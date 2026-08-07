@@ -1,12 +1,18 @@
-/* W.O. DO ORGANIZADOR — ESCOLHA 1×2 DO DESTINO + NOTIFICAÇÃO NO FIM DO CICLO
+/* W.O. DO ORGANIZADOR — DESFECHO ÚNICO + NOTIFICAÇÃO NO FIM DO CICLO
  * node tests/wo-destino-ciclo-notifica.test.js
  *
- * REGRA DO DONO (ago/2026): (1) o organizador escolhe entre mandar quem levou W.O. pros
- * DESATIVADOS ou pro FIM da lista de espera; o primeiro da fila assume e ocupa a posição
- * até o final do torneio; quem foi pros desativados entra na ÚLTIMA posição da fila ao
- * reativar. (2) _"no que esse ciclo completar precisa disparar notificação para todos os
- * envolvidos dizendo o que aconteceu e instruindo a pessoa que tomou o wo do que precisa
- * fazer para voltar a lista de espera."_
+ * ⚠️ REVISADO NA v1.7.59 — A ESCOLHA 1×2 FOI REVOGADA PELO DONO (06/ago/2026), depois do
+ * caso da Eliane Cinelli: ela levou W.O. e foi parar NA FILA porque o default do diálogo
+ * era 'waitlist'. A regra passou a ser **W.O. desativa, sempre**; a lista de espera vira
+ * consequência de um ATO da pessoa (religar o toggle), nunca do W.O.
+ * As asserções que exigiam a pergunta "pra onde vai?", os dois botões e o default 'fila'
+ * foram reescritas pro desfecho único — o que elas protegiam de verdade (o destino é
+ * aplicado no caminho REAL, nos 4 pontos, e a instrução chega a quem levou o W.O.)
+ * continua travado, agora contra um desfecho só.
+ *
+ * REGRA DO DONO que este arquivo ainda guarda: _"no que esse ciclo completar precisa
+ * disparar notificação para todos os envolvidos dizendo o que aconteceu e instruindo a
+ * pessoa que tomou o wo do que precisa fazer para voltar a lista de espera."_
  *
  * ONDE ISSO TEM QUE ESTAR: no diálogo "Substituto" (_ligaPickFill) — o caminho REAL do
  * botão é wo-claim.js → _woResolveApply → _ligaPickFill. A v1.6.88 construiu a escolha em
@@ -97,40 +103,31 @@ function parseDom(html) {
 }
 const nomes = (arr) => (arr || []).map((p) => (typeof p === 'string' ? p : (PERFIL[p.uid] || p.displayName || p.name)));
 
-// ── 1. A escolha 1×2 está NO DIÁLOGO REAL ───────────────────────────────────
+// ── 1. O DESFECHO está DECLARADO no diálogo REAL (e não é mais escolha) ─────
+// v1.7.59: as 3 asserções da escolha 1×2 foram REVISADAS. O invariante real — o diálogo
+// do caminho REAL (_ligaPickFill) diz o que vai acontecer com quem leva W.O. — continua.
 sec(function () {
   const t = novoT(); boot(t);
   win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
   ok(!!CAP, 'o diálogo Substituto tem que abrir');
-  ok(CAP.html.indexOf('pra onde vai?') !== -1, 'a pergunta de destino tem que estar no diálogo do caminho REAL');
-  ok(CAP.html.indexOf('1 · 🔴 Desativados') !== -1, 'opção 1 — Desativados');
-  ok(CAP.html.indexOf('2 · 📋 Fim da lista de espera') !== -1, 'opção 2 — Fim da lista de espera');
-  ok(CAP.html.indexOf('data-dest="waitlist" data-on="1"') !== -1, 'default é a FILA (menos punitivo); tirar alguém do torneio é escolha explícita');
+  ok(CAP.html.indexOf('pra onde vai?') === -1, 'a pergunta de destino NÃO pode voltar — não há escolha');
+  ok(CAP.html.indexOf('data-dest=') === -1, 'nenhum botão de destino no diálogo do caminho REAL');
+  ok(/vai para os Desativados/i.test(CAP.html), 'o diálogo DECLARA o desfecho: vai para os Desativados');
+  ok(CAP.html.indexOf('fim da lista de espera') !== -1, 'e ensina que religar o toggle leva ao fim da lista de espera');
   ok(CAP.html.indexOf('Sandra') !== -1 && CAP.html.indexOf('Jogador X') !== -1, 'e a fila + Jogador X continuam ali');
 });
 
-// ── 2. Destino 2 (fila) + convite: o ausente vai pro FIM da fila ────────────
+// ── 2+3. Convite: o W.O. já vale e DESATIVA (era o teste dos dois destinos) ──
 sec(function () {
   const t = novoT(); boot(t);
   win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
-  win._ligaInviteSelected(t.id, 0, 'R1 Grupo W', 'Thereza');   // default = waitlist
-  ok(!nomes(t.participants).includes('Thereza'), 'com destino "fila", sai do elenco');
-  const fila = nomes(win._getWaitlist(t));
-  ok(fila[fila.length - 1] === 'Thereza', 'entra no FIM da fila, fila=' + fila.join('|'));
-  ok(t.rounds[0].monarchGroups[0].woDest === 'waitlist', 'o destino escolhido fica gravado no grupo');
-  ok((t.ligaSubInvites || []).length >= 1, 'os convites foram disparados');
-});
-
-// ── 3. Destino 1 (desativados) ──────────────────────────────────────────────
-sec(function () {
-  const t = novoT(); boot(t);
-  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
-  DOM._dests.forEach((d) => { d.on = (d.d === 'inactive') ? '1' : '0'; });   // organizador clica na 1
   win._ligaInviteSelected(t.id, 0, 'R1 Grupo W', 'Thereza');
   const th = t.participants.filter((p) => p.uid === 'uid_thereza')[0];
-  ok(!!th && th.ligaActive === false, 'com destino "desativados", FICA no elenco e vira inativa');
-  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e NÃO entra na fila agora (só ao reativar)');
-  ok(t.rounds[0].monarchGroups[0].woDest === 'inactive', 'o destino escolhido fica gravado no grupo');
+  ok(!!th && th.ligaActive === false, 'ao convidar, quem levou W.O. FICA no elenco e vira inativa');
+  ok(!!th.woDeactivatedAt, 'com a marca woDeactivatedAt');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e NÃO entra na fila agora (só ao reativar) — bug da Eliane');
+  ok(t.rounds[0].monarchGroups[0].woDest === 'inactive', 'o desfecho fica gravado no grupo');
+  ok((t.ligaSubInvites || []).length >= 1, 'os convites foram disparados');
 });
 
 // ── 4. O SUPLENTE assume e FICA (entra no elenco) ao aceitar ────────────────
@@ -166,7 +163,9 @@ sec(function () {
   const msg = paraAusente.map((n) => n.data.message).join(' ');
   ok(msg.indexOf('W.O.') !== -1, 'a mensagem diz o que aconteceu');
   ok(msg.indexOf('lista de espera') !== -1, 'e fala da lista de espera');
-  ok(/não precisa fazer nada|Não precisa fazer nada/.test(msg), 'no destino "fila", a instrução é que ela já está na fila');
+  // v1.7.59 REVISADA: a instrução era "não precisa fazer nada" (destino fila). Agora o
+  // desfecho é único e o caminho de volta EXIGE um ato — é essa a regra nova.
+  ok(msg.indexOf('Ativado') !== -1, 'a instrução ensina o caminho de volta: ligar o botão Ativado');
   ok(paraAusente[0].data.level === 'fundamental', 'aviso de W.O. é nível fundamental');
 
   ok(NOTIFS.some((n) => n.uid === 'uid_sandra'), 'o suplente é avisado de que entrou');
@@ -184,11 +183,10 @@ sec(function () {
   ok(doPaulo.indexOf('Mudança no') === -1, 'quem não está no grupo NÃO recebe o aviso de mudança de grupo');
 });
 
-// ── 6. Instrução MUDA quando o destino é "desativados" ──────────────────────
+// ── 6. A instrução ENSINA o caminho de volta (desfecho único) ───────────────
 sec(function () {
   const t = novoT(); boot(t);
   win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
-  DOM._dests.forEach((d) => { d.on = (d.d === 'inactive') ? '1' : '0'; });
   win._ligaInviteSelected(t.id, 0, 'R1 Grupo W', 'Thereza');
   const iv = t.ligaSubInvites.filter((x) => x.inviteeUid === 'uid_sandra')[0];
   boot(t, 'uid_sandra'); NOTIFS = [];
@@ -210,7 +208,9 @@ sec(function () {
   ['uid_fabiana', 'uid_flavia', 'uid_suely'].forEach((u) => {
     ok(NOTIFS.some((n) => n.uid === u), 'o grupo é avisado (' + u + ')');
   });
-  ok(!nomes(t.participants).includes('Thereza'), 'o destino também vale no caminho do Jogador X');
+  const _thX = t.participants.filter((p) => p.uid === 'uid_thereza')[0];
+  ok(!!_thX && _thX.ligaActive === false, 'o desfecho também vale no caminho do Jogador X: desativada');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e o Jogador X não empurra ninguém pra fila');
 });
 
 // ── 8. Escopo: wo-claim.js segue sem o fluxo do organizador ─────────────────
@@ -253,9 +253,9 @@ sec(function () {
   ok(g.subStatus === 'filled' && g.subName === 'Sandra', 'o grupo fica preenchido');
   ok(nomes(t.participants).includes('Sandra'), 'a suplente entra no ELENCO (fica até o fim do torneio)');
   ok(!nomes(win._getWaitlist(t)).includes('Sandra'), 'e sai da fila');
-  ok(!nomes(t.participants).includes('Thereza'), 'a ausente vai pro destino escolhido (default = fila)');
-  const fila = nomes(win._getWaitlist(t));
-  ok(fila[fila.length - 1] === 'Thereza', 'no FIM da fila, fila=' + fila.join('|'));
+  const _thD = t.participants.filter((p) => p.uid === 'uid_thereza')[0];
+  ok(!!_thD && _thD.ligaActive === false, 'a ausente é DESATIVADA (v1.7.59: desfecho único)');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e não vai pra fila');
   ok((t.rounds[0].matches || []).some((m) => m.isSitOut && m.sitOutReason === 'wo' && m.p1 === 'Thereza'), 'o marcador de W.O. existe');
   ok((t.ligaSubInvites || []).every((iv) => iv.status !== 'pending'), 'convite pendente do grupo é cancelado (vaga resolvida na mão)');
   // e o ciclo AVISA todo mundo, igual ao caminho do aceite
@@ -266,15 +266,15 @@ sec(function () {
   });
 });
 
-// ── 11. Substituição direta respeita o destino 1 ────────────────────────────
+// ── 11. Substituição direta SEM passar pelo diálogo desativa igual ──────────
+// (chamada direta, sem _ligaPickFill antes: não há DOM nenhum pra "ler destino")
 sec(function () {
   const t = novoT(); boot(t, 'org');
-  win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
-  DOM._dests.forEach((d) => { d.on = (d.d === 'inactive') ? '1' : '0'; });
   win._ligaSubstituteNow(t.id, 0, 'R1 Grupo W', 'Thereza', 'uid_sandra', 'Sandra');
   const th = t.participants.filter((p) => p.uid === 'uid_thereza')[0];
-  ok(!!th && th.ligaActive === false, 'destino 1 na substituição direta: fica inativa no elenco');
-  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e não entra na fila agora');
+  ok(!!th && th.ligaActive === false, 'sem diálogo aberto, o desfecho é o mesmo: inativa no elenco');
+  ok(!!th.woDeactivatedAt, 'com a marca woDeactivatedAt');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'e não entra na fila');
 });
 
 // ── 12. Quem NÃO é autoridade não consegue chamar a função direto ───────────

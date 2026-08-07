@@ -30,6 +30,14 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     func sendReplay(shuffle: Bool) {
         sendIntent(["v": 1, "type": "replay", "shuffle": shuffle, "id": UUID().uuidString])
     }
+    /// ENCERRAR a partida pelo relógio (v1.7.67). Antes o "Fechar" da tela de fim
+    /// só escondia o painel AQUI (`replayDismissed`), e o celular seguia com o placar
+    /// aberto — o relógio ficava preso na tela de resultado. Agora a ordem viaja: o
+    /// celular fecha o placar, volta à configuração e devolve um estado inativo, que
+    /// é o que traz este app de volta para a espera.
+    func sendClose() {
+        sendIntent(["v": 1, "type": "close", "id": UUID().uuidString])
+    }
     func sendResolveTie(_ rule: String) {   // "extend" (prorrogar) | "tiebreak"
         sendIntent(["v": 1, "type": "resolveTie", "rule": rule, "id": UUID().uuidString])
     }

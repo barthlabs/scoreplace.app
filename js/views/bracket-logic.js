@@ -3778,13 +3778,28 @@ function _buildBye(opts) {
 window._buildBye = _buildBye;
 
 function _monarchWaitKey(category) { return (category || '_default_').replace(/\s+/g, '_'); }
+// A FILA GUARDA CHAVES: uid de quem tem conta, nome só de quem não tem (v1.7.61).
+// A leitura NORMALIZA — nome legado de alguém com conta vira o uid dela, e item que não
+// corresponde a ninguém da espera é DESCARTADO. É esse descarte que faz sumir sozinho o
+// lixo gravado pela versão que guardava nome ("Jogador sem perfil (jSNA)"), sem migração
+// à parte e sem ninguém precisar rodar nada. Ver o cabeçalho em waitlist-core.js.
 window._getMonarchWaitlist = function (t, category) {
   var k = _monarchWaitKey(category);
-  return (t && t.monarchWaitlist && Array.isArray(t.monarchWaitlist[k])) ? t.monarchWaitlist[k].slice() : [];
+  var arr = (t && t.monarchWaitlist && Array.isArray(t.monarchWaitlist[k])) ? t.monarchWaitlist[k] : [];
+  var out = [], visto = {};
+  for (var i = 0; i < arr.length; i++) {
+    var key = (typeof window._wlNormalizeKey === 'function')
+      ? window._wlNormalizeKey(t, arr[i])
+      : String(arr[i] || '').trim();
+    if (!key || visto[key]) continue;   // fantasma ou repetido: fora
+    visto[key] = 1;
+    out.push(key);
+  }
+  return out;
 };
-function _setMonarchWaitlist(t, category, names) {
+function _setMonarchWaitlist(t, category, keys) {
   if (!t.monarchWaitlist) t.monarchWaitlist = {};
-  t.monarchWaitlist[_monarchWaitKey(category)] = (names || []).slice();
+  t.monarchWaitlist[_monarchWaitKey(category)] = (keys || []).slice();
 }
 // Forma grupos de 4 a partir da lista de espera e anexa à COLUNA da rodada corrente.
 // Retorna quantos grupos formou. Chamado após o sorteio e após +participante.
@@ -3803,7 +3818,13 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   var eligible = fullWl.slice();
   if (sameDay) {
     var _ci = t.checkedIn || {}, _ab = t.absent || {};
-    eligible = eligible.filter(function (n) { return window._idMapHas(t, _ci, n) && !window._idMapHas(t, _ab, n); });
+    // Presença/ausência são MAPAS POR UID (t.checkedIn/t.absent). Passa a ENTRADA, não a
+    // string: `_idMapKey` extrai o uid dela e casa pela chave certa. Passar texto obrigava
+    // o mapa a ser consultado por nome — que é justamente o que a entrada strippada não tem.
+    eligible = eligible.filter(function (n) {
+      var alvo = (typeof window._wlEntryByKey === 'function') ? (window._wlEntryByKey(t, n) || n) : n;
+      return window._idMapHas(t, _ci, alvo) && !window._idMapHas(t, _ab, alvo);
+    });
   }
   if (eligible.length < 4) return 0;
   var rounds = t.rounds || [];
@@ -3880,24 +3901,35 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   var _sorteioLivre = (typeof window._drawModeIsLivre === 'function') ? window._drawModeIsLivre(t) : false;
   var _ratioAtual = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t, null, category) : '';
   var _ratioTravada = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
-  // uid de quem está NA FILA, pelo nome. O mapa do elenco (_n2uMapWl) é montado a partir do
-  // nome GRAVADO em t.participants — que a entrada strippada não tem. A ENTRADA DA ESPERA
-  // tem uid, então ela é a fonte primária aqui; o mapa do elenco fica como fallback.
-  var _wlUidPorNome = {}, _wlEntryPorNome = {};
+  // ENTRADA DA FILA PELA CHAVE (v1.7.61). A fila trabalha em CHAVES — uid de quem tem
+  // conta, nome só de quem não tem. Antes estes mapas eram indexados por NOME, montados a
+  // partir de `_pName(e)`; com a entrada strippada (só uid, desde a v1.3.52) o `_pName`
+  // devolve o rótulo "Jogador sem perfil (XXXX)", que não é identidade de ninguém — daí o
+  // gênero nunca resolver e NENHUM grupo fechar. Ver waitlist-core.js.
+  var _wlEntryPorChave = {};
   (function () {
     var q = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
     q.forEach(function (e) {
       if (!e || typeof e !== 'object') return;
-      [(typeof window._pName === 'function') ? window._pName(e, '') : '', e.displayName, e.name]
-        .forEach(function (n) {
-          n = String(n || '').trim();
-          if (!n) return;
-          if (!_wlEntryPorNome[n]) _wlEntryPorNome[n] = e;
-          if (e.uid && !_wlUidPorNome[n]) _wlUidPorNome[n] = e.uid;
-        });
+      var k = (typeof window._wlKey === 'function') ? window._wlKey(e) : '';
+      if (k && !_wlEntryPorChave[k]) _wlEntryPorChave[k] = e;
     });
   })();
-  var _uidDaFila = function (nm) { return _wlUidPorNome[nm] || (_n2uMapWl && _n2uMapWl[nm]) || null; };
+  var _entradaDe = function (k) {
+    return _wlEntryPorChave[k] ||
+      ((typeof window._wlEntryByKey === 'function') ? window._wlEntryByKey(t, k) : null);
+  };
+  // uid da chave: a chave JÁ É o uid quando a pessoa tem conta. O mapa do elenco só
+  // socorre o caso legado em que a chave ainda é um nome de alguém COM conta.
+  var _uidDaFila = function (k) {
+    var e = _entradaDe(k);
+    if (e && e.uid) return String(e.uid);
+    return (_n2uMapWl && _n2uMapWl[k]) || null;
+  };
+  // Nome de EXIBIÇÃO — nunca identidade. Só serve pra montar o grupo e pintar a tela.
+  var _nomeDe = function (k) {
+    return (typeof window._wlDisplayName === 'function') ? window._wlDisplayName(t, k) : String(k || '');
+  };
   // DECLARADO OU NADA: '' significa "não sei" e NUNCA é tratado como um gênero.
   //
   // Lê pela ENTRADA (`_pGender`), não por `_genderForUid` direto, porque os dois lados
@@ -3914,7 +3946,7 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   // ela fazia 'masculino' virar 'Masc', falhar a comparação e BLOQUEAR TODA formação.
   // A normalização aqui é por prefixo, que vale igual nos dois.
   var _generoDe = function (nm) {
-    var e = _wlEntryPorNome[nm], u = _uidDaFila(nm);
+    var e = _entradaDe(nm), u = _uidDaFila(nm);
     var g = '';
     if (e && typeof window._pGender === 'function') g = String(window._pGender(e) || '');
     if (!g && e && e.gender) g = String(e.gender);
@@ -3928,7 +3960,12 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   // que saiu com playersUids todos nulos e virou jogo apontando pra ninguém).
   var _n2uFinal = {};
   Object.keys(_n2uMapWl || {}).forEach(function (k) { _n2uFinal[k] = _n2uMapWl[k]; });
-  Object.keys(_wlUidPorNome).forEach(function (k) { if (!_n2uFinal[k]) _n2uFinal[k] = _wlUidPorNome[k]; });
+  // nome de exibição → uid, pra que _buildMonarchGroup grave playersUids certo. A fonte
+  // é a CHAVE (uid), não o nome: o nome aqui é derivado, nunca o contrário.
+  Object.keys(_wlEntryPorChave).forEach(function (k) {
+    var u = _uidDaFila(k); if (!u) return;
+    var nm = _nomeDe(k); if (nm && !_n2uFinal[nm]) _n2uFinal[nm] = u;
+  });
   // PLANEJA TODOS OS GRUPOS DE UMA VEZ — nunca um de cada vez.
   //
   // O guloso anterior ("pega os 4 primeiros que cabem, pula quem estoura a cota") PERDIA
@@ -3953,7 +3990,7 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
       return gs;
     }
     var res = window._planGroupsByRatio(pool.map(function (n) {
-      var e = _wlEntryPorNome[n];
+      var e = _entradaDe(n);
       return { key: n, gender: _generoDe(n), wildcard: !!(e && e.isPlaceholder) };
     }), { ratio: _ratioAtual, locked: _ratioTravada, size: 4 });
     return res.groups || [];
@@ -3967,7 +4004,7 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
     if (_ratioTravada && !_sorteioLivre && _ratioAtual &&
         typeof window._groupMeetsRatio === 'function') {
       var _comp = grp.map(function (n) {
-        var e = _wlEntryPorNome[n];
+        var e = _entradaDe(n);
         return { gender: _generoDe(n), wildcard: !!(e && e.isPlaceholder) };
       });
       if (!window._groupMeetsRatio(_comp, _ratioAtual)) {
@@ -3976,7 +4013,12 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
       }
     }
     var gi = (col.monarchGroups || []).length;
-    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: grp, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uFinal });
+    // A chave é a identidade; o NOME é derivado dela só agora, pra montar o grupo. Assim
+    // `players` sai com o nome VIVO da pessoa e `playersUids` com o uid — e trocar de nome
+    // depois não desfaz nada, porque nada foi indexado pelo nome.
+    var _nomes = grp.map(_nomeDe);
+    grp.forEach(function (k, i) { var u = _uidDaFila(k); if (u) _n2uFinal[_nomes[i]] = u; });
+    var g = _buildMonarchGroup({ roundNum: roundNum, roundIndex: colIdx, gi: gi, players: _nomes, category: category, ts: ts, idTag: 'wl', idExtra: '-' + formed, nameToUid: _n2uFinal });
     col.monarchGroups.push(g);
     col.matches = (col.matches || []).concat(g.matches);
     grp.forEach(function (n) { used.push(n); });
@@ -3985,7 +4027,13 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   // remove os usados de TODAS as fontes da espera (monarch + standby + waitlist);
   // não-presentes e a sobra permanecem na fila monarch desta categoria.
   if (used.length) {
-    used.forEach(function (n) { if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(t, n); });
+    // Sai da espera pela CHAVE: uid de quem tem conta, nome só do informal. Remover por
+    // nome deixava na fila quem não tinha nome gravado — a pessoa jogava E continuava
+    // esperando, que é o fantasma que o cânone da espera proíbe.
+    used.forEach(function (k) {
+      if (typeof window._removeFromWaitlistByKey === 'function') window._removeFromWaitlistByKey(t, k);
+      else if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(t, k);
+    });
     _setMonarchWaitlist(t, category, fullWl.filter(function (n) { return used.indexOf(n) === -1; }));
   }
   if (formed > 0 && typeof _recordOpponentHistory === 'function') {
@@ -4012,9 +4060,22 @@ window._expandMonarchFromWaitlist = function (t) {
   }
   if (!target) return 0;
   var roundNum = target.round;
-  // nomes já em algum grupo desta rodada (não re-enfileira)
+  // QUEM JÁ JOGA nesta rodada não volta pra fila. Indexado por UID (playersUids, que o
+  // motor grava desde a v4.4.115); o nome só entra pro slot que NÃO tem uid — o informal
+  // digitado à mão, onde o nome é a única identidade que existe. Antes isto era só por
+  // nome, e com a entrada strippada o nome não resolvia: a mesma pessoa era re-enfileirada
+  // enquanto já estava jogando.
   var inGroup = {};
-  (target.monarchGroups || []).forEach(function (g) { (g.players || []).forEach(function (n) { inGroup[String(n).toLowerCase()] = 1; }); });
+  (target.monarchGroups || []).forEach(function (g) {
+    if (!g) return;
+    (g.playersUids || []).forEach(function (u) { if (u) inGroup[String(u)] = 1; });
+    (g.players || []).forEach(function (n, i) {
+      var u = (g.playersUids || [])[i];
+      if (u) return;                                   // com uid já foi indexado acima
+      var nm = String(n || '').trim();
+      if (nm) inGroup[nm.toLowerCase()] = 1;
+    });
+  });
   // ── A FILA É DA CATEGORIA DA RODADA, NUNCA DA CATEGORIA DA INSCRIÇÃO (v1.7.55) ────
   // BUG MEDIDO (dono, 06/ago/2026, Confra): 6 pessoas na espera — 3 homens e 3 mulheres,
   // TODAS com gênero no perfil — e nenhum grupo se formava, com a proporção 25/75 travada
@@ -4055,10 +4116,15 @@ window._expandMonarchFromWaitlist = function (t) {
   // quando o grupo se forma — ver o bloco "vira INSCRITO" no fim desta função.
   var _daEspera = {};
   var bridge = function (e) {
-    var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim();
-    if (!nm || nm.indexOf(' / ') !== -1) return;       // só indivíduos
-    if (inGroup[nm.toLowerCase()]) return;             // já joga nesta rodada
-    _daEspera[nm.toLowerCase()] = e;
+    // CHAVE, não nome: uid de quem tem conta, nome só de quem não tem. Ler por `_pName`
+    // aqui era o defeito — entrada strippada devolvia o rótulo "Jogador sem perfil (XXXX)",
+    // que não é identidade de ninguém e envenenava a fila (v1.7.61).
+    var nm = (typeof window._wlKey === 'function') ? window._wlKey(e) : '';
+    if (!nm) return;
+    // Dupla pré-formada não entra: o Rei/Rainha forma grupo de 4 INDIVÍDUOS.
+    if (nm.indexOf(' / ') !== -1) return;
+    if (inGroup[nm] || inGroup[nm.toLowerCase()]) return;   // já joga nesta rodada
+    _daEspera[nm] = e;
     var cat = (e && (e.category || (Array.isArray(e.categories) && e.categories[0]))) || null;
     // A categoria da inscrição só governa a fila quando a RODADA de fato separa por
     // categoria E aquela categoria existe nela. Fora disso, a fila é a da rodada.
@@ -4073,7 +4139,12 @@ window._expandMonarchFromWaitlist = function (t) {
     var _chaveCerta = _monarchWaitKey(cat);
     Object.keys(t.monarchWaitlist || {}).forEach(function (k) {
       if (k === _chaveCerta || !Array.isArray(t.monarchWaitlist[k])) return;
-      t.monarchWaitlist[k] = t.monarchWaitlist[k].filter(function (x) { return String(x) !== nm; });
+      // Compara NORMALIZADO: a mesma pessoa pode estar na outra chave pelo NOME legado
+      // enquanto aqui ela já é uid. Sem normalizar, a duplicata sobrevive à limpeza.
+      t.monarchWaitlist[k] = t.monarchWaitlist[k].filter(function (x) {
+        var xk = (typeof window._wlNormalizeKey === 'function') ? window._wlNormalizeKey(t, x) : String(x || '').trim();
+        return xk !== nm;
+      });
     });
     cats[_monarchWaitKey(cat)] = cat || null;
   };
@@ -4106,11 +4177,18 @@ window._expandMonarchFromWaitlist = function (t) {
   // ocupar um lugar na chave tem de estar no roster — senão a contagem, a Análise de
   // Inscritos e a presença enxergam menos gente do que está em quadra.
   if (formed > 0) {
+    // Quem está em grupo AGORA, na MESMA chave que `_daEspera` usa (uid quando há conta,
+    // nome só pro informal). Antes era só nome minúsculo, e com a entrada strippada o
+    // casamento falhava: a pessoa entrava na chave e NÃO virava inscrita.
     var _agora = {};
     (target.monarchGroups || []).forEach(function (g) {
-      (g.players || []).forEach(function (n) {
+      if (!g) return;
+      (g.players || []).forEach(function (n, i) {
+        var u = (g.playersUids || [])[i];
+        if (u) { _agora[String(u)] = 1; return; }
         var s2 = String(n == null ? '' : n).trim();
         if (!s2 || s2.indexOf(' / ') !== -1) return;    // só indivíduos
+        _agora[s2] = 1;
         _agora[s2.toLowerCase()] = 1;
       });
     });
@@ -4137,8 +4215,9 @@ window._expandMonarchFromWaitlist = function (t) {
     // e sai da espera: está na chave XOR na espera, nunca nos dois
     var _fora = function (arr) {
       return (Array.isArray(arr) ? arr : []).filter(function (e) {
-        var nm = String(window._pName ? window._pName(e, '') : ((e && (e.displayName || e.name)) || e || '')).trim().toLowerCase();
-        return !(nm && _agora[nm]);
+        var k2 = (typeof window._wlKey === 'function') ? window._wlKey(e) : '';
+        if (!k2) return true;
+        return !(_agora[k2] || _agora[k2.toLowerCase()]);
       });
     };
     t.standbyParticipants = _fora(t.standbyParticipants);

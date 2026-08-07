@@ -31,8 +31,21 @@ Transporte: iOS = WatchConnectivity (`WCSession`); Android = Wear Data Layer
 ```jsonc
 { "v": 1, "type": "point", "team": 1, "id": "<uuid>" }  // +1 ao time 1 (ou 2)
 { "v": 1, "type": "undo",  "id": "<uuid>" }             // desfaz o último ponto
+{ "v": 1, "type": "close", "id": "<uuid>" }             // ENCERRAR: fecha o placar no celular
 { "v": 1, "type": "hello" }                             // pede o estado atual (abrir/reconectar)
 ```
+
+⚠️ **`close` (v1.7.67)** — o "Fechar" da tela de fim de partida. Ele existe porque
+antes o botão só mexia em estado LOCAL do relógio (`replayDismissed`, nos DOIS
+sistemas): o celular seguia com o placar aberto e o relógio ficava preso na tela de
+resultado. **Não abre diálogo no celular** — o toque no relógio já é a confirmação, e
+esperar alguém confirmar do outro lado seria o mesmo travamento. O que ele NÃO pula é o
+consenso de encerramento do casual multiplayer: ali quem decide são os outros jogadores.
+Quem devolve o relógio à espera é o estado inativo que o fechamento empurra logo depois.
+
+A lista viva das intenções aceitas está no `switch` de `applyIntent` em
+`js/watch-bridge.js` — hoje: `point`, `undo`, `close`, `replay`, `resolveTie`, `start`,
+`rrNext`, `rrFinal`, `rrActivate`, `setServer`, `hello`.
 
 ## Celular → Relógio (snapshot de estado)
 

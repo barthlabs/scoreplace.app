@@ -1,0 +1,52 @@
+name: CI — suíte unitária
+
+# ⚠️ ESTE WORKFLOW NÃO PUBLICA NADA. Substituiu o "Deploy to GitHub Pages" em
+# 07/ago/2026, quando o domínio já estava servido pelo FIREBASE HOSTING.
+#
+# Por que o antigo tinha que sair: ele seguia publicando no GitHub Pages, que
+# ainda reivindicava o CNAME `scoreplace.app`. Virou um SEGUNDO PUBLICADOR
+# DORMENTE — e um perigoso, porque mentia nos dois sentidos: build vermelho no
+# GitHub fazia parecer que o deploy tinha quebrado (não tinha: quem publica é o
+# Firebase), e build verde fazia parecer que tinha publicado (não tinha). Além
+# disso o build do Pages ficava ATRASADO em relação ao site real — se o DNS
+# voltasse a apontar pra lá, o ar viraria a versão velha.
+#
+# O que publica de verdade, e é MANUAL:
+#     firebase deploy --only hosting --project scoreplace-app
+# `git push` versiona o repo e NÃO muda o site. Ver a seção Deploy do CLAUDE.md
+# e a memória project_prod_deploy_target.
+#
+# O que ficou aqui é o que valia a pena: o GATE. A suíte roda em todo push, e é
+# o sinal de que a árvore está sã antes de alguém rodar o deploy do Firebase.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Suíte unitária
+        run: |
+          npm ci --ignore-scripts
+          # tests/letzplay-big-profile.test.js sobe um Chromium (Playwright) contra um
+          # letzplay sintético. `--ignore-scripts` pula o postinstall que baixa o browser,
+          # então SEM esta linha a suíte morre com "Executable doesn't exist" e o gate
+          # reprova tudo — foi o que aconteceu da 1.6.5 à 1.6.9. Local passava porque o
+          # Chromium já estava na máquina. Mesmo conserto da CI de staging (1.1.17).
+          npx playwright install --with-deps chromium
+          npm test

@@ -38,22 +38,63 @@ function _wlName(e) {
 
 // LISTA DE ESPERA CANÔNICA: une os 3 storages, deduplicado por nome (lowercase).
 // Entrada objeto volta como está; string vira {name, displayName}.
+// ⚠️ O DEDUP É POR IDENTIDADE, NUNCA POR NOME (v1.7.61). Desde que `monarchWaitlist`
+// passou a guardar UID, deduplicar por nome fazia a MESMA pessoa entrar duas vezes: uma
+// pela entrada de `standbyParticipants` (nome resolvido do perfil) e outra pelo uid do
+// mapa, que virava um "nome" que não é de ninguém. Foi exatamente isso que pintou os
+// chips crus `tqlM4F93…` na Lista de espera — 6 pessoas onde havia 3.
+//
+// Item em texto no mapa pode ser uid (novo) ou nome (legado). Os dois resolvem para a
+// ENTRADA real da espera; o que não resolve para ninguém é descartado, porque a fila é um
+// índice — quem está nela tem que estar em `waitlist`/`standbyParticipants`. Só sobrevive
+// como texto o nome de quem NÃO TEM CONTA, que é a ressalva do dono: ali o nome é a única
+// identidade que existe.
 window._getWaitlist = function (t) {
   if (!t) return [];
   var out = [], seen = {};
-  function add(e) {
-    var nm = _wlName(e);
-    if (!nm) return;
-    var k = nm.toLowerCase();
-    if (seen[k]) return; seen[k] = 1;
-    out.push((e && typeof e === 'object') ? e : { name: nm, displayName: nm });
+  function push(e, key) {
+    if (!key || seen[key]) return;
+    seen[key] = 1;
+    out.push(e);
   }
-  if (Array.isArray(t.waitlist)) t.waitlist.forEach(add);
-  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(add);
+  function addEntry(e) {
+    if (!e) return;
+    if (typeof e === 'string') return addText(e);
+    push(e, window._wlKey(e));
+  }
+  function addText(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return;
+    // uid OU nome legado → a entrada real da espera (que já foi adicionada acima)
+    var ent = window._wlEntryByKey(t, s);
+    if (ent) return push(ent, window._wlKey(ent));
+    // nome de alguém COM conta que não está mais na espera: é resíduo do índice
+    if (typeof window._memberUidByName === 'function' && window._memberUidByName(t, s)) return;
+    // uid que não corresponde a ninguém da espera: resíduo do índice
+    if (_pareceUid(t, s)) return;
+    // sobrou: nome de quem não tem conta — o informal digitado à mão
+    push({ name: s, displayName: s }, s);
+  }
+  // É uid de alguém do torneio? (evita tratar um uid órfão como se fosse nome de gente)
+  function _pareceUid(t2, s) {
+    var pools = [t2.participants, t2.standbyParticipants, t2.waitlist];
+    for (var i = 0; i < pools.length; i++) {
+      var arr = pools[i];
+      if (!Array.isArray(arr)) continue;
+      for (var j = 0; j < arr.length; j++) {
+        var p = arr[j];
+        if (p && typeof p === 'object' && (p.uid === s || p.p1Uid === s || p.p2Uid === s)) return true;
+      }
+    }
+    // formato de uid do Firebase (28 chars alfanuméricos) sem nenhum espaço
+    return /^[A-Za-z0-9_-]{20,}$/.test(s);
+  }
+  if (Array.isArray(t.waitlist)) t.waitlist.forEach(addEntry);
+  if (Array.isArray(t.standbyParticipants)) t.standbyParticipants.forEach(addEntry);
   if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
     Object.keys(t.monarchWaitlist).forEach(function (cat) {
       var arr = t.monarchWaitlist[cat];
-      if (Array.isArray(arr)) arr.forEach(add);
+      if (Array.isArray(arr)) arr.forEach(addEntry);
     });
   }
   return out;
@@ -254,5 +295,146 @@ window._sanitizeWaitlistVsGroups = function (t) {
   Object.keys(playing).forEach(function (k) {
     if (window._removeFromWaitlist(t, playing[k])) removed++;
   });
+  return removed;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A IDENTIDADE DA FILA É O UID (v1.7.61) — nome SÓ para quem não tem conta.
+//
+// DEFEITO MEDIDO (dono, 07/ago/2026, Confra). Rodando o motor REAL contra o doc REAL:
+//
+//   [0] uid=jSNA85jlsdfm…  _pName() = "Jogador sem perfil (jSNA)"   gender = null
+//   [1] uid=5TxVeRIiT1cr…  _pName() = "Jogador sem perfil (5TxV)"   gender = null
+//   …
+//   grupos formados: 0
+//   monarchWaitlist: ["Vini","Vanessa Kaufmann","Jogador sem perfil (jSNA)", …]
+//
+// A ponte e o motor guardavam a fila por NOME. As entradas da espera são strippadas desde
+// a v1.3.52 (só uid), então `_pName` caía num RÓTULO-FANTASMA — e era esse texto que ia
+// pra fila. Três estragos somados: (a) o gênero não resolve por um rótulo que não é de
+// ninguém, e com a proporção travada "gênero desconhecido" tira a pessoa do pool → NENHUM
+// grupo fecha, nunca; (b) a mesma pessoa entra duas vezes (o "Vini" antigo e o fantasma
+// dela), que é exatamente o duplo-sorteio que o cânone da espera manda evitar; (c) o mapa
+// vira lixo permanente, porque nada nunca limpa um nome que não é de ninguém.
+//
+// REGRA (dono): _"por uid sempre. nunca nome, email ou qualquer outro dado"_ — com UMA
+// ressalva, também dele: _"se o usuário digitar participantes sem uid aí tem que considerar
+// por nome apenas esses"_. Ou seja: o nome só é identidade onde NÃO EXISTE uid — o
+// participante informal que o organizador digitou à mão. Para todo o resto, uid.
+//
+// A fila passa a guardar CHAVES: o uid quando a pessoa tem conta, o nome quando não tem.
+// Item que não resolve para NINGUÉM da espera é descartado na leitura — é assim que os
+// fantasmas gravados pela versão anterior somem sozinhos, sem migração à parte.
+
+// Chave canônica de UMA entrada da espera. Objeto → uid, senão nome. Nunca devolve
+// rótulo-fantasma: `_pName` só é consultado quando a entrada não tem uid.
+window._wlKey = function (e) {
+  if (e == null) return '';
+  if (typeof e === 'string') return e.trim();
+  if (typeof e !== 'object') return '';
+  if (e.uid) return String(e.uid);
+  // Sem uid = informal digitado à mão. Aqui o nome É a identidade legítima.
+  var nm = String((e.displayName || e.name || '') || '').trim();
+  if (nm) return nm;
+  // Último recurso: só agora vale consultar _pName (dupla pré-formada "A / B", por ex.).
+  return String((typeof window._pName === 'function') ? (window._pName(e, '') || '') : '').trim();
+};
+
+// Entrada da espera a partir de uma chave (uid OU nome). É o inverso de _wlKey e a
+// única forma de sair da chave de volta pra pessoa.
+window._wlEntryByKey = function (t, key) {
+  if (!t || !key) return null;
+  var k = String(key).trim();
+  if (!k) return null;
+  var kLower = k.toLowerCase();
+  var pools = [t.waitlist, t.standbyParticipants];
+  for (var pi = 0; pi < pools.length; pi++) {
+    var arr = pools[pi];
+    if (!Array.isArray(arr)) continue;
+    for (var i = 0; i < arr.length; i++) {
+      var e = arr[i];
+      if (!e) continue;
+      if (typeof e === 'object' && e.uid && String(e.uid) === k) return e;
+      if (!(typeof e === 'object' && e.uid) &&
+          (window._nameForms(e) || []).indexOf(kLower) !== -1) return e;
+    }
+  }
+  return null;
+};
+
+// Normaliza um item GRAVADO na fila (que pode ser nome legado) para a chave canônica.
+// Devolve '' quando o item não corresponde a ninguém que esteja na espera — é o
+// descarte dos fantasmas.
+window._wlNormalizeKey = function (t, item) {
+  var raw = String(item == null ? '' : (typeof item === 'object' ? window._wlKey(item) : item)).trim();
+  if (!raw) return '';
+  // Já é a chave de alguém da espera?
+  var direto = window._wlEntryByKey(t, raw);
+  if (direto) return window._wlKey(direto);
+  // Nome legado de alguém COM conta → vira o uid dela (migração na leitura).
+  var uid = (typeof window._memberUidByName === 'function') ? window._memberUidByName(t, raw) : '';
+  if (uid) return uid;
+  return '';
+};
+
+// Nome de EXIBIÇÃO de uma chave. Nunca é identidade — só serve pra montar o grupo e
+// pintar a tela. Perfil vivo primeiro (uid), depois o nome gravado, e o próprio texto
+// da chave quando ela É o nome (informal sem conta).
+// ⚠️ NUNCA passar por `_displayNameForUid` com storedName vazio: ela devolve o RÓTULO
+// `"Jogador sem perfil (XXXX)"` quando o perfil não resolveu — e foi exatamente esse
+// rótulo que envenenou a fila. Aqui a ordem é: nome VIVO (que nunca inventa rótulo) →
+// nome gravado na própria entrada → nome gravado no elenco → a chave. Se a chave for o
+// nome (informal sem conta), ela já É o nome certo.
+window._wlDisplayName = function (t, key) {
+  var k = String(key || '').trim();
+  if (!k) return '';
+  var e = window._wlEntryByKey(t, k);
+  var uid = (e && e.uid) ? String(e.uid) : '';
+  if (uid && typeof window._nameForUid === 'function') {
+    var vivo = String(window._nameForUid(uid) || '').trim();
+    if (vivo) return vivo;
+  }
+  if (e) {
+    var nm = String((e.displayName || e.name || '') || '').trim();
+    if (nm) return nm;
+  }
+  if (uid && typeof window._memberNameByUid === 'function') {
+    var gravado = String(window._memberNameByUid(t, uid) || '').trim();
+    if (gravado) return gravado;
+  }
+  return k;
+};
+
+// Remove da espera pela CHAVE (uid quando há conta, nome só pro informal). Espelha
+// _removeFromWaitlist, que continua existindo pros caminhos que só têm o nome em mãos.
+window._removeFromWaitlistByKey = function (t, key) {
+  if (!t || !key) return false;
+  var k = String(key).trim();
+  if (!k) return false;
+  var kLower = k.toLowerCase();
+  var removed = false;
+  var casa = function (e) {
+    if (!e) return false;
+    if (typeof e === 'object' && e.uid) return String(e.uid) === k;   // COM conta: só uid
+    return (window._nameForms(e) || []).indexOf(kLower) !== -1;        // SEM conta: nome
+  };
+  ['waitlist', 'standbyParticipants'].forEach(function (campo) {
+    if (!Array.isArray(t[campo])) return;
+    var antes = t[campo].length;
+    t[campo] = t[campo].filter(function (e) { return !casa(e); });
+    if (t[campo].length < antes) removed = true;
+  });
+  if (t.monarchWaitlist && typeof t.monarchWaitlist === 'object' && !Array.isArray(t.monarchWaitlist)) {
+    Object.keys(t.monarchWaitlist).forEach(function (cat) {
+      var arr = t.monarchWaitlist[cat];
+      if (!Array.isArray(arr)) return;
+      var antes2 = arr.length;
+      t.monarchWaitlist[cat] = arr.filter(function (x) {
+        var xs = String(x || '').trim();
+        return !(xs === k || xs.toLowerCase() === kLower);
+      });
+      if (t.monarchWaitlist[cat].length < antes2) removed = true;
+    });
+  }
   return removed;
 };

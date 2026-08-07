@@ -588,6 +588,47 @@ const SUITES = [
   // coachmarks REAL com relógio controlado; contra o código anterior a dica
   // nasce em cima de quem está marcando ponto.
   'tests/dica-nunca-no-placar.test.js',
+
+  // O GATE DE TERMOS não pode carimbar quem acabou de nascer. Relato do dono: "o modal
+  // de termos nunca aparece pra ninguem" — MEDIDO: 188 de 202 aceites eram grandfather
+  // automático, 187 deles a menos de 10s do nascimento da conta (a Paula levou 318 ms).
+  // A lista de "evidência de uso" contava campos que o PRÓPRIO cadastro escreve
+  // (createdAt, notifyLevel, acceptFriendRequests). Roda a expressão REAL do auth.js
+  // contra o perfil REAL da Paula recém-criada.
+  'tests/gate-de-termos-nao-carimba-conta-nova.test.js',
+
+  // QUEM ACABOU DE CRIAR CONTA consegue entrar e se inscrever. Dois defeitos medidos no
+  // Confra: (1) a busca do torneio só olhava listas em MEMÓRIA — conta nova não é membro
+  // de nada e o discovery é assíncrono, então a inscrição era recusada no cliente sem a CF
+  // ser chamada nem uma vez; (2) o auto-reload não reconhecia 'Database deleted by request
+  // of the user' (IndexedDB apagado), que mata a sessão e impede gravar o perfil no login.
+  'tests/conta-nova-consegue-entrar-e-inscrever.test.js',
+
+  // A SAFE AREA É MEDIDA, NUNCA ESTIMADA. Dois defeitos que só existem NO APARELHO
+  // (no navegador env() é 0 e eles somem): faixa morta no cabeçalho — 37px no iPhone,
+  // porque o padding usava `inset - 12px`, um desconto no olho — e a placa do ponto
+  // por cima do Desfazer, porque a reserva de altura era o número fixo `56 * escala`
+  // enquanto o botão cresce com `env(safe-area-inset-bottom)`. A invasão é do tamanho
+  // do inset: 49px no Android com 3 botões, o pior caso. Vale pros dois sistemas —
+  // o projeto está em targetSdk 36 e o edge-to-edge lá é obrigatório.
+  // Junto: o picker do sacador que cabia numa barra só, em duas colunas.
+  'tests/safe-area-medida-nao-estimada.test.js',
+
+  // O RELÓGIO ACOMPANHA O SACADOR E O ENCERRAR DELE ENCERRA. Dois relatos do dono,
+  // ambos valendo pros DOIS sistemas (mesmo contrato, mesmo snapshot, mesmo botão):
+  // a escolha do 1º sacador no celular não viajava (o campo saía de `serveOrder`,
+  // que na tela do 1º sacador está vazia), e o "Fechar" do relógio só mexia em
+  // estado LOCAL — a ponte não tinha intenção de encerrar, então a ordem não tinha
+  // por onde chegar ao celular e o relógio ficava preso na tela de resultado.
+  'tests/relogio-sacador-e-encerrar.test.js',
+  // AMISTOSO É PARTIDA. O índice do letzplay enumera partidas avulsas
+  // (`matchable_type: "User"`, card sem link de competição) e o extrator as descartava —
+  // o acervo ficava devendo um id PARA SEMPRE, a barra parava em 98% e o verde virava
+  // violeta. Junto: "concluí" virou verificação contra o índice, não impressão de página.
+  'tests/lz-amistoso-fecha-a-conta.test.js',
+  // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
+  // (o da matriz não recebia nada), e repintar no meio do save não apaga o feedback.
+  'tests/analise-botao-salvando.test.js',
 ];
 
 let failed = [];

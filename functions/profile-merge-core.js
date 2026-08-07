@@ -139,7 +139,66 @@ function pickLetzplayScan(keepData, dropData) {
   return (jogos(dropData) > jogos(keepData)) ? 'drop' : 'keep';
 }
 
+/**
+ * O IDENTIFICADOR DA CONTA ABSORVIDA VIRA VÍNCULO DO SOBREVIVENTE.
+ *
+ * Buraco MEDIDO na fusão da Fabiana Bastos Vieira (07/ago/2026): depois de fundir, o
+ * `linkedEmails` do sobrevivente continuou `undefined` e o e-mail da conta absorvida
+ * (`fabiana@sialdrill.com.br`) só existia em `loginRedirects`. Os dois servem a coisas
+ * DIFERENTES e por isso um não cobre o outro:
+ *   • `loginRedirects` responde "quem tentar ENTRAR por este e-mail é fulano" — é o caminho
+ *     de sessão, e só é lido no login.
+ *   • `linkedEmails` responde "este e-mail TAMBÉM é do fulano" — é o que `_uidByProfileEmail`
+ *     consulta pra achar a pessoa, e o que a fila de e-mail usa pra alcançar o endereço
+ *     antigo. Sem ele, a pessoa deixa de receber no endereço pelo qual ela se cadastrou.
+ *
+ * Por que `computeProfileMerge` não pega isso: o e-mail primário do drop mora em
+ * `dropData.email`, que está em NUNCA_COPIAR de propósito (o e-mail do sobrevivente é dele e
+ * não pode ser sobrescrito). A varredura genérica une `linkedEmails` × `linkedEmails` — e
+ * ambos estavam vazios. O dado a preservar não era um array, era o campo escalar.
+ *
+ * ⚠️ Esta regra JÁ EXISTIA, inline, dentro de `mergePhoneAccount` (index.js, o ramo do
+ * `surv.linkedEmails`). Eram duas versões da mesma decisão e só uma rodava no caminho comum
+ * — exatamente o drift que este projeto já pagou caro. Agora é UMA função, e os dois
+ * caminhos chamam ela.
+ *
+ * Idempotente: chamar de novo com o mesmo identificador não duplica nem devolve update.
+ * Devolve SÓ o que mudou (`{}` = nada a gravar).
+ *
+ * @param {Object} keepData  perfil do sobrevivente (como está no banco)
+ * @param {string} dropEmail e-mail REAL da conta absorvida (sintético é descartado aqui)
+ * @param {string} dropPhone telefone E.164 da conta absorvida
+ * @returns {Object} subconjunto de {linkedEmails, linkedPhones} a gravar
+ */
+function computeLinkedIdentifiers(keepData, dropEmail, dropPhone) {
+  const keep = keepData || {};
+  const upd = {};
+
+  // E-mail sintético de conta de celular NUNCA é identidade — não vira vínculo.
+  const em = String(dropEmail || '').trim().toLowerCase();
+  if (em && !/@phone\.scoreplace\.app$/i.test(em)) {
+    const proprio = String(keep.email || '').trim().toLowerCase();
+    if (em !== proprio) {
+      const base = Array.isArray(keep.linkedEmails) ? keep.linkedEmails : [];
+      // dedup case-insensitive: o array pode ter vindo com o e-mail em outra caixa
+      const jaTem = base.some(function (e) { return String(e || '').trim().toLowerCase() === em; });
+      if (!jaTem) upd.linkedEmails = base.concat([em]);
+    }
+  }
+
+  const ph = String(dropPhone || '').trim();
+  if (ph) {
+    const proprioPh = String(keep.phone || '').trim();
+    if (ph !== proprioPh) {
+      const baseP = Array.isArray(keep.linkedPhones) ? keep.linkedPhones : [];
+      if (baseP.indexOf(ph) === -1) upd.linkedPhones = baseP.concat([ph]);
+    }
+  }
+
+  return upd;
+}
+
 module.exports = {
   NUNCA_COPIAR, computeProfileMerge, isEmpty, isPlainObject, sameItem,
-  pickLetzplayScan,
+  pickLetzplayScan, computeLinkedIdentifiers,
 };

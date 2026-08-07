@@ -143,6 +143,20 @@
           window._liveScoreUndoLastPoint();
         }
         break;
+      case 'close':
+        // ENCERRAR tocado no relógio (v1.7.67). Relato do dono: "quando clicamos
+        // encerrar ao final da partida deveria voltar para a tela de configuração
+        // no celular e o relógio voltar para a espera, mas o relogio fica travado
+        // na tela de resultado da ultima partida".
+        // A causa era estrutural: o botão só mexia em estado LOCAL do relógio
+        // (`replayDismissed`) — nos DOIS sistemas, watchOS e Wear — e esta
+        // intenção não existia, então a ordem não tinha por onde chegar aqui.
+        // Fecha sem diálogo (o toque no relógio já é a confirmação) e o teardown
+        // do fechamento empurra o estado inativo, que devolve o relógio à espera.
+        if (typeof window._liveScoreCloseFromWatch === 'function') {
+          window._liveScoreCloseFromWatch();
+        }
+        break;
       case 'replay':
         // "Jogar novamente" (casual) — já confirmado no relógio, pula o
         // diálogo do celular. intent.shuffle: re-sortear as duplas (true) ou

@@ -126,6 +126,13 @@
   // de grupo. Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
   function _ctxUidsFor(t, ctx, matches, name) {
     if (!t || !name || name === 'TBD' || name === 'BYE') return [];
+    // v1.7.66 — o uid GRAVADO no claim vem primeiro. Ele é o único que sobrevive a
+    // alguém trocar o displayName: as buscas abaixo todas dependem de casar o NOME
+    // (g.players.indexOf, team1.indexOf), e nome trocado não casa com mais nada.
+    if (ctx && Array.isArray(ctx.playerUids) && Array.isArray(ctx.players)) {
+      var _ip = ctx.players.indexOf(name);
+      if (_ip >= 0 && ctx.playerUids[_ip]) return [String(ctx.playerUids[_ip])];
+    }
     var r = (t.rounds || [])[(ctx && ctx.roundIndex) || 0];
     var g = (r && Array.isArray(r.monarchGroups) && ctx && ctx.groupName)
       ? r.monarchGroups.filter(function (x) { return x && x.name === ctx.groupName; })[0] : null;
@@ -216,7 +223,12 @@
     var done = matches.length > 0 && matches.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
     // Grupo/Liga: o pool já é de PESSOAS (players são nomes individuais) — só anexa o uid.
     var members = players.map(function (nm) { return { name: nm, uids: _ctxUidsFor(t, ctx, matches, nm) }; });
-    return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: members, players: players, matches: matches, done: done };
+    // v1.7.66 — os uids viajam JUNTO com os nomes, na mesma ordem. `players` é um
+    // snapshot de NOMES e nome ENVELHECE: quem troca o displayName depois some do
+    // `g.players.indexOf(name)` e o apontamento perde a identidade da pessoa. Vazio na
+    // posição de quem não tem conta — ali o nome é a identidade (ressalva do dono).
+    var playerUids = members.map(function (mb) { return (mb && mb.uids && mb.uids[0]) ? String(mb.uids[0]) : ''; });
+    return { scope: 'group', roundIndex: ctx.roundIndex, groupName: ctx.groupName, members: members, players: players, playerUids: playerUids, matches: matches, done: done };
   }
   // Uids de TODA a gente do contexto (quem pode apontar / quem confirma). Lê o uid que o
   // alvo já carrega — resolver por nome aqui devolvia [] pra pessoa dentro de dupla.
@@ -239,7 +251,7 @@
   function _claimById(t, id) { return _claims(t).find(function (c) { return c.id === id; }) || null; }
   function _ctxFromClaim(c) {
     if (c.scope === 'match') return { scope: 'match', matchId: c.matchId };
-    return { scope: 'group', roundIndex: c.roundIndex, groupName: c.groupName, matchIds: c.matchIds, players: c.players };
+    return { scope: 'group', roundIndex: c.roundIndex, groupName: c.groupName, matchIds: c.matchIds, players: c.players, playerUids: c.playerUids };
   }
   function _confirmerUids(t, rc, c) {
     var all = _allCtxUids(t, rc);
@@ -531,7 +543,7 @@
       status: 'pending', confirms: {}, createdAt: new Date().toISOString()
     };
     if (rc.scope === 'match') { c.matchId = rc.matchId; }
-    else { c.roundIndex = rc.roundIndex; c.groupName = rc.groupName; c.matchIds = rc.matches.map(function (m) { return m.id; }); c.players = rc.players; }
+    else { c.roundIndex = rc.roundIndex; c.groupName = rc.groupName; c.matchIds = rc.matches.map(function (m) { return m.id; }); c.players = rc.players; c.playerUids = rc.playerUids || []; }
     var conf = _confirmerUids(t, rc, c);
     var data = _notifData(t, '⚠️ Confirma a falta?', (c.byName || 'Alguém') + ' apontou que "' + absentName + '" faltou em "' + (t.name || '') + '". Confirme ou conteste.');
     _commit(tId, function (ft) {

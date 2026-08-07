@@ -138,6 +138,50 @@ const merge = P.computeProfileMerge;
   ok('devolve sempre um doc INTEIRO (nunca híbrido)', r === 'keep' || r === 'drop');
 })();
 
+// ── O IDENTIFICADOR DA CONTA ABSORVIDA VIRA VÍNCULO ──────────────────────────
+// DEFEITO MEDIDO (Fabiana Bastos Vieira, 07/ago/2026): a fusão rodou, o torneio ficou
+// intacto — e o `linkedEmails` do sobrevivente continuou `undefined`. O e-mail da conta
+// absorvida (fabiana@sialdrill.com.br) foi parar SÓ em `loginRedirects`, que só é lido no
+// login. Resultado: ela entra pelos dois caminhos e não RECEBE mais nada no endereço pelo
+// qual se cadastrou. A varredura de perfil não pegava porque `email` está em NUNCA_COPIAR:
+// o dado a preservar é um campo ESCALAR do drop, não um array pra unir.
+(() => {
+  const L = P.computeLinkedIdentifiers;
+
+  // O caso real, reproduzido: keep sem linkedEmails nenhum.
+  const fab = L({ email: 'fabi2bvieira@gmail.com' }, 'fabiana@sialdrill.com.br', null);
+  ok('o e-mail da conta absorvida entra em linkedEmails',
+    JSON.stringify(fab.linkedEmails) === JSON.stringify(['fabiana@sialdrill.com.br']),
+    JSON.stringify(fab));
+
+  ok('preserva os vínculos que já existiam',
+    JSON.stringify(L({ email: 'a@x.com', linkedEmails: ['v@x.com'] }, 'b@x.com', null).linkedEmails)
+      === JSON.stringify(['v@x.com', 'b@x.com']));
+
+  // Idempotência: rodar de novo depois de gravado não pode duplicar nem gerar update.
+  ok('idempotente — segunda passada não devolve update',
+    Object.keys(L({ email: 'a@x.com', linkedEmails: ['b@x.com'] }, 'b@x.com', null)).length === 0);
+  ok('dedup é insensível a maiúscula',
+    Object.keys(L({ email: 'a@x.com', linkedEmails: ['B@X.com'] }, 'b@x.com', null)).length === 0);
+
+  // O próprio e-mail do sobrevivente nunca vira "vínculo" dele mesmo.
+  ok('não vincula o e-mail do próprio sobrevivente',
+    Object.keys(L({ email: 'a@x.com' }, 'A@x.com', null)).length === 0);
+
+  // E-mail sintético de conta de celular NÃO é identidade — não pode virar vínculo.
+  ok('e-mail sintético de celular é descartado',
+    Object.keys(L({ email: 'a@x.com' }, 'phone_5511999998888@phone.scoreplace.app', null)).length === 0);
+
+  // Telefone segue a mesma regra, em linkedPhones (é o que _uidByProfilePhone consulta).
+  ok('telefone da conta absorvida entra em linkedPhones',
+    JSON.stringify(L({ phone: '+5511911111111' }, null, '+5511922222222').linkedPhones)
+      === JSON.stringify(['+5511922222222']));
+  ok('não vincula o telefone do próprio sobrevivente',
+    Object.keys(L({ phone: '+5511911111111' }, null, '+5511911111111')).length === 0);
+
+  ok('sem identificador nenhum → nada a gravar', Object.keys(L({}, null, null)).length === 0);
+})();
+
 // ── Fiação: o index.js usa o módulo de verdade ───────────────────────────────
 (() => {
   const fs = require('fs'), path = require('path');
@@ -148,6 +192,36 @@ const merge = P.computeProfileMerge;
   ok('a união do perfil acontece DENTRO do _executeMerge (o caminho comum de toda fusão)',
     bloco.includes('computeProfileMerge('));
   ok('grava num update só (perfil + matchHistory juntos)', /profileUpd\.matchHistory\s*=/.test(bloco));
+
+  // O vínculo do identificador tem que rodar no CAMINHO COMUM, não só no merge por celular —
+  // foi exatamente essa assimetria que deixou a Fabiana sem linkedEmails.
+  ok('_executeMerge vincula o identificador da conta absorvida',
+    bloco.includes('computeLinkedIdentifiers('));
+  // E não pode haver DUAS versões da mesma decisão: o mergePhoneAccount tinha a regra
+  // inline (`surv.linkedEmails.push(oe)`) e o caminho comum não tinha nada.
+  ok('mergePhoneAccount usa a MESMA função (regra não duplicada)',
+    (src.match(/computeLinkedIdentifiers\(/g) || []).length >= 2);
+  ok('a versão inline de mergePhoneAccount saiu do arquivo',
+    !/surv\.linkedEmails\.push\(/.test(src));
+})();
+
+// ── O índice que a migração de notificações exige existe no repo ─────────────
+// Na fusão da Fabiana o passo _migrateNotifications morreu com FAILED_PRECONDITION: falta
+// o índice COLLECTION_GROUP de `notifications.fromUid`. É best-effort (não aborta a fusão),
+// e por isso passou despercebido — mas significa que ele NUNCA rodou em fusão nenhuma:
+// notificação enviada pela conta absorvida seguia apontando pro uid morto, e o nome/foto do
+// remetente deixava de resolver na caixa de terceiros.
+(() => {
+  const fs = require('fs'), path = require('path');
+  const idx = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'firestore.indexes.json'), 'utf8'));
+  const ov = (idx.fieldOverrides || []).find(f => f.collectionGroup === 'notifications' && f.fieldPath === 'fromUid');
+  ok('firestore.indexes.json declara notifications.fromUid', !!ov);
+  ok('com escopo COLLECTION_GROUP (é uma query de collectionGroup)',
+    !!ov && (ov.indexes || []).some(i => i.queryScope === 'COLLECTION_GROUP' && i.order === 'ASCENDING'));
+  // fieldOverride SUBSTITUI a indexação automática do campo: sem redeclarar o escopo
+  // COLLECTION, qualquer query normal por fromUid dentro de um usuário pararia de funcionar.
+  ok('mantém também o escopo COLLECTION (o override substitui o índice automático)',
+    !!ov && (ov.indexes || []).some(i => i.queryScope === 'COLLECTION'));
 })();
 
 console.log(fail === 0

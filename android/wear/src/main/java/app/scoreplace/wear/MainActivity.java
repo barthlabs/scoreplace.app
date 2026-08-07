@@ -200,9 +200,16 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnUndo.setOnClickListener(v -> sendIntent("undo", 0));
         // "Jogar novamente?" — Cancelar dispensa o prompt; Confirmar manda a
         // intenção pro celular recomeçar (com/sem re-sortear as duplas).
+        // v1.7.67: ENCERRAR manda a ordem pro celular em vez de só esconder o painel
+        // aqui. Antes isto era estado LOCAL — o celular seguia com o placar aberto e
+        // este app ficava preso na tela de resultado da última partida (mesmo defeito
+        // do watchOS; os dois só mexiam em `replayDismissed`). Esconder na hora
+        // continua, senão o painel piscaria de volta enquanto a resposta não chega;
+        // quem tira daqui de vez é o estado INATIVO que o celular devolve.
         btnReplayCancel.setOnClickListener(v -> {
             replayDismissed = true;
             replayControls.setVisibility(View.GONE);
+            sendIntent("close", 0);
         });
         btnReplayConfirm.setOnClickListener(v -> {
             // RR ligado → aceita a sugestão de Rei/Rainha; senão, replay normal.

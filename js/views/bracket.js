@@ -5007,13 +5007,16 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // caixa "ficaram de fora"). Foi esse o "os balõezinhos não aparecem" da Cynthia,
             // que está no MESMO grupo do Arnaldo.
             //
-            // ⚠️ O AUSENTE É A ÚNICA ENTRADA SEM UID AQUI, e não por escolha: o schema
-            // guarda `g.woAbsent` como NOME PURO — não existe `woAbsentUid`. Ele entra com
-            // uid nulo e quem resolve é a própria `_computeMonarchStandings`, pelos SLOTS
-            // dos jogos (`_matchN2u` ← team1Uids/team2Uids), que é a fonte canônica; montar
-            // um segundo resolvedor aqui seria copiar a mesma decisão. Por isso o dedup
-            // abaixo compara NOME: é o único dado que o schema dá pra esse caso — a mesma
-            // exceção do fictício, que só tem nome. Fechar de vez é gravar `woAbsentUid`.
+            // ⚠️ COMENTÁRIO CORRIGIDO na v1.7.63 — ele afirmava que o schema não guardava o
+            // uid do ausente e mandava "fechar de vez" gravando esse campo. Isso deixou de
+            // ser verdade na v1.7.21, que passou a gravá-lo na aplicação do W.O., e o código
+            // logo abaixo JÁ o lê primeiro. Era só o comentário que ficou pra trás — e ele
+            // mandava o próximo leitor consertar um problema que não existe mais.
+            //
+            // O que continua valendo: o dedup abaixo compara NOME porque é a única chave
+            // comum entre o roster do grupo e o ausente quando ele NÃO TEM CONTA (fictício,
+            // nome digitado à mão) — a ressalva do dono. Para quem tem conta, o uid resolve
+            // logo em seguida, pelas duas fontes descritas abaixo.
             // Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
             var _stRoster = (g.players || []).map(function (nm, i) {
               return { name: nm, uid: (g.playersUids || [])[i] || null };

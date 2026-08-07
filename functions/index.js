@@ -471,6 +471,22 @@ async function _executeMerge(db, keepDoc, dropDoc) {
   catch (e) { _drEmail = dropData.email || null; _drPhone = dropData.phone || null; }
   await _recordLoginRedirects(db, keepUid, _drEmail, _drPhone);
 
+  // v1.7.61 — E O IDENTIFICADOR TAMBÉM VIRA VÍNCULO. `loginRedirects` só é lido no LOGIN;
+  // quem responde "este e-mail também é dessa pessoa" é `linkedEmails` (é o que
+  // _uidByProfileEmail consulta e o que a fila de e-mail usa pra alcançar o endereço antigo).
+  // Medido na fusão da Fabiana: o `fabiana@sialdrill.com.br` ficou SÓ no redirect, e ela
+  // parou de receber e-mail no endereço pelo qual se cadastrou. A varredura de perfil não
+  // pega isso porque `email` está em NUNCA_COPIAR — o dado a preservar é escalar, não array.
+  // Base = perfil do keep JÁ com o que a varredura acabou de gravar (senão sobrescreveria).
+  try {
+    const _linkUpd = _profileMerge.computeLinkedIdentifiers(
+      Object.assign({}, keepData, profileUpd), _drEmail, _drPhone);
+    if (Object.keys(_linkUpd).length > 0) {
+      await db.collection("users").doc(keepUid).update(_linkUpd);
+      console.log(`[_executeMerge] identificadores vinculados: ${JSON.stringify(_linkUpd)}`);
+    }
+  } catch (e) { console.error("[_executeMerge] vincular identificadores falhou:", e.code || e.message); }
+
   console.log(`[_executeMerge] Done: tourFixed=${tourFixed} casualFixed=${casualFixed} ` +
     `presences=${sweptFixed.presences || 0} venues=${sweptFixed.venues || 0} ` +
     `notifMovidas=${notifFixed.moved} notifDuplicadas=${notifFixed.duplicates} notifDeTerceiros=${notifFixed.fromUid}`);
@@ -5422,11 +5438,13 @@ exports.mergePhoneAccount = onCall(
     surv.friends = unionArr(newData.friends, oldData.friends).filter(u => u !== callerUid && u !== oldUid);
     surv.friendRequestsSent = unionArr(newData.friendRequestsSent, oldData.friendRequestsSent).filter(u => u !== callerUid && u !== oldUid);
     surv.friendRequestsReceived = unionArr(newData.friendRequestsReceived, oldData.friendRequestsReceived).filter(u => u !== callerUid && u !== oldUid);
+    // v1.7.61 — a regra de "o e-mail da conta absorvida vira vínculo" MORAVA AQUI, inline, e
+    // só aqui: o caminho comum de fusão (_executeMerge) não tinha equivalente, e por isso a
+    // Fabiana saiu de uma fusão sem `linkedEmails`. Agora é UMA função pura, usada pelos dois.
     surv.linkedEmails = unionArr(newData.linkedEmails, oldData.linkedEmails);
-    if (oldEmailRaw) {
-      const oe = oldEmailRaw.toLowerCase();
-      if (oe !== newEmail && surv.linkedEmails.indexOf(oe) === -1) surv.linkedEmails.push(oe);
-    }
+    const _linkPhone = _profileMerge.computeLinkedIdentifiers(
+      { email: newEmail, linkedEmails: surv.linkedEmails }, oldEmailRaw, null);
+    if (_linkPhone.linkedEmails) surv.linkedEmails = _linkPhone.linkedEmails;
     surv.preferredSports = unionArr(newData.preferredSports, oldData.preferredSports);
     surv.preferredCeps = unionArr(newData.preferredCeps, oldData.preferredCeps);
     surv.preferredLocations = unionLocations(newData.preferredLocations, oldData.preferredLocations);

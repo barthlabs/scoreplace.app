@@ -1,11 +1,18 @@
-/* W.O. DO ORGANIZADOR — DESTINO DO AUSENTE + O PRIMEIRO DA FILA ASSUME
+/* W.O. DO ORGANIZADOR — O PRIMEIRO DA FILA ASSUME A VAGA
  * node tests/wo-destino-e-suplente.test.js
  *
- * REGRA DO DONO (ago/2026), textual: _"o organizador pode escolher entre mandar o W.O.
- * para a lista de desativados ou para a lista de espera (no fim da lista). Assume a
- * posição o primeiro da lista de espera (suplente) e ocupa a posição até o final do
- * torneio (caso não haja W.O. dessa pessoa). Se o W.O. for para desativados, passa para
- * última posição da lista de espera ao se reativar."_
+ * ⚠️ REVISADO NA v1.7.59 — A ESCOLHA DE DESTINO FOI REVOGADA PELO DONO.
+ * A regra da v1.6.88/v1.6.90 era: _"o organizador pode escolher entre mandar o W.O. para
+ * a lista de desativados ou para a lista de espera (no fim da lista)"_. Em 06/ago/2026,
+ * depois do caso da Eliane Cinelli (levou W.O. e foi parar NA FILA, porque o default do
+ * diálogo era 'waitlist'), o dono cortou a escolha: **W.O. desativa, sempre; e é o
+ * próprio participante, religando o toggle, quem entra na lista de espera.**
+ *
+ * O QUE ESTE ARQUIVO AINDA PROTEGE (e por isso não foi apagado): a ordem da fila, o
+ * primeiro da fila assumindo a vaga, o slot com o uid certo, os 3 jogos reescritos, o
+ * marcador de 0 pts, o suplente ficando até o fim do torneio e a fila vazia. As asserções
+ * que exigiam o destino 'waitlist' foram reescritas pro desfecho único — o novo caminho
+ * inteiro (os 4 pontos de aplicação + o religar) vive em `tests/wo-sempre-desativa.test.js`.
  * Escopo: SÓ o W.O. dado pelo ORGANIZADOR. O W.O. reivindicado por participante
  * (wo-claim.js) segue inalterado — ordem explícita do dono.
  *
@@ -15,7 +22,7 @@
  * rodada é sorteada a partir de t.participants. As duas metades ficavam soltas.
  *
  * Este teste carrega o liga-substitution.js REAL (a IIFE inteira) num window de teste e
- * roda _ligaApplyWoWithDest contra o grupo REAL do Confra — R1 Grupo W: Thereza, FABIANA
+ * roda _ligaApplyWo contra o grupo REAL do Confra — R1 Grupo W: Thereza, FABIANA
  * VIEIRA, Flávia Barchetta, Suely — com a fila real de 2 pessoas.
  */
 const fs = require('fs');
@@ -121,17 +128,20 @@ sec(function () {
   ok(nomes(win._getWaitlist(t)).join('|') === 'Sandra|Paulo Oriente|Novo', 'pushBack repetido mexeu na fila');
 });
 
-// ── 2. W.O. → FIM DA LISTA DE ESPERA (a escolha do organizador) ─────────────
+// ── 2. W.O. → DESATIVADO, e o primeiro da fila assume ──────────────────────
+// v1.7.59: as 3 asserções (a) exigiam o destino 'waitlist' — REVISADAS de propósito.
+// O invariante que elas defendiam de verdade ("quem levou W.O. sai do elenco ATIVO e não
+// fura a fila de quem já esperava") continua travado: ele agora é ligaActive:false.
 sec(function () {
   const t = novoT();
   loadLiga(t);
-  win._ligaApplyWoWithDest(t.id, 0, 'R1 Grupo W', 'Thereza', 'waitlist');
+  win._ligaApplyWo(t.id, 0, 'R1 Grupo W', 'Thereza');
 
-  // (a) a Thereza SAIU do elenco e está no FIM da fila — atrás de quem já esperava
-  ok(!nomes(t.participants).includes('Thereza'), 'Thereza tinha que sair do elenco ativo');
-  const fila = nomes(win._getWaitlist(t));
-  ok(fila[fila.length - 1] === 'Thereza', 'Thereza tinha que entrar no FIM da fila, fila=' + fila.join('|'));
-  ok(fila.indexOf('Paulo Oriente') < fila.indexOf('Thereza'), 'quem já esperava não pode ficar atrás de quem acabou de levar W.O.');
+  // (a) a Thereza CONTINUA no elenco, desativada — e NÃO entra na fila por conta do W.O.
+  const _th = t.participants.filter((p) => p.displayName === 'Thereza')[0];
+  ok(!!_th && _th.ligaActive === false, 'Thereza tinha que ficar no elenco DESATIVADA');
+  ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'o W.O. NÃO pode empurrar ninguém pra fila (bug da Eliane)');
+  ok(nomes(win._getWaitlist(t)).includes('Paulo Oriente'), 'quem já esperava continua na fila');
 
   // (b) a Sandra (primeira da fila) ASSUMIU — no grupo E no elenco
   const g = t.rounds[0].monarchGroups[0];
@@ -159,26 +169,28 @@ sec(function () {
   ok(wo[0].sitOutPoints === 0, 'W.O. é 0 pts');
 });
 
-// ── 3. W.O. → DESATIVADOS (a outra escolha) ────────────────────────────────
+// ── 3. A marca do W.O. é woDeactivatedAt — e só ela ────────────────────────
 sec(function () {
   const t = novoT();
   loadLiga(t);
-  win._ligaApplyWoWithDest(t.id, 0, 'R1 Grupo W', 'Thereza', 'inactive');
+  win._ligaApplyWo(t.id, 0, 'R1 Grupo W', 'Thereza');
 
   const th = t.participants.filter((p) => p.displayName === 'Thereza')[0];
-  ok(!!th, 'no destino "desativados" a Thereza CONTINUA no elenco');
+  ok(!!th, 'quem leva W.O. CONTINUA no elenco');
   ok(th.ligaActive === false, 'e fica inativa');
+  ok(!!th.woDeactivatedAt, 'com a marca woDeactivatedAt — é dela que o religar depende');
+  ok(!th.woSentToWaitlistAt, 'e NUNCA com woSentToWaitlistAt: essa marca é do toggle da própria pessoa');
   ok(!nomes(win._getWaitlist(t)).includes('Thereza'), 'quem foi pros desativados NÃO entra na fila agora (só ao reativar)');
-  // e a vaga foi ocupada do mesmo jeito
-  ok(t.rounds[0].monarchGroups[0].players.includes('Sandra'), 'a Sandra assume a vaga nos dois destinos');
-  ok(nomes(t.participants).includes('Sandra'), 'e entra no elenco nos dois destinos');
+  // e a vaga é ocupada
+  ok(t.rounds[0].monarchGroups[0].players.includes('Sandra'), 'a Sandra assume a vaga');
+  ok(nomes(t.participants).includes('Sandra'), 'e entra no elenco');
 });
 
 // ── 4. Desativado por W.O. que REATIVA → ÚLTIMA posição da fila ────────────
 sec(function () {
   const t = novoT();
   loadLiga(t);
-  win._ligaApplyWoWithDest(t.id, 0, 'R1 Grupo W', 'Thereza', 'inactive');
+  win._ligaApplyWo(t.id, 0, 'R1 Grupo W', 'Thereza');
   // fila agora: Paulo (a Sandra assumiu). Reativa a Thereza pelo caminho real.
   const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
   const i = src.indexOf('window._toggleLigaActive = function');
@@ -205,26 +217,28 @@ sec(function () {
   const t = novoT();
   t.standbyParticipants = [];
   loadLiga(t);
-  win._ligaApplyWoWithDest(t.id, 0, 'R1 Grupo W', 'Thereza', 'waitlist');
+  win._ligaApplyWo(t.id, 0, 'R1 Grupo W', 'Thereza');
   const g = t.rounds[0].monarchGroups[0];
   ok(g.woAbsent === 'Thereza', 'o W.O. tem que valer mesmo sem suplente');
   ok(g.subStatus === 'open', 'sem fila, a vaga fica ABERTA (convite/Jogador X continuam disponíveis)');
   ok(g.players.includes('Thereza') === false || g.subName == null, 'sem suplente ninguém entra no lugar');
-  ok(nomes(win._getWaitlist(t)).join('|') === 'Thereza', 'a Thereza é quem está na fila agora');
+  // v1.7.59 REVISADA: antes esperava a Thereza NA fila. Fila vazia + W.O. = fila vazia —
+  // o W.O. não cria fila; quem cria é a pessoa, religando o toggle.
+  ok(win._getWaitlist(t).length === 0, 'a fila continua VAZIA — o W.O. não põe ninguém nela');
 });
 
 // ── 6. O suplente FICA — a rodada seguinte sorteia a partir do elenco ──────
 sec(function () {
   const t = novoT();
   loadLiga(t);
-  win._ligaApplyWoWithDest(t.id, 0, 'R1 Grupo W', 'Thereza', 'waitlist');
+  win._ligaApplyWo(t.id, 0, 'R1 Grupo W', 'Thereza');
   // "ocupa a posição até o final do torneio" = está em participants ATIVO, que é a fonte
   // do próximo sorteio da Liga (_getActiveLigaPlayers lê participants e pula ligaActive
   // === false). Sem isso o substituto sumiria na R2, porque cada rodada é sorteada de novo.
   const ativos = (t.participants || []).filter((p) => p && p.ligaActive !== false);
   const nomesAtivos = ativos.map((p) => (p.displayName || p.name));
   ok(nomesAtivos.includes('Sandra'), 'a Sandra tem que entrar no sorteio da rodada seguinte, ativos=' + nomesAtivos.join('|'));
-  ok(!nomesAtivos.includes('Thereza'), 'quem levou W.O. e foi pra fila NÃO pode ser sorteada na rodada seguinte');
+  ok(!nomesAtivos.includes('Thereza'), 'quem levou W.O. NÃO pode ser sorteada na rodada seguinte');
   ok(ativos.length === 4, 'o elenco ativo continua com 4 (uma sai, uma entra), tem ' + ativos.length);
   const sub = t.participants.filter((p) => p.displayName === 'Sandra')[0];
   ok(sub && sub.woSubstituteFor === 'Thereza', 'o substituto guarda de quem assumiu a vaga (rastro do W.O.)');
@@ -233,9 +247,70 @@ sec(function () {
 // ── 7. Escopo: o W.O. do PARTICIPANTE não foi tocado ───────────────────────
 sec(function () {
   const claim = fs.readFileSync(path.join(ROOT, 'js', 'views', 'wo-claim.js'), 'utf8');
-  ok(claim.indexOf('_ligaApplyWoWithDest') === -1 && claim.indexOf('_ligaWoDestination') === -1,
+  ok(claim.indexOf('_ligaApplyWo(') === -1 && claim.indexOf('_ligaWoConfirm') === -1,
     'wo-claim.js (W.O. do participante) NÃO pode chamar o fluxo novo — ordem explícita do dono');
 });
+
+// ── O SUPLENTE GUARDA O UID, não só o nome (v1.7.63) ────────────────────────────
+// Regra do dono: "por uid sempre. nunca nome, email ou qualquer outro dado" — com a
+// ressalva "se o usuário digitar participantes sem uid aí tem que considerar por nome
+// apenas esses".
+//
+// O ausente já gravava `woAbsentUid` desde a v1.7.21; o SUPLENTE ficou pra trás com
+// `subName` puro. Rótulo ENVELHECE: quem troca o displayName depois vira um `subName`
+// que não resolve pra ninguém — foi exatamente esse defeito que a v1.7.46 corrigiu na
+// classificação ("Fabi2401@" × "Dani Bataglia", a MESMA pessoa em duas telas).
+(() => {
+  // os QUATRO caminhos que preenchem a vaga gravam o uid junto…
+  const escritas = (LIGA_SRC.match(/g\.subName\s*=/g) || []).length;
+  const uids = (LIGA_SRC.match(/g\.subUid\s*=|delete g\.subUid/g) || []).length;
+  ok(escritas >= 4, 'os 4 caminhos que preenchem a vaga continuam existindo, achei ' + escritas);
+  ok(uids >= escritas, 'TODO caminho que grava subName decide o subUid junto (' + uids + ' × ' + escritas + ')');
+
+  // …e cada um usa a fonte de uid que tem em mãos, nunca resolvendo por nome
+  ok(/if \(_sub && _sub\.uid\) g\.subUid/.test(LIGA_SRC), 'suplente da fila: uid vem da ENTRADA da espera');
+  ok(/if \(subUid\) g\.subUid/.test(LIGA_SRC), 'substituição direta: uid vem do parâmetro (já era recebido)');
+  ok(/if \(_subEntry && _subEntry\.uid\) g\.subUid/.test(LIGA_SRC), 'convite aceito: uid vem da entrada do convidado');
+
+  // A RESSALVA: Jogador X não tem conta — ali o nome É a identidade e não há uid a gravar.
+  const jx = LIGA_SRC.slice(LIGA_SRC.indexOf("g.subIsGuest = true"));
+  ok(/delete g\.subUid/.test(jx.slice(0, 200)), 'Jogador X (sem conta) NÃO ganha subUid — o nome é a identidade dele');
+
+  // Nada pode voltar a resolver o suplente por nome pra decidir identidade.
+  ok(!/g\.subUid\s*=\s*[^;]*_nameUidMap/.test(LIGA_SRC), 'o subUid nunca é resolvido por mapa de nome');
+})();
+
+// ── O comentário do renderer não pode mentir sobre o schema ─────────────────────
+// Ele afirmava "não existe `woAbsentUid`" — falso desde a v1.7.21, e o código logo
+// abaixo já lia o uid. Comentário que mente manda o próximo leitor consertar o lugar errado.
+(() => {
+  const BR = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+  ok(BR.indexOf('não existe `woAbsentUid`') === -1,
+     'o comentário do box não pode mais afirmar que woAbsentUid não existe');
+  ok(BR.indexOf('var _absUid = g.woAbsentUid') !== -1,
+     'e o renderer continua lendo o uid ANTES de qualquer nome');
+})();
+
+// ── woClaims guarda o UID de quem está no contexto, não só o nome (v1.7.66) ──────
+// Última ponta por nome do W.O.: `woClaims[].players` é um snapshot de NOMES, e toda a
+// resolução de identidade depois dependia de casar esse nome (`g.players.indexOf`,
+// `team1.indexOf`). Nome ENVELHECE — quem troca o displayName some das buscas e o
+// apontamento perde a pessoa. O doc já tinha `absentUids` e `byUid`; faltava o resto.
+(() => {
+  const WO = fs.readFileSync(path.join(ROOT, 'js', 'views', 'wo-claim.js'), 'utf8');
+  ok(/playerUids: playerUids/.test(WO), 'o contexto resolvido carrega playerUids');
+  ok(/c\.playerUids = rc\.playerUids/.test(WO), 'o claim GRAVADO leva os uids junto');
+  ok(/playerUids: c\.playerUids/.test(WO), 'e reconstruir o contexto a partir do claim traz os uids de volta');
+  // a ordem importa: o uid gravado tem que ser consultado ANTES de qualquer casamento por nome
+  const fn = WO.slice(WO.indexOf('function _ctxUidsFor'), WO.indexOf('function _allCtxUids'));
+  const iUid = fn.indexOf('ctx.playerUids');
+  const iNome = fn.indexOf('g.players.indexOf(name)');
+  ok(iUid !== -1 && iNome !== -1 && iUid < iNome,
+     'o uid gravado é consultado ANTES do casamento por nome (senão o nome trocado ganha)');
+  // quem não tem conta continua valendo pelo nome — a ressalva do dono
+  ok(/\? String\(mb\.uids\[0\]\) : ''/.test(WO),
+     'quem não tem conta fica com uid vazio na lista — o nome continua sendo a identidade dele');
+})();
 
 console.log((fail === 0 ? '✅' : '❌') + ' wo-destino-e-suplente: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail === 0 ? 0 : 1);

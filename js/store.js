@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.59';
+window.SCOREPLACE_VERSION = '1.7.70';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -108,7 +108,7 @@ try {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.95';
+window.SP_EXT_VERSION = '1.96';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
@@ -2756,6 +2756,30 @@ window._reflowChrome = function() {
     }
     return null;
   }
+  // v1.7.66 — A MARGEM SAI DE QUEM DEIXOU DE SER O PRIMEIRO VISÍVEL.
+  //
+  // O bloco abaixo GRAVA `margin-top` (com !important) no primeiro irmão visível do
+  // back-header, e nunca a tirava de quem ocupava esse posto antes. O posto TROCA sozinho
+  // durante o uso: `#part-search-empty` ("nenhum resultado") nasce `display:none`, aparece
+  // quando a busca não acha ninguém e some de novo quando se limpa no ✕ — ou seja, digitar
+  // e apagar é exatamente o gatilho que move a margem de um elemento pro outro.
+  //
+  // Resultado do vazamento: dois irmãos com a mesma margem de ~73px ao mesmo tempo, e o
+  // conteúdo empurrado pelo dobro. Como a margem é !important, nada mais a desfaz.
+  //
+  // Marcamos quem recebeu (`data-sp-chrome-mt`) pra poder devolver o elemento ao estado
+  // anterior — a margem é REMOVIDA, não zerada: zerar com !important quebraria qualquer
+  // margem legítima que o CSS do elemento tenha.
+  function _aplicarMargemDeConteudo(el, valor) {
+    document.querySelectorAll('[data-sp-chrome-mt]').forEach(function (antigo) {
+      if (antigo === el) return;
+      antigo.style.removeProperty('margin-top');
+      antigo.removeAttribute('data-sp-chrome-mt');
+    });
+    if (!el) return;
+    el.style.setProperty('margin-top', valor, 'important');
+    el.setAttribute('data-sp-chrome-mt', '1');
+  }
   var bhOffset = topbarH + ddH - 1;
   // v3.0.91: expõe a altura do back-header FIXO visível em `--backheader-h`.
   // Qualquer barra sticky que precise grudar ABAIXO do back-header (ex.: a barra
@@ -2782,13 +2806,13 @@ window._reflowChrome = function() {
         fixedBackHeaderH = Math.floor(_bhRectH);
         // Use !important because overlay CSS uses `margin-top: 0 !important`
         // to suppress the default 50px spacer — our dynamic value has to win.
-        next.style.setProperty('margin-top', (ddH + bhH + 8) + 'px', 'important');
+        _aplicarMargemDeConteudo(next, (ddH + bhH + 8) + 'px');
       }
     } else {
       var next = _firstVisibleSibling(bh);
       if (next) {
         var mt = ddH > 0 ? (ddH + 8) + 'px' : '0';
-        next.style.setProperty('margin-top', mt, 'important');
+        _aplicarMargemDeConteudo(next, mt);
       }
     }
   });
@@ -5241,10 +5265,15 @@ window._haversineKm = function(lat1, lon1, lat2, lon2) {
 //
 // A ESPERA É INSCRIÇÃO. Ela vive nos 3 storages (`_getWaitlist`), e `memberUids` a cobre
 // desde a v1.6.86 — a pessoa vê o torneio no app porque ESTÁ nele.
-// W.O. é ANOTAÇÃO, não estado-base: quem leva W.O. termina desativado OU na fila (a
-// escolha do organizador, v1.6.90), então o W.O. entra como selo em cima do estado real —
-// juntar os dois num estado só apagaria justamente a informação acionável ("e agora, como
-// eu volto?"). Ver [[project_wo_outcome_negotiation_canon]], [[project_sitout_vs_waitlist_canon]].
+// W.O. é ANOTAÇÃO, não estado-base — e o selo em cima do estado real continua sendo o
+// certo mesmo depois da v1.7.59, que tornou o desfecho ÚNICO (W.O. sempre desativa):
+// quem levou W.O. pode estar DESATIVADO (acabou de levar) ou NA FILA (religou o toggle
+// depois), e é justamente essa diferença que responde "e agora, como eu volto?" — no
+// primeiro caso ligar o botão Ativado, no segundo esperar a vez. Fundir num estado só
+// apagaria a informação acionável.
+// ⚠️ `woSentToWaitlistAt` NÃO significa mais "o organizador mandou pra fila" (a escolha
+// 1×2 da v1.6.90 foi revogada): hoje é a marca de quem RELIGOU o toggle depois do W.O.
+// Ver [[project_wo_outcome_negotiation_canon]], [[project_sitout_vs_waitlist_canon]].
 window._meuStatusNoTorneio = function (t) {
   var cu = window.AppStore && window.AppStore.currentUser;
   var uid = cu && cu.uid;
@@ -6381,6 +6410,52 @@ window._findTournamentById = function (tId) {
     }
   }
   return null;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACHAR O TORNEIO NÃO PODE DEPENDER DO QUE JÁ ESTÁ EM MEMÓRIA (v1.7.65)
+//
+// `_findTournamentById` só olha DUAS listas locais: `AppStore.tournaments` (que vem do
+// listener `memberUids array-contains meuUid`) e `AppStore.publicDiscovery` (carga
+// assíncrona). Para quem ACABOU DE CRIAR CONTA as duas estão vazias — ele não é membro de
+// nada, e o discovery ainda está a caminho. Nessa janela o app conclui que o torneio "foi
+// removido ou não está acessível" e recusa a inscrição.
+//
+// Foi o que aconteceu no Confra (06/ago): a Paula Vasconcelos criou a conta às 23:33:53 e
+// tentou entrar em seguida; a CF `enrollParticipant` NÃO foi chamada UMA ÚNICA VEZ naquela
+// janela (conferido no log) — ou seja a recusa foi do CLIENTE, antes de o servidor saber
+// que existiu. O torneio estava vivo o tempo todo: `status:'active'`, público, 122
+// inscritos. Faltava só ir buscar o doc.
+//
+// Aqui a busca ganha o último degrau: não achou em memória, LÊ DO FIRESTORE pelo id. O doc
+// do torneio público é legível por qualquer um, então isso não abre nada — só para de
+// depender de o listener/discovery ter chegado primeiro. O resultado entra em
+// `publicDiscovery` pra que o resto da tela o encontre pelo caminho normal.
+//
+// Callback (não Promise) de propósito: os call sites são handlers de clique, e transformar
+// `enrollCurrentUser` em async mudaria o contrato de ~10 chamadores.
+window._ensureTournamentLoaded = function (tId, cb) {
+  var local = window._findTournamentById(tId);
+  if (local) { cb(local); return; }
+  var DB = window.FirestoreDB;
+  if (!DB || typeof DB.loadTournamentById !== 'function') { cb(null); return; }
+  DB.loadTournamentById(tId).then(function (t) {
+    if (!t) { cb(null); return; }
+    if (!t.id) t.id = String(tId);
+    // Uma segunda busca pode ter resolvido enquanto a leitura estava em voo — nunca
+    // duplicar: quem chegou primeiro é a referência viva que a tela já pode estar usando.
+    var jaTem = window._findTournamentById(tId);
+    if (jaTem) { cb(jaTem); return; }
+    var A = window.AppStore;
+    if (A) {
+      if (!Array.isArray(A.publicDiscovery)) A.publicDiscovery = [];
+      A.publicDiscovery.push(t);
+    }
+    cb(t);
+  }).catch(function (e) {
+    if (window._warn) window._warn('[_ensureTournamentLoaded] falhou:', e && e.message);
+    cb(null);
+  });
 };
 
 window.AppStore = {

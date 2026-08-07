@@ -1051,18 +1051,24 @@
     Object.keys(_pendingEdits).forEach(function (k) { var pe = _pendingEdits[k]; if (pe && Object.keys(pe).length > 0) n++; });
     return n;
   }
+  // BOTÃO OCUPADO NÃO É REPINTADO. `_erSaveEdits` limpa `_pendingEdits` ANTES de terminar
+  // de gravar, então qualquer chamada a esta função no meio do save veria n=0 e (a) trocaria
+  // o "Salvando…" pelo rótulo normal e (b) ESCONDERIA a barra inline inteira — sumindo com
+  // o próprio feedback que o dono pediu. Quem está girando fica como está; quem solta é o
+  // `_spinButtonDone` no fim do trabalho. [[project_busy_button_canonical]]
+  function _erBtnOcupado(el) { return !!(el && el.getAttribute('data-spinning') === '1'); }
   window._erUpdateSaveBar = function () {
     var n = _erPendingCount();
     // Barra inline no back-header (Cancelar/Salvar) — display flex.
     var inline = document.getElementById('er-mx-save-inline');
     var inlineBtn = document.getElementById('er-mx-save-btn');
-    if (inline && inlineBtn) {
+    if (inline && inlineBtn && !_erBtnOcupado(inlineBtn)) {
       if (n > 0) { inline.style.display = 'flex'; inlineBtn.disabled = false; inlineBtn.textContent = '💾 Salvar (' + n + ')'; }
       else { inline.style.display = 'none'; inlineBtn.disabled = true; inlineBtn.textContent = '💾 Salvar'; }
     }
     // Barra da lista de inscritos legada (er-save-bar), se existir.
     var bar = document.getElementById('er-save-bar'); var btn = document.getElementById('er-save-btn');
-    if (bar && btn) {
+    if (bar && btn && !_erBtnOcupado(btn)) {
       if (n > 0) { bar.style.display = ''; btn.disabled = false; btn.textContent = '💾 Salvar alterações (' + n + ')'; }
       else { bar.style.display = 'none'; btn.disabled = true; btn.textContent = '💾 Salvar alterações'; }
     }
@@ -1176,9 +1182,25 @@
     // grava a ficha do torneio (sorteio + inscritos sem conta)
     try { if (window.FirestoreDB && window.FirestoreDB.saveTournament) { if (!Array.isArray(t.participants)) t.participants = parts; window.FirestoreDB.saveTournament(t); } } catch (e) {}
     _pendingEdits = {};
-    var btn = document.getElementById('er-save-btn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Salvando…'; }
+    // ── "SALVANDO…" NOS DOIS BOTÕES, ATÉ O TRABALHO TERMINAR ──────────────────────
+    // Relato do dono (07/ago/2026): "o botão salvar da análise precisa de um salvando
+    // enquanto não termina de salvar". Existia meio: só o `#er-save-btn` (a barra da lista
+    // legada) trocava de texto — o `#er-mx-save-btn`, que é o da MATRIZ e o que o
+    // organizador usa, não recebia nada. E era texto puro: sem cinza, sem spinner e sem
+    // `disabled` no inline, dava pra clicar de novo no meio do save.
+    // Agora os dois passam pelo motor canônico (cinza + spinner + gerúndio + "…"), e o fim
+    // é EVENTO — o `finish` abaixo —, nunca timeout. [[project_busy_button_canonical]]
+    var _btnsSalvar = ['er-save-btn', 'er-mx-save-btn']
+      .map(function (id) { return document.getElementById(id); })
+      .filter(Boolean);
+    _btnsSalvar.forEach(function (b) {
+      if (window._spinButton) window._spinButton(b, 'Salvando…');
+      else { b.disabled = true; b.textContent = 'Salvando…'; }
+    });
     var finish = function (extra) {
+      // Solta ANTES do _erUpdateSaveBar: o restore do spin repõe o innerHTML original, então
+      // repintar primeiro faria o rótulo velho ("💾 Salvar (3)") voltar por cima do novo.
+      _btnsSalvar.forEach(function (b) { if (window._spinButtonDone) window._spinButtonDone(b); });
       window._erUpdateSaveBar();
       if (typeof window._erRenderInscritos === 'function') window._erRenderInscritos();
       if (typeof window._erRenderMatrix === 'function') window._erRenderMatrix();

@@ -88,8 +88,14 @@ sec(function () {
   ['danielacsimao', 'Carol Capucho', 'Nádia Santiago Lazarin'].forEach(function (n) {
     ok(g.indexOf(n) !== -1, 'a mulher "' + n + '" entra (as 3 cabem)');
   });
+  // ⚠️ REVISADA na v1.7.61 — o CONTRATO da fila mudou, o invariante NÃO. Antes a fila
+  // guardava NOMES; agora guarda CHAVES (uid de quem tem conta, nome só de quem não tem),
+  // porque a entrada da espera é strippada e o nome dela resolvia pro rótulo-fantasma
+  // "Jogador sem perfil (XXXX)" — que travava TODA formação em produção. O que esta
+  // asserção defende — a sobra sai na ORDEM DE CHEGADA, Renato antes de Vini — continua
+  // travado; só se compara pela identidade certa.
   const sobra = (t.monarchWaitlist._default_ || []);
-  ok(sobra[0] === 'Renato Oshima' && sobra[1] === 'Vini',
+  ok(sobra[0] === 'u_renato' && sobra[1] === 'u_vini',
      'a sobra mantém a ordem de chegada (Renato, depois Vini), ficou: ' + sobra.join(', '));
 });
 
@@ -130,7 +136,9 @@ sec(function () {
   const naMasc = (t.monarchWaitlist.Masc_C || []);
   const naFem = (t.monarchWaitlist.Fem_D || []);
   ok(naMasc.length === 3, 'os 3 homens vão pra fila Masc C (a rodada separa de verdade), foram ' + naMasc.length);
-  ok(naFem.indexOf('danielacsimao') !== -1, 'a Fem D vai pra fila Fem D');
+  // ⚠️ REVISADA na v1.7.61 pelo mesmo motivo da seção 2: a fila guarda CHAVE, não nome.
+  // O invariante — a Fem D cai na fila Fem D quando a rodada separa DE VERDADE — segue igual.
+  ok(naFem.indexOf('u_dani') !== -1, 'a Fem D vai pra fila Fem D');
   ok(nomesDoGrupoNovo(t).length === 0, 'e nenhum grupo nasce misturando categorias que a rodada separa');
 });
 
@@ -139,6 +147,107 @@ sec(function () {
   const t = novoT({ standbyParticipants: FILA.slice(0, 3), monarchWaitlist: {} });
   ok(win._expandMonarchFromWaitlist(t) === 0, '3 pessoas na fila não formam grupo');
   ok(nomesDoGrupoNovo(t).length === 0, 'e a rodada continua com o grupo que já tinha');
+});
+
+// ── 6. O DADO REAL: entrada STRIPPADA (só uid) — o caso que quebrou em produção ──
+// ⚠️ O fixture das seções acima dá `displayName` E `gender` a TODO MUNDO da fila. O doc
+// real NÃO TEM NENHUM DOS DOIS: desde a v1.3.52 a entrada com uid é strippada, e o gênero
+// vem do perfil. Era isso que fazia a suíte passar verde enquanto a produção não formava
+// grupo nenhum — a segunda vez que um fixture generoso demais esconde ESTE mesmo bug (a
+// primeira foi `grupo-espera-max-1-homem`, corrigida na v1.7.16).
+//
+// MEDIDO no Confra (07/ago/2026) rodando o motor REAL contra o doc REAL: `_pName` da
+// entrada devolvia "Jogador sem perfil (jSNA)", esse rótulo ia pra fila, o gênero não
+// resolvia por ele e o resultado era 0 grupos — com a fila poluída de fantasmas.
+sec(function () {
+  // exatamente a forma do banco: uid + addedAt + flags. Sem displayName. Sem gender.
+  const CRU = [
+    { uid: 'u_vini',  addedAt: '2026-08-04T14:25:17.360Z', ligaActive: true, selfEnrolled: true },
+    { uid: 'u_vane',  addedAt: '2026-08-06T14:54:10.766Z', ligaActive: true, selfEnrolled: true },
+    { uid: 'u_debo',  addedAt: '2026-08-06T14:57:39.201Z', ligaActive: true, selfEnrolled: true },
+    { uid: 'u_fabi',  addedAt: '2026-08-06T18:19:23.087Z', ligaActive: true, selfEnrolled: true },
+    { uid: 'u_cris',  addedAt: '2026-08-06T23:21:36.000Z', ligaActive: true, selfEnrolled: true },
+    { uid: 'u_paul',  addedAt: '2026-08-06T23:33:53.787Z', ligaActive: true, selfEnrolled: true },
+    { uid: 'u_andr',  addedAt: '2026-08-07T03:33:38.930Z', ligaActive: true, selfEnrolled: true },
+  ];
+  // o nome VIVO vem do perfil por uid — é o que a CF injeta em _profileNameByUid.
+  const NOMES = { u_vini: 'Vini', u_vane: 'Vanessa Kaufmann', u_debo: 'Debora Castello',
+                  u_fabi: 'Fabio Simao', u_cris: 'Cristina Arvate', u_paul: 'Paula Vasconcelos',
+                  u_andr: 'ANDREYA NOVAZZI' };
+  const GEN = { u_vini: 'masculino', u_fabi: 'masculino', u_vane: 'feminino', u_debo: 'feminino',
+                u_cris: 'feminino', u_paul: 'feminino', u_andr: 'feminino' };
+  const antes = win._profileNameByUid;
+  win._profileNameByUid = NOMES;
+  // o gênero a CF escreve na ENTRADA (_enrichParticipantsFromProfiles), por uid
+  const fila = CRU.map((e) => Object.assign({}, e, { gender: GEN[e.uid] }));
+  const t = novoT({ standbyParticipants: fila, monarchWaitlist: {} });
+
+  // a fila que o motor enxerga são UIDs, na ordem de chegada — nunca rótulo-fantasma
+  const vista = win._getMonarchWaitlist(t, null);
+  ok(vista.length === 0, 'fila monarch começa vazia (a ponte é quem a preenche), veio ' + vista.length);
+
+  const formados = win._expandMonarchFromWaitlist(t);
+  ok(formados === 1, 'forma 1 grupo mesmo com a entrada STRIPPADA (era 0 antes), formou ' + formados);
+
+  const g = nomesDoGrupoNovo(t);
+  const gu = (t.rounds[0].monarchGroups[t.rounds[0].monarchGroups.length - 1] || {}).playersUids || [];
+  ok(gu.join(',') === 'u_vini,u_vane,u_debo,u_cris',
+     'o grupo é 1 homem + as 3 primeiras mulheres da fila, POR UID; veio: ' + gu.join(','));
+  ok(gu.every(Boolean) && gu.length === 4, 'nenhum uid nulo no grupo (o defeito do R1 Grupo B2)');
+  ok(g.join(',') === 'Vini,Vanessa Kaufmann,Debora Castello,Cristina Arvate',
+     'os NOMES saem do perfil vivo, nunca do rótulo-fantasma; veio: ' + g.join(','));
+  ok(g.every((n) => String(n).indexOf('Jogador sem perfil') === -1),
+     'nenhum "Jogador sem perfil" no grupo');
+
+  // a sobra segue a ordem de chegada, por uid
+  const sobra = win._getMonarchWaitlist(t, null);
+  ok(sobra.join(',') === 'u_fabi,u_paul,u_andr',
+     'a sobra fica na ordem de chegada (Fabio, Paula, Andreya), veio: ' + sobra.join(','));
+  ok(Object.keys(t.monarchWaitlist).every((k) =>
+       (t.monarchWaitlist[k] || []).every((x) => String(x).indexOf('Jogador sem perfil') === -1)),
+     'a fila persistida não guarda rótulo-fantasma');
+
+  // quem entrou no grupo vira INSCRITO e SAI da espera — nunca nos dois
+  const inscritos = (t.participants || []).map((p) => p && p.uid).filter(Boolean);
+  ok(['u_vini', 'u_vane', 'u_debo', 'u_cris'].every((u) => inscritos.indexOf(u) !== -1),
+     'os 4 que entraram viraram inscritos');
+  ok((t.standbyParticipants || []).map((p) => p.uid).join(',') === 'u_fabi,u_paul,u_andr',
+     'e saíram da espera (está na chave XOR na espera)');
+
+  // FANTASMA GRAVADO pela versão anterior tem que ser descartado na leitura
+  const t2 = novoT({ standbyParticipants: fila.slice(0, 4),
+                     monarchWaitlist: { _default_: ['Jogador sem perfil (u_vi)', 'u_vini', 'Vanessa Kaufmann'] } });
+  const lida = win._getMonarchWaitlist(t2, null);
+  ok(lida.indexOf('Jogador sem perfil (u_vi)') === -1, 'o rótulo-fantasma gravado é descartado na leitura');
+  ok(lida.indexOf('u_vini') !== -1, 'o uid gravado é mantido');
+  ok(lida.indexOf('u_vane') !== -1, 'o NOME legado de quem tem conta é migrado pro uid dela');
+  ok(lida.length === new Set(lida).size, 'e ninguém aparece duas vezes');
+
+  win._profileNameByUid = antes;
+});
+
+// ── 7. A RESSALVA DO DONO: sem uid, o nome É a identidade ───────────────────────
+// _"é sempre por uid tudo, mas se o usuário digitar participantes sem uid aí tem que
+// considerar por nome apenas esses"_ — o informal que o organizador digitou à mão não tem
+// conta, então o nome dele é a única identidade que existe e tem que continuar valendo.
+sec(function () {
+  const antes = win._profileNameByUid;
+  win._profileNameByUid = { u_a: 'Com Conta A', u_b: 'Com Conta B', u_c: 'Com Conta C' };
+  const fila = [
+    { uid: 'u_a', gender: 'masculino' },
+    { uid: 'u_b', gender: 'feminino' },
+    { uid: 'u_c', gender: 'feminino' },
+    { displayName: 'Convidada Sem Conta', gender: 'feminino' },   // digitada à mão
+  ];
+  const t = novoT({ standbyParticipants: fila, monarchWaitlist: {} });
+  ok(win._wlKey(fila[0]) === 'u_a', 'quem tem uid é identificado pelo uid');
+  ok(win._wlKey(fila[3]) === 'Convidada Sem Conta', 'quem NÃO tem uid é identificado pelo nome');
+  const formados = win._expandMonarchFromWaitlist(t);
+  ok(formados === 1, 'o grupo fecha misturando quem tem conta e quem não tem, formou ' + formados);
+  const g = nomesDoGrupoNovo(t);
+  ok(g.indexOf('Convidada Sem Conta') !== -1, 'a convidada sem conta entra no grupo pelo nome dela');
+  ok((t.standbyParticipants || []).length === 0, 'e sai da espera junto com os outros');
+  win._profileNameByUid = antes;
 });
 
 console.log((fail === 0 ? '✅' : '❌') + ' espera-forma-grupo-por-ordem: ' + pass + ' asserções, ' + fail + ' falhas');
