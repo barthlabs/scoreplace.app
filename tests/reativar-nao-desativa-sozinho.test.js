@@ -320,6 +320,112 @@ await secA(async function () {
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// 5. REATIVOU → SAI DA FOLGA E ENTRA NA LISTA DE ESPERA (regra do dono)
+//
+//    _"quem era folga e reativou entra na lista de espera"_ ·
+//    _"reativou sai da folga e entra na lista de espera"_
+//
+//    MEDIDO no Confra (07/ago/2026): a Ana reativou, entrou na fila, formou grupo
+//    (R1 grupo 31, 3 jogos) — e SEGUIA em "Desativados", porque a folga
+//    `sitOutReason:'inactive'` do sorteio nunca saiu. Era a única nesse estado: das 4
+//    folgas da rodada, 1 é de inativa de verdade e 2 são de W.O.
+//
+//    ⚠️ Consertar isso na FORMAÇÃO DE GRUPO seria tarde e errado: quem reativa e fica
+//    esperando na fila sem formar grupo continuaria listado como desativado. Sair da folga
+//    é parte do ato de REATIVAR.
+// ══════════════════════════════════════════════════════════════════════════
+await secA(async function () {
+  require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
+  const win = globalThis.window;
+  ok(typeof win._sanitizeSitOutsVsRoster === 'function', '_sanitizeSitOutsVsRoster existe e é vendorável');
+
+  // (a) o ato de reativar tira a folga — pelo caminho REAL, com o save REAL
+  {
+    const t = confraNoInstanteDoVideo();
+    // mais 3 folgas que NÃO podem ser tocadas
+    t.participants.push(P('u-outra', { ligaActive: false }));
+    const R = t.rounds[0].matches;
+    R.push({ id: 'so2', p1: 'Outra Inativa', p2: 'FOLGA', p1Uid: 'u-outra', isSitOut: true, sitOutReason: 'inactive' });
+    R.push({ id: 'wo1', p1: 'Levou WO', p2: 'W.O.', p1Uid: 'u-wo', isSitOut: true, sitOutReason: 'wo' });
+    R.push({ id: 'rem1', p1: 'Sobrou', p2: 'FOLGA', p1Uid: 'u-rem', isSitOut: true, sitOutReason: 'remainder' });
+    t.participants.push(P('u-wo', { ligaActive: false, woDeactivatedAt: '2026-08-06T22:00:55Z' }));
+
+    const banco = JSON.parse(JSON.stringify(t));
+    const { DB, gravado } = novoDB(banco);
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
+    const i = src.indexOf('window._toggleLigaActive = function');
+    const body = src.slice(i, src.indexOf('\n};', i) + 3);
+    let saveP = Promise.resolve();
+    const sb = {
+      AppStore: { tournaments: [t], currentUser: { uid: 'u-ana' }, isOrganizer: () => false },
+      _phaseDrawDone: win._phaseDrawDone, _isPlayingCurrentPhase: win._isPlayingCurrentPhase,
+      _participantUids: win._participantUids, _waitlistPushBack: win._waitlistPushBack,
+      _getWaitlist: win._getWaitlist, _removeFromWaitlist: win._removeFromWaitlist,
+      _sanitizeSitOutsVsRoster: win._sanitizeSitOutsVsRoster, _pName: win._pName,
+      _userMatchesParticipant: (u, p) => !!(p && p.uid && u && u.uid && p.uid === u.uid),
+      _warn: () => {}, showNotification: () => {}, _t: (k) => k,
+      FirestoreDB: { saveTournament: (doc, opt) => (saveP = DB.saveTournament(doc, opt)) },
+    };
+    sb.window = sb;
+    sb.document = { querySelectorAll: () => [], getElementById: () => null };
+    sb.renderTournaments = () => {};
+    const toggle = new Function('window', 'document', '_t', 'renderTournaments',
+      'with (window) { ' + body + ' return window._toggleLigaActive; }'
+    )(sb, sb.document, sb._t, sb.renderTournaments);
+
+    toggle(t.id, true);
+    await saveP;
+
+    const so = (gravado().rounds[0].matches || []).filter(m => m.isSitOut);
+    const ids = so.map(m => m.id);
+    ok(!ids.includes('sitout-rr-r1-0'), 'reativar TIRA a folga de quem reativou (o sintoma do dono)');
+    ok((gravado().standbyParticipants || []).some(p => p.uid === 'u-ana'), 'e ela entra na lista de espera');
+    ok(ids.includes('so2'), 'a folga de OUTRA pessoa que segue inativa NÃO é tocada');
+    ok(ids.includes('wo1'), 'a folga de W.O. NÃO é tocada (é registro de falta, com 0 pts)');
+    ok(ids.includes('rem1'), 'a folga de "remainder" NÃO é tocada (tem cura própria)');
+    ok((gravado().rounds[0].matches || []).filter(m => !m.isSitOut).length === 1, 'jogo real intacto');
+  }
+
+  // (b) o saneamento sozinho: idempotente, casa por UID e respeita quem está inativo
+  {
+    const t = confraNoInstanteDoVideo();
+    // Ana já foi pra fila (estado pós-reativação), mas a folga ficou — é o doc da Ana hoje
+    t.participants = t.participants.filter(p => p.uid !== 'u-ana');
+    t.standbyParticipants = [P('u-ana', { ligaActive: true })];
+    ok(win._sanitizeSitOutsVsRoster(t) === 1, 'cura o doc já gravado: 1 folga removida');
+    ok(win._sanitizeSitOutsVsRoster(t) === 0, 'e é IDEMPOTENTE: rodar de novo não remove nada');
+    ok((t.rounds[0].matches || []).filter(m => m.isSitOut).length === 0, 'a folga fantasma saiu');
+  }
+  {
+    // quem está DESATIVADO no elenco mantém a folga — é o estado que ela descreve
+    const t = confraNoInstanteDoVideo();
+    ok(win._sanitizeSitOutsVsRoster(t) === 0, 'inativo de verdade CONTINUA com a folga');
+  }
+  {
+    // já jogando (voltou pro grupo) também não pode ter folga
+    const t = confraNoInstanteDoVideo();
+    t.participants.find(p => p.uid === 'u-ana').ligaActive = true;
+    t.rounds[0].monarchGroups[0].playersUids.push('u-ana');
+    ok(win._sanitizeSitOutsVsRoster(t) === 1, 'quem voltou a jogar não segue como folga');
+  }
+  {
+    // NOME TROCADO não engana: a identidade é o uid
+    const t = confraNoInstanteDoVideo();
+    t.rounds[0].matches.find(m => m.isSitOut).p1 = 'Nome Antigo Dela';
+    t.participants.find(p => p.uid === 'u-ana').ligaActive = true;
+    ok(win._sanitizeSitOutsVsRoster(t) === 1, 'casa por uid mesmo com o nome gravado diferente');
+  }
+  {
+    // fictício (sem uid) casa por nome — é a única identidade que ele tem
+    const t = confraNoInstanteDoVideo();
+    delete t.rounds[0].matches.find(m => m.isSitOut).p1Uid;
+    t.participants = t.participants.filter(p => p.uid !== 'u-ana');
+    t.participants.push({ displayName: 'Ana Ribeiro', ligaActive: false });
+    ok(win._sanitizeSitOutsVsRoster(t) === 0, 'fictício desativado mantém a folga (casa por nome)');
+  }
+});
+
 console.log(`\n  ${pass} ok, ${fail} falha(s)`);
 process.exit(fail ? 1 : 0);
 

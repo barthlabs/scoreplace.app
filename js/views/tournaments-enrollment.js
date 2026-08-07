@@ -1521,6 +1521,11 @@ window._toggleLigaActive = function(tId, isActive) {
   var _levouWo = !!(found && found.woDeactivatedAt);
   var _marcasWo = null;
   var _movedToWait = null;
+  var _folgasRemovidas = [];   // v1.7.73 — pro rollback devolver a folga junto com a pessoa
+  var _uidsDe = function (p) {
+    return (typeof window._participantUids === 'function') ? window._participantUids(p)
+         : ((p && p.uid) ? [p.uid] : []);
+  };
   if (!_vindoDaFila && isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
       (_levouWo || (typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)))) {
     var _idx = arr.indexOf(found);
@@ -1540,6 +1545,23 @@ window._toggleLigaActive = function(tId, isActive) {
       // ("se o W.O. for para desativados, passa para última posição da lista de espera ao
       // se reativar"). _waitlistPushBack é o ponto único disso e é idempotente.
       window._waitlistPushBack(t, found);
+      // v1.7.73 — REATIVAR SAI DA FOLGA, no MESMO ato (regra do dono: _"reativou sai da
+      // folga e entra na lista de espera"_). A folga `inactive` que o sorteio deu descreve
+      // "está desativada"; a partir daqui ela não está mais, então o marcador some junto —
+      // senão a pessoa entra na fila e SEGUE listada em "Desativados", que foi o que
+      // aconteceu com a Ana Ribeiro no Confra. O saneamento é idempotente e casa por uid.
+      // ⚠️ Não toca em `wo`: aquele é registro de uma falta que aconteceu (0 pts na rodada).
+      // Guarda o que sair, pra que o rollback do save falho devolva a folga junto com a
+      // pessoa — desfazer metade deixaria o doc num estado que nenhum caminho produz.
+      (t.rounds || []).forEach(function (r, ri) {
+        (r && r.matches || []).forEach(function (m) {
+          if (m && m.isSitOut && m.sitOutReason === 'inactive' &&
+              (m.p1Uid ? _uidsDe(found).indexOf(m.p1Uid) !== -1 : false)) {
+            _folgasRemovidas.push({ ri: ri, m: m });
+          }
+        });
+      });
+      if (typeof window._sanitizeSitOutsVsRoster === 'function') window._sanitizeSitOutsVsRoster(t);
       _movedToWait = { entry: found, idx: _idx };
     }
   }
@@ -1631,6 +1653,14 @@ window._toggleLigaActive = function(tId, isActive) {
         _movedToWait.entry.woDeactivatedAt = _marcasWo.deactivatedAt;
         _marcasWo = null;
       }
+      // ...e devolve a folga: a pessoa volta a estar desativada, logo volta a ser folga.
+      _folgasRemovidas.forEach(function (f) {
+        var _r = (t.rounds || [])[f.ri];
+        if (!_r) return;
+        if (!Array.isArray(_r.matches)) _r.matches = [];
+        if (_r.matches.indexOf(f.m) === -1) _r.matches.push(f.m);
+      });
+      _folgasRemovidas = [];
       _movedToWait = null;
     }
     _syncTogglesInDom();

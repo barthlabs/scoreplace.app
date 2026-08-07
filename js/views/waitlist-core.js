@@ -298,6 +298,61 @@ window._sanitizeWaitlistVsGroups = function (t) {
   return removed;
 };
 
+// SANEAMENTO IDEMPOTENTE, IRMÃO DO DE CIMA: **folga de inativo só é de quem ESTÁ inativo.**
+//
+// REGRA DO DONO (07/ago/2026): _"quem era folga e reativou entra na lista de espera"_ ·
+// _"reativou sai da folga e entra na lista de espera"_ — os dois numa tacada só. Sair da
+// folga é parte do MESMO ato de reativar, não uma consequência de formar grupo depois.
+//
+// DEFEITO MEDIDO (Confra, mesmo dia): a **Ana Ribeiro** reativou, entrou na fila e chegou a
+// formar grupo (R1 grupo 31, 3 jogos) — e continuava aparecendo em **"Desativados"**, porque
+// a folga `sitOutReason:'inactive'` que o sorteio lhe deu quando ela ESTAVA inativa nunca foi
+// retirada. Ela era a única nesse estado: das 4 folgas da rodada, as outras 3 são legítimas
+// (1 inativa de verdade + 2 de W.O.). ⚠️ Consertar isso na FORMAÇÃO DE GRUPO seria tarde e
+// errado — quem reativa e fica esperando na fila sem formar grupo continuaria listado como
+// desativado, que é justamente o que não pode.
+//
+// A folga de inativo descreve UM estado: "esta pessoa está desativada no elenco". Quem não
+// está mais assim (foi pra fila, voltou a jogar, ou saiu) não tem por que carregá-la.
+// `'wo'` e `'remainder'` NÃO são tocados: o W.O. é o registro de uma falta que aconteceu
+// (com 0 pts na rodada) e apagá-lo apagaria a penalidade; `remainder` é a sobra do sorteio,
+// que tem cura própria (`_healMonarchRemainderToWaitlist`).
+//
+// Casa por UID (identidade canônica) e cai no nome só pra quem não tem conta.
+// Retorna o nº de folgas removidas.
+window._sanitizeSitOutsVsRoster = function (t) {
+  if (!t || !Array.isArray(t.rounds)) return 0;
+  var _uids = (typeof window._participantUids === 'function') ? window._participantUids
+            : function (p) { return (p && p.uid) ? [p.uid] : []; };
+  // quem está DESATIVADO no elenco — os únicos que podem ter folga de inativo
+  var inativoUid = {}, inativoNome = {};
+  (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) {
+    if (!p || typeof p !== 'object' || p.ligaActive !== false) return;
+    var us = _uids(p).filter(Boolean);
+    us.forEach(function (u) { inativoUid[u] = 1; });
+    if (!us.length) _nameForms(p).forEach(function (n) { inativoNome[n] = 1; });
+  });
+  var removed = 0;
+  t.rounds.forEach(function (r) {
+    if (!r || !Array.isArray(r.matches)) return;
+    r.matches = r.matches.filter(function (m) {
+      if (!m || !m.isSitOut || m.sitOutReason !== 'inactive') return true;
+      // uid manda; nome só quando não há uid nenhum no marcador
+      if (m.p1Uid) { if (inativoUid[m.p1Uid]) return true; removed++; return false; }
+      var nm = String(m.p1 || '').trim().toLowerCase();
+      if (!nm || inativoNome[nm]) return true;
+      removed++; return false;
+    });
+  });
+  return removed;
+};
+
+// Formas do nome de uma entrada — local, espelha _nameForms público (definido abaixo).
+function _nameForms(e) {
+  return (typeof window._nameForms === 'function') ? window._nameForms(e)
+    : [String((e && (e.displayName || e.name || e.email)) || '').trim().toLowerCase()].filter(Boolean);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // A IDENTIDADE DA FILA É O UID (v1.7.61) — nome SÓ para quem não tem conta.
 //
