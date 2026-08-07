@@ -322,7 +322,12 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
       window._removeFromWaitlist(ft, _subName);          // sai da fila (assumiu)
       _removeSitOut(r, _subName);                        // não é mais folga — vai jogar
       _rewriteSlot(g, absentName, _subName, true, ft);
+      // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
+      // ausente (v1.7.21). `subName` sozinho é rótulo, e rótulo ENVELHECE: quem troca o
+      // displayName depois vira um `subName` que não resolve pra ninguém. Vazio de
+      // propósito pra quem não tem conta — ali o nome é a identidade (ressalva do dono).
       g.subStatus = 'filled'; g.subName = _subName; g.subIsGuest = false; delete g.pendingInviteId;
+      if (_sub && _sub.uid) g.subUid = String(_sub.uid); else delete g.subUid;
     } else {
       g.subStatus = 'open';                              // fila vazia: vaga aberta (convite/Jogador X)
     }
@@ -616,7 +621,12 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
     if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, subName);
     _removeSitOut(r, subName);
     _rewriteSlot(g, absentName, subName, true, ft);
+      // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
+      // ausente (v1.7.21). `subName` sozinho é rótulo, e rótulo ENVELHECE: quem troca o
+      // displayName depois vira um `subName` que não resolve pra ninguém. Vazio de
+      // propósito pra quem não tem conta — ali o nome é a identidade (ressalva do dono).
     g.subStatus = 'filled'; g.subName = subName; g.subIsGuest = false; delete g.pendingInviteId;
+    if (subUid) g.subUid = String(subUid); else delete g.subUid;
     // convites pendentes do grupo perdem o sentido — a vaga foi resolvida na mão.
     if (Array.isArray(ft.ligaSubInvites)) {
       ft.ligaSubInvites.forEach(function (iv) {
@@ -777,7 +787,9 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     _addWoMarker(ft, r, roundIndex, absentName, cat);
     _rewriteSlot(g, absentName, gname, true, t);
     _addGhost(ft, gname);
+    // Jogador X NÃO tem conta — aqui o nome É a identidade, e não existe uid a gravar.
     g.woAbsent = absentName; g.subStatus = 'filled'; g.subName = gname; g.subIsGuest = true;
+    delete g.subUid;
     if (_absU4) g.woAbsentUid = _absU4; else delete g.woAbsentUid;
     g.woDest = 'inactive';   // v1.7.59: destino único
     delete g.pendingInviteId;
@@ -917,7 +929,12 @@ window._ligaAcceptSub = function (tId, inviteId) {
     // a espera não pode continuar contando com ele pra formar grupo novo).
     if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, _invName);
     _rewriteSlot(g, _absName, _invName, true, t);
+      // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
+      // ausente (v1.7.21). `subName` sozinho é rótulo, e rótulo ENVELHECE: quem troca o
+      // displayName depois vira um `subName` que não resolve pra ninguém. Vazio de
+      // propósito pra quem não tem conta — ali o nome é a identidade (ressalva do dono).
     g.subStatus = 'filled'; g.subName = _invName; g.subIsGuest = false; delete g.pendingInviteId;
+    if (_subEntry && _subEntry.uid) g.subUid = String(_subEntry.uid); else delete g.subUid;
     fiv.status = 'accepted'; fiv.resolvedAt = new Date().toISOString();
     // supersede os convites-irmãos (vaga preenchida pelo primeiro que aceitou)
     (ft.ligaSubInvites || []).forEach(function (x) {

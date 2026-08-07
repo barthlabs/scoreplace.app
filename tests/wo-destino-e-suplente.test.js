@@ -251,5 +251,45 @@ sec(function () {
     'wo-claim.js (W.O. do participante) NÃO pode chamar o fluxo novo — ordem explícita do dono');
 });
 
+// ── O SUPLENTE GUARDA O UID, não só o nome (v1.7.63) ────────────────────────────
+// Regra do dono: "por uid sempre. nunca nome, email ou qualquer outro dado" — com a
+// ressalva "se o usuário digitar participantes sem uid aí tem que considerar por nome
+// apenas esses".
+//
+// O ausente já gravava `woAbsentUid` desde a v1.7.21; o SUPLENTE ficou pra trás com
+// `subName` puro. Rótulo ENVELHECE: quem troca o displayName depois vira um `subName`
+// que não resolve pra ninguém — foi exatamente esse defeito que a v1.7.46 corrigiu na
+// classificação ("Fabi2401@" × "Dani Bataglia", a MESMA pessoa em duas telas).
+(() => {
+  // os QUATRO caminhos que preenchem a vaga gravam o uid junto…
+  const escritas = (LIGA_SRC.match(/g\.subName\s*=/g) || []).length;
+  const uids = (LIGA_SRC.match(/g\.subUid\s*=|delete g\.subUid/g) || []).length;
+  ok(escritas >= 4, 'os 4 caminhos que preenchem a vaga continuam existindo, achei ' + escritas);
+  ok(uids >= escritas, 'TODO caminho que grava subName decide o subUid junto (' + uids + ' × ' + escritas + ')');
+
+  // …e cada um usa a fonte de uid que tem em mãos, nunca resolvendo por nome
+  ok(/if \(_sub && _sub\.uid\) g\.subUid/.test(LIGA_SRC), 'suplente da fila: uid vem da ENTRADA da espera');
+  ok(/if \(subUid\) g\.subUid/.test(LIGA_SRC), 'substituição direta: uid vem do parâmetro (já era recebido)');
+  ok(/if \(_subEntry && _subEntry\.uid\) g\.subUid/.test(LIGA_SRC), 'convite aceito: uid vem da entrada do convidado');
+
+  // A RESSALVA: Jogador X não tem conta — ali o nome É a identidade e não há uid a gravar.
+  const jx = LIGA_SRC.slice(LIGA_SRC.indexOf("g.subIsGuest = true"));
+  ok(/delete g\.subUid/.test(jx.slice(0, 200)), 'Jogador X (sem conta) NÃO ganha subUid — o nome é a identidade dele');
+
+  // Nada pode voltar a resolver o suplente por nome pra decidir identidade.
+  ok(!/g\.subUid\s*=\s*[^;]*_nameUidMap/.test(LIGA_SRC), 'o subUid nunca é resolvido por mapa de nome');
+})();
+
+// ── O comentário do renderer não pode mentir sobre o schema ─────────────────────
+// Ele afirmava "não existe `woAbsentUid`" — falso desde a v1.7.21, e o código logo
+// abaixo já lia o uid. Comentário que mente manda o próximo leitor consertar o lugar errado.
+(() => {
+  const BR = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+  ok(BR.indexOf('não existe `woAbsentUid`') === -1,
+     'o comentário do box não pode mais afirmar que woAbsentUid não existe');
+  ok(BR.indexOf('var _absUid = g.woAbsentUid') !== -1,
+     'e o renderer continua lendo o uid ANTES de qualquer nome');
+})();
+
 console.log((fail === 0 ? '✅' : '❌') + ' wo-destino-e-suplente: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail === 0 ? 0 : 1);
