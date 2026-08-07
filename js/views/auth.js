@@ -4988,19 +4988,35 @@ async function simulateLoginSuccess(user) {
   if (typeof window._needsTermsAcceptance === 'function' &&
       window._needsTermsAcceptance(_termsCheckProfile)) {
     var _profile = _termsCheckProfile || {};
+    // ⚠️ v1.7.64 — A LISTA DE "EVIDÊNCIA" ESTAVA CARIMBANDO TODA CONTA NOVA.
+    //
+    // MEDIDO na base (07/ago/2026), depois do dono dizer "o modal de termos nunca aparece
+    // pra ninguém": 205 perfis, 202 com acceptedTerms=true — e 188 deles GRANDFATHERED.
+    // Só 14 aceites de verdade. Dos 188, 187 foram carimbados a MENOS DE 10 SEGUNDOS do
+    // nascimento da conta (Paula Vasconcelos: createdAt 23:33:53.787 → acceptedTermsAt
+    // 23:33:54.105, 318 ms depois). Ninguém lê e aceita termos em 318 ms.
+    //
+    // CAUSA: a lista abaixo incluía campos que TODA conta tem no primeiro milissegundo,
+    // porque são escritos pelo PRÓPRIO cadastro junto com os defaults — `createdAt`,
+    // `updatedAt`, `acceptFriendRequests`, `notifyLevel`. Qualquer um sozinho disparava o
+    // grandfather. `createdAt` como prova de "uso passado" nunca podia funcionar: ele é
+    // carimbado no NASCIMENTO, não no uso.
+    //
+    // A REGRA AGORA: evidência é só o que EXIGE UM ATO da pessoa DEPOIS do cadastro e que
+    // o fluxo de entrada nunca escreve sozinho. Nada de default, nada de dado que vem do
+    // provedor (nome/foto/e-mail/telefone chegam do Google/Apple no primeiro login), nada
+    // que o ORGANIZADOR possa ter preenchido por ela (gênero e habilidade têm `genderSetBy`/
+    // `skillSetBy` justamente porque são atribuíveis por terceiro).
+    //
+    // Decisão do dono nesta leva: corrigir DAQUI PRA FRENTE. Os 188 já carimbados ficam
+    // como estão — eles seguem com acceptedTerms=true e nem chegam neste gate.
     var _hasUsageEvidence = !!(
-      _profile.createdAt ||
-      _profile.updatedAt ||
       (Array.isArray(_profile.friends) && _profile.friends.length > 0) ||
       (Array.isArray(_profile.preferredSports) && _profile.preferredSports.length > 0) ||
       (Array.isArray(_profile.preferredLocations) && _profile.preferredLocations.length > 0) ||
-      _profile.gender ||
-      _profile.birthDate ||
-      _profile.city ||
-      _profile.phone ||
-      (_profile.theme && _profile.theme !== 'dark') ||
-      _profile.acceptFriendRequests !== undefined ||
-      _profile.notifyLevel ||
+      (Array.isArray(_profile.preferredCeps) && _profile.preferredCeps.length > 0) ||
+      (Array.isArray(_profile.matchHistory) && _profile.matchHistory.length > 0) ||
+      _profile.letzplayHandle ||
       _profile.plan
     );
     // v1.0.61-beta: Firebase Auth metadata também conta como evidência —
@@ -5008,7 +5024,17 @@ async function simulateLoginSuccess(user) {
     // do auth provider, independe de ler o doc no Firestore). Cobre o caso
     // raro em que retries de loadUserProfile esgotaram mas o user é
     // demonstravelmente returning.
-    if (!_hasUsageEvidence) {
+    // Rede do v1.0.61 — SÓ quando o perfil NÃO PÔDE SER LIDO. É pra isso que ela nasceu:
+    // "retries de loadUserProfile esgotaram mas o user é demonstravelmente returning".
+    //
+    // ⚠️ v1.7.64 — antes ela rodava sempre que faltasse evidência, e isso é um BYPASS: com
+    // a lista de campos corrigida acima, qualquer SEGUNDA entrada tem
+    // lastSignIn − creation > 60s, então quem fechou o modal na primeira vez entraria
+    // carimbado na segunda, sem nunca aceitar nada. Amarrada ao doc ilegível, ela volta a
+    // cobrir só o caso que motivou sua criação: doc vazio + conta comprovadamente antiga.
+    // Conta recém-criada também tem doc vazio aqui — mas nela a diferença é ~0, então ela
+    // cai no modal, que é o comportamento certo.
+    if (!_hasUsageEvidence && Object.keys(_profile).length === 0) {
       try {
         var _fbu2 = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) || user;
         if (_fbu2 && _fbu2.metadata && _fbu2.metadata.creationTime && _fbu2.metadata.lastSignInTime) {
@@ -5016,7 +5042,7 @@ async function simulateLoginSuccess(user) {
           var _s2 = new Date(_fbu2.metadata.lastSignInTime).getTime();
           if ((_s2 - _c2) > 60000) {
             _hasUsageEvidence = true;
-            window._log('[terms-gate v1.0.61] grandfather via Firebase Auth metadata (returning user, lastSignIn-creation=' + Math.round((_s2-_c2)/60000) + 'min)');
+            window._log('[terms-gate v1.7.64] grandfather via Firebase Auth metadata (perfil ILEGÍVEL + conta antiga, lastSignIn-creation=' + Math.round((_s2-_c2)/60000) + 'min)');
           }
         }
       } catch (_fbErr) {}

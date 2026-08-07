@@ -588,6 +588,14 @@ const SUITES = [
   // coachmarks REAL com relógio controlado; contra o código anterior a dica
   // nasce em cima de quem está marcando ponto.
   'tests/dica-nunca-no-placar.test.js',
+
+  // O GATE DE TERMOS não pode carimbar quem acabou de nascer. Relato do dono: "o modal
+  // de termos nunca aparece pra ninguem" — MEDIDO: 188 de 202 aceites eram grandfather
+  // automático, 187 deles a menos de 10s do nascimento da conta (a Paula levou 318 ms).
+  // A lista de "evidência de uso" contava campos que o PRÓPRIO cadastro escreve
+  // (createdAt, notifyLevel, acceptFriendRequests). Roda a expressão REAL do auth.js
+  // contra o perfil REAL da Paula recém-criada.
+  'tests/gate-de-termos-nao-carimba-conta-nova.test.js',
 ];
 
 let failed = [];
