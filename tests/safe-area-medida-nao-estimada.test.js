@@ -27,6 +27,11 @@ const fs = require('fs');
 const path = require('path');
 
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
+// ⚠️ O CSS entra na varredura porque desde a v1.7.71 quem reserva a status bar é ELE
+// (piso por orientação no #live-scoring-overlay), não mais uma decisão em JS. Sem ler
+// o CSS, o teste travaria só metade da conta — e foi a metade em JS que produziu os
+// 62px mortos em retrato.
+const CSS = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
 
 let ok = 0, fail = 0;
 function check(nome, cond) {
@@ -42,46 +47,80 @@ check('o probe lê safe-area-inset pelo lado pedido',
 check('não há uma SEGUNDA definição de _spInsetPx (duas divergem)',
   (SRC.match(/function _spInsetPx\s*\(/g) || []).length === 0);
 
-// ── 2 · a reserva do Desfazer soma o inset MEDIDO, nas duas orientações ────
-const undoRetrato = /_pUndo\s*=\s*Math\.round\(56 \* _lsK\)\s*\+\s*_spInsetPx\('bottom'\)/.test(SRC);
-const undoDeitado = /_lUndo\s*=\s*Math\.round\(56 \* _lsK\)\s*\+\s*_spInsetPx\('bottom'\)/.test(SRC);
-check('retrato: a reserva do Desfazer soma o inset de baixo', undoRetrato);
-check('deitado: a reserva do Desfazer soma o inset de baixo', undoDeitado);
-check('nenhuma reserva de Desfazer ficou só com o número fixo',
-  !/_[pl]Undo\s*=\s*Math\.round\(56 \* _lsK\)\s*;/.test(SRC));
+// ── 2 · a reserva do Desfazer É A ALTURA REAL DO BOTÃO ────────────────────
+// ⚠️ REVISADO DE PROPÓSITO (v1.7.72). Antes exigia `Math.round(56 * _lsK) + inset`:
+// os 56px eram CRAVADOS À MÃO enquanto o botão media 26pt — 51pt reservados pra nada,
+// que viravam vão morto entre a caixa de baixo e o rodapé (medido no iPhone 17).
+// O invariante segue o mesmo e mais forte: a reserva conta o inset de baixo E não
+// inventa número — ela É a altura do botão, calculada nas MESMAS variáveis que o
+// desenham, mais um respiro pra a placa não encostar.
+check('a altura do Desfazer sai de UMA conta (ícone + respiro + faixa do indicador)',
+  /var _UNDO_H\s*=\s*_UNDO_PAD \+ _UNDO_ICO \+ _UNDO_BOT;/.test(SRC));
+check('e essa conta inclui o inset de baixo, medido',
+  /_UNDO_BOT\s*=\s*Math\.max\(2,\s*Math\.round\(window\._spInsetPx\('bottom'\)/.test(SRC));
+check('retrato e deitado RESERVAM essa altura (nenhum número fixo sobrou)',
+  /_pUndo\s*=\s*_UNDO_H \+ _UNDO_GAP/.test(SRC) && /_lUndo\s*=\s*_UNDO_H \+ _UNDO_GAP/.test(SRC));
+check('o 56px cravado não voltou',
+  !/Math\.round\(56 \* _lsK\)/.test(SRC));
 
 // ── 3 · a caixa do deitado NÃO tem altura fixa ─────────────────────────────
 // Com altura fixa, todo erro da estimativa vira placa por cima do Desfazer:
 // 8px medidos no iPhone deitado e 6px no Android, mesmo já somando o inset.
-check('deitado: a caixa preenche o espaço real (height:100%), não _lBoxH fixo',
-  /_lBoxStyle\s*=\s*'width:'\s*\+\s*_lBoxW\s*\+\s*'px;height:100%/.test(SRC));
+// ⚠️ REVISADO DE PROPÓSITO (v1.7.72): a caixa deitada perdeu a LARGURA cravada em px.
+// O padding do container passou a sair de `env(safe-area-inset-left/right)` — a ilha da
+// câmera fica na lateral e cobria o avatar do 2º jogador —, e uma largura fixa ignora
+// esse recuo e volta pra baixo da ilha. Quem desenha agora é o flex; `_lBoxW` só serve
+// pra dimensionar FONTE. O invariante (a caixa preenche a altura real) continua aqui.
+check('deitado: a caixa preenche a altura real e divide a largura por flex',
+  /_lBoxStyle\s*=\s*'flex:1 1 0;min-width:0;height:100%;'/.test(SRC));
+check('e o recuo lateral da ilha entra no padding do container',
+  /padding:0 calc\('\s*\+\s*_lPad\s*\+\s*'px \+ env\(safe-area-inset-right/.test(SRC));
 check('deitado: _lBoxH não volta a virar altura de caixa',
   !/height:'\s*\+\s*_lBoxH\s*\+\s*'px/.test(SRC));
 
 // ── 4 · o cabeçalho não reserva inset que não precisa ──────────────────────
 check('o desconto mágico de 12px saiu do padding do cabeçalho',
   !/env\(safe-area-inset-top,\s*0px\)\s*-\s*12px/.test(SRC));
-check('existe a decisão medida _spTopInsetNecessario',
-  /window\._spTopInsetNecessario\s*=\s*function/.test(SRC));
-check('ela devolve 0 quando o sistema já recuou a webview',
-  /fora\s*>=\s*inset\s*-\s*4/.test(SRC));
-check('fallback conservador: sem como medir a tela, mantém o inset',
-  /if\s*\(!tela\)\s*return inset/.test(SRC));
-check('o cabeçalho consome a decisão em vez do env() cru',
-  /_topInset\s*=\s*\(typeof window\._spTopInsetNecessario/.test(SRC));
+// ⚠️ QUATRO ASSERÇÕES REVISADAS DE PROPÓSITO (v1.7.71/72). Elas exigiam a função
+// `_spTopInsetNecessario`, que DECIDIA em JS quanto do inset de cima reservar. Ela
+// FOI REMOVIDA: medindo no aparelho ficou claro que quem reserva a status bar é o
+// CSS do #live-scoring-overlay, e o cabeçalho somava a MESMA reserva de novo — 62px
+// mortos em retrato. Decidir isso em DOIS lugares era o defeito; a função era o
+// segundo lugar. O invariante que elas defendiam — "a faixa de cima é reservada UMA
+// vez só" — é o que fica travado agora, pelos dois lados da conta.
+check('o cabeçalho NÃO soma o inset de cima de novo (quem reserva é o overlay)',
+  /var headerPadTop = headerPadY;/.test(SRC));
+check('e a função que decidia isso em JS não voltou',
+  !/window\._spTopInsetNecessario\s*=/.test(SRC));   // a DEFINIÇÃO; o nome ainda é citado nos comentários que explicam a remoção
+check('a reserva do topo é do CSS do overlay, com piso por ORIENTAÇÃO',
+  /@media \(orientation: portrait\)[\s\S]{0,220}#live-scoring-overlay[\s\S]{0,160}max\(env\(safe-area-inset-top/.test(CSS));
+check('deitado NÃO usa o piso de 50px (a barra some, não há o que proteger)',
+  /@media \(orientation: landscape\)[\s\S]{0,220}#live-scoring-overlay[\s\S]{0,160}padding-top:\s*env\(safe-area-inset-top/.test(CSS));
 
 // ── 5 · picker do sacador: UMA barra, duas colunas ─────────────────────────
 // Antes havia uma segunda barra interna (Fechar · título · Iniciar) embaixo do
 // cabeçalho do overlay: dois cabeçalhos e DOIS "Fechar" na mesma tela, 61px de
 // altura, e o 4º jogador fora da tela no deitado (46px escondidos, medido).
-check('o título do picker vai pro slot central do cabeçalho (#live-hdr-sets)',
-  /_hdrMid\.innerHTML\s*=\s*'<div style="min-width:0;text-align:center/.test(SRC));
-check('o Iniciar/Confirmar entra no grupo de botões do cabeçalho',
-  /_btn\.id\s*=\s*'live-serve-confirm'[\s\S]{0,600}_hdrActs\.appendChild\(_btn\)/.test(SRC));
+// ⚠️ DUAS ASSERÇÕES REVISADAS DE PROPÓSITO (v1.7.72). Elas exigiam que o título e o
+// "Iniciar" fossem INJETADOS no cabeçalho do overlay. Isso quebrou em produção: o id
+// `live-score-header-actions` existe DUAS vezes no app (aqui e no overlay da partida
+// casual) e, com os dois montados, `getElementById` entregava o do OUTRO overlay — o
+// botão existia no DOM e NÃO aparecia na tela (visto no iPhone). Agora os dois moram
+// numa linha PRÓPRIA dentro do container desta tela: sem id compartilhado, sem ordem
+// de render pra dar errado. O invariante original — UMA barra só, nunca duas
+// empilhadas com dois "Fechar" — continua travado logo abaixo.
+check('título e Iniciar moram numa linha própria do picker, não no cabeçalho',
+  /var _barraTopo =[\s\S]{0,900}id="live-serve-confirm"/.test(SRC));
+check('e nada é mais injetado no grupo de botões compartilhado do cabeçalho',
+  !/_hdrActs\.appendChild/.test(SRC));
 check('não sobrou o segundo botão Fechar dentro do picker',
   !/_liveSkipServe\(\)"[^>]*>Fechar<\/button>/.test(SRC));
-check('a lista do picker é grid de 2 colunas, não coluna única',
-  /id="serve-order-list"[\s\S]{0,260}grid-template-columns:1fr 1fr/.test(SRC));
+// ⚠️ REVISADA DE PROPÓSITO (v1.7.72): eram 2 colunas SEMPRE. Ordem do dono — "em pé é
+// um em cima do outro; 2x2 apenas no deitado". Em pé a tela é estreita e 2 colunas
+// espremiam o nome a ponto de cortar ("Nelson Ba…"). O motivo das 2 colunas continua
+// valendo DEITADO (uma coluna deixava 484px mortos ao lado), e é isso que fica travado.
+check('deitado tem 2 colunas; em pé, uma só',
+  /_pkDeitado \? '1fr 1fr' : '1fr'/.test(SRC));
 check('o card do picker não tem mais max-width de lista de uma coluna',
   !/width:100%;max-width:360px/.test(SRC));
 

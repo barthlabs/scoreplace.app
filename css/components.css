@@ -155,6 +155,69 @@ html.sp-native #venues-detail-overlay .sticky-back-header {
 #venues-detail-overlay .sticky-back-header + * {
   margin-top: 0 !important;
 }
+/* v4.3.26: overlays FULL-SCREEN top:0 (Partida Casual + quick-create bottom-sheet no
+   mobile) usam a .sticky-back-header como topo, SEM a topbar acima — no app NATIVO o
+   header (Voltar / título / ação) encavalava no notch/ilha dinâmica. env(safe-area-
+   inset-top) volta 0 pra elementos fixed no WKWebView (mesmo caso do modal de login,
+   v4.3.20), então usamos PISO fixo de 50px. O fundo dark do header cobre a faixa do
+   notch; o conteúdo desce. Gated por sp-native → inerte na web (sem notch fantasma).
+   EXCLUÍDOS de propósito: #venues-detail-overlay (backdrop em top:60px, abaixo da topbar
+   que já limpa o notch) e #qr-modal-overlay (modal CENTRADO, header não fica no notch).
+   Gated por sp-IOS (não sp-native): no Android o WebView já é inset abaixo da status bar,
+   então o overlay top:0 não encavala — 50px lá viraria gap à toa. */
+html.sp-ios #modal-quick-create .sticky-back-header,
+html.sp-ios #casual-match-overlay .sticky-back-header {
+  padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+}
+/* Mesmo header, mas no PWA instalado (Add to Home Screen) — pra ficar consistente com
+   o placar ao vivo/scanner: o usuário consegue validar isso no app instalado da web. */
+@media (display-mode: standalone) {
+  html:not(.sp-native) #modal-quick-create .sticky-back-header,
+  html:not(.sp-native) #casual-match-overlay .sticky-back-header {
+    padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+  }
+}
+/* v4.3.26: PLACAR AO VIVO (courtside, base do smartwatch) — overlay full-screen top:0
+   cujo header (📡 AO VIVO / Ajustar / Resetar / Fechar) encavalava na ilha dinâmica no
+   iOS. O header usa env(safe-area-inset-top) inline, mas env=0 pra fixed no WKWebView →
+   não empurrava. Piso fixo de 50px no CONTAINER empurra TODO o conteúdo abaixo do notch
+   (box-sizing:border-box mantém 100dvh). Cobre iOS NATIVO (sp-ios) E PWA instalado
+   (display-mode:standalone, :not(.sp-native)). Android não entra: WebView já é inset
+   abaixo da status bar. */
+/* v1.7.71 — O PISO DE 50px VALE SÓ EM RETRATO.
+   MEDIDO no simulador (iPhone 17, dentro do WebView do app): env(safe-area-inset-top)
+   é ZERO nas DUAS orientações, e inner === screen (402x874). Ou seja o WebView é
+   full-bleed e o env() não ajuda — por isso o piso fixo existe.
+   Só que em PAISAGEM o iPhone ESCONDE a status bar: ali os 50px não protegem de nada
+   e viram faixa 100% morta no topo do placar. Relato do dono com print, três vezes:
+   "continua a merda do espaco em cima morto".
+   Em paisagem sobra o inset (que é 0) + o padding do próprio cabeçalho. Medido deitado:
+   top=0 bottom=20 left=62 right=62 — quem precisa de reserva ali são as LATERAIS (notch),
+   e disso o headerPadX já cuida. */
+html.sp-ios #live-scoring-overlay { box-sizing: border-box; }
+@media (orientation: portrait) {
+  html.sp-ios #live-scoring-overlay {
+    padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+  }
+}
+@media (orientation: landscape) {
+  html.sp-ios #live-scoring-overlay {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+  }
+}
+@media (display-mode: standalone) {
+  html:not(.sp-native) #live-scoring-overlay { box-sizing: border-box; }
+  @media (orientation: portrait) {
+    html:not(.sp-native) #live-scoring-overlay {
+      padding-top: max(env(safe-area-inset-top, 0px), 50px) !important;
+    }
+  }
+  @media (orientation: landscape) {
+    html:not(.sp-native) #live-scoring-overlay {
+      padding-top: env(safe-area-inset-top, 0px) !important;
+    }
+  }
+}
 /* Hide the page's own back-header while venue detail overlay is open — sem
    isso, a back-header da página (ex: #venues ou #dashboard) aparece através
    da top-bar area e o usuário vê dois "Voltar" duplicados. Aplica só no body,

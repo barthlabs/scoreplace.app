@@ -41,7 +41,16 @@
   function _saveSeen(m) { try { localStorage.setItem(_seenKey(), JSON.stringify(m)); } catch (e) {} }
   function isStepSeen(id) { return !!_seen()[id]; }
   function markSeen(id) { var m = _seen(); m[id] = 1; _saveSeen(m); }
-  function isDisabled() { try { return localStorage.getItem(DISABLED_KEY) === '1'; } catch (e) { return false; } }
+  // v1.7.74: DICAS DESLIGADAS por ordem do dono — "estao muito defasadas e
+  // voltaremos a elas para fazer isso corretamente quando o programa estiver
+  // redondo". `_init` consulta isto ANTES de qualquer coisa, então o sistema
+  // fica inerte: nenhum tour arma, nenhuma máscara escurece a tela, nenhum
+  // balão nasce. NADA foi apagado — os passos, os tours e a trava do placar
+  // seguem no arquivo; pra voltar, basta window._COACH_ENABLED = true.
+  function isDisabled() {
+    if (window._COACH_ENABLED !== true) return true;
+    try { return localStorage.getItem(DISABLED_KEY) === '1'; } catch (e) { return false; }
+  }
   function setEnabled(on) {
     try { if (on) localStorage.removeItem(DISABLED_KEY); else localStorage.setItem(DISABLED_KEY, '1'); } catch (e) {}
     if (!on) _stop();
@@ -657,7 +666,14 @@
     dismiss: function () { _hide(); },
     forceShow: function () {}
   };
-  window._HINTS_ENABLED = true;
+  // v1.7.74: esta linha ligava o OUTRO sistema de dicas (js/hints.js), que tem o
+  // próprio gate `window._HINTS_ENABLED !== true`. Com ela, os DOIS apareciam —
+  // e o catálogo do hints.js é o mais antigo dos dois, que é justamente o que o
+  // dono chamou de defasado. Ela sai junto, então o hints.js volta a ficar
+  // inerte. De brinde, o toggle "Dicas visuais" do perfil some sozinho: ele já
+  // é montado sob `window._HINTS_ENABLED === true` (auth.js) — sem isso, o
+  // controle ficaria na tela prometendo algo que nunca aconteceria.
+  // window._HINTS_ENABLED = true;   ← religar SÓ quando as dicas forem reescritas
 
   window._coach = {
     autoStartDashboard: autoStartDashboard,

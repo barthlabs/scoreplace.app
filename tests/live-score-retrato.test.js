@@ -37,7 +37,16 @@ console.log('\n── uma paleta só, e ela LÊ nos dois fundos ──');
   ok(cr('#123A9E', DARK) < 3, 'o azul antigo da placa NÃO servia no fundo escuro (era por isso que havia 2 paletas)');
   ok(cr('#60a5fa', ICE) < 3, 'e o azul antigo do GAMES não servia sobre o gelo');
 
-  const semNumeros = src.slice(src.indexOf('var LIVE_NUM_1'), src.indexOf('window._fitLivePlateText'));
+  // ⚠️ ÂNCORA REVISADA (v1.7.72): o recorte começava em `var LIVE_NUM_1`, que SAIU do
+  // render e foi pro TOPO do arquivo — o par precisava ser visível também pelo diálogo
+  // de empate, que roda em outro escopo (usá-lo de lá dava `ReferenceError` e TRAVAVA a
+  // partida). Com a declaração no topo, o recorte varria o arquivo quase inteiro e
+  // acusava cores de outras telas. O invariante NÃO mudou — "no bloco do placar nenhuma
+  // cor de número é solta" —, só o marco de início: agora `_lsNumClr`, o resolvedor de
+  // cor do placar, que é o começo real do bloco (recorte de ~10k chars). Âncoras mais
+  // acima varriam metade do arquivo e acusavam cores de OUTRAS telas — o vermelho do
+  // botão "Encerrar" da tela de fim de partida, por exemplo, que não é cor de número.
+  const semNumeros = src.slice(src.indexOf('var _lsNumClr = function'), src.indexOf('window._fitLivePlateText'));
   ok(!/#60A5FA|#F87171|#123A9E|#9B1414/i.test(semNumeros),
      'nenhuma cor de número solta sobrou no bloco do placar — todas saem do par');
   // ⚠️ ASSERÇÃO REVISADA DE PROPÓSITO (v1.7.59, limpeza dos órfãos do redesenho)
@@ -144,8 +153,17 @@ console.log('\n── nome e foto: uma medida só, proporcional ──');
      'e é esse valor calculado que chega no avatar');
   ok(!/_liveAvatarHtml\(pn, \d/.test(src),
      'nenhum tamanho de foto cravado sobrou no placar ao vivo');
-  ok(/var f = sz\.fs; while \(f > 10 && _lsW\(pn, f, 700\) > util\) f--;/.test(src),
+  // ⚠️ ASSERÇÃO REVISADA DE PROPÓSITO (v1.7.72). Ela travava o texto EXATO do laço
+  // (`var f = sz.fs; while (...) f--;`). O laço ganhou uma primeira metade — o nome
+  // agora CRESCE até encher a largura livre, porque desde a v1.7.72 ele mostra só o
+  // primeiro nome e sobrava espaço à toa — e passou a medir `pnCurto`, que é o rótulo
+  // realmente desenhado. O INVARIANTE que ela defende é o mesmo e segue travado: o
+  // nome cede fonte até caber, nunca trunca. Por isso o teste agora exige o `f--`
+  // medindo o texto que vai pra tela, não uma linha literal que envelhece.
+  ok(/while \(f > 10 && _lsW\(pnCurto, f, 700\) > util\) f--;/.test(src),
      'e o nome CEDE FONTE até caber em vez de truncar (a regra que salva "Kelly Barth")');
+  ok(/while \(f < fTeto && _lsW\(pnCurto, f \+ 1, 700\) <= util\) f\+\+;/.test(src),
+     'e CRESCE até encher a largura livre — com só o primeiro nome, sobrava espaço');
 }
 
 console.log((fail ? '✗' : '✓') + ' live-score-retrato: ' + pass + ' passaram, ' + fail + ' falharam');
