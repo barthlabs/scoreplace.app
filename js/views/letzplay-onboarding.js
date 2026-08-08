@@ -13,8 +13,15 @@
   // FONTE ÚNICA: window.SP_EXT_VERSION (store.js). NUNCA hardcodar um número aqui — o
   // valor solto que existia (1.35) divergiu da extensão (1.36) e deixou passar versão velha.
   var MIN_EXT_VERSION = window.SP_EXT_VERSION;
-  // URL da Chrome Web Store — null enquanto não publicado (mostra instruções manuais).
-  var STORE_URL = null;
+  // URL da Chrome Web Store. FICOU `null` DEPOIS DE PUBLICADA (07/ago/2026): a
+  // extensão já estava APROVADA e pública no painel do desenvolvedor (editor
+  // barthlabs, id hpjbalgkbnodadaanfmbdeipodgillab) e mesmo assim o app seguia
+  // oferecendo SÓ o zip — instalação manual, e o pior: SEM AUTO-UPDATE. Como o
+  // gate exige sempre a versão mais nova (MIN_EXT_VERSION acima), toda subida de
+  // versão obrigava a pessoa a baixar e reinstalar na mão pra voltar a importar.
+  // Pela loja o Chrome atualiza sozinho e esse atrito acaba. O zip continua
+  // servido pelo site como caminho alternativo (quem não usa Chrome/Web Store).
+  var STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
 
   var _ext = { present: false, version: null, seenAt: 0 };
   var _pollTimer = null;

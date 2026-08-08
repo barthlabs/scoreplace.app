@@ -108,6 +108,16 @@ sandbox.window.removeEventListener = function () {};
 sandbox.window.getComputedStyle = function () { return { display: 'block', visibility: 'visible', opacity: '1' }; };
 sandbox.window.AppStore = { currentUser: { uid: 'u1', email: 'a@b.c', displayName: 'Teste' } };
 
+// REVISADO de propósito na v1.7.74: as dicas foram DESLIGADAS globalmente por
+// ordem do dono ("estao muito defasadas… voltaremos a elas"), então `isDisabled()`
+// devolve true e `_init` retorna antes de armar qualquer coisa. Este teste não
+// existe pra provar que a dica aparece — ele existe pra travar que ela NUNCA
+// aparece EM QUADRA. Esse invariante só é testável com a máquina ligada, então
+// aqui a gente liga explicitamente, no ambiente do teste. É de propósito que a
+// trava do placar continue verde enquanto o sistema está desligado: quando as
+// dicas forem reescritas e religadas, o placar já estará protegido.
+sandbox.window._COACH_ENABLED = true;
+
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'coachmarks.js'), 'utf8'),
   sandbox, { filename: 'coachmarks.js' });

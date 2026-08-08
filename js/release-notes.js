@@ -47,6 +47,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>⌚ O relógio não trava mais ao encerrar:</b> ao tocar em Encerrar no fim da partida, o relógio ficava preso no placar final sem fazer mais nada. Agora ele volta pra uma tela própria.</li>' +
         '<li><b>🙋 Só o primeiro nome no placar:</b> a tela mostra <b>Rodrigo</b>, não <b>Rodrigo Barth</b> — sobra espaço e a fonte cresce. O sobrenome só aparece quando dois jogadores têm o mesmo primeiro nome, e só o quanto basta pra diferenciar.</li>' +
         '<li><b>📏 Placar maior na mesma tela:</b> havia espaço reservado e não usado em volta do <i>Desfazer</i> e do cabeçalho. Com ele devolvido, as <b>placas e os números cresceram</b> sem nada sair da tela.</li>' +
+        '<li><b>💡 As dicas saíram de cena por enquanto:</b> elas estavam desatualizadas e apareciam por cima do que você queria ver. Ficam desligadas até serem reescritas direito — nada foi perdido.</li>' +
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:12px;padding:14px 16px;">' +
