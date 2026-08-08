@@ -531,8 +531,8 @@
       : '';
     return '<div onclick="window._openExternalUrl(\'' + _safe(mapsUrl) + '\')" style="display:flex;align-items:center;gap:10px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;cursor:pointer;">' +
       '<div style="flex:1;min-width:0;">' +
-        '<div style="font-weight:600;color:var(--text-bright);font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;">🗺️ ' + _safe(p.name) + '</div>' +
-        (p.address ? '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(p.address) + '</div>' : '') +
+        '<div style="font-weight:600;color:var(--text-bright);font-size:0.88rem;overflow:hidden;line-height:1.25;margin-bottom:2px;">🗺️ ' + _safe(p.name) + '</div>' +
+        (p.address ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;line-height:1.25;">' + _safe(p.address) + '</div>' : '') +
       '</div>' +
       (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);min-width:36px;text-align:right;">' + _safe(distText) + '</div>' : '') +
       registerBtn +
@@ -1051,7 +1051,7 @@
             iconsHtml + avatar +
             '<div style="flex:1;min-width:0;">' +
               '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
-                '<span style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(name) + '</span>' +
+                '<span style="font-weight:600;font-size:0.88rem;color:var(--text-bright);overflow:hidden;line-height:1.25;">' + _safe(name) + '</span>' +
                 leaveBtn +
               '</div>' +
               '<div style="font-size:0.72rem;color:var(--text-muted);">' + _safe(subtitle) + '</div>' +
@@ -1175,7 +1175,7 @@
         lateIcon +
         (iconStr ? '<span title="' + _safe(chipSports.join(', ')) + '" style="font-size:0.88rem;line-height:1;flex-shrink:0;">' + iconStr + '</span>' : '') +
         avatar +
-        '<span style="font-size:0.76rem;color:var(--text-bright);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + _safe(name) + '</span>' +
+        '<span style="font-size:0.76rem;color:var(--text-bright);font-weight:600;overflow:hidden;line-height:1.25;line-height:1;">' + _safe(name) + '</span>' +
         cancelBtn +
       '</div>';
     };
@@ -1607,7 +1607,7 @@
     return '<div class="pref-nomatch-card hover-lift" data-pref-pid="' + safePid + '" data-pref-placeid="' + safeRealPid + '" data-pref-venuename="' + safeVenueName + '" style="background:var(--bg-card);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;">' +
       '<div style="display:flex;align-items:center;gap:10px;">' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-weight:700;color:var(--text-bright);font-size:0.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + safeName + '</div>' +
+          '<div style="font-weight:700;color:var(--text-bright);font-size:0.92rem;overflow:hidden;line-height:1.25;">' + safeName + '</div>' +
           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">do seu perfil · não cadastrado</div>' +
         '</div>' +
         (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
@@ -2794,7 +2794,7 @@
       var parts = Array.isArray(t.participants) ? t.participants.length : 0;
       return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:0.82rem;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(t.id) + '\'">' +
         '<span style="min-width:72px;color:var(--text-muted);font-size:0.72rem;">' + when + '</span>' +
-        '<span style="flex:1;color:var(--text-bright);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 ' + _safe(t.name || 'Torneio') + '</span>' +
+        '<span style="flex:1;color:var(--text-bright);font-weight:600;overflow:hidden;line-height:1.25;">🏆 ' + _safe(t.name || 'Torneio') + '</span>' +
         (sport ? '<span style="color:var(--text-muted);font-size:0.7rem;">' + _safe(sport) + '</span>' : '') +
         (parts ? '<span style="color:var(--text-muted);font-size:0.7rem;margin-left:4px;">· ' + parts + '</span>' : '') +
       '</div>';

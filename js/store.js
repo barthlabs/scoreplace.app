@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.76';
+window.SCOREPLACE_VERSION = '1.7.77';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -3303,6 +3303,19 @@ window._firstNameOnly = function(name) {
       fs = Math.max(minR, fs - 0.03);
       el.style.fontSize = fs + 'rem';
     }
+    // v1.7.77 — A SEGUNDA METADE DA REGRA: chegou no PISO e ainda não coube?
+    // Então QUEBRA em vez de vazar. Sem isto o piso (que existe pra o nome nunca
+    // virar ilegível) fazia o texto estourar a caixa — foi o que aconteceu com
+    // "Bem-vindo, Rodrigo!" no slider em 1,7: encolheu até 1.1rem, parou, e
+    // transbordou. Encolher tem limite; quebrar linha não tem custo de leitura.
+    // Só mexe em quem PEDIU nowrap — quem já quebra não precisa de nada.
+    if (fs <= minR + 0.001 && el.scrollWidth > bw + 1) {
+      el.style.whiteSpace = 'normal';
+      el.style.wordBreak = 'break-word';
+    } else if (el.style.whiteSpace === 'normal') {
+      el.style.whiteSpace = '';      // coube encolhendo → devolve o nowrap original
+      el.style.wordBreak = '';
+    }
     el.setAttribute('data-fitted', '1');
     el.setAttribute('data-fitw', bw);
     el.setAttribute('data-fith', bh);
@@ -5667,7 +5680,19 @@ window._fitTwoLineNames = function(root) {
   if (window._fitNamesObserverInstalled || typeof MutationObserver === 'undefined') return;
   window._fitNamesObserverInstalled = true;
   var pending = false;
-  function _run() { pending = false; if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document); }
+  // v1.7.77: o observer rodava SÓ o `_fitTwoLineNames`. O cânone da CAIXA
+  // INVISÍVEL (`.sp-name-fit` → `_fitNames`/`_fitNameToBox`, jul/2026) ficou
+  // sem gatilho: era chamado à mão em EXATAMENTE 2 telas (dashboard, explore)
+  // e, fora delas, só no `resize` da janela. Ou seja o cânone existia inteiro
+  // — com piso, ResizeObserver e memória escrita — e simplesmente não rodava
+  // em lugar nenhum, inclusive na CHAVE, que é onde o nome mais aparece.
+  // Agora quem já varre o DOM roda os DOIS. Telas novas passam a funcionar
+  // só por usar a classe, sem ninguém lembrar de chamar nada.
+  function _run() {
+    pending = false;
+    if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document);
+    if (typeof window._fitNames === 'function') window._fitNames(document, 0);
+  }
   function _schedule() { if (pending) return; pending = true; (window.requestAnimationFrame || function(f){ setTimeout(f, 16); })(_run); }
   try {
     var start = function() {

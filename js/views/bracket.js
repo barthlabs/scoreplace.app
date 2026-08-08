@@ -3246,10 +3246,23 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     const onerror = cachedPhoto ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
     const size = members.length > 1 ? '20px' : '24px';
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
+    // ── CAIXA INVISÍVEL DO NOME (cânone fit-name-to-box) ───────────────────
+    // Regra do dono: nome NUNCA é cortado. A caixa é do MESMO tamanho pra todo
+    // mundo e a FONTE é a variável — nome longo encolhe pra caber, nome curto
+    // usa o tamanho cheio. Quem escolheu cinco sobrenomes paga em legibilidade,
+    // e o card do vizinho não é espremido por causa disso.
+    // O mecanismo (`_fitNameToBox` + ResizeObserver) já existia em store.js
+    // desde jul/2026 e NUNCA tinha sido aplicado na chave — era `…` puro aqui.
+    // `flex:1;min-width:0` faz a caixa ocupar a largura que sobra do avatar;
+    // a ALTURA é fixa em rem pra herdar a escala por área (e o piso do fit
+    // impede que o nome vire ilegível pra quem só está LENDO a chave).
+    const _nomeMaxRem = members.length > 1 ? 0.78 : 0.85;
+    const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
+    const _boxNome = `flex:1;min-width:0;height:${(_nomeMaxRem * 1.35).toFixed(2)}rem;overflow:hidden;display:flex;align-items:center;`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(dispName)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;opacity:0.95;">` +
-        `<span style="font-weight:700;font-size:${fontSize};color:#fbbf24;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${window._safeHtml(dispName)}</span>` +
+        `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:#fbbf24;white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
@@ -3260,7 +3273,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
       // "faça funcionar na classificação e não na chave". Na quadra o card é área de
       // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
       // da CLASSIFICAÇÃO (grupo e geral), que agora abre _openPlayerProfile.
-      `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
+      `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span></div>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
