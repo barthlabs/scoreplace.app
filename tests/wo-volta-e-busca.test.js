@@ -56,11 +56,25 @@ function carrega(t, quemSou) {
 const nomes = (a) => (a || []).map((p) => p.displayName || p.name);
 
 // ── 1. O CONTROLE APARECE PRA QUEM ESTÁ NA FILA ─────────────────────────────
+//
+// ⚠️ UMA ASSERÇÃO REVISADA em 07/ago/2026 (v1.7.72). Ela exigia que na fila o controle
+// mostrasse "Desativado" — "ligá-lo é o gesto de voltar". Isso era verdade na v1.6.93,
+// quando ligar na fila DEVOLVIA a pessoa ao elenco. A v1.7.38 mudou o destino de
+// propósito: com a fase sorteada, ligar MANTÉM a pessoa na fila (é de lá que ela é
+// chamada). O gesto que o rótulo prometia deixou de existir — e o rótulo virou o
+// segundo motor do "ativa mas ele desativa sozinho" que a Ana Ribeiro filmou: ela liga,
+// a fixture aqui embaixo confirma que ela fica `ligaActive:true` na fila, e a tela
+// mostrava "Desativado" na cara dela.
+// O invariante que esta seção protege — quem está na fila TEM que ver o controle, senão
+// não há caminho de volta — segue travado, e ganhou o rótulo correto por estado.
+// Ver tests/reativar-nao-desativa-sozinho.test.js (os 4 estados) e o histórico do doc
+// tour_1780009816637, que gravou as 4 restaurações indevidas nos segundos do vídeo.
 sec(function () {
   const t = novoT(); carrega(t, 'uid_th');
   const html = win._buildLigaActiveToggleHtml(t);
   ok(!!html, 'quem está na lista de espera TEM que ver o controle (senão não há volta)');
-  ok(html.indexOf('Desativado') !== -1, 'na fila o controle mostra "Desativado" — ligá-lo é o gesto de voltar');
+  ok(/>Ativado</.test(html),
+     'na fila com ligaActive:true o controle mostra "Ativado" — o rótulo segue o DADO, não a lista');
   ok(html.indexOf('lista de espera') !== -1, 'e o título explica que ele está na fila');
 });
 

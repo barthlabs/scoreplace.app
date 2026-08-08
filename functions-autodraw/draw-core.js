@@ -655,6 +655,10 @@ function integrateLateEntries(t, opts) {
   let wlClean = 0;
   try { if (typeof win._sanitizeWaitlistVsGroups === 'function') wlClean = win._sanitizeWaitlistVsGroups(t) || 0; }
   catch (e) { win._error && win._error('[integrateLate] sanitizeWaitlist:', e); }
+  // Saneamento irmão (v1.7.73): folga de INATIVO só é de quem está inativo. Quem reativou
+  // (foi pra fila ou voltou a jogar) não pode seguir listado em "Desativados".
+  try { if (typeof win._sanitizeSitOutsVsRoster === 'function') wlClean += win._sanitizeSitOutsVsRoster(t) || 0; }
+  catch (e) { win._error && win._error('[integrateLate] sanitizeSitOuts:', e); }
 
   const redrawn = placed, healed = 0, dedup = 0, lowLand = 0;
 

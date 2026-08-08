@@ -1521,6 +1521,11 @@ window._toggleLigaActive = function(tId, isActive) {
   var _levouWo = !!(found && found.woDeactivatedAt);
   var _marcasWo = null;
   var _movedToWait = null;
+  var _folgasRemovidas = [];   // v1.7.73 — pro rollback devolver a folga junto com a pessoa
+  var _uidsDe = function (p) {
+    return (typeof window._participantUids === 'function') ? window._participantUids(p)
+         : ((p && p.uid) ? [p.uid] : []);
+  };
   if (!_vindoDaFila && isActive && typeof window._phaseDrawDone === 'function' && window._phaseDrawDone(t) &&
       (_levouWo || (typeof window._isPlayingCurrentPhase === 'function' && !window._isPlayingCurrentPhase(t, found)))) {
     var _idx = arr.indexOf(found);
@@ -1540,6 +1545,23 @@ window._toggleLigaActive = function(tId, isActive) {
       // ("se o W.O. for para desativados, passa para última posição da lista de espera ao
       // se reativar"). _waitlistPushBack é o ponto único disso e é idempotente.
       window._waitlistPushBack(t, found);
+      // v1.7.73 — REATIVAR SAI DA FOLGA, no MESMO ato (regra do dono: _"reativou sai da
+      // folga e entra na lista de espera"_). A folga `inactive` que o sorteio deu descreve
+      // "está desativada"; a partir daqui ela não está mais, então o marcador some junto —
+      // senão a pessoa entra na fila e SEGUE listada em "Desativados", que foi o que
+      // aconteceu com a Ana Ribeiro no Confra. O saneamento é idempotente e casa por uid.
+      // ⚠️ Não toca em `wo`: aquele é registro de uma falta que aconteceu (0 pts na rodada).
+      // Guarda o que sair, pra que o rollback do save falho devolva a folga junto com a
+      // pessoa — desfazer metade deixaria o doc num estado que nenhum caminho produz.
+      (t.rounds || []).forEach(function (r, ri) {
+        (r && r.matches || []).forEach(function (m) {
+          if (m && m.isSitOut && m.sitOutReason === 'inactive' &&
+              (m.p1Uid ? _uidsDe(found).indexOf(m.p1Uid) !== -1 : false)) {
+            _folgasRemovidas.push({ ri: ri, m: m });
+          }
+        });
+      });
+      if (typeof window._sanitizeSitOutsVsRoster === 'function') window._sanitizeSitOutsVsRoster(t);
       _movedToWait = { entry: found, idx: _idx };
     }
   }
@@ -1631,6 +1653,14 @@ window._toggleLigaActive = function(tId, isActive) {
         _movedToWait.entry.woDeactivatedAt = _marcasWo.deactivatedAt;
         _marcasWo = null;
       }
+      // ...e devolve a folga: a pessoa volta a estar desativada, logo volta a ser folga.
+      _folgasRemovidas.forEach(function (f) {
+        var _r = (t.rounds || [])[f.ri];
+        if (!_r) return;
+        if (!Array.isArray(_r.matches)) _r.matches = [];
+        if (_r.matches.indexOf(f.m) === -1) _r.matches.push(f.m);
+      });
+      _folgasRemovidas = [];
       _movedToWait = null;
     }
     _syncTogglesInDom();
@@ -1685,19 +1715,36 @@ window._buildLigaActiveToggleHtml = function(t) {
     if (found) _naFila = true;
   }
   if (!found) return ''; // só mostra pra quem está inscrito
-  // Na fila = fora dos sorteios (não é "desativado", mas também não é sorteado): o
-  // controle mostra DESATIVADO pra que ligá-lo seja o gesto de voltar.
-  var isActive = !_naFila && found.ligaActive !== false; // default true
+  // O RÓTULO SEGUE O DADO (`ligaActive`), NUNCA A LISTA EM QUE A PESSOA ESTÁ.
+  //
+  // ⚠️ v1.7.72 — aqui havia `!_naFila && …`, e era a segunda metade do "ativo mas ele
+  // desativa sozinho" (vídeo da Ana Ribeiro, 07/ago/2026). Quem está na fila COM
+  // `ligaActive:true` — ou seja, quem acabou de ligar o toggle — lia "Desativado".
+  // Na v1.6.93 isso fazia sentido: ligar na fila DEVOLVIA a pessoa ao elenco, então o
+  // rótulo convidava ao gesto. Mas a v1.7.38 mudou o destino: com a fase sorteada,
+  // ligar mantém a pessoa na fila de propósito (é de lá que ela é chamada). O gesto que
+  // o rótulo prometia deixou de existir, e o que sobrou foi a tela contradizendo o dado
+  // e o próprio toast ("Você entrou na lista de espera") na mesma sessão.
+  //
+  // Estar na fila continua sendo dito — no título do controle aqui embaixo, no card
+  // "você está na lista de espera (posição N)" (v1.7.55) e no botão "Sair da lista de
+  // espera". Nada se perde; o que sai é o rótulo que mentia.
+  var isActive = found.ligaActive !== false; // default true
   var safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var stateLabel = isActive ? 'Ativado' : 'Desativado';
   // v2.6.21: pílula SÓLIDA — verde (Ativado) / vermelha (Desativado) com texto
   // SEMPRE branco, nos dois temas. Antes era texto colorido sobre tarja escura
   // (contraste ruim no tema claro). A própria pílula carrega a cor do estado.
   var pillBg = isActive ? '#10b981' : '#ef4444';
-  var titleAttr = isActive
-    ? 'Clique para ficar de fora do próximo sorteio'
-    : (_naFila ? 'Você está na lista de espera. Clique para voltar aos próximos sorteios.'
-               : 'Clique para voltar ao próximo sorteio');
+  // Quatro estados, quatro frases: o rótulo diz a DISPONIBILIDADE, o título diz ONDE a
+  // pessoa está e o que o clique faz. Na fila, desligar é o que a tira dela (v1.7.59).
+  var titleAttr = _naFila
+    ? (isActive
+        ? 'Você está na lista de espera — assim que houver vaga ou um novo confronto, você joga. Clique para sair da fila.'
+        : 'Você está na lista de espera, marcado como indisponível. Clique para ficar disponível.')
+    : (isActive
+        ? 'Clique para ficar de fora do próximo sorteio'
+        : 'Clique para voltar ao próximo sorteio');
   // v0.16.92: stopPropagation EM TODOS os elementos do toggle.
   // v0.16.93: data-liga-toggle-tid no outer wrapper + class
   // liga-toggle-state-label no text span permite update in-place pelo

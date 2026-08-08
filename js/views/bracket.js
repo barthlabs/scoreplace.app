@@ -4661,6 +4661,28 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _sitOuts = _allRoundMatches.filter(function(m) { return m && m.isSitOut; });
         // v4.x: NÃO retornar cedo por não haver sit-outs — a LISTA DE ESPERA (sit-outs sem
         // W.O./presença) vive dentro deste box e pode existir mesmo sem inativos/W.O.
+        // v1.7.73 — AUTO-CURA: folga de INATIVO só é de quem está inativo. Quem reativou
+        // (foi pra fila ou voltou a jogar) carregava a folga do sorteio e SEGUIA listado em
+        // "Desativados" — foi o que aconteceu com a Ana Ribeiro no Confra: reativou, entrou
+        // na fila, formou grupo e continuava aparecendo aqui. A partir da v1.7.73 a folga sai
+        // no próprio ato de reativar; esta varredura cura o que ficou gravado ANTES disso,
+        // sem ninguém precisar mexer no banco. Mesmo padrão (e mesmo guard de reentrância)
+        // do _healMonarchRemainderToWaitlist logo abaixo.
+        if (typeof window._sanitizeSitOutsVsRoster === 'function' && !window._sitOutHealInFlight) {
+          var _curadas = 0;
+          try { _curadas = window._sanitizeSitOutsVsRoster(t) || 0; } catch (e) { _curadas = 0; }
+          if (_curadas > 0) {
+            _allRoundMatches = currentRoundData.matches || [];
+            _sitOuts = _allRoundMatches.filter(function(m) { return m && m.isSitOut; });
+            window._sitOutHealInFlight = true;
+            setTimeout(function() {
+              try {
+                if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+              } catch (e) { if (window._warn) window._warn('[sitout heal]', e); }
+              finally { window._sitOutHealInFlight = false; }
+            }, 0);
+          }
+        }
         var _inactive = _sitOuts.filter(function(m) { return m.sitOutReason === 'inactive'; });
         var _wo = _sitOuts.filter(function(m) { return m.sitOutReason === 'wo'; }); // v2.4.30
         var _remainder = _sitOuts.filter(function(m) { return m.sitOutReason !== 'inactive' && m.sitOutReason !== 'wo'; });
