@@ -2275,10 +2275,20 @@ window._buildTournamentConfigBox = function (t, opts) {
     return '<details class="info-box tourn-config-box"' + openAttr +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%;">' +
+        // v1.7.83: a ordem era ⚙️ + NOME DO FORMATO + "configuração ▾" na MESMA
+        // linha, com o nome elipsado — e com a escala grande (até 1.7) ele nunca
+        // cabia: "Pontos Corridos / El…" (medido +8px). O nome do formato é a
+        // informação; "configuração ▾" é o CONTROLE de abrir/fechar.
+        // Ordem do dono: "aqui a configuracao com a seta para descolapsar fica na
+        // primeira linha e o resto vai para a linha de baixo" · "aqui o box pode
+        // ter mais linhas quando necessario."
+        // Então: linha 1 = ⚙️ configuração ▾ (sempre cabe, é curto); linha 2+ =
+        // o formato INTEIRO, quebrando em quantas linhas precisar. Zero corte.
         '<span style="display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
-        '<span style="flex-shrink:0;">⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +
-        '<span style="opacity:0.7;font-weight:500;font-size:0.68rem;flex-shrink:0;white-space:nowrap;">configuração ▾</span>' +
+        '<span style="flex-shrink:0;">⚙️</span>' +
+        '<span style="opacity:0.7;font-weight:500;font-size:0.68rem;white-space:nowrap;">configuração ▾</span>' +
         '</span>' +
+        '<span style="min-width:0;max-width:100%;overflow-wrap:anywhere;line-height:1.35;padding-left:22px;">' + summary + '</span>' +
         (digestLine ? '<span style="font-weight:500;font-size:0.68rem;opacity:0.85;line-height:1.4;padding-left:22px;">' + digestLine + '</span>' : '') +
         '</summary>' +
         '<div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">' + rows.join('') + '</div>' +

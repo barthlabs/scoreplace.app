@@ -7104,11 +7104,17 @@ function setupProfileModal() {
         return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;">' +
           '<span style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (idx + 1) + '</span>' +
           '<div style="flex:1;min-width:0;" title="' + titleAttr + '">' +
-            '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span style="font-size:0.74rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;">' + window._safeHtml(primary) + '</span>' +
+            // v1.7.83: o nome tinha nowrap+ellipsis mas NÃO tinha `min-width:0`,
+            // então no flex ele se recusava a encolher e passava POR BAIXO da
+            // pílula "📍 Google" (visto na tela: "Clube Paineiras do Morumby"
+            // atravessando o badge). Agora a linha QUEBRA — o badge desce quando
+            // não couber — e o endereço quebra em 2 linhas em vez de virar
+            // "São Paulo - S…" (medido +121px na escala 1.7).
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+              '<span style="font-size:0.74rem;color:var(--text-bright);font-weight:600;flex:1 1 auto;min-width:0;overflow-wrap:anywhere;line-height:1.25;">' + window._safeHtml(primary) + '</span>' +
               badge +
             '</div>' +
-            (secondary ? '<div style="font-size:0.65rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">' + window._safeHtml(secondary) + '</div>' : '') +
+            (secondary ? '<div style="font-size:0.65rem;color:var(--text-muted);overflow-wrap:anywhere;line-height:1.3;margin-top:1px;">' + window._safeHtml(secondary) + '</div>' : '') +
           '</div>' +
           '<button type="button" onclick="window._removeProfileLocation(' + idx + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:2px 4px;line-height:1;flex-shrink:0;" title="Remover">&times;</button>' +
         '</div>';
