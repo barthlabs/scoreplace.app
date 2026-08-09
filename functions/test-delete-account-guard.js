@@ -69,5 +69,34 @@ ok(!temJogoPendente(grupoConfra(), ''), 'uid vazio nunca casa');
 ok(torneiosQueBloqueiam([], U).length === 0, 'lista vazia → nada bloqueia');
 ok(/e /.test(mensagemBloqueio([{ name: 'A', jogos: 1 }, { name: 'B', jogos: 2 }])), 'dois torneios são ligados por "e"');
 
+
+// ─── (5) ORGANIZAR também prende ──────────────────────────────────────────────
+// Ordem do dono: "se a pessoa organizar torneio... precisa repassar a organizacao
+// para outro antes". Antes o deleteAccount APAGAVA esses torneios — o evento de
+// todo mundo sumia porque uma pessoa saiu.
+const { organiza, torneiosQueOrganiza } = require('./delete-account-guard-core');
+const ORG = 'uidOrg';
+const tOrg = { id: 't1', name: 'Confra', creatorUid: ORG, memberUids: ['a', 'b', ORG], rounds: [] };
+ok(organiza(tOrg, ORG), 'creatorUid identifica o organizador');
+ok(organiza({ organizerUid: ORG, memberUids: ['a', ORG] }, ORG), 'organizerUid também');
+ok(organiza({ organizerEmail: 'X@Y.com', memberUids: ['a', 'b'] }, 'outro', 'x@y.com'), 'e-mail do organizador (legado) também, case-insensitive');
+ok(!organiza(tOrg, 'estranho'), 'quem não organiza não é pego');
+
+const orgLista = torneiosQueOrganiza([tOrg], ORG);
+ok(orgLista.length === 1 && orgLista[0].pessoas === 3, 'lista o torneio organizado com quantas pessoas dependem dele');
+const msgOrg = mensagemBloqueio([], orgLista);
+ok(/organiza/i.test(msgOrg) && /passe a organização/i.test(msgOrg), 'a mensagem oferece TRANSFERIR a organização');
+ok(/apague o torneio/i.test(msgOrg), 'a mensagem oferece também APAGAR o torneio (2ª saída, ordem do dono)');
+ok(!/W\.O\./.test(msgOrg), 'quem SÓ organiza não é mandado dar W.O. num jogo que não tem');
+
+// SOLO não prende — não há terceiro a proteger
+ok(torneiosQueOrganiza([{ id: 's', name: 'Teste', creatorUid: ORG, memberUids: [ORG] }], ORG).length === 0,
+  'torneio SOLO (só ela) não bloqueia — senão quem criou um teste nunca apaga a conta');
+
+// as DUAS razões juntas
+const msg2 = mensagemBloqueio(torneiosQueBloqueiam([grupoConfra()], U), orgLista);
+ok(/passe a organização/i.test(msg2) && /W\.O\./.test(msg2),
+  'organiza um E joga em outro → as duas instruções aparecem');
+
 console.log(`  ${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);

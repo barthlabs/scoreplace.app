@@ -69,14 +69,70 @@ function torneiosQueBloqueiam(tournaments, uid) {
   });
 }
 
-/* A mensagem que a pessoa lê. Diz ONDE ela está presa e QUAL é o caminho —
- * mensagem que só diz "não pode" vira suporte. */
-function mensagemBloqueio(lista) {
-  const nomes = (lista || []).map((x) => '“' + x.name + '”' + (x.jogos ? ' (' + x.jogos + ' jogo' + (x.jogos > 1 ? 's' : '') + ' pendente' + (x.jogos > 1 ? 's' : '') + ')' : ''));
-  const alvo = nomes.length === 1 ? nomes[0] : nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
-  return 'Você ainda tem jogos marcados em ' + alvo + '. ' +
-    'Saia do torneio primeiro (você recebe W.O. nos jogos pendentes e o organizador é avisado) — ' +
-    'depois disso a exclusão da conta fica liberada.';
+/* ─── ORGANIZAR TAMBÉM PRENDE ─────────────────────────────────────────────────
+ * Ordem do dono (ago/2026): "se a pessoa organizar torneio e tentar excluir sua
+ * conta nao deve permitir. deve avisar que ela precisa repassar a organizacao
+ * para outro antes de se desinscrever do torneio e dai poder excluir a conta."
+ *
+ * O QUE ACONTECIA: `deleteAccount` APAGAVA os torneios que ela organiza. O evento
+ * inteiro sumia — inscritos, chave, placares, histórico de TODO MUNDO — porque
+ * uma pessoa saiu. Isso nunca foi decisão de quem sai: é dado dos outros.
+ *
+ * ⚠️ ORGANIZAR ≠ JOGAR, e são bloqueios SEPARADOS de propósito. O dono lembrou o
+ * caso: "a pessoa pode se inscrever ou criar torneio e se desativar para ficar
+ * apenas na organizacao". Quem só organiza não tem jogo pendente e mesmo assim
+ * está preso — por isso as duas razões são medidas e informadas separadamente,
+ * senão a mensagem manda a pessoa dar W.O. num jogo que ela não tem.
+ *
+ * SOLO NÃO PRENDE: torneio onde ela é a ÚNICA pessoa não tem terceiro pra
+ * proteger — some com a conta, como hoje. Prender ali deixaria quem criou um
+ * teste sem caminho nenhum pra apagar a conta.
+ */
+function _quantaGente(t) {
+  if (Array.isArray(t.memberUids)) return t.memberUids.length;
+  if (Array.isArray(t.participants)) return t.participants.length;
+  return 0;
+}
+function organiza(t, uid, email) {
+  if (!t || !uid) return false;
+  if (t.creatorUid === uid || t.organizerUid === uid) return true;
+  const em = String(email || '').toLowerCase();
+  if (em && (String(t.organizerEmail || '').toLowerCase() === em ||
+             String(t.creatorEmail || '').toLowerCase() === em)) return true;
+  return false;
+}
+function torneiosQueOrganiza(tournaments, uid, email) {
+  return (tournaments || [])
+    .filter((t) => organiza(t, uid, email) && _quantaGente(t) > 1)
+    .map((t) => ({ id: t.id || null, name: String(t.name || 'torneio'), pessoas: _quantaGente(t) }));
 }
 
-module.exports = { temJogoPendente, torneiosQueBloqueiam, mensagemBloqueio };
+/* A mensagem que a pessoa lê. Diz ONDE ela está presa e QUAL é o caminho —
+ * mensagem que só diz "não pode" vira suporte. As duas razões podem coexistir
+ * (organiza um e joga em outro), e aí as duas instruções aparecem. */
+function _lista(nomes) {
+  if (!nomes.length) return '';
+  return nomes.length === 1 ? nomes[0] : nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
+}
+function mensagemBloqueio(lista, organizando) {
+  const partes = [];
+  const org = organizando || [];
+  if (org.length) {
+    // DUAS saídas, e as duas são do dono (ago/2026): "precisa repassar a
+    // organizacao para outro" + "ou a pessoa pode apagar o torneio antes de
+    // excluir a conta". Dar só a primeira prenderia quem criou um torneio que
+    // não quer mais manter e não tem pra quem passar.
+    partes.push('Você organiza ' + _lista(org.map((x) => '“' + x.name + '”')) + '. ' +
+      'Antes de apagar a conta, passe a organização para outra pessoa OU apague o torneio — ' +
+      'sem isso ele ficaria sem dono e os inscritos perderiam o evento.');
+  }
+  if ((lista || []).length) {
+    const nomes = lista.map((x) => '“' + x.name + '”' + (x.jogos ? ' (' + x.jogos + ' jogo' + (x.jogos > 1 ? 's' : '') + ' pendente' + (x.jogos > 1 ? 's' : '') + ')' : ''));
+    partes.push('Você ainda tem jogos marcados em ' + _lista(nomes) + '. ' +
+      'Saia do torneio primeiro (você recebe W.O. nos jogos pendentes e o organizador é avisado).');
+  }
+  partes.push('Resolvido isso, a exclusão da conta fica liberada.');
+  return partes.join(' ');
+}
+
+module.exports = { temJogoPendente, torneiosQueBloqueiam, mensagemBloqueio, organiza, torneiosQueOrganiza };

@@ -4832,14 +4832,29 @@ exports.deleteAccount = onCall(
     // torneio primeiro (o que dispara o W.O. e avisa o organizador), depois
     // apagar. Roda ANTES de qualquer escrita — recusar no meio deixaria a conta
     // pela metade, que é pior que não começar.
+    // Duas razões INDEPENDENTES: organizar (o torneio ficaria sem dono e sumiria
+    // pros inscritos) e ter jogo pendente (o grupo ficaria sem adversário). Quem só
+    // organiza não tem jogo — por isso são medidas em separado, senão a mensagem
+    // mandaria dar W.O. num jogo inexistente.
     {
-      const bloqueio = [];
-      const sn = await db.collection("tournaments").where("memberUids", "array-contains", uid).get();
-      sn.forEach((d) => { const t = Object.assign({ id: d.id }, d.data()); if (_delGuard.temJogoPendente(t, uid)) bloqueio.push(t); });
-      if (bloqueio.length) {
-        const lista = _delGuard.torneiosQueBloqueiam(bloqueio, uid);
-        console.log("[deleteAccount] BLOQUEADO " + uid + " → " + JSON.stringify(lista));
-        throw new HttpsError("failed-precondition", _delGuard.mensagemBloqueio(lista), { tournaments: lista });
+      const vistos = new Map();
+      const add = (d) => vistos.set(d.id, Object.assign({ id: d.id }, d.data()));
+      // organizados: as MESMAS 3 consultas que o passo (1) usa pra apagar
+      for (const q of [
+        db.collection("tournaments").where("creatorUid", "==", uid),
+        db.collection("tournaments").where("organizerUid", "==", uid),
+        ...(email ? [db.collection("tournaments").where("organizerEmail", "==", email)] : []),
+        db.collection("tournaments").where("memberUids", "array-contains", uid),
+      ]) {
+        try { (await q.get()).docs.forEach(add); } catch (e) {}
+      }
+      const todos = Array.from(vistos.values());
+      const organizando = _delGuard.torneiosQueOrganiza(todos, uid, email);
+      const comJogo = _delGuard.torneiosQueBloqueiam(todos.filter((t) => _delGuard.temJogoPendente(t, uid)), uid);
+      if (organizando.length || comJogo.length) {
+        console.log("[deleteAccount] BLOQUEADO " + uid + " → organiza=" + JSON.stringify(organizando) + " jogos=" + JSON.stringify(comJogo));
+        throw new HttpsError("failed-precondition", _delGuard.mensagemBloqueio(comJogo, organizando),
+          { tournaments: comJogo, organizing: organizando });
       }
     }
 
