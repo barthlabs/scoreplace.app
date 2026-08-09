@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.80';
+window.SCOREPLACE_VERSION = '1.7.81';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5945,8 +5945,19 @@ window._themeNames = { dark: 'Noturno', light: 'Claro' };
 // --ui-scale multiplica o font-size da raiz (html), que é a base de quase todo
 // o app (rem). Escala TUDO junto e proporcionalmente. Padrão 1 = aparência de
 // hoje. Persiste em localStorage (instantâneo) + perfil (cross-device).
+// v1.7.81 — TETO DE 1,3 → 1,7. Pedido do dono: "precisamos chegar e algo como
+// 1,7 pelo menos". O teto antigo não era conservadorismo à toa: MEDIDO no app
+// real (logado, Confra de produção), em 1,3 já cortava NOME ("FABIANA VIEIRA")
+// e em 1,7 havia ~180 estouros — 150 só no #explore. A causa não era a faixa e
+// sim as CAIXAS: fonte em rem crescia, box em px ficava parado.
+// Depois da 1.7.77 (grid do explore, card de organização, .btn e variantes em
+// rem, nome em caixa que encolhe e QUEBRA no piso) a curva de estouros ficou
+// PLANA de 1,0 a 2,0 — e o #explore foi de 150 pra 0, provado ao vivo.
+// Por isso o teto sobe agora, e não antes: primeiro o app aguenta, depois o
+// controle permite. O PISO fica em 0,8 — abaixo disso a fonte da raiz cai a
+// ~10px e nada fica legível, então baixar não serve a ninguém.
 window._UI_SCALE_MIN = 0.8;
-window._UI_SCALE_MAX = 1.3;
+window._UI_SCALE_MAX = 1.7;
 window._clampUiScale = function(v) {
   v = parseFloat(v);
   if (isNaN(v)) return 1;
