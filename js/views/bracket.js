@@ -5296,6 +5296,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _grpArrivedL = (typeof window._monGroupArrivedBtn === 'function') ? window._monGroupArrivedBtn(t, g.matches, gDone) : '';
           var _schGrpBtn = (isMyGroup && typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
           var _waGrpBtn = (isMyGroup && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';
+          // v1.7.90: com W.O. ativo o bloco SEGUE indo pra linha de estado (_woStateLine)
+          // e não pra linha de botões — isso não mudou, e é o que mantém a linha de ações
+          // limpa. O que mudou é o CONTEÚDO do bloco: `_ligaGroupControlsHtml` agora
+          // acrescenta o botão de declarar um NOVO W.O. a cada estado, em vez de tratá-lo
+          // como alternativa a eles. Antes, ter um `woAbsent` no grupo deixava o
+          // organizador sem como declarar a falta de mais ninguém — e num torneio de
+          // temporada o W.O. pode acontecer a qualquer momento. O "Reverter" de cada
+          // estado segue citando o nome de quem levou AQUELE W.O.
           var _woActive = !!g.woAbsent;
           var _rightCtrl = (_woActive ? '' : (_ligaCtrl || '')) + _grpArrivedL + _schGrpBtn + _waGrpBtn;
           var _woStateLine = (_woActive && _ligaCtrl)

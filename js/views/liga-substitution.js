@@ -524,6 +524,53 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     // participante do grupo vê só o convite. [[project_wo_outcome_negotiation_canon]]
     var _souOrg = (typeof window._canManagePresence === 'function')
       ? !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser) : false;
+    // v1.7.90 — SÓ O PRIMEIRO QUE RESPEITA A PROPORÇÃO NASCE MARCADO.
+    //
+    // Ordem do dono, depois de operar o W.O. da Denise Mamesso ao vivo: "o padrao certo
+    // é só vir o primeiro que respeitar a proporcao".
+    //
+    // Antes TODOS nasciam com `data-on="1"`: o diálogo abriu com Carol Moresco E Daniel
+    // Oliveira marcados e o rodapé em "Convidar 2 selecionados". Confirmar ali teria
+    // CONVIDADO os dois em vez de COLOCAR a primeira da fila — o oposto da regra, que é
+    // "o próximo assume". Pior: o Daniel é homem e o grupo tinha 1H/2M + a vaga; entrar
+    // ele daria 2H/2M e quebraria a proporção 25/75 travada do torneio.
+    //
+    // Agora nasce marcado UM só: o primeiro da fila (a ordem já vem por chegada) que,
+    // entrando, MANTÉM a proporção do grupo — usando a mesma função canônica do motor
+    // de sorteio (`_groupMeetsRatio`), não uma régua paralela. Sem proporção aplicável
+    // (torneio sem a trava, ou categoria que separa gênero), cai no primeiro da fila,
+    // que é a regra pura de ordem. Marcar mais de um continua possível — é um toque, e
+    // é assim que se convida vários de propósito.
+    var _jaMarcou = false;
+    var _ratioAtiva = (typeof window._ratioAppliesTo === 'function')
+      ? window._ratioAppliesTo(t, cat) : false;
+    var _ratio = _ratioAtiva ? (t && (t.wlGenderRatio || t.genderRatio)) : null;
+    // Gênero de quem JÁ está no grupo, menos o ausente — é a vaga dele que se preenche.
+    var _generoDe = function (nome) {
+      try {
+        var u = uidMap && uidMap[nome];
+        if (u && typeof window._genderForUid === 'function') {
+          var g = window._genderForUid(t, u);
+          if (g) return g;
+        }
+        var lst = Array.isArray(t.participants) ? t.participants : [];
+        var p = lst.find(function (e) {
+          var eu = (typeof window._participantUids === 'function') ? (window._participantUids(e) || [])[0] : (e && e.uid);
+          return (u && eu === u) || (window._pName ? window._pName(e, '') === nome : false);
+        });
+        return (typeof window._pGender === 'function') ? window._pGender(t, p) : ((p && p.gender) || '');
+      } catch (e) { return ''; }
+    };
+    var _mantemProporcao = function (cand) {
+      if (!_ratio || typeof window._groupMeetsRatio !== 'function') return true;
+      try {
+        var base = ((group && group.players) || [])
+          .filter(function (nm) { return String(nm) !== String(absentName); })
+          .map(function (nm) { return { gender: _generoDe(nm) }; });
+        base.push({ gender: _generoDe(cand && cand.name) || (cand && cand.gender) || '' });
+        return !!window._groupMeetsRatio(base, _ratio);
+      } catch (e) { return true; }   // na dúvida ninguém deixa de ser oferecido
+    };
     html += '<div id="liga-fill-cands">' + folgas.map(function (f) {
       // offCat NÃO some com a pessoa: mostra marcado, e o organizador decide se aceita a
       // quebra de categoria. Sumir era o que fazia a fila "não existir" na tela.
@@ -535,8 +582,12 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
       // v1.6.92: a linha é do NOME — largura inteira. O botão por linha (v1.6.91) comeu a
       // largura e picotou os nomes em duas linhas com a tag cortada. A AÇÃO virou UMA só,
       // no rodapé, e o que ela faz depende de quantos estão marcados (regra do dono).
-      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="1" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + _bd + ';color:' + _co + ';">' +
-        '<span data-mark="1" style="flex:0 0 auto;">✅</span>' +
+      // Marca UM só: o primeiro da fila que mantém a proporção. Os demais entram
+      // desmarcados e podem ser ligados no toque (é assim que se convida vários).
+      var _on = (!_jaMarcou && !f.offCat && _mantemProporcao(f));
+      if (_on) _jaMarcou = true;
+      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="' + (_on ? '1' : '0') + '" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + _bd + ';color:' + _co + ';' + (_on ? '' : 'opacity:0.6;') + '">' +
+        '<span data-mark="1" style="flex:0 0 auto;">' + (_on ? '✅' : '⬜') + '</span>' +
         '<span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(f.name) + '</span>' +
         _tag +
       '</button>';
@@ -1072,6 +1123,30 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   // Botões de AÇÃO = classe de botão padrão do app (.btn .btn-outline .btn-sm),
   // com tom suave por inline. Indicadores de STATUS continuam como pills.
   var poBtnStyle = 'font-size:0.72rem;padding:3px 11px;';
+  // v1.7.90 — DAR W.O. É SEMPRE POSSÍVEL.
+  //
+  // Relato do dono: "se deu wo pra alguem o botao para dar wo em outros, some. mas isso
+  // esta errado. a rigor podemos dar wo sempre." E logo depois, a regra do desfazer:
+  // "o botao reverter wo fica vinculado a cada um que tomou o wo."
+  //
+  // Eram DUAS causas somadas para o mesmo sintoma:
+  //   1. esta função é uma máquina de estados que RETORNA CEDO em cada estado de W.O.
+  //      (pendente / preenchido / sem substituto) — com um `woAbsent` no grupo ela nunca
+  //      chegava na linha que monta o botão de dar W.O., lá embaixo;
+  //   2. o bracket.js ainda tirava este bloco inteiro da linha de ações quando
+  //      `g.woAbsent` estava setado.
+  // Resultado: bastava UMA pessoa levar W.O. para o grupo inteiro ficar sem como
+  // declarar a falta de qualquer outra — num torneio de temporada, onde o W.O. pode
+  // acontecer a qualquer momento, isso trava o organizador.
+  //
+  // O botão passa a ser ACRESCENTADO a cada estado, em vez de ser alternativa a eles.
+  // O "Reverter" de cada estado continua citando o NOME de quem levou aquele W.O.
+  // (`group.woAbsent`) — é ele que fica vinculado à pessoa, como o dono pediu.
+  var _btnNovoWo = (manage && !gDone && typeof window._woBtnHtml === 'function')
+    ? ' ' + window._woBtnHtml("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", true,
+        { label: 'W.O.', size: 'btn-micro', fontSize: '0.66rem',
+          extraStyle: 'min-height:0;height:22px;line-height:1;' })
+    : '';
   // Estado: pendente de aceite
   if (group.subStatus === 'pending') {
     // multi-convite: lista TODOS os pendentes do grupo (1 → nome; 2+ → contagem).
@@ -1091,7 +1166,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
         && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
       if (!_woPlayedP) s += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
     }
-    return s;
+    return s + _btnNovoWo;   // v1.7.90: dar W.O. em OUTRA pessoa continua possível
   }
   // Estado: preenchido (W.O. ativo)
   if (group.subStatus === 'filled' && group.woAbsent) {
@@ -1101,11 +1176,11 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     var _woPlayed = (typeof window._matchHasRealPlay === 'function')
       && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
     if (manage && !_woPlayed) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
-    return s2;
+    return s2 + _btnNovoWo;  // v1.7.90: idem — o Reverter é do W.O. desta pessoa
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher
   if (group.woAbsent && (group.subStatus === 'open' || !group.subStatus) && manage) {
-    return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>';
+    return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>' + _btnNovoWo;
   }
   // Estado normal: oferece declarar ausência (só se grupo não terminou).
   // v3.1.72: torneio multi-dia + jogadores lançam resultado → usa o fluxo CANÔNICO
