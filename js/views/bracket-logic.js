@@ -77,8 +77,28 @@ window._computeMonarchStandings = function(group, t, category) {
     };
     return k;
   }
-  (group.players || []).forEach(function(name, i) {
-    _monEnsure(name, Array.isArray(group.playersUids) ? group.playersUids[i] : null);
+  // v1.7.79 — A TABELA NASCE DO UID, NÃO DO RÓTULO.
+  // Antes o seed era `group.players.forEach(...)`: sem nome gravado, sem linha. MEDIDO
+  // no Confra real apagando os rótulos e mantendo os uids — a classificação caía de
+  // 157 linhas pra 4, enquanto os 31 grupos e os 97 cards de jogo seguiam inteiros.
+  // Ou seja: o rótulo ainda MANDAVA aqui. Agora a lista sai da união posicional
+  // (uid manda; o nome só entra onde NÃO há uid — fictício/legado), e o `name` da
+  // linha é o nome VIVO do perfil. Ver [[project_uid_identity_canon_locked]].
+  function _ladoPares(nomes, uids) {
+    var N = Array.isArray(nomes) ? nomes : [], U = Array.isArray(uids) ? uids : [];
+    var n = Math.max(N.length, U.length), out = [];
+    for (var i = 0; i < n; i++) { if (N[i] || U[i]) out.push({ name: N[i] || '', uid: U[i] || null }); }
+    return out;
+  }
+  function _nomeVivoMon(p) {
+    if (p.uid && typeof window._displayNameForUid === 'function') {
+      var v = window._displayNameForUid(p.uid, p.name || '');
+      if (v) return v;
+    }
+    return p.name || '';
+  }
+  _ladoPares(group.players, group.playersUids).forEach(function (p) {
+    _monEnsure(_nomeVivoMon(p), p.uid);
   });
 
   var matches = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
@@ -122,8 +142,10 @@ window._computeMonarchStandings = function(group, t, category) {
     // v4.4.117: só ATUALIZA quem já está no elenco (seed) — NÃO cria linha nova a partir do
     // nome do jogo (preserva "tabela = os do grupo"). Casa por UID (chave uid:...); se o nome
     // do jogo está clobberado mas o uid bate o do elenco, encontra a linha certa.
-    m.team1.forEach(function(name, i) {
-      var k = _monKey(name, _u1m[i]); if (!stats[k]) return;
+    // v1.7.79: itera pelo par POSICIONAL (uid manda) — `m.team1.forEach` era
+    // name-driven e, sem rótulo gravado, não somava jogo nenhum.
+    _ladoPares(m.team1, _u1m).forEach(function(_p) {
+      var k = _monKey(_p.name, _p.uid); if (!stats[k]) return;
       stats[k].played++;
       stats[k].pointsFor += s1;
       stats[k].pointsAgainst += s2;
@@ -135,8 +157,8 @@ window._computeMonarchStandings = function(group, t, category) {
       stats[k].tiebreaksLost += tb2;
       if (team1Won) stats[k].wins++; else stats[k].losses++;
     });
-    m.team2.forEach(function(name, i) {
-      var k = _monKey(name, _u2m[i]); if (!stats[k]) return;
+    _ladoPares(m.team2, _u2m).forEach(function(_p) {
+      var k = _monKey(_p.name, _p.uid); if (!stats[k]) return;
       stats[k].played++;
       stats[k].pointsFor += s2;
       stats[k].pointsAgainst += s1;
