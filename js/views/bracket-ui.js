@@ -537,7 +537,10 @@ function _sideBelongsToUser(t, sideStr, user) {
   // lado, incluindo dupla "A / B".
   var dn = user.displayName || '';
   var em = user.email || '';
-  if (dn && (sideStr === dn || sideStr.indexOf(dn) !== -1)) return true;
+  // v1.7.78: EXATO. `indexOf` fazia "Mariana C" casar com "Mariana Ciocci" e
+  // "Ana" com "Ana Paula" — identidade nunca foi substring. Dupla "A / B"
+  // segue coberta pelo split logo abaixo.
+  if (dn && sideStr === dn) return true;
   if (em && sideStr === em) return true;
   if (sideStr.indexOf('/') !== -1) {
     var members = sideStr.split('/').map(function(n) { return n.trim(); });

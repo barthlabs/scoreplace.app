@@ -135,6 +135,11 @@ const SUITES = [
   // identidade lida por NOME (que o strip do save apaga) → chave de irmãos vazia →
   // o link de UM grupo espelhado nos 81 jogos dos 27 grupos.
   'tests/wa-group-por-grupo.test.js',
+  // Os DOIS chips do rodapé do card ("Combinar jogo" + grupo de whats) são irmãos
+  // com GATE COMUM: quebrar o gate derruba os dois DE UMA VEZ e EM SILÊNCIO (todo
+  // call site é guardado por `typeof === 'function'`). Nasceu de um relato de
+  // regressão na 1.7.76 que a medição não confirmou — o que faltava era o teste.
+  'tests/chips-do-card-do-jogo.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
@@ -466,6 +471,14 @@ const SUITES = [
   // login federado não passava por checagem server-side, e homônimos continuaram nascendo
   // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
   'functions/test-name-variant-core.js',
+  // Trocou o displayName → o rótulo gravado nos torneios vira mentira. Este core
+  // decide o que reescrever SÓ por uid; metade do teste existe pra travar o que
+  // NÃO pode ser tocado (homônimo de outro uid, parceiro de dupla, fictício).
+  'functions/test-rename-propagate-core.js',
+  // Arrays pareados nome[i] ↔ uid[i]. A exclusão de conta filtrava SÓ o lado dos
+  // uids e deixava o nome (caso Denise Mamesso, 08/ago/2026) — na 1ª posição isso
+  // faria cada nome apontar pro uid do vizinho.
+  'functions/test-uid-sweep-pares.js',
   // HOMÔNIMO AVISA, POSSE AUTORIZA: o botão de unir contas não funde nada — pede uma prova
   // (link no e-mail da OUTRA conta). Trava que o cliente não recebe uid/contato cheio, que o
   // alvo é resolvido no servidor (senão vira porta de spam) e que há rate limit.

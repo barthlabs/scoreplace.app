@@ -123,4 +123,51 @@ function findUidPaths(node, uid) {
   return paths;
 }
 
-module.exports = { remapUid, findUidPaths, isPlainContainer };
+/* ─── ARRAYS PAREADOS: nome[i] ↔ uid[i] ──────────────────────────────────────
+ * FALHA REAL (Confra, 08/ago/2026): a exclusão de conta da Denise Mamesso rodou
+ * `team1Uids.filter(x => x !== uid)` — tirou o uid e DEIXOU o nome em `team1`.
+ * Resultado: 4 nomes / 3 uids no grupo, e o app parou de reconhecer o grupo dela.
+ * Ela era a ÚLTIMA do array, então os outros ainda casavam por sorte. Se fosse a
+ * PRIMEIRA, o filter teria deslocado tudo e CADA NOME passaria a apontar pro uid
+ * do vizinho — placar e identidade do grupo inteiro trocados.
+ *
+ * REGRA: array de uids NUNCA é filtrado sozinho. Ou some junto com o nome do
+ * MESMO índice, ou os dois ficam. Ver [[project_uid_identity_canon_locked]].
+ */
+const PARES_NOME_UID = { playersUids: "players", team1Uids: "team1", team2Uids: "team2" };
+
+/* Índices a remover de um objeto que tem os dois arrays. Devolve
+ * { <chaveUids>: [i,...] } — vazio quando não há par ou o uid não está lá. */
+function paresParaRemover(obj, uid) {
+  const out = {};
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return out;
+  for (const kUid of Object.keys(PARES_NOME_UID)) {
+    const kNome = PARES_NOME_UID[kUid];
+    const uids = obj[kUid];
+    if (!Array.isArray(uids)) continue;
+    const idx = [];
+    uids.forEach((u, i) => { if (u === uid) idx.push(i); });
+    if (!idx.length) continue;
+    // Só remove em PAR quando os dois arrays existem e estão alinhados. Fora
+    // disso (folga só-uid, doc legado) mexer às cegas piora: deixa como está.
+    const nomes = obj[kNome];
+    if (!Array.isArray(nomes) || nomes.length !== uids.length) continue;
+    out[kUid] = idx;
+  }
+  return out;
+}
+
+/* Aplica a remoção pareada: devolve {<chave>: arrayNovo} pros DOIS lados. */
+function removerPares(obj, uid) {
+  const alvo = paresParaRemover(obj, uid);
+  const novo = {};
+  for (const kUid of Object.keys(alvo)) {
+    const drop = new Set(alvo[kUid]);
+    const kNome = PARES_NOME_UID[kUid];
+    novo[kUid] = obj[kUid].filter((_, i) => !drop.has(i));
+    novo[kNome] = obj[kNome].filter((_, i) => !drop.has(i));
+  }
+  return novo;
+}
+
+module.exports = { remapUid, findUidPaths, isPlainContainer, PARES_NOME_UID, paresParaRemover, removerPares };

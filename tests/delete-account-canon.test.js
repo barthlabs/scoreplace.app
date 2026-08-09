@@ -15,7 +15,8 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-const { findUidPaths, isPlainContainer } = require('../functions/uid-sweep');
+const _uidSweepReal = require('../functions/uid-sweep');
+const { findUidPaths, isPlainContainer } = _uidSweepReal;
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -32,7 +33,10 @@ function extrai(nome) {
   const m = /\n\}\n/.exec(src.slice(i));
   return src.slice(i, i + m.index + 2);
 }
-const sandbox = { _uidSweep: { findUidPaths, isPlainContainer }, module: {}, console };
+// v1.7.78: injeta o MÓDULO INTEIRO. Injetar só 2 funções fazia o teste quebrar
+// quando a CF passou a usar removerPares — e o vermelho seria do harness, não
+// do código. O sandbox tem que espelhar o require real.
+const sandbox = { _uidSweep: _uidSweepReal, module: {}, console };
 vm.createContext(sandbox);
 vm.runInContext(
   extrai('_tournamentHasPlayedMatches') + '\n' +

@@ -3894,7 +3894,8 @@ window._monGroupArrivedBtn = function (t, matches, groupDone) {
   if (!_cuMon || !_cuMonName || groupDone) return '';
   var _inGrpMon = (matches || []).some(function (m) {
     return (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cuMon) > 0) ||
-      ([m.p1 || '', m.p2 || ''].concat(m.team1 || [], m.team2 || []).some(function (s) { return s && (s === _cuMonName || String(s).indexOf(_cuMonName) !== -1); }));
+      ([m.p1 || '', m.p2 || ''].concat(m.team1 || [], m.team2 || []).some(function (s) { return s && s === _cuMonName; }));   // v1.7.78: exato — team1/team2 já trazem cada membro; substring casava "Ana" com "Ana Paula"
+
   });
   if (!_inGrpMon) return '';
   var _meHereMon = (typeof window._idMapHas === 'function') ? window._idMapHas(t, t.checkedIn, _cuMonName) : false;
@@ -3940,7 +3941,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     return sg.players.some(function(n) {
       var nm = (typeof n === 'string') ? n : (n && (n.displayName || n.name) || '');
       if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, nm, _cuM)) return true;
-      return !!(_cuMName && nm && (nm === _cuMName || nm.indexOf(_cuMName) !== -1));
+      return !!(_cuMName && nm && nm === _cuMName);   // v1.7.78: exato, nunca substring
     });
   }
   subgroups = subgroups.map(function(sg, i) { return { sg: sg, i: i, me: _sgHasMe(sg) ? 0 : 1 }; })
@@ -4149,7 +4150,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
       // participante pela string e checa uid); fallback nome/email abaixo.
       if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _cuGS)) return true;
       if (typeof n !== 'string') return false;
-      if (_cuGSName && (n === _cuGSName || n.indexOf(_cuGSName) !== -1)) return true;
+      if (_cuGSName && n === _cuGSName) return true;   // v1.7.78: exato; composto "A / B" cai no split abaixo
       if (_cuGSEmail && n === _cuGSEmail) return true;
       if (n.indexOf('/') !== -1) {
         return n.split('/').map(s => s.trim()).some(m => (_cuGSName && m === _cuGSName) || (_cuGSEmail && m === _cuGSEmail));
@@ -4609,7 +4610,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser; fallback nome/email.
     if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _curUser)) return true;
     if (typeof n !== 'string') return false;
-    if (_curUserName && (n === _curUserName || n.indexOf(_curUserName) !== -1)) return true;
+    if (_curUserName && n === _curUserName) return true;   // v1.7.78: exato; composto "A / B" cai no split abaixo
     if (_curUserEmail && n === _curUserEmail) return true;
     if (n.indexOf('/') !== -1) {
       var parts = n.split('/').map(function(s){return s.trim();});
@@ -4924,13 +4925,32 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _cuRRName = _cuRR ? (_cuRR.displayName || '') : '';
         var _cuRREmail = _cuRR ? (_cuRR.email || '') : '';
         var _groupHasMe = function(g) {
-          if (!_cuRR || !g || !Array.isArray(g.players)) return false;
+          if (!_cuRR || !g) return false;
+          // v1.7.78 — IDENTIDADE É O UID, e aqui ele SEMPRE esteve à mão.
+          // FALHA REAL (Confra, ago/2026): `g.players[]` é o RÓTULO DO DIA DO SORTEIO
+          // e ENVELHECE — quem troca o displayName depois deixa de casar por nome. E o
+          // fallback do _sideBelongsToUser não salva: ele procura o participante PELO
+          // NOME em t.participants, mas o save passa por `_stripUidEntryNames`, que
+          // apaga o nome de toda entrada com uid → em torneio real a busca não acha
+          // ninguém e sobra a comparação de string contra o rótulo velho.
+          // Consequência MEDIDA no doc de produção: 5 dos 124 jogadores (Marina Turri→
+          // Marina Cegal, RODRIGO UNGER PIRES DA SILVA→Rodrigo Unger, Mariana C→Mariana
+          // Ciocci, Fabi2401@→Dani Bataglia, Adriana→Adriana Rosa) ficavam SEM o selo
+          // "SEU GRUPO", SEM o "Combinar jogos" e SEM o botão do grupo de WhatsApp —
+          // os dois chips somem JUNTOS porque dependem do mesmo isMyGroup.
+          // O grupo grava `playersUids` ao lado de `players` desde que nasceu: casar
+          // por uid resolve sem depender de nome nenhum. Ver [[project_uid_identity_canon_locked]]
+          // e o irmão já corrigido em v1.7.46/1.7.47 (classificação e busca).
+          if (_cuRR.uid && Array.isArray(g.playersUids) && g.playersUids.indexOf(_cuRR.uid) !== -1) return true;
+          if (!Array.isArray(g.players)) return false;
+          // Fallback por NOME — só pra quem NÃO tem uid (jogador fictício, sem conta) e
+          // pra doc legado anterior ao playersUids. Nunca é o caminho de quem tem conta.
           return g.players.some(function(n) {
             if (!n) return false;
             // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser; fallback nome/email.
             if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _cuRR)) return true;
             if (typeof n !== 'string') return false;
-            if (_cuRRName && (n === _cuRRName || n.indexOf(_cuRRName) !== -1)) return true;
+            if (_cuRRName && n === _cuRRName) return true;   // v1.7.78: exato; composto "A / B" cai no split abaixo
             if (_cuRREmail && n === _cuRREmail) return true;
             if (n.indexOf('/') !== -1) {
               var members = n.split('/').map(function(s) { return s.trim(); });

@@ -4993,9 +4993,19 @@ function _purgeUidEverywhere(node, uid, manterSlots) {
       if (manterSlots && SLOTS_DE_JOGO.has(key)) return v;   // team1Uids etc: intacto
       return v.filter((x) => x !== uid).map((x) => walk(x, key));
     }
+    // v1.7.78 — ARRAYS PAREADOS PRIMEIRO. `team1Uids`/`playersUids` andam colados
+    // com `team1`/`players` pelo ÍNDICE. Filtrar só o lado dos uids (o que o walk
+    // genérico abaixo faz) DESALINHA os dois e o nome vira fantasma — foi o que
+    // aconteceu com a Denise Mamesso (08/ago/2026): uid removido, nome mantido,
+    // 4 nomes / 3 uids. Ela era a última e por sorte ninguém mais quebrou; na
+    // primeira posição, cada nome passaria a apontar pro uid do vizinho.
+    // Aqui os dois lados caem juntos, no mesmo índice. Regra pura e testada em
+    // uid-sweep.paresParaRemover/removerPares.
+    const pareados = manterSlots ? {} : _uidSweep.removerPares(v, uid);
     const out = {};
     for (const k of Object.keys(v)) {
       if (k === uid) continue;                                // chave de mapa por-pessoa
+      if (Object.prototype.hasOwnProperty.call(pareados, k)) { out[k] = pareados[k]; continue; }
       if (manterSlots && SLOTS_DE_JOGO.has(k) && v[k] === uid) { out[k] = v[k]; continue; }
       if (!manterSlots && SLOTS_DE_JOGO.has(k) && v[k] === uid) continue;
       out[k] = walk(v[k], k);
