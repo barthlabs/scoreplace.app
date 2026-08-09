@@ -380,7 +380,14 @@
         '<div id="venues-map" style="width:100%;height:clamp(180px,30vh,280px);background:#0a0e1a;border-radius:12px;overflow:hidden;border:1px solid var(--border-color);display:block;"></div>' +
       '</div>' +
       // ── Search bar ──
-      '<div style="padding:12px 16px 0;">' +
+      // v1.7.86: a barra do #place era a ÚNICA do app sem `sticky` — MEDIDO numa
+      // varredura das 5 telas com filtro (#explore, #analise, #participants,
+      // #bracket e esta): as outras 4 grudam, esta ia a topo -601 e SUMIA no
+      // scroll. É o relato do dono: "a barra de busca/filtro... no scroll somem".
+      // Gruda em 116px, a mesma altura do #explore e da Análise (topbar 60 +
+      // cabeçalho 57) — e ganha fundo próprio, senão os cards passariam POR BAIXO
+      // dela e o texto ficaria ilegível ao rolar.
+      '<div style="position:sticky;top:116px;z-index:40;padding:12px 16px 12px;background:var(--bg-dark);">' +
         '<div style="display:flex;gap:8px;align-items:center;">' +
           '<div style="flex:1;min-width:0;position:relative;">' +
             '<input type="text" id="venues-location" value="' + _safe(state.location) + '" placeholder="Buscar por nome, endereço ou bairro…" oninput="window._venuesOnLocation(this.value)" onfocus="this.select()" onclick="this.select()" onblur="setTimeout(function(){var b=document.getElementById(\'venues-suggestions\');if(b)b.style.display=\'none\';},200)" autocomplete="off" style="width:100%;box-sizing:border-box;padding:11px 14px;border-radius:12px;background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-bright);font-size:0.9rem;outline:none;">' +

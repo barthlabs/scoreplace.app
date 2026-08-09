@@ -1807,19 +1807,25 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
     opts = opts || {};
     var _icon = opts.iconSize || '1.3rem', _lbl = opts.labelSize || '0.85rem', _val = opts.valueSize || '1.15rem';
     var _endTs = (typeof window._ligaCurrentRoundEndTs === 'function') ? window._ligaCurrentRoundEndTs(t) : null;
-    var _valStyle = 'margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;';
-    var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    // v1.7.86: mesma regra da linha de cima — rótulo e relógio EMPILHADOS, porque
+    // dividindo uma linha só o rótulo virava "Rodada em …". Ordem do dono: "a mesma
+    // coisa logo abaixo." O ícone segue na coluna da esquerda.
+    var _valStyle = 'font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;';
+    var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;line-height:1.2;overflow-wrap:anywhere;';
+    var _pilha = function (icone, rotulo, valorHtml) {
+        return '<span style="font-size:' + _icon + ';flex-shrink:0;">' + icone + '</span>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
+              '<span style="' + _lblStyle + '">' + rotulo + '</span>' + valorHtml +
+            '</div>';
+    };
     if (_endTs && _endTs >= _since) {
         // ENCERRADA — relógio congelado na duração total (sem data-elapsed-since → não ticka).
         var _dur = window._formatCountdown ? window._formatCountdown(_endTs - _since) : '';
-        return '<span style="font-size:' + _icon + ';flex-shrink:0;">🏁</span>' +
-            '<span style="' + _lblStyle + '">Rodada encerrada</span>' +
-            '<span style="' + _valStyle + '">' + _dur + '</span>';
+        return _pilha('🏁', 'Rodada encerrada', '<span style="' + _valStyle + '">' + _dur + '</span>');
     }
     var _txt = window._formatCountdown ? window._formatCountdown(Date.now() - _since) : '';
-    return '<span style="font-size:' + _icon + ';flex-shrink:0;">▶️</span>' +
-        '<span style="' + _lblStyle + '">Rodada em andamento</span>' +
-        '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>';
+    return _pilha('▶️', 'Rodada em andamento',
+        '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>');
 };
 
 // v4.x: FONTE ÚNICA da decisão do COUNTDOWN da Liga (o box "Início da temporada / Próximo
@@ -1949,10 +1955,18 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         ? 'padding:14px 18px;background:' + _rb.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
         : 'padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
     return '<div style="margin-top:' + _mt + ';' + _box + '">' +
+        // v1.7.86: rótulo e relógio EMPILHADOS. Antes dividiam UMA linha e, com a
+        // escala grande, o rótulo virava "Fim da r…" — some justamente a palavra
+        // que diz DE QUE prazo se trata. Ordem do dono, olhando o card: "aqui o
+        // fim da r... e o timer devem ficar em 2 linhas para nao truncar."
+        // O ícone fica na coluna da esquerda (não empilha com o texto); rótulo em
+        // cima, número embaixo — e o rótulo pode quebrar em quantas linhas quiser.
         '<div style="display:flex;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
           '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';flex-shrink:0;">' + _ce.icon + '</span>' +
-          '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _label + '</span>' +
-          '<span data-countdown-target="' + _ts + '" style="margin-left:auto;font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;' + (_lg ? 'line-height:1;' : '') + 'white-space:nowrap;flex-shrink:0;">' + _txt + '</span>' +
+          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
+            '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;line-height:1.2;overflow-wrap:anywhere;">' + _label + '</span>' +
+            '<span data-countdown-target="' + _ts + '" style="font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;">' + _txt + '</span>' +
+          '</div>' +
         '</div>' + _line2 +
     '</div>';
 };
