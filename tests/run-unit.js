@@ -479,6 +479,9 @@ const SUITES = [
   // uids e deixava o nome (caso Denise Mamesso, 08/ago/2026) — na 1ª posição isso
   // faria cada nome apontar pro uid do vizinho.
   'functions/test-uid-sweep-pares.js',
+  // Jogo pendente BLOQUEIA apagar a conta (caso Denise Mamesso). Metade do teste
+  // trava o que NÃO pode bloquear — folga, BYE, sem sorteio, torneio encerrado.
+  'functions/test-delete-account-guard.js',
   // HOMÔNIMO AVISA, POSSE AUTORIZA: o botão de unir contas não funde nada — pede uma prova
   // (link no e-mail da OUTRA conta). Trava que o cliente não recebe uid/contato cheio, que o
   // alvo é resolvido no servidor (senão vira porta de spam) e que há rate limit.

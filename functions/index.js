@@ -40,6 +40,7 @@ const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
 const _rosterWatch = require("./roster-watch-core");
+const _delGuard = require("./delete-account-guard-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -4821,6 +4822,26 @@ exports.deleteAccount = onCall(
 
     let email = "";
     try { const au = await admin.auth().getUser(uid); email = (au.email || "").toLowerCase(); } catch (e) {}
+
+    // 0) PORTA — jogo pendente BLOQUEIA a exclusão (ordem do dono, ago/2026).
+    // Sem isto, a pessoa apaga a conta estando SORTEADA e leva o grupo dos outros
+    // junto: foi o caso Denise Mamesso (R1 Grupo A do Confra, 3 jogos marcados,
+    // zero placar) — o cascade arrancou o uid de dentro da chave, deixou o nome,
+    // os outros 3 ficaram sem adversária e o organizador não foi avisado de nada.
+    // O direito de apagar continua garantido; o que muda é a ORDEM: sair do
+    // torneio primeiro (o que dispara o W.O. e avisa o organizador), depois
+    // apagar. Roda ANTES de qualquer escrita — recusar no meio deixaria a conta
+    // pela metade, que é pior que não começar.
+    {
+      const bloqueio = [];
+      const sn = await db.collection("tournaments").where("memberUids", "array-contains", uid).get();
+      sn.forEach((d) => { const t = Object.assign({ id: d.id }, d.data()); if (_delGuard.temJogoPendente(t, uid)) bloqueio.push(t); });
+      if (bloqueio.length) {
+        const lista = _delGuard.torneiosQueBloqueiam(bloqueio, uid);
+        console.log("[deleteAccount] BLOQUEADO " + uid + " → " + JSON.stringify(lista));
+        throw new HttpsError("failed-precondition", _delGuard.mensagemBloqueio(lista), { tournaments: lista });
+      }
+    }
 
     // 1) Torneios que ela ORGANIZA → apagados (o dono sai, o torneio vai junto).
     const organizados = new Map();

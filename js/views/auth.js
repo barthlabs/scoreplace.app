@@ -5674,7 +5674,19 @@ window._executeDeleteAccount = async function() {
 
   } catch (err) {
     window._error('Erro ao excluir conta:', err);
-    showNotification(_t('auth.error'), _t('auth.deleteErrorMsg'), 'error');
+    // v1.7.78 — RECUSA COM MOTIVO. A CF barra quem tem jogo pendente
+    // (failed-precondition) e manda no `message` ONDE a pessoa está presa e QUAL
+    // é o caminho (sair do torneio → W.O. → organizador avisado). Cair no texto
+    // genérico aqui transformava uma recusa explicável em "deu erro, tente de
+    // novo" — e a pessoa tentaria de novo pra sempre. Só o motivo real serve.
+    var _blk = err && (err.code === 'functions/failed-precondition' || err.code === 'failed-precondition');
+    if (_blk && err.message) {
+      showNotification('Você ainda tem jogos marcados', String(err.message), 'warning');
+    } else {
+      showNotification(_t('auth.error'), _t('auth.deleteErrorMsg'), 'error');
+    }
+    // O modal de confirmação FICA aberto: a pessoa não perdeu o caminho, só
+    // precisa resolver o torneio antes.
     if (btn) { btn.textContent = _t('auth.deleteAccountBtn'); btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
   }
 };
