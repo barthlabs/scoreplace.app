@@ -581,6 +581,35 @@ window._tProgFmtDur = function(ms) {
   out.push(s + 's');
   return out.join(' ');
 };
+// v1.7.83: o MESMO tempo, quebrado em DUAS linhas — "6d 13h" em cima, "2m 27s"
+// embaixo. Nasceu de um estouro medido: na escala 1.7 o relógio da coluna do
+// meio (DECORRIDO) escrevia POR CIMA do "19:00" da coluna INÍCIO REAL (+43px).
+// Ordem do dono: "aqui pode quebrar a linha com xxd xxh na linha de cima e xxm
+// e xxs na linha de baixo."
+// ⚠️ NÃO mexer no `_tProgFmtDur` acima: ele devolve TEXTO e há caller que faz
+// regex nele (`.replace(/\s\d+s$/,'')` no card de torneio encerrado) — devolver
+// HTML dali quebraria esses usos. Esta é uma função IRMÃ, só pro relógio.
+// Sem dia nem hora (duração curta) devolve uma linha só — quebrar "2m 27s" em
+// duas seria pior que o problema.
+// v1.7.83: rótulo de coluna em DUAS linhas — "início" em cima, "programado"
+// embaixo. Ordem do dono, olhando o box na escala 1.7: "inicio numa linha
+// programado na de baixo. final numa linha e programado na outra. nos 4 casos."
+// Quebra na ÚLTIMA palavra (não na primeira): é ela que é longa e comum aos 4
+// ("programado"). Rótulo de uma palavra só passa intacto.
+window._tProgLbl2L = function(label) {
+  var s = String(label || '');
+  var i = s.lastIndexOf(' ');
+  return i === -1 ? s : (s.slice(0, i) + '<br>' + s.slice(i + 1));
+};
+window._tProgFmtDur2L = function(ms) {
+  var txt = window._tProgFmtDur(ms);
+  var p = txt.split(' ');
+  if (p.length < 3) return '<span style="white-space:nowrap;">' + txt + '</span>';
+  var cima = p.slice(0, p.length - 2).join(' ');   // "6d 13h" (ou só "13h")
+  var baixo = p.slice(p.length - 2).join(' ');      // "2m 27s"
+  return '<span style="white-space:nowrap;">' + cima + '</span><br>' +
+         '<span style="white-space:nowrap;">' + baixo + '</span>';
+};
 window._estimateTournamentMinutes = function(t) {
   var prog = window._getTournamentProgress(t);
   var totalMatches = prog.total || 0;
@@ -1156,7 +1185,7 @@ window._buildProgressInner = function(t) {
       _durRow = '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-top:9px;gap:8px;">' +
         _tCol(_firstPointMs, 'início real', 'flex-start') +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(_tDurMs) + '</span>' +
+          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(_tDurMs) + '</span>' +
           '<span style="' + _tLblS + '">' + _tDurLabel + '</span>' +
         '</div>' +
         _rightCol +
@@ -1185,7 +1214,7 @@ window._buildProgressInner = function(t) {
         return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
           '<span style="font-size:1rem;font-weight:800;color:#93c5fd;line-height:1.1;">' + _time(ms) + '</span>' +
           '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-          '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+          '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
         '</div>';
       };
       _schedRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:9px;gap:8px;">' +
@@ -1306,7 +1335,7 @@ window._buildProgressInner = function(t) {
     return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
       '<span style="' + _timeS + 'color:#93c5fd;">' + _time(ms) + '</span>' +
       '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-      '<span style="' + _lblS + 'color:#60a5fa;text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+      '<span style="' + _lblS + 'color:#60a5fa;text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
     '</div>';
   };
 
