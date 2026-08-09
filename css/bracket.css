@@ -239,3 +239,33 @@ summary::-webkit-details-marker { display: none; }
 
 /* Tema light/sunset: gradient fade usa background do card (cream/branco),
    não dark. CSS variable --bg-card já cobre isso automaticamente. */
+
+/* ─── v1.7.88 — O BOX DO GRUPO PARA DE DESPERDIÇAR AS LATERAIS ──────────────
+   Print do dono na chave: "os box nas chaves estao com um padding que poderia ser
+   minimo em relacao ao box geral. tem espaço para mais largura no box de cada grupo
+   e com isso ter mais espaço para conteudo util."
+
+   MEDIDO na tela real, de fora pra dentro e POR LADO:
+     #view-container 13px + .card 27,6px + <details> 14px + wrapper 10px = 64,6px
+   → 129px consumidos só de recuo antes de qualquer conteúdo aparecer. E como o
+   padding do .card está em `rem`, ele CRESCE junto com a escala da interface: quanto
+   maior a pessoa põe a letra (justamente quem precisa de espaço), mais largura ela
+   perde para a moldura.
+
+   O corte é só na HORIZONTAL e só DENTRO da chave (`#inline-bracket-container`) —
+   o vertical segue dando respiro entre grupos, e o `.card` do resto do app (dashboard,
+   detalhe do torneio) não é tocado.
+
+   GANHO MEDIDO, não estimado: simulando a largura de celular (390px), o card de jogo
+   passa de 280px para 292px — +12px. É menos do que os 33px que o padding devolve,
+   porque parte do espaço é reabsorvida pelos recuos internos; e é o teto por este
+   caminho (ver o aviso logo abaixo). */
+#inline-bracket-container > .card {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+/* ⚠️ NÃO adiantou mexer nos recuos internos (o <details> e o wrapper): MEDI com
+   `!important` e o card ficou nos MESMOS 292px — o espaço deles não é o que aperta o
+   conteúdo. Regra que não muda pixel é regra morta, então não fica aqui. Se um dia
+   precisar de mais largura, o caminho é outro (a largura do próprio card de jogo),
+   não empilhar seletor que não faz efeito. */

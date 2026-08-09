@@ -2569,7 +2569,15 @@ function renderDashboard(container) {
     // regra da caixa invisível (que reduz a fonte pra não cortar) vale pra
     // gente, e cortar "Organiz…" não perde identidade de ninguém.
     const _corta = _wrapLabel ? '' : 'overflow:hidden;text-overflow:ellipsis;max-width:100%;';
-    return `<div style="flex:0 1 92px;min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
+    // v1.7.88 — A PILL CRESCE PRA PREENCHER A LINHA.
+    // Era `flex:0 1 92px`: o `0` PROÍBE crescer, então as pills ficavam travadas
+    // em 92px com sobra de espaço nas duas laterais — e o rótulo cortava ("Organiza…",
+    // "Participa…", "Encerrad…") tendo espaço livre logo ao lado. Print do dono no
+    // celular: "aqui temos espaço para aumentar a largura dos box para nao precisar ...".
+    // `flex:1 1 92px` mantém 92px como base (mesma quantidade de pills por linha) e
+    // deixa cada uma dividir a sobra — o texto passa a caber sem tocar na reticência,
+    // que fica só como rede pra nome muito longo em escala muito grande.
+    return `<div style="flex:1 1 92px;min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};${_corta}">${label}</h3>
@@ -2605,7 +2613,7 @@ function renderDashboard(container) {
         : (opts.subtitleDataAttr
             ? '<div' + subAttr + ' style="font-size:0.62rem;font-weight:700;color:var(--hero-text-soft,#94a3b8);line-height:1.1;margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:0.2px;white-space:nowrap;"></div>'
             : '');
-      return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:0 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+      return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:1 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
         <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
         <span${countAttr} style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
         <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.1;">${label}</h3>
@@ -2617,7 +2625,7 @@ function renderDashboard(container) {
       : (opts.subtitleDataAttr
           ? '<div' + subAttr + ' style="font-size:0.62rem;font-weight:700;color:var(--hero-text-soft,#94a3b8);line-height:1.1;margin-top:1px;font-variant-numeric:tabular-nums;letter-spacing:0.2px;white-space:nowrap;"></div>'
           : '');
-    return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:0 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+    return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:1 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span${countAttr} style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       ${subtitleHtml}

@@ -1854,6 +1854,13 @@ window.FirestoreDB = {
     // continua não salvando" reportado em v0.16.6 e v0.16.7.
     var toSave = Object.assign({}, profileData);
     if (toSave.displayName) {
+      // v1.7.88: saneia aqui TAMBÉM — este é o último portão antes do Firestore e
+      // nem todo caminho passa pelo saveUserProfileToFirestore do store.js. Sem isto
+      // o `displayName_lower` seria derivado do nome sujo, e é ele que a BUSCA usa:
+      // "Juliana Dal+Sasso" ficaria inalcançável por quem digitasse "Dal Sasso".
+      if (typeof window !== 'undefined' && typeof window._normalizeDisplayName === 'function') {
+        toSave.displayName = window._normalizeDisplayName(toSave.displayName);
+      }
       toSave.displayName_lower = String(toSave.displayName).toLowerCase();
     }
     if (toSave.email) {

@@ -649,6 +649,10 @@ const SUITES = [
   // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
   // (o da matriz não recebia nada), e repintar no meio do save não apaga o feedback.
   'tests/analise-botao-salvando.test.js',
+  // "Juliana Dal+Sasso" — o `+` do form-encoding da Apple chegava GRAVADO no banco
+  // (e no displayName_lower, quebrando a busca); e a faixa do slider morava em 4
+  // lugares e 2 unidades, fazendo o mesmo teto ser lido ora como 130%, ora 169%.
+  'tests/nome-e-escala-sem-lixo.test.js',
 ];
 
 let failed = [];

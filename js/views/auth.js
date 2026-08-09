@@ -6547,7 +6547,12 @@ function setupProfileModal() {
               '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Ajusta textos e botões em todo o app. Ele já se adapta ao seu aparelho — aqui você afina do seu jeito. (O zoom do placar ao vivo continua separado.)</p>' +
               '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:0.7rem;color:var(--text-muted);line-height:1;">A</span>' +
-                '<input type="range" id="profile-ui-scale" min="60" max="130" step="5" value="100" aria-label="Tamanho da interface" style="flex:1;min-width:0;accent-color:var(--primary-color);height:28px;" ' +
+                // v1.7.88: min/max VÊM das constantes, não cravados aqui. Era `min="60"
+                // max="130"` enquanto o store.js dizia 0,8–1,7 — duas faixas em duas
+                // unidades, e o teto do slider (130%) virava 1,69 interno: quem lia
+                // dividindo pela base mostrava "130%", quem lia sem dividir mostrava
+                // "169%". Era a inconsistência que o dono via alternar.
+                '<input type="range" id="profile-ui-scale" min="' + (window._UI_PCT_MIN || 80) + '" max="' + (window._UI_PCT_MAX || 150) + '" step="5" value="100" aria-label="Tamanho da interface" style="flex:1;min-width:0;accent-color:var(--primary-color);height:28px;" ' +
                   'oninput="window._applyUiScale&&window._applyUiScale(window._uiPctToScale(this.value)); var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=this.value+\'%\';" ' +
                   'onchange="window._setUiScale&&window._setUiScale(window._uiPctToScale(this.value));">' +
                 '<span style="font-size:1.1rem;color:var(--text-muted);line-height:1;">A</span>' +
