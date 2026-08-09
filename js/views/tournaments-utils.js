@@ -1346,7 +1346,10 @@ window._buildProgressInner = function(t) {
     : '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
         _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
+          // v1.7.83/84: 2 linhas — este é o SEGUNDO renderizador do relógio (o do
+          // painel da rodada); o outro é o do TORNEIO COMPLETO. Consertar só um
+          // deixava o defeito de pé, que foi exatamente o que a verificação pegou.
+          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(elapsedMs) + '</span>' +
           '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
         '</div>' +
         _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
