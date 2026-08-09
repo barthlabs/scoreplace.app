@@ -26,8 +26,10 @@ android {
         // entre apps de mesmo package (e mesma assinatura — debug key serve).
         applicationId "app.scoreplace"
         minSdkVersion 30
-        targetSdkVersion 35
-        versionCode 43
+        targetSdkVersion rootProject.ext.targetSdkVersion  // v1.7.76: era 35 CRAVADO enquanto a raiz
+                                                   // já estava em 36 — era ISSO que deixava o
+                                                   // relógio um degrau atrás a cada subida.
+        versionCode 45
         versionName "1.7.76"
     }
 
@@ -36,7 +38,10 @@ android {
             minifyEnabled false
         }
         release {
-            minifyEnabled false
+            // v1.7.76: R8 ligado também aqui — senão o aviso de desofuscação continuaria
+            // vindo pelo artefato do relógio, que é uma distribuição SEPARADA no Play.
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (keystorePropsFile.exists()) signingConfig signingConfigs.release
         }
