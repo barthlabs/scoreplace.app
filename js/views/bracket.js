@@ -3222,14 +3222,47 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   // (guest) cai no nome. Antes o card principal chamava sem hint → dependia do
   // match-by-name (homônimo-inseguro).
   if (t && typeof window._resolveSideLive === 'function') teamName = window._resolveSideLive(t, teamName, uidHint);
-  if (!teamName || teamName === 'TBD') {
+  // SENTINELAS antes de tudo: TBD/BYE são ESTADO do slot, não gente — nenhum uid
+  // muda isso.
+  if (teamName === 'TBD') {
     return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
   }
   if (teamName === 'BYE') {
     return `<span style="font-weight:600;font-size:0.85rem;opacity:0.5;">BYE</span>`;
   }
-  const members = teamName.split(' / ').map(n => n.trim()).filter(n => n);
-  if (members.length === 0) return `<span style="opacity:0.4;">—</span>`;
+  // ⚠️ "sem rótulo" NÃO é mais "sem ninguém". O `if (!teamName) return "A definir"`
+  // que morava aqui era o que tornava o nome gravado LOAD-BEARING: um slot com uid
+  // válido e rótulo vazio desenhava "A definir". Agora quem decide se há gente é o
+  // UID; o vazio real só é declarado lá embaixo, depois de tentar resolver.
+  // ── v1.7.79: A LISTA NASCE DO UID, NÃO DO RÓTULO ────────────────────────────
+  // Antes o card partia da STRING gravada e só a "melhorava" por uid — então o
+  // rótulo era LOAD-BEARING: apagando os nomes do doc, MEDIDO no Confra real, a
+  // chave desabava (718KB → 240KB) e 186 slots viravam "A definir", mesmo com
+  // todos os uids no lugar. Ou seja o schema ainda mandava na tela.
+  // Agora a fonte é `uidHint` (posicional, via _slotUidsPositional): cada pessoa
+  // é resolvida PELO SEU uid, e o rótulo guardado só entra onde NÃO há uid —
+  // jogador fictício (sem conta, e aí o nome digitado É a identidade legítima) ou
+  // doc legado. Com isso o nome gravado deixa de sustentar a exibição, que é o
+  // pré-requisito pra parar de gravá-lo. Ver [[project_uid_identity_canon_locked]].
+  const _rotulos = (typeof teamName === 'string' ? teamName : '').split(' / ').map(n => n.trim()).filter(n => n);
+  const _uidsSlot = Array.isArray(uidHint) ? uidHint : (uidHint ? [uidHint] : []);
+  let members;
+  if (_uidsSlot.filter(Boolean).length) {
+    const _porUid = (u) => (u && typeof window._displayNameForUid === 'function')
+      ? window._displayNameForUid(u, '') : '';
+    // posição a posição: uid manda; sem uid naquela posição, cai no rótulo dela
+    members = _uidsSlot.map((u, i) => _porUid(u) || _rotulos[i] || '');
+    // rótulos ALÉM dos uids = gente sem conta no mesmo lado → preserva
+    if (_rotulos.length > _uidsSlot.length) members = members.concat(_rotulos.slice(_uidsSlot.length));
+    members = members.filter(n => n);
+    // rede: se NADA resolveu (perfis ainda não carregados), usa o rótulo em vez
+    // de desenhar um slot vazio — tela em branco é pior que nome desatualizado.
+    if (!members.length) members = _rotulos;
+  } else {
+    members = _rotulos;
+  }
+  // vazio de VERDADE: nem uid que resolva, nem rótulo. Aí sim o slot está aberto.
+  if (members.length === 0) return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
 
   let html = members.length > 1 ? '<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden;">' : '';
   members.forEach(function(name) {
@@ -3246,10 +3279,23 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     const onerror = cachedPhoto ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
     const size = members.length > 1 ? '20px' : '24px';
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
+    // ── CAIXA INVISÍVEL DO NOME (cânone fit-name-to-box) ───────────────────
+    // Regra do dono: nome NUNCA é cortado. A caixa é do MESMO tamanho pra todo
+    // mundo e a FONTE é a variável — nome longo encolhe pra caber, nome curto
+    // usa o tamanho cheio. Quem escolheu cinco sobrenomes paga em legibilidade,
+    // e o card do vizinho não é espremido por causa disso.
+    // O mecanismo (`_fitNameToBox` + ResizeObserver) já existia em store.js
+    // desde jul/2026 e NUNCA tinha sido aplicado na chave — era `…` puro aqui.
+    // `flex:1;min-width:0` faz a caixa ocupar a largura que sobra do avatar;
+    // a ALTURA é fixa em rem pra herdar a escala por área (e o piso do fit
+    // impede que o nome vire ilegível pra quem só está LENDO a chave).
+    const _nomeMaxRem = members.length > 1 ? 0.78 : 0.85;
+    const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
+    const _boxNome = `flex:1;min-width:0;height:${(_nomeMaxRem * 1.35).toFixed(2)}rem;overflow:hidden;display:flex;align-items:center;`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(dispName)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;opacity:0.95;">` +
-        `<span style="font-weight:700;font-size:${fontSize};color:#fbbf24;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${window._safeHtml(dispName)}</span>` +
+        `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:#fbbf24;white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
@@ -3260,7 +3306,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
       // "faça funcionar na classificação e não na chave". Na quadra o card é área de
       // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
       // da CLASSIFICAÇÃO (grupo e geral), que agora abre _openPlayerProfile.
-      `<span style="font-weight:600;font-size:${fontSize};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span>` +
+      `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span></div>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -3881,7 +3927,8 @@ window._monGroupArrivedBtn = function (t, matches, groupDone) {
   if (!_cuMon || !_cuMonName || groupDone) return '';
   var _inGrpMon = (matches || []).some(function (m) {
     return (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, _cuMon) > 0) ||
-      ([m.p1 || '', m.p2 || ''].concat(m.team1 || [], m.team2 || []).some(function (s) { return s && (s === _cuMonName || String(s).indexOf(_cuMonName) !== -1); }));
+      ([m.p1 || '', m.p2 || ''].concat(m.team1 || [], m.team2 || []).some(function (s) { return s && s === _cuMonName; }));   // v1.7.78: exato — team1/team2 já trazem cada membro; substring casava "Ana" com "Ana Paula"
+
   });
   if (!_inGrpMon) return '';
   var _meHereMon = (typeof window._idMapHas === 'function') ? window._idMapHas(t, t.checkedIn, _cuMonName) : false;
@@ -3927,7 +3974,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     return sg.players.some(function(n) {
       var nm = (typeof n === 'string') ? n : (n && (n.displayName || n.name) || '');
       if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, nm, _cuM)) return true;
-      return !!(_cuMName && nm && (nm === _cuMName || nm.indexOf(_cuMName) !== -1));
+      return !!(_cuMName && nm && nm === _cuMName);   // v1.7.78: exato, nunca substring
     });
   }
   subgroups = subgroups.map(function(sg, i) { return { sg: sg, i: i, me: _sgHasMe(sg) ? 0 : 1 }; })
@@ -3953,9 +4000,21 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // desenha ficha nem 💬, então não doía — mas ficava armada pro dia em que desenhar.
     // O uid do ausente vem do SLOT do próprio marcador de W.O. (fonte canônica, a mesma
     // do box "ficaram de fora"). Sem uid = nome digitado (fictício): fica só o nome.
-    var _stRoster = (sg.players || [])
-      .map(function (nm, i) { return { name: nm, uid: (sg.playersUids || [])[i] || null }; })
-      .filter(function (r) { return _ghostsM.indexOf(r.name) === -1; });
+    // v1.7.79: a lista sai da UNIÃO POSICIONAL (uid manda). Partir de `sg.players`
+    // fazia o rótulo ser load-bearing: sem nome gravado, elenco vazio → tabela vazia.
+    // O ghost (Jogador X) não tem uid e continua reconhecido pelo NOME, que é a única
+    // identidade que ele tem.
+    var _stUidsG = Array.isArray(sg.playersUids) ? sg.playersUids : [];
+    var _stNomesG = Array.isArray(sg.players) ? sg.players : [];
+    var _stRoster = [];
+    for (var _si = 0; _si < Math.max(_stUidsG.length, _stNomesG.length); _si++) {
+      var _stU = _stUidsG[_si] || null, _stNm = _stNomesG[_si] || '';
+      if (!_stU && !_stNm) continue;
+      var _stDisp = (_stU && typeof window._displayNameForUid === 'function')
+        ? (window._displayNameForUid(_stU, _stNm) || _stNm) : _stNm;
+      if (_ghostsM.indexOf(_stNm) !== -1 || _ghostsM.indexOf(_stDisp) !== -1) continue;
+      _stRoster.push({ name: _stDisp, uid: _stU });
+    }
     if (_woMk && _woMk.p1 && !_stRoster.some(function (r) { return r.name === _woMk.p1; })) {
       var _wU = (typeof window._slotUidsPositional === 'function')
         ? window._slotUidsPositional(_woMk, 'p1') : (_woMk.p1Uid || _woMk.team1Uids);
@@ -4136,7 +4195,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
       // participante pela string e checa uid); fallback nome/email abaixo.
       if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _cuGS)) return true;
       if (typeof n !== 'string') return false;
-      if (_cuGSName && (n === _cuGSName || n.indexOf(_cuGSName) !== -1)) return true;
+      if (_cuGSName && n === _cuGSName) return true;   // v1.7.78: exato; composto "A / B" cai no split abaixo
       if (_cuGSEmail && n === _cuGSEmail) return true;
       if (n.indexOf('/') !== -1) {
         return n.split('/').map(s => s.trim()).some(m => (_cuGSName && m === _cuGSName) || (_cuGSEmail && m === _cuGSEmail));
@@ -4596,7 +4655,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser; fallback nome/email.
     if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _curUser)) return true;
     if (typeof n !== 'string') return false;
-    if (_curUserName && (n === _curUserName || n.indexOf(_curUserName) !== -1)) return true;
+    if (_curUserName && n === _curUserName) return true;   // v1.7.78: exato; composto "A / B" cai no split abaixo
     if (_curUserEmail && n === _curUserEmail) return true;
     if (n.indexOf('/') !== -1) {
       var parts = n.split('/').map(function(s){return s.trim();});
@@ -4911,13 +4970,32 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _cuRRName = _cuRR ? (_cuRR.displayName || '') : '';
         var _cuRREmail = _cuRR ? (_cuRR.email || '') : '';
         var _groupHasMe = function(g) {
-          if (!_cuRR || !g || !Array.isArray(g.players)) return false;
+          if (!_cuRR || !g) return false;
+          // v1.7.78 — IDENTIDADE É O UID, e aqui ele SEMPRE esteve à mão.
+          // FALHA REAL (Confra, ago/2026): `g.players[]` é o RÓTULO DO DIA DO SORTEIO
+          // e ENVELHECE — quem troca o displayName depois deixa de casar por nome. E o
+          // fallback do _sideBelongsToUser não salva: ele procura o participante PELO
+          // NOME em t.participants, mas o save passa por `_stripUidEntryNames`, que
+          // apaga o nome de toda entrada com uid → em torneio real a busca não acha
+          // ninguém e sobra a comparação de string contra o rótulo velho.
+          // Consequência MEDIDA no doc de produção: 5 dos 124 jogadores (Marina Turri→
+          // Marina Cegal, RODRIGO UNGER PIRES DA SILVA→Rodrigo Unger, Mariana C→Mariana
+          // Ciocci, Fabi2401@→Dani Bataglia, Adriana→Adriana Rosa) ficavam SEM o selo
+          // "SEU GRUPO", SEM o "Combinar jogos" e SEM o botão do grupo de WhatsApp —
+          // os dois chips somem JUNTOS porque dependem do mesmo isMyGroup.
+          // O grupo grava `playersUids` ao lado de `players` desde que nasceu: casar
+          // por uid resolve sem depender de nome nenhum. Ver [[project_uid_identity_canon_locked]]
+          // e o irmão já corrigido em v1.7.46/1.7.47 (classificação e busca).
+          if (_cuRR.uid && Array.isArray(g.playersUids) && g.playersUids.indexOf(_cuRR.uid) !== -1) return true;
+          if (!Array.isArray(g.players)) return false;
+          // Fallback por NOME — só pra quem NÃO tem uid (jogador fictício, sem conta) e
+          // pra doc legado anterior ao playersUids. Nunca é o caminho de quem tem conta.
           return g.players.some(function(n) {
             if (!n) return false;
             // v3.0.77 (Parte 8 uid): uid-first via _sideBelongsToUser; fallback nome/email.
             if (typeof window._sideBelongsToUser === 'function' && window._sideBelongsToUser(t, (typeof n === 'string' ? n : (n.displayName || n.name || '')), _cuRR)) return true;
             if (typeof n !== 'string') return false;
-            if (_cuRRName && (n === _cuRRName || n.indexOf(_cuRRName) !== -1)) return true;
+            if (_cuRRName && n === _cuRRName) return true;   // v1.7.78: exato; composto "A / B" cai no split abaixo
             if (_cuRREmail && n === _cuRREmail) return true;
             if (n.indexOf('/') !== -1) {
               var members = n.split('/').map(function(s) { return s.trim(); });
@@ -5040,9 +5118,19 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // nome digitado à mão) — a ressalva do dono. Para quem tem conta, o uid resolve
             // logo em seguida, pelas duas fontes descritas abaixo.
             // Ver [[project_uid_identity_canon_locked]] e [[project_match_slot_uid_identity]].
-            var _stRoster = (g.players || []).map(function (nm, i) {
-              return { name: nm, uid: (g.playersUids || [])[i] || null };
-            });
+            // v1.7.79: UNIÃO POSICIONAL — o uid manda, o rótulo só entra onde não há
+            // uid (fictício/legado). Partir de `g.players` fazia o nome gravado
+            // sustentar a tabela: sem rótulo, elenco vazio → classificação vazia.
+            var _uG = Array.isArray(g.playersUids) ? g.playersUids : [];
+            var _nG = Array.isArray(g.players) ? g.players : [];
+            var _stRoster = [];
+            for (var _ri = 0; _ri < Math.max(_uG.length, _nG.length); _ri++) {
+              var _rU = _uG[_ri] || null, _rN = _nG[_ri] || '';
+              if (!_rU && !_rN) continue;
+              var _rD = (_rU && typeof window._displayNameForUid === 'function')
+                ? (window._displayNameForUid(_rU, _rN) || _rN) : _rN;
+              _stRoster.push({ name: _rD, uid: _rU });
+            }
             if (g.woAbsent && !_stRoster.some(function (r) { return r.name === g.woAbsent; })) {
               // SEMPRE POR UID QUANDO HOUVER (regra do dono). Duas fontes, nesta ordem:
               //  1. `g.woAbsentUid`, gravado na aplicação do W.O. (liga-substitution) —

@@ -4857,7 +4857,8 @@ async function simulateLoginSuccess(user) {
     if (typeof window._applyPresenceMuteUI === 'function') window._applyPresenceMuteUI({ active: _active, days: _daysLeft });
     if (typeof window._applyNotifyFilterUI === 'function') window._applyNotifyFilterUI(cu.notifyLevel || 'todas');
     // v2.1.91: inicializa o slider de tamanho da interface com o valor salvo
-    var _uiSliderPct = Math.round((typeof window._getUiScale === 'function' ? window._getUiScale() : 1) * 100);
+    var _uiSliderPct = (typeof window._uiScaleToPct === 'function' && typeof window._getUiScale === 'function')
+      ? window._uiScaleToPct(window._getUiScale()) : 100;
     var _uiSlider = document.getElementById('profile-ui-scale');
     if (_uiSlider) _uiSlider.value = _uiSliderPct;
     var _uiSliderLbl = document.getElementById('profile-ui-scale-val');
@@ -5884,7 +5885,19 @@ window._executeDeleteAccount = async function() {
 
   } catch (err) {
     window._error('Erro ao excluir conta:', err);
-    showNotification(_t('auth.error'), _t('auth.deleteErrorMsg'), 'error');
+    // v1.7.78 — RECUSA COM MOTIVO. A CF barra quem tem jogo pendente
+    // (failed-precondition) e manda no `message` ONDE a pessoa está presa e QUAL
+    // é o caminho (sair do torneio → W.O. → organizador avisado). Cair no texto
+    // genérico aqui transformava uma recusa explicável em "deu erro, tente de
+    // novo" — e a pessoa tentaria de novo pra sempre. Só o motivo real serve.
+    var _blk = err && (err.code === 'functions/failed-precondition' || err.code === 'failed-precondition');
+    if (_blk && err.message) {
+      showNotification('Você ainda tem jogos marcados', String(err.message), 'warning');
+    } else {
+      showNotification(_t('auth.error'), _t('auth.deleteErrorMsg'), 'error');
+    }
+    // O modal de confirmação FICA aberto: a pessoa não perdeu o caminho, só
+    // precisa resolver o torneio antes.
     if (btn) { btn.textContent = _t('auth.deleteAccountBtn'); btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; }
   }
 };
@@ -6744,13 +6757,13 @@ function setupProfileModal() {
               '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Ajusta textos e botões em todo o app. Ele já se adapta ao seu aparelho — aqui você afina do seu jeito. (O zoom do placar ao vivo continua separado.)</p>' +
               '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:0.7rem;color:var(--text-muted);line-height:1;">A</span>' +
-                '<input type="range" id="profile-ui-scale" min="80" max="130" step="5" value="100" aria-label="Tamanho da interface" style="flex:1;min-width:0;accent-color:var(--primary-color);height:28px;" ' +
-                  'oninput="window._applyUiScale&&window._applyUiScale(this.value/100); var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=this.value+\'%\';" ' +
-                  'onchange="window._setUiScale&&window._setUiScale(this.value/100);">' +
+                '<input type="range" id="profile-ui-scale" min="60" max="130" step="5" value="100" aria-label="Tamanho da interface" style="flex:1;min-width:0;accent-color:var(--primary-color);height:28px;" ' +
+                  'oninput="window._applyUiScale&&window._applyUiScale(window._uiPctToScale(this.value)); var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=this.value+\'%\';" ' +
+                  'onchange="window._setUiScale&&window._setUiScale(window._uiPctToScale(this.value));">' +
                 '<span style="font-size:1.1rem;color:var(--text-muted);line-height:1;">A</span>' +
                 '<span id="profile-ui-scale-val" style="font-size:0.78rem;font-weight:800;color:var(--primary-color);min-width:44px;text-align:right;">100%</span>' +
               '</div>' +
-              '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(1);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
+              '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(window._UI_SCALE_BASE);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
             '</div>' +
             // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
             // de descoberta: cadastrar onde joga vem antes de configurar presença).
@@ -7301,11 +7314,17 @@ function setupProfileModal() {
         return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;">' +
           '<span style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (idx + 1) + '</span>' +
           '<div style="flex:1;min-width:0;" title="' + titleAttr + '">' +
-            '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span style="font-size:0.74rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;">' + window._safeHtml(primary) + '</span>' +
+            // v1.7.83: o nome tinha nowrap+ellipsis mas NÃO tinha `min-width:0`,
+            // então no flex ele se recusava a encolher e passava POR BAIXO da
+            // pílula "📍 Google" (visto na tela: "Clube Paineiras do Morumby"
+            // atravessando o badge). Agora a linha QUEBRA — o badge desce quando
+            // não couber — e o endereço quebra em 2 linhas em vez de virar
+            // "São Paulo - S…" (medido +121px na escala 1.7).
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+              '<span style="font-size:0.74rem;color:var(--text-bright);font-weight:600;flex:1 1 auto;min-width:0;overflow-wrap:anywhere;line-height:1.25;">' + window._safeHtml(primary) + '</span>' +
               badge +
             '</div>' +
-            (secondary ? '<div style="font-size:0.65rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">' + window._safeHtml(secondary) + '</div>' : '') +
+            (secondary ? '<div style="font-size:0.65rem;color:var(--text-muted);overflow-wrap:anywhere;line-height:1.3;margin-top:1px;">' + window._safeHtml(secondary) + '</div>' : '') +
           '</div>' +
           '<button type="button" onclick="window._removeProfileLocation(' + idx + ')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:2px 4px;line-height:1;flex-shrink:0;" title="Remover">&times;</button>' +
         '</div>';

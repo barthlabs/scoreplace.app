@@ -53,6 +53,10 @@ const SUITES = [
   // fecha com campeão. Substitui as ~1.250 linhas de cirurgia incremental.
   'tests/late-entry-recalc.test.js',
   'tests/bracket-logic.test.js',
+  // Folga sem identidade não nasce. Medido contra o doc real: com os rótulos
+  // apagados o motor gerava uma folga fantasma (p1 undefined, sem uid) que nada
+  // conseguia remover depois. Com o guard, a rodada sai IDÊNTICA com e sem rótulo.
+  'tests/folga-sem-identidade.test.js',
   // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
   // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
   'tests/liga-autodraw-server-only.test.js',
@@ -135,6 +139,11 @@ const SUITES = [
   // identidade lida por NOME (que o strip do save apaga) → chave de irmãos vazia →
   // o link de UM grupo espelhado nos 81 jogos dos 27 grupos.
   'tests/wa-group-por-grupo.test.js',
+  // Os DOIS chips do rodapé do card ("Combinar jogo" + grupo de whats) são irmãos
+  // com GATE COMUM: quebrar o gate derruba os dois DE UMA VEZ e EM SILÊNCIO (todo
+  // call site é guardado por `typeof === 'function'`). Nasceu de um relato de
+  // regressão na 1.7.76 que a medição não confirmou — o que faltava era o teste.
+  'tests/chips-do-card-do-jogo.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
@@ -466,6 +475,17 @@ const SUITES = [
   // login federado não passava por checagem server-side, e homônimos continuaram nascendo
   // (11/jul, 14/jul, 17/jul, 30/jul) depois de a lei existir (24/jun).
   'functions/test-name-variant-core.js',
+  // Trocou o displayName → o rótulo gravado nos torneios vira mentira. Este core
+  // decide o que reescrever SÓ por uid; metade do teste existe pra travar o que
+  // NÃO pode ser tocado (homônimo de outro uid, parceiro de dupla, fictício).
+  'functions/test-rename-propagate-core.js',
+  // Arrays pareados nome[i] ↔ uid[i]. A exclusão de conta filtrava SÓ o lado dos
+  // uids e deixava o nome (caso Denise Mamesso, 08/ago/2026) — na 1ª posição isso
+  // faria cada nome apontar pro uid do vizinho.
+  'functions/test-uid-sweep-pares.js',
+  // Jogo pendente BLOQUEIA apagar a conta (caso Denise Mamesso). Metade do teste
+  // trava o que NÃO pode bloquear — folga, BYE, sem sorteio, torneio encerrado.
+  'functions/test-delete-account-guard.js',
   // HOMÔNIMO AVISA, POSSE AUTORIZA: o botão de unir contas não funde nada — pede uma prova
   // (link no e-mail da OUTRA conta). Trava que o cliente não recebe uid/contato cheio, que o
   // alvo é resolvido no servidor (senão vira porta de spam) e que há rate limit.

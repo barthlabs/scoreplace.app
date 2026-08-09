@@ -201,7 +201,7 @@ function _friendCompactCardHtml(u, uid) {
   window._exploreProfileCache[uid] = u;
 
   return '<div class="card hover-lift"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + safeUid + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(34,197,94,0.06);border:1px solid var(--success-color);border-radius:10px;min-width:0;">' +
-    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--success-color);flex-shrink:0;">' +
+    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid var(--success-color);flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
       (subtitle ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(subtitle) + '</div>' : '') +
@@ -238,7 +238,7 @@ function _userCardHtml(u, uid, actionHtml, variant, onClickFn) {
   var _cardClick = onClickFn ? ' onclick="' + onClickFn + '"' : '';
   var _cardCursor = onClickFn ? 'cursor:pointer;' : '';
   return '<div class="card"' + _personFilterAttrs(u) + _cardClick + ' style="' + _cardCursor + 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
-    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">' +
+    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
       (infoChips.length > 0 ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(infoChips.join(' · ')) + '</div>' : '') +
@@ -801,7 +801,7 @@ function _userCardWithEncounterHtml(u, uid, actionHtml) {
   // Date is shown as a group header above a batch of cards (see _renderOtrosCards),
   // so we don't repeat it on each individual card.
   return '<div class="card"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + _safeUidEnc + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
-    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid ' + avatarBorder + ';flex-shrink:0;">' +
+    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid ' + avatarBorder + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
       sharedLine +
@@ -843,7 +843,7 @@ function _renderPendingRequests(myUid, receivedIds) {
       window._exploreProfileCache = window._exploreProfileCache || {};
       if (uid) window._exploreProfileCache[uid] = u;
       html += '<div class="card"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + safeUidPending + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.45);border-radius:10px;min-width:0;">' +
-        '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto2 + '\'" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid rgba(245,158,11,0.45);flex-shrink:0;">' +
+        '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto2 + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid rgba(245,158,11,0.45);flex-shrink:0;">' +
         '<div style="flex:1;min-width:0;">' +
           _nameHtml(_nlP.line1, _nlP.line2) +
           '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;">' + (window._t || function(k){return k;})('explore.wantsToBeFriend') + '</div>' +
@@ -1035,7 +1035,7 @@ function _renderMyFriends(myUid, friendIds) {
 
     var html = '<div style="margin-bottom: 1.5rem;">' +
       '<div style="font-weight: 600; font-size: 0.9rem; color: var(--success-color); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">' + (window._t || function(k){return k;})('explore.myFriends') + ' (' + profiles.length + ')</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px;">';
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(9.7rem,1fr));gap:8px;">';
 
     profiles.forEach(function(u) {
       var uid = u._docId;

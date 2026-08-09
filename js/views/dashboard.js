@@ -758,12 +758,18 @@ function renderDashboard(container) {
           <div class="card-body p-4" style="${_photoPanelD}${isOrg ? 'padding-bottom: 38px;' : ''}">
 
             <!-- Top Row: Icon/Modality | Status (same line, consistent with detail page) -->
-            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; flex-wrap: nowrap;">
+            <!-- v1.7.83: era flex-wrap:nowrap — com a escala grande (até 1.7) a
+                 pílula de status saía PELA DIREITA do card e sumia (+40/+40/+86px
+                 medidos em 3 cards). Ordem do dono: "aqui podemos mudar de linha.
+                 na 1a linha fica a modalidade e as inscricoes na linha seguinte.
+                 assim a informacao fica na tela sem truncar." Reticência aqui
+                 esconderia o STATUS do torneio, que é a informação da linha. -->
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; flex-wrap: wrap; gap: 6px;">
                <div style="display: flex; align-items: center; gap: 6px; opacity: 0.65; flex-shrink: 0;">
                   <span style="font-size: 1.1rem;">${getSportIcon(t.sport)}</span>
                   <span>${cleanSportName(t.sport) || _t('tournament.sport')}</span>
                </div>
-               <div style="display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;">
+               <div style="display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; margin-left: auto;">
                   <div id="dash-regstatus-${t.id}"
                        ${isAberto && t.registrationLimit ? `data-regdeadline-tid="${t.id}" data-regdeadline-ts="${new Date(t.registrationLimit).getTime()}"` : ''}
                        style="color: ${statusColor}; background: ${statusBg}; padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: ${statusFontWeight}; white-space: nowrap;">
@@ -1785,7 +1791,15 @@ function renderDashboard(container) {
       // 2, FORA do #header-btns (que é reescrito in-place no fluxo de aprovação).
       var goToBtn = '<button class="btn btn-indigo btn-micro" onclick="event.stopPropagation();window._goToTournamentMatch(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;line-height:1.05;text-align:center;">Ir para<br>Torneio →</button>';
 
-      return '<div style="min-width:300px;max-width:360px;display:flex;flex-direction:column;gap:0.6rem;">' +
+      // v1.7.83: o box era `min-width:300px;max-width:360px` — px CRAVADO. Com a
+      // escala grande (até 1.7) os 3 botões do cabeçalho (Ao Vivo · Confirmar ·
+      // Ir para Torneio) não cabiam em 360px e o último montava POR CIMA do
+      // Confirmar (+11px medidos). Ordem do dono: "esse box deve usar a largura
+      // da tela e com isso ter mais espaço para os botoes."
+      // `flex:1 1 18.75rem` mantém o comportamento de fila em tela larga (vários
+      // cards lado a lado) e ENCHE a largura no telefone; o teto vira 100%, que
+      // é o container — nunca mais um número fixo que ignora a escala.
+      return '<div style="flex:1 1 18.75rem;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
           '<div style="display:flex;align-items:center;gap:8px;">' +
             '<h4 style="color:' + faseColor + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor + ';padding-left:8px;flex:1;">' +
@@ -2548,10 +2562,17 @@ function renderDashboard(container) {
     // quebrar entre palavras quando o pill fica estreito.
     const _wrapLabel = String(label).indexOf(' ') !== -1;
     const _ws = _wrapLabel ? 'normal' : 'nowrap';
+    // v1.7.83: com a escala grande (até 1.7) uma palavra só — "Organizados",
+    // "Participando", "Encerrados" — passa da pill e INVADE a vizinha (medido:
+    // +21/+22/+9px em 1.7). Ordem do dono: "nesses 3 casos vamos usar ...".
+    // Reticência aqui é legítima: é RÓTULO DE FILTRO, não nome de pessoa — a
+    // regra da caixa invisível (que reduz a fonte pra não cortar) vale pra
+    // gente, e cortar "Organiz…" não perde identidade de ninguém.
+    const _corta = _wrapLabel ? '' : 'overflow:hidden;text-overflow:ellipsis;max-width:100%;';
     return `<div style="flex:0 1 92px;min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
-      <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};">${label}</h3>
+      <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};${_corta}">${label}</h3>
     </div>`;
   };
 
@@ -2587,7 +2608,7 @@ function renderDashboard(container) {
       return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:0 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
         <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
         <span${countAttr} style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
-        <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.1;white-space:nowrap;">${label}</h3>
+        <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.1;">${label}</h3>
         ${subtitleHtmlTop}
       </div>`;
     }
@@ -2600,7 +2621,7 @@ function renderDashboard(container) {
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span${countAttr} style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       ${subtitleHtml}
-      <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.1;white-space:nowrap;">${label}</h3>
+      <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.1;">${label}</h3>
     </div>`;
   };
 

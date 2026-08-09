@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.76';
+window.SCOREPLACE_VERSION = '1.7.85';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -3303,6 +3303,19 @@ window._firstNameOnly = function(name) {
       fs = Math.max(minR, fs - 0.03);
       el.style.fontSize = fs + 'rem';
     }
+    // v1.7.77 — A SEGUNDA METADE DA REGRA: chegou no PISO e ainda não coube?
+    // Então QUEBRA em vez de vazar. Sem isto o piso (que existe pra o nome nunca
+    // virar ilegível) fazia o texto estourar a caixa — foi o que aconteceu com
+    // "Bem-vindo, Rodrigo!" no slider em 1,7: encolheu até 1.1rem, parou, e
+    // transbordou. Encolher tem limite; quebrar linha não tem custo de leitura.
+    // Só mexe em quem PEDIU nowrap — quem já quebra não precisa de nada.
+    if (fs <= minR + 0.001 && el.scrollWidth > bw + 1) {
+      el.style.whiteSpace = 'normal';
+      el.style.wordBreak = 'break-word';
+    } else if (el.style.whiteSpace === 'normal') {
+      el.style.whiteSpace = '';      // coube encolhendo → devolve o nowrap original
+      el.style.wordBreak = '';
+    }
     el.setAttribute('data-fitted', '1');
     el.setAttribute('data-fitw', bw);
     el.setAttribute('data-fith', bh);
@@ -4827,14 +4840,16 @@ window._whatsappShareUrl = function(text) {
 // vibrante. Renderização consistente em iOS/Android/Windows.
 // Versões anteriores (mantidas no histórico de commits): SVG bicolor com
 // gomo amarelo + linha curva (v0.17.11-v0.17.51).
-// v4.3.27: era '<span style="filter:hue-rotate...">🎾</span>' — mas o emoji 🎾 no
-// Android (Noto) rende como RAQUETE+bola (no iOS/Apple é só a bola), então o indicador
-// do sacador e o ícone de Beach Tennis viravam "uma raquete com bola genérica" no
-// Android. Trocado por SVG inline (bola laranja com costura branca) → renderiza IGUAL
-// em iOS/Android/web e é inequivocamente uma BOLA. Escala com font-size (width:1em).
+// v4.3.27 (NATIVO): era '<span style="filter:hue-rotate...">🎾</span>' — mas o emoji
+// 🎾 no Android (fonte Noto) rende como RAQUETE+bola (no iOS/Apple é só a bola),
+// entao o indicador do sacador e o icone de Beach Tennis viravam "uma raquete com
+// bola generica" no Android. SVG inline (bola laranja com costura branca) rende
+// IGUAL em iOS/Android/web e e inequivocamente uma BOLA. Escala com font-size (1em).
+// ⚠️ ESTE BLOCO E EXCLUSIVO DO BRANCH NATIVO e ja foi perdido uma vez num merge
+// (bastou pegar o arquivo inteiro do lado da web). Ao resolver conflito em store.js,
+// conferir SEMPRE se _BEACH_TENNIS_ICON e _TENNIS_ICON continuam SVG aqui.
 window._BEACH_TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Beach Tennis"><circle cx="50" cy="50" r="47" fill="#fb923c" stroke="#c2410c" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/></svg>';
-// v4.3.28: mesmo motivo do beach — o 🎾 do Tênis é RAQUETE+bola no Android. Vira bola
-// verde SVG (bola de tênis clássica). Rende igual em todo lugar.
+// v4.3.28: mesmo motivo do beach — o 🎾 do Tenis e RAQUETE+bola no Android.
 window._TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Tênis"><circle cx="50" cy="50" r="47" fill="#c4e83a" stroke="#84a81f" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>';
 
 // v0.17.11: ícone Pickleball — SVG inline com bola amarela e furos visíveis
@@ -4878,7 +4893,7 @@ window._sportIcon = function(sport) {
   if (s.indexOf('pickleball') !== -1) return '🟡';
   if (s.indexOf('padel') !== -1) return '🥎';
   if (s.indexOf('tênis de mesa') !== -1 || s.indexOf('tenis de mesa') !== -1 || s.indexOf('ping pong') !== -1) return '🏓';
-  if (s.indexOf('tênis') !== -1 || s.indexOf('tenis') !== -1 || s.indexOf('tennis') !== -1) return window._TENNIS_ICON || '🎾';
+  if (s.indexOf('tênis') !== -1 || s.indexOf('tenis') !== -1 || s.indexOf('tennis') !== -1) return '🎾';
   return '🏆';
 };
 
@@ -5203,25 +5218,6 @@ window._openExternalUrl = function(url) {
   } catch (e) {
     try { window.open(url, '_blank'); } catch (_) {}
   }
-};
-
-// v4.3.22: compartilhamento NATIVO (Capacitor iOS/Android) via @capacitor/share.
-// No Android o navigator.share NÃO existe no WebView → sem isto os "Compartilhar"
-// (convite, resultado de partida, local) caíam só no clipboard. Com o plugin, os
-// DOIS sistemas abrem o share sheet nativo (WhatsApp, Instagram, SMS, etc.).
-// Retorna true se tratou nativamente (dispara async, fire-and-forget); false →
-// o caller segue o caminho web de sempre (navigator.share / clipboard). NO-OP na
-// web (Capacitor undefined) → caminho web 100% intocado.
-window._spNativeShare = function (opts) {
-  try {
-    var C = window.Capacitor;
-    if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform() && C.Plugins && C.Plugins.Share) {
-      var o = opts || {};
-      C.Plugins.Share.share({ title: o.title, text: o.text, url: o.url, dialogTitle: o.title }).catch(function () {});
-      return true;
-    }
-  } catch (e) {}
-  return false;
 };
 
 // v2.8.36 (canonização B-2): distância great-circle em KM entre dois pontos
@@ -5694,7 +5690,19 @@ window._fitTwoLineNames = function(root) {
   if (window._fitNamesObserverInstalled || typeof MutationObserver === 'undefined') return;
   window._fitNamesObserverInstalled = true;
   var pending = false;
-  function _run() { pending = false; if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document); }
+  // v1.7.77: o observer rodava SÓ o `_fitTwoLineNames`. O cânone da CAIXA
+  // INVISÍVEL (`.sp-name-fit` → `_fitNames`/`_fitNameToBox`, jul/2026) ficou
+  // sem gatilho: era chamado à mão em EXATAMENTE 2 telas (dashboard, explore)
+  // e, fora delas, só no `resize` da janela. Ou seja o cânone existia inteiro
+  // — com piso, ResizeObserver e memória escrita — e simplesmente não rodava
+  // em lugar nenhum, inclusive na CHAVE, que é onde o nome mais aparece.
+  // Agora quem já varre o DOM roda os DOIS. Telas novas passam a funcionar
+  // só por usar a classe, sem ninguém lembrar de chamar nada.
+  function _run() {
+    pending = false;
+    if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document);
+    if (typeof window._fitNames === 'function') window._fitNames(document, 0);
+  }
   function _schedule() { if (pending) return; pending = true; (window.requestAnimationFrame || function(f){ setTimeout(f, 16); })(_run); }
   try {
     var start = function() {
@@ -5947,11 +5955,41 @@ window._themeNames = { dark: 'Noturno', light: 'Claro' };
 // --ui-scale multiplica o font-size da raiz (html), que é a base de quase todo
 // o app (rem). Escala TUDO junto e proporcionalmente. Padrão 1 = aparência de
 // hoje. Persiste em localStorage (instantâneo) + perfil (cross-device).
+// v1.7.81 — TETO DE 1,3 → 1,7. Pedido do dono: "precisamos chegar e algo como
+// 1,7 pelo menos". O teto antigo não era conservadorismo à toa: MEDIDO no app
+// real (logado, Confra de produção), em 1,3 já cortava NOME ("FABIANA VIEIRA")
+// e em 1,7 havia ~180 estouros — 150 só no #explore. A causa não era a faixa e
+// sim as CAIXAS: fonte em rem crescia, box em px ficava parado.
+// Depois da 1.7.77 (grid do explore, card de organização, .btn e variantes em
+// rem, nome em caixa que encolhe e QUEBRA no piso) a curva de estouros ficou
+// PLANA de 1,0 a 2,0 — e o #explore foi de 150 pra 0, provado ao vivo.
+// Por isso o teto sobe agora, e não antes: primeiro o app aguenta, depois o
+// controle permite. O PISO fica em 0,8 — abaixo disso a fonte da raiz cai a
+// ~10px e nada fica legível, então baixar não serve a ninguém.
 window._UI_SCALE_MIN = 0.8;
-window._UI_SCALE_MAX = 1.3;
+window._UI_SCALE_MAX = 1.7;
+// v1.7.82 — "130% VIRA 100%". Pedido do dono, e o motivo é a reclamação que
+// abriu o assunto: gente achando a letra pequena. Quem reclama NÃO abre o
+// perfil — então subir o PADRÃO é o que alcança essas pessoas; alargar a faixa
+// só serve a quem já mexe no slider.
+//
+// ⚠️ POR QUE A BASE TIPOGRÁFICA NÃO FOI MULTIPLICADA POR 1,3 (o caminho óbvio
+// e ERRADO): o valor escolhido é PERSISTIDO — em localStorage e no PERFIL,
+// sincronizado entre aparelhos. Multiplicar a base faria todo valor já salvo
+// valer 30% a mais do que a pessoa escolheu (quem pôs 1,3 por enxergar mal
+// receberia 1,69), e não haveria como distinguir valor novo de velho, porque
+// as faixas se sobrepõem (0,8–1,7 × 0,6–1,3) — em algum aparelho converteria
+// DUAS vezes. Aqui o número guardado NÃO muda de significado: muda só o
+// PADRÃO de quem nunca escolheu, e o RÓTULO na tela.
+//
+// Resultado: quem nunca mexeu ganha o tamanho novo sozinho; quem escolheu um
+// valor olhando pra tela continua exatamente com o que viu.
+window._UI_SCALE_BASE = 1.3;          // este interno = "100%" pra pessoa
+window._uiScaleToPct = function(s) { return Math.round((s / window._UI_SCALE_BASE) * 100); };
+window._uiPctToScale = function(p) { return (parseFloat(p) / 100) * window._UI_SCALE_BASE; };
 window._clampUiScale = function(v) {
   v = parseFloat(v);
-  if (isNaN(v)) return 1;
+  if (isNaN(v)) return window._UI_SCALE_BASE;
   return Math.max(window._UI_SCALE_MIN, Math.min(window._UI_SCALE_MAX, v));
 };
 window._getUiScale = function() {

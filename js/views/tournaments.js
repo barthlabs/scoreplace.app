@@ -3536,11 +3536,14 @@ function renderTournaments(container, tournamentId = null) {
           // separada (_buildDropzone), que só aparece durante o arraste.
           var _tapAttrs = isTapPicker ? ' title="Toque para co-organizar" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"' : '';
           var _starSpan = '<span class="sp-org-star" style="display:inline-flex;align-items:center;flex-shrink:0;">' + _crownSvg + '</span>';
-          return '<div class="sp-org-card"' + _tapAttrs + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:0 0 230px;height:58px;overflow:hidden;">' +
-            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
+          return '<div class="sp-org-card"' + _tapAttrs + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
+            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="display:flex;align-items:center;gap:4px;font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;white-space:nowrap;">' + '<span style="overflow:hidden;text-overflow:ellipsis;min-width:0;">' + window._safeHtml(name) + '</span>' + _starSpan + '</div>' +
-              '<div style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + role + '</div>' +
+              '<div style="display:flex;align-items:center;gap:4px;">' +
+                '<div style="flex:1;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
+                  '<span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' +
+                '</div>' + _starSpan + '</div>' +
+              '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;">' + role + '</div>' +
             '</div>' +
             (canRemove ? '<button type="button" class="cancel-x-btn" style="--cx-size:20px;" title="Remover co-organizador" onclick="event.stopPropagation();window._removeCoHost(\'' + window._safeHtml(String(_t.id)) + '\',\'' + window._safeHtml(removeEmail) + '\')">✕</button>' : '') +
           '</div>';
@@ -3556,10 +3559,10 @@ function renderTournaments(container, tournamentId = null) {
           var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[_lc] && window._playerPhotoCache[_lc].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_lc] : _oFallback;
           var _safeTId = window._safeHtml(String(_t.id));
           var _rmBtn = canRemove ? '<button type="button" class="cancel-x-btn" style="--cx-size:20px;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
-          return '<div class="sp-org-card sp-org-pending" style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:0 0 230px;height:58px;overflow:hidden;">' +
-            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;" />' +
+          return '<div class="sp-org-card sp-org-pending" style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
+            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;" />' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="font-weight:700;font-size:0.82rem;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(name) + '</div>' +
+              '<div style="height:1.15rem;overflow:hidden;display:flex;align-items:center;"><span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' + '</div>' +
               '<div style="font-size:0.6rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.3px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⭐ Pendente de aceite</div>' +
             '</div>' +
             _rmBtn +
@@ -3578,7 +3581,7 @@ function renderTournaments(container, tournamentId = null) {
             'ondragover="event.preventDefault();event.dataTransfer.dropEffect=\'move\';this.classList.add(\'sp-org-drop-hover\');" ' +
             'ondragleave="this.classList.remove(\'sp-org-drop-hover\');" ' +
             'ondrop="this.classList.remove(\'sp-org-drop-hover\');if(window._handleCrownDrop)window._handleCrownDrop(event,\'' + _safeTId + '\')" ' +
-            'style="box-sizing:border-box;position:relative;align-items:center;justify-content:center;padding:8px 12px;background:rgba(251,191,36,0.05);border:2px dashed rgba(251,191,36,0.55);border-radius:10px;flex:0 0 230px;height:58px;">' +
+            'style="box-sizing:border-box;position:relative;align-items:center;justify-content:center;padding:8px 12px;background:rgba(251,191,36,0.05);border:2px dashed rgba(251,191,36,0.55);border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;">' +
             '<div class="sp-org-drop-hint">⭐ Arraste para co-organizar</div>' +
             '<span class="sp-org-star" style="display:inline-flex;align-items:center;opacity:0.32;">' + _crownSvg + '</span>' +
           '</div>';
@@ -4374,7 +4377,7 @@ window._partnerPickerRender = function(tId, q, enrolled, friends, searchResults)
 
   function _item(p, badge, color) {
     var avatar = p.photo
-      ? '<img src="' + window._safeHtml(p.photo) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
+      ? '<img src="' + window._safeHtml(p.photo) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
       : '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,' + color + ');display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#fff;font-weight:700;flex-shrink:0;">' + window._safeHtml((p.name[0]||'?').toUpperCase()) + '</div>';
     return '<div onclick="event.stopPropagation();window._partnerPickerSelect(\'' + tId + '\',\'' + _escAttr(p.name) + '\',\'' + _escAttr(p.uid||'') + '\')" ' +
       'style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background 0.1s;" ' +

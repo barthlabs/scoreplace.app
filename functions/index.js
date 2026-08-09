@@ -40,6 +40,8 @@ const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
 const _rosterWatch = require("./roster-watch-core");
+const _delGuard = require("./delete-account-guard-core");
+const _renameProp = require("./rename-propagate-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -4822,6 +4824,41 @@ exports.deleteAccount = onCall(
     let email = "";
     try { const au = await admin.auth().getUser(uid); email = (au.email || "").toLowerCase(); } catch (e) {}
 
+    // 0) PORTA — jogo pendente BLOQUEIA a exclusão (ordem do dono, ago/2026).
+    // Sem isto, a pessoa apaga a conta estando SORTEADA e leva o grupo dos outros
+    // junto: foi o caso Denise Mamesso (R1 Grupo A do Confra, 3 jogos marcados,
+    // zero placar) — o cascade arrancou o uid de dentro da chave, deixou o nome,
+    // os outros 3 ficaram sem adversária e o organizador não foi avisado de nada.
+    // O direito de apagar continua garantido; o que muda é a ORDEM: sair do
+    // torneio primeiro (o que dispara o W.O. e avisa o organizador), depois
+    // apagar. Roda ANTES de qualquer escrita — recusar no meio deixaria a conta
+    // pela metade, que é pior que não começar.
+    // Duas razões INDEPENDENTES: organizar (o torneio ficaria sem dono e sumiria
+    // pros inscritos) e ter jogo pendente (o grupo ficaria sem adversário). Quem só
+    // organiza não tem jogo — por isso são medidas em separado, senão a mensagem
+    // mandaria dar W.O. num jogo inexistente.
+    {
+      const vistos = new Map();
+      const add = (d) => vistos.set(d.id, Object.assign({ id: d.id }, d.data()));
+      // organizados: as MESMAS 3 consultas que o passo (1) usa pra apagar
+      for (const q of [
+        db.collection("tournaments").where("creatorUid", "==", uid),
+        db.collection("tournaments").where("organizerUid", "==", uid),
+        ...(email ? [db.collection("tournaments").where("organizerEmail", "==", email)] : []),
+        db.collection("tournaments").where("memberUids", "array-contains", uid),
+      ]) {
+        try { (await q.get()).docs.forEach(add); } catch (e) {}
+      }
+      const todos = Array.from(vistos.values());
+      const organizando = _delGuard.torneiosQueOrganiza(todos, uid, email);
+      const comJogo = _delGuard.torneiosQueBloqueiam(todos.filter((t) => _delGuard.temJogoPendente(t, uid)), uid);
+      if (organizando.length || comJogo.length) {
+        console.log("[deleteAccount] BLOQUEADO " + uid + " → organiza=" + JSON.stringify(organizando) + " jogos=" + JSON.stringify(comJogo));
+        throw new HttpsError("failed-precondition", _delGuard.mensagemBloqueio(comJogo, organizando),
+          { tournaments: comJogo, organizing: organizando });
+      }
+    }
+
     // 1) Torneios que ela ORGANIZA → apagados (o dono sai, o torneio vai junto).
     const organizados = new Map();
     for (const q of [
@@ -4993,9 +5030,19 @@ function _purgeUidEverywhere(node, uid, manterSlots) {
       if (manterSlots && SLOTS_DE_JOGO.has(key)) return v;   // team1Uids etc: intacto
       return v.filter((x) => x !== uid).map((x) => walk(x, key));
     }
+    // v1.7.78 — ARRAYS PAREADOS PRIMEIRO. `team1Uids`/`playersUids` andam colados
+    // com `team1`/`players` pelo ÍNDICE. Filtrar só o lado dos uids (o que o walk
+    // genérico abaixo faz) DESALINHA os dois e o nome vira fantasma — foi o que
+    // aconteceu com a Denise Mamesso (08/ago/2026): uid removido, nome mantido,
+    // 4 nomes / 3 uids. Ela era a última e por sorte ninguém mais quebrou; na
+    // primeira posição, cada nome passaria a apontar pro uid do vizinho.
+    // Aqui os dois lados caem juntos, no mesmo índice. Regra pura e testada em
+    // uid-sweep.paresParaRemover/removerPares.
+    const pareados = manterSlots ? {} : _uidSweep.removerPares(v, uid);
     const out = {};
     for (const k of Object.keys(v)) {
       if (k === uid) continue;                                // chave de mapa por-pessoa
+      if (Object.prototype.hasOwnProperty.call(pareados, k)) { out[k] = pareados[k]; continue; }
       if (manterSlots && SLOTS_DE_JOGO.has(k) && v[k] === uid) { out[k] = v[k]; continue; }
       if (!manterSlots && SLOTS_DE_JOGO.has(k) && v[k] === uid) continue;
       out[k] = walk(v[k], k);
@@ -6026,6 +6073,66 @@ function _discoverySummary(t) {
     hasDraw: hasDraw
   };
 }
+
+// ─── PROPAGAÇÃO DE NOME ───────────────────────────────────────────────────────
+// Ordem do dono (ago/2026): "quando a pessoa troca o nome de perfil, isso tem que
+// ser atualizado em todo o banco de dados".
+// MEDIDO na base: 495 slots guardam (uid + rótulo) e 14 estavam desatualizados —
+// Fabi2401@→Dani Bataglia, Marina Turri→Marina Cegal, Mariana C→Mariana Ciocci,
+// RODRIGO UNGER PIRES DA SILVA→Rodrigo Unger, Adriana→Adriana Rosa.
+//
+// ⚠️ ISTO NÃO É A REDE — é a limpeza. A rede é o uid: desde a 1.7.79 a chave
+// NASCE do uid e o rótulo não sustenta mais nada na tela. A propagação nunca é
+// completa nem instantânea (doc offline, torneio antigo, escrita que falha no
+// meio), então nada pode voltar a DEPENDER dela.
+//
+// A regra do que reescrever mora em rename-propagate-core (PURO, 20 asserções):
+// só por uid, nunca por nome — e array desalinhado é recusado por inteiro em vez
+// de adivinhado (foi assim que a saída da Denise quase renomeou o vizinho).
+exports.propagateDisplayName = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
+  async (event) => {
+    const after = event.data.after;
+    if (!after || !after.exists) return;
+    const a = after.data() || {};
+    const b = event.data.before && event.data.before.exists ? (event.data.before.data() || {}) : {};
+    if (a.deleted || a.mergedInto) return;                 // tombstone não propaga nada
+    const novo = String(a.displayName || "").trim();
+    const velho = String(b.displayName || "").trim();
+    // SÓ quando o nome MUDOU de verdade — senão toda escrita de perfil (presença,
+    // troféu, preferência) varreria os torneios à toa. Também é o anti-loop.
+    if (!novo || novo === velho) return;
+
+    const uid = event.params.uid;
+    const db = admin.firestore();
+    let docs = [];
+    try { docs = (await db.collection("tournaments").where("memberUids", "array-contains", uid).get()).docs; }
+    catch (e) { console.error("[propagateDisplayName] query:", e.message); return; }
+
+    let tocados = 0, slots = 0;
+    for (const d of docs) {
+      try {
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(d.ref);            // relê DENTRO da transação
+          if (!snap.exists) return;
+          const t = snap.data();
+          const r = _renameProp.planRename(t, uid, novo);
+          if (!r.total) return;
+          // escrita SELETIVA: só os campos de topo que o plano tocou — nunca o doc
+          // inteiro (outra aba pode ter lançado placar no meio).
+          const patch = {};
+          _renameProp.camposTocados(r.mudancas).forEach((c) => { patch[c] = t[c]; });
+          tx.update(d.ref, patch);
+          tocados++; slots += r.total;
+          if (r.avisos && r.avisos.length) {
+            console.warn("[propagateDisplayName] arrays desalinhados em " + d.id + ": " + JSON.stringify(r.avisos));
+          }
+        });
+      } catch (e) { console.error("[propagateDisplayName] " + d.id + ":", e.message); }
+    }
+    if (tocados) console.log(`[propagateDisplayName] ${uid} → "${novo}": ${slots} rótulo(s) em ${tocados} torneio(s)`);
+  }
+);
 
 exports.syncDiscoveryFeed = onDocumentWritten(
   { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
