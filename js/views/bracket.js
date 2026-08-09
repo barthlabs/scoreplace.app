@@ -6163,4 +6163,19 @@ window._bracketApplyFilter = function () {
   }
   var empty = document.getElementById('bracket-search-empty');
   if (empty) empty.style.display = ((q || onlyMine) && shown === 0) ? 'block' : 'none';
+  // v1.7.87 — QUEM FILTRA TEM QUE AVISAR O CHROME.
+  //
+  // O observer que mantém o cabeçalho fixo e a barra sticky no lugar
+  // (`_reflowChrome`) escuta o #view-container com `{childList:true, subtree:true}`
+  // — ou seja, só vê nó ENTRANDO ou SAINDO. Esta função não cria nem remove nada:
+  // ela liga e desliga `style.display`, que é mudança de ATRIBUTO e não notifica
+  // esse observer. Resultado: o conjunto de irmãos VISÍVEIS muda (inclusive o
+  // "nenhum resultado", que nasce escondido e aparece na busca vazia) e a margem
+  // que afasta o conteúdo do cabeçalho fixo NUNCA é recalculada — o conteúdo passa
+  // por baixo do cabeçalho e a leitura é de que a fixação "quebrou". Digitar e
+  // apagar no ✕ é o gatilho porque é o que mais mexe em quem está visível.
+  //
+  // Avisar aqui é barato (a função é idempotente e já roda a cada scroll) e fecha o
+  // buraco na fonte: é o próprio ato de filtrar que reposiciona o chrome.
+  if (typeof window._reflowChrome === 'function') window._reflowChrome();
 };

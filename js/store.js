@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.86';
+window.SCOREPLACE_VERSION = '1.7.87';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2746,12 +2746,33 @@ window._reflowChrome = function() {
   // irmão display:none logo após o header (ex.: #part-search-empty na tela de
   // Inscritos) recebe a margem (e some), e o conteúdo de verdade fica COBERTO pelo
   // header fixo. Pula invisíveis (display:none / 0×0).
+  // v1.7.87 — A MARGEM NUNCA VAI NUM STICKY/FIXED.
+  //
+  // Relato do dono, na chave: "a barra de busca/filtro depois que apaga algo digitado
+  // com o x, quebra o travamento no topo sempre visível do cabeçalho e barra que somem
+  // ao scrollar."
+  //
+  // MEDIDO na tela real: na chave os irmãos do #view-container são
+  // [0] back-header (fixed) · [1] a BARRA canônica (sticky) · [2..] o conteúdo.
+  // Ou seja, o "primeiro irmão visível" É A BARRA — e ela estava recebendo a margem
+  // de conteúdo (~159px). É o choque de duas correções minhas: o cânone da 1.7.43/1.7.55
+  // pôs a barra como 1ª irmã (pra o sticky pegar cedo), e esta função dá a margem a quem
+  // ocupa esse posto. Um elemento sticky com margem NÃO precisa dela (ele se posiciona
+  // pelo `top`, calculado logo acima) e, pior, a margem desloca a posição NATURAL dele:
+  // quando o filtro esconde/mostra irmãos, o posto TROCA, a margem sai de um e vai pro
+  // outro, e o layout inteiro salta ~159px — o conteúdo passa POR BAIXO do cabeçalho
+  // fixo, que é exatamente o "quebra o travamento" que ele descreve. Digitar e apagar no
+  // ✕ é o gatilho porque é ele que muda quais irmãos estão visíveis.
+  //
+  // Agora a margem procura o primeiro irmão visível que esteja NO FLUXO. Sticky e fixed
+  // são pulados: quem se posiciona sozinho não é empurrado por ninguém.
   function _firstVisibleSibling(el) {
     var s = el && el.nextElementSibling;
     while (s) {
       var cs = window.getComputedStyle(s);
       var r = s.getBoundingClientRect();
-      if (cs.display !== 'none' && cs.visibility !== 'hidden' && !(r.width === 0 && r.height === 0)) return s;
+      var noFluxo = cs.position !== 'sticky' && cs.position !== 'fixed' && cs.position !== 'absolute';
+      if (noFluxo && cs.display !== 'none' && cs.visibility !== 'hidden' && !(r.width === 0 && r.height === 0)) return s;
       s = s.nextElementSibling;
     }
     return null;
@@ -4514,7 +4535,13 @@ window._fbClearSearch = function (key) {
     var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
     if (x) x.style.display = 'none';
     window._fbAction(key, 'search', '', true);
-    if (el && el.focus) el.focus();
+    // v1.7.87: `preventScroll`. O focus() normal manda o navegador ROLAR até o campo —
+    // e o campo mora numa barra STICKY, então ele rola a página inteira pra reposicionar
+    // algo que já estava na tela. Some com o lugar onde o dono estava lendo, logo depois
+    // de ele só ter apagado a busca. Onde não há suporte, cai no focus() de sempre.
+    if (el && el.focus) {
+        try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }
 };
 // v2.7.33 (Opção 1): pílula de sort por critério — clicar a ATIVA inverte a seta
 // (cresc↔decr); clicar a inativa ativa-a com a direção lembrada (st.nameDir/orderDir).
