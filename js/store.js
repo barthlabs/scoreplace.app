@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.81';
+window.SCOREPLACE_VERSION = '1.7.82';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5958,9 +5958,28 @@ window._themeNames = { dark: 'Noturno', light: 'Claro' };
 // ~10px e nada fica legível, então baixar não serve a ninguém.
 window._UI_SCALE_MIN = 0.8;
 window._UI_SCALE_MAX = 1.7;
+// v1.7.82 — "130% VIRA 100%". Pedido do dono, e o motivo é a reclamação que
+// abriu o assunto: gente achando a letra pequena. Quem reclama NÃO abre o
+// perfil — então subir o PADRÃO é o que alcança essas pessoas; alargar a faixa
+// só serve a quem já mexe no slider.
+//
+// ⚠️ POR QUE A BASE TIPOGRÁFICA NÃO FOI MULTIPLICADA POR 1,3 (o caminho óbvio
+// e ERRADO): o valor escolhido é PERSISTIDO — em localStorage e no PERFIL,
+// sincronizado entre aparelhos. Multiplicar a base faria todo valor já salvo
+// valer 30% a mais do que a pessoa escolheu (quem pôs 1,3 por enxergar mal
+// receberia 1,69), e não haveria como distinguir valor novo de velho, porque
+// as faixas se sobrepõem (0,8–1,7 × 0,6–1,3) — em algum aparelho converteria
+// DUAS vezes. Aqui o número guardado NÃO muda de significado: muda só o
+// PADRÃO de quem nunca escolheu, e o RÓTULO na tela.
+//
+// Resultado: quem nunca mexeu ganha o tamanho novo sozinho; quem escolheu um
+// valor olhando pra tela continua exatamente com o que viu.
+window._UI_SCALE_BASE = 1.3;          // este interno = "100%" pra pessoa
+window._uiScaleToPct = function(s) { return Math.round((s / window._UI_SCALE_BASE) * 100); };
+window._uiPctToScale = function(p) { return (parseFloat(p) / 100) * window._UI_SCALE_BASE; };
 window._clampUiScale = function(v) {
   v = parseFloat(v);
-  if (isNaN(v)) return 1;
+  if (isNaN(v)) return window._UI_SCALE_BASE;
   return Math.max(window._UI_SCALE_MIN, Math.min(window._UI_SCALE_MAX, v));
 };
 window._getUiScale = function() {

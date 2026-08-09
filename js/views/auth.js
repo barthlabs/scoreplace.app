@@ -4647,7 +4647,8 @@ async function simulateLoginSuccess(user) {
     if (typeof window._applyPresenceMuteUI === 'function') window._applyPresenceMuteUI({ active: _active, days: _daysLeft });
     if (typeof window._applyNotifyFilterUI === 'function') window._applyNotifyFilterUI(cu.notifyLevel || 'todas');
     // v2.1.91: inicializa o slider de tamanho da interface com o valor salvo
-    var _uiSliderPct = Math.round((typeof window._getUiScale === 'function' ? window._getUiScale() : 1) * 100);
+    var _uiSliderPct = (typeof window._uiScaleToPct === 'function' && typeof window._getUiScale === 'function')
+      ? window._uiScaleToPct(window._getUiScale()) : 100;
     var _uiSlider = document.getElementById('profile-ui-scale');
     if (_uiSlider) _uiSlider.value = _uiSliderPct;
     var _uiSliderLbl = document.getElementById('profile-ui-scale-val');
@@ -6546,13 +6547,13 @@ function setupProfileModal() {
               '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Ajusta textos e botões em todo o app. Ele já se adapta ao seu aparelho — aqui você afina do seu jeito. (O zoom do placar ao vivo continua separado.)</p>' +
               '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:0.7rem;color:var(--text-muted);line-height:1;">A</span>' +
-                '<input type="range" id="profile-ui-scale" min="80" max="170" step="5" value="100" aria-label="Tamanho da interface" style="flex:1;min-width:0;accent-color:var(--primary-color);height:28px;" ' +
-                  'oninput="window._applyUiScale&&window._applyUiScale(this.value/100); var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=this.value+\'%\';" ' +
-                  'onchange="window._setUiScale&&window._setUiScale(this.value/100);">' +
+                '<input type="range" id="profile-ui-scale" min="60" max="130" step="5" value="100" aria-label="Tamanho da interface" style="flex:1;min-width:0;accent-color:var(--primary-color);height:28px;" ' +
+                  'oninput="window._applyUiScale&&window._applyUiScale(window._uiPctToScale(this.value)); var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=this.value+\'%\';" ' +
+                  'onchange="window._setUiScale&&window._setUiScale(window._uiPctToScale(this.value));">' +
                 '<span style="font-size:1.1rem;color:var(--text-muted);line-height:1;">A</span>' +
                 '<span id="profile-ui-scale-val" style="font-size:0.78rem;font-weight:800;color:var(--primary-color);min-width:44px;text-align:right;">100%</span>' +
               '</div>' +
-              '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(1);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
+              '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(window._UI_SCALE_BASE);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
             '</div>' +
             // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
             // de descoberta: cadastrar onde joga vem antes de configurar presença).

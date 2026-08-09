@@ -18,10 +18,12 @@ var _validThemes = ['dark', 'light'];
 // pra não dar flash de tamanho errado. Lê o cache local; o perfil sincroniza
 // depois (loadUserProfile). Clamp 0.7–1.6 por segurança.
 (function applyInitialUiScale() {
-  var s = 1;
+  // v1.7.82: padrão = 1.3 (o que a pessoa vê como "100%"). Tem que casar com
+  // window._UI_SCALE_BASE do store.js — aqui não dá pra ler o store (roda antes).
+  var s = 1.3;
   try {
     var raw = localStorage.getItem('scoreplace_ui_scale');
-    if (raw != null) { var v = parseFloat(raw); if (!isNaN(v)) s = Math.max(0.7, Math.min(1.6, v)); }
+    if (raw != null) { var v = parseFloat(raw); if (!isNaN(v)) s = Math.max(0.7, Math.min(1.7, v)); }
   } catch (e) {}
   document.documentElement.style.setProperty('--ui-scale', s);
 })();
