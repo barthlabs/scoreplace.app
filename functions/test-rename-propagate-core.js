@@ -119,5 +119,18 @@ planRename(tM2, alvoUid, 'Renomeado');
 ok(JSON.stringify(gM.players) === antesM,
   'uid removido do MEIO → nada é reescrito (era aqui que o vizinho seria renomeado)');
 
+
+// ─── (8) FIAÇÃO — o core sem gatilho é decoração ──────────────────────────────
+// Este módulo já ficou pronto, testado e DESLIGADO uma vez: o core existia e o
+// index.js nunca o requeria, então trocar de nome não propagava nada. Teste de
+// varredura pra isso não se repetir em silêncio.
+const _fsIdx = require('fs').readFileSync(require('path').join(__dirname, 'index.js'), 'utf8');
+ok(/require\("\.\/rename-propagate-core"\)/.test(_fsIdx), 'index.js REQUER o rename-propagate-core');
+ok(/exports\.propagateDisplayName\s*=\s*onDocumentWritten/.test(_fsIdx), 'existe o trigger propagateDisplayName em users/{uid}');
+ok(/_renameProp\.planRename\(/.test(_fsIdx), 'o trigger chama planRename (a regra vem do core, não reimplementada)');
+ok(/_renameProp\.camposTocados\(/.test(_fsIdx), 'a escrita é SELETIVA (camposTocados), nunca o doc inteiro');
+ok(/runTransaction/.test(_fsIdx.slice(_fsIdx.indexOf('exports.propagateDisplayName'), _fsIdx.indexOf('exports.syncDiscoveryFeed'))),
+  'a propagação roda em TRANSAÇÃO (relê o doc; placar lançado no meio não é perdido)');
+
 console.log(`  ${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);

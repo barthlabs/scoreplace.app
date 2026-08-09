@@ -41,6 +41,7 @@ const _nameVariant = require("./name-variant-core");
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
 const _rosterWatch = require("./roster-watch-core");
 const _delGuard = require("./delete-account-guard-core");
+const _renameProp = require("./rename-propagate-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -6072,6 +6073,66 @@ function _discoverySummary(t) {
     hasDraw: hasDraw
   };
 }
+
+// ─── PROPAGAÇÃO DE NOME ───────────────────────────────────────────────────────
+// Ordem do dono (ago/2026): "quando a pessoa troca o nome de perfil, isso tem que
+// ser atualizado em todo o banco de dados".
+// MEDIDO na base: 495 slots guardam (uid + rótulo) e 14 estavam desatualizados —
+// Fabi2401@→Dani Bataglia, Marina Turri→Marina Cegal, Mariana C→Mariana Ciocci,
+// RODRIGO UNGER PIRES DA SILVA→Rodrigo Unger, Adriana→Adriana Rosa.
+//
+// ⚠️ ISTO NÃO É A REDE — é a limpeza. A rede é o uid: desde a 1.7.79 a chave
+// NASCE do uid e o rótulo não sustenta mais nada na tela. A propagação nunca é
+// completa nem instantânea (doc offline, torneio antigo, escrita que falha no
+// meio), então nada pode voltar a DEPENDER dela.
+//
+// A regra do que reescrever mora em rename-propagate-core (PURO, 20 asserções):
+// só por uid, nunca por nome — e array desalinhado é recusado por inteiro em vez
+// de adivinhado (foi assim que a saída da Denise quase renomeou o vizinho).
+exports.propagateDisplayName = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
+  async (event) => {
+    const after = event.data.after;
+    if (!after || !after.exists) return;
+    const a = after.data() || {};
+    const b = event.data.before && event.data.before.exists ? (event.data.before.data() || {}) : {};
+    if (a.deleted || a.mergedInto) return;                 // tombstone não propaga nada
+    const novo = String(a.displayName || "").trim();
+    const velho = String(b.displayName || "").trim();
+    // SÓ quando o nome MUDOU de verdade — senão toda escrita de perfil (presença,
+    // troféu, preferência) varreria os torneios à toa. Também é o anti-loop.
+    if (!novo || novo === velho) return;
+
+    const uid = event.params.uid;
+    const db = admin.firestore();
+    let docs = [];
+    try { docs = (await db.collection("tournaments").where("memberUids", "array-contains", uid).get()).docs; }
+    catch (e) { console.error("[propagateDisplayName] query:", e.message); return; }
+
+    let tocados = 0, slots = 0;
+    for (const d of docs) {
+      try {
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(d.ref);            // relê DENTRO da transação
+          if (!snap.exists) return;
+          const t = snap.data();
+          const r = _renameProp.planRename(t, uid, novo);
+          if (!r.total) return;
+          // escrita SELETIVA: só os campos de topo que o plano tocou — nunca o doc
+          // inteiro (outra aba pode ter lançado placar no meio).
+          const patch = {};
+          _renameProp.camposTocados(r.mudancas).forEach((c) => { patch[c] = t[c]; });
+          tx.update(d.ref, patch);
+          tocados++; slots += r.total;
+          if (r.avisos && r.avisos.length) {
+            console.warn("[propagateDisplayName] arrays desalinhados em " + d.id + ": " + JSON.stringify(r.avisos));
+          }
+        });
+      } catch (e) { console.error("[propagateDisplayName] " + d.id + ":", e.message); }
+    }
+    if (tocados) console.log(`[propagateDisplayName] ${uid} → "${novo}": ${slots} rótulo(s) em ${tocados} torneio(s)`);
+  }
+);
 
 exports.syncDiscoveryFeed = onDocumentWritten(
   { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
