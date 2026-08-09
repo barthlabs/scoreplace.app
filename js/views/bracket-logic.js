@@ -4575,6 +4575,15 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     // v2.6.70: inativos NÃO contam na fairness do sorteio (reason 'inactive').
     _recordSitOut(t, inactiveSitOuts, category, 'inactive');
     allSitOuts.forEach(function(name, si) {
+      // v1.7.80 — FOLGA SEM IDENTIDADE NÃO NASCE.
+      // MEDIDO (Confra, 09/ago/2026): uma linha de classificação sem nome nem uid
+      // virava uma folga fantasma — `p1: undefined`, `p1Uid` vazio, sem perfil.
+      // Ela aparece na caixa "Ficaram de fora desta rodada" como um jogador que
+      // não existe, e nenhum caminho consegue removê-la depois (não há uid pra
+      // casar nem nome pra procurar). Registro que não identifica ninguém é lixo:
+      // não gravar é melhor que gravar errado — a mesma regra da v1.7.45.
+      var _uidFolga = _n2uMap[name] || null;
+      if (!name && !_uidFolga) return;
       var isInactive = inactiveSitOuts.indexOf(name) !== -1;
       var avgPts = isInactive ? 0 : _sitOutComp(t, name, category);
       var soObj = _buildSitOut({ player: name, playerUid: (_n2uMap[name] || null), roundNum: roundNum, roundIndex: (t.rounds || []).length, category: category, ts: ts, idPrefix: 'sitout-rr-r', idIndex: si, reason: isInactive ? 'inactive' : 'remainder', points: avgPts });

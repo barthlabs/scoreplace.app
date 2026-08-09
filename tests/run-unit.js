@@ -53,6 +53,10 @@ const SUITES = [
   // fecha com campeão. Substitui as ~1.250 linhas de cirurgia incremental.
   'tests/late-entry-recalc.test.js',
   'tests/bracket-logic.test.js',
+  // Folga sem identidade não nasce. Medido contra o doc real: com os rótulos
+  // apagados o motor gerava uma folga fantasma (p1 undefined, sem uid) que nada
+  // conseguia remover depois. Com o guard, a rodada sai IDÊNTICA com e sem rótulo.
+  'tests/folga-sem-identidade.test.js',
   // Trava a canonização: o cliente NÃO sorteia a Liga agendada (fim da corrida
   // cliente×CF). Se alguém religar o poller, esta suíte fica vermelha.
   'tests/liga-autodraw-server-only.test.js',
