@@ -30,7 +30,7 @@ android {
                                                    // já estava em 36 — era ISSO que deixava o
                                                    // relógio um degrau atrás a cada subida.
         versionCode 47
-        versionName "1.7.85"
+        versionName "1.7.86"
     }
 
     buildTypes {

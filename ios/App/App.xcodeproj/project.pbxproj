@@ -352,7 +352,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.85;
+				MARKETING_VERSION = 1.7.86;
 				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -489,7 +489,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.85;
+				MARKETING_VERSION = 1.7.86;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace;
@@ -514,7 +514,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.85;
+				MARKETING_VERSION = 1.7.86;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -538,7 +538,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.7.85;
+				MARKETING_VERSION = 1.7.86;
 				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
