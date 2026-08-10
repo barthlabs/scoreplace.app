@@ -90,6 +90,91 @@ window.FirestoreDB = {
     return cleanData;
   },
 
+  // ── v1.7.91 · CARIMBO DE ESCALAÇÃO — fonte ÚNICA das DUAS portas de escrita ────
+  // Uma pessoa num grupo Rei/Rainha vive em QUATRO estruturas, e DUAS delas carregam
+  // escalação: o SLOT do jogo (`p1/p2/team*Uids`) e o ELENCO do grupo
+  // (`monarchGroups[g].players/playersUids`) — que é de onde sai a CLASSIFICAÇÃO.
+  // Proteger só o slot deixava os 3 jogos certos e a classificação mostrando o ausente.
+  //
+  // Este bloco é o ÚNICO lugar que sabe quais campos são "escalação" e onde ela mora.
+  // As duas portas o usam com papéis diferentes, e é essa divisão que conserta o bug:
+  //   · `mutateTournament` (transação) só CARIMBA — ela já lê fresco, não precisa de
+  //     defesa; o que faltava era ela DEIXAR O RASTRO pra outra porta poder se defender.
+  //   · `saveTournament` (save solto) compara com o banco e RECUSA o que veio do passado.
+  // Antes o carimbo nascia só no save solto — então toda troca feita pelo app (W.O.,
+  // substituição, formação de grupo passam TODOS pela transação) ia pro banco SEM
+  // carimbo, e a cópia velha que chegasse depois era lida como "primeira troca da vida"
+  // e ACEITA. Ver [[project_roster_guard_single_rule]]: dois caminhos guardando o mesmo
+  // invariante com regras diferentes é o próprio bug, e já custou dois incidentes.
+  _ROSTER_KEYS: {
+    match: ['p1', 'p2', 'team1', 'team2', 'team1Uids', 'team2Uids', 'p1Uid', 'p2Uid'],
+    group: ['players', 'playersUids']
+  },
+
+  // Varre TODA unidade que carrega escalação, com uma CHAVE ESTÁVEL.
+  // A chave do grupo é a ÂNCORA ESTRUTURAL (rodada + índice do grupo), nunca derivada
+  // dos nomes/uids — senão trocar alguém mudaria a própria chave e o par se perderia.
+  // Ver [[project_group_identity_structural_anchor]].
+  _eachRosterUnit(t, fn) {
+    if (!t) return;
+    var _ms = function (arr) {
+      (Array.isArray(arr) ? arr : []).forEach(function (m) {
+        if (m && m.id != null) fn(m, 'm:' + m.id, 'match');
+      });
+    };
+    var _rodadas = function (rounds, escopo) {
+      (Array.isArray(rounds) ? rounds : []).forEach(function (r, ri) {
+        if (!r) return;
+        _ms(r.matches);
+        var rk = (r.round != null ? r.round : ri);
+        (Array.isArray(r.monarchGroups) ? r.monarchGroups : []).forEach(function (g, gi) {
+          if (!g) return;
+          fn(g, 'g:' + escopo + ':' + rk + ':' + (g.groupIdx != null ? g.groupIdx : gi), 'group');
+        });
+      });
+    };
+    _ms(t.matches);
+    _rodadas(t.rounds, '');
+    // phaseRounds: { [fase]: { rounds: [...] } } — Liga incremental de fase posterior.
+    // Mesma estrutura, mesma exposição; o fold canônico já a trata, o guard também tem que.
+    if (t.phaseRounds && typeof t.phaseRounds === 'object') {
+      Object.keys(t.phaseRounds).forEach(function (k) {
+        var slot = t.phaseRounds[k];
+        if (slot && Array.isArray(slot.rounds)) _rodadas(slot.rounds, 'p' + k);
+      });
+    }
+    (Array.isArray(t.groups) ? t.groups : []).forEach(function (g) { if (g) _ms(g.matches); });
+  },
+
+  _rosterSig(u, tipo) {
+    var keys = this._ROSTER_KEYS[tipo] || [];
+    return JSON.stringify(keys.map(function (k) { return u ? u[k] : null; }));
+  },
+
+  // Carimba o que MUDOU de escalação entre `sigAntes` e o estado atual de `t`.
+  // Usado pela transação (que conhece o "antes" exato da mesma leitura transacional).
+  // Unidade que não existia antes = motor criando chave, não troca → não carimba.
+  // Devolve quantas unidades trocaram (0 = save comum, e aí `rosterRev` não sobe:
+  // o participante não pode carregar campo fora da allowlist ou a escrita é RECUSADA
+  // INTEIRA e ele perde o lançamento de placar).
+  _stampRosterChanges(t, sigAntes, agora) {
+    var self = this, trocou = 0;
+    this._eachRosterUnit(t, function (u, key, tipo) {
+      if (!(key in sigAntes)) return;
+      if (self._rosterSig(u, tipo) === sigAntes[key]) return;
+      u.rosterAt = agora;
+      trocou++;
+    });
+    if (trocou) t.rosterRev = ((typeof t.rosterRev === 'number') ? t.rosterRev : 0) + 1;
+    return trocou;
+  },
+
+  _rosterSigMap(t) {
+    var self = this, out = {};
+    this._eachRosterUnit(t, function (u, key, tipo) { out[key] = self._rosterSig(u, tipo); });
+    return out;
+  },
+
   // ---- Tournaments ----
 
   // v1.2.2: _computeMemberEmails REMOVIDA junto com o campo memberEmails[]. Identidade de
@@ -559,27 +644,37 @@ window.FirestoreDB = {
           // atrasado, a escalação do banco volta. Primeira troca da vida (banco sem
           // carimbo) é aceita e carimbada. Duas trocas legítimas em sequência também
           // passam: quem leu DEPOIS da primeira carrega o carimbo dela.
-          var _ROSTER = ['p1', 'p2', 'team1', 'team2', 'team1Uids', 'team2Uids', 'p1Uid', 'p2Uid'];
-          var _sigRoster = function (m) {
-            return JSON.stringify(_ROSTER.map(function (k) { return m ? m[k] : null; }));
-          };
+          //
+          // v1.7.91 — DUAS correções neste guard, as duas medidas no incidente da
+          // Denise → Carol (Confra, 09–10/ago): a substituição foi aplicada, conferida
+          // no banco, e ~2h depois um save atrasado a desfez — com o dono SEM INTERNET,
+          // ou seja não foi ato de ninguém, foi uma aba com cópia velha gravando.
+          //   (1) o carimbo agora nasce TAMBÉM na transação (ver `_stampRosterChanges`).
+          //       Era o buraco principal: W.O., substituição e formação de grupo passam
+          //       TODOS pela transação, então a troca ia pro banco sem carimbo e o save
+          //       atrasado era aceito como "primeira troca da vida".
+          //   (2) o guard agora cobre o ELENCO DO GRUPO, não só o slot do jogo — a
+          //       classificação sai de `monarchGroups[g].players[]`, então proteger só
+          //       os jogos deixava a tela mostrando o ausente na tabela.
+          var self = this;
+          var _bancoUnits = {};
+          this._eachRosterUnit(_bancoP, function (u, key, tipo) { _bancoUnits[key] = u; });
           var _slotRev = [], _slotNovo = 0, _agora = Date.now();
-          if (!_motorReescrevendo) _varre(cleanData, function (m) {
-            if (!m || m.id == null) return;
-            var b = _idxAll[String(m.id)];
-            if (!b) return;
-            if (_sigRoster(m) === _sigRoster(b)) {
-              if (b.rosterAt != null && m.rosterAt == null) m.rosterAt = b.rosterAt; // não perde o carimbo
+          if (!_motorReescrevendo) this._eachRosterUnit(cleanData, function (u, key, tipo) {
+            var b = _bancoUnits[key];
+            if (!b) return;                                   // unidade nova: nada a comparar
+            if (self._rosterSig(u, tipo) === self._rosterSig(b, tipo)) {
+              if (b.rosterAt != null && u.rosterAt == null) u.rosterAt = b.rosterAt; // não perde o carimbo
               return;
             }
             var _cB = (typeof b.rosterAt === 'number') ? b.rosterAt : null;
-            var _cS = (typeof m.rosterAt === 'number') ? m.rosterAt : null;
+            var _cS = (typeof u.rosterAt === 'number') ? u.rosterAt : null;
             if (_cB != null && (_cS == null || _cS < _cB)) {
-              _ROSTER.forEach(function (k) { if (b[k] !== undefined) m[k] = b[k]; else delete m[k]; });
-              m.rosterAt = _cB;
-              _slotRev.push(String(m.id));
+              self._ROSTER_KEYS[tipo].forEach(function (k) { if (b[k] !== undefined) u[k] = b[k]; else delete u[k]; });
+              u.rosterAt = _cB;
+              _slotRev.push(key);
             } else {
-              m.rosterAt = _agora;                            // troca legítima: carimba
+              u.rosterAt = _agora;                            // troca legítima: carimba
               _slotNovo++;
             }
           });
@@ -971,9 +1066,17 @@ window.FirestoreDB = {
       var _antesArr = { participants: Array.isArray(data.participants) ? data.participants.slice() : [],
                         standbyParticipants: Array.isArray(data.standbyParticipants) ? data.standbyParticipants.slice() : [],
                         waitlist: Array.isArray(data.waitlist) ? data.waitlist.slice() : [] };
+      // v1.7.91 — assinatura da ESCALAÇÃO antes do mutator. A transação não precisa se
+      // DEFENDER de save atrasado (ela lê fresco), mas precisa DEIXAR O RASTRO: é por
+      // aqui que passam W.O., substituição e formação de grupo, e sem carimbo a cópia
+      // velha que gravasse depois seria lida como "primeira troca da vida" e venceria.
+      // Foi exatamente assim que a substituição da Denise → Carol foi desfeita sozinha.
+      var _sigRosterAntes = self._rosterSigMap(data);
 
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
+      // Carimba o que o mutator trocou (0 trocas = save comum, nada é escrito).
+      self._stampRosterChanges(data, _sigRosterAntes, Date.now());
       // ── RESTAURAÇÃO PÓS-MUTATOR — a regra é NÃO SUMIR, não "não sair" ─────────
       // ⚠️ A primeira versão disto exigia que a pessoa continuasse no ELENCO, e teria
       // QUEBRADO O W.O. no meio do torneio: o W.O. tira do elenco e põe na FILA (v1.6.88).
@@ -1089,42 +1192,22 @@ window.FirestoreDB = {
       var data = doc.exists ? doc.data() : { matchId: String(matchId), tournamentId: String(tournamentId) };
       var out = mutatorFn(data);
       if (out === false) return { aborted: true, data: data };
-      // Restauração pós-mutator (ver bloco acima). Sai de graça quando nada sumiu.
-      if (!(options && options.allowRosterRemoval)) {
-        try {
-          var _depoisElenco = _setDe(data.participants);
-          var _voltaram = [];
-          if (Array.isArray(data.participants)) {
-            _antesArr.participants.forEach(function (p) {
-              var us = _uidsTx(p).filter(Boolean);
-              if (!us.length) return;                                   // fictício: sem proteção
-              if (us.some(function (u) { return _depoisElenco[u]; })) return;
-              data.participants.push(p); us.forEach(function (u) { _depoisElenco[u] = 1; });
-              _voltaram.push(us[0] + ' (participants)');
-            });
-          }
-          ['standbyParticipants', 'waitlist'].forEach(function (campo) {
-            if (!Array.isArray(data[campo]) || !_antesArr[campo].length) return;
-            var _dep = _setDe(data[campo]);
-            _antesArr[campo].forEach(function (p) {
-              var us = _uidsTx(p).filter(Boolean);
-              if (!us.length) return;
-              if (us.some(function (u) { return _dep[u]; })) return;
-              if (us.some(function (u) { return _depoisElenco[u]; })) return;  // PROMOVIDO
-              data[campo].push(p); us.forEach(function (u) { _dep[u] = 1; });
-              _voltaram.push(us[0] + ' (' + campo + ')');
-            });
-          });
-          if (_voltaram.length) {
-            if (!Array.isArray(data.history)) data.history = [];
-            data.history.push({ date: new Date().toISOString(),
-              message: 'Protecao automatica (transacao): ' + _voltaram.length +
-                ' pessoa(s) sumiram na mutacao e foram restauradas (' + _voltaram.join(', ') + ').' });
-            if (window._warn) window._warn('[mutateTournament] LISTA PROTEGIDA: ' + _voltaram.join(', '));
-            try { if (typeof window._captureException === 'function') window._captureException(new Error('tx roster shrink blocked: ' + _voltaram.join(', '))); } catch (_se) {}
-          }
-        } catch (_txgErr) { /* o guard nunca derruba a transação */ }
-      }
+      // ⚠️ v1.7.91 — AQUI MORAVA UM BLOCO COLADO POR ENGANO, e ele quebrava esta função
+      // INTEIRA. A 1.7.28 (`c1c041e5`) levou o guard de elenco pra DENTRO da transação e
+      // uma cópia dele caiu também aqui, num escopo onde `options`, `_setDe`, `_antesArr`
+      // e `_uidsTx` NÃO EXISTEM (`mutateMatchResult(tournamentId, matchId, mutatorFn)` não
+      // tem `options`). Resultado MEDIDO chamando a função real: `ReferenceError: options
+      // is not defined` na PRIMEIRA linha do bloco, antes de qualquer `try` — ou seja a
+      // transação estourava e NADA era gravado, em 100% das chamadas.
+      //
+      // O bloco também não fazia sentido nenhum aqui: este doc é o RESULTADO de UM jogo
+      // (placar/consenso, ver o comentário do topo) — não tem `participants`,
+      // `standbyParticipants` nem `waitlist` pra restaurar. Elenco é assunto do doc do
+      // torneio, e lá o guard continua onde deve, em `mutateTournament`.
+      //
+      // Não estourou em produção porque `commitMatchResult` (store.js) ainda não tem
+      // chamador — o doc por jogo está atrás do "incremento 3" de
+      // [[project_match_result_docs]]. Ficaria armado pro dia em que fosse ligado.
       data.matchId = String(matchId);
       data.updatedAt = new Date().toISOString();
       var clean = self._cleanUndefined(data);

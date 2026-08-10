@@ -312,6 +312,10 @@ const SUITES = [
   'tests/wo-slot-uid-identity.test.js',
   'tests/wo-claim-uid-por-estrutura.test.js',
   'tests/elenco-nunca-encolhe.test.js',
+  // Irmão do de cima: aquele trava o que SUMIU de um save atrasado; este trava o que
+  // VOLTOU NO TEMPO (mesmos jogos, conteúdo antigo — a substituição desfeita sozinha).
+  // Roda as DUAS portas de escrita juntas, que é onde o buraco estava. v1.7.91.
+  'tests/save-atrasado-nao-desfaz-troca.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
