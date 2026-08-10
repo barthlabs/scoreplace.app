@@ -318,6 +318,9 @@ const SUITES = [
   'tests/save-atrasado-nao-desfaz-troca.test.js',
   // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.
   'tests/save-atrasado-nao-apaga-grupo.test.js',
+  // CAUSA-RAIZ do inscrito invisível: o push otimista da inscrição não pode ser persistido
+  // por um save de outra coisa quando a resposta do servidor nunca chega. v1.8.1.
+  'tests/inscricao-otimista-nao-persiste.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',

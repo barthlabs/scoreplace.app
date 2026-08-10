@@ -249,7 +249,12 @@ sec(function () {
   const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-enrollment.js'), 'utf8');
   const doEnroll = src.slice(src.indexOf('window._doEnrollCurrentUser = function'));
   const gate = doEnroll.indexOf('window._phaseDrawDone(t)');
-  const push = doEnroll.indexOf('t.participants.push(participantObj)');
+  // v1.8.1: casa com a CHAMADA, não com o argumento. O push otimista passou a marcar a
+  // entrada (`_pendingEnroll`) pra o ponto de gravação não persistir inscrição que o
+  // servidor nunca confirmou — e o matcher literal antigo (`push(participantObj)`) parou
+  // de achar a linha, reprovando um invariante que continuava VERDADEIRO. Matcher frágil
+  // vira alarme falso e ensina a ignorar o teste.
+  const push = doEnroll.indexOf('t.participants.push(');
   ok(gate !== -1, '_doEnrollCurrentUser precisa consultar window._phaseDrawDone');
   ok(gate < push, 'o gate da espera tem que vir ANTES do push otimista em participants');
 

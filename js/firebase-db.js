@@ -339,6 +339,34 @@ window.FirestoreDB = {
     // ⚠️ MODO DE FALHA ESCOLHIDO: se um caminho legítimo de remoção esquecer a flag, a
     // pessoa CONTINUA inscrita e o console grita (+ Sentry). O contrário — sumir calado —
     // é o que custou dois dias de torneio a alguém.
+    // ── v1.8.1 · INSCRIÇÃO SÓ-OTIMISTA NÃO VIRA INSCRITO ──────────────────────────
+    // O cliente empurra a pessoa em `t.participants` ANTES de falar com o servidor, pra a
+    // tela responder na hora, e desfaz quando a resposta chega. Se a resposta NUNCA chega
+    // (4G caindo na quadra, aba fechada, timeout), o push ficava — e qualquer save
+    // posterior o gravava. A pessoa virava "inscrita" sem nunca ter passado pela LISTA DE
+    // ESPERA, que é onde a regra da 1.6.86 manda quem chega depois do sorteio: ficava no
+    // elenco, fora de qualquer grupo, INVISÍVEL na rodada e nunca chamada.
+    // Foi a causa-raiz de M.Delia Fernandez, Marcos Alvarez e Debora Castello no Confra —
+    // achada em 10/ago depois de eliminar, por medição, inscrição manual, o bug do toggle,
+    // a proteção do elenco, a CF, o fallback e a promoção por formação de grupo.
+    // ⚠️ Aqui é o lugar certo: o CHOKE POINT. Quem grava inscrição de verdade é a CF (ou a
+    // transação de fallback), e ambas devolvem o array AUTORITATIVO — que não tem a marca.
+    // ⚠️ E isto NÃO briga com o guard "o elenco nunca encolhe": ele restaura quem está no
+    // BANCO e sumiu do save; uma inscrição só-otimista nunca chegou ao banco.
+    try {
+      if (Array.isArray(cleanData.participants)) {
+        cleanData.participants = cleanData.participants.filter(function (p) {
+          return !(p && typeof p === 'object' && p._pendingEnroll);
+        }).map(function (p) {
+          if (p && typeof p === 'object' && '_pendingEnroll' in p) {
+            var c = {}; for (var k in p) if (k !== '_pendingEnroll' && Object.prototype.hasOwnProperty.call(p, k)) c[k] = p[k];
+            return c;                                  // marca é transiente: nunca persiste
+          }
+          return p;
+        });
+      }
+    } catch (_peErr) { /* nunca derruba o save */ }
+
     var _allowRosterRemoval = !!(options && options.allowRosterRemoval) || cleanData._allowRosterRemoval === true;
     delete cleanData._allowRosterRemoval; // flag transiente — nunca persistir no doc
     var _tocaElenco = Array.isArray(cleanData.participants);
