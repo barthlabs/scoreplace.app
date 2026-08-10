@@ -27,7 +27,15 @@ var _validThemes = ['dark', 'light'];
   // Três faixas diferentes pro mesmo controle era a origem do "ora 130%, ora 169%".
   var s = 1.3;                       // = _UI_SCALE_BASE (o "100%" da pessoa)
   var MIN = 1.04, MAX = 1.95;        // = _uiPctToScale(80) e _uiPctToScale(150)
+  // v1.7.91: mesmo carimbo de reset do store.js ('coloque o novo 100% por padrao para
+  // todos'). Este arquivo roda ANTES do store — sem a checagem aqui, o valor antigo
+  // seria pintado na tela por um instante antes de ser descartado lá, e a pessoa veria
+  // a escala velha piscar. O valor tem que ser idêntico ao `_UI_SCALE_RESET`.
+  var RESET = '2026-08-10-base130';
   try {
+    if (localStorage.getItem('scoreplace_ui_scale_reset') !== RESET) {
+      localStorage.removeItem('scoreplace_ui_scale');   // o store grava o carimbo
+    }
     var raw = localStorage.getItem('scoreplace_ui_scale');
     if (raw != null) { var v = parseFloat(raw); if (!isNaN(v)) s = Math.max(MIN, Math.min(MAX, v)); }
   } catch (e) {}

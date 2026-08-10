@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.91';
+window.SCOREPLACE_VERSION = '1.7.92';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6057,11 +6057,52 @@ window._clampUiScale = function(v) {
   if (isNaN(v)) return window._UI_SCALE_BASE;
   return Math.max(window._UI_SCALE_MIN, Math.min(window._UI_SCALE_MAX, v));
 };
+// v1.7.91 — O NOVO 100% PASSA A VALER PRA TODO MUNDO, UMA VEZ.
+//
+// Ordem do dono: "coloque o novo 100% por padrao para todos. nao importa o que
+// escolheram antes."
+//
+// A escolha de escala vive em DOIS lugares — `scoreplace_ui_scale` (localStorage, por
+// aparelho) e `uiScale` no perfil (Firestore, sincronizado). Limpar só um deles não
+// adianta: o outro devolve o valor velho no próximo carregamento. Por isso o reset é
+// CARIMBADO: enquanto o carimbo salvo não for o atual, qualquer valor guardado é
+// DESCARTADO e vale a base. Depois de aplicado uma vez, o carimbo fica gravado e as
+// escolhas novas passam a ser respeitadas normalmente — não é um reset que se repete
+// a cada visita, é uma virada de régua.
+//
+// Trocar `_UI_SCALE_RESET` no futuro força outra virada. Enquanto o valor for o mesmo,
+// nada é apagado de novo.
+window._UI_SCALE_RESET = '2026-08-10-base130';
+window._uiScaleResetPendente = function () {
+  try { return localStorage.getItem('scoreplace_ui_scale_reset') !== window._UI_SCALE_RESET; }
+  catch (e) { return false; }   // sem localStorage não dá pra saber → não mexe em nada
+};
+window._uiScaleMarcarReset = function () {
+  try {
+    localStorage.setItem('scoreplace_ui_scale_reset', window._UI_SCALE_RESET);
+    localStorage.removeItem('scoreplace_ui_scale');
+  } catch (e) {}
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu) {
+    cu.uiScale = window._UI_SCALE_BASE;
+    // Grava a base no perfil TAMBÉM: sem isto o valor velho continua no Firestore e
+    // volta no próximo aparelho em que a pessoa entrar.
+    try {
+      var uid = cu.uid;
+      if (uid && window.FirestoreDB && typeof window.FirestoreDB.saveUserProfile === 'function') {
+        window.FirestoreDB.saveUserProfile(uid, { uiScale: window._UI_SCALE_BASE }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+};
 window._getUiScale = function() {
+  if (window._uiScaleResetPendente()) { window._uiScaleMarcarReset(); return window._UI_SCALE_BASE; }
   var cu = window.AppStore && window.AppStore.currentUser;
   if (cu && cu.uiScale != null) return window._clampUiScale(cu.uiScale);
   try { var raw = localStorage.getItem('scoreplace_ui_scale'); if (raw != null) return window._clampUiScale(raw); } catch (e) {}
-  return 1;
+  // v1.7.91: quem nunca escolheu recebe a BASE (o novo 100%), não 1 — devolver 1 dava
+  // a escala ANTIGA justamente a quem nunca mexeu, que é quem a virada quer alcançar.
+  return window._UI_SCALE_BASE;
 };
 // Aplica ao vivo (só o CSS var) — sem persistir. Pra preview do slider.
 window._applyUiScale = function(scale) {
@@ -7522,13 +7563,22 @@ window.AppStore = {
           }
         }
         // v2.1.91: sincroniza o tamanho da interface (--ui-scale) entre dispositivos
-        if (data.uiScale != null && typeof window._applyUiScale === 'function') {
+        // v1.7.91: este é o caminho que traz a escala do PERFIL (sincroniza entre
+        // aparelhos) — e é por aqui que o valor antigo voltaria depois do reset. Com o
+        // reset pendente, o que vem do Firestore é ignorado e vale a base.
+        if (data.uiScale != null && typeof window._applyUiScale === 'function'
+            && !(typeof window._uiScaleResetPendente === 'function' && window._uiScaleResetPendente())) {
           var _s = window._clampUiScale(data.uiScale);
           if (store.currentUser) store.currentUser.uiScale = _s;
           try { localStorage.setItem('scoreplace_ui_scale', String(_s)); } catch (e) {}
           window._applyUiScale(_s);
           var _sl = document.getElementById('profile-ui-scale');
-          if (_sl) { _sl.value = Math.round(_s * 100); var _lbl = document.getElementById('profile-ui-scale-val'); if (_lbl) _lbl.textContent = Math.round(_s * 100) + '%'; }
+          // v1.7.91: o slider fala em PERCENTUAL RELATIVO À BASE (o novo 100%). Era
+          // `_s * 100` — escala interna vezes 100 —, que mostrava 130% pra quem estava
+          // no padrão e 195% no teto. É a mesma confusão de unidades que produzia o
+          // "ora 130%, ora 169%"; aqui ela tinha sobrevivido.
+          var _pct = (typeof window._uiScaleToPct === 'function') ? window._uiScaleToPct(_s) : Math.round(_s * 100);
+          if (_sl) { _sl.value = _pct; var _lbl = document.getElementById('profile-ui-scale-val'); if (_lbl) _lbl.textContent = _pct + '%'; }
         }
         // Sync active casual room — navigate other devices to the same match
         // BUT only when the value transitioned (not on every unrelated save).
