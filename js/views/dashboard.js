@@ -2577,7 +2577,20 @@ function renderDashboard(container) {
     // `flex:1 1 92px` mantém 92px como base (mesma quantidade de pills por linha) e
     // deixa cada uma dividir a sobra — o texto passa a caber sem tocar na reticência,
     // que fica só como rede pra nome muito longo em escala muito grande.
-    return `<div style="flex:1 1 92px;min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
+    // v1.7.96 — TRÊS POR LINHA (3x3 com a linha social de baixo).
+    // Ordem do dono, com o print: "temos 4 box em cima e 2 embaixo. daria para fazer
+    // 3 em cima e 3 embaixo deixando 3x3 sem mexer no ultimo que tem tamanho
+    // diferente. com isso os 4 de cima teriam mais largura e poderiam caber melhor
+    // o texto." Com base 92px cabiam 4 por linha e os rótulos de uma palavra só
+    // ("Organizados", "Participando") batiam na reticência da v1.7.83 — havia
+    // largura disponível, só não estava sendo distribuída.
+    // A base passa a ser UM TERÇO da linha (o gap do container é 0.5rem, então 2
+    // gaps = 1rem). Continua FLEX de propósito, não grid: com 4 ou 5 filtros (a
+    // pill de Favoritos/Encerrados só existe com count > 0) a sobra da última linha
+    // fica CENTRALIZADA — que foi exatamente o motivo de a v0.17.50 ter saído do
+    // grid auto-fit, onde o item órfão colava à esquerda. `min-width:80px` segue
+    // como piso: em tela muito estreita o wrap cai pra 2 sozinho.
+    return `<div style="flex:1 1 calc((100% - 1rem) / 3);min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};${_corta}">${label}</h3>
