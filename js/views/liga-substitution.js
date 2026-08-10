@@ -1112,6 +1112,35 @@ window._ligaRevertWo = function (tId, roundIndex, groupName) {
 // True quando o grupo está aguardando aceite de convite (trava lançamento).
 window._ligaGroupPending = function (group) { return !!(group && group.subStatus === 'pending'); };
 
+// ── v1.7.92 · O BOTÃO DE DAR W.O. É UM SÓ, NO MESMO LUGAR, EM TODO ESTADO ──────
+// Ordem do dono, com o print do R1 Grupo A na mão: _"esse botao wo esta diferente de
+// todos os outros e em outra posicao. ele precisa estar na mesma posicao (com ou sem
+// wo aplicado no grupo)."_
+//
+// A 1.7.90 fez o certo (dar W.O. é sempre possível) mas montou o botão DUAS VEZES,
+// com aparências diferentes: no estado normal ele saía `btn-sm`/0.72rem (o padrão do
+// app), e nos estados COM W.O. saía `btn-micro`/0.66rem/`height:22px` — visivelmente
+// menor e mais achatado. E era ACRESCENTADO no fim do bloco, então com W.O. aplicado
+// ele pulava pra depois da pílula e do "Reverter".
+//
+// Agora existe UMA definição (mesma classe, mesmo tamanho, mesmo título) e ela entra
+// SEMPRE como PRIMEIRO elemento do bloco — que é onde o botão já ficava quando o grupo
+// não tinha W.O. nenhum. Assim ele não muda de tamanho nem de lugar quando alguém leva
+// W.O.: a pílula de status e o "Reverter" é que vêm depois dele.
+// Ver [[project_wo_button_standard]] e [[feedback_unify_dual_entry_points]] — duas
+// montagens do mesmo botão é exatamente o que faz uma delas divergir.
+function _woDeclareBtn(onclickJs, mostrar) {
+  if (!mostrar || typeof window._woBtnHtml !== 'function') return '';
+  return window._woBtnHtml(onclickJs, true, {
+    label: 'W.O.',
+    title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto (folga ou Jogador X).'
+  });
+}
+// Junta o botão de declarar (sempre primeiro) com o resto do bloco daquele estado.
+function _woBlocoComBotao(btn, resto) {
+  return btn ? (resto ? btn + ' ' + resto : btn) : resto;
+}
+
 // HTML dos controles de W.O./substituição no cabeçalho do grupo.
 window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (!t || !group) return '';
@@ -1142,11 +1171,9 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   // O botão passa a ser ACRESCENTADO a cada estado, em vez de ser alternativa a eles.
   // O "Reverter" de cada estado continua citando o NOME de quem levou aquele W.O.
   // (`group.woAbsent`) — é ele que fica vinculado à pessoa, como o dono pediu.
-  var _btnNovoWo = (manage && !gDone && typeof window._woBtnHtml === 'function')
-    ? ' ' + window._woBtnHtml("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", true,
-        { label: 'W.O.', size: 'btn-micro', fontSize: '0.66rem',
-          extraStyle: 'min-height:0;height:22px;line-height:1;' })
-    : '';
+  // v1.7.92: UMA definição só (era montado aqui em btn-micro e lá embaixo em btn-sm) e
+  // entra SEMPRE em primeiro, via `_woBlocoComBotao` — ver o comentário do helper.
+  var _btnNovoWo = _woDeclareBtn("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", manage && !gDone);
   // Estado: pendente de aceite
   if (group.subStatus === 'pending') {
     // multi-convite: lista TODOS os pendentes do grupo (1 → nome; 2+ → contagem).
@@ -1166,7 +1193,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
         && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
       if (!_woPlayedP) s += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
     }
-    return s + _btnNovoWo;   // v1.7.90: dar W.O. em OUTRA pessoa continua possível
+    return _woBlocoComBotao(_btnNovoWo, s);   // dar W.O. em OUTRA pessoa continua possível
   }
   // Estado: preenchido (W.O. ativo)
   if (group.subStatus === 'filled' && group.woAbsent) {
@@ -1176,11 +1203,11 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     var _woPlayed = (typeof window._matchHasRealPlay === 'function')
       && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
     if (manage && !_woPlayed) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
-    return s2 + _btnNovoWo;  // v1.7.90: idem — o Reverter é do W.O. desta pessoa
+    return _woBlocoComBotao(_btnNovoWo, s2);  // idem — o Reverter é do W.O. desta pessoa
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher
   if (group.woAbsent && (group.subStatus === 'open' || !group.subStatus) && manage) {
-    return '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>' + _btnNovoWo;
+    return _woBlocoComBotao(_btnNovoWo, '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>');
   }
   // Estado normal: oferece declarar ausência (só se grupo não terminou).
   // v3.1.72: torneio multi-dia + jogadores lançam resultado → usa o fluxo CANÔNICO
@@ -1193,8 +1220,9 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     if (manage) {
       // Label padrão "W.O." (cosmético — pedido do dono; era "⚠️ Faltou alguém?").
       // O fluxo continua o mesmo: folga assume a vaga ou Jogador X.
-      return window._woBtnHtml("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", true,
-        { label: 'W.O.', title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto.' });
+      // v1.7.92: MESMA definição dos estados com W.O. (`_btnNovoWo`) — era aqui que
+      // nascia a segunda versão do botão, e é o par delas que divergia em tamanho.
+      return _btnNovoWo;
     }
   }
   return '';
@@ -1383,6 +1411,12 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
   if (!(window._isLigaFormat && window._isLigaFormat(t)) || t.status === 'finished') return '';
   var manage = _monCanManage(t, gName, pIdx);
   var wm = _monWoMarker(t, gName, pIdx);
+  // v1.7.92 — MESMA REGRA do bloco da rota Liga (`_ligaGroupControlsHtml`): um botão só,
+  // sempre em PRIMEIRO, com ou sem W.O. aplicado. Aqui ele nem chegava a aparecer quando
+  // havia W.O. no grupo (a função retornava antes), o que é a mesma trava que a 1.7.90
+  // consertou do outro lado — dar W.O. em OUTRA pessoa tem que continuar possível.
+  var _btnNovoWo = _woDeclareBtn("window._monWoFlow('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')",
+    !groupDone && manage);
   if (wm) {
     var lbl = wm.woIsGuest ? (_safe(wm.woReplacedBy) + ' (Jogador X)') : _safe(wm.woReplacedBy);
     var s = '<span style="font-size:0.66rem;font-weight:700;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:2px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O. → ' + lbl + '</span>';
@@ -1390,13 +1424,9 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
     if (manage && !played && typeof window._woBtnHtml === 'function') {
       s += ' ' + window._woBtnHtml("window._monWoRevert('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')", false, { label: '↩️ Reverter W.O.', size: 'btn-sm' });
     }
-    return s;
+    return _woBlocoComBotao(_btnNovoWo, s);
   }
-  if (!groupDone && manage && typeof window._woBtnHtml === 'function') {
-    return window._woBtnHtml("window._monWoFlow('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')", true,
-      { label: 'W.O.', size: 'btn-sm', title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto (folga ou Jogador X).' });
-  }
-  return '';
+  return _btnNovoWo;
 };
 
 })();
