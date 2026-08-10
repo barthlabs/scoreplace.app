@@ -15,6 +15,7 @@
 // ABSOLUTO decidido uma vez, nunca um toggle sobre o estado fresco. [[project_concurrency_safe_saves]]
 const H = require('./render-harness');
 const W = H.sandbox;
+require('./headless').load('wo-core.js');        // v1.8.0: motor de W.O.
 require('./headless').load('participants.js');   // _applyCheckInToggle
 
 let pass = 0, fail = 0; const fails = [];

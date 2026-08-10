@@ -585,8 +585,17 @@ window.FirestoreDB = {
             });
           });
 
+          // ⚠️ v1.8.0 — CALCULADO AQUI, ANTES DE (b1). Estava lá embaixo, em (b2), e o guard
+          // de GRUPO que entrou nesta versão o lia ANTES de existir: `undefined` → o guard
+          // achava que NUNCA era o motor e restaurava grupo durante o re-sorteio. Mesma
+          // armadilha de zona morta que o `db` da CF deu hoje — a ordem é parte da regra.
+          var _vistos = {};
+          _varre(cleanData, function (m) { if (m && m.id != null) _vistos[String(m.id)] = 1; });
+          // o save TROUXE jogo que o banco não tem ⇒ é o motor reescrevendo a chave: sai de cena
+          var _motorReescrevendo = Object.keys(_vistos).some(function (id) { return !_idxAll[id]; });
+
           // (b1) rodada que sumiu — só quando o save NÃO zerou (zerar é reset declarado pela forma)
-          var _rodVolt = [];
+          var _rodVolt = [], _grpVolt = [];
           if (Array.isArray(cleanData.rounds) && Array.isArray(_bancoP.rounds) &&
               cleanData.rounds.length > 0 && cleanData.rounds.length < _bancoP.rounds.length) {
             var _temR = {};
@@ -603,11 +612,50 @@ window.FirestoreDB = {
             }
           }
 
+          // ── v1.8.0 · (b1½) O GRUPO QUE SUMIU ───────────────────────────────────────
+          // O guard cobria RODADA (b1) e JOGO (b2) e deixava o GRUPO de fora — a única
+          // menção a `monarchGroups` no arquivo era um comentário. MEDIDO no Confra: a
+          // formação por espera promove as 4 pessoas pro elenco e as tira da fila; um save
+          // atrasado devolvia `rounds` sem o grupo, e como `participants` NÃO encolhe
+          // (1.7.26) a promoção sobrevivia e o grupo não. Sobrava gente no elenco, fora de
+          // qualquer grupo, INVISÍVEL na rodada — foi o estado de M.Delia, Marcos e Debora.
+          // Metade da operação persistindo é pior que nenhuma: nenhum caminho do app produz
+          // esse estado, então nada o conserta sozinho.
+          // Mesma régua dos outros: o motor reescrevendo (`_motorReescrevendo`, id de jogo
+          // novo) sai de cena, e rodada zerada é reset declarado pela FORMA.
+          if (!_motorReescrevendo && Array.isArray(cleanData.rounds)) {
+            (Array.isArray(_bancoP.rounds) ? _bancoP.rounds : []).forEach(function (rb, ri) {
+              var gb = (rb && Array.isArray(rb.monarchGroups)) ? rb.monarchGroups : [];
+              if (!gb.length) return;
+              var rk = (rb.round != null ? rb.round : ri);
+              var rs = null;
+              for (var _i = 0; _i < cleanData.rounds.length; _i++) {
+                var _c = cleanData.rounds[_i];
+                if (!_c) continue;
+                if (_c.round != null ? _c.round === rk : _i === ri) { rs = _c; break; }
+              }
+              if (!rs) return;                       // a rodada inteira sumiu → (b1) cuida
+              if (!Array.isArray(rs.monarchGroups)) rs.monarchGroups = [];
+              var _tem = {};
+              rs.monarchGroups.forEach(function (g, gi) {
+                if (g) _tem[String(g.groupIdx != null ? g.groupIdx : gi)] = 1;
+              });
+              gb.forEach(function (g, gi) {
+                var k = String(g && g.groupIdx != null ? g.groupIdx : gi);
+                if (_tem[k]) return;
+                rs.monarchGroups.push(g);
+                _grpVolt.push(rk + '/' + k);
+              });
+            });
+          }
+
           // (b2) jogo que sumiu de uma rodada/grupo que sobreviveu
+          // ⚠️ `_vistos` recalculado AQUI, sobre o estado JÁ restaurado por (b1)/(b1½). Ele
+          // chegou a ser compartilhado com o cálculo de `_motorReescrevendo` lá em cima, e
+          // isso duplicava jogo: a rodada restaurada por (b1) traz os jogos dela, mas o
+          // conjunto antigo não os conhecia e (b2) os empurrava de novo.
           var _vistos = {};
           _varre(cleanData, function (m) { if (m && m.id != null) _vistos[String(m.id)] = 1; });
-          // o save TROUXE jogo que o banco não tem ⇒ é o motor reescrevendo a chave: sai de cena
-          var _motorReescrevendo = Object.keys(_vistos).some(function (id) { return !_idxAll[id]; });
           // v1.7.95 — O SAVE ESTÁ PROVADAMENTE ATRASADO? O contador de DOCUMENTO responde.
           // `rosterRev` sobe a cada troca de escalação ACEITA. Quem leu o doc DEPOIS do
           // W.O. carrega o valor atual; a cópia atrasada carrega um ANTERIOR (ou nenhum).
@@ -786,6 +834,35 @@ window.FirestoreDB = {
               });
             });
 
+            // ── v1.8.0 · REGISTRO DE "JÁ AVISEI" NÃO SOME ────────────────────────────
+            // Varredura do doc inteiro (ordem do dono: parar de achar buraco por incidente).
+            // `categoryNotifications` (LISTA, append-only — o app só faz `push`) e
+            // `remindersSent` (MAPA de janelas já disparadas, escrito pela CF de lembrete e
+            // lido pra dedup; NADA no app remove) são registros de que a pessoa JÁ foi
+            // avisada. Perdê-los não some com dado: **re-notifica todo mundo**. No doc real
+            // do Confra são 82 avisos de categoria sobre 133 pessoas — spam garantido.
+            // Mesma classe de `woClaims`/`polls`, e por isso entram no mesmo bloco.
+            {
+              var _cnB = _bancoP.categoryNotifications;
+              if (Array.isArray(_cnB) && _cnB.length) {
+                if (!Array.isArray(cleanData.categoryNotifications)) cleanData.categoryNotifications = [];
+                if (cleanData.categoryNotifications.length < _cnB.length) {
+                  var _falta = _cnB.length - cleanData.categoryNotifications.length;
+                  cleanData.categoryNotifications = _cnB.slice();  // sem id estável: o banco manda
+                  _apVolt.push('categoryNotifications/+' + _falta);
+                }
+              }
+              var _rsB = _bancoP.remindersSent;
+              if (_rsB && typeof _rsB === 'object' && !Array.isArray(_rsB)) {
+                if (!cleanData.remindersSent || typeof cleanData.remindersSent !== 'object' ||
+                    Array.isArray(cleanData.remindersSent)) cleanData.remindersSent = {};
+                Object.keys(_rsB).forEach(function (k) {
+                  if (cleanData.remindersSent[k] !== undefined) return;
+                  cleanData.remindersSent[k] = _rsB[k]; _apVolt.push('remindersSent/' + k);
+                });
+              }
+            }
+
             ['woClaims', 'polls'].forEach(function (campo) {
               var _b = _bancoP[campo];
               if (!Array.isArray(_b) || !_b.length) return;
@@ -806,19 +883,21 @@ window.FirestoreDB = {
             try { if (typeof window._captureException === 'function') window._captureException(new Error('waitlist/claims shrink blocked: ' + docId + ' (e=' + _espVolt.length + ' r=' + _apVolt.length + ')')); } catch (_se) {}
           }
 
-          if (_rodVolt.length || _jogoVolt.length || _aditRest.length) {
+          if (_rodVolt.length || _grpVolt.length || _jogoVolt.length || _aditRest.length) {
             if (window._warn) window._warn('[saveTournament] CHAVE PROTEGIDA em ' + docId + ': ' +
               (_rodVolt.length ? _rodVolt.length + ' rodada(s) ' : '') +
+              (_grpVolt.length ? _grpVolt.length + ' grupo(s) ' : '') +
               (_jogoVolt.length ? _jogoVolt.length + ' jogo(s) com valor ' : '') +
               (_aditRest.length ? _aditRest.length + ' campo(s) (grupo/horário) ' : '') +
               'sumiram do save e foram restaurados do banco.');
-            try { if (typeof window._captureException === 'function') window._captureException(new Error('bracket shrink blocked: ' + docId + ' (r=' + _rodVolt.length + ' m=' + _jogoVolt.length + ' f=' + _aditRest.length + ')')); } catch (_se) {}
+            try { if (typeof window._captureException === 'function') window._captureException(new Error('bracket shrink blocked: ' + docId + ' (r=' + _rodVolt.length + ' g=' + _grpVolt.length + ' m=' + _jogoVolt.length + ' f=' + _aditRest.length + ')')); } catch (_se) {}
           }
-          if (_rodVolt.length || _jogoVolt.length) {
+          if (_rodVolt.length || _grpVolt.length || _jogoVolt.length) {
             if (!Array.isArray(cleanData.history)) cleanData.history = Array.isArray(_bancoP.history) ? _bancoP.history.slice() : [];
             cleanData.history.push({ date: new Date().toISOString(),
-              message: 'Protecao automatica: um save chegou sem ' + _rodVolt.length + ' rodada(s) e ' +
-                _jogoVolt.length + ' jogo(s) que existem no banco e eles foram restaurados.' });
+              message: 'Protecao automatica: um save chegou sem ' + _rodVolt.length + ' rodada(s), ' +
+                _grpVolt.length + ' grupo(s) e ' + _jogoVolt.length +
+                ' jogo(s) que existem no banco e eles foram restaurados.' });
           }
         }
       } catch (_spErr) { /* o guard nunca derruba o save */ }

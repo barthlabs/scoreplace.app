@@ -557,6 +557,22 @@ exports.integrateLateEntries = onCall(async (request) => {
       }
       // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor.
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+      // ── v1.2.58 · SEM ISTO A FILA NUNCA FORMA GRUPO ────────────────────────────────
+      // `_preloadDrawNames` acima popula só o MAPA `_profByUid`; quem ESCREVE `gender` nas
+      // entradas é esta função — e ela faltava AQUI (as outras 5 chamadas do arquivo a
+      // fazem; esta era a única sem). Consequência medida no doc real do Confra: as
+      // entradas são strippadas desde a v1.3.52, no servidor `_genderForUid` é STUB que
+      // devolve '' e `_pGender(p)` lê `p.gender` — ou seja, sem enriquecer, TODO MUNDO da
+      // fila fica "sem gênero". E a regra da v1.7.16 ("sem gênero determinado NÃO entra em
+      // grupo", criada depois do R1 Grupo B2 fechar com 3 homens) então barra a fila
+      // inteira, em silêncio: `changed:false`, nenhum grupo, nenhum erro.
+      // PROVADO com o módulo real contra o doc real: sem enriquecer → 31 grupos, changed
+      // false; enriquecendo → 32 grupos (Marcos + M.Delia + Debora + Juliana) e Daniel
+      // segue na fila, que é exatamente o que o dono descreveu.
+      // ⚠️ O outro caminho que roda o mesmo motor (dentro do autoDraw) já enriquecia — por
+      // isso a formação "funcionava antes": ela acontecia por LÁ. Só que aquele bloco só
+      // visita torneio com `nextDrawAt`, e o Confra tem sorteio único já disparado.
+      _enrichParticipantsFromProfiles(t);
 
       const res = integrateLateFn(t, {});
       if (!res || !res.ok) {

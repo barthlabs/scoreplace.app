@@ -4839,7 +4839,21 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _ptsLbl = '<span style="font-size:0.7rem;font-weight:700;opacity:0.85;margin-left:4px;">+' + _pts + (_suAdv ? ' PA' : (' pt' + (_pts !== 1 ? 's' : ''))) + '</span>';
             // v0.17.29: destaque ciano + badge "VOCÊ" no pill do usuário
             // logado — leitura imediata de "estou de fora porque…"
-            var _isMe = _nameMatchesCurUser(m.p1);
+            // ── v1.8.0 · IDENTIDADE É O UID, TAMBÉM AQUI ────────────────────────────
+            // Ordem do dono: _"nada deve ser por nome, tudo por uid."_ O uid do slot já
+            // era lido logo abaixo, mas SÓ depois — então "sou eu?" e o clique da ficha
+            // caíam no NOME guardado no marcador, que ENVELHECE (quem troca o displayName
+            // vira outra pessoa pro chip) e não distingue homônimo. Subi a leitura do uid
+            // pra cá e ela passa a decidir os dois. Ver [[project_uid_identity_canon_locked]].
+            var _slotU = (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids));
+            var _nmPill = window._resolveSideLive(t, m.p1, _slotU);
+            var _uidPill = (Array.isArray(_slotU) ? _slotU[0] : _slotU) || m.p1Uid || '';
+            // Com uid, "sou eu" é comparação de uid e ponto. Sem uid (fictício — quem não
+            // tem conta) o nome é a ÚNICA identidade que existe, e aí o fallback é legítimo.
+            // Lê do AppStore (fonte canônica) e não da closure `_curUser`: este bloco é
+            // extraído por teste headless, onde aquela variável não existe.
+            var _meUidPill = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '';
+            var _isMe = _uidPill ? (!!_meUidPill && _uidPill === _meUidPill) : _nameMatchesCurUser(m.p1);
             var _bgPill = _isMe ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.06)';
             var _borderPill = _isMe ? 'rgba(34,211,238,0.55)' : border;
             var _colorPill = _isMe ? '#22d3ee' : color;
@@ -4851,14 +4865,19 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // escondia o box inteiro e não sobrava nada na tela.
             // `data-my-match="1"` de propósito: o toggle "Só meus jogos" filtra JOGOS; quem
             // está de fora não tem jogo e não pode sumir por causa dele.
-            var _slotU = (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids));
-            var _nmPill = window._resolveSideLive(t, m.p1, _slotU);
-            // v1.7.10: o UID do slot é a identidade do chip (ficha e 💬 saem daqui).
-            var _uidPill = (Array.isArray(_slotU) ? _slotU[0] : _slotU) || m.p1Uid || '';
-            // Autoridade clica no NOME (ficha); os demais mantêm o clique antigo no chip
-            // inteiro (estatísticas globais) — nada regride pra quem não é organizador.
+            // (v1.7.10: o UID do slot é a identidade do chip — ficha e 💬 saem daqui.
+            //  `_slotU`/`_nmPill`/`_uidPill` subiram pro bloco acima na v1.8.0, porque o
+            //  `_isMe` também precisa deles.)
+            // Autoridade clica no NOME (ficha); os demais mantêm o clique no chip inteiro.
+            // v1.8.0: quando há uid, abre a ficha POR UID (`_openPlayerProfile`, que prefere
+            // o uid e é o mesmo caminho da classificação desde a 1.6.98). O antigo
+            // `_showPlayerStats` casa por NOME e abriria a ficha errada pra homônimo — ou
+            // nenhuma, pra quem trocou de nome depois do sorteio. Sem uid (fictício), o
+            // nome segue sendo a única identidade possível.
             var _pillClick = _outIsAdmin ? '' :
-              (' onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + _outEsc(m.p1) + '\',\'' + _outTidJs + '\')"');
+              (_uidPill
+                ? (' onclick="if(window._openPlayerProfile)window._openPlayerProfile(\'' + _outEsc(_nmPill) + '\',{uid:\'' + _outEsc(_uidPill) + '\'})"')
+                : (' onclick="if(window._showPlayerStats)window._showPlayerStats(\'' + _outEsc(m.p1) + '\',\'' + _outTidJs + '\')"'));
             // data-players pelo nome VIVO (uid) — senão a busca acha pelo nome antigo.
             var _nmBusca = (_uidPill && typeof window._displayNameForUid === 'function')
               ? window._displayNameForUid(_uidPill, _nmPill) : _nmPill;

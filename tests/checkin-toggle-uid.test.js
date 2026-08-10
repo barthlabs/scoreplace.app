@@ -14,6 +14,8 @@ const { sandbox } = require('./render-harness');
 
 // participants.js define _toggleCheckIn/_applyCheckInToggle/_applyWoSubsToTournament — não é
 // carregado pela render-harness (que traz store/tournaments/bracket/identity-core). Carrega por cima.
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'wo-core.js'), 'utf8'),
+  sandbox, { filename: 'wo-core.js' });   // v1.8.0: o motor de W.O. saiu da view
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'participants.js'), 'utf8'),
   sandbox, { filename: 'participants.js' });
 const W = sandbox;

@@ -316,6 +316,8 @@ const SUITES = [
   // VOLTOU NO TEMPO (mesmos jogos, conteúdo antigo — a substituição desfeita sozinha).
   // Roda as DUAS portas de escrita juntas, que é onde o buraco estava. v1.7.91.
   'tests/save-atrasado-nao-desfaz-troca.test.js',
+  // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.
+  'tests/save-atrasado-nao-apaga-grupo.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',

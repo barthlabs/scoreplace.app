@@ -64,7 +64,7 @@ sandbox._woCloseOverlay = () => {};
 
 vm.createContext(sandbox);
 const ROOT = path.join(__dirname, '..');
-['js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/participants.js', 'js/views/wo-claim.js']
+['js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/wo-core.js', 'js/views/participants.js', 'js/views/wo-claim.js']
   .forEach((rel) => vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sandbox, { filename: rel }));
 const W = sandbox;
 

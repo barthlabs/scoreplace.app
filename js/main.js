@@ -114,7 +114,7 @@ function setupHelpModal() {
           '<p>🏆 <b>Torneios</b> — Crie, organize, participe. Eliminatórias, Dupla Elim., Grupos + Elim., Liga, Rei/Rainha. Check-in, sorteio, resultados ao vivo.</p>' +
           '<p>⚡ <b>Partida Casual</b> — Partidas avulsas sem criar torneio. Placar ao vivo em tela cheia, sincronizado entre jogadores via código de sala/QR. Estatísticas detalhadas no perfil.</p>' +
           '<p>📍 <b>Presença</b> — "Status online" pra quadras e clubes. Check-in imediato ou ida planejada; amigos veem no dashboard e podem se juntar.</p>' +
-          '<p>🏢 <b>Locais</b> — Descubra clubes e arenas na sua cidade ou em viagens. Mapa com pins, filtros, reviews, integração com torneios e presença. <i>(Presença + Locais ficam unificados na tela "📍 Place".)</i></p>' +
+          '<p>🏢 <b>Locais</b> — Descubra clubes e arenas na sua cidade ou em viagens. Mapa com pins, filtros, reviews, integração com torneios e presença. <i>(Presença + Locais ficam unificados na tela "📍 Presença".)</i></p>' +
           '<p>📊 <b>Stats/Perfil</b> — Estatísticas detalhadas: vitórias, derrotas, sets, games, pontos, tiebreaks. Confrontos diretos (H2H), top adversários, top parceiros. Sobrevive à exclusão de torneio/partida casual.</p>' +
           '<p style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Os 5 pilares se conectam: criar torneio num local visto em Place prefilla o venue; ver presenças lista torneios agendados no mesmo lugar; stats acumulam de qualquer fonte (casual ou torneio).</p>' +
         '</div>' +
@@ -166,7 +166,7 @@ function setupHelpModal() {
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Hero e Ações Rápidas</div>' +
           '<p><b>Welcome para usuário novo</b> — Sem nenhum torneio criado ou disponível, você vê um card de boas-vindas com 4 CTAs coloridos: 🏆 Criar torneio, 🏢 Descobrir locais, 📍 Registrar presença, 👥 Encontrar amigos. Some assim que existir qualquer torneio visível pra você.</p>' +
-          '<p><b>Barra de ações (linha 1)</b> — ⚡ <b>Partida Casual</b> (placar ao vivo sem criar torneio), 🏆 <b>Novo Torneio</b>, 📍 <b>Place</b> (descobre locais, faz check-in, planeja ida). <b>Linha 2:</b> 👥 <b>Pessoas</b> (explorar jogadores, amigos, torneios da comunidade), <b>Convidar</b> (QR Code do app), <b>Pro</b>, <b>Apoie</b>.</p>' +
+          '<p><b>Barra de ações (linha 1)</b> — ⚡ <b>Partida Casual</b> (placar ao vivo sem criar torneio), 🏆 <b>Novo Torneio</b>, 📍 <b>Presença</b> (descobre locais, faz check-in, planeja ida). <b>Linha 2:</b> 👥 <b>Pessoas</b> (explorar jogadores, amigos, torneios da comunidade), <b>Convidar</b> (QR Code do app), <b>Pro</b>, <b>Apoie</b>.</p>' +
           '<p><b>Contadores de resumo</b> — Todos, Organizados, Participando, <b>Inscrições Abertas</b>, Favoritos, Encerrados. Clique para filtrar.</p>' +
           '<p><b>"Inscrições Abertas"</b> — União dos <i>seus</i> torneios com inscrição aberta + torneios públicos do feed de descoberta que você ainda não entrou. Clicar "Inscrever-se" num card de descoberta aqui mesmo inscreve em 1 clique (sem precisar abrir a página do torneio).</p>' +
           '<p><b>Filtros secundários</b> — Pills coloridas por modalidade (roxo), local (verde), formato (amarelo). "✕ Limpar filtros" reseta.</p>' +
@@ -357,7 +357,7 @@ function setupHelpModal() {
           '<p><b>Cidade e localização</b> — Busca automática no mapa. Botão 📍 usa GPS.</p>' +
           '<p><b>Esportes preferidos</b> — <b>Pills toggleáveis</b> com 9 modalidades (Beach Tennis, Pickleball, Tênis, Tênis de Mesa, Padel, Squash, Badminton, Vôlei de Praia, Futevôlei). Marcar seu(s) esporte(s) tem efeito em várias partes do app:<br>' +
             '&nbsp;&nbsp;• <b>Feed de torneios</b> — a dashboard só exibe torneios do(s) esporte(s) marcado(s). Sem esporte marcado, mostra tudo.<br>' +
-            '&nbsp;&nbsp;• <b>📍 Place (locais)</b> — filtro de modalidade pré-aplicado; só aparecem venues que oferecem o esporte.<br>' +
+            '&nbsp;&nbsp;• <b>📍 Presença (locais)</b> — filtro de modalidade pré-aplicado; só aparecem venues que oferecem o esporte.<br>' +
             '&nbsp;&nbsp;• <b>Check-in e Planejar ida</b> — as pills de modalidade já vêm pré-selecionadas com o(s) seu(s) esporte(s); não precisa escolher toda vez.<br>' +
             '&nbsp;&nbsp;• <b>Nível por esporte (skillBySport)</b> — ao marcar uma modalidade, aparecem 5 mini-pills de habilidade (A / B / C / D / FUN) específicas para ela. Você pode ser nível A em Beach Tennis e C em Tênis ao mesmo tempo; o app usa o nível correto ao inscrevê-lo em torneios com categorias.<br>' +
             '&nbsp;&nbsp;• <b>👥 Pessoas</b> — matching com jogadores que praticam os mesmos esportes; aparece como subtítulo nos cards.<br>' +
@@ -1121,7 +1121,7 @@ function setupHelpModal() {
             '• <b>Meus locais</b> — Check-in em 1 tap nos venues preferidos<br>' +
             '• <b>Amigos no local</b> — Até 6 amigos com presença ativa hoje<br>' +
             '• <b>Complete seu perfil</b> — Nudge quando faltam campos-chave<br>' +
-            '• <b>📍 Place (hero)</b> — Botão para descobrir locais e registrar presença<br>' +
+            '• <b>📍 Presença (hero)</b> — Botão para descobrir locais e registrar presença<br>' +
             '• <b>👥 Pessoas (hero)</b> — Botão para explorar jogadores e torneios da comunidade<br>' +
             '• <b>⚡ Partida Casual (hero)</b> — Criar sala de placar ao vivo' +
           '</p>' +
