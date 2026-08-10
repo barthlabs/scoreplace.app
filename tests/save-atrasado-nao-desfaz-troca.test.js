@@ -244,6 +244,88 @@ const achatar = (t) => {
   ok(db._banco().venue === 'Quadra 3', 'e a mudança real daquele save é gravada normalmente');
 }
 
+// ── (6) AS QUATRO ESTRUTURAS DO W.O., NÃO SÓ A ESCALAÇÃO ─────────────────────
+// A pessoa num grupo Rei/Rainha vive em QUATRO lugares. A 1.7.91 protegeu os dois
+// primeiros (slot do jogo, elenco do grupo) e deixou de fora os dois que REGISTRAM
+// a falta: as MARCAS (`woAbsent`/`subName`/`subStatus`) e a FOLGA de 0 pts — e é a
+// folga que a lista "⚠️ W.O. (N)" lê (`sitOutReason==='wo'`). Um save atrasado
+// apagava os dois: a escalação ficava certa e o W.O. sumia do registro.
+{
+  const db = mkDb(torneioComGrupo('Denise', 'u-denise'));
+  DB.db = db;
+  const copiaVelha = JSON.parse(JSON.stringify(db._banco()));   // lida ANTES do W.O.
+
+  await DB.mutateTournament('T-confra', function (t) {
+    const g = t.rounds[0].monarchGroups[0];
+    g.players = ['Ana', 'Bia', 'Cid', 'Carol'];
+    g.playersUids = ['u-ana', 'u-bia', 'u-cid', 'u-carol'];
+    g.woAbsent = 'Denise'; g.woAbsentUid = 'u-denise';
+    g.subName = 'Carol'; g.subUid = 'u-carol'; g.subStatus = 'filled';
+    t.rounds[0].matches.forEach(function (m) {
+      ['p1', 'p2'].forEach(k => { if (typeof m[k] === 'string') m[k] = m[k].replace('Denise', 'Carol'); });
+      ['team1Uids', 'team2Uids'].forEach(k => {
+        if (Array.isArray(m[k])) m[k] = m[k].map(u => u === 'u-denise' ? 'u-carol' : u);
+      });
+    });
+    t.rounds[0].matches.push({ id: 'wo1', isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0,
+                               p1: 'Denise', p2: 'W.O.', label: 'R1 • W.O.' });
+  });
+
+  await DB.saveTournament(copiaVelha);
+
+  const g = db._banco().rounds[0].monarchGroups[0];
+  const folga = db._banco().rounds[0].matches.filter(m => m.sitOutReason === 'wo')[0];
+  ok(g.woAbsent === 'Denise' && g.subName === 'Carol' && g.subStatus === 'filled',
+     'MARCAS do W.O. sobrevivem ao save atrasado (o registro da falta não se apaga)');
+  ok(!!folga && folga.sitOutPoints === 0,
+     'FOLGA de W.O. sobrevive — é ela que a lista "⚠️ W.O. (N)" lê e que carrega os 0 pts');
+}
+
+// ── (7) REVERTER W.O. DE PROPÓSITO CONTINUA FUNCIONANDO ──────────────────────
+// Sem esta, o guard viraria uma prisão: quem reverte lê o doc FRESCO (carrega o
+// `rosterRev` atual), então a remoção dele é legítima e passa.
+{
+  const db = mkDb(torneioComGrupo('Denise', 'u-denise'));
+  DB.db = db;
+  await DB.mutateTournament('T-confra', function (t) {
+    const g = t.rounds[0].monarchGroups[0];
+    g.woAbsent = 'Denise'; g.subName = 'Carol'; g.subStatus = 'filled';
+    g.players = ['Ana', 'Bia', 'Cid', 'Carol'];
+    g.playersUids = ['u-ana', 'u-bia', 'u-cid', 'u-carol'];
+    t.rounds[0].matches.push({ id: 'wo1', isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0, p1: 'Denise', p2: 'W.O.' });
+  });
+
+  const fresco = JSON.parse(JSON.stringify(db._banco()));       // leu DEPOIS do W.O.
+  const gf = fresco.rounds[0].monarchGroups[0];
+  delete gf.woAbsent; delete gf.subName; delete gf.subStatus;
+  gf.players = ['Ana', 'Bia', 'Cid', 'Denise'];
+  gf.playersUids = ['u-ana', 'u-bia', 'u-cid', 'u-denise'];
+  fresco.rounds[0].matches = fresco.rounds[0].matches.filter(m => m.sitOutReason !== 'wo');
+  await DB.saveTournament(fresco);
+
+  const g2 = db._banco().rounds[0].monarchGroups[0];
+  ok(!g2.woAbsent && !g2.subName, 'reverter W.O. limpa as marcas — o guard não prende');
+  ok(!db._banco().rounds[0].matches.some(m => m.sitOutReason === 'wo'), 'reverter remove a folga de verdade');
+  ok(g2.playersUids.includes('u-denise'), 'e devolve a pessoa ao grupo');
+}
+
+// ── (8) FOLGA COMUM NÃO É REGISTRO DE FALTA — segue podendo sumir ────────────
+// `_removeSitOut`/`_isRem` apagam marcador de folga o tempo todo; ressuscitá-los
+// quebraria o W.O. e a formação de grupo. Só a folga `'wo'` é protegida.
+{
+  const banco = torneioComGrupo('Denise', 'u-denise');
+  banco.rosterRev = 3;
+  banco.rounds[0].matches.push({ id: 'si1', isSitOut: true, sitOutReason: 'inactive', p1: 'Zeca' });
+  const db = mkDb(banco);
+  DB.db = db;
+  const save = JSON.parse(JSON.stringify(banco));
+  save.rounds[0].matches = save.rounds[0].matches.filter(m => m.id !== 'si1');
+  delete save.rosterRev;                                        // save velho, sem contador
+  await DB.saveTournament(save);
+  ok(!db._banco().rounds[0].matches.some(m => m.id === 'si1'),
+     'folga de INATIVO pode sumir mesmo em save atrasado (não é registro de falta)');
+}
+
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 if (fail) process.exit(1);
 })();

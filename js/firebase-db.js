@@ -106,9 +106,16 @@ window.FirestoreDB = {
   // carimbo, e a cópia velha que chegasse depois era lida como "primeira troca da vida"
   // e ACEITA. Ver [[project_roster_guard_single_rule]]: dois caminhos guardando o mesmo
   // invariante com regras diferentes é o próprio bug, e já custou dois incidentes.
+  // ⚠️ As MARCAS do W.O. entram na assinatura do GRUPO (v1.7.95). Uma pessoa num grupo
+  // Rei/Rainha vive em QUATRO estruturas e o W.O. é a 3ª: sem ela aqui, um save atrasado
+  // apagava `woAbsent`/`subName`/`subStatus` — ou seja, desfazia o REGISTRO da falta
+  // mesmo com a escalação já protegida, e a tela voltava a dizer que ninguém faltou.
+  // Elas mudam junto com a escalação e pelos mesmos atos, então pertencem ao mesmo
+  // carimbo: quem aplica ou reverte o W.O. carimba; quem chegou atrasado perde.
   _ROSTER_KEYS: {
     match: ['p1', 'p2', 'team1', 'team2', 'team1Uids', 'team2Uids', 'p1Uid', 'p2Uid'],
-    group: ['players', 'playersUids']
+    group: ['players', 'playersUids',
+            'woAbsent', 'woAbsentUid', 'subName', 'subUid', 'subStatus']
   },
 
   // Varre TODA unidade que carrega escalação, com uma CHAVE ESTÁVEL.
@@ -601,11 +608,27 @@ window.FirestoreDB = {
           _varre(cleanData, function (m) { if (m && m.id != null) _vistos[String(m.id)] = 1; });
           // o save TROUXE jogo que o banco não tem ⇒ é o motor reescrevendo a chave: sai de cena
           var _motorReescrevendo = Object.keys(_vistos).some(function (id) { return !_idxAll[id]; });
+          // v1.7.95 — O SAVE ESTÁ PROVADAMENTE ATRASADO? O contador de DOCUMENTO responde.
+          // `rosterRev` sobe a cada troca de escalação ACEITA. Quem leu o doc DEPOIS do
+          // W.O. carrega o valor atual; a cópia atrasada carrega um ANTERIOR (ou nenhum).
+          // Lido AQUI, antes do bloco de carimbo lá embaixo reescrever `cleanData.rosterRev`.
+          var _revBanco = (typeof _bancoP.rosterRev === 'number') ? _bancoP.rosterRev : null;
+          var _revSave  = (typeof cleanData.rosterRev === 'number') ? cleanData.rosterRev : null;
+          var _saveAtrasadoPorRev = (_revBanco != null && (_revSave == null || _revSave < _revBanco));
+
           var _jogoVolt = [];
           if (!_motorReescrevendo) Object.keys(_idxAll).forEach(function (id) {
             if (_vistos[id]) return;
             var b = _idxAll[id];
-            if (b && b.isSitOut) return;                     // marcador de folga/W.O.: pode sumir
+            // A FOLGA é a 4ª estrutura do W.O. — e é ELA que a lista "⚠️ W.O. (N)" lê
+            // (`sitOutReason==='wo'`), além de carregar os 0 pts da rodada. Deixá-la sumir
+            // SEMPRE apagava a penalidade num save atrasado. Mas ela também some
+            // LEGITIMAMENTE quando alguém reverte o W.O. — é por isso que a exceção existe.
+            // O que separa os dois é o contador acima: só volta quando o save é provadamente
+            // de antes da última troca aceita. Folga comum (inativo/remainder) segue livre.
+            if (b && b.isSitOut) {
+              if (b.sitOutReason !== 'wo' || !_saveAtrasadoPorRev) return;
+            }
             var onde = _ondeMora[id] || {};
             var alvo = null;
             if (onde.tipo === 'matches') {
