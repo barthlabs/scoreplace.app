@@ -470,6 +470,9 @@ const SUITES = [
   // a mesma pessoa como "Fabi2401@" na classificação e "Dani Bataglia" nos jogos.
   'tests/nome-vem-do-perfil-nao-do-sorteio.test.js',
   'functions/test-merge-collections-core.js',
+  // O espelho do roster saiu do cliente (onde nunca funcionou — sem regra, sempre negado)
+  // e virou responsabilidade do gatilho `syncMatchRosters`. v1.7.99.
+  'functions/test-roster-mirror-core.js',
   // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
   // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,
   // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.

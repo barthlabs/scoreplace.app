@@ -40,6 +40,7 @@ const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
 const _rosterWatch = require("./roster-watch-core");
+const _rosterMirror = require("./roster-mirror-core");
 const _delGuard = require("./delete-account-guard-core");
 const _renameProp = require("./rename-propagate-core");
 const fetch = require("node-fetch");
@@ -6210,6 +6211,41 @@ exports.syncMatchRosters = onDocumentWritten(
           JSON.stringify(_rw.suspeitos.slice(0, 5)));
       }
     } catch (_rwErr) { /* o vigia NUNCA derruba o gatilho */ }
+
+    // ── v1.7.99 · ESPELHO DO ROSTER — AGORA AQUI, E SÓ AQUI ────────────────
+    // `tournaments/{id}/participants/{uid}` é a REDE contra perda de inscrito (Gersom,
+    // 1.7.29). Ele vivia no CLIENTE e MEDIDO em 10/ago: **não existe regra pra essa
+    // subcoleção**, então toda escrita de cliente voltava `permission-denied` — a rede
+    // nunca existiu de fato. Cânone do dono: tudo roda na CF, o cliente só dispara.
+    //
+    // Aqui é o lugar CERTO, e não só o permitido: este gatilho vê TODA escrita, de
+    // QUALQUER cliente — inclusive o app NATIVO antigo, que não tem auto-update e nunca
+    // vai chamar CF nenhuma. Ele cobre o que a `enrollParticipant` não cobre: os
+    // MOVIMENTOS (W.O., promoção da fila, saída) e a inscrição que cai no fallback do
+    // cliente quando a CF falha.
+    //
+    // Roda ANTES do early-return de baixo (que só olha mudança de JOGO): mudança de
+    // roster frequentemente não mexe em jogo nenhum, e sair antes cegaria a rede
+    // justamente nos eventos que ela existe pra registrar.
+    // Best-effort e isolado: falhar aqui não pode derrubar o gatilho nem o save que já
+    // aconteceu — o array no doc do torneio segue sendo a fonte da verdade.
+    try {
+      const _plano = _rosterMirror.planRosterMirror(before, after);
+      if (_plano.total) {
+        // ⚠️ handle PRÓPRIO, não o `db` da função: ele é `const` declarado MAIS ABAIXO,
+        // e `const` fica em zona morta temporal até a linha dele — usá-lo aqui estoura
+        // com "Cannot access 'db' before initialization". Foi exatamente o que o log da
+        // 1ª tentativa acusou; o `catch` conteve, mas o espelho não escrevia nada.
+        const _db = admin.firestore();
+        const _col = _db.collection("tournaments").doc(tid).collection("participants");
+        await Promise.all(_plano.writes.map((w) =>
+          _col.doc(w.uid).set(w.doc, { merge: true })
+            .catch((e) => console.error("[espelho-roster] " + tid + "/" + w.uid + ": " + (e && e.message)))));
+        console.log("[espelho-roster] " + tid + " · " + _plano.total + " doc(s) atualizados");
+      }
+    } catch (_rmErr) {
+      console.error("[espelho-roster] " + tid + " falhou:", _rmErr && _rmErr.message);
+    }
 
     // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
     const beforeSig = {};
