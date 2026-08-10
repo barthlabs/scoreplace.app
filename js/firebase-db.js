@@ -881,155 +881,33 @@ window.FirestoreDB = {
       }
     } catch (_cfgErr) { /* blindagem best-effort; nunca derruba o save */ }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
-    // v1.7.29 — ESCRITA DUPLA na subcoleção `tournaments/{id}/participants/{uid}`.
-    // PASSO 1 de expandir→migrar→contrair. O array segue sendo a FONTE DA VERDADE e
-    // NENHUMA tela lê isto ainda — por isso é seguro no meio de um torneio sorteado.
-    // O que ganha desde já: cada pessoa passa a ter um documento PRÓPRIO, sem contenção
-    // com o resto do torneio, servindo de PROVA e de fonte de recuperação. Reconstruir o
-    // sumiço do Gersom custou uma tarde porque essa prova não existia.
-    // Best-effort e fora do caminho crítico: falhar aqui não pode derrubar o save do
-    // torneio, que é o que a pessoa está esperando na tela.
-    try { this._mirrorRoster(docId, cleanData); } catch (_mrErr) {}
+    // v1.7.98: aqui havia a escrita dupla no espelho (`_mirrorRoster`). Saiu — o cliente
+    // NÃO tem permissão nessa subcoleção e nunca teve; quem espelha é a CF. Ver a nota
+    // longa onde a função morava.
   },
 
-  // Espelha o roster na subcoleção — só o DELTA. Escrever os 119 a cada save seria 119
-  // escritas por clique e derrubaria a quota; e o delta é o que interessa mesmo: quem
-  // entrou, quem mudou de lugar e quem saiu. `_rosterMirrorCache` guarda o último estado
-  // espelhado por torneio, então saves que não mexem no roster não geram escrita nenhuma.
+  // ── ESPELHO DO ROSTER: SAIU DO CLIENTE, VIVE NA CF (v1.7.98) ───────────────────────
+  // Aqui morava `_mirrorRoster` (~100 linhas) + `_rosterMirrorCache`, que espelhavam o
+  // roster em `tournaments/{id}/participants/{uid}` a cada save.
   //
-  // ── DOIS BURACOS QUE FAZIAM A REDE DE SEGURANÇA NÃO PEGAR NINGUÉM (v1.7.56) ────────
-  // MEDIDO na produção (Confra, 06/ago/2026): a subcoleção tinha 119 docs e **as três
-  // inscrições do dia não estavam lá** — inclusive a da Vanessa, que deu certo. Os únicos
-  // docs de gente na fila eram do backfill de 04/ago.
+  // MEDIDO: **não existe regra nenhuma pra essa subcoleção** no `firestore.rules`
+  // (`grep -c 'match /participants'` = 0 — há `results` e `letzplayScans`, essa não), e o
+  // Firestore NEGA por omissão. Ou seja o espelho **nunca funcionou a partir do cliente**,
+  // desde que nasceu na 1.7.29: toda escrita voltava `permission-denied`. Os docs que
+  // existem no banco vieram da **CF** (Admin SDK, que passa por cima das regras) e dos
+  // backfills manuais. Pior: como o `try/catch` não pega rejeição de promessa, cada
+  // tentativa virava *unhandled rejection* — era a issue nº1 do Sentry (57 eventos / 24
+  // usuários), que a 1.7.97 calou pondo `.catch()` num código que já era morto.
   //
-  // (1) A ESPERA NÃO ERA ESPELHADA. Esta função só olhava `data.participants` — e quem
-  //     está na lista de espera NÃO está lá (vive em standbyParticipants / waitlist /
-  //     monarchWaitlist). Ou seja: a rede contra perda de inscrito ignorava exatamente
-  //     quem é mais frágil — o inscrito tardio. Foi um desses que sumiu no incidente do
-  //     Gersom, e foi a Dėbora Castello que sumiu agora.
-  // (2) A 1ª GRAVAÇÃO DA SESSÃO NÃO ESCREVIA NADA. O `if (!antes) return` existia pra não
-  //     despejar o roster inteiro ao abrir o app — mas **a inscrição da própria pessoa é,
-  //     quase sempre, o primeiro save da sessão dela**. A rede nunca via o evento que mais
-  //     importa. Agora a primeira gravação espelha **o próprio usuário logado** (1 escrita,
-  //     não 119) — que é justamente o caso que o espelho existe pra salvar.
+  // ⚠️ NÃO abrir a regra pra ressuscitar isto. Cânone do dono: **tudo roda na CF, o
+  // cliente apenas DISPARA** ([[feedback_draw_is_cf_only]], [[project_canon_runs_on_server]]).
+  // Quem espelha é `enrollParticipant` (functions/index.js), no MESMO ponto em que grava a
+  // inscrição — que é o evento pelo qual a rede foi criada (o sumiço do Gersom).
   //
-  // O cache guarda o STATUS, não só a presença: mover-se de `waitlisted` pra `enrolled`
-  // (ou o contrário, no W.O.) é mudança que tem que ser registrada. Com um booleano, quem
-  // saiu da fila e entrou no elenco não gerava escrita nenhuma.
-  // ── ESPELHA TUDO (v1.7.57) ──────────────────────────────────────────────────────────
-  // Ordem do dono: _"tem que espelhar tudo. participante, lista de espera, desativado,
-  // wo. tudo."_ Espelhar só metade dos estados é ter uma rede que responde "não sei"
-  // justamente nos casos em que alguém some — e é sempre de um estado de BORDA que a
-  // pessoa desaparece, nunca do elenco ativo.
-  //
-  // `status` = enrolled | waitlisted | inactive | left  ·  `wo` = true/false
-  //
-  // W.O. é MARCA SEPARADA, não um 5º status, pelo mesmo motivo do card do usuário
-  // (v1.7.55): quem leva W.O. termina desativado OU na fila — a escolha do organizador
-  // (v1.6.90). Enfiar "wo" no status apagaria em qual dos dois a pessoa está, que é a
-  // única informação acionável. Com os dois campos, `wo:true + status:'waitlisted'` e
-  // `wo:true + status:'inactive'` são estados distintos e legíveis.
-  _rosterMirrorCache: {},
-  _mirrorRoster(docId, data) {
-    if (!this.db || !data) return;
-    var uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
-      ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
-    var agora = {}, entradaDe = {}, woDe = {};
-    // Precedência: elenco > fila. Quem aparece nos dois (resíduo) conta como inscrito.
-    var PESO = { enrolled: 3, inactive: 3, waitlisted: 1 };
-    function marca(u, status, p) {
-      if (!u) return;
-      if (agora[u] && PESO[agora[u]] >= PESO[status]) return;
-      agora[u] = status; if (p) entradaDe[u] = p;
-    }
-    function coleta(lista, status) {
-      (Array.isArray(lista) ? lista : []).forEach(function (p) {
-        if (!p || typeof p !== 'object') return;
-        // DESATIVADO é estado próprio: a pessoa está inscrita mas fora dos sorteios.
-        // Sem isto, "sumiu" e "está desativada" ficavam indistinguíveis no espelho.
-        var st = (status === 'enrolled' && p.ligaActive === false) ? 'inactive' : status;
-        uidsOf(p).forEach(function (u) { marca(u, st, p); });
-      });
-    }
-    coleta(data.participants, 'enrolled');
-    coleta(data.standbyParticipants, 'waitlisted');
-    coleta(data.waitlist, 'waitlisted');
-    // ⚠️ `monarchWaitlist` (3º storage da espera) NÃO é lido aqui de propósito: é MAPA
-    // categoria→NOMES, e IDENTIDADE É O UID, SEMPRE. Resolver nome→uid pra espelhar
-    // colocaria o nome de volta no meio da identidade — é o hack que o uid veio matar
-    // (homônimo, nome trocado, entrada strippada). E não se perde ninguém: esse mapa é
-    // espelho POR NOME de quem já está em standbyParticipants/waitlist com uid, e é de
-    // lá que essas pessoas são coletadas acima. Quem só existe no mapa e não tem uid é
-    // fictício — não tem conta, logo não tem doc de espelho pra ter.
-    // Ver [[project_uid_identity_canon_locked]] / [[feedback_uid_controls_everything_name_only_ficticio]].
-    //
-    // W.O. DECRETADO na rodada corrente — o marcador é a partida `isSitOut` com
-    // `sitOutReason:'wo'` (_addWoMarker), e o uid vem DO SLOT. Sem uid no slot não há
-    // W.O. a espelhar: ou é fictício, ou é doc velho — e em nenhum dos dois o nome
-    // decide quem é a pessoa.
-    var _rs = Array.isArray(data.rounds) ? data.rounds : [];
-    var _ult = _rs.length ? _rs[_rs.length - 1] : null;
-    ((_ult && _ult.matches) || []).forEach(function (m) {
-      if (!m || !m.isSitOut || m.sitOutReason !== 'wo') return;
-      [].concat(m.team1Uids || [], m.p1Uid || []).forEach(function (u) { if (u) woDe[u] = true; });
-    });
-    if (!Object.keys(agora).length) return;
-
-    // A chave do cache carrega status + W.O.: sem isso, decretar W.O. em quem continua
-    // no mesmo lugar não geraria escrita nenhuma e o espelho ficaria desatualizado.
-    var chave = function (u) { return agora[u] + (woDe[u] ? '|wo' : ''); };
-    var antes = this._rosterMirrorCache[docId] || null;
-    var cacheNovo = {};
-    Object.keys(agora).forEach(function (u) { cacheNovo[u] = chave(u); });
-    this._rosterMirrorCache[docId] = cacheNovo;
-
-    var col = this.db.collection('tournaments').doc(docId).collection('participants');
-    // ⚠️ v1.7.97 — `.set()` DEVOLVE PROMESSA: o `try/catch` que estava aqui só pegava throw
-    // SÍNCRONO, e a REJEIÇÃO escapava como **unhandled rejection**. Era isso que alimentava
-    // a issue `FirebaseError: Missing or insufficient permissions` do Sentry
-    // (`mechanism: onunhandledrejection`, stack no webchannel, 57 eventos / 24 usuários) —
-    // e é por isso que ela não fechou com o fix das regras de `statsVisibility` (1.7.51/52):
-    // aquilo era `users/{uid}/matchHistory`, outra coleção. A issue agrupa por assinatura de
-    // stack, e como o stack é todo interno do SDK, QUALQUER escrita negada cai no mesmo balde.
-    //
-    // O espelho é BEST-EFFORT de propósito (a verdade é o array no doc do torneio), então
-    // engolir está certo — o que não podia era engolir SEM tratar. Vai por `_warn` e NÃO por
-    // `_captureException`: negação aqui é esperada e reportá-la só recria o ruído.
-    var _semRuido = function (p) {
-      if (p && typeof p.catch === 'function') {
-        p.catch(function (e) {
-          if (window._warn) window._warn('[mirrorRoster] espelho não gravou (best-effort): ' +
-            ((e && (e.code || e.message)) || e));
-        });
-      }
-    };
-    var escreve = function (u) {
-      try {
-        var doc = { uid: u, status: agora[u], wo: !!woDe[u], at: new Date().toISOString() };
-        if (entradaDe[u]) doc.entry = entradaDe[u];
-        _semRuido(col.doc(u).set(doc, { merge: true }));
-      } catch (_e) {}
-    };
-
-    if (!antes) {
-      // 1ª gravação da sessão: sem base de comparação. Espelha SÓ o usuário logado — é a
-      // inscrição dele que estaria acontecendo agora, e é ela que o espelho precisa provar.
-      var meu = (typeof window !== 'undefined' && window.AppStore && window.AppStore.currentUser
-                 && window.AppStore.currentUser.uid) || '';
-      if (meu && agora[meu]) escreve(meu);
-      return;
-    }
-    Object.keys(agora).forEach(function (u) {
-      if (antes[u] === chave(u)) return;                     // mesmo estado: nada a escrever
-      escreve(u);                                            // novo, mudou de lugar, ou levou W.O.
-    });
-    Object.keys(antes).forEach(function (u) {
-      if (agora[u]) return;
-      // NÃO apaga: marca. O histórico de quem saiu é justamente o que faltou no incidente.
-      // Mesma armadilha do `escreve` acima: a promessa precisa de `.catch()` próprio.
-      try { _semRuido(col.doc(u).set({ status: 'left', leftAt: new Date().toISOString() }, { merge: true })); } catch (_e) {}
-    });
-  },
+  // ⏳ COBERTURA HOJE, dita sem maquiagem: a CF espelha INSCRIÇÃO (enrolled/waitlisted). Os
+  // MOVIMENTOS de roster (W.O., promoção da fila, saída) ainda não são espelhados por
+  // ninguém — o W.O. roda por transação no cliente (`AppStore.mutate`), não por CF. Fechar
+  // isso é levar esses fluxos pra CF, não reabrir a escrita do cliente.
 
   // ── BLINDAGEM DE CONCORRÊNCIA (project_concurrency_safe_saves) ──────────────
   // Primitivo transacional GENÉRICO para todo read-modify-write de alto risco.
@@ -1199,11 +1077,8 @@ window.FirestoreDB = {
       return { aborted: false, data: clean };
     });
     // v1.7.29: escrita dupla também aqui — a INSCRIÇÃO passa por esta transação, então
-    // sem isto a subcoleção nasceria cega justamente pro evento que mais importa.
-    // FORA da transação de propósito: escrever numa subcoleção dentro dela ampliaria o
-    // conjunto de docs disputados e faria a transação abortar mais — o oposto do que
-    // queremos num pico de lançamento. O espelho é best-effort; a verdade é o array.
-    try { if (_txOut && !_txOut.aborted && _txOut.data) this._mirrorRoster(tournamentId, _txOut.data); } catch (_mrErr) {}
+    // v1.7.98: o espelho saiu daqui junto com o do `saveTournament` — mesma razão (regra
+    // inexistente, escrita sempre negada). A verdade continua sendo o array no doc.
     return _txOut;
   },
 
@@ -1520,13 +1395,16 @@ window.FirestoreDB = {
                _mirror: Object.assign({}, data, { participants: participants }) };
     }).then(function (out) {
       // ESPELHO (v1.7.56): este caminho gravava por `transaction.update` e NUNCA chamava
-      // `_mirrorRoster` — só `saveTournament` e `mutateTournament` chamavam. Ou seja: a
-      // inscrição pelo fallback do cliente (o caminho que roda sempre que a CF falha, e é
-      // o que sobrou nas inscrições recentes) não deixava rastro nenhum na subcoleção que
-      // existe justamente pra provar que a pessoa se inscreveu. Medido em produção: 3
-      // inscrições do dia, ZERO docs de espelho. Roda DEPOIS do commit — dentro da
-      // transação o dado ainda não é autoritativo.
-      try { if (out && out._mirror) self._mirrorRoster(String(tournamentId), out._mirror); } catch (_e) {}
+      // ⏳ v1.7.98 — AQUI FICA O ÚNICO BURACO REAL, e ele é DECLARADO, não esquecido.
+      // A 1.7.56 pôs o espelho neste ponto porque esta transação é o FALLBACK do cliente
+      // (roda sempre que a CF falha — o bug do Firestore no iOS), e uma inscrição por
+      // aqui não deixava rastro na subcoleção. Só que a escrita do cliente É NEGADA pela
+      // regra (ela não existe), então o rastro nunca foi criado de verdade: o que havia
+      // era a aparência de rede. Removido junto com o resto.
+      // Consequência honesta: inscrição que cai no fallback fica SEM espelho. Fechar isso
+      // é fazer este caminho passar pela CF (cânone: o cliente só dispara) — não reabrir a
+      // escrita do cliente. Enquanto isso, a fonte da verdade segue sendo o array do doc,
+      // que é o que toda tela lê.
       if (out) delete out._mirror;
       return out;
     });
