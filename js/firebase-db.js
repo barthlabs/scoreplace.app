@@ -984,11 +984,30 @@ window.FirestoreDB = {
     this._rosterMirrorCache[docId] = cacheNovo;
 
     var col = this.db.collection('tournaments').doc(docId).collection('participants');
+    // ⚠️ v1.7.97 — `.set()` DEVOLVE PROMESSA: o `try/catch` que estava aqui só pegava throw
+    // SÍNCRONO, e a REJEIÇÃO escapava como **unhandled rejection**. Era isso que alimentava
+    // a issue `FirebaseError: Missing or insufficient permissions` do Sentry
+    // (`mechanism: onunhandledrejection`, stack no webchannel, 57 eventos / 24 usuários) —
+    // e é por isso que ela não fechou com o fix das regras de `statsVisibility` (1.7.51/52):
+    // aquilo era `users/{uid}/matchHistory`, outra coleção. A issue agrupa por assinatura de
+    // stack, e como o stack é todo interno do SDK, QUALQUER escrita negada cai no mesmo balde.
+    //
+    // O espelho é BEST-EFFORT de propósito (a verdade é o array no doc do torneio), então
+    // engolir está certo — o que não podia era engolir SEM tratar. Vai por `_warn` e NÃO por
+    // `_captureException`: negação aqui é esperada e reportá-la só recria o ruído.
+    var _semRuido = function (p) {
+      if (p && typeof p.catch === 'function') {
+        p.catch(function (e) {
+          if (window._warn) window._warn('[mirrorRoster] espelho não gravou (best-effort): ' +
+            ((e && (e.code || e.message)) || e));
+        });
+      }
+    };
     var escreve = function (u) {
       try {
         var doc = { uid: u, status: agora[u], wo: !!woDe[u], at: new Date().toISOString() };
         if (entradaDe[u]) doc.entry = entradaDe[u];
-        col.doc(u).set(doc, { merge: true });
+        _semRuido(col.doc(u).set(doc, { merge: true }));
       } catch (_e) {}
     };
 
@@ -1007,7 +1026,8 @@ window.FirestoreDB = {
     Object.keys(antes).forEach(function (u) {
       if (agora[u]) return;
       // NÃO apaga: marca. O histórico de quem saiu é justamente o que faltou no incidente.
-      try { col.doc(u).set({ status: 'left', leftAt: new Date().toISOString() }, { merge: true }); } catch (_e) {}
+      // Mesma armadilha do `escreve` acima: a promessa precisa de `.catch()` próprio.
+      try { _semRuido(col.doc(u).set({ status: 'left', leftAt: new Date().toISOString() }, { merge: true })); } catch (_e) {}
     });
   },
 
