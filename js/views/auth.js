@@ -299,13 +299,14 @@
 // que é quem produz o proofIdToken do merge). Ver project_whatsapp_meta_2fa_block.
 
 
-// ─── Config Firebase: PRODUÇÃO por padrão, STAGING só por hostname ────────────
-// scoreplace.app (e qualquer host que NÃO seja o staging, incl. localhost de
-// preview) usa exatamente os valores de produção de sempre — INTOCADO. Só o
-// ambiente de staging (scoreplace-staging.web.app / .firebaseapp.com) aponta pro
-// 2º projeto Firebase isolado (scoreplace-staging), pra testar mudanças
-// arriscadas sem encostar nos dados reais do Confra. Ver docs/staging.md.
-var _firebaseConfigProd = {
+// ─── Config Firebase: um projeto só (scoreplace-app = PRODUÇÃO) ───────────────
+// Todo host — scoreplace.app, auth.scoreplace.app, o WebView do app nativo e o
+// localhost de preview — aponta pro MESMO projeto. Até 19/jul/2026 existia um 2º
+// projeto isolado (scoreplace-staging) escolhido por hostname, com um
+// window.SCOREPLACE_ENV pendurado nele; o ambiente foi DELETADO e o switch saiu
+// junto (1.8.2). Não reintroduzir config por hostname sem um ambiente de verdade
+// atrás dela: guard que nunca dispara vira armadilha pra quem lê depois.
+const firebaseConfig = {
   apiKey: "AIzaSyB7AyOojV_Pm50Kr7bovVY4jVTTNbKOK0A",
   // v1.1.32 — authDomain CUSTOM (auth.scoreplace.app), não mais firebaseapp.com.
   //
@@ -354,19 +355,6 @@ var _firebaseConfigProd = {
   appId: "1:382268772878:web:7c164933f3beacba4be25f",
   measurementId: "G-PZ25D36JSV"
 };
-var _firebaseConfigStaging = {
-  apiKey: "AIzaSyDCFcrAr49iq3cDAh00Y_LlDLFsNJSsW8k",
-  authDomain: "scoreplace-staging.firebaseapp.com",
-  projectId: "scoreplace-staging",
-  storageBucket: "scoreplace-staging.firebasestorage.app",
-  messagingSenderId: "5066307789",
-  appId: "1:5066307789:web:b04d0b448b94eb1fb39184"
-};
-var _isStagingHost = (function () {
-  try { return /scoreplace-staging/.test(window.location.hostname || ''); } catch (e) { return false; }
-})();
-window.SCOREPLACE_ENV = _isStagingHost ? 'staging' : 'prod';
-const firebaseConfig = _isStagingHost ? _firebaseConfigStaging : _firebaseConfigProd;
 
 // ─── Safari detection ───────────────────────────────────────────────────────
 // Safari (desktop + iOS) has ITP that breaks popup-based OAuth when the auth
@@ -8273,7 +8261,6 @@ window._profileHydrateNameConflict = function () {
         verified: false
       }).then(function() {
         // Criar email via coleção mail (Trigger Email extension)
-        if (window.SCOREPLACE_ENV === 'staging') { return null; } // staging: kill-switch — sem e-mail
         return db.collection('mail').add({
           to: [email],
           message: {

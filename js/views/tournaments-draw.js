@@ -2159,8 +2159,12 @@ function _commitInitialDraw(tId, t, preDraw) {
 // e a v1.3.86 trocou httpsCallable por fetch() direto pelo MESMO motivo. Filtrar não basta
 // — a chamada nem sai. Aqui falamos o protocolo callable na mão: POST {data}, resposta
 // {result} ou {error:{status,message}}.
-// projectId vem do app (NUNCA hardcodar 'scoreplace-app': quebraria na staging, que roda
-// no projeto scoreplace-staging — ver [[project_staging_env]]).
+// projectId vem do app, NUNCA hardcodado. O motivo original era o staging (2º projeto,
+// deletado em 19/jul/2026) — mas a regra fica, e por um motivo que segue VIVO: ler de
+// fb.app().options é também o teste de que o SDK inicializou. Hardcodar faz a chamada
+// SAIR mesmo com o app morto — POST sem token pra uma CF que vai recusar, e o usuário
+// vê "permissão negada" no lugar de "app não inicializado". O `if (!pid)` abaixo é o
+// que transforma isso num erro honesto; ele só existe porque o pid é derivado.
 window._callDrawRound = function (payload) {
     var fb = window.firebase;
     var user = fb && fb.auth && fb.auth().currentUser;

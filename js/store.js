@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.1';
+window.SCOREPLACE_VERSION = '1.8.2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1243,36 +1243,13 @@ window._flag = function (name) {
   } catch (e) { return false; }
 };
 
-// ─── Selo STAGING (só no ambiente de teste) ──────────────────────────────────
-// Badge fixo e inconfundível pra NUNCA confundir staging com produção: evita
-// fazer teste destrutivo achando que está no staging (ou entrar em pânico
-// achando que quebrou o Confra quando está só no staging). Só aparece quando o
-// host é o de staging — INVISÍVEL na produção. pointer-events:none = não bloqueia
-// clique. Detecta por hostname (auto-suficiente, sem depender de timing).
-(function () {
-  try {
-    if (!/scoreplace-staging/.test(window.location.hostname || '')) return;
-    var inject = function () {
-      if (document.getElementById('sp-staging-badge')) return;
-      var b = document.createElement('div');
-      b.id = 'sp-staging-badge';
-      b.textContent = 'STAGING';
-      b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483647;' +
-        'background:#b91c1c;color:#fff;font:700 11px/1 -apple-system,BlinkMacSystemFont,sans-serif;' +
-        'letter-spacing:1.5px;padding:5px 9px;border-radius:6px;pointer-events:none;' +
-        'box-shadow:0 2px 8px rgba(0,0,0,0.45);opacity:0.92;';
-      (document.body || document.documentElement).appendChild(b);
-    };
-    if (document.body) inject();
-    else document.addEventListener('DOMContentLoaded', inject);
-  } catch (e) {}
-})();
-
-// ─── Tarja SANDBOX (como era o staging, mas por TORNEIO) ─────────────────────
+// ─── Tarja SANDBOX (o sinal de "não é pra valer", por TORNEIO) ───────────────
 // Barra VERMELHA fixa de fora a fora no rodapé, sempre visível ENQUANTO se está
 // atuando num torneio sandbox (detalhe/bracket/chamada/etc.). O SB roda EM
-// PRODUÇÃO — então o sinal não pode ser por hostname (como o staging morto), tem
-// que ser pela rota: se o torneio em tela é isSandbox, mostra. Some fora do SB.
+// PRODUÇÃO — então o sinal não pode ser por hostname, tem que ser pela ROTA: se o
+// torneio em tela é isSandbox, mostra. Some fora do SB. (Até 19/jul/2026 havia um
+// selo irmão "STAGING" por hostname; o ambiente foi deletado e o selo saiu na
+// 1.8.2 — hoje o único sinal de ambiente-de-teste é este, e ele é por torneio.)
 // pointer-events:none = não bloqueia clique. Ver project_sandbox_tournament.
 (function () {
   try {

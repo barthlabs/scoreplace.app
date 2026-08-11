@@ -2414,7 +2414,6 @@ window.FirestoreDB = {
 
   async queueEmail(to, subject, html) {
     if (!this.db || !to) return;
-    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] e-mail suprimido (queueEmail)'); } catch(_e){} return; }
     try {
       var toArr = Array.isArray(to) ? to : [to];
       await this.db.collection('mail').add({
@@ -2433,12 +2432,11 @@ window.FirestoreDB = {
   // E-mails transacionais (verificação) NÃO passam por aqui — vão direto pro mail/.
   async queueNotifEmail(emails, level, message, opts) {
     if (!this.db || !emails || !emails.length) return;
-    if (window.SCOREPLACE_ENV === 'staging') { try { window._warn && window._warn('[staging] notif e-mail suprimido (queueNotifEmail)'); } catch(_e){} return; }
     opts = opts || {};
     // v1.4.12 — BACKSTOP DO SANDBOX na ÚLTIMA porta antes do e-mail. O killswitch principal
-    // é o _sendUserNotification/_notifyTournamentParticipants; este é a rede embaixo dele
-    // (mesmo espírito da supressão de staging acima). Um e-mail de SB que vaza chega em gente
-    // que nem sabe que o SB existe. Ver [[project_sandbox_tournament]].
+    // é o _sendUserNotification/_notifyTournamentParticipants; este é a rede embaixo dele.
+    // Um e-mail de SB que vaza chega em gente que nem sabe que o SB existe.
+    // Ver [[project_sandbox_tournament]].
     if (/^\(SB\)/.test(String(opts.tournamentName || '')) || /_sb(\b|$)/.test(String(opts.tournamentUrl || ''))) {
       try { window._warn && window._warn('[sandbox] notif e-mail suprimido (queueNotifEmail)'); } catch (_e) {}
       return;

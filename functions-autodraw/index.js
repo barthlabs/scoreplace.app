@@ -240,11 +240,6 @@ function _sideDisplayName(uids, nameByUid, storedStr) {
   return storedStr || '?';
 }
 
-// Kill-switch de notificações no staging (ver functions/index.js). No projeto de
-// staging, push (FCM) NÃO é enviado — pra simular torneios com inscritos reais
-// sem disparar nada. Em prod IS_STAGING é false → comportamento idêntico.
-const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || '').indexOf('staging') !== -1;
-
 // v2.4.12: temporada encerrada? Espelha o cliente (tournaments.js season auto-
 // closure + bracket-logic poller endDate check). Sem isto, o autoDraw gerava
 // rodadas — e disparava notificações — PRA SEMPRE após o fim da temporada, se
@@ -1459,7 +1454,6 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
 exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{notifId}', async (event) => {
   const snap = event.data;
   if (!snap) return;
-  if (IS_STAGING) { console.log('[staging] push (FCM) suprimido'); return; }
 
   const userId = event.params.userId;
   const notifData = snap.data();

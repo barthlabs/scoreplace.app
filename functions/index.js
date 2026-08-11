@@ -70,19 +70,13 @@ const APP_ORIGINS = [
   "http://localhost:9876",
 ];
 
-// ── KILL-SWITCH DE NOTIFICAÇÕES NO STAGING ───────────────────────────────────
-// O staging compartilha os MESMOS backends de prod (FCM, SMTP
-// Brevo via extensão). Pra simular torneios com os inscritos REAIS sem disparar
-// nada pra eles, TODA entrega externa (e-mail, push) vira no-op quando
-// rodando no projeto de staging. Em prod IS_STAGING é false → comportamento
-// idêntico ao de sempre. As notificações in-app (docs em users/{uid}/notifications)
-// continuam sendo criadas — visíveis na UI do staging, mas sem entrega externa.
-const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "").indexOf("staging") !== -1;
-
 // Enfileira e-mail na coleção mail/ (consumida pela extensão firestore-send-email).
-// No staging NÃO escreve nada → a extensão não tem o que entregar → zero e-mail.
+// Até 19/jul/2026 havia aqui um kill-switch IS_STAGING (no-op de toda entrega
+// externa quando GCLOUD_PROJECT continha "staging"); o projeto scoreplace-staging
+// foi deletado e o guard saiu na 1.8.2 — só existe produção, ele era constante
+// false. O killswitch que continua VIVO e importa é o do SANDBOX, que é por
+// TORNEIO e roda em produção. Ver [[project_sandbox_tournament]].
 async function _enqueueMail(dbRef, doc) {
-  if (IS_STAGING) { console.log("[staging] e-mail suprimido (mail/ não escrito)"); return null; }
   return dbRef.collection("mail").add(doc);
 }
 
