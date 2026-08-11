@@ -621,36 +621,39 @@
       ' e carregue em <code>chrome://extensions</code> com o Modo do desenvolvedor.</div>';
   }
 
-  // ZIP COMO BOTÃO PRINCIPAL — só na janela em que a loja ainda não serve o mínimo.
-  // Bronca do dono (11/ago/2026): _"não adianta apontar para a loja enquanto a nova versão
-  // não estiver lá."_ Nessa janela o botão da loja é um beco: o Chrome responde "já está
-  // atualizada" e a pessoa não sai do lugar. Então os papéis se INVERTEM — o zip vira a
-  // ação, e a loja vira a promessa ("quando sair lá, atualiza sozinho").
+  // ZIP — SOMA à loja enquanto ela ainda não serve o mínimo. Não substitui.
+  // Regra do dono (11/ago/2026): _"loja sempre e zip enquanto a loja não tiver a versão
+  // atualizada."_ Ele corrigiu a minha 1ª tentativa, que TROCAVA um pelo outro: o link da
+  // loja sumia na janela de revisão. Está certo — a loja é o destino permanente (é lá que
+  // a extensão vive e de onde o Chrome atualiza sozinho depois), e o zip é o que funciona
+  // AGORA. Esconder a loja transformaria uma janela de dias no fim do caminho dela.
   function _zipBtn(label) {
     var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
     if (!z) return '';
     return '<div style="margin-top:10px;"><a href="' + _esc(z) + '" download class="btn btn-primary">' + _esc(label) + '</a>' +
-      '<div style="opacity:0.8;font-size:0.72rem;margin-top:4px;">Descompacte e carregue em <code>chrome://extensions</code> ' +
-      'com o <b>Modo do desenvolvedor</b> ligado.</div>' +
-      (STORE_URL ? '<div style="opacity:0.7;font-size:0.72rem;margin-top:6px;">A v' + _esc(MIN_EXT_VERSION) +
-        ' está em revisão na <a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" style="color:#94a3b8;">Chrome Web Store</a>' +
-        ' — quando sair por lá, o Chrome passa a atualizar sozinho.</div>' : '') + '</div>';
+      '<div style="opacity:0.8;font-size:0.72rem;margin-top:4px;">A v' + _esc(MIN_EXT_VERSION) +
+      ' ainda está em revisão na loja. Descompacte e carregue em <code>chrome://extensions</code> ' +
+      'com o <b>Modo do desenvolvedor</b> ligado — quando sair por lá, o Chrome volta a atualizar sozinho.</div></div>';
   }
 
-  // Botão da LOJA — o caminho principal de instalação/atualização (1.8.4), MAS só quando
-  // ela realmente serve a versão exigida. Sem a URL configurada não renderiza link morto:
-  // manda procurar pelo nome, que é uma instrução que sempre funciona.
-  function _storeBtn(label) {
+  // Botão da LOJA — o caminho permanente de instalação/atualização, presente SEMPRE.
+  // Sem a URL configurada não renderiza link morto: manda procurar pelo nome, que é uma
+  // instrução que sempre funciona.
+  function _storeBtn(label, secundario) {
     if (!STORE_URL) {
       return '<div style="margin-top:8px;color:#94a3b8;font-size:0.8rem;">Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.</div>';
     }
-    return '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">' + _esc(label) + '</a>' +
+    return '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn ' +
+      (secundario ? 'btn-outline' : 'btn-primary') + '">' + _esc(label) + '</a>' +
       '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Pela loja o Chrome mantém a extensão atualizada sozinho.</div></div>';
   }
-  /** O botão de AÇÃO: loja quando ela resolve, zip quando não. Ponto único da escolha. */
+  /** OS DOIS CAMINHOS. A loja aparece sempre; o zip entra junto enquanto ela está atrás.
+   *  Ponto único — as telas não decidem isso sozinhas. */
   function _instalarBtn(labelLoja, labelZip) {
     if (_lojaTemMinimo()) return _storeBtn(labelLoja);
-    return _zipBtn(labelZip) || _storeBtn(labelLoja);
+    // ordem: o que RESOLVE agora primeiro, e a loja logo abaixo — visível, secundária,
+    // nunca ausente.
+    return (_zipBtn(labelZip) || '') + _storeBtn(labelLoja, true);
   }
 
   // ⚠️ REMOVIDOS na 1.8.4: `_zipBtn` (botão de baixar o zip) e `_installHelp` (o <details>

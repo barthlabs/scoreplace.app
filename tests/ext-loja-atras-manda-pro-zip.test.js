@@ -111,6 +111,32 @@ t('quem NÃO tem extensão também vai pro zip nesta janela', () => {
   assert.ok(/_instalarBtn\(/.test(ultimo), 'o ramo "sem extensão" voltou a chamar _storeBtn direto');
 });
 
+console.log('\n3b. A LOJA APARECE SEMPRE — o zip SOMA, nunca substitui');
+// Regra do dono, corrigindo a 1ª versão desta feature: "loja sempre e zip enquanto a loja
+// não tiver a versão atualizada". Eu tinha feito um ou-outro, e o link da loja SUMIA na
+// janela de revisão — o que apagaria o destino permanente (e o auto-update que vem com ele)
+// durante os dias de revisão.
+t('_instalarBtn devolve os DOIS quando a loja está atrás', () => {
+  const fn = onb.slice(onb.indexOf('function _instalarBtn'), onb.indexOf('function _instalarBtn') + 700);
+  const ramo = fn.slice(fn.indexOf('_lojaTemMinimo()'));
+  assert.ok(/_zipBtn\(/.test(ramo) && /_storeBtn\(/.test(ramo),
+    'o ramo "loja atrás" tem que montar zip E loja; hoje: ' + ramo.replace(/\s+/g, ' ').slice(0, 160));
+});
+t('e nenhum ramo devolve o zip SOZINHO', () => {
+  const fn = onb.slice(onb.indexOf('function _instalarBtn'), onb.indexOf('function _instalarBtn') + 700);
+  assert.ok(!/return\s+_zipBtn\([^)]*\)\s*(\|\|[^;]*)?;/.test(fn),
+    'algum ramo voltou a devolver só o zip — a loja precisa aparecer junto');
+});
+t('o aviso da Análise mantém o link da loja na janela do zip', () => {
+  // o ramo !lojaOk monta a frase do zip e ainda assim concatena `loja`
+  const i = rep.indexOf('OS DOIS CAMINHOS');
+  assert.ok(i > 0, 'o bloco do aviso mudou de forma — reveja este teste');
+  const bloco = rep.slice(i, i + 1600);
+  const ramoZip = bloco.slice(bloco.indexOf('if (!lojaOk'));
+  assert.ok(/\+ loja \+|\+ loja;|loja \+/.test(ramoZip),
+    'o ramo do zip parou de incluir o link da loja');
+});
+
 console.log('\n4. O ZIP DA VERSÃO EXIGIDA EXISTE DE VERDADE');
 t('o arquivo scoreplace-letzplay-ext-<exigida>.zip está no repo', () => {
   const zip = path.join(raiz, 'scoreplace-letzplay-ext-' + vExig + '.zip');
