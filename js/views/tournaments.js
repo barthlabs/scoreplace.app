@@ -2899,9 +2899,29 @@ function renderTournaments(container, tournamentId = null) {
             // Safe version for embedding in onclick attributes (escape quotes and newlines)
             const inviteTextSafe = inviteText.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
             const _friendCount = (window.AppStore.currentUser && window.AppStore.currentUser.friends && window.AppStore.currentUser.friends.length > 0) ? ' (' + window.AppStore.currentUser.friends.length + ')' : '';
+            // ── v1.8.11 · O CONVITE NÃO NASCE ATRÁS DO CHROME ───────────────────────
+            // O card usava `top:1rem` — 16px do TOPO DA VIEWPORT, ou seja, atrás da
+            // topbar, do back-header e da barra de busca sticky. Medido no relato do dono
+            // (print, 11/ago): a primeira linha do convite (Amigos / WhatsApp / Copiar)
+            // some por baixo da barra.
+            //
+            // `--scroll-anchor` é a FONTE ÚNICA de "tudo que fica grudado no topo"
+            // (topbar + dropdown do hamburger + back-header + barra sticky + 12px de
+            // respiro), publicada pelo _reflowChrome e já usada por todo scrollIntoView do
+            // app. Ela nasceu do MESMO defeito: o auto-scroll do "meu jogo" pousava com o
+            // card atrás da barra. Número fixo erraria — a topbar quebra em 2 linhas no
+            // mobile, o dropdown abre/fecha e a barra só existe em algumas telas.
+            //
+            // O `max-height` fecha a outra metade: sem teto o conteúdo (QR + campo de
+            // e-mail) estoura a tela em aparelho baixo e o fim do convite fica
+            // inalcançável — o mesmo defeito que a v1.6.91 corrigiu no showAlertDialog.
+            // ⚠️ `100%`, NUNCA `100vh`: o overlay pai já é fixed com height:100%, e sob
+            // `zoom` no body a unidade de viewport estoura a tela. É cânone do projeto e
+            // tem teste varrendo (tests/area-scaling-canon.test.js) — foi ele que pegou
+            // este erro meu. Ver [[project_web_area_scaling_canon]].
             const inviteModalHtml = `
              <div id="invite-modal-${t.id}" class="invite-modal-container" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 9999; cursor: default; box-sizing: border-box;" onclick="event.stopPropagation()">
-                <div style="position:absolute;top:1rem;left:50%;transform:translateX(-50%);background: var(--bg-card); width: calc(100% - 2rem); max-width: 340px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); animation: fadeIn 0.2s ease; box-sizing: border-box; overflow: hidden;">
+                <div style="position:absolute;top:calc(var(--scroll-anchor, 120px) + 4px);left:50%;transform:translateX(-50%);background: var(--bg-card); width: calc(100% - 2rem); max-width: 340px; max-height:calc(100% - var(--scroll-anchor, 120px) - 16px); overflow-y:auto; -webkit-overflow-scrolling:touch; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 20px 40px rgba(0,0,0,0.4); animation: fadeIn 0.2s ease; box-sizing: border-box;">
 
                    <!-- Standard back header row -->
                    <div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.75rem;border-bottom:1px solid var(--border-color);">
