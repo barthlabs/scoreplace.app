@@ -39,10 +39,26 @@ ok(/window\.SP_EXT_STORE_URL\s*=\s*'https:\/\/chromewebstore\.google\.com\//.tes
   'a URL da loja é fonte única no store.js');
 // procura a ATRIBUIÇÃO, não o nome: o comentário-lápide cita `_spExtZipUrl` de propósito,
 // pra quem grepar achar por que ele sumiu. Nome citado ≠ função viva.
-ok(!/window\._spExtZipUrl\s*=/.test(R('js/store.js')), 'o helper de link do zip não existe mais');
+// ⚠️ REVISADO na 1.8.9, com o motivo: a 1.8.4 travava "zero zip na UI". A regra mudou por
+// ordem do dono — "ter alternativa enquanto a loja nao aprova". A loja leva dias revisando
+// e nesse intervalo o gate exige uma versão que ela AINDA NÃO SERVE: mandar pra lá não
+// resolve (o Chrome diz "já está atualizada"). O zip volta como SECUNDÁRIO e CONDICIONADO
+// ao caso de extensão desatualizada; é também o canal de teste da versão nova.
+// O que continua travado, e é o que importa: a loja é a porta PRINCIPAL, a URL é fonte
+// única, e quem não tem extensão nenhuma NÃO recebe zip.
+ok(/window\._spExtZipUrl\s*=/.test(R('js/store.js')), 'o helper do zip existe de novo (alternativa da janela de revisão)');
 for (const f of ['js/views/letzplay-onboarding.js', 'js/views/tournaments-enrollment-report.js']) {
-  ok(!/_spExtZipUrl|\.zip['"]|download class=/.test(R(f)), f + ' não oferece download de zip');
   ok(/SP_EXT_STORE_URL/.test(R(f)), f + ' aponta pra loja');
+}
+{
+  const onb = R('js/views/letzplay-onboarding.js');
+  ok(/_zipAlternativa/.test(onb), 'o zip do onboarding é uma função à parte, não o caminho principal');
+  // o ramo "sem extensão" monta a mensagem com _storeBtn e NÃO chama a alternativa
+  const semExt = onb.slice(onb.indexOf("'Precisa da extensão do scoreplace"), onb.indexOf("'Precisa da extensão do scoreplace") + 220);
+  ok(!/_zipAlternativa/.test(semExt), 'quem NÃO tem extensão vai só pra loja — sem zip');
+  const rep = R('js/views/tournaments-enrollment-report.js');
+  ok(/versaoAtual && typeof window\._spExtZipUrl/.test(rep),
+     'na Análise o zip só aparece quando JÁ existe extensão desatualizada');
 }
 
 // 4) a propagação é AUTOMÁTICA e roda em todo deploy

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.8';
+window.SCOREPLACE_VERSION = '1.8.9';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,7 +105,7 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-window.SP_EXT_VERSION = '1.97';
+window.SP_EXT_VERSION = '1.98';
 
 // ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
 // A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",
@@ -120,14 +120,16 @@ window.SP_EXT_VERSION = '1.97';
 // coisa é o que faz uma divergir. Ver [[feedback_unify_dual_entry_points]].
 window.SP_EXT_STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
 
-// ⚠️ `window._spExtZipUrl` FOI REMOVIDO na 1.8.4 (ordem do dono: "o código do programa
-// aponta para ela [a loja] e não para o zip"). Nenhuma tela do app oferece mais download
-// de zip: instalar e atualizar passam pela loja acima, e é ela que dá o auto-update.
-// Sideload é o único jeito de ficar preso numa versão velha — que é exatamente o que o
-// gate de versão vinha punindo com reinstalação manual a cada bump.
-// O ARQUIVO .zip continua no repo de propósito: é o artefato que se SOBE pra Chrome Web
-// Store (gerado por `npm run ext:zip`). Ele é insumo de publicação, não caminho de
-// instalação — não voltar a linká-lo na UI.
+// ── O ZIP VOLTOU, e com papel DEFINIDO (1.8.9) ───────────────────────────────
+// A 1.8.4 tirou o zip da UI ("o código aponta para a loja e não para o zip"). Certo como
+// regra permanente — sideload não recebe auto-update. Mas ele volta por uma razão que o
+// dono cravou: "ter alternativa enquanto a loja nao aprova". A loja leva dias revisando, e
+// nesse intervalo o gate exige uma versão que a loja AINDA NÃO SERVE — mandar pra lá não
+// resolve, o Chrome responde "já está atualizada". Nessa janela o zip é o ÚNICO caminho,
+// e é também o canal de TESTE da versão nova antes de publicar.
+// ⚠️ Por isso ele é SECUNDÁRIO e condicionado: só aparece quando a extensão instalada está
+// ABAIXO do mínimo. Quem não tem extensão nenhuma vai pra loja e pronto.
+window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)

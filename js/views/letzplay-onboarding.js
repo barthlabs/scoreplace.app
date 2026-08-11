@@ -583,13 +583,27 @@
       // listagem (ou chrome://extensions → Atualizar) resolve. Nada de baixar zip.
       return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
         '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
-        _storeBtn('🎾 Atualizar pela Chrome Web Store');
+        _storeBtn('🎾 Atualizar pela Chrome Web Store') + _zipAlternativa();
     }
     return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' +
       _storeBtn('🎾 Instalar extensão');
   }
 
-  // Botão da LOJA — o ÚNICO caminho de instalação/atualização (1.8.4).
+  // ALTERNATIVA enquanto a loja não aprovou a versão exigida. Só no ramo de extensão
+  // DESATUALIZADA: é o único momento em que a loja pode não resolver — se ela ainda serve a
+  // versão antiga, o Chrome responde "já está atualizada" e a pessoa fica presa. Aqui o zip
+  // é saída, e também o canal de teste da versão nova. Nunca aparece pra quem não tem
+  // extensão: esse vai pra loja e pronto.
+  function _zipAlternativa() {
+    var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    if (!z) return '';
+    return '<div style="margin-top:8px;font-size:0.76rem;color:#94a3b8;">A loja pode levar alguns dias pra publicar a ' +
+      'v' + _esc(MIN_EXT_VERSION) + '. Se ela ainda não apareceu por lá, ' +
+      '<a href="' + _esc(z) + '" download style="color:#fbbf24;font-weight:700;">baixe o zip da v' + _esc(MIN_EXT_VERSION) + '</a>' +
+      ' e carregue em <code>chrome://extensions</code> com o Modo do desenvolvedor.</div>';
+  }
+
+  // Botão da LOJA — o caminho principal de instalação/atualização (1.8.4).
   // Sem a URL configurada não renderiza link morto: manda procurar pelo nome, que é uma
   // instrução que sempre funciona. Nunca cair de volta pro zip aqui.
   function _storeBtn(label) {

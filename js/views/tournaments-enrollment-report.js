@@ -3947,6 +3947,12 @@
       ? 'Instalada pela <b>Chrome Web Store</b>, o Chrome atualiza sozinho. Se ainda estiver na v' +
         versaoAtual + ', abra a loja e clique em <b>Atualizar</b> (ou <code>chrome://extensions</code> → <b>Atualizar</b>).'
       : 'Instale pela <b>Chrome Web Store</b> — um clique, e o Chrome mantém atualizada sozinho.');
+    // alternativa só pra quem JÁ tem extensão e está abaixo do mínimo: a loja pode ainda
+    // não ter publicado a versão exigida, e aí ela não resolve.
+    var _zip = (versaoAtual && typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    if (_zip) corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
+      _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
+      'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
 
     if (typeof window.showConfirmDialog !== 'function' || !storeUrl) {
       _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT +
