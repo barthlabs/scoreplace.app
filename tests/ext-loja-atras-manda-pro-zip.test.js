@@ -127,15 +127,52 @@ t('e nenhum ramo devolve o zip SOZINHO', () => {
   assert.ok(!/return\s+_zipBtn\([^)]*\)\s*(\|\|[^;]*)?;/.test(fn),
     'algum ramo voltou a devolver só o zip — a loja precisa aparecer junto');
 });
-t('o aviso da Análise mantém o link da loja na janela do zip', () => {
-  // o ramo !lojaOk monta a frase do zip e ainda assim concatena `loja`
+t('o aviso da Análise mantém a loja na janela do zip', () => {
+  // ⚠️ Este teste mirava a concatenação de string do aviso antigo (`… + loja + …`). O aviso
+  // virou BOTÕES em _lzExtBotoesHtml (11/ago, ordem do dono: "clicar no texto é uma
+  // merda"), então o que se checa agora é o COMPORTAMENTO da função — feito no bloco 3c,
+  // que exige 2 botões nesse estado. Aqui fica só o que este bloco defende: a função existe
+  // e é ela quem o aviso usa.
+  assert.ok(/function _lzExtBotoesHtml/.test(rep), 'a montagem dos botões do aviso sumiu');
   const i = rep.indexOf('OS DOIS CAMINHOS');
   assert.ok(i > 0, 'o bloco do aviso mudou de forma — reveja este teste');
-  const bloco = rep.slice(i, i + 1600);
-  const ramoZip = bloco.slice(bloco.indexOf('if (!lojaOk'));
-  assert.ok(/\+ loja \+|\+ loja;|loja \+/.test(ramoZip),
-    'o ramo do zip parou de incluir o link da loja');
+  assert.ok(/_lzExtBotoesHtml\(\)/.test(rep.slice(i, i + 900)),
+    'o aviso parou de usar a montagem única e voltou a escrever links na mão');
 });
+
+console.log('\n3c. A AÇÃO É BOTÃO, NÃO LINK NO MEIO DO TEXTO');
+// Bronca do dono (11/ago/2026, print do aviso): "onde está a porra dos botões que tinha
+// mostrado. clicar no texto é uma merda." A ação estava como <a> dentro de um parágrafo de
+// 4 linhas — mesma fonte, mesmo peso do resto, alvo do tamanho de uma palavra.
+{
+  const corpo = (q) => { const i = rep.indexOf(q); let j = rep.indexOf('{', i), d = 0, k = j;
+    for (; k < rep.length; k++) { if (rep[k] === '{') d++; else if (rep[k] === '}') { d--; if (!d) break; } }
+    return rep.slice(i, k + 1); };
+  const esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+  const mk = new Function('window', '_esc', '_LZ_MIN_EXT', corpo('function _lzExtBotoesHtml') + '; return _lzExtBotoesHtml;');
+  const W = (lojaOk) => ({ SP_EXT_STORE_URL: 'https://chromewebstore.google.com/detail/abc',
+    _spExtStoreTemMinimo: () => lojaOk, _spExtZipUrl: () => '/scoreplace-letzplay-ext-9.99.zip' });
+
+  t('o aviso monta BOTÕES (não <a> solto no parágrafo)', () => {
+    const h = mk(W(false), esc, '9.99')();
+    assert.ok(/padding:9px 15px/.test(h), 'perdeu a área de toque — virou link de novo');
+    assert.ok(/border-radius:10px/.test(h) && /font-weight:800/.test(h), 'perdeu o peso de botão');
+  });
+  t('com a loja atrás: DOIS botões — zip primeiro, loja junto', () => {
+    const h = mk(W(false), esc, '9.99')();
+    assert.strictEqual((h.match(/<a /g) || []).length, 2, 'esperava zip + loja');
+    assert.ok(h.indexOf('.zip') < h.indexOf('chromewebstore'), 'o que resolve agora tem que vir primeiro');
+  });
+  t('com a loja em dia: UM botão, e nenhum zip', () => {
+    const h = mk(W(true), esc, '9.99')();
+    assert.strictEqual((h.match(/<a /g) || []).length, 1);
+    assert.ok(!/.zip/.test(h), 'o zip continuou aparecendo com a loja já servindo o mínimo');
+  });
+  t('sem URL da loja não vira link morto', () => {
+    const h = mk({ _spExtStoreTemMinimo: () => true, _spExtZipUrl: () => null }, esc, '9.99')();
+    assert.ok(!/<a /.test(h) && /importar letzplay/.test(h), 'devia instruir pelo NOME');
+  });
+}
 
 console.log('\n4. O ZIP DA VERSÃO EXIGIDA EXISTE DE VERDADE');
 t('o arquivo scoreplace-letzplay-ext-<exigida>.zip está no repo', () => {

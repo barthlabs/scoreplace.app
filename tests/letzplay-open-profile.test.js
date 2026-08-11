@@ -149,9 +149,16 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   //            NESSA JANELA — e só nela.
   // O invariante real segue travado, e é este: o aviso nunca escolhe sozinho. Ele consulta
   // a fonte única da decisão; quando a loja atende, é pra ela que manda.
-  ok(/SP_EXT_STORE_URL/.test(fn), 'o aviso aponta pra loja, pela fonte única');
-  ok(/_spExtStoreTemMinimo/.test(fn), 'e a escolha loja×zip vem da fonte única, não de regra local');
-  ok(/_spExtZipUrl/.test(fn), 'o zip está disponível pra janela em que a loja não resolve');
+  // ⚠️ 11/ago/2026: o aviso deixou de montar os links na mão e passou a chamar
+  // _lzExtBotoesHtml() — a ação virou BOTÃO por ordem do dono ("clicar no texto é uma
+  // merda"). As URLs e a decisão loja×zip continuam nas fontes únicas, só que consultadas
+  // lá dentro. O comportamento está travado em tests/ext-loja-atras-manda-pro-zip.test.js
+  // (bloco 3c: 2 botões com a loja atrás, 1 com ela em dia).
+  ok(/_lzExtBotoesHtml\(\)/.test(fn), 'o aviso usa a montagem única dos botões');
+  const bts = app.slice(app.indexOf('function _lzExtBotoesHtml'), app.indexOf('function _lzExtBotoesHtml') + 2200);
+  ok(/SP_EXT_STORE_URL/.test(bts), 'os botões apontam pra loja, pela fonte única');
+  ok(/_spExtStoreTemMinimo/.test(bts), 'e a escolha loja×zip vem da fonte única, não de regra local');
+  ok(/_spExtZipUrl/.test(bts), 'o zip está disponível pra janela em que a loja não resolve');
   // ⚠️ REVISADA em 11/ago/2026 — ela travava o próprio defeito.
   // O texto antigo era: "no celular não aparece — lá não há extensão pra instalar, e o
   // AVISO PRÓPRIO JÁ EXPLICA", exigindo `if (movel) { caixa.innerHTML = ''; return; }`.
