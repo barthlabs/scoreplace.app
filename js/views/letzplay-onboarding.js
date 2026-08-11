@@ -579,70 +579,32 @@
       return 'Extensão detectada e pronta. <b>v' + _esc(_ext.version) + '</b> ✓';
     }
     if (_ext.present && !_verGte(_ext.version, MIN_EXT_VERSION)) {
-      // O botão de baixar fica VISÍVEL aqui, não escondido dentro do "Como atualizar".
-      // Com a extensão NA LOJA, atualizar não é "baixe o zip e reinstale" — o Chrome faz
-      // sozinho. Este ramo mandava só o zip, que é o caminho mais penoso e hoje o
-      // secundário. A loja vem primeiro; o zip fica no <details> pra quem precisar.
+      // Atualizar = a LOJA. O Chrome atualiza sozinho; se ainda estiver velha, abrir a
+      // listagem (ou chrome://extensions → Atualizar) resolve. Nada de baixar zip.
       return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
         '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
-        _storeBtn('🎾 Atualizar pela Chrome Web Store') + _installHelp('Atualizar manualmente');
+        _storeBtn('🎾 Atualizar pela Chrome Web Store');
     }
-    var installBtn = STORE_URL
-      ? _storeBtn('🎾 Instalar extensão')
-      : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Baixe e instale em modo desenvolvedor:</div>' + _zipBtn();
-    return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' + installBtn + _installHelp(STORE_URL ? 'Instalar manualmente' : 'Passo a passo (modo desenvolvedor)');
+    return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' +
+      _storeBtn('🎾 Instalar extensão');
   }
 
-  // Botão da LOJA — a porta principal. Some sozinho se não houver loja configurada,
-  // pra nunca render um link morto.
+  // Botão da LOJA — o ÚNICO caminho de instalação/atualização (1.8.4).
+  // Sem a URL configurada não renderiza link morto: manda procurar pelo nome, que é uma
+  // instrução que sempre funciona. Nunca cair de volta pro zip aqui.
   function _storeBtn(label) {
-    if (!STORE_URL) return '';
+    if (!STORE_URL) {
+      return '<div style="margin-top:8px;color:#94a3b8;font-size:0.8rem;">Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.</div>';
+    }
     return '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">' + _esc(label) + '</a>' +
       '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Pela loja o Chrome mantém a extensão atualizada sozinho.</div></div>';
   }
 
-  // Botão de baixar o zip da versão EXIGIDA. Mora aqui (fora do _installHelp) porque
-  // precisa aparecer VISÍVEL nos avisos de "instale"/"atualize", não só dentro do
-  // <details> colapsado — download que existe mas ninguém acha é download que não existe.
-  // A URL sai de SP_EXT_VERSION, então nunca aponta pra versão que o gate recusa, e a
-  // trava check-ext-version garante que o arquivo está lá.
-  function _zipBtn() {
-    var zipUrl = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
-    if (!zipUrl) return '';
-    return '<div style="margin:10px 0;"><a href="' + _esc(zipUrl) + '" download class="btn btn-primary" style="text-decoration:none;">⬇️ Baixar a extensão (v' + _esc(MIN_EXT_VERSION) + ')</a>' +
-      '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Baixe e <b>descompacte</b> — a pasta que sair do zip é a que você escolhe em <code>chrome://extensions</code> → “Carregar sem compactação”.</div></div>';
-  }
-
-  function _installHelp(label) {
-    // chrome:// não pode ser aberto por link de um site (o Chrome bloqueia por
-    // segurança). Então oferecemos um botão que COPIA o endereço pra colar na barra.
-    var chromeLine = '<li>Na barra do Chrome, vá em <code>chrome://extensions</code> ' +
-      '<button type="button" onclick="var b=this;if(navigator.clipboard){navigator.clipboard.writeText(\'chrome://extensions\').then(function(){b.textContent=\'copiado ✓\';})}" ' +
-      'class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 10px;font-size:0.72rem;">📋 copiar</button>' +
-      '<div style="opacity:0.7;font-size:0.72rem;margin-top:2px;">(o Chrome não deixa abrir esse endereço por link — cole na barra e dê Enter)</div></li>';
-    // O zip fica a UM CLIQUE, sempre na versão que o gate exige. Antes, o passo 1 mandava
-    // "escolha a pasta extension do scoreplace" — que só existe pra quem tem o repositório
-    // clonado. Sem um download aqui, atualizar dependia de achar o arquivo em algum lugar,
-    // e foi assim que a extensão ficou parada na 1.35 enquanto o app já pedia mais nova.
-    var zipBtn = _zipBtn();
-    return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
-      // ⚠️ Este aviso dizia SEMPRE "enquanto a extensão não está na loja" — inclusive pra
-      // quem tinha acabado de instalar POR ELA. Agora ele só aparece quando realmente não
-      // há loja; com loja, o texto explica que este caminho é a exceção, não a regra.
-      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">' +
-        (STORE_URL
-          ? '⚙️ Só precisa disto se <b>não</b> puder usar a Chrome Web Store. Instalada pela loja, o Chrome atualiza <b>sozinho</b> — nada dos passos abaixo.'
-          : '⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, o Chrome atualiza <b>sozinho</b> — nada disso abaixo.') +
-      '</div>' +
-      zipBtn +
-      '<ol style="margin:6px 0 0;padding-left:20px;line-height:1.75;">' +
-        chromeLine +
-        '<li>Nessa página, ligue o interruptor <b>Modo do desenvolvedor</b> (fica no canto superior direito).</li>' +
-        '<li>Vai aparecer um botão <b>“Carregar sem compactação”</b> (o Chrome em inglês chama de <i>Load unpacked</i>) — é assim que ele instala uma extensão a partir de uma pasta do computador. Clique nele e escolha a pasta que saiu do zip.</li>' +
-        '<li>Pronto — volte aqui, esta tela reconhece sozinha ✓</li>' +
-        '<li><i>Já tinha instalado?</i> Remova a versão antiga e carregue a pasta nova (ou clique no <b>↻</b> do card se apontar pra mesma pasta).</li>' +
-      '</ol></details>';
-  }
+  // ⚠️ REMOVIDOS na 1.8.4: `_zipBtn` (botão de baixar o zip) e `_installHelp` (o <details>
+  // com o passo a passo de Modo do desenvolvedor). A extensão está na Chrome Web Store, e
+  // a ordem do dono é apontar pra ELA e não pro zip. Sideload não recebe auto-update — era
+  // exatamente o que fazia o gate de versão obrigar reinstalação manual a cada bump. Manter
+  // o caminho do zip ao lado da loja é manter viva a única forma de cair nesse buraco.
 
   function _renderSteps() {
     var host = document.getElementById('imp-steps');

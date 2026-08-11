@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.3';
+window.SCOREPLACE_VERSION = '1.8.4';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -120,12 +120,14 @@ window.SP_EXT_VERSION = '1.97';
 // coisa é o que faz uma divergir. Ver [[feedback_unify_dual_entry_points]].
 window.SP_EXT_STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
 
-// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo). Derivado de
-// SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não aceita, e a trava de
-// deploy (scripts/check-ext-version.js) garante que o arquivo existe. Hoje ele é o caminho
-// ALTERNATIVO (quem não usa Chrome/Web Store, ou precisa de uma versão que a loja ainda não
-// revisou) — a porta principal é a loja acima.
-window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
+// ⚠️ `window._spExtZipUrl` FOI REMOVIDO na 1.8.4 (ordem do dono: "o código do programa
+// aponta para ela [a loja] e não para o zip"). Nenhuma tela do app oferece mais download
+// de zip: instalar e atualizar passam pela loja acima, e é ela que dá o auto-update.
+// Sideload é o único jeito de ficar preso numa versão velha — que é exatamente o que o
+// gate de versão vinha punindo com reinstalação manual a cada bump.
+// O ARQUIVO .zip continua no repo de propósito: é o artefato que se SOBE pra Chrome Web
+// Store (gerado por `npm run ext:zip`). Ele é insumo de publicação, não caminho de
+// instalação — não voltar a linká-lo na UI.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)

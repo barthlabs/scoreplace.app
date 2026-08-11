@@ -18,19 +18,32 @@ ok(new RegExp("EXT_VERSION\\s*=\\s*'" + manifestVer + "'").test(R('extension/con
 ok(new RegExp("SP_EXT_VERSION\\s*=\\s*'" + manifestVer + "'").test(R('js/store.js')),
   'o gate do app exige exatamente a versão atual');
 ok(fs.existsSync(path.join(root, 'scoreplace-letzplay-ext-' + manifestVer + '.zip')),
-  'o zip que o app oferece existe NA versão exigida');
+  'o zip de PUBLICAÇÃO existe na versão atual (é o que se sobe pra Chrome Web Store)');
 
-// 2) não sobrou zip de versão antiga (o link é derivado, mas o arquivo velho confunde)
+// 2) não sobrou zip de versão antiga (arquivo velho confunde na hora de subir pra loja)
 const zips = fs.readdirSync(root).filter((f) => /^scoreplace-letzplay-ext-.+\.zip$/.test(f));
-ok(zips.length === 1, 'existe UM zip publicado, o da versão atual (achei: ' + zips.join(', ') + ')');
+ok(zips.length === 1, 'existe UM zip, o da versão atual (achei: ' + zips.join(', ') + ')');
 
 // 3) o gate do app é o mesmo valor em todo lugar (nada hardcodado)
 ok(/_LZ_MIN_EXT = window\.SP_EXT_VERSION/.test(R('js/views/tournaments-enrollment-report.js')),
   'a Análise lê o mínimo de SP_EXT_VERSION');
 ok(/MIN_EXT_VERSION = window\.SP_EXT_VERSION/.test(R('js/views/letzplay-onboarding.js')),
   'o onboarding também — nenhum número solto');
-ok(/_spExtZipUrl = function \(\) \{ return '\/scoreplace-letzplay-ext-' \+ window\.SP_EXT_VERSION/.test(R('js/store.js')),
-  'o link de download é derivado do mesmo valor');
+// ⚠️ REVISADO na 1.8.4, com o motivo: aqui se travava que "o link de download do zip é
+// derivado de SP_EXT_VERSION". Esse invariante MORREU — não existe mais link de download:
+// a extensão está na Chrome Web Store e o app aponta só pra ela (ordem do dono). O que
+// entra no lugar é o invariante NOVO, mais forte: nenhuma tela pode oferecer zip, e a URL
+// da loja é fonte ÚNICA no store.js (ela já morou dentro de uma view e as outras duas
+// telas não a enxergavam — foi assim que a migração ficou pela metade).
+ok(/window\.SP_EXT_STORE_URL\s*=\s*'https:\/\/chromewebstore\.google\.com\//.test(R('js/store.js')),
+  'a URL da loja é fonte única no store.js');
+// procura a ATRIBUIÇÃO, não o nome: o comentário-lápide cita `_spExtZipUrl` de propósito,
+// pra quem grepar achar por que ele sumiu. Nome citado ≠ função viva.
+ok(!/window\._spExtZipUrl\s*=/.test(R('js/store.js')), 'o helper de link do zip não existe mais');
+for (const f of ['js/views/letzplay-onboarding.js', 'js/views/tournaments-enrollment-report.js']) {
+  ok(!/_spExtZipUrl|\.zip['"]|download class=/.test(R(f)), f + ' não oferece download de zip');
+  ok(/SP_EXT_STORE_URL/.test(R(f)), f + ' aponta pra loja');
+}
 
 // 4) a propagação é AUTOMÁTICA e roda em todo deploy
 ok(fs.existsSync(path.join(root, 'scripts/sync-ext-version.js')), 'existe o sincronizador');
