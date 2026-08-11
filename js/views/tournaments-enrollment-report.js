@@ -1353,7 +1353,9 @@
     // scoreplace: o pódio da identidade (icons/logo-podium.svg) desenhado inline, pra não
     // custar requisição por linha nem depender de <img> que falha em silêncio.
     return '<span title="scoreplace" aria-label="scoreplace" style="' + base + '">' +
-      '<svg viewBox="0 0 80 60" width="13" height="10" aria-hidden="true" focusable="false">' +
+      // 18×14 pra bater com o peso visual do "LP" (0.74rem bold). A 13×10 o pódio ficava
+      // visivelmente menor que a sigla irmã — os dois selos têm que pesar igual na linha.
+      '<svg viewBox="0 0 80 60" width="18" height="14" aria-hidden="true" focusable="false">' +
         '<rect x="2" y="30" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
         '<rect x="29" y="10" width="22" height="50" rx="3" fill="#F59E0B"/>' +
         '<rect x="56" y="40" width="22" height="20" rx="3" fill="#FB923C"/>' +

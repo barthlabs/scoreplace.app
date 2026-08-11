@@ -20,7 +20,7 @@
  *
  * ⚠️ O QUE ESTE MÓDULO NÃO INVENTA: dentro de uma mesma rodada eliminatória não existe
  * ordem — quem perdeu nas quartas empata em 5º. Cravar "6º" exigiria um critério de
- * desempate que o torneio não jogou. Então devolve-se a FAIXA CERTA (5º–7º) + a FASE em que
+ * desempate que o torneio não jogou. Então devolve-se a FAIXA CERTA (5º/7º) + a FASE em que
  * parou, que é informação verdadeira. Inventar o número exato seria repetir, com outra
  * roupa, o erro do pódio falso que originou este arquivo.
  */
@@ -78,7 +78,7 @@
    *
    * Cada time recebe { key, handles, names, ateOnde, posMin, posMax, rotulo }.
    */
-  function compute(matches) {
+  function compute(matches, opts) {
     var lista = (matches || []).filter(function (m) { return m && m.sides && m.sides.length === 2; });
     var porTime = {};                    // key → { …, perdeuEm, venceuFinal }
     var vistos = [];                     // ordem estável de descoberta
@@ -125,13 +125,32 @@
       if (t.perdeuEm === 'final') { t.ateOnde = 'vice'; t.posMin = t.posMax = 2; return; }
       if (temTerceiro && t.venceuTerceiro) { t.ateOnde = 'semifinal'; t.posMin = t.posMax = 3; return; }
       if (temTerceiro && t.perdeuTerceiro) { t.ateOnde = 'semifinal'; t.posMin = t.posMax = 4; return; }
-      if (!t.perdeuEm) { t.ateOnde = null; t.posMin = t.posMax = null; return; }
+      if (!t.perdeuEm) { t.ateOnde = 'fase de grupos'; t.posMin = t.posMax = null; return; }
       // faixa = logo depois dos times que ficaram à frente, com largura = nº de perdedores
       var base = _acumuladoAcima(t.perdeuEm, perdedores, temTerceiro);
       var n = (perdedores[t.perdeuEm] || []).length;
       t.ateOnde = _nomeDe(t.perdeuEm);
       t.posMin = base + 1;
       t.posMax = base + n;
+    });
+
+    // ── QUEM PAROU NOS GRUPOS TAMBÉM TEM CLASSIFICAÇÃO ──────────────────────────
+    // Regra do dono: "se o ultimo colocado que passou da fase de grupos ficou em 5o/7o,
+    // entao os que nao chegaram ai ficaram em ultimo a 8o (e o ultimo é o numero de
+    // participantes)". Ou seja: a faixa começa logo depois da chave e termina no total.
+    // O total sai de `opts.totalTimes` quando o chamador sabe (soma das linhas dos grupos);
+    // senão, do que conhecemos — e aí é PISO, não verdade: só se sabe o total quando se
+    // leu a fase de grupos inteira, então sem isso não se afirma o último lugar.
+    var ultimaDaChave = 0;
+    vistos.forEach(function (t) { if (t.posMax != null && t.posMax > ultimaDaChave) ultimaDaChave = t.posMax; });
+    var totalInformado = opts && opts.totalTimes > 0 ? opts.totalTimes : 0;
+    var totalConhecido = totalInformado || vistos.length;
+    vistos.forEach(function (t) {
+      if (t.posMin != null || t.ateOnde !== 'fase de grupos') return;
+      if (!ultimaDaChave) return;                       // sem chave não há de onde começar
+      t.posMin = ultimaDaChave + 1;
+      t.posMax = totalConhecido > t.posMin ? totalConhecido : t.posMin;
+      t.totalEstimado = !totalInformado;                // sem total declarado, é piso
     });
 
     vistos.forEach(function (t) { t.rotulo = rotuloDe(t); });
@@ -172,29 +191,100 @@
   }
 
   /** Texto curto e honesto: nunca crava número dentro de uma faixa.
-   *  Posição EXATA vai sozinha ("3º") — a fase ali não acrescenta nada e confunde
-   *  (quem venceu a disputa de 3º perdeu na semi, e "3º (semifinal)" se lia como erro).
-   *  Já a FAIXA precisa da fase, porque é ela que explica por que não há número único. */
+   *  Pedido do dono: "mencionar a fase em que caiu (se nao chegou a final) … apenas o nome
+   *  da fase entre parentesis". Então Campeão e Vice vão sem parêntese (os dois CHEGARAM à
+   *  final — dizer a fase ali seria redundante) e todo o resto leva a fase, inclusive
+   *  posição exata: "3º (semifinal)". */
   function rotuloDe(t) {
     if (!t || t.posMin == null) return null;
     if (t.posMin === 1) return 'Campeão';
     if (t.posMin === 2) return 'Vice';
-    if (t.posMin === t.posMax) return t.posMin + 'º';
-    return t.posMin + 'º–' + t.posMax + 'º' + (t.ateOnde ? ' (' + t.ateOnde + ')' : '');
+    // separador "/" e não "–": é como o dono escreve ("3o/4o lugar", "5o/7o") e ele
+    // confirmou que a faixa diz muito — "5º/7º (quartas)" é mais direto que um número só.
+    var faixa = (t.posMin === t.posMax) ? (t.posMin + 'º') : (t.posMin + 'º/' + t.posMax + 'º');
+    return faixa + (t.ateOnde ? ' (' + t.ateOnde + ')' : '');
   }
 
   /** A resposta pra UMA pessoa: onde ela terminou naquela categoria. */
-  function doHandle(matches, handle) {
-    var r = compute(matches);
+  function doHandle(matches, handle, opts) {
+    var r = computeAuto(matches, opts);
     var t = r.porHandle[String(handle || '').toLowerCase()];
     if (!r.temChave) return { conhecido: false, motivo: 'sem-chave' };
     if (!t) return { conhecido: true, chegouNaChave: false, ateOnde: 'fase de grupos',
                      rotulo: 'Fase de grupos', posMin: null, posMax: null };
+    if (!t.chegou && t.ateOnde === 'fase de grupos') { /* cai no retorno geral abaixo */ }
     return { conhecido: true, chegouNaChave: true, ateOnde: t.ateOnde, rotulo: t.rotulo,
              posMin: t.posMin, posMax: t.posMax };
   }
 
-  var API = { compute: compute, doHandle: doHandle, timeKey: timeKey,
+  // ── QUANDO A FASE NÃO VEM ESCRITA: inferir pela ORDEM ────────────────────────
+  // Dono: "pode ser que outros torneios nao tenham a fase escrita (estejam mais
+  // desorganizados) … de qualquer forma, os torneios devem ao menos ser organizados de
+  // forma que o ultimo jogo seja a final e a partir dai, voltando para tras temos as semis,
+  // quartas, oitavas".
+  //
+  // Anda do FIM pra trás: 1 final, 2 semis, 4 quartas, 8 oitavas… ⚠️ Mas só rotula se a
+  // ESTRUTURA confirmar: quem joga uma rodada tem que ter VENCIDO na rodada anterior (ou
+  // entrado por bye). Sem essa checagem, um torneio de pontos corridos — que não tem final
+  // nenhuma — ganharia um "campeão" inventado só porque alguém jogou por último. Na dúvida
+  // devolve null e o chamador fica sem colocação, que é melhor que uma errada.
+  function inferirFases(matches) {
+    var ord = (matches || []).filter(function (m) { return m && m.sides && m.sides.length === 2; })
+      .slice().sort(function (a, b) { return (a.n || 0) - (b.n || 0); });
+    if (ord.length < 3) return null;
+
+    var blocos = [], idx = ord.length - 1;
+    for (var ri = 0; ri < RODADAS.length && idx >= 0; ri++) {
+      var querem = (ri === 0) ? 1 : Math.pow(2, ri);      // 1, 2, 4, 8, 16
+      var bloco = [];
+      for (var k = 0; k < querem && idx >= 0; k++) bloco.unshift(ord[idx--]);
+      blocos.push({ chave: RODADAS[ri].chave, jogos: bloco });
+      if (bloco.length < querem) break;                   // acabou no meio → para aqui
+    }
+    if (!blocos.length || blocos[0].jogos.length !== 1) return null;
+
+    // estrutura: cada time de um bloco tem que ter VENCIDO no bloco anterior (ou ter bye)
+    for (var b = 0; b < blocos.length - 1; b++) {
+      var atual = blocos[b], anterior = blocos[b + 1];
+      var vencedoresAntes = {};
+      anterior.jogos.forEach(function (m) {
+        var v = vencedor(m); if (v == null) return;
+        vencedoresAntes[timeKey(m.sides[v])] = 1;
+      });
+      var confere = 0, total = 0;
+      atual.jogos.forEach(function (m) {
+        m.sides.forEach(function (s) { total++; if (vencedoresAntes[timeKey(s)]) confere++; });
+      });
+      // pelo menos METADE tem que vir de vitória na rodada anterior; o resto pode ser bye.
+      // Zero é o sinal de que aquilo não é uma chave — aí não se rotula nada.
+      if (total === 0 || confere === 0 || confere * 2 < total) return null;
+    }
+
+    var porJogo = [];
+    blocos.forEach(function (bl) {
+      bl.jogos.forEach(function (m) {
+        porJogo.push({ n: m.n, phase: bl.chave, sides: m.sides, inferida: true });
+      });
+    });
+    return porJogo;
+  }
+
+  /** Usa a fase escrita quando existe; senão tenta inferir pela ordem. */
+  function computeAuto(matches, opts) {
+    var temFase = (matches || []).some(function (m) {
+      var f = classificaFase(m && m.phase);
+      return f && f.chave !== 'grupos';
+    });
+    if (temFase) return compute(matches, opts);
+    var inferido = inferirFases(matches);
+    if (!inferido) return compute(matches, opts);         // sem chave detectável
+    var r = compute(inferido, opts);
+    r.fasesInferidas = true;
+    return r;
+  }
+
+  var API = { compute: compute, computeAuto: computeAuto, inferirFases: inferirFases,
+              doHandle: doHandle, timeKey: timeKey,
               classificaFase: classificaFase, vencedor: vencedor, rotuloDe: rotuloDe };
   if (typeof window !== 'undefined') window._lzPlacement = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
