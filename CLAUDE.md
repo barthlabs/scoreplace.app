@@ -9,7 +9,7 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 - **Versao atual:** `1.7` (definida em `window.SCOREPLACE_VERSION` no store.js; esquema alinhado às lojas desde a v1.1 — ver memória `project_version_scheme_store_aligned`)
 - **Convenção de versão (a partir de 30 Abr 2026):** `MAJOR.MINOR.PATCH-channel` no padrão semver. Em fase **beta**, incremento PATCH a cada deploy (`1.0.0-beta` → `1.0.1-beta` → `1.0.2-beta` → ...). MINOR sobe quando há feature significativa nova; MAJOR reservado pra v2.0 (mudanças incompatíveis). Estável: dropar o `-beta` (`1.0.0`).
 - **URL principal:** https://scoreplace.app
-- **GitHub repo:** `rstbarth/scoreplace.app`
+- **GitHub repo:** `barthlabs/scoreplace.app` — ⚠️ **NÃO é `rstbarth/scoreplace.app`**, que este arquivo afirmou até 10/ago/2026. Os dois existem: `rstbarth/` é um espelho **ABANDONADO** (último push 20/mai/2026, `main` em `0ce285bb`) e `barthlabs/` é o `origin` de verdade. Isso importa porque o GitHub é **o backup** contra a corrupção do `.git` pelo Drive ([[project_git_repo_lives_in_google_drive]]): empurrar backup pro espelho morto — ou LER dele achando que é atual — é falha silenciosa. Conferir sempre com `git remote -v`.
 - **Banco de dados:** Cloud Firestore (projeto Firebase: `scoreplace-app`)
 - **Auth:** Firebase Auth com Google Sign-In (popup)
 - **localStorage:** prefixo `scoreplace_*` (preferências, cache)
@@ -1383,7 +1383,7 @@ GitHub Actions/Pages ficou em **major outage** e o site seguiu servindo normal.
 - CNAME www â rstbarth.github.io
 
 ### Pre-requisitos
-- Git inicializado na pasta local com remote `origin` apontando para `https://github.com/rstbarth/scoreplace.app.git`
+- Git inicializado na pasta local com remote `origin` apontando para `https://github.com/barthlabs/scoreplace.app.git` (⚠️ **não** `rstbarth/…` — ver o aviso lá em cima)
 - `gh auth setup-git` executado para autenticacao via GitHub CLI
 - `.gitignore` configurado (`.DS_Store`, `.claude/`, `*.backup`, `*.bak`, `outputs/`, `extensions/`, `functions/node_modules/`)
 
