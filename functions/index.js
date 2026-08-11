@@ -47,9 +47,11 @@ const fetch = require("node-fetch");
 
 admin.initializeApp();
 
-// CORS unificado pros callables/onRequest do frontend. Inclui produção, o ambiente
-// de STAGING (scoreplace-staging.web.app + .firebaseapp.com) e localhost de dev.
-// Centralizado pra evitar drift entre as ~23 functions e dar paridade prod↔staging.
+// CORS unificado pros callables/onRequest do frontend: produção, os esquemas do app
+// nativo e localhost de dev. Centralizado pra evitar drift entre as ~23 functions.
+// (Até a 1.8.3 listava também scoreplace-staging.web.app/.firebaseapp.com; o ambiente
+// foi deletado em 19/jul/2026 e nenhum cliente pode originar de um host que não
+// resolve — as duas entradas saíram.)
 // ORIGENS que podem chamar as CFs. O APP NATIVO NÃO fala "https://scoreplace.app": o WKWebView
 // PROÍBE registrar handler pra http/https, então o Capacitor descarta iosScheme:"https" e cai no
 // default → a origem no iPhone é "capacitor://scoreplace.app" (CAPInstanceDescriptor: se
@@ -65,8 +67,6 @@ const APP_ORIGINS = [
   "capacitor://localhost",        // iOS nativo sem hostname configurado
   "http://localhost",             // Android WebView legado
   "https://localhost",            // Android nativo (androidScheme https sem hostname)
-  "https://scoreplace-staging.web.app",
-  "https://scoreplace-staging.firebaseapp.com",
   "http://localhost:9876",
 ];
 

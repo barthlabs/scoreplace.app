@@ -54,7 +54,8 @@ var ERR_MSG = {
 };
 function sendToScoreplace(imp) {
   status('Enviando pro scoreplace…');
-  chrome.tabs.query({ url: ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'] }, function (tabs) {
+  // (scoreplace-staging.web.app saiu na 1.8.3 — host deletado, devolve 404.)
+  chrome.tabs.query({ url: ['https://scoreplace.app/*', 'http://localhost/*'] }, function (tabs) {
     if (!tabs || !tabs.length) {
       status('⚠️ Abra o scoreplace.app numa aba (logado) e clique de novo.'); return;
     }
