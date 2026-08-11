@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.97';
+  var EXT_VERSION = '1.98';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -987,6 +987,15 @@
       imp.lzCursor = { v: 4, handle: realHandle, toursDone: C.toursDone, ranksDone: C.ranksDone,
         pageDone: lastPageRead, pagesRead: C.pagesRead, pagesTotal: maxPage || null,
         complete: C.complete === true };
+      // QUAL MOTOR LEU ISTO. Sem este carimbo o app não tem como saber se um histórico
+      // veio da extensão atual ou de uma anterior — e leitura antiga com aparência boa
+      // (jogos com id, data recente) era absolvida como VERDE mesmo tendo sido produzida
+      // por um pipeline que já se sabe defeituoso. Regra do dono (11/ago/2026): _"se
+      // baixamos o letzplay desses que autorizaram mas a extensão mudou, baixou pelo motor
+      // desatualizado e por isso todos devem voltar a ser roxo até ter rodado pelo motor
+      // novo"_. Quem confere é `_lzMotorAtual` (tournaments-enrollment-report.js): toda
+      // leitura SEM este campo é, por definição, de motor antigo.
+      imp.extVersion = EXT_VERSION;
       return boundImportDoc(imp);
     }
     // Só o que ENTROU desde o último flush: regravar tudo a cada parcial custava ~25 mil

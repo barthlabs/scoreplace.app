@@ -4320,6 +4320,10 @@ async function simulateLoginSuccess(user) {
   // v1.7.41: o trigger sinaliza o conflito de nome em `nameConflict`; aqui é quem PERGUNTA.
   // Atrasado: o perfil chega pelo listener e `nameConflict` só existe depois dele.
   setTimeout(function () { if (typeof window._askNameConflict === 'function') window._askNameConflict(); }, 4000);
+  // A pergunta de SEGUNDA CONTA vem depois da de nome — duas caixas ao mesmo tempo é o
+  // jeito mais rápido de a pessoa fechar as duas no automático (que é justamente o que o
+  // dono descreveu: "as pessoas às vezes não leem na pressa e fecham respondendo não").
+  setTimeout(function () { if (typeof window._askDuplicateAccount === 'function') window._askDuplicateAccount(); }, 9000);
 
   // Quando perfil carregar: remover dot de carregamento da topbar e re-renderizar botão
   // Ouvinte único — remove-se após disparar pra não acumular listeners entre logins.
@@ -7800,6 +7804,64 @@ function setupProfileModal() {
 // Nada é fundido aqui. "Sim" leva pro perfil, onde vivem os dois canais de PROVA DE POSSE
 // (link no e-mail / SMS no celular da outra conta) — nome igual detecta, nome igual não
 // autoriza ([[project_unique_display_name]]). "Não" só troca o próprio nome por um livre.
+// ─── POSSÍVEL SEGUNDA CONTA — a pergunta no CADASTRO (v1.7.99) ───────────────────────
+// Regra do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
+// cadastra"_ e _"tem que perguntar"_. O trigger grava `dupSuspect` (só o contato
+// MASCARADO); aqui é quem finalmente PERGUNTA — sem isso o sinal era gravado e ninguém lia.
+//
+// ⚠️ SEPARADO do `_askNameConflict` de propósito. Aquele é UNICIDADE (nome idêntico → a
+// saída é escolher outro nome). Este é DUPLICATA (nome PARECIDO ou credencial) → a saída é
+// unir ou dizer "não sou eu". Sobre "Rodrigo Terra Barth" × "Rodrigo Barth" o dono foi
+// explícito: _"é diferente. se disser que não é, não é, mas é um baita indício."_ — ninguém
+// precisa trocar de nome por isso, precisa ser perguntado.
+//
+// NADA é fundido aqui. "Sim" leva ao perfil, onde vivem os canais de PROVA DE POSSE (link
+// no e-mail / SMS no celular da outra conta). Credencial já autenticada nem chega aqui: o
+// servidor funde antes ([[project_dismiss_reopens_on_stronger_signal]]).
+window._askDuplicateAccount = function () {
+  try {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) return;
+    var ds = cu.dupSuspect;
+    if (!ds || !ds.nome) return;
+    if (window._dupAccountAsked) return;        // uma vez por sessão
+    window._dupAccountAsked = true;
+
+    var contato = ds.maskedEmail || ds.maskedPhone || '';
+    // NUNCA AFIRMA — mesma doutrina do texto da inscrição: dizer "você já tem outra conta"
+    // MENTE quando são dois homônimos de verdade (o par "Nelson Barth"), e não diz COM QUAL
+    // conta, que é a única informação acionável.
+    var corpo =
+      '<div style="font-size:0.86rem;line-height:1.5;">' +
+        'Você PARECE já ter outra conta aqui' +
+        (contato ? (', a <strong>' + window._safeHtml(contato) + '</strong>') : '') +
+        ', cadastrada como <strong>' + window._safeHtml(ds.nome) + '</strong>.' +
+      '</div>' +
+      '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
+        'Se for <strong>sua</strong>, dá pra unir as duas — seus torneios, jogos e histórico ficam num lugar só. ' +
+        'A união só acontece depois que você confirmar a posse daquela conta (link no e-mail ou código no celular dela). ' +
+        'Se for outra pessoa, é só dizer que não é você — não perguntamos de novo.' +
+      '</div>';
+
+    showConfirmDialog('👥 Essa outra conta é sua?', corpo, function () {
+      if (typeof showNotification === 'function') {
+        showNotification('Confirme a posse', 'Abrimos seu perfil: confirme pelo e-mail ou pelo celular da outra conta pra unir as duas.', 'info');
+      }
+      window.location.hash = '#profile';
+    }, function () {
+      // "Não sou eu" → o servidor redescobre o par e anota COM a força do sinal, pra não
+      // perguntar de novo sem dado novo. O cliente nunca soube o uid do outro.
+      try {
+        if (typeof window._callCF === 'function') {
+          window._callCF('dismissDuplicateAccount', {})
+            .then(function () { if (window.AppStore.currentUser) window.AppStore.currentUser.dupSuspect = null; })
+            .catch(function (e) { if (window._warn) window._warn('[dupAccount] dismiss falhou:', e); });
+        }
+      } catch (e) { if (window._warn) window._warn('[dupAccount] dismiss falhou:', e); }
+    }, { confirmText: 'Sim, é minha outra conta', cancelText: 'Não sou eu' });
+  } catch (e) { if (window._warn) window._warn('[dupAccount] pergunta falhou:', e); }
+};
+
 window._askNameConflict = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;

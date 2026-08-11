@@ -2091,6 +2091,34 @@
     var g = (x && x.games) || [];
     return g.length > 0 && g.every(function (y) { return y && y.lzId; });
   }
+  // ─── O MOTOR QUE LEU ISTO É O ATUAL? ────────────────────────────────────────────
+  // Regra do dono (11/ago/2026): _"se baixamos o letzplay desses que autorizaram mas a
+  // extensão mudou, baixou pelo motor desatualizado e por isso todos devem voltar a ser
+  // roxo até ter rodado pelo motor novo (nova extensão)"_.
+  //
+  // POR QUE `_lzTemIds` NÃO BASTA: ele prova que a leitura veio de um pipeline que já
+  // gravava o id da partida — não que veio do pipeline ATUAL. Entre a 1.93 e a 1.97 o
+  // motor mudou (amistoso passou a contar, o fechamento virou verificação contra o
+  // índice), e uma leitura da 1.93 tem ids, é recente e passava como VERDE. Verde é
+  // ABSOLVIÇÃO; absolver com motor que já se sabe defeituoso é afirmar o que não se sabe.
+  //
+  // A prova é o carimbo `extVersion`, gravado pela extensão em cada leitura. Leitura SEM
+  // o campo é, por definição, anterior a este carimbo → motor antigo. É isso que faz TODAS
+  // as leituras de hoje voltarem a violeta sem precisar migrar nada no banco: a ausência
+  // do dado já é a resposta. Volta a verde quando a pessoa puxar de novo pela extensão nova.
+  //
+  // FONTE ÚNICA da versão exigida: window.SP_EXT_VERSION (store.js) — a MESMA que o gate de
+  // instalação usa. Nunca hardcodar um número aqui, senão o app passa a exigir uma versão
+  // e o download entrega outra.
+  function _lzMotorAtual(x) {
+    var v = x && x.extVersion;
+    if (!v) return false;                                   // sem carimbo = motor antigo
+    var min = window.SP_EXT_VERSION;
+    if (!min) return true;                                   // sem referência, não reprova
+    return (typeof window._verGte === 'function')
+      ? window._verGte(String(v), String(min))
+      : String(v) === String(min);
+  }
   function _lzQuando(x) {
     var ms = Date.parse((x && (x.importedAt || x.at)) || '');
     return isNaN(ms) ? 0 : ms;
@@ -2224,6 +2252,11 @@
         // perdia competição. A prova de motor novo está no dado — o id da partida vindo do
         // letzplay (`lzId`). Sem ele, violeta: autorizou, mas ainda não foi lido direito.
         if (v.key === 'green' && !_lzTemIds(li)) v = { key: 'white', apurada: null };
+        // ... e VERDE EXIGE O MOTOR ATUAL. Ter id prova que veio de um pipeline com ids,
+        // não que veio DESTE. Entre versões da extensão o motor mudou (o amistoso passou a
+        // contar, o fechamento virou verificação contra o índice) — leitura da versão
+        // anterior tem id, é recente, e mesmo assim não foi lida direito. Ver _lzMotorAtual.
+        if (v.key === 'green' && !_lzMotorAtual(li)) v = { key: 'white', apurada: null };
         if (v.key !== 'white') { r._lzColor = _LZ_COL[v.key]; r._lzVerified = true; }
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
@@ -2242,6 +2275,9 @@
         // mesmo com captura incompleta. O que a falta de dado impede é a ABSOLVIÇÃO.
         if (v2.key === 'green' && !_lzScanComplete(sc)) v2 = { key: 'white', apurada: null };
         if (v2.key === 'green' && !_lzFresco(sc) && !_lzFresco(scanMap[r.uid])) v2 = { key: 'white', apurada: null };
+        // Mesmo motivo do caminho do import: absolver exige o motor atual. O scan herda o
+        // carimbo da leitura que o produziu (scanFromImport), então a checagem é a mesma.
+        if (v2.key === 'green' && !_lzMotorAtual(sc) && !_lzMotorAtual(li)) v2 = { key: 'white', apurada: null };
         r._lzSrc = '🔎';
         r._lzSkill = sc.profileSkill || sc.skill || (v2.apurada != null ? _LTR[v2.apurada] : null);
         if (v2.key !== 'white') { r._lzColor = _LZ_COL[v2.key]; r._lzVerified = true; }
@@ -2953,7 +2989,7 @@
       }
       // POR QUE ESTÁ ROXO. 100% capturado não é o mesmo que lido pelo motor atual — e sem
       // dizer isso a tela parece contraditória ("estou com 100%, por que continua roxo?").
-      var _velho = !_lzTemIds(imp), _antigo = !_lzFresco(imp);
+      var _velho = !_lzTemIds(imp) || !_lzMotorAtual(imp), _antigo = !_lzFresco(imp);
       if (_velho || _antigo) {
         body += '<div style="font-size:0.8rem;color:#a78bfa;margin-top:6px;line-height:1.45;">' +
           (_velho

@@ -3536,7 +3536,21 @@ function renderTournaments(container, tournamentId = null) {
           // separada (_buildDropzone), que só aparece durante o arraste.
           var _tapAttrs = isTapPicker ? ' title="Toque para co-organizar" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"' : '';
           var _starSpan = '<span class="sp-org-star" style="display:inline-flex;align-items:center;flex-shrink:0;">' + _crownSvg + '</span>';
-          return '<div class="sp-org-card"' + _tapAttrs + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
+          // v1.7.99 — O CARD DE ORGANIZAÇÃO ENTRA NO FILTRO DA BUSCA.
+          // Relato do dono (11/ago/2026), com o filtro em "debora": _"os organizadores
+          // nenhum é debora e ficam lá atrapalhando a tela. se tiver organizador que bate
+          // com o filtro deve aparecer. se não deve sumir"_. Estes cards ficam ACIMA do
+          // chaveamento na página do torneio, então continuavam ocupando a primeira tela
+          // inteira enquanto o resultado da busca ficava empurrado pra baixo.
+          // `data-players` é o MESMO atributo que os cards de jogo usam — quem filtra
+          // segue sendo `_bracketApplyFilter`, um lugar só; aqui só se declara que este
+          // card também é "gente com nome". Sem filtro ativo nada muda; e como o filtro
+          // sobe pelos ancestrais (1.6.87), o rótulo "ORGANIZAÇÃO" some junto quando
+          // nenhum organizador casa, em vez de ficar um título órfão.
+          // `data-my-match="1"`: organizador não é JOGO, então o toggle "Só meus jogos"
+          // não pode apagá-lo — mesma decisão dos chips de quem ficou de fora (1.6.93).
+          var _orgFiltro = ' data-players="' + window._safeHtml(String(name || '') + ' ' + String(role || '')) + '" data-my-match="1"';
+          return '<div class="sp-org-card"' + _tapAttrs + _orgFiltro + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="display:flex;align-items:center;gap:4px;">' +
@@ -3559,7 +3573,10 @@ function renderTournaments(container, tournamentId = null) {
           var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[_lc] && window._playerPhotoCache[_lc].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_lc] : _oFallback;
           var _safeTId = window._safeHtml(String(_t.id));
           var _rmBtn = canRemove ? '<button type="button" class="cancel-x-btn" style="--cx-size:20px;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
-          return '<div class="sp-org-card sp-org-pending" style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
+          // Convite pendente é gente com nome igual aos demais — entra no filtro do
+          // mesmo jeito (ver _buildOrgCard).
+          var _pendFiltro = ' data-players="' + window._safeHtml(String(name || '') + ' co-organizador pendente') + '" data-my-match="1"';
+          return '<div class="sp-org-card sp-org-pending"' + _pendFiltro + ' style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;" />' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="height:1.15rem;overflow:hidden;display:flex;align-items:center;"><span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' + '</div>' +

@@ -32,6 +32,20 @@ const COL = window._LZ_COL;
 // e absolver com dado velho é chute — um título tirado semana passada muda o veredito.
 const AGORA = new Date().toISOString();
 const VELHO = new Date(Date.now() - 120 * 86400000).toISOString();   // 4 meses → fora da janela
+// v1.7.99 — CARIMBO DO MOTOR. Uma leitura só pode ABSOLVER (verde) se veio da extensão
+// ATUAL: entre versões o motor mudou (o amistoso passou a contar, o fechamento virou
+// verificação contra o índice), e leitura da versão anterior tem id, é recente e mesmo
+// assim não foi lida direito. Por isso os fixtures que esperam VERDE agora carregam
+// `extVersion` — é o que a extensão grava em cada leitura. Ver _lzMotorAtual.
+// O harness carrega só o tournaments-enrollment-report.js — `SP_EXT_VERSION` mora no
+// store.js e chegaria `undefined`, o que reprovaria TODA leitura por falta de referência.
+// Lê da FONTE ÚNICA (o próprio store.js) em vez de cravar o número aqui: cravado, o teste
+// passaria a aceitar uma versão que o app já não aceita no dia em que ela subir.
+window.SP_EXT_VERSION = (require('fs')
+  .readFileSync(require('path').join(__dirname, '..', 'js', 'store.js'), 'utf8')
+  .match(/SP_EXT_VERSION\s*=\s*'([^']+)'/) || [])[1];
+if (!window.SP_EXT_VERSION) throw new Error('SP_EXT_VERSION não encontrado no store.js');
+const MOTOR = window.SP_EXT_VERSION;
 const DOIS_MESES = new Date(Date.now() - 60 * 86400000).toISOString(); // dentro dos 3 meses
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -41,7 +55,7 @@ const scanFlavia = {
   handle: 'FlaviaCampion', name: 'Flavia Campion',
   rankingCategory: 'Fem D+ / C-', allCategories: ['Fem D+ / C-'],
   gender: 'feminino', skill: 'C', profileSkill: 'D', champions: [],
-  at: AGORA,
+  at: AGORA, extVersion: MOTOR,
   rankings: [{ category: 'Fem D+ / C-', active: true, position: null, fieldSize: null }, { category: 'Fem D+ / C-', active: true }, { category: 'Fem D', active: false }],
   tournaments: [], totals: { rankings: 3, tournaments: 2, matches: 66 },   // ← 2 torneios declarados, 0 capturados: INCOMPLETO (real)
 };
@@ -49,7 +63,7 @@ const scanKelly = {
   handle: 'KellyBarth1', name: 'Kelly Barth',
   rankingCategory: 'Fem C+ / B-', allCategories: ['Fem C+ / B-'],
   gender: 'feminino', skill: 'B', profileSkill: 'C', champions: [],
-  at: AGORA,
+  at: AGORA, extVersion: MOTOR,
   rankings: [{ category: 'Fem C+ / B-', active: true, position: null, fieldSize: null }],
   tournaments: [], totals: { rankings: 1, tournaments: 0, matches: 152 },   // scan COMPLETO (pra testar o caminho feliz)
 };
@@ -163,7 +177,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 // O letzplay declara o total na própria página; guardá-lo dá prova de completude de graça.
 {
   const impCompleto = { handle: 'RodrigoBarth', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
   const r = run({ uid: 'r1', effectiveSkills: [] }, { r1: Object.assign({ letzplayImport: impCompleto }, profAuthorized) }, {});
   ok(r._lzColor === COL.green, 'autoimport 81 de 81 declarados → VERDE (veio: ' + r._lzColor + ')');
   ok(r._lzSrc === '🎾', 'fonte = autoimport');
@@ -171,14 +185,14 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 {
   // PARCIAL salvo (a paginação morreu na metade): tem 60 dos 81 → não absolve
   const impParcial = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(60), declaredGames: 81 };
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(60), declaredGames: 81 };
   const r = run({ uid: 'r2', effectiveSkills: [] }, { r2: Object.assign({ letzplayImport: impParcial }, profAuthorized) }, {});
   ok(r._lzColor === COL.violet, '60 de 81 declarados → ROXO, não verde (veio: ' + r._lzColor + ')');
 }
 {
   // ele mesmo diz que parou no meio, mesmo com a contagem batendo
   const impInterrompido = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81,
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'D+/C-' }, rankings: [], tournaments: [], games: new Array(81), declaredGames: 81,
     partialReason: 'rate: HTTP 403' };
   const r = run({ uid: 'r3', effectiveSkills: [] }, { r3: Object.assign({ letzplayImport: impInterrompido }, profAuthorized) }, {});
   ok(r._lzColor === COL.violet, 'partialReason presente → ROXO mesmo com a contagem batendo');
@@ -186,7 +200,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 {
   // import LEGADO (sem declaredGames): mantém o comportamento antigo — não regride
   const impLegado = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, footprint: [], games: new Array(81) };
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'D+/C-' }, footprint: [], games: new Array(81) };
   const r = run({ uid: 'r4', effectiveSkills: [] }, { r4: Object.assign({ letzplayImport: impLegado }, profAuthorized) }, {});
   ok(r._lzColor === COL.green, 'import legado sem declaredGames → segue VERDE (não regride quem já tinha)');
 }
@@ -197,7 +211,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   // passava enquanto a produção ficava violeta. Corrigido em 03/ago/2026 com o doc da
   // Kelly na mão: `tournaments: 0`, `footprint` com as 8 competições.
   const impGato = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
-    importedAt: AGORA, rating: { band: 'D+/C-' }, games: new Array(60), declaredGames: 81,
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'D+/C-' }, games: new Array(60), declaredGames: 81,
     footprint: [{ official: true, categoryRaw: 'Masculina C', title: true }] };
   const r = run({ uid: 'r5', effectiveSkills: ['D'] }, { r5: Object.assign({ letzplayImport: impGato }, profAuthorized) }, {});
   ok(r._lzColor === COL.red, 'campeão achado em import PARCIAL → VERMELHO (achar é prova; não achar não é)');
@@ -213,7 +227,7 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 // Depender do letzplayImport é fazer a leitura do organizador esperar o inscrito logar.
 {
   const fullDoOrg = { games: new Array(152), officialCategory: { categoryRaw: 'Feminina C', skill: 'C' },
-    importedAt: AGORA, rating: { band: 'C+/B-' }, rankings: [], tournaments: [] };
+    importedAt: AGORA, extVersion: MOTOR, rating: { band: 'C+/B-' }, rankings: [], tournaments: [] };
   const scanResumido = Object.assign({}, scanKelly, { tournaments: [], totals: { rankings: 8, tournaments: 8, matches: 152 } });
   const r = run({ uid: 'k9', effectiveSkills: [] }, { k9: profAuthorized }, { k9: { scan: scanResumido, fullImport: fullDoOrg } });
   ok(r._lzColor === COL.green, 'histórico completo no fullImport do SCAN → VERDE (veio: ' + r._lzColor + ')');
@@ -422,8 +436,8 @@ console.log('\n── frescor: verde exige leitura recente ──');
 {
   const base = { source: 'letzplay', handle: 'x', officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
     rankings: [], tournaments: [], games: new Array(81), declaredGames: 81 };
-  const novo = Object.assign({}, base, { importedAt: AGORA });
-  const velho = Object.assign({}, base, { importedAt: VELHO });
+  const novo = Object.assign({}, base, { importedAt: AGORA, extVersion: MOTOR });
+  const velho = Object.assign({}, base, { importedAt: VELHO, extVersion: MOTOR });
   const semData = Object.assign({}, base);                       // é o caso de TODO perfil antigo
   const rN = run({ uid: 'f1', effectiveSkills: [] }, { f1: Object.assign({ letzplayImport: novo }, profAuthorized) }, {});
   const rV = run({ uid: 'f2', effectiveSkills: [] }, { f2: Object.assign({ letzplayImport: velho }, profAuthorized) }, {});
@@ -449,7 +463,7 @@ console.log('\n── frescor: verde exige leitura recente ──');
 // exigia `jogos >= declaredGames`, a leitura fechada ficava "INCOMPLETA" por 9 fantasmas.
 console.log('\n── completude pelo cursor (478 cards × 469 partidas) ──');
 {
-  const camila = { source: 'letzplay', handle: 'camilacalia', importedAt: AGORA,
+  const camila = { source: 'letzplay', handle: 'camilacalia', importedAt: AGORA, extVersion: MOTOR,
     officialCategory: { skill: 'C', categoryRaw: 'Fem C' }, rankings: [], tournaments: [],
     games: new Array(469), declaredGames: 478,
     lzCursor: { v: 4, complete: true, pageDone: 24, pagesTotal: 24 } };
@@ -502,12 +516,12 @@ console.log('\n── abas: torneios · rankings · jogos ──');
 // mais velhos. "Vence quem tem mais" trouxe o lixo de volta pra tela.
 console.log('\n── escolha entre os dois imports ──');
 {
-  const limpo = { importedAt: AGORA, games: Array.from({ length: 469 }, (_, i) => ({ lzId: 'x' + i })) };
+  const limpo = { importedAt: AGORA, extVersion: MOTOR, games: Array.from({ length: 469 }, (_, i) => ({ lzId: 'x' + i })) };
   const sujo = { importedAt: VELHO, games: Array.from({ length: 569 }, () => ({})) };
   ok(window._lzMelhorImport(sujo, limpo) === limpo, 'com id vence sem id, mesmo com menos jogos');
   ok(window._lzMelhorImport(limpo, sujo) === limpo, 'a ordem dos argumentos não muda o resultado');
-  const velhoComId = { importedAt: VELHO, games: [{ lzId: '1' }] };
-  const novoComId = { importedAt: AGORA, games: [{ lzId: '1' }, { lzId: '2' }] };
+  const velhoComId = { importedAt: VELHO, extVersion: MOTOR, games: [{ lzId: '1' }] };
+  const novoComId = { importedAt: AGORA, extVersion: MOTOR, games: [{ lzId: '1' }, { lzId: '2' }] };
   ok(window._lzMelhorImport(velhoComId, novoComId) === novoComId, 'empatados no id, vence o mais recente');
   ok(window._lzMelhorImport(null, sujo) === sujo, 'um só existindo, é ele');
   ok(window._lzMelhorImport(null, null) === null, 'nenhum dos dois → null');
@@ -526,7 +540,7 @@ console.log('\n── total de rankings (footprint fragmentado) ──');
     }
   }
   ok(fp.length === 20, 'o fixture reproduz o footprint inflado (' + fp.length + ' entradas pra 8 rankings)');
-  const imp = { handle: 'kelly', importedAt: AGORA, declaredRankings: 8, footprint: fp,
+  const imp = { handle: 'kelly', importedAt: AGORA, extVersion: MOTOR, declaredRankings: 8, footprint: fp,
     rankingsList: Array.from({ length: 8 }, (_, i) => ({ club: 'pb', rid: String(100 + i) })),
     games: [{ lzId: '1' }], lzCursor: { v: 4, complete: true,
       ranksDone: Object.fromEntries(fp.map(f => ['r/pb/' + f.rankingId, 1])) } };
@@ -541,7 +555,7 @@ console.log('\n── total de rankings (footprint fragmentado) ──');
 // velho, que duplicava partida e perdia competição.
 console.log('\n── verde exige o motor novo ──');
 {
-  const base = { importedAt: AGORA, officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
+  const base = { importedAt: AGORA, extVersion: MOTOR, officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
     rankings: [], tournaments: [], declaredGames: 81,
     lzCursor: { v: 4, complete: true, pageDone: 1, pagesTotal: 1 } };
   const motorNovo = Object.assign({}, base, { games: Array.from({ length: 81 }, (_, i) => ({ lzId: 'g' + i })) });
@@ -556,7 +570,7 @@ console.log('\n── verde exige o motor novo ──');
   ok(rM._lzColor !== COL.green, 'meio lido pelo motor velho também não absolve');
 
   // AS DUAS CONDIÇÕES, JUNTAS (regra do dono: "é motor atual E data. as duas coisas").
-  const novoMasVelho = Object.assign({}, base, { importedAt: VELHO,
+  const novoMasVelho = Object.assign({}, base, { importedAt: VELHO, extVersion: MOTOR,
     games: Array.from({ length: 81 }, (_, i) => ({ lzId: 'g' + i })) });
   const rNV = run({ uid: 'm4', effectiveSkills: [] }, { m4: Object.assign({ letzplayImport: novoMasVelho }, profAuthorized) }, {});
   ok(rNV._lzColor !== COL.green, 'motor NOVO mas leitura de 4 meses → NÃO absolve');
@@ -575,7 +589,7 @@ console.log('\n── barra sem total declarado ──');
         categoryRaw: 'cat' + k, standings: [{ group: 'G', rows: [{ pos: 1, handles: ['kelly'] }] }] });
     }
   }
-  const imp = { handle: 'kelly', importedAt: AGORA, footprint: fp, games: [{ lzId: '1' }],
+  const imp = { handle: 'kelly', importedAt: AGORA, extVersion: MOTOR, footprint: fp, games: [{ lzId: '1' }],
     lzCursor: { v: 4, complete: true, toursDone: Object.fromEntries(fp.map(f => ['t/cl/' + f.tourneyId, 1])) } };
   ok(imp.declaredTournaments === undefined, 'o fixture não declara total (como o import da Kelly)');
   ok(window._lzTournamentsRead(imp) === 7, 'lidos = 7 competições distintas, não 14 entradas');
@@ -593,7 +607,7 @@ console.log('\n── janela de 3 meses ──');
     declaredGames: 3, games: [{ lzId: '1' }, { lzId: '2' }, { lzId: '3' }],
     lzCursor: { v: 4, complete: true } };
   function cor(quando, uid) {
-    const imp = Object.assign({}, base, { importedAt: quando });
+    const imp = Object.assign({}, base, { importedAt: quando, extVersion: MOTOR });
     return run({ uid: uid, effectiveSkills: [] }, { [uid]: Object.assign({ letzplayImport: imp }, profAuthorized) }, {})._lzColor;
   }
   const dias = n => new Date(Date.now() - n * 86400000).toISOString();
@@ -617,7 +631,7 @@ console.log('\n── janela de 3 meses ──');
   ok(/_erApplyLzToRows\(rows, profileMap, scanMap\)/.test(render), 'as cores são aplicadas com o que veio do banco');
 
   // e o veredito só depende do dado — nenhuma cor precisa de clique
-  const imp = { importedAt: new Date().toISOString(), officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
+  const imp = { importedAt: new Date().toISOString(), extVersion: MOTOR, officialCategory: { skill: 'D', categoryRaw: 'Fem D' },
     rankings: [], tournaments: [], games: [{ lzId: '1' }], declaredGames: 1, lzCursor: { v: 4, complete: true } };
   const r = run({ uid: 'db1', effectiveSkills: [] }, { db1: profAuthorized }, { db1: { fullImport: imp } });
   ok(r._lzColor === COL.green, 'scan vindo do BANCO (letzplayScans) já pinta verde sem clique nenhum');
@@ -635,6 +649,59 @@ console.log('\n── data mostrada = data do histórico em uso ──');
   const lu = window._lzLastUpdateOf ? window._lzLastUpdateOf('d1') : null;
   ok(!!lu, 'achou uma data');
   ok(/14\/07/.test(lu.label), 'mostra 14/07 (a data do histórico em uso), não 30/07 do scannedAt solto');
+}
+
+
+// ── 20 · VERDE EXIGE O MOTOR ATUAL (v1.7.99) ────────────────────────────────────
+// Regra do dono (11/ago/2026): _"se baixamos o letzplay desses que autorizaram mas a
+// extensão mudou, baixou pelo motor desatualizado e por isso todos devem voltar a ser
+// roxo até ter rodado pelo motor novo (nova extensão)"_.
+//
+// POR QUE NÃO BASTAVA O QUE JÁ HAVIA: `_lzTemIds` prova que a leitura veio de um pipeline
+// que gravava id de partida — não que veio DESTE. Medido no banco em 11/ago: as 12 leituras
+// existentes tinham ids, eram recentes e passariam como VERDE, todas produzidas por
+// extensão anterior à 1.97. Verde é ABSOLVIÇÃO; absolver com motor que já se sabe
+// defeituoso afirma o que não se sabe.
+{
+  const base = { handle: 'X', officialCategory: { categoryRaw: 'Masculina D', skill: 'D' },
+    importedAt: AGORA, rating: { band: 'D+/C-' }, rankings: [], tournaments: [],
+    games: new Array(81), declaredGames: 81 };
+
+  const comCarimbo = Object.assign({}, base, { extVersion: MOTOR });
+  const r1 = run({ uid: 'm1', effectiveSkills: [] },
+    { m1: Object.assign({ letzplayImport: comCarimbo }, profAuthorized) }, {});
+  ok(r1._lzColor === COL.green, 'lido pela extensão ATUAL → VERDE (veio: ' + r1._lzColor + ')');
+
+  // O caso que motivou a regra: leitura boa em tudo, menos no motor.
+  const semCarimbo = Object.assign({}, base);           // sem extVersion — é o banco de hoje
+  const r2 = run({ uid: 'm2', effectiveSkills: [] },
+    { m2: Object.assign({ letzplayImport: semCarimbo }, profAuthorized) }, {});
+  ok(r2._lzColor === COL.violet, 'SEM carimbo de motor → VIOLETA, mesmo 81 de 81 e recente (veio: ' + r2._lzColor + ')');
+  ok(r2._lzVerified === false, '  → e não conta como verificada');
+
+  // Versão ANTERIOR à exigida também não absolve.
+  const motorVelho = Object.assign({}, base, { extVersion: '1.93' });
+  const r3 = run({ uid: 'm3', effectiveSkills: [] },
+    { m3: Object.assign({ letzplayImport: motorVelho }, profAuthorized) }, {});
+  ok(r3._lzColor === COL.violet, 'extensão ANTERIOR (1.93) → VIOLETA (veio: ' + r3._lzColor + ')');
+
+  // Evidência POSITIVA não depende do motor: achar título é prova, e prova continua valendo.
+  const gatoSemCarimbo = Object.assign({}, base, {
+    officialCategory: { categoryRaw: 'Masculina C', skill: 'C' },
+    champions: ['Masculina C'], footprint: [{ official: true, champion: true, categoryRaw: 'Masculina C' }] });
+  const r4 = run({ uid: 'm4', effectiveSkills: ['D'] },
+    { m4: Object.assign({ letzplayImport: gatoSemCarimbo }, profAuthorized) }, {});
+  ok(r4._lzColor !== COL.green, 'sem motor atual nunca ABSOLVE (verde), seja qual for o resto');
+
+  // A versão exigida sai da FONTE ÚNICA — nunca de um número cravado no app.
+  const src = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
+  ok(/_lzMotorAtual[\s\S]{0,600}window\.SP_EXT_VERSION/.test(src),
+    'a versão exigida vem de window.SP_EXT_VERSION (fonte única), não cravada');
+  ok(/v\.key === 'green' && !_lzMotorAtual\(li\)/.test(src),
+    'o guard do motor está no caminho do IMPORT');
+  ok(/v2\.key === 'green' && !_lzMotorAtual\(sc\)/.test(src),
+    '  → e no caminho do SCAN');
 }
 
 console.log((fail ? '✗' : '✓') + ' letzplay-verdict-color: ' + pass + ' passaram, ' + fail + ' falharam');

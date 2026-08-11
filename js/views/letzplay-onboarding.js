@@ -28,6 +28,10 @@
   var _lzLoggedIn = null;   // null=desconhecido, true=logado no letzplay, false=deslogado
   var _lastLzCheck = 0;
 
+  // v1.7.99: EXPORTADA. O veredito da Análise (`_lzMotorAtual`) precisa da MESMA
+  // comparação de versão que o gate de instalação usa — se as duas divergirem, o app
+  // pode exigir uma versão pra instalar e aceitar outra pra absolver a leitura.
+  // Uma implementação só, aqui, onde ela já existia.
   function _verGte(a, b) {
     var pa = String(a || '0').split('.').map(Number), pb = String(b || '0').split('.').map(Number);
     for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -36,6 +40,7 @@
     }
     return true;
   }
+  window._verGte = _verGte;
 
   function _isMobile() {
     return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||

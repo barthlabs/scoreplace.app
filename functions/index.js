@@ -2388,11 +2388,51 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     (Array.isArray(tData && tData.memberUids) ? tData.memberUids : []).forEach((u) => { membros[u] = true; });
     if (!Object.keys(membros).length) return null;
 
-    // Candidatos: mesmo nome OU mesmo celular. Duas consultas indexadas, limite curto.
-    const nomeLower = String(meu.displayName || "").trim().toLowerCase();
+    // ── CANDIDATOS ────────────────────────────────────────────────────────────────
+    // ⚠️ v1.7.99 — AQUI ESTAVA O FURO. A única consulta por nome era
+    // `displayName_lower == nomeLower`, e `displayName_lower` é `toLowerCase()` CRU:
+    // preserva acento, ponto e espaço. Resultado medido no Confra (11/ago/2026):
+    // "Dėbora Castello" nunca casava com "Debora Castello" (o `ė` é U+0117) e
+    // "M.Delia Fernandez" nunca casava com "MDelia Fernandez". As duas pessoas ficaram
+    // com DUAS contas cada, jogando em grupos diferentes da MESMA rodada.
+    // O comparador (`compararNomes`) sabia resolver o caso da Debora — mas nunca era
+    // chamado, porque a consulta não entregava o candidato. Havia normalização FORTE pra
+    // comparar e FRACA pra buscar, e quem decide é a fraca.
+    // Agora a busca usa as MESMAS chaves que o comparador gera:
+    //   • `displayName_keys` (array) — grafia e inicial omitida: cobre M.Delia×MDelia×Delia
+    //     e Debora×Dėbora e Castello×Castelo (chave sem letra dobrada).
+    //   • `displayName_lastkey` — o sobrenome, como REDE: traz quem tem o mesmo sobrenome e
+    //     deixa `compararNomes` decidir (é por ela que "MDelia" alcança "Delia").
+    // `displayName_lower` fica como 3ª consulta pra perfil legado ainda sem as chaves.
+    // Ver [[project_duplicate_detection_two_normalizations]].
+    const nomeMeu = String(meu.displayName || "").trim();
+    const nomeLower = nomeMeu.toLowerCase();
     const telCanon = _dupPerson.normalizarTelefone(meu.phone);
     const consultas = [];
-    if (nomeLower && !_nameUnique.isUnfriendlyName(nomeLower)) {
+    if (nomeMeu && !_nameUnique.isUnfriendlyName(nomeLower)) {
+      const chaves = _dupPerson.chavesDeBusca(nomeMeu).slice(0, 10);   // teto do array-contains-any
+      const sobren = _dupPerson.chaveSobrenome(nomeMeu);
+      if (chaves.length) {
+        consultas.push(db.collection("users")
+          .where("displayName_keys", "array-contains-any", chaves).limit(20).get());
+      }
+      if (sobren) {
+        // Limite maior: sobrenome comum traz gente de fora do torneio, e o filtro por
+        // membro roda DEPOIS do limit — apertar aqui perderia o candidato certo.
+        consultas.push(db.collection("users")
+          .where("displayName_lastkey", "==", sobren).limit(40).get());
+      }
+      // Nome com INICIAL abreviada ("Mariana C", "M.Delia", "Marcos a Alvarez"): aí o
+      // sobrenome pode ser uma letra e nenhuma chave cruza com a forma por extenso
+      // ("Mariana Ciocci"). Só nesse caso vale consultar pelo PRIMEIRO nome — é amplo, e
+      // fora daqui traria todas as "Mariana" da base à toa.
+      if (_dupPerson.temInicialAbreviada(nomeMeu)) {
+        const pk = _dupPerson.chavePrimeiroNome(nomeMeu);
+        if (pk) {
+          consultas.push(db.collection("users")
+            .where("displayName_firstkey", "==", pk).limit(40).get());
+        }
+      }
       consultas.push(db.collection("users").where("displayName_lower", "==", nomeLower).limit(8).get());
     }
     if (telCanon) {
@@ -2418,18 +2458,71 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     }
     if (!pessoas.length) return null;
 
+    // ⚠️ RIGOR DE TORNEIO. Regra do dono (11/ago/2026): _"quando a pessoa se inscreve de
+    // novo no mesmo torneio aumenta a chance de ser a mesma pessoa. a busca deve ser mais
+    // dura aqui."_ O universo aqui são os ~130 inscritos DESTE torneio, não a base inteira,
+    // e todos já demonstraram intenção no mesmo evento — a mesma semelhança vale mais.
+    // O que o rigor alto acrescenta foi MEDIDO nos 131 do Confra (0 falso positivo):
+    // 1 caractere sem piso de comprimento, e 2 caracteres em nome longo. Ver compararNomes.
     const r = _dupPerson.detectarMesmaPessoa({
       uid: callerUid, nome: meu.displayName || "", telefone: meu.phone || "",
       letzplayHandle: meu.letzplayHandle || "",
-      dispensados: Array.isArray(meu.dupDismissed) ? meu.dupDismissed : [],
-    }, pessoas);
+      // Memória do "não sou eu": a RICA (com força) manda; o array legado entra junto e
+      // vale como força 0 — reabre uma vez, porque não se sabe de que sinal ele era.
+      dispensados: [].concat(
+        Array.isArray(meu.dupDismissedInfo) ? meu.dupDismissedInfo : [],
+        Array.isArray(meu.dupDismissed) ? meu.dupDismissed : []),
+    }, pessoas, { rigor: "torneio" });
     if (!r.suspeito) return null;
+
+    // ─── CELULAR AUTENTICADO NÃO PERGUNTA: FUNDE (v1.7.99) ──────────────────────────
+    // Regra do dono (11/ago/2026): _"no mesmo celular autenticado, já mescla, nem pergunta."_
+    //
+    // ⚠️ "AUTENTICADO" É O TELEFONE DO **AUTH**, NUNCA O CAMPO `phone` DO PERFIL.
+    // O campo do perfil é TEXTO DIGITADO: a pessoa pode errar um dígito e cair no número de
+    // outra, ou digitar o do marido. Fundir por isso apagaria a conta de um terceiro — e
+    // fusão apaga do Auth, não tem volta. O `phoneNumber` do Auth só existe depois de um SMS
+    // conferido: é posse provada, que é exatamente o que o dono qualificou com "autenticado".
+    // (O `autoMergeOnProfileUpdate` funde pelo campo do PERFIL — mais frouxo que isto de
+    // propósito? não: é dívida conhecida, ver [[project-automerge-trigger-footgun]].)
+    //
+    // Os DOIS lados precisam ter o número no Auth. Um só provando não diz nada sobre o outro.
+    if (r.suspeito.motivo === "celular" || r.suspeito.motivo === "email") {
+      try {
+        const [_meuAuth, _outroAuth] = await Promise.all([
+          admin.auth().getUser(callerUid).catch(() => null),
+          admin.auth().getUser(r.suspeito.uid).catch(() => null),
+        ]);
+        const _p1 = _meuAuth && _meuAuth.phoneNumber;
+        const _p2 = _outroAuth && _outroAuth.phoneNumber;
+        const _telProvado = !!(_p1 && _p2 &&
+          _dupPerson.normalizarTelefone(_p1) === _dupPerson.normalizarTelefone(_p2));
+        // E-MAIL vale igual ao celular, com a MESMA exigência: verificado NO AUTH dos dois
+        // lados. `emailVerified` é o que separa "provou que recebe nesse endereço" de
+        // "digitou esse endereço" — sem ele, fundir por e-mail apagaria a conta de quem
+        // teve o endereço digitado por engano.
+        const _e1 = _meuAuth && _meuAuth.emailVerified && _dupPerson.normalizarEmail(_meuAuth.email);
+        const _e2 = _outroAuth && _outroAuth.emailVerified && _dupPerson.normalizarEmail(_outroAuth.email);
+        const _mailProvado = !!(_e1 && _e2 && _e1 === _e2);
+        if (_telProvado || _mailProvado) {
+          console.log(`[dup] ${_telProvado ? "celular" : "e-mail"} AUTENTICADO igual nos dois ` +
+            `(${callerUid} × ${r.suspeito.uid}) — fundindo sem perguntar`);
+          const _res = await _mergeAccountsKeepOlder(db, callerUid, r.suspeito.uid);
+          console.log(`[dup] fusão automática por credencial autenticada:`, JSON.stringify(_res));
+          return null;   // não há o que perguntar — as contas viraram uma
+        }
+      } catch (e) {
+        // Falhar aqui NÃO pode barrar a inscrição: cai na pergunta, que é o caminho seguro.
+        console.error("[dup] fusão por credencial autenticada falhou (segue pra pergunta):", e && e.message);
+      }
+    }
 
     const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
     const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
     return {
       uid: r.suspeito.uid,                       // ⚠️ interno — NUNCA vai pro cliente
       motivo: r.suspeito.motivo,
+      semelhanca: r.suspeito.semelhanca || null, // como os nomes bateram (muda o texto)
       corroboracoes: r.suspeito.corroboracoes,
       nome: alvo.nome || "",
       maskedEmail: _nameUnique.maskEmail(emailReal) || null,
@@ -2497,7 +2590,7 @@ exports.enrollParticipant = onCall(
               dupSuspect: {   // ⚠️ SEM uid e SEM contato cheio
                 motivo: _d0.motivo, nome: _d0.nome,
                 maskedEmail: _d0.maskedEmail, maskedPhone: _d0.maskedPhone,
-                texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo),
+                texto: _dupPerson.textoDaPergunta(_d0.nome, _d0.maskedEmail || _d0.maskedPhone, _d0.motivo, _d0.semelhanca),
               },
             };
           }
@@ -2630,12 +2723,64 @@ exports.dismissDuplicateSuspicion = onCall(
     const d = await _detectarDuplicataNoTorneio(db, callerUid, snap.data());
     if (!d) return { ok: true, nada: true };
 
+    // ⚠️ O "NÃO SOU EU" GUARDA A FORÇA DO SINAL QUE FOI DISPENSADO (v1.7.99).
+    // Regra do dono: _"anotar a resposta pra não ficar perguntando de novo sem dado novo.
+    // se coloca o mesmo celular e autentica, daí funde mesmo tendo sido perguntado antes e
+    // a pessoa deu que não. as pessoas às vezes não leem na pressa e fecham respondendo
+    // não."_ Guardando só o uid, um toque apressado matava a suspeita PRA SEMPRE — inclusive
+    // contra evidência muito mais forte que aparecesse depois. Com a força anotada, a
+    // pergunta só volta quando surge algo estritamente mais forte (ver detectarMesmaPessoa).
+    // `dupDismissed` (array de uid) CONTINUA sendo gravado: é o que o app publicado nas
+    // lojas lê, e ele não tem auto-update. O array novo é ADITIVO.
     const FV = admin.firestore.FieldValue;
+    const _forca = _dupPerson.forcaDoSinal(d.motivo, d.semelhanca);
+    const _reg = (uid) => ({ uid: uid, forca: _forca, motivo: d.motivo,
+                             semelhanca: d.semelhanca || null, at: new Date().toISOString() });
     await Promise.all([
-      db.collection("users").doc(callerUid).set({ dupDismissed: FV.arrayUnion(d.uid) }, { merge: true }),
-      db.collection("users").doc(d.uid).set({ dupDismissed: FV.arrayUnion(callerUid) }, { merge: true }),
+      db.collection("users").doc(callerUid).set(
+        { dupDismissed: FV.arrayUnion(d.uid), dupDismissedInfo: FV.arrayUnion(_reg(d.uid)) }, { merge: true }),
+      db.collection("users").doc(d.uid).set(
+        { dupDismissed: FV.arrayUnion(callerUid), dupDismissedInfo: FV.arrayUnion(_reg(callerUid)) }, { merge: true }),
     ]);
-    console.log(`[dismissDuplicateSuspicion] ${callerUid} <-> ${d.uid} (${d.motivo}) — não são a mesma pessoa`);
+    console.log(`[dismissDuplicateSuspicion] ${callerUid} <-> ${d.uid} (${d.motivo}/${d.semelhanca || '-'}, força ${_forca}) — não são a mesma pessoa`);
+    return { ok: true, dispensado: true };
+  }
+);
+
+// ─── "NÃO SOU EU" NO CADASTRO (v1.7.99) ──────────────────────────────────────────
+// A dismissDuplicateSuspicion exige tournamentId (ela redescobre o par dentro do torneio).
+// No cadastro não há torneio: o par é redescoberto na BASE, pelo mesmo detector que gravou
+// o sinal. O cliente NUNCA passa o uid do outro — ele nem o recebe.
+exports.dismissDuplicateAccount = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const db = admin.firestore();
+    const snap = await db.collection("users").doc(callerUid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "perfil não existe");
+
+    const d = await _detectarDuplicataNaBase(db, callerUid, snap.data());
+    const FV = admin.firestore.FieldValue;
+    if (!d) {
+      await db.collection("users").doc(callerUid).set({ dupSuspect: FV.delete() }, { merge: true });
+      return { ok: true, nada: true };
+    }
+    // Anota COM a força do sinal: dado novo mais forte reabre a pergunta depois
+    // ([[project_dismiss_reopens_on_stronger_signal]]).
+    const forca = _dupPerson.forcaDoSinal(d.motivo, d.semelhanca);
+    const reg = (uid) => ({ uid: uid, forca: forca, motivo: d.motivo,
+                            semelhanca: d.semelhanca || null, at: new Date().toISOString() });
+    await Promise.all([
+      db.collection("users").doc(callerUid).set({
+        dupDismissed: FV.arrayUnion(d.uid), dupDismissedInfo: FV.arrayUnion(reg(d.uid)),
+        dupSuspect: FV.delete(),
+      }, { merge: true }),
+      db.collection("users").doc(d.uid).set({
+        dupDismissed: FV.arrayUnion(callerUid), dupDismissedInfo: FV.arrayUnion(reg(callerUid)),
+      }, { merge: true }),
+    ]);
+    console.log(`[dismissDuplicateAccount] ${callerUid} <-> ${d.uid} (${d.motivo}, força ${forca})`);
     return { ok: true, dispensado: true };
   }
 );
@@ -5912,6 +6057,32 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
         const freshOther = await db.collection("users").doc(other.id).get();
         if (!freshOther.exists || freshOther.data().mergedInto) continue;
 
+        // ⚠️ v1.7.99 — FUNDIR EXIGE CREDENCIAL AUTENTICADA. SEMPRE.
+        // Regra do dono (11/ago/2026), ao ver que este trigger fundia sem isso:
+        // _"tem que autenticar email ou celular. sempre autenticado. nada disso de ser
+        // frouxo."_ E ele tem razão: até aqui bastava o campo `phone`/`email` do PERFIL
+        // bater — texto DIGITADO. Um dígito errado cai no número de outra pessoa, e a
+        // fusão APAGA uma conta do Auth, sem volta. Ou seja: dava pra apagar a conta de um
+        // terceiro digitando o telefone dele no próprio perfil.
+        // A prova é o AUTH: `phoneNumber` só existe depois de SMS conferido, e o e-mail
+        // precisa de `emailVerified`. Os DOIS lados têm que provar — um só não diz nada
+        // sobre o outro. Sem prova, NÃO funde (e não pergunta aqui: quem pergunta é o
+        // fluxo de duplicata, que sabe mascarar o contato).
+        const _autA = await admin.auth().getUser(uid).catch(() => null);
+        const _autB = await admin.auth().getUser(other.id).catch(() => null);
+        const _t1 = _autA && _autA.phoneNumber, _t2 = _autB && _autB.phoneNumber;
+        const _m1 = _autA && _autA.emailVerified && _dupPerson.normalizarEmail(_autA.email);
+        const _m2 = _autB && _autB.emailVerified && _dupPerson.normalizarEmail(_autB.email);
+        const _telOk = !!(_t1 && _t2 &&
+          _dupPerson.normalizarTelefone(_t1) === _dupPerson.normalizarTelefone(_t2));
+        const _mailOk = !!(_m1 && _m2 && _m1 === _m2);
+        if (!_telOk && !_mailOk) {
+          console.log(`[autoMergeOnProfileUpdate] RECUSADO ${uid} × ${other.id}: ` +
+            `"${field}" bate no PERFIL mas não há credencial AUTENTICADA nos dois lados — ` +
+            `fundir por texto digitado apagaria conta de terceiro.`);
+          continue;
+        }
+
         const { keepDoc, dropDoc } = await _determineMergeWinner(currentDoc, freshOther);
         try {
           const r = await _executeMerge(db, keepDoc, dropDoc);
@@ -5951,6 +6122,102 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 //
 // ANTI-LOOP: só age quando o displayName MUDOU nesta escrita. Depois de renomear, a
 // própria escrita reacorda o trigger — mas aí o nome novo não colide e ele volta na hora.
+// ─── DUPLICATA NO CADASTRO — a mesma pergunta, fora de torneio (v1.7.99) ──────────
+// Regra do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
+// cadastra"_. Até aqui a detecção só rodava na INSCRIÇÃO EM TORNEIO — quem criava a
+// segunda conta e não se inscrevia em nada nunca era perguntado, e a duplicata só aparecia
+// mais tarde (no Confra levou 8 dias, e só porque a fila formou grupo).
+//
+// ⚠️ NÃO reusa `findDisplayNameConflict`: aquela é o caminho que BLOQUEIA o cadastro
+// (`already-exists`, "escolha outro nome"). Ampliá-la pra nomes PARECIDOS faria o app
+// RECUSAR "Rodrigo Terra Barth" por existir "Rodrigo Barth" — o oposto do pedido. Aqui só
+// se PERGUNTA. Perguntar e bloquear são caminhos separados de propósito.
+//
+// Rigor BASE (não o de torneio): o universo é a base inteira, onde quem se parece com você
+// provavelmente não tem nada a ver. Ver compararNomes.
+async function _detectarDuplicataNaBase(db, uid, meu) {
+  try {
+    if (!meu || meu.mergedInto) return null;
+    const nome = String(meu.displayName || "").trim();
+    const telCanon = _dupPerson.normalizarTelefone(meu.phone);
+    const consultas = [];
+    if (nome && !_nameUnique.isUnfriendlyName(nome.toLowerCase())) {
+      const chaves = _dupPerson.chavesDeBusca(nome).slice(0, 10);
+      const sobren = _dupPerson.chaveSobrenome(nome);
+      if (chaves.length) {
+        consultas.push(db.collection("users").where("displayName_keys", "array-contains-any", chaves).limit(20).get());
+      }
+      if (sobren) consultas.push(db.collection("users").where("displayName_lastkey", "==", sobren).limit(40).get());
+      if (_dupPerson.temInicialAbreviada(nome)) {
+        const pk = _dupPerson.chavePrimeiroNome(nome);
+        if (pk) consultas.push(db.collection("users").where("displayName_firstkey", "==", pk).limit(40).get());
+      }
+    }
+    if (telCanon) consultas.push(db.collection("users").where("phone", "==", meu.phone).limit(8).get());
+    const _mailMeu = _dupPerson.normalizarEmail(meu.email);
+    if (_mailMeu) consultas.push(db.collection("users").where("email", "==", meu.email).limit(8).get());
+    if (!consultas.length) return null;
+
+    const snaps = await Promise.all(consultas.map((p) => p.catch(() => null)));
+    const vistos = {};
+    const pessoas = [];
+    for (const snap of snaps) {
+      if (!snap) continue;
+      snap.forEach((d) => {
+        if (d.id === uid || vistos[d.id]) return;
+        const x = d.data() || {};
+        if (x.mergedInto) return;
+        vistos[d.id] = true;
+        pessoas.push({ uid: d.id, nome: x.displayName || "", telefone: x.phone || "",
+          email: x.email || "", linkedEmails: x.linkedEmails || [],
+          letzplayHandle: x.letzplayHandle || "" });
+      });
+    }
+    if (!pessoas.length) return null;
+
+    const r = _dupPerson.detectarMesmaPessoa({
+      uid: uid, nome: nome, telefone: meu.phone || "", email: meu.email || "",
+      linkedEmails: meu.linkedEmails || [], letzplayHandle: meu.letzplayHandle || "",
+      dispensados: [].concat(
+        Array.isArray(meu.dupDismissedInfo) ? meu.dupDismissedInfo : [],
+        Array.isArray(meu.dupDismissed) ? meu.dupDismissed : []),
+    }, pessoas);
+    if (!r.suspeito) return null;
+
+    // CREDENCIAL AUTENTICADA nem pergunta: funde. Mesma regra da inscrição — a prova é o
+    // AUTH (SMS conferido / emailVerified), nunca o campo do perfil.
+    if (r.suspeito.motivo === "celular" || r.suspeito.motivo === "email") {
+      try {
+        const [a1, a2] = await Promise.all([
+          admin.auth().getUser(uid).catch(() => null),
+          admin.auth().getUser(r.suspeito.uid).catch(() => null),
+        ]);
+        const t1 = a1 && a1.phoneNumber, t2 = a2 && a2.phoneNumber;
+        const e1 = a1 && a1.emailVerified && _dupPerson.normalizarEmail(a1.email);
+        const e2 = a2 && a2.emailVerified && _dupPerson.normalizarEmail(a2.email);
+        if ((t1 && t2 && _dupPerson.normalizarTelefone(t1) === _dupPerson.normalizarTelefone(t2)) ||
+            (e1 && e2 && e1 === e2)) {
+          console.log(`[dup-cadastro] credencial AUTENTICADA igual (${uid} × ${r.suspeito.uid}) — fundindo`);
+          await _mergeAccountsKeepOlder(db, uid, r.suspeito.uid);
+          return null;
+        }
+      } catch (e) { console.error("[dup-cadastro] fusão falhou (segue pra pergunta):", e && e.message); }
+    }
+
+    const alvo = pessoas.filter((p) => p.uid === r.suspeito.uid)[0] || {};
+    const emailReal = (alvo.email && !_nameUnique.isSyntheticEmail(alvo.email)) ? alvo.email : "";
+    return {
+      uid: r.suspeito.uid, motivo: r.suspeito.motivo, semelhanca: r.suspeito.semelhanca || null,
+      nome: alvo.nome || "",
+      maskedEmail: _nameUnique.maskEmail(emailReal) || null,
+      maskedPhone: _nameUnique.maskPhone(alvo.telefone) || null,
+    };
+  } catch (e) {
+    console.error("[dup-cadastro] fail-open:", e && e.message);
+    return null;   // nunca barra nada
+  }
+}
+
 exports.enforceUniqueDisplayName = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
   async (event) => {
@@ -5962,11 +6229,84 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     if (a.mergedInto) return;                       // tombstone de fusão — fora da disputa
     const nome = String(a.displayName || "").trim();
     if (!nome) return;
-    if (nome === String(b.displayName || "").trim()) return; // nome não mudou → nada a fazer
-    if (_nameUnique.isUnfriendlyName(nome)) return; // placeholder não disputa unicidade
 
     const db = admin.firestore();
     const uid = event.params.uid;
+
+    // ── v1.7.99 · AS CHAVES DE BUSCA SÃO MANTIDAS PELO SERVIDOR ──────────────────
+    // `displayName_keys`/`displayName_lastkey` são o índice da detecção de duplicata
+    // (ver _detectarDuplicataNoTorneio). Elas NÃO são calculadas no cliente de propósito:
+    // duplicar a regra de normalização em dois lugares foi exatamente o que produziu o
+    // incidente — havia uma normalização forte pra comparar e uma fraca pra buscar, e a
+    // fraca decidia. Aqui o cliente só DISPARA (grava o nome) e o servidor mantém o
+    // derivado, do mesmo jeito que o espelho do roster (v1.7.98). Vale pra TODA escrita,
+    // de QUALQUER cliente — inclusive o app NATIVO publicado, que não tem auto-update.
+    //
+    // De brinde, é o BACKFILL: perfil legado ganha as chaves na primeira vez que for
+    // tocado, sem migração à parte.
+    //
+    // ⚠️ ANTI-LOOP: este write re-dispara o trigger. Só grava quando o que está no doc
+    // DIVERGE do esperado — na segunda passada bate e não escreve. Roda ANTES do
+    // "nome não mudou → return" justamente pra alcançar o legado.
+    try {
+      const kEsperado = _dupPerson.chavesDeBusca(nome);
+      const sEsperado = _dupPerson.chaveSobrenome(nome);
+      const fEsperado = _dupPerson.chavePrimeiroNome(nome);
+      const kAtual = Array.isArray(a.displayName_keys) ? a.displayName_keys : null;
+      const divergiu = !kAtual ||
+        kAtual.length !== kEsperado.length ||
+        kEsperado.some((x, i) => kAtual[i] !== x) ||
+        String(a.displayName_lastkey || "") !== sEsperado ||
+        String(a.displayName_firstkey || "") !== fEsperado;
+      if (divergiu) {
+        await db.collection("users").doc(uid).set(
+          { displayName_keys: kEsperado, displayName_lastkey: sEsperado,
+            displayName_firstkey: fEsperado }, { merge: true });
+        console.log(`[enforceUniqueDisplayName] uid=${uid}: chaves de busca atualizadas ` +
+          `(${JSON.stringify(kEsperado)} / ${sEsperado})`);
+      }
+    } catch (e) {
+      console.error("[enforceUniqueDisplayName] chaves de busca falharam (best-effort):", e && e.message);
+    }
+
+    // ─── DUPLICATA NO CADASTRO (v1.7.99) ────────────────────────────────────────
+    // Regra do dono: _"essa verificação deve acontecer quando a pessoa se cadastra"_.
+    // Roda quando o NOME, o CELULAR ou o E-MAIL mudam — que é quando aparece dado novo
+    // capaz de revelar a segunda conta. Grava `dupSuspect` (só o contato MASCARADO), que
+    // o cliente lê e transforma em pergunta. Se a credencial estiver AUTENTICADA nos dois
+    // lados, `_detectarDuplicataNaBase` já funde e não sobra nada pra perguntar.
+    // ⚠️ Separado de `nameConflict` DE PROPÓSITO: aquele é UNICIDADE (nome idêntico → a
+    // saída é trocar de nome); este é DUPLICATA (nome parecido → a saída é unir ou dizer
+    // "não sou eu"). "Rodrigo Terra Barth" não precisa trocar de nome por existir
+    // "Rodrigo Barth" — precisa ser perguntado.
+    try {
+      const _mudouIdent = nome !== String(b.displayName || "").trim() ||
+        String(a.phone || "") !== String(b.phone || "") ||
+        String(a.email || "") !== String(b.email || "");
+      if (_mudouIdent) {
+        const _dup = await _detectarDuplicataNaBase(db, uid, a);
+        if (_dup) {
+          await db.collection("users").doc(uid).set({
+            dupSuspect: {
+              nome: _dup.nome, motivo: _dup.motivo, semelhanca: _dup.semelhanca,
+              maskedEmail: _dup.maskedEmail, maskedPhone: _dup.maskedPhone,
+              at: new Date().toISOString(),
+            },
+          }, { merge: true });
+          console.log(`[enforceUniqueDisplayName] uid=${uid}: possível segunda conta ` +
+            `(${_dup.motivo}/${_dup.semelhanca || "-"}) → dupSuspect gravado`);
+        } else if (a.dupSuspect) {
+          // Resolvido (fundiu, dispensou, ou a outra sumiu) → o sinal não pode ficar pendurado.
+          await db.collection("users").doc(uid).set(
+            { dupSuspect: admin.firestore.FieldValue.delete() }, { merge: true });
+        }
+      }
+    } catch (e) {
+      console.error("[enforceUniqueDisplayName] duplicata no cadastro (best-effort):", e && e.message);
+    }
+
+    if (nome === String(b.displayName || "").trim()) return; // nome não mudou → nada a fazer
+    if (_nameUnique.isUnfriendlyName(nome)) return; // placeholder não disputa unicidade
     const conflito = await _nameUnique.findDisplayNameConflict(db, nome, uid);
 
     if (!conflito) {

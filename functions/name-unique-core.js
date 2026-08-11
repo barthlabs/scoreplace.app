@@ -29,6 +29,8 @@
  * bloquear cadastro ([[feedback_enrollment_fail_open]] — mesma filosofia).
  */
 
+const _dupPerson = require('./duplicate-person-core.js');
+
 // Espelha window._isUnfriendlyName (store.js): só placeholders genéricos são
 // "não-nome" e ficam fora da disputa de unicidade. Telefone/e-mail como nome é
 // identificador válido de conta phone-only (v1.8.60) — mas também não disputa
@@ -135,6 +137,16 @@ function denormalizeDisplayName(profilePayload, displayName) {
   if (!nm) return profilePayload;
   profilePayload.displayName = nm;
   profilePayload.displayName_lower = nm.toLowerCase();
+  // v1.7.99 — CHAVES DE BUSCA DE DUPLICATA. `displayName_lower` é `toLowerCase()` cru:
+  // preserva acento, ponto e espaço, então "Dėbora Castello" nunca casa com "Debora
+  // Castello" e "M.Delia" nunca casa com "MDelia". Era esse o furo pelo qual duas pessoas
+  // ficaram com duas contas cada no MESMO torneio (Confra, 11/ago/2026) — a comparação
+  // sabia resolver, mas a consulta nunca entregava o candidato. Estas chaves são geradas
+  // pela MESMA função que compara, pra que buscar e comparar deixem de divergir.
+  // Ver [[project_duplicate_detection_two_normalizations]].
+  profilePayload.displayName_keys = _dupPerson.chavesDeBusca(nm);
+  profilePayload.displayName_lastkey = _dupPerson.chaveSobrenome(nm);
+  profilePayload.displayName_firstkey = _dupPerson.chavePrimeiroNome(nm);
   return profilePayload;
 }
 

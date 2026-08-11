@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.1';
+window.SCOREPLACE_VERSION = '1.8.3';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -108,7 +108,7 @@ try {
 // Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
 // Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
 // BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.97';
+window.SP_EXT_VERSION = '1.98';
 // O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
 // entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
 // aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
@@ -2814,8 +2814,21 @@ window._reflowChrome = function() {
     if (isFixed) {
       bh.style.top = bhOffset + 'px';
       var next = _firstVisibleSibling(bh);
+      // ── v1.7.99 · A ALTURA DO CABEÇALHO NÃO DEPENDE DE HAVER IRMÃO VISÍVEL ──────
+      // `fixedBackHeaderH` alimenta `--backheader-h`, que é o `top` de TODA barra sticky
+      // (a canônica de busca, a de chamada). Ele estava sendo calculado DENTRO do
+      // `if (next)` — então, quando nenhum irmão visível era encontrado, ficava em 0 e a
+      // barra passava a grudar no fundo da TOPBAR, atrás do cabeçalho, sumindo ao rolar.
+      // E `next` some com facilidade: `_firstVisibleSibling` PULA quem é sticky/fixed
+      // (ou seja, pula a própria barra de busca) e o filtro da chave esconde os irmãos
+      // de conteúdo com `display:none` — buscar e limpar é justamente o que mais mexe
+      // em quem está visível.
+      // A altura do cabeçalho é medida do PRÓPRIO cabeçalho; nada além dele deveria
+      // poder zerá-la. Mover pra fora do `if` é o conserto: o que depende de `next`
+      // é só a MARGEM do conteúdo, que de fato precisa de um alvo.
+      var _bhRectH = bh.getBoundingClientRect().height;
+      fixedBackHeaderH = Math.floor(_bhRectH);
       if (next) {
-        var _bhRectH = bh.getBoundingClientRect().height;
         // v3.1.19: a barra canônica sticky usa FLOOR da altura do back-header pra
         // `--backheader-h`, NÃO ceil. Com ceil (54.1→55) o `top` da barra caía ~0.9px
         // ABAIXO do fundo real do header (121.1) → um vão sub-1px onde o card vazava
@@ -2824,7 +2837,6 @@ window._reflowChrome = function() {
         // por cima) em vez de gap. O espaçamento do conteúdo (margin-top) segue ceil
         // (folga generosa pra o conteúdo nunca ser coberto pelo header).
         var bhH = Math.ceil(_bhRectH);
-        fixedBackHeaderH = Math.floor(_bhRectH);
         // Use !important because overlay CSS uses `margin-top: 0 !important`
         // to suppress the default 50px spacer — our dynamic value has to win.
         _aplicarMargemDeConteudo(next, (ddH + bhH + 8) + 'px');
@@ -7752,6 +7764,11 @@ window.AppStore = {
         // e NINGUÉM o leria — a lista abaixo é campo a campo e não faz merge genérico.
         // `null` limpa (o trigger apaga o campo quando o conflito acaba).
         this.currentUser.nameConflict = profile.nameConflict || null;
+        // v1.7.99 — POSSÍVEL SEGUNDA CONTA (detectada no cadastro pelo trigger).
+        // ⚠️ loadUserProfile copia CAMPO A CAMPO (não há merge genérico): sem esta linha o
+        // sinal fica gravado no Firestore e a tela nunca pergunta — foi exatamente o que
+        // aconteceu com o `nameConflict` na 1.7.41.
+        this.currentUser.dupSuspect = profile.dupSuspect || null;
         if (profile.preferredSports) this.currentUser.preferredSports = profile.preferredSports;
         // v1.2.11: favoritos e ocultados VÊM DA CONTA (users/{uid}), não do device.
         // Arrays: usar !== undefined (lista VAZIA é um valor legítimo — "desfavoritei
