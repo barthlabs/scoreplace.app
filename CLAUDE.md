@@ -1306,9 +1306,18 @@ firebase deploy --only hosting --project scoreplace-app
 ```bash
 rm -rf /tmp/sp-deploy && mkdir -p /tmp/sp-deploy
 git archive HEAD | tar -x -C /tmp/sp-deploy          # árvore COMMITADA, do repo LOCAL
-ln -s "$PWD/node_modules" /tmp/sp-deploy/node_modules # o predeploy roda prerender (playwright)
+# ⚠️ node_modules: apontar pro do REPO PAI, não pro "$PWD" — ver a armadilha abaixo
+ln -s "/Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules" /tmp/sp-deploy/node_modules
+ls /tmp/sp-deploy/node_modules/@playwright/test >/dev/null || echo "SYMLINK QUEBRADO — pare aqui"
 cd /tmp/sp-deploy && firebase deploy --only hosting --project scoreplace-app
 ```
+
+🪤 **A armadilha do `node_modules` quando se deploya DE UM WORKTREE (mordeu na 1.8.2).**
+A receita antiga dizia `ln -s "$PWD/node_modules"`. Só que **worktree do git não tem
+`node_modules` próprio** — os testes só passam nele porque o Node **sobe os diretórios**
+até achar o do repo pai. Na cópia extraída em `/tmp` não existe pai, então o symlink fica
+**pendurado** e o predeploy morre com `Cannot find module '@playwright/test'` em 3 suítes
+de Chromium — **que estavam verdes no worktree**. Parece regressão do commit e não é.
 
 Por que assim, e não das outras duas formas que já foram usadas:
 
