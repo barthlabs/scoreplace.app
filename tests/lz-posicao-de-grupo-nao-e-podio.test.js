@@ -111,5 +111,54 @@ console.log('\n4. Varredura: a regra não pode voltar a ser "medalha pra qualque
 ok(/g\.ranking/.test(SRC), 'a distinção sai do DADO (g.ranking), não de palpite da tela');
 ok(!/_lzMedalha\(L\.pos\)/.test(SRC), 'não existe mais medalha aplicada à posição crua');
 
+console.log('\n5. Ranking ZERADO não é classificação (caso real: T&F lançado como ranking)');
+// Dono, 11/ago: "lançaram o torneio de pais como um ranking … os lancamentos ali estao
+// zerados e nao podem ser considerados." MEDIDO no doc dele: rid 58234, pontos
+// [0,0,0,0,0,0], ele em 9º. Sem guard a tela dava "🏅 9º" em cor de pódio.
+{
+  const zerado = { footprint: [{ official: false, club: 'pb', rankingId: '58234',
+    name: 'T&F Special Edition - torneio PAIS', categoryRaw: 'Masc',
+    standings: [{ group: 'Classificação', ranking: true, rows: [
+      { pos: 8, handles: ['Outro'], points: 0 },
+      { pos: 9, handles: ['RodrigoBarth'], points: 0 }] }] }] };
+  const h = P.rows(zerado, 'RodrigoBarth', 'rank');
+  ok(!/🥇|🥈|🥉|🏅/.test(h), 'tabela zerada NÃO ganha medalha');
+  ok(!/9º/.test(h), 'e nem exibe a posição, que ali não significa nada');
+  ok(/sem pontuação lançada/.test(h), 'diz o que é, em vez de calar', h.slice(0, 120));
+}
+{
+  // o outro lado: ranking COM pontos segue com pódio (rid 33695 real, ele em 3º)
+  const real = { footprint: [{ official: false, club: 'pb', rankingId: '33695',
+    name: 'BT SOCIAL - Cat Masculina D', categoryRaw: 'Masc D',
+    standings: [{ group: 'Classificação', ranking: true, rows: [
+      { pos: 1, handles: ['A'], points: 2944 },
+      { pos: 3, handles: ['RodrigoBarth'], points: 2402 }] }] }] };
+  const h2 = P.rows(real, 'RodrigoBarth', 'rank');
+  ok(/🥉 3º/.test(h2), 'ranking com pontos de verdade mantém a medalha', h2.slice(0, 120));
+}
+{
+  // ⚠️ AUSENTE ≠ ZERO: import antigo sem o campo `points` não pode perder a classificação.
+  // Suprimir por não saber seria errar para o outro lado.
+  const semCampo = { footprint: [{ official: false, club: 'pb', rankingId: '999',
+    name: 'Ranking antigo', categoryRaw: 'Masc',
+    standings: [{ group: 'Classificação', ranking: true, rows: [
+      { pos: 1, handles: ['A'] }, { pos: 2, handles: ['RodrigoBarth'] }] }] }] };
+  const h3 = P.rows(semCampo, 'RodrigoBarth', 'rank');
+  ok(/🥈 2º/.test(h3), 'sem o campo points, a posição é mantida (ausente não é zero)', h3.slice(0, 110));
+}
+
+console.log('\n6. Selo RK: a lista denuncia o "torneio" que foi lançado como ranking');
+// Dono: "vamos colocar RK antes do LP para indicar quando um torneio foi lancado como
+// ranking (assim driblamos o 3 de 3 … mas ai na lista indica tambem que aquele que deveria
+// ser um torneio, e um ranking)."
+{
+  const hR = P.rows(IMP, 'RodrigoBarth', 'rank');
+  ok(/aria-label="lançado como ranking"/.test(hR), 'linha de RANKING leva o selo RK');
+  ok(hR.indexOf('lançado como ranking') < hR.indexOf('aria-label="letzplay"'), 'e o RK vem ANTES do LP');
+  const hT = P.rows(IMP, 'RodrigoBarth', 'tour');
+  ok(!/lançado como ranking/.test(hT), 'linha de TORNEIO não leva RK — senão o sinal não distinguiria nada');
+  ok(/aria-label="letzplay"/.test(hT), 'mas leva o LP normalmente');
+}
+
 console.log('\n' + (fail ? '✗' : '✅') + ' lz-posicao-de-grupo-nao-e-podio: ' + pass + ' passaram, ' + fail + ' falharam');
 if (fail) process.exit(1);

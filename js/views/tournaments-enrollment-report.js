@@ -1346,6 +1346,18 @@
   var _LZ_C_LP = '#f97316';     // laranja do letzplay
   function _lzSelo(qual) {
     var base = 'display:inline-flex;align-items:center;gap:3px;vertical-align:-1px;';
+    // RK — "isto foi lançado como RANKING". Pedido do dono (11/ago): o T&F "torneio PAIS"
+    // foi criado como ranking no letzplay por erro de quem publicou, e não há como
+    // consertar lá. Marcar na lista resolve por outro caminho o contador "3 de 3": em vez
+    // de mexer no número deles (que é diretriz), a própria linha diz que aquilo que
+    // deveria ser torneio está como ranking.
+    // ⚠️ Distinto por FORMA, não por cor nova: a linha já usa 5 cores (data, categoria,
+    // posição, trilha, LP) e uma 6ª viraria confete. RK é um chip com borda.
+    if (qual === 'rk') {
+      return '<span title="lançado como ranking no letzplay" aria-label="lançado como ranking" style="' + base +
+        'color:#cbd5e1;font-weight:800;font-size:0.66rem;letter-spacing:0.4px;' +
+        'border:1px solid rgba(203,213,225,0.45);border-radius:4px;padding:0 3px;line-height:1.35;">RK</span>';
+    }
     if (qual === 'lp') {
       return '<span title="letzplay" aria-label="letzplay" style="' + base +
         'color:' + _LZ_C_LP + ';font-weight:800;font-size:0.74rem;letter-spacing:0.4px;">LP</span>';
@@ -1508,7 +1520,11 @@
       // tabela de GRUPO — dizer "🥉 3º" pra quem foi o último de um grupo de 3 é inventar
       // um resultado que não existiu. Ver o comentário de _lzMyPosIn.
       if (L.pos) {
-        h += L.pos.ranking
+        h += L.pos.semPontuacao
+          // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
+          // é, em cinza, em vez de emprestar um pódio a um ranking sem lançamento nenhum.
+          ? (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">sem pontuação lançada</span>')
+          : L.pos.ranking
           ? (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>')
           : (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">' +
              (L.pos.grupo ? _esc(L.pos.grupo) + ' · ' : 'grupo · ') + L.pos.pos + 'º' +
@@ -1516,7 +1532,9 @@
       }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
-      h += ' · ' + _lzSelo('lp');     // de onde veio — o irmão do selo do scoreplace
+      // de onde veio. RK vem ANTES do LP quando a competição está no letzplay como RANKING
+      // — é o que denuncia o "torneio" que foi publicado no lugar errado.
+      h += ' · ' + (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp');
       return { ord: L.ord, h: h + '</div>' };
     });
     // PUBLICA OS ITENS pra o scoreplace poder INTERCALAR (e não concatenar) — ver
@@ -2784,6 +2802,30 @@
   // [{ group:'Classificação', ranking:true, ... }] e a posição É a classificação real.
   // Por isso a distinção sai do DADO (`g.ranking`), não de um palpite da tela.
   // Retorna { pos, grupo, de, ranking } ou null.
+  // ⚠️ RANKING ZERADO NÃO É CLASSIFICAÇÃO (dono, 11/ago/2026). Ele flagrou o caso real:
+  // o "T&F Special Edition - torneio PAIS" foi LANÇADO COMO RANKING no letzplay (erro de
+  // quem criou, e não temos como consertar lá) e a tabela dele está inteira zerada —
+  // _"tem uma pagina de classificacao do torneio que resolveria tudo, mas os lancamentos
+  // ali estao zerados e nao podem ser considerados"_. MEDIDO no doc dele: rid 58234 tem
+  // pontos [0,0,0,0,0,0] e ele consta em 9º; os outros 4 rankings têm pontos de verdade.
+  // Sem este guard a tela mostraria "🏅 9º" em âmbar de pódio pra uma tabela vazia — a
+  // MESMA mentira do bronze da fase de grupos, entrando por outra porta.
+  // A regra serve nos dois casos: temporada recém-aberta também tem todo mundo zerado, e
+  // ali também não existe classificação a exibir.
+  // ⚠️ AUSENTE ≠ ZERO. Só se declara "zerada" quando o campo `points` EXISTE e é 0 em todo
+  // mundo. Import antigo (ou tabela de outro formato) pode não trazer pontuação nenhuma —
+  // ali não se sabe, e suprimir por não saber apagaria classificação legítima. Na dúvida,
+  // mantém o que estava: o guard existe pra impedir uma AFIRMAÇÃO falsa, não pra criar uma.
+  function _lzTabelaZerada(g) {
+    var rows = (g && g.rows) || [];
+    if (!rows.length) return false;
+    var temCampo = rows.some(function (r) { return r && r.points != null && r.points !== ''; });
+    if (!temCampo) return false;
+    return rows.every(function (r) {
+      var p = r && r.points;
+      return p == null || p === '' || Number(p) === 0;
+    });
+  }
   function _lzMyPosIn(standings, handle) {
     var low = String(handle || '').toLowerCase(), out = null;
     (standings || []).forEach(function (g) {
@@ -2791,7 +2833,8 @@
       rows.forEach(function (r) {
         if (out != null || r.pos == null) return;
         if (!(r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) return;
-        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: !!g.ranking };
+        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: !!g.ranking,
+                semPontuacao: !!g.ranking && _lzTabelaZerada(g) };
       });
     });
     return out;
