@@ -63,13 +63,40 @@
   }
   function temIdade(categoryRaw) { return /\b(40|50|60|70)\b/.test(String(categoryRaw || '')); }
 
+  // SÓ A CATEGORIA — o nome do torneio, quando vem grudado, é jogado fora.
+  // MEDIDO no doc do @fabiogod (11/ago/2026): o campo `categoryRaw` NEM SEMPRE é só a
+  // categoria. Vem assim, misturado, e depende do torneio:
+  //   "Masculina D"                          → já é só a categoria
+  //   "11º BT House Open - MASCULINA C"      → nome + categoria
+  //   "8º ABACATEIRO OPEN - MASCULINA - C"   → nome + gênero + skill, em 3 partes
+  // Sem isto, a ficha dele exibia "categoria oficial: 11º BT House Open - MASCULINA C" —
+  // o nome do torneio inteiro dentro da pílula de categoria.
+  //
+  // A REGRA: parte por separador e devolve do PRIMEIRO pedaço que fala de gênero em
+  // diante. É isso que separa "o que é nome" de "o que é categoria" sem precisar conhecer
+  // os nomes — e mantém "MASCULINA - C" inteiro quando gênero e skill vêm separados.
+  // Sem gênero em parte nenhuma, devolve o texto como está: quem decide daí é quem chama.
+  function soCategoria(catRaw) {
+    var s = String(catRaw == null ? '' : catRaw).replace(/\s+/g, ' ').trim();
+    if (!s) return s;
+    var partes = s.split(/\s+[-–—]\s+/);
+    if (partes.length < 2) return s;
+    for (var i = 0; i < partes.length; i++) {
+      if (generoDe(partes[i])) return partes.slice(i).join(' - ');
+    }
+    return s;
+  }
+
   /** A categoria oficial do ATLETA → { label, deMista } ou null.
    *  `deMista` = a skill veio de um torneio misto e o gênero foi OMITIDO de propósito. */
   root._lzCatAtleta = function (imp) {
     if (!imp || typeof imp !== 'object') return null;
     var comGenero = null, soSkill = null;
-    function considera(catRaw, ageBand) {
-      if (!catRaw || ageBand || temIdade(catRaw)) return;      // faixa etária nunca é a categoria base
+    function considera(catRawBruto, ageBand) {
+      if (!catRawBruto || ageBand || temIdade(catRawBruto)) return;   // faixa etária nunca é a categoria base
+      // JOGA FORA O NOME DO TORNEIO antes de qualquer coisa — ele vem grudado em parte dos
+      // registros e ia inteiro pra pílula de categoria (ver soCategoria).
+      var catRaw = soCategoria(catRawBruto);
       var sk = skillDe(catRaw); if (!sk) return;
       var g = generoDe(catRaw);
       if (g === 'M' || g === 'F') {

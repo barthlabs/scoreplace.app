@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.17';
+window.SCOREPLACE_VERSION = '1.8.18';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -152,6 +152,36 @@ window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.
 // isso é o comportamento CERTO, não um esquecimento. Há teste travando que ele nunca fique
 // à FRENTE de SP_EXT_VERSION (isso seria mentir que a loja tem algo que não existe).
 window.SP_EXT_STORE_VERSION = '1.98';
+
+// ── A LEITURA DO LETZPLAY SÓ ACONTECE NO CHROME DESKTOP ──────────────────────
+// Bronca do dono (11/ago/2026, print do app no iPhone via TestFlight): _"não sendo no
+// chrome desktop onde existem as extensões (no celular por exemplo) não pode ficar sem a
+// informação de que isso só pode ser feito num desktop no chrome com extensão. já tratamos
+// disso e parece que nunca funcionou. no celular aparece o botão sem qualquer informação
+// disso."_
+//
+// Ele está certo nas duas partes, e a segunda explica a primeira: o aviso EXISTE — mas
+// dentro do `letzplay-onboarding.js`, com um `_isMobile()` PRIVADO daquele arquivo. A tela
+// da Análise (a do print, e a que ele usa no dia a dia) nunca teve detecção nenhuma:
+// `grep _isMobile` em tournaments-enrollment-report.js dava ZERO. Então "nunca funcionou"
+// não é impressão — o aviso nunca esteve na tela onde o botão aparece.
+//
+// Por isso a regra sobe pro store.js: enquanto a detecção morar dentro de uma view, a
+// próxima tela que oferecer a leitura vai nascer sem ela. É a mesma raiz do zip×loja
+// ([[feedback_unify_dual_entry_points]]).
+//
+// ⚠️ Cobre o NATIVO também: no app das lojas `SCOREPLACE_PLATFORM` é 'ios'/'android', e
+// mesmo num iPad o Chrome não tem extensões. Não existe caminho de leitura fora do
+// desktop — então aqui a resposta é sobre CAPACIDADE, não sobre tamanho de tela.
+window._spLetzplayPrecisaDesktop = function () {
+  try {
+    if (window.SCOREPLACE_PLATFORM && window.SCOREPLACE_PLATFORM !== 'web') return true;
+    if (/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) return true;
+    // iPad com "Solicitar site para computador" se anuncia como Mac — o toque entrega.
+    if (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent || '')) return true;
+    return false;
+  } catch (e) { return false; }
+};
 
 /** A loja já serve a versão que o gate exige? Fonte única da decisão loja × zip. */
 window._spExtStoreTemMinimo = function () {
