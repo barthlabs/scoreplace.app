@@ -7,6 +7,7 @@
     "public": ".",
     "predeploy": [
       "node scripts/check-version-ahead.js",
+      "node scripts/check-release-notes.js",
       "npm test",
       "npm run prerender"
     ],

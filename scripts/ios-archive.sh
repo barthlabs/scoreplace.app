@@ -15,6 +15,12 @@
 
 set -euo pipefail
 
+# ── TRAVA: a nota de versão tem que cobrir esta versão, ANTES de arquivar ──────
+# Depois de arquivar e subir, consertar a nota exige build NOVA — e build nova é build que
+# o dono NÃO testou no TestFlight. Já falhou 3x (1.7.8, 1.7.49, 1.8.11). Roda primeiro:
+# falhar aqui custa segundos; falhar depois custa uma volta inteira na fila da Apple.
+node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-release-notes.js"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$REPO_ROOT/ios/App"
 PROJECT="$APP_DIR/App.xcodeproj"

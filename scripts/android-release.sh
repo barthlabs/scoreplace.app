@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+# ── TRAVA: nota de versão antes de gerar o .aab (mesmo motivo do iOS) ─────────
+node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-release-notes.js"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ANDROID_DIR="$REPO_ROOT/android"
 

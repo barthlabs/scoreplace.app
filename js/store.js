@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.11';
+window.SCOREPLACE_VERSION = '1.8.12';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -867,15 +867,39 @@ window._formatLabel = function (t) {
 // _bootReady=true depois de `min` ms desde o open do app. Assim, mesmo com o
 // shell velho em cache, a tela inicial respeita o tempo mínimo.
 window.__bootT0 = window.__bootT0 || Date.now();
-window._BOOT_MIN_MS = 3500;
-window._markBootReady = function(minMs, _label) {
+
+// ─── v1.8.12 · QUEM LIBERA A TELA É O DADO, NÃO O RELÓGIO ────────────────────
+// Ordem do dono (11/ago/2026), depois de pedir "várias vezes":
+//   _"o programa abre sem ter tudo carregado e daí tentamos ir rapidamente para encontrar
+//   o torneio e fica travando tudo por uns 4segs e acaba com a experiência"_ ·
+//   _"pode ficar mais tempo no carregando e só abrir quando tudo da dashboard estiver
+//   efetivamente carregado"_ · _"não tem que ter definição de tempo. tem que ser LIBERA
+//   QUANDO CARREGOU"_.
+//
+// O QUE HAVIA E POR QUE FALHAVA: existia sim um mecanismo esperando o primeiro snapshot
+// (`_waitingForFirstSnapshot`) — mas por cima dele havia um TETO GLOBAL de 3,5s que
+// revelava a tela "mesmo com dados lentos" (está escrito assim no comentário antigo), e
+// pisos de 2,5s/1,5s/1s. Ou seja: o relógio ganhava do dado. Firestore demorando 4s → a
+// tela abria VAZIA, o dono tocava num torneio e a interface travava enquanto o render de
+// verdade acontecia. Por isso "se existe, não funciona": funcionava só quando os dados
+// eram rápidos, que é justamente quando não fazia falta.
+//
+// AGORA: `_markBootReady()` libera NA HORA em que é chamado — e só é chamado quando os
+// dados da dashboard estão prontos. Sem piso (não segura quem já carregou) e sem teto
+// (não revela quem não carregou).
+//
+// ⚠️ A ÚNICA exceção é FALHA, e não é "tempo pra revelar": se o Firestore não responde
+// (offline/erro), carregar nunca vai acontecer — aí revela-se o que houver em cache, senão
+// o app ficaria preso no splash pra sempre. Está no fallback do listener, rotulado
+// '5s-fallback', e é o ÚNICO lugar onde tempo ainda decide alguma coisa.
+window._markBootReady = function(_label) {
   if (window._bootReady === true) return;
-  if (typeof minMs !== 'number') minMs = window._BOOT_MIN_MS;
-  var _el = Date.now() - (window.__bootT0 || Date.now());
-  if (_el < minMs) { setTimeout(function() { window._markBootReady(minMs, _label); }, minMs - _el); return; }
-  // Diagnóstico: registra QUEM revelou e em quanto tempo (útil pra confirmar que
-  // o splash está segurando o tempo certo, inclusive no aparelho do usuário).
-  window._bootRevealInfo = { minMs: minMs, elapsedMs: Math.round(_el), label: _label || '?' };
+  // Diagnóstico: registra QUEM revelou e em quanto tempo (confere no aparelho do dono
+  // via window._bootRevealInfo).
+  window._bootRevealInfo = {
+    elapsedMs: Math.round(Date.now() - (window.__bootT0 || Date.now())),
+    label: _label || '?',
+  };
   window._bootReady = true;
 };
 
@@ -935,11 +959,11 @@ window._ensureBootOverlay = function() {
 };
 window._ensureBootOverlay();
 
-// v2.4.93: TETO GLOBAL de splash. Garante que a tela inicial nunca passa de
-// ~3,5s (v1.8: era 4,5s) desde o open do app, qualquer que seja o caminho
-// (mesmo dados lentos, _finalizeBootReady atrasado, etc.). Os caminhos mais
-// rápidos (router=1,5s, dash-poller=2,5s) revelam antes quando aplicáveis.
-window._markBootReady(3500, 'global-cap');
+// ⚠️ O TETO GLOBAL DE 3,5s FOI REMOVIDO (v1.8.12) — ele era o defeito, não a rede.
+// Ele revelava a tela "mesmo com dados lentos" (o comentário antigo dizia isso com todas
+// as letras), e por isso o app abria vazio e travava ao primeiro toque. Quem revela agora
+// é o DADO (_finalizeBootReady); a única saída por tempo é a de FALHA do Firestore.
+// NÃO reintroduzir um teto aqui: seria voltar a revelar tela sem conteúdo.
 
 // ─── Plataforma de execução + Feature Flags ──────────────────────────────────
 // Trilho pra "mudar com segurança enquanto sempre no ar": uma mudança arriscada
@@ -7175,7 +7199,7 @@ window.AppStore = {
       if (window._waitingForFirstSnapshot) {
         window._waitingForFirstSnapshot = false;
         // Sem dados do servidor — revela o que houver (cache) mesmo assim.
-        window._markBootReady(undefined, '5s-fallback');
+        window._markBootReady('5s-fallback');
         if (typeof window._hideBootLoader === 'function') window._hideBootLoader();
       }
     }, 5000);
@@ -7318,20 +7342,16 @@ window.AppStore = {
             var _onDash = (_hash0 === '' || _hash0 === 'dashboard');
             if (!_onDash) {
               requestAnimationFrame(function() {
-                setTimeout(function() { window._markBootReady(1000, 'deep-link'); }, 550);
+                window._markBootReady('deep-link');
               });
               return;
             }
-            // v2.4.93: tempo FIXO de splash, simples e LIMITADO. A v2.4.87 usava
-            // um detector de "DOM quieto" — mas a dashboard tem timers/re-renders
-            // ~contínuos, então ele batia no teto e revelava só em ~9s (confirmado
-            // pelo diagnóstico: dash-poller @ 9002ms). Agora: revela no piso de
-            // 2,5s (v1.8: era 3,5s — o scroll-jank de abertura passou a ser
-            // tratado separado, então o piso virou majoritariamente estético e
-            // baixamos 1s pra acelerar o boot). Um teto GLOBAL (_markBootReady(3500))
-            // garante que nunca passa de ~3,5s, mesmo com dados lentos. Quem
-            // realmente trava o scroll (re-render pós-reveal) é tratado separado.
-            window._markBootReady(2500, 'dash-poller');
+            // v1.8.12: CHEGOU AQUI = os dados estão prontos. Este ponto só é alcançado
+            // depois do PRIMEIRO SNAPSHOT dos torneios e do PERFIL carregado (o guard
+            // acima), que é exatamente o "tudo da dashboard efetivamente carregado" que o
+            // dono pediu. Revela AGORA, sem piso: segurar quem já carregou é tão ruim
+            // quanto revelar quem não carregou.
+            window._markBootReady('dados-prontos');
           };
           // Auto-scroll: tratado pelo renderDashboard com 600ms após render.
           // v4.5.72: _autoFixStaleNames removido — sob identidade-por-uid o render
