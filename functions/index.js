@@ -2389,7 +2389,7 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     if (!Object.keys(membros).length) return null;
 
     // ── CANDIDATOS ────────────────────────────────────────────────────────────────
-    // ⚠️ v1.7.99 — AQUI ESTAVA O FURO. A única consulta por nome era
+    // ⚠️ v1.8.3 — AQUI ESTAVA O FURO. A única consulta por nome era
     // `displayName_lower == nomeLower`, e `displayName_lower` é `toLowerCase()` CRU:
     // preserva acento, ponto e espaço. Resultado medido no Confra (11/ago/2026):
     // "Dėbora Castello" nunca casava com "Debora Castello" (o `ė` é U+0117) e
@@ -2475,7 +2475,7 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     }, pessoas, { rigor: "torneio" });
     if (!r.suspeito) return null;
 
-    // ─── CELULAR AUTENTICADO NÃO PERGUNTA: FUNDE (v1.7.99) ──────────────────────────
+    // ─── CELULAR AUTENTICADO NÃO PERGUNTA: FUNDE (v1.8.3) ──────────────────────────
     // Regra do dono (11/ago/2026): _"no mesmo celular autenticado, já mescla, nem pergunta."_
     //
     // ⚠️ "AUTENTICADO" É O TELEFONE DO **AUTH**, NUNCA O CAMPO `phone` DO PERFIL.
@@ -2723,7 +2723,7 @@ exports.dismissDuplicateSuspicion = onCall(
     const d = await _detectarDuplicataNoTorneio(db, callerUid, snap.data());
     if (!d) return { ok: true, nada: true };
 
-    // ⚠️ O "NÃO SOU EU" GUARDA A FORÇA DO SINAL QUE FOI DISPENSADO (v1.7.99).
+    // ⚠️ O "NÃO SOU EU" GUARDA A FORÇA DO SINAL QUE FOI DISPENSADO (v1.8.3).
     // Regra do dono: _"anotar a resposta pra não ficar perguntando de novo sem dado novo.
     // se coloca o mesmo celular e autentica, daí funde mesmo tendo sido perguntado antes e
     // a pessoa deu que não. as pessoas às vezes não leem na pressa e fecham respondendo
@@ -2747,7 +2747,7 @@ exports.dismissDuplicateSuspicion = onCall(
   }
 );
 
-// ─── "NÃO SOU EU" NO CADASTRO (v1.7.99) ──────────────────────────────────────────
+// ─── "NÃO SOU EU" NO CADASTRO (v1.8.3) ──────────────────────────────────────────
 // A dismissDuplicateSuspicion exige tournamentId (ela redescobre o par dentro do torneio).
 // No cadastro não há torneio: o par é redescoberto na BASE, pelo mesmo detector que gravou
 // o sinal. O cliente NUNCA passa o uid do outro — ele nem o recebe.
@@ -6057,7 +6057,7 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
         const freshOther = await db.collection("users").doc(other.id).get();
         if (!freshOther.exists || freshOther.data().mergedInto) continue;
 
-        // ⚠️ v1.7.99 — FUNDIR EXIGE CREDENCIAL AUTENTICADA. SEMPRE.
+        // ⚠️ v1.8.3 — FUNDIR EXIGE CREDENCIAL AUTENTICADA. SEMPRE.
         // Regra do dono (11/ago/2026), ao ver que este trigger fundia sem isso:
         // _"tem que autenticar email ou celular. sempre autenticado. nada disso de ser
         // frouxo."_ E ele tem razão: até aqui bastava o campo `phone`/`email` do PERFIL
@@ -6122,7 +6122,7 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
 //
 // ANTI-LOOP: só age quando o displayName MUDOU nesta escrita. Depois de renomear, a
 // própria escrita reacorda o trigger — mas aí o nome novo não colide e ele volta na hora.
-// ─── DUPLICATA NO CADASTRO — a mesma pergunta, fora de torneio (v1.7.99) ──────────
+// ─── DUPLICATA NO CADASTRO — a mesma pergunta, fora de torneio (v1.8.3) ──────────
 // Regra do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
 // cadastra"_. Até aqui a detecção só rodava na INSCRIÇÃO EM TORNEIO — quem criava a
 // segunda conta e não se inscrevia em nada nunca era perguntado, e a duplicata só aparecia
@@ -6233,7 +6233,7 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
     const db = admin.firestore();
     const uid = event.params.uid;
 
-    // ── v1.7.99 · AS CHAVES DE BUSCA SÃO MANTIDAS PELO SERVIDOR ──────────────────
+    // ── v1.8.3 · AS CHAVES DE BUSCA SÃO MANTIDAS PELO SERVIDOR ──────────────────
     // `displayName_keys`/`displayName_lastkey` são o índice da detecção de duplicata
     // (ver _detectarDuplicataNoTorneio). Elas NÃO são calculadas no cliente de propósito:
     // duplicar a regra de normalização em dois lugares foi exatamente o que produziu o
@@ -6269,7 +6269,7 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
       console.error("[enforceUniqueDisplayName] chaves de busca falharam (best-effort):", e && e.message);
     }
 
-    // ─── DUPLICATA NO CADASTRO (v1.7.99) ────────────────────────────────────────
+    // ─── DUPLICATA NO CADASTRO (v1.8.3) ────────────────────────────────────────
     // Regra do dono: _"essa verificação deve acontecer quando a pessoa se cadastra"_.
     // Roda quando o NOME, o CELULAR ou o E-MAIL mudam — que é quando aparece dado novo
     // capaz de revelar a segunda conta. Grava `dupSuspect` (só o contato MASCARADO), que

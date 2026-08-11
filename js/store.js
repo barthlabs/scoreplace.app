@@ -2814,7 +2814,7 @@ window._reflowChrome = function() {
     if (isFixed) {
       bh.style.top = bhOffset + 'px';
       var next = _firstVisibleSibling(bh);
-      // ── v1.7.99 · A ALTURA DO CABEÇALHO NÃO DEPENDE DE HAVER IRMÃO VISÍVEL ──────
+      // ── v1.8.3 · A ALTURA DO CABEÇALHO NÃO DEPENDE DE HAVER IRMÃO VISÍVEL ──────
       // `fixedBackHeaderH` alimenta `--backheader-h`, que é o `top` de TODA barra sticky
       // (a canônica de busca, a de chamada). Ele estava sendo calculado DENTRO do
       // `if (next)` — então, quando nenhum irmão visível era encontrado, ficava em 0 e a
@@ -7764,7 +7764,7 @@ window.AppStore = {
         // e NINGUÉM o leria — a lista abaixo é campo a campo e não faz merge genérico.
         // `null` limpa (o trigger apaga o campo quando o conflito acaba).
         this.currentUser.nameConflict = profile.nameConflict || null;
-        // v1.7.99 — POSSÍVEL SEGUNDA CONTA (detectada no cadastro pelo trigger).
+        // v1.8.3 — POSSÍVEL SEGUNDA CONTA (detectada no cadastro pelo trigger).
         // ⚠️ loadUserProfile copia CAMPO A CAMPO (não há merge genérico): sem esta linha o
         // sinal fica gravado no Firestore e a tela nunca pergunta — foi exatamente o que
         // aconteceu com o `nameConflict` na 1.7.41.

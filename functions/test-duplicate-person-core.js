@@ -45,7 +45,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   const real = { uid: 'u_nelson_real', nome: 'Nelson Barth' };
   ok('homônimo dispara a pergunta (é sinal FORTE, não fraco)', !!achou(teste, [real]));
 
-  // ⚠️ ASSERÇÃO REVISADA (v1.7.99), com o motivo aqui pra não parecer teste afrouxado.
+  // ⚠️ ASSERÇÃO REVISADA (v1.8.3), com o motivo aqui pra não parecer teste afrouxado.
   // Ela dizia "depois do não sou eu, NUNCA mais pergunta" — e o dono mudou essa regra:
   // _"anotar a resposta pra não ficar perguntando de novo SEM DADO NOVO. se coloca o mesmo
   // celular e autentica, daí funde mesmo tendo sido perguntado antes e a pessoa deu que
@@ -59,7 +59,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     !!achou(jaDisse, [real, { uid: 'u_terceiro', nome: 'Nelson Barth' }]));
 })();
 
-// ── 2b · O "NÃO SOU EU" NÃO É ETERNO: dado novo REABRE (v1.7.99) ─────────────
+// ── 2b · O "NÃO SOU EU" NÃO É ETERNO: dado novo REABRE (v1.8.3) ─────────────
 // Regra do dono (11/ago/2026): _"tem que perguntar. e anotar a resposta pra não ficar
 // perguntando de novo sem dado novo. se coloca o mesmo celular e autentica, por exemplo,
 // daí funde mesmo tendo sido perguntado antes e a pessoa deu que não. as pessoas às vezes
@@ -118,7 +118,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     /privilegedUserFields[\s\S]{0,300}'dupDismissedInfo'/.test(rules));
 })();
 
-// ── 2c · CELULAR AUTENTICADO FUNDE, NEM PERGUNTA (v1.7.99) ──────────────────
+// ── 2c · CELULAR AUTENTICADO FUNDE, NEM PERGUNTA (v1.8.3) ──────────────────
 // Regra do dono (11/ago/2026): _"no mesmo celular autenticado, já mescla, nem pergunta."_
 // (Aqui vale varredura de código: fundir toca Auth + Firestore e o comportamento ponta a
 //  ponta não roda em teste puro. O que se trava é a REGRA e os limites dela.)
@@ -148,7 +148,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
     D.FORCA_SINAL.email === D.FORCA_SINAL.celular && D.FORCA_SINAL.email > D.FORCA_SINAL.identico);
 })();
 
-// ── 2d · A PERGUNTA NO CADASTRO + "SEMPRE AUTENTICADO" (v1.7.99) ─────────────
+// ── 2d · A PERGUNTA NO CADASTRO + "SEMPRE AUTENTICADO" (v1.8.3) ─────────────
 // Regras do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
 // cadastra"_ · _"tem que perguntar"_ · _"tem que autenticar email ou celular. SEMPRE
 // autenticado. nada disso de ser frouxo."_
@@ -402,7 +402,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('  → SEM o uid da outra conta (só mascarado)',
     /dupSuspect: \{[\s\S]{0,400}maskedEmail/.test(idx) &&
     !/dupSuspect: \{[\s\S]{0,400}uid: _d0\.uid/.test(idx));
-  // ⚠️ ASSERÇÃO REVISADA (v1.7.99), com o motivo aqui pra não parecer afrouxamento.
+  // ⚠️ ASSERÇÃO REVISADA (v1.8.3), com o motivo aqui pra não parecer afrouxamento.
   // Ela ancorava no texto literal `displayName_lower", "==", nomeLower` dentro de uma
   // janela de 1500 chars. A janela quebrou quando a busca ganhou as chaves novas
   // (displayName_keys / displayName_lastkey) e o comentário que explica o incidente.

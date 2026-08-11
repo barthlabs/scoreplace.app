@@ -7804,7 +7804,7 @@ function setupProfileModal() {
 // Nada é fundido aqui. "Sim" leva pro perfil, onde vivem os dois canais de PROVA DE POSSE
 // (link no e-mail / SMS no celular da outra conta) — nome igual detecta, nome igual não
 // autoriza ([[project_unique_display_name]]). "Não" só troca o próprio nome por um livre.
-// ─── POSSÍVEL SEGUNDA CONTA — a pergunta no CADASTRO (v1.7.99) ───────────────────────
+// ─── POSSÍVEL SEGUNDA CONTA — a pergunta no CADASTRO (v1.8.3) ───────────────────────
 // Regra do dono (11/ago/2026): _"essa verificação deve acontecer quando a pessoa se
 // cadastra"_ e _"tem que perguntar"_. O trigger grava `dupSuspect` (só o contato
 // MASCARADO); aqui é quem finalmente PERGUNTA — sem isso o sinal era gravado e ninguém lia.

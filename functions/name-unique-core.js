@@ -137,7 +137,7 @@ function denormalizeDisplayName(profilePayload, displayName) {
   if (!nm) return profilePayload;
   profilePayload.displayName = nm;
   profilePayload.displayName_lower = nm.toLowerCase();
-  // v1.7.99 — CHAVES DE BUSCA DE DUPLICATA. `displayName_lower` é `toLowerCase()` cru:
+  // v1.8.3 — CHAVES DE BUSCA DE DUPLICATA. `displayName_lower` é `toLowerCase()` cru:
   // preserva acento, ponto e espaço, então "Dėbora Castello" nunca casa com "Debora
   // Castello" e "M.Delia" nunca casa com "MDelia". Era esse o furo pelo qual duas pessoas
   // ficaram com duas contas cada no MESMO torneio (Confra, 11/ago/2026) — a comparação

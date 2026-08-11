@@ -3536,7 +3536,7 @@ function renderTournaments(container, tournamentId = null) {
           // separada (_buildDropzone), que só aparece durante o arraste.
           var _tapAttrs = isTapPicker ? ' title="Toque para co-organizar" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"' : '';
           var _starSpan = '<span class="sp-org-star" style="display:inline-flex;align-items:center;flex-shrink:0;">' + _crownSvg + '</span>';
-          // v1.7.99 — O CARD DE ORGANIZAÇÃO ENTRA NO FILTRO DA BUSCA.
+          // v1.8.3 — O CARD DE ORGANIZAÇÃO ENTRA NO FILTRO DA BUSCA.
           // Relato do dono (11/ago/2026), com o filtro em "debora": _"os organizadores
           // nenhum é debora e ficam lá atrapalhando a tela. se tiver organizador que bate
           // com o filtro deve aparecer. se não deve sumir"_. Estes cards ficam ACIMA do

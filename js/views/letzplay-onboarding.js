@@ -28,7 +28,7 @@
   var _lzLoggedIn = null;   // null=desconhecido, true=logado no letzplay, false=deslogado
   var _lastLzCheck = 0;
 
-  // v1.7.99: EXPORTADA. O veredito da Análise (`_lzMotorAtual`) precisa da MESMA
+  // v1.8.3: EXPORTADA. O veredito da Análise (`_lzMotorAtual`) precisa da MESMA
   // comparação de versão que o gate de instalação usa — se as duas divergirem, o app
   // pode exigir uma versão pra instalar e aceitar outra pra absolver a leitura.
   // Uma implementação só, aqui, onde ela já existia.

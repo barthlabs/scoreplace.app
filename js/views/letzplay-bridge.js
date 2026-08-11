@@ -66,7 +66,7 @@
     // carrega stats de nome resolvido, se a nova versão trouxe melhor
     if (next.tourneyNameStats) base.tourneyNameStats = next.tourneyNameStats;
     base.importedAt = next.importedAt || base.importedAt;   // SEMPRE a data/hora nova
-    // v1.7.99 — QUAL MOTOR LEU ISTO vem SEMPRE da leitura nova, e o valor ANTIGO é
+    // v1.8.3 — QUAL MOTOR LEU ISTO vem SEMPRE da leitura nova, e o valor ANTIGO é
     // APAGADO quando a nova não traz nenhum. Herdar seria mentir na direção perigosa:
     // uma releitura feita por extensão velha ficaria carimbada com a versão da leitura
     // anterior e voltaria a ser absolvida (verde) sem ter passado pelo motor atual.

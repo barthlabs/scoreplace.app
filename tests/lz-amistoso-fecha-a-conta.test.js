@@ -223,7 +223,7 @@ function impFabio(games) {
   return {
     handle: 'FabioSimaoB', source: 'letzplay', version: 2,
     importedAt: new Date().toISOString(),          // leitura de hoje (verde exige < 3 meses)
-    // v1.7.99: e verde exige também o MOTOR ATUAL — a extensão carimba a versão que
+    // v1.8.3: e verde exige também o MOTOR ATUAL — a extensão carimba a versão que
     // produziu a leitura. Lido da FONTE ÚNICA (store.js) pra não cravar número aqui.
     extVersion: (fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8')
       .match(/SP_EXT_VERSION\s*=\s*'([^']+)'/) || [])[1],

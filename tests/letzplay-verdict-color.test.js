@@ -32,7 +32,7 @@ const COL = window._LZ_COL;
 // e absolver com dado velho é chute — um título tirado semana passada muda o veredito.
 const AGORA = new Date().toISOString();
 const VELHO = new Date(Date.now() - 120 * 86400000).toISOString();   // 4 meses → fora da janela
-// v1.7.99 — CARIMBO DO MOTOR. Uma leitura só pode ABSOLVER (verde) se veio da extensão
+// v1.8.3 — CARIMBO DO MOTOR. Uma leitura só pode ABSOLVER (verde) se veio da extensão
 // ATUAL: entre versões o motor mudou (o amistoso passou a contar, o fechamento virou
 // verificação contra o índice), e leitura da versão anterior tem id, é recente e mesmo
 // assim não foi lida direito. Por isso os fixtures que esperam VERDE agora carregam
@@ -652,7 +652,7 @@ console.log('\n── data mostrada = data do histórico em uso ──');
 }
 
 
-// ── 20 · VERDE EXIGE O MOTOR ATUAL (v1.7.99) ────────────────────────────────────
+// ── 20 · VERDE EXIGE O MOTOR ATUAL (v1.8.3) ────────────────────────────────────
 // Regra do dono (11/ago/2026): _"se baixamos o letzplay desses que autorizaram mas a
 // extensão mudou, baixou pelo motor desatualizado e por isso todos devem voltar a ser
 // roxo até ter rodado pelo motor novo (nova extensão)"_.

@@ -6,6 +6,7 @@
   "hosting": {
     "public": ".",
     "predeploy": [
+      "node scripts/check-version-ahead.js",
       "npm test",
       "npm run prerender"
     ],

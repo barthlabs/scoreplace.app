@@ -370,7 +370,7 @@ function compararPessoa(candidato, pessoa, opts) {
   const lzB = normalizarHandle(pessoa.letzplayHandle);
 
   const mesmoTel = !!(telA && telB && telA === telB);
-  // v1.7.99 — não é mais igualdade exata: grafia, inicial omitida e 1 caractere também
+  // v1.8.3 — não é mais igualdade exata: grafia, inicial omitida e 1 caractere também
   // contam. Ver compararNomes e [[project_duplicate_detection_two_normalizations]].
   const parecidoNome = compararNomes(candidato.nome, pessoa.nome, opts);
   const mesmoLz = !!(lzA && lzB && lzA === lzB);
@@ -493,7 +493,7 @@ function textoDaPergunta(nome, contatoMascarado, motivo, semelhanca) {
     return 'Você PARECE já estar inscrito neste torneio com ' + quem +
       ' — ela tem o mesmo celular que o seu. É você?';
   }
-  // ⚠️ v1.7.99 — o nome nem sempre é o MESMO; pode ser a mesma pessoa escrita de outro
+  // ⚠️ v1.8.3 — o nome nem sempre é o MESMO; pode ser a mesma pessoa escrita de outro
   // jeito ("M.Delia Fernandez" × "MDelia Fernandez", "Debora" × "Dėbora"). Dizer
   // "que usa o mesmo nome" nesses casos é falso, e falso é o que faz a pessoa responder
   // "não sou eu" achando que o app se enganou. O texto descreve o que de fato bateu.
