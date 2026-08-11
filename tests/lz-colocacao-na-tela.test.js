@@ -173,26 +173,43 @@ t('quem não entrou na chave → fase de grupos, nunca um número inventado', ()
   assert.strictEqual(r.rotulo, 'Fase de grupos');
 });
 
-console.log('\n4. SEM CHAVE, A TABELA DE GRUPO CONTINUA VALENDO (nada regride)');
-t('footprint sem matches cai no _lzMyPosIn de sempre', () => {
+console.log('\n4. POSIÇÃO DE GRUPO NUNCA APARECE — só classificação GERAL');
+// Ordem do dono (11/ago/2026): "não interessa grupo x, yº de tantos. só importa a
+// classificação geral. sempre. nem que seja por faixa se não for personalizada como num
+// ranking." O print dele mostrava "GRUPO 03 · 2º de 3" e isso não diz nada sobre o torneio.
+t('torneio SEM chave lida → nenhuma colocação (não inventa a partir do grupo)', () => {
   const soGrupo = { standings: [{ group: 'GRUPO 03', rows: [
     { pos: 1, handles: ['Outro'], points: 6 },
     { pos: 2, handles: ['GersomOtsu'], points: 3 },
     { pos: 3, handles: ['Terceiro'], points: 0 }] }] };
-  const r = _lzColocacao(soGrupo, 'GersomOtsu');
-  assert.ok(r && !r.chave, 'deveria vir da tabela de grupo');
-  assert.strictEqual(r.pos, 2);
-  assert.strictEqual(r.de, 3);
-  assert.strictEqual(r.grupo, 'GRUPO 03');
+  assert.strictEqual(_lzColocacao(soGrupo, 'GersomOtsu'), null,
+    'a tabela de grupo voltou a virar colocação');
 });
-t('a CHAVE vence a tabela de grupo quando as duas existem', () => {
-  // Este é o ponto do dono: "a posicao no grupo nao revela nada". Com as duas fontes
-  // presentes, a do torneio inteiro é a que vale.
+t('RANKING continua valendo — ali a posição JÁ é geral', () => {
+  const rk = { standings: [{ group: 'Ranking Masculino D', ranking: true, rows: [
+    { pos: 1, handles: ['X'], points: 120 },
+    { pos: 9, handles: ['GersomOtsu'], points: 40 }] }] };
+  const r = _lzColocacao(rk, 'GersomOtsu');
+  assert.ok(r && !r.chave, 'deveria vir da tabela do ranking');
+  assert.strictEqual(r.pos, 9);
+  assert.strictEqual(r.ranking, true);
+});
+t('ranking ZERADO continua sendo recusado como pódio', () => {
+  const rk = { standings: [{ group: 'R', ranking: true, rows: [
+    { pos: 1, handles: ['X'], points: 0 }, { pos: 9, handles: ['GersomOtsu'], points: 0 }] }] };
+  assert.strictEqual(_lzColocacao(rk, 'GersomOtsu').semPontuacao, true);
+});
+t('a CHAVE vence quando existe junto com a tabela de grupo', () => {
   const ambos = Object.assign({}, fp, { standings: [{ group: 'GRUPO 03', rows: [
     { pos: 2, handles: ['GersomOtsu'], points: 3 }, { pos: 1, handles: ['X'], points: 6 }] }] });
   const r = _lzColocacao(ambos, 'GersomOtsu');
   assert.strictEqual(r.chave, true);
   assert.strictEqual(r.rotulo, '5º/7º (quartas)');
+});
+t('o render NÃO tem mais o ramo que imprimia "grupo · Nº de N"', () => {
+  assert.ok(!/'grupo · '/.test(src), 'o texto "grupo · " voltou ao render');
+  assert.ok(!/L\.pos\.grupo \? _esc\(L\.pos\.grupo\)/.test(src),
+    'o ramo que imprime o nome do grupo como colocação voltou');
 });
 
 console.log('\n5. CATEGORIA DO ATLETA NUNCA É "MISTA"');

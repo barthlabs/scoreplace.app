@@ -351,17 +351,21 @@ ok(_linhaPend.indexOf('#7dd3fc') < 0, 'não lido NÃO ganha data inventada (sem 
 // RANKING, onde a posição é classificação de verdade — travado logo abaixo.
 ok(htmlL.indexOf('#7dd3fc') >= 0, 'data tem cor própria (#7dd3fc)');
 ok(htmlL.indexOf('#a78bfa') >= 0, 'categoria tem cor própria (#a78bfa)');
-ok(htmlL.indexOf('#94a3b8') >= 0, 'posição de GRUPO tem cor própria e NEUTRA (#94a3b8), não a de pódio');
 ok(htmlL.indexOf('#fbbf24') < 0, 'e o âmbar de pódio NÃO aparece em linha de torneio');
-ok(new Set(['#7dd3fc', '#a78bfa', '#94a3b8']).size === 3, 'as três cores são diferentes entre si');
 
-// 5) POSIÇÃO: em torneio é do GRUPO (sem medalha); em ranking é classificação (com medalha)
-// ⚠️ REVISADO na 1.8.5. Antes: "campeã sai com 🥇 1º" — mas `pos:1` num `{group:'G1'}` é
-// 1º DO GRUPO, não campeã do torneio. O invariante que estas linhas protegiam de verdade
-// (a colocação aparece e é legível) segue travado, agora dizendo a verdade.
+// 5) POSIÇÃO EM TORNEIO: só a CLASSIFICAÇÃO GERAL, que vem da chave — nunca o grupo.
+// ⚠️ REVISADO DUAS VEZES, e o histórico importa porque explica por que hoje não sai nada.
+//   1.8.5  — "campeã sai com 🥇 1º" virou falso: `pos:1` num `{group:'G1'}` é 1º DO GRUPO.
+//            O conserto da época foi contextualizar: "G1 · 1º de 1".
+//   1.8.13 — ordem do dono: _"não interessa grupo x, yº de tantos. só importa a
+//            classificação geral. sempre. nem que seja por faixa se não for personalizada
+//            como num ranking."_ Contextualizar não bastava — posição de grupo não é
+//            colocação, então não se exibe. Quem responde é a CHAVE (_lzPlacement, por
+//            faixa quando não dá pra cravar) ou o RANKING, logo abaixo.
+// Este fixture é só-grupo, sem chave lida → a linha sai SEM colocação, de propósito.
 ok(!/🥇|🥈|🥉|🏅/.test(htmlL), 'nenhuma medalha em linha de TORNEIO — grupo não é pódio');
-ok(/G1 · 1º de 1/.test(htmlL), '1º do grupo sai como "G1 · 1º de 1", com o grupo nomeado');
-ok(/G1 · 2º de 1/.test(htmlL) && /G1 · 3º de 1/.test(htmlL), '2º e 3º idem, sempre com o grupo');
+ok(!/G1 ·/.test(htmlL), 'o nome do grupo não sai como colocação (era "G1 · 1º de 1")');
+ok(!/\dº de \d/.test(htmlL), 'o "Nº de N" do grupo não sai — sem chave, não se afirma colocação');
 {
   // o outro lado da regra: RANKING mantém o pódio (o scraper marca `ranking:true`)
   var _hR = window._lzTourneyRows({ footprint: [{ official: false, club: 'c', rankingId: 'r9',
@@ -419,19 +423,26 @@ ok(window._lzTournamentsRead(impT) === 1,
 var htmlT = window._lzTourneyRows(impT, 'camilacalia');
 var divsT = (htmlT.match(/<div /g) || []).length;
 ok(divsT === 1, 'a lista mostra UMA linha para o torneio (era uma por trilha)', 'linhas=' + divsT);
-// (1.8.5: o invariante aqui é a FUSÃO — a melhor posição vence entre as 3 trilhas do mesmo
-// torneio. O que mudou é a forma: posição de grupo não usa medalha. Ver _lzMyPosIn.)
-ok(/2º de 1/.test(htmlT) && !/4º|6º/.test(htmlT),
-   'funde as entradas mantendo a melhor colocação (2º, não 4º nem 6º)');
+// (1.8.5: o invariante aqui é a FUSÃO — as 3 trilhas do mesmo torneio viram UMA linha.
+//  1.8.13: as posições fundidas eram de GRUPO (2º/4º/6º de G1), e grupo deixou de ser
+//  colocação por ordem do dono. A fusão continua travada pela contagem de <div> acima, que
+//  é o que ela sempre defendeu de verdade; aqui trava-se o outro lado: nenhuma das três
+//  posições de grupo vaza pra tela.)
+ok(!/\dº de \d/.test(htmlT) && !/>\s*[246]º\s*</.test(htmlT),
+   'nenhuma posição de GRUPO aparece — nem a melhor delas (era "2º de 1")');
 
 // 3) a TRILHA sai do campo da categoria, fica BRANCA e vai pro FIM
 ok(new RegExp('color:#f3f4f6[^>]*>Ver trilha de').test(htmlT), 'trilha em BRANCO (#f3f4f6), não no roxo');
 ok(htmlT.indexOf('#a78bfa') < 0 || !/color:#a78bfa[^>]*>Ver trilha/.test(htmlT),
   'trilha NUNCA sai com a cor da categoria');
-// (1.8.5: a posição de grupo é #94a3b8 — o #fbbf24 ficou reservado ao pódio de ranking)
-var iCat = htmlT.indexOf('#a78bfa'), iPos = htmlT.indexOf('#94a3b8'), iTr = htmlT.indexOf('#f3f4f6');
-ok(iCat >= 0 && iPos > iCat && iTr > iPos,
-  'ordem: categoria → classificação → trilha (pedido do dono)', 'cat=' + iCat + ' pos=' + iPos + ' trilha=' + iTr);
+// ORDEM DOS CAMPOS (pedido do dono): categoria → classificação → trilha.
+// ⚠️ 1.8.13: este fixture é só-grupo, e grupo não é mais colocação — então não há campo de
+// classificação nesta linha pra ancorar o meio. A ordem que dá pra travar AQUI é
+// categoria → trilha; a posição da classificação entre as duas está travada em
+// tests/lz-colocacao-na-tela.test.js, com um fixture que TEM chave lida.
+var iCat = htmlT.indexOf('#a78bfa'), iTr = htmlT.indexOf('#f3f4f6');
+ok(iCat >= 0 && iTr > iCat,
+  'ordem: categoria → … → trilha (a trilha é sempre a última)', 'cat=' + iCat + ' trilha=' + iTr);
 
 // 4) a CATEGORIA REAL é resgatada do nome, já que o campo dela estava ocupado pela trilha
 ok(new RegExp('color:#a78bfa[^>]*>Feminina C<').test(htmlT),
@@ -529,8 +540,9 @@ console.log('\n── abas: torneios · rankings · jogos ──');
   ok(/Competitivo Fem C/.test(r) && !/Open Reação/.test(r), 'aba RANKINGS mostra só ranking');
   ok(/Torneio ainda não lido/.test(t) && /ainda não lido/.test(t), 'torneio pendente aparece na aba dele');
   ok(/Ranking não lido/.test(r), 'ranking pendente aparece na aba dele');
-  // torneio = posição de GRUPO (sem medalha) · ranking = classificação real (com medalha)
-  ok(/G · 2º de 1/.test(t) && !/🥈/.test(t), 'aba TORNEIOS traz a posição do grupo, sem pódio');
+  // ⚠️ 1.8.13: torneio só exibe colocação quando ela é GERAL (vem da chave). Este fixture
+  // é só-grupo → sai sem colocação. Ranking segue com a classificação real e a medalha.
+  ok(!/G · 2º de 1/.test(t) && !/🥈/.test(t), 'aba TORNEIOS não traz posição de grupo');
   ok(/🏅 4º/.test(r), 'aba RANKINGS traz a classificação de verdade, com medalha');
   ok(/6–3/.test(j) && /4–6/.test(j), 'aba JOGOS traz o placar');
   ok(/vs Ana \/ Bia/.test(j), 'aba JOGOS traz os adversários');

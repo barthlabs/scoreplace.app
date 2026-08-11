@@ -1521,12 +1521,17 @@
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
-      // COLOCAÇÃO só é pódio quando o dado diz que é (ranking). Em torneio o número vem da
-      // tabela de GRUPO — dizer "🥉 3º" pra quem foi o último de um grupo de 3 é inventar
-      // um resultado que não existiu. Ver o comentário de _lzMyPosIn.
+      // A COLOCAÇÃO É SEMPRE GERAL — nunca "GRUPO 03 · 2º de 3".
+      // Ordem do dono: _"não interessa grupo x, yº de tantos. só importa a classificação
+      // geral. sempre. nem que seja por faixa se não for personalizada como num ranking."_
+      // São só DOIS jeitos de saber isso, e os dois estão aqui:
+      //   • TORNEIO → a chave, pelo _lzPlacement (exata no pódio, por FAIXA no resto).
+      //   • RANKING → a posição na tabela dele, que já é a classificação inteira.
+      // O ramo que imprimia posição de grupo foi REMOVIDO (e a fonte, _lzMyPosIn, parou de
+      // devolvê-la — ali é onde o corte vale). Sem chave lida a linha fica sem colocação,
+      // de propósito: não saber é melhor que afirmar uma que não existiu.
       if (L.pos) {
         h += L.pos.chave
-          // COLOCAÇÃO CALCULADA DA CHAVE — a de verdade, entre todos os participantes.
           // Pódio (1º/2º/3º) sai em âmbar com medalha; faixa e fase saem em cinza, porque
           // "5º/7º (quartas)" é informação e não conquista.
           ? (' · <span style="color:' + (L.pos.podio ? _LZ_C_POS : _LZ_C_GRUPO) +
@@ -1541,11 +1546,8 @@
           // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
           // é, em cinza, em vez de emprestar um pódio a um ranking sem lançamento nenhum.
           ? (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">sem pontuação lançada</span>')
-          : L.pos.ranking
-          ? (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>')
-          : (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">' +
-             (L.pos.grupo ? _esc(L.pos.grupo) + ' · ' : 'grupo · ') + L.pos.pos + 'º' +
-             (L.pos.de ? ' de ' + L.pos.de : '') + '</span>');
+          // RANKING: posição na tabela inteira — é classificação geral por definição.
+          : (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>');
       }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
@@ -2879,15 +2881,31 @@
       return p == null || p === '' || Number(p) === 0;
     });
   }
+  // ⚠️ SÓ CLASSIFICAÇÃO GERAL — POSIÇÃO DE GRUPO NUNCA SAI DAQUI.
+  // Ordem do dono (11/ago/2026): _"não interessa grupo x, yº de tantos. só importa a
+  // classificação geral. sempre. nem que seja por faixa se não for personalizada como num
+  // ranking."_
+  //
+  // As duas coisas moravam nesta função e eram exibidas com o mesmo peso:
+  //   • RANKING (`g.ranking`) — ali a posição JÁ É geral: é a colocação da pessoa na
+  //     tabela inteira daquele ranking. Continua saindo, com medalha.
+  //   • GRUPO de torneio — "2º de 3 no GRUPO 03" não diz nada sobre o torneio. Quem
+  //     responde isso é a CHAVE, via _lzPlacement, e por faixa quando não dá pra cravar
+  //     ("5º/7º"). Sem chave lida, a resposta honesta é NÃO DIZER — inventar uma
+  //     colocação a partir do grupo é o mesmo erro do pódio falso da 1.8.5.
+  //
+  // O corte é AQUI e não no render de propósito: enquanto a função devolver a posição de
+  // grupo, basta um chamador novo pra ela reaparecer na tela.
   function _lzMyPosIn(standings, handle) {
     var low = String(handle || '').toLowerCase(), out = null;
     (standings || []).forEach(function (g) {
+      if (!g.ranking) return;                        // tabela de GRUPO não é classificação
       var rows = g.rows || [];
       rows.forEach(function (r) {
         if (out != null || r.pos == null) return;
         if (!(r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) return;
-        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: !!g.ranking,
-                semPontuacao: !!g.ranking && _lzTabelaZerada(g) };
+        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: true,
+                semPontuacao: _lzTabelaZerada(g) };
       });
     });
     return out;

@@ -76,13 +76,27 @@ function carregar() {
 const P = carregar();
 const win = globalThis.__win;
 
-console.log('\n1. Torneio: o número é do GRUPO — nunca pódio');
+// ⚠️ ASSERÇÕES REVISADAS EM 11/ago/2026 — POR ORDEM DO DONO, e o motivo fica escrito aqui.
+// Esta suíte nasceu em 10/ago consertando o pódio falso ("🥈 2º" pra quem foi 2º de 3 NO
+// GRUPO). O conserto da época foi mostrar o número COM O CONTEXTO — "GRUPO 03 · 2º de 3" —
+// e era isso que as 3 asserções abaixo travavam.
+//
+// No dia seguinte ele foi além: _"não interessa grupo x, yº de tantos. só importa a
+// classificação geral. sempre. nem que seja por faixa se não for personalizada como num
+// ranking."_ Ou seja: contextualizar não bastava; posição de grupo não é colocação e
+// simplesmente não se exibe. Quem responde "onde terminei" é a CHAVE (via _lzPlacement,
+// por faixa quando não dá pra cravar) ou o RANKING.
+//
+// O INVARIANTE QUE ELAS DEFENDIAM CONTINUA TRAVADO, e mais forte: antes era "o número do
+// grupo não pode virar medalha"; agora é "o número do grupo não pode aparecer". A regressão
+// que originou a suíte (Rodrigo aparecendo em 2º/3º/4º sem nunca ter passado da 1ª fase)
+// segue impossível pelos dois lados.
+console.log('\n1. Torneio: posição de GRUPO não é colocação — e não aparece');
 const htmlT = P.rows(IMP, 'RodrigoBarth', 'tour');
 ok(!/🥇|🥈|🥉|🏅/.test(htmlT), 'nenhuma medalha em linha de TORNEIO');
-ok(/GRUPO 02/.test(htmlT) && /4º de 4/.test(htmlT),
-   'o BTG Masc 50 diz "GRUPO 02 · 4º de 4" (era "🏅 4º", último do grupo virando 4º lugar)');
-ok(/GRUPO 03/.test(htmlT) && /2º de 3/.test(htmlT), 'a Seletiva PPP diz "GRUPO 03 · 2º de 3" (era "🥈 2º")');
-ok(!/>\s*2º\s*</.test(htmlT.replace(/GRUPO[^<]*/g, '')), 'não sobrou um "2º" solto sem o contexto do grupo');
+ok(!/GRUPO 0\d/.test(htmlT), 'o nome do grupo não aparece como colocação (era "GRUPO 02 · 4º de 4")');
+ok(!/\dº de \d/.test(htmlT), 'o "Nº de N" do grupo não aparece (era "2º de 3" na Seletiva PPP)');
+ok(!/>\s*\dº\s*</.test(htmlT), 'e não sobrou nenhum "Nº" solto — sem chave lida, a linha fica sem colocação');
 
 console.log('\n2. Ranking: ali a posição É classificação, e o pódio continua valendo');
 const htmlR = P.rows(IMP, 'RodrigoBarth', 'rank');
