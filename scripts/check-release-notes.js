@@ -47,8 +47,52 @@ const src = fs.readFileSync(p, 'utf8');
 
 // A entrada aparece como `v1.8 —` / `v1.8 -` / `v1.8<` no HTML da nota.
 const tem = new RegExp('v' + minor.replace('.', '\\.') + '(?![0-9])').test(src);
+// ─── PARTE 2 · A NOTA NÃO PODE ESTAR ATRASADA EM RELAÇÃO AO CÓDIGO ───────────
+// A parte 1 garante que a nota EXISTE. Não garante que está COMPLETA — e foi isso que
+// falhou em 11/ago/2026: a nota da v1.8 foi escrita, passou verde, e mesmo assim omitia
+// entregas e afirmava coisa errada. Reação do dono: "que merda de trava é essa que não
+// trava nada?" (e ele estava certo duas vezes: na 1ª versão desta parte 2 eu a colei
+// DEPOIS do process.exit — código morto, que nunca rodou).
+//
+// ⚠️ LIMITE HONESTO: nenhum script julga se um texto descreve certo o que o código faz —
+// isso é leitura. O que DÁ pra travar é OMISSÃO: entregou código depois da última vez que
+// escreveu a nota. É o caso comum, e é determinístico.
+function checarAtraso() {
+  const { execFileSync } = require('child_process');
+  const git = (args) => {
+    try {
+      return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch (e) { return ''; }
+  };
+  const ultimoDaNota = git(['log', '-1', '--format=%H', '--', 'js/release-notes.js']);
+  if (!ultimoDaNota) return;   // sem git/histórico → só a parte 1 vale
+  const depois = git(['log', ultimoDaNota + '..HEAD', '--format=%h|%s', '--',
+    'js/', 'css/', 'index.html', ':!js/release-notes.js'])
+    .split('\n').filter(Boolean);
+  if (!depois.length) return;
+  console.error('');
+  console.error('✗ A NOTA ESTÁ ATRASADA — ' + depois.length + ' entrega(s) de código depois da última vez que ela foi escrita:');
+  console.error('');
+  depois.slice(0, 12).forEach((l) => {
+    const [h, ...r] = l.split('|');
+    console.error('  • ' + h + '  ' + r.join('|').slice(0, 100));
+  });
+  if (depois.length > 12) console.error('  … e mais ' + (depois.length - 12));
+  console.error('');
+  console.error('  Confira se cada uma aparece na nota da v' + minor + ' — e se o que está');
+  console.error('  escrito é VERDADE. Esta trava pega OMISSÃO; ela não sabe julgar se o texto');
+  console.error('  descreve certo o que o código faz. Isso já passou batido: a nota da v1.8');
+  console.error('  dizia "nada é unido sozinho" quando o app funde sozinho com credencial');
+  console.error('  autenticada.');
+  console.error('');
+  console.error('  Se a nota JÁ contempla tudo, toque-a no mesmo commit do código.');
+  console.error('');
+  process.exit(1);
+}
+
 if (tem) {
-  console.log('✓ nota de versão cobre a v' + minor + ' (app em ' + versao + ')');
+  checarAtraso();
+  console.log('✓ nota de versão cobre a v' + minor + ' e está em dia com o código (app em ' + versao + ')');
   process.exit(0);
 }
 
