@@ -1998,42 +1998,6 @@
     }
   }
 
-  // ── OS BOTÕES DO AVISO DE EXTENSÃO ────────────────────────────────────────────
-  // Ordem do dono (11/ago/2026): _"onde está a porra dos botões que tinha mostrado. clicar
-  // no texto é uma merda."_ A ação estava como <a> dentro de um parágrafo — mesma fonte,
-  // mesmo peso, alvo do tamanho de uma palavra. Vira BOTÃO: área grande, cor de ação, e a
-  // frase por cima só explica.
-  // QUAL aparece segue a regra dele de antes: a loja SEMPRE; o zip JUNTO enquanto a loja
-  // servir versão abaixo do mínimo. Decisão em window._spExtStoreTemMinimo() (store.js).
-  function _lzExtBotoesHtml() {
-    var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
-    var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
-    var url = window.SP_EXT_STORE_URL || null;
-    var base = 'display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:10px;' +
-      'font-size:0.8rem;font-weight:800;text-decoration:none;white-space:nowrap;';
-    var primario = base + 'background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1205;' +
-      'border:1px solid rgba(245,158,11,0.6);';
-    var secundario = base + 'background:rgba(255,255,255,0.06);color:#fbbf24;' +
-      'border:1px solid rgba(251,191,36,0.45);';
-    var bt = [];
-    if (!lojaOk && z) {
-      // o que resolve AGORA vem primeiro e em destaque
-      bt.push('<a href="' + _esc(z) + '" download style="' + primario + '">⬇️ Baixar a v' + _esc(_LZ_MIN_EXT) + ' (zip)</a>');
-      if (url) bt.push('<a href="' + _esc(url) + '" target="_blank" rel="noopener" style="' + secundario + '">🧩 Chrome Web Store ↗</a>');
-    } else if (url) {
-      bt.push('<a href="' + _esc(url) + '" target="_blank" rel="noopener" style="' + primario + '">🧩 Abrir na Chrome Web Store ↗</a>');
-    }
-    if (!bt.length) {
-      return ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.';
-    }
-    var nota = (!lojaOk && z)
-      ? 'A v' + _esc(_LZ_MIN_EXT) + ' ainda está em revisão na loja. Baixe o zip e carregue em ' +
-        '<code>chrome://extensions</code> com o <b>Modo do desenvolvedor</b> ligado.'
-      : 'Pela loja o Chrome mantém a extensão atualizada sozinho.';
-    return '<div style="margin-top:10px;font-size:0.78rem;opacity:0.9;line-height:1.45;">' + nota + '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">' + bt.join('') + '</div>';
-  }
-
   // ── CONFERE A EXTENSÃO AO ABRIR A FICHA ───────────────────────────────────────
   // Pergunta a versão e responde em ~800ms: sem extensão, ou com uma abaixo do mínimo, o
   // aviso aparece no topo da ficha e o botão de puxar fica cinza. Ninguém mais descobre
@@ -2075,15 +2039,45 @@
              _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
           : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
              _esc(_LZ_MIN_EXT) + ').')) +
-        // OS DOIS CAMINHOS — E COMO BOTÃO, NÃO COMO LINK NO MEIO DA FRASE.
-        // Bronca do dono (11/ago/2026, print do aviso): _"onde está a porra dos botões que
-        // tinha mostrado. clicar no texto é uma merda."_ Ele está certo e eu já tinha visto
-        // isso uma vez sem consertar: a ação ficava como <a> dentro de um parágrafo de 4
-        // linhas, do mesmo tamanho do resto — some no texto, e o alvo de clique é uma
-        // palavra. Botão é área, tem peso visual e diz que é ação.
-        // A regra de QUAL aparece não mudou: a loja SEMPRE, e o zip junto enquanto ela
-        // servir uma versão abaixo do mínimo. Fonte única: window._spExtStoreTemMinimo().
-        _lzExtBotoesHtml() + '</div>';
+        // OS DOIS CAMINHOS. A loja aparece SEMPRE — é onde a extensão vive e de onde o
+        // Chrome atualiza sozinho; e o zip entra JUNTO enquanto a loja ainda serve uma
+        // versão abaixo do mínimo (aí clicar nela não sai do lugar). Regra do dono:
+        // "loja sempre e zip enquanto a loja não tiver a versão atualizada".
+        // Fonte única da decisão: window._spExtStoreTemMinimo() (store.js).
+        // A AÇÃO É BOTÃO, NÃO LINK NO MEIO DA FRASE.
+        // Ordem do dono (11/ago/2026): _"onde está a porra dos botões que tinha mostrado.
+        // clicar no texto é uma merda."_ Estava como <a> dentro de um parágrafo de 4
+        // linhas: mesma fonte, mesmo peso do texto em volta, alvo do tamanho de uma
+        // palavra.
+        // ⚠️ A MUDANÇA É SÓ DE APARÊNCIA, DE PROPÓSITO. Na 1.8.19 eu extraí isto pra uma
+        // função nomeada no escopo do módulo — e aquela versão quebrou no aparelho do dono
+        // ("quebrou na 19 e 20"), sem que eu conseguisse reproduzir aqui. Não sei a causa,
+        // então não repito o movimento: a IIFE fica EXATAMENTE onde estava, lendo as mesmas
+        // variáveis do mesmo escopo léxico que funciona desde a 1.8.15. O que muda são os
+        // estilos dos <a>. Menos mudança = menos superfície pra quebrar de novo.
+        (function () {
+          var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
+          var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+          var _b = 'display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:10px;' +
+            'font-size:0.8rem;font-weight:800;text-decoration:none;white-space:nowrap;';
+          var _pri = _b + 'background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1205;border:1px solid rgba(245,158,11,0.6);';
+          var _sec = _b + 'background:rgba(255,255,255,0.06);color:#fbbf24;border:1px solid rgba(251,191,36,0.45);';
+          var _linha = function (h) { return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">' + h + '</div>'; };
+          var _nota = function (t) { return '<div style="margin-top:10px;font-size:0.78rem;opacity:0.9;line-height:1.45;">' + t + '</div>'; };
+          if (!window.SP_EXT_STORE_URL) {
+            return ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.';
+          }
+          var btLoja = '<a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="' +
+            (lojaOk ? _pri : _sec) + '">🧩 ' + (lojaOk ? 'Abrir na Chrome Web Store ↗' : 'Chrome Web Store ↗') + '</a>';
+          if (!lojaOk && z) {
+            // janela de revisão: o que RESOLVE agora vem primeiro e em destaque; a loja
+            // continua ali (regra do dono: "loja sempre e zip enquanto a loja não tiver").
+            return _nota('A v' + _esc(_LZ_MIN_EXT) + ' ainda está em revisão na loja. Baixe o zip e carregue em ' +
+                '<code>chrome://extensions</code> com o <b>Modo do desenvolvedor</b> ligado.') +
+              _linha('<a href="' + _esc(z) + '" download style="' + _pri + '">⬇️ Baixar a v' + _esc(_LZ_MIN_EXT) + ' (zip)</a>' + btLoja);
+          }
+          return _nota('Pela loja o Chrome mantém a extensão atualizada sozinho.') + _linha(btLoja);
+        })() + '</div>';
       // e o botão do topo deixa de prometer o que não pode cumprir
       var d = document.getElementById('custom-confirm-dialog');
       var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
