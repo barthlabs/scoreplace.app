@@ -572,7 +572,7 @@ function initRouter() {
   if (window._authStateResolved && !_fbUser() && !_hasCache() && !_appUser()) {
     setTimeout(function() {
       if (!_fbUser() && !_hasCache() && !_appUser() && !window._waitingForFirstSnapshot) {
-        if (typeof window._markBootReady === 'function') window._markBootReady(1500, 'router-logged-out');
+        if (typeof window._markBootReady === 'function') window._markBootReady('router-logged-out');
         else window._bootReady = true;
       }
     }, 900);

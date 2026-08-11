@@ -666,6 +666,9 @@ const SUITES = [
   // "Juliana Dal+Sasso" — o `+` do form-encoding da Apple chegava GRAVADO no banco
   // (e no displayName_lower, quebrando a busca); e a faixa do slider morava em 4
   // lugares e 2 unidades, fazendo o mesmo teto ser lido ora como 130%, ora 169%.
+  // O splash só sai quando os dados carregaram — o teto por tempo revelava tela vazia
+  // e o app travava ao primeiro toque. v1.8.12.
+  'tests/boot-libera-quando-carregou.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
 ];
 
