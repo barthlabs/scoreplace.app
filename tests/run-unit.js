@@ -659,6 +659,7 @@ const SUITES = [
   // violeta. Junto: "concluí" virou verificação contra o índice, não impressão de página.
   'tests/lz-amistoso-fecha-a-conta.test.js',
   'tests/lz-posicao-de-grupo-nao-e-podio.test.js',
+  'tests/lz-colocacao-final.test.js',
   // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
   // (o da matriz não recebia nada), e repintar no meio do save não apaga o feedback.
   'tests/analise-botao-salvando.test.js',

@@ -1337,6 +1337,30 @@
   // fez o app anunciar bronze pra quem foi último no grupo.
   var _LZ_C_GRUPO = '#94a3b8';
 
+  // ── DE QUE PLATAFORMA VEIO — selo, não palavra (pedido do dono) ──────────────
+  // "poderia usar LP laranja para o letzplay [e] o logo do Scoreplace (inves de escrever
+  // scoreplace) indicando em qual plataforma ocorreu o torneio ou ranking".
+  // Antes só o scoreplace era marcado, e por extenso: as linhas do letzplay não diziam de
+  // onde vinham — numa lista agora INTERCALADA (1.8.5) a origem deixou de ser óbvia pela
+  // posição. O selo é `aria-label`ado porque cor+sigla sozinhas não servem a leitor de tela.
+  var _LZ_C_LP = '#f97316';     // laranja do letzplay
+  function _lzSelo(qual) {
+    var base = 'display:inline-flex;align-items:center;gap:3px;vertical-align:-1px;';
+    if (qual === 'lp') {
+      return '<span title="letzplay" aria-label="letzplay" style="' + base +
+        'color:' + _LZ_C_LP + ';font-weight:800;font-size:0.74rem;letter-spacing:0.4px;">LP</span>';
+    }
+    // scoreplace: o pódio da identidade (icons/logo-podium.svg) desenhado inline, pra não
+    // custar requisição por linha nem depender de <img> que falha em silêncio.
+    return '<span title="scoreplace" aria-label="scoreplace" style="' + base + '">' +
+      '<svg viewBox="0 0 80 60" width="13" height="10" aria-hidden="true" focusable="false">' +
+        '<rect x="2" y="30" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
+        '<rect x="29" y="10" width="22" height="50" rx="3" fill="#F59E0B"/>' +
+        '<rect x="56" y="40" width="22" height="20" rx="3" fill="#FB923C"/>' +
+        '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#F59E0B"/>' +
+      '</svg></span>';
+  }
+
   function _lzPad2(n) { return (n < 10 ? '0' : '') + n; }
   var _LZ_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   // Data de CALENDÁRIO montada dos componentes (nunca parse de string, nunca UTC) — ver
@@ -1490,6 +1514,7 @@
       }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
+      h += ' · ' + _lzSelo('lp');     // de onde veio — o irmão do selo do scoreplace
       return { ord: L.ord, h: h + '</div>' };
     });
     // PUBLICA OS ITENS pra o scoreplace poder INTERCALAR (e não concatenar) — ver
@@ -1837,7 +1862,7 @@
         var h = '<div style="padding:2px 0;">🏆 ' +
           (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
           '<span>' + _esc(c.nome) + '</span> · ' +
-          '<span style="color:#818cf8;font-weight:700;">scoreplace</span></div>';
+          _lzSelo('sp') + '</div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
       // INTERCALA — não concatena. Empurra as linhas do app pra a MESMA lista do letzplay
