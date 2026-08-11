@@ -113,7 +113,11 @@
     'invalido': 'Não consegui montar o histórico. Tente de novo.',
     'net': 'Não consegui falar com o letzplay. Confira: (1) uma aba do letzplay.me aberta e logada, (2) sua conexão, (3) nenhum bloqueador/VPN barrando letzplay.me. Depois tente de novo.',
     'fetch': 'A leitura do letzplay falhou. Deixe uma aba do letzplay.me aberta e logada, recarregue esta página e tente de novo.',
-    'rate': 'O letzplay limitou as leituras (muitas de uma vez — HTTP 403/429). Espere ~1 minuto e tente de novo. Esta versão já espaça as buscas pra evitar isso.'
+    // ⛔ NADA DE CULPAR O LETZPLAY — regra do dono (14/jul, reafirmada 11/ago): o problema é
+    // NOSSO. A frase antiga era "O letzplay limitou as leituras (HTTP 403/429)…", que joga
+    // a culpa pro outro lado e ainda entrega um código de erro que a pessoa não pode usar
+    // pra nada. Ela precisa de UMA coisa: o que fazer agora.
+    'rate': 'A leitura precisa de uma pausa. Espere cerca de 1 minuto e tente de novo — o que já veio ficou salvo.'
   };
 
   function _overlayCard(html) {
@@ -589,7 +593,8 @@
       // sentido quando o botão é o da loja — com o zip como botão, ela seria a mesma coisa
       // duas vezes.
       return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
-        '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
+        // ⛔ sem citar o letzplay — ver tests/lz-nao-culpa-o-letzplay.test.js
+        '(a antiga desiste no meio e não traz os jogos).</span>' +
         _instalarBtn('🎾 Atualizar pela Chrome Web Store', '🎾 Baixar a v' + _esc(MIN_EXT_VERSION) + ' (zip)') +
         (_lojaTemMinimo() ? _zipAlternativa() : '');
     }

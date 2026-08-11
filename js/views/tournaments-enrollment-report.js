@@ -1458,6 +1458,45 @@
     if (low.indexOf(lowc) >= 0) return { nome: n, cat: null };
     return { nome: n, cat: c };
   }
+  // ── NOME DE TORNEIO REPETIDO ────────────────────────────────────────────────
+  // Relato do dono (11/ago/2026, print da ficha do @FernandoBernacchi): _"torneio rp 2026
+  // 10 anos repetido e sem data"_. MEDIDO no doc: o campo vem literalmente
+  //   "TORNEIO RP 2026 - 10 anos - TORNEIO RP 2026 - 10 anos"
+  // Não é o app concatenando: chega repetido DA FONTE. O `h2.title.with-avatar` da página
+  // do letzplay junta nome + categoria, e quando o torneio não tem categoria (`categoryRaw`
+  // é "" neste caso) ele repete o próprio nome no lugar dela.
+  //
+  // ⚠️ NÃO DÁ PRA SÓ CORTAR NA METADE: nome legítimo tem hífen ("T&F Special Edition -
+  // torneio PAIS - Masculino - Bronze"). O que se colapsa é PARTE REPETIDA — e só ela.
+  // Vive no APP (e não só na extensão) porque conserta o que JÁ está gravado, sem obrigar
+  // ninguém a reler; a origem também foi corrigida, pras leituras novas.
+  function _lzSemRepeticao(nome) {
+    var s = String(nome == null ? '' : nome).replace(/\s+/g, ' ').trim();
+    if (!s) return s;
+    // 1) repetição por separador: "X - X", "X · X", "X | X" → "X"
+    var partes = s.split(/\s+[-–—·|]\s+/);
+    if (partes.length > 1) {
+      var vistos = {}, mantidas = [];
+      partes.forEach(function (p) {
+        var k = p.toLowerCase();
+        if (vistos[k]) return;                    // parte já apareceu → é repetição
+        vistos[k] = 1; mantidas.push(p);
+      });
+      if (mantidas.length !== partes.length) {
+        // reconstrói com o separador original entre as partes que sobraram
+        var sep = (s.match(/\s+([-–—·|])\s+/) || [' - '])[0];
+        s = mantidas.join(sep);
+      }
+    }
+    // 2) a string INTEIRA duplicada, com ou sem separador: "abc - abc" já caiu acima;
+    //    aqui pega "abcabc" e "abc abc". Exige metade exata pra não mutilar nome legítimo.
+    var meio = Math.floor(s.length / 2);
+    if (s.length % 2 === 0 && s.slice(0, meio) === s.slice(meio)) return s.slice(0, meio).trim();
+    var m = s.match(/^(.{4,})\s+\1$/);
+    if (m) return m[1].trim();
+    return s;
+  }
+
   window._lzTourneyRows = function (imp, handle, kind) {
     if (!imp) return '';
     var _rank = (kind === 'rank');
@@ -1471,7 +1510,7 @@
       // UMA LINHA POR TORNEIO. Imports antigos têm o footprint fragmentado (o mesmo torneio
       // em várias entradas, uma por trilha de dupla) — sem isto a lista repetia o mesmo
       // torneio 3, 4 vezes, que é como o dono viu "2º Final's Ranking 7BTW" duplicado.
-      var nomeBruto = f.name || f.categoryRaw || 'torneio';
+      var nomeBruto = _lzSemRepeticao(f.name || f.categoryRaw || 'torneio');
       var cat = _lzPareceCategoria(f.categoryRaw) ? String(f.categoryRaw).trim() : _lzCatDoNome(nomeBruto);
       var part = _lzSplitCat(nomeBruto, cat);
       var trilha = _lzEhTrilha(f.categoryRaw) ? String(f.categoryRaw).trim() : null;
@@ -3615,16 +3654,24 @@
         // MANTÉM O PASSO NA TELA. Antes isto trocava o texto por uma frase genérica, e o
         // "página 10 de 24" — a única informação real ali — DESAPARECIA justo no momento em
         // que a leitura demora mais. Ficava minutos sem dizer nada, e sem dizer nada é
-        // indistinguível de travado. O passo continua; quem se mexe é a linha de baixo.
-        // O BLOQUEIO TEM QUE APARECER. Eu vinha ajustando velocidade no escuro e o dono
-        // olhando barra parada, sem nunca saber se era lentidão nossa ou o letzplay
-        // fechando a porta. Cada espera vira uma linha no feed, com o tempo e o motivo —
-        // um número que ele lê na hora, em vez de eu supor.
+        // indistinguível de travado. O passo continua; quem se mexe é o relógio de decorrido.
+        //
+        // ⛔ NADA SOBRE O LIMITE DO LETZPLAY NA TELA — REGRA DO DONO, e esta é a SEGUNDA vez.
+        // Ele cravou em 14/jul: o problema é NOSSO, e a pessoa que clicou não tem o que
+        // fazer com "o letzplay limitou o acesso" a não ser desconfiar do app. A v1.6.11
+        // limpou as frases; na v1.6.48 (31/jul) EU as trouxe de volta, com o argumento de
+        // "mostrar o bloqueio pra não parecer travado" — e o resultado foi ele reencontrar
+        // a mesma frase hoje: _"voltou essa merda de limitou acesso que já disse que não é
+        // pra ter."_ O argumento era meu, não dele, e não vale contra a ordem.
+        //
+        // O que resolve "parece travado" já está na tela e não acusa ninguém: o passo em
+        // curso continua no `sub` e o relógio de decorrido tica a cada segundo. Espera é
+        // ritmo, não evento — e o que ela precisa de fora é que a tela se mexa, não que ela
+        // saiba de quem é a culpa.
+        // O contador FICA: `_bloqueios` alimenta o orçamento de paciência (lógica interna,
+        // que decide quando encerrar a rodada). O que sai é a frase.
         _bloqueios++;
-        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null,
-          feedAdd: '🚧 letzplay limitou o acesso (' + _bloqueios + 'ª vez) — esperando ' +
-            Math.round((d.waitMs || 0) / 1000) + 's' +
-            (d.gap ? ' · passo agora ' + (d.gap >= 1000 ? (d.gap / 1000).toFixed(1) + 's' : d.gap + 'ms') : '') });
+        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null });
         return;
       }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
@@ -4068,7 +4115,9 @@
     var viaZip = !lojaOk && !!_zip;
     var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
     var corpo = versaoAtual
-      ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
+      // ⛔ sem citar o letzplay: o que importa pra quem lê é o RESULTADO ruim da versão
+      // velha (termina sem os jogos), não de quem é a culpa. Ver lz-nao-culpa-o-letzplay.
+      ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste no meio e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
       : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
     corpo += '<br><br>' + (viaZip
       // JANELA DA REVISÃO: o zip é o que funciona AGORA e vira o botão — mas a loja
