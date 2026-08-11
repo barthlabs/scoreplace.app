@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.19';
+window.SCOREPLACE_VERSION = '1.8.20';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -4097,23 +4097,58 @@ window._waitlistExpandPool = function(t, namesOnly) {
   }
   function apply() {
     var want = anyOpen();
+    // ⚠️ A VERDADE É O DOM, NÃO A FLAG. Antes o destravamento era `!want && locked` — ou
+    // seja, só desfazia o que ESTA instância tivesse travado. Bastava a flag dessincronizar
+    // da classe (recarga parcial, bfcache do iOS, ou o próprio deadlock do rAF abaixo) pra
+    // `.sp-scroll-locked` ficar presa no <body> PARA SEMPRE, e com ela `position:fixed` +
+    // `overflow:hidden`: a página inteira colapsa na altura da viewport.
+    // MEDIDO em produção (11/ago/2026, iPhone e reproduzido no navegador): landing com
+    // 4.216px de conteúdo montada no DOM, `document.scrollHeight` preso em 812, topbar na
+    // tela e o resto invisível — a "tela branca travada" que o dono relatou.
+    // Classe presa SEM overlay aberto é sempre erro; agora ela sai independentemente da
+    // flag, e a flag apenas acompanha.
+    var temClasse = document.body.classList.contains('sp-scroll-locked');
     if (want && !locked) {
       locked = true;
       savedY = window.scrollY || window.pageYOffset || 0;
       document.body.style.top = (-savedY) + 'px';
       document.body.classList.add('sp-scroll-locked');
-    } else if (!want && locked) {
+    } else if (!want && (locked || temClasse)) {
       locked = false;
       document.body.classList.remove('sp-scroll-locked');
       document.body.style.top = '';
-      window.scrollTo(0, savedY);
+      if (savedY) window.scrollTo(0, savedY);
     }
   }
-  function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = null; apply(); }); }
+  // ⚠️ O rAF NÃO PODE SER O ÚNICO CAMINHO. `if (raf) return` protege contra enfileirar
+  // várias checagens — mas se aquele frame NUNCA chega (aba em background durante o boot,
+  // página restaurada do bfcache, WebView suspensa: MEDIDO ao vivo, `requestAnimationFrame`
+  // não disparou), `raf` fica com um handle pendente e o schedule() nunca mais agenda nada.
+  // O mecanismo inteiro morre em silêncio, e foi exatamente isso que prendeu a classe.
+  // Agora todo agendamento tem um timeout de reserva: o que chegar primeiro executa, e o
+  // handle é sempre liberado.
+  function schedule() {
+    if (raf) return;
+    var feito = false;
+    function correr() { if (feito) return; feito = true; raf = null; apply(); }
+    raf = { rafId: null, toId: null };
+    try { raf.rafId = requestAnimationFrame(correr); } catch (e) {}
+    raf.toId = setTimeout(correr, 250);            // rede: o frame pode não vir
+  }
   function start() {
     if (!document.body) { document.addEventListener('DOMContentLoaded', start); return; }
     try { new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] }); } catch (e) {}
     apply();
+    // Gatilhos que NÃO dependem de mutação no DOM — são os momentos em que o app volta de
+    // um estado onde o rAF costuma estar parado, e em que uma classe presa já se manifestou.
+    ['pageshow', 'focus', 'visibilitychange', 'orientationchange', 'resize'].forEach(function (ev) {
+      try { window.addEventListener(ev, schedule, { passive: true }); } catch (e) {}
+    });
+    // Rede final para o BOOT: é a janela em que o loader (overlay de tela cheia) some e,
+    // se a checagem daquele instante se perder, ninguém mais pergunta. Poucas passadas,
+    // baratas, e só nos primeiros segundos.
+    var n = 0;
+    var t = setInterval(function () { schedule(); if (++n >= 12) clearInterval(t); }, 500);
   }
   start();
   window._refreshScrollLock = schedule; // pra forçar re-checagem se necessário
