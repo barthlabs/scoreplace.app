@@ -129,11 +129,18 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
      'distingue "velha" de "não instalada" — são coisas diferentes pra quem lê');
   ok(/b\.setAttribute\('disabled', 'disabled'\)/.test(fn),
      'e o botão de puxar deixa de prometer o que não pode cumprir');
-  // ⚠️ REVISADO na 1.8.4: travava "o link do zip sai da fonte única da versão". Não há mais
-  // link de zip — o aviso manda pra Chrome Web Store, que é onde a extensão vive e de onde
-  // o Chrome a atualiza sozinho.
+  // ⚠️ REVISADO DUAS VEZES:
+  //   1.8.4  — travava "o link do zip sai da fonte única da versão"; virou "não há mais
+  //            link de zip", porque a extensão passou a viver na Chrome Web Store.
+  //   1.8.15 — ordem do dono: _"não adianta apontar para a loja enquanto a nova versão não
+  //            estiver lá"_. Enquanto a revisão não sai, a loja serve a versão que o gate
+  //            barra e clicar nela não resolve nada. Então o aviso passa a oferecer o ZIP
+  //            NESSA JANELA — e só nela.
+  // O invariante real segue travado, e é este: o aviso nunca escolhe sozinho. Ele consulta
+  // a fonte única da decisão; quando a loja atende, é pra ela que manda.
   ok(/SP_EXT_STORE_URL/.test(fn), 'o aviso aponta pra loja, pela fonte única');
-  ok(!/_spExtZipUrl|\.zip/.test(fn), 'e não oferece download de zip');
+  ok(/_spExtStoreTemMinimo/.test(fn), 'e a escolha loja×zip vem da fonte única, não de regra local');
+  ok(/_spExtZipUrl/.test(fn), 'o zip está disponível pra janela em que a loja não resolve');
   ok(/movel\) \{ caixa\.innerHTML = ''; return; \}/.test(fn),
      'no celular não aparece — lá não há extensão pra instalar, e o aviso próprio já explica');
 }

@@ -86,6 +86,21 @@
       // Classificação COMPLETA do torneio (todos os grupos + posições), gravada UMA VEZ
       // aqui — resolvida por referência (club/tourneyId), nunca repetida nos jogos.
       standings: Array.isArray(x.standings) ? x.standings : null,
+      // A CHAVE do torneio — todos os jogos com a FASE ("#23 • QF"), de TODOS os
+      // participantes, não só os do atleta. É a matéria-prima da COLOCAÇÃO FINAL
+      // (_lzPlacement): sem ela dá pra saber a posição dentro do grupo e mais nada.
+      // ⚠️ ESTAVA SENDO PERDIDA AQUI. A extensão colhe desde a ext 1.98 e grava em
+      // raw.tournaments[].matches, mas esta função copia campo a campo — e quem não é
+      // citado é descartado em silêncio. Medido em 11/ago/2026 no @GersomOtsu, lido às
+      // 17:20 com extVersion 1.98: `matches` nulo nos 3 torneios, com o coletor no ar
+      // desde as 05:38. É a mesma armadilha que engoliu `nameConflict` no
+      // loadUserProfile (1.7.41): cópia campo a campo não avisa quando esquece um.
+      matches: Array.isArray(x.matches) ? x.matches : null,
+      // Quantos entraram no torneio — fecha o "de N" do último colocado. Vem dos GRUPOS
+      // (jogadores e times contados separado: em Rei/Rainha os parceiros giram, então
+      // contar duplas daria um número que não é gente nenhuma).
+      grupoJogadores: (x.grupoJogadores != null) ? x.grupoJogadores : null,
+      grupoTimes: (x.grupoTimes != null) ? x.grupoTimes : null,
       title: x.title === true
     };
   }

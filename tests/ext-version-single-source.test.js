@@ -39,26 +39,35 @@ ok(/window\.SP_EXT_STORE_URL\s*=\s*'https:\/\/chromewebstore\.google\.com\//.tes
   'a URL da loja é fonte única no store.js');
 // procura a ATRIBUIÇÃO, não o nome: o comentário-lápide cita `_spExtZipUrl` de propósito,
 // pra quem grepar achar por que ele sumiu. Nome citado ≠ função viva.
-// ⚠️ REVISADO na 1.8.9, com o motivo: a 1.8.4 travava "zero zip na UI". A regra mudou por
-// ordem do dono — "ter alternativa enquanto a loja nao aprova". A loja leva dias revisando
-// e nesse intervalo o gate exige uma versão que ela AINDA NÃO SERVE: mandar pra lá não
-// resolve (o Chrome diz "já está atualizada"). O zip volta como SECUNDÁRIO e CONDICIONADO
-// ao caso de extensão desatualizada; é também o canal de teste da versão nova.
-// O que continua travado, e é o que importa: a loja é a porta PRINCIPAL, a URL é fonte
-// única, e quem não tem extensão nenhuma NÃO recebe zip.
-ok(/window\._spExtZipUrl\s*=/.test(R('js/store.js')), 'o helper do zip existe de novo (alternativa da janela de revisão)');
+// ⚠️ REVISADO DUAS VEZES — e a linha do tempo explica por que a regra afrouxou.
+//   1.8.4  — "zero zip na UI": sideload não recebe auto-update, então tudo pra loja.
+//   1.8.9  — o dono: "ter alternativa enquanto a loja nao aprova". O zip voltou, mas
+//            SECUNDÁRIO e só pra quem já tinha extensão desatualizada.
+//   1.8.15 — o dono de novo, depois de eu bumpar a extensão e apontar pra loja mesmo
+//            assim: _"a extensão tem que ter versão zip se não estiver na loja, que leva
+//            dias. não adianta apontar para a loja enquanto a nova versão não estiver
+//            lá."_ Nessa janela a loja é um BECO — ela serve a versão que o gate barra, o
+//            Chrome responde "já está atualizada" e a pessoa não sai do lugar. Então o zip
+//            deixa de ser rodapé e vira o BOTÃO, inclusive pra quem não tem extensão
+//            nenhuma (instalar a antiga só adia o bloqueio em um passo).
+//
+// O QUE CONTINUA TRAVADO, e é o que sempre importou: a loja é a porta principal SEMPRE QUE
+// ELA RESOLVE, a URL é fonte única, e ninguém escolhe loja×zip por conta própria — quem
+// decide é window._spExtStoreTemMinimo(). A cobertura da inversão está em
+// tests/ext-loja-atras-manda-pro-zip.test.js.
+ok(/window\._spExtZipUrl\s*=/.test(R('js/store.js')), 'o helper do zip existe (alternativa da janela de revisão)');
+ok(/window\.SP_EXT_STORE_VERSION\s*=/.test(R('js/store.js')),
+   'a versão PUBLICADA na loja é declarada — sem ela o app não sabe se a loja resolve');
 for (const f of ['js/views/letzplay-onboarding.js', 'js/views/tournaments-enrollment-report.js']) {
   ok(/SP_EXT_STORE_URL/.test(R(f)), f + ' aponta pra loja');
+  ok(/_spExtStoreTemMinimo/.test(R(f)), f + ' consulta a decisão loja×zip (não escolhe sozinho)');
 }
 {
   const onb = R('js/views/letzplay-onboarding.js');
-  ok(/_zipAlternativa/.test(onb), 'o zip do onboarding é uma função à parte, não o caminho principal');
-  // o ramo "sem extensão" monta a mensagem com _storeBtn e NÃO chama a alternativa
-  const semExt = onb.slice(onb.indexOf("'Precisa da extensão do scoreplace"), onb.indexOf("'Precisa da extensão do scoreplace") + 220);
-  ok(!/_zipAlternativa/.test(semExt), 'quem NÃO tem extensão vai só pra loja — sem zip');
+  ok(/_zipAlternativa/.test(onb), 'a nota de rodapé do zip continua existindo (usada quando a loja resolve)');
+  ok(/function _instalarBtn/.test(onb), 'a escolha do botão é ponto ÚNICO no onboarding');
   const rep = R('js/views/tournaments-enrollment-report.js');
-  ok(/versaoAtual && typeof window\._spExtZipUrl/.test(rep),
-     'na Análise o zip só aparece quando JÁ existe extensão desatualizada');
+  ok(/viaZip/.test(rep), 'a Análise distingue explicitamente o caminho do zip');
 }
 
 // 4) a propagação é AUTOMÁTICA e roda em todo deploy

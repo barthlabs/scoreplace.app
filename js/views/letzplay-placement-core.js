@@ -205,16 +205,29 @@
     return faixa + (t.ateOnde ? ' (' + t.ateOnde + ')' : '');
   }
 
-  /** A resposta pra UMA pessoa: onde ela terminou naquela categoria. */
+  /** A resposta pra UMA pessoa: onde ela terminou naquela categoria — e COM QUEM.
+   *  O parceiro sai de graça: a unidade deste motor é o TIME, então quem terminou em
+   *  5º/7º não foi a pessoa, foi a dupla. O dono pediu isso junto da faixa: _"e qual sua
+   *  dupla e onde ela ficou"_ — é a mesma resposta, e separá-las sugeriria que a
+   *  colocação fosse individual num torneio de duplas. */
   function doHandle(matches, handle, opts) {
     var r = computeAuto(matches, opts);
-    var t = r.porHandle[String(handle || '').toLowerCase()];
+    var low = String(handle || '').toLowerCase();
+    var t = r.porHandle[low];
     if (!r.temChave) return { conhecido: false, motivo: 'sem-chave' };
     if (!t) return { conhecido: true, chegouNaChave: false, ateOnde: 'fase de grupos',
-                     rotulo: 'Fase de grupos', posMin: null, posMax: null };
-    if (!t.chegou && t.ateOnde === 'fase de grupos') { /* cai no retorno geral abaixo */ }
+                     rotulo: 'Fase de grupos', posMin: null, posMax: null, parceiro: null };
+    // o parceiro é o outro membro do time. Casa por handle; sem handle (fictício) o nome
+    // é a única identidade que existe, então cai no índice — que é estável porque
+    // `handles` e `names` são preenchidos no mesmo push.
+    var parceiro = null;
+    var hs = t.handles || [], ns = t.names || [];
+    for (var i = 0; i < hs.length; i++) {
+      if (String(hs[i]).toLowerCase() !== low) { parceiro = ns[i] || hs[i] || null; break; }
+    }
+    if (!parceiro && ns.length === 2 && !hs.length) parceiro = ns[1];
     return { conhecido: true, chegouNaChave: true, ateOnde: t.ateOnde, rotulo: t.rotulo,
-             posMin: t.posMin, posMax: t.posMax };
+             posMin: t.posMin, posMax: t.posMax, parceiro: parceiro };
   }
 
   // ── QUANDO A FASE NÃO VEM ESCRITA: inferir pela ORDEM ────────────────────────

@@ -1458,6 +1458,45 @@
     if (low.indexOf(lowc) >= 0) return { nome: n, cat: null };
     return { nome: n, cat: c };
   }
+  // ── NOME DE TORNEIO REPETIDO ────────────────────────────────────────────────
+  // Relato do dono (11/ago/2026, print da ficha do @FernandoBernacchi): _"torneio rp 2026
+  // 10 anos repetido e sem data"_. MEDIDO no doc: o campo vem literalmente
+  //   "TORNEIO RP 2026 - 10 anos - TORNEIO RP 2026 - 10 anos"
+  // Não é o app concatenando: chega repetido DA FONTE. O `h2.title.with-avatar` da página
+  // do letzplay junta nome + categoria, e quando o torneio não tem categoria (`categoryRaw`
+  // é "" neste caso) ele repete o próprio nome no lugar dela.
+  //
+  // ⚠️ NÃO DÁ PRA SÓ CORTAR NA METADE: nome legítimo tem hífen ("T&F Special Edition -
+  // torneio PAIS - Masculino - Bronze"). O que se colapsa é PARTE REPETIDA — e só ela.
+  // Vive no APP (e não só na extensão) porque conserta o que JÁ está gravado, sem obrigar
+  // ninguém a reler; a origem também foi corrigida, pras leituras novas.
+  function _lzSemRepeticao(nome) {
+    var s = String(nome == null ? '' : nome).replace(/\s+/g, ' ').trim();
+    if (!s) return s;
+    // 1) repetição por separador: "X - X", "X · X", "X | X" → "X"
+    var partes = s.split(/\s+[-–—·|]\s+/);
+    if (partes.length > 1) {
+      var vistos = {}, mantidas = [];
+      partes.forEach(function (p) {
+        var k = p.toLowerCase();
+        if (vistos[k]) return;                    // parte já apareceu → é repetição
+        vistos[k] = 1; mantidas.push(p);
+      });
+      if (mantidas.length !== partes.length) {
+        // reconstrói com o separador original entre as partes que sobraram
+        var sep = (s.match(/\s+([-–—·|])\s+/) || [' - '])[0];
+        s = mantidas.join(sep);
+      }
+    }
+    // 2) a string INTEIRA duplicada, com ou sem separador: "abc - abc" já caiu acima;
+    //    aqui pega "abcabc" e "abc abc". Exige metade exata pra não mutilar nome legítimo.
+    var meio = Math.floor(s.length / 2);
+    if (s.length % 2 === 0 && s.slice(0, meio) === s.slice(meio)) return s.slice(0, meio).trim();
+    var m = s.match(/^(.{4,})\s+\1$/);
+    if (m) return m[1].trim();
+    return s;
+  }
+
   window._lzTourneyRows = function (imp, handle, kind) {
     if (!imp) return '';
     var _rank = (kind === 'rank');
@@ -1471,15 +1510,20 @@
       // UMA LINHA POR TORNEIO. Imports antigos têm o footprint fragmentado (o mesmo torneio
       // em várias entradas, uma por trilha de dupla) — sem isto a lista repetia o mesmo
       // torneio 3, 4 vezes, que é como o dono viu "2º Final's Ranking 7BTW" duplicado.
-      var nomeBruto = f.name || f.categoryRaw || 'torneio';
+      var nomeBruto = _lzSemRepeticao(f.name || f.categoryRaw || 'torneio');
       var cat = _lzPareceCategoria(f.categoryRaw) ? String(f.categoryRaw).trim() : _lzCatDoNome(nomeBruto);
       var part = _lzSplitCat(nomeBruto, cat);
       var trilha = _lzEhTrilha(f.categoryRaw) ? String(f.categoryRaw).trim() : null;
-      var pos = _lzMyPosIn(f.standings, handle);
+      var pos = _lzColocacao(f, handle);
       var ja = porId[k];
       if (ja) {
-        // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem
-        if (ja.pos == null || (pos != null && pos.pos < ja.pos.pos)) ja.pos = pos;
+        // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem.
+        // ⚠️ A da CHAVE sempre vence a de grupo — são escalas diferentes ("2º de 3 no
+        // grupo" não se compara com "5º/7º do torneio"), e comparar `.pos` entre as duas
+        // escolheria pelo número menor, que é justamente a menos informativa.
+        if (pos && pos.chave && !(ja.pos && ja.pos.chave)) ja.pos = pos;
+        else if (ja.pos == null) ja.pos = pos;
+        else if (pos && !pos.chave && !ja.pos.chave && pos.pos < ja.pos.pos) ja.pos = pos;
         if (!ja.cat && part.cat) ja.cat = part.cat;
         if (!ja.trilha && trilha) ja.trilha = trilha;
         if (!ja.data && datas[k]) ja.data = _lzFmtDataNum(datas[k]);
@@ -1516,19 +1560,33 @@
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
-      // COLOCAÇÃO só é pódio quando o dado diz que é (ranking). Em torneio o número vem da
-      // tabela de GRUPO — dizer "🥉 3º" pra quem foi o último de um grupo de 3 é inventar
-      // um resultado que não existiu. Ver o comentário de _lzMyPosIn.
+      // A COLOCAÇÃO É SEMPRE GERAL — nunca "GRUPO 03 · 2º de 3".
+      // Ordem do dono: _"não interessa grupo x, yº de tantos. só importa a classificação
+      // geral. sempre. nem que seja por faixa se não for personalizada como num ranking."_
+      // São só DOIS jeitos de saber isso, e os dois estão aqui:
+      //   • TORNEIO → a chave, pelo _lzPlacement (exata no pódio, por FAIXA no resto).
+      //   • RANKING → a posição na tabela dele, que já é a classificação inteira.
+      // O ramo que imprimia posição de grupo foi REMOVIDO (e a fonte, _lzMyPosIn, parou de
+      // devolvê-la — ali é onde o corte vale). Sem chave lida a linha fica sem colocação,
+      // de propósito: não saber é melhor que afirmar uma que não existiu.
       if (L.pos) {
-        h += L.pos.semPontuacao
+        h += L.pos.chave
+          // Pódio (1º/2º/3º) sai em âmbar com medalha; faixa e fase saem em cinza, porque
+          // "5º/7º (quartas)" é informação e não conquista.
+          ? (' · <span style="color:' + (L.pos.podio ? _LZ_C_POS : _LZ_C_GRUPO) +
+             ';font-weight:' + (L.pos.podio ? '800' : '600') + ';">' +
+             (L.pos.podio ? _lzMedalhaPos(L.pos.posMin) + ' ' : '') + _esc(L.pos.rotulo) + '</span>' +
+             // COM QUEM. Em torneio de duplas a colocação é DA DUPLA — omitir o parceiro
+             // faria "5º/7º" parecer resultado individual. Vai em branco discreto porque é
+             // contexto, a mesma regra da trilha.
+             (L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
+                _esc(L.pos.parceiro) + '</span>' : ''))
+          : L.pos.semPontuacao
           // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
           // é, em cinza, em vez de emprestar um pódio a um ranking sem lançamento nenhum.
           ? (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">sem pontuação lançada</span>')
-          : L.pos.ranking
-          ? (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>')
-          : (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">' +
-             (L.pos.grupo ? _esc(L.pos.grupo) + ' · ' : 'grupo · ') + L.pos.pos + 'º' +
-             (L.pos.de ? ' de ' + L.pos.de : '') + '</span>');
+          // RANKING: posição na tabela inteira — é classificação geral por definição.
+          : (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>');
       }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
@@ -1971,12 +2029,24 @@
              _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
           : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
              _esc(_LZ_MIN_EXT) + ').')) +
-        // A extensão está na Chrome Web Store — é pra lá que se manda, sempre. O Chrome
-        // atualiza sozinho e ninguém descompacta nada. Fonte única: window.SP_EXT_STORE_URL
-        // (store.js). Sem ela, instruir pelo NOME em vez de cair de volta pro zip.
-        (window.SP_EXT_STORE_URL
-          ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
-          : ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.') + '</div>';
+        // OS DOIS CAMINHOS. A loja aparece SEMPRE — é onde a extensão vive e de onde o
+        // Chrome atualiza sozinho; e o zip entra JUNTO enquanto a loja ainda serve uma
+        // versão abaixo do mínimo (aí clicar nela não sai do lugar). Regra do dono:
+        // "loja sempre e zip enquanto a loja não tiver a versão atualizada".
+        // Fonte única da decisão: window._spExtStoreTemMinimo() (store.js).
+        (function () {
+          var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
+          var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+          var loja = window.SP_EXT_STORE_URL
+            ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
+            : ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.';
+          if (!lojaOk && z) {
+            return ' <a href="' + _esc(z) + '" download style="color:#fbbf24;font-weight:800;">baixar o zip da v' +
+              _esc(_LZ_MIN_EXT) + ' ↓</a> e carregar em <code>chrome://extensions</code> (Modo do desenvolvedor)' +
+              ' — a v' + _esc(_LZ_MIN_EXT) + ' ainda está em revisão, mas você pode' + loja + ' pra acompanhar.';
+          }
+          return loja;
+        })() + '</div>';
       // e o botão do topo deixa de prometer o que não pode cumprir
       var d = document.getElementById('custom-confirm-dialog');
       var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
@@ -2862,18 +2932,70 @@
       return p == null || p === '' || Number(p) === 0;
     });
   }
+  // ⚠️ SÓ CLASSIFICAÇÃO GERAL — POSIÇÃO DE GRUPO NUNCA SAI DAQUI.
+  // Ordem do dono (11/ago/2026): _"não interessa grupo x, yº de tantos. só importa a
+  // classificação geral. sempre. nem que seja por faixa se não for personalizada como num
+  // ranking."_
+  //
+  // As duas coisas moravam nesta função e eram exibidas com o mesmo peso:
+  //   • RANKING (`g.ranking`) — ali a posição JÁ É geral: é a colocação da pessoa na
+  //     tabela inteira daquele ranking. Continua saindo, com medalha.
+  //   • GRUPO de torneio — "2º de 3 no GRUPO 03" não diz nada sobre o torneio. Quem
+  //     responde isso é a CHAVE, via _lzPlacement, e por faixa quando não dá pra cravar
+  //     ("5º/7º"). Sem chave lida, a resposta honesta é NÃO DIZER — inventar uma
+  //     colocação a partir do grupo é o mesmo erro do pódio falso da 1.8.5.
+  //
+  // O corte é AQUI e não no render de propósito: enquanto a função devolver a posição de
+  // grupo, basta um chamador novo pra ela reaparecer na tela.
   function _lzMyPosIn(standings, handle) {
     var low = String(handle || '').toLowerCase(), out = null;
     (standings || []).forEach(function (g) {
+      if (!g.ranking) return;                        // tabela de GRUPO não é classificação
       var rows = g.rows || [];
       rows.forEach(function (r) {
         if (out != null || r.pos == null) return;
         if (!(r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) return;
-        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: !!g.ranking,
-                semPontuacao: !!g.ranking && _lzTabelaZerada(g) };
+        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: true,
+                semPontuacao: _lzTabelaZerada(g) };
       });
     });
     return out;
+  }
+
+  // ── ATÉ ONDE O ATLETA CHEGOU (a colocação de verdade) ────────────────────────
+  // Pergunta do dono (11/ago/2026, olhando a ficha do @GersomOtsu): _"onde está a posição
+  // na classificação (nem que seja por faixa) e a etapa até aonde chegou o atleta no
+  // torneio?"_ — a lista mostrava "GRUPO 03 · 2º de 3" numa linha só e nada nas outras.
+  //
+  // DUAS FONTES, e a ordem entre elas é o ponto:
+  //   1º  A CHAVE (f.matches, com a fase de cada jogo) → _lzPlacement anda da Final pra
+  //       trás e devolve Campeão / Vice / "5º/7º (quartas)" / "fase de grupos". É a
+  //       colocação ENTRE TODOS os participantes.
+  //   2º  A tabela de GRUPO (f.standings) → só diz a posição dentro do grupo. Continua
+  //       valendo quando não há chave lida, mas nunca ganha da chave: foi o dono que
+  //       cortou isso — _"a posicao no grupo nao revela nada"_.
+  //
+  // Devolve o mesmo shape do _lzMyPosIn quando cai no grupo, e { chave:true, rotulo }
+  // quando a chave respondeu — o render distingue pelo campo `chave`.
+  function _lzColocacao(f, handle) {
+    var P = window._lzPlacement;
+    if (P && Array.isArray(f && f.matches) && f.matches.length) {
+      try {
+        var r = P.doHandle(f.matches, handle, { totalTimes: f.grupoTimes || 0 });
+        // `conhecido:false` = não há chave detectável naquele torneio (pontos corridos,
+        // por exemplo). Aí o motor se cala de propósito e a tabela de grupo assume.
+        if (r && r.conhecido && r.rotulo) {
+          return { chave: true, rotulo: r.rotulo, podio: r.posMin != null && r.posMin <= 3,
+                   ateOnde: r.ateOnde, posMin: r.posMin, parceiro: r.parceiro || null };
+        }
+      } catch (e) { /* motor não decide → cai na tabela de grupo, nunca deixa a linha muda */ }
+    }
+    return _lzMyPosIn(f && f.standings, handle);
+  }
+  // Medalha só pra pódio REAL (1º/2º/3º entre todos). Faixa e fase saem sem medalha —
+  // "5º/7º (quartas)" é informação, não pódio.
+  function _lzMedalhaPos(posMin) {
+    return posMin === 1 ? '🥇' : posMin === 2 ? '🥈' : posMin === 3 ? '🥉' : '';
   }
   // ══ AS TRÊS CONTAGENS, UM LUGAR SÓ ═══════════════════════════════════════════
   // Regra do dono (01/ago/2026): "pare de consertar 1 coisa e quebrar 2 — faça direito
@@ -3532,16 +3654,24 @@
         // MANTÉM O PASSO NA TELA. Antes isto trocava o texto por uma frase genérica, e o
         // "página 10 de 24" — a única informação real ali — DESAPARECIA justo no momento em
         // que a leitura demora mais. Ficava minutos sem dizer nada, e sem dizer nada é
-        // indistinguível de travado. O passo continua; quem se mexe é a linha de baixo.
-        // O BLOQUEIO TEM QUE APARECER. Eu vinha ajustando velocidade no escuro e o dono
-        // olhando barra parada, sem nunca saber se era lentidão nossa ou o letzplay
-        // fechando a porta. Cada espera vira uma linha no feed, com o tempo e o motivo —
-        // um número que ele lê na hora, em vez de eu supor.
+        // indistinguível de travado. O passo continua; quem se mexe é o relógio de decorrido.
+        //
+        // ⛔ NADA SOBRE O LIMITE DO LETZPLAY NA TELA — REGRA DO DONO, e esta é a SEGUNDA vez.
+        // Ele cravou em 14/jul: o problema é NOSSO, e a pessoa que clicou não tem o que
+        // fazer com "o letzplay limitou o acesso" a não ser desconfiar do app. A v1.6.11
+        // limpou as frases; na v1.6.48 (31/jul) EU as trouxe de volta, com o argumento de
+        // "mostrar o bloqueio pra não parecer travado" — e o resultado foi ele reencontrar
+        // a mesma frase hoje: _"voltou essa merda de limitou acesso que já disse que não é
+        // pra ter."_ O argumento era meu, não dele, e não vale contra a ordem.
+        //
+        // O que resolve "parece travado" já está na tela e não acusa ninguém: o passo em
+        // curso continua no `sub` e o relógio de decorrido tica a cada segundo. Espera é
+        // ritmo, não evento — e o que ela precisa de fora é que a tela se mexa, não que ela
+        // saiba de quem é a culpa.
+        // O contador FICA: `_bloqueios` alimenta o orçamento de paciência (lógica interna,
+        // que decide quando encerrar a rodada). O que sai é a frase.
         _bloqueios++;
-        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null,
-          feedAdd: '🚧 letzplay limitou o acesso (' + _bloqueios + 'ª vez) — esperando ' +
-            Math.round((d.waitMs || 0) / 1000) + 's' +
-            (d.gap ? ' · passo agora ' + (d.gap >= 1000 ? (d.gap / 1000).toFixed(1) + 's' : d.gap + 'ms') : '') });
+        setProg({ sub: ultimaNota || 'lendo o letzplay', pct: null });
         return;
       }
       if (d.__sp_lp === 'athlete-import-progress' && d.uid === uid) {
@@ -3973,31 +4103,63 @@
   // desenvolvedor") porque não havia loja; a premissa caiu. Sideload não recebe
   // auto-update — é exatamente o que fazia cada bump de versão virar reinstalação manual.
   // Fonte única da URL: window.SP_EXT_STORE_URL (store.js).
+  // ⚠️ 1.8.15: o botão principal deixou de ser SEMPRE a loja. Bronca do dono: _"não adianta
+  // apontar para a loja enquanto a nova versão não estiver lá"_ — a revisão leva dias, e
+  // nessa janela a loja serve a versão ANTIGA, que é justamente a que o gate barra. Clicar
+  // ali faz o Chrome dizer "já está atualizada" e a pessoa não sai do lugar. Quem decide é
+  // window._spExtStoreTemMinimo() (store.js), comparando a versão publicada com a exigida.
   function _lzExtDialog(versaoAtual) {
     var storeUrl = window.SP_EXT_STORE_URL || null;
+    var _zip = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
+    var viaZip = !lojaOk && !!_zip;
     var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
     var corpo = versaoAtual
-      ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
+      // ⛔ sem citar o letzplay: o que importa pra quem lê é o RESULTADO ruim da versão
+      // velha (termina sem os jogos), não de quem é a culpa. Ver lz-nao-culpa-o-letzplay.
+      ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste no meio e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
       : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
-    corpo += '<br><br>' + (versaoAtual
+    corpo += '<br><br>' + (viaZip
+      // JANELA DA REVISÃO: o zip é o que funciona AGORA e vira o botão — mas a loja
+      // continua NO TEXTO e com link. Regra do dono: "loja sempre e zip enquanto a loja
+      // não tiver a versão atualizada" — os dois, nunca um no lugar do outro.
+      ? 'A <b>v' + _LZ_MIN_EXT + '</b> ainda está em revisão na ' +
+        (storeUrl ? '<a href="' + _esc(storeUrl) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:700;">Chrome Web Store</a>'
+                  : '<b>Chrome Web Store</b>') + ' (leva alguns dias). ' +
+        'Até sair por lá, baixe o <b>zip</b> e carregue em <code>chrome://extensions</code> com o ' +
+        '<b>Modo do desenvolvedor</b> ligado. Quando a loja publicar, o Chrome volta a atualizar sozinho.'
+      : versaoAtual
       ? 'Instalada pela <b>Chrome Web Store</b>, o Chrome atualiza sozinho. Se ainda estiver na v' +
         versaoAtual + ', abra a loja e clique em <b>Atualizar</b> (ou <code>chrome://extensions</code> → <b>Atualizar</b>).'
       : 'Instale pela <b>Chrome Web Store</b> — um clique, e o Chrome mantém atualizada sozinho.');
-    // alternativa só pra quem JÁ tem extensão e está abaixo do mínimo: a loja pode ainda
-    // não ter publicado a versão exigida, e aí ela não resolve.
-    var _zip = (versaoAtual && typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
-    if (_zip) corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
-      _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
-      'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
+    // alternativa em texto só quando o botão é o da LOJA — com o zip como botão ela seria
+    // a mesma instrução duas vezes.
+    if (!viaZip && versaoAtual && _zip) {
+      corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
+        _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
+        'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
+    }
 
-    if (typeof window.showConfirmDialog !== 'function' || !storeUrl) {
-      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT +
-        '. Instale “scoreplace — importar letzplay” na Chrome Web Store.');
+    var destino = viaZip ? _zip : storeUrl;
+    if (typeof window.showConfirmDialog !== 'function' || !destino) {
+      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '. ' +
+        (viaZip ? 'Baixe o zip em ' + _zip + ' e carregue em chrome://extensions.'
+                : 'Instale “scoreplace — importar letzplay” na Chrome Web Store.'));
       return;
     }
     window.showConfirmDialog(titulo, corpo, function () {
+      if (viaZip) {
+        // download, não aba nova: é arquivo, e abrir zip em aba deixa a pessoa sem ação.
+        var a = document.createElement('a');
+        a.href = _zip; a.download = '';
+        document.body.appendChild(a); a.click(); a.remove();
+        return;
+      }
       window.open(storeUrl, '_blank', 'noopener');
-    }, null, { confirmText: '🎾 Abrir na Chrome Web Store', cancelText: 'Agora não', type: 'warning' });
+    }, null, {
+      confirmText: viaZip ? ('🎾 Baixar a v' + _LZ_MIN_EXT + ' (zip)') : '🎾 Abrir na Chrome Web Store',
+      cancelText: 'Agora não', type: 'warning'
+    });
   }
 
   // Quanto tempo a busca vai levar, em texto — MOSTRADO ANTES de começar. Um job de 3h

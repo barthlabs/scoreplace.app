@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '1.98';
+  var EXT_VERSION = '2.00';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -128,14 +128,34 @@
     } catch (e) { return null; }
   }
 
+  // Colapsa parte REPETIDA no nome do torneio. O `h2.title.with-avatar` junta nome +
+  // categoria, e quando o torneio não tem categoria ele repete o próprio nome — foi assim
+  // que "TORNEIO RP 2026 - 10 anos" virou "TORNEIO RP 2026 - 10 anos - TORNEIO RP 2026 -
+  // 10 anos" no doc do @FernandoBernacchi (medido em 11/ago/2026).
+  // ⚠️ Corta só o que REPETE: nome legítimo tem hífen ("… - Masculino - Bronze").
+  function _semRepeticao(s) {
+    s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    if (!s) return s;
+    var partes = s.split(/\s+[-–—·|]\s+/);
+    if (partes.length > 1) {
+      var vistos = {}, keep = [];
+      partes.forEach(function (p) { var k = p.toLowerCase(); if (!vistos[k]) { vistos[k] = 1; keep.push(p); } });
+      if (keep.length !== partes.length) s = keep.join((s.match(/\s+([-–—·|])\s+/) || [' - '])[0]);
+    }
+    var meio = Math.floor(s.length / 2);
+    if (s.length % 2 === 0 && s.slice(0, meio) === s.slice(meio)) return s.slice(0, meio).trim();
+    var m = s.match(/^(.{4,})\s+\1$/);
+    return m ? m[1].trim() : s;
+  }
+
   function tourneyNameFromDoc(doc) {
     try {
       var h2 = doc.querySelector('h2.title.with-avatar, .title.with-avatar');
-      if (h2) { var hn = (h2.textContent || '').replace(/\s+/g, ' ').trim(); if (hn) return hn; }
+      if (h2) { var hn = _semRepeticao((h2.textContent || '')); if (hn) return hn; }
       var og = doc.querySelector('meta[property="og:title"]');
       var t = (og ? (og.getAttribute('content') || '') : (doc.title || '')).replace(/\s+/g, ' ').trim();
       t = t.replace(/\s*-\s*Letzplay\s*$/i, '').replace(/^(Informa[çc][õo]es|Chaves) do Torneio\s+/i, '');
-      return t || null;
+      return _semRepeticao(t) || null;
     } catch (e) { return null; }
   }
 

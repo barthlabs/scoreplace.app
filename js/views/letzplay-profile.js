@@ -19,6 +19,83 @@
     return Math.max(3, Math.min(97, p));
   }
 
+  // ══ CATEGORIA DO ATLETA — NUNCA "MISTA" ══════════════════════════════════════
+  // Ordem do dono (11/ago/2026), vendo a ficha do @GersomOtsu (masculino no perfil)
+  // dizer "categoria oficial: Mista D": _"não existe categoria Mista para atleta! é masc
+  // ou fem. no torneio ele pode participar da categoria mista."_
+  //
+  // Ele está descrevendo duas coisas diferentes que estavam no mesmo campo: "Mista" é a
+  // categoria do TORNEIO (uma dupla homem+mulher); a do ATLETA é a faixa dele dentro do
+  // próprio gênero. Um homem que jogou a Mista D não "é" Mista D.
+  //
+  // CAUSA MEDIDA: a escolha em extension/lib/letzplay-import.js pega a skill mais alta de
+  // QUALQUER torneio oficial — só exclui faixa etária. No footprint do Gersom, "Mista D" e
+  // "Masculina D" empatam em D, e como a comparação é `>` estrito, a PRIMEIRA do array
+  // vence. Era a Mista, por ordem de leitura.
+  //
+  // ⚠️ POR QUE A REGRA MORA AQUI E NÃO NA EXTENSÃO: corrigir só na origem deixaria errada
+  // toda leitura já gravada — e o footprint completo já está no doc, então dá pra resolver
+  // no render e curar o passado sem ninguém reler nada. As libs do letzplay vivem só em
+  // extension/lib/ e o app não as carrega ([[project_letzplay_libs_single_source]]), então
+  // a alternativa seria uma segunda cópia da regra, que é o defeito, não o conserto.
+  var _SKILL_ORD = { 'FUN': 0, 'E': 1, 'D': 2, 'D+': 3, 'C-': 4, 'C': 5, 'C+': 6,
+                     'B-': 7, 'B': 8, 'B+': 9, 'A-': 10, 'A': 11, 'PRO': 12 };
+  // Token de skill mais alto presente no texto. Casa D+ antes de D (chaves da maior pra
+  // menor) e exige fronteira, senão o "D" de "Duplas" viraria categoria.
+  function skillDe(categoryRaw) {
+    var up = String(categoryRaw || '').toUpperCase(), melhor = null, v = -1;
+    Object.keys(_SKILL_ORD).sort(function (a, b) { return b.length - a.length; }).forEach(function (tok) {
+      var e = tok.replace('+', '\\+').replace('-', '\\-');
+      if (new RegExp('(^|[^A-Z+\\-])' + e + '($|[^A-Z+\\-])').test(up) && _SKILL_ORD[tok] > v) {
+        v = _SKILL_ORD[tok]; melhor = tok;
+      }
+    });
+    return melhor ? { tok: melhor, ord: v } : null;
+  }
+  // 'M' | 'F' | 'X' (mista) | null (não declarado no texto).
+  // ⚠️ "Mista" tem que ser testada ANTES de qualquer coisa: é o caso que decide.
+  function generoDe(categoryRaw) {
+    var s = String(categoryRaw || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (/\bmist[oa]s?\b|\bmixed\b|\bdupla\s+mist/.test(s)) return 'X';
+    if (/\bmasculin[oa]s?\b|\bmasc\b|\bmale\b/.test(s)) return 'M';
+    if (/\bfeminin[oa]s?\b|\bfem\b|\bfemale\b/.test(s)) return 'F';
+    return null;
+  }
+  function temIdade(categoryRaw) { return /\b(40|50|60|70)\b/.test(String(categoryRaw || '')); }
+
+  /** A categoria oficial do ATLETA → { label, deMista } ou null.
+   *  `deMista` = a skill veio de um torneio misto e o gênero foi OMITIDO de propósito. */
+  root._lzCatAtleta = function (imp) {
+    if (!imp || typeof imp !== 'object') return null;
+    var comGenero = null, soSkill = null;
+    function considera(catRaw, ageBand) {
+      if (!catRaw || ageBand || temIdade(catRaw)) return;      // faixa etária nunca é a categoria base
+      var sk = skillDe(catRaw); if (!sk) return;
+      var g = generoDe(catRaw);
+      if (g === 'M' || g === 'F') {
+        if (!comGenero || sk.ord > comGenero.ord) comGenero = { label: String(catRaw).trim(), ord: sk.ord };
+      } else if (!soSkill || sk.ord > soSkill.ord) {
+        // Mista OU sem gênero no texto: guarda só a SKILL. Ela é do atleta; o rótulo de
+        // gênero do torneio não é. Melhor "D" verdadeiro que "Mista D" falso.
+        soSkill = { label: sk.tok, ord: sk.ord, deMista: g === 'X' };
+      }
+    }
+    // ORDEM IMPORTA no EMPATE. O campo já gravado vem primeiro e, como a substituição só
+    // acontece com skill ESTRITAMENTE maior, ele vence quando empata — que é o certo: ele é
+    // a escolha que o app já exibia, e costuma trazer o rótulo por extenso ("Feminina C")
+    // enquanto o footprint traz a abreviação ("Fem C"). Inverter isso trocaria o rótulo de
+    // quem está correto sem nenhum ganho (pego pela suíte letzplay-level-bar, com o dado da
+    // @camilacalia).
+    // ⚠️ Mas ele NUNCA é aceito cru: passa pelo mesmo filtro, então uma "Mista D" gravada
+    // continua barrada — era exatamente esta a porta dos fundos que faltava fechar.
+    var oc = imp.officialCategory;
+    if (oc && oc.categoryRaw) considera(oc.categoryRaw, null);
+    (imp.footprint || []).forEach(function (f) { if (f && f.official) considera(f.categoryRaw, f.ageBand); });
+    if (comGenero) return { label: comGenero.label, deMista: false };
+    if (soSkill) return { label: soSkill.label, deMista: !!soSkill.deMista };
+    return null;
+  };
+
   // tile centralizado. valHtml já é HTML (permite cor); x = sublinha.
   function tileH(k, valHtml, x) {
     return '<div style="background:var(--bg-darker,#0f1420);border:1px solid var(--border-color,#28313f);border-radius:9px;padding:9px 11px;text-align:center;">' +
@@ -38,21 +115,35 @@
   // seria garantir que um dia os dois divergem.
   root._lzLevelBar = function (imp) {
     if (!imp || typeof imp !== 'object') return '';
-    var off = imp.officialCategory || null, r = imp.rating || {};
+    var cat = root._lzCatAtleta(imp), r = imp.rating || {};
     var pct = ratingPct(r.value);
     var gStops = 'linear-gradient(90deg,#dc2626 0%,#ef7a2b ' + Math.max(6, pct - 22) + '%,#eab308 ' +
       Math.max(10, pct - 12) + '%,#16a34a ' + Math.max(14, pct - 5) + '%,#16a34a ' +
       Math.min(88, pct + 5) + '%,#eab308 ' + Math.min(92, pct + 14) + '%,#ef7a2b ' +
       Math.min(97, pct + 26) + '%,#dc2626 100%)';
-    var offHtml = off
-      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.categoryRaw) + '</span>'
+    var offHtml = cat
+      ? '<span title="' + (cat.deMista ? 'faixa apurada em torneio misto — o gênero é do torneio, não do atleta' : 'categoria oficial disputada em torneio') +
+        '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(cat.label) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
     return '' +
-      '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;margin-bottom:4px;">' +
+      '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:4px;">' +
         '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
         '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma</span><br>' +
-          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span>' +
-          (r.value ? '<span style="font-size:11px;color:var(--text-muted,#8b93a3);"> · ' + r.value + '</span>' : '') + '</div>' +
+          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span></div>' +
+        // ── OS PONTOS ────────────────────────────────────────────────────────────
+        // Ordem do dono (11/ago/2026): _"vamos dar mais destaque para os 14xx pontos do
+        // atleta. para isso ser uma coisa a ser notada."_ Antes eram 11px em cinza-muted,
+        // atrás de um "·", grudados na forma — MENORES que qualquer outra coisa da linha,
+        // quando são o número que resume o atleta.
+        // Ficam à DIREITA (margin-left:auto) e não ao lado da forma: a numeração precisa
+        // de um canto próprio pra ser lida como valor, não como legenda da faixa.
+        (r.value
+          ? '<div style="margin-left:auto;text-align:right;">' +
+              '<span style="font-size:11px;color:var(--text-muted,#8b93a3);">pontos</span><br>' +
+              '<span style="font-family:ui-monospace,Menlo,monospace;font-size:26px;font-weight:800;line-height:1;' +
+                'color:#2dd4a0;text-shadow:0 0 18px rgba(45,212,160,.28);font-variant-numeric:tabular-nums;">' + r.value + '</span>' +
+            '</div>'
+          : '') +
       '</div>' +
       '<div style="margin-top:10px;">' +
         '<div style="display:flex;">' + ['FUN', 'D', 'C', 'B', 'A'].map(function (t) {
@@ -70,7 +161,7 @@
     spExtra = spExtra || {};
     var spT = Array.isArray(spExtra.tournaments) ? spExtra.tournaments : [];
     var spW = spExtra.wins || 0, spL = spExtra.losses || 0;
-    var off = imp.officialCategory || null;
+    var off = root._lzCatAtleta(imp);            // NUNCA "Mista" — ver _lzCatAtleta
     var r = imp.rating || {};
     var st = imp.stats || {};
     var pct = ratingPct(r.value);
@@ -82,7 +173,7 @@
       Math.min(97, pct + 26) + '%,#dc2626 100%)';
 
     var offHtml = off
-      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.categoryRaw) + '</span>'
+      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.label) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
 
     // ── Data de conclusão (mês/ano) + ordenação cronológica ──────────────
