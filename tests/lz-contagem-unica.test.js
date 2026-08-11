@@ -186,9 +186,19 @@ console.log('\n── "já li" só vale se o DETALHE sobreviveu ──');
 // puxar tudo. O cursor prova que a página foi ABERTA; não prova que o dado ficou.
 {
   const cnt = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
-  const t = cnt.slice(cnt.indexOf('var _pendT = toursList.filter'), cnt.indexOf('var _pendT = toursList.filter') + 1200);
-  ok(/if \(d0 && \(d0\.name \|\| d0\.standings\)\) \{ det\[tk\] = d0; return false; \}/.test(t),
-     'torneio só é pulado quando o NOME ou a classificação estão guardados');
+  const t = cnt.slice(cnt.indexOf('var _pendT = toursList.filter'), cnt.indexOf('var _pendT = toursList.filter') + 1600);
+  // ⚠️ ASSERÇÃO REVISADA DE PROPÓSITO (1.8.22) — o invariante é o MESMO, a régua ficou
+  // mais dura. Ela cravava a expressão `d0.name || d0.standings`, e desde a ext 2.01 o
+  // torneio também precisa da CHAVE pra contar como lido: sem ela a ficha do atleta não
+  // tem como dizer a colocação nem a rodada em que a pessoa caiu (medido no @fabiogod:
+  // 29 de 35 torneios mudos, e a releitura os pulava justamente por este `if`).
+  // O que a Kelly ensinou continua travado aqui — "o cursor prova que a página foi
+  // ABERTA, não que o dado ficou" —, agora com o carimbo do cursor junto: só o `3`
+  // (chave resolvida) autoriza pular.
+  ok(/C\.toursDone\[tk\] === 3\) \? detDe\(tk\) : null/.test(t),
+     'só o carimbo 3 (chave resolvida) autoriza pular o torneio');
+  ok(/if \(d0 && \(d0\.name \|\| d0\.standings \|\| d0\.matches\)\) \{ det\[tk\] = d0; return false; \}/.test(t),
+     'e o detalhe ainda precisa ter sobrevivido (nome, classificação ou chave)');
   const r = cnt.slice(cnt.indexOf('var _pendR = ranksList.filter'), cnt.indexOf('var _pendR = ranksList.filter') + 1200);
   ok(/if \(d0 && \(d0\.name \|\| d0\.standings\)\) \{ det\[rk\] = d0; return false; \}/.test(r),
      'e ranking idem');

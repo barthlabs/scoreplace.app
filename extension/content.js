@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '2.00';
+  var EXT_VERSION = '2.01';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -934,9 +934,36 @@
     // TER NOME + CLASSIFICAÇÃO **É** ESTAR LIDO — a prova está no dado, não num contador.
     // O cursor sozinho registrava menos do que o footprint já provava, e a diferença era
     // rebuscada a cada rodada ("se já puxou 21 de 35, não deveria começar do 1 de novo").
+    //
+    // ── TORNEIO SÓ ESTÁ PRONTO COM A CHAVE (11/ago/2026) ────────────────────────
+    // Pergunta do dono, na ficha do @fabiogod: _"onde está a classificação dos torneios e
+    // a rodada em que caiu?"_ — a lista estava muda em TODAS as linhas visíveis.
+    // MEDIDO no doc dele (lido no mesmo dia, já com a ext 2.00): **6 dos 35** torneios
+    // tinham `matches`; os outros 29 tinham só nome + tabela de GRUPO. E tabela de grupo
+    // não vira colocação de propósito (ordem do dono: "a posição no grupo não revela
+    // nada"), então a linha fica sem nada a dizer.
+    //
+    // A CAUSA NÃO ERA A LEITURA TER FALHADO — era o critério de "já li": ele olhava nome e
+    // classificação, e `matches` nasceu depois (ext 1.98). Todo torneio lido antes disso
+    // já tinha nome, então a releitura o PULAVA e a chave nunca era buscada. Ou seja:
+    // reler não consertava, e nunca ia consertar sozinho.
+    //
+    // O valor no cursor deixou de ser um booleano disfarçado e passou a dizer QUANTO se
+    // sabe. É ele que impede tanto o buraco quanto o oposto (rebuscar pra sempre um
+    // torneio que legitimamente não tem chave — pontos corridos, por exemplo):
+    //   1 = lido pelo critério ANTIGO (nome/classificação) — a chave ainda não foi tentada
+    //   2 = tentei abrir e não abriu (não insiste)
+    //   3 = a chave foi RESOLVIDA: ou veio, ou a página provou que não existe
+    // Ranking não tem chave; ali `1` segue sendo o estado final.
     Object.keys(priorNames).forEach(function (id) {
-      if (!priorNames[id].standings) return;
-      (id.charAt(0) === 't' ? C.toursDone : C.ranksDone)[id] = 1;
+      var p = priorNames[id];
+      // a prova de leitura é a classificação OU a chave — exigir só standings deixava de
+      // fora justamente o torneio que já tem a chave lida e nenhum grupo (5 dos 6 do Fabio).
+      if (!p.standings && !p.matches) return;
+      var eTorneio = (id.charAt(0) === 't');
+      var alvo = eTorneio ? C.toursDone : C.ranksDone;
+      if (alvo[id] === 2 || alvo[id] === 3) return;   // resultado já registrado: não rebaixa
+      alvo[id] = (eTorneio && !p.matches) ? 1 : 3;
     });
 
     // ── comunicação com o app ───────────────────────────────────────────────────
@@ -1345,8 +1372,12 @@
           // evidência não há veredito; e o nome dela ficava VIOLETA pra sempre, mesmo
           // depois de puxar tudo. Detalhe perdido = não lido.
           if (C.toursDone[tk] === 2) return false;   // tentei e não abriu: não insiste
-          var d0 = C.toursDone[tk] ? detDe(tk) : null;
-          if (d0 && (d0.name || d0.standings)) { det[tk] = d0; return false; }
+          // ⚠️ SÓ O `3` AUTORIZA PULAR. Enquanto isto aceitava qualquer valor truthy, o
+          // torneio lido antes da ext 1.98 (que tem nome e classificação, mas nasceu sem
+          // a chave) era pulado pra sempre — e a colocação/rodada nunca apareciam. Ver o
+          // bloco da semente do cursor, acima, com a medição no @fabiogod.
+          var d0 = (C.toursDone[tk] === 3) ? detDe(tk) : null;
+          if (d0 && (d0.name || d0.standings || d0.matches)) { det[tk] = d0; return false; }
           return true;
         });
         var _totT = totTorneios || toursList.length;
@@ -1358,9 +1389,25 @@
             pct: 4 + Math.round((_bt / Math.max(1, _pendT.length)) * 26) });
           await Promise.all(_pendT.slice(_bt, _bt + LOTE).map(async function (P) {
             var tk = 't/' + P.club + '/' + P.tid;
+            // A CHAVE FOI RESOLVIDA NESTA VOLTA? Só isso autoriza carimbar `3`. Se a busca
+            // dela cair por REDE, o torneio volta a valer como `1` e é tentado de novo na
+            // leitura seguinte — carimbar assim mesmo congelaria "sem chave" pra sempre,
+            // por causa de uma falha passageira.
+            var _chaveResolvida = false;
             try {
               var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
-              det[tk] = { name: tourneyNameFromDoc(dT), standings: tourneyStandingsFromDoc(dT), logo: tourneyLogoFromDoc(dT) };
+              // ⚠️ MELHOR-CONHECIDO-VENCE. Desde que a releitura passou a reabrir torneio
+              // já lido (atrás da chave), esta atribuição deixou de ser a primeira notícia
+              // sobre ele — e sobrescrever direto APAGARIA nome e classificação que já
+              // estavam gravados, sempre que a página viesse pior (ou mudasse de markup).
+              // `detDe` prefere `det[tk]`, então o estrago seria silencioso e permanente.
+              var _ja = detDe(tk) || {};
+              det[tk] = { name: tourneyNameFromDoc(dT) || _ja.name || null,
+                          standings: tourneyStandingsFromDoc(dT) || _ja.standings || null,
+                          logo: tourneyLogoFromDoc(dT) || _ja.logo || null,
+                          matches: _ja.matches || null,
+                          grupoJogadores: _ja.grupoJogadores || null,
+                          grupoTimes: _ja.grupoTimes || null };
               // JOGOS COM A FASE — é daqui que sai a colocação final (a tabela de grupos só
               // dá posição DENTRO do grupo). Páginas extras só enquanto vierem cards: o
               // torneio 449729 tem 2 páginas (21 de grupos + 6 de chave). Teto de 6 pra uma
@@ -1404,8 +1451,12 @@
                   det[tk].grupoJogadores = Object.keys(_gj).length;
                   det[tk].grupoTimes = Object.keys(_gt).length;
                 }
+                // O laço terminou por conta própria: ou a chave veio, ou as páginas de
+                // jogos provaram que ela não existe (torneio de pontos corridos). Nos dois
+                // casos a pergunta está respondida e não se rebusca mais.
+                _chaveResolvida = true;
               } catch (eM) { if (ehPausa(eM)) throw eM; }
-              C.toursDone[tk] = 1;
+              C.toursDone[tk] = _chaveResolvida ? 3 : 1;
               var pT = minhaPos(det[tk].standings);
               prog({ phase: 'torneios',
                 note: 'torneio ' + Math.min(Object.keys(C.toursDone).length, _totT) + ' de ' + _totT + ' — nome, categoria e classificação',
