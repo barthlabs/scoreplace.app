@@ -30,7 +30,7 @@ android {
                                                    // já estava em 36 — era ISSO que deixava o
                                                    // relógio um degrau atrás a cada subida.
         versionCode 51
-        versionName "1.9.0"
+        versionName "1.8.10"
     }
 
     buildTypes {
