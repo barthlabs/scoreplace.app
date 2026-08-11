@@ -299,13 +299,14 @@
 // que é quem produz o proofIdToken do merge). Ver project_whatsapp_meta_2fa_block.
 
 
-// ─── Config Firebase: PRODUÇÃO por padrão, STAGING só por hostname ────────────
-// scoreplace.app (e qualquer host que NÃO seja o staging, incl. localhost de
-// preview) usa exatamente os valores de produção de sempre — INTOCADO. Só o
-// ambiente de staging (scoreplace-staging.web.app / .firebaseapp.com) aponta pro
-// 2º projeto Firebase isolado (scoreplace-staging), pra testar mudanças
-// arriscadas sem encostar nos dados reais do Confra. Ver docs/staging.md.
-var _firebaseConfigProd = {
+// ─── Config Firebase: um projeto só (scoreplace-app = PRODUÇÃO) ───────────────
+// Todo host — scoreplace.app, auth.scoreplace.app, o WebView do app nativo e o
+// localhost de preview — aponta pro MESMO projeto. Até 19/jul/2026 existia um 2º
+// projeto isolado (scoreplace-staging) escolhido por hostname, com um
+// window.SCOREPLACE_ENV pendurado nele; o ambiente foi DELETADO e o switch saiu
+// junto (1.8.2). Não reintroduzir config por hostname sem um ambiente de verdade
+// atrás dela: guard que nunca dispara vira armadilha pra quem lê depois.
+const firebaseConfig = {
   apiKey: "AIzaSyB7AyOojV_Pm50Kr7bovVY4jVTTNbKOK0A",
   // v1.1.32 — authDomain CUSTOM (auth.scoreplace.app), não mais firebaseapp.com.
   //
@@ -354,19 +355,25 @@ var _firebaseConfigProd = {
   appId: "1:382268772878:web:7c164933f3beacba4be25f",
   measurementId: "G-PZ25D36JSV"
 };
-var _firebaseConfigStaging = {
-  apiKey: "AIzaSyDCFcrAr49iq3cDAh00Y_LlDLFsNJSsW8k",
-  authDomain: "scoreplace-staging.firebaseapp.com",
-  projectId: "scoreplace-staging",
-  storageBucket: "scoreplace-staging.firebasestorage.app",
-  messagingSenderId: "5066307789",
-  appId: "1:5066307789:web:b04d0b448b94eb1fb39184"
-};
-var _isStagingHost = (function () {
-  try { return /scoreplace-staging/.test(window.location.hostname || ''); } catch (e) { return false; }
-})();
-window.SCOREPLACE_ENV = _isStagingHost ? 'staging' : 'prod';
-const firebaseConfig = _isStagingHost ? _firebaseConfigStaging : _firebaseConfigProd;
+
+// ─── API key por plataforma NO APP NATIVO ────────────────────────────────────
+// v4.3.22: no app Capacitor o JS SDK roda de origem `capacitor://localhost`. A
+// "Browser key" (a apiKey do config web) é restrita por HTTP referrer a
+// scoreplace.app/*, localhost, etc. — `capacitor://localhost` NÃO está na lista,
+// então TODA request do JS SDK (installations, identitytoolkit/signInWithCredential,
+// securetoken, firestore) volta 403 PERMISSION_DENIED "Requests from referer
+// capacitor://localhost are blocked". As chaves iOS/Android auto-criadas pelo
+// Firebase NÃO têm restrição de referrer/app e cobrem todas essas APIs → usamos
+// elas no nativo. NO-OP na web (SCOREPLACE_PLATFORM undefined). Só afeta prod
+// nativo (staging não roda nativo hoje). Ver memória project_native_app_roadmap.
+try {
+  var _spPlat = window.SCOREPLACE_PLATFORM;
+  if (_spPlat === 'ios') {
+    firebaseConfig.apiKey = 'AIzaSyBI8z9CV_VORj0VxWE8l6px7-OOMDq5etI'; // iOS key (auto Firebase)
+  } else if (_spPlat === 'android') {
+    firebaseConfig.apiKey = 'AIzaSyBxTnVWKwiQdhmei8YqQdjhxPnaKNo5iFk'; // Android key (auto Firebase)
+  }
+} catch (_ak) {}
 
 // ─── Safari detection ───────────────────────────────────────────────────────
 // Safari (desktop + iOS) has ITP that breaks popup-based OAuth when the auth
@@ -872,15 +879,17 @@ function handleGoogleLogin() {
     return;
   }
 
-  // App NATIVO (iOS): o popup/redirect do Firebase é bloqueado no WebView do
-  // Capacitor (auth/invalid-cordova-configuration / popup bloqueado). Usa o
-  // Google Sign-In NATIVO via plugin @capgo/capacitor-social-login → idToken →
-  // firebase signInWithCredential. Mesmo padrão do Sign in with Apple.
-  var _capG = window.Capacitor;
-  if (_capG && _capG.isNativePlatform && _capG.isNativePlatform()
-      && _capG.getPlatform && _capG.getPlatform() === 'ios'
-      && _capG.Plugins && _capG.Plugins.SocialLogin) {
-    _googleNativeLogin(_capG.Plugins.SocialLogin);
+  // ─── NATIVO (Capacitor iOS/Android) ──────────────────────────────────────
+  // v4.3.20: no app nativo, signInWithPopup é BLOQUEADO no WKWebView e o
+  // signInWithRedirect é instável (origem capacitor://localhost quebra o
+  // handler de redirect do Firebase JS SDK). A rota nativa usa o plugin
+  // @capacitor-firebase/authentication (Google Sign-In nativo) → obtém o
+  // idToken → firebase.auth().signInWithCredential no JS SDK (fonte única de
+  // verdade da sessão). NÃO depende de e-mail (resolve os "emails chatos"
+  // Hotmail/Outlook) nem de reCAPTCHA. Gate por _isNativeAuthAvailable(); na
+  // WEB isso é SEMPRE false → o fluxo popup/redirect abaixo fica INTOCADO.
+  if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
+    _handleGoogleLoginNative();
     return;
   }
 
@@ -1042,6 +1051,186 @@ function handleGoogleLogin() {
     });
 }
 
+// ─── Login nativo (Capacitor) ────────────────────────────────────────────────
+// v4.3.20: detecta se o app está rodando nativo (iOS/Android via Capacitor) E
+// se o plugin @capacitor-firebase/authentication está registrado no bridge.
+// Só então usamos a rota nativa de Google Sign-In. Na WEB, window.Capacitor é
+// undefined → sempre false → o fluxo web (popup/redirect) nunca é alterado.
+function _isNativeAuthAvailable() {
+  try {
+    var C = window.Capacitor;
+    return !!(C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()
+      && C.Plugins && C.Plugins.FirebaseAuthentication
+      && typeof C.Plugins.FirebaseAuthentication.signInWithGoogle === 'function');
+  } catch (e) { return false; }
+}
+window._isNativeAuthAvailable = _isNativeAuthAvailable;
+
+// Google Sign-In NATIVO → credencial → JS SDK. Mantém a MESMA arquitetura da
+// web: o JS SDK é a fonte de verdade da sessão (Firestore, listeners, perfil).
+// O plugin roda com skipNativeAuth:true (ver capacitor.config.json), então
+// signInWithGoogle() só devolve a credencial e NÃO cria sessão nativa paralela.
+function _handleGoogleLoginNative() {
+  var FA = window.Capacitor.Plugins.FirebaseAuthentication;
+  // Nativo NÃO usa popup (o _t('auth.connectingMsg') fala em "popup" — web only).
+  showNotification(_t('auth.connecting'), 'Abrindo o login do Google…', 'info');
+  window._log('[scoreplace-auth] Native Google Sign-In starting…');
+
+  FA.signInWithGoogle().then(function (result) {
+    var cred = result && result.credential;
+    var idToken = cred && cred.idToken;
+    var accessToken = cred && cred.accessToken;
+    if (!idToken) {
+      throw new Error('native-google-no-idtoken');
+    }
+    window._log('[scoreplace-auth] Native Google credential obtido; assinando no JS SDK…');
+    var gcred = firebase.auth.GoogleAuthProvider.credential(idToken, accessToken || null);
+    return firebase.auth().signInWithCredential(gcred).then(function (userCred) {
+      return { userCred: userCred, accessToken: accessToken };
+    });
+  }).then(function (bundle) {
+    var user = bundle.userCred && bundle.userCred.user;
+    if (!user) { throw new Error('native-google-no-user'); }
+    window._log('[scoreplace-auth] Native login success:', { uid: user.uid, email: user.email });
+
+    // Fecha o modal imediatamente (paridade com o popup web).
+    _forceCloseLoginModal();
+    showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: user.displayName }), 'success');
+
+    // Persiste provider + nome/foto no primeiro login (igual à web).
+    if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
+      window.FirestoreDB.saveUserProfile(user.uid, {
+        authProvider: 'google.com',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || ''
+      }).catch(function () {});
+    }
+
+    // People API: detecta foto real vs monograma (não-fatal). Reusa o
+    // accessToken devolvido pelo plugin nativo (mesma lógica da web).
+    try {
+      var _googleAccessToken = bundle.accessToken;
+      if (_googleAccessToken && user.uid) {
+        fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
+          headers: { 'Authorization': 'Bearer ' + _googleAccessToken }
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !Array.isArray(data.photos) || data.photos.length === 0) return;
+            var primary = data.photos.find(function (p) { return p.metadata && p.metadata.primary; }) || data.photos[0];
+            var hasReal = !primary['default'];
+            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
+              window.FirestoreDB.saveUserProfile(user.uid, { hasGooglePhotoReal: hasReal }).catch(function () {});
+            }
+            if (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid === user.uid) {
+              window.AppStore.currentUser.hasGooglePhotoReal = hasReal;
+            }
+          }).catch(function () {});
+      }
+    } catch (_peopleErr) {}
+
+    try {
+      localStorage.setItem('scoreplace_authCache', JSON.stringify({
+        uid: user.uid, email: user.email,
+        displayName: user.displayName, photoURL: user.photoURL,
+        authProvider: 'google.com'
+      }));
+    } catch (e) {}
+
+    simulateLoginSuccess({
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL
+    });
+  }).catch(function (error) {
+    window._error('[scoreplace-auth] Native Google Sign-In error:', error);
+    if (typeof window._captureException === 'function') {
+      window._captureException(error, { area: 'googleLoginNative', code: error && (error.code || error.message) });
+    }
+    // Cancelamento do usuário no picker nativo não é erro.
+    var code = (error && (error.code || error.message)) || 'unknown';
+    if (/cancel|closed|1\.\s*canceled|SIGN_IN_CANCELLED/i.test(String(code))) {
+      return;
+    }
+    showNotification(_t('auth.googleError'),
+      'Não foi possível entrar com Google. Tente novamente, ou use celular/e-mail acima.\n\n(código: ' + code + ')',
+      'error');
+  });
+}
+window._handleGoogleLoginNative = _handleGoogleLoginNative;
+
+// ─── Phone/SMS NATIVO (Capacitor) ─────────────────────────────────────────────
+// v4.3.21: no app nativo o Phone Auth do Firebase JS SDK exige reCAPTCHA, que
+// quebra no WKWebView. A rota nativa usa o plugin @capacitor-firebase/authentication
+// (signInWithPhoneNumber → evento phoneCodeSent com verificationId; iOS via APNs /
+// Android via Play Integrity — SEM reCAPTCHA). O código chega por SMS e é confirmado
+// montando a credencial no JS SDK. Truque de compat: em vez de mexer no
+// handlePhoneVerifyCode (que já faz todo o pós-login — senha, boas-vindas, cleanup),
+// setamos window._phoneConfirmationResult com um wrapper cujo .confirm(code) devolve
+// signInWithCredential — MESMA assinatura do confirmationResult do web (Promise<{user}>),
+// então o fluxo de confirmação existente roda INTOCADO.
+function _sendPhoneCodeNative(phoneE164) {
+  var FA = window.Capacitor.Plugins.FirebaseAuthentication;
+  var note = document.getElementById('phone-step-sms-note');
+  if (note) note.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código por SMS…</span>';
+  window._log('[scoreplace-auth] Native phone verification starting for', phoneE164);
+
+  var _finishFail = function (msg) {
+    window._phoneLoginInFlight = false;
+    var n = document.getElementById('phone-step-sms-note');
+    if (n) n.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ ' + (msg || 'SMS indisponível agora — use o link do WhatsApp acima.') + '</span>';
+  };
+
+  // Limpa listeners de tentativas anteriores antes de registrar de novo.
+  FA.removeAllListeners().then(function () {
+    // Código enviado → guarda verificationId no wrapper compatível.
+    FA.addListener('phoneCodeSent', function (event) {
+      window._phoneLoginInFlight = false;
+      var vId = event && event.verificationId;
+      if (!vId) { _finishFail('Falha ao iniciar verificação por SMS.'); return; }
+      window._phoneConfirmationResult = {
+        confirm: function (code) {
+          var cred = firebase.auth.PhoneAuthProvider.credential(vId, code);
+          return firebase.auth().signInWithCredential(cred);
+        }
+      };
+      var n = document.getElementById('phone-step-sms-note');
+      if (n) n.innerHTML = '<span style="color:#10b981;font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
+    });
+    // Android: auto-retrieval do SMS → já vem o código, preenche e confirma sozinho.
+    FA.addListener('phoneVerificationCompleted', function (event) {
+      window._phoneLoginInFlight = false;
+      var vId2 = event && event.verificationId;
+      var code2 = event && event.verificationCode;
+      if (!vId2 || !code2) return;
+      if (!window._phoneConfirmationResult) {
+        window._phoneConfirmationResult = {
+          confirm: function (code) {
+            var cred = firebase.auth.PhoneAuthProvider.credential(vId2, code);
+            return firebase.auth().signInWithCredential(cred);
+          }
+        };
+      }
+      var el = document.getElementById('login-phone-code');
+      if (el) el.value = code2;
+      if (typeof handlePhoneVerifyCode === 'function') handlePhoneVerifyCode();
+    });
+    FA.addListener('phoneVerificationFailed', function (event) {
+      window._error('[scoreplace-auth] Native phone verification failed:', event);
+      if (typeof window._captureException === 'function') {
+        window._captureException(new Error('nativePhoneVerificationFailed'), { area: 'phoneLoginNative', message: event && event.message });
+      }
+      _finishFail(event && event.message);
+    });
+    FA.signInWithPhoneNumber({ phoneNumber: phoneE164 }).catch(function (err) {
+      window._error('[scoreplace-auth] Native signInWithPhoneNumber error:', err);
+      _finishFail(err && (err.message || err.code));
+    });
+  }).catch(function (err) {
+    _finishFail(err && (err.message || err.code));
+  });
+}
+window._sendPhoneCodeNative = _sendPhoneCodeNative;
 // ─── Google Sign-In NATIVO (iOS/Capacitor) ──────────────────────────────────
 // O popup/redirect do Firebase não funciona no WebView do app; usa o plugin
 // @capgo/capacitor-social-login (Google Sign-In nativo) → idToken → Firebase.
@@ -2226,6 +2415,15 @@ function handlePhoneLogin() {
   var _smsNote0 = document.getElementById('phone-step-sms-note');
   if (_smsNote0) _smsNote0.innerHTML = '<span style="color:var(--text-muted);font-size:0.72rem;">⏳ Enviando código por SMS…</span>';
   showNotification('📱 Código a caminho', 'Enviamos um código por SMS pra ' + phone + '.', 'info');
+
+  // ── NATIVO (Capacitor): SMS sem reCAPTCHA via plugin ───────────────────────
+  // No app nativo, pula todo o caminho reCAPTCHA (que quebra no WKWebView) e usa
+  // o Phone Auth nativo do plugin. Na WEB _isNativeAuthAvailable() é sempre false → segue reCAPTCHA.
+  // (WhatsApp saiu na v1.2.9 — SMS é o canal ÚNICO; ver project_whatsapp_is_wame_only.)
+  if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
+    _sendPhoneCodeNative(phone);
+    return;
+  }
 
   // ── SMS (canal ÚNICO) ──────────────────────────────────────────────────────
   // v1.3.76-beta: container pro body ANTES de qualquer operação de reCAPTCHA pra
@@ -7634,6 +7832,61 @@ function setupProfileModal() {
       }
       window._profilePhoneCtx.e164 = e164;
       var otpEl = document.getElementById(ctx.otpId);
+
+      // ── NATIVO (Capacitor iOS/Android): SEM reCAPTCHA ───────────────────────
+      // O reCAPTCHA do Firebase JS SDK NÃO carrega no WKWebView → o token nunca
+      // volta → auth/internal-error e o SMS não sai. Era o que quebrava este botão
+      // no app iOS (o login por telefone já desviava pra cá desde a v4.3.21; o
+      // perfil não — e ficou anos caindo no reCAPTCHA). Usa o mesmo plugin
+      // (@capacitor-firebase/authentication): iOS via APNs, Android via Play
+      // Integrity. Espelha _sendPhoneCodeNative, MAS confirma na instância
+      // SECUNDÁRIA ('profilephone') — o plugin autentica na camada nativa, e o
+      // .confirm() aqui NÃO pode tocar a sessão principal (senão o merge/prova de
+      // posse derrubaria o login do usuário). NA WEB _isNativeAuthAvailable() é
+      // false → segue o reCAPTCHA abaixo, intocado.
+      if (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) {
+        var _sappN = firebase.apps.find(function (a) { return a.name === 'profilephone'; })
+          || firebase.initializeApp(firebase.app().options, 'profilephone');
+        try { _sappN.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch (e) {}
+        window._profilePhoneSurvivor = cu.uid;
+        window._profilePhoneE164 = e164;
+        if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
+        var FAp = window.Capacitor.Plugins.FirebaseAuthentication;
+        var _failN = function (msg) {
+          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(String(msg || 'erro')) + '</div>';
+        };
+        FAp.removeAllListeners().then(function () {
+          FAp.addListener('phoneCodeSent', function (ev) {
+            var vId = ev && ev.verificationId;
+            if (!vId) { _failN('Falha ao iniciar a verificação.'); return; }
+            // Mesma assinatura do confirmationResult do web → _profileConfirmPhoneCode
+            // (e o merge) rodam INTOCADOS.
+            window._profilePhoneConfirmation = {
+              confirm: function (code) {
+                var cred = firebase.auth.PhoneAuthProvider.credential(vId, code);
+                return _sappN.auth().signInWithCredential(cred);
+              }
+            };
+            if (otpEl) otpEl.innerHTML =
+              '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b>:</div>' +
+              '<div style="display:flex;gap:8px;">' +
+                '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
+                '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
+              '</div>';
+            var c = document.getElementById(ctx.codeId); if (c) { try { c.focus(); } catch (e) {} }
+          });
+          FAp.addListener('phoneVerificationFailed', function (ev) {
+            window._error('[scoreplace-auth] profile native phone verification failed:', ev);
+            _failN(ev && ev.message);
+          });
+          return FAp.signInWithPhoneNumber({ phoneNumber: e164 });
+        }).catch(function (err) {
+          window._error('[scoreplace-auth] profile native signInWithPhoneNumber error:', err);
+          _failN(err && (err.message || err.code));
+        });
+        return;
+      }
+
       // reCAPTCHA invisível NÃO pode ficar em display:none — o iframe não recebe
       // dimensões, o token sai inválido e o backend responde auth/internal-error
       // (o SMS nunca chega). Espelha _ensureRecaptchaInBody do login: recria o nó
@@ -8335,7 +8588,6 @@ window._profileHydrateNameConflict = function () {
         verified: false
       }).then(function() {
         // Criar email via coleção mail (Trigger Email extension)
-        if (window.SCOREPLACE_ENV === 'staging') { return null; } // staging: kill-switch — sem e-mail
         return db.collection('mail').add({
           to: [email],
           message: {

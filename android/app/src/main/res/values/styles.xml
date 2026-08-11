@@ -13,6 +13,13 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Android 15+ (targetSdk 36): edge-to-edge é forçado e StatusBar.setBackgroundColor
+             virou NO-OP. Com o WebView inset abaixo da status bar, a ÁREA da status/nav bar
+             mostra o windowBackground — que no tema Light default vinha CLARO, deixando o
+             relógio/bateria (ícones claros) invisíveis. Fixamos o windowBackground em #111114
+             (mesma cor do .topbar) → a faixa da status bar combina com o topbar e os ícones
+             claros ficam legíveis. Bate com o app dark-first (Noturno). -->
+        <item name="android:windowBackground">#111114</item>
     </style>
 
 

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -32,6 +33,26 @@
             </intent-filter>
         </activity>
 
+        <!-- Health Connect: grava o treino medido pelo relógio (ver WorkoutRecorder.kt).
+             A tela é invisível — só abre o fluxo oficial de permissão e se fecha. -->
+        <activity
+            android:name=".HealthPermissionActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Justificativa de uso dos dados de saúde. O Health Connect exige um destino
+             para "por que este app pede isso": abre o app (política de privacidade). -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -40,6 +61,11 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
     </application>
+
+    <!-- Health Connect declara minSdk 26; o app roda de 24 pra cima. O override
+         mantém Android 7 instalando — o código de treino só é acionado quando
+         getSdkStatus() diz SDK_AVAILABLE (Android 9+ com Health Connect). -->
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
 
     <!-- Permissions -->
 
@@ -51,6 +77,16 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Notificações push (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Health Connect: GRAVAR o treino medido pelo relógio (exercício + batimentos).
+         Só escrita — o app não LÊ dados de saúde de outros apps. -->
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
+
+    <!-- Health Connect vive num app separado até o Android 13; o target precisa
+         declarar a consulta pra conseguir enxergar o provedor. -->
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <!-- câmera não é obrigatória pro app rodar (só pro QR) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

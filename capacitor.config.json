@@ -18,13 +18,12 @@
       "splashFullScreen": true,
       "splashImmersive": true
     },
-    "SocialLogin": {
-      "providers": {
-        "google": "implementation",
-        "facebook": false,
-        "apple": false,
-        "twitter": false
-      }
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com", "phone"]
+    },
+    "FirebaseMessaging": {
+      "presentationOptions": []
     }
   }
 }

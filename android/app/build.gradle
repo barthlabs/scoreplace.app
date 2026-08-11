@@ -1,14 +1,42 @@
 apply plugin: 'com.android.application'
+// Kotlin só pelo Health Connect (WorkoutRecorder.kt) — o resto do :app segue Java.
+apply plugin: 'kotlin-android'
 
 android {
     namespace = "app.scoreplace"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    // Assinatura de release via android/keystore.properties (gitignored). Se o
+    // arquivo não existir, o release fica sem assinar (não quebra o config).
+    def keystorePropsFile = rootProject.file("keystore.properties")
+    def keystoreProps = new Properties()
+    if (keystorePropsFile.exists()) keystoreProps.load(new FileInputStream(keystorePropsFile))
+
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+    // O Health Connect exige minSdk 26 e nosso piso é 24. Em vez de derrubar
+    // Android 7, desugarizamos a core library (java.time) e forçamos o override no
+    // manifest — em API < 26 o WorkoutRecorder simplesmente nunca roda
+    // (HealthConnectClient.getSdkStatus != SDK_AVAILABLE).
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
     defaultConfig {
         applicationId "app.scoreplace"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.1"
+        versionCode 50
+        versionName "1.9.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +44,40 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // ⚠️ AVISO DE SÍMBOLOS NATIVOS — NÃO TENTAR DE NOVO SEM DECISÃO NOVA.
+    // Medido 3×: `ndk { debugSymbolLevel 'SYMBOL_TABLE' }` (06/ago) e `'FULL'` (07/ago)
+    // NÃO produzem entrada de debugsymbols no .aab — a libdatastore_shared_counter.so
+    // (4 cópias, 4–7 KB, do androidx.datastore) vem STRIPPADA do fornecedor, sem
+    // `.symtab` nem `.debug_*`: não há símbolo para extrair.
+    // O ÚNICO caminho que apaga o aviso é excluir o .so via
+    // `packaging { jniLibs { excludes += ['**/libdatastore_shared_counter.so'] } }`.
+    // Foi implementado e passou no emulador (app abre, login nativo abre, sem
+    // UnsatisfiedLinkError) — e REVERTIDO por decisão do dono: "vai capar o negocio,
+    // deixa pra la. depois analisamos isso com calma". Arrancar código nativo de uma
+    // dependência pra silenciar aviso cosmético troca ruído por risco de runtime.
+    // O aviso de DESOFUSCAÇÃO, esse sim, foi resolvido (R8 ligado abaixo).
+
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // v1.7.76: R8 LIGADO por ordem do dono (pedida 3×). O que ele resolve é o
+            // aviso "arquivo de desofuscação" do Play: com minify ligado nasce um
+            // mapping.txt, e o `android.buildTypes.release` do AGP já o embute no .aab
+            // (BUNDLE-METADATA), então o console para de pedir.
+            // ⚠️ O RISCO É REAL E NÃO É TEÓRICO: os plugins do Capacitor são achados por
+            // REFLEXÃO, pelo NOME da classe. Sem as regras de keep do proguard-rules.pro
+            // o app COMPILA e sobe, e só morre em runtime (login, push, share). Por isso
+            // o gate do emulador é OBRIGATÓRIO nesta build, não opcional.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystorePropsFile.exists()) signingConfig signingConfigs.release
+
+            // ⚠️ NÃO adicionar `ndk { debugSymbolLevel ... }` — TENTADO E MEDIDO (06/ago).
+            // O único código nativo do pacote são 4 cópias de
+            // `libdatastore_shared_counter.so` (7 KB cada, do Firebase/DataStore), e elas
+            // já vêm STRIPPADAS: lendo as seções do .so só existe `.dynsym`, sem `.symtab`
+            // e sem `.debug_*`. A task roda, não acha símbolo e o .aab sai idêntico byte a
+            // byte. Esse aviso é o único dos dois que segue sem conserto do nosso lado.
         }
     }
 }
@@ -38,6 +96,10 @@ dependencies {
     implementation project(':capacitor-android')
     // Ponte pro smartwatch (fase 4): Wear Data Layer (MessageClient/NodeClient).
     implementation "com.google.android.gms:play-services-wearable:18.2.0"
+    // Grava o treino medido no relógio (ExerciseSessionRecord + HeartRateRecord).
+    implementation "androidx.health.connect:connect-client:$healthConnectVersion"
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
+    implementation "androidx.activity:activity-ktx:$androidxActivityVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

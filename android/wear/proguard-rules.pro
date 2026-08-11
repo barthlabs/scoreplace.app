@@ -55,3 +55,9 @@
 -dontwarn com.facebook.**
 -dontwarn com.twitter.**
 -dontwarn com.google.android.gms.games.**
+
+# ── Wear: a camada de dados do relógio é resolvida pelo Google Play Services ──
+-keep class com.google.android.gms.wearable.** { *; }
+-keep class * implements com.google.android.gms.wearable.MessageClient$OnMessageReceivedListener { *; }
+-keep class * implements com.google.android.gms.wearable.DataClient$OnDataChangedListener { *; }
+-keep class * extends com.google.android.gms.wearable.WearableListenerService { *; }

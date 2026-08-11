@@ -343,15 +343,34 @@ var _linhaPend = htmlL.split('<div ').filter(function (x) { return x.indexOf('PE
 ok(_linhaPend.indexOf('ainda não lido') >= 0, 'não lido é rotulado como tal');
 ok(_linhaPend.indexOf('#7dd3fc') < 0, 'não lido NÃO ganha data inventada (sem a cor da data)');
 
-// 4) TRÊS CORES distintas — data, categoria e classificação
+// 4) CORES distintas — data, categoria e posição
+// ⚠️ REVISADO na 1.8.5, com o motivo: o âmbar #fbbf24 é a cor de PÓDIO e aqui as fixtures
+// são TORNEIO com `standings:[{group:'G1',…}]`, ou seja posição de GRUPO. Pintar isso de
+// pódio é o bug que o dono relatou (print de 10/ago: ele aparecia com bronze tendo sido o
+// ÚLTIMO do grupo). A posição de grupo agora sai em cinza; o âmbar continua reservado a
+// RANKING, onde a posição é classificação de verdade — travado logo abaixo.
 ok(htmlL.indexOf('#7dd3fc') >= 0, 'data tem cor própria (#7dd3fc)');
 ok(htmlL.indexOf('#a78bfa') >= 0, 'categoria tem cor própria (#a78bfa)');
-ok(htmlL.indexOf('#fbbf24') >= 0, 'classificação tem cor própria (#fbbf24)');
-ok(new Set(['#7dd3fc', '#a78bfa', '#fbbf24']).size === 3, 'as três cores são diferentes entre si');
+ok(htmlL.indexOf('#94a3b8') >= 0, 'posição de GRUPO tem cor própria e NEUTRA (#94a3b8), não a de pódio');
+ok(htmlL.indexOf('#fbbf24') < 0, 'e o âmbar de pódio NÃO aparece em linha de torneio');
+ok(new Set(['#7dd3fc', '#a78bfa', '#94a3b8']).size === 3, 'as três cores são diferentes entre si');
 
-// 5) CLASSIFICAÇÃO com medalha
-ok(/🥇 1º/.test(htmlL), 'campeã sai com 🥇 1º');
-ok(/🥈 2º/.test(htmlL) && /🥉 3º/.test(htmlL), '2º e 3º saem com 🥈 e 🥉');
+// 5) POSIÇÃO: em torneio é do GRUPO (sem medalha); em ranking é classificação (com medalha)
+// ⚠️ REVISADO na 1.8.5. Antes: "campeã sai com 🥇 1º" — mas `pos:1` num `{group:'G1'}` é
+// 1º DO GRUPO, não campeã do torneio. O invariante que estas linhas protegiam de verdade
+// (a colocação aparece e é legível) segue travado, agora dizendo a verdade.
+ok(!/🥇|🥈|🥉|🏅/.test(htmlL), 'nenhuma medalha em linha de TORNEIO — grupo não é pódio');
+ok(/G1 · 1º de 1/.test(htmlL), '1º do grupo sai como "G1 · 1º de 1", com o grupo nomeado');
+ok(/G1 · 2º de 1/.test(htmlL) && /G1 · 3º de 1/.test(htmlL), '2º e 3º idem, sempre com o grupo');
+{
+  // o outro lado da regra: RANKING mantém o pódio (o scraper marca `ranking:true`)
+  var _hR = window._lzTourneyRows({ footprint: [{ official: false, club: 'c', rankingId: 'r9',
+    categoryRaw: 'Social Fem C', name: 'Social Fem C',
+    standings: [{ group: 'Classificação', ranking: true, rows: [{ pos: 2, handles: ['camilacalia'] }] }] }] },
+    'camilacalia', 'rank');
+  ok(/🥈 2º/.test(_hR), 'ranking com pos 2 continua saindo com 🥈 (ali a posição é real)');
+  ok(_hR.indexOf('#fbbf24') >= 0, 'e mantém o âmbar de pódio');
+}
 
 // 6) CATEGORIA sempre destacada: sai de dentro do nome e vira campo colorido próprio.
 // (o nome real do letzplay quase sempre TERMINA na categoria — se só evitássemos repetir,
@@ -400,13 +419,17 @@ ok(window._lzTournamentsRead(impT) === 1,
 var htmlT = window._lzTourneyRows(impT, 'camilacalia');
 var divsT = (htmlT.match(/<div /g) || []).length;
 ok(divsT === 1, 'a lista mostra UMA linha para o torneio (era uma por trilha)', 'linhas=' + divsT);
-ok(/🥈 2º/.test(htmlT), 'funde as entradas mantendo a melhor colocação (2º, não 4º nem 6º)');
+// (1.8.5: o invariante aqui é a FUSÃO — a melhor posição vence entre as 3 trilhas do mesmo
+// torneio. O que mudou é a forma: posição de grupo não usa medalha. Ver _lzMyPosIn.)
+ok(/2º de 1/.test(htmlT) && !/4º|6º/.test(htmlT),
+   'funde as entradas mantendo a melhor colocação (2º, não 4º nem 6º)');
 
 // 3) a TRILHA sai do campo da categoria, fica BRANCA e vai pro FIM
 ok(new RegExp('color:#f3f4f6[^>]*>Ver trilha de').test(htmlT), 'trilha em BRANCO (#f3f4f6), não no roxo');
 ok(htmlT.indexOf('#a78bfa') < 0 || !/color:#a78bfa[^>]*>Ver trilha/.test(htmlT),
   'trilha NUNCA sai com a cor da categoria');
-var iCat = htmlT.indexOf('#a78bfa'), iPos = htmlT.indexOf('#fbbf24'), iTr = htmlT.indexOf('#f3f4f6');
+// (1.8.5: a posição de grupo é #94a3b8 — o #fbbf24 ficou reservado ao pódio de ranking)
+var iCat = htmlT.indexOf('#a78bfa'), iPos = htmlT.indexOf('#94a3b8'), iTr = htmlT.indexOf('#f3f4f6');
 ok(iCat >= 0 && iPos > iCat && iTr > iPos,
   'ordem: categoria → classificação → trilha (pedido do dono)', 'cat=' + iCat + ' pos=' + iPos + ' trilha=' + iTr);
 
@@ -483,8 +506,12 @@ console.log('\n── abas: torneios · rankings · jogos ──');
     footprint: [
       { official: true, club: 'cl', tourneyId: '11', name: 'Open Reação - Feminina C', categoryRaw: 'Feminina C',
         year: 2026, standings: [{ group: 'G', rows: [{ pos: 2, handles: ['camilacalia'] }] }] },
+      // ⚠️ 1.8.5 — a fixture do RANKING passou a refletir o que o scraper realmente produz:
+      // `{ group:'Classificação', ranking:true }` (rankingStandingsFromDoc). Antes vinha como
+      // se fosse grupo de torneio, e por isso não dava pra distinguir posição real de posição
+      // de grupo — a distinção que o bug do pódio falso exigiu.
       { official: false, club: 'pb', rankingId: '55291', name: 'Competitivo Fem C | 2026', categoryRaw: 'Fem C',
-        year: 2026, standings: [{ group: 'G', rows: [{ pos: 4, handles: ['camilacalia'] }] }] }
+        year: 2026, standings: [{ group: 'Classificação', ranking: true, rows: [{ pos: 4, handles: ['camilacalia'] }] }] }
     ],
     tournamentsList: [{ club: 'cl', tid: '11' }, { club: 'cl', tid: '99', title: 'Torneio ainda não lido - Fem C' }],
     rankingsList: [{ club: 'pb', rid: '55291' }, { club: 'pb', rid: '777', title: 'Ranking não lido' }],
@@ -502,7 +529,9 @@ console.log('\n── abas: torneios · rankings · jogos ──');
   ok(/Competitivo Fem C/.test(r) && !/Open Reação/.test(r), 'aba RANKINGS mostra só ranking');
   ok(/Torneio ainda não lido/.test(t) && /ainda não lido/.test(t), 'torneio pendente aparece na aba dele');
   ok(/Ranking não lido/.test(r), 'ranking pendente aparece na aba dele');
-  ok(/🥈 2º/.test(t) && /🏅 4º/.test(r), 'cada aba traz a classificação da sua competição');
+  // torneio = posição de GRUPO (sem medalha) · ranking = classificação real (com medalha)
+  ok(/G · 2º de 1/.test(t) && !/🥈/.test(t), 'aba TORNEIOS traz a posição do grupo, sem pódio');
+  ok(/🏅 4º/.test(r), 'aba RANKINGS traz a classificação de verdade, com medalha');
   ok(/6–3/.test(j) && /4–6/.test(j), 'aba JOGOS traz o placar');
   ok(/vs Ana \/ Bia/.test(j), 'aba JOGOS traz os adversários');
   ok(/29 jul 26/.test(j) && /28 jul 26/.test(j), 'aba JOGOS traz a data formatada');

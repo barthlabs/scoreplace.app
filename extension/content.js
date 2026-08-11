@@ -185,6 +185,69 @@
     } catch (e) { return null; }
   }
 
+  // ── JOGOS DO TORNEIO, COM A FASE (ext 1.98) ─────────────────────────────────
+  // /{club}/tournaments/{tid}/matches?page=N — cada card traz "#N • FASE", e a FASE é
+  // "Grupos" na 1ª página e "QF"/"SF"/"Final" depois. É a ÚNICA fonte da colocação final:
+  // o letzplay não publica classificação de torneio, e a tabela de grupos só diz posição
+  // DENTRO do grupo. Com a fase dá pra andar da Final pra trás e posicionar todo mundo.
+  //
+  // ⚠️ ESTRUTURA MEDIDA AO VIVO (11/ago/2026, torneio 449729 logado — não deduzida):
+  //   card            .row.match
+  //   título          .match-title            → "#23 • QF"
+  //   cada lado       .row.match-player       (2 por card)
+  //   nomes           .match-players-double   (dupla, separada por <br>)
+  //   handles         a[href^="/"] no formato /Handle  (≠ nome: "Krieger", "Wilson-Jr")
+  //   vencedor        .match-player-result i  → fa-check-circle | fa-times-circle
+  //   placar          .match-points
+  //
+  // 🪤 DUAS ARMADILHAS QUE SÓ O HTML REAL MOSTROU, as duas dentro de .match-points:
+  //   1) o GAME do PERDEDOR é nó de texto solto, mas o do VENCEDOR vem dentro de <strong>
+  //      — ler só nós diretos devolvia null pra todo vencedor;
+  //   2) o TIEBREAK é um <sub> irmão — ler textContent cru colava os dois e transformava
+  //      "5(5)" em 55 (visto no jogo #24).
+  //   Regra que resolve as duas: clonar, REMOVER o <sub> (que é o tiebreak) e ler o resto.
+  function _lpPontos(el) {
+    if (!el) return { game: null, tb: null };
+    var cl = el.cloneNode(true);
+    var sub = cl.querySelector('sub');
+    var tbTxt = sub ? sub.textContent : '';
+    if (sub && sub.parentNode) sub.parentNode.removeChild(sub);
+    var g = parseInt(String(cl.textContent || '').replace(/[^\d]/g, ''), 10);
+    var t = parseInt(String(tbTxt).replace(/[^\d]/g, ''), 10);
+    return { game: isNaN(g) ? null : g, tb: isNaN(t) ? null : t };
+  }
+  function tourneyMatchesFromDoc(doc) {
+    try {
+      var out = [], cards = doc.querySelectorAll('.row.match');
+      for (var i = 0; i < cards.length; i++) {
+        var c = cards[i];
+        var tEl = c.querySelector('.match-title');
+        var titulo = tEl ? (tEl.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        var mn = titulo.match(/#\s*(\d+)/);
+        var partes = titulo.split('•');
+        var fase = partes.length > 1 ? partes[1].replace(/\s+/g, ' ').trim() : null;
+        var lados = [], rows = c.querySelectorAll('.row.match-player');
+        for (var j = 0; j < rows.length; j++) {
+          var r = rows[j];
+          var nEl = r.querySelector('.match-players-double') || r.querySelector('.match-player-info span');
+          var nomes = nEl ? (nEl.innerHTML || '').split(/<br\s*\/?>/i)
+            .map(function (s) { return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); })
+            .filter(Boolean) : [];
+          var handles = [].slice.call(r.querySelectorAll('a[href]'))
+            .map(function (a) { return a.getAttribute('href') || ''; })
+            .filter(function (h) { return /^\/[A-Za-z0-9_.-]+$/.test(h); })
+            .map(function (h) { return h.slice(1); });
+          var cls = String(((r.querySelector('.match-player-result i') || {}).className) || '');
+          var won = /check|success/i.test(cls) ? true : (/times|danger/i.test(cls) ? false : null);
+          var p = _lpPontos(r.querySelector('.match-points'));
+          lados.push({ names: nomes, handles: handles, won: won, score: p.game, tb: p.tb });
+        }
+        if (lados.length === 2) out.push({ n: mn ? +mn[1] : null, phase: fase, sides: lados });
+      }
+      return out.length ? out : null;
+    } catch (e) { return null; }
+  }
+
   // Logo do torneio/ranking: imagem (cloudinary) do avatar ao lado do título
   // (`.title.with-avatar`). NÃO é o og:image (esse é o logo genérico da plataforma) nem
   // o logo do clube (esse é o 1º cloudinary do doc, no nav). Sobe até 4 ancestrais do
@@ -592,9 +655,18 @@
   function shrinkImport(imp) {
     function size(o) { try { return JSON.stringify(o).length; } catch (e) { return 0; } }
     if (size(imp) <= 900000) return imp;
+    // 1º a sair: os jogos de GRUPO. São ~21 de 27 num torneio e não entram no cálculo da
+    // colocação — a chave (6) é que posiciona, e as contagens de grupo já foram gravadas.
+    (imp.footprint || []).forEach(function (f) {
+      if (Array.isArray(f.matches)) {
+        var k = f.matches.filter(function (m) { return !/grupo/i.test(m.phase || ''); });
+        if (k.length !== f.matches.length) f.matches = k.length ? k : null;
+      }
+    });
+    if (size(imp) <= 900000) { imp.slimmed = 'group-matches'; return imp; }
     (imp.footprint || []).forEach(function (f) { if (!f.official) { delete f.standings; } });
     if (size(imp) <= 900000) { imp.slimmed = 'rank-standings'; return imp; }
-    (imp.footprint || []).forEach(function (f) { delete f.standings; delete f.logo; });
+    (imp.footprint || []).forEach(function (f) { delete f.standings; delete f.logo; delete f.matches; });
     imp.slimmed = 'all-standings';
     return imp;
   }
@@ -835,6 +907,7 @@
       priorNames[id] = {
         name: f.name || (ja && ja.name) || null,
         standings: f.standings || (ja && ja.standings) || null,
+        matches: f.matches || (ja && ja.matches) || null,
         logo: f.logo || (ja && ja.logo) || null
       };
     });
@@ -904,7 +977,8 @@
       var raw = F.buildRaw(realHandle, all);
       (raw.tournaments || []).forEach(function (t) {
         var d = t.tourneyId && t.club ? detDe('t/' + t.club + '/' + t.tourneyId) : null;
-        if (d) { if (d.name) t.name = d.name; if (d.standings) t.standings = d.standings; if (d.logo) t.logo = d.logo; }
+        if (d) { if (d.name) t.name = d.name; if (d.standings) t.standings = d.standings; if (d.logo) t.logo = d.logo;
+                 if (d.matches) { t.matches = d.matches; t.grupoJogadores = d.grupoJogadores; t.grupoTimes = d.grupoTimes; } }
       });
       (raw.rankings || []).forEach(function (r) {
         var d = r.rankingId && r.club ? detDe('r/' + r.club + '/' + r.rankingId) : null;
@@ -920,7 +994,8 @@
         var _pt = _partirNome(d.name || P.title || '');
         raw.tournaments.push({ name: d.name || P.title || '', club: P.club, sport: 'Beach Tennis',
           categoryRaw: _pt.cat || '', year: null, status: 'done', wins: 0, losses: 0,
-          tourneyId: P.tid, rankingId: null, standings: d.standings || null, logo: d.logo || null });
+          tourneyId: P.tid, rankingId: null, standings: d.standings || null, logo: d.logo || null,
+          matches: d.matches || null, grupoJogadores: d.grupoJogadores || null, grupoTimes: d.grupoTimes || null });
       });
       ranksList.forEach(function (R) {
         var id = 'r/' + R.club + '/' + R.rid;
@@ -1266,6 +1341,50 @@
             try {
               var dT = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid);
               det[tk] = { name: tourneyNameFromDoc(dT), standings: tourneyStandingsFromDoc(dT), logo: tourneyLogoFromDoc(dT) };
+              // JOGOS COM A FASE — é daqui que sai a colocação final (a tabela de grupos só
+              // dá posição DENTRO do grupo). Páginas extras só enquanto vierem cards: o
+              // torneio 449729 tem 2 páginas (21 de grupos + 6 de chave). Teto de 6 pra uma
+              // paginação estranha não virar laço. Falhar aqui NÃO derruba o torneio — o
+              // nome e a classificação de grupo já foram lidos acima.
+              try {
+                var _mAll = [], _pg = 1;
+                while (_pg <= 6) {
+                  var _dm = (_pg === 1) ? dT : await bgFetchDoc(
+                    'https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches?page=' + _pg);
+                  var _mm = tourneyMatchesFromDoc(_dm);
+                  if (_pg === 1 && !_mm) {   // a página do torneio não é a de jogos
+                    _dm = await bgFetchDoc('https://letzplay.me/' + P.club + '/tournaments/' + P.tid + '/matches?page=1');
+                    _mm = tourneyMatchesFromDoc(_dm);
+                  }
+                  if (!_mm || !_mm.length) break;
+                  var _novos = _mm.filter(function (x) {
+                    return !_mAll.some(function (y) { return y.n === x.n; });
+                  });
+                  if (!_novos.length) break;              // página repetida = fim
+                  _mAll = _mAll.concat(_novos);
+                  _pg++;
+                }
+                if (_mAll.length) {
+                  det[tk].matches = _mAll;
+                  // CONTAGENS DA FASE DE GRUPOS gravadas AGORA, porque os jogos de grupo
+                  // são a maior parte do peso e o slim pode descartá-los. Sem isto,
+                  // encolher o doc apagaria o "de quantos" da colocação.
+                  // ⚠️ jogadores E times: MEDIDO no 449729, nos grupos os parceiros GIRAM
+                  // (Rei/Rainha — 28 jogadores em duplas rotativas) e só na chave a dupla
+                  // é fixa (14 jogadores / 7 duplas). Contar "duplas do grupo" daria 42,
+                  // que não é gente nenhuma.
+                  var _gj = {}, _gt = {};
+                  _mAll.forEach(function (m) {
+                    if (!/grupo/i.test(m.phase || '')) return;
+                    m.sides.forEach(function (sd) {
+                      _gt[(sd.handles || []).slice().sort().join('|')] = 1;
+                      (sd.handles || []).forEach(function (h) { _gj[h] = 1; });
+                    });
+                  });
+                  det[tk].grupoJogadores = Object.keys(_gj).length;
+                  det[tk].grupoTimes = Object.keys(_gt).length;
+                }
+              } catch (eM) { if (ehPausa(eM)) throw eM; }
               C.toursDone[tk] = 1;
               var pT = minhaPos(det[tk].standings);
               prog({ phase: 'torneios',

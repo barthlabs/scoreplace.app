@@ -4,14 +4,33 @@ android {
     namespace "app.scoreplace.wear"
     compileSdk rootProject.ext.compileSdkVersion
 
+    // Assinatura de release via android/keystore.properties (mesma upload key do :app).
+    // Play exige que o AAB do Wear seja assinado com a MESMA chave do app do celular.
+    def keystorePropsFile = rootProject.file("keystore.properties")
+    def keystoreProps = new Properties()
+    if (keystorePropsFile.exists()) keystoreProps.load(new FileInputStream(keystorePropsFile))
+
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
     defaultConfig {
         // MESMO applicationId do celular: o Wear Data Layer só entrega mensagens
         // entre apps de mesmo package (e mesma assinatura — debug key serve).
         applicationId "app.scoreplace"
         minSdkVersion 30
-        targetSdkVersion 34
-        versionCode 4
-        versionName "1.1"
+        targetSdkVersion rootProject.ext.targetSdkVersion  // v1.7.76: era 35 CRAVADO enquanto a raiz
+                                                   // já estava em 36 — era ISSO que deixava o
+                                                   // relógio um degrau atrás a cada subida.
+        versionCode 51
+        versionName "1.9.0"
     }
 
     buildTypes {
@@ -19,8 +38,12 @@ android {
             minifyEnabled false
         }
         release {
-            minifyEnabled false
+            // v1.7.76: R8 ligado também aqui — senão o aviso de desofuscação continuaria
+            // vindo pelo artefato do relógio, que é uma distribuição SEPARADA no Play.
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystorePropsFile.exists()) signingConfig signingConfigs.release
         }
     }
 

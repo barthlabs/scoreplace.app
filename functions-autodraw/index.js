@@ -240,11 +240,6 @@ function _sideDisplayName(uids, nameByUid, storedStr) {
   return storedStr || '?';
 }
 
-// Kill-switch de notificações no staging (ver functions/index.js). No projeto de
-// staging, push (FCM) NÃO é enviado — pra simular torneios com inscritos reais
-// sem disparar nada. Em prod IS_STAGING é false → comportamento idêntico.
-const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || '').indexOf('staging') !== -1;
-
 // v2.4.12: temporada encerrada? Espelha o cliente (tournaments.js season auto-
 // closure + bracket-logic poller endDate check). Sem isto, o autoDraw gerava
 // rodadas — e disparava notificações — PRA SEMPRE após o fim da temporada, se
@@ -1459,7 +1454,6 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
 exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{notifId}', async (event) => {
   const snap = event.data;
   if (!snap) return;
-  if (IS_STAGING) { console.log('[staging] push (FCM) suprimido'); return; }
 
   const userId = event.params.userId;
   const notifData = snap.data();
@@ -1500,6 +1494,27 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
       fcmOptions: { link: link }
     }
   };
+
+  // ⚠️ TOKENS NATIVOS (Capacitor iOS/Android) — exceção AO contrato data-only.
+  // O contrato data-only acima existe SÓ por causa da WEB (o navegador exibe uma
+  // cópia automática do payload `notification` além da que o sw.js mostra → 2x).
+  // No app NATIVO não há sw.js: data-only NÃO gera notificação na bandeja em
+  // background/killed (o SO não auto-exibe sem `notification`). Por isso, e SÓ
+  // pros tokens nativos (fcmTokenPlatform começa com 'native-'; a web grava
+  // 'web' ou nada → nunca entra aqui → segue data-only intocada), adicionamos o
+  // payload `notification`. Validado no emulador Android (v4.3.29-beta): com
+  // notification+data, background → bandeja do SO, foreground → toast in-app
+  // (o plugin não auto-exibe em foreground; iOS usa presentationOptions:[]).
+  const _isNativeToken = String(userData.fcmTokenPlatform || '').indexOf('native') === 0;
+  if (_isNativeToken) {
+    message.notification = {
+      title: notifData.tournamentName || 'scoreplace.app',
+      body: notifData.message || 'Você tem uma nova notificação.'
+    };
+    // Android: colapsa entregas do mesmo doc pelo tag; o tap abre via data.link
+    // (o app trata notificationActionPerformed → navega pro #tournaments/<id>).
+    message.android = { collapseKey: tag, notification: { tag: tag } };
+  }
 
   try {
     await getMessaging().send(message);

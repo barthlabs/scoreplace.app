@@ -168,10 +168,10 @@ struct ScoreState: Decodable {
         s.sportName = "Beach Tennis"
         s.isDoubles = true
         s.teams = [
-            "1": Team(players: ["Rodrigo", "Nelson"]),
-            "2": Team(players: ["Kelly", "Zilda"])
+            "1": Team(players: ["Ana", "Bruno"]),
+            "2": Team(players: ["Carla", "Diego"])
         ]
-        s.server = Server(team: 1, name: "Rodrigo")
+        s.server = Server(team: 1, name: "Ana")
         return s
     }
 
@@ -249,7 +249,7 @@ struct ScoreState: Decodable {
         s.reiRainha = true
         s.rrRound = 3
         s.rrStandings = [
-            RRStanding(name: "Rodrigo Barth", wins: 3),
+            RRStanding(name: "Ana Souza", wins: 3),
             RRStanding(name: "Jogador 03", wins: 2),
             RRStanding(name: "Jogador 02", wins: 1),
             RRStanding(name: "Jogador 04", wins: 0)
@@ -272,10 +272,13 @@ struct ScoreState: Decodable {
         s.isDoubles = true
         s.courtLeft = 1
         s.hrMax = 185                // ≈ 220 − 35 anos, só pro preview ter faixa
-        s.server = Server(team: 1, name: "Rodrigo")
+        // Sacador tem que ser alguém que ESTÁ nos times do mock (Ana/Bruno × Carla/Diego),
+        // senão o preview desenha a bolinha num nome que não aparece na tela. "Rodrigo"
+        // era resíduo de antes de os nomes virarem genéricos — ver o comentário do mockStore.
+        s.server = Server(team: 1, name: "Ana")
         s.teams = [
-            "1": Team(players: ["Rodrigo", "Nelson"]),
-            "2": Team(players: ["Kelly", "Zilda"])
+            "1": Team(players: ["Ana", "Bruno"]),
+            "2": Team(players: ["Carla", "Diego"])
         ]
         return s
     }

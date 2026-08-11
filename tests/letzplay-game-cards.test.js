@@ -77,12 +77,20 @@ ok(typeof window._spScoreplaceItems === 'function', 'match-history expõe os jog
   const rep = require('fs').readFileSync(
     require('path').join(__dirname, '..', 'js', 'views', 'tournaments-enrollment-report.js'), 'utf8');
   ok(/_lzJuntarScoreplace\(uid/.test(rep), 'o diálogo chama a costura das duas fontes');
-  const fn = rep.slice(rep.indexOf('function _lzJuntarScoreplace'), rep.indexOf('function _lzJuntarScoreplace') + 2600);
+  // ⚠️ o corte vai até o INÍCIO DA PRÓXIMA função, não por tamanho fixo. Com `+2600`/`+3400`
+  // o teste ficava refém do comprimento do corpo: bastou a 1.8.5 acrescentar comentários pra
+  // `juntar('rank'` cair fora da janela e a asserção falhar sem nada ter quebrado.
+  const _corpo = (nome) => {
+    const i = rep.indexOf('function ' + nome);
+    const j = rep.indexOf('\n  function ', i + 10);
+    return rep.slice(i, j > i ? j : rep.length);
+  };
+  const fn = _corpo('_lzJuntarScoreplace');
   ok(/_lzGameItens = \(window\._lzGameItens \|\| \[\]\)\.concat\(itens\)/.test(fn),
     'os jogos do app entram na MESMA lista do letzplay (não num bloco separado)');
   ok(/A\.jogo = window\._lzRenderJogos\(meNome\)/.test(fn),
     'e a lista inteira é re-renderizada, o que reordena por data');
-  const juntarFn = rep.slice(rep.indexOf('function _lzJuntarScoreplace'), rep.indexOf('function _lzJuntarScoreplace') + 3400);
+  const juntarFn = fn;
   ok(/juntar\('tour'/.test(juntarFn) && /juntar\('rank'/.test(juntarFn), 'competições do app entram em Torneios e em Rankings');
   ok(/_isLigaFormat/.test(fn), 'Pontos Corridos vai pra Rankings (temporada contínua), o resto pra Torneios');
   ok(/if \(!it\.official\) return;/.test(fn), 'partida casual não vira competição');

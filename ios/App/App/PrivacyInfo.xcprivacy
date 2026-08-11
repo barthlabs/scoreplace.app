@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  scoreplace.app — Privacy Manifest (App Privacy / Required-Reason APIs)
+  Fonte: docs/data-inventory.md (auditoria do codebase). Manter em sincronia.
+
+  Cenário assumido: SEM rastreio (NSPrivacyTracking=false) — nenhum dado é usado
+  pra rastrear entre apps/sites de terceiros (sem IDFA, ad SDK, data broker).
+  ⚠️ Isso depende de resolver o GA4 (data-inventory §5.1): desativar Google Signals/
+  ad features OU tirar o GA4 da build nativa. Se o GA4 ficar com ad features, vira
+  rastreio → precisaria NSPrivacyTracking=true + prompt ATT.
+
+  As libs de terceiros (Firebase, GoogleSignIn via SPM) trazem os PRÓPRIOS
+  PrivacyInfo.xcprivacy — este arquivo cobre só o app-level.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSPrivacyTracking</key>
+  <false/>
+  <key>NSPrivacyTrackingDomains</key>
+  <array/>
+
+  <key>NSPrivacyCollectedDataTypes</key>
+  <array>
+    <!-- Nome (displayName) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeName</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- E-mail -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeEmailAddress</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Telefone -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypePhoneNumber</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Foto de perfil -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Localização precisa (check-in, GPS de quadras/locais) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypePreciseLocation</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Localização aproximada (cidade/estado/país, CEPs preferidos) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeCoarseLocation</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Conteúdo do usuário: torneios, partidas, avaliações, amigos, modalidades/nível -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+        <string>NSPrivacyCollectedDataTypePurposeProductPersonalization</string>
+      </array>
+    </dict>
+    <!-- Gênero / data de nascimento / idade (categorização esportiva — comum, não Health) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+        <string>NSPrivacyCollectedDataTypePurposeProductPersonalization</string>
+      </array>
+    </dict>
+    <!-- Token de push (fcmToken) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeDeviceID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Diagnóstico: crash (Sentry) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeCrashData</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><false/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- Diagnóstico: performance (Sentry) -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypePerformanceData</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><false/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+    </dict>
+    <!-- ⚠️ Uso do produto (GA4) — INCLUIR SÓ SE o GA4 ficar na build nativa (data-inventory §5.1).
+         Se tirar o GA4 do nativo, REMOVER este bloco. Com Google Signals OFF, Tracking=false. -->
+    <dict>
+      <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeProductInteraction</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key><false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string></array>
+    </dict>
+  </array>
+
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <!-- UserDefaults — usado pelo Capacitor/plugins pra guardar config do próprio app.
+         CA92.1 = acessar info armazenada só pelo próprio app, não compartilhada com data broker. -->
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key><string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array><string>CA92.1</string></array>
+    </dict>
+  </array>
+</dict>
+</plist>

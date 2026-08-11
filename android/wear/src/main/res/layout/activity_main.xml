@@ -57,7 +57,7 @@
                     android:textSize="15sp"
                     android:includeFontPadding="false"
                     android:layout_marginEnd="3dp"
-                    android:visibility="gone" />
+                    android:visibility="visible" />
                 <TextView
                     android:id="@+id/name_l1"
                     android:layout_width="wrap_content"
@@ -66,7 +66,7 @@
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="end"
-                    android:text="Rodrigo"
+                    android:text="Ana"
                     android:textColor="@color/name_blue"
                     android:textSize="16sp"
                     android:includeFontPadding="false" />
@@ -97,7 +97,7 @@
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="end"
-                    android:text="Nelson"
+                    android:text="Bruno"
                     android:textColor="@color/name_blue_dim"
                     android:textSize="16sp"
                     android:includeFontPadding="false" />
@@ -147,7 +147,7 @@
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="start"
-                    android:text="Kelly"
+                    android:text="Carla"
                     android:textColor="@color/name_red"
                     android:textSize="16sp"
                     android:includeFontPadding="false" />
@@ -178,7 +178,7 @@
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="start"
-                    android:text="Zilda"
+                    android:text="Diego"
                     android:textColor="@color/name_red_dim"
                     android:textSize="16sp"
                     android:includeFontPadding="false" />
@@ -726,6 +726,49 @@
          SETOR 3 botão-barra "Iniciar" colado na base — topo RETO, estoura a
          largura → cantos inferiores cortados pela curva da tela. Dispara a MESMA
          _casualStart() do celular. -->
+    <!-- ⚠️ PLACAR FECHADO NO CELULAR: sem isto o relógio ficava com o placar morto na
+         tela e "não fazia mais nada" (relato do dono). O celular manda active=false,
+         isFinished=false e canStart=false; nenhuma das outras telas casa com isso. -->
+    <FrameLayout
+        android:id="@+id/idle_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/winner_scrim"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎾"
+                android:textSize="30sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sem partida"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginTop="6dp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Abra o placar no celular"
+                android:textColor="#99FFFFFF"
+                android:gravity="center"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+    </FrameLayout>
+
     <FrameLayout
         android:id="@+id/start_overlay"
         android:layout_width="match_parent"

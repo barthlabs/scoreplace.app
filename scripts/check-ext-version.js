@@ -52,8 +52,11 @@ for (const f of ['js/views/letzplay-onboarding.js', 'js/views/tournaments-enroll
   if (bad) fail.push(f + ': mínimo hardcoded (' + bad[0] + ') — use window.SP_EXT_VERSION');
 }
 
-// 5) O zip que o usuário instala tem que existir NA versão exigida (não há
-//    auto-update enquanto a extensão não está publicada na Chrome Web Store).
+// 5) O zip da versão exigida tem que existir. ⚠️ Desde a 1.8.4 ele NÃO é mais o que o
+//    usuário instala — a extensão está na Chrome Web Store e o app aponta só pra lá (o
+//    Chrome atualiza sozinho). O zip é o artefato de PUBLICAÇÃO: é o arquivo que se sobe
+//    no painel da Web Store. Por isso a trava fica: subir uma versão sem ter o zip dela
+//    gerado é ficar sem o que publicar.
 if (storeVer) {
   const zip = 'scoreplace-letzplay-ext-' + storeVer + '.zip';
   if (!fs.existsSync(path.join(root, zip))) {

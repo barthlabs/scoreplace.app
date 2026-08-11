@@ -107,6 +107,13 @@ struct RemoteView: View {
             // isto o relógio só sabia dizer "Aguardando…" e a partida SÓ podia
             // começar pegando o celular.
             if !state.active && !state.isFinished && state.canStart { startOverlay }
+            // ⚠️ PLACAR FECHADO NO CELULAR → o relógio PRECISA de uma tela. Ao tocar
+            // "Encerrar" no fim da partida o celular manda `active:false,
+            // isFinished:false, canStart:false` (WatchBridge.pushInactive) e NENHUMA
+            // das condições acima casava: nem início (exige canStart), nem vencedor
+            // (exige isFinished). Sobrava o placar vazio e o relógio "não fazia mais
+            // nada" — relato do dono. Sem saída a não ser matar o app do relógio.
+            if !state.active && !state.isFinished && !state.canStart { idleOverlay }
             // Empate (5-5, 6-6, 7-7…) esperando decisão: cobre os botões +1 até
             // o usuário escolher prorrogar ou ativar o tie-break. Recorre a cada
             // empate enquanto ninguém vence por 2 (motor GSM = fonte única).
@@ -551,6 +558,26 @@ struct RemoteView: View {
             pickableName(name, team: team, isSel: isSel)
         }
         .buttonStyle(.plain)
+    }
+
+    // Nada rolando no celular: diz o que é e como voltar. Não oferece "Iniciar"
+    // porque sem os nomes não há sacador a escolher — quem monta a partida é o
+    // celular; aqui é só não deixar o relógio preso numa tela morta.
+    private var idleOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.92).ignoresSafeArea()
+            VStack(spacing: sz(6)) {
+                Text("🎾").font(.system(size: sz(30)))
+                Text("Sem partida")
+                    .font(.system(size: sz(16), weight: .bold))
+                    .foregroundColor(.white)
+                Text("Abra o placar no celular")
+                    .font(.system(size: sz(11)))
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, sz(8))
+        }
     }
 
     private var startOverlay: some View {

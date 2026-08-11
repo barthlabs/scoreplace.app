@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.3';
+window.SCOREPLACE_VERSION = '1.9.0';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,15 +105,30 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-// Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
-// Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
-// BLOQUEIA e pede a atualização manual pelo zip — de propósito.
 window.SP_EXT_VERSION = '1.98';
-// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
-// entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
-// aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
-// Enquanto não há versão na Chrome Web Store não existe auto-update — então o caminho de
-// atualização tem que estar a UM CLIQUE, não "ache a pasta do projeto no seu computador".
+
+// ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
+// A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",
+// barthlabs, id hpjbalgkbnodadaanfmbdeipodgillab). Pela loja o Chrome atualiza
+// SOZINHO — é isso que acaba com o atrito do gate de versão: sem auto-update, toda
+// subida obrigava a pessoa a baixar o zip e reinstalar na mão pra voltar a importar.
+//
+// ⚠️ Mora AQUI, e não dentro de uma view, porque estava dentro de UMA
+// (letzplay-onboarding.js) e as OUTRAS DUAS telas que pedem a extensão não a
+// enxergavam — seguiram mandando descompactar zip em modo desenvolvedor, e uma
+// delas ainda dizia "ainda não está na Chrome Web Store". Duas definições da mesma
+// coisa é o que faz uma divergir. Ver [[feedback_unify_dual_entry_points]].
+window.SP_EXT_STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
+
+// ── O ZIP VOLTOU, e com papel DEFINIDO (1.8.9) ───────────────────────────────
+// A 1.8.4 tirou o zip da UI ("o código aponta para a loja e não para o zip"). Certo como
+// regra permanente — sideload não recebe auto-update. Mas ele volta por uma razão que o
+// dono cravou: "ter alternativa enquanto a loja nao aprova". A loja leva dias revisando, e
+// nesse intervalo o gate exige uma versão que a loja AINDA NÃO SERVE — mandar pra lá não
+// resolve, o Chrome responde "já está atualizada". Nessa janela o zip é o ÚNICO caminho,
+// e é também o canal de TESTE da versão nova antes de publicar.
+// ⚠️ Por isso ele é SECUNDÁRIO e condicionado: só aparece quando a extensão instalada está
+// ABAIXO do mínimo. Quem não tem extensão nenhuma vai pra loja e pronto.
 window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1243,36 +1258,13 @@ window._flag = function (name) {
   } catch (e) { return false; }
 };
 
-// ─── Selo STAGING (só no ambiente de teste) ──────────────────────────────────
-// Badge fixo e inconfundível pra NUNCA confundir staging com produção: evita
-// fazer teste destrutivo achando que está no staging (ou entrar em pânico
-// achando que quebrou o Confra quando está só no staging). Só aparece quando o
-// host é o de staging — INVISÍVEL na produção. pointer-events:none = não bloqueia
-// clique. Detecta por hostname (auto-suficiente, sem depender de timing).
-(function () {
-  try {
-    if (!/scoreplace-staging/.test(window.location.hostname || '')) return;
-    var inject = function () {
-      if (document.getElementById('sp-staging-badge')) return;
-      var b = document.createElement('div');
-      b.id = 'sp-staging-badge';
-      b.textContent = 'STAGING';
-      b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483647;' +
-        'background:#b91c1c;color:#fff;font:700 11px/1 -apple-system,BlinkMacSystemFont,sans-serif;' +
-        'letter-spacing:1.5px;padding:5px 9px;border-radius:6px;pointer-events:none;' +
-        'box-shadow:0 2px 8px rgba(0,0,0,0.45);opacity:0.92;';
-      (document.body || document.documentElement).appendChild(b);
-    };
-    if (document.body) inject();
-    else document.addEventListener('DOMContentLoaded', inject);
-  } catch (e) {}
-})();
-
-// ─── Tarja SANDBOX (como era o staging, mas por TORNEIO) ─────────────────────
+// ─── Tarja SANDBOX (o sinal de "não é pra valer", por TORNEIO) ───────────────
 // Barra VERMELHA fixa de fora a fora no rodapé, sempre visível ENQUANTO se está
 // atuando num torneio sandbox (detalhe/bracket/chamada/etc.). O SB roda EM
-// PRODUÇÃO — então o sinal não pode ser por hostname (como o staging morto), tem
-// que ser pela rota: se o torneio em tela é isSandbox, mostra. Some fora do SB.
+// PRODUÇÃO — então o sinal não pode ser por hostname, tem que ser pela ROTA: se o
+// torneio em tela é isSandbox, mostra. Some fora do SB. (Até 19/jul/2026 havia um
+// selo irmão "STAGING" por hostname; o ambiente foi deletado e o selo saiu na
+// 1.8.2 — hoje o único sinal de ambiente-de-teste é este, e ele é por torneio.)
 // pointer-events:none = não bloqueia clique. Ver project_sandbox_tournament.
 (function () {
   try {
@@ -4879,7 +4871,17 @@ window._whatsappShareUrl = function(text) {
 // vibrante. Renderização consistente em iOS/Android/Windows.
 // Versões anteriores (mantidas no histórico de commits): SVG bicolor com
 // gomo amarelo + linha curva (v0.17.11-v0.17.51).
-window._BEACH_TENNIS_ICON = '<span style="filter:hue-rotate(-50deg) saturate(1.8);display:inline-block;vertical-align:-0.15em;" aria-label="Beach Tennis">🎾</span>';
+// v4.3.27 (NATIVO): era '<span style="filter:hue-rotate...">🎾</span>' — mas o emoji
+// 🎾 no Android (fonte Noto) rende como RAQUETE+bola (no iOS/Apple é só a bola),
+// entao o indicador do sacador e o icone de Beach Tennis viravam "uma raquete com
+// bola generica" no Android. SVG inline (bola laranja com costura branca) rende
+// IGUAL em iOS/Android/web e e inequivocamente uma BOLA. Escala com font-size (1em).
+// ⚠️ ESTE BLOCO E EXCLUSIVO DO BRANCH NATIVO e ja foi perdido uma vez num merge
+// (bastou pegar o arquivo inteiro do lado da web). Ao resolver conflito em store.js,
+// conferir SEMPRE se _BEACH_TENNIS_ICON e _TENNIS_ICON continuam SVG aqui.
+window._BEACH_TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Beach Tennis"><circle cx="50" cy="50" r="47" fill="#fb923c" stroke="#c2410c" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff7ed" stroke-width="5" stroke-linecap="round"/></svg>';
+// v4.3.28: mesmo motivo do beach — o 🎾 do Tenis e RAQUETE+bola no Android.
+window._TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;vertical-align:-0.15em;display:inline-block;flex-shrink:0" aria-label="Tênis"><circle cx="50" cy="50" r="47" fill="#c4e83a" stroke="#84a81f" stroke-width="3"/><path d="M18 20 C44 40 44 60 18 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M82 20 C56 40 56 60 82 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>';
 
 // v0.17.11: ícone Pickleball — SVG inline com bola amarela e furos visíveis
 // (bola real tem 40 furos; reduzido pra 13 num grid distribuído pra que

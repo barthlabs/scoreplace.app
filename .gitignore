@@ -50,9 +50,9 @@ android/app/src/main/assets/public/
 android/capacitor-cordova-android-plugins/
 .gradle/
 
-# Android signing keystore (segredo — nunca commitar)
-android-signing/
+# Android signing (NUNCA commitar — contém segredos)
 android/keystore.properties
+android-signing/
 *.jks
 *.keystore
 torneio_bye_repescagem.xlsx
