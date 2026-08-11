@@ -1475,11 +1475,16 @@
       var cat = _lzPareceCategoria(f.categoryRaw) ? String(f.categoryRaw).trim() : _lzCatDoNome(nomeBruto);
       var part = _lzSplitCat(nomeBruto, cat);
       var trilha = _lzEhTrilha(f.categoryRaw) ? String(f.categoryRaw).trim() : null;
-      var pos = _lzMyPosIn(f.standings, handle);
+      var pos = _lzColocacao(f, handle);
       var ja = porId[k];
       if (ja) {
-        // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem
-        if (ja.pos == null || (pos != null && pos.pos < ja.pos.pos)) ja.pos = pos;
+        // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem.
+        // ⚠️ A da CHAVE sempre vence a de grupo — são escalas diferentes ("2º de 3 no
+        // grupo" não se compara com "5º/7º do torneio"), e comparar `.pos` entre as duas
+        // escolheria pelo número menor, que é justamente a menos informativa.
+        if (pos && pos.chave && !(ja.pos && ja.pos.chave)) ja.pos = pos;
+        else if (ja.pos == null) ja.pos = pos;
+        else if (pos && !pos.chave && !ja.pos.chave && pos.pos < ja.pos.pos) ja.pos = pos;
         if (!ja.cat && part.cat) ja.cat = part.cat;
         if (!ja.trilha && trilha) ja.trilha = trilha;
         if (!ja.data && datas[k]) ja.data = _lzFmtDataNum(datas[k]);
@@ -1520,7 +1525,19 @@
       // tabela de GRUPO — dizer "🥉 3º" pra quem foi o último de um grupo de 3 é inventar
       // um resultado que não existiu. Ver o comentário de _lzMyPosIn.
       if (L.pos) {
-        h += L.pos.semPontuacao
+        h += L.pos.chave
+          // COLOCAÇÃO CALCULADA DA CHAVE — a de verdade, entre todos os participantes.
+          // Pódio (1º/2º/3º) sai em âmbar com medalha; faixa e fase saem em cinza, porque
+          // "5º/7º (quartas)" é informação e não conquista.
+          ? (' · <span style="color:' + (L.pos.podio ? _LZ_C_POS : _LZ_C_GRUPO) +
+             ';font-weight:' + (L.pos.podio ? '800' : '600') + ';">' +
+             (L.pos.podio ? _lzMedalhaPos(L.pos.posMin) + ' ' : '') + _esc(L.pos.rotulo) + '</span>' +
+             // COM QUEM. Em torneio de duplas a colocação é DA DUPLA — omitir o parceiro
+             // faria "5º/7º" parecer resultado individual. Vai em branco discreto porque é
+             // contexto, a mesma regra da trilha.
+             (L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
+                _esc(L.pos.parceiro) + '</span>' : ''))
+          : L.pos.semPontuacao
           // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
           // é, em cinza, em vez de emprestar um pódio a um ranking sem lançamento nenhum.
           ? (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">sem pontuação lançada</span>')
@@ -2874,6 +2891,42 @@
       });
     });
     return out;
+  }
+
+  // ── ATÉ ONDE O ATLETA CHEGOU (a colocação de verdade) ────────────────────────
+  // Pergunta do dono (11/ago/2026, olhando a ficha do @GersomOtsu): _"onde está a posição
+  // na classificação (nem que seja por faixa) e a etapa até aonde chegou o atleta no
+  // torneio?"_ — a lista mostrava "GRUPO 03 · 2º de 3" numa linha só e nada nas outras.
+  //
+  // DUAS FONTES, e a ordem entre elas é o ponto:
+  //   1º  A CHAVE (f.matches, com a fase de cada jogo) → _lzPlacement anda da Final pra
+  //       trás e devolve Campeão / Vice / "5º/7º (quartas)" / "fase de grupos". É a
+  //       colocação ENTRE TODOS os participantes.
+  //   2º  A tabela de GRUPO (f.standings) → só diz a posição dentro do grupo. Continua
+  //       valendo quando não há chave lida, mas nunca ganha da chave: foi o dono que
+  //       cortou isso — _"a posicao no grupo nao revela nada"_.
+  //
+  // Devolve o mesmo shape do _lzMyPosIn quando cai no grupo, e { chave:true, rotulo }
+  // quando a chave respondeu — o render distingue pelo campo `chave`.
+  function _lzColocacao(f, handle) {
+    var P = window._lzPlacement;
+    if (P && Array.isArray(f && f.matches) && f.matches.length) {
+      try {
+        var r = P.doHandle(f.matches, handle, { totalTimes: f.grupoTimes || 0 });
+        // `conhecido:false` = não há chave detectável naquele torneio (pontos corridos,
+        // por exemplo). Aí o motor se cala de propósito e a tabela de grupo assume.
+        if (r && r.conhecido && r.rotulo) {
+          return { chave: true, rotulo: r.rotulo, podio: r.posMin != null && r.posMin <= 3,
+                   ateOnde: r.ateOnde, posMin: r.posMin, parceiro: r.parceiro || null };
+        }
+      } catch (e) { /* motor não decide → cai na tabela de grupo, nunca deixa a linha muda */ }
+    }
+    return _lzMyPosIn(f && f.standings, handle);
+  }
+  // Medalha só pra pódio REAL (1º/2º/3º entre todos). Faixa e fase saem sem medalha —
+  // "5º/7º (quartas)" é informação, não pódio.
+  function _lzMedalhaPos(posMin) {
+    return posMin === 1 ? '🥇' : posMin === 2 ? '🥈' : posMin === 3 ? '🥉' : '';
   }
   // ══ AS TRÊS CONTAGENS, UM LUGAR SÓ ═══════════════════════════════════════════
   // Regra do dono (01/ago/2026): "pare de consertar 1 coisa e quebrar 2 — faça direito
