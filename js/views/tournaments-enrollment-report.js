@@ -2019,8 +2019,18 @@
       var temAlguma = achadas.length > 0;
       var serve = temAlguma && _verGE(melhor, _LZ_MIN_EXT);
       if (serve) { caixa.innerHTML = ''; return; }
-      // no celular a mensagem é outra (lá não existe extensão nenhuma pra instalar)
-      var movel = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+      // NO CELULAR A CAIXA FICA VAZIA — e agora isso é uma decisão, não um esquecimento.
+      // Ordem do dono (11/ago/2026): _"o resto tudo igual ao desktop"_ — a tela do celular
+      // não leva faixa de aviso nenhuma; ela é idêntica à do computador. O aviso existe, e
+      // aparece no POPUP quando a pessoa toca em "Puxar histórico completo"
+      // (window._lzAvisoSoNoDesktop) — ou seja, no momento em que ela demonstra querer a
+      // ação, que é quando a informação serve pra alguma coisa.
+      // ⚠️ O que NUNCA pode voltar aqui é o aviso de extensão do desktop: mandar instalar
+      // extensão no celular é impossível de cumprir. Travado em
+      // tests/lz-celular-avisa-que-e-so-no-desktop.test.js.
+      var movel = (typeof window._spLetzplayPrecisaDesktop === 'function')
+        ? window._spLetzplayPrecisaDesktop()
+        : /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
       if (movel) { caixa.innerHTML = ''; return; }
       caixa.innerHTML = '<div style="font-size:0.82rem;color:#fbbf24;line-height:1.45;margin:0 0 9px;' +
         'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.32);border-radius:9px;padding:9px 11px;">' +
@@ -2034,18 +2044,39 @@
         // versão abaixo do mínimo (aí clicar nela não sai do lugar). Regra do dono:
         // "loja sempre e zip enquanto a loja não tiver a versão atualizada".
         // Fonte única da decisão: window._spExtStoreTemMinimo() (store.js).
+        // A AÇÃO É BOTÃO, NÃO LINK NO MEIO DA FRASE.
+        // Ordem do dono (11/ago/2026): _"onde está a porra dos botões que tinha mostrado.
+        // clicar no texto é uma merda."_ Estava como <a> dentro de um parágrafo de 4
+        // linhas: mesma fonte, mesmo peso do texto em volta, alvo do tamanho de uma
+        // palavra.
+        // ⚠️ A MUDANÇA É SÓ DE APARÊNCIA, DE PROPÓSITO. Na 1.8.19 eu extraí isto pra uma
+        // função nomeada no escopo do módulo — e aquela versão quebrou no aparelho do dono
+        // ("quebrou na 19 e 20"), sem que eu conseguisse reproduzir aqui. Não sei a causa,
+        // então não repito o movimento: a IIFE fica EXATAMENTE onde estava, lendo as mesmas
+        // variáveis do mesmo escopo léxico que funciona desde a 1.8.15. O que muda são os
+        // estilos dos <a>. Menos mudança = menos superfície pra quebrar de novo.
         (function () {
           var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
           var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
-          var loja = window.SP_EXT_STORE_URL
-            ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
-            : ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.';
-          if (!lojaOk && z) {
-            return ' <a href="' + _esc(z) + '" download style="color:#fbbf24;font-weight:800;">baixar o zip da v' +
-              _esc(_LZ_MIN_EXT) + ' ↓</a> e carregar em <code>chrome://extensions</code> (Modo do desenvolvedor)' +
-              ' — a v' + _esc(_LZ_MIN_EXT) + ' ainda está em revisão, mas você pode' + loja + ' pra acompanhar.';
+          var _b = 'display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:10px;' +
+            'font-size:0.8rem;font-weight:800;text-decoration:none;white-space:nowrap;';
+          var _pri = _b + 'background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1205;border:1px solid rgba(245,158,11,0.6);';
+          var _sec = _b + 'background:rgba(255,255,255,0.06);color:#fbbf24;border:1px solid rgba(251,191,36,0.45);';
+          var _linha = function (h) { return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">' + h + '</div>'; };
+          var _nota = function (t) { return '<div style="margin-top:10px;font-size:0.78rem;opacity:0.9;line-height:1.45;">' + t + '</div>'; };
+          if (!window.SP_EXT_STORE_URL) {
+            return ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.';
           }
-          return loja;
+          var btLoja = '<a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="' +
+            (lojaOk ? _pri : _sec) + '">🧩 ' + (lojaOk ? 'Abrir na Chrome Web Store ↗' : 'Chrome Web Store ↗') + '</a>';
+          if (!lojaOk && z) {
+            // janela de revisão: o que RESOLVE agora vem primeiro e em destaque; a loja
+            // continua ali (regra do dono: "loja sempre e zip enquanto a loja não tiver").
+            return _nota('A v' + _esc(_LZ_MIN_EXT) + ' ainda está em revisão na loja. Baixe o zip e carregue em ' +
+                '<code>chrome://extensions</code> com o <b>Modo do desenvolvedor</b> ligado.') +
+              _linha('<a href="' + _esc(z) + '" download style="' + _pri + '">⬇️ Baixar a v' + _esc(_LZ_MIN_EXT) + ' (zip)</a>' + btLoja);
+          }
+          return _nota('Pela loja o Chrome mantém a extensão atualizada sozinho.') + _linha(btLoja);
         })() + '</div>';
       // e o botão do topo deixa de prometer o que não pode cumprir
       var d = document.getElementById('custom-confirm-dialog');
@@ -2076,6 +2107,17 @@
     if (d && d.parentNode) d.parentNode.removeChild(d);
   };
   window._lzPuxarDoTopo = function () {
+    // ⛔ NO CELULAR, O CLIQUE ABRE O AVISO E PARA AQUI — a leitura é impossível fora do
+    // Chrome do computador (é a extensão que lê, na sessão da própria pessoa). A checagem
+    // fica NESTE ponto, e não no desenho do botão, porque foi decisão do dono que a tela
+    // seja idêntica à do desktop: _"o resto tudo igual ao desktop"_. Deixar passar daqui
+    // faria a leitura falhar em silêncio, que é como isso começou.
+    // Só vale quando a extensão NÃO se anunciou: se ela respondeu o ping, há extensão viva
+    // nesta aba e o caminho é o normal, seja lá qual for o dispositivo.
+    if (!window._lzExtVer && typeof window._spLetzplayPrecisaDesktop === 'function'
+        && window._spLetzplayPrecisaDesktop()) {
+      if (typeof window._lzAvisoSoNoDesktop === 'function') { window._lzAvisoSoNoDesktop(); return; }
+    }
     var b = _lzBotaoNativo('confirm-ok-btn');
     if (b) { b.click(); return; }
     // sem diálogo na tela (chamada solta): faz o que o botão faria
@@ -3278,25 +3320,51 @@
     // o letzplay é a extensão, na sessão do próprio usuário. O botão ficava azul e clicável
     // do mesmo jeito — o dono tocou nele no iPhone e não aconteceu nada, sem uma palavra de
     // explicação. Botão que não pode agir tem que PARECER que não pode, e dizer por quê.
+    // ⚠️ A DETECÇÃO É FONTE ÚNICA (store.js). Ela morava aqui e no letzplay-onboarding.js,
+    // cada uma com sua regex — e a versão daqui não cobria iPad em "modo computador" nem o
+    // app NATIVO. Ver window._spLetzplayPrecisaDesktop.
+    function _precisaDesktop() {
+      return (typeof window._spLetzplayPrecisaDesktop === 'function')
+        ? window._spLetzplayPrecisaDesktop()
+        : /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+    }
     function _podePuxar() {
       if (window._lzExtVer) return true;                 // a extensão se anunciou nesta aba
-      var ua = navigator.userAgent || '';
-      var movel = /iPhone|iPad|iPod|Android/i.test(ua);
-      return !movel;   // no desktop sem anúncio ainda deixa tentar (ela pode responder tarde)
+      return !_precisaDesktop();   // no desktop sem anúncio ainda deixa tentar (ela pode responder tarde)
     }
+    // ── A TELA NO CELULAR É IGUAL À DO DESKTOP; O AVISO VEM NO TOQUE ───────────
+    // Desenho definido pelo dono (11/ago/2026): _"o certo é o botão apertado abrir um popup
+    // com o aviso e só com um outro botão fechar (o aviso)"_ · _"o resto tudo igual ao
+    // desktop"_.
+    //
+    // As duas tentativas anteriores estavam erradas de jeitos opostos, e vale registrar:
+    //   • botão apagado + `title=` → tooltip precisa de HOVER, que no toque não existe. Era
+    //     o "botão sem qualquer informação" que ele viu no iPhone.
+    //   • botão apagado + faixa de aviso fixa → informava, mas sujava a tela pra sempre e
+    //     deixava o app do celular visivelmente capenga em relação ao do computador.
+    // O popup resolve os dois: a tela fica idêntica, e a explicação aparece exatamente
+    // quando a pessoa demonstra querer a ação — que é quando ela precisa da informação.
     function _botaoPuxar() {
-      if (_podePuxar()) {
-        return '<button type="button" onclick="window._lzPuxarDoTopo()" ' +
-          'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
-          'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
-          'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>';
-      }
-      return '<button type="button" disabled ' +
-        'title="A leitura do letzplay é feita pela extensão do Chrome, que só roda no computador." ' +
-        'style="padding:8px 14px;border-radius:9px;cursor:not-allowed;font-size:0.78rem;font-weight:800;' +
-        'border:1px solid var(--border-color,rgba(255,255,255,0.12));background:var(--bg-darker,rgba(255,255,255,0.06));' +
-        'color:var(--text-muted,#8b93a1);white-space:nowrap;opacity:0.75;">🖥️ ' + _esc(btnLabel) + '</button>';
+      return '<button type="button" onclick="window._lzPuxarDoTopo()" ' +
+        'style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:800;' +
+        'border:1px solid rgba(59,130,246,0.5);background:linear-gradient(135deg,#3b82f6,#2563eb);' +
+        'color:#fff;white-space:nowrap;">' + _esc(btnLabel) + '</button>';
     }
+    /** O popup do celular. Um botão só, pra fechar — não há outra ação possível aqui. */
+    window._lzAvisoSoNoDesktop = function () {
+      var titulo = '🖥️ Isso só dá no computador';
+      var corpo = 'A leitura do letzplay é feita por uma <b>extensão do Chrome</b>, e o ' +
+        'Chrome do celular não aceita extensões — não é limitação do scoreplace.<br><br>' +
+        'Abra o <b>scoreplace no Chrome do computador</b>, com a extensão instalada, e ' +
+        'toque em <b>Puxar histórico completo</b> por lá.<br><br>' +
+        '<span style="opacity:0.75;">Aqui no celular você continua vendo normalmente tudo ' +
+        'o que já foi lido.</span>';
+      if (typeof window.showAlertDialog === 'function') {
+        window.showAlertDialog(titulo, corpo, null, { confirmText: 'Entendi', type: 'info' });
+        return;
+      }
+      _toastErr('A leitura do letzplay só roda no Chrome do computador, pela extensão.');
+    };
     // O AVISO DE EXTENSÃO VELHA VEM AO ABRIR, NÃO DEPOIS DO CLIQUE (pedido do dono,
     // 02/ago/2026: "o certo seria já trazer a desatualização assim que abre a página do
     // jogador, antes de clicar em qualquer coisa, sempre"). Antes, a checagem só existia

@@ -91,23 +91,34 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   ok(/← Voltar/.test(hdr) && /_lzFecharDialogo/.test(hdr), 'tem Voltar, ligado ao fechamento');
   const btn = rep.slice(rep.indexOf('function _botaoPuxar()'), rep.indexOf('function _botaoPuxar()') + 1400);
   ok(/_lzPuxarDoTopo/.test(btn), 'e o botão de puxar, ligado à leitura');
-  ok((btn.match(/_esc\(btnLabel\)/g) || []).length === 2,
-     'usa o MESMO rótulo do botão nativo nos DOIS estados (vira "Continuar" quando incompleto)');
-  // 01/ago/2026: no celular a leitura é impossível — quem lê é a extensão, na sessão do
-  // usuário, e ela só roda no computador. O dono tocou no botão azul no iPhone e nada
-  // aconteceu, sem uma palavra. Botão que não pode agir tem que parecer que não pode.
+  ok((btn.match(/_esc\(btnLabel\)/g) || []).length === 1,
+     'usa o rótulo do botão nativo (vira "Continuar" quando incompleto)');
+  // ⚠️ REVISADO em 11/ago/2026, POR ORDEM DO DONO — o desenho do celular mudou.
+  //   01/ago — botão DESABILITADO no celular + explicação no `title=`. Era o que estas
+  //            asserções travavam (`disabled` + `cursor:not-allowed`, e 2 rótulos, um por
+  //            estado).
+  //   11/ago — ele viu o resultado no iPhone: _"no celular aparece o botão sem qualquer
+  //            informação disso"_ — porque `title=` é TOOLTIP e no toque não há hover. E
+  //            definiu o desenho certo: _"o certo é o botão apertado abrir um popup com o
+  //            aviso e só com um outro botão fechar"_ · _"o resto tudo igual ao desktop"_.
+  // Então o botão deixou de nascer diferente: a tela do celular é idêntica, e a explicação
+  // aparece no toque. O INVARIANTE segue o mesmo e mais forte — a pessoa nunca fica sem
+  // saber por que não deu: antes dependia de hover, agora é um popup que ela dispara.
   ok(/function _podePuxar\(\)/.test(rep), 'a tela sabe se dá pra puxar aqui');
-  ok(/iPhone\|iPad\|iPod\|Android/.test(rep), 'reconhece o celular');
+  ok(/_spLetzplayPrecisaDesktop/.test(rep), 'reconhece o celular pela fonte única (store.js)');
   ok(/window\._lzExtVer/.test(rep), 'e a extensão que se anunciou nesta aba');
-  ok(/disabled/.test(btn) && /cursor:not-allowed/.test(btn), 'sem poder puxar, o botão fica cinza e travado');
-  ok(/Aqui não dá pra puxar/.test(rep) && /só roda no computador/.test(rep),
-     'e o corpo explica por quê, onde o usuário está olhando');
+  ok(!/disabled/.test(btn) && !/cursor:not-allowed/.test(btn),
+     'o botão é IGUAL ao do desktop — nada de cinza travado (ordem do dono, 11/ago)');
+  ok(/window\._lzAvisoSoNoDesktop\s*=/.test(rep) && /showAlertDialog/.test(
+       rep.slice(rep.indexOf('window._lzAvisoSoNoDesktop = function'),
+                 rep.indexOf('window._lzAvisoSoNoDesktop = function') + 1400)),
+     'e existe o popup de 1 botão que explica por quê');
   // 01/ago/2026: sem letzplay não há o que puxar — a ficha abre igual, só sem esse botão.
   ok(/\(_temLz$/m.test(hdr) || /_temLz\s*\n?\s*\?/.test(hdr), 'e o botão de puxar só aparece quando existe letzplay');
   ok(rep.indexOf('headerHtml:') > rep.indexOf("var btnLabel = '📚 Puxar histórico completo'"),
     'montado depois de o rótulo estar decidido (senão sai "undefined")');
   ok(/window\._lzDialogUid = uid/.test(rep), 'o diálogo registra sobre quem as ações agem');
-  const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 700);
+  const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 1800);
   ok(/_lzAthleteImport\(uid\)/.test(puxar), 'o botão dispara a leitura');
   ok(/catch \(e\)/.test(puxar), 'e não morre calado se estourar');
 }
@@ -141,8 +152,28 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
   ok(/SP_EXT_STORE_URL/.test(fn), 'o aviso aponta pra loja, pela fonte única');
   ok(/_spExtStoreTemMinimo/.test(fn), 'e a escolha loja×zip vem da fonte única, não de regra local');
   ok(/_spExtZipUrl/.test(fn), 'o zip está disponível pra janela em que a loja não resolve');
+  // ⚠️ REVISADA em 11/ago/2026 — ela travava o próprio defeito.
+  // O texto antigo era: "no celular não aparece — lá não há extensão pra instalar, e o
+  // AVISO PRÓPRIO JÁ EXPLICA", exigindo `if (movel) { caixa.innerHTML = ''; return; }`.
+  // A premissa era falsa: o tal "aviso próprio" era um `title=` no botão — TOOLTIP, que
+  // precisa de hover e no toque não existe. Então no celular a tela ficava com um botão
+  // apagado e ZERO explicação, que é o que o dono viu no iPhone e reportou como
+  // _"já tratamos disso e parece que nunca funcionou"_.
+  // O invariante legítimo continua: no celular NÃO se manda instalar extensão (o Chrome de
+  // celular não aceita) — o que se faz é dizer ONDE a leitura acontece.
+  // ⚠️ ESTA ASSERÇÃO NASCEU E FOI REVISADA NO MESMO DIA — registro o vaivém porque ele é
+  // a lição. Eu tinha feito a caixa do topo EXPLICAR no celular; o dono então definiu o
+  // desenho: _"o resto tudo igual ao desktop"_ e o aviso só no popup do toque. Ou seja, a
+  // caixa volta a ficar vazia no celular — mas agora por decisão, e a explicação existe
+  // (em window._lzAvisoSoNoDesktop, travado logo acima e em
+  // tests/lz-celular-avisa-que-e-so-no-desktop.test.js).
   ok(/movel\) \{ caixa\.innerHTML = ''; return; \}/.test(fn),
-     'no celular não aparece — lá não há extensão pra instalar, e o aviso próprio já explica');
+     'no celular a caixa do topo fica vazia — a tela é igual à do desktop');
+  {
+    const movelBloco = fn.slice(fn.indexOf('var movel ='), fn.indexOf('var movel =') + 1200);
+    ok(!/Chrome Web Store|instale/i.test(movelBloco),
+       'e o que NUNCA pode voltar: mandar instalar extensão no celular, que é impossível de cumprir');
+  }
 }
 
 console.log((fail ? '✗' : '✓') + ' letzplay-open-profile: ' + pass + ' passaram, ' + fail + ' falharam');

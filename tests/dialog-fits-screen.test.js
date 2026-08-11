@@ -43,7 +43,7 @@ ok(/id="confirm-cancel-btn"/.test(src) && /id="confirm-ok-btn"/.test(src),
   const fechar = rep.slice(rep.indexOf('window._lzFecharDialogo'), rep.indexOf('window._lzFecharDialogo') + 420);
   ok(/confirm-cancel-btn'\)/.test(fechar) && /b\.click\(\)/.test(fechar),
     'o Voltar do topo dispara o botão nativo (não some com o diálogo por fora)');
-  const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 700);
+  const puxar = rep.slice(rep.indexOf('window._lzPuxarDoTopo'), rep.indexOf('window._lzPuxarDoTopo') + 1800);
   ok(/confirm-ok-btn'\)/.test(puxar) && /b\.click\(\)/.test(puxar),
     'e o Puxar do topo dispara o de confirmação — senão o onConfirm nunca rodaria');
   ok(/if \(!uid\) return;/.test(puxar), 'com caminho de reserva se não houver diálogo na tela');
@@ -54,7 +54,7 @@ ok(/id="confirm-cancel-btn"/.test(src) && /id="confirm-ok-btn"/.test(src),
 // ocupando espaço inutilmente." A barra sticky dentro do corpo vazava por cima do
 // conteúdo ao rolar e roubava uma faixa inteira de altura.
 ok(/headerHtml = ''/.test(src), 'o diálogo aceita ações no cabeçalho');
-const hdr = src.slice(src.indexOf('${c.icon}') - 400, src.indexOf('${c.icon}') + 700);
+const hdr = src.slice(src.indexOf('${c.icon}') - 400, src.indexOf('${c.icon}') + 1800);
 ok(/\$\{headerHtml/.test(hdr), 'e as renderiza na MESMA linha do título');
 ok(/flex: 1 1 auto; min-width: 0/.test(hdr), 'o título ocupa a sobra e pode encolher');
 ok(/flex-wrap: wrap/.test(hdr), 'em tela estreita as ações caem pra linha de baixo em vez de vazar');

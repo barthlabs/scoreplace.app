@@ -8,6 +8,26 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // a colocação do letzplay CHEGA na tela (o motor existia e estava mudo)
+  'tests/lz-colocacao-na-tela.test.js',
+  // nenhuma frase da leitura culpa o letzplay (regra do dono, 2 reincidências)
+  'tests/lz-nao-culpa-o-letzplay.test.js',
+  // nome de torneio repetido pela fonte é colapsado
+  'tests/lz-nome-de-torneio-nao-repete.test.js',
+  // no celular o toque explica que a leitura é no computador
+  'tests/lz-celular-avisa-que-e-so-no-desktop.test.js',
+  // loja atrás do mínimo → o app oferece o zip JUNTO da loja
+  'tests/ext-loja-atras-manda-pro-zip.test.js',
+  // reativar não é desfeito pelo guard do elenco
+  'tests/reativar-nao-desativa-sozinho.test.js',
+  // W.O. sempre desativa; a fila é ato da própria pessoa
+  'tests/wo-sempre-desativa.test.js',
+  // o cronômetro da Liga mira o fim da rodada
+  'tests/liga-countdown-round-end.test.js',
+  // nome não é cortado na tela
+  'tests/nome-nunca-e-cortado.test.js',
+  // repescagem: melhor derrotado pelos critérios do organizador
+  'tests/repechage-best-loser.test.js',
   // MOTOR DE CHAVES determinístico (js/views/chaves.js): a chave é função pura de
   // (N, formato). Trava os invariantes que quebraram AO VIVO no torneio de casais
   // (1.5.2→1.5.5): auto-confronto Time X vs X, tardio derrubando confronto já

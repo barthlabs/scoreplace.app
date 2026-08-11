@@ -127,15 +127,43 @@ t('e nenhum ramo devolve o zip SOZINHO', () => {
   assert.ok(!/return\s+_zipBtn\([^)]*\)\s*(\|\|[^;]*)?;/.test(fn),
     'algum ramo voltou a devolver só o zip — a loja precisa aparecer junto');
 });
-t('o aviso da Análise mantém o link da loja na janela do zip', () => {
-  // o ramo !lojaOk monta a frase do zip e ainda assim concatena `loja`
-  const i = rep.indexOf('OS DOIS CAMINHOS');
-  assert.ok(i > 0, 'o bloco do aviso mudou de forma — reveja este teste');
-  const bloco = rep.slice(i, i + 1600);
-  const ramoZip = bloco.slice(bloco.indexOf('if (!lojaOk'));
-  assert.ok(/\+ loja \+|\+ loja;|loja \+/.test(ramoZip),
-    'o ramo do zip parou de incluir o link da loja');
-});
+// ── O AVISO DA ANÁLISE: comportamento, não formato ───────────────────────────
+// ⚠️ Esta asserção mirava a concatenação de string do texto antigo (`… + loja + …`). O
+// aviso virou BOTÃO (ordem do dono: "clicar no texto é uma merda"), então checar a forma
+// da string quebra a cada ajuste visual sem defender nada. Agora RODA a IIFE real do aviso
+// nos dois estados e olha o resultado.
+{
+  const marca = 'A AÇÃO É BOTÃO, NÃO LINK NO MEIO DA FRASE.';
+  const im = rep.indexOf(marca);
+  const ini = rep.indexOf('(function () {', im);
+  let d = 0, k = rep.indexOf('{', ini), fim = -1;
+  for (; k < rep.length; k++) { if (rep[k] === '{') d++; else if (rep[k] === '}') { d--; if (!d) { fim = k; break; } } }
+  const esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const roda = (lojaOk, url) => new Function('window', '_esc', '_LZ_MIN_EXT',
+    'return ' + rep.slice(ini, fim + 1) + ')()')(
+    { SP_EXT_STORE_URL: url === undefined ? 'https://chromewebstore.google.com/detail/abc' : url,
+      _spExtStoreTemMinimo: () => lojaOk, _spExtZipUrl: () => '/scoreplace-letzplay-ext-9.99.zip' }, esc, '9.99');
+
+  t('o aviso monta BOTÕES (não <a> solto no parágrafo)', () => {
+    const h = roda(false);
+    assert.ok(/padding:9px 15px/.test(h), 'perdeu a área de toque — virou link de novo');
+    assert.ok(/font-weight:800/.test(h), 'perdeu o peso de botão');
+  });
+  t('com a loja atrás: zip E loja, com o zip primeiro', () => {
+    const h = roda(false);
+    assert.strictEqual((h.match(/<a /g) || []).length, 2, 'esperava os dois');
+    assert.ok(h.indexOf('.zip') < h.indexOf('chromewebstore'), 'o que resolve agora tem que vir antes');
+  });
+  t('com a loja em dia: só ela, e nenhum zip', () => {
+    const h = roda(true);
+    assert.strictEqual((h.match(/<a /g) || []).length, 1);
+    assert.ok(!/\.zip/.test(h), 'o zip apareceu com a loja já servindo o mínimo');
+  });
+  t('sem URL da loja não vira link morto', () => {
+    const h = roda(true, null);
+    assert.ok(!/<a /.test(h) && /importar letzplay/.test(h), 'devia instruir pelo NOME');
+  });
+}
 
 console.log('\n4. O ZIP DA VERSÃO EXIGIDA EXISTE DE VERDADE');
 t('o arquivo scoreplace-letzplay-ext-<exigida>.zip está no repo', () => {
