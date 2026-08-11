@@ -584,14 +584,27 @@
       return 'Extensão detectada e pronta. <b>v' + _esc(_ext.version) + '</b> ✓';
     }
     if (_ext.present && !_verGte(_ext.version, MIN_EXT_VERSION)) {
-      // Atualizar = a LOJA. O Chrome atualiza sozinho; se ainda estiver velha, abrir a
-      // listagem (ou chrome://extensions → Atualizar) resolve. Nada de baixar zip.
+      // Atualizar = a LOJA **quando ela já serve o mínimo**; senão o zip, que é o único
+      // caminho que resolve enquanto a revisão não sai. A alternativa em texto só faz
+      // sentido quando o botão é o da loja — com o zip como botão, ela seria a mesma coisa
+      // duas vezes.
       return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
         '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
-        _storeBtn('🎾 Atualizar pela Chrome Web Store') + _zipAlternativa();
+        _instalarBtn('🎾 Atualizar pela Chrome Web Store', '🎾 Baixar a v' + _esc(MIN_EXT_VERSION) + ' (zip)') +
+        (_lojaTemMinimo() ? _zipAlternativa() : '');
     }
+    // ⚠️ QUEM NÃO TEM EXTENSÃO TAMBÉM PRECISA DO ZIP nesta janela. Antes este ramo ia
+    // SEMPRE pra loja, com o argumento de que "quem instala do zero pega a da loja e
+    // pronto" — mas isso é falso enquanto a loja está atrás: a pessoa instala a versão
+    // antiga, o gate a barra na hora seguinte, e ela vai direto pro laço que o dono
+    // descreveu, agora tendo passado pela instalação à toa.
     return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' +
-      _storeBtn('🎾 Instalar extensão');
+      _instalarBtn('🎾 Instalar extensão', '🎾 Baixar a v' + _esc(MIN_EXT_VERSION) + ' (zip)');
+  }
+
+  /** A loja já serve a versão que o gate exige? (fonte única em store.js) */
+  function _lojaTemMinimo() {
+    return (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
   }
 
   // ALTERNATIVA enquanto a loja não aprovou a versão exigida. Só no ramo de extensão
@@ -608,15 +621,36 @@
       ' e carregue em <code>chrome://extensions</code> com o Modo do desenvolvedor.</div>';
   }
 
-  // Botão da LOJA — o caminho principal de instalação/atualização (1.8.4).
-  // Sem a URL configurada não renderiza link morto: manda procurar pelo nome, que é uma
-  // instrução que sempre funciona. Nunca cair de volta pro zip aqui.
+  // ZIP COMO BOTÃO PRINCIPAL — só na janela em que a loja ainda não serve o mínimo.
+  // Bronca do dono (11/ago/2026): _"não adianta apontar para a loja enquanto a nova versão
+  // não estiver lá."_ Nessa janela o botão da loja é um beco: o Chrome responde "já está
+  // atualizada" e a pessoa não sai do lugar. Então os papéis se INVERTEM — o zip vira a
+  // ação, e a loja vira a promessa ("quando sair lá, atualiza sozinho").
+  function _zipBtn(label) {
+    var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    if (!z) return '';
+    return '<div style="margin-top:10px;"><a href="' + _esc(z) + '" download class="btn btn-primary">' + _esc(label) + '</a>' +
+      '<div style="opacity:0.8;font-size:0.72rem;margin-top:4px;">Descompacte e carregue em <code>chrome://extensions</code> ' +
+      'com o <b>Modo do desenvolvedor</b> ligado.</div>' +
+      (STORE_URL ? '<div style="opacity:0.7;font-size:0.72rem;margin-top:6px;">A v' + _esc(MIN_EXT_VERSION) +
+        ' está em revisão na <a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" style="color:#94a3b8;">Chrome Web Store</a>' +
+        ' — quando sair por lá, o Chrome passa a atualizar sozinho.</div>' : '') + '</div>';
+  }
+
+  // Botão da LOJA — o caminho principal de instalação/atualização (1.8.4), MAS só quando
+  // ela realmente serve a versão exigida. Sem a URL configurada não renderiza link morto:
+  // manda procurar pelo nome, que é uma instrução que sempre funciona.
   function _storeBtn(label) {
     if (!STORE_URL) {
       return '<div style="margin-top:8px;color:#94a3b8;font-size:0.8rem;">Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.</div>';
     }
     return '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">' + _esc(label) + '</a>' +
       '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Pela loja o Chrome mantém a extensão atualizada sozinho.</div></div>';
+  }
+  /** O botão de AÇÃO: loja quando ela resolve, zip quando não. Ponto único da escolha. */
+  function _instalarBtn(labelLoja, labelZip) {
+    if (_lojaTemMinimo()) return _storeBtn(labelLoja);
+    return _zipBtn(labelZip) || _storeBtn(labelLoja);
   }
 
   // ⚠️ REMOVIDOS na 1.8.4: `_zipBtn` (botão de baixar o zip) e `_installHelp` (o <details>

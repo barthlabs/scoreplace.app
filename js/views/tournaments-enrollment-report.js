@@ -1990,12 +1990,21 @@
              _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
           : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
              _esc(_LZ_MIN_EXT) + ').')) +
-        // A extensão está na Chrome Web Store — é pra lá que se manda, sempre. O Chrome
-        // atualiza sozinho e ninguém descompacta nada. Fonte única: window.SP_EXT_STORE_URL
-        // (store.js). Sem ela, instruir pelo NOME em vez de cair de volta pro zip.
-        (window.SP_EXT_STORE_URL
-          ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
-          : ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.') + '</div>';
+        // PRA ONDE MANDAR — a loja quando ela já serve o mínimo; senão o ZIP, porque nessa
+        // janela a loja ainda tem a versão que o gate barra e clicar nela não sai do lugar.
+        // Fonte única da decisão: window._spExtStoreTemMinimo() (store.js).
+        (function () {
+          var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
+          var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+          if (!lojaOk && z) {
+            return ' A v' + _esc(_LZ_MIN_EXT) + ' ainda está em revisão na loja — ' +
+              '<a href="' + _esc(z) + '" download style="color:#fbbf24;font-weight:800;">baixar o zip ↓</a>' +
+              ' e carregar em <code>chrome://extensions</code> (Modo do desenvolvedor).';
+          }
+          return window.SP_EXT_STORE_URL
+            ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
+            : ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.';
+        })() + '</div>';
       // e o botão do topo deixa de prometer o que não pode cumprir
       var d = document.getElementById('custom-confirm-dialog');
       var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
@@ -4044,31 +4053,58 @@
   // desenvolvedor") porque não havia loja; a premissa caiu. Sideload não recebe
   // auto-update — é exatamente o que fazia cada bump de versão virar reinstalação manual.
   // Fonte única da URL: window.SP_EXT_STORE_URL (store.js).
+  // ⚠️ 1.8.15: o botão principal deixou de ser SEMPRE a loja. Bronca do dono: _"não adianta
+  // apontar para a loja enquanto a nova versão não estiver lá"_ — a revisão leva dias, e
+  // nessa janela a loja serve a versão ANTIGA, que é justamente a que o gate barra. Clicar
+  // ali faz o Chrome dizer "já está atualizada" e a pessoa não sai do lugar. Quem decide é
+  // window._spExtStoreTemMinimo() (store.js), comparando a versão publicada com a exigida.
   function _lzExtDialog(versaoAtual) {
     var storeUrl = window.SP_EXT_STORE_URL || null;
+    var _zip = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var lojaOk = (typeof window._spExtStoreTemMinimo === 'function') ? window._spExtStoreTemMinimo() : true;
+    var viaZip = !lojaOk && !!_zip;
     var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
     var corpo = versaoAtual
       ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
       : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
-    corpo += '<br><br>' + (versaoAtual
+    corpo += '<br><br>' + (viaZip
+      // JANELA DA REVISÃO: o zip é o único caminho, então ele é o texto principal — e a
+      // loja aparece como o que vem DEPOIS, não como alternativa a tentar antes.
+      ? 'A <b>v' + _LZ_MIN_EXT + '</b> ainda está em revisão na Chrome Web Store (leva alguns dias). ' +
+        'Até sair por lá, baixe o <b>zip</b> e carregue em <code>chrome://extensions</code> com o ' +
+        '<b>Modo do desenvolvedor</b> ligado. Quando a loja publicar, o Chrome volta a atualizar sozinho.'
+      : versaoAtual
       ? 'Instalada pela <b>Chrome Web Store</b>, o Chrome atualiza sozinho. Se ainda estiver na v' +
         versaoAtual + ', abra a loja e clique em <b>Atualizar</b> (ou <code>chrome://extensions</code> → <b>Atualizar</b>).'
       : 'Instale pela <b>Chrome Web Store</b> — um clique, e o Chrome mantém atualizada sozinho.');
-    // alternativa só pra quem JÁ tem extensão e está abaixo do mínimo: a loja pode ainda
-    // não ter publicado a versão exigida, e aí ela não resolve.
-    var _zip = (versaoAtual && typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
-    if (_zip) corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
-      _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
-      'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
+    // alternativa em texto só quando o botão é o da LOJA — com o zip como botão ela seria
+    // a mesma instrução duas vezes.
+    if (!viaZip && versaoAtual && _zip) {
+      corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
+        _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
+        'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
+    }
 
-    if (typeof window.showConfirmDialog !== 'function' || !storeUrl) {
-      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT +
-        '. Instale “scoreplace — importar letzplay” na Chrome Web Store.');
+    var destino = viaZip ? _zip : storeUrl;
+    if (typeof window.showConfirmDialog !== 'function' || !destino) {
+      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '. ' +
+        (viaZip ? 'Baixe o zip em ' + _zip + ' e carregue em chrome://extensions.'
+                : 'Instale “scoreplace — importar letzplay” na Chrome Web Store.'));
       return;
     }
     window.showConfirmDialog(titulo, corpo, function () {
+      if (viaZip) {
+        // download, não aba nova: é arquivo, e abrir zip em aba deixa a pessoa sem ação.
+        var a = document.createElement('a');
+        a.href = _zip; a.download = '';
+        document.body.appendChild(a); a.click(); a.remove();
+        return;
+      }
       window.open(storeUrl, '_blank', 'noopener');
-    }, null, { confirmText: '🎾 Abrir na Chrome Web Store', cancelText: 'Agora não', type: 'warning' });
+    }, null, {
+      confirmText: viaZip ? ('🎾 Baixar a v' + _LZ_MIN_EXT + ' (zip)') : '🎾 Abrir na Chrome Web Store',
+      cancelText: 'Agora não', type: 'warning'
+    });
   }
 
   // Quanto tempo a busca vai levar, em texto — MOSTRADO ANTES de começar. Um job de 3h

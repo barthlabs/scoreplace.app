@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.14';
+window.SCOREPLACE_VERSION = '1.8.15';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -130,6 +130,40 @@ window.SP_EXT_STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnod
 // ⚠️ Por isso ele é SECUNDÁRIO e condicionado: só aparece quando a extensão instalada está
 // ABAIXO do mínimo. Quem não tem extensão nenhuma vai pra loja e pronto.
 window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
+
+// ── QUAL VERSÃO A LOJA JÁ SERVE — e por que isso precisa ser DECLARADO ────────
+// Bronca do dono (11/ago/2026), ao ver a 1.99 subir apontando pra loja: _"a extensão tem
+// que ter versão zip se não estiver na loja, que leva dias. não adianta apontar para a
+// loja enquanto a nova versão não estiver lá."_
+//
+// O buraco é fechado e sem saída: `SP_EXT_VERSION` é ao mesmo tempo a versão nova E o
+// MÍNIMO que o gate exige. No instante do bump, todo mundo fica abaixo do mínimo — e a
+// loja, que leva DIAS revisando, ainda serve a anterior. Mandar pra lá faz o Chrome
+// responder "já está atualizada" e a pessoa fica presa num laço, sem importar nada.
+//
+// A regra não pode ser adivinhada em runtime: a Chrome Web Store não expõe a versão
+// publicada de forma consultável pelo navegador (a página é montada por JS e o CORS barra).
+// Então ela é DECLARADA aqui, e o app decide sozinho pra onde mandar:
+//   loja >= mínimo  → botão principal = LOJA (auto-update, o caminho bom)
+//   loja <  mínimo  → botão principal = ZIP  (o único que resolve nessa janela)
+//
+// ⚠️ ATUALIZAR ESTE VALOR É PARTE DE PUBLICAR NA LOJA — quando a revisão aprovar a versão
+// nova, este número sobe junto. Enquanto ele estiver atrás, o app manda pro zip sozinho, e
+// isso é o comportamento CERTO, não um esquecimento. Há teste travando que ele nunca fique
+// à FRENTE de SP_EXT_VERSION (isso seria mentir que a loja tem algo que não existe).
+window.SP_EXT_STORE_VERSION = '1.98';
+
+/** A loja já serve a versão que o gate exige? Fonte única da decisão loja × zip. */
+window._spExtStoreTemMinimo = function () {
+  var a = String(window.SP_EXT_STORE_VERSION || '0').split('.').map(Number);
+  var b = String(window.SP_EXT_VERSION || '0').split('.').map(Number);
+  for (var i = 0; i < Math.max(a.length, b.length); i++) {
+    var x = a[i] || 0, y = b[i] || 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return true;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CROSS-REF letzplay @handle → nome de apresentação do SCOREPLACE (v1.15.20)
