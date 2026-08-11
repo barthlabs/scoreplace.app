@@ -13,15 +13,12 @@
   // FONTE ÚNICA: window.SP_EXT_VERSION (store.js). NUNCA hardcodar um número aqui — o
   // valor solto que existia (1.35) divergiu da extensão (1.36) e deixou passar versão velha.
   var MIN_EXT_VERSION = window.SP_EXT_VERSION;
-  // URL da Chrome Web Store. FICOU `null` DEPOIS DE PUBLICADA (07/ago/2026): a
-  // extensão já estava APROVADA e pública no painel do desenvolvedor (editor
-  // barthlabs, id hpjbalgkbnodadaanfmbdeipodgillab) e mesmo assim o app seguia
-  // oferecendo SÓ o zip — instalação manual, e o pior: SEM AUTO-UPDATE. Como o
-  // gate exige sempre a versão mais nova (MIN_EXT_VERSION acima), toda subida de
-  // versão obrigava a pessoa a baixar e reinstalar na mão pra voltar a importar.
-  // Pela loja o Chrome atualiza sozinho e esse atrito acaba. O zip continua
-  // servido pelo site como caminho alternativo (quem não usa Chrome/Web Store).
-  var STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
+  // URL da Chrome Web Store — FONTE ÚNICA em window.SP_EXT_STORE_URL (store.js).
+  // Ela morava AQUI dentro, e por isso as outras duas telas que pedem a extensão
+  // (o aviso e o diálogo da Análise de Inscritos) nunca souberam que a loja existe:
+  // seguiram mandando baixar zip e instalar em modo desenvolvedor. Não trazer de
+  // volta pra cá. Ver [[feedback_unify_dual_entry_points]].
+  var STORE_URL = window.SP_EXT_STORE_URL || null;
 
   var _ext = { present: false, version: null, seenAt: 0 };
   var _pollTimer = null;
@@ -583,17 +580,25 @@
     }
     if (_ext.present && !_verGte(_ext.version, MIN_EXT_VERSION)) {
       // O botão de baixar fica VISÍVEL aqui, não escondido dentro do "Como atualizar".
-      // Enquanto não há versão na loja não existe auto-update: sem o download na cara, o
-      // usuário lê "atualize pra v1.38" e não tem de onde. Foi exatamente o que aconteceu
-      // — o zip existia, servido, e ainda assim ninguém achava.
+      // Com a extensão NA LOJA, atualizar não é "baixe o zip e reinstale" — o Chrome faz
+      // sozinho. Este ramo mandava só o zip, que é o caminho mais penoso e hoje o
+      // secundário. A loja vem primeiro; o zip fica no <details> pra quem precisar.
       return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
         '(a antiga desiste quando o letzplay limita e não traz os jogos).</span>' +
-        _zipBtn() + _installHelp('Como atualizar');
+        _storeBtn('🎾 Atualizar pela Chrome Web Store') + _installHelp('Atualizar manualmente');
     }
     var installBtn = STORE_URL
-      ? '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">🎾 Instalar extensão</a></div>'
+      ? _storeBtn('🎾 Instalar extensão')
       : '<div style="margin-top:6px;color:#94a3b8;">A extensão ainda não está na Chrome Web Store (em preparação). Baixe e instale em modo desenvolvedor:</div>' + _zipBtn();
     return 'Precisa da extensão do scoreplace pra ler seu histórico na sua sessão logada (sem senha).' + installBtn + _installHelp(STORE_URL ? 'Instalar manualmente' : 'Passo a passo (modo desenvolvedor)');
+  }
+
+  // Botão da LOJA — a porta principal. Some sozinho se não houver loja configurada,
+  // pra nunca render um link morto.
+  function _storeBtn(label) {
+    if (!STORE_URL) return '';
+    return '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn btn-primary">' + _esc(label) + '</a>' +
+      '<div style="opacity:0.75;font-size:0.72rem;margin-top:4px;">Pela loja o Chrome mantém a extensão atualizada sozinho.</div></div>';
   }
 
   // Botão de baixar o zip da versão EXIGIDA. Mora aqui (fora do _installHelp) porque
@@ -621,7 +626,14 @@
     // e foi assim que a extensão ficou parada na 1.35 enquanto o app já pedia mais nova.
     var zipBtn = _zipBtn();
     return '<details style="margin-top:8px;"><summary style="cursor:pointer;color:var(--primary-color,#818cf8);font-weight:600;">' + _esc(label) + '</summary>' +
-      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, o Chrome atualiza <b>sozinho</b> — nada disso abaixo.</div>' +
+      // ⚠️ Este aviso dizia SEMPRE "enquanto a extensão não está na loja" — inclusive pra
+      // quem tinha acabado de instalar POR ELA. Agora ele só aparece quando realmente não
+      // há loja; com loja, o texto explica que este caminho é a exceção, não a regra.
+      '<div style="margin:8px 0 6px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);font-size:0.74rem;color:var(--text-muted,#cbd5e1);">' +
+        (STORE_URL
+          ? '⚙️ Só precisa disto se <b>não</b> puder usar a Chrome Web Store. Instalada pela loja, o Chrome atualiza <b>sozinho</b> — nada dos passos abaixo.'
+          : '⚙️ Instalação <b>temporária</b>, só pra teste enquanto a extensão não está na loja. Quando publicar, o Chrome atualiza <b>sozinho</b> — nada disso abaixo.') +
+      '</div>' +
       zipBtn +
       '<ol style="margin:6px 0 0;padding-left:20px;line-height:1.75;">' +
         chromeLine +

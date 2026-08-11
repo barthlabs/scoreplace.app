@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.2';
+window.SCOREPLACE_VERSION = '1.8.3';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,15 +105,26 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-// Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
-// Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
-// BLOQUEIA e pede a atualização manual pelo zip — de propósito.
 window.SP_EXT_VERSION = '1.97';
-// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
-// entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
-// aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
-// Enquanto não há versão na Chrome Web Store não existe auto-update — então o caminho de
-// atualização tem que estar a UM CLIQUE, não "ache a pasta do projeto no seu computador".
+
+// ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
+// A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",
+// barthlabs, id hpjbalgkbnodadaanfmbdeipodgillab). Pela loja o Chrome atualiza
+// SOZINHO — é isso que acaba com o atrito do gate de versão: sem auto-update, toda
+// subida obrigava a pessoa a baixar o zip e reinstalar na mão pra voltar a importar.
+//
+// ⚠️ Mora AQUI, e não dentro de uma view, porque estava dentro de UMA
+// (letzplay-onboarding.js) e as OUTRAS DUAS telas que pedem a extensão não a
+// enxergavam — seguiram mandando descompactar zip em modo desenvolvedor, e uma
+// delas ainda dizia "ainda não está na Chrome Web Store". Duas definições da mesma
+// coisa é o que faz uma divergir. Ver [[feedback_unify_dual_entry_points]].
+window.SP_EXT_STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
+
+// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo). Derivado de
+// SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não aceita, e a trava de
+// deploy (scripts/check-ext-version.js) garante que o arquivo existe. Hoje ele é o caminho
+// ALTERNATIVO (quem não usa Chrome/Web Store, ou precisa de uma versão que a loja ainda não
+// revisou) — a porta principal é a loja acima.
 window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
 
 // ─────────────────────────────────────────────────────────────────────────────

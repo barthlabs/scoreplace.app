@@ -1875,8 +1875,14 @@
              _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
           : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
              _esc(_LZ_MIN_EXT) + ').')) +
-        ' <a href="' + _esc((typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : ('/scoreplace-letzplay-ext-' + _LZ_MIN_EXT + '.zip')) +
-        '" download style="color:#fbbf24;font-weight:800;">baixar a v' + _esc(_LZ_MIN_EXT) + ' ↓</a></div>';
+        // A extensão ESTÁ na Chrome Web Store, então o caminho certo é ela: o Chrome
+        // atualiza sozinho e ninguém precisa descompactar nada. Este aviso oferecia SÓ o
+        // zip porque a URL da loja morava dentro do letzplay-onboarding.js e esta tela não
+        // a enxergava. Fonte única agora: window.SP_EXT_STORE_URL (store.js).
+        (window.SP_EXT_STORE_URL
+          ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
+          : (' <a href="' + _esc((typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : ('/scoreplace-letzplay-ext-' + _LZ_MIN_EXT + '.zip')) +
+             '" download style="color:#fbbf24;font-weight:800;">baixar a v' + _esc(_LZ_MIN_EXT) + ' ↓</a>')) + '</div>';
       // e o botão do topo deixa de prometer o que não pode cumprir
       var d = document.getElementById('custom-confirm-dialog');
       var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
@@ -3790,26 +3796,50 @@
   // gate mandava "baixe a v1.38 em scoreplace.app/..." num toast: texto que some, não
   // clica, e manda o cara copiar URL na mão. O zip existia, servido, e mesmo assim não
   // havia como chegar nele a partir da tela onde o bloqueio acontece.
-  // Sem versão na loja não há auto-update, então o download TEM que estar aqui.
+  // ⚠️ ATUALIZADO (1.8.3): a extensão ESTÁ na Chrome Web Store, então o caminho principal
+  // é ela — o Chrome instala e ATUALIZA sozinho, e o ritual de "baixe o zip, descompacte,
+  // modo do desenvolvedor" deixa de ser necessário. O texto abaixo dizia "Sem versão na
+  // loja não há auto-update, então o download TEM que estar aqui"; a premissa caiu. O zip
+  // continua como caminho ALTERNATIVO (quem não pode usar a loja). Fonte única da URL:
+  // window.SP_EXT_STORE_URL (store.js) — ela morava dentro do letzplay-onboarding.js e por
+  // isso esta tela nunca soube que a loja existe.
   function _lzExtDialog(versaoAtual) {
-    var url = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var zipUrl = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var storeUrl = window.SP_EXT_STORE_URL || null;
     var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
     var corpo = versaoAtual
       ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
       : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
+
+    if (storeUrl) {
+      corpo += '<br><br>' + (versaoAtual
+        ? 'Instalada pela <b>Chrome Web Store</b>, o Chrome atualiza sozinho. Se ainda estiver na v' +
+          versaoAtual + ', abra a loja e clique em <b>Atualizar</b> (ou <code>chrome://extensions</code> → <b>Atualizar</b>).'
+        : 'Instale pela <b>Chrome Web Store</b> — um clique, e o Chrome mantém atualizada sozinho.');
+      corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">Não pode usar a loja? ' +
+        (zipUrl ? ('<a href="' + _esc(zipUrl) + '" download style="color:#fbbf24;font-weight:700;">baixe o zip da v' +
+                   _esc(_LZ_MIN_EXT) + '</a> e carregue em <code>chrome://extensions</code> com o Modo do desenvolvedor.')
+                : 'fale com o organizador.') + '</span>';
+      if (typeof window.showConfirmDialog !== 'function') { _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '.'); return; }
+      window.showConfirmDialog(titulo, corpo, function () {
+        window.open(storeUrl, '_blank', 'noopener');
+      }, null, { confirmText: '🎾 Abrir na Chrome Web Store', cancelText: 'Agora não', type: 'warning' });
+      return;
+    }
+
     corpo += '<br><br><b>Instalar:</b><br>' +
       '1. Baixe o zip e <b>descompacte</b><br>' +
       '2. Abra <code>chrome://extensions</code> → ligue <b>Modo do desenvolvedor</b><br>' +
       '3. <b>Carregar sem compactação</b> → escolha a pasta que saiu do zip' +
       (versaoAtual ? ' (e remova a v' + versaoAtual + ')' : '') + '<br>' +
       '4. Recarregue esta página';
-    if (typeof window.showConfirmDialog !== 'function' || !url) {
+    if (typeof window.showConfirmDialog !== 'function' || !zipUrl) {
       _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '.');
       return;
     }
     window.showConfirmDialog(titulo, corpo, function () {
       var a = document.createElement('a');
-      a.href = url; a.setAttribute('download', '');
+      a.href = zipUrl; a.setAttribute('download', '');
       document.body.appendChild(a); a.click(); a.remove();
     }, null, { confirmText: '⬇️ Baixar a v' + _LZ_MIN_EXT, cancelText: 'Agora não', type: 'warning' });
   }
