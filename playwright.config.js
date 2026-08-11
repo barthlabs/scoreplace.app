@@ -4,20 +4,22 @@
 
 const { defineConfig, devices } = require('@playwright/test');
 
-// SEGURANÇA: o default NUNCA pode ser produção. Specs de escrita criam/sorteiam/apagam
-// torneios de verdade — contra prod isso tocaria os dados reais do Confra.
+// Default = servidor LOCAL (mesmo porto do .claude/launch.json). Sobe com
+// `npx http-server -p 8899 -c-1` antes de rodar. Prod entra só por opt-in EXPLÍCITO
+// (SCOREPLACE_URL=https://scoreplace.app).
 //
 // ⚠️ Até a 1.8.2 o default era `https://scoreplace-staging.web.app`. Esse ambiente foi
 // DELETADO em 19/jul/2026 (projeto GCP em DELETE_REQUESTED, hosting devolvendo 404), então
 // o default apontava pra um host morto e QUALQUER run sem SCOREPLACE_URL batia no vazio.
-// Agora o default é o servidor local (o mesmo porto do .claude/launch.json) — sobe com
-// `npx http-server -p 8899 -c-1` antes de rodar. Prod entra só por opt-in EXPLÍCITO
-// (SCOREPLACE_URL=https://scoreplace.app) e serve só pros specs de LEITURA.
 //
-// ⚠️ Localhost NÃO é um Firestore isolado: o app aponta pro projeto de PRODUÇÃO em
-// qualquer host (a config deixou de variar por hostname na 1.8.2). Então rodar aqui
-// escreve em PROD — é por isso que os specs de escrita seguem travados e não podem ser
-// soltos "porque é localhost". Ver o cabeçalho de tests/e2e/tournament-flow.spec.js.
+// 🔴 TODO spec aqui é de LEITURA, e isso é uma REGRA, não um acaso. Localhost NÃO é um
+// Firestore isolado: desde a 1.8.2 o app aponta pro projeto de PRODUÇÃO em qualquer host
+// (a config deixou de variar por hostname). Então um spec que escreve — criar torneio,
+// sortear, lançar placar, check-in — escreve NO CONFRA, rodando em localhost ou onde for.
+// Os 4 specs de escrita que existiam eram travados por `test.skip(!isStaging)` e foram
+// APAGADOS na 1.8.3 junto com o ambiente (ver CLAUDE.md). Não reintroduzir spec de escrita
+// sem um alvo descartável de verdade: emulador do Firestore ligado no app, ou torneio
+// sandbox `(SB)`, que já roda em produção justamente pra isso.
 const DEFAULT_URL = 'http://localhost:8899';
 const LOCAL_URL = process.env.SCOREPLACE_URL || DEFAULT_URL;
 
