@@ -98,6 +98,9 @@ const FILES = [
   'js/views/bracket-model.js',
   'js/views/bracket-logic.js',
   'js/views/bracket-ui.js',
+  // v1.8.0: o motor de W.O. (_applyWO / _applyWoSubsToTournament) saiu da view pro
+  // wo-core.js — PURO e por isso vendorável pela CF. Carregar ANTES de participants.js.
+  'js/views/wo-core.js',
   'js/views/participants.js',
   'js/firebase-db.js',
 ];

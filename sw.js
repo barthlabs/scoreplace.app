@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v1.7.86';
+var CACHE_NAME = 'scoreplace-v1.8.9';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -80,6 +80,14 @@ var STATIC_ASSETS = [
   '/css/responsive.css',
   '/css/trophies.css',
   '/js/theme.js',
+  // v1.7.94: os DICIONÁRIOS entram no precache. Todo o TEXTO da interface sai daqui —
+  // se `i18n-pt.js` não executa, `_t()` devolve a chave e a tela inteira vira
+  // "landing.tagline"/"landing.feat1Title". Era o único bloco do caminho crítico fora
+  // do precache, e o `ignoreSearch` do fallback (ver o fetch handler) é o que faz estas
+  // entradas, gravadas sem `?v=`, casarem com a requisição versionada.
+  '/js/i18n.js',
+  '/js/i18n-pt.js',
+  '/js/i18n-en.js',
   '/js/sentry-init.js',
   '/js/logger.js',
   '/js/analytics.js',
@@ -111,6 +119,7 @@ var STATIC_ASSETS = [
   '/js/views/team-formation.js',
   '/js/views/liga-substitution.js',
   '/js/views/wo-claim.js',
+  '/js/views/wo-core.js',
   '/js/views/participants.js',
   '/js/views/rules.js',
   '/js/views/explore.js',
@@ -224,8 +233,24 @@ self.addEventListener('fetch', function(event) {
         }
         return response;
       }).catch(function() {
-        // Network failed — fallback to cache (offline support)
-        return caches.match(event.request);
+        // Network failed — fallback to cache (offline support).
+        //
+        // v1.7.94 · `ignoreSearch` — POR QUE ISTO É O CONSERTO DA LANDING EM CHAVES CRUAS.
+        // Todo asset carrega `?v=<versão>`, e o cache de runtime guarda a URL COM a query.
+        // Então, no primeiro load DEPOIS de um deploy, as URLs são todas novas e
+        // `caches.match(request)` (que casa a URL INTEIRA) não acha NADA — a versão
+        // anterior está no cache sob outro `?v=`. Ou seja: exatamente na janela em que a
+        // rede mais tropeça (troca de arquivos no servidor + SW novo purgando o cache
+        // antigo), o fallback offline não existia e o script simplesmente não executava.
+        // Quando quem não executa é `i18n-pt.js`, `_t()` devolve a CHAVE e a tela mostra
+        // "landing.tagline"/"LANDING.CTA" — que é o print do dono em 10/ago, minutos
+        // depois do deploy da 1.7.93 (o HTML servido estava correto, os arquivos vinham
+        // 200, e um load limpo renderizava certo: era a janela de troca).
+        // Com `ignoreSearch`, um fetch que falhou cai na ÚLTIMA cópia boa do mesmo
+        // arquivo, mesmo que gravada sob outra versão. Servir um dicionário de uma versão
+        // atrás é incomparavelmente melhor que servir a tela em chaves cruas — e isto só
+        // roda quando a rede JÁ falhou; no caminho normal o network-first manda.
+        return caches.match(event.request, { ignoreSearch: true });
       })
     );
     return;

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.7.86';
+window.SCOREPLACE_VERSION = '1.8.9';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,15 +105,30 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-// Auto-atualização: quando a extensão estiver publicada na Chrome Web Store, o
-// Chrome atualiza sozinho e este gate para de disparar. Enquanto não está, o gate
-// BLOQUEIA e pede a atualização manual pelo zip — de propósito.
-window.SP_EXT_VERSION = '1.97';
-// O zip da versão exigida, servido pelo próprio site (fica na raiz do repo → GitHub Pages
-// entrega). Derivado de SP_EXT_VERSION: o link NUNCA aponta pra uma versão que o gate não
-// aceita, e a trava de deploy (scripts/check-ext-version.js) garante que o arquivo existe.
-// Enquanto não há versão na Chrome Web Store não existe auto-update — então o caminho de
-// atualização tem que estar a UM CLIQUE, não "ache a pasta do projeto no seu computador".
+window.SP_EXT_VERSION = '1.98';
+
+// ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
+// A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",
+// barthlabs, id hpjbalgkbnodadaanfmbdeipodgillab). Pela loja o Chrome atualiza
+// SOZINHO — é isso que acaba com o atrito do gate de versão: sem auto-update, toda
+// subida obrigava a pessoa a baixar o zip e reinstalar na mão pra voltar a importar.
+//
+// ⚠️ Mora AQUI, e não dentro de uma view, porque estava dentro de UMA
+// (letzplay-onboarding.js) e as OUTRAS DUAS telas que pedem a extensão não a
+// enxergavam — seguiram mandando descompactar zip em modo desenvolvedor, e uma
+// delas ainda dizia "ainda não está na Chrome Web Store". Duas definições da mesma
+// coisa é o que faz uma divergir. Ver [[feedback_unify_dual_entry_points]].
+window.SP_EXT_STORE_URL = 'https://chromewebstore.google.com/detail/hpjbalgkbnodadaanfmbdeipodgillab';
+
+// ── O ZIP VOLTOU, e com papel DEFINIDO (1.8.9) ───────────────────────────────
+// A 1.8.4 tirou o zip da UI ("o código aponta para a loja e não para o zip"). Certo como
+// regra permanente — sideload não recebe auto-update. Mas ele volta por uma razão que o
+// dono cravou: "ter alternativa enquanto a loja nao aprova". A loja leva dias revisando, e
+// nesse intervalo o gate exige uma versão que a loja AINDA NÃO SERVE — mandar pra lá não
+// resolve, o Chrome responde "já está atualizada". Nessa janela o zip é o ÚNICO caminho,
+// e é também o canal de TESTE da versão nova antes de publicar.
+// ⚠️ Por isso ele é SECUNDÁRIO e condicionado: só aparece quando a extensão instalada está
+// ABAIXO do mínimo. Quem não tem extensão nenhuma vai pra loja e pronto.
 window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.SP_EXT_VERSION + '.zip'; };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1243,36 +1258,13 @@ window._flag = function (name) {
   } catch (e) { return false; }
 };
 
-// ─── Selo STAGING (só no ambiente de teste) ──────────────────────────────────
-// Badge fixo e inconfundível pra NUNCA confundir staging com produção: evita
-// fazer teste destrutivo achando que está no staging (ou entrar em pânico
-// achando que quebrou o Confra quando está só no staging). Só aparece quando o
-// host é o de staging — INVISÍVEL na produção. pointer-events:none = não bloqueia
-// clique. Detecta por hostname (auto-suficiente, sem depender de timing).
-(function () {
-  try {
-    if (!/scoreplace-staging/.test(window.location.hostname || '')) return;
-    var inject = function () {
-      if (document.getElementById('sp-staging-badge')) return;
-      var b = document.createElement('div');
-      b.id = 'sp-staging-badge';
-      b.textContent = 'STAGING';
-      b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:2147483647;' +
-        'background:#b91c1c;color:#fff;font:700 11px/1 -apple-system,BlinkMacSystemFont,sans-serif;' +
-        'letter-spacing:1.5px;padding:5px 9px;border-radius:6px;pointer-events:none;' +
-        'box-shadow:0 2px 8px rgba(0,0,0,0.45);opacity:0.92;';
-      (document.body || document.documentElement).appendChild(b);
-    };
-    if (document.body) inject();
-    else document.addEventListener('DOMContentLoaded', inject);
-  } catch (e) {}
-})();
-
-// ─── Tarja SANDBOX (como era o staging, mas por TORNEIO) ─────────────────────
+// ─── Tarja SANDBOX (o sinal de "não é pra valer", por TORNEIO) ───────────────
 // Barra VERMELHA fixa de fora a fora no rodapé, sempre visível ENQUANTO se está
 // atuando num torneio sandbox (detalhe/bracket/chamada/etc.). O SB roda EM
-// PRODUÇÃO — então o sinal não pode ser por hostname (como o staging morto), tem
-// que ser pela rota: se o torneio em tela é isSandbox, mostra. Some fora do SB.
+// PRODUÇÃO — então o sinal não pode ser por hostname, tem que ser pela ROTA: se o
+// torneio em tela é isSandbox, mostra. Some fora do SB. (Até 19/jul/2026 havia um
+// selo irmão "STAGING" por hostname; o ambiente foi deletado e o selo saiu na
+// 1.8.2 — hoje o único sinal de ambiente-de-teste é este, e ele é por torneio.)
 // pointer-events:none = não bloqueia clique. Ver project_sandbox_tournament.
 (function () {
   try {
@@ -2746,12 +2738,33 @@ window._reflowChrome = function() {
   // irmão display:none logo após o header (ex.: #part-search-empty na tela de
   // Inscritos) recebe a margem (e some), e o conteúdo de verdade fica COBERTO pelo
   // header fixo. Pula invisíveis (display:none / 0×0).
+  // v1.7.87 — A MARGEM NUNCA VAI NUM STICKY/FIXED.
+  //
+  // Relato do dono, na chave: "a barra de busca/filtro depois que apaga algo digitado
+  // com o x, quebra o travamento no topo sempre visível do cabeçalho e barra que somem
+  // ao scrollar."
+  //
+  // MEDIDO na tela real: na chave os irmãos do #view-container são
+  // [0] back-header (fixed) · [1] a BARRA canônica (sticky) · [2..] o conteúdo.
+  // Ou seja, o "primeiro irmão visível" É A BARRA — e ela estava recebendo a margem
+  // de conteúdo (~159px). É o choque de duas correções minhas: o cânone da 1.7.43/1.7.55
+  // pôs a barra como 1ª irmã (pra o sticky pegar cedo), e esta função dá a margem a quem
+  // ocupa esse posto. Um elemento sticky com margem NÃO precisa dela (ele se posiciona
+  // pelo `top`, calculado logo acima) e, pior, a margem desloca a posição NATURAL dele:
+  // quando o filtro esconde/mostra irmãos, o posto TROCA, a margem sai de um e vai pro
+  // outro, e o layout inteiro salta ~159px — o conteúdo passa POR BAIXO do cabeçalho
+  // fixo, que é exatamente o "quebra o travamento" que ele descreve. Digitar e apagar no
+  // ✕ é o gatilho porque é ele que muda quais irmãos estão visíveis.
+  //
+  // Agora a margem procura o primeiro irmão visível que esteja NO FLUXO. Sticky e fixed
+  // são pulados: quem se posiciona sozinho não é empurrado por ninguém.
   function _firstVisibleSibling(el) {
     var s = el && el.nextElementSibling;
     while (s) {
       var cs = window.getComputedStyle(s);
       var r = s.getBoundingClientRect();
-      if (cs.display !== 'none' && cs.visibility !== 'hidden' && !(r.width === 0 && r.height === 0)) return s;
+      var noFluxo = cs.position !== 'sticky' && cs.position !== 'fixed' && cs.position !== 'absolute';
+      if (noFluxo && cs.display !== 'none' && cs.visibility !== 'hidden' && !(r.width === 0 && r.height === 0)) return s;
       s = s.nextElementSibling;
     }
     return null;
@@ -4514,7 +4527,13 @@ window._fbClearSearch = function (key) {
     var x = opts.searchId && document.getElementById(opts.searchId + '-clear');
     if (x) x.style.display = 'none';
     window._fbAction(key, 'search', '', true);
-    if (el && el.focus) el.focus();
+    // v1.7.87: `preventScroll`. O focus() normal manda o navegador ROLAR até o campo —
+    // e o campo mora numa barra STICKY, então ele rola a página inteira pra reposicionar
+    // algo que já estava na tela. Some com o lugar onde o dono estava lendo, logo depois
+    // de ele só ter apagado a busca. Onde não há suporte, cai no focus() de sempre.
+    if (el && el.focus) {
+        try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    }
 };
 // v2.7.33 (Opção 1): pílula de sort por critério — clicar a ATIVA inverte a seta
 // (cresc↔decr); clicar a inativa ativa-a com a direção lembrada (st.nameDir/orderDir).
@@ -5966,8 +5985,53 @@ window._themeNames = { dark: 'Noturno', light: 'Claro' };
 // Por isso o teto sobe agora, e não antes: primeiro o app aguenta, depois o
 // controle permite. O PISO fica em 0,8 — abaixo disso a fonte da raiz cai a
 // ~10px e nada fica legível, então baixar não serve a ninguém.
-window._UI_SCALE_MIN = 0.8;
-window._UI_SCALE_MAX = 1.7;
+// v1.7.88 — A FAIXA PASSA A SER DECLARADA EM PERCENTUAL, E SÓ AQUI.
+//
+// Relato do dono: "o slider do perfil esta inconsistente. ora da 130% como
+// maximo, ora da 169%... tem que dar sempre 150% como maximo e o minimo pode
+// ser 80%".
+//
+// A CAUSA era estrutural, não um número errado: os limites viviam em QUATRO
+// lugares e em DUAS unidades que não conversavam — MIN/MAX aqui (escala
+// interna 0,8–1,7), o `min`/`max` cravado no HTML do slider (percentual
+// 60–130), o clamp do theme.js (interna 0,7–1,7, com o piso ainda divergindo
+// do daqui) e a BASE que converte entre as duas. No teto, o slider mandava
+// 130% → 1,3 × 1,3 = 1,69 interno; quem lia DIVIDINDO pela base mostrava
+// "130%", quem lia sem dividir mostrava "169%". São exatamente os dois números
+// que ele viu — o mesmo estado, contado de dois jeitos.
+//
+// Agora a faixa é declarada UMA vez, na unidade que a pessoa lê (percentual),
+// e tudo o mais DERIVA daqui: os limites internos abaixo, o `min`/`max` do
+// slider (auth.js) e o clamp do theme.js. Não há mais dois números pra manter
+// em sincronia — há um par, e o resto é conta.
+window._UI_PCT_MIN = 80;
+window._UI_PCT_MAX = 150;
+
+// ─── NOME DE PESSOA: SANEAMENTO NA ENTRADA (v1.7.88) ────────────────────────
+// Print do dono: "Juliana Dal+Sasso" — "duvido que a pessoa tenha colocado esse +
+// no proprio nome".
+//
+// MEDIDO no banco antes de mexer: o `+` está GRAVADO (em `displayName` E em
+// `displayName_lower`), não é defeito de exibição. A conta nasceu 09/ago 09:47 BRT
+// por `authProvider: apple.com`. E há um irmão do mesmo mal na base:
+// "Juliana  Penha", com DOIS espaços.
+//
+// A assinatura é de `application/x-www-form-urlencoded` — o encoding em que ESPAÇO
+// vira `+`, e que é justamente como a Apple devolve o nome no fluxo WEB. O sobrenome
+// "Dal Sasso" chegou "Dal+Sasso". A conversão acontece antes de chegar em nós (no
+// handler do provedor), por isso não há `+` sendo produzido no nosso código — mas o
+// que É nosso é gravar o que o provedor manda SEM olhar.
+//
+// ⚠️ ESCOPO ESTREITO DE PROPÓSITO: só troca `+` que esteja ENTRE LETRAS e sem espaço
+// ao redor (`Dal+Sasso`), que é a assinatura do encoding. Um `+` solto, no começo/fim
+// ou cercado de espaço é preservado — pode ser escolha da pessoa, e nome é dela.
+// Telefone como nome ("+55 11…") também passa intacto: `+` seguido de dígito não casa.
+window._normalizeDisplayName = function (nome) {
+  var s = String(nome == null ? '' : nome);
+  s = s.replace(/([\p{L}])\+([\p{L}])/gu, '$1 $2');  // Dal+Sasso → Dal Sasso
+  s = s.replace(/\s+/g, ' ').trim();                  // "Juliana  Penha" → "Juliana Penha"
+  return s;
+};
 // v1.7.82 — "130% VIRA 100%". Pedido do dono, e o motivo é a reclamação que
 // abriu o assunto: gente achando a letra pequena. Quem reclama NÃO abre o
 // perfil — então subir o PADRÃO é o que alcança essas pessoas; alargar a faixa
@@ -5987,16 +6051,60 @@ window._UI_SCALE_MAX = 1.7;
 window._UI_SCALE_BASE = 1.3;          // este interno = "100%" pra pessoa
 window._uiScaleToPct = function(s) { return Math.round((s / window._UI_SCALE_BASE) * 100); };
 window._uiPctToScale = function(p) { return (parseFloat(p) / 100) * window._UI_SCALE_BASE; };
+// DERIVADOS — nunca escrever número aqui. Mexer na faixa é mexer em _UI_PCT_*.
+window._UI_SCALE_MIN = window._uiPctToScale(window._UI_PCT_MIN);   //  80% → 1.04
+window._UI_SCALE_MAX = window._uiPctToScale(window._UI_PCT_MAX);   // 150% → 1.95
 window._clampUiScale = function(v) {
   v = parseFloat(v);
   if (isNaN(v)) return window._UI_SCALE_BASE;
   return Math.max(window._UI_SCALE_MIN, Math.min(window._UI_SCALE_MAX, v));
 };
+// v1.7.91 — O NOVO 100% PASSA A VALER PRA TODO MUNDO, UMA VEZ.
+//
+// Ordem do dono: "coloque o novo 100% por padrao para todos. nao importa o que
+// escolheram antes."
+//
+// A escolha de escala vive em DOIS lugares — `scoreplace_ui_scale` (localStorage, por
+// aparelho) e `uiScale` no perfil (Firestore, sincronizado). Limpar só um deles não
+// adianta: o outro devolve o valor velho no próximo carregamento. Por isso o reset é
+// CARIMBADO: enquanto o carimbo salvo não for o atual, qualquer valor guardado é
+// DESCARTADO e vale a base. Depois de aplicado uma vez, o carimbo fica gravado e as
+// escolhas novas passam a ser respeitadas normalmente — não é um reset que se repete
+// a cada visita, é uma virada de régua.
+//
+// Trocar `_UI_SCALE_RESET` no futuro força outra virada. Enquanto o valor for o mesmo,
+// nada é apagado de novo.
+window._UI_SCALE_RESET = '2026-08-10-base130';
+window._uiScaleResetPendente = function () {
+  try { return localStorage.getItem('scoreplace_ui_scale_reset') !== window._UI_SCALE_RESET; }
+  catch (e) { return false; }   // sem localStorage não dá pra saber → não mexe em nada
+};
+window._uiScaleMarcarReset = function () {
+  try {
+    localStorage.setItem('scoreplace_ui_scale_reset', window._UI_SCALE_RESET);
+    localStorage.removeItem('scoreplace_ui_scale');
+  } catch (e) {}
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (cu) {
+    cu.uiScale = window._UI_SCALE_BASE;
+    // Grava a base no perfil TAMBÉM: sem isto o valor velho continua no Firestore e
+    // volta no próximo aparelho em que a pessoa entrar.
+    try {
+      var uid = cu.uid;
+      if (uid && window.FirestoreDB && typeof window.FirestoreDB.saveUserProfile === 'function') {
+        window.FirestoreDB.saveUserProfile(uid, { uiScale: window._UI_SCALE_BASE }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+};
 window._getUiScale = function() {
+  if (window._uiScaleResetPendente()) { window._uiScaleMarcarReset(); return window._UI_SCALE_BASE; }
   var cu = window.AppStore && window.AppStore.currentUser;
   if (cu && cu.uiScale != null) return window._clampUiScale(cu.uiScale);
   try { var raw = localStorage.getItem('scoreplace_ui_scale'); if (raw != null) return window._clampUiScale(raw); } catch (e) {}
-  return 1;
+  // v1.7.91: quem nunca escolheu recebe a BASE (o novo 100%), não 1 — devolver 1 dava
+  // a escala ANTIGA justamente a quem nunca mexeu, que é quem a virada quer alcançar.
+  return window._UI_SCALE_BASE;
 };
 // Aplica ao vivo (só o CSS var) — sem persistir. Pra preview do slider.
 window._applyUiScale = function(scale) {
@@ -7457,13 +7565,22 @@ window.AppStore = {
           }
         }
         // v2.1.91: sincroniza o tamanho da interface (--ui-scale) entre dispositivos
-        if (data.uiScale != null && typeof window._applyUiScale === 'function') {
+        // v1.7.91: este é o caminho que traz a escala do PERFIL (sincroniza entre
+        // aparelhos) — e é por aqui que o valor antigo voltaria depois do reset. Com o
+        // reset pendente, o que vem do Firestore é ignorado e vale a base.
+        if (data.uiScale != null && typeof window._applyUiScale === 'function'
+            && !(typeof window._uiScaleResetPendente === 'function' && window._uiScaleResetPendente())) {
           var _s = window._clampUiScale(data.uiScale);
           if (store.currentUser) store.currentUser.uiScale = _s;
           try { localStorage.setItem('scoreplace_ui_scale', String(_s)); } catch (e) {}
           window._applyUiScale(_s);
           var _sl = document.getElementById('profile-ui-scale');
-          if (_sl) { _sl.value = Math.round(_s * 100); var _lbl = document.getElementById('profile-ui-scale-val'); if (_lbl) _lbl.textContent = Math.round(_s * 100) + '%'; }
+          // v1.7.91: o slider fala em PERCENTUAL RELATIVO À BASE (o novo 100%). Era
+          // `_s * 100` — escala interna vezes 100 —, que mostrava 130% pra quem estava
+          // no padrão e 195% no teto. É a mesma confusão de unidades que produzia o
+          // "ora 130%, ora 169%"; aqui ela tinha sobrevivido.
+          var _pct = (typeof window._uiScaleToPct === 'function') ? window._uiScaleToPct(_s) : Math.round(_s * 100);
+          if (_sl) { _sl.value = _pct; var _lbl = document.getElementById('profile-ui-scale-val'); if (_lbl) _lbl.textContent = _pct + '%'; }
         }
         // Sync active casual room — navigate other devices to the same match
         // BUT only when the value transitioned (not on every unrelated save).
@@ -7998,7 +8115,11 @@ window.AppStore = {
     var user = this.currentUser;
     var uid = user.uid || user.email;
     var payload = {
-      displayName: user.displayName,
+      // v1.7.88: saneia AQUI, no choke point de escrita — não nos ~10 lugares que
+      // copiam `user.displayName` do provedor. Lista à mão sempre esquece um (é a
+      // lição do _repairTournaments); aqui passa tudo que vai pro doc.
+      displayName: (typeof window._normalizeDisplayName === 'function')
+        ? window._normalizeDisplayName(user.displayName) : user.displayName,
       email: user.email,
       photoURL: user.photoURL,
       gender: user.gender,

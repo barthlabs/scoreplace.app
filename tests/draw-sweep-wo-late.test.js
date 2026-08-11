@@ -8,6 +8,7 @@ sandbox.AppStore = { tournaments: [], logAction: () => {}, sync: () => {}, isOrg
 sandbox._displayNameForUid = (u, fb) => u ? ('P_' + u) : (fb || '');
 sandbox._pName = (p, fb) => { if (!p) return fb || ''; if (typeof p === 'string') return p; if (p.p1Name || p.p2Name) { const a = p.p1Name || '', b = p.p2Name || ''; if (a && b) return a + ' / ' + b; } return p.displayName || p.name || fb || ''; };
 load('identity-core.js');
+load('wo-core.js');        // motor de W.O. (v1.8.0: saiu da view)
 load('participants.js');    // _applyWO / _applyWoSubsToTournament / _declareAbsent
 load('tournaments-draw.js');
 const dc = require('../functions-autodraw/draw-core.js');

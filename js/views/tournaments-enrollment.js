@@ -722,8 +722,17 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     }
 
     // Add to local state immediately
+    // ⚠️ v1.8.1 — O PUSH É DA TELA, NÃO DO BANCO. Marca transiente `_pendingEnroll`:
+    // este objeto existe pra a interface responder na hora, mas NÃO é inscrição
+    // confirmada — quem confirma é a CF (ou a transação de fallback), que devolve o
+    // array autoritativo logo abaixo. Sem a marca, quando a resposta NUNCA chega (4G
+    // caindo na quadra, aba fechada, timeout) o push ficava e qualquer save posterior
+    // o gravava: a pessoa virava "inscrita" sem nunca ter passado pela LISTA DE ESPERA,
+    // que é onde a regra da 1.6.86 manda quem chega depois do sorteio. Foi assim que
+    // M.Delia, Marcos e Debora ficaram invisíveis na rodada do Confra (10/ago).
+    // O `saveTournament` remove entradas marcadas antes de persistir.
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-    t.participants.push(participantObj);
+    t.participants.push(Object.assign({}, participantObj, { _pendingEnroll: true }));
 
     // Show success and navigate immediately (no wait for network)
     if (window._sound) window._sound('sino');
@@ -956,8 +965,17 @@ window.submitTeamEnroll = function (tId) {
     if (mod) mod.style.display = 'none';
 
     // --- Optimistic UI: update locally FIRST, then sync to Firestore ---
+    // ⚠️ v1.8.1 — O PUSH É DA TELA, NÃO DO BANCO. Marca transiente `_pendingEnroll`:
+    // este objeto existe pra a interface responder na hora, mas NÃO é inscrição
+    // confirmada — quem confirma é a CF (ou a transação de fallback), que devolve o
+    // array autoritativo logo abaixo. Sem a marca, quando a resposta NUNCA chega (4G
+    // caindo na quadra, aba fechada, timeout) o push ficava e qualquer save posterior
+    // o gravava: a pessoa virava "inscrita" sem nunca ter passado pela LISTA DE ESPERA,
+    // que é onde a regra da 1.6.86 manda quem chega depois do sorteio. Foi assim que
+    // M.Delia, Marcos e Debora ficaram invisíveis na rodada do Confra (10/ago).
+    // O `saveTournament` remove entradas marcadas antes de persistir.
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-    t.participants.push(participantObj);
+    t.participants.push(Object.assign({}, participantObj, { _pendingEnroll: true }));
     t.teamOrigins = _teamOrigins;
 
     // Show success and navigate immediately (no wait for network)

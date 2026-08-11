@@ -240,11 +240,6 @@ function _sideDisplayName(uids, nameByUid, storedStr) {
   return storedStr || '?';
 }
 
-// Kill-switch de notificações no staging (ver functions/index.js). No projeto de
-// staging, push (FCM) NÃO é enviado — pra simular torneios com inscritos reais
-// sem disparar nada. Em prod IS_STAGING é false → comportamento idêntico.
-const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || '').indexOf('staging') !== -1;
-
 // v2.4.12: temporada encerrada? Espelha o cliente (tournaments.js season auto-
 // closure + bracket-logic poller endDate check). Sem isto, o autoDraw gerava
 // rodadas — e disparava notificações — PRA SEMPRE após o fim da temporada, se
@@ -557,6 +552,22 @@ exports.integrateLateEntries = onCall(async (request) => {
       }
       // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor.
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+      // ── v1.2.58 · SEM ISTO A FILA NUNCA FORMA GRUPO ────────────────────────────────
+      // `_preloadDrawNames` acima popula só o MAPA `_profByUid`; quem ESCREVE `gender` nas
+      // entradas é esta função — e ela faltava AQUI (as outras 5 chamadas do arquivo a
+      // fazem; esta era a única sem). Consequência medida no doc real do Confra: as
+      // entradas são strippadas desde a v1.3.52, no servidor `_genderForUid` é STUB que
+      // devolve '' e `_pGender(p)` lê `p.gender` — ou seja, sem enriquecer, TODO MUNDO da
+      // fila fica "sem gênero". E a regra da v1.7.16 ("sem gênero determinado NÃO entra em
+      // grupo", criada depois do R1 Grupo B2 fechar com 3 homens) então barra a fila
+      // inteira, em silêncio: `changed:false`, nenhum grupo, nenhum erro.
+      // PROVADO com o módulo real contra o doc real: sem enriquecer → 31 grupos, changed
+      // false; enriquecendo → 32 grupos (Marcos + M.Delia + Debora + Juliana) e Daniel
+      // segue na fila, que é exatamente o que o dono descreveu.
+      // ⚠️ O outro caminho que roda o mesmo motor (dentro do autoDraw) já enriquecia — por
+      // isso a formação "funcionava antes": ela acontecia por LÁ. Só que aquele bloco só
+      // visita torneio com `nextDrawAt`, e o Confra tem sorteio único já disparado.
+      _enrichParticipantsFromProfiles(t);
 
       const res = integrateLateFn(t, {});
       if (!res || !res.ok) {
@@ -1443,7 +1454,6 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
 exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{notifId}', async (event) => {
   const snap = event.data;
   if (!snap) return;
-  if (IS_STAGING) { console.log('[staging] push (FCM) suprimido'); return; }
 
   const userId = event.params.userId;
   const notifData = snap.data();

@@ -4,13 +4,24 @@
 
 const { defineConfig, devices } = require('@playwright/test');
 
-// SEGURANÇA: o default é STAGING (Firestore isolado, descartável), NUNCA produção.
-// Specs de escrita (tournament-flow) criam/sorteiam/apagam torneios de verdade — rodar
-// isso contra prod tocaria os dados reais do Confra. Prod só entra por opt-in EXPLÍCITO
-// (SCOREPLACE_URL=https://scoreplace.app), e ainda assim o tournament-flow tem trava
-// própria que se recusa a escrever em prod. Ver docs/staging.md + playwright.config.
-const STAGING_URL = 'https://scoreplace-staging.web.app';
-const LOCAL_URL = process.env.SCOREPLACE_URL || STAGING_URL;
+// Default = servidor LOCAL (mesmo porto do .claude/launch.json). Sobe com
+// `npx http-server -p 8899 -c-1` antes de rodar. Prod entra só por opt-in EXPLÍCITO
+// (SCOREPLACE_URL=https://scoreplace.app).
+//
+// ⚠️ Até a 1.8.2 o default era `https://scoreplace-staging.web.app`. Esse ambiente foi
+// DELETADO em 19/jul/2026 (projeto GCP em DELETE_REQUESTED, hosting devolvendo 404), então
+// o default apontava pra um host morto e QUALQUER run sem SCOREPLACE_URL batia no vazio.
+//
+// 🔴 TODO spec aqui é de LEITURA, e isso é uma REGRA, não um acaso. Localhost NÃO é um
+// Firestore isolado: desde a 1.8.2 o app aponta pro projeto de PRODUÇÃO em qualquer host
+// (a config deixou de variar por hostname). Então um spec que escreve — criar torneio,
+// sortear, lançar placar, check-in — escreve NO CONFRA, rodando em localhost ou onde for.
+// Os 4 specs de escrita que existiam eram travados por `test.skip(!isStaging)` e foram
+// APAGADOS na 1.8.3 junto com o ambiente (ver CLAUDE.md). Não reintroduzir spec de escrita
+// sem um alvo descartável de verdade: emulador do Firestore ligado no app, ou torneio
+// sandbox `(SB)`, que já roda em produção justamente pra isso.
+const DEFAULT_URL = 'http://localhost:8899';
+const LOCAL_URL = process.env.SCOREPLACE_URL || DEFAULT_URL;
 
 module.exports = defineConfig({
   testDir: './tests/e2e',

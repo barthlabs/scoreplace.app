@@ -236,7 +236,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
     { id: 'profile-gender', selector: '#profile-edit-gender', text: 'Selecione seu gênero para ser distribuído automaticamente nas categorias corretas ao se inscrever.', context: 'global', priority: 5, position: 'bottom' },
     { id: 'profile-language', selector: '#profile-lang-flags button, [onclick*="_setLang"]', text: 'Escolha o idioma do app: Português (🇧🇷) ou English (🇺🇸).', context: 'global', priority: 4, position: 'bottom' },
-    { id: 'profile-sports', selector: '#profile-edit-sports', text: 'Marque seus esportes: filtra torneios na dashboard, locais no 📍 Place e pré-seleciona modalidades no check-in. Após marcar cada esporte, escolha seu nível (A/B/C/D/FUN) — você pode ter nível diferente por modalidade!', context: 'global', priority: 4, position: 'bottom' },
+    { id: 'profile-sports', selector: '#profile-edit-sports', text: 'Marque seus esportes: filtra torneios na dashboard, locais no 📍 Presença e pré-seleciona modalidades no check-in. Após marcar cada esporte, escolha seu nível (A/B/C/D/FUN) — você pode ter nível diferente por modalidade!', context: 'global', priority: 4, position: 'bottom' },
     { id: 'profile-location', selector: '#profile-location-search', text: 'Adicione sua localização para encontrar torneios perto de você e receber notificações.', context: 'global', priority: 5, position: 'bottom' },
     { id: 'profile-notify-level', selector: '[onclick*="_toggleNotifyFilter"]', text: 'Configure o nível de notificações: Todas, Só Importantes ou Só Fundamentais.', context: 'global', priority: 4, position: 'top' },
     { id: 'profile-hints-toggle', selector: '[onclick*="hintSystem"]', text: 'Ative ou desative as dicas visuais que aparecem quando você fica parado.', context: 'global', priority: 3, position: 'top' },
@@ -329,7 +329,7 @@
     { id: 'dash-my-active', selector: '#dashboard-myactive-widget', text: 'Sua presença ativa aparece aqui. Dot verde = check-in em andamento. ⚡ = partida casual em andamento (botão "Voltar"). Clique "Cancelar" pra remover presença.', context: 'dashboard', priority: 7, position: 'bottom', requiresLogin: true },
     { id: 'dash-friends-presence', selector: '#dashboard-presences-widget', text: 'Amigos com check-in ativo ou presença planejada hoje. Clique num card pra ver o local e se juntar.', context: 'dashboard', priority: 5, position: 'top', requiresLogin: true },
     { id: 'dash-profile-nudge', selector: '#dash-profile-nudge', text: 'Complete seu perfil pra ativar torneios perto de você, sugestões de parceiros e presença rápida.', context: 'dashboard', priority: 6, position: 'top', requiresLogin: true },
-    { id: 'dash-place-btn', selector: 'a[href="#place"], button[onclick*="#place"]', text: '📍 Place — descubra quadras/clubes próximos no mapa, marque presença no local, veja amigos jogando. Tudo unificado numa tela só.', context: 'dashboard', priority: 6, position: 'bottom' },
+    { id: 'dash-place-btn', selector: 'a[href="#place"], button[onclick*="#place"]', text: '📍 Presença — descubra quadras/clubes próximos no mapa, marque presença no local, veja amigos jogando. Tudo unificado numa tela só.', context: 'dashboard', priority: 6, position: 'bottom' },
 
     // ═══════════════════════════════════════════════════════════════════════════
     // TOURNAMENT DETAIL — Calendário (v0.15.16)

@@ -129,7 +129,11 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
      'distingue "velha" de "não instalada" — são coisas diferentes pra quem lê');
   ok(/b\.setAttribute\('disabled', 'disabled'\)/.test(fn),
      'e o botão de puxar deixa de prometer o que não pode cumprir');
-  ok(/_spExtZipUrl/.test(fn), 'o link do zip sai da fonte única da versão');
+  // ⚠️ REVISADO na 1.8.4: travava "o link do zip sai da fonte única da versão". Não há mais
+  // link de zip — o aviso manda pra Chrome Web Store, que é onde a extensão vive e de onde
+  // o Chrome a atualiza sozinho.
+  ok(/SP_EXT_STORE_URL/.test(fn), 'o aviso aponta pra loja, pela fonte única');
+  ok(!/_spExtZipUrl|\.zip/.test(fn), 'e não oferece download de zip');
   ok(/movel\) \{ caixa\.innerHTML = ''; return; \}/.test(fn),
      'no celular não aparece — lá não há extensão pra instalar, e o aviso próprio já explica');
 }

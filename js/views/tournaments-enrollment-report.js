@@ -1332,6 +1332,48 @@
   var _LZ_C_CAT = '#a78bfa';    // categoria  — violeta (a cor do letzplay no app)
   var _LZ_C_POS = '#fbbf24';    // colocação  — âmbar (pódio)
   var _LZ_C_TRILHA = '#f3f4f6'; // trilha     — BRANCO (é contexto, não classificação)
+  // posição de GRUPO — cinza de propósito: NÃO é pódio, e o âmbar de cima já significa
+  // conquista. Foi justamente pintar posição de grupo com cor (e medalha) de pódio que
+  // fez o app anunciar bronze pra quem foi último no grupo.
+  var _LZ_C_GRUPO = '#94a3b8';
+
+  // ── DE QUE PLATAFORMA VEIO — selo, não palavra (pedido do dono) ──────────────
+  // "poderia usar LP laranja para o letzplay [e] o logo do Scoreplace (inves de escrever
+  // scoreplace) indicando em qual plataforma ocorreu o torneio ou ranking".
+  // Antes só o scoreplace era marcado, e por extenso: as linhas do letzplay não diziam de
+  // onde vinham — numa lista agora INTERCALADA (1.8.5) a origem deixou de ser óbvia pela
+  // posição. O selo é `aria-label`ado porque cor+sigla sozinhas não servem a leitor de tela.
+  var _LZ_C_LP = '#f97316';     // laranja do letzplay
+  function _lzSelo(qual) {
+    var base = 'display:inline-flex;align-items:center;gap:3px;vertical-align:-1px;';
+    // RK — "isto foi lançado como RANKING". Pedido do dono (11/ago): o T&F "torneio PAIS"
+    // foi criado como ranking no letzplay por erro de quem publicou, e não há como
+    // consertar lá. Marcar na lista resolve por outro caminho o contador "3 de 3": em vez
+    // de mexer no número deles (que é diretriz), a própria linha diz que aquilo que
+    // deveria ser torneio está como ranking.
+    // ⚠️ Distinto por FORMA, não por cor nova: a linha já usa 5 cores (data, categoria,
+    // posição, trilha, LP) e uma 6ª viraria confete. RK é um chip com borda.
+    if (qual === 'rk') {
+      return '<span title="lançado como ranking no letzplay" aria-label="lançado como ranking" style="' + base +
+        'color:#cbd5e1;font-weight:800;font-size:0.66rem;letter-spacing:0.4px;' +
+        'border:1px solid rgba(203,213,225,0.45);border-radius:4px;padding:0 3px;line-height:1.35;">RK</span>';
+    }
+    if (qual === 'lp') {
+      return '<span title="letzplay" aria-label="letzplay" style="' + base +
+        'color:' + _LZ_C_LP + ';font-weight:800;font-size:0.74rem;letter-spacing:0.4px;">LP</span>';
+    }
+    // scoreplace: o pódio da identidade (icons/logo-podium.svg) desenhado inline, pra não
+    // custar requisição por linha nem depender de <img> que falha em silêncio.
+    return '<span title="scoreplace" aria-label="scoreplace" style="' + base + '">' +
+      // 18×14 pra bater com o peso visual do "LP" (0.74rem bold). A 13×10 o pódio ficava
+      // visivelmente menor que a sigla irmã — os dois selos têm que pesar igual na linha.
+      '<svg viewBox="0 0 80 60" width="18" height="14" aria-hidden="true" focusable="false">' +
+        '<rect x="2" y="30" width="22" height="30" rx="3" fill="#CBD5E1"/>' +
+        '<rect x="29" y="10" width="22" height="50" rx="3" fill="#F59E0B"/>' +
+        '<rect x="56" y="40" width="22" height="20" rx="3" fill="#FB923C"/>' +
+        '<path d="M 40 0 L 42 6 L 48 6 L 43 10 L 45 16 L 40 12 L 35 16 L 37 10 L 32 6 L 38 6 Z" fill="#F59E0B"/>' +
+      '</svg></span>';
+  }
 
   function _lzPad2(n) { return (n < 10 ? '0' : '') + n; }
   var _LZ_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -1437,7 +1479,7 @@
       var ja = porId[k];
       if (ja) {
         // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem
-        if (ja.pos == null || (pos != null && pos < ja.pos)) ja.pos = pos;
+        if (ja.pos == null || (pos != null && pos.pos < ja.pos.pos)) ja.pos = pos;
         if (!ja.cat && part.cat) ja.cat = part.cat;
         if (!ja.trilha && trilha) ja.trilha = trilha;
         if (!ja.data && datas[k]) ja.data = _lzFmtDataNum(datas[k]);
@@ -1463,23 +1505,69 @@
       var pp = _lzSplitCat(pn, pc);
       linhas.push({ lido: false, ord: -pend, nome: pp.nome, cat: pp.cat, trilha: null, data: null, pos: null });
     });
-    if (!linhas.length) return '';
-    // cronológica INVERSA; sem data (não lido) desce, preservando a ordem da lista pública
-    linhas.sort(function (a, b) { return b.ord - a.ord; });
+    if (!linhas.length) { (window._lzCompItens || (window._lzCompItens = {}))[kind] = []; return ''; }
+    // (a ordenação cronológica inversa mora em _lzRenderComps, que ordena letzplay e
+    // scoreplace JUNTOS — ordenar aqui de novo não faria diferença e esconderia isso)
     // ORDEM DOS CAMPOS (pedido do dono): data · nome · CATEGORIA · CLASSIFICAÇÃO · trilha.
     // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
     // classificação nem categoria, e disputava a atenção quando estava colorida.
-    return linhas.map(function (L) {
+    var itens = linhas.map(function (L) {
       var h = '<div style="padding:2px 0;">' + (L.lido ? (_rank ? '📊 ' : '🏆 ') : '⏳ ');
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
-      if (L.pos != null) h += ' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos) + ' ' + L.pos + 'º</span>';
+      // COLOCAÇÃO só é pódio quando o dado diz que é (ranking). Em torneio o número vem da
+      // tabela de GRUPO — dizer "🥉 3º" pra quem foi o último de um grupo de 3 é inventar
+      // um resultado que não existiu. Ver o comentário de _lzMyPosIn.
+      if (L.pos) {
+        h += L.pos.semPontuacao
+          // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
+          // é, em cinza, em vez de emprestar um pódio a um ranking sem lançamento nenhum.
+          ? (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">sem pontuação lançada</span>')
+          : L.pos.ranking
+          ? (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>')
+          : (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">' +
+             (L.pos.grupo ? _esc(L.pos.grupo) + ' · ' : 'grupo · ') + L.pos.pos + 'º' +
+             (L.pos.de ? ' de ' + L.pos.de : '') + '</span>');
+      }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
-      return h + '</div>';
-    }).join('');
+      // de onde veio. RK vem ANTES do LP quando a competição está no letzplay como RANKING
+      // — é o que denuncia o "torneio" que foi publicado no lugar errado.
+      h += ' · ' + (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp');
+      return { ord: L.ord, h: h + '</div>' };
+    });
+    // PUBLICA OS ITENS pra o scoreplace poder INTERCALAR (e não concatenar) — ver
+    // _lzRenderComps. Antes daqui a função só devolvia HTML pronto, e por isso o bloco do
+    // app só tinha como ser grudado no fim: era essa a origem da ordem quebrada.
+    (window._lzCompItens || (window._lzCompItens = {}))[kind] = itens;
+    return _lzRenderComps(kind);
   };
+
+  // ── UMA LISTA SÓ, ORDENADA — letzplay + scoreplace ───────────────────────────
+  // O dono: "os torneios não estão sendo apresentados na ordem cronológica invertida (letz
+  // e score)". Estavam ordenados DENTRO de cada fonte e concatenados: 5 do letzplay (ago26…
+  // dez24) e depois 3 do app (jul26, jul26, jun26) — logo um "jul 26" aparecia DEPOIS de um
+  // "dez 24".
+  // ⚠️ A causa de não terem sido fundidos antes é que as chaves são de ESCALAS diferentes:
+  // o letzplay ordena por AAAAMMDD (20241201) e o app por epoch em ms (~1,7e12). Somar os
+  // dois num sort só faria TODO item do app subir pro topo. Por isso a chave é normalizada
+  // pra AAAAMMDD nos dois lados (_lzOrdDeTs), que é a granularidade que a linha exibe.
+  // Não-lidos entram com ord NEGATIVO de propósito e continuam afundando, preservando a
+  // ordem da lista pública, que é a única noção de tempo que se tem deles.
+  function _lzRenderComps(kind) {
+    var itens = ((window._lzCompItens || {})[kind] || []).slice();
+    itens.sort(function (a, b) { return (b.ord || 0) - (a.ord || 0); });
+    return itens.map(function (x) { return x.h; }).join('');
+  }
+  // epoch ms → AAAAMMDD pelos COMPONENTES LOCAIS (nunca parse de string, nunca UTC — é o
+  // cânone de data do projeto; ver [[project_date_parsing_canonical]]).
+  function _lzOrdDeTs(ts) {
+    if (!ts) return 0;
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return 0;
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
 
   // JUNTA O QUE É DO SCOREPLACE às abas do diálogo. Assíncrono de propósito: o histórico
   // do letzplay já está em memória e abre na hora; o do scoreplace é uma leitura do
@@ -1794,13 +1882,21 @@
         var h = '<div style="padding:2px 0;">🏆 ' +
           (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
           '<span>' + _esc(c.nome) + '</span> · ' +
-          '<span style="color:#818cf8;font-weight:700;">scoreplace</span></div>';
+          _lzSelo('sp') + '</div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
+      // INTERCALA — não concatena. Empurra as linhas do app pra a MESMA lista do letzplay
+      // e re-renderiza ordenando as duas fontes juntas. O `A[alvo] = A[alvo] + …` que
+      // estava aqui é o que fazia um torneio de jul/26 do app aparecer DEPOIS de um de
+      // dez/24 do letzplay. A chave vai normalizada pra AAAAMMDD (a do letzplay), senão o
+      // epoch em ms jogaria tudo do app pro topo.
       function juntar(alvo, lista) {
         if (!lista.length) return;
-        lista.sort(function (a, b) { return b.ts - a.ts; });
-        A[alvo] = (A[alvo] || '') + lista.map(function (x) { return x.h; }).join('');
+        var reg = (window._lzCompItens || (window._lzCompItens = {}));
+        reg[alvo] = (reg[alvo] || []).concat(lista.map(function (x) {
+          return { ord: _lzOrdDeTs(x.ts), h: x.h };
+        }));
+        A[alvo] = _lzRenderComps(alvo);
       }
       juntar('tour', linhasT);
       juntar('rank', linhasR);
@@ -1875,8 +1971,12 @@
              _esc(_LZ_MIN_EXT) + '</b>. Até atualizar, o histórico mostrado é o que já estava gravado.')
           : ('⚠️ <b>Extensão não encontrada</b> — a leitura do letzplay precisa da extensão do Chrome (v' +
              _esc(_LZ_MIN_EXT) + ').')) +
-        ' <a href="' + _esc((typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : ('/scoreplace-letzplay-ext-' + _LZ_MIN_EXT + '.zip')) +
-        '" download style="color:#fbbf24;font-weight:800;">baixar a v' + _esc(_LZ_MIN_EXT) + ' ↓</a></div>';
+        // A extensão está na Chrome Web Store — é pra lá que se manda, sempre. O Chrome
+        // atualiza sozinho e ninguém descompacta nada. Fonte única: window.SP_EXT_STORE_URL
+        // (store.js). Sem ela, instruir pelo NOME em vez de cair de volta pro zip.
+        (window.SP_EXT_STORE_URL
+          ? (' <a href="' + _esc(window.SP_EXT_STORE_URL) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:800;">abrir na Chrome Web Store ↗</a>')
+          : ' Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.') + '</div>';
       // e o botão do topo deixa de prometer o que não pode cumprir
       var d = document.getElementById('custom-confirm-dialog');
       var b = d && d.querySelector('button[onclick*="_lzPuxarDoTopo"]');
@@ -2688,11 +2788,53 @@
   // Tela individual (v1.1.21): nome + @ + última atualização + botão de puxar a
   // COMPLETA daquele atleta — substitui os botões de lote da Análise.
   // Posição do atleta na classificação gravada de um torneio (footprint[].standings).
+  // ⚠️ O QUE ESTE NÚMERO É — e o que ele NÃO é (bug reportado pelo dono, 10/ago/2026).
+  //
+  // Ele devolvia só `r.pos`, e o render pintava isso como colocação no torneio, COM MEDALHA.
+  // Mas `standings` de TORNEIO é a lista de GRUPOS da fase de grupos (o scraper diz isso na
+  // cara: `.table-group` → [{ group:'GRUPO 01', rows:[...] }]), então `pos` é a posição
+  // DENTRO DO GRUPO. MEDIDO no doc real do dono: no BTG Pactual Masc 50 ele é `pos 4 de 4`
+  // no GRUPO 02 — ÚLTIMO do grupo — e a tela mostrava "🏅 4º"; no Masc D é `3 de 3` e saía
+  // "🥉 3º", bronze. Ele nunca passou da primeira fase em nenhum: o app estava inventando
+  // pódio a partir de tabela de grupo.
+  //
+  // RANKING é outra coisa e continua valendo: ali o scraper devolve
+  // [{ group:'Classificação', ranking:true, ... }] e a posição É a classificação real.
+  // Por isso a distinção sai do DADO (`g.ranking`), não de um palpite da tela.
+  // Retorna { pos, grupo, de, ranking } ou null.
+  // ⚠️ RANKING ZERADO NÃO É CLASSIFICAÇÃO (dono, 11/ago/2026). Ele flagrou o caso real:
+  // o "T&F Special Edition - torneio PAIS" foi LANÇADO COMO RANKING no letzplay (erro de
+  // quem criou, e não temos como consertar lá) e a tabela dele está inteira zerada —
+  // _"tem uma pagina de classificacao do torneio que resolveria tudo, mas os lancamentos
+  // ali estao zerados e nao podem ser considerados"_. MEDIDO no doc dele: rid 58234 tem
+  // pontos [0,0,0,0,0,0] e ele consta em 9º; os outros 4 rankings têm pontos de verdade.
+  // Sem este guard a tela mostraria "🏅 9º" em âmbar de pódio pra uma tabela vazia — a
+  // MESMA mentira do bronze da fase de grupos, entrando por outra porta.
+  // A regra serve nos dois casos: temporada recém-aberta também tem todo mundo zerado, e
+  // ali também não existe classificação a exibir.
+  // ⚠️ AUSENTE ≠ ZERO. Só se declara "zerada" quando o campo `points` EXISTE e é 0 em todo
+  // mundo. Import antigo (ou tabela de outro formato) pode não trazer pontuação nenhuma —
+  // ali não se sabe, e suprimir por não saber apagaria classificação legítima. Na dúvida,
+  // mantém o que estava: o guard existe pra impedir uma AFIRMAÇÃO falsa, não pra criar uma.
+  function _lzTabelaZerada(g) {
+    var rows = (g && g.rows) || [];
+    if (!rows.length) return false;
+    var temCampo = rows.some(function (r) { return r && r.points != null && r.points !== ''; });
+    if (!temCampo) return false;
+    return rows.every(function (r) {
+      var p = r && r.points;
+      return p == null || p === '' || Number(p) === 0;
+    });
+  }
   function _lzMyPosIn(standings, handle) {
     var low = String(handle || '').toLowerCase(), out = null;
     (standings || []).forEach(function (g) {
-      (g.rows || []).forEach(function (r) {
-        if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
+      var rows = g.rows || [];
+      rows.forEach(function (r) {
+        if (out != null || r.pos == null) return;
+        if (!(r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) return;
+        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: !!g.ranking,
+                semPontuacao: !!g.ranking && _lzTabelaZerada(g) };
       });
     });
     return out;
@@ -3790,28 +3932,36 @@
   // gate mandava "baixe a v1.38 em scoreplace.app/..." num toast: texto que some, não
   // clica, e manda o cara copiar URL na mão. O zip existia, servido, e mesmo assim não
   // havia como chegar nele a partir da tela onde o bloqueio acontece.
-  // Sem versão na loja não há auto-update, então o download TEM que estar aqui.
+  // ⚠️ 1.8.4: a extensão está na Chrome Web Store e este diálogo aponta SÓ pra ela.
+  // Antes ele era um tutorial de sideload ("baixe o zip, descompacte, Modo do
+  // desenvolvedor") porque não havia loja; a premissa caiu. Sideload não recebe
+  // auto-update — é exatamente o que fazia cada bump de versão virar reinstalação manual.
+  // Fonte única da URL: window.SP_EXT_STORE_URL (store.js).
   function _lzExtDialog(versaoAtual) {
-    var url = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    var storeUrl = window.SP_EXT_STORE_URL || null;
     var titulo = versaoAtual ? ('🧩 Sua extensão é a v' + versaoAtual) : '🧩 Extensão não encontrada';
     var corpo = versaoAtual
       ? 'A busca precisa da <b>v' + _LZ_MIN_EXT + '</b>. A v' + versaoAtual + ' desiste quando o letzplay limita o acesso e conclui a busca <b>sem trazer os jogos</b> — sem erro nenhum.'
       : 'Não achei a extensão do scoreplace neste navegador. É ela que lê o letzplay dentro da sua sessão logada.';
-    corpo += '<br><br><b>Instalar:</b><br>' +
-      '1. Baixe o zip e <b>descompacte</b><br>' +
-      '2. Abra <code>chrome://extensions</code> → ligue <b>Modo do desenvolvedor</b><br>' +
-      '3. <b>Carregar sem compactação</b> → escolha a pasta que saiu do zip' +
-      (versaoAtual ? ' (e remova a v' + versaoAtual + ')' : '') + '<br>' +
-      '4. Recarregue esta página';
-    if (typeof window.showConfirmDialog !== 'function' || !url) {
-      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT + '.');
+    corpo += '<br><br>' + (versaoAtual
+      ? 'Instalada pela <b>Chrome Web Store</b>, o Chrome atualiza sozinho. Se ainda estiver na v' +
+        versaoAtual + ', abra a loja e clique em <b>Atualizar</b> (ou <code>chrome://extensions</code> → <b>Atualizar</b>).'
+      : 'Instale pela <b>Chrome Web Store</b> — um clique, e o Chrome mantém atualizada sozinho.');
+    // alternativa só pra quem JÁ tem extensão e está abaixo do mínimo: a loja pode ainda
+    // não ter publicado a versão exigida, e aí ela não resolve.
+    var _zip = (versaoAtual && typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
+    if (_zip) corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
+      _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
+      'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
+
+    if (typeof window.showConfirmDialog !== 'function' || !storeUrl) {
+      _toastErr(titulo + ' — a busca precisa da v' + _LZ_MIN_EXT +
+        '. Instale “scoreplace — importar letzplay” na Chrome Web Store.');
       return;
     }
     window.showConfirmDialog(titulo, corpo, function () {
-      var a = document.createElement('a');
-      a.href = url; a.setAttribute('download', '');
-      document.body.appendChild(a); a.click(); a.remove();
-    }, null, { confirmText: '⬇️ Baixar a v' + _LZ_MIN_EXT, cancelText: 'Agora não', type: 'warning' });
+      window.open(storeUrl, '_blank', 'noopener');
+    }, null, { confirmText: '🎾 Abrir na Chrome Web Store', cancelText: 'Agora não', type: 'warning' });
   }
 
   // Quanto tempo a busca vai levar, em texto — MOSTRADO ANTES de começar. Um job de 3h

@@ -567,7 +567,7 @@
   // rota da dashboard. Cobrem a "porta de entrada" de cada funcionalidade.
   function _heroSteps() {
     return [
-      { id: 'dash_place', el: '#btn-place', waitFor: _isDashboardRoute, title: '📍 Place', text: 'Ache quadras e arenas perto de você e marque presença pra avisar os amigos.' },
+      { id: 'dash_place', el: '#btn-place', waitFor: _isDashboardRoute, title: '📍 Presença', text: 'Ache quadras e arenas perto de você e marque presença pra avisar os amigos.' },
       { id: 'dash_people', el: '#btn-people', waitFor: _isDashboardRoute, title: '👥 Pessoas', text: 'Encontre outros jogadores, adicione amigos e veja quem joga o quê.' },
       { id: 'dash_qr', el: '#btn-scan-qr', waitFor: _isDashboardRoute, title: '📷 Ler QR Code', text: 'Aponte a câmera num QR de torneio ou partida pra entrar na hora — ou digite o código.' },
       { id: 'dash_invite', el: '#btn-invite-app', waitFor: _isDashboardRoute, title: '📱 Convidar', text: 'Chame amigos pro app: mostre o QR ou compartilhe o link de convite.' }

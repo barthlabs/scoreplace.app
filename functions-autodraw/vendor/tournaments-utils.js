@@ -581,6 +581,35 @@ window._tProgFmtDur = function(ms) {
   out.push(s + 's');
   return out.join(' ');
 };
+// v1.7.83: o MESMO tempo, quebrado em DUAS linhas — "6d 13h" em cima, "2m 27s"
+// embaixo. Nasceu de um estouro medido: na escala 1.7 o relógio da coluna do
+// meio (DECORRIDO) escrevia POR CIMA do "19:00" da coluna INÍCIO REAL (+43px).
+// Ordem do dono: "aqui pode quebrar a linha com xxd xxh na linha de cima e xxm
+// e xxs na linha de baixo."
+// ⚠️ NÃO mexer no `_tProgFmtDur` acima: ele devolve TEXTO e há caller que faz
+// regex nele (`.replace(/\s\d+s$/,'')` no card de torneio encerrado) — devolver
+// HTML dali quebraria esses usos. Esta é uma função IRMÃ, só pro relógio.
+// Sem dia nem hora (duração curta) devolve uma linha só — quebrar "2m 27s" em
+// duas seria pior que o problema.
+// v1.7.83: rótulo de coluna em DUAS linhas — "início" em cima, "programado"
+// embaixo. Ordem do dono, olhando o box na escala 1.7: "inicio numa linha
+// programado na de baixo. final numa linha e programado na outra. nos 4 casos."
+// Quebra na ÚLTIMA palavra (não na primeira): é ela que é longa e comum aos 4
+// ("programado"). Rótulo de uma palavra só passa intacto.
+window._tProgLbl2L = function(label) {
+  var s = String(label || '');
+  var i = s.lastIndexOf(' ');
+  return i === -1 ? s : (s.slice(0, i) + '<br>' + s.slice(i + 1));
+};
+window._tProgFmtDur2L = function(ms) {
+  var txt = window._tProgFmtDur(ms);
+  var p = txt.split(' ');
+  if (p.length < 3) return '<span style="white-space:nowrap;">' + txt + '</span>';
+  var cima = p.slice(0, p.length - 2).join(' ');   // "6d 13h" (ou só "13h")
+  var baixo = p.slice(p.length - 2).join(' ');      // "2m 27s"
+  return '<span style="white-space:nowrap;">' + cima + '</span><br>' +
+         '<span style="white-space:nowrap;">' + baixo + '</span>';
+};
 window._estimateTournamentMinutes = function(t) {
   var prog = window._getTournamentProgress(t);
   var totalMatches = prog.total || 0;
@@ -1156,7 +1185,7 @@ window._buildProgressInner = function(t) {
       _durRow = '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-top:9px;gap:8px;">' +
         _tCol(_firstPointMs, 'início real', 'flex-start') +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(_tDurMs) + '</span>' +
+          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(_tDurMs) + '</span>' +
           '<span style="' + _tLblS + '">' + _tDurLabel + '</span>' +
         '</div>' +
         _rightCol +
@@ -1185,7 +1214,7 @@ window._buildProgressInner = function(t) {
         return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
           '<span style="font-size:1rem;font-weight:800;color:#93c5fd;line-height:1.1;">' + _time(ms) + '</span>' +
           '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-          '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+          '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
         '</div>';
       };
       _schedRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:9px;gap:8px;">' +
@@ -1306,7 +1335,7 @@ window._buildProgressInner = function(t) {
     return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
       '<span style="' + _timeS + 'color:#93c5fd;">' + _time(ms) + '</span>' +
       '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-      '<span style="' + _lblS + 'color:#60a5fa;text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+      '<span style="' + _lblS + 'color:#60a5fa;text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
     '</div>';
   };
 
@@ -1317,7 +1346,10 @@ window._buildProgressInner = function(t) {
     : '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
         _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;">' + window._tProgFmtDur(elapsedMs) + '</span>' +
+          // v1.7.83/84: 2 linhas — este é o SEGUNDO renderizador do relógio (o do
+          // painel da rodada); o outro é o do TORNEIO COMPLETO. Consertar só um
+          // deixava o defeito de pé, que foi exatamente o que a verificação pegou.
+          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(elapsedMs) + '</span>' +
           '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
         '</div>' +
         _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
@@ -1775,19 +1807,25 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
     opts = opts || {};
     var _icon = opts.iconSize || '1.3rem', _lbl = opts.labelSize || '0.85rem', _val = opts.valueSize || '1.15rem';
     var _endTs = (typeof window._ligaCurrentRoundEndTs === 'function') ? window._ligaCurrentRoundEndTs(t) : null;
-    var _valStyle = 'margin-left:auto;font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1;white-space:nowrap;flex-shrink:0;';
-    var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    // v1.7.86: mesma regra da linha de cima — rótulo e relógio EMPILHADOS, porque
+    // dividindo uma linha só o rótulo virava "Rodada em …". Ordem do dono: "a mesma
+    // coisa logo abaixo." O ícone segue na coluna da esquerda.
+    var _valStyle = 'font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;';
+    var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;line-height:1.2;overflow-wrap:anywhere;';
+    var _pilha = function (icone, rotulo, valorHtml) {
+        return '<span style="font-size:' + _icon + ';flex-shrink:0;">' + icone + '</span>' +
+            '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
+              '<span style="' + _lblStyle + '">' + rotulo + '</span>' + valorHtml +
+            '</div>';
+    };
     if (_endTs && _endTs >= _since) {
         // ENCERRADA — relógio congelado na duração total (sem data-elapsed-since → não ticka).
         var _dur = window._formatCountdown ? window._formatCountdown(_endTs - _since) : '';
-        return '<span style="font-size:' + _icon + ';flex-shrink:0;">🏁</span>' +
-            '<span style="' + _lblStyle + '">Rodada encerrada</span>' +
-            '<span style="' + _valStyle + '">' + _dur + '</span>';
+        return _pilha('🏁', 'Rodada encerrada', '<span style="' + _valStyle + '">' + _dur + '</span>');
     }
     var _txt = window._formatCountdown ? window._formatCountdown(Date.now() - _since) : '';
-    return '<span style="font-size:' + _icon + ';flex-shrink:0;">▶️</span>' +
-        '<span style="' + _lblStyle + '">Rodada em andamento</span>' +
-        '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>';
+    return _pilha('▶️', 'Rodada em andamento',
+        '<span data-elapsed-since="' + _since + '" style="' + _valStyle + '">' + _txt + '</span>');
 };
 
 // v4.x: FONTE ÚNICA da decisão do COUNTDOWN da Liga (o box "Início da temporada / Próximo
@@ -1917,10 +1955,18 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         ? 'padding:14px 18px;background:' + _rb.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
         : 'padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
     return '<div style="margin-top:' + _mt + ';' + _box + '">' +
+        // v1.7.86: rótulo e relógio EMPILHADOS. Antes dividiam UMA linha e, com a
+        // escala grande, o rótulo virava "Fim da r…" — some justamente a palavra
+        // que diz DE QUE prazo se trata. Ordem do dono, olhando o card: "aqui o
+        // fim da r... e o timer devem ficar em 2 linhas para nao truncar."
+        // O ícone fica na coluna da esquerda (não empilha com o texto); rótulo em
+        // cima, número embaixo — e o rótulo pode quebrar em quantas linhas quiser.
         '<div style="display:flex;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
           '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';flex-shrink:0;">' + _ce.icon + '</span>' +
-          '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _label + '</span>' +
-          '<span data-countdown-target="' + _ts + '" style="margin-left:auto;font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;' + (_lg ? 'line-height:1;' : '') + 'white-space:nowrap;flex-shrink:0;">' + _txt + '</span>' +
+          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
+            '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;line-height:1.2;overflow-wrap:anywhere;">' + _label + '</span>' +
+            '<span data-countdown-target="' + _ts + '" style="font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;">' + _txt + '</span>' +
+          '</div>' +
         '</div>' + _line2 +
     '</div>';
 };
@@ -2275,10 +2321,20 @@ window._buildTournamentConfigBox = function (t, opts) {
     return '<details class="info-box tourn-config-box"' + openAttr +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%;">' +
+        // v1.7.83: a ordem era ⚙️ + NOME DO FORMATO + "configuração ▾" na MESMA
+        // linha, com o nome elipsado — e com a escala grande (até 1.7) ele nunca
+        // cabia: "Pontos Corridos / El…" (medido +8px). O nome do formato é a
+        // informação; "configuração ▾" é o CONTROLE de abrir/fechar.
+        // Ordem do dono: "aqui a configuracao com a seta para descolapsar fica na
+        // primeira linha e o resto vai para a linha de baixo" · "aqui o box pode
+        // ter mais linhas quando necessario."
+        // Então: linha 1 = ⚙️ configuração ▾ (sempre cabe, é curto); linha 2+ =
+        // o formato INTEIRO, quebrando em quantas linhas precisar. Zero corte.
         '<span style="display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
-        '<span style="flex-shrink:0;">⚙️</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + summary + '</span>' +
-        '<span style="opacity:0.7;font-weight:500;font-size:0.68rem;flex-shrink:0;white-space:nowrap;">configuração ▾</span>' +
+        '<span style="flex-shrink:0;">⚙️</span>' +
+        '<span style="opacity:0.7;font-weight:500;font-size:0.68rem;white-space:nowrap;">configuração ▾</span>' +
         '</span>' +
+        '<span style="min-width:0;max-width:100%;overflow-wrap:anywhere;line-height:1.35;padding-left:22px;">' + summary + '</span>' +
         (digestLine ? '<span style="font-weight:500;font-size:0.68rem;opacity:0.85;line-height:1.4;padding-left:22px;">' + digestLine + '</span>' : '') +
         '</summary>' +
         '<div style="margin-top:6px;display:flex;flex-direction:column;gap:2px;">' + rows.join('') + '</div>' +

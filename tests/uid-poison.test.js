@@ -88,6 +88,7 @@ load('bracket-logic.js');   // _slotUids
 load('tournaments-categories.js'); // _getParticipantCategories / _participantInCategory
 load('wo-claim.js');        // _woMatchMembers
 load('draw-decisions.js');  // _entryIsPresent / _applyPresenceRoll
+load('wo-core.js');        // motor de W.O. (v1.8.0: saiu da view)
 load('participants.js');    // _applyWO — o motor
 
 let pass = 0, fail = 0;

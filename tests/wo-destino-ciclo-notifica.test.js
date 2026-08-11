@@ -93,6 +93,8 @@ function parseDom(html) {
   return {
     acao,
     byId: { 'liga-wo-dest': { querySelectorAll: () => dests }, 'liga-fill-action': acao },
+    // simula o toque do organizador num candidato que nasceu desmarcado (v1.7.90)
+    marcarCandidato: (uid) => { cands.forEach((c) => { if (c.getAttribute('data-uid') === uid) c._on = '1'; }); },
     query: (sel) => {
       if (sel.indexOf('liga-fill-cands') !== -1) return cands.filter((c) => c._on === '1');
       if (sel.indexOf('liga-wo-dest') !== -1) return dests.filter((x) => x.on === '1');
@@ -153,6 +155,15 @@ sec(function () {
 sec(function () {
   const t = novoT(); boot(t);
   win._ligaPickFill(t.id, 0, 'R1 Grupo W', 'Thereza');
+  // v1.7.90 — REVISADO DE PROPÓSITO, com o motivo aqui. Até a 1.7.89 TODOS os candidatos
+  // nasciam marcados no diálogo, então este cenário convidava Sandra E Paulo sem tocar em
+  // nada. A regra mudou por ordem do dono ("o padrao certo é só vir o primeiro que
+  // respeitar a proporcao"): agora nasce marcado UM só, e convidar um SEGUNDO é gesto
+  // deliberado. É esse gesto que a linha abaixo simula — `_on='1'` é exatamente o que o
+  // toque em `_ligaToggleCand` grava. O invariante que a seção defende NÃO mudou e segue
+  // testado: quem é convidado e perde a vaga tem que ser avisado. Sem marcar o Paulo, o
+  // teste estaria cobrando um convite que a regra nova corretamente não faz.
+  DOM.marcarCandidato('uid_paulo');
   win._ligaInviteSelected(t.id, 0, 'R1 Grupo W', 'Thereza');
   const iv = t.ligaSubInvites.filter((x) => x.inviteeUid === 'uid_sandra')[0];
   boot(t, 'uid_sandra'); NOTIFS = [];

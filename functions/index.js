@@ -40,15 +40,18 @@ const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
 // autoridade pra isso. Pendurado no syncMatchRosters (mesmo gatilho, custo zero).
 const _rosterWatch = require("./roster-watch-core");
+const _rosterMirror = require("./roster-mirror-core");
 const _delGuard = require("./delete-account-guard-core");
 const _renameProp = require("./rename-propagate-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
 
-// CORS unificado pros callables/onRequest do frontend. Inclui produção, o ambiente
-// de STAGING (scoreplace-staging.web.app + .firebaseapp.com) e localhost de dev.
-// Centralizado pra evitar drift entre as ~23 functions e dar paridade prod↔staging.
+// CORS unificado pros callables/onRequest do frontend: produção, os esquemas do app
+// nativo e localhost de dev. Centralizado pra evitar drift entre as ~23 functions.
+// (Até a 1.8.3 listava também scoreplace-staging.web.app/.firebaseapp.com; o ambiente
+// foi deletado em 19/jul/2026 e nenhum cliente pode originar de um host que não
+// resolve — as duas entradas saíram.)
 // ORIGENS que podem chamar as CFs. O APP NATIVO NÃO fala "https://scoreplace.app": o WKWebView
 // PROÍBE registrar handler pra http/https, então o Capacitor descarta iosScheme:"https" e cai no
 // default → a origem no iPhone é "capacitor://scoreplace.app" (CAPInstanceDescriptor: se
@@ -64,24 +67,16 @@ const APP_ORIGINS = [
   "capacitor://localhost",        // iOS nativo sem hostname configurado
   "http://localhost",             // Android WebView legado
   "https://localhost",            // Android nativo (androidScheme https sem hostname)
-  "https://scoreplace-staging.web.app",
-  "https://scoreplace-staging.firebaseapp.com",
   "http://localhost:9876",
 ];
 
-// ── KILL-SWITCH DE NOTIFICAÇÕES NO STAGING ───────────────────────────────────
-// O staging compartilha os MESMOS backends de prod (FCM, SMTP
-// Brevo via extensão). Pra simular torneios com os inscritos REAIS sem disparar
-// nada pra eles, TODA entrega externa (e-mail, push) vira no-op quando
-// rodando no projeto de staging. Em prod IS_STAGING é false → comportamento
-// idêntico ao de sempre. As notificações in-app (docs em users/{uid}/notifications)
-// continuam sendo criadas — visíveis na UI do staging, mas sem entrega externa.
-const IS_STAGING = String(process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "").indexOf("staging") !== -1;
-
 // Enfileira e-mail na coleção mail/ (consumida pela extensão firestore-send-email).
-// No staging NÃO escreve nada → a extensão não tem o que entregar → zero e-mail.
+// Até 19/jul/2026 havia aqui um kill-switch IS_STAGING (no-op de toda entrega
+// externa quando GCLOUD_PROJECT continha "staging"); o projeto scoreplace-staging
+// foi deletado e o guard saiu na 1.8.2 — só existe produção, ele era constante
+// false. O killswitch que continua VIVO e importa é o do SANDBOX, que é por
+// TORNEIO e roda em produção. Ver [[project_sandbox_tournament]].
 async function _enqueueMail(dbRef, doc) {
-  if (IS_STAGING) { console.log("[staging] e-mail suprimido (mail/ não escrito)"); return null; }
   return dbRef.collection("mail").add(doc);
 }
 
@@ -6210,6 +6205,41 @@ exports.syncMatchRosters = onDocumentWritten(
           JSON.stringify(_rw.suspeitos.slice(0, 5)));
       }
     } catch (_rwErr) { /* o vigia NUNCA derruba o gatilho */ }
+
+    // ── v1.7.99 · ESPELHO DO ROSTER — AGORA AQUI, E SÓ AQUI ────────────────
+    // `tournaments/{id}/participants/{uid}` é a REDE contra perda de inscrito (Gersom,
+    // 1.7.29). Ele vivia no CLIENTE e MEDIDO em 10/ago: **não existe regra pra essa
+    // subcoleção**, então toda escrita de cliente voltava `permission-denied` — a rede
+    // nunca existiu de fato. Cânone do dono: tudo roda na CF, o cliente só dispara.
+    //
+    // Aqui é o lugar CERTO, e não só o permitido: este gatilho vê TODA escrita, de
+    // QUALQUER cliente — inclusive o app NATIVO antigo, que não tem auto-update e nunca
+    // vai chamar CF nenhuma. Ele cobre o que a `enrollParticipant` não cobre: os
+    // MOVIMENTOS (W.O., promoção da fila, saída) e a inscrição que cai no fallback do
+    // cliente quando a CF falha.
+    //
+    // Roda ANTES do early-return de baixo (que só olha mudança de JOGO): mudança de
+    // roster frequentemente não mexe em jogo nenhum, e sair antes cegaria a rede
+    // justamente nos eventos que ela existe pra registrar.
+    // Best-effort e isolado: falhar aqui não pode derrubar o gatilho nem o save que já
+    // aconteceu — o array no doc do torneio segue sendo a fonte da verdade.
+    try {
+      const _plano = _rosterMirror.planRosterMirror(before, after);
+      if (_plano.total) {
+        // ⚠️ handle PRÓPRIO, não o `db` da função: ele é `const` declarado MAIS ABAIXO,
+        // e `const` fica em zona morta temporal até a linha dele — usá-lo aqui estoura
+        // com "Cannot access 'db' before initialization". Foi exatamente o que o log da
+        // 1ª tentativa acusou; o `catch` conteve, mas o espelho não escrevia nada.
+        const _db = admin.firestore();
+        const _col = _db.collection("tournaments").doc(tid).collection("participants");
+        await Promise.all(_plano.writes.map((w) =>
+          _col.doc(w.uid).set(w.doc, { merge: true })
+            .catch((e) => console.error("[espelho-roster] " + tid + "/" + w.uid + ": " + (e && e.message)))));
+        console.log("[espelho-roster] " + tid + " · " + _plano.total + " doc(s) atualizados");
+      }
+    } catch (_rmErr) {
+      console.error("[espelho-roster] " + tid + " falhou:", _rmErr && _rmErr.message);
+    }
 
     // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
     const beforeSig = {};

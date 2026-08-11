@@ -289,25 +289,32 @@ function mkDbEspelho(banco) {
   ok(Object.keys(e.subdocs).length === 0, 'primeiro save só memoriza — não dispara escrita em massa');
 }
 
-// ── (17) quem ENTRA ganha doc próprio ────────────────────────────────────────
+// ── (17-18) REVISADAS DE PROPÓSITO em v1.7.98 ────────────────────────────────
+// Aqui havia duas seções exigindo que `saveTournament` escrevesse no espelho
+// (`tournaments/{id}/participants/{uid}`): "quem entra ganha doc próprio" e "quem sai é
+// marcado como left". Elas passavam porque o Firestore FALSO deste harness aceita
+// qualquer escrita — e o Firestore de VERDADE nega: **não existe regra pra essa
+// subcoleção** (`grep -c 'match /participants'` no firestore.rules = 0), então toda
+// escrita do cliente voltava `permission-denied` desde a 1.7.29. Era um teste verde em
+// cima de código que nunca funcionou em produção — a armadilha do
+// [[feedback_green_tests_still_broken]].
+//
+// O invariante que elas defendiam (existir prova por pessoa) NÃO foi abandonado: quem
+// espelha é a CF `enrollParticipant`, no mesmo ponto em que grava a inscrição. O que
+// mudou é QUEM escreve — cânone do dono: tudo roda na CF, o cliente só dispara.
+//
+// No lugar delas, a garantia que importa agora: o cliente NÃO PODE voltar a escrever ali.
 {
   const banco = { id: 'T1', participants: [P('u-ana')] };
   const e = mkDbEspelho(banco);
-  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')] });          // memoriza
+  await DB.saveTournament({ id: 'T1', participants: [P('u-ana')] });
   await DB.saveTournament({ id: 'T1', participants: [P('u-ana'), P('u-nova')] });
-  ok(e.subdocs['u-nova'] && e.subdocs['u-nova'].status === 'enrolled', 'quem entra ganha doc próprio');
-  ok(!e.subdocs['u-ana'], 'quem já estava não é reescrito (só o delta)');
-}
-
-// ── (18) quem SAI é MARCADO, não apagado ─────────────────────────────────────
-// O histórico de quem saiu é exatamente o que faltou pra reconstruir o incidente.
-{
-  const banco = { id: 'T1', participants: [P('u-ana'), P('u-vai')] };
-  const e = mkDbEspelho(banco);
-  await DB.saveTournament({ id: 'T1', participants: [P('u-ana'), P('u-vai')] });
   await DB.saveTournament({ id: 'T1', participants: [P('u-ana')] }, { allowRosterRemoval: true });
-  ok(e.subdocs['u-vai'] && e.subdocs['u-vai'].status === 'left', 'quem sai é MARCADO como left (não apagado)');
-  ok(!!e.subdocs['u-vai'].leftAt, 'com a hora da saída');
+  ok(Object.keys(e.subdocs).length === 0,
+     'o cliente NÃO escreve na subcoleção do espelho — nem ao entrar, nem ao sair (é CF-only)');
+  const fonte = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
+  ok(!/this\._mirrorRoster|self\._mirrorRoster/.test(fonte),
+     'e nenhuma chamada a _mirrorRoster voltou ao firebase-db.js');
 }
 
 // ══ PLACAR não é apagado por save que não é de placar (v1.7.30) ══════════════

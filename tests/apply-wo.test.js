@@ -76,7 +76,10 @@ vm.createContext(sandbox);
 
 const ROOT = path.join(__dirname, '..');
 // carrega a cadeia REAL: model → logic → participants (motor _applyWO + _processWoSubstitutions)
-['js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/participants.js'].forEach((rel) => {
+// v1.8.0: o motor (_applyWO / _applyWoSubsToTournament) saiu do participants.js pro
+// wo-core.js — PURO e por isso vendorável pela CF (a view não era). Este teste é a prova
+// de que foi mudança de ENDEREÇO e não de comportamento: as asserções são as mesmas.
+['js/views/bracket-model.js', 'js/views/bracket-logic.js', 'js/views/wo-core.js', 'js/views/participants.js'].forEach((rel) => {
   vm.runInContext(fs.readFileSync(path.join(ROOT, rel), 'utf8'), sandbox, { filename: rel });
 });
 const W = sandbox;

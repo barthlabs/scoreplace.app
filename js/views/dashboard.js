@@ -2446,7 +2446,7 @@ function renderDashboard(container) {
           '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:600px;margin:0 auto;">' +
             '<button class="btn hover-lift" onclick="if(typeof window._openCasualMatch===\'function\')window._openCasualMatch()" style="background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff;border:none;font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">⚡ Partida Casual</button>' +
             '<button class="btn hover-lift" onclick="if(typeof openModal===\'function\')openModal(\'modal-quick-create\')" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">🏆 Criar torneio</button>' +
-            '<button class="btn hover-lift" title="Procure lugares para seus jogos e marque presença" onclick="window.location.hash=\'#place\'" style="background:linear-gradient(135deg,#FFD700,#DAA520);color:#1a0f00;border:none;font-weight:800;padding:10px 18px;font-size:0.85rem;border-radius:10px;">📍 Place</button>' +
+            '<button class="btn hover-lift" title="Procure lugares para seus jogos e marque presença" onclick="window.location.hash=\'#place\'" style="background:linear-gradient(135deg,#FFD700,#DAA520);color:#1a0f00;border:none;font-weight:800;padding:10px 18px;font-size:0.85rem;border-radius:10px;">📍 Presença</button>' +
             '<button class="btn hover-lift" onclick="window.location.hash=\'#explore\'" style="background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">👥 Encontrar amigos</button>' +
           '</div>' +
           '<div style="margin-top:1.25rem;font-size:0.78rem;color:var(--text-muted);">Dica: se já existe um torneio público na sua cidade, ele vai aparecer aqui automaticamente.</div>' +
@@ -2569,7 +2569,28 @@ function renderDashboard(container) {
     // regra da caixa invisível (que reduz a fonte pra não cortar) vale pra
     // gente, e cortar "Organiz…" não perde identidade de ninguém.
     const _corta = _wrapLabel ? '' : 'overflow:hidden;text-overflow:ellipsis;max-width:100%;';
-    return `<div style="flex:0 1 92px;min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
+    // v1.7.88 — A PILL CRESCE PRA PREENCHER A LINHA.
+    // Era `flex:0 1 92px`: o `0` PROÍBE crescer, então as pills ficavam travadas
+    // em 92px com sobra de espaço nas duas laterais — e o rótulo cortava ("Organiza…",
+    // "Participa…", "Encerrad…") tendo espaço livre logo ao lado. Print do dono no
+    // celular: "aqui temos espaço para aumentar a largura dos box para nao precisar ...".
+    // `flex:1 1 92px` mantém 92px como base (mesma quantidade de pills por linha) e
+    // deixa cada uma dividir a sobra — o texto passa a caber sem tocar na reticência,
+    // que fica só como rede pra nome muito longo em escala muito grande.
+    // v1.7.96 — TRÊS POR LINHA (3x3 com a linha social de baixo).
+    // Ordem do dono, com o print: "temos 4 box em cima e 2 embaixo. daria para fazer
+    // 3 em cima e 3 embaixo deixando 3x3 sem mexer no ultimo que tem tamanho
+    // diferente. com isso os 4 de cima teriam mais largura e poderiam caber melhor
+    // o texto." Com base 92px cabiam 4 por linha e os rótulos de uma palavra só
+    // ("Organizados", "Participando") batiam na reticência da v1.7.83 — havia
+    // largura disponível, só não estava sendo distribuída.
+    // A base passa a ser UM TERÇO da linha (o gap do container é 0.5rem, então 2
+    // gaps = 1rem). Continua FLEX de propósito, não grid: com 4 ou 5 filtros (a
+    // pill de Favoritos/Encerrados só existe com count > 0) a sobra da última linha
+    // fica CENTRALIZADA — que foi exatamente o motivo de a v0.17.50 ter saído do
+    // grid auto-fit, onde o item órfão colava à esquerda. `min-width:80px` segue
+    // como piso: em tela muito estreita o wrap cai pra 2 sozinho.
+    return `<div style="flex:1 1 calc((100% - 1rem) / 3);min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};${_corta}">${label}</h3>
@@ -2605,7 +2626,7 @@ function renderDashboard(container) {
         : (opts.subtitleDataAttr
             ? '<div' + subAttr + ' style="font-size:0.62rem;font-weight:700;color:var(--hero-text-soft,#94a3b8);line-height:1.1;margin-top:2px;font-variant-numeric:tabular-nums;letter-spacing:0.2px;white-space:nowrap;"></div>'
             : '');
-      return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:0 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+      return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:1 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
         <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
         <span${countAttr} style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
         <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.1;">${label}</h3>
@@ -2617,7 +2638,7 @@ function renderDashboard(container) {
       : (opts.subtitleDataAttr
           ? '<div' + subAttr + ' style="font-size:0.62rem;font-weight:700;color:var(--hero-text-soft,#94a3b8);line-height:1.1;margin-top:1px;font-variant-numeric:tabular-nums;letter-spacing:0.2px;white-space:nowrap;"></div>'
           : '');
-    return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:0 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
+    return `<div${titleAttr}${pillDataAttrs ? ' ' + pillDataAttrs : ''} style="flex:1 1 ${flexBasis}px;min-width:${minWidth}px;background:var(--hero-pill-inactive-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:0.55rem 0.45rem;border-radius:10px;border:1px solid var(--hero-pill-inactive-border);cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;" onclick="${onclickJs}" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='none';this.style.boxShadow='none'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span${countAttr} style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       ${subtitleHtml}
@@ -2845,7 +2866,7 @@ function renderDashboard(container) {
           </button>
           <button class="btn btn-cta hover-lift" id="btn-place" title="Procure lugares para seus jogos e marque presença" style="--shine-delay:1.2s;background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">📍</span>
-            <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Place</span>
+            <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Presença</span>
           </button>
         </div>
         <!-- v2.3.87: ordem do hero box reorganizada — (1) Convidar + Pessoas,

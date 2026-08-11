@@ -1784,3 +1784,27 @@ html, body,
    "➕ Criar categoria" da Análise de Inscritos caber na coluna de 50% do celular. O botão
    virou TOGGLE sem texto (createToggle), então o problema de largura deixou de existir e as
    classes ficaram sem nenhum consumidor em JS. */
+
+/* ─── v1.7.89 — MOLDURA NÃO É CONTEÚDO: RECUO DO CARD COM TETO ──────────────
+   Ordem do dono: "esse melhor aproveitamento com margens menores no card do torneio
+   em qualquer tamanho de interface".
+
+   MEDIDO no dashboard a 150% (escala 1.95, raiz 33px): o `.card` ficava com 41,4px de
+   recuo de CADA lado e o `.cards-grid` com 49,7px de vão entre colunas — porque os dois
+   estão em `rem` e portanto CRESCEM junto com a interface. O efeito é perverso: quem
+   aumenta a letra por enxergar menos é justamente quem perde mais largura para a
+   moldura. Na medição, o card tinha 436px numa janela de 955.
+
+   O texto DEVE escalar (é conteúdo, é o que a pessoa lê). O recuo NÃO precisa: ele só
+   separa. Por isso vira `clamp()` — acompanha a escala num trecho e para num teto,
+   valendo em QUALQUER tamanho da interface, que foi o pedido.
+
+   Vertical fica generoso (o respiro entre blocos é o que dá leitura); o corte é lateral,
+   que é onde a largura é disputada. */
+.card {
+  padding-left: clamp(0.6rem, 0.5rem + 0.6vw, 1.1rem);
+  padding-right: clamp(0.6rem, 0.5rem + 0.6vw, 1.1rem);
+}
+.cards-grid {
+  gap: clamp(0.5rem, 0.4rem + 0.5vw, 1rem);
+}

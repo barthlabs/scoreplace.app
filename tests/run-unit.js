@@ -312,6 +312,15 @@ const SUITES = [
   'tests/wo-slot-uid-identity.test.js',
   'tests/wo-claim-uid-por-estrutura.test.js',
   'tests/elenco-nunca-encolhe.test.js',
+  // Irmão do de cima: aquele trava o que SUMIU de um save atrasado; este trava o que
+  // VOLTOU NO TEMPO (mesmos jogos, conteúdo antigo — a substituição desfeita sozinha).
+  // Roda as DUAS portas de escrita juntas, que é onde o buraco estava. v1.7.91.
+  'tests/save-atrasado-nao-desfaz-troca.test.js',
+  // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.
+  'tests/save-atrasado-nao-apaga-grupo.test.js',
+  // CAUSA-RAIZ do inscrito invisível: o push otimista da inscrição não pode ser persistido
+  // por um save de outra coisa quando a resposta do servidor nunca chega. v1.8.1.
+  'tests/inscricao-otimista-nao-persiste.test.js',
   'tests/monarch-wo-uid-identity.test.js',
   'tests/liga-wo-invite.test.js',
   'tests/swiss-to-elim-transition.test.js',
@@ -466,6 +475,9 @@ const SUITES = [
   // a mesma pessoa como "Fabi2401@" na classificação e "Dani Bataglia" nos jogos.
   'tests/nome-vem-do-perfil-nao-do-sorteio.test.js',
   'functions/test-merge-collections-core.js',
+  // O espelho do roster saiu do cliente (onde nunca funcionou — sem regra, sempre negado)
+  // e virou responsabilidade do gatilho `syncMatchRosters`. v1.7.99.
+  'functions/test-roster-mirror-core.js',
   // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
   // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,
   // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.
@@ -646,9 +658,15 @@ const SUITES = [
   // o acervo ficava devendo um id PARA SEMPRE, a barra parava em 98% e o verde virava
   // violeta. Junto: "concluí" virou verificação contra o índice, não impressão de página.
   'tests/lz-amistoso-fecha-a-conta.test.js',
+  'tests/lz-posicao-de-grupo-nao-e-podio.test.js',
+  'tests/lz-colocacao-final.test.js',
   // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
   // (o da matriz não recebia nada), e repintar no meio do save não apaga o feedback.
   'tests/analise-botao-salvando.test.js',
+  // "Juliana Dal+Sasso" — o `+` do form-encoding da Apple chegava GRAVADO no banco
+  // (e no displayName_lower, quebrando a busca); e a faixa do slider morava em 4
+  // lugares e 2 unidades, fazendo o mesmo teto ser lido ora como 130%, ora 169%.
+  'tests/nome-e-escala-sem-lixo.test.js',
 ];
 
 let failed = [];

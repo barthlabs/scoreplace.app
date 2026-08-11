@@ -170,7 +170,9 @@ function enqueue(fn) {
   return run.then(dec, function (e) { dec(); throw e; });
 }
 
-var CS_MATCHES = ['https://scoreplace.app/*', 'https://scoreplace-staging.web.app/*', 'http://localhost/*'];
+// (scoreplace-staging.web.app saiu na 1.8.3: ambiente deletado em 19/jul/2026, o host
+// devolve 404 — padrão de match que nunca casa com aba nenhuma.)
+var CS_MATCHES = ['https://scoreplace.app/*', 'http://localhost/*'];
 var CS_FILES = ['lib/letzplay-api.js', 'lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
 function injectIntoOpenScoreplaceTabs() {
   if (!chrome.scripting || !chrome.tabs) return;
