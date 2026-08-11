@@ -1332,6 +1332,10 @@
   var _LZ_C_CAT = '#a78bfa';    // categoria  — violeta (a cor do letzplay no app)
   var _LZ_C_POS = '#fbbf24';    // colocação  — âmbar (pódio)
   var _LZ_C_TRILHA = '#f3f4f6'; // trilha     — BRANCO (é contexto, não classificação)
+  // posição de GRUPO — cinza de propósito: NÃO é pódio, e o âmbar de cima já significa
+  // conquista. Foi justamente pintar posição de grupo com cor (e medalha) de pódio que
+  // fez o app anunciar bronze pra quem foi último no grupo.
+  var _LZ_C_GRUPO = '#94a3b8';
 
   function _lzPad2(n) { return (n < 10 ? '0' : '') + n; }
   var _LZ_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -1437,7 +1441,7 @@
       var ja = porId[k];
       if (ja) {
         // funde: a melhor colocação e a primeira categoria/trilha conhecidas vencem
-        if (ja.pos == null || (pos != null && pos < ja.pos)) ja.pos = pos;
+        if (ja.pos == null || (pos != null && pos.pos < ja.pos.pos)) ja.pos = pos;
         if (!ja.cat && part.cat) ja.cat = part.cat;
         if (!ja.trilha && trilha) ja.trilha = trilha;
         if (!ja.data && datas[k]) ja.data = _lzFmtDataNum(datas[k]);
@@ -1463,23 +1467,62 @@
       var pp = _lzSplitCat(pn, pc);
       linhas.push({ lido: false, ord: -pend, nome: pp.nome, cat: pp.cat, trilha: null, data: null, pos: null });
     });
-    if (!linhas.length) return '';
-    // cronológica INVERSA; sem data (não lido) desce, preservando a ordem da lista pública
-    linhas.sort(function (a, b) { return b.ord - a.ord; });
+    if (!linhas.length) { (window._lzCompItens || (window._lzCompItens = {}))[kind] = []; return ''; }
+    // (a ordenação cronológica inversa mora em _lzRenderComps, que ordena letzplay e
+    // scoreplace JUNTOS — ordenar aqui de novo não faria diferença e esconderia isso)
     // ORDEM DOS CAMPOS (pedido do dono): data · nome · CATEGORIA · CLASSIFICAÇÃO · trilha.
     // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
     // classificação nem categoria, e disputava a atenção quando estava colorida.
-    return linhas.map(function (L) {
+    var itens = linhas.map(function (L) {
       var h = '<div style="padding:2px 0;">' + (L.lido ? (_rank ? '📊 ' : '🏆 ') : '⏳ ');
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
-      if (L.pos != null) h += ' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos) + ' ' + L.pos + 'º</span>';
+      // COLOCAÇÃO só é pódio quando o dado diz que é (ranking). Em torneio o número vem da
+      // tabela de GRUPO — dizer "🥉 3º" pra quem foi o último de um grupo de 3 é inventar
+      // um resultado que não existiu. Ver o comentário de _lzMyPosIn.
+      if (L.pos) {
+        h += L.pos.ranking
+          ? (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>')
+          : (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">' +
+             (L.pos.grupo ? _esc(L.pos.grupo) + ' · ' : 'grupo · ') + L.pos.pos + 'º' +
+             (L.pos.de ? ' de ' + L.pos.de : '') + '</span>');
+      }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
-      return h + '</div>';
-    }).join('');
+      return { ord: L.ord, h: h + '</div>' };
+    });
+    // PUBLICA OS ITENS pra o scoreplace poder INTERCALAR (e não concatenar) — ver
+    // _lzRenderComps. Antes daqui a função só devolvia HTML pronto, e por isso o bloco do
+    // app só tinha como ser grudado no fim: era essa a origem da ordem quebrada.
+    (window._lzCompItens || (window._lzCompItens = {}))[kind] = itens;
+    return _lzRenderComps(kind);
   };
+
+  // ── UMA LISTA SÓ, ORDENADA — letzplay + scoreplace ───────────────────────────
+  // O dono: "os torneios não estão sendo apresentados na ordem cronológica invertida (letz
+  // e score)". Estavam ordenados DENTRO de cada fonte e concatenados: 5 do letzplay (ago26…
+  // dez24) e depois 3 do app (jul26, jul26, jun26) — logo um "jul 26" aparecia DEPOIS de um
+  // "dez 24".
+  // ⚠️ A causa de não terem sido fundidos antes é que as chaves são de ESCALAS diferentes:
+  // o letzplay ordena por AAAAMMDD (20241201) e o app por epoch em ms (~1,7e12). Somar os
+  // dois num sort só faria TODO item do app subir pro topo. Por isso a chave é normalizada
+  // pra AAAAMMDD nos dois lados (_lzOrdDeTs), que é a granularidade que a linha exibe.
+  // Não-lidos entram com ord NEGATIVO de propósito e continuam afundando, preservando a
+  // ordem da lista pública, que é a única noção de tempo que se tem deles.
+  function _lzRenderComps(kind) {
+    var itens = ((window._lzCompItens || {})[kind] || []).slice();
+    itens.sort(function (a, b) { return (b.ord || 0) - (a.ord || 0); });
+    return itens.map(function (x) { return x.h; }).join('');
+  }
+  // epoch ms → AAAAMMDD pelos COMPONENTES LOCAIS (nunca parse de string, nunca UTC — é o
+  // cânone de data do projeto; ver [[project_date_parsing_canonical]]).
+  function _lzOrdDeTs(ts) {
+    if (!ts) return 0;
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return 0;
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
 
   // JUNTA O QUE É DO SCOREPLACE às abas do diálogo. Assíncrono de propósito: o histórico
   // do letzplay já está em memória e abre na hora; o do scoreplace é uma leitura do
@@ -1797,10 +1840,18 @@
           '<span style="color:#818cf8;font-weight:700;">scoreplace</span></div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
+      // INTERCALA — não concatena. Empurra as linhas do app pra a MESMA lista do letzplay
+      // e re-renderiza ordenando as duas fontes juntas. O `A[alvo] = A[alvo] + …` que
+      // estava aqui é o que fazia um torneio de jul/26 do app aparecer DEPOIS de um de
+      // dez/24 do letzplay. A chave vai normalizada pra AAAAMMDD (a do letzplay), senão o
+      // epoch em ms jogaria tudo do app pro topo.
       function juntar(alvo, lista) {
         if (!lista.length) return;
-        lista.sort(function (a, b) { return b.ts - a.ts; });
-        A[alvo] = (A[alvo] || '') + lista.map(function (x) { return x.h; }).join('');
+        var reg = (window._lzCompItens || (window._lzCompItens = {}));
+        reg[alvo] = (reg[alvo] || []).concat(lista.map(function (x) {
+          return { ord: _lzOrdDeTs(x.ts), h: x.h };
+        }));
+        A[alvo] = _lzRenderComps(alvo);
       }
       juntar('tour', linhasT);
       juntar('rank', linhasR);
@@ -2692,11 +2743,28 @@
   // Tela individual (v1.1.21): nome + @ + última atualização + botão de puxar a
   // COMPLETA daquele atleta — substitui os botões de lote da Análise.
   // Posição do atleta na classificação gravada de um torneio (footprint[].standings).
+  // ⚠️ O QUE ESTE NÚMERO É — e o que ele NÃO é (bug reportado pelo dono, 10/ago/2026).
+  //
+  // Ele devolvia só `r.pos`, e o render pintava isso como colocação no torneio, COM MEDALHA.
+  // Mas `standings` de TORNEIO é a lista de GRUPOS da fase de grupos (o scraper diz isso na
+  // cara: `.table-group` → [{ group:'GRUPO 01', rows:[...] }]), então `pos` é a posição
+  // DENTRO DO GRUPO. MEDIDO no doc real do dono: no BTG Pactual Masc 50 ele é `pos 4 de 4`
+  // no GRUPO 02 — ÚLTIMO do grupo — e a tela mostrava "🏅 4º"; no Masc D é `3 de 3` e saía
+  // "🥉 3º", bronze. Ele nunca passou da primeira fase em nenhum: o app estava inventando
+  // pódio a partir de tabela de grupo.
+  //
+  // RANKING é outra coisa e continua valendo: ali o scraper devolve
+  // [{ group:'Classificação', ranking:true, ... }] e a posição É a classificação real.
+  // Por isso a distinção sai do DADO (`g.ranking`), não de um palpite da tela.
+  // Retorna { pos, grupo, de, ranking } ou null.
   function _lzMyPosIn(standings, handle) {
     var low = String(handle || '').toLowerCase(), out = null;
     (standings || []).forEach(function (g) {
-      (g.rows || []).forEach(function (r) {
-        if (out == null && r.pos != null && (r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) out = r.pos;
+      var rows = g.rows || [];
+      rows.forEach(function (r) {
+        if (out != null || r.pos == null) return;
+        if (!(r.handles || []).some(function (x) { return String(x).toLowerCase() === low; })) return;
+        out = { pos: r.pos, grupo: g.group || null, de: rows.length, ranking: !!g.ranking };
       });
     });
     return out;
