@@ -8,6 +8,10 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // Bloco CSS sem `}` engole o RESTO do arquivo, sem erro nenhum. Aconteceu em
+  // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
+  // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
+  'tests/css-nao-perde-regra.test.js',
   // a colocação do letzplay CHEGA na tela (o motor existia e estava mudo)
   'tests/lz-colocacao-na-tela.test.js',
   // nenhuma frase da leitura culpa o letzplay (regra do dono, 2 reincidências)

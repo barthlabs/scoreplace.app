@@ -169,6 +169,7 @@ window._translations['pt'] = {
   // Landing page
   'landing.tagline': 'Jogue em outro nível — torneios, partidas casuais, presença e locais esportivos.',
   'landing.cta': 'Entrar no scoreplace.app',
+  'landing.entering': 'Entrando…',
   'landing.ctaBottom': 'Comece agora — é grátis!',
   'landing.featuresTitle': 'Recursos da plataforma',
   'landing.howTitle': 'Como funciona',

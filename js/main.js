@@ -1881,18 +1881,48 @@ window._installButtonHtml = function (opts) {
 // v2.3.99: "Entrar" que JÁ INSTALA antes de logar quando há prompt nativo
 // (Android Chrome/Edge, desktop) — "instala e já entra". No iOS Safari (sem prompt
 // nativo) só abre o login; o botão separado de instalar continua na tela.
-window._enterApp = async function () {
+// `btn` é OPCIONAL — quando vem (o CTA da landing passa `this`), o botão fica cinza com
+// "Entrando…" até o login estar na tela. [[project_busy_button_canonical]]
+//
+// POR QUE ISTO PRECISOU DE CONSERTO (12/ago/2026, relato do dono: _"clicar no entrar
+// demora demais para funcionar sem qualquer feedback visual. isso não pode acontecer"_):
+// o CTA chamava `_enterApp()` sem passar o botão e sem tocar em estado nenhum — MEDIDO no
+// navegador, logo após o clique o botão seguia `disabled:false`, sem spinner e sem filtro.
+// E a demora tem causa REAL no caminho de instalação: quando há prompt pendente
+// (Android/Chrome desktop) a função faz `await userChoice` ANTES de abrir o login, então
+// fica parada enquanto o usuário decide — com o botão parecendo morto o tempo todo.
+window._enterApp = async function (btn) {
+  var _soltou = false;
+  var soltar = function () {
+    if (_soltou) return;
+    _soltou = true;
+    if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
+  };
+  if (btn && typeof window._spinButton === 'function') {
+    window._spinButton(btn, (typeof window._t === 'function' && window._t('landing.entering')) || 'Entrando…');
+  }
   try {
-    if (window._deferredInstallPrompt && !(window._isInstalledAsPWA && window._isInstalledAsPWA())) {
-      window._deferredInstallPrompt.prompt();
-      try { await window._deferredInstallPrompt.userChoice; } catch (e) {}
-      if (window._markInstallBannerInstalled) window._markInstallBannerInstalled();
-      window._deferredInstallPrompt = null;
-    }
-  } catch (e) {}
-  // Entra (login)
-  if (typeof window.openModal === 'function') window.openModal('modal-login');
-  else if (typeof window.handleGoogleLogin === 'function') window.handleGoogleLogin();
+    try {
+      if (window._deferredInstallPrompt && !(window._isInstalledAsPWA && window._isInstalledAsPWA())) {
+        window._deferredInstallPrompt.prompt();
+        try { await window._deferredInstallPrompt.userChoice; } catch (e) {}
+        if (window._markInstallBannerInstalled) window._markInstallBannerInstalled();
+        window._deferredInstallPrompt = null;
+      }
+    } catch (e) {}
+    // Entra (login)
+    if (typeof window.openModal === 'function') window.openModal('modal-login');
+    else if (typeof window.handleGoogleLogin === 'function') window.handleGoogleLogin();
+  } finally {
+    // O login na tela É a entrega deste botão — soltar aqui.
+    // ⚠️ NUNCA `requestAnimationFrame` pra isto: rAF NÃO DISPARA com a página oculta
+    // (aba em segundo plano, prompt do sistema por cima, tela apagada). MEDIDO: com o
+    // painel do navegador escondido o rAF simplesmente não roda, e o botão ficava cinza
+    // até o backstop de 8s do _spinButton — que é exatamente o caminho de quem toca em
+    // "Entrar" e leva um diálogo de instalação na frente. `setTimeout` dispara nos dois
+    // casos; os 50ms só deixam o modal pintar antes de o cinza sair.
+    setTimeout(soltar, 50);
+  }
 };
 
 window._showAndroidInstallBanner = function() {
