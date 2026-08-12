@@ -12,6 +12,10 @@ const SUITES = [
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
   'tests/css-nao-perde-regra.test.js',
+  // Carregando é UMA tela só. Havia CINCO — e a que o dono via "no meio da experiência"
+  // era o default do _renderBallLoader (bolinha + texto, sem barra). A do router (Entrar
+  // → dashboard) tinha barra INDETERMINADA, e por isso nunca mostrava %.
+  'tests/carregando-e-uma-tela-so.test.js',
   // a colocação do letzplay CHEGA na tela (o motor existia e estava mudo)
   'tests/lz-colocacao-na-tela.test.js',
   // nenhuma frase da leitura culpa o letzplay (regra do dono, 2 reincidências)

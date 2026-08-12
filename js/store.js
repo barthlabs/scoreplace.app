@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.25';
+window.SCOREPLACE_VERSION = '1.8.26';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -991,27 +991,20 @@ window._ensureBootOverlay = function() {
       st.textContent = '@keyframes scoreplace-ball-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes scoreplace-ball-pulse{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 12px rgba(212,244,60,0.6))}}@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
       (document.head || host).appendChild(st);
     }
-    var ballSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%"><defs><radialGradient id="spjbball" cx="37%" cy="31%" r="80%"><stop offset="0" stop-color="#EFEA57"/><stop offset="46%" stop-color="#D2E000"/><stop offset="86%" stop-color="#A6C614"/><stop offset="100%" stop-color="#8CA811"/></radialGradient><clipPath id="spjbclip"><circle cx="24" cy="24" r="22"/></clipPath></defs><circle cx="24" cy="24" r="22" fill="url(#spjbball)"/><g clip-path="url(#spjbclip)"><path d="M24,-3 C58,18 -10,30 24,51" fill="none" stroke="#7a9410" stroke-width="3.4" opacity="0.4"/><path d="M24,-3 C58,18 -10,30 24,51" fill="none" stroke="#fff" stroke-width="2.6" opacity="0.97"/></g></svg>';
+    // (o desenho da bola vive no _TENNIS_BALL_SVG, usado pelo corpo único — a cópia local saiu)
     var ov = document.createElement('div');
     ov.id = 'sp-js-boot-overlay';
     ov.setAttribute('role', 'status');
     ov.setAttribute('aria-label', 'Carregando scoreplace.app');
     ov.style.cssText = 'position:fixed;inset:0;background:#0f172a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:100000;transition:opacity .35s ease;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
-    ov.innerHTML =
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;" aria-hidden="true">' +
-        '<svg width="40" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
-        '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
-      '</div>' +
-      '<div aria-hidden="true" style="width:3rem;height:3rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + ballSvg + '</div>' +
-      '<div style="font-size:.78rem;color:#64748b;">Carregando…</div>' +
-      // v4.1.23: barra 3D laranja indeterminada (mesma da tela rica) — este fallback não pode
-      // mais aparecer "pobre" (só bola) quando o boot inline sumiu.
-      '<div aria-hidden="true" style="position:relative;width:300px;max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin-top:4px;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
-        '<div style="position:absolute;top:2px;bottom:2px;width:42%;border-radius:999px;animation:sp-rich-bar 1.05s ease-in-out infinite;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
-      '</div>';
+    // O CORPO ÚNICO — logo + bola + mensagem + barra com %. O mesmo de _showLoading,
+    // do router e das ~12 telas do meio do app. Uma tela só.
+    ov.innerHTML = window._spLoaderBodyHtml('Carregando…', { size: '3rem' });
     host.appendChild(ov);
+    window._spLoaderTick();
     var _tick = function() {
       if (window._bootReady === true) {
+        window._spLoaderFinish(ov);
         ov.style.opacity = '0';
         setTimeout(function() { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 380);
         return;
@@ -2627,34 +2620,120 @@ window._loadingSpinner = { show: function(m){ if (window._showLoading) window._s
 // As keyframes ficam em <style id="scoreplace-ball-keyframes"> injetado
 // uma vez no <head>. Pode coexistir com o estilo do _loadingSpinner
 // (chaves com prefixo diferente) sem conflito.
+// ─── CARREGANDO: UMA TELA SÓ, EM TODO LUGAR ────────────────────────────────────────
+// Ordem do dono (12/ago/2026): _"a tela de carregando deveria ser canônica sempre a mesma
+// em qualquer situação em que uma tela carregando aparece e isso não acontece. lá no meio
+// da experiência, ainda aparece em determinados momentos a tela de carregando antiga."_
+//
+// MEDIDO — existiam CINCO apresentações, todas "quase" iguais:
+//   1. #scoreplace-boot-loader (index.html)  → bola + logo + barra COM %
+//   2. _ensureBootOverlay                    → bola + logo + barra indeterminada
+//   3. _showLoading                          → bola + msg, SEM logo, barra indeterminada
+//   4. _renderBallLoader SEM `bar`           → só bolinha + texto cinza  ← "a antiga"
+//   5. _renderBallLoader COM `bar`           → bola + barra indeterminada
+// A (4) é a que o dono via "no meio da experiência": ela é o default de 10 telas
+// (histórico, troféus, ficha do jogador, ferramentas do organizador, locais, casual…).
+// E a (5) é a do router — a tela ENTRE o Entrar e a dashboard, que por isso não tinha %.
+//
+// Agora existe UM markup. A barra COM % é obrigatória — `opts.bar` deixou de existir, e
+// quem não passava barra passa a ter. Slot minúsculo dentro de card continua sendo o
+// `_renderBallLoaderInline` (uma linha com bolinha), que não é "tela".
+//
+// SOBRE O %: onde não há progresso mensurável ele avança por CREEP até 95% e só crava 100%
+// quando o carregamento termina — exatamente o que o boot loader já fazia desde a v2.8.47,
+// e por isso não é número inventado: ele nunca afirma "pronto" antes de estar.
+window._spLoaderKeyframes = function () {
+  if (document.getElementById('scoreplace-ball-keyframes')) return;
+  var style = document.createElement('style');
+  style.id = 'scoreplace-ball-keyframes';
+  style.textContent =
+    '@keyframes scoreplace-ball-spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }' +
+    '@keyframes scoreplace-ball-pulse { 0%,100% { filter: drop-shadow(0 0 0 transparent);} 50% { filter: drop-shadow(0 0 12px rgba(212,244,60,0.6));} }' +
+    '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
+  document.head.appendChild(style);
+};
+
+// A BARRA canônica — a mesma pílula 3D laranja do boot loader, com o % por cima.
+// `largura` deixa a barra acompanhar telas pequenas (slot de card) sem virar outra barra.
+window._spLoaderBarHtml = function (largura) {
+  var w = largura || '300px';
+  return '<div class="sp-loader-bar" data-sp-prog="4" style="position:relative;width:' + w + ';max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
+      '<div class="sp-loader-fill" style="position:absolute;top:2px;bottom:2px;left:2px;width:4%;border-radius:999px;transition:width .25s ease-out;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
+      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:#fbe6c4;text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;">4%</div>' +
+    '</div>';
+};
+
+// UM relógio só anima TODA barra que estiver no DOM — assim os ~12 chamadores que montam
+// HTML por string (innerHTML) ganham o % sem precisar mudar nenhum deles. Liga sozinho
+// quando nasce a primeira barra e se desliga quando não há mais nenhuma (zero timer órfão).
+window._spLoaderTick = function () {
+  if (window._spLoaderTimer) return;
+  window._spLoaderTimer = setInterval(function () {
+    var barras = document.querySelectorAll('.sp-loader-bar');
+    if (!barras.length) { clearInterval(window._spLoaderTimer); window._spLoaderTimer = null; return; }
+    for (var i = 0; i < barras.length; i++) {
+      var b = barras[i];
+      var p = parseFloat(b.getAttribute('data-sp-prog')) || 0;
+      // Creep desacelerando: sobe rápido no começo e vai encostando em 95 sem nunca chegar.
+      // Nunca crava 100 aqui — 100 é o FIM, e quem o declara é _spLoaderFinish.
+      if (p < 95) p += Math.max(0.35, (95 - p) * 0.055);
+      if (p > 95) p = 95;
+      b.setAttribute('data-sp-prog', String(p));
+      var f = b.querySelector('.sp-loader-fill'); if (f) f.style.width = p.toFixed(1) + '%';
+      var t = b.querySelector('.sp-loader-pct');  if (t) t.textContent = Math.round(p) + '%';
+    }
+  }, 140);
+};
+
+// Crava 100% nas barras de um escopo antes de a tela sair — sem isto o carregamento
+// termina em "73%" e fica a sensação de que foi cortado no meio.
+window._spLoaderFinish = function (raiz) {
+  try {
+    var barras = (raiz || document).querySelectorAll('.sp-loader-bar');
+    for (var i = 0; i < barras.length; i++) {
+      barras[i].setAttribute('data-sp-prog', '100');
+      var f = barras[i].querySelector('.sp-loader-fill'); if (f) f.style.width = '100%';
+      var t = barras[i].querySelector('.sp-loader-pct');  if (t) t.textContent = '100%';
+    }
+  } catch (e) {}
+};
+
+// A MARCA da tela de carregando — a mesma do boot inline (barras + estrela + wordmark).
+window._spLoaderLogoHtml = function () {
+  return '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:2px;" aria-hidden="true">' +
+      '<svg width="40" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
+      '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
+    '</div>';
+};
+
+// ⭐ O CORPO ÚNICO DA TELA DE CARREGANDO — logo + bola girando + mensagem + barra com %.
+// Ordem do dono: _"se tiver bolinha carregando e barra % tem que ser uma tela só sempre.
+// não 5."_ Então TODO lugar que mostra bola + barra monta ESTE corpo, e mais nada:
+// `_renderBallLoader` (as ~12 telas do meio do app, inclusive a do router entre o Entrar
+// e a dashboard), `_showLoading` (Sortear/Salvar) e `_ensureBootOverlay` (splash de
+// fallback). O boot inline do index.html repete a mesma composição por obrigação técnica
+// — ele roda ANTES de qualquer script existir — e há teste travando que continue igual.
+// Quem precisa de um indicador de UMA LINHA dentro de um card usa
+// `_renderBallLoaderInline`: ali não há bola grande nem barra, então não é "tela".
+window._spLoaderBodyHtml = function (label, opts) {
+  opts = opts || {};
+  window._spLoaderKeyframes();
+  var size = opts.size || '3rem';
+  var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
+  return '<div style="text-align:center;">' +
+      window._spLoaderLogoHtml() +
+      '<div aria-hidden="true" style="width:' + size + ';height:' + size + ';margin:0.6rem auto 0.85rem;display:block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + window._TENNIS_BALL_SVG(size) + '</div>' +
+      '<div role="status" aria-live="polite" data-load-msg style="color:var(--text-muted, #9ca3af);font-size:0.88rem;font-weight:600;">' + safeLabel + '</div>' +
+      window._spLoaderBarHtml(opts.barWidth || '300px') +
+    '</div>';
+};
+
 window._renderBallLoader = function(label, opts) {
   opts = opts || {};
-  if (!document.getElementById('scoreplace-ball-keyframes')) {
-    var style = document.createElement('style');
-    style.id = 'scoreplace-ball-keyframes';
-    style.textContent =
-      '@keyframes scoreplace-ball-spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }' +
-      '@keyframes scoreplace-ball-pulse { 0%,100% { filter: drop-shadow(0 0 0 transparent);} 50% { filter: drop-shadow(0 0 12px rgba(212,244,60,0.6));} }' +
-      '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
-    document.head.appendChild(style);
-  }
-  var size = opts.size || '3rem';
   var minHeight = opts.minHeight || '40vh';
-  var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
-  // v4.1.23: opts.bar → mostra a MESMA barra 3D laranja indeterminada do boot loader /
-  // _showLoading (tela RICA única). Ligado nos contextos FULL-SCREEN (router auth, boot
-  // fallback); slots inline de card seguem sem barra (opts.bar ausente).
-  var barHtml = opts.bar
-    ? '<div aria-hidden="true" style="position:relative;width:300px;max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
-        '<div style="position:absolute;top:2px;bottom:2px;width:42%;border-radius:999px;animation:sp-rich-bar 1.05s ease-in-out infinite;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
-      '</div>'
-    : '';
+  setTimeout(window._spLoaderTick, 0);   // o HTML ainda vai ser inserido pelo chamador
   return '<div class="scoreplace-ball-loader" style="display:flex;justify-content:center;align-items:center;min-height:' + minHeight + ';">' +
-    '<div style="text-align:center;">' +
-      '<div aria-hidden="true" style="width:' + size + ';height:' + size + ';margin-bottom:0.85rem;display:inline-block;line-height:1;animation:scoreplace-ball-spin 1.2s linear infinite;">' + window._TENNIS_BALL_SVG(size) + '</div>' +
-      '<div role="status" aria-live="polite" style="color:var(--text-muted, #9ca3af);font-size:0.88rem;font-weight:600;">' + safeLabel + '</div>' +
-      barHtml +
-    '</div>' +
+    window._spLoaderBodyHtml(label, opts) +
   '</div>';
 };
 
@@ -5304,20 +5383,16 @@ window._showLoading = function (msg) {
         '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
       document.head.appendChild(_kf);
     }
-    var _ball = (typeof window._TENNIS_BALL_SVG === 'function') ? window._TENNIS_BALL_SVG('4rem') : '🎾';
     ov = document.createElement('div');
     ov.id = 'sp-global-loading';
     ov.setAttribute('role', 'status');
     ov.setAttribute('aria-live', 'polite');
     ov.style.cssText = 'position:fixed;inset:0;z-index:100050;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.92);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
-    ov.innerHTML =
-      '<div aria-hidden="true" style="width:4rem;height:4rem;line-height:1;display:inline-block;animation:scoreplace-ball-spin 1.2s linear infinite;">' + _ball + '</div>' +
-      '<div data-load-msg style="color:#e2e8f0;font-size:1rem;font-weight:800;text-align:center;padding:0 24px;">' + window._safeHtml(msg || 'Carregando…') + '</div>' +
-      // barra 3D laranja (mesma pílula do boot loader) com preenchimento INDETERMINADO
-      '<div aria-hidden="true" style="position:relative;width:300px;max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
-        '<div style="position:absolute;top:2px;bottom:2px;width:42%;border-radius:999px;animation:sp-rich-bar 1.05s ease-in-out infinite;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
-      '</div>';
+    // O CORPO ÚNICO — logo + bola + mensagem + barra com %. Igual ao do router, ao das
+    // ~12 telas do meio do app e ao splash. Uma tela só, como o dono mandou.
+    ov.innerHTML = window._spLoaderBodyHtml(msg || 'Carregando…', { size: '4rem' });
     document.body.appendChild(ov);
+    window._spLoaderTick();
     // auto-dismiss: some quando um painel/diálogo/overlay de RESULTADO entra no body.
     if (typeof MutationObserver === 'function') {
       var obs = new MutationObserver(function (muts) {
@@ -5345,7 +5420,14 @@ window._hideLoading = function () {
     if (window._spLoadingObs) { try { window._spLoadingObs.disconnect(); } catch (e) {} window._spLoadingObs = null; }
     if (window._spLoadingTimer) { clearTimeout(window._spLoadingTimer); window._spLoadingTimer = null; }
     var ov = document.getElementById('sp-global-loading');
-    if (ov) ov.remove();
+    if (ov) {
+      // Crava 100% e deixa o olho ver antes de tirar da tela: sem isto o carregamento
+      // termina num "73%" congelado, que lê como corte no meio.
+      window._spLoaderFinish(ov);
+      ov.style.transition = 'opacity .18s ease';
+      setTimeout(function () { ov.style.opacity = '0'; }, 90);
+      setTimeout(function () { if (ov.parentNode) ov.remove(); }, 300);
+    }
   } catch (e) {}
 };
 // Navegação real (hashchange) = chegou outra tela → esconde o loader. NÃO dispara no
