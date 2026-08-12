@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.31';
+window.SCOREPLACE_VERSION = '1.8.32';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -587,6 +587,18 @@ window._formatLabel = function (t) {
         el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
+        // v1.8.31: A FOTO CHEGA DEPOIS — E QUEM DEPENDE DELA PRECISA SABER.
+        // Até a 1.7.52 o `venuePhotoBg` já vinha PRONTO no render (com a URL paga do
+        // Places), então tudo que depende de "tem foto atrás de mim" era decidido ali.
+        // A 1.7.53 tirou a URL do render — certíssimo, PINTAR era PAGAR — mas quem lê
+        // `venuePhotoBg` passou a receber SEMPRE "não tem foto", mesmo nos cards que
+        // recebem foto um instante depois. Resultado: estilo calibrado pra fundo liso
+        // acabando em cima de uma foto. Este marcador é a correção do sinal: só existe
+        // quando a foto foi REALMENTE pintada — se ela não vier, nada muda.
+        // ⚠️ Atributo dedicado (e não a classe `card-has-photo`) de propósito: aquela
+        // classe governa o tema claro do card INTEIRO (style.css) e ligá-la aqui mexeria
+        // em toda a app de uma vez. Ver o achado registrado no CLAUDE.md.
+        el.setAttribute('data-vphoto-on', '1');
       });
     });
   };
@@ -9098,6 +9110,90 @@ window._classifMapFromMatches = function (t, matches) {
   var faux = { matches: rest, format: 'Eliminatórias Simples', thirdPlaceMatch: third, tiebreakers: t && t.tiebreakers };
   try { window._updateProgressiveClassification(faux); } catch (e) { return {}; }
   return faux.classification || {};
+};
+
+// QUEM REALMENTE DISPUTOU — tirado SÓ dos jogos.
+// Ordem do dono (12/ago/2026): _"considera apenas as 8 equipes que participaram
+// desconsiderando quem ficou na lista de espera/ausentes. classificacao final entre os
+// participantes apenas"_. Ler dos JOGOS entrega isso sem precisar descontar nada: quem
+// ficou na espera nunca ocupou um slot, e o ausente que levou W.O. ocupou (e é justo que
+// ocupe — ele tem posição). TBD/BYE não são gente. No caso medido, o "Duplas Mistas
+// Sorteadas" tem 8 no elenco, 1 no standby e 10 na espera, e isto devolve exatamente 8.
+window._classifCompetitors = function (matches) {
+  var set = {};
+  (matches || []).forEach(function (m) {
+    [m && m.p1, m && m.p2].forEach(function (n) {
+      n = (n == null ? '' : String(n)).trim();
+      if (n && n !== 'TBD' && n !== 'BYE') set[n] = 1;
+    });
+  });
+  return Object.keys(set);
+};
+
+// A CLASSIFICAÇÃO FECHOU? Só quando TODO competidor que entrou em quadra tem posição.
+// ⚠️ Compara NOME A NOME, não `length >= length`: os dois números podem empatar com um
+// nome faltando e outro sobrando (dupla reescrita por substituição, por exemplo), e aí a
+// contagem diria "fechada" com alguém de fora — que é o oposto do pedido.
+window._classifIsComplete = function (matches, clMap) {
+  var comp = window._classifCompetitors(matches);
+  if (!comp.length) return false;
+  var map = clMap || {};
+  for (var i = 0; i < comp.length; i++) if (map[comp[i]] == null) return false;
+  return true;
+};
+
+// A COLOCAÇÃO DE UMA PESSOA NUM TORNEIO NOSSO → { pos, total, time } ou null.
+// Nasce do relato do dono (12/ago/2026): a ficha da Kelly na Análise mostrava o torneio
+// "Duplas Mistas Sorteadas" MUDO, enquanto as linhas do letzplay ao lado traziam "5º/8º".
+// Não era reflexo do rótulo "parcial" (outra tela, outra fonte): aquela linha simplesmente
+// nunca teve colocação — o próprio comentário dela dizia "esta linha ainda não mostra
+// colocação". Isto é o resolvedor que faltava, e ele DELEGA tudo ao que já existe:
+// `_classifMapFromMatches` / `_classifUnifiedMap` são as MESMAS funções que desenham a
+// classificação na página do torneio, então as duas telas não têm como divergir.
+//
+// ⚠️ IDENTIDADE É O UID. O time é achado pelo uid do SLOT (`_slotUids`), nunca pelo nome:
+// o rótulo gravado em `m.p1`/`m.p2` envelhece quando a pessoa troca de displayName, e foi
+// exatamente esse o defeito da 1.7.46. O rótulo só é usado DEPOIS, como chave do mapa de
+// classificação — que é keyed por rótulo porque a dupla não tem uid próprio.
+//
+// ⚠️ Só devolve com a classificação FECHADA (`_classifIsComplete`). Ordem do dono:
+// "classificacao final entre os participantes apenas". Torneio em andamento não publica
+// colocação na ficha de ninguém — meia-classificação vira promessa que muda sozinha.
+window._placementInTournament = function (t, uid) {
+  if (!t || !uid) return null;
+  var ms = (typeof window._collectAllMatches === 'function')
+    ? (window._collectAllMatches(t) || []) : (Array.isArray(t.matches) ? t.matches : []);
+  if (!ms.length) return null;
+  var su = (typeof window._slotUids === 'function') ? window._slotUids : null;
+  if (!su) return null;
+
+  // qual RÓTULO de time é o desta pessoa, e em que linha da chave ela jogou
+  var label = null, linha = null;
+  for (var i = 0; i < ms.length; i++) {
+    var m = ms[i];
+    if (su(m, 'p1').indexOf(uid) >= 0) { label = m.p1; linha = (m.bracket || 'main'); break; }
+    if (su(m, 'p2').indexOf(uid) >= 0) { label = m.p2; linha = (m.bracket || 'main'); break; }
+  }
+  if (!label || label === 'TBD' || label === 'BYE') return null;
+
+  // MESMO desenho da página do torneio (_renderPodiumsAndClassif): com grande final a
+  // classificação é a unificada; com 2+ linhas sem grande final cada linha classifica a
+  // si mesma; senão, fase única.
+  var tierKeys = (typeof window._classifTierKeys === 'function') ? window._classifTierKeys(ms) : ['main'];
+  var hasGF = ms.some(function (m) { return (m.bracket || '') === 'grandfinal'; });
+  var escopo = ms, map;
+  if (hasGF && typeof window._classifUnifiedMap === 'function') {
+    map = window._classifUnifiedMap(t, ms, tierKeys);
+  } else if (tierKeys.length >= 2) {
+    escopo = ms.filter(function (m) { return (m.bracket || 'main') === linha; });
+    map = window._classifMapFromMatches(t, escopo);
+  } else {
+    map = window._classifMapFromMatches(t, ms);
+  }
+  if (!window._classifIsComplete(escopo, map)) return null;
+  var pos = map[label];
+  if (pos == null) return null;
+  return { pos: pos, total: window._classifCompetitors(escopo).length, time: label };
 };
 
 // classificação GERAL com grande final: campeão=1º, vice=2º, 3º/4º das semis, depois as

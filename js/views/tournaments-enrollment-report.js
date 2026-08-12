@@ -1556,7 +1556,16 @@
     // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
     // classificação nem categoria, e disputava a atenção quando estava colorida.
     var itens = linhas.map(function (L) {
-      var h = '<div style="padding:2px 0;">' + (L.lido ? (_rank ? '📊 ' : '🏆 ') : '⏳ ');
+      // v1.8.31: A LINHA ABRE PELA ORIGEM. Pedido do dono: _"vamos abrir cada item com o
+      // LP ou logo do scoreplace (antes da data)"_. O selo saiu do FIM da linha e tomou o
+      // lugar do 🏆/📊 genérico — que era o MESMO glifo nas duas fontes e, numa lista
+      // INTERCALADA (1.8.5), não dizia nada: a origem só aparecia no fim, depois de nome,
+      // categoria, colocação e trilha. Trocar um marcador redundante por um informativo
+      // não custa largura. O ⏳ de "ainda não lido" FICA, logo depois do selo: é estado da
+      // leitura, não origem — as duas coisas convivem na mesma linha.
+      var h = '<div style="padding:2px 0;">' +
+              (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp') + ' ' +
+              (L.lido ? '' : '⏳ ');
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
@@ -1609,9 +1618,9 @@
       else if (!L.pos && !L.data && !L.cat && !L.trilha) {
         h += ' · <span style="opacity:0.55;">sem jogos publicados</span>';
       }
-      // de onde veio. RK vem ANTES do LP quando a competição está no letzplay como RANKING
-      // — é o que denuncia o "torneio" que foi publicado no lugar errado.
-      h += ' · ' + (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp');
+      // (v1.8.31: os selos RK/LP subiram pra ABERTURA da linha — ver o topo desta função.
+      // RK continua vindo ANTES do LP, que é o que denuncia o "torneio" publicado como
+      // ranking no letzplay; o que mudou é ONDE, não a regra.)
       return { ord: L.ord, h: h + '</div>' };
     });
     // PUBLICA OS ITENS pra o scoreplace poder INTERCALAR (e não concatenar) — ver
@@ -1987,10 +1996,39 @@
           : _pares.length === 1
           ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' + _esc(_pares[0]) + '</span>'
           : '';
-        var h = '<div style="padding:2px 0;">🏆 ' +
+        // A COLOCAÇÃO, que faltava. Relato do dono: a linha do "Duplas Mistas Sorteadas"
+        // vinha muda enquanto as do letzplay ao lado traziam "5º/8º". Sai do resolvedor
+        // canônico (`_placementInTournament`), que usa as MESMAS funções que desenham a
+        // classificação na página do torneio — as duas telas não podem divergir. Só
+        // aparece com a classificação FECHADA, e o total conta apenas quem entrou em
+        // quadra (espera/ausentes fora), que é a regra que o dono deu.
+        var _tour = (c.tid && typeof window._findTournamentById === 'function')
+          ? window._findTournamentById(c.tid) : null;
+        var _plc = (_tour && typeof window._placementInTournament === 'function')
+          ? window._placementInTournament(_tour, uid) : null;
+        // ⚠️ POSIÇÃO ÚNICA — "Nº", NUNCA "Nº/Mº".
+        // Eu escrevi "7º/8º" querendo dizer "7º de 8" e o dono cortou na hora: _"cada dupla
+        // numa única posição porra. nao posso ocupar 2 posicoes"_. Ele está certo, e o erro
+        // é de VOCABULÁRIO, não de gosto: nesta MESMA lista a barra já significa FAIXA — as
+        // linhas do letzplay imprimem "5º/8º (quartas)" pra dizer "caiu nas quartas, ficou
+        // entre 5º e 8º" (é o que _lzPlacement devolve fora do pódio). Ou seja, "7º/8º"
+        // seria lido como um intervalo de duas colocações. Aqui a posição é EXATA — a chave
+        // fechou e cada dupla tem uma só. O total continua no objeto (`_plc.total`) porque é
+        // o que prova que a classificação fechou, mas NÃO vai pra tela nesta notação.
+        // Pódio em âmbar com medalha, resto em cinza — colocação fora do pódio é informação,
+        // não conquista (mesma gramática da linha irmã).
+        var posHtml = _plc
+          ? ' · <span style="color:' + (_plc.pos <= 3 ? _LZ_C_POS : _LZ_C_GRUPO) + ';font-weight:' +
+            (_plc.pos <= 3 ? '800' : '600') + ';">' +
+            (_plc.pos <= 3 ? _lzMedalhaPos(_plc.pos) + ' ' : '') +
+            _plc.pos + 'º</span>'
+          : '';
+        // v1.8.31: abre pelo selo do scoreplace, ANTES da data — mesma regra da linha do
+        // letzplay (ver _lzSelo e o topo do builder de lá). O 🏆 saiu: ele era idêntico ao
+        // das linhas do letzplay e, numa lista intercalada, não distinguia origem nenhuma.
+        var h = '<div style="padding:2px 0;">' + _lzSelo('sp') + ' ' +
           (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
-          nomeHtml + duplaHtml + ' · ' +
-          _lzSelo('sp') + '</div>';
+          nomeHtml + posHtml + duplaHtml + '</div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
       // INTERCALA — não concatena. Empurra as linhas do app pra a MESMA lista do letzplay

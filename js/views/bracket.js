@@ -2644,8 +2644,11 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       : '';
   }
   // Classificação POR LINHA (mapa { nome: pos }) — delega ao global canônico.
+  function _lineMatches(bracketKey) {
+    return pm.filter(function (m) { return (m.bracket || 'main') === bracketKey; });
+  }
   function _lineClassifMap(bracketKey) {
-    var lm = pm.filter(function (m) { return (m.bracket || 'main') === bracketKey; });
+    var lm = _lineMatches(bracketKey);
     return (typeof window._classifMapFromMatches === 'function') ? window._classifMapFromMatches(t, lm) : {};
   }
   function _classifBlock(matchesArr, third, color, label, openByDefault) {
@@ -2653,8 +2656,20 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     var src = third ? matchesArr.concat([third]) : matchesArr;
     return _renderClassifFromMap(window._classifMapFromMatches(t, src), color, label, openByDefault);
   }
+  // v1.8.31: "PARCIAL" DEIXA DE SER PALAVRA FIXA E VIRA LEITURA DO DADO.
+  // Relato do dono, com print do "Duplas Mistas Sorteadas" já ENCERRADO e com as 8 equipes
+  // posicionadas: _"explica como está escrito a porra do parcial aqui"_. O rótulo estava
+  // cravado na string desde que este bloco nasceu, então a linha dizia "parcial" até num
+  // torneio terminado — e não tinha nada a ver com Ouro/Prata: este caminho é o da
+  // classificação POR LINHA, e uma Eliminatória Simples também tem UMA linha ('main'),
+  // logo passa por aqui igual. Agora quem decide é `_classifIsComplete`: fechou quando
+  // todo mundo que ENTROU EM QUADRA tem posição — espera e ausentes fora, que é a regra
+  // que o dono deu. Medido no doc real: 8 definidos / 8 participaram → "final".
   function _tierClassifHtml(bracketKey, color) {
-    return _renderClassifFromMap(_lineClassifMap(bracketKey), color, '📊 Classificação parcial', false);
+    var lm = _lineMatches(bracketKey);
+    var map = _lineClassifMap(bracketKey);
+    var fechada = (typeof window._classifIsComplete === 'function') && window._classifIsComplete(lm, map);
+    return _renderClassifFromMap(map, color, fechada ? '📊 Classificação final' : '📊 Classificação parcial', false);
   }
   // Classificação GERAL (quando HÁ grande final unindo as linhas) — delega ao global.
   // v4.x: geral COLAPSADA por default (consistente com a classificação geral da fase 0 e
