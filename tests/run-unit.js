@@ -498,6 +498,11 @@ const SUITES = [
   // O espelho do roster saiu do cliente (onde nunca funcionou — sem regra, sempre negado)
   // e virou responsabilidade do gatilho `syncMatchRosters`. v1.7.99.
   'functions/test-roster-mirror-core.js',
+  // Apagar o torneio apaga as CÓPIAS dele nas pessoas (`users/{uid}/matchHistory`) — que
+  // o delete do cliente nunca tocou, deixando o torneio vivo na ficha da própria pessoa e
+  // morto na de todos os outros. Trava também o `t_<tid>_<matchId>` contra bracket-ui.js
+  // e o fato de `participants` ser CF-only (sem regra → cliente negado). CF-only, 12/ago/2026.
+  'functions/test-tournament-purge-core.js',
   // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
   // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,
   // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.

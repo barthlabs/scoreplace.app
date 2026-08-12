@@ -1,0 +1,19 @@
+{
+  "//": "Config DEDICADA ao teste ponta-a-ponta do gatilho purgeTournamentCopies. Sobe Firestore + Functions pra o onDocumentDeleted DISPARAR DE VERDADE. NÃO usar pra deploy (deploy de CF = scripts/deploy-functions.sh). Rodada via: npm run test:purge",
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs22"
+    }
+  ],
+  "firestore": {
+    "rules": "tests/concurrency/firestore.allow.rules"
+  },
+  "emulators": {
+    "firestore": { "port": 8081 },
+    "functions": { "port": 5011 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}
