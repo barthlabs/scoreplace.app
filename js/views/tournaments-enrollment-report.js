@@ -1596,6 +1596,19 @@
       }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
+      // ── LINHA LIDA E MUDA: DIZER POR QUÊ ──────────────────────────────────────
+      // Reação do dono (12/ago/2026) na linha do "TORNEIO RP 2026 - 10 anos":
+      // _"desse outro torneio nao tem nada? classificacao, dupla, fase? que caramba"_.
+      // MEDIDO no doc dele e conferido por ele na origem: o torneio foi ABERTO
+      // (`toursDone` = 3, o carimbo de chave resolvida), veio sem chave, sem tabela de
+      // grupo, sem data e sem NENHUM dos 64 jogos apontando pra ele — a página do torneio
+      // diz, com todas as letras, que os jogos ainda não estão disponíveis.
+      // Ou seja: a linha estava CERTA e calada, e é a calada que parece defeito. Sem data
+      // (que sai do jogo mais recente dele no torneio) não há um único jogo lido — é esse
+      // o sinal, e ele não depende de reler nada.
+      else if (!L.pos && !L.data && !L.cat && !L.trilha) {
+        h += ' · <span style="opacity:0.55;">sem jogos publicados</span>';
+      }
       // de onde veio. RK vem ANTES do LP quando a competição está no letzplay como RANKING
       // — é o que denuncia o "torneio" que foi publicado no lugar errado.
       h += ' · ' + (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp');
@@ -1906,6 +1919,13 @@
     return (p && (p.displayName || p.name)) || null;
   }
 
+  // Id dentro de onclick="…('X')". A BARRA VEM PRIMEIRO: escapar a aspa antes duplicaria
+  // a barra que a própria fuga acabou de escrever. É a armadilha registrada no CLAUDE.md
+  // (v0.8.6) — um id com aspa/barra fecha o atributo e derruba o arquivo inteiro.
+  function _escAttr(s) {
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  }
+
   function _lzJuntarScoreplace(uid, meNome) {
     if (!uid) return;
     var proprio = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) === uid;
@@ -1934,8 +1954,16 @@
       itens.forEach(function (it) {
         if (!it.official) return;                       // casual não é competição
         var k = it.tournamentId || ('nome:' + (it.competition || ''));
-        var b = porComp[k] || (porComp[k] = { nome: it.competition || 'Torneio', ts: 0, fmt: it.tournamentFormat || '' });
+        var b = porComp[k] || (porComp[k] = { nome: it.competition || 'Torneio', ts: 0, fmt: it.tournamentFormat || '',
+                                              tid: it.tournamentId || null, pares: {}, nPares: 0 });
         if ((it.ts || 0) > b.ts) b.ts = it.ts || 0;
+        // COM QUEM — o torneio é NOSSO, então a dupla sai dos próprios jogos gravados.
+        // Mesma lei do letzplay ([[project_letzplay_dupla_fixa_vs_variavel]]): parceiro
+        // único no torneio inteiro = dupla fixa e se nomeia; mais de um = dupla variável.
+        // Aqui não há "fase que deu a colocação" pra escopar, porque esta linha ainda não
+        // mostra colocação — o escopo é o torneio, e é o que o dado permite afirmar.
+        var _p = String(it.partner || '').trim();
+        if (_p && !b.pares[_p]) { b.pares[_p] = 1; b.nPares++; }
       });
       var linhasT = [], linhasR = [];
       Object.keys(porComp).forEach(function (k) {
@@ -1943,9 +1971,25 @@
         var liga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(c.fmt) : /liga|ranking|pontos corridos/i.test(c.fmt || '');
         var d = c.ts ? new Date(c.ts) : null;
         var data = d ? (_lzPad2(d.getDate()) + ' ' + (_LZ_MES[d.getMonth()] || '') + ' ' + String(d.getFullYear()).slice(2)) : null;
+        // O NOME VIRA LINK PRA CHAVE. Só o do scoreplace pode: é torneio nosso, o id está
+        // aqui e a tela existe. Continua um <a href> de verdade (o onclick só marca o
+        // bilhete de volta) — se o JS falhar, o link ainda leva ao torneio.
+        var _uidFicha = uid;
+        var nomeHtml = c.tid
+          ? '<a href="#tournaments/' + _esc(String(c.tid)) + '" onclick="return window._lzIrAoTorneio(' +
+              "'" + _escAttr(String(c.tid)) + "','" + _escAttr(String(_uidFicha || '')) + "'" + ')" ' +
+              'style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
+              _esc(c.nome) + '</a>'
+          : '<span>' + _esc(c.nome) + '</span>';
+        var _pares = Object.keys(c.pares || {});
+        var duplaHtml = _pares.length > 1
+          ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">dupla variável</span>'
+          : _pares.length === 1
+          ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' + _esc(_pares[0]) + '</span>'
+          : '';
         var h = '<div style="padding:2px 0;">🏆 ' +
           (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
-          '<span>' + _esc(c.nome) + '</span> · ' +
+          nomeHtml + duplaHtml + ' · ' +
           _lzSelo('sp') + '</div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
@@ -4942,6 +4986,34 @@
 
   // ─── Public renderer ─ chamado pelo router ──────────────────────────
   // Padrão centralizado: igual a renderProfilePage / renderSupportPage etc.
+  // ── IDA E VOLTA: ficha → chave do torneio → ficha ────────────────────────────
+  // Pedido do dono: _"sendo torneio do scoreplace, poderia ser um link direto para o
+  // torneio no qual o voltar voltaria para essa tela (assim se pode fazer uma consulta
+  // rápida a chave do torneio)"_.
+  //
+  // A IDA só marca o bilhete e deixa o <a href> navegar — se o marcador falhar, o link
+  // continua funcionando e a pessoa só perde o atalho de volta, nunca o destino.
+  window._lzIrAoTorneio = function (tid, uid) {
+    try {
+      if (typeof window._spMarcarVolta === 'function') {
+        window._spMarcarVolta({ para: window.location.hash || '', aplicaEm: '#tournaments/' + tid, uid: uid || null });
+      }
+    } catch (e) {}
+    return true;
+  };
+  // A VOLTA reabre a ficha de quem estava aberto — voltar pra Análise "crua" seria devolver
+  // a pessoa a meio caminho, e ela teria que reencontrar o atleta na lista. Roda DEPOIS do
+  // _renderPage porque a ficha lê o contexto que ele monta (perfis, scans).
+  function _lzReabrirFichaSeVoltou() {
+    try {
+      var b = (typeof window._spLerVolta === 'function') ? window._spLerVolta() : null;
+      if (!b || !b.uid) return;
+      if ((window.location.hash || '').indexOf(b.para) !== 0) return;   // ainda não voltei
+      window._spLimparVolta();                                          // bilhete é de UM uso
+      if (typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(b.uid);
+    } catch (e) { if (window._warn) window._warn('[analise] não reabri a ficha na volta', e); }
+  }
+
   window.renderEnrollmentReportPage = function (container, tId) {
     // FONTE ÚNICA de lookup (String-safe, também olha publicDiscovery). O `find` com
     // `x.id === tId` cru dependia do tipo do id bater exatamente.
@@ -5015,6 +5087,7 @@
         window._log('[EnrollmentReport] profiles:', Object.keys(byUid).length, 'scans:', Object.keys(scanMap).length);
         _renderPage(container, t, rows, byUid, parts, fetchResult.resolvedFor || {}, scanMap);
         _doneLoading();
+        _lzReabrirFichaSeVoltou();
       });
     }).catch(function (err) {
       window._error('[EnrollmentReport] erro:', err);

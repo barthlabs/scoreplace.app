@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.23';
+window.SCOREPLACE_VERSION = '1.8.24';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2445,10 +2445,45 @@ window._closeHamburger = function() {
 //   onClickOverride— optional JS string (legacy) OR function. If a function is
 //                    passed, it's registered and invoked by the delegate.
 window._backNavCallbacks = window._backNavCallbacks || {};
+// ── VOLTAR PRA ONDE SE VEIO — bilhete de IDA E VOLTA (v1.8.24) ───────────────
+// Pedido do dono: da ficha do atleta, o torneio do scoreplace vira link _"e o voltar
+// voltaria para essa tela (assim se pode fazer uma consulta rápida à chave)"_.
+//
+// ⚠️ Mora AQUI porque `_renderBackHeader` é o ÚNICO lugar que desenha o Voltar de todas
+// as telas — pendurar isso na view do torneio obrigaria a repetir a regra em cada tela
+// que um dia queira o mesmo, e uma delas divergiria ([[feedback_unify_dual_entry_points]]).
+//
+// O bilhete é de UM uso e ANCORADO no destino (`aplicaEm`): só vale enquanto a pessoa
+// está NAQUELA tela. Sem essa âncora ele sequestraria o Voltar de qualquer tela aberta
+// depois — o usuário clicaria Voltar num lugar e cairia noutro, sem explicação.
+window._spMarcarVolta = function (bilhete) {
+  try { sessionStorage.setItem('sp_volta', JSON.stringify(bilhete || {})); } catch (e) {}
+};
+window._spLerVolta = function () {
+  try {
+    var b = JSON.parse(sessionStorage.getItem('sp_volta') || 'null');
+    if (!b || !b.para || !b.aplicaEm) return null;
+    var h = window.location.hash || '';
+    if (h.indexOf(b.aplicaEm) === 0) return b;          // estou no destino → o bilhete vale
+    if (h.indexOf(b.para) === 0) return b;              // voltei → quem consome é a tela de origem
+    window._spLimparVolta();                            // foi pra outro lugar → bilhete morreu
+    return null;
+  } catch (e) { return null; }
+};
+window._spLimparVolta = function () {
+  try { sessionStorage.removeItem('sp_volta'); } catch (e) {}
+};
+
 window._renderBackHeader = function(opts) {
   opts = opts || {};
   var _label = (opts.label == null) ? 'Voltar' : String(opts.label);
   var _href = opts.href || '#dashboard';
+  // bilhete de volta: só troca o destino quando a tela ATUAL é a que ele marcou, e nunca
+  // atropela um override explícito (quem passou onClickOverride sabe o que quer fazer).
+  if (!opts.onClickOverride && typeof window._spLerVolta === 'function') {
+    var _b = window._spLerVolta();
+    if (_b && (window.location.hash || '').indexOf(_b.aplicaEm) === 0) _href = _b.para;
+  }
   var _safeHrefAttr = String(_href).replace(/"/g, '&quot;');
   var _extraStyle = opts.extraStyle ? (' style="' + opts.extraStyle + '"') : '';
   var _svg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
