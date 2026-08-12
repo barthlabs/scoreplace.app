@@ -244,24 +244,13 @@
     } catch (e) { return ''; }
   };
 
-  // Chip do TORNEIO — FERRAMENTAS DO ORGANIZADOR (criar/trocar). Só organizador.
-  window._waGrpTournamentOrgChip = function (t) {
-    try {
-      var cu = _cu(); if (!t || !cu || !cu.uid) return '';
-      if (!_waAllowed(cu)) return '';
-      if (!_isOrg(t, cu)) return '';
-      // ⚠️ 1.8.30 — COM O GRUPO JÁ CRIADO, ESTE CHIP SAI. Ordem do dono: _"esse botao do
-      // grupo geral oficial do torneio no whats já esta la em cima e nao deve ser repetido
-      // aqui nas ferramentas do organizador"_. Ele está certo: com link existente o topo já
-      // mostra "Entrar no grupo geral oficial do torneio" (_waGrpTournamentJoinChip), e dois
-      // botões quase idênticos na mesma tela são ruído.
-      // O que sobra aqui é o que NÃO existe em outro lugar: CRIAR o grupo. Sem link, este é
-      // o único caminho — por isso o chip continua aparecendo nesse estado.
-      if (t.waGroup && t.waGroup.link) return '';
-      var open = 'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')';
-      return _btn('Criar grupo geral<br>oficial do torneio', open, '', WA_BLUE);
-    } catch (e) { return ''; }
-  };
+  // ⛔ REMOVIDO na 1.8.31: `_waGrpTournamentOrgChip` — o chip do grupo nas Ferramentas do
+  // Organizador. Ordem do dono: _"existe esse botao la em cima ao lado do
+  // inscrever-se/desinscrever-se. nao é o mesmo? tem que ficar só ele com toda a
+  // funcionalidade"_. Virou UM botão só (`_waGrpTournamentJoinChip`), que para o
+  // ORGANIZADOR abre o painel completo — criar, trocar, abrir e compartilhar.
+  // Apagado em vez de virar no-op: função sem chamador é decoy, e decoy faz o próximo
+  // leitor consertar o lugar errado.
 
   // Chip do TORNEIO — ENTRAR (participante). Só inscrito (ou organizador), e só
   // quando o grupo existe: sem link não há o que entrar.
@@ -269,12 +258,32 @@
     try {
       var cu = _cu(); if (!t || !cu || !cu.uid) return '';
       if (!_waAllowed(cu)) return '';
-      if (!t.waGroup || !t.waGroup.link) return '';
-      if (!_isEnrolled(t, cu) && !_isOrg(t, cu)) return '';
+      var _org = _isOrg(t, cu);
+      var _temLink = !!(t.waGroup && t.waGroup.link);
+      // ── 1.8.31: ESTE É O ÚNICO BOTÃO DO GRUPO DO TORNEIO ────────────────────────
+      // Ordem do dono: _"tem que ficar só ele com toda a funcionalidade"_. Então ele muda
+      // de papel conforme QUEM clica, em vez de existirem dois botões parecidos:
+      //   · ORGANIZADOR → abre o PAINEL (criar, trocar, abrir, compartilhar). É onde toda
+      //     a funcionalidade que morava nas Ferramentas passou a viver.
+      //   · INSCRITO    → abre o grupo direto, 1 clique (o caminho quente na quadra).
+      // Sem link: só o organizador vê algo, e o que ele vê é CRIAR — pra quem não pode
+      // criar não há o que entrar, e um botão que não faz nada é pior que botão nenhum.
+      if (!_temLink && !_org) return '';
+      if (!_temLink) {
+        return _btn('Criar grupo geral<br>oficial do torneio',
+                    'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')',
+                    'min-width:118px;padding:6px 14px;', WA_BLUE);
+      }
+      if (!_isEnrolled(t, cu) && !_org) return '';
       // v1.3.100 (dono): texto COMPLETO "grupo oficial do torneio"; border-radius no PADRÃO do app
       // (.btn = 10px; o btn-micro herdado era 6px = "quadrado") e um pouco mais largo.
       // v1.7.24: AZUL + "GERAL" — este é o mural do evento, não o grupo do jogo da pessoa.
-      return _btn('Entrar no grupo geral<br>oficial do torneio', 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')', 'min-width:118px;padding:6px 14px;', WA_BLUE);
+      var _acao = _org
+        ? 'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')'
+        : 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'\')';
+      // o rótulo diz o que o clique faz: o organizador cai no painel, não direto no grupo.
+      var _rot = _org ? 'Grupo geral oficial<br>do torneio' : 'Entrar no grupo geral<br>oficial do torneio';
+      return _btn(_rot, _acao, 'min-width:118px;padding:6px 14px;', WA_BLUE);
     } catch (e) { return ''; }
   };
 

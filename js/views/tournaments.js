@@ -3194,12 +3194,15 @@ function renderTournaments(container, tournamentId = null) {
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
-              ${/* Grupo do torneio no WhatsApp: pro PARTICIPANTE, "Entrar no grupo" mora à
-                    esquerda de "Desinscrever-se" (bem na cara — ver bloco enrollBtnHtml). Aqui
-                    fica só o caso do ORGANIZADOR que NÃO joga, pra ele também alcançar o grupo
-                    de um clique sem depender das Ferramentas. CRIAR/trocar o link segue nas
-                    Ferramentas do Organizador. */ ''}
-              ${(isOrg && !isParticipating && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
+              ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
+                    "Desinscrever-se" quando esse bloco existe (inscrito + inscrições abertas);
+                    AQUI é o mesmo botão, pra TODOS os outros estados. A condição é o
+                    complemento exato da de lá, então ele aparece sempre e nunca duas vezes.
+                    ⚠️ O buraco que isto fecha: organizador INSCRITO com as inscrições já
+                    FECHADAS não caía em nenhum dos dois lados — e como o chip das Ferramentas
+                    saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
+                    Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
+              ${(!(isParticipating && isAberto) && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
@@ -3418,10 +3421,12 @@ function renderTournaments(container, tournamentId = null) {
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
-                ${/* Criar/trocar o link do grupo do torneio É ferramenta de organizador (o grupo é
-                      oficial do evento) — diferente do grupo do JOGO, que é dos jogadores e mora no
-                      card do chaveamento. O chip só renderiza pra org/co-host. */ ''}
-                ${(typeof window._waGrpTournamentOrgChip === 'function') ? window._waGrpTournamentOrgChip(t) : ''}
+                ${/* ⛔ 1.8.31 — o chip do grupo do torneio SAIU daqui. Ordem do dono: "existe esse
+                      botao la em cima ao lado do inscrever-se/desinscrever-se. nao é o mesmo? tem
+                      que ficar só ele com toda a funcionalidade". É um botão só, lá em cima, e
+                      pro organizador ele abre o painel completo: criar, trocar, abrir e
+                      compartilhar. O grupo do JOGO continua sendo outra coisa e mora no card da
+                      chave — é dos jogadores, não do organizador. */ ''}
                 ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
                       ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento
