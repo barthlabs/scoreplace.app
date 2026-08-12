@@ -52,16 +52,24 @@
 
 const { collectMatches } = require("./match-roster");
 
-/* Subcoleções de `users/{uid}` que guardam CÓPIA de algo do torneio.
- * É uma DECLARAÇÃO, e declaração apodrece (a lição do uid-sweep.js) — há teste
- * confrontando esta lista com o firestore.rules. Subcoleção nova nas rules e fora daqui
- * deixa o teste vermelho, pra a decisão ser tomada em vez de esquecida. */
-const USER_SUBCOLLECTIONS_BY_TOURNAMENT = ["matchHistory"];
+/* Subcoleções de `users/{uid}` que guardam CÓPIA de algo do torneio, achadas por
+ * `collectionGroup(sub).where('tournamentId','==',tid)`.
+ * DECLARAÇÃO, e declaração apodrece (a lição do uid-sweep.js) — há teste confrontando esta
+ * lista com o firestore.rules: subcoleção nova lá e ausente aqui deixa o teste vermelho. */
+const USER_SUBCOLLECTIONS_BY_TOURNAMENT = ["matchHistory", "notifications"];
 
-/* Subcoleções de `tournaments/{tid}` que o CLIENTE não consegue limpar (sem regra →
- * negado por omissão) e que por isso só a CF alcança. `results` e `letzplayScans` NÃO
- * entram: o cliente já os apaga e têm regra própria. */
-const CF_ONLY_TOURNAMENT_SUBCOLLECTIONS = ["participants"];
+/* Coleções de TOPO cujos docs apontam pro torneio. `presences` são os planos "vou a este
+ * torneio" (project_tournament_plan_2day_rule) — MEDIDO em 12/ago: 26 num único torneio.
+ * Consulta de campo único em coleção de topo é auto-indexada; não pede índice. */
+const TOPLEVEL_COLLECTIONS_BY_TOURNAMENT = ["presences"];
+
+/* ⚠️ NÃO existe lista de subcoleções DE `tournaments/{tid}` — elas são ENUMERADAS em
+ * tempo de execução (`doc.listCollections()`, Admin SDK). Isto é decisão de projeto, não
+ * preguiça: a lista à mão do cliente (`_tournamentSubcollections`) já deixou passar DUAS
+ * — `participants` (o espelho do roster) e `communications` (comunicados do organizador),
+ * as duas descobertas só ao medir o banco, as duas sem regra no firestore.rules e
+ * portanto inalcançáveis pelo cliente. Enumerar mata a classe inteira do bug: subcoleção
+ * nova nasce já coberta, sem ninguém lembrar de atualizar lista nenhuma. */
 
 /** Espelha o recordId de bracket-ui.js. Mudar aqui sem mudar lá deixa cópia pra trás. */
 function recordIdDe(tid, matchId) {
@@ -146,6 +154,29 @@ function unirPlanos(planoA, achadosNaVarredura) {
   return { refs, total: refs.length };
 }
 
+/**
+ * `notif_email_queue` NÃO tem `tournamentId` — só `tournamentUrl` (que carrega o tid).
+ * Como é fila TRANSITÓRIA (janela de no máximo 30 min, e o flush apaga o que enviou),
+ * varrer a coleção inteira e filtrar aqui sai mais barato que criar índice pra ela.
+ * `docs` = [{ id, tournamentUrl }].
+ *
+ * Casa por FRONTEIRA, não por `includes` cru: `tour_1780009816637` é prefixo de
+ * `tour_17800098166370`, e um `includes` apagaria e-mail do torneio errado.
+ */
+function filaDoTorneio(tid, docs) {
+  const alvo = String(tid || "");
+  if (!alvo) return [];
+  return (Array.isArray(docs) ? docs : [])
+    .filter((d) => {
+      const url = String((d && d.tournamentUrl) || "");
+      const i = url.indexOf(alvo);
+      if (i < 0) return false;
+      const depois = url.charAt(i + alvo.length);
+      return depois === "" || !/[A-Za-z0-9_-]/.test(depois);   // nada de id mais longo
+    })
+    .map((d) => d.id);
+}
+
 /** Fatia em lotes de `tamanho` (o teto do batch do Firestore é 500; usamos 400). */
 function emLotes(itens, tamanho) {
   const t = tamanho || 400;
@@ -156,7 +187,8 @@ function emLotes(itens, tamanho) {
 
 module.exports = {
   USER_SUBCOLLECTIONS_BY_TOURNAMENT,
-  CF_ONLY_TOURNAMENT_SUBCOLLECTIONS,
+  TOPLEVEL_COLLECTIONS_BY_TOURNAMENT,
+  filaDoTorneio,
   recordIdDe,
   uidsDoTorneio,
   recordIdsDoTorneio,

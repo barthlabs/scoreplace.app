@@ -26,7 +26,8 @@ const fs = require('fs');
 const path = require('path');
 const {
   USER_SUBCOLLECTIONS_BY_TOURNAMENT,
-  CF_ONLY_TOURNAMENT_SUBCOLLECTIONS,
+  TOPLEVEL_COLLECTIONS_BY_TOURNAMENT,
+  filaDoTorneio,
   recordIdDe, uidsDoTorneio, recordIdsDoTorneio,
   planPurgePorReferencia, unirPlanos, emLotes
 } = require('./tournament-purge-core');
@@ -163,35 +164,82 @@ const torneio = {
   const bloco = rules.slice(corpo, fim);
   const subs = Array.from(bloco.matchAll(/match \/([A-Za-z0-9_]+)\/\{/g)).map((m) => m[1]);
 
-  // As que existem hoje e NÃO guardam torneio — se uma sair desta lista, é porque mudou
-  // de natureza e alguém precisa decidir conscientemente.
-  const semTorneio = ['notifications', 'templates', 'trophies', 'milestones'];
+  // As que existem hoje e NÃO guardam cópia de torneio. `templates` são configurações
+  // salvas (não apontam pra um tid); `trophies`/`milestones` são EMBLEMAS, chaveados por
+  // id de conquista — não há doc por torneio pra apagar.
+  const semTorneio = ['templates', 'trophies', 'milestones'];
   const conhecidas = USER_SUBCOLLECTIONS_BY_TOURNAMENT.concat(semTorneio);
   const novas = subs.filter((s) => !conhecidas.includes(s));
 
   ok(novas.length === 0,
      'subcoleção nova em users/{uid} sem decisão sobre o purge: ' + novas.join(', '));
-  ok(USER_SUBCOLLECTIONS_BY_TOURNAMENT.includes('matchHistory'),
-     'matchHistory está declarada como cópia por torneio');
-  ok(subs.includes('matchHistory'), 'matchHistory realmente existe nas rules');
+  ['matchHistory', 'notifications'].forEach((s) => {
+    ok(USER_SUBCOLLECTIONS_BY_TOURNAMENT.includes(s), s + ' declarada como cópia por torneio');
+    ok(subs.includes(s), s + ' realmente existe nas rules');
+  });
 }
 
-// ── (10) `participants` É CF-ONLY, E A PROVA ESTÁ NAS RULES ────────────────
-// Pôr na lista do cliente NÃO resolveria: sem regra, o Firestore nega por omissão.
+// ── (10) AS SUBCOLEÇÕES DO TORNEIO SÃO ENUMERADAS, NUNCA LISTADAS ─────────
+// A lista à mão do cliente já deixou passar DUAS — `participants` e `communications`,
+// ambas achadas só medindo o banco, ambas SEM regra (logo inalcançáveis pelo cliente).
+// Se alguém trocar o `listCollections()` por uma lista, isto fica vermelho.
 {
   const rules = ler('firestore.rules');
-  ok(!/match \/participants\/\{/.test(rules),
-     'segue sem regra pra participants — logo o cliente não pode limpá-la (por isso é CF-only)');
-  ok(CF_ONLY_TOURNAMENT_SUBCOLLECTIONS.includes('participants'),
-     'participants está na lista que só a CF alcança');
+  ['participants', 'communications'].forEach((sub) => {
+    ok(!new RegExp('match /' + sub + '/\\{').test(rules),
+       'segue sem regra pra ' + sub + ' — o cliente nunca poderia limpá-la');
+  });
 
+  const idx = ler('functions/index.js');
+  const bloco = idx.slice(idx.indexOf('exports.purgeTournamentCopies'));
+  ok(/listCollections\(\)/.test(bloco),
+     'o gatilho ENUMERA as subcoleções do torneio (não confia em lista)');
+
+  const core = ler('functions/tournament-purge-core.js');
+  ok(!/CF_ONLY_TOURNAMENT_SUBCOLLECTIONS/.test(core),
+     'a lista à mão de subcoleções do torneio não voltou ao módulo');
+
+  // O cliente segue com a lista dele — e ela segue incompleta. Isso é ESPERADO: quem
+  // completa é a CF. A asserção existe pra ninguém "consertar" o cliente e tomar
+  // permission-denied em silêncio.
   const db = ler('js/firebase-db.js');
   const m = db.match(/_tournamentSubcollections:\s*\[([^\]]*)\]/);
   ok(!!m, 'o cliente ainda declara _tournamentSubcollections');
-  CF_ONLY_TOURNAMENT_SUBCOLLECTIONS.forEach((sub) => {
+  ['participants', 'communications'].forEach((sub) => {
     ok(m && !m[1].includes("'" + sub + "'"),
        "'" + sub + "' NÃO pode entrar na lista do cliente (tomaria permission-denied)");
   });
+}
+
+// ── (10b) PRESENÇAS: o plano "vou a este torneio" morre com ele ───────────
+// MEDIDO em 12/ago: 26 presences apontando pra um único torneio. Eu tinha afirmado que
+// presences não referenciavam torneio — o dado desmentiu.
+{
+  ok(TOPLEVEL_COLLECTIONS_BY_TOURNAMENT.includes('presences'),
+     'presences está declarada como coleção de topo que aponta pro torneio');
+  const idx = ler('functions/index.js');
+  const bloco = idx.slice(idx.indexOf('exports.purgeTournamentCopies'));
+  ok(/TOPLEVEL_COLLECTIONS_BY_TOURNAMENT/.test(bloco), 'o gatilho consome essa lista');
+}
+
+// ── (10c) A FILA DE E-MAIL casa por FRONTEIRA, não por includes ──────────
+// `notif_email_queue` não tem tournamentId, só `tournamentUrl`. Um `includes` cru
+// apagaria e-mail do torneio errado, porque um tid é prefixo de outro mais longo.
+{
+  const U = (tid) => 'https://scoreplace.app/#tournaments/' + tid;
+  const docs = [
+    { id: 'a', tournamentUrl: U('tour_123') },
+    { id: 'b', tournamentUrl: U('tour_1230') },        // id MAIS LONGO — não pode casar
+    { id: 'c', tournamentUrl: U('tour_999') },
+    { id: 'd', tournamentUrl: U('tour_123') + '?x=1' }, // fronteira por '?' — casa
+    { id: 'e' }                                         // sem url — ignorado
+  ];
+  const ids = filaDoTorneio('tour_123', docs);
+  ok(ids.includes('a') && ids.includes('d'), 'pega os e-mails do torneio certo');
+  ok(!ids.includes('b'), 'NÃO pega tour_1230 (o tid é prefixo — era o bug do includes cru)');
+  ok(!ids.includes('c') && !ids.includes('e'), 'não pega outro torneio nem doc sem url');
+  ok(filaDoTorneio('', docs).length === 0, 'tid vazio não apaga nada');
+  ok(filaDoTorneio('tour_123', null).length === 0, 'entrada nula não estoura');
 }
 
 // ── (11) A FIAÇÃO — sem ela, tudo acima fica verde com o purge DESLIGADO ────
@@ -208,8 +256,9 @@ const torneio = {
   ok(/document:\s*"tournaments\/\{tid\}"/.test(bloco), 'escuta o delete de tournaments/{tid}');
   ok(/tournament-purge-core/.test(idx),
      'o gatilho usa o módulo puro — não uma segunda cópia da regra');
-  ok(/USER_SUBCOLLECTIONS_BY_TOURNAMENT/.test(bloco) && /CF_ONLY_TOURNAMENT_SUBCOLLECTIONS/.test(bloco),
-     'as DUAS listas são consumidas (histórico das pessoas + subcoleção CF-only)');
+  ok(/USER_SUBCOLLECTIONS_BY_TOURNAMENT/.test(bloco), 'consome as cópias nas pessoas');
+  ok(/notif_email_queue/.test(bloco), 'limpa a fila de e-mail pendente do torneio');
+  ok(/discoveryFeed/.test(bloco), 'remove o doc de índice do feed');
   ok(/admin\.firestore\(\)/.test(bloco),
      'usa handle PRÓPRIO do Firestore — o `const db` do módulo está em zona morta temporal aqui (1.7.99)');
   ok(/collectionGroup\(/.test(bloco) && /planPurgePorReferencia/.test(bloco),
@@ -221,11 +270,15 @@ const torneio = {
 // referência sobra — quem foi substituído por W.O. ficaria com a cópia pra sempre.
 {
   const idx = JSON.parse(ler('firestore.indexes.json'));
-  const ov = (idx.fieldOverrides || []).find(
-    (o) => o.collectionGroup === 'matchHistory' && o.fieldPath === 'tournamentId');
-  ok(!!ov, 'firestore.indexes.json declara override de matchHistory/tournamentId');
-  ok(!!ov && (ov.indexes || []).some((i) => i.queryScope === 'COLLECTION_GROUP'),
-     'com escopo COLLECTION_GROUP — é o que a varredura precisa');
+  // TODA subcoleção de pessoa varrida por collectionGroup precisa do override — senão a
+  // consulta morre com FAILED_PRECONDITION e a cópia fica lá.
+  USER_SUBCOLLECTIONS_BY_TOURNAMENT.forEach((sub) => {
+    const ov = (idx.fieldOverrides || []).find(
+      (o) => o.collectionGroup === sub && o.fieldPath === 'tournamentId');
+    ok(!!ov, 'firestore.indexes.json declara override de ' + sub + '/tournamentId');
+    ok(!!ov && (ov.indexes || []).some((i) => i.queryScope === 'COLLECTION_GROUP'),
+       sub + ' com escopo COLLECTION_GROUP — é o que a varredura precisa');
+  });
 }
 
 console.log(`\n  ${pass} passaram, ${fail} falharam`);

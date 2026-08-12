@@ -6847,83 +6847,103 @@ exports.cacheVenuePhoto = onCall(
 // Deploy: scripts/deploy-functions.sh main   (NUNCA `firebase deploy --only functions` puro)
 const _purge = require("./tournament-purge-core");
 exports.purgeTournamentCopies = onDocumentDeleted(
-  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
+  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 540 },
   async (event) => {
     const tid = event.params.tid;
     // Handle PRÓPRIO: o `const db` do módulo é declarado abaixo e `const` fica em zona
     // morta temporal — foi exatamente assim que o espelho do roster nasceu mudo (1.7.99).
     const _db = admin.firestore();
     const t = (event.data && typeof event.data.data === "function" ? event.data.data() : null) || null;
+    const conta = {};
 
-    // ── ROTA (A): referência direta. Sem consulta, sem índice, sempre funciona ──
+    // Apaga um punhado de refs em lotes de 400 (o teto do batch é 500).
+    const apagarRefs = async (refs, rotulo) => {
+      let n = 0;
+      for (const lote of _purge.emLotes(refs, 400)) {
+        const batch = _db.batch();
+        lote.forEach((r) => batch.delete(r));
+        try { await batch.commit(); n += lote.length; }
+        catch (e) { console.error(`[purgeTournamentCopies] ${rotulo} falhou em ${tid}:`, e && e.message); }
+      }
+      if (n) conta[rotulo] = (conta[rotulo] || 0) + n;
+      return n;
+    };
+
+    // ── (1) CÓPIAS NAS PESSOAS ────────────────────────────────────────────────
+    // matchHistory tem id DETERMINÍSTICO (`t_<tid>_<matchId>`), então a rota por
+    // REFERÊNCIA funciona sem consulta e sem índice. A VARREDURA vem por cima porque
+    // alcança quem a referência não vê — o caso real é quem levou W.O. e foi
+    // SUBSTITUÍDO: sumiu do elenco e dos slots, mas o registro do jogo que jogou ficou
+    // com ele. `notifications` não tem id derivável e depende só da varredura.
     const planoA = _purge.planPurgePorReferencia(tid, t);
-
-    // ── ROTA (B): varredura. Alcança quem a (A) não vê — o caso real é quem levou
-    // W.O. e foi SUBSTITUÍDO: saiu do elenco e dos slots, mas o registro do jogo que
-    // ele jogou antes continua com ele. Precisa de índice de collection group; se ele
-    // ainda não estiver no ar isto falha ALTO e a (A) segue valendo.
-    const daVarredura = [];
     for (const sub of _purge.USER_SUBCOLLECTIONS_BY_TOURNAMENT) {
+      const achados = [];
       try {
         const snap = await _db.collectionGroup(sub).where("tournamentId", "==", tid).get();
         snap.forEach((d) => {
-          const dono = d.ref.parent.parent;      // users/{uid}/matchHistory/{recordId}
-          if (dono && dono.id) daVarredura.push({ uid: dono.id, recordId: d.id });
+          const dono = d.ref.parent.parent;                   // users/{uid}/<sub>/{id}
+          if (dono && dono.id) achados.push({ uid: dono.id, recordId: d.id });
         });
       } catch (e) {
-        console.error(`[purgeTournamentCopies] varredura de ${sub} falhou para ${tid}:`, e && e.message);
+        console.error(`[purgeTournamentCopies] varredura de ${sub} falhou em ${tid}:`, e && e.message);
+      }
+      // A referência direta só vale pra matchHistory — é a única com id determinístico.
+      const base = (sub === "matchHistory") ? planoA : { refs: [] };
+      const plano = _purge.unirPlanos(base, achados);
+      await apagarRefs(
+        plano.refs.map((r) => _db.collection("users").doc(r.uid).collection(sub).doc(r.recordId)),
+        sub
+      );
+    }
+
+    // ── (2) COLEÇÕES DE TOPO que apontam pro torneio (planos de presença) ────
+    for (const col of _purge.TOPLEVEL_COLLECTIONS_BY_TOURNAMENT) {
+      try {
+        const snap = await _db.collection(col).where("tournamentId", "==", tid).get();
+        await apagarRefs(snap.docs.map((d) => d.ref), col);
+      } catch (e) {
+        console.error(`[purgeTournamentCopies] ${col} falhou em ${tid}:`, e && e.message);
       }
     }
 
-    const plano = _purge.unirPlanos(planoA, daVarredura);
-    const soDaVarredura = daVarredura.length;
+    // ── (3) FILA DE E-MAIL — não tem tournamentId, só a URL ─────────────────
+    // Coleção transitória e pequena (o flush a drena): varrer inteira sai mais barato
+    // que manter índice. Sem isto, e-mail de um torneio apagado ainda sairia com link morto.
+    try {
+      const snap = await _db.collection("notif_email_queue").get();
+      const ids = _purge.filaDoTorneio(tid, snap.docs.map((d) => ({ id: d.id, tournamentUrl: (d.data() || {}).tournamentUrl })));
+      await apagarRefs(ids.map((id) => _db.collection("notif_email_queue").doc(id)), "notif_email_queue");
+    } catch (e) {
+      console.error(`[purgeTournamentCopies] fila de e-mail falhou em ${tid}:`, e && e.message);
+    }
 
-    // ── Apaga as cópias, em lotes de 400 (teto do batch é 500) ──
-    // ⚠️ A rota (A) só vale pra `matchHistory`: é ela que tem id DETERMINÍSTICO
-    // (`t_<tid>_<matchId>`). Subcoleção nova em `USER_SUBCOLLECTIONS_BY_TOURNAMENT` com
-    // outro esquema de id precisa depender só da varredura — reveja este laço antes de
-    // acrescentar a segunda entrada na lista.
-    let apagados = 0;
-    for (const sub of _purge.USER_SUBCOLLECTIONS_BY_TOURNAMENT) {
-      for (const lote of _purge.emLotes(plano.refs, 400)) {
-        const batch = _db.batch();
-        lote.forEach((r) => {
-          batch.delete(_db.collection("users").doc(r.uid).collection(sub).doc(r.recordId));
-        });
-        try {
+    // ── (4) SUBCOLEÇÕES DO TORNEIO — ENUMERADAS, nunca listadas à mão ───────
+    // O Firestore não apaga subcoleção junto com o pai, e o cliente só alcança as que
+    // têm regra. A lista à mão dele já deixou passar DUAS (`participants` e
+    // `communications`), ambas descobertas medindo o banco. Enumerar mata a classe:
+    // subcoleção nova nasce coberta. Funciona com o doc PAI já apagado — a subcoleção
+    // existe de forma independente dele.
+    try {
+      const subs = await _db.collection("tournaments").doc(tid).listCollections();
+      for (const col of subs) {
+        for (let volta = 0; volta < 50; volta++) {            // teto de segurança (20 mil docs)
+          const snap = await col.limit(400).get();
+          if (snap.empty) break;
+          const batch = _db.batch();
+          snap.forEach((d) => batch.delete(d.ref));
           await batch.commit();
-          apagados += lote.length;
-        } catch (e) {
-          console.error(`[purgeTournamentCopies] lote de ${sub} falhou para ${tid}:`, e && e.message);
+          conta["sub:" + col.id] = (conta["sub:" + col.id] || 0) + snap.size;
+          if (snap.size < 400) break;
         }
       }
+    } catch (e) {
+      console.error(`[purgeTournamentCopies] subcoleções falharam em ${tid}:`, e && e.message);
     }
 
-    // ── Subcoleções que só a CF alcança (sem regra → cliente negado) ──
-    let orfaos = 0;
-    for (const sub of _purge.CF_ONLY_TOURNAMENT_SUBCOLLECTIONS) {
-      const col = _db.collection("tournaments").doc(tid).collection(sub);
-      for (let volta = 0; volta < 50; volta++) {          // teto de segurança (20 mil docs)
-        let snap;
-        try { snap = await col.limit(400).get(); } catch (e) {
-          console.error(`[purgeTournamentCopies] leitura de ${sub} falhou para ${tid}:`, e && e.message);
-          break;
-        }
-        if (snap.empty) break;
-        const batch = _db.batch();
-        snap.forEach((d) => batch.delete(d.ref));
-        try { await batch.commit(); orfaos += snap.size; } catch (e) {
-          console.error(`[purgeTournamentCopies] delete de ${sub} falhou para ${tid}:`, e && e.message);
-          break;
-        }
-        if (snap.size < 400) break;
-      }
-    }
+    // ── (5) o doc de índice do feed ─────────────────────────────────────────
+    try { await _db.collection("discoveryFeed").doc(tid).delete(); } catch (e) {}
 
-    console.log(
-      `[purgeTournamentCopies] ${tid} → ${apagados} cópia(s) de histórico ` +
-      `(${planoA.uids.length} pessoa(s) × ${planoA.recordIds.length} jogo(s) por referência, ` +
-      `${soDaVarredura} pela varredura), ${orfaos} doc(s) de subcoleção CF-only`
-    );
+    const resumo = Object.keys(conta).map((k) => `${k}=${conta[k]}`).join(" · ") || "nada a apagar";
+    console.log(`[purgeTournamentCopies] ${tid} → ${resumo}`);
   }
 );

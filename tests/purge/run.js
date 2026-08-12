@@ -75,13 +75,45 @@ const mh = (uid, rid) => db.collection('users').doc(uid).collection('matchHistor
     playerUids: ['u-ana'], finishedAt: '2026-08-02T12:00:00.000Z'
   });
 
-  // Espelho do roster (a subcoleção CF-only).
+  // Espelho do roster + comunicados: as DUAS subcoleções que a lista à mão do cliente
+  // não conhecia. Aqui elas não são declaradas em lugar nenhum — quem as acha é o
+  // `listCollections()` do gatilho.
   for (const u of ['u-ana', 'u-caio', 'u-dani', 'u-espera']) {
     await db.collection('tournaments').doc(TID).collection('participants').doc(u)
       .set({ uid: u, status: 'enrolled' });
   }
+  await db.collection('tournaments').doc(TID).collection('communications').doc('c1')
+    .set({ texto: 'comunicado do organizador' });
+  // Subcoleção INVENTADA: nenhuma lista a conhece. Se o purge a apagar, está provado que
+  // a enumeração cobre o que ainda nem existe.
+  await db.collection('tournaments').doc(TID).collection('coisaNovaQueNinguemDeclarou').doc('x')
+    .set({ ok: true });
   await db.collection('tournaments').doc(OUTRO).collection('participants').doc('u-ana')
     .set({ uid: 'u-ana', status: 'enrolled' });
+
+  // Notificações: as do torneio-alvo morrem, a de outro torneio e a sem torneio ficam.
+  await db.collection('users').doc('u-ana').collection('notifications').doc('n-alvo')
+    .set({ type: 'draw', tournamentId: TID, read: false });
+  await db.collection('users').doc('u-caio').collection('notifications').doc('n-alvo2')
+    .set({ type: 'new_round', tournamentId: TID, read: true });
+  await db.collection('users').doc('u-ana').collection('notifications').doc('n-outro')
+    .set({ type: 'draw', tournamentId: OUTRO, read: false });
+  await db.collection('users').doc('u-ana').collection('notifications').doc('n-amizade')
+    .set({ type: 'friend_request', read: false });
+
+  // Presenças: o plano "vou a este torneio" morre com ele; check-in avulso fica.
+  await db.collection('presences').doc('p-alvo')
+    .set({ uid: 'u-ana', type: 'planned', tournamentId: TID, dayKey: '2026-08-20' });
+  await db.collection('presences').doc('p-outro')
+    .set({ uid: 'u-ana', type: 'planned', tournamentId: OUTRO, dayKey: '2026-08-20' });
+  await db.collection('presences').doc('p-avulsa')
+    .set({ uid: 'u-ana', type: 'checkin', dayKey: '2026-08-20' });
+
+  // Fila de e-mail: casa pela URL. `tour_purge_alvo0` é o caso do prefixo.
+  const U = (tid) => 'https://scoreplace.app/#tournaments/' + tid;
+  await db.collection('notif_email_queue').doc('q-alvo').set({ email: 'a@x.com', tournamentUrl: U(TID) });
+  await db.collection('notif_email_queue').doc('q-prefixo').set({ email: 'b@x.com', tournamentUrl: U(TID + '0') });
+  await db.collection('notif_email_queue').doc('q-outro').set({ email: 'c@x.com', tournamentUrl: U(OUTRO) });
 
   // Confere o estado inicial (senão um "sumiu" pode ser "nunca existiu").
   ok(await existe(mh('u-ana', 't_' + TID + '_m1')), 'semeado: cópia de u-ana existe ANTES');
@@ -110,14 +142,34 @@ const mh = (uid, rid) => db.collection('users').doc(uid).collection('matchHistor
   ok(!(await existe(mh('u-bruno',  't_' + TID + '_m1'))),
      'cópia do SUBSTITUÍDO POR W.O. sumiu — é a varredura funcionando (a referência não o via)');
 
-  const depois = await db.collection('tournaments').doc(TID).collection('participants').get();
-  ok(depois.size === 0, 'espelho do roster SUMIU (sobrou ' + depois.size + ')');
+  const sub = (nome) => db.collection('tournaments').doc(TID).collection(nome).get();
+  ok((await sub('participants')).size === 0, 'espelho do roster SUMIU');
+  ok((await sub('communications')).size === 0, 'comunicados do organizador SUMIRAM');
+  ok((await sub('coisaNovaQueNinguemDeclarou')).size === 0,
+     'subcoleção que NENHUMA lista declara sumiu — a enumeração cobre o que nem existe ainda');
+
+  const n = (u, id) => db.collection('users').doc(u).collection('notifications').doc(id);
+  ok(!(await existe(n('u-ana', 'n-alvo'))),  'notificação do torneio SUMIU');
+  ok(!(await existe(n('u-caio', 'n-alvo2'))), 'notificação do torneio de outra pessoa SUMIU');
+
+  const p = (id) => db.collection('presences').doc(id);
+  ok(!(await existe(p('p-alvo'))), 'plano de presença do torneio SUMIU');
+
+  const q = (id) => db.collection('notif_email_queue').doc(id);
+  ok(!(await existe(q('q-alvo'))), 'e-mail pendente do torneio SUMIU');
 
   // ── O QUE NÃO PODIA SER TOCADO ────────────────────────────────────────────
   ok(await existe(mh('u-ana', 't_' + OUTRO + '_m1')),
      'cópia de OUTRO torneio da mesma pessoa ficou intacta');
   ok(await existe(mh('u-ana', 'casual_123')),
      'partida CASUAL da mesma pessoa ficou intacta');
+  ok(await existe(n('u-ana', 'n-outro')),   'notificação de OUTRO torneio intacta');
+  ok(await existe(n('u-ana', 'n-amizade')), 'notificação sem torneio (amizade) intacta');
+  ok(await existe(p('p-outro')),  'plano de presença de OUTRO torneio intacto');
+  ok(await existe(p('p-avulsa')), 'check-in avulso (sem torneio) intacto');
+  ok(await existe(q('q-outro')),  'e-mail de OUTRO torneio intacto');
+  ok(await existe(q('q-prefixo')),
+     'e-mail de tid com o alvo por PREFIXO intacto — o casamento é por fronteira');
   const ctrl = await db.collection('tournaments').doc(OUTRO).collection('participants').get();
   ok(ctrl.size === 1, 'espelho do roster do outro torneio intacto (' + ctrl.size + ')');
   ok(await existe(db.collection('tournaments').doc(OUTRO)), 'o outro torneio segue existindo');
