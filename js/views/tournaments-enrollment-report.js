@@ -1579,7 +1579,13 @@
              // COM QUEM. Em torneio de duplas a colocação é DA DUPLA — omitir o parceiro
              // faria "5º/7º" parecer resultado individual. Vai em branco discreto porque é
              // contexto, a mesma regra da trilha.
-             (L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
+             // ⚠️ Só nomeia quem foi parceiro DE VERDADE o tempo todo. Quando a fase que
+             // deu a colocação rodou as duplas (Rei/Rainha nos grupos), o motor devolve
+             // `duplaVariavel` e aqui se diz isso — nomear um seria nomear o último com
+             // quem se jogou, que é o defeito que o dono pegou na própria linha.
+             (L.pos.duplaVariavel
+               ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">dupla variável</span>'
+               : L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
                 _esc(L.pos.parceiro) + '</span>' : ''))
           : L.pos.semPontuacao
           // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
@@ -3028,7 +3034,8 @@
         // por exemplo). Aí o motor se cala de propósito e a tabela de grupo assume.
         if (r && r.conhecido && r.rotulo) {
           return { chave: true, rotulo: r.rotulo, podio: r.posMin != null && r.posMin <= 3,
-                   ateOnde: r.ateOnde, posMin: r.posMin, parceiro: r.parceiro || null };
+                   ateOnde: r.ateOnde, posMin: r.posMin, parceiro: r.parceiro || null,
+                   duplaVariavel: !!r.duplaVariavel };
         }
       } catch (e) { /* motor não decide → cai na tabela de grupo, nunca deixa a linha muda */ }
     }

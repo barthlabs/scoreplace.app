@@ -176,5 +176,61 @@ console.log('\n10. A faixa é CALCULADA da chave — largura varia com o torneio
   ok(q('t2') === '9º/16º (oitavas)', '8 perdedores de oitavas → 9º/16º', q('t2'));
 }
 
+console.log('\n11. DUPLA VARIÁVEL × DUPLA FIXA — a fase que dá a colocação é quem manda');
+// Ordem do dono (12/ago/2026), lendo a PRÓPRIA linha do PAIS na tela: _"o certo é dizer
+// que na fase de grupos foi dupla variável (onde cai) e não que fiz dupla com o último que
+// joguei. a dupla fixou depois da fase de grupos e isso é claro nos jogos subsequentes."_
+//
+// FIXTURE REAL: os 3 jogos do grupo dele (#4,#5,#6) do MESMO torneio 449729, lidos do doc
+// `letzplayScans/B17n7JCXYOfqahlcLZ0fKxGGyUu1` (fullImport.footprint). É Rei/Rainha: 4
+// jogadores, parceiro rotativo a cada jogo.
+// ⚠️ Stefan e Wilson REUSAM os consts da chave lá em cima — no letzplay os @ deles são
+// `Krieger` e `Wilson-Jr`, mas a fixture do topo foi escrita dos prints e usa @ fictício.
+// O que este teste precisa é que a MESMA pessoa tenha a MESMA identidade nos dois trechos;
+// redeclarar com o handle real criaria duas pessoas e o campeão nunca casaria.
+{
+  const rb = { n: 'Rodrigo Barth', h: 'RodrigoBarth' }, ari = { n: 'Ari Rabello', h: 'AriRabello' };
+  const stf = stefan, wil = wilson;
+  const g = (n, a, b, c, d, ga, gb) => ({ n, phase: 'Grupos',
+    sides: [Object.assign(dupla(a, b), { score: ga, won: ga > gb }),
+            Object.assign(dupla(c, d), { score: gb, won: gb > ga })] });
+  // #4 Ari+Wilson 6x2 Rodrigo+Stefan · #5 Stefan+Wilson 6x1 Ari+Rodrigo · #6 Ari+Stefan 6x4 Rodrigo+Wilson
+  const grupoRR = [g(4, ari, wil, rb, stf, 6, 2), g(5, stf, wil, ari, rb, 6, 1), g(6, ari, stf, rb, wil, 6, 4)];
+  // a chave do mesmo torneio (CHAVE_REAL já tem #23..#28) — nela Stefan+Wilson é campeã.
+  const completo = grupoRR.concat(CHAVE_REAL);
+
+  const r = h => P.doHandle(completo, h, { totalTimes: 42 });
+
+  // (a) O BUG DO PRINT, virado teste: 3 parceiros na fase em que ele terminou → não se
+  //     nomeia nenhum. Antes saía "com Wilson Jr", que era só o último jogo registrado.
+  const dono = r('RodrigoBarth');
+  ok(dono.duplaVariavel === true, 'grupo Rei/Rainha → dupla VARIÁVEL', JSON.stringify(dono.parceiro));
+  ok(dono.parceiro === null, 'e nenhum parceiro é nomeado (nomear = nomear o último)', dono.parceiro);
+  ok(/fase de grupos/.test(dono.rotulo || ''), 'a colocação em si não muda', dono.rotulo);
+
+  // (b) O IRMÃO DO MESMO DEFEITO, e o mais grave: o CAMPEÃO era rebaixado. Wilson joga o
+  //     grupo com Ari e com o dono, e a chave com Stefan; o mapa guardava o ÚLTIMO time
+  //     visto, então ele saía "8º/42º (fase de grupos) com Rodrigo Barth".
+  const campeao = r(wilson.h);
+  ok(campeao.rotulo === 'Campeão', 'quem venceu a final é CAMPEÃO, não "fase de grupos"', campeao.rotulo);
+  ok(campeao.parceiro === 'Stefan Krieger', 'e a dupla é a da CHAVE, não a do grupo', campeao.parceiro);
+  ok(campeao.duplaVariavel === false, 'na chave a dupla é fixa por construção', String(campeao.duplaVariavel));
+
+  // (c) DUPLA FIXA NOS GRUPOS CONTINUA SENDO NOMEADA — senão o conserto viraria uma
+  //     regressão em todo torneio de duplas normal. Fixture real: os 2 jogos do dono no
+  //     "BTG Pactual - Masculina D", os dois com Flavio Staudohar.
+  const fla = { n: 'Flavio Staudohar', h: 'FlavioStaudohar' };
+  const x1 = { n: 'Rodrigo Jolig', h: 'RodrigoJolig' }, x2 = { n: 'Francisco Monteleone', h: 'FMonteleone' };
+  const y1 = { n: 'Adriano Coletta', h: 'AdrianoColetta' }, y2 = { n: 'Fabio Menezes', h: 'FabioMenezes' };
+  const fixo = [g(7, rb, fla, x2, x1, 3, 6), g(9, y1, y2, rb, fla, 6, 2)].concat(CHAVE_REAL);
+  const comFixa = P.doHandle(fixo, 'RodrigoBarth', { totalTimes: 12 });
+  ok(comFixa.duplaVariavel === false, 'mesmo parceiro nos 2 jogos → dupla FIXA', String(comFixa.duplaVariavel));
+  ok(comFixa.parceiro === 'Flavio Staudohar', 'e o nome dele continua na linha', comFixa.parceiro);
+
+  // (d) Um jogo só de grupo não é "variável" — não há rotação a declarar.
+  const um = P.doHandle([g(7, rb, fla, x2, x1, 3, 6)].concat(CHAVE_REAL), 'RodrigoBarth', { totalTimes: 12 });
+  ok(um.duplaVariavel === false, 'um único jogo de grupo → dupla fixa', String(um.duplaVariavel));
+}
+
 console.log('\n' + (fail ? '✗' : '✅') + ' lz-colocacao-final: ' + pass + ' passaram, ' + fail + ' falharam');
 if (fail) process.exit(1);
