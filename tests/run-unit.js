@@ -12,6 +12,10 @@ const SUITES = [
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
   'tests/css-nao-perde-regra.test.js',
+  // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
+  // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
+  // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.
+  'tests/safe-area-cobre-todo-contexto.test.js',
   // Carregando é UMA tela só. Havia CINCO — e a que o dono via "no meio da experiência"
   // era o default do _renderBallLoader (bolinha + texto, sem barra). A do router (Entrar
   // → dashboard) tinha barra INDETERMINADA, e por isso nunca mostrava %.
