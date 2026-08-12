@@ -317,6 +317,35 @@ function renderBracket(container, tournamentId, isInline) {
 
   // Pre-load player photos from Firestore, then update bracket images
   _preloadPlayerPhotos(t).then(function() {
+    // ── 1.8.29: OS NOMES TAMBÉM SE ATUALIZAM AQUI ─────────────────────────────
+    // Este `.then` trocava só FOTO. O nome era resolvido no render SÍNCRONO, antes de os
+    // perfis chegarem, e nada mais o repintava — então a chave do "Duplas Mistas Sorteadas"
+    // ficava com "Jogador sem perfil (XXXX)" em todas as linhas para sempre (medido: os 16
+    // uids existem em `users` com displayName).
+    // `_hydrateUidNames` é o hidratador canônico do app (store.js) — o `#participants` já o
+    // usava e a CHAVE nunca. Ele preenche cada `[data-uid-name]` com o nome ATUAL do perfil,
+    // que é a ordem do dono: uid resolve o nome, e o nome segue o perfil.
+    if (typeof window._hydrateUidNames === 'function') {
+      try {
+        window._hydrateUidNames(container).then(function () {
+          // o avatar é cacheado por NOME: com o nome resolvido agora, o rótulo do <img>
+          // passa a casar com o cache de fotos.
+          container.querySelectorAll('[data-uid-name]').forEach(function (sp) {
+            var nm = (sp.textContent || '').trim();
+            if (!nm) return;
+            var linha = sp.closest('div');
+            var img = linha && linha.parentElement ? linha.parentElement.querySelector('img[data-player-name]') : null;
+            if (img && !(img.getAttribute('data-player-name') || '').trim()) img.setAttribute('data-player-name', nm);
+          });
+          // a caixa do nome tem tamanho fixo e a FONTE é a variável — texto novo exige
+          // re-ajuste, senão o nome hidratado sai fora da caixa (ou minúsculo demais).
+          container.querySelectorAll('.sp-name-fit[data-fitted]').forEach(function (el) {
+            el.removeAttribute('data-fitted');
+          });
+          if (typeof window._fitNames === 'function') window._fitNames(container);
+        }).catch(function () {});
+      } catch (e) {}
+    }
     // After photos loaded, update all bracket avatar images with real photos
     var bracketImgs = container.querySelectorAll('img[data-player-name]');
     bracketImgs.forEach(function(img) {
@@ -1267,7 +1296,12 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     // se o cache do perfil estava frio no render, data-lj-name virou "Participante N" e o
     // clone arrastado mostrava isso em vez do nome. Guest: key = nome, _displayNameForUid não
     // resolve → cai no data-lj-name. Ver [[project_uid_identity_canon_locked]].
-    var _liveNm = (key && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(key, '') : '';
+    // ⚠️ 1.8.29: aqui era `_displayNameForUid(key, '')`, o MESMO engano do card da chave —
+    // ele nunca devolve vazio, então com cache frio o `|| data-lj-name` nunca disparava e o
+    // fantasma arrastado dizia "Jogador sem perfil (…)". Pior no GUEST, o caso que o
+    // comentário acima diz estar coberto: `key` ali é o NOME, e o resolvedor devolve
+    // "Jogador sem perfil (tonh)" em vez de cair no rótulo. Nome vivo → rótulo → nada.
+    var _liveNm = (key && typeof window._nameForUid === 'function') ? (window._nameForUid(key) || '') : '';
     var nm = _liveNm || card.getAttribute('data-lj-name') || key;
     var clone = document.createElement('div');
     clone.textContent = '👤 ' + nm;
@@ -3248,24 +3282,52 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   const _uidsSlot = Array.isArray(uidHint) ? uidHint : (uidHint ? [uidHint] : []);
   let members;
   if (_uidsSlot.filter(Boolean).length) {
-    const _porUid = (u) => (u && typeof window._displayNameForUid === 'function')
-      ? window._displayNameForUid(u, '') : '';
-    // posição a posição: uid manda; sem uid naquela posição, cai no rótulo dela
-    members = _uidsSlot.map((u, i) => _porUid(u) || _rotulos[i] || '');
+    // ── O RESOLVEDOR TEM QUE PODER DIZER "NÃO SEI" (1.8.29) ────────────────────
+    // Aqui era `_displayNameForUid(u, '')`, e ele NUNCA devolve vazio: sem perfil no cache
+    // ele devolve o RÓTULO NEUTRO ("Jogador sem perfil (ZD7W)"), que é truthy. Resultado: o
+    // `|| _rotulos[i]` logo abaixo — a rede que o comentário promete — nunca disparava, e a
+    // "rede: se NADA resolveu, usa o rótulo" era código morto.
+    // MEDIDO no torneio "Duplas Mistas Sorteadas" (tour_1783511910924): os 8 jogos têm os
+    // nomes REAIS em `m.p1`/`m.p2` ("Iliane Geraldi Garcia / Flávia Barchetta") e os 16 uids
+    // existem em `users` com displayName — e a chave mostrava "Jogador sem perfil (XXXX)"
+    // em TODAS as linhas. Nada estava errado no dado: o render escolhia o placeholder por
+    // cima de duas fontes boas.
+    // POR QUE ISSO BATE EM DUPLA: o preload de perfis (`_preloadPlayerPhotos`) é ASSÍNCRONO
+    // e o `.then` dele só troca FOTO — nunca repinta nome. Em entrada individual o rótulo
+    // do slot costuma sobreviver por outros caminhos; em dupla stripada (sem p1Name/p2Name,
+    // sem e-mail no membro) o cache frio é a única fonte, então o placeholder ganhava.
+    // ⛔ E A CORREÇÃO NÃO É CAIR NO NOME GRAVADO. Ordem do dono, cortando a minha 1ª
+    // tentativa (que usava `m.p1` como reserva): _"nao tem que gravar nome. é uid e uid
+    // resolve o nome"_ · _"atualizando de acordo com o que estiver no perfil do usuário"_.
+    // Nome gravado ENVELHECE — quem renomeia o perfil apareceria com o nome velho, que é o
+    // defeito da 1.7.46 de novo. Então: QUEM TEM UID exibe o nome do PERFIL, e enquanto ele
+    // não chegou o slot vai VAZIO e é hidratado por `data-uid-name` (mecanismo que já existe
+    // em store.js e que a chave nunca usou). Rótulo guardado só onde NÃO há uid — fictício
+    // sem conta, onde o nome digitado é a única identidade que existe.
+    const _vivo = (u) => (u && typeof window._nameForUid === 'function') ? (window._nameForUid(u) || '') : '';
+    members = _uidsSlot.map((u, i) => u
+      ? { uid: u, nome: _vivo(u) }                       // perfil manda; vazio → hidrata
+      : { uid: null, nome: _rotulos[i] || '' });          // sem uid: o rótulo É a identidade
     // rótulos ALÉM dos uids = gente sem conta no mesmo lado → preserva
-    if (_rotulos.length > _uidsSlot.length) members = members.concat(_rotulos.slice(_uidsSlot.length));
-    members = members.filter(n => n);
-    // rede: se NADA resolveu (perfis ainda não carregados), usa o rótulo em vez
-    // de desenhar um slot vazio — tela em branco é pior que nome desatualizado.
-    if (!members.length) members = _rotulos;
+    if (_rotulos.length > _uidsSlot.length) {
+      members = members.concat(_rotulos.slice(_uidsSlot.length).map((n) => ({ uid: null, nome: n })));
+    }
+    // slot só desaparece quando não tem NEM uid nem rótulo — com uid ele existe mesmo sem
+    // nome ainda resolvido (é o que a hidratação preenche).
+    members = members.filter((x) => x.uid || x.nome);
   } else {
-    members = _rotulos;
+    members = _rotulos.map((n) => ({ uid: null, nome: n }));
   }
   // vazio de VERDADE: nem uid que resolva, nem rótulo. Aí sim o slot está aberto.
   if (members.length === 0) return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
 
   let html = members.length > 1 ? '<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden;">' : '';
-  members.forEach(function(name) {
+  members.forEach(function(_mb) {
+    // `_mb` = { uid, nome }. `nome` pode vir VAZIO quando há uid e o perfil ainda não
+    // chegou — o span leva `data-uid-name` e é preenchido pela hidratação (nunca por
+    // nome gravado). O resto da função continua trabalhando com `name` como antes.
+    const _slotUid = _mb && _mb.uid ? String(_mb.uid) : '';
+    const name = (_mb && _mb.nome) ? String(_mb.nome) : '';
     // v2.4.65: durante W.O. pendente, o slot do ausente exibe o substituto
     // convidado em amarelo + tag "aguardando resposta" (avatar do convidado).
     const _isPendingSlot = !!(pendingSub && pendingSub.absent && name === pendingSub.absent && pendingSub.invitee);
@@ -3306,7 +3368,20 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
       // "faça funcionar na classificação e não na chave". Na quadra o card é área de
       // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
       // da CLASSIFICAÇÃO (grupo e geral), que agora abre _openPlayerProfile.
-      `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name)}</span></div>` +
+      // ── O NOME É DO PERFIL, E SE ATUALIZA (1.8.29) ────────────────────────
+      // Com uid, o texto vive num span `data-uid-name`: ele nasce com o nome do perfil
+      // se já está em cache e VAZIO se não está, e `_hydrateUidNames` o preenche quando
+      // o perfil chega — e com o nome ATUAL, não com o que foi gravado no sorteio.
+      // A coroa fica FORA do span: a hidratação escreve `textContent` e apagaria qualquer
+      // filho. Sem uid (fictício) segue o caminho antigo, onde o rótulo é a identidade.
+      `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${
+        _slotUid
+          ? `<span data-uid-name="${window._safeHtml(_slotUid)}">${window._safeHtml(name)}</span>` +
+            ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&
+              window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
+          : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
+              ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name))
+      }</span></div>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
