@@ -4555,6 +4555,20 @@
       });
     });
     out.games = ordem.map(function (k) { return mapa[k]; });
+    // ── O CONTADOR SEGUE O ARRAY, SEMPRE (1.8.28) ───────────────────────────────
+    // `out` nasce de um Object.assign, então `gamesTotal` vinha do lado NOVO enquanto
+    // `out.games` é a UNIÃO dos dois. Bastava a rodada nova ter 1 jogo a menos que a união
+    // pro doc ficar auto-contraditório — e foi o que travou o @fabiogod: 397 jogos com
+    // `gamesTotal: 396`, abaixo do `indexTotal: 397`, então "incompleto" pra sempre.
+    // ⚠️ O que fazia disso um beco sem saída: RELER NÃO CONSERTAVA. Toda rodada trazia o
+    // mesmo 396, a união continuava 397, e o número gravado nunca subia — o dono passou o
+    // Fabio duas vezes e nada mudou.
+    // O `max` preserva o doc TRUNCADO (acervo > 600 jogos), onde o total é legitimamente
+    // maior que o array; e `gamesTruncated` passa a ser DERIVADO, porque bandeira guardada
+    // ao lado do dado é mais uma coisa que pode divergir dele.
+    out.gamesTotal = Math.max(antigo.gamesTotal || 0, novo.gamesTotal || 0, out.games.length);
+    if (out.gamesTotal > out.games.length) out.gamesTruncated = true;
+    else delete out.gamesTruncated;
     // cursor: união dos conjuntos — o que já foi aberto não desabre
     var ca = antigo.lzCursor || {}, cn = novo.lzCursor || {};
     out.lzCursor = Object.assign({}, ca, cn, {

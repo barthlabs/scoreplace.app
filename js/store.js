@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.27';
+window.SCOREPLACE_VERSION = '1.8.28';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -476,10 +476,24 @@ window._spCompByRefStr = function (imp, ref) {
 // "▶️ Continuar de onde parou" mesmo com tudo já lido. Use isto em qualquer lugar que
 // signifique "quanto desta pessoa nós temos": completude, comparação entre imports, barras,
 // contagens na tela. `games.length` só onde a pergunta é literalmente sobre o array.
+// ⚠️ E NUNCA MENOS DO QUE O ARRAY REALMENTE TEM (1.8.28). `gamesTotal` é CONTADOR, e
+// contador guardado ao lado do dado deriva dele — quando os dois discordam, o dado ganha.
+// MEDIDO no doc do @fabiogod (12/ago/2026): 397 jogos no array, todos com `lzId` e todos
+// distintos, `indexTotal: 397` — e `gamesTotal: 396`. Como este helper devolvia o contador
+// cegamente, a completude comparava 396 < 397, reprovava, e o nome ficava violeta com a
+// barra em "396 de 400 (99%)".
+// O PIOR NÃO ERA O NÚMERO ERRADO, ERA NÃO TER CONSERTO: reler não resolvia, porque cada
+// rodada nova traz o mesmo 396 e a união dos jogos continua 397 — o dono passou duas vezes
+// e o estado não mudou. A origem era o merge, que unia `games` e nunca recalculava o
+// contador (consertado junto, em `mergeImports`); esta linha é o que cura os documentos JÁ
+// GRAVADOS sem obrigar ninguém a reler.
+// `max` preserva o motivo pelo qual o contador existe: em doc TRUNCADO (acervo > 600) ele é
+// legitimamente MAIOR que o array, e continua vencendo.
 window._lzGamesTotal = function (imp) {
   if (!imp) return 0;
-  if (imp.gamesTotal != null) return imp.gamesTotal;
-  return Array.isArray(imp.games) ? imp.games.length : 0;
+  var n = Array.isArray(imp.games) ? imp.games.length : 0;
+  if (imp.gamesTotal != null) return Math.max(imp.gamesTotal, n);
+  return n;
 };
 
 window._spGameComp = function (imp, g) {
