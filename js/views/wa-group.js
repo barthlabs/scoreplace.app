@@ -250,8 +250,16 @@
       var cu = _cu(); if (!t || !cu || !cu.uid) return '';
       if (!_waAllowed(cu)) return '';
       if (!_isOrg(t, cu)) return '';
+      // ⚠️ 1.8.30 — COM O GRUPO JÁ CRIADO, ESTE CHIP SAI. Ordem do dono: _"esse botao do
+      // grupo geral oficial do torneio no whats já esta la em cima e nao deve ser repetido
+      // aqui nas ferramentas do organizador"_. Ele está certo: com link existente o topo já
+      // mostra "Entrar no grupo geral oficial do torneio" (_waGrpTournamentJoinChip), e dois
+      // botões quase idênticos na mesma tela são ruído.
+      // O que sobra aqui é o que NÃO existe em outro lugar: CRIAR o grupo. Sem link, este é
+      // o único caminho — por isso o chip continua aparecendo nesse estado.
+      if (t.waGroup && t.waGroup.link) return '';
       var open = 'event.stopPropagation(); window._waGrpOpenTournament(\'' + _attr(t.id) + '\')';
-      return _btn((t.waGroup && t.waGroup.link) ? 'Grupo geral oficial<br>do torneio' : 'Criar grupo geral<br>oficial do torneio', open, '', WA_BLUE);
+      return _btn('Criar grupo geral<br>oficial do torneio', open, '', WA_BLUE);
     } catch (e) { return ''; }
   };
 

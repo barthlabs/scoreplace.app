@@ -697,6 +697,7 @@ const SUITES = [
   'tests/lz-amistoso-fecha-a-conta.test.js',
   'tests/lz-posicao-de-grupo-nao-e-podio.test.js',
   'tests/lz-colocacao-final.test.js',
+  'tests/duplas-mistas-consistencia.test.js',
   'tests/lz-contador-nunca-abaixo-do-acervo.test.js',
   'tests/volta-da-ficha-pro-torneio.test.js',
   // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
