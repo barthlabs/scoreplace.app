@@ -1296,13 +1296,21 @@ store.js). Números queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1
 
 ## Deploy
 
-⚠️ **PROD É FIREBASE HOSTING desde ago/2026 — NÃO é mais GitHub Pages.** Publicar é:
+⚠️ **PROD É FIREBASE HOSTING desde ago/2026 — NÃO é mais GitHub Pages.** Publicar é **UM comando**:
 
 ```bash
-firebase deploy --only hosting --project scoreplace-app
+scripts/deploy-hosting.sh
 ```
 
-**O `git push origin HEAD:main` continua obrigatório** (versiona o repo e é de onde o worktree de deploy sai), **mas ele não muda o site**. Fazer só o push e dizer "deployado" é anunciar entrega que não aconteceu.
+Ele faz, nesta ordem: confere árvore limpa → **empurra HEAD pro `main`** (fast-forward; divergiu = aborta) → extrai o commit com `git archive` → carimba → `firebase deploy --only hosting` → confere o `version.txt` **no ar**. Aceita `--dry-run`.
+
+⛔ **NUNCA `firebase deploy --only hosting` na mão.** Desde 12/ago/2026 há trava (`scripts/check-deploy-alignment.js`, 1º item do `hosting.predeploy`) que **bloqueia o deploy de qualquer coisa que não esteja em `origin/main`** — e, numa cópia extraída sem `.git`, bloqueia se não houver o carimbo que o script escreve.
+
+**POR QUE A TRAVA EXISTE — e por que não é paranoia:** em 12/ago/2026 a produção ficou em **1.8.27 com o `origin/main` em 1.8.24**, 5 commits atrás. Ninguém errou comando: era o comportamento NORMAL do fluxo (cada sessão publica do seu branch/worktree e nada obrigava a empurrar pro main). A armadilha é que a leva seguinte publicada a partir do `main` **REBAIXA a produção**, tirando do ar versões que já servem gente. Ordem do dono: _"as coisas precisam estar alinhadas… apenas as versoes da loja ficam desalinhadas por um curto periodo de tempo por logistica apenas."_ Ou seja: **web publicada == `main`, sempre**; só as lojas podem atrasar, porque ali a revisão é de terceiro.
+
+**A regra em uma linha: o `main` descreve o que está no ar.** Se `git rev-parse origin/main` não bate com o commit publicado, alguma coisa está errada — e a trava existe pra isso não chegar até esse ponto.
+
+Escape hatch só pra emergência declarada: `SP_SKIP_ALIGNMENT=1` (avisa no console e o motivo tem que ir no commit).
 
 ⚠️ **DEPLOYAR SEMPRE DE UMA CÓPIA LOCAL EXTRAÍDA — sem rede, sem GitHub** (regra do dono, 07/ago/2026: _"pode até manter um backup no github, mas nao podemos ficar dependendo dele no dia a dia"_):
 

@@ -19,6 +19,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 1.8.27 NÃO ganhou item nesta nota, e isso é DECISÃO, não esquecimento. Conferido
+    // no diff: em js/, css/ e index.html ela mexeu SÓ em cache-buster, no
+    // `SCOREPLACE_VERSION` e no snapshot do prerender — zero comportamento novo (o commit
+    // foi varredura da safe-area + leitura do Sentry, ou seja verificação). O que era
+    // visível daquele ciclo já está descrito nos itens do cabeçalho e da tela de carregando,
+    // escritos em 1.8.25/1.8.26. A trava (check-release-notes) pega OMISSÃO e não sabe
+    // julgar isso — então a justificativa fica aqui, pro próximo leitor não achar que
+    // faltou.
     // ── v1.8 ─────────────────────────────────────────────────────────────────
     '<div style="margin-bottom:1rem;border:2px solid #a78bfa;border-radius:12px;padding:14px 16px;background:rgba(167,139,250,0.08);">' +
       '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">\uD83C\uDFC5 v1.8 \u2014 Sua coloca\u00e7\u00e3o calculada, conta duplicada que o app pergunta antes, e o app s\u00f3 abre quando terminou de carregar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
