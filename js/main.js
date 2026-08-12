@@ -1891,16 +1891,87 @@ window._installButtonHtml = function (opts) {
 // E a demora tem causa REAL no caminho de instalação: quando há prompt pendente
 // (Android/Chrome desktop) a função faz `await userChoice` ANTES de abrir o login, então
 // fica parada enquanto o usuário decide — com o botão parecendo morto o tempo todo.
+/* O "ENTRAR" DA LANDING SEGURA O FEEDBACK ATÉ A PESSOA ENTRAR (v1.8.34) ─────────────────
+ *
+ * Relato do dono: _"botão entrar da landing continua sem confirmação visual de que está
+ * entrando. ele clica várias vezes e só isso."_ E a régua, quando eu mostrei que o
+ * feedback existia: _"tem que ficar dando o feedback enquanto não entrar. dar um feed e
+ * sumir é como não dar."_
+ *
+ * MEDIDO no botão real antes de mexer: o "Entrando…" aparecia e SUMIA entre 30ms e 60ms —
+ * 2 a 4 quadros. Existia no código e não existia para o olho. A causa era o
+ * `setTimeout(soltar, 50)` que ficava aqui: ele soltava o botão 50ms depois do clique,
+ * TENHA O LOGIN APARECIDO OU NÃO. Quando o modal não sobe (o caso do relato), a pessoa vê
+ * o botão voltar ao normal e conclui que o toque não pegou — daí clicar várias vezes.
+ *
+ * Agora quem solta é o ESTADO, não o relógio:
+ *   • entrou (`AppStore.currentUser`) → solta, missão cumprida;
+ *   • o login está NA TELA → segue girando; a pessoa está no próximo passo e o botão está
+ *     atrás do modal. Fechou o modal sem entrar → solta (ela desistiu);
+ *   • o login NÃO subiu em 6s → solta E DIZ ISSO, com um aviso. Silêncio é o que faz
+ *     alguém martelar o botão.
+ * ⚠️ O `_spinButton` tem uma rede de 8s que restaura o botão sozinho. Como aqui o giro
+ * pode durar mais que isso (a pessoa lendo o modal, digitando a senha), o laço RE-ARMA o
+ * giro quando vê que a rede o desfez — em vez de mexer no `_spinButton`, que é usado pelo
+ * app inteiro. Re-armar é seguro porque a rede restaura o innerHTML ORIGINAL antes de
+ * soltar, então o próximo `_spinButton` captura o texto certo, não o spinner.
+ * ⚠️ Enquanto gira, o botão fica `disabled` — é isso que faz o clique repetido não
+ * empilhar nada. Ver [[project_busy_button_canonical]].
+ */
 window._enterApp = async function (btn) {
   var _soltou = false;
-  var soltar = function () {
-    if (_soltou) return;
-    _soltou = true;
-    if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
-  };
-  if (btn && typeof window._spinButton === 'function') {
+  var _iv = null;
+  var _t0 = Date.now();
+  var _viuLogin = false;
+
+  function _loginNaTela() {
+    var m = document.getElementById('modal-login');
+    if (!m) return false;
+    var cs = window.getComputedStyle(m);
+    var r = m.getBoundingClientRect();
+    // Visibilidade DE VERDADE: `display:flex` + classe `active` não bastam — o overlay
+    // nasce com `opacity:0` e só a classe `.active` o traz pra 1; enquanto a transição não
+    // corre, ele ocupa a tela sem ser visto.
+    // ⚠️ NUNCA usar `offsetParent` aqui: `.modal-overlay` é `position: fixed`, e para
+    // elemento fixo o `offsetParent` é SEMPRE null — o teste daria "invisível" com o login
+    // aberto na cara da pessoa, e o botão acusaria falha depois de 6s em todo login que
+    // deu certo. Tamanho + opacity + visibility bastam e valem pra qualquer posicionamento.
+    return cs.visibility !== 'hidden' && cs.display !== 'none' &&
+           parseFloat(cs.opacity || '1') > 0.05 && r.width > 1 && r.height > 1;
+  }
+  function _girar() {
+    if (!btn || typeof window._spinButton !== 'function') return;
+    if (btn.getAttribute('data-spinning') === '1') return;
     window._spinButton(btn, (typeof window._t === 'function' && window._t('landing.entering')) || 'Entrando…');
   }
+  var soltar = function (avisoErro) {
+    if (_soltou) return;
+    _soltou = true;
+    if (_iv) { clearInterval(_iv); _iv = null; }
+    if (btn && typeof window._spinButtonDone === 'function') window._spinButtonDone(btn);
+    if (avisoErro && typeof showNotification === 'function') {
+      showNotification('Não deu pra abrir o login', avisoErro, 'error');
+    }
+  };
+  _girar();
+  _iv = setInterval(function () {
+    // BOTÃO TROCADO POR RE-RENDER → segue no novo, não morre calado.
+    // A landing se redesenha sozinha (i18n, tema, soft-refresh) e o nó antigo sai do DOM.
+    // Se o laço apenas parasse aqui, o feedback sumiria no meio do caminho — de novo o
+    // "dá um feed e some". Então ele reencontra o CTA atual e continua girando NELE.
+    // Só desiste quando não há mais CTA na tela (a pessoa entrou e a view trocou), e aí
+    // não há o que sinalizar nem timer a manter.
+    if (btn && !document.body.contains(btn)) {
+      var _novo = document.querySelector('[data-landing-cta]');
+      if (_novo) { btn = _novo; }
+      else { if (_iv) clearInterval(_iv); _iv = null; _soltou = true; return; }
+    }
+    if (window.AppStore && window.AppStore.currentUser) { soltar(); return; }
+    if (_loginNaTela()) { _viuLogin = true; _girar(); return; }
+    if (_viuLogin) { soltar(); return; }                 // abriu e a pessoa fechou sem entrar
+    if (Date.now() - _t0 > 6000) { soltar('Toque em Entrar novamente. Se não abrir, recarregue a página.'); return; }
+    _girar();                                            // ainda não abriu: continua girando
+  }, 120);
   try {
     try {
       if (window._deferredInstallPrompt && !(window._isInstalledAsPWA && window._isInstalledAsPWA())) {
@@ -1913,16 +1984,17 @@ window._enterApp = async function (btn) {
     // Entra (login)
     if (typeof window.openModal === 'function') window.openModal('modal-login');
     else if (typeof window.handleGoogleLogin === 'function') window.handleGoogleLogin();
-  } finally {
-    // O login na tela É a entrega deste botão — soltar aqui.
-    // ⚠️ NUNCA `requestAnimationFrame` pra isto: rAF NÃO DISPARA com a página oculta
-    // (aba em segundo plano, prompt do sistema por cima, tela apagada). MEDIDO: com o
-    // painel do navegador escondido o rAF simplesmente não roda, e o botão ficava cinza
-    // até o backstop de 8s do _spinButton — que é exatamente o caminho de quem toca em
-    // "Entrar" e leva um diálogo de instalação na frente. `setTimeout` dispara nos dois
-    // casos; os 50ms só deixam o modal pintar antes de o cinza sair.
-    setTimeout(soltar, 50);
+  } catch (e) {
+    // Falhou ANTES de o login subir: solta com aviso em vez de deixar girando à toa.
+    soltar('Tente novamente.');
   }
+  // ⚠️ SEM `finally { setTimeout(soltar, 50) }`. Era exatamente ele o defeito: soltava o
+  // botão 50ms depois do clique, tivesse o login aparecido ou não — o "feedback que some",
+  // que o dono resumiu como "é como não dar". Quem solta agora é o laço de estado lá em
+  // cima (entrou · fechou o login · 6s sem abrir), nunca o relógio.
+  // ⚠️ E NUNCA `requestAnimationFrame` aqui: rAF NÃO DISPARA com a página oculta (aba em
+  // segundo plano, prompt do sistema por cima, tela apagada) — foi a lição que gerou o
+  // setTimeout original. O `setInterval` do laço dispara nos dois casos.
 };
 
 window._showAndroidInstallBanner = function() {
