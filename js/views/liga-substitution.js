@@ -712,7 +712,10 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     // são recalculados a cada toque (_ligaSyncFillAction). Participante nunca vê "Colocar".
     html += '<button id="liga-fill-action" class="btn btn-success" style="width:100%;margin-top:4px;font-weight:800;" ' +
       'data-tid="' + _safe(tId) + '" data-ri="' + roundIndex + '" data-gn="' + _safe(groupName) + '" data-abs="' + _safe(absentName) + '" data-org="' + (_souOrg ? '1' : '0') + '" ' +
-      'onclick="window._ligaFillAction(this)">📨 Convidar selecionados</button>';
+      // rótulo inicial NEUTRO: quem manda é o _ligaSyncFillAction logo após a montagem.
+      // Deixar "Convidar" aqui fazia o botão prometer convite mesmo quando a ação é
+      // colocação direta (1 marcado + organizador) — se o sync falhasse, mentia.
+      'onclick="window._ligaFillAction(this)">Marque quem entra ou recebe o convite</button>';
   } else {
     // O texto antigo dizia "ninguém DA MESMA CATEGORIA" mesmo quando a lista de espera
     // tinha gente — a frase culpava a categoria por um defeito de leitura. Agora só é
@@ -724,6 +727,19 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
 
   if (window.showAlertDialog) window.showAlertDialog('Substituto', html, function () {}, { type: 'info', confirmText: 'Fechar' });
+
+  // ⚠️ SINCRONIZA O RÓTULO NA MONTAGEM. `_ligaSyncFillAction` só rodava no TOQUE
+  // (fim do _ligaToggleCand), então o botão abria com o texto estático "Convidar
+  // selecionados" — e desde que a lista passou a vir com 1 candidato PRÉ-MARCADO
+  // (v1.8.45, o suplente que respeita a proporção) isso virou promessa errada: com
+  // UM marcado e sendo o organizador, a ação é COLOCAÇÃO DIRETA ("▶️ Colocar
+  // <nome>"), não convite. Convite só faz sentido a partir de 2 marcados — aí sim
+  // são opções, e entra o primeiro que aceitar. Regra do dono (13/ago).
+  // setTimeout(0) porque o showAlertDialog insere o HTML e o botão só existe depois.
+  try {
+    window._ligaSyncFillAction();
+    setTimeout(function () { try { window._ligaSyncFillAction(); } catch (e) {} }, 0);
+  } catch (e) {}
 };
 
 

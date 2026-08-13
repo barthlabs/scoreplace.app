@@ -2241,45 +2241,26 @@ function renderDashboard(container) {
         return dias === 1 ? 'ontem' : 'há ' + dias + ' dias';
       }
 
-      // Card NEUTRO: nenhum lado é "você", então não há vitória/derrota — só quem venceu.
+      // ⚠️ O CARD É O DA CHAVE — window.renderMatchCard, o MESMO renderizador do bracket
+      // (foto de cada pessoa, os dois blocos de dupla, o "vs" no meio, vencedor em verde e
+      // o subplacar do tie-break). Reclamação do dono (13/ago) sobre a 1ª versão: eu tinha
+      // escrito um card PRÓPRIO (nome + placar em duas linhas), criando um TERCEIRO visual
+      // pra a mesma coisa. `canEnterResult=false` deixa em leitura: medido, sai com ZERO
+      // botão e ZERO input — é jogo de outra pessoa, não há o que lançar aqui.
+      // Acima do card fica só o contexto que a chave não tem: de QUAL torneio é e QUANDO
+      // o resultado saiu (esta seção cruza torneios; a chave é sempre de um só).
       function _novCard(it) {
-        var m = it.m;
-        var venceuP1 = !m.draw && m.winner === m.p1;
-        var venceuP2 = !m.draw && m.winner === m.p2;
-        // placar POR LADO, passando pelo formatador canônico — é ele que traz o
-        // subplacar do tie-break (6⁽⁷⁾). Ler s.gamesP1 cru perderia o TB.
-        function _lado(n) {
-          if (Array.isArray(m.sets) && m.sets.length) {
-            return m.sets.map(function(s) {
-              return (typeof window._formatSetForPlayer === 'function')
-                ? window._formatSetForPlayer(s, n, { html: true })
-                : String(n === 1 ? s.gamesP1 : s.gamesP2);
-            }).join(' ');
-          }
-          var v = (n === 1 ? m.scoreP1 : m.scoreP2);
-          return v == null ? '' : _sf(String(v));
-        }
-        function _linha(nome, venceu, placar) {
-          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;' +
-            (venceu ? 'background:rgba(74,222,128,0.10);' : '') + '">' +
-            '<span style="flex:1;min-width:0;font-size:0.82rem;font-weight:' + (venceu ? '800' : '600') + ';' +
-            'color:' + (venceu ? '#4ade80' : '#cbd5e1') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
-            _sf(nome || '') + '</span>' +
-            '<span style="flex-shrink:0;font-size:0.95rem;font-weight:800;color:' + (venceu ? '#4ade80' : '#e2e8f0') + ';">' +
-            placar + '</span></div>';
-        }
         var _quando = _agoLabel(it.at);
-        var _jogo = (m._gameNum != null) ? ('Jogo ' + m._gameNum) : '';
-        var _meta = [it.tName, it.subLine, _jogo].filter(Boolean).join(' · ');
-        return '<div data-nov-card="1" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.16);' +
-          'border-radius:10px;padding:8px 10px;margin-bottom:8px;">' +
-          '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;">' +
+        var _meta = [it.tName, it.subLine].filter(Boolean).join(' · ');
+        var _card = (typeof window.renderMatchCard === 'function')
+          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null)
+          : '';
+        return '<div data-nov-card="1" style="margin-bottom:10px;">' +
+          '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;padding:0 2px;">' +
             '<span style="flex:1;min-width:0;font-size:0.66rem;font-weight:700;color:#94a3b8;text-transform:uppercase;' +
             'letter-spacing:0.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(_meta) + '</span>' +
             (_quando ? '<span style="flex-shrink:0;font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' : '') +
-          '</div>' +
-          _linha(m.p1, venceuP1, _lado(1)) +
-          _linha(m.p2, venceuP2, _lado(2)) +
+          '</div>' + _card +
         '</div>';
       }
 

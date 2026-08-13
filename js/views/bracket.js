@@ -3885,9 +3885,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   //    quebra em 2 linhas → 3 linhas no total: tag / Aguardando / aprovação).
   //  - Abaixo: linha própria com os botões (Contestar vermelho à esquerda,
   //    Confirmar verde à direita), com flex:1 pra dividir a largura e quebrar.
-  // O card ganha max-width só quando pendente — não mexe nos demais estados.
+  // ⚰️ REMOVIDO (1.8.46) o `max-width:280px` que o card ganhava SÓ quando pendente.
+  // Ele resolvia o esticão de 2019 (o cabeçalho pendente empurrava a coluna, que vive
+  // num scroll `min-width:max-content`) CAPANDO o card — e o preço era o card pendente
+  // ficar visivelmente mais estreito que os vizinhos na MESMA coluna. Reclamação do dono
+  // (13/ago): "cada situação com uma largura diferente… mantenha a maior largura
+  // disponível". MEDIDO antes de tirar: pendente 280px × decidido 400px na mesma coluna.
+  // E o motivo original NÃO reproduz mais — o cabeçalho já encolhe sozinho (`min-width:0`
+  // + `flex:1` na esquerda, `max-width:104px` na direita) e a linha de botões quebra.
+  // Sem o cap, os dois cards medem IGUAL tanto em pai de largura fixa quanto em
+  // `max-content`. box-sizing fica: o padding do card não pode virar largura extra.
   var _showHeaderPending = hasPending && _pr && !_pr.disputed;
-  var _cardMax = hasPending ? 'max-width:280px;box-sizing:border-box;' : '';
+  var _cardMax = 'box-sizing:border-box;';
   var _pendingBtnsRow = (_showHeaderPending && pendingActionBtns)
     ? `<div id="pending-banner-btns-${m.id}" style="display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${pendingActionBtns}</div>`
     : '';
@@ -5499,7 +5508,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // v0.16.95: filtra sit-outs (isSitOut) — eles aparecem na seção
         // dedicada "Ficaram de fora desta rodada" acima, não no grid.
         const allMatches = (currentRoundData.matches || []).filter(function(m) { return m && !m.isSitOut; });
-        const buildCard = (m, absIdx) => `<div style="min-width:260px;max-width:320px;flex:1;">${renderMatchCard(m, canEnterResult, t.id, prevMatches + absIdx + 1)}</div>`;
+        // v1.8.46: item de GRID, sem largura própria. O `min-width:260px;max-width:320px;flex:1`
+        // era o padrão que a v0.16.52 já tinha aposentado nos GRUPOS e que sobreviveu aqui
+        // (rodadas de Liga/Suíço): cards na mesma linha se espremiam abaixo de 320 e o
+        // último sozinho esticava até 320 — larguras diferentes no mesmo bloco.
+        const buildCard = (m, absIdx) => `<div>${renderMatchCard(m, canEnterResult, t.id, prevMatches + absIdx + 1)}</div>`;
         const _cu = window.AppStore && window.AppStore.currentUser;
         const _cuName = _cu ? (_cu.displayName || '') : '';
         const _cuEmail = _cu ? (_cu.email || '') : '';
@@ -5519,7 +5532,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                 <span>▸ Jogos da rodada (${allMatches.length})</span>
               </summary>
-              <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:1rem;">${allHtml}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:1rem;">${allHtml}</div>
             </details>
           </div>`;
           return '';
@@ -5539,16 +5552,16 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                   <span>▸ Demais jogos da rodada (${otherIdx.length})</span>
                 </summary>
-                <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:1rem;">${otherHtml}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:1rem;">${otherHtml}</div>
               </details>
             </div>`;
             return `<div>
               <div style="font-size:0.75rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:1px;margin-bottom:0.6rem;">⭐ ${myLabel}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:16px;">${myHtml}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">${myHtml}</div>
             </div>`;
           }
         }
-        return `<div style="display:flex;flex-wrap:wrap;gap:16px;">${allMatches.map((m, idx) => buildCard(m, idx)).join('')}</div>`;
+        return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">${allMatches.map((m, idx) => buildCard(m, idx)).join('')}</div>`;
       })()}
     </div>`;
 
