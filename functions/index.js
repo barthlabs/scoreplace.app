@@ -34,6 +34,33 @@ const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _mergeCols = require("./merge-collections-core");
 const _dupPerson = require("./duplicate-person-core");
+
+// v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
+// O subconjunto de 1 token só vira sinal quando o token existe SÓ nas duas contas
+// comparadas: "betania" está em 2 contas, "fabio" em 4 — e é isso que impede
+// "Fabio" × "Fábio Simão". Conta apenas os tokens de nomes que TÊM um token só, dos dois
+// lados. Falha na contagem devolve {} e a exceção simplesmente não dispara (fail-closed:
+// erro de consulta NUNCA vira sinal, e o comportamento volta a ser o de antes).
+async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
+  const out = {};
+  try {
+    const aContar = new Set();
+    const meus = dup.tokensNome(nomeMeu || "");
+    if (meus.length === 1) aContar.add(meus[0]);
+    (pessoas || []).forEach((p) => {
+      const t = dup.tokensNome((p && p.nome) || "");
+      if (t.length === 1) aContar.add(t[0]);
+    });
+    await Promise.all(Array.from(aContar).map(async (tk) => {
+      const c = await db.collection("users").where("displayName_tokens", "array-contains", tk).count().get();
+      out[tk] = c.data().count;
+    }));
+  } catch (e) {
+    console.error("[dup] contagem de token falhou (sinal de 1 token desligado):", e && e.message);
+    return {};
+  }
+  return out;
+}
 const _enrollCore = require("./enroll-core");
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
@@ -2427,6 +2454,15 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
             .where("displayName_firstkey", "==", pk).limit(40).get());
         }
       }
+      // v1.8.38 — nome de UM TOKEN só: nenhuma consulta acima alcança quem tem esse token
+      // no MEIO do nome. Mesmo buraco do cadastro; ver o bloco gêmeo em dup-cadastro.
+      if (_dupPerson.tokensNome(nomeMeu).length === 1) {
+        const tk = _dupPerson.tokensNome(nomeMeu)[0];
+        if (tk) {
+          consultas.push(db.collection("users")
+            .where("displayName_tokens", "array-contains", tk).limit(30).get());
+        }
+      }
       consultas.push(db.collection("users").where("displayName_lower", "==", nomeLower).limit(8).get());
     }
     if (telCanon) {
@@ -2466,7 +2502,7 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
       dispensados: [].concat(
         Array.isArray(meu.dupDismissedInfo) ? meu.dupDismissedInfo : [],
         Array.isArray(meu.dupDismissed) ? meu.dupDismissed : []),
-    }, pessoas, { rigor: "torneio" });
+    }, pessoas, { rigor: "torneio", freqTokens: await _freqDosTokensSoltos(db, _dupPerson, meu.displayName || "", pessoas) });
     if (!r.suspeito) return null;
 
     // ─── CELULAR AUTENTICADO NÃO PERGUNTA: FUNDE (v1.8.3) ──────────────────────────
@@ -6146,6 +6182,15 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
         const pk = _dupPerson.chavePrimeiroNome(nome);
         if (pk) consultas.push(db.collection("users").where("displayName_firstkey", "==", pk).limit(40).get());
       }
+      // v1.8.38 — NOME DE UM TOKEN SÓ ("Betânia", "Luciana"): nenhuma das consultas acima
+      // alcança quem tem esse token no MEIO do nome ("maria BETANIA roberto faria").
+      // `_keys` é o nome inteiro concatenado e `_firstkey`/`_lastkey` são as pontas. Foi
+      // esse buraco que deixou a mesma pessoa em dois grupos do Confra. Só disparamos
+      // quando o nome tem 1 token — fora daí seria trazer meia base à toa.
+      if (_dupPerson.tokensNome(nome).length === 1) {
+        const tk = _dupPerson.tokensNome(nome)[0];
+        if (tk) consultas.push(db.collection("users").where("displayName_tokens", "array-contains", tk).limit(30).get());
+      }
     }
     if (telCanon) consultas.push(db.collection("users").where("phone", "==", meu.phone).limit(8).get());
     const _mailMeu = _dupPerson.normalizarEmail(meu.email);
@@ -6169,13 +6214,16 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
     }
     if (!pessoas.length) return null;
 
+    // v1.8.38 — raridade do token: MESMO helper que o caminho da inscrição usa.
+    const freqTokens = await _freqDosTokensSoltos(db, _dupPerson, nome, pessoas);
+
     const r = _dupPerson.detectarMesmaPessoa({
       uid: uid, nome: nome, telefone: meu.phone || "", email: meu.email || "",
       linkedEmails: meu.linkedEmails || [], letzplayHandle: meu.letzplayHandle || "",
       dispensados: [].concat(
         Array.isArray(meu.dupDismissedInfo) ? meu.dupDismissedInfo : [],
         Array.isArray(meu.dupDismissed) ? meu.dupDismissed : []),
-    }, pessoas);
+    }, pessoas, { freqTokens: freqTokens });
     if (!r.suspeito) return null;
 
     // CREDENCIAL AUTENTICADA nem pergunta: funde. Mesma regra da inscrição — a prova é o
@@ -6246,16 +6294,26 @@ exports.enforceUniqueDisplayName = onDocumentWritten(
       const kEsperado = _dupPerson.chavesDeBusca(nome);
       const sEsperado = _dupPerson.chaveSobrenome(nome);
       const fEsperado = _dupPerson.chavePrimeiroNome(nome);
+      // v1.8.38: `displayName_tokens` — os tokens SOLTOS do nome ("maria","betania",
+      // "roberto","faria"). As outras três chaves não alcançam token do MEIO: `_keys` é o
+      // nome inteiro concatenado, `_firstkey`/`_lastkey` são as pontas. Foi por isso que
+      // "Betânia" nunca encontrou "maria betania roberto faria" — a MESMA pessoa em dois
+      // grupos do Confra (12/ago). Este índice serve as duas pontas do sinal novo:
+      // ACHAR o candidato (array-contains) e MEDIR a raridade do token (count).
+      const tEsperado = _dupPerson.tokensNome(nome);
       const kAtual = Array.isArray(a.displayName_keys) ? a.displayName_keys : null;
-      const divergiu = !kAtual ||
+      const tAtual = Array.isArray(a.displayName_tokens) ? a.displayName_tokens : null;
+      const divergiu = !kAtual || !tAtual ||
         kAtual.length !== kEsperado.length ||
         kEsperado.some((x, i) => kAtual[i] !== x) ||
+        tAtual.length !== tEsperado.length ||
+        tEsperado.some((x, i) => tAtual[i] !== x) ||
         String(a.displayName_lastkey || "") !== sEsperado ||
         String(a.displayName_firstkey || "") !== fEsperado;
       if (divergiu) {
         await db.collection("users").doc(uid).set(
           { displayName_keys: kEsperado, displayName_lastkey: sEsperado,
-            displayName_firstkey: fEsperado }, { merge: true });
+            displayName_firstkey: fEsperado, displayName_tokens: tEsperado }, { merge: true });
         console.log(`[enforceUniqueDisplayName] uid=${uid}: chaves de busca atualizadas ` +
           `(${JSON.stringify(kEsperado)} / ${sEsperado})`);
       }

@@ -719,6 +719,9 @@ const SUITES = [
   // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
   // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
   'tests/entrar-nunca-fica-mudo.test.js',
+  // Nome de 1 token: sugere sobrenome no perfil e vira sinal de duplicata quando o
+  // token é RARO e não é sobrenome. Trava a paridade cliente×servidor. v1.8.38.
+  'tests/sobrenome-e-raridade.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
 ];
 

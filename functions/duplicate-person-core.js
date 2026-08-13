@@ -341,8 +341,12 @@ function subconjuntoDeNome(ta, tb, opts) {
   //
   // Com as duas: 3 aceitos, 0 errados nos 7 pares da base. E mesmo um falso positivo custa
   // só uma PERGUNTA — a porta nunca afirma e sempre tem "não sou eu" ([[feedback_duplicate_person_signals]]).
-  const raro = !!(opts && opts.freqToken === 2);
-  if (!raro) return false;
+  // A frequência é POR TOKEN, então vem num MAPA (`freqTokens`) — um `freqToken` solto
+  // valeria pro lote inteiro e contaminaria os outros candidatos da mesma consulta
+  // (a CF compara o candidato contra vários de uma vez). `freqToken` fica aceito como
+  // atalho de 1 par só, que é como os testes exercitam.
+  const f = opts && (opts.freqTokens ? opts.freqTokens[menor[0]] : opts.freqToken);
+  if (f !== 2) return false;   // raro = existe SÓ nas duas contas comparadas
   return maior[maior.length - 1] !== menor[0];
 }
 
