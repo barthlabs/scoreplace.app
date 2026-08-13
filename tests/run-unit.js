@@ -740,6 +740,11 @@ const SUITES = [
   // servidor) limpa cache, tira o SW e recarrega uma vez. v1.8.39.
   'tests/js-truncado-se-conserta.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
+  // Exclusão de conta manda comprovante (titular + dono, CC barthlabs) por gatilho —
+  // qualquer origem, inclusive script de admin e console. Trava o caso que dói:
+  // FUSÃO não é exclusão (o cleanupAbandonedAuth apaga o doc do merge-ghost 7 dias
+  // depois, e quem uniu contas não pode receber "sua conta foi excluída").
+  'functions/test-account-deletion-email-core.js',
 ];
 
 let failed = [];
