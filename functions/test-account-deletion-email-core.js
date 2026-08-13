@@ -1,8 +1,9 @@
 /* E-MAIL DE CONFIRMAÇÃO DE EXCLUSÃO DE CONTA — o comprovante de que a conta sumiu.
  *
  * Ordem do dono (13/ago/2026): _"sempre que qualquer conta for excluída no app
- * (por qualquer motivo — solicitação do usuário, admin, etc.)"_ → e-mail para a
- * pessoa + rstbarth@gmail.com + CC contato@barthlabs.com.
+ * (por qualquer motivo — solicitação do usuário, admin, etc.)"_ → comprovante por
+ * e-mail. Destinatários corrigidos pelo dono no mesmo dia: _"NÃO enviar para
+ * rstbarth@gmail.com"_ — vai só pro titular e pra contato@barthlabs.com.
  *
  * O que este teste trava, na ordem do que dói errar:
  *   1. FUSÃO NÃO É EXCLUSÃO. O merge grava `mergedInto` e o cleanupAbandonedAuth
@@ -106,6 +107,41 @@ ok('com sobra NÃO diz "varredura limpa"', !/Varredura limpa/.test(comSobra.html
 const xss = core.buildAdminEmail({ uid: 'U', name: '<script>alert(1)</script>', deletedAt: quando });
 ok('nome é escapado (sem <script> cru)', xss.html.indexOf('<script>alert') === -1 && /&lt;script&gt;/.test(xss.html));
 
+// ── 3b. DESTINATÁRIOS ──────────────────────────────────────────────────────────
+// Correção explícita do dono (13/ago): o endereço PESSOAL saiu — o comprovante vai
+// só pro titular e pra caixa da empresa. Endereço pessoal em rotina automática é
+// exatamente o que [[feedback_contact_email_always_barthlabs]] proíbe, e a correção
+// foi expressa: não pode voltar por descuido.
+const alvos = core.mailTargets('cristiano@x.com');
+ok('titular recebe a confirmação', alvos.user.to.length === 1 && alvos.user.to[0] === 'cristiano@x.com');
+ok('titular tem CC pra barthlabs', alvos.user.cc.indexOf('contato@barthlabs.com') !== -1);
+ok('relatório vai pra contato@barthlabs.com', alvos.report.to[0] === 'contato@barthlabs.com');
+ok('replyTo é sempre barthlabs nos dois',
+  alvos.user.replyTo === 'contato@barthlabs.com' && alvos.report.replyTo === 'contato@barthlabs.com');
+
+// A armadilha do dia: com o pessoal fora, destino do relatório e CC viraram o MESMO
+// endereço — os dois no mesmo e-mail entregam duplicado na mesma caixa.
+ok('relatório NÃO se auto-CCa (to e cc seriam o mesmo endereço)', alvos.report.cc.length === 0);
+
+const mesmo = core.mailTargets('contato@barthlabs.com');
+ok('titular que JÁ é a caixa da empresa não vira to+cc duplicado', mesmo.user.cc.length === 0);
+const caixaAlta = core.mailTargets('CONTATO@BarthLabs.com');
+ok('a dedupe ignora caixa alta/baixa', caixaAlta.user.cc.length === 0);
+
+const semCaixa = core.mailTargets('');
+ok('conta só-celular: não há e-mail de titular', semCaixa.user === null);
+ok('conta só-celular: o relatório sai mesmo assim', semCaixa.report.to[0] === 'contato@barthlabs.com');
+
+// A trava da correção: o endereço pessoal não pode reaparecer em lugar nenhum.
+const fonteCore = fs.readFileSync(path.join(__dirname, 'account-deletion-email-core.js'), 'utf8');
+const rst = /rstbarth@gmail\.com/;
+ok('NUNCA rstbarth@gmail.com nos destinatários do core',
+  !rst.test(JSON.stringify(core.mailTargets('a@b.com'))) &&
+  !rst.test(String(core.REPORT_TO)) && !rst.test(String(core.CC_CONTATO)));
+ok('o core só cita o endereço pessoal em comentário (o porquê da correção), nunca em código',
+  fonteCore.split('\n').filter((l) => rst.test(l))
+    .every((l) => /^\s*(\*|\/\/|\/\*)/.test(l)));
+
 // ── 4. IDS DETERMINÍSTICOS (reentrega não duplica) ─────────────────────────────
 const ids = core.mailDocIds('wOmGzHQK');
 ok('id do usuário e do admin são distintos', ids.user !== ids.admin);
@@ -128,8 +164,8 @@ ok('a decisão vem do core, não reimplementada no gatilho',
 // e-mail no mesmo instante. Ler o after é ficar sem destinatário.
 ok('lê a identidade do BEFORE (o after já perdeu o e-mail)',
   /before/.test(bloco) && /before\.data\(\)/.test(bloco));
-ok('manda pro dono rstbarth@gmail.com', bloco.indexOf('rstbarth@gmail.com') !== -1 || /ADMIN_TO/.test(bloco));
-ok('CC contato@barthlabs.com', /cc:/.test(bloco) && (/CC_CONTATO/.test(bloco) || bloco.indexOf('contato@barthlabs.com') !== -1));
+ok('o roteamento vem do core (o gatilho não monta to/cc na mão)',
+  /mailTargets/.test(bloco) && !/to: \[destinatario\]/.test(bloco));
 ok('usa id determinístico ao enfileirar (não .add())',
   /mailDocIds/.test(bloco) && /\.doc\(/.test(bloco));
 ok('é best-effort: exclusão não pode falhar por causa do e-mail',

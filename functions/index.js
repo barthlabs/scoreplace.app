@@ -6241,27 +6241,30 @@ exports.accountDeletionEmail = onDocumentWritten(
         }
       };
 
+      // Quem recebe o quê é decisão do core (lá mora a dedupe: desde que o
+      // endereço pessoal saiu, o destino do relatório e o CC são o MESMO
+      // endereço, e os dois no mesmo e-mail entregariam duplicado).
+      const alvos = _delEmail.mailTargets(destinatario);
+
       // 1) titular (só se houver e-mail real — conta só-celular não tem caixa)
-      if (destinatario) {
+      if (alvos.user) {
         const m = _delEmail.buildUserEmail(info);
-        await põe(ids.user, {
-          to: [destinatario], cc: [_delEmail.CC_CONTATO], replyTo: _delEmail.CC_CONTATO,
+        await põe(ids.user, Object.assign({}, alvos.user, {
           message: { subject: m.subject, html: m.html, text: m.text },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        }));
       } else {
         console.log("[accountDeletionEmail] " + uid + " sem e-mail — só o relatório interno");
       }
 
       // 2) relatório interno
       const r = _delEmail.buildAdminEmail(info);
-      await põe(ids.admin, {
-        to: [_delEmail.ADMIN_TO], cc: [_delEmail.CC_CONTATO], replyTo: _delEmail.CC_CONTATO,
+      await põe(ids.admin, Object.assign({}, alvos.report, {
         message: { subject: r.subject, html: r.html, text: r.text },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      }));
       console.log("[accountDeletionEmail] enfileirado → " + (destinatario || "(sem titular)") +
-        " + " + _delEmail.ADMIN_TO + " | sobras=" + leftovers.length);
+        " + " + _delEmail.REPORT_TO + " | sobras=" + leftovers.length);
     } catch (e) {
       // best-effort: a conta já foi apagada; falhar aqui não pode reverter nada.
       console.error("[accountDeletionEmail] falhou:", e && e.message);

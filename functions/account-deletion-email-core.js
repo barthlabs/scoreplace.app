@@ -4,8 +4,14 @@
  *
  * Pedido do dono (13/ago/2026): _"sempre que qualquer conta for excluída no app
  * (por qualquer motivo — solicitação do usuário, admin, etc.), o sistema deve
- * automaticamente enviar e-mail de confirmação"_ — para a pessoa excluída, para
- * rstbarth@gmail.com e com CC contato@barthlabs.com.
+ * automaticamente enviar e-mail de confirmação"_.
+ *
+ * ⚠️ DESTINATÁRIOS — correção do dono no mesmo dia: _"NÃO enviar para
+ * rstbarth@gmail.com. O e-mail de confirmação de exclusão vai apenas para: o
+ * e-mail do usuário excluído, contato@barthlabs.com"_. O endereço pessoal saiu;
+ * o relatório interno passou a ser endereçado à caixa da empresa. Há asserção
+ * travando a ausência de rstbarth@gmail.com — a correção foi explícita e não
+ * pode voltar por descuido ([[feedback_contact_email_always_barthlabs]]).
  *
  * POR QUE UM GATILHO DE FIRESTORE, e não uma linha dentro do deleteAccount:
  * a mesma lição do syncMatchRosters — o gatilho vê TODA escrita, de QUALQUER
@@ -31,8 +37,39 @@
  * fato que não aconteceu. Por isso `mergedInto` no `before` é descarte.
  */
 
-var ADMIN_TO = 'rstbarth@gmail.com';
 var CC_CONTATO = 'contato@barthlabs.com';
+var REPORT_TO = 'contato@barthlabs.com';   // o relatório interno vai pra caixa da empresa
+
+/* ── ROTEAMENTO ─────────────────────────────────────────────────────────────
+ * Mora aqui, e não solto no gatilho, porque tem uma armadilha: desde que o
+ * endereço pessoal saiu, REPORT_TO e CC_CONTATO são o MESMO endereço — pôr os
+ * dois no mesmo e-mail entregaria duplicado na mesma caixa. A dedupe precisa de
+ * um lugar só, testado; espalhada pelo gatilho, ela divergiria no primeiro
+ * endereço novo.
+ *
+ * `destinatario` vazio (conta só-celular, sem caixa) → o e-mail do titular não
+ * existe e só o relatório sai.
+ */
+function _dedupe(lista) {
+  var vistos = {}, out = [];
+  (lista || []).forEach(function (e) {
+    var k = String(e || '').trim().toLowerCase();
+    if (!k || vistos[k]) return;
+    vistos[k] = 1; out.push(e);
+  });
+  return out;
+}
+
+function mailTargets(destinatario) {
+  var alvo = String(destinatario || '').trim();
+  var ccUser = _dedupe([CC_CONTATO]).filter(function (e) {
+    return e.toLowerCase() !== alvo.toLowerCase();   // não CCar quem já é o To
+  });
+  return {
+    user: alvo ? { to: [alvo], cc: ccUser, replyTo: CC_CONTATO } : null,
+    report: { to: [REPORT_TO], cc: [], replyTo: CC_CONTATO }
+  };
+}
 
 /* ── DECISÃO ────────────────────────────────────────────────────────────────
  * Recebe os dois lados CRUS do evento (objetos simples ou null), não o snapshot,
@@ -239,8 +276,9 @@ module.exports = {
   decideDeletionNotice,
   buildUserEmail,
   buildAdminEmail,
+  mailTargets,
   mailDocIds,
   fmtBR,
-  ADMIN_TO,
+  REPORT_TO,
   CC_CONTATO
 };
