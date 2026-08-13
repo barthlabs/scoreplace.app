@@ -65,3 +65,10 @@ node_modules
 functions/node_modules
 functions-autodraw/node_modules
 functions-stripe/node_modules
+
+# Fixtures do golden master do motor: são os DOCS REAIS de produção, com e-mail e
+# nome de gente de verdade — e este repositório é PÚBLICO. Ficam só na máquina;
+# quem precisar regenera com `node scripts/baixar-torneios.js`. O teste PULA quando
+# elas não existem, então a CI não fica verde mentindo.
+tests/fixtures/prod-tournaments.json
+tests/fixtures/motor-golden.json

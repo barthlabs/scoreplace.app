@@ -1884,7 +1884,7 @@ function renderDashboard(container) {
     if (pendingForMe.length > 0) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
       var _btnStyle = function(r,g,b) { return 'border:1px solid rgba('+r+','+g+','+b+',0.4);color:rgba('+r+','+g+','+b+',1);border-radius:6px;padding:2px 7px;font-size:0.65rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba('+r+','+g+','+b+',0.15);'; };
       pendingForMe.forEach(function(item) {
@@ -1917,7 +1917,7 @@ function renderDashboard(container) {
     if (pendingByMe.length > 0) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingByMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
@@ -1940,7 +1940,7 @@ function renderDashboard(container) {
     if (disputedMatches.length > 0) {
       html += '<div style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:#f87171;background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
       disputedMatches.forEach(function(item) {
         var pr = item.m.pendingResult || {};
@@ -2020,7 +2020,7 @@ function renderDashboard(container) {
     // ── Últimos resultados confirmados — estilo chave (não card flat) ──
     if (recentConfirmed.length > 0) {
       html += '<div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
       // única vez numa linha e só "JOGO N" acima de cada chave.
@@ -2170,7 +2170,7 @@ function renderDashboard(container) {
       _resGroups.forEach(function(g) {
         if (g.grouped && g.units.length >= 2) {
           // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
-          html += '<div style="flex-basis:100%;width:100%;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
+          html += '<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
             '<h4 style="color:' + g.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + g.color + ';padding-left:8px;flex:1;">' +
               _sf(g.group) +
               '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
@@ -2180,14 +2180,14 @@ function renderDashboard(container) {
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
           // fica uma vez no topo. Pequena margem entre os boxes via margin.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;margin-bottom:6px;">' +
+            html += '<div style="min-width:0;display:flex;flex-direction:column;margin-bottom:6px;">' +
               u.body +
             '</div>';
           });
         } else {
           // Singleton — cabeçalho completo (grupo · jogo + torneio), como antes.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
+            html += '<div style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
                 '<h4 style="color:' + u.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + u.color + ';padding-left:8px;flex:1;">' +
                   (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + _sf(u.faseStr2) +

@@ -351,6 +351,46 @@ const CACHE_QUENTE = {
   if (bloqueantes.length) console.error('     →', bloqueantes.join('\n       '));
   ok('  → e ela é promovida pra `all` no onload', /this\.media\s*=\s*['"]all['"]/.test(shell));
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // 7) TRAVA DO PRECACHE (13/ago/2026) — o precache do `install` NÃO PODE puxar a
+  //    página inteira. Pedido do dono depois da 3ª reincidência da tela branca:
+  //    "como vc está cagando isso com frequência, faça uma trava pra não voltar".
+  //
+  //    POR QUE ESTA É A TRAVA CERTA: o `CACHE_NAME` muda a CADA versão, então toda
+  //    primeira abertura depois de um deploy re-baixa o que o install listar. Com a
+  //    lista = página inteira (90 arquivos, buscados com Promise.all) isso disputa
+  //    banda com a própria página. MEDIDO em produção, 4G a 10Mbps: first-paint
+  //    15.880ms na 1ª abertura × 22ms na 2ª — e a folha de fontes levando 11.111ms
+  //    VINDA DO CACHE, ou seja a espera era FILA, não rede. A 1.8.35 fechou a tela
+  //    branca pelo topo do sw.js; esta é a mesma tela branca por outro caminho.
+  //
+  //    A regra: o install só pré-carrega o que BLOQUEIA A PINTURA (o <head>). Os
+  //    scripts `defer` do <body> entram no cache sozinhos, pelo runtime.
+  // ───────────────────────────────────────────────────────────────────────────
+  const swFonte = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const contaVersionados = (txt) => {
+    const re = /(?:src|href)\s*=\s*["']([^"']+\.(?:js|css)\?v=[^"']+)["']/g;
+    let m, n = 0; while ((m = re.exec(txt)) !== null) n++; return n;
+  };
+  const naPagina = contaVersionados(html);
+  const noHead = contaVersionados(html.split(/<\/head>/i)[0] || '');
+
+  ok('o precache do install recorta o <head> (não varre a página inteira)',
+    /_versionedShellUrls[\s\S]{0,600}?split\(\/<\\?\/head>\/i\)/.test(swFonte));
+  ok('  → e isso é o que o corta de ' + naPagina + ' pra ' + noHead + ' arquivos',
+    noHead < naPagina && noHead > 0);
+  // teto ABSOLUTO: mesmo que o <head> cresça, o precache não pode virar a página toda.
+  ok('  → o <head> tem no máximo 20 arquivos versionados (tem ' + noHead + ')', noHead <= 20);
+  ok('  → e é MUITO menor que a página (no máximo 1/3 dos ' + naPagina + ')',
+    noHead <= Math.ceil(naPagina / 3));
+  ok('o precache busca em SÉRIE — Promise.all aqui saturava a banda da página',
+    /_cacheEmSerie/.test(swFonte) &&
+    !/Promise\.all\(\s*_versionedShellUrls/.test(swFonte));
+  // o motivo tem que ficar escrito onde o defeito morava, senão alguém "otimiza" de volta
+  ok('  → o motivo está escrito no sw.js (pra ninguém reverter achando que é lentidão)',
+    /first-paint/i.test(swFonte) && /COMPETINDO POR BANDA|competindo por banda/i.test(swFonte));
+
   console.log('\n' + (fail === 0 ? '✅' : '❌') + ' ' + pass + ' asserções ok, ' + fail + ' falha(s)');
   process.exit(fail === 0 ? 0 : 1);
 })();

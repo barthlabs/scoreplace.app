@@ -97,7 +97,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v1.8.48';
+var CACHE_NAME = 'scoreplace-v1.8.49';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -211,16 +211,33 @@ self.addEventListener('message', function(event) {
 // novo já instala com as URLs exatas que a página vai pedir.
 // (As entradas sem query continuam existindo: são elas que o fallback offline
 // alcança via `ignoreSearch` — ver o comentário no fetch handler.)
+// ⚠️ SÓ O QUE BLOQUEIA A PINTURA — o `<head>`. Isto já pegou TODO js/css com `?v=` da
+// página (~90 arquivos) e os buscava de UMA VEZ (Promise.all). Como o `CACHE_NAME` muda a
+// cada versão, TODA primeira abertura depois de um deploy disparava esse download inteiro
+// COMPETINDO POR BANDA com a própria página — MEDIDO em produção (13/ago, 4G a 10Mbps):
+// first-paint em 15.880ms na 1ª abertura contra 22ms na 2ª, com a folha de fontes levando
+// 11.111ms *vinda do cache* (ou seja: a espera era fila, não rede). É a tela branca de
+// volta, por um caminho diferente do que a 1.8.35 fechou.
+// Os ~80 scripts `defer` do <body> NÃO precisam estar aqui: eles não seguram o primeiro
+// pixel e entram no cache sozinhos, pelo runtime, na primeira vez que a página os pede.
 function _versionedShellUrls(html) {
   var out = [];
+  var head = html.split(/<\/head>/i)[0] || '';   // recorta o <head>: o resto é defer
   var re = /(?:src|href)\s*=\s*["']([^"']+\.(?:js|css)\?v=[^"']+)["']/g;
   var m;
-  while ((m = re.exec(html)) !== null) {
+  while ((m = re.exec(head)) !== null) {
     var u = m[1];
     if (u.indexOf('http') === 0 && u.indexOf(self.location.origin) !== 0) continue; // outra origem
     try { out.push(new URL(u, self.location.origin).href); } catch (e) {}
   }
   return out;
+}
+// Busca em SÉRIE (não Promise.all): mesmo curta, a lista não pode disputar banda com a
+// página que está pintando. Um arquivo que falhe não derruba os outros.
+function _cacheEmSerie(cache, urls) {
+  return urls.reduce(function (p, u) {
+    return p.then(function () { return cache.add(u).catch(function () {}); });
+  }, Promise.resolve());
 }
 
 // Install: pre-cache static assets
@@ -237,9 +254,7 @@ self.addEventListener('install', function(event) {
           return r.ok ? r.text() : '';
         }).then(function(html) {
           if (!html) return;
-          return Promise.all(_versionedShellUrls(html).map(function(u) {
-            return cache.add(u).catch(function() {});
-          }));
+          return _cacheEmSerie(cache, _versionedShellUrls(html));
         }).catch(function() {});
       });
     }).then(function() {
