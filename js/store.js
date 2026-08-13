@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.47';
+window.SCOREPLACE_VERSION = '1.8.48';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2545,6 +2545,32 @@ window._renderBackHeader = function(opts) {
   );
 };
 
+// Zera TODA barra de busca/filtro canônica: o estado por `stateKey` (que é o que
+// sobrevive ao re-render) E o que estiver visível no DOM. Ponto único — chamado pelo
+// Voltar; qualquer outro lugar que precise "parar de filtrar" chama daqui em vez de
+// mexer no _filterBarState na mão. Best-effort: nunca derruba a navegação.
+window._limparBarrasDeBusca = function () {
+  try {
+    var st = window._filterBarState || {};
+    Object.keys(st).forEach(function (k) { if (st[k]) st[k].search = ''; });
+  } catch (e) {}
+  // limpa também os inputs que ainda estejam na tela (o DOM sai de cena logo em
+  // seguida, mas se a navegação for pra MESMA view o input é reaproveitado)
+  try {
+    var ids = ['bracket-search', 'part-search'];
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && 'value' in el) el.value = '';
+    });
+    document.querySelectorAll('[data-fb-search]').forEach(function (el) {
+      if ('value' in el) el.value = '';
+    });
+  } catch (e) {}
+  // e desfaz o efeito nos cards que ainda estiverem montados
+  try { if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter(); } catch (e) {}
+  try { if (typeof window._partApplyFilter === 'function') window._partApplyFilter(); } catch (e) {}
+};
+
 // Single delegated click handler for every Voltar button in the app.
 // Installed once at load; survives view re-renders because it lives on <body>.
 window._installBackNavDelegate = function() {
@@ -2563,6 +2589,17 @@ window._installBackNavDelegate = function() {
 
     // Dismiss overlays first so no stale full-screen modal masks the target view.
     try { if (typeof window._dismissAllOverlays === 'function') window._dismissAllOverlays(); } catch(err) {}
+
+    // ⚠️ VOLTAR ZERA A BUSCA. Regra do dono (13/ago): "se houve algo digitado na barra de
+    // busca/filtro e clicarmos em voltar, o conteúdo da barra deve ser limpo, zerado,
+    // parando de filtrar qualquer coisa". O texto sobrevivia de propósito ao RE-RENDER
+    // (é o que faz o filtro da chave resistir a um placar lançado, v1.4.14) — mas o
+    // estado é guardado por `stateKey` em _filterBarState e não era limpo ao SAIR da
+    // tela. Resultado: voltava-se pra uma lista filtrada por um texto que não estava
+    // mais visível em lugar nenhum — a tela parecia vazia sem explicação.
+    // Aqui, e não em cada tela: é o ÚNICO handler de Voltar do app (delegado no body),
+    // então some o risco de uma tela nova nascer sem a limpeza.
+    try { window._limparBarrasDeBusca(); } catch(err) {}
 
     // Override path: callback function registered in _backNavCallbacks.
     var cbId = el.getAttribute('data-back-cb');
@@ -4910,7 +4947,9 @@ window._fbInner = function (key) {
         // O wrapper herda o flex do input (era o input que absorvia a sobra da linha).
         var _clr = "window._fbClearSearch('" + key + "')";
         searchInp = '<span style="position:relative;display:inline-flex;align-items:center;flex:1 1 64px;min-width:60px;">'
-            + '<input id="' + opts.searchId + '" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
+            // data-fb-search: marca TODA barra canônica pro "Voltar" zerar a busca sem
+            // depender de lista de ids — barra nova nasce coberta. (_limparBarrasDeBusca)
+            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
             + '<button type="button" id="' + opts.searchId + '-clear" class="cancel-x-btn" title="Limpar busca" onclick="' + _clr + '" style="--cx-size:20px;position:absolute;right:8px;top:50%;transform:translateY(-50%);' + (search ? '' : 'display:none;') + '">✕</button>'
             + '</span>';
     }

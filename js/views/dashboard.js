@@ -1499,7 +1499,14 @@ function renderDashboard(container) {
           // Jogo de OUTRAS pessoas, num torneio em que EU estou inscrito. Só entra
           // quem JÁ TEM RESULTADO: `m.winner` é o que separa "jogado" de "marcado"
           // (jogo sorteado nasce sem winner). Sem placar não aparece — regra do dono.
-          if (m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length))) {
+          // ⚠️ SÓ TORNEIO EM ANDAMENTO. Regra do dono (13/ago): "torneios encerrados não
+          // devem popular nada aqui". "Novidades" é o que está ACONTECENDO agora — jogo de
+          // torneio terminado não é novidade, e sem este filtro um torneio antigo com
+          // dezenas de jogos afogaria o que está em curso (a ordenação é por data do
+          // lançamento, e torneio velho sem carimbo cai no desempate por rodada).
+          // Encerrado = `finished`, inclusive o encerrado automaticamente por abandono.
+          var _tEncerrado = (t.status === 'finished') || !!t.autoClosed;
+          if (!_tEncerrado && m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length))) {
             othersResults.push({
               tId: t.id, tName: t.name || '', m: m,
               // MEDIDO em produção: `resultAt` é o carimbo do lançamento (7 de 8 jogos
