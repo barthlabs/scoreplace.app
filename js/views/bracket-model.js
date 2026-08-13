@@ -826,11 +826,22 @@
   }
 
   // ============================================================================
-  // SET SCORE FORMATTING
-  // Shared helpers for rendering set scores with per-team tiebreak scores as
-  // superscript in parentheses. Normalizes two tiebreak shapes:
-  //   - casual:     set.tiebreak = { p1, p2 }
-  //   - tournament: set.tiebreak = { pointsP1, pointsP2 }
+  // SET SCORE FORMATTING + TIE-BREAK: UMA forma de gravar, UM leitor
+  //
+  // GRAVAR → SEMPRE `set.tiebreak = { pointsP1, pointsP2 }` (window._tbPoints).
+  //   Escolhido por ser AUTODESCRITIVO ao lado de gamesP1/gamesP2, que moram no
+  //   mesmo objeto: "points" diz que são os PONTOS do tie-break, e não games.
+  //   `{p1,p2}` ali é ambíguo. Também já era a forma do doc do TORNEIO, que é o
+  //   registro autoritativo da partida.
+  // LER → SEMPRE window._setTiebreak(set), que devolve {p1,p2} NORMALIZADO
+  //   (forma interna, em memória — nunca gravada).
+  //
+  // ⚠️ O leitor aceita as DUAS formas e isso NÃO é indecisão: é compatibilidade
+  // com o que JÁ ESTÁ GRAVADO. Medido em produção (ago/2026): matchHistory tinha
+  // 100% `{p1,p2}`, casualMatches quase tudo `{p1,p2}`, e o doc do torneio
+  // `{pointsP1,pointsP2}`. Reescrever o passado exigiria migração; tolerar na
+  // LEITURA custa duas linhas. O que foi unificado é a ESCRITA — nenhum caminho
+  // novo grava a forma curta.
   // opts.html=true → <sup style="…">(n)</sup>; else Unicode superscript digits.
   // ============================================================================
   var _SUP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻' };
@@ -845,6 +856,15 @@
     if (p1 == null && p2 == null) return null;
     return { p1: p1 == null ? 0 : p1, p2: p2 == null ? 0 : p2 };
   }
+  // LEITOR ÚNICO (exposto): todo lugar que precisa dos pontos do TB passa por aqui,
+  // em vez de ler `set.tiebreak.p1` cru — era assim que uma forma "não existia" pro
+  // outro lado do app.
+  window._setTiebreak = _getSetTB;
+  // ESCRITOR ÚNICO: a forma canônica de gravar, num lugar só.
+  window._tbPoints = function (p1, p2) {
+    if (p1 == null || p2 == null || isNaN(p1) || isNaN(p2)) return null;
+    return { pointsP1: Number(p1), pointsP2: Number(p2) };
+  };
   window._formatSetForPlayer = function(set, playerNum, opts) {
     opts = opts || {};
     if (!set) return '';

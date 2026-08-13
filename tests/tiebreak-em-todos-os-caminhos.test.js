@@ -71,9 +71,14 @@ ok(/oninput="window\._highlightWinner/.test(PE), '_editPendingResult fia oninput
 ok(/_highlightWinner\(matchId\)/.test(PE), '_editPendingResult revela ao MONTAR (proposta já no gatilho)');
 ok(/isTiebreakEntry/.test(PE) && /tbP1/.test(PE) && /tbP2/.test(PE),
   '_editPendingResult grava o TB no pendingResult (senão o Confirmar descarta os pontos)');
-// os DOIS desfechos (organizador finaliza · participante contra-propõe) levam o TB
-ok((PE.match(/isTiebreakEntry:/g) || []).length === 2,
-  'o TB viaja nos DOIS desfechos: organizador finaliza E contra-proposta do participante');
+// os DOIS desfechos (organizador finaliza · participante contra-propõe) levam o TB.
+// ⚠️ Asserção pelo INVARIANTE, não por contagem de string: a versão anterior contava
+// `isTiebreakEntry:` e quebrou sozinha quando o mesmo nome passou a aparecer também
+// dentro das chamadas do builder — teste que quebra por refator sem defeito é ruído.
+ok((PE.match(/_buildManualSet\(/g) || []).length === 2,
+  'os DOIS desfechos montam o set pelo builder canônico (organizador E contra-proposta)');
+ok(/m\.pendingResult\.sets\s*=/.test(PE), 'o desfecho do ORGANIZADOR anexa o set (com o TB)');
+ok(/_counter\.sets\s*=/.test(PE), 'a CONTRA-PROPOSTA do participante anexa o set (com o TB)');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. COMPORTAMENTO — o jogo REAL do relato (Confra, 5×6 pendente)

@@ -406,6 +406,9 @@ const SUITES = [
   // participante). O relato foi no card com PROPOSTA PENDENTE — o único ramo que nunca
   // renderizou tb1/tb2, então _highlightWinner virava no-op silencioso. v1.8.43.
   'tests/tiebreak-em-todos-os-caminhos.test.js',
+  // UMA forma de gravar o tie-break ({pointsP1,pointsP2}) + o subplacar sobrevive do
+  // lançamento até a tela (o `sets` no pendingResult é o que faltava). v1.8.44.
+  'tests/tiebreak-uma-forma-de-gravar.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.

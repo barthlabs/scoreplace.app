@@ -1432,6 +1432,16 @@ function renderDashboard(container) {
     var noResult = [];       // match sem resultado, torneio ativo, sou participante
     var upcoming = [];       // próximas partidas (sem resultado, resultEntry = organizer)
     var recentConfirmed = []; // últimas partidas com resultado confirmado
+    var othersResults = [];  // 📣 Novidades: jogos de OUTRAS pessoas, já com resultado
+
+    // Carimbo → milissegundos. `resultAt` normalmente vem em ms (13 dígitos), mas há
+    // dado gravado em SEGUNDOS na base (a mesma armadilha que o abandon-core encontrou),
+    // e misturar as duas escalas põe um jogo de 2026 antes de um de hoje na ordenação.
+    function _tsMs(v) {
+      var n = Number(v);
+      if (!n || isNaN(n) || n <= 0) return 0;
+      return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
+    }
 
     participacoes.forEach(function(t) {
       // v4.1.20: carimba a numeração GLOBAL "JOGO N" (fonte única, mesma do bracket) neste
@@ -1473,9 +1483,9 @@ function renderDashboard(container) {
         if (m.isMonarch && Array.isArray(m.team2)) p2Names = m.team2.slice();
         var inP1 = p1Names.some(_isMe) || _isMe(m.p1) || p1Names.some(function(n) { return _isMeByUid(n, t); });
         var inP2 = p2Names.some(_isMe) || _isMe(m.p2) || p2Names.some(function(n) { return _isMeByUid(n, t); });
-        if (!inP1 && !inP2) return;
-
-        // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo)
+        // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo).
+        // ⚠️ Calculado ANTES do desvio de "não sou deste jogo": desde a seção
+        // "Novidades no seu torneio" os DOIS ramos precisam deste rótulo.
         var _phaseLabel = '';
         if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
@@ -1483,6 +1493,28 @@ function renderDashboard(container) {
         var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');
         if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Pontos Corridos · Rei/Rainha';
         var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
+
+        if (!inP1 && !inP2) {
+          // ── 📣 Novidades no seu torneio ──────────────────────────────────────
+          // Jogo de OUTRAS pessoas, num torneio em que EU estou inscrito. Só entra
+          // quem JÁ TEM RESULTADO: `m.winner` é o que separa "jogado" de "marcado"
+          // (jogo sorteado nasce sem winner). Sem placar não aparece — regra do dono.
+          if (m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length))) {
+            othersResults.push({
+              tId: t.id, tName: t.name || '', m: m,
+              // MEDIDO em produção: `resultAt` é o carimbo do lançamento (7 de 8 jogos
+              // do "Duplas Mistas" o têm), mas torneio antigo (BT Corpus Christi) não
+              // tem carimbo NENHUM — daí a cadeia + o desempate por rodada/nº do jogo,
+              // a mesma régua que "Meus Últimos Resultados" já usa.
+              at: _tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || 0,
+              roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
+              gameSeq: (m._gameNum != null) ? Number(m._gameNum)
+                : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),
+              subLine: _subLine
+            });
+          }
+          return;
+        }
 
         var matchInfo = {
           tId: t.id, tName: t.name || '', sport: t.sport || '', m: m,
@@ -1545,7 +1577,11 @@ function renderDashboard(container) {
     });
     recentConfirmed = recentConfirmed.slice(0, 3);
 
-    var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length;
+    // ⚠️ `othersResults` entra na conta: quem se inscreveu e AINDA NÃO JOGOU não tem
+    // jogo nenhum nas outras listas, e sem isto o retorno antecipado levava junto a
+    // seção "Novidades no seu torneio" — apagando exatamente para quem ela mais serve
+    // (o recém-inscrito, que só tem os jogos dos outros para acompanhar).
+    var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length + othersResults.length;
     if (totalSection === 0) return '';
 
     var _sf = window._safeHtml || function(s) { return String(s || ''); };
@@ -1578,7 +1614,7 @@ function renderDashboard(container) {
       html += '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
       html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
-        '🏅 Meus Últimos Resultados</h3>';
+        '🏅 Seus últimos resultados</h3>';
       html += '<div id="meus-resultados-body" style="margin-top:12px;' + (_mrCollapsed ? 'display:none;' : '') + '">';
     }
 
@@ -1965,7 +2001,7 @@ function renderDashboard(container) {
 
       // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
       _upHtml += '<div id="proximos-jogos-section" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Próximo Jogo</h3>';
+      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Seu próximo jogo</h3>';
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:#a5b4fc;font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
@@ -2008,18 +2044,21 @@ function renderDashboard(container) {
         var resultLabel = m2.draw ? 'Empate' : (isWinner ? '🏆 Vitória' : 'Derrota');
 
         // placar — mostra pelo lado do usuário (p1 ou p2)
-        function _scoreDisplay(p1, p2) {
-          return '<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">' + _sf(String(p1)) + '</span>' +
-            '<span style="font-size:0.75rem;color:#475569;margin:0 4px;">×</span>' +
-            '<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">' + _sf(String(p2)) + '</span>';
-        }
-        var scoresHtml = '';
-        if (Array.isArray(m2.sets) && m2.sets.length > 0) {
-          scoresHtml = m2.sets.map(function(s) {
-            return _scoreDisplay(item.inP1 ? s.gamesP1 : s.gamesP2, item.inP1 ? s.gamesP2 : s.gamesP1);
-          }).join('<span style="color:#334155;margin:0 6px;">·</span>');
-        } else if (m2.scoreP1 != null && m2.scoreP2 != null) {
-          scoresHtml = _scoreDisplay(item.inP1 ? m2.scoreP1 : m2.scoreP2, item.inP1 ? m2.scoreP2 : m2.scoreP1);
+        // ⚰️ REMOVIDO (1.8.44): `_scoreDisplay` + `scoresHtml` eram montados aqui e
+        // NUNCA consumidos — quem desenha o placar deste card é o bloco "VS" mais
+        // abaixo, que lê m2.scoreP1/scoreP2. Ficavam como decoy: mexer neles parecia
+        // mexer no placar e não mudava um pixel (foi o que aconteceu ao consertar o
+        // subplacar do tie-break). O placar com tie-break vive em `_placarLado`.
+
+        // Placar de UM lado, com o subplacar do tie-break quando houver (6⁽⁷⁾).
+        // Ler m2.scoreP1 cru perdia o TB — o número dos games é o mesmo, o que some
+        // é o (7). Fonte única de formatação: window._formatSetForPlayer.
+        function _placarLado(n) {
+          if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
+            return m2.sets.map(function(s) { return window._formatSetForPlayer(s, n, { html: true }); }).join(' ');
+          }
+          var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
+          return v == null ? '' : _sf(String(v));
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
@@ -2086,7 +2125,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p1IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+m2.scoreP1+'</div>' : '';
+                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p1IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(1)+'</div>' : '';
                 return ph+sc3;
               })() +
             '</div>' +
@@ -2103,7 +2142,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p2IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+m2.scoreP2+'</div>' : '';
+                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p2IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(2)+'</div>' : '';
                 return ph+sc4;
               })() +
             '</div>' +
@@ -2162,7 +2201,110 @@ function renderDashboard(container) {
       html += '</div>'; // fecha #meus-resultados-section
     }
     // v3.1.24: Próximos Jogos (não colapsável) PRIMEIRO, depois Meus Últimos Resultados (colapsável).
-    return _upHtml + html;
+    // ── 📣 NOVIDADES NO SEU TORNEIO ──────────────────────────────────────────
+    // Os últimos jogos JÁ JOGADOS dos torneios em que o usuário está inscrito, mas
+    // de OUTRAS pessoas (os dele já têm as duas seções vizinhas). Ordem cronológica
+    // INVERSA do lançamento do resultado — o mais recente no topo. Vem COLAPSADA com
+    // apenas o jogo mais recente visível; abrindo, aparecem os anteriores.
+    var _novHtml = '';
+    if (othersResults.length > 0) {
+      // mais recente primeiro. Sem carimbo (torneio antigo — MEDIDO: o BT Corpus
+      // Christi não tem nenhum), desempata por rodada e nº do jogo, a mesma régua de
+      // "Meus Últimos Resultados". Sem isso a ordem vira a de inserção e a seção
+      // mentiria dizendo "mais recente".
+      othersResults.sort(function(a, b) {
+        if (b.at !== a.at) return b.at - a.at;
+        if (b.roundNum !== a.roundNum) return b.roundNum - a.roundNum;
+        return b.gameSeq - a.gameSeq;
+      });
+      var _NOV_MAX = 15;
+      var _novTotal = othersResults.length;
+      var _novList = othersResults.slice(0, _NOV_MAX);
+
+      var _novCollapsed = true;
+      try {
+        var _nvPref = localStorage.getItem('scoreplace_collapse_novidades');
+        if (_nvPref === '0') _novCollapsed = false;
+      } catch (e) {}
+
+      // "há X" — só quando existe carimbo de verdade; inventar tempo é pior que omitir.
+      function _agoLabel(ms) {
+        if (!ms) return '';
+        var d = Date.now() - ms;
+        if (d < 0) return '';
+        var min = Math.floor(d / 60000);
+        if (min < 1) return 'agora há pouco';
+        if (min < 60) return 'há ' + min + 'min';
+        var h = Math.floor(min / 60);
+        if (h < 24) return 'há ' + h + 'h';
+        var dias = Math.floor(h / 24);
+        return dias === 1 ? 'ontem' : 'há ' + dias + ' dias';
+      }
+
+      // Card NEUTRO: nenhum lado é "você", então não há vitória/derrota — só quem venceu.
+      function _novCard(it) {
+        var m = it.m;
+        var venceuP1 = !m.draw && m.winner === m.p1;
+        var venceuP2 = !m.draw && m.winner === m.p2;
+        // placar POR LADO, passando pelo formatador canônico — é ele que traz o
+        // subplacar do tie-break (6⁽⁷⁾). Ler s.gamesP1 cru perderia o TB.
+        function _lado(n) {
+          if (Array.isArray(m.sets) && m.sets.length) {
+            return m.sets.map(function(s) {
+              return (typeof window._formatSetForPlayer === 'function')
+                ? window._formatSetForPlayer(s, n, { html: true })
+                : String(n === 1 ? s.gamesP1 : s.gamesP2);
+            }).join(' ');
+          }
+          var v = (n === 1 ? m.scoreP1 : m.scoreP2);
+          return v == null ? '' : _sf(String(v));
+        }
+        function _linha(nome, venceu, placar) {
+          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px;' +
+            (venceu ? 'background:rgba(74,222,128,0.10);' : '') + '">' +
+            '<span style="flex:1;min-width:0;font-size:0.82rem;font-weight:' + (venceu ? '800' : '600') + ';' +
+            'color:' + (venceu ? '#4ade80' : '#cbd5e1') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+            _sf(nome || '') + '</span>' +
+            '<span style="flex-shrink:0;font-size:0.95rem;font-weight:800;color:' + (venceu ? '#4ade80' : '#e2e8f0') + ';">' +
+            placar + '</span></div>';
+        }
+        var _quando = _agoLabel(it.at);
+        var _jogo = (m._gameNum != null) ? ('Jogo ' + m._gameNum) : '';
+        var _meta = [it.tName, it.subLine, _jogo].filter(Boolean).join(' · ');
+        return '<div data-nov-card="1" style="background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.16);' +
+          'border-radius:10px;padding:8px 10px;margin-bottom:8px;">' +
+          '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;">' +
+            '<span style="flex:1;min-width:0;font-size:0.66rem;font-weight:700;color:#94a3b8;text-transform:uppercase;' +
+            'letter-spacing:0.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(_meta) + '</span>' +
+            (_quando ? '<span style="flex-shrink:0;font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' : '') +
+          '</div>' +
+          _linha(m.p1, venceuP1, _lado(1)) +
+          _linha(m.p2, venceuP2, _lado(2)) +
+        '</div>';
+      }
+
+      _novHtml += '<div id="novidades-section" style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+        '<span id="nov-chevron" style="font-size:0.8rem;display:inline-block;">' + (_novCollapsed ? '▸' : '▾') + '</span>' +
+        '📣 Novidades no seu torneio</h3>';
+      // o mais recente fica SEMPRE visível — é o "apenas o último jogo" do estado colapsado
+      _novHtml += '<div style="margin-top:12px;">' + _novCard(_novList[0]) + '</div>';
+      if (_novList.length > 1) {
+        _novHtml += '<div id="novidades-body" style="' + (_novCollapsed ? 'display:none;' : '') + '">';
+        for (var _nvI = 1; _nvI < _novList.length; _nvI++) _novHtml += _novCard(_novList[_nvI]);
+        // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
+        if (_novTotal > _NOV_MAX) {
+          _novHtml += '<p style="margin:2px 0 0;font-size:0.68rem;color:#64748b;text-align:center;">' +
+            'mostrando os ' + _NOV_MAX + ' mais recentes de ' + _novTotal + '</p>';
+        }
+        _novHtml += '</div>';
+        _novHtml += '<p id="novidades-hint" onclick="window._toggleNovidadesCollapse()" style="margin:6px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
+          (_novCollapsed ? '▾ ver os ' + (_novList.length - 1) + ' jogos anteriores' : '▴ ocultar anteriores') + '</p>';
+      }
+      _novHtml += '</div>'; // fecha #novidades-section
+    }
+
+    return _upHtml + _novHtml + html;
   }
 
   const curFilter = window._dashFilter || 'todos';
@@ -3345,6 +3487,26 @@ window._applyDashSearchInPlace = function() {
   });
   // v3.0.97: não deixa a tela pular nem a barra sair do lugar quando a busca esvazia.
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(keepY); } catch (e) {}
+};
+
+// 📣 Novidades no seu torneio — mesmo padrão do "Meus Últimos Resultados": o mais
+// recente fica FORA do corpo colapsável (é o "apenas o último jogo visível"), então
+// aqui só entram/saem os anteriores. A escolha é lembrada; o default é COLAPSADA.
+window._toggleNovidadesCollapse = function() {
+  var body = document.getElementById('novidades-body');
+  var chev = document.getElementById('nov-chevron');
+  var hint = document.getElementById('novidades-hint');
+  if (!body) return;
+  var willCollapse = body.style.display !== 'none';
+  body.style.display = willCollapse ? 'none' : '';
+  if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  if (hint) {
+    var n = body.querySelectorAll ? body.querySelectorAll('[data-nov-card]').length : 0;
+    hint.textContent = willCollapse
+      ? ('▾ ver os ' + (n || body.children.length) + ' jogos anteriores')
+      : '▴ ocultar anteriores';
+  }
+  try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
 };
 
 window._toggleMyResultsCollapse = function() {

@@ -1620,12 +1620,13 @@ window._renderPersistentMatchStats = function(records, uid) {
             // {pointsP1,pointsP2} (legacy tournament m.sets saves). Handle both.
             if (Array.isArray(r.sets)) {
                 for (var sIdx = 0; sIdx < r.sets.length; sIdx++) {
-                    var _tbSet = r.sets[sIdx];
-                    var _tb = _tbSet && _tbSet.tiebreak;
-                    if (!_tb) continue;
-                    var _tbP1 = (typeof _tb.p1 === 'number') ? _tb.p1 : (typeof _tb.pointsP1 === 'number' ? _tb.pointsP1 : null);
-                    var _tbP2 = (typeof _tb.p2 === 'number') ? _tb.p2 : (typeof _tb.pointsP2 === 'number' ? _tb.pointsP2 : null);
-                    if (_tbP1 === null || _tbP2 === null) continue;
+                    // LEITOR ÚNICO (window._setTiebreak) — aqui havia a 4ª cópia da
+                    // normalização das duas formas; cada cópia é uma chance de uma
+                    // delas ficar de fora e o dado "sumir" só nesta tela.
+                    var _tbN = (typeof window._setTiebreak === 'function')
+                      ? window._setTiebreak(r.sets[sIdx]) : null;
+                    if (!_tbN) continue;
+                    var _tbP1 = _tbN.p1, _tbP2 = _tbN.p2;
                     var _myPts = myTeam === 1 ? _tbP1 : _tbP2;
                     var _oppPts = myTeam === 1 ? _tbP2 : _tbP1;
                     if (_myPts > _oppPts) {
