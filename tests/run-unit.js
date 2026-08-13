@@ -716,6 +716,9 @@ const SUITES = [
   // Entrar na lista de espera passa pelo SERVIDOR (enrollParticipant), nunca por
   // saveTournament do doc inteiro — incidente da Mariana no Confra, 12/ago. v1.8.36.
   'tests/inscricao-na-fila-passa-pelo-servidor.test.js',
+  // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
+  // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
+  'tests/entrar-nunca-fica-mudo.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
 ];
 
