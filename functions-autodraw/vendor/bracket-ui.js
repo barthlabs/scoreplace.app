@@ -893,7 +893,7 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
   var setsArr = [];
   if (useSets) {
     var setEntry = { gamesP1: s1, gamesP2: s2 };
-    if (isTiebreakEntry && !isNaN(tbP1) && !isNaN(tbP2)) setEntry.tiebreak = { p1: tbP1, p2: tbP2 };
+    if (isTiebreakEntry) { var _tbc = window._tbPoints(tbP1, tbP2); if (_tbc) setEntry.tiebreak = _tbc; }
     setsArr.push(setEntry);
   }
   var setsT1 = useSets ? (s1 > s2 ? 1 : 0) : 0;
@@ -941,12 +941,8 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
   else if (m.winner === m.p2) winnerTeam = 2;
   var setsArr = (sets || []).map(function(s) {
     var e = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
-    if (s.tiebreak) {
-      var _tb = s.tiebreak;
-      var _p1 = (typeof _tb.p1 === 'number') ? _tb.p1 : (typeof _tb.pointsP1 === 'number' ? _tb.pointsP1 : null);
-      var _p2 = (typeof _tb.p2 === 'number') ? _tb.p2 : (typeof _tb.pointsP2 === 'number' ? _tb.pointsP2 : null);
-      if (_p1 !== null && _p2 !== null) e.tiebreak = { p1: _p1, p2: _p2 };
-    }
+    var _tbn = window._setTiebreak(s);
+    if (_tbn) e.tiebreak = window._tbPoints(_tbn.p1, _tbn.p2);
     if (s.fixedSet) e.fixedSet = true;
     return e;
   });
@@ -955,7 +951,8 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
   var team2 = Object.assign({ points: totalGamesP2 || 0, games: totalGamesP2 || 0, sets: p2Sets || 0 }, zeroStats);
   var scoreSummary = setsArr.map(function(s) {
     var base = s.gamesP1 + '-' + s.gamesP2;
-    if (s.tiebreak) base += '(' + Math.min(s.tiebreak.p1, s.tiebreak.p2) + ')';
+    var _tbb = window._setTiebreak(s);
+    if (_tbb) base += '(' + Math.min(_tbb.p1, _tbb.p2) + ')';
     return base;
   }).join(' ');
   var recordId = 't_' + String(t.id) + '_' + String(m.id);
@@ -1202,6 +1199,25 @@ window._tbLoserGames = function (scoring, sport) {
   return (at === 'g-1') ? Math.max(1, gp - 1) : gp;
 };
 
+// FONTE ÚNICA do SET gravado no lançamento manual (sempre 1 set): games + o tie-break quando
+// houver. Existe porque o subplacar do TB só APARECE na tela se o jogo tiver `m.sets` — quem
+// desenha é `_formatSetForPlayer` (6⁽⁵⁾), e ele lê `sets[0].tiebreak`. Guardar só `tbP1/tbP2`
+// no pendingResult NÃO basta: `_applyApprovedResult` exige `pr.sets` ser ARRAY pra montar
+// `m.sets`; sem isso cai no ramo simples e o tie-break some na aprovação — foi exatamente o
+// buraco que sobrou quando o TB entrou no `_editPendingResult`. Chave `pointsP1/pointsP2`
+// (a forma do torneio); `_getSetTB` também aceita `p1/p2`, que é a do casual.
+window._buildManualSet = function (s1, s2, opts) {
+  opts = opts || {};
+  var set = { gamesP1: s1, gamesP2: s2 };
+  if (opts.isFixedSet) set.fixedSet = true;
+  if (opts.isTiebreakEntry) {
+    // escritor único — ele mesmo recusa valor faltando
+    var _tbc = window._tbPoints(opts.tbP1, opts.tbP2);
+    if (_tbc) set.tiebreak = _tbc;
+  }
+  return { sets: [set], setsWonP1: (s1 > s2 ? 1 : 0), setsWonP2: (s2 > s1 ? 1 : 0) };
+};
+
 window._highlightWinner = function (matchId) {
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
@@ -1290,7 +1306,7 @@ window._saveSetResult = function(tId, matchId) {
       // Tie — add tiebreak data
       const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
       const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
-      setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+      setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
       // Tiebreak winner gets the set
       if (tbP1 > tbP2) { setData.gamesP1 = g1 + 1; p1Sets = 1; }
       else if (tbP2 > tbP1) { setData.gamesP2 = g2 + 1; p2Sets = 1; }
@@ -1318,7 +1334,7 @@ window._saveSetResult = function(tId, matchId) {
       if (window._isTiebreakSetScore(g1, g2, window._tbLoserGames(sc, t.sport))) {
         const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
         const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
-        if (tbP1 || tbP2) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+        if (tbP1 || tbP2) setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
       }
 
       sets.push(setData);
@@ -1592,7 +1608,7 @@ window._applyResultToTournament = function (t, matchId, payload) {
   } else if (useSets) {
     var setData = { gamesP1: s1, gamesP2: s2 };
     if (isFixedSet) setData.fixedSet = true;
-    if (isTiebreakEntry) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+    if (isTiebreakEntry) setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
     m.sets = [setData];
     m.setsWonP1 = s1 > s2 ? 1 : 0;
     m.setsWonP2 = s2 > s1 ? 1 : 0;
@@ -1750,12 +1766,12 @@ window._saveResultInline = function (tId, matchId) {
       tbP2: isTiebreakEntry ? tbP2 : null
     };
     if (useSets) {
-      var _setData = { gamesP1: s1, gamesP2: s2 };
-      if (isFixedSet) _setData.fixedSet = true;
-      if (isTiebreakEntry) _setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
-      _pendingPayload.sets = [_setData];
-      _pendingPayload.setsWonP1 = s1 > s2 ? 1 : 0;
-      _pendingPayload.setsWonP2 = s2 > s1 ? 1 : 0;
+      // FONTE ÚNICA _buildManualSet — é o `sets` daqui que faz o subplacar do TB
+      // sobreviver à aprovação (_applyApprovedResult exige o array).
+      var _mp = window._buildManualSet(s1, s2, { isFixedSet: isFixedSet, isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2 });
+      _pendingPayload.sets = _mp.sets;
+      _pendingPayload.setsWonP1 = _mp.setsWonP1;
+      _pendingPayload.setsWonP2 = _mp.setsWonP2;
     }
     m.pendingResult = _pendingPayload;
     _propagateMatchUpdate(t, m);
@@ -1781,15 +1797,11 @@ window._saveResultInline = function (tId, matchId) {
   }
 
   if (useSets) {
-    // Store as a single set for GSM compatibility
-    var setData = { gamesP1: s1, gamesP2: s2 };
-    if (isFixedSet) setData.fixedSet = true;
-    if (isTiebreakEntry) {
-      setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
-    }
-    m.sets = [setData];
-    m.setsWonP1 = s1 > s2 ? 1 : 0;
-    m.setsWonP2 = s2 > s1 ? 1 : 0;
+    // Store as a single set for GSM compatibility — FONTE ÚNICA _buildManualSet
+    var _ms = window._buildManualSet(s1, s2, { isFixedSet: isFixedSet, isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2 });
+    m.sets = _ms.sets;
+    m.setsWonP1 = _ms.setsWonP1;
+    m.setsWonP2 = _ms.setsWonP2;
     if (isFixedSet) m.fixedSet = true;
     m.scoreP1 = s1;
     m.scoreP2 = s2;
@@ -2489,10 +2501,46 @@ window._editPendingResult = function(tId, matchId) {
     window.location.hash = '#bracket/' + tId;
     return;
   }
+  // ⚠️ TIE-BREAK TAMBÉM AQUI. Este é o 3º caminho de lançamento e era o ÚNICO sem os campos
+  // do TB: com `pendingResult` o card não mostra os inputs normais (`showInputs` exige
+  // `!hasPending`), então quem edita uma proposta cai NESTE ramo — e ele montava só s1/s2, sem
+  // `tb1-`/`tb2-` e sem `oninput`. Resultado: digitar o placar do gatilho (6-5 na regra 5-5)
+  // não abria nada, porque os campos não existiam no DOM. Relato do dono (13/ago): "entrei no
+  // jogo que está 5-6 como organizador e reescrevi esses números e não abriu para mim também".
+  // O gatilho vem da MESMA fonte única dos outros dois caminhos (_tbLoserGames → config do
+  // torneio, com fallback por esporte). [[project_live_scoring_canonical]]
+  var _pesc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var _peUseSets = window._scoringUsesSets(_pesc);
+  var _peTbEnabled = _peUseSets && _pesc && _pesc.tiebreakEnabled !== false;
+  // pré-preenche com o TB que a proposta já trazia (pr.tbP1/tbP2) ou com o do set gravado
+  var _peSetTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
+  var _peTb1 = (pr && pr.tbP1 != null) ? pr.tbP1 : (_peSetTb && _peSetTb.pointsP1 != null ? _peSetTb.pointsP1 : null);
+  var _peTb2 = (pr && pr.tbP2 != null) ? pr.tbP2 : (_peSetTb && _peSetTb.pointsP2 != null ? _peSetTb.pointsP2 : null);
+  var _peTbStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;' +
+    'background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);' +
+    'color:var(--text-bright);border-radius:5px;padding:3px 4px;';
+  var _peEsc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  var _peTbInput = function(n, val) {
+    if (!_peTbEnabled) return '';
+    return '<input type="number" id="tb' + n + '-' + matchId + '" min="0" placeholder="tb" title="Tie-break"' +
+      (val != null ? ' value="' + val + '"' : '') +
+      ' onclick="event.stopPropagation()"' +
+      ' style="' + _peTbStyle + 'display:none;margin-left:4px;"' +
+      ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')">';
+  };
+
   // Suprime re-renders enquanto o usuário edita (evita dashboard destruir os inputs)
   window._suppressSoftRefresh = true;
-  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
-  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
+  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()"' +
+    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(1, _peTb1);
+  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()"' +
+    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(2, _peTb2);
+
+  // Revela JÁ se o placar que veio na proposta é do gatilho (o caso do relato: abre em 5-6
+  // sem o organizador precisar redigitar). Depois disso quem revela é o oninput.
+  if (typeof window._highlightWinner === 'function') {
+    try { window._highlightWinner(matchId); } catch (e) {}
+  }
 
   // Troca botões do header por Cancelar + Confirmar
   var headerBtnArea = document.getElementById('header-btns-' + matchId);
@@ -2524,6 +2572,30 @@ window._editPendingResult = function(tId, matchId) {
       var s1v = parseInt((document.getElementById('s1-' + matchId) || {}).value, 10);
       var s2v = parseInt((document.getElementById('s2-' + matchId) || {}).value, 10);
       if (isNaN(s1v) || isNaN(s2v)) { showNotification('Placar inválido', 'Preencha os dois campos.', 'warning'); return; }
+      // TIE-BREAK: mesma regra e mesmas validações do _saveResultInline (fonte única do gatilho
+      // em _tbLoserGames). Sem este bloco os pontos digitados eram DESCARTADOS no Confirmar —
+      // o set virava um 6-5 sem o TB, e `_approveResult` lê justamente pr.isTiebreakEntry/tbP1/tbP2.
+      var _peTrigger = _peTbEnabled ? window._tbLoserGames(_pesc, t.sport) : null;
+      var _peIsTb = false, _peTbV1 = NaN, _peTbV2 = NaN;
+      if (_peTbEnabled && window._isTiebreakSetScore(s1v, s2v, _peTrigger)) {
+        var _e1 = document.getElementById('tb1-' + matchId);
+        var _e2 = document.getElementById('tb2-' + matchId);
+        _peTbV1 = _e1 ? parseInt(_e1.value, 10) : NaN;
+        _peTbV2 = _e2 ? parseInt(_e2.value, 10) : NaN;
+        if (isNaN(_peTbV1) || isNaN(_peTbV2)) {
+          showNotification('Tie-break obrigatório',
+            'O placar ' + (_peTrigger + 1) + '-' + _peTrigger + ' foi decidido no tie-break — preencha os pontos.', 'warning');
+          return;
+        }
+        // o vencedor do TB tem que ser o mesmo do set (quem fez mais games)
+        var _setP1Venceu = s1v > s2v;
+        if ((_setP1Venceu && _peTbV1 <= _peTbV2) || (!_setP1Venceu && _peTbV2 <= _peTbV1)) {
+          showNotification('Tie-break não bate',
+            'Quem venceu o set tem que ter mais pontos no tie-break.', 'warning');
+          return;
+        }
+        _peIsTb = true;
+      }
       var isGroupMatch = m.group !== undefined;
       var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
         return (r.matches || []).some(function(rm) { return rm.id === matchId; });
@@ -2554,8 +2626,20 @@ window._editPendingResult = function(tId, matchId) {
           winner: winner,
           draw: s1v === s2v,
           scoreP1: s1v,
-          scoreP2: s2v
+          scoreP2: s2v,
+          useSets: !!_peUseSets,
+          isTiebreakEntry: _peIsTb,
+          tbP1: _peIsTb ? _peTbV1 : null,
+          tbP2: _peIsTb ? _peTbV2 : null
         };
+        // ⚠️ o `sets` é o que faz o subplacar APARECER: _applyApprovedResult só monta
+        // `m.sets` quando `pr.sets` é ARRAY — sem ele o tie-break é gravado e some na tela.
+        if (_peUseSets) {
+          var _msA = window._buildManualSet(s1v, s2v, { isTiebreakEntry: _peIsTb, tbP1: _peTbV1, tbP2: _peTbV2 });
+          m.pendingResult.sets = _msA.sets;
+          m.pendingResult.setsWonP1 = _msA.setsWonP1;
+          m.pendingResult.setsWonP2 = _msA.setsWonP2;
+        }
         if (typeof window._approveResult === 'function') window._approveResult(tId, matchId);
         return;
       }
@@ -2577,9 +2661,22 @@ window._editPendingResult = function(tId, matchId) {
         draw: s1v === s2v,
         scoreP1: s1v,
         scoreP2: s2v,
+        // o TB viaja na contra-proposta: quem confirmar do outro lado aprova o placar
+        // COMPLETO, não um 6-5 sem os pontos
+        useSets: !!_peUseSets,
+        isTiebreakEntry: _peIsTb,
+        tbP1: _peIsTb ? _peTbV1 : null,
+        tbP2: _peIsTb ? _peTbV2 : null,
         isCounterProposal: true,  // marca fase 2: time original verá Confirmar + Contestar
         originalProposal: _origProp
       };
+      // idem: sem o `sets` a contra-proposta chega ao outro lado sem o subplacar do TB
+      if (_peUseSets) {
+        var _msC = window._buildManualSet(s1v, s2v, { isTiebreakEntry: _peIsTb, tbP1: _peTbV1, tbP2: _peTbV2 });
+        _counter.sets = _msC.sets;
+        _counter.setsWonP1 = _msC.setsWonP1;
+        _counter.setsWonP2 = _msC.setsWonP2;
+      }
       m.pendingResult = _counter; // local otimista
       // BLINDAGEM (v4.0.121): grava a contra-proposta ATÔMICO pelo portão.
       window.AppStore.mutate(tId, function (ft) {
@@ -4037,7 +4134,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // ── State ──
   var state = {
-    sets: [], // Array of { gamesP1, gamesP2, tiebreak: { p1, p2 } | null }
+    sets: [], // Array de { gamesP1, gamesP2, tiebreak: window._tbPoints(...) | null }
+              // (forma ÚNICA {pointsP1,pointsP2} — o casual gravava {p1,p2} até 1.8.44)
     currentGameP1: 0,  // Points in current game
     currentGameP2: 0,
     isTiebreak: false,  // Currently in tiebreak within a set
@@ -4602,14 +4700,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var cs = _currentSet();
       if (state.isTiebreak) {
         // Tiebreak won → set is won by this player
-        cs.tiebreak = { p1: state.currentGameP1, p2: state.currentGameP2 };
+        cs.tiebreak = window._tbPoints(state.currentGameP1, state.currentGameP2);
         if (gameWinner === 1) cs.gamesP1++;
         else cs.gamesP2++;
         state.isTiebreak = false;
         _finishSet(gameWinner);
       } else if (_isDecidingSet()) {
         // Super tiebreak won
-        cs.tiebreak = { p1: state.currentGameP1, p2: state.currentGameP2 };
+        cs.tiebreak = window._tbPoints(state.currentGameP1, state.currentGameP2);
         if (gameWinner === 1) cs.gamesP1++;
         else cs.gamesP2++;
         _finishSet(gameWinner);
@@ -4932,7 +5030,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
             : (ss.gamesP1 + '-' + ss.gamesP2);
           if (si < state.sets.length - 1) summary += '  ';
           var setEntry = { gamesP1: ss.gamesP1, gamesP2: ss.gamesP2 };
-          if (ss.tiebreak) setEntry.tiebreak = { pointsP1: ss.tiebreak.p1, pointsP2: ss.tiebreak.p2 };
+          var _tbs = window._setTiebreak(ss);
+          if (_tbs) setEntry.tiebreak = window._tbPoints(_tbs.p1, _tbs.p2);
           setsData.push(setEntry);
         }
       } else {
@@ -5084,7 +5183,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Save as GSM sets data
       m.sets = state.sets.map(function(s) {
         var setData = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
-        if (s.tiebreak) setData.tiebreak = { pointsP1: s.tiebreak.p1, pointsP2: s.tiebreak.p2 };
+        var _tbd = window._setTiebreak(s);
+        if (_tbd) setData.tiebreak = window._tbPoints(_tbd.p1, _tbd.p2);
         if (state.isFixedSet) setData.fixedSet = true;
         return setData;
       });
@@ -5822,7 +5922,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       for (var pi = 0; pi < state.sets.length; pi++) {
         var ps = state.sets[pi];
         totalPtsP1 += ps.gamesP1; totalPtsP2 += ps.gamesP2;
-        if (ps.tiebreak) { totalPtsP1 += ps.tiebreak.p1; totalPtsP2 += ps.tiebreak.p2; }
+        var _tbp = window._setTiebreak(ps);
+        if (_tbp) { totalPtsP1 += _tbp.p1; totalPtsP2 += _tbp.p2; }
       }
       var totalPts = totalPtsP1 + totalPtsP2;
 
@@ -8646,7 +8747,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (useSets) {
       setsData = state.sets.map(function(ss) {
         var se = { gamesP1: ss.gamesP1, gamesP2: ss.gamesP2 };
-        if (ss.tiebreak) se.tiebreak = { pointsP1: ss.tiebreak.p1, pointsP2: ss.tiebreak.p2 };
+        var _tbe = window._setTiebreak(ss);
+        if (_tbe) se.tiebreak = window._tbPoints(_tbe.p1, _tbe.p2);
         return se;
       });
     }
@@ -9503,8 +9605,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (useSets && Array.isArray(state.sets) && state.sets.length > 0) {
       scoreLine = state.sets.map(function(s) {
         var line = (s.gamesP1 != null ? s.gamesP1 : 0) + '-' + (s.gamesP2 != null ? s.gamesP2 : 0);
-        if (s.tiebreak && (s.tiebreak.pointsP1 != null || s.tiebreak.p1 != null)) {
-          var tbp = (s.tiebreak.pointsP1 != null ? s.tiebreak.pointsP1 : s.tiebreak.p1);
+        var _tbh = window._setTiebreak(s);
+        if (_tbh) {
+          var tbp = _tbh.p1;
           line += '(' + tbp + ')';
         }
         return line;

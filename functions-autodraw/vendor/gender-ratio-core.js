@@ -157,6 +157,37 @@
     return (cfg.m - m) + (cfg.f - f) === w;
   };
 
+  /* DISTÂNCIA ATÉ A PROPORÇÃO — quanto uma composição EXCEDE as cotas de gênero.
+   *
+   * Nasceu na escolha do SUPLENTE de W.O. (v1.8.45, ordem do dono em 13/ago/2026, W.O.
+   * da Glauce no R1 Grupo R do Confra): _"o homem na lista de espera passa na frente das
+   * mulheres e vai compor um grupo que estava 0/100 para virar 25/75"_. Ali o
+   * `_groupMeetsRatio` booleano NÃO serve de régua: num grupo que JÁ está fora da
+   * proporção (4 mulheres em 25/75), TODO candidato "não atende" — e um booleano
+   * bloquearia até a troca NEUTRA (mulher no lugar de mulher, que mantém o grupo
+   * exatamente como estava). A distância ordena: 0 = a composição atende a proporção
+   * exata; N = N pessoas além da cota do seu gênero; null = não dá pra medir (proporção
+   * inválida OU alguém sem gênero declarado — gênero nunca é presumido).
+   * Vaga (wildcard) não conta excesso: ela tapa o buraco de qualquer lado.
+   */
+  window._ratioDistance = function (entradas, ratio) {
+    var cfg = RATIOS[String(ratio || '')];
+    if (!cfg) return null;
+    var arr = Array.isArray(entradas) ? entradas : [];
+    var m = 0, f = 0, x = 0;
+    arr.forEach(function (e) {
+      var g, wild = false;
+      if (e && typeof e === 'object') { g = String(e.gender || ''); wild = !!e.wildcard; }
+      else g = String(e || '');
+      g = g.trim().toLowerCase();
+      if (g.indexOf('masc') === 0) m++;
+      else if (g.indexOf('fem') === 0) f++;
+      else if (!wild) x++;             // pessoa real sem gênero: não dá pra medir
+    });
+    if (x) return null;
+    return Math.max(0, m - cfg.m) + Math.max(0, f - cfg.f);
+  };
+
   /* DIVIDE O POOL EM GRUPOS respeitando a proporção.
    *
    * pool : [{ key, gender }]  — gender: 'masculino' | 'feminino' | '' (desconhecido)

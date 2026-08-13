@@ -34,6 +34,9 @@ const SUITES = [
   'tests/reativar-nao-desativa-sozinho.test.js',
   // W.O. sempre desativa; a fila é ato da própria pessoa
   'tests/wo-sempre-desativa.test.js',
+  // o suplente do W.O. respeita a proporção de gênero (o homem fura a fila de um grupo
+  // 0/100 em 25/75 — ordem do dono, W.O. da Glauce no R1 Grupo R)
+  'tests/wo-substituto-respeita-proporcao.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // nome não é cortado na tela

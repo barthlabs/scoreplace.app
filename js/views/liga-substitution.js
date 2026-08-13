@@ -193,6 +193,18 @@ window._ligaAbsentFlow = function (tId, roundIndex, groupName) {
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) { if (window.showNotification) window.showNotification('W.O.', 'Só o organizador ou um jogador do grupo pode fazer isso.', 'info'); return; }
+  // v1.8.45 — os PERFIS entram em cache já no passo 1: o gênero (que decide quem assume
+  // pela proporção) mora no perfil, não na entrada do doc. Disparado aqui, fire-and-forget,
+  // porque até o organizador escolher o ausente no diálogo a carga já chegou.
+  try {
+    if (typeof window._preloadUserProfiles === 'function') {
+      var _preUids = ((group.playersUids || []).filter(Boolean))
+        .concat(((typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []) || []).map(function (e) {
+          return (typeof window._participantUids === 'function') ? ((window._participantUids(e) || [])[0] || '') : (e && e.uid) || '';
+        }).filter(Boolean));
+      window._preloadUserProfiles(_preUids);
+    }
+  } catch (_ePre) {}
   // Se já tem um ausente definido (convite recusado / aguardando preencher), pula direto pro fill.
   if (group.woAbsent && group.subStatus !== 'filled') { window._ligaPickFill(tId, roundIndex, groupName, group.woAbsent); return; }
   var players = (group.players || []).slice();
@@ -237,10 +249,18 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
 
   // Quem assume — mostrado ANTES de confirmar: o organizador tem que saber quem entra.
   if (sub) {
+    // Se a proporção fez alguém FURAR a fila (v1.8.45), o diálogo diz isso com todas as
+    // letras — quem foi passado pra trás vai perguntar, e a resposta tem que estar aqui.
+    var _pureFirst = window._waitlistFirst(t, _ligaSuplenteServe(t, group, absentName));
+    var _furou = _pureFirst && _wlDisplay(_pureFirst) !== _wlDisplay(sub);
+    var _rrExp = _furou ? _ligaRatioRank(t, group, absentName) : null;
+    var _comoEntra = (_furou && _rrExp)
+      ? 'Entra <b>na frente da fila</b> pra manter a proporção ' + _safe((typeof window._ratioLabel === 'function' && window._ratioLabel(_rrExp.ratio)) || _rrExp.ratio) + ' do grupo. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.'
+      : 'Primeiro da lista de espera. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.';
     html += '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:10px;margin-bottom:14px;">' +
       '<div style="font-size:0.72rem;font-weight:700;color:#4ade80;margin-bottom:4px;">✅ QUEM ASSUME A VAGA</div>' +
       '<div style="font-size:0.95rem;font-weight:700;">' + _safe(_wlDisplay(sub)) + '</div>' +
-      '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Primeiro da lista de espera. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.</div>' +
+      '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">' + _comoEntra + '</div>' +
     '</div>';
   } else {
     html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:10px;margin-bottom:14px;font-size:0.78rem;color:#fbbf24;">' +
@@ -255,14 +275,26 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
   if (window.showAlertDialog) window.showAlertDialog('Confirmar W.O.?', html, function () {}, { type: 'warning', confirmText: 'Cancelar' });
 };
 
-// O SUPLENTE = primeiro da fila que atende a CATEGORIA do grupo. A ordem manda; a
-// categoria só peneira (torneio sem categoria → o primeiro, ponto).
-// [[project_wo_individual_substitution_rule]]: nunca colocar alguém que quebre a
-// categoria — mas também nunca reordenar a fila por "melhor encaixe".
-function _ligaNextSuplente(t, group, absentName) {
+// O SUPLENTE = primeiro da fila que atende a CATEGORIA do grupo — e, desde a v1.8.45,
+// a PROPORÇÃO DE GÊNERO reordena. Ordem do dono (13/ago/2026, dando W.O. na Glauce
+// Assunção do R1 Grupo R — 4 mulheres, fila Fem → Fem → Masc): _"deve buscar garantir a
+// proporção de 25/75. como nesse grupo não há nenhum homem, o homem na lista de espera
+// passa na frente das mulheres e vai compor um grupo que estava 0/100 para virar 25/75."_
+//
+// ⚠️ Isto REVISA o "nunca reordenar a fila por melhor encaixe" da v1.6.88: a CATEGORIA
+// continua só peneirando (nunca fura), mas a proporção passa a decidir ENTRE gêneros —
+// dentro da mesma distância a ordem de chegada segue mandando. E NÃO é um portão: se
+// ninguém deixa o grupo melhor (fila só de mulheres pra um grupo todo feminino), o
+// primeiro da fila entra do mesmo jeito — trocar mulher por mulher mantém o grupo como
+// estava, e vaga aberta por causa de proporção seria pior que a composição que já
+// existia. Por isso a régua é DISTÂNCIA (`_ratioDistance`), não o booleano.
+
+// A peneira de "quem pode assumir" — compartilhada entre quem ESCOLHE (_ligaNextSuplente)
+// e quem EXPLICA (_ligaWoConfirm mostra se alguém furou a fila pela proporção).
+function _ligaSuplenteServe(t, group, absentName) {
   var cat = _groupCategory(group);
   var inGroup = {}; (group.players || []).forEach(function (n) { inGroup[String(n)] = 1; });
-  return window._waitlistFirst(t, function (e) {
+  return function (e) {
     var nm = _wlDisplay(e);
     if (!nm || nm === absentName || inGroup[nm]) return false;
     if (nm.indexOf(' / ') !== -1) return false;      // dupla já formada não assume vaga individual
@@ -271,7 +303,94 @@ function _ligaNextSuplente(t, group, absentName) {
       try { return !!window._participantInCategory(e, cat, t); } catch (err) { return true; }
     }
     return true;
-  });
+  };
+}
+
+// Gênero de UMA pessoa, na ordem de confiança: perfil pelo uid (cânone — o que está
+// gravado na entrada envelhece) → campo `gender` da entrada (fictício/legado, que não
+// tem perfil) → prefixo da CATEGORIA DE INSCRIÇÃO ("Fem D"/"Masc C" DECLARAM gênero;
+// "C"/"D"/"Misto" não dizem nada). O prefixo é declaração de alguém (a pessoa ou o
+// organizador escolheu a categoria), não presunção — presumir gênero é proibido.
+function _entryGender(t, entry) {
+  var u = '';
+  if (entry && typeof entry === 'object') {
+    u = (typeof window._participantUids === 'function')
+      ? ((window._participantUids(entry) || [])[0] || '')
+      : (entry.uid || '');
+  }
+  var g = '';
+  if (u && typeof window._genderForUid === 'function') g = String(window._genderForUid(u) || '');
+  if (!g && entry && entry.gender) g = String(entry.gender);
+  if (!g) {
+    var src = entry;
+    // entrada do GRUPO só tem uid — a categoria mora na entrada do ELENCO
+    if ((!src || (!src.category && !src.categories)) && u) {
+      var lst = (t && Array.isArray(t.participants)) ? t.participants : [];
+      for (var i = 0; i < lst.length; i++) { if (lst[i] && lst[i].uid === u) { src = lst[i]; break; } }
+    }
+    var cats = src ? [].concat(src.category || [], src.categories || []) : [];
+    for (var j = 0; j < cats.length && !g; j++) {
+      var c = String(cats[j] || '').trim().toLowerCase();
+      if (c.indexOf('fem') === 0) g = 'feminino';
+      else if (c.indexOf('masc') === 0) g = 'masculino';
+    }
+  }
+  g = String(g).trim().toLowerCase();
+  if (g.indexOf('masc') === 0) return 'masculino';
+  if (g.indexOf('fem') === 0) return 'feminino';
+  return '';
+}
+
+// A RÉGUA DA PROPORÇÃO pra esta vaga. Devolve null quando a proporção não decide nada
+// (sorteio livre, categoria que separa gênero, ou alguém do grupo sem gênero resolvível
+// — aí vale a ordem pura da fila, que era a regra até a v1.8.44). Senão devolve
+// { ratio, rank(entry)→distância }: 0 = entrando, o grupo ATENDE a proporção exata.
+// A proporção vem de `_ratioForPhase` — COM default (25/75) de propósito: preencher vaga
+// de grupo formado é o mesmo caminho da formação por espera, onde a regra dura já valia
+// (ver gender-ratio-core). ⚠️ A v1.7.90 lia `t.wlGenderRatio || t.genderRatio` CRU — e o
+// Confra não tem nenhum dos dois (a proporção dele É o default): a régua estava morta e
+// o pré-marcado caía na ordem pura. Também chamava `_genderForUid(t, u)` e
+// `_pGender(t, p)` com assinatura errada (recebem só uid / só entrada) — gênero sempre
+// resolvia vazio. Os dois defeitos nunca apareceram porque um escondia o outro.
+function _ligaRatioRank(t, group, absentName) {
+  if (typeof window._ratioForPhase !== 'function' || typeof window._ratioDistance !== 'function') return null;
+  var cat = _groupCategory(group);
+  var ratio = window._ratioForPhase(t, null, cat);
+  if (!ratio) return null;
+  var base = [];
+  var players = (group && group.players) || [];
+  for (var i = 0; i < players.length; i++) {
+    if (String(players[i]) === String(absentName)) continue;
+    var u = (group.playersUids || [])[i];
+    var g = _entryGender(t, u ? { uid: u } : { name: players[i] });
+    if (!g) return null;     // grupo sem gênero medível → a proporção não decide (ordem pura)
+    base.push({ gender: g });
+  }
+  return {
+    ratio: ratio,
+    rank: function (entry) {
+      var g = _entryGender(t, entry);
+      if (!g) return 9;      // candidato sem gênero: nunca fura a fila (mas segue elegível)
+      var d = window._ratioDistance(base.concat([{ gender: g }]), ratio);
+      return (d == null) ? 9 : d;
+    }
+  };
+}
+
+function _ligaNextSuplente(t, group, absentName) {
+  var serve = _ligaSuplenteServe(t, group, absentName);
+  var rr = _ligaRatioRank(t, group, absentName);
+  if (!rr) return window._waitlistFirst(t, serve);
+  // menor distância vence; empate → ordem de chegada. O "primeiro que serve" continua
+  // valendo DENTRO de cada distância — a proporção só decide entre gêneros diferentes.
+  var best = null, bestD = Infinity;
+  var q = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
+  for (var i = 0; i < q.length; i++) {
+    if (!serve(q[i])) continue;
+    var d = rr.rank(q[i]);
+    if (d < bestD) { best = q[i]; bestD = d; }
+  }
+  return best;
 }
 window._ligaNextSuplente = _ligaNextSuplente;
 
@@ -455,6 +574,16 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   var cat = _groupCategory(group);
   var round = (t.rounds || [])[roundIndex];
   var uidMap = _nameUidMap(t);
+  // v1.8.45 — perfis em cache (gênero mora no perfil); este diálogo também abre direto
+  // pelo botão "escolher substituto", sem passar pelo passo 1 que já pré-carrega.
+  try {
+    if (typeof window._preloadUserProfiles === 'function') {
+      window._preloadUserProfiles(((group.playersUids || []).filter(Boolean))
+        .concat(((typeof window._getWaitlist === 'function' ? window._getWaitlist(t) : []) || []).map(function (e) {
+          return (typeof window._participantUids === 'function') ? ((window._participantUids(e) || [])[0] || '') : (e && e.uid) || '';
+        }).filter(Boolean)));
+    }
+  } catch (_ePre2) {}
   // Quem "ficou de fora nesta rodada" (MESMA categoria, com conta/uid pra aceitar):
   //  (a) folgas do sorteio (sit-out 'remainder' — modelo antigo/inativos re-sorteados);
   //  (b) LISTA DE ESPERA monarch (t.monarchWaitlist — desde v2.6.99 a sobra da divisão
@@ -484,7 +613,7 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     if (cat && typeof window._participantInCategory === 'function') {
       try { _ok = !!window._participantInCategory(e, cat, t); } catch (_ec) { _ok = true; }
     }
-    folgas.push({ name: _nm || _u, uid: _u || '', offCat: !_ok, fromWaitlist: true });
+    folgas.push({ name: _nm || _u, uid: _u || '', offCat: !_ok, fromWaitlist: true, entry: e });
   });
   // (a leitura antiga por _getMonarchWaitlist saiu: era 1 dos 3 storages e casava por nome)
   // fora: quem já está no grupo, o próprio ausente. Dedup por UID; sem uid, por nome —
@@ -496,14 +625,21 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     if (k === 'n:' || seen[k] || inGroup[f.name] || f.name === absentName) return false;
     seen[k] = 1; return true;
   });
-  // A FILA PRIMEIRO, na ordem dela: quem espera tem precedência sobre folga da rodada, e
-  // quem atende a categoria vem antes de quem não atende. Ordenação ESTÁVEL — dentro de
-  // cada balde a ordem de chegada é preservada (é ela que define "o primeiro da fila").
+  // v1.8.45 — a PROPORÇÃO reordena (ordem do dono, W.O. da Glauce no R1 Grupo R): quem
+  // deixa o grupo NA proporção passa na frente. A distância de cada candidato é medida
+  // AQUI, antes da ordenação, pela mesma régua do suplente automático (_ligaRatioRank —
+  // nunca uma régua paralela). `dist = 0` pra todos quando a proporção não decide nada.
+  var _rr = _ligaRatioRank(t, group, absentName);
+  folgas.forEach(function (f) { f.dist = _rr ? _rr.rank(f.entry || f) : 0; });
+  // ORDEM: categoria pesa mais que tudo (fora da categoria nunca fura, e vem marcado);
+  // depois a PROPORÇÃO (menor distância primeiro — o homem fura a fila de mulheres num
+  // grupo 0/100 em 25/75); depois fila antes de folga; e dentro de cada balde a ordem de
+  // chegada é preservada (é ela que define "o primeiro da fila"). Ordenação ESTÁVEL.
   folgas = folgas
     .map(function (f, i) { return { f: f, i: i }; })
     .sort(function (a, b) {
-      var ra = (a.f.offCat ? 2 : 0) + (a.f.fromWaitlist ? 0 : 1);
-      var rb = (b.f.offCat ? 2 : 0) + (b.f.fromWaitlist ? 0 : 1);
+      var ra = (a.f.offCat ? 100 : 0) + (a.f.dist * 10) + (a.f.fromWaitlist ? 0 : 1);
+      var rb = (b.f.offCat ? 100 : 0) + (b.f.dist * 10) + (b.f.fromWaitlist ? 0 : 1);
       return ra !== rb ? ra - rb : a.i - b.i;
     })
     .map(function (x) { return x.f; });
@@ -535,56 +671,35 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     // "o próximo assume". Pior: o Daniel é homem e o grupo tinha 1H/2M + a vaga; entrar
     // ele daria 2H/2M e quebraria a proporção 25/75 travada do torneio.
     //
-    // Agora nasce marcado UM só: o primeiro da fila (a ordem já vem por chegada) que,
-    // entrando, MANTÉM a proporção do grupo — usando a mesma função canônica do motor
-    // de sorteio (`_groupMeetsRatio`), não uma régua paralela. Sem proporção aplicável
-    // (torneio sem a trava, ou categoria que separa gênero), cai no primeiro da fila,
-    // que é a regra pura de ordem. Marcar mais de um continua possível — é um toque, e
-    // é assim que se convida vários de propósito.
+    // ⚠️ CORRIGIDO NA v1.8.45 (o erro fica registrado, não apagado): a implementação da
+    // v1.7.90 lia `t.wlGenderRatio || t.genderRatio` cru — campos que o Confra NÃO tem
+    // (a proporção dele é o default 25/75 de `_ratioForPhase`) — e resolvia gênero com
+    // `_genderForUid(t, u)` / `_pGender(t, p)`, assinaturas erradas que devolvem sempre
+    // vazio. A régua nasceu MORTA: o pré-marcado sempre caía na ordem pura, e no caso da
+    // Denise parecia certo porque a primeira da fila POR ACASO mantinha a proporção.
+    // Agora a régua é a MESMA do suplente automático (_ligaRatioRank → _ratioDistance),
+    // já computada em `f.dist` antes da ordenação: marcado nasce o primeiro com dist 0.
     var _jaMarcou = false;
-    var _ratioAtiva = (typeof window._ratioAppliesTo === 'function')
-      ? window._ratioAppliesTo(t, cat) : false;
-    var _ratio = _ratioAtiva ? (t && (t.wlGenderRatio || t.genderRatio)) : null;
-    // Gênero de quem JÁ está no grupo, menos o ausente — é a vaga dele que se preenche.
-    var _generoDe = function (nome) {
-      try {
-        var u = uidMap && uidMap[nome];
-        if (u && typeof window._genderForUid === 'function') {
-          var g = window._genderForUid(t, u);
-          if (g) return g;
-        }
-        var lst = Array.isArray(t.participants) ? t.participants : [];
-        var p = lst.find(function (e) {
-          var eu = (typeof window._participantUids === 'function') ? (window._participantUids(e) || [])[0] : (e && e.uid);
-          return (u && eu === u) || (window._pName ? window._pName(e, '') === nome : false);
-        });
-        return (typeof window._pGender === 'function') ? window._pGender(t, p) : ((p && p.gender) || '');
-      } catch (e) { return ''; }
-    };
-    var _mantemProporcao = function (cand) {
-      if (!_ratio || typeof window._groupMeetsRatio !== 'function') return true;
-      try {
-        var base = ((group && group.players) || [])
-          .filter(function (nm) { return String(nm) !== String(absentName); })
-          .map(function (nm) { return { gender: _generoDe(nm) }; });
-        base.push({ gender: _generoDe(cand && cand.name) || (cand && cand.gender) || '' });
-        return !!window._groupMeetsRatio(base, _ratio);
-      } catch (e) { return true; }   // na dúvida ninguém deixa de ser oferecido
-    };
     html += '<div id="liga-fill-cands">' + folgas.map(function (f) {
       // offCat NÃO some com a pessoa: mostra marcado, e o organizador decide se aceita a
       // quebra de categoria. Sumir era o que fazia a fila "não existir" na tela.
       var _tag = f.offCat
         ? '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;flex:0 0 auto;">fora da categoria</span>'
         : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:1px 6px;border-radius:5px;flex:0 0 auto;">espera</span>' : '');
+      // v1.8.45 — quem quebraria a proporção NÃO some (esconder é o que fez a fila "não
+      // existir" na tela): vem marcado, e o organizador decide se aceita a quebra.
+      if (_rr && f.dist > 0 && !f.offCat) {
+        _tag += '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;flex:0 0 auto;margin-left:4px;">quebra ' + _safe(_rr.ratio) + '</span>';
+      }
       var _bd = f.offCat ? 'rgba(251,191,36,0.5)' : 'rgba(16,185,129,0.55)';
       var _co = f.offCat ? '#fbbf24' : '#4ade80';
       // v1.6.92: a linha é do NOME — largura inteira. O botão por linha (v1.6.91) comeu a
       // largura e picotou os nomes em duas linhas com a tag cortada. A AÇÃO virou UMA só,
       // no rodapé, e o que ela faz depende de quantos estão marcados (regra do dono).
-      // Marca UM só: o primeiro da fila que mantém a proporção. Os demais entram
+      // Marca UM só: o primeiro da fila que mantém a proporção (dist 0 — a lista já vem
+      // ordenada por distância, então é o primeiro da tela). Os demais entram
       // desmarcados e podem ser ligados no toque (é assim que se convida vários).
-      var _on = (!_jaMarcou && !f.offCat && _mantemProporcao(f));
+      var _on = (!_jaMarcou && !f.offCat && f.dist === 0);
       if (_on) _jaMarcou = true;
       return '<button type="button" class="btn btn-outline" data-cand="1" data-on="' + (_on ? '1' : '0') + '" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + _bd + ';color:' + _co + ';' + (_on ? '' : 'opacity:0.6;') + '">' +
         '<span data-mark="1" style="flex:0 0 auto;">' + (_on ? '✅' : '⬜') + '</span>' +
