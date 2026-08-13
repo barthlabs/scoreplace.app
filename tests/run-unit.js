@@ -722,6 +722,9 @@ const SUITES = [
   // Nome de 1 token: sugere sobrenome no perfil e vira sinal de duplicata quando o
   // token é RARO e não é sobrenome. Trava a paridade cliente×servidor. v1.8.38.
   'tests/sobrenome-e-raridade.test.js',
+  // Script que chega TRUNCADO (medido no Sentry: EOF no meio de um arquivo íntegro no
+  // servidor) limpa cache, tira o SW e recarrega uma vez. v1.8.39.
+  'tests/js-truncado-se-conserta.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
 ];
 

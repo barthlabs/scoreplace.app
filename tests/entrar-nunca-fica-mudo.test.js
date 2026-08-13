@@ -30,7 +30,11 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); 
 console.log('──── entrar nunca fica mudo ────');
 
 // ── 1. O handler existe e é INLINE (sem src, sem defer) ────────────────────────────────
-const mHandler = /<script>\s*\(function \(\) \{[\s\S]*?window\._spEnterClick[\s\S]*?\}\)\(\);\s*<\/script>/.exec(html);
+// ⚠️ ANCORADO na 1ª linha do próprio handler (`var pendente`). O regex genérico
+// `<script>(function () {...window._spEnterClick...` abocanhava desde OUTRO script
+// inline que passou a existir antes dele (o auto-reparo de JS truncado, v1.8.39) e
+// o teste quebrava sem nada estar errado no app.
+const mHandler = /<script>\s*\(function \(\) \{\s*var pendente = false[\s\S]*?\}\)\(\);\s*<\/script>/.exec(html);
 ok(!!mHandler, 'o handler _spEnterClick tem que existir como <script> INLINE no index.html');
 
 // ── 2. Ele roda ANTES do primeiro script com defer ─────────────────────────────────────
