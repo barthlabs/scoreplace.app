@@ -6226,11 +6226,11 @@ exports.accountDeletionEmail = onDocumentWritten(
       const info = {
         uid, name: nome, email: destinatario, phone: before.phone || "",
         providers, createdAt, lastSignIn, deletedAt: new Date(),
-        items, leftovers, origin: "exclusão de conta (" + d.reason + ")",
+        items, leftovers, swept: true, origin: "exclusão de conta (" + d.reason + ")",
       };
 
       // ids determinísticos + create(): reentrega do gatilho não vira e-mail dobrado.
-      const ids = _delEmail.mailDocIds(uid);
+      const idMail = _delEmail.mailDocId(uid);
       const põe = async (docId, doc) => {
         try { await db.collection("mail").doc(docId).create(doc); return true; }
         catch (e) {
@@ -6241,30 +6241,35 @@ exports.accountDeletionEmail = onDocumentWritten(
         }
       };
 
-      // Quem recebe o quê é decisão do core (lá mora a dedupe: desde que o
-      // endereço pessoal saiu, o destino do relatório e o CC são o MESMO
-      // endereço, e os dois no mesmo e-mail entregariam duplicado).
-      const alvos = _delEmail.mailTargets(destinatario);
-
-      // 1) titular (só se houver e-mail real — conta só-celular não tem caixa)
-      if (alvos.user) {
-        const m = _delEmail.buildUserEmail(info);
-        await põe(ids.user, Object.assign({}, alvos.user, {
-          message: { subject: m.subject, html: m.html, text: m.text },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        }));
-      } else {
-        console.log("[accountDeletionEmail] " + uid + " sem e-mail — só o relatório interno");
+      // O DETALHE OPERACIONAL VIVE NO LOG, não numa caixa de e-mail. Com o
+      // relatório interno removido (regra: "nenhum outro destinatário"), é aqui
+      // que ficam uid, provedores, datas e os caminhos de sobra. Sobra é ERRO de
+      // propósito: some no meio de log comum, e é justamente o que exige ação.
+      console.log("[accountDeletionEmail] " + JSON.stringify({
+        uid, nome, providers, criada: createdAt, ultimoAcesso: lastSignIn,
+        itens: items, sobras: leftovers.length,
+      }));
+      if (leftovers.length) {
+        console.error("[accountDeletionEmail] SOBRARAM referências de " + uid +
+          " — limpeza manual: " + leftovers.join(" | "));
       }
 
-      // 2) relatório interno
-      const r = _delEmail.buildAdminEmail(info);
-      await põe(ids.admin, Object.assign({}, alvos.report, {
-        message: { subject: r.subject, html: r.html, text: r.text },
+      // UM e-mail só: a conta excluída, com CC pra caixa da empresa. Quem recebe
+      // é decisão do core — "nenhum outro destinatário" tem que ser verificável
+      // num lugar só. Sem e-mail (conta só-celular) não há envio: mandar só pro
+      // CC promoveria a caixa da empresa a destinatário primário.
+      const alvos = _delEmail.mailTargets(destinatario);
+      if (!alvos.user) {
+        console.log("[accountDeletionEmail] " + uid + " sem e-mail — nada a enviar (registro só no log)");
+        return;
+      }
+      const m = _delEmail.buildUserEmail(info);
+      await põe(idMail, Object.assign({}, alvos.user, {
+        message: { subject: m.subject, html: m.html, text: m.text },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
-      console.log("[accountDeletionEmail] enfileirado → " + (destinatario || "(sem titular)") +
-        " + " + _delEmail.REPORT_TO + " | sobras=" + leftovers.length);
+      console.log("[accountDeletionEmail] enfileirado → " + destinatario +
+        " (cc " + (alvos.user.cc.join(",") || "—") + ") | sobras=" + leftovers.length);
     } catch (e) {
       // best-effort: a conta já foi apagada; falhar aqui não pode reverter nada.
       console.error("[accountDeletionEmail] falhou:", e && e.message);

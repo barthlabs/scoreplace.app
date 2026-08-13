@@ -6,12 +6,20 @@
  * (por qualquer motivo — solicitação do usuário, admin, etc.), o sistema deve
  * automaticamente enviar e-mail de confirmação"_.
  *
- * ⚠️ DESTINATÁRIOS — correção do dono no mesmo dia: _"NÃO enviar para
- * rstbarth@gmail.com. O e-mail de confirmação de exclusão vai apenas para: o
- * e-mail do usuário excluído, contato@barthlabs.com"_. O endereço pessoal saiu;
- * o relatório interno passou a ser endereçado à caixa da empresa. Há asserção
- * travando a ausência de rstbarth@gmail.com — a correção foi explícita e não
- * pode voltar por descuido ([[feedback_contact_email_always_barthlabs]]).
+ * ⚠️ DESTINATÁRIOS — regra FINAL, confirmada pelo dono (13/ago/2026): _"e-mail de
+ * exclusão vai APENAS para o e-mail da conta excluída, com CC para
+ * contato@barthlabs.com. Nenhum outro destinatário. Não enviar para
+ * rstbarth@gmail.com em nenhuma hipótese."_
+ *
+ * É UM e-mail só. Existiu por algumas horas um SEGUNDO e-mail (relatório interno
+ * endereçado à caixa da empresa) — ele foi REMOVIDO, junto com o construtor, e
+ * não deve voltar: "nenhum outro destinatário" cobre também um segundo envio pro
+ * mesmo endereço. O detalhe operacional (uid, caminhos de sobra) vive no LOG da
+ * função, que é onde detalhe de máquina pertence — não numa caixa de e-mail.
+ *
+ * Há asserção travando a ausência de rstbarth@gmail.com em código e a ausência de
+ * um segundo destinatário — as duas correções foram explícitas e não podem voltar
+ * por descuido ([[feedback_contact_email_always_barthlabs]]).
  *
  * POR QUE UM GATILHO DE FIRESTORE, e não uma linha dentro do deleteAccount:
  * a mesma lição do syncMatchRosters — o gatilho vê TODA escrita, de QUALQUER
@@ -38,37 +46,26 @@
  */
 
 var CC_CONTATO = 'contato@barthlabs.com';
-var REPORT_TO = 'contato@barthlabs.com';   // o relatório interno vai pra caixa da empresa
 
 /* ── ROTEAMENTO ─────────────────────────────────────────────────────────────
- * Mora aqui, e não solto no gatilho, porque tem uma armadilha: desde que o
- * endereço pessoal saiu, REPORT_TO e CC_CONTATO são o MESMO endereço — pôr os
- * dois no mesmo e-mail entregaria duplicado na mesma caixa. A dedupe precisa de
- * um lugar só, testado; espalhada pelo gatilho, ela divergiria no primeiro
- * endereço novo.
+ * UM destino: a conta excluída, com CC pra caixa da empresa. Mora aqui, e não
+ * solto no gatilho, pra "nenhum outro destinatário" ser uma regra verificável
+ * num lugar só — espalhada pelo gatilho, ela divergiria no primeiro endereço novo.
  *
- * `destinatario` vazio (conta só-celular, sem caixa) → o e-mail do titular não
- * existe e só o relatório sai.
+ * ⚠️ SEM E-MAIL, SEM ENVIO. Conta só-celular (13 na base) não tem caixa, e a
+ * regra é "apenas para o e-mail da conta excluída" — sem esse endereço não há
+ * e-mail a enviar. Mandar só pro CC transformaria a caixa da empresa em
+ * destinatário PRIMÁRIO, que é exatamente o que a regra exclui. Nesses casos o
+ * registro fica só no log da função.
+ *
+ * O CC é descartado quando a própria conta excluída É a caixa da empresa — senão
+ * o mesmo endereço entraria como to e cc e receberia duplicado.
  */
-function _dedupe(lista) {
-  var vistos = {}, out = [];
-  (lista || []).forEach(function (e) {
-    var k = String(e || '').trim().toLowerCase();
-    if (!k || vistos[k]) return;
-    vistos[k] = 1; out.push(e);
-  });
-  return out;
-}
-
 function mailTargets(destinatario) {
   var alvo = String(destinatario || '').trim();
-  var ccUser = _dedupe([CC_CONTATO]).filter(function (e) {
-    return e.toLowerCase() !== alvo.toLowerCase();   // não CCar quem já é o To
-  });
-  return {
-    user: alvo ? { to: [alvo], cc: ccUser, replyTo: CC_CONTATO } : null,
-    report: { to: [REPORT_TO], cc: [], replyTo: CC_CONTATO }
-  };
+  if (!alvo) return { user: null };
+  var cc = (alvo.toLowerCase() === CC_CONTATO.toLowerCase()) ? [] : [CC_CONTATO];
+  return { user: { to: [alvo], cc: cc, replyTo: CC_CONTATO } };
 }
 
 /* ── DECISÃO ────────────────────────────────────────────────────────────────
@@ -117,14 +114,8 @@ function fmtBR(d) {
   }
 }
 
-function _phoneFmt(ph) {
-  var d = String(ph || '').replace(/\D/g, '');
-  if (!d) return '';
-  if (d.length > 11 && d.indexOf('55') === 0) d = d.slice(2);
-  if (d.length === 11) return '+55 (' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
-  if (d.length === 10) return '+55 (' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
-  return ph;
-}
+// (_phoneFmt saiu junto com o relatório interno — só ele formatava celular, e a
+//  confirmação do titular não mostra telefone.)
 
 var WRAP = 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;' +
   'max-width:600px;margin:0 auto;padding:24px;color:#1f2937;line-height:1.55;';
@@ -149,6 +140,7 @@ function buildUserEmail(info) {
   var quando = fmtBR(info.deletedAt);
   var itens = (info.items || []);
   var prim = nome ? nome.split(/\s+/)[0] : '';
+  var itensSobra = (info.leftovers || []).length;
 
   var subject = 'Sua conta no scoreplace foi excluída';
 
@@ -170,6 +162,18 @@ function buildUserEmail(info) {
         itens.map(function (i) { return '<li style="margin:3px 0;">' + esc(i) + '</li>'; }).join('') +
         '</ul>'
       : '') +
+    // A conferência PÓS-exclusão. Com o relatório interno removido, é esta linha
+    // que carrega a prova — e ela é boa notícia pra quem pediu a exclusão. O
+    // detalhe técnico (quais caminhos) fica no log; aqui vai o veredito.
+    (info.swept
+      ? '<p style="margin:14px 0 0;font-size:14px;' +
+        (itensSobra ? 'color:#92400e;' : 'color:#065f46;') + '">' +
+        (itensSobra
+          ? 'Conferimos logo após a exclusão e ainda há ' + itensSobra +
+            ' registro(s) técnico(s) em remoção. Vamos concluir e não é preciso fazer nada.'
+          : '<strong>Conferimos logo após a exclusão:</strong> nenhum registro seu permaneceu em nossos sistemas.') +
+        '</p>'
+      : '') +
     '<p style="margin:16px 0 0;font-size:14px;">A exclusão é <strong>permanente e não pode ser desfeita</strong>. ' +
     'Não guardamos cópia do seu perfil. Se um dia quiser voltar, será preciso criar uma conta nova.</p>' +
     '<div style="' + FOOT + '">' +
@@ -186,6 +190,11 @@ function buildUserEmail(info) {
     (nome ? 'Nome: ' + nome + '\n' : '') +
     'Excluída em: ' + quando + '\n\n' +
     (itens.length ? 'O que foi removido:\n' + itens.map(function (i) { return '  - ' + i; }).join('\n') + '\n\n' : '') +
+    (info.swept
+      ? (itensSobra
+          ? 'Conferimos logo após a exclusão e ainda há ' + itensSobra + ' registro(s) técnico(s) em remoção. Vamos concluir e não é preciso fazer nada.\n\n'
+          : 'Conferimos logo após a exclusão: nenhum registro seu permaneceu em nossos sistemas.\n\n')
+      : '') +
     'A exclusão é permanente e não pode ser desfeita.\n\n' +
     'Comprovante de atendimento ao pedido de exclusão de dados (LGPD, Lei nº 13.709/2018).\n' +
     'Dúvidas: ' + CC_CONTATO + '\n';
@@ -193,92 +202,34 @@ function buildUserEmail(info) {
   return { subject: subject, html: html, text: text };
 }
 
-/* ── 2) RELATÓRIO PARA O DONO ───────────────────────────────────────────────
- * Registro operacional: identidade, origem da conta, o que saiu e — o que faz
- * este e-mail valer alguma coisa — a VARREDURA DE SOBRAS. Relatório que só diz
- * "apagado" não prova nada; o que prova é a conferência feita depois.
+/* ── (2) O RELATÓRIO INTERNO FOI REMOVIDO ───────────────────────────────────
+ * Existiu aqui um segundo e-mail — relatório operacional (uid, provedores, datas
+ * da conta, varredura de sobras) endereçado primeiro ao e-mail pessoal do dono e
+ * depois à caixa da empresa. Saiu junto com o construtor quando a regra virou
+ * "APENAS o e-mail da conta excluída, com CC pra contato@barthlabs.com. Nenhum
+ * outro destinatário" — e sai por completo de propósito: construtor sem chamador
+ * é decoy, e é o que faz o próximo leitor consertar o lugar errado.
+ *
+ * O que ele carregava de útil não se perdeu, mudou de lugar: o VEREDITO da
+ * varredura virou uma linha da confirmação do titular (info.swept/info.leftovers),
+ * e o detalhe de máquina (quais caminhos sobraram) vai pro LOG da função, em nível
+ * de erro quando sobra algo. Detalhe operacional pertence ao log, não a uma caixa.
  */
-function buildAdminEmail(info) {
-  info = info || {};
-  var nome = String(info.name || '').trim();
-  var quando = fmtBR(info.deletedAt);
-  var itens = info.items || [];
-  var sobras = info.leftovers || [];
-  var origem = info.origin || 'exclusão de conta';
 
-  var subject = '[scoreplace] Conta excluída — ' + (nome || info.email || info.uid || 'desconhecida');
-
-  var limpo = sobras.length === 0;
-  var selo = limpo
-    ? '<div style="background:#ecfdf5;border-left:4px solid #10b981;padding:12px 14px;border-radius:6px;margin:14px 0;font-size:14px;">' +
-      '<strong>✓ Varredura limpa.</strong> Nenhuma referência ao uid restou na base.</div>'
-    : '<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 14px;border-radius:6px;margin:14px 0;font-size:14px;">' +
-      '<strong>⚠️ Sobraram ' + sobras.length + ' referência(s)</strong> — precisam de limpeza manual:' +
-      '<ul style="margin:8px 0 0;padding-left:20px;">' +
-      sobras.map(function (s) { return '<li style="margin:2px 0;"><code>' + esc(s) + '</code></li>'; }).join('') +
-      '</ul></div>';
-
-  var html = '<div style="' + WRAP + '">' +
-    '<div style="' + H1 + '">Conta excluída — relatório</div>' +
-    '<div style="' + BOX + '">' +
-      _linhas([
-        ['Nome', nome],
-        ['E-mail', info.email || ''],
-        ['Celular', _phoneFmt(info.phone)],
-        ['uid', info.uid || ''],
-        ['Provedores', (info.providers || []).join(', ')],
-        ['Conta criada em', info.createdAt ? fmtBR(info.createdAt) : ''],
-        ['Último acesso', info.lastSignIn ? fmtBR(info.lastSignIn) : ''],
-        ['Excluída em', quando],
-        ['Origem', origem]
-      ]) +
-    '</div>' +
-    (itens.length
-      ? '<p style="margin:16px 0 6px;font-weight:600;">Dados encontrados e apagados</p>' +
-        '<ul style="margin:0;padding-left:20px;font-size:14px;">' +
-        itens.map(function (i) { return '<li style="margin:3px 0;">' + esc(i) + '</li>'; }).join('') +
-        '</ul>'
-      : '<p style="margin:16px 0 6px;font-size:14px;color:#6b7280;">Nenhum item detalhado informado.</p>') +
-    selo +
-    '<div style="' + FOOT + '">' +
-      'Registro automático de conformidade com pedido de exclusão de dados (LGPD, Lei nº 13.709/2018).<br>' +
-      'Gerado pelo gatilho <code>accountDeletionEmail</code> do scoreplace.app.' +
-    '</div>' +
-  '</div>';
-
-  var text = 'Conta excluída — relatório\n\n' +
-    'Nome: ' + (nome || '(n/d)') + '\n' +
-    'E-mail: ' + (info.email || '(n/d)') + '\n' +
-    (info.phone ? 'Celular: ' + _phoneFmt(info.phone) + '\n' : '') +
-    'uid: ' + (info.uid || '(n/d)') + '\n' +
-    'Provedores: ' + ((info.providers || []).join(', ') || '(n/d)') + '\n' +
-    (info.createdAt ? 'Conta criada em: ' + fmtBR(info.createdAt) + '\n' : '') +
-    (info.lastSignIn ? 'Último acesso: ' + fmtBR(info.lastSignIn) + '\n' : '') +
-    'Excluída em: ' + quando + '\n' +
-    'Origem: ' + origem + '\n\n' +
-    (itens.length ? 'Dados encontrados e apagados:\n' + itens.map(function (i) { return '  - ' + i; }).join('\n') + '\n\n' : '') +
-    (limpo ? 'Varredura limpa — nenhuma referência restou na base.\n'
-           : 'ATENÇÃO: sobraram ' + sobras.length + ' referência(s):\n' + sobras.map(function (s) { return '  - ' + s; }).join('\n') + '\n') +
-    '\nRegistro de conformidade (LGPD, Lei nº 13.709/2018).\n';
-
-  return { subject: subject, html: html, text: text };
-}
-
-/* ids determinísticos: reentrega do gatilho não vira e-mail duplicado.
- * O Firestore aceita '/' só como separador de caminho — o uid não tem, mas
- * sanitizo por garantia. */
-function mailDocIds(uid) {
-  var safe = String(uid || 'desconhecido').replace(/[^A-Za-z0-9_-]/g, '_');
-  return { user: 'acctdel_' + safe + '_user', admin: 'acctdel_' + safe + '_admin' };
+/* id determinístico: reentrega do gatilho não vira e-mail duplicado (o `create()`
+ * falha se já existir). É UM id porque é UM e-mail — o sufixo _admin sumiu junto
+ * com o relatório interno.
+ * O Firestore aceita '/' só como separador de caminho; o uid não tem, mas sanitizo
+ * por garantia. */
+function mailDocId(uid) {
+  return 'acctdel_' + String(uid || 'desconhecido').replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
 module.exports = {
   decideDeletionNotice,
   buildUserEmail,
-  buildAdminEmail,
   mailTargets,
-  mailDocIds,
+  mailDocId,
   fmtBR,
-  REPORT_TO,
   CC_CONTATO
 };

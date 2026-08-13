@@ -81,56 +81,65 @@ ok('data em BRT, com o fuso escrito', /13\/08\/2026,?\s+15:30/.test(u.html) && /
 const semNome = core.buildUserEmail({ email: 'x@y.com', deletedAt: quando });
 ok('sem nome não vira "Olá, undefined"', !/undefined/.test(semNome.html) && !/Olá, \./.test(semNome.html));
 
-// ── 3. RELATÓRIO DO DONO ───────────────────────────────────────────────────────
-const a = core.buildAdminEmail({
-  uid: 'UID123', name: 'Cristiano Franco', email: 'c@x.com', phone: '11988887777',
-  providers: ['google.com'], createdAt: quando, lastSignIn: quando, deletedAt: quando,
-  items: ['users/UID123', '2 troféus'], leftovers: [], origin: 'pedido do titular'
-});
-ok('assunto identifica a conta', a.subject.indexOf('Cristiano Franco') !== -1 && /scoreplace/.test(a.subject));
-ok('traz o uid', a.html.indexOf('UID123') !== -1);
-ok('traz provedor e origem', /google\.com/.test(a.html) && /pedido do titular/.test(a.html));
-ok('celular formatado', /\+55 \(11\) 98888-7777/.test(a.html));
-ok('varredura limpa vira selo verde', /Varredura limpa/.test(a.html));
-ok('relatório cita LGPD', /LGPD/.test(a.html));
+// ── 3. A CONFERÊNCIA PÓS-EXCLUSÃO, DENTRO DA CONFIRMAÇÃO ──────────────────────
+// O relatório interno foi REMOVIDO (regra: "nenhum outro destinatário"), então é a
+// confirmação do titular que passou a carregar o veredito da varredura. Detalhe de
+// máquina (quais caminhos) não entra aqui — vai pro log da função.
+const limpo = core.buildUserEmail({ name: 'Ana', email: 'a@x.com', deletedAt: quando,
+  items: ['Perfil'], leftovers: [], swept: true });
+ok('varredura limpa vira boa notícia pro titular',
+  /nenhum registro seu permaneceu/.test(limpo.html) && /nenhum registro seu permaneceu/.test(limpo.text));
 
-// Um relatório que diz "apagado" sem conferir não prova nada. Sobra tem que gritar.
-const comSobra = core.buildAdminEmail({
-  uid: 'U', deletedAt: quando, items: [], leftovers: ['tournaments/t1.memberUids', 'presences/p9']
-});
-ok('SOBRA aparece em destaque, não escondida',
-  /Sobraram 2 refer/.test(comSobra.html) && /tournaments\/t1\.memberUids/.test(comSobra.html));
-ok('sobra também no texto puro', /presences\/p9/.test(comSobra.text));
-ok('com sobra NÃO diz "varredura limpa"', !/Varredura limpa/.test(comSobra.html));
+const sujo = core.buildUserEmail({ name: 'Ana', email: 'a@x.com', deletedAt: quando,
+  items: ['Perfil'], leftovers: ['tournaments/t1.memberUids', 'presences/p9'], swept: true });
+ok('com sobra, o titular é avisado sem jargão', /2 registro\(s\) técnico\(s\)/.test(sujo.html));
+ok('e NÃO promete que ficou limpo', !/nenhum registro seu permaneceu/.test(sujo.html));
+// Caminho do Firestore é ruído (e vazamento) numa caixa de usuário — fica no log.
+ok('caminho técnico NUNCA vai pro e-mail do titular',
+  sujo.html.indexOf('tournaments/t1') === -1 && sujo.text.indexOf('presences/p9') === -1);
+
+const semVarredura = core.buildUserEmail({ email: 'a@x.com', deletedAt: quando });
+ok('sem varredura feita, não afirma nada sobre conferência',
+  !/Conferimos/.test(semVarredura.html));
 
 // XSS: nome é dado do usuário e entra em HTML.
-const xss = core.buildAdminEmail({ uid: 'U', name: '<script>alert(1)</script>', deletedAt: quando });
+const xss = core.buildUserEmail({ name: '<script>alert(1)</script>', email: 'a@x.com', deletedAt: quando });
 ok('nome é escapado (sem <script> cru)', xss.html.indexOf('<script>alert') === -1 && /&lt;script&gt;/.test(xss.html));
 
-// ── 3b. DESTINATÁRIOS ──────────────────────────────────────────────────────────
-// Correção explícita do dono (13/ago): o endereço PESSOAL saiu — o comprovante vai
-// só pro titular e pra caixa da empresa. Endereço pessoal em rotina automática é
-// exatamente o que [[feedback_contact_email_always_barthlabs]] proíbe, e a correção
-// foi expressa: não pode voltar por descuido.
+// ── 3b. DESTINATÁRIOS — A REGRA FINAL ─────────────────────────────────────────
+// Confirmação do dono (13/ago): "APENAS para o e-mail da conta excluída, com CC
+// para contato@barthlabs.com. Nenhum outro destinatário. Não enviar para
+// rstbarth@gmail.com em nenhuma hipótese." Endereço pessoal em rotina automática é
+// o que [[feedback_contact_email_always_barthlabs]] proíbe; e "nenhum outro
+// destinatário" cobre também um SEGUNDO e-mail pro mesmo endereço — por isso o
+// relatório interno saiu inteiro, construtor incluído.
 const alvos = core.mailTargets('cristiano@x.com');
 ok('titular recebe a confirmação', alvos.user.to.length === 1 && alvos.user.to[0] === 'cristiano@x.com');
-ok('titular tem CC pra barthlabs', alvos.user.cc.indexOf('contato@barthlabs.com') !== -1);
-ok('relatório vai pra contato@barthlabs.com', alvos.report.to[0] === 'contato@barthlabs.com');
-ok('replyTo é sempre barthlabs nos dois',
-  alvos.user.replyTo === 'contato@barthlabs.com' && alvos.report.replyTo === 'contato@barthlabs.com');
+ok('CC é a caixa da empresa', alvos.user.cc.length === 1 && alvos.user.cc[0] === 'contato@barthlabs.com');
+ok('replyTo é barthlabs', alvos.user.replyTo === 'contato@barthlabs.com');
 
-// A armadilha do dia: com o pessoal fora, destino do relatório e CC viraram o MESMO
-// endereço — os dois no mesmo e-mail entregam duplicado na mesma caixa.
-ok('relatório NÃO se auto-CCa (to e cc seriam o mesmo endereço)', alvos.report.cc.length === 0);
+// É UM e-mail só: nenhum segundo alvo pode reaparecer no roteamento.
+ok('o roteamento tem UM destino só (sem relatório interno)',
+  Object.keys(alvos).length === 1 && alvos.report === undefined);
+ok('o construtor do relatório interno NÃO existe mais (decoy removido)',
+  typeof core.buildAdminEmail === 'undefined');
+
+// Ninguém além do titular e do CC — varredura no conjunto inteiro de endereços.
+const todos = alvos.user.to.concat(alvos.user.cc);
+ok('exatamente 2 endereços envolvidos', todos.length === 2);
+ok('e são só esses dois',
+  todos.every((e) => e === 'cristiano@x.com' || e === 'contato@barthlabs.com'));
 
 const mesmo = core.mailTargets('contato@barthlabs.com');
 ok('titular que JÁ é a caixa da empresa não vira to+cc duplicado', mesmo.user.cc.length === 0);
 const caixaAlta = core.mailTargets('CONTATO@BarthLabs.com');
 ok('a dedupe ignora caixa alta/baixa', caixaAlta.user.cc.length === 0);
 
+// Conta só-celular: sem e-mail da conta, não há e-mail a enviar. Mandar só pro CC
+// promoveria a caixa da empresa a destinatário PRIMÁRIO — o que a regra exclui.
 const semCaixa = core.mailTargets('');
-ok('conta só-celular: não há e-mail de titular', semCaixa.user === null);
-ok('conta só-celular: o relatório sai mesmo assim', semCaixa.report.to[0] === 'contato@barthlabs.com');
+ok('conta só-celular: nenhum envio (a regra é "apenas o e-mail da conta")', semCaixa.user === null);
+ok('conta só-celular: não sobra nenhum outro alvo', Object.keys(semCaixa).length === 1);
 
 // A trava da correção: o endereço pessoal não pode reaparecer em lugar nenhum.
 const fonteCore = fs.readFileSync(path.join(__dirname, 'account-deletion-email-core.js'), 'utf8');
@@ -143,15 +152,25 @@ ok('o core só cita o endereço pessoal em comentário (o porquê da correção)
     .every((l) => /^\s*(\*|\/\/|\/\*)/.test(l)));
 
 // ── 4. IDS DETERMINÍSTICOS (reentrega não duplica) ─────────────────────────────
-const ids = core.mailDocIds('wOmGzHQK');
-ok('id do usuário e do admin são distintos', ids.user !== ids.admin);
-ok('id é estável pro mesmo uid', core.mailDocIds('wOmGzHQK').user === ids.user);
-ok('id sanitiza caractere de caminho', core.mailDocIds('a/b').user.indexOf('/') === -1);
+ok('id é estável pro mesmo uid', core.mailDocId('wOmGzHQK') === core.mailDocId('wOmGzHQK'));
+ok('id sanitiza caractere de caminho', core.mailDocId('a/b').indexOf('/') === -1);
+ok('é UM id (o sufixo _admin sumiu com o relatório)', typeof core.mailDocId('x') === 'string');
 
 // ── 5. FIAÇÃO DO GATILHO (functions/index.js) ──────────────────────────────────
 const idx = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
-const bloco = idx.slice(idx.indexOf('exports.accountDeletionEmail'),
-                        idx.indexOf('exports.accountDeletionEmail') + 6000);
+// ⚠️ O bloco é delimitado pela PRÓXIMA função exportada, não por um número fixo de
+// caracteres. Com uma janela fixa ele vazava para o `autoMergeOnProfileUpdate` — que
+// também é onDocumentWritten e também lê `before` — e asserções passavam por causa do
+// VIZINHO, não do código sob teste. Foi assim que "lê a identidade do BEFORE" ficou
+// verde antes mesmo de eu conferir se era verdade aqui.
+// O corte é no BANNER da próxima seção, não no `exports.` seguinte: o cabeçalho de
+// comentário da função vizinha vem ANTES dela e cita `users/{uid}`, o que sozinho
+// satisfaria a asserção de "escuta users/{uid}" sem o gatilho ter nada disso.
+const _ini = idx.indexOf('exports.accountDeletionEmail');
+const _fim = idx.indexOf('\n// ─── ', _ini);
+const bloco = idx.slice(_ini, _fim === -1 ? idx.length : _fim);
+ok('o bloco sob teste não vaza pra função seguinte',
+  bloco.indexOf('autoMergeOnProfileUpdate') === -1 && bloco.length > 500);
 ok('o gatilho existe', idx.indexOf('exports.accountDeletionEmail') !== -1);
 ok('escuta users/{uid} via onDocumentWritten',
   /onDocumentWritten/.test(bloco) && /users\/\{uid\}/.test(bloco));
@@ -163,13 +182,29 @@ ok('a decisão vem do core, não reimplementada no gatilho',
 // A identidade TEM que sair do before: o tombstone é `set` sem merge e apaga o
 // e-mail no mesmo instante. Ler o after é ficar sem destinatário.
 ok('lê a identidade do BEFORE (o after já perdeu o e-mail)',
-  /before/.test(bloco) && /before\.data\(\)/.test(bloco));
+  /event\.data\.before/.test(bloco) && /before\.displayName/.test(bloco) && /before\.email/.test(bloco));
 ok('o roteamento vem do core (o gatilho não monta to/cc na mão)',
   /mailTargets/.test(bloco) && !/to: \[destinatario\]/.test(bloco));
 ok('usa id determinístico ao enfileirar (não .add())',
-  /mailDocIds/.test(bloco) && /\.doc\(/.test(bloco));
+  /mailDocId/.test(bloco) && /\.doc\(/.test(bloco));
 ok('é best-effort: exclusão não pode falhar por causa do e-mail',
   /catch/.test(bloco));
+
+// "Nenhum outro destinatário" tem que valer no GATILHO, não só no core: um segundo
+// enfileiramento reintroduziria o e-mail que o dono mandou remover.
+const enfileira = (bloco.match(/await põe\(/g) || []).length;
+ok('o gatilho enfileira UM e-mail só', enfileira === 1);
+ok('nenhum endereço cravado no gatilho (quem endereça é o core)',
+  bloco.indexOf('@gmail.com') === -1 && bloco.indexOf('@barthlabs.com') === -1);
+ok('sem e-mail da conta, o gatilho NÃO envia (não promove o CC a primário)',
+  /if \(!alvos\.user\)/.test(bloco) && /return;/.test(bloco));
+
+// Com o relatório interno fora, o detalhe operacional precisa sobreviver em algum
+// lugar — e sobra é ERRO, senão some no meio de log comum.
+ok('uid/provedores/datas vão pro log', /console\.log\(.*JSON\.stringify\(\{/.test(bloco) &&
+  /providers,/.test(bloco) && /itens: items/.test(bloco));
+ok('sobra vira console.error com os caminhos',
+  /console\.error/.test(bloco) && /SOBRARAM/.test(bloco) && /leftovers\.join/.test(bloco));
 
 // A varredura de sobras é ordenada DEPOIS do tombstone, e a CF canônica só apaga o
 // Auth no passo seguinte. Sem folga, o gatilho ganha a corrida e acusa "Auth ainda
