@@ -47,6 +47,20 @@ function corpoDe(src) {
   throw new Error('não fechei a função');
 }
 const corpo = corpoDe(fonte);
+
+// v1.8.40: _enrollToStandby delega a leitura do resultado ao LEITOR ÚNICO
+// (window._applyEnrollResult) — o harness carrega os DOIS códigos reais.
+function corpoDoLeitor(src) {
+  const i = src.indexOf('window._applyEnrollResult = function');
+  if (i === -1) throw new Error('não achei _applyEnrollResult — ajuste o teste');
+  let depth = 0, j = src.indexOf('{', i);
+  for (let k = j; k < src.length; k++) {
+    if (src[k] === '{') depth++;
+    else if (src[k] === '}') { depth--; if (depth === 0) return src.slice(i, k + 1) + ';'; }
+  }
+  throw new Error('não fechei _applyEnrollResult');
+}
+const corpoLeitor = corpoDoLeitor(fonte);
 // A varredura olha o CÓDIGO, não os comentários — o bloco que explica o incidente cita
 // `saveTournament` de propósito, e sem isto o teste acusaria a própria documentação.
 const semComentario = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -93,8 +107,11 @@ function monta(resposta, opts) {
       return resposta instanceof Error ? Promise.reject(resposta) : Promise.resolve(resposta);
     }
   };
+  // self = uid do participantObj bate com o usuário logado → mensagens na 2ª pessoa.
+  sb.AppStore = { currentUser: { uid: 'uid_mariana' } };
+  sb._safeHtml = (s) => String(s == null ? '' : s);
   vm.createContext(sb);
-  vm.runInContext(corpo + ';this.__f = _enrollToStandby;', sb, { filename: 'enroll.js' });
+  vm.runInContext(corpoLeitor + corpo + ';this.__f = _enrollToStandby;', sb, { filename: 'enroll.js' });
   return sb;
 }
 
@@ -116,8 +133,11 @@ const NOVA = { uid: 'uid_mariana', name: 'Mariana', displayName: 'Mariana', self
      '(é isso que produzia o "apareceu em azul e sumiu") — tinha ' + sb.filaDuranteAChamada.length);
   ok(t.standbyParticipants.length === 1 && t.standbyParticipants[0].enrollSeq === 143,
      'a cópia em memória adota a lista que o SERVIDOR devolveu (com o enrollSeq dele)');
+  // v1.8.40 (revisada, motivo): o toast agora sai do LEITOR ÚNICO (_applyEnrollResult),
+  // com texto próprio pra "você" — o invariante (avisar que ENTROU NA FILA, tom de
+  // sucesso, um toast só) é o mesmo; só a chave i18n deixou de ser o contrato.
   ok(sb.toasts.length === 1 && sb.toasts[0].tipo === 'success' &&
-     sb.toasts[0].titulo === 'enroll.waitlistedTitle',
+     /lista de espera/i.test(sb.toasts[0].titulo),
      'avisa que entrou na lista de espera — veio ' + JSON.stringify(sb.toasts));
 
   // (b) servidor decide que ainda cabe no ELENCO (fase não estava sorteada no doc fresco)
@@ -150,12 +170,24 @@ const NOVA = { uid: 'uid_mariana', name: 'Mariana', displayName: 'Mariana', self
      sb4.toasts[0].msg.indexOf('permissions') !== -1,
      'falhou: mostra o erro REAL do servidor, não texto genérico');
 
-  // (e) dedup local continua valendo (não vira ida ao servidor à toa)
+  // (e) v1.8.40 (REVISADA, motivo no arquivo): o pré-gate LOCAL saiu de propósito.
+  // Ele decidia "já está na fila/inscrito" olhando a CÓPIA EM MEMÓRIA (stale) e
+  // retornava SEM chamar o callback — botão preso e recusa por dado velho. O
+  // invariante novo é o inverso: a cópia local NUNCA recusa ninguém; quem responde
+  // "já está" é o SERVIDOR (alreadyWaitlisted), lendo o doc fresco — e a resposta
+  // dele não duplica a entrada local.
   const t5 = { id: 'tour_x', name: 'Confra', participants: [], standbyParticipants: [{ uid: 'uid_mariana' }] };
-  const sb5 = monta({ waitlisted: true }, { t: t5 });
-  sb5.__f(t5, 'tour_x', NOVA, null);
-  ok(sb5.chamou.length === 0,
-     'quem já está na fila localmente nem chama o servidor — chamou ' + JSON.stringify(sb5.chamou));
+  const sb5 = monta({ waitlisted: true, alreadyWaitlisted: true,
+                      standbyParticipants: [{ uid: 'uid_mariana' }] }, { t: t5 });
+  await new Promise(r => sb5.__f(t5, 'tour_x', NOVA, r));
+  ok(sb5.chamou.indexOf('enrollParticipant') !== -1,
+     'a cópia local NUNCA recusa: mesmo "já na fila" local, o servidor é consultado — chamou ' + JSON.stringify(sb5.chamou));
+  ok(t5.standbyParticipants.length === 1,
+     'resposta alreadyWaitlisted não duplica a entrada local — fila ' + t5.standbyParticipants.length);
+  // varredura: o pré-gate local não pode voltar
+  ok(semComentario(corpo).indexOf('já está na fila') === -1 &&
+     !/standbyParticipants\.some\(/.test(semComentario(corpo)),
+     'REGRESSÃO: _enrollToStandby não pode voltar a decidir "já está" pela cópia local');
 
   console.log(fail === 0 ? '  ✓ ' + pass + ' asserções' : '  ' + pass + ' ok / ' + fail + ' falhas');
   process.exit(fail === 0 ? 0 : 1);

@@ -97,9 +97,13 @@ function asParticipantsArray(data) {
 }
 
 // Espelha o gate de "inscrições abertas" de enrollParticipant.
+// v1.8.40: REGRA CANÔNICA, espelhada no cliente por window._enrollmentOpenState
+// (js/views/waitlist-core.js) — paridade travada por teste. Mudou aqui → mudou lá.
+// `status !== 'finished'` entrou no ligaOpen: Liga ENCERRADA não aceita inscrição
+// (antes o ligaOpen ignorava finished e o servidor aceitaria gente em torneio morto).
 function enrollmentOpen(data, nowMs) {
   var isLiga = data.format && (data.format === 'Liga' || data.format === 'Ranking' || data.format === 'liga' || data.format === 'ranking');
-  var ligaOpen = isLiga && data.ligaOpenEnrollment !== false;
+  var ligaOpen = isLiga && data.ligaOpenEnrollment !== false && data.status !== 'finished';
   var sorteioRealizado = (Array.isArray(data.matches) && data.matches.length > 0) ||
     (Array.isArray(data.rounds) && data.rounds.length > 0) ||
     (Array.isArray(data.groups) && data.groups.length > 0);

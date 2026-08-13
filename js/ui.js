@@ -33,6 +33,13 @@ function openModal(modalId) {
       window._entrarInFlight = false;
       window._phoneLoginInFlight = false;
       if (window._entrarWatchdog) { clearTimeout(window._entrarWatchdog); window._entrarWatchdog = null; }
+      // v1.8.40: decoração central do modal (banner "Bem-vindo de volta" + badge
+      // "✓ da última vez"). Aqui porque TODO caminho que abre o login passa por
+      // openModal — antes só o clique no btn-login decorava, e quem chegava pela
+      // inscrição ("Inscrever-se" sem sessão) via o modal pelado.
+      setTimeout(function () {
+        if (typeof window._decorateLoginModal === 'function') window._decorateLoginModal();
+      }, 60);
     }
     modal.classList.add('active');
     // Scroll para o topo do conteúdo do modal

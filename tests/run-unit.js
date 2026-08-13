@@ -716,6 +716,17 @@ const SUITES = [
   // Entrar na lista de espera passa pelo SERVIDOR (enrollParticipant), nunca por
   // saveTournament do doc inteiro — incidente da Mariana no Confra, 12/ago. v1.8.36.
   'tests/inscricao-na-fila-passa-pelo-servidor.test.js',
+  // v1.8.40 — a leva do login/inscrição (13/ago/2026):
+  // "inscrições abertas" é UMA regra (paridade cliente×servidor por matriz; era o
+  // bloqueio indevido de Liga aberta pré-sorteio com prazo vencido)
+  'tests/inscricao-aberta-uma-regra.test.js',
+  // o resultado da inscrição tem UM leitor — waitlisted/closed/dupSuspect nunca mais mudos
+  'tests/inscricao-outcomes-um-leitor.test.js',
+  // modal com Google/Apple no topo + "último usado" + linking sem API morta +
+  // corrida do resgate fechada + hint precoce + pedido de celular
+  'tests/login-um-caminho-so.test.js',
+  // e-mail de consolidação da conta (assinatura anti-spam, conteúdo, gatilho, backfill)
+  'functions/test-account-email-core.js',
   // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
   // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
   'tests/entrar-nunca-fica-mudo.test.js',

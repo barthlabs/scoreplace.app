@@ -1338,6 +1338,38 @@ window.FirestoreDB = {
     }
   },
 
+  // v1.8.40: SAIR DA LISTA DE ESPERA por transação de CAMPOS (standby/waitlist/memberUids
+  // recomputado do doc FRESCO). Antes o _leaveStandby gravava o documento INTEIRO via
+  // saveTournament a partir da cópia em memória — a mesma classe do bug da Mariana (um
+  // campo divergente derruba a escrita toda). As 3 chaves estão na allowlist de
+  // isEnrollmentOnlyDiff() das rules, então o participante consegue gravar.
+  async leaveStandby(tournamentId, user) {
+    if (!this.db) throw new Error('Firestore not initialized');
+    var self = this;
+    var docRef = this.db.collection('tournaments').doc(String(tournamentId));
+    return this.db.runTransaction(async function (tx) {
+      var doc = await tx.get(docRef);
+      if (!doc.exists) throw new Error('Tournament not found');
+      var data = doc.data();
+      var match = function (p) {
+        if (!p) return false;
+        if (typeof window !== 'undefined' && typeof window._userMatchesParticipant === 'function') {
+          return window._userMatchesParticipant(user, p);
+        }
+        if (typeof p === 'string') return p === user.email || p === user.displayName;
+        return !!(p.uid && user.uid && p.uid === user.uid);
+      };
+      var sb = Array.isArray(data.standbyParticipants) ? data.standbyParticipants.filter(function (p) { return !match(p); }) : [];
+      var wl = Array.isArray(data.waitlist) ? data.waitlist.filter(function (p) { return !match(p); }) : [];
+      var changed = (Array.isArray(data.standbyParticipants) && sb.length !== data.standbyParticipants.length) ||
+                    (Array.isArray(data.waitlist) && wl.length !== data.waitlist.length);
+      if (!changed) return { removed: false };
+      var next = Object.assign({}, data, { standbyParticipants: sb, waitlist: wl });
+      tx.update(docRef, { standbyParticipants: sb, waitlist: wl, memberUids: self._computeMemberUids(next) });
+      return { removed: true, standbyParticipants: sb, waitlist: wl };
+    });
+  },
+
   async _enrollParticipantTx(tournamentId, participantObj, extraUpdates) {
     if (!this.db) throw new Error('Firestore not initialized');
     // Guard: rejeitar participante completamente sem identificador.
@@ -1369,7 +1401,9 @@ window.FirestoreDB = {
       // com os cards/config mostrando "aberta" (que usam !== false). Bug da Vivi
       // Hirata: organizador não conseguia inscrever após o 1º confronto. Alinhado
       // com enrollCurrentUser, cards e form (todos !== false).
-      var _ligaOpen = _isLiga && data.ligaOpenEnrollment !== false;
+      // v1.8.40: `status !== 'finished'` espelha o canônico (waitlist-core._enrollmentOpenState
+      // e functions/enroll-core.enrollmentOpen) — Liga ENCERRADA não aceita inscrição.
+      var _ligaOpen = _isLiga && data.ligaOpenEnrollment !== false && data.status !== 'finished';
       var _sorteioRealizado = (Array.isArray(data.matches) && data.matches.length > 0) ||
                               (Array.isArray(data.rounds) && data.rounds.length > 0) ||
                               (Array.isArray(data.groups) && data.groups.length > 0);

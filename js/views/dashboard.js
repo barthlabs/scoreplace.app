@@ -146,12 +146,11 @@ window._dashEnroll = function(tId) {
   if (!t || !user) { window.enrollCurrentUser(tId); return; }
 
   // Block enrollment if inscriptions are closed
-  var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-  var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default — alinha com cards/form
-  var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                 (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                 (Array.isArray(t.groups) && t.groups.length > 0);
-  var _aberto = (t.status !== 'closed' && t.status !== 'finished' && !_sorteio) || _ligaOpen;
+  // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+  var _sorteio = window._phaseDrawDone ? window._phaseDrawDone(t)
+    : ((Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0));
+  var _aberto = window._enrollmentOpenState ? window._enrollmentOpenState(t).open
+    : ((t.status !== 'closed' && t.status !== 'finished' && !_sorteio));
   if (!_aberto) {
     // v1.5.3 (bug de produção, torneio ao vivo): esta regra era uma CÓPIA driftada que
     // ignorava a INSCRIÇÃO DURANTE A FASE. Com o sorteio feito e o toggle em Abertas
@@ -273,13 +272,13 @@ function renderDashboard(container) {
   const torneiosCount = visible.length;
   const torneiosPublicos = visible.filter(t => t.isPublic).length;
   const inscricoesAbertas = visible.filter(t => {
-    const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    const _stF = window._enrollmentOpenState(t);
     // v2.1.4: late enrollment (Fechadas OFF) — inscrições seguem abertas após o
     // sorteio (e após iniciar) até o organizador encerrar. Mesma regra do detalhe.
     const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
-    return (t.status !== 'finished' && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
+    const lateEnrollOpen = _stF.sorteio && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
+    return _stF.open || lateEnrollOpen;
   }).length;
 
 
@@ -420,19 +419,8 @@ function renderDashboard(container) {
   // (que exclui torneios onde o usuário é member). A semântica do label
   // "Inscrições Abertas" não sugere "só os que você não entrou"; agora é
   // o que o usuário espera: total de torneios aceitando inscrição.
-  const _isOpenEnrollment = (t) => {
-    if (!t) return false;
-    const _hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                     (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                     (Array.isArray(t.groups) && t.groups.length > 0);
-    const _ligaAberta = (typeof window._isLigaFormat === 'function'
-                          ? window._isLigaFormat(t)
-                          : t.format === 'Liga')
-                        && t.ligaOpenEnrollment !== false
-                        && _hasDraw;
-    const _deadlinePassed = t.registrationLimit && new Date(t.registrationLimit) < new Date();
-    return (t.status !== 'closed' && t.status !== 'finished' && !_hasDraw && !_deadlinePassed) || _ligaAberta;
-  };
+  // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+  const _isOpenEnrollment = (t) => !!(t && window._enrollmentOpenState(t).open);
 
   const _discoveryRaw = (window.AppStore && Array.isArray(window.AppStore.publicDiscovery))
     ? window.AppStore.publicDiscovery
@@ -588,12 +576,16 @@ function renderDashboard(container) {
     // Inscrições fecham após sorteio (status 'active'), exceto Liga com inscrições abertas na temporada
     const isFinished = t.status === 'finished';
     const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    // A cópia daqui exigia sorteioRealizado no ligaAberta: Liga aberta pré-sorteio com
+    // prazo vencido/status closed mostrava o card FECHADO enquanto o servidor aceitaria.
+    const _openStD = window._enrollmentOpenState(t);
+    const ligaAberta = _openStD.ligaOpen;
     // v2.1.4: late enrollment (Fechadas OFF) mantém inscrições abertas após o
     // sorteio e após iniciar, até o organizador encerrar. Mesma regra do detalhe.
     const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
     const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
-    const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
+    const isAberto = _openStD.open || lateEnrollOpen;
     // v1.3.35-beta: "Em Andamento" só com t.tournamentStarted setado pelo
     // botão Iniciar Torneio. Sorteio realizado mantém "Inscrições Encerradas".
     const tournamentStarted = !!(t.tournamentStarted || t.status === 'in_progress');

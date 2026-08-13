@@ -638,12 +638,13 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
           showNotification(_t('auth.loginDone'), _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName || user.email}), 'success');
         }
       } catch(e) {}
-      if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-        window.FirestoreDB.saveUserProfile(user.uid, {
+      // v1.8.40: patch-se-existe — nunca criar o doc antes do resgate (ver handleGoogleLogin).
+      if (user.uid && typeof _patchProfileIfExists === 'function') {
+        _patchProfileIfExists(user.uid, {
           authProvider: 'google.com',
           displayName: user.displayName || '',
           photoURL: user.photoURL || ''
-        }).catch(function() {});
+        });
       }
       try { _tryLinkPendingCredential(result); } catch(e) {}
 
@@ -926,14 +927,18 @@ function handleGoogleLogin() {
 
       showNotification(_t('auth.loginDone'), _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}), 'success');
 
-      // Save auth provider + displayName/photoURL to Firestore on first Google login
-      if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-        window.FirestoreDB.saveUserProfile(user.uid, {
-          authProvider: 'google.com',
-          displayName: user.displayName || '',
-          photoURL: user.photoURL || ''
-        }).catch(function() {});
-      }
+      // v1.8.40: PATCH-SE-EXISTE, nunca set(merge) — este write rodava ANTES do
+      // resgate de conta fundida/redirecionada em simulateLoginSuccess, e como o
+      // resgate só dispara quando o doc NÃO existe (resolveLoginRedirect), criar o
+      // doc aqui era uma CORRIDA que podia matar o resgate: a pessoa entrava numa
+      // conta VAZIA em vez de ser mandada pra conta dona da credencial. Conta nova
+      // de verdade ganha o doc no auto-save do próprio simulateLoginSuccess, DEPOIS
+      // do resgate rodar.
+      _patchProfileIfExists(user.uid, {
+        authProvider: 'google.com',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || ''
+      });
 
       // v1.6.29-beta: detecta se o usuário tem FOTO REAL no Google (não
       // monograma default) via People API. Substitui as heurísticas de
@@ -956,9 +961,9 @@ function handleGoogleLogin() {
               var primary = data.photos.find(function(p) { return p.metadata && p.metadata.primary; }) || data.photos[0];
               var hasReal = !primary['default']; // bracket pra evitar reserved word issues
               window._log('[scoreplace-auth] Google People API photo.default=', primary['default'], '→ hasGooglePhotoReal=', hasReal);
-              if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-                window.FirestoreDB.saveUserProfile(user.uid, { hasGooglePhotoReal: hasReal }).catch(function() {});
-              }
+              // v1.8.40: patch-se-existe — esta resposta pode chegar ANTES do resgate de
+              // conta em simulateLoginSuccess; criar o doc aqui mataria o resolveLoginRedirect.
+              _patchProfileIfExists(user.uid, { hasGooglePhotoReal: hasReal });
               // Atualiza AppStore.currentUser pra check do trofeu pegar imediatamente
               if (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid === user.uid) {
                 window.AppStore.currentUser.hasGooglePhotoReal = hasReal;
@@ -1097,13 +1102,13 @@ function _handleGoogleLoginNative() {
     _forceCloseLoginModal();
     showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: user.displayName }), 'success');
 
-    // Persiste provider + nome/foto no primeiro login (igual à web).
-    if (window.FirestoreDB && window.FirestoreDB.db && user.uid) {
-      window.FirestoreDB.saveUserProfile(user.uid, {
+    // v1.8.40: patch-se-existe — nunca criar o doc antes do resgate (ver handleGoogleLogin).
+    if (user.uid) {
+      _patchProfileIfExists(user.uid, {
         authProvider: 'google.com',
         displayName: user.displayName || '',
         photoURL: user.photoURL || ''
-      }).catch(function () {});
+      });
     }
 
     // People API: detecta foto real vs monograma (não-fatal). Reusa o
@@ -1118,9 +1123,8 @@ function _handleGoogleLoginNative() {
             if (!data || !Array.isArray(data.photos) || data.photos.length === 0) return;
             var primary = data.photos.find(function (p) { return p.metadata && p.metadata.primary; }) || data.photos[0];
             var hasReal = !primary['default'];
-            if (window.FirestoreDB && window.FirestoreDB.saveUserProfile) {
-              window.FirestoreDB.saveUserProfile(user.uid, { hasGooglePhotoReal: hasReal }).catch(function () {});
-            }
+            // v1.8.40: patch-se-existe (a resposta pode chegar antes do resgate de conta).
+            _patchProfileIfExists(user.uid, { hasGooglePhotoReal: hasReal });
             if (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid === user.uid) {
               window.AppStore.currentUser.hasGooglePhotoReal = hasReal;
             }
@@ -1272,12 +1276,13 @@ function _onGoogleAuthSuccess(user, result) {
   if (typeof _forceCloseLoginModal === 'function') _forceCloseLoginModal();
   var name = (user && (user.displayName || user.email)) || _t('auth.defaultUser');
   showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: name }), 'success');
-  if (window.FirestoreDB && window.FirestoreDB.db && user && user.uid) {
-    window.FirestoreDB.saveUserProfile(user.uid, {
+  // v1.8.40: patch-se-existe — nunca criar o doc antes do resgate (ver handleGoogleLogin).
+  if (user && user.uid) {
+    _patchProfileIfExists(user.uid, {
       authProvider: 'google.com',
       displayName: user.displayName || '',
       photoURL: user.photoURL || ''
-    }).catch(function(){});
+    });
   }
   try { _tryLinkPendingCredential(result); } catch (e) {
     window._warn && window._warn('[scoreplace-auth] google _tryLinkPendingCredential (non-fatal):', e);
@@ -1394,11 +1399,12 @@ function _onAppleAuthSuccess(user, result, fullName) {
   var name = (user && user.displayName) || fullName || (user && user.email) || 'Atleta';
   showNotification(_t('auth.loginDone'), _t('auth.welcomeName', { greeting: window._welcomeWord(user), name: name }), 'success');
 
-  if (window.FirestoreDB && window.FirestoreDB.db && user && user.uid) {
+  // v1.8.40: patch-se-existe — nunca criar o doc antes do resgate (ver handleGoogleLogin).
+  if (user && user.uid) {
     var payload = { authProvider: 'apple.com' };
     if (user.displayName) payload.displayName = user.displayName;
     else if (fullName) payload.displayName = fullName;
-    window.FirestoreDB.saveUserProfile(user.uid, payload).catch(function(){});
+    _patchProfileIfExists(user.uid, payload);
   }
 
   try { _tryLinkPendingCredential(result); } catch (e) {
@@ -1431,49 +1437,78 @@ function _onAppleAuthError(error) {
   showNotification(_t('auth.error'), 'Não foi possível entrar com a Apple. Tente e-mail, celular ou Google.', 'error');
 }
 
+// ─── Patch de perfil que NUNCA cria doc (v1.8.40) ───────────────────────────
+// `update()` falha silenciosamente quando o doc não existe — é exatamente o que
+// queremos nos handlers de login social: registrar o provedor em perfil EXISTENTE
+// sem criar um doc vazio que mate o resgate de conta (resolveLoginRedirect só age
+// quando o doc NÃO existe). Ver o comentário no handleGoogleLogin.
+function _patchProfileIfExists(uid, fields) {
+  try {
+    if (!(window.FirestoreDB && window.FirestoreDB.db && uid)) return;
+    window.FirestoreDB.db.collection('users').doc(uid).update(fields).catch(function () {});
+  } catch (e) {}
+}
+
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
 // the same email via a different provider, Firebase throws
-// auth/account-exists-with-different-credential. This helper detects the
-// existing provider and guides the user to link accounts.
+// auth/account-exists-with-different-credential.
+//
+// v1.8.40 — REESCRITO. O fluxo antigo usava fetchSignInMethodsForEmail, que está
+// MORTO neste projeto: a proteção de enumeração de e-mail está LIGADA
+// (enableImprovedEmailPrivacy, medido na config do Identity Toolkit em 13/ago/2026)
+// e o método devolve SEMPRE lista vazia — então o caminho caía no genérico
+// "identifyError" e a pessoa ficava sem saber como entrar. Quem sabe os provedores
+// é o SERVIDOR (CF checkAccount, Admin SDK, resposta mascarada + rate limit).
+// E o aviso virou um DIÁLOGO com ação: um toque leva pro provedor certo; a
+// credencial pendente fica guardada e _tryLinkPendingCredential VINCULA os dois
+// métodos na mesma conta após o login — zero conta duplicada.
 function _handleAccountLinking(error, providerName) {
   if (error.code !== 'auth/account-exists-with-different-credential') return false;
   var email = error.customData ? error.customData.email : (error.email || '');
   var pendingCred = error.credential || null;
-  if (!email) {
-    showNotification(_t('auth.accountExists'), _t('auth.accountExistsMsg'), 'warning');
-    return true;
+  // Save pending credential so we can link after successful sign-in
+  if (pendingCred) {
+    window._pendingLinkCredential = pendingCred;
+    window._pendingLinkEmail = email || '';
   }
-
-  // Fetch which providers are linked to this email
-  firebase.auth().fetchSignInMethodsForEmail(email).then(function(methods) {
-    if (!methods || methods.length === 0) {
-      showNotification(_t('auth.error'), _t('auth.identifyError'), 'error');
-      return;
-    }
-    var existingProvider = methods[0]; // e.g. 'google.com', 'password', 'emailLink', 'phone'
-    var providerNames = {
-      'google.com': 'Google',
-      'password': _t('auth.providerPassword'),
-      'emailLink': 'Link de E-mail',
-      'phone': _t('auth.providerPhone')
-    };
-    var existingName = providerNames[existingProvider] || existingProvider;
-
-    // Save pending credential so we can link after successful sign-in
-    if (pendingCred) {
-      window._pendingLinkCredential = pendingCred;
-      window._pendingLinkEmail = email;
-    }
-
-    showNotification(
-      _t('auth.accountAlreadyExists'),
-      _t('auth.accountLinkMsg', {email: email, existing: existingName, newProvider: providerName}),
-      'info'
-    );
-  }).catch(function(err) {
-    window._warn('fetchSignInMethodsForEmail error:', err);
+  var generic = function () {
     showNotification(_t('auth.accountExists'), _t('auth.accountExistsMsg'), 'warning');
+  };
+  if (!email || typeof window._entrarCheckAccount !== 'function') { generic(); return true; }
+
+  window._entrarCheckAccount(email).then(function (info) {
+    if (!info || !info.exists) { generic(); return; }
+    var provs = info.socialProviders || [];
+    var isGoogle = provs.indexOf('google.com') !== -1;
+    var isApple = provs.indexOf('apple.com') !== -1;
+    var alvo = isGoogle ? 'Google' : (isApple ? 'Apple' : (info.hasPassword ? 'e-mail e senha' : ''));
+    if (!alvo) { generic(); return; }
+    var esc = window._safeHtml || function (s) { return s; };
+    var corpo = 'O e-mail <b>' + esc(email) + '</b> já tem conta no scoreplace que entra com <b>' + alvo + '</b>.<br><br>' +
+      'Entre por ela — nós <b>conectamos o ' + esc(providerName) + '</b> à mesma conta automaticamente. ' +
+      'Assim você continua com um perfil só (inscrições, jogos e histórico juntos).';
+    var goRight = function () {
+      if (isGoogle && typeof window.handleGoogleLogin === 'function') { window.handleGoogleLogin(); return; }
+      if (isApple && typeof window.handleAppleLogin === 'function') { window.handleAppleLogin(); return; }
+      // e-mail e senha → preenche o identificador e foca a senha
+      try {
+        var idEl = document.getElementById('login-identifier');
+        if (idEl) { idEl.value = email; idEl.dispatchEvent(new Event('input')); }
+        var pwEl = document.getElementById('login-password');
+        if (pwEl) setTimeout(function () { pwEl.focus(); }, 80);
+      } catch (_e) {}
+    };
+    if (typeof showConfirmDialog === 'function') {
+      showConfirmDialog('👤 Você já tem conta', corpo, goRight, null,
+        { confirmText: 'Entrar com ' + alvo, cancelText: 'Agora não', type: 'info' });
+    } else {
+      showNotification(_t('auth.accountAlreadyExists'),
+        _t('auth.accountLinkMsg', { email: email, existing: alvo, newProvider: providerName }), 'info');
+    }
+  }).catch(function (err) {
+    window._warn('checkAccount (linking) error:', err);
+    generic();
   });
   return true;
 }
@@ -1633,6 +1668,54 @@ window._onIdentifierInput = function() {
   }
   if (countryEl) countryEl.style.display = (mode === 'phone') ? '' : 'none';
   if (rowEl) rowEl.style.gridTemplateColumns = (mode === 'phone') ? 'auto 1fr' : '1fr';
+  // v1.8.40: hint PRECOCE — se o e-mail digitado já tem conta, diz COMO ela entra
+  // ANTES de a pessoa digitar senha e cair no cadastro inline (que é a fábrica de
+  // conta duplicada). Ver _entrarEarlyHint.
+  if (mode !== 'phone' && typeof window._entrarEarlyHint === 'function') window._entrarEarlyHint(el.value.trim());
+};
+
+// ── v1.8.40 · HINT PRECOCE DE CONTA EXISTENTE ────────────────────────────────
+// A pessoa digita o e-mail e, se ele JÁ tem conta, o modal responde na hora
+// "essa conta entra com Google" (realçando o botão) ou "é só entrar com sua
+// senha" — em vez de deixá-la errar a senha e expandir o cadastro. Usa a CF
+// checkAccount (Admin SDK — fetchSignInMethodsForEmail está morto com a
+// proteção de enumeração ligada; a CF já tem rate-limit e resposta mascarada,
+// e o app já a usa pra distinguir entrar de cadastrar). Debounce de 900ms +
+// cache por valor: zero chamada repetida enquanto digita.
+window._entrarEarlyHintTimer = null;
+window._entrarEarlyHintCache = {};
+window._entrarEarlyHint = function (raw) {
+  try {
+    if (window._entrarEarlyHintTimer) { clearTimeout(window._entrarEarlyHintTimer); window._entrarEarlyHintTimer = null; }
+    var v = String(raw || '').trim().toLowerCase();
+    // Só e-mail COMPLETO (tld incluído) — no meio da digitação não há o que perguntar.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return;
+    var render = function (info) {
+      // O campo pode ter mudado enquanto a resposta viajava — só fala do valor atual.
+      var el = document.getElementById('login-identifier');
+      if (!el || String(el.value || '').trim().toLowerCase() !== v) return;
+      if (!info || !info.exists) return; // conta nova: o fluxo normal do Entrar cuida
+      var provs = info.socialProviders || [];
+      if (provs.indexOf('google.com') !== -1) {
+        if (typeof window._entrarShowGoogleSuggestion === 'function') window._entrarShowGoogleSuggestion('google');
+      } else if (provs.indexOf('apple.com') !== -1) {
+        if (typeof window._entrarShowGoogleSuggestion === 'function') window._entrarShowGoogleSuggestion('apple');
+      } else if (info.hasPassword && typeof window._entrarStatus === 'function') {
+        window._entrarStatus('✓ Esse e-mail já tem conta — é só digitar sua senha e Entrar. Esqueceu? Use "Esqueci minha senha".', 'info');
+      }
+    };
+    if (Object.prototype.hasOwnProperty.call(window._entrarEarlyHintCache, v)) {
+      render(window._entrarEarlyHintCache[v]);
+      return;
+    }
+    window._entrarEarlyHintTimer = setTimeout(function () {
+      if (typeof window._entrarCheckAccount !== 'function') return;
+      window._entrarCheckAccount(v).then(function (info) {
+        window._entrarEarlyHintCache[v] = info || null;
+        render(info);
+      });
+    }, 900);
+  } catch (e) {}
 };
 
 // E.164 (com +) do campo, usando o DDI selecionado.
@@ -3976,6 +4059,10 @@ window._checkEmailVerified = function() {
 };
 
 async function simulateLoginSuccess(user) {
+  // v1.8.40: memoriza o MÉTODO de login numa chave que sobrevive ao logout —
+  // alimenta a badge "✓ da última vez" do modal. Cada handler já gravou o
+  // authProvider no authCache antes de chegar aqui (funil único).
+  try { if (typeof window._rememberLoginMethod === 'function') window._rememberLoginMethod(); } catch (_rlm) {}
   // v0.17.85: timestamp-based guard substituiu boolean. Antes era flag bool
   // _simulateLoginInProgress que só era resetado no FINAL bem-sucedido da
   // função — qualquer throw em await intermediário (loadUserProfile,
@@ -4522,6 +4609,11 @@ async function simulateLoginSuccess(user) {
   // jeito mais rápido de a pessoa fechar as duas no automático (que é justamente o que o
   // dono descreveu: "as pessoas às vezes não leem na pressa e fecham respondendo não").
   setTimeout(function () { if (typeof window._askDuplicateAccount === 'function') window._askDuplicateAccount(); }, 9000);
+  // v1.8.40: por último (16s), o pedido de CELULAR — sinal mais forte de "mesma pessoa"
+  // que existe (medido: zero celular repetido na base) e âncora de recuperação de conta.
+  // Depois das perguntas de nome/duplicata de propósito: três caixas empilhadas é o jeito
+  // mais rápido de a pessoa fechar todas no automático.
+  setTimeout(function () { if (typeof window._askSecureContact === 'function') window._askSecureContact(); }, 16000);
 
   // Quando perfil carregar: remover dot de carregamento da topbar e re-renderizar botão
   // Ouvinte único — remove-se após disparar pra não acumular listeners entre logins.
@@ -5441,6 +5533,59 @@ window._resetLoginGuard = function() {
   window._simulateLoginInProgressAt = 0;
 };
 
+// ── v1.8.40 · "ÚLTIMO USADO" ─────────────────────────────────────────────────
+// Ataque direto ao "esqueci como entrei da última vez e criei outra conta".
+// A chave é PRÓPRIA (scoreplace_last_login_method) de propósito: o scoreplace_authCache
+// é REMOVIDO no logout e no commit de sessão nula — a memória do MÉTODO tem que
+// sobreviver a isso, senão a badge some exatamente pra quem mais precisa dela
+// (quem saiu e vai voltar semanas depois). Gravada no funil único (simulateLoginSuccess),
+// lendo o authProvider que cada handler já registrou no authCache.
+window._rememberLoginMethod = function () {
+  try {
+    var ac = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
+    if (ac && ac.authProvider) localStorage.setItem('scoreplace_last_login_method', ac.authProvider);
+  } catch (e) {}
+};
+
+// Badge "✓ da última vez" no botão do provedor usado — padrão de mercado
+// (Clerk/WorkOS/Better Auth, 2025). Pra e-mail/senha e celular (que não são botão
+// único), a linha #login-lastmethod-hint acima do bloco diz o método.
+window._applyLastLoginBadge = function () {
+  try {
+    var m = localStorage.getItem('scoreplace_last_login_method') || '';
+    if (!m) {
+      var ac = JSON.parse(localStorage.getItem('scoreplace_authCache') || '{}');
+      m = ac.authProvider || '';
+    }
+    document.querySelectorAll('.sp-lastlogin-badge').forEach(function (b) { b.remove(); });
+    var hint = document.getElementById('login-lastmethod-hint');
+    if (hint) hint.innerHTML = '';
+    if (!m) return;
+    var map = { 'google.com': 'login-google-btn', 'apple.com': 'login-apple-btn' };
+    if (map[m]) {
+      var btn = document.getElementById(map[m]);
+      if (btn) {
+        var b = document.createElement('span');
+        b.className = 'sp-lastlogin-badge';
+        b.textContent = '✓ da última vez';
+        b.style.cssText = 'margin-left:8px;font-size:0.64rem;font-weight:800;padding:2px 7px;border-radius:999px;background:#10b981;color:#fff;vertical-align:middle;white-space:nowrap;';
+        btn.appendChild(b);
+      }
+    } else if (hint && (m === 'password' || m === 'emailLink' || m === 'phone')) {
+      hint.innerHTML = '✓ Da última vez você entrou com <b>' + (m === 'phone' ? 'celular' : 'e-mail e senha') + '</b> — use o mesmo caminho abaixo.';
+    }
+  } catch (e) {}
+};
+
+// Ponto único de decoração do modal de login (chamado pelo openModal de ui.js —
+// TODO caminho que abre o modal passa por lá, inclusive a inscrição sem sessão).
+window._decorateLoginModal = function () {
+  try {
+    if (typeof window._showQuickReturnBanner === 'function') window._showQuickReturnBanner();
+    if (typeof window._applyLastLoginBadge === 'function') window._applyLastLoginBadge();
+  } catch (e) {}
+};
+
 // v1.8.70: retorno rápido — quando sessão Firebase expirou mas temos cache do usuário,
 // v2.1.94: banner "Bem-vindo de volta" mostra o botão de login correto
 // para o provider usado da última vez (Google, senha ou telefone).
@@ -5515,9 +5660,11 @@ window._quickReturnLogin = function() {
       // Desce o banner e foca no campo de e-mail/senha
       var bannerEl = document.getElementById('quick-return-banner');
       if (bannerEl) bannerEl.remove();
-      // Pre-preenche o e-mail se existir
+      // Pre-preenche o e-mail se existir.
+      // v1.8.40: o id certo é login-identifier — 'login-email' morreu na v2.5.x e este
+      // pré-preenchimento era no-op desde então.
       if (cached.email) {
-        var emailInp = document.getElementById('login-email');
+        var emailInp = document.getElementById('login-identifier');
         if (emailInp) { emailInp.value = cached.email; emailInp.dispatchEvent(new Event('input')); }
       }
       var pwInp = document.getElementById('login-password');
@@ -5585,6 +5732,49 @@ function setupLoginModal() {
           '<button class="modal-close" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')">&times;</button>' +
         '</div>' +
         '<div class="modal-body">' +
+
+          // ── v1.8.40 · GOOGLE/APPLE NO TOPO (ordem do dono, 13/ago/2026) ──────────
+          // O modal antigo abria com CAMPO DE SENHA + "Entrar" + "Esqueci minha senha",
+          // e Google/Apple ficavam no FIM, depois do divider. Quem não lembrava como
+          // entrou via primeiro um formulário de senha — e o próprio modal expandia o
+          // cadastro inline ("vamos criar a sua"): conta duplicada por desenho. MEDIDO
+          // na base (13/ago): 206 contas, 68 só-senha e 63 só-Google — a maioria tem UM
+          // método, e errar o método na volta = conta nova. Provider-first + badge de
+          // "último usado" é o padrão de mercado (Clerk/WorkOS/Better Auth, 2025).
+          // No iOS nativo a Apple vem primeiro (Guideline 4.8 pede destaque equivalente);
+          // na web/Android, Google primeiro (91 contas Google × 24 Apple).
+          '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">Já tem conta? <b style="color:var(--text-bright);">Entre do mesmo jeito da última vez</b> — entrar por outro caminho cria uma conta separada.</div>' +
+          (function () {
+            var _plat = 'web';
+            try { _plat = (window.Capacitor && window.Capacitor.getPlatform) ? window.Capacitor.getPlatform() : 'web'; } catch (_e) {}
+            var appleBtn = (window._shouldShowAppleBtn && window._shouldShowAppleBtn())
+              ? '<div style="margin-bottom:8px;">' +
+                  '<button type="button" id="login-apple-btn" class="btn hover-lift btn-block" onclick="handleAppleLogin()" style="background:#000;color:#fff;border:1px solid #000;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
+                    '<svg width="18" height="18" viewBox="0 0 384 512" fill="#fff" style="vertical-align:middle;margin-right:8px;"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>' +
+                    ((typeof _t === 'function' && _t('auth.signInApple') !== 'auth.signInApple') ? _t('auth.signInApple') : 'Entrar com a Apple') +
+                  '</button>' +
+                '</div>'
+              : '';
+            var googleBtn =
+              '<div style="margin-bottom:8px;">' +
+                '<button type="button" id="login-google-btn" class="btn hover-lift btn-block" onclick="handleGoogleLogin()" style="background:#fff;color:#333;border:1px solid #ddd;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
+                  '<svg width="18" height="18" viewBox="0 0 48 48" style="vertical-align:middle;margin-right:8px;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.34 2.44 10.5l8.09-5.91z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
+                  _t('auth.signInGoogle') +
+                '</button>' +
+              '</div>';
+            return (_plat === 'ios') ? (appleBtn + googleBtn) : (googleBtn + appleBtn);
+          })() +
+
+          // --- Divider ---
+          '<div style="display:flex;align-items:center;gap:12px;margin:14px 0;">' +
+            '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
+            '<span style="color:var(--text-muted);font-size:1rem;font-weight:700;letter-spacing:1px;">ou</span>' +
+            '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
+          '</div>' +
+
+          // Linha do "último usado" quando o método é e-mail/senha ou celular (os botões
+          // Google/Apple ganham a badge direto — window._applyLastLoginBadge).
+          '<div id="login-lastmethod-hint" style="font-size:0.78rem;color:#6ee7b7;margin-bottom:8px;line-height:1.45;"></div>' +
 
           // --- 1. Entrar com 1 clique (email mágico OU SMS — campo único) ---
           // v1.0.22-beta: feedback do user — ter 2 campos (Link Mágico e SMS)
@@ -5682,29 +5872,7 @@ function setupLoginModal() {
           // são mais acionados por nenhuma UI visível.
           '<div id="login-panel-email" style="display:none;"></div>' +
 
-          // --- Divider ---
-          '<div style="display:flex;align-items:center;gap:12px;margin:14px 0;">' +
-            '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
-            '<span style="color:var(--text-muted);font-size:1rem;font-weight:700;letter-spacing:1px;">ou</span>' +
-            '<div style="flex:1;height:1px;background:var(--border-color);"></div>' +
-          '</div>' +
-
-          // --- 4a. Apple (iOS + web; escondido no Android native — Guideline 4.8) ---
-          (window._shouldShowAppleBtn && window._shouldShowAppleBtn() ?
-          '<div style="margin-bottom:8px;">' +
-            '<button type="button" id="login-apple-btn" class="btn hover-lift btn-block" onclick="handleAppleLogin()" style="background:#000;color:#fff;border:1px solid #000;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
-              '<svg width="18" height="18" viewBox="0 0 384 512" fill="#fff" style="vertical-align:middle;margin-right:8px;"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>' +
-              ((typeof _t === 'function' && _t('auth.signInApple') !== 'auth.signInApple') ? _t('auth.signInApple') : 'Entrar com a Apple') +
-            '</button>' +
-          '</div>' : '') +
-
-          // --- 4. Google ---
-          '<div style="margin-bottom:4px;">' +
-            '<button type="button" id="login-google-btn" class="btn hover-lift btn-block" onclick="handleGoogleLogin()" style="background:#fff;color:#333;border:1px solid #ddd;padding:12px 16px;font-size:0.88rem;font-weight:600;">' +
-              '<svg width="18" height="18" viewBox="0 0 48 48" style="vertical-align:middle;margin-right:8px;"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.34 2.44 10.5l8.09-5.91z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
-              _t('auth.signInGoogle') +
-            '</button>' +
-          '</div>' +
+          // v1.8.40: Apple/Google SUBIRAM pro topo do modal (ver bloco no início).
           '<div id="login-panel-google" style="display:none;"></div>' +
 
           // Hidden containers for backward compat
@@ -8110,6 +8278,38 @@ function setupProfileModal() {
 // NADA é fundido aqui. "Sim" leva ao perfil, onde vivem os canais de PROVA DE POSSE (link
 // no e-mail / SMS no celular da outra conta). Credencial já autenticada nem chega aqui: o
 // servidor funde antes ([[project_dismiss_reopens_on_stronger_signal]]).
+// ── v1.8.40 · "GARANTA SUA CONTA" — pedido de celular pós-login ──────────────
+// O celular é o sinal de dedup mais forte da base (medido 13/ago: das 49 contas
+// com celular no Auth, ZERO repetido) e a âncora de recuperação quando a pessoa
+// esquece como entrou. Só 24% da base tem — este nudge existe pra subir isso.
+// Regras: (1) nunca em cima de outra pergunta (dupSuspect/nameConflict têm
+// prioridade); (2) cooldown de 7 dias por uid; (3) some pra sempre quando o
+// celular existir. E-mail oculto da Apple (@privaterelay) ganha texto próprio:
+// é a conta MAIS exposta a virar duplicata (não temos como reconhecer o e-mail).
+window._askSecureContact = function () {
+  try {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) return;
+    if (cu.phone) return;                                   // já tem celular — nada a pedir
+    if (cu.dupSuspect || cu.nameConflict) return;           // outra pergunta em aberto tem prioridade
+    if (typeof showConfirmDialog !== 'function') return;
+    var key = 'scoreplace_phone_nudge_' + cu.uid;
+    try {
+      var last = parseInt(localStorage.getItem(key) || '0', 10);
+      if (last && (Date.now() - last) < 7 * 24 * 3600000) return;   // cooldown 7 dias
+      localStorage.setItem(key, String(Date.now()));
+    } catch (_e) {}
+    var isRelay = /@privaterelay\.appleid\.com$/i.test(String(cu.email || ''));
+    var corpo = isRelay
+      ? 'Você entrou com a Apple usando <b>e-mail oculto</b> — nós não temos como reconhecer esse endereço se você entrar por outro caminho um dia. ' +
+        'Cadastre seu <b>celular</b> no perfil: ele garante que sua conta é encontrada e recuperada, e evita que uma conta duplicada seja criada sem querer.'
+      : 'Cadastre seu <b>celular</b> no perfil: ele é a forma mais segura de recuperar seu acesso se você esquecer como entrou — e evita que uma conta duplicada seja criada sem querer.';
+    showConfirmDialog('🔒 Garanta sua conta', corpo, function () {
+      window.location.hash = '#profile';
+    }, null, { confirmText: '📱 Cadastrar celular', cancelText: 'Agora não', type: 'info' });
+  } catch (e) {}
+};
+
 window._askDuplicateAccount = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;
@@ -8424,6 +8624,22 @@ window._profileHydrateNameConflict = function () {
       return Promise.resolve(null);
     }
 
+    // v1.8.40: aviso in-app + e-mail quando uma forma NOVA de entrar é vinculada.
+    // Complementa o e-mail de nascimento da conta (welcomeLoginMethodEmail, CF):
+    // a caixa de e-mail da pessoa vira o registro de COMO ela entra.
+    window._notifyLoginMethodAdded = function (label) {
+      try {
+        var cu = window.AppStore && window.AppStore.currentUser;
+        if (!cu || !cu.uid || typeof window._sendUserNotification !== 'function') return;
+        window._sendUserNotification(cu.uid, {
+          type: 'account_update',
+          title: '🔑 Nova forma de entrar',
+          message: 'Sua conta no scoreplace agora também entra com ' + label + '. Você continua com um perfil só — qualquer um dos métodos vinculados leva à mesma conta. Se não foi você, escreva pra contato@barthlabs.com.',
+          level: 'important'
+        });
+      } catch (e) {}
+    };
+
     window._profileLinkProvider = function (pid) {
       var m = _PROV_META[pid] || { label: pid };
       var fbU = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
@@ -8454,6 +8670,9 @@ window._profileHydrateNameConflict = function () {
           throw err;
         });
       }).then(function () {
+        // v1.8.40: registra por e-mail que a conta ganhou uma forma nova de entrar —
+        // o mesmo "registro pesquisável" do e-mail de nascimento da conta.
+        try { if (typeof window._notifyLoginMethodAdded === 'function') window._notifyLoginMethodAdded(m.label); } catch (_nm) {}
         done();
       }).catch(function (err) {
         var c = (err && err.code) || '';

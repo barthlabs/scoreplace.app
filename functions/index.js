@@ -6021,6 +6021,87 @@ exports.fixMergedParticipants = onRequest(
   }
 );
 
+// ─── accountSummaryEmail (Firestore trigger, v1.8.40) ──────────────────────
+// Pedido do dono (13/ago/2026): _"o sistema mandar automaticamente um email dizendo
+// como a pessoa escolheu logar"_ + _"sempre que mudar algo consolida e envia
+// novamente um email de confirmação"_. É o registro PESQUISÁVEL contra o "esqueci
+// como entrei e criei outra conta": a pessoa busca "scoreplace" na caixa e encontra
+// a foto atual da conta (nome, e-mail, celular, formas de entrar).
+//
+// DISPARO POR ASSINATURA, não por escrita: users/{uid} muda o tempo todo (tema,
+// preferências, stats) — só os campos de IDENTIDADE (accountDocSig: nome, e-mail,
+// celular) contam. A assinatura enviada fica gravada em `accountEmailSig`; escrita
+// com a mesma assinatura (inclusive a NOSSA, do próprio marcador) é ignorada —
+// é isso que impede o loop e o spam. O conteúdo/assinatura vivem em
+// functions/account-email-core.js (PURO — o mesmo construtor do backfill
+// scripts/send-account-summary-emails.js e dos testes).
+//
+// Os provedores saem do Firebase AUTH (Admin SDK) — não do doc, que no instante do
+// nascimento pode ainda não ter authProvider. Vínculo de provedor NOVO não passa
+// por aqui (não muda o doc): o cliente avisa na hora (_notifyLoginMethodAdded).
+// replyTo = contato@barthlabs.com ([[feedback_contact_email_always_barthlabs]]).
+//
+// ⚠️ LIMITE CONHECIDO (documentado, não esquecido): e-mail @privaterelay.appleid.com
+// (Apple "Ocultar meu e-mail") só é ENCAMINHADO pela Apple quando o REMETENTE está
+// registrado no Private Email Relay Service (Apple Developer) com SPF/DKIM num
+// domínio nosso. Enquanto o SMTP da extensão for o Gmail, essas contas provavelmente
+// NÃO recebem. Registrar domínio/remetente é ação do dono; enviamos mesmo assim.
+const _accountEmail = require("./account-email-core.js");
+exports.accountSummaryEmail = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    try {
+      const after = event.data && event.data.after;
+      if (!after || !after.exists) return;                 // deleção — nada a mandar
+      const p = after.data() || {};
+      if (p.mergedInto) return;                            // conta absorvida
+      const uid = event.params.uid;
+
+      const sig = _accountEmail.accountDocSig(p);
+      if (p.accountEmailSig === sig) return;               // identidade não mudou (ou é o nosso próprio marcador)
+      const isNew = !(event.data.before && event.data.before.exists);
+
+      let providers = [];
+      let authEmail = "";
+      try {
+        const ur = await admin.auth().getUser(uid);
+        authEmail = ur.email || "";
+        providers = (ur.providerData || []).map((x) => x && x.providerId).filter(Boolean);
+      } catch (e) {
+        return; // sem conta no Auth (doc órfão/backfill) → não há a quem escrever
+      }
+      const email = (authEmail && !_isSyntheticAuthEmail(authEmail)) ? authEmail
+        : ((p.email && !_isSyntheticAuthEmail(p.email)) ? String(p.email) : "");
+
+      // Conta sem e-mail real (só-celular): grava a assinatura e para — senão toda
+      // escrita do doc re-tentaria pra sempre.
+      if (!email) { await after.ref.set({ accountEmailSig: sig }, { merge: true }); return; }
+
+      const mail = _accountEmail.buildAccountEmail({
+        name: p.displayName || "",
+        email: email,
+        phone: p.phone || "",
+        providers: providers,
+        authProviderFallback: p.authProvider || "",
+        isNew: isNew,
+      });
+      // ORDEM: enfileira PRIMEIRO, assinatura DEPOIS — se o enfileiramento falhar, a
+      // assinatura não é gravada e a próxima escrita re-tenta (perder o e-mail em
+      // silêncio seria pior que, raramente, mandar duas vezes).
+      await _enqueueMail(admin.firestore(), {
+        to: [email],
+        replyTo: "contato@barthlabs.com",
+        message: { subject: mail.subject, html: mail.html, text: mail.text },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await after.ref.set({ accountEmailSig: sig }, { merge: true });
+      console.log("[accountSummaryEmail]", isNew ? "nascimento" : "mudança", "→", email);
+    } catch (e) {
+      console.error("[accountSummaryEmail] falhou (best-effort):", e && e.message);
+    }
+  }
+);
+
 // ─── autoMergeOnProfileUpdate (Firestore trigger) ─────────────────────────
 // Dispara sempre que um doc users/{uid} é criado ou atualizado.
 // Se phone ou email mudou, varre o banco por outros usuários com o mesmo

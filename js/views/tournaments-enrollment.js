@@ -372,40 +372,127 @@ window._syncTournamentPresencePlan = function(t, user) {
   } catch (e) {}
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v1.8.40 · UM SÓ LEITOR DO RESULTADO DA INSCRIÇÃO.
+//
+// MEDIDO em 13/ago/2026: a CF enrollParticipant devolve 7 desfechos e cada um dos 4
+// call sites lia um SUBCONJUNTO diferente — o resto caía em silêncio ou, pior, no
+// toast de SUCESSO. Os três piores, todos reais:
+//   (a) organizador inscrevia alguém numa Liga com a fase sorteada → o servidor
+//       devolvia `waitlisted` → _doAddParticipant/submitTeamEnroll não tinham o ramo
+//       → `t.participants = result.participants` e a pessoa SUMIA sem mensagem;
+//   (b) `enrollmentClosed` na auto-inscrição não era tratado → o toast otimista de
+//       sucesso já tinha saído e a pessoa acreditava estar inscrita;
+//   (c) recusa por DUPLICATA vinha como `alreadyEnrolled+dupSuspect` e o ramo
+//       alreadyEnrolled retornava ANTES da linha que abre o diálogo — o "não sou eu"
+//       (_askDuplicatePerson) era código morto nesse caminho: a pessoa via "você já
+//       está inscrito" sem saída (caso Nelson Barth).
+// Um resultado, uma leitura. Call site nenhum volta a interpretar o shape na mão.
+// [[feedback_unify_dual_entry_points]]
+//
+// ctx: { name, self, optimistic, successToast, refresh, onRefresh, excludeEmail }
+//   optimistic = a REFERÊNCIA do push otimista (pra rollback por identidade — o push
+//   é uma CÓPIA com `_pendingEnroll`, então filtrar pelo participantObj original,
+//   como o rollback antigo fazia, não removia NADA).
+// Retorna o veredito: 'enrolled' | 'waitlisted' | 'alreadyWaitlisted' | 'already' |
+// 'dupSuspect' | 'capacityFull' | 'closed'.
+window._applyEnrollResult = function (t, tId, res, ctx) {
+  res = res || {}; ctx = ctx || {};
+  var name = ctx.name || '';
+  var toast = function (title, msg, kind) { if (typeof showNotification !== 'undefined') showNotification(title, msg, kind); };
+
+  var verdict;
+  if (res.capacityFull) verdict = 'capacityFull';
+  else if (res.enrollmentClosed) verdict = 'closed';
+  else if (res.alreadyEnrolled && res.dupSuspect) verdict = 'dupSuspect';
+  else if (res.alreadyEnrolled) verdict = 'already';
+  else if (res.alreadyWaitlisted) verdict = 'alreadyWaitlisted';
+  else if (res.waitlisted) verdict = 'waitlisted';
+  else verdict = 'enrolled';
+  var ok = (verdict === 'enrolled' || verdict === 'waitlisted');
+
+  // A verdade é a do servidor: a cópia local adota as listas que ele devolveu.
+  if (Array.isArray(res.participants)) t.participants = res.participants;
+  if (Array.isArray(res.standbyParticipants)) t.standbyParticipants = res.standbyParticipants;
+  // Recusa → o push otimista sai da tela AGORA (por referência), não no próximo snapshot.
+  if (!ok && ctx.optimistic && Array.isArray(t.participants)) {
+    t.participants = t.participants.filter(function (p) { return p !== ctx.optimistic; });
+  }
+
+  if (verdict === 'capacityFull') {
+    toast('Vagas esgotadas', ctx.self
+      ? 'As vagas acabaram antes de você concluir — você não foi inscrito.'
+      : ('As vagas acabaram — ' + name + ' não entrou.'), 'error');
+  } else if (verdict === 'closed') {
+    // ⚠️ Corrige o toast otimista de sucesso que pode já ter saído: tem que dizer
+    // com todas as letras que a inscrição NÃO foi gravada.
+    toast(_t('enroll.enrollClosed'), ctx.self
+      ? 'As inscrições fecharam antes de concluir — sua inscrição NÃO foi gravada.'
+      : ('As inscrições fecharam antes de concluir — ' + name + ' NÃO foi inscrito(a).'), 'error');
+  } else if (verdict === 'already') {
+    toast(_t('enroll.alreadyEnrolled'), name ? _t('enroll.alreadyEnrolledSingle', { name: name }) : _t('enroll.alreadyEnrolledMsg'), 'info');
+  } else if (verdict === 'alreadyWaitlisted') {
+    toast(_t('enroll.alreadyWaitlisted'), _t('enroll.alreadyWaitlistedMsg', { name: name }), 'info');
+  } else if (verdict === 'waitlisted') {
+    if (ctx.self) {
+      toast('📋 Você entrou na lista de espera',
+        'A fase atual já está sorteada. Sua inscrição está garantida e você é chamado no próximo confronto.', 'success');
+    } else {
+      toast('📋 Lista de espera',
+        name + ' entrou na LISTA DE ESPERA — a fase atual já está sorteada; entra no próximo confronto.', 'success');
+    }
+  } else if (verdict === 'enrolled' && ctx.successToast) {
+    // ⚠️ `enroll.enrolledMsg` interpola o nome do TORNEIO, não o da pessoa.
+    toast(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: t.name || '' }), 'success');
+  }
+  // verdict 'dupSuspect' NÃO ganha toast: o diálogo abaixo é a mensagem (com o "PARECE",
+  // a conta mascarada e o "não sou eu") — o toast "já inscrito" aqui seria a mentira
+  // que escondia a saída.
+
+  if (res.dupSuspect && typeof window._askDuplicatePerson === 'function') {
+    window._askDuplicatePerson(tId, res.dupSuspect);
+  }
+
+  if (verdict === 'enrolled') {
+    if (res.reachedCapacityDraw && typeof window._notifyTournamentParticipants === 'function') {
+      window._notifyTournamentParticipants(t, { type: 'tournament_update', message: 'As vagas de "' + (t.name || 'Torneio') + '" foram preenchidas. Novas inscrições entram na lista de espera — um sorteio definirá quem joga.', level: 'important' });
+    }
+    if (res.autoCloseTriggered) {
+      t.status = 'closed';
+      toast(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
+      if (typeof window._notifyTournamentParticipants === 'function') {
+        window._notifyTournamentParticipants(t, {
+          type: 'enrollments_closed',
+          message: _t('notif.enrollmentsClosed').replace('{name}', t.name || 'Torneio'),
+          level: 'important'
+        }, ctx.excludeEmail || null);
+      }
+    }
+  }
+
+  // Refresh: recusa e mudança de estado SEMPRE repintam (a pessoa não pode continuar
+  // vendo o push otimista); sucesso repinta só quando o caller pediu (refresh:true).
+  var needRefresh = !ok || (verdict === 'waitlisted') || !!res.autoCloseTriggered;
+  if (ctx.refresh !== false && (ctx.refresh === true || needRefresh)) {
+    if (typeof ctx.onRefresh === 'function') ctx.onRefresh();
+    else {
+      var _vcAR = document.getElementById('view-container');
+      if (_vcAR && typeof renderTournaments === 'function') renderTournaments(_vcAR, String(tId));
+    }
+  }
+  return verdict;
+};
+
 // Helper: add participant to standby/waitlist instead of main roster
 function _enrollToStandby(t, tId, participantObj, callback) {
   if (!Array.isArray(t.standbyParticipants)) t.standbyParticipants = [];
-  var getName = function(p) { return window._pName(p); };
-  var newName = getName(participantObj);
-  // v3.0.76: dedup uid-first (nome só fallback). Dois inscritos de mesmo nome
-  // (uids distintos) não colidem mais; dupla casa por QUALQUER uid de slot
-  // (p1Uid/p2Uid). Entrada string ou sem uid cai no fallback por nome.
-  var _uidsOf = function(x) {
-    return (typeof window._participantUids === 'function') ? window._participantUids(x)
-         : (x && typeof x === 'object' && x.uid ? [x.uid] : []);
-  };
-  var newUids = _uidsOf(participantObj);
-  var _sameEntry = function(p) {
-    var pu = _uidsOf(p);
-    // Ambos os lados têm uid → identidade é SÓ por uid: homônimos de uids
-    // distintos NÃO colidem; dupla casa por qualquer slot (p1Uid/p2Uid).
-    if (newUids.length && pu.length) return pu.some(function(u){ return newUids.indexOf(u) !== -1; });
-    // Algum lado sem uid (informal/legado) → fallback por nome.
-    return getName(p) === newName;
-  };
-  // Check if already in standby
-  var already = t.standbyParticipants.some(_sameEntry);
-  if (already) {
-    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyWaitlisted'), _t('enroll.alreadyWaitlistedMsg', { name: newName }), 'info');
-    return;
-  }
-  // Check if already enrolled
-  var partsArr = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var alreadyEnrolled = partsArr.some(_sameEntry);
-  if (alreadyEnrolled) {
-    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: newName }), 'info');
-    return;
-  }
+  var newName = window._pName(participantObj);
+  // v1.8.40: os PRÉ-GATES LOCAIS ("já está na fila"/"já inscrito" lidos da cópia em
+  // memória) SAÍRAM. Eles decidiam com dado STALE antes de qualquer leitura fresca e
+  // retornavam SEM chamar o callback — o botão ficava preso no estado anterior até o
+  // timeout do _spinButton. Quem responde "já está" é o SERVIDOR (alreadyEnrolled /
+  // alreadyWaitlisted), lendo o doc fresco, e o _applyEnrollResult mostra a mensagem
+  // certa. A cópia local NUNCA recusa ninguém.
   // ── v1.8.36 · A FILA PASSA PELO SERVIDOR, como todo o resto da inscrição ──────────────
   // INCIDENTE (Confra, 12/ago/2026): a Mariana clicou em inscrever-se, APARECEU EM AZUL na
   // lista de espera e sumiu com "Missing or insufficient permissions". Isto aqui era o
@@ -431,33 +518,21 @@ function _enrollToStandby(t, tId, participantObj, callback) {
   // caso de sucesso parcial deixaria a tela afirmando algo que o banco não tem.
   window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(res) {
     res = res || {};
-    if (res.alreadyEnrolled) {
-      if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: newName }), 'info');
-      if (callback) callback();
-      return;
+    // Fallback antigo sem lista devolvida: adota o push local só no waitlisted NOVO —
+    // `alreadyWaitlisted` significa "o doc fresco JÁ tem essa pessoa": empurrar aqui
+    // duplicaria a entrada na tela.
+    if (res.waitlisted && !res.alreadyWaitlisted && !Array.isArray(res.standbyParticipants) && t.standbyParticipants.indexOf(participantObj) === -1) {
+      t.standbyParticipants.push(participantObj);
     }
-    if (res.alreadyWaitlisted) {
-      if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyWaitlisted'), _t('enroll.alreadyWaitlistedMsg', { name: newName }), 'info');
-      if (callback) callback();
-      return;
-    }
-    // A cópia em memória segue o que o SERVIDOR devolveu; só cai no push local quando ele
-    // não mandou a lista (fallback antigo). Nunca inventamos posição na fila.
-    if (Array.isArray(res.standbyParticipants)) t.standbyParticipants = res.standbyParticipants;
-    else if (res.waitlisted && t.standbyParticipants.indexOf(participantObj) === -1) t.standbyParticipants.push(participantObj);
-    if (Array.isArray(res.participants)) t.participants = res.participants;
-
-    if (typeof showNotification !== 'undefined') {
-      if (res.waitlisted) {
-        var modeLabel = ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
-        showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
-      } else {
-        // O servidor leu o doc FRESCO e concluiu que ainda cabe no elenco (a fase não estava
-        // sorteada de verdade). Quem manda é ele — a tela não contradiz o banco.
-        // ⚠️ `enroll.enrolledMsg` interpola o nome do TORNEIO, não o da pessoa.
-        showNotification(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: t.name || '' }), 'success');
-      }
-    }
+    // self = a própria pessoa se inscrevendo (o organizador inscrevendo terceiro recebe
+    // a mensagem na 3ª pessoa). Decidido por uid, nunca por flag de UI.
+    var _cuStb = window.AppStore && window.AppStore.currentUser;
+    window._applyEnrollResult(t, tId, res, {
+      name: newName,
+      self: !!(_cuStb && participantObj && participantObj.uid && participantObj.uid === _cuStb.uid),
+      successToast: true,   // 'enrolled' aqui = o servidor concluiu que ainda cabe no elenco
+      refresh: false        // quem repinta é o callback do caller
+    });
     if (callback) callback();
   }).catch(function(e) {
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível entrar na lista de espera', (e && e.message) ? e.message : 'Tente novamente em instantes.', 'error');
@@ -677,9 +752,12 @@ window.enrollCurrentUser = function (tId, _reentrouAposCarregar) {
         // direto em t.participants DEPOIS do sorteio: inscrita, fora dos grupos e fora dos 3
         // storages de espera (Confra ago/2026, 57s depois do sorteio).
         // Ver waitlist-core._phaseDrawDone.
-        const sorteioRealizado = window._phaseDrawDone(t);
-        const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
-        const inscricoesAbertas = (t.status !== 'closed' && !sorteioRealizado) || ligaAberta;
+        // v1.8.40: a regra é a CANÔNICA (waitlist-core._enrollmentOpenState — a MESMA do
+        // servidor). A cópia local exigia `sorteioRealizado` pro ligaAberta: uma Liga aberta
+        // ANTES do 1º sorteio, com status 'closed' (auto-close por prazo) ou registrationLimit
+        // vencido, era BLOQUEADA AQUI — a CF nem chegava a ser chamada, enquanto o servidor a
+        // aceitaria. É o "inscrições abertas e a pessoa cai em bloqueio" relatado pelo dono.
+        const inscricoesAbertas = window._enrollmentOpenState(t).open;
         const aceitaTardia = _allowsLateEnrollment(t) && t.status !== 'finished';
         if (!inscricoesAbertas && !aceitaTardia) {
             showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
@@ -851,7 +929,11 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // M.Delia, Marcos e Debora ficaram invisíveis na rodada do Confra (10/ago).
     // O `saveTournament` remove entradas marcadas antes de persistir.
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-    t.participants.push(Object.assign({}, participantObj, { _pendingEnroll: true }));
+    // v1.8.40: guarda a REFERÊNCIA do push — o rollback antigo filtrava por participantObj,
+    // mas o que entra no array é uma CÓPIA (Object.assign), então a recusa não removia NADA
+    // da tela e a pessoa seguia se vendo "inscrita" até o próximo snapshot.
+    var _pushedEnroll = Object.assign({}, participantObj, { _pendingEnroll: true });
+    t.participants.push(_pushedEnroll);
 
     // Show success and navigate immediately (no wait for network)
     if (window._sound) window._sound('sino');
@@ -872,54 +954,16 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
         window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
-            if (result.capacityFull) {
-                // v2.6.87: lotou antes de concluir (limite com corrida) — NÃO inscrito.
-                if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram antes de você concluir — você não foi inscrito.', 'error');
-                var _vcCap = document.getElementById('view-container'); if (_vcCap && typeof renderTournaments === 'function') renderTournaments(_vcCap, tId);
-                return;
-            }
-            if (result.alreadyEnrolled) {
-                // Already enrolled on server — local state is fine, just sync participants
-                t.participants = result.participants;
-                return;
-            }
-            // v1.6.86 — CORRIDA COM O SORTEIO: o cliente checou antes, o sorteio disparou no
-            // meio e o servidor mandou pra ESPERA. O push otimista em t.participants está
-            // ERRADO agora — a verdade é a do servidor. Sem isto o app mostraria a pessoa
-            // sorteada até o próximo snapshot, e o toast anterior mentiria sobre o destino.
-            if (result.waitlisted) {
-                t.participants = result.participants;
-                if (result.standbyParticipants) t.standbyParticipants = result.standbyParticipants;
-                if (typeof showNotification !== 'undefined') {
-                    showNotification('📋 Você entrou na lista de espera',
-                        'O sorteio da rodada saiu enquanto você se inscrevia. Sua inscrição está garantida e você é chamado no próximo confronto.', 'info');
-                }
-                var _vcWl = document.getElementById('view-container');
-                if (_vcWl && typeof renderTournaments === 'function') renderTournaments(_vcWl, tId);
-                if (result.dupSuspect) window._askDuplicatePerson(tId, result.dupSuspect);
-                return;
-            }
-            // Sync authoritative server state
-            t.participants = result.participants;
-            if (result.dupSuspect) window._askDuplicatePerson(tId, result.dupSuspect);
-            // v2.6.88: Vagas com sorteio — atingiu o máx. → avisa todos os inscritos da lista de espera.
-            if (result.reachedCapacityDraw && typeof window._notifyTournamentParticipants === 'function') {
-                window._notifyTournamentParticipants(t, { type: 'tournament_update', message: 'As vagas de "' + (t.name || 'Torneio') + '" foram preenchidas. Novas inscrições entram na lista de espera — um sorteio definirá quem joga.', level: 'important' });
-            }
-            if (result.autoCloseTriggered) {
-                t.status = 'closed';
-                if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
-                if (typeof window._notifyTournamentParticipants === 'function') {
-                    window._notifyTournamentParticipants(t, {
-                        type: 'enrollments_closed',
-                        message: _t('notif.enrollmentsClosed').replace('{name}', t.name || 'Torneio'),
-                        level: 'important'
-                    }, user.email);
-                }
-                // Re-render to show closed status
-                var container = document.getElementById('view-container');
-                if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
-            }
+            // v1.8.40: UM leitor pro resultado (toasts, sync, rollback do push, diálogo de
+            // duplicata, auto-close). O toast de sucesso já saiu otimista → successToast:false.
+            var _verdict = window._applyEnrollResult(t, tId, result, {
+                name: _dispName || '',
+                self: true,
+                optimistic: _pushedEnroll,
+                successToast: false,
+                excludeEmail: user.email
+            });
+            if (_verdict !== 'enrolled') return;
 
             // Notify organizer (fire-and-forget)
             if (t.organizerEmail && t.organizerEmail !== user.email && typeof window._resolveOrganizerUid === 'function') {
@@ -955,10 +999,9 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
         }).catch(function(err) {
             // Rollback: remove from local state and re-render
             window._warn('Enroll transaction error:', err);
-            // v3.0.76: rollback remove EXATAMENTE o objeto recém-inserido (referência),
-            // não por email+uid — que falhava pra phone-only (email null !== undefined)
-            // e era ambíguo. participantObj está no escopo desta função.
-            t.participants = t.participants.filter(function(p) { return p !== participantObj; });
+            // v1.8.40: o que entrou no array foi a CÓPIA _pushedEnroll — filtrar pelo
+            // participantObj original (v3.0.76) nunca removia nada.
+            t.participants = t.participants.filter(function(p) { return p !== _pushedEnroll; });
             if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
             var container = document.getElementById('view-container');
             if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
@@ -1013,9 +1056,9 @@ window.submitTeamEnroll = function (tId) {
         showAlertDialog(_t('enroll.tournamentFinished'), _t('enroll.tournamentFinishedMsg'), null, { type: 'warning' });
         return;
     }
-    const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado;
-    const inscricoesAbertas = (t.status !== 'closed' && !sorteioRealizado) || ligaAberta;
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState) — era a 3ª cópia
+    // divergente (esta nem checava `finished` no ligaAberta).
+    const inscricoesAbertas = window._enrollmentOpenState(t).open;
     if (!inscricoesAbertas) {
         if (_allowsLateEnrollment(t) && t.status !== 'finished') {
             // Late enrollment for teams — collect names first, then send to standby
@@ -1094,7 +1137,9 @@ window.submitTeamEnroll = function (tId) {
     // M.Delia, Marcos e Debora ficaram invisíveis na rodada do Confra (10/ago).
     // O `saveTournament` remove entradas marcadas antes de persistir.
     if (!Array.isArray(t.participants)) t.participants = t.participants ? Object.values(t.participants) : [];
-    t.participants.push(Object.assign({}, participantObj, { _pendingEnroll: true }));
+    // v1.8.40: referência guardada pro rollback (o push é uma CÓPIA — ver _doEnrollCurrentUser).
+    var _pushedTeam = Object.assign({}, participantObj, { _pendingEnroll: true });
+    t.participants.push(_pushedTeam);
     t.teamOrigins = _teamOrigins;
 
     // Show success and navigate immediately (no wait for network)
@@ -1112,33 +1157,17 @@ window.submitTeamEnroll = function (tId) {
     // --- Background: Firestore transaction for consistency ---
     if (window.FirestoreDB && window.FirestoreDB.enrollParticipant) {
         window.FirestoreDB.enrollParticipant(tId, participantObj, { teamOrigins: _teamOrigins }).then(function(result) {
-            if (result.capacityFull) {
-                if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram antes de você concluir — você não foi inscrito.', 'error');
-                var _vcCap2 = document.getElementById('view-container'); if (_vcCap2 && typeof renderTournaments === 'function') renderTournaments(_vcCap2, tId);
-                return;
-            }
-            if (result.alreadyEnrolled) {
-                t.participants = result.participants;
-                return;
-            }
-            t.participants = result.participants;
-            // v2.6.88: Vagas com sorteio — atingiu o máx. → avisa todos os inscritos da lista de espera.
-            if (result.reachedCapacityDraw && typeof window._notifyTournamentParticipants === 'function') {
-                window._notifyTournamentParticipants(t, { type: 'tournament_update', message: 'As vagas de "' + (t.name || 'Torneio') + '" foram preenchidas. Novas inscrições entram na lista de espera — um sorteio definirá quem joga.', level: 'important' });
-            }
-            if (result.autoCloseTriggered) {
-                t.status = 'closed';
-                if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
-                if (typeof window._notifyTournamentParticipants === 'function') {
-                    window._notifyTournamentParticipants(t, {
-                        type: 'enrollments_closed',
-                        message: _t('notif.enrollmentsClosed').replace('{name}', t.name || 'Torneio'),
-                        level: 'important'
-                    }, user.email);
-                }
-                var container = document.getElementById('view-container');
-                if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
-            }
+            // v1.8.40: UM leitor pro resultado. Antes o `waitlisted` (Liga aberta com fase
+            // sorteada) caía no ramo genérico: `t.participants = result.participants` e a
+            // dupla SUMIA da tela sem mensagem nenhuma.
+            var _verdictTeam = window._applyEnrollResult(t, tId, result, {
+                name: teamString,
+                self: true,
+                optimistic: _pushedTeam,
+                successToast: false,
+                excludeEmail: user.email
+            });
+            if (_verdictTeam !== 'enrolled') return;
 
             // Notify organizer (fire-and-forget)
             if (t.organizerEmail && t.organizerEmail !== user.email && typeof window._resolveOrganizerUid === 'function') {
@@ -1185,9 +1214,9 @@ window.submitTeamEnroll = function (tId) {
         }).catch(function(err) {
             // Rollback: remove from local state and re-render
             window._warn('Team enroll transaction error:', err);
-            // v3.0.76: rollback por referência exata (não por name+email) — slot-correct
-            // pra dupla cujo displayName é só o nome do p1. participantObj está no escopo.
-            t.participants = t.participants.filter(function(p) { return p !== participantObj; });
+            // v1.8.40: o que entrou no array foi a CÓPIA _pushedTeam (filtrar pelo
+            // participantObj original nunca removia nada).
+            t.participants = t.participants.filter(function(p) { return p !== _pushedTeam; });
             if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.errorMsg'), 'error');
             var container = document.getElementById('view-container');
             if (container && typeof renderTournaments === 'function') renderTournaments(container, tId);
@@ -1216,10 +1245,17 @@ window._leaveStandby = function (tId) {
         _t('enroll.leaveWaitlist') || 'Sair da lista de espera',
         'Deseja sair da lista de espera deste torneio?',
         function() {
+            // Otimista na tela; a gravação vai por transação de CAMPOS (v1.8.40) — o
+            // saveTournament de doc inteiro que morava aqui era a classe do bug da Mariana.
             if (Array.isArray(t.standbyParticipants)) t.standbyParticipants = t.standbyParticipants.filter(function(p) { return !_matchUser(p); });
             if (Array.isArray(t.waitlist)) t.waitlist = t.waitlist.filter(function(p) { return !_matchUser(p); });
-            if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') {
-                window.FirestoreDB.saveTournament(t).catch(function(err) { window._warn('[leaveStandby] save error:', err); });
+            if (window.FirestoreDB && typeof window.FirestoreDB.leaveStandby === 'function') {
+                window.FirestoreDB.leaveStandby(tId, user).then(function(res) {
+                    if (res && res.removed) {
+                        if (Array.isArray(res.standbyParticipants)) t.standbyParticipants = res.standbyParticipants;
+                        if (Array.isArray(res.waitlist)) t.waitlist = res.waitlist;
+                    }
+                }).catch(function(err) { window._warn('[leaveStandby] tx error:', err); });
             }
             if (typeof showNotification !== 'undefined') showNotification('Saiu da lista de espera', 'Você não está mais na lista de espera.', 'info');
             var c = document.getElementById('view-container');
@@ -1316,13 +1352,8 @@ window.deenrollCurrentUser = function (tId) {
 window.addParticipantFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
-    // Block if enrollments are closed (except Liga with open enrollment)
-    var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-    var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default (só fecha se explicitamente false) — alinha com cards/form/enrollCurrentUser
-    var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                   (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                   (Array.isArray(t.groups) && t.groups.length > 0);
-    var _closedOrDrawn = (t.status === 'closed' || t.status === 'finished' || _sorteio) && !_ligaOpen;
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    var _closedOrDrawn = !window._enrollmentOpenState(t).open;
     if (_closedOrDrawn && !_allowsLateEnrollment(t)) {
         showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
@@ -1340,12 +1371,8 @@ window.addParticipantFunction = function (tId) {
 window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onDone, _resolved) {
     var t = window._findTournamentById(tId);
     if (!t) return;
-    var _isLiga2 = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-    var _ligaOpen2 = _isLiga2 && t.ligaOpenEnrollment !== false;
-    var _sorteio2 = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                    (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                    (Array.isArray(t.groups) && t.groups.length > 0);
-    var _closedOrDrawn = (t.status === 'closed' || t.status === 'finished' || _sorteio2) && !_ligaOpen2;
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    var _closedOrDrawn = !window._enrollmentOpenState(t).open;
     // Mesma regra do botão/overlay: torneio fechado SEM inscrição tardia bloqueia o add
     // (consistência página ↔ overlay; evita "a página deixa, o botão não").
     if (_closedOrDrawn && !_allowsLateEnrollment(t)) {
@@ -1389,25 +1416,18 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
             // Use transactional enroll to prevent race conditions
             if (window.FirestoreDB && typeof window.FirestoreDB.enrollParticipant === 'function') {
                 window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(result) {
-                    if (result.capacityFull) {
-                        if (typeof showNotification !== 'undefined') showNotification('Vagas esgotadas', 'As vagas acabaram — ' + pName.trim() + ' não foi inscrito.', 'error');
-                        _refresh();
-                        return;
-                    }
-                    if (result.alreadyEnrolled) {
-                        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: pName.trim() }), 'warning');
-                        return;
-                    }
-                    if (result.enrollmentClosed) {
-                        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), 'warning');
-                        return;
-                    }
-                    t.participants = result.participants;
+                    // v1.8.40: UM leitor pro resultado. Antes o `waitlisted` (Liga aberta com
+                    // fase sorteada — o ramo que o ORGANIZADOR realmente percorre) não era
+                    // tratado: a pessoa ia pra fila no servidor e SUMIA da tela sem mensagem.
+                    var _verdictAdd = window._applyEnrollResult(t, tId, result, {
+                        name: pName.trim(),
+                        self: false,
+                        successToast: false,
+                        refresh: true,
+                        onRefresh: _refresh
+                    });
+                    if (_verdictAdd !== 'enrolled') return;
                     if (window._sound) window._sound('sino'); // +Participante concluído
-                    if (result.autoCloseTriggered) {
-                        t.status = 'closed';
-                        if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
-                    }
                     // v2.6.99: Rei/Rainha com rodada em andamento → novo inscrito entra
                     // na LISTA DE ESPERA; ao juntar 4, forma um grupo automaticamente.
                     try {
@@ -1417,7 +1437,6 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
                             if (_wlRes.formed > 0 && typeof showNotification !== 'undefined') showNotification('Novo grupo formado', _wlRes.formed + ' grupo(s) criado(s) a partir da lista de espera.', 'success');
                         }
                     } catch (_wlErr) { if (window._warn) window._warn('[monarch waitlist add]', _wlErr); }
-                    _refresh();
                 }).catch(function(err) {
                     window._warn('Add participant error:', err);
                     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error');
@@ -1443,13 +1462,8 @@ window._doAddParticipant = function (tId, pName, selectedUid, selectedPhoto, onD
 window.addTeamFunction = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
-    // Block if enrollments are closed (except Liga with open enrollment)
-    var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-    var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default (só fecha se explicitamente false) — alinha com cards/form/enrollCurrentUser
-    var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                   (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                   (Array.isArray(t.groups) && t.groups.length > 0);
-    var _closedOrDrawn2 = (t.status === 'closed' || t.status === 'finished' || _sorteio) && !_ligaOpen;
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    var _closedOrDrawn2 = !window._enrollmentOpenState(t).open;
     if (_closedOrDrawn2 && !_allowsLateEnrollment(t)) {
         showAlertDialog(_t('enroll.enrollClosed'), _t('enroll.enrollClosedMsg'), null, { type: 'warning' });
         return;
@@ -1475,21 +1489,22 @@ window.addTeamFunction = function (tId) {
                 return;
             }
 
-            let arr = Array.isArray(t.participants) ? t.participants : (t.participants ? Object.values(t.participants) : []);
-            arr.push({ name: teamString, displayName: teamString });
-            t.participants = arr;
-            // Registrar origem: organizer adicionou o time
+            // v1.8.40: SAIU o `saveTournament(t)` de doc INTEIRO — era a mesma classe do bug
+            // da Mariana (um campo da cópia local divergente do banco derruba a escrita toda,
+            // e o time some em silêncio). A inscrição do time vai pela MESMA porta de todo
+            // mundo (CF enrollParticipant, que grava só participants+memberUids+extraUpdates),
+            // e o resultado passa pelo leitor único.
             if (!t.teamOrigins) t.teamOrigins = {};
             t.teamOrigins[teamString] = 'formada';
-
-            window.FirestoreDB.saveTournament(t);
-            // No modo Vagas-por-sorteio a inscrição NUNCA fecha sozinha (sem corrida).
-            if (t.autoCloseOnFull && t.maxParticipants && t.enrollmentLimitMode !== 'draw' && arr.length >= parseInt(t.maxParticipants)) {
-                t.status = 'closed'; window.FirestoreDB.saveTournament(t);
-                if (typeof showNotification !== 'undefined') showNotification(_t('enroll.autoClosedTitle'), '"' + window._safeHtml(t.name) + '" ' + _t('enroll.autoClosedMsg', { count: t.maxParticipants }), 'success');
+            var _teamObj = { name: teamString, displayName: teamString };
+            if (window.FirestoreDB && typeof window.FirestoreDB.enrollParticipant === 'function') {
+                window.FirestoreDB.enrollParticipant(tId, _teamObj, { teamOrigins: t.teamOrigins }).then(function(result) {
+                    window._applyEnrollResult(t, tId, result, { name: teamString, self: false, successToast: false, refresh: true });
+                }).catch(function(err) {
+                    window._warn('Add team error:', err);
+                    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.error'), _t('enroll.addError'), 'error');
+                });
             }
-            const container = document.getElementById('view-container');
-            if (container && typeof renderTournaments === 'function') renderTournaments(container, window.location.hash.split('/')[1]);
         },
         { itemLabel: _t('enroll.memberLabel') }
     );
