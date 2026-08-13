@@ -709,6 +709,13 @@ const SUITES = [
   // O splash só sai quando os dados carregaram — o teto por tempo revelava tela vazia
   // e o app travava ao primeiro toque. v1.8.12.
   'tests/boot-libera-quando-carregou.test.js',
+  // O PWA abre sem tela branca: o topo do sw.js não pode depender da rede (era
+  // importScripts do Firebase por outra origem, bloqueando TODO fetch) e o shell
+  // sai do cache sem esperar round-trip. Roda o sw.js de verdade. v1.8.35.
+  'tests/sw-abre-sem-tela-branca.test.js',
+  // Entrar na lista de espera passa pelo SERVIDOR (enrollParticipant), nunca por
+  // saveTournament do doc inteiro — incidente da Mariana no Confra, 12/ago. v1.8.36.
+  'tests/inscricao-na-fila-passa-pelo-servidor.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
 ];
 
