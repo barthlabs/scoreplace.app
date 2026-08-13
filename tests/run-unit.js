@@ -398,6 +398,10 @@ const SUITES = [
   // O gatilho do TB não pode depender da GRAFIA do esporte: "🎾 Beach Tennis"
   // (quick-create) tem que abrir o campo no 6-5 igual a "Beach Tennis". v1.8.41.
   'tests/tiebreak-sport-com-emoji.test.js',
+  // REGRA DO DONO: o gatilho segue a CONFIGURAÇÃO do torneio (5-5 → 6-5, 6-6 → 7-6),
+  // vence o padrão do esporte nos dois sentidos, escala com gamesPerSet e nunca é
+  // cravado. Inclui a ESCRITA: o que a tela destaca é o que fica gravado. v1.8.42.
+  'tests/tiebreak-segue-a-config.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
