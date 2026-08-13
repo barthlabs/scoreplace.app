@@ -241,8 +241,17 @@ sec(function () {
   ok(CAP.html.indexOf('id="liga-fill-action"') !== -1, 'tem que existir UM botão de ação');
   ok(CAP.html.indexOf('data-org="1"') !== -1, 'o botão sabe que quem está olhando é o organizador');
   ok((CAP.html.match(/_ligaSubstituteNow/g) || []).length === 0, 'não pode mais existir botão "Colocar" por linha — comia a largura e picotava o nome');
-  ok(CAP.html.indexOf('white-space:nowrap') !== -1 && CAP.html.indexOf('text-overflow:ellipsis') !== -1,
-    'o nome ocupa a linha inteira e corta com reticências em vez de quebrar');
+  // ⚠️ ASSERÇÃO REVISADA (1.8.47), com o motivo aqui: ela travava `nowrap + ellipsis`,
+  // decidido na v1.6.92 pra o nome não empurrar o botão "Colocar" que existia por linha.
+  // Esse botão não existe mais (a asserção logo acima garante isso), e desde a 1.8.45 a
+  // linha ganhou a tag "quebra 25/75" — MEDIDO: sobravam 132px pra um nome que precisa de
+  // 206, virando "Fabi…" / "Nath…". Ordem do dono (13/ago): o nome não se comprime.
+  // O que a asserção protegia de verdade (o nome não estourar a linha) segue travado —
+  // agora por QUEBRA, não por corte.
+  ok(CAP.html.indexOf('white-space:normal') !== -1 && CAP.html.indexOf('overflow-wrap:anywhere') !== -1,
+    'o nome do candidato QUEBRA em vez de ser cortado com reticências');
+  ok(CAP.html.indexOf('text-overflow:ellipsis') === -1,
+    'nenhum nome de candidato é truncado');
 
   // (b) o PARTICIPANTE do grupo NÃO vê — ele só convida
   const t2 = novoT(); boot(t2, 'uid_fabiana');
@@ -334,11 +343,17 @@ sec(function () {
   globalThis.document.querySelectorAll = (sel) => (sel.indexOf('liga-fill-cands') !== -1
     ? marcados.map((m) => ({ getAttribute: (k) => (k === 'data-uid' ? m.uid : (k === 'data-name' ? m.name : '1')) })) : []);
   win._ligaSyncFillAction();
-  ok(acao.textContent.indexOf('Convidar 2') !== -1, 'com 2 marcados o botão CONVIDA — veio: ' + acao.textContent);
+  // ⚠️ REVISADAS (1.8.47): o rótulo perdeu o NOME e a contagem — ordem do dono, "apenas
+  // substituir quando único e convidar quando + de 1" · "não precisa colocar o nome no
+  // botão" (nome comprido truncava). O invariante segue o mesmo: 1+organizador = ação
+  // DIRETA, 1+participante = convite, 2+ = convite. Só o texto encolheu.
+  ok(acao.textContent.indexOf('Convidar') !== -1, 'com 2 marcados o botão CONVIDA — veio: ' + acao.textContent);
+  ok(/\d/.test(acao.textContent) === false, 'o rótulo não traz contagem nem nome');
 
   marcados = [{ uid: 'uid_sandra', name: 'Sandra' }];
   win._ligaSyncFillAction();
-  ok(acao.textContent.indexOf('Colocar Sandra') !== -1, 'com 1 marcado o ORGANIZADOR COLOCA — veio: ' + acao.textContent);
+  ok(acao.textContent.indexOf('Substituir') !== -1, 'com 1 marcado o ORGANIZADOR SUBSTITUI — veio: ' + acao.textContent);
+  ok(acao.textContent.indexOf('Sandra') === -1, 'o botão NÃO traz o nome (truncava em nome comprido)');
 
   marcados = [];
   win._ligaSyncFillAction();
@@ -354,7 +369,8 @@ sec(function () {
   const acao = DOM.acao;
   globalThis.document.querySelectorAll = () => [{ getAttribute: (k) => (k === 'data-uid' ? 'uid_sandra' : (k === 'data-name' ? 'Sandra' : '1')) }];
   win._ligaSyncFillAction();
-  ok(acao.textContent.indexOf('Convidar Sandra') !== -1, 'participante com 1 marcado CONVIDA — veio: ' + acao.textContent);
+  ok(acao.textContent.indexOf('Convidar') !== -1, 'participante com 1 marcado CONVIDA — veio: ' + acao.textContent);
+  ok(acao.textContent.indexOf('Substituir') === -1, 'participante NUNCA vê Substituir');
   ok(acao.textContent.indexOf('Colocar') === -1, 'e nunca vê "Colocar"');
 });
 

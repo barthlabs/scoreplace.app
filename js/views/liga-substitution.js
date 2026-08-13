@@ -529,7 +529,13 @@ function _ligaNotifyWoCycle(t, group, absentName, subName, isGuest) {
     try { var m = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {}) : {}; return m[n] || null; } catch (e) { return null; }
   };
   var base = { type: 'liga-sub-result', tournamentId: String(t.id), tournamentName: nome };
-  var comoEntrou = isGuest ? (subName + ' entrou como Jogador X (não pontua)') : (subName + ' assumiu a vaga');
+  // subName VAZIO = o W.O. acabou de ser dado e a vaga ainda não foi preenchida. Ordem do
+  // dono (13/ago): "ao dar o W.O., todos os que estão no grupo e o que entrou no lugar
+  // devem receber notificação automaticamente" — o aviso não pode esperar o suplente
+  // aparecer. Mesmo notificador nos dois momentos, pra as duas mensagens não divergirem.
+  var semSub = !subName;
+  var comoEntrou = semSub ? 'a vaga está aberta'
+    : (isGuest ? (subName + ' entrou como Jogador X (não pontua)') : (subName + ' assumiu a vaga'));
 
   // (a) o AUSENTE — o que aconteceu + O QUE FAZER pra voltar.
   var uAbs = uidDe(absentName);
@@ -539,12 +545,14 @@ function _ligaNotifyWoCycle(t, group, absentName, subName, isGuest) {
     var instr = 'Você ficou como DESATIVADO e não entra nos próximos sorteios. Para voltar: abra o torneio e ligue o botão "Ativado" — você entra no FIM da lista de espera e joga quando chegar a sua vez.';
     window._sendUserNotification(uAbs, Object.assign({}, base, {
       level: 'fundamental',
-      message: 'Você levou W.O. no ' + gName + ' de "' + nome + '" — 0 pontos nesta rodada, e ' + comoEntrou + ' no seu lugar. ' + instr,
+      message: (semSub
+        ? 'Você levou W.O. no ' + gName + ' de "' + nome + '" — 0 pontos nesta rodada. ' + instr
+        : 'Você levou W.O. no ' + gName + ' de "' + nome + '" — 0 pontos nesta rodada, e ' + comoEntrou + ' no seu lugar. ' + instr),
     }));
   }
 
-  // (b) o SUBSTITUTO (só quem tem conta — Jogador X não tem).
-  if (!isGuest) {
+  // (b) o SUBSTITUTO (só quem tem conta — Jogador X não tem; e só quando já existe).
+  if (!isGuest && !semSub) {
     var uSub = uidDe(subName);
     if (uSub) {
       window._sendUserNotification(uSub, Object.assign({}, base, {
@@ -556,12 +564,14 @@ function _ligaNotifyWoCycle(t, group, absentName, subName, isGuest) {
 
   // (c) os DEMAIS do grupo — precisam saber com quem vão jogar.
   ((group && group.players) || []).forEach(function (n) {
-    if (!n || n === subName || n === absentName) return;
+    if (!n || (subName && n === subName) || n === absentName) return;
     var u = uidDe(n);
     if (!u) return;
     window._sendUserNotification(u, Object.assign({}, base, {
       level: 'important',
-      message: 'Mudança no ' + gName + ' de "' + nome + '": ' + absentName + ' levou W.O. e ' + comoEntrou + '. Seus jogos da rodada seguem valendo.',
+      message: (semSub
+        ? 'Mudança no ' + gName + ' de "' + nome + '": ' + absentName + ' levou W.O. e a vaga está aberta. Seus jogos da rodada seguem valendo.'
+        : 'Mudança no ' + gName + ' de "' + nome + '": ' + absentName + ' levou W.O. e ' + comoEntrou + '. Seus jogos da rodada seguem valendo.'),
     }));
   });
 }
@@ -703,7 +713,11 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
       if (_on) _jaMarcou = true;
       return '<button type="button" class="btn btn-outline" data-cand="1" data-on="' + (_on ? '1' : '0') + '" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + _bd + ';color:' + _co + ';' + (_on ? '' : 'opacity:0.6;') + '">' +
         '<span data-mark="1" style="flex:0 0 auto;">' + (_on ? '✅' : '⬜') + '</span>' +
-        '<span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(f.name) + '</span>' +
+        // ⚠️ NOME NÃO SE COMPRIME. Era `nowrap + ellipsis`: com a tag "quebra 25/75" ao
+        // lado sobravam 132px pra um nome que precisa de 206 e virava "Fabi…" / "Nath…" —
+        // o organizador escolhendo suplente SEM conseguir ler de quem se trata. Agora
+        // quebra em duas linhas: altura é barata, nome cortado não. [[project_name_fit_box_canonical]]
+        '<span style="flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.25;">' + _safe(f.name) + '</span>' +
         _tag +
       '</button>';
     }).join('') + '</div>';
@@ -870,13 +884,18 @@ window._ligaSyncFillAction = function () {
     return;
   }
   act.style.opacity = '';
+  // ⚠️ SEM NOME NO BOTÃO (ordem do dono, 13/ago): "pode ser apenas substituir quando
+  // único e convidar quando + de 1" · "não precisa colocar o nome no botão". O nome
+  // vinha aqui e estourava/truncava o rótulo em nome comprido — e é redundante, já que
+  // a linha marcada com ✅ logo acima diz de quem se trata. O que o botão precisa
+  // comunicar é O QUE ELE FAZ: com UM marcado o organizador SUBSTITUI na hora (sem
+  // aceite); com 2+ são opções, e aí é convite — entra o primeiro que aceitar.
   if (sel.length === 1 && org) {
-    // 1 marcado + organizador → entra AGORA, sem aceite.
-    act.textContent = '▶️ Colocar ' + sel[0].name;
+    act.textContent = '▶️ Substituir';
   } else if (sel.length === 1) {
-    act.textContent = '📨 Convidar ' + sel[0].name;
+    act.textContent = '📨 Convidar';
   } else {
-    act.textContent = '📨 Convidar ' + sel.length + ' selecionados';
+    act.textContent = '📨 Convidar selecionados';
   }
 };
 
