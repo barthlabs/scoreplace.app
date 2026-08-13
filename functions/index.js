@@ -6254,22 +6254,22 @@ exports.accountDeletionEmail = onDocumentWritten(
           " — limpeza manual: " + leftovers.join(" | "));
       }
 
-      // UM e-mail só: a conta excluída, com CC pra caixa da empresa. Quem recebe
-      // é decisão do core — "nenhum outro destinatário" tem que ser verificável
-      // num lugar só. Sem e-mail (conta só-celular) não há envio: mandar só pro
-      // CC promoveria a caixa da empresa a destinatário primário.
+      // UM e-mail por exclusão, sempre — quem recebe é decisão do core, pra
+      // "nenhum outro destinatário" ser verificável num lugar só:
+      //   com e-mail → confirmação pra pessoa (CC caixa da empresa);
+      //   só celular → relatório pra caixa da empresa (o titular não é avisado,
+      //                porque avisá-lo exigiria SMS, que o sistema não envia).
+      // Os dois nunca saem juntos: o relatório SUBSTITUI a confirmação.
       const alvos = _delEmail.mailTargets(destinatario);
-      if (!alvos.user) {
-        console.log("[accountDeletionEmail] " + uid + " sem e-mail — nada a enviar (registro só no log)");
-        return;
-      }
-      const m = _delEmail.buildUserEmail(info);
-      await põe(idMail, Object.assign({}, alvos.user, {
+      const ehRelatorio = !alvos.user;
+      const alvo = alvos.user || alvos.report;
+      const m = ehRelatorio ? _delEmail.buildReportEmail(info) : _delEmail.buildUserEmail(info);
+      await põe(idMail, Object.assign({}, alvo, {
         message: { subject: m.subject, html: m.html, text: m.text },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
-      console.log("[accountDeletionEmail] enfileirado → " + destinatario +
-        " (cc " + (alvos.user.cc.join(",") || "—") + ") | sobras=" + leftovers.length);
+      console.log("[accountDeletionEmail] enfileirado (" + (ehRelatorio ? "relatório — conta sem e-mail" : "confirmação ao titular") +
+        ") → " + alvo.to.join(",") + " (cc " + (alvo.cc.join(",") || "—") + ") | sobras=" + leftovers.length);
     } catch (e) {
       // best-effort: a conta já foi apagada; falhar aqui não pode reverter nada.
       console.error("[accountDeletionEmail] falhou:", e && e.message);

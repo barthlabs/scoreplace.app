@@ -2,8 +2,11 @@
  *
  * Ordem do dono (13/ago/2026): _"sempre que qualquer conta for excluída no app
  * (por qualquer motivo — solicitação do usuário, admin, etc.)"_ → comprovante por
- * e-mail. Destinatários corrigidos pelo dono no mesmo dia: _"NÃO enviar para
- * rstbarth@gmail.com"_ — vai só pro titular e pra contato@barthlabs.com.
+ * e-mail. Destinatários fixados pelo dono no mesmo dia: _"NÃO enviar para
+ * rstbarth@gmail.com em nenhuma hipótese"_. É SEMPRE UM e-mail, e muda quem recebe:
+ * conta com e-mail → confirmação pra PESSOA (CC contato@barthlabs.com); conta
+ * só-celular → relatório pra contato@barthlabs.com, porque avisar o titular exigiria
+ * SMS e o sistema não envia SMS (adotar provedor tem custo, e o dono decidiu não).
  *
  * O que este teste trava, na ordem do que dói errar:
  *   1. FUSÃO NÃO É EXCLUSÃO. O merge grava `mergedInto` e o cleanupAbandonedAuth
@@ -82,9 +85,9 @@ const semNome = core.buildUserEmail({ email: 'x@y.com', deletedAt: quando });
 ok('sem nome não vira "Olá, undefined"', !/undefined/.test(semNome.html) && !/Olá, \./.test(semNome.html));
 
 // ── 3. A CONFERÊNCIA PÓS-EXCLUSÃO, DENTRO DA CONFIRMAÇÃO ──────────────────────
-// O relatório interno foi REMOVIDO (regra: "nenhum outro destinatário"), então é a
-// confirmação do titular que passou a carregar o veredito da varredura. Detalhe de
-// máquina (quais caminhos) não entra aqui — vai pro log da função.
+// Como o relatório NÃO acompanha a confirmação (é um e-mail só), é a confirmação do
+// titular que carrega o veredito da varredura. Detalhe de máquina (quais caminhos)
+// não entra aqui — vai pro log e, quando é conta só-celular, pro relatório.
 const limpo = core.buildUserEmail({ name: 'Ana', email: 'a@x.com', deletedAt: quando,
   items: ['Perfil'], leftovers: [], swept: true });
 ok('varredura limpa vira boa notícia pro titular',
@@ -112,17 +115,14 @@ ok('nome é escapado (sem <script> cru)', xss.html.indexOf('<script>alert') === 
 // rstbarth@gmail.com em nenhuma hipótese." Endereço pessoal em rotina automática é
 // o que [[feedback_contact_email_always_barthlabs]] proíbe; e "nenhum outro
 // destinatário" cobre também um SEGUNDO e-mail pro mesmo endereço — por isso o
-// relatório interno saiu inteiro, construtor incluído.
+// relatório nunca ACOMPANHA a confirmação: ele só existe quando a substitui.
 const alvos = core.mailTargets('cristiano@x.com');
 ok('titular recebe a confirmação', alvos.user.to.length === 1 && alvos.user.to[0] === 'cristiano@x.com');
 ok('CC é a caixa da empresa', alvos.user.cc.length === 1 && alvos.user.cc[0] === 'contato@barthlabs.com');
 ok('replyTo é barthlabs', alvos.user.replyTo === 'contato@barthlabs.com');
 
-// É UM e-mail só: nenhum segundo alvo pode reaparecer no roteamento.
-ok('o roteamento tem UM destino só (sem relatório interno)',
-  Object.keys(alvos).length === 1 && alvos.report === undefined);
-ok('o construtor do relatório interno NÃO existe mais (decoy removido)',
-  typeof core.buildAdminEmail === 'undefined');
+// UM e-mail por exclusão: com caixa, o relatório NÃO acompanha a confirmação.
+ok('conta com e-mail: só a confirmação, sem relatório junto', alvos.report === null);
 
 // Ninguém além do titular e do CC — varredura no conjunto inteiro de endereços.
 const todos = alvos.user.to.concat(alvos.user.cc);
@@ -135,11 +135,42 @@ ok('titular que JÁ é a caixa da empresa não vira to+cc duplicado', mesmo.user
 const caixaAlta = core.mailTargets('CONTATO@BarthLabs.com');
 ok('a dedupe ignora caixa alta/baixa', caixaAlta.user.cc.length === 0);
 
-// Conta só-celular: sem e-mail da conta, não há e-mail a enviar. Mandar só pro CC
-// promoveria a caixa da empresa a destinatário PRIMÁRIO — o que a regra exclui.
+// ── 3c. CONTA SÓ-CELULAR ──────────────────────────────────────────────────────
+// Decisão do dono (13/ago): avisar o titular exigiria SMS — MEDIDO: não há provedor
+// nas functions, e o único SMS do sistema é o código de verificação do Firebase,
+// disparado pelo CLIENTE. Adotar provedor tem custo, e ele decidiu não adotar:
+// "não manda nada além do relatório para barthlabs por email nesses casos".
 const semCaixa = core.mailTargets('');
-ok('conta só-celular: nenhum envio (a regra é "apenas o e-mail da conta")', semCaixa.user === null);
-ok('conta só-celular: não sobra nenhum outro alvo', Object.keys(semCaixa).length === 1);
+ok('só-celular: o titular NÃO recebe (não há caixa, e não há SMS)', semCaixa.user === null);
+ok('só-celular: o relatório vai pra caixa da empresa', semCaixa.report.to[0] === 'contato@barthlabs.com');
+ok('só-celular: sem CC (to e cc seriam o mesmo endereço)', semCaixa.report.cc.length === 0);
+ok('só-celular: ainda é UM endereço só', semCaixa.report.to.length === 1);
+
+const rel = core.buildReportEmail({
+  uid: 'U9', name: 'Fulano', phone: '11988887777', providers: ['phone'],
+  createdAt: quando, lastSignIn: quando, deletedAt: quando,
+  items: ['Perfil (12 campos)'], leftovers: []
+});
+// O ponto que impede alguém, meses depois, de afirmar que a pessoa foi notificada.
+ok('o relatório DIZ que o titular não foi avisado',
+  /NÃO foi avisado/.test(rel.html) && /NÃO foi avisado/.test(rel.text));
+ok('e explica o porquê (sem e-mail, e o sistema não manda SMS)',
+  /não envia SMS/.test(rel.html) && /não envia SMS/.test(rel.text));
+ok('assunto distingue do e-mail de confirmação', /sem e-mail/.test(rel.subject));
+ok('traz celular formatado, uid e provedores',
+  /\+55 \(11\) 98888-7777/.test(rel.html) && rel.html.indexOf('U9') !== -1 && /phone/.test(rel.html));
+ok('varredura limpa vira selo verde', /Varredura limpa/.test(rel.html));
+
+// Aqui o caminho técnico É bem-vindo: o destinatário é a caixa da empresa.
+const relSujo = core.buildReportEmail({ uid: 'U9', deletedAt: quando,
+  leftovers: ['tournaments/t1.memberUids', 'presences/p9'] });
+ok('sobra aparece com os caminhos, pra dar ação',
+  /Sobraram 2 refer/.test(relSujo.html) && /tournaments\/t1\.memberUids/.test(relSujo.html));
+ok('sobra também no texto puro', /presences\/p9/.test(relSujo.text));
+ok('com sobra NÃO diz "varredura limpa"', !/Varredura limpa/.test(relSujo.html));
+ok('nome do relatório é escapado',
+  core.buildReportEmail({ uid: 'U', name: '<script>x</script>', deletedAt: quando })
+    .html.indexOf('<script>x') === -1);
 
 // A trava da correção: o endereço pessoal não pode reaparecer em lugar nenhum.
 const fonteCore = fs.readFileSync(path.join(__dirname, 'account-deletion-email-core.js'), 'utf8');
@@ -196,8 +227,10 @@ const enfileira = (bloco.match(/await põe\(/g) || []).length;
 ok('o gatilho enfileira UM e-mail só', enfileira === 1);
 ok('nenhum endereço cravado no gatilho (quem endereça é o core)',
   bloco.indexOf('@gmail.com') === -1 && bloco.indexOf('@barthlabs.com') === -1);
-ok('sem e-mail da conta, o gatilho NÃO envia (não promove o CC a primário)',
-  /if \(!alvos\.user\)/.test(bloco) && /return;/.test(bloco));
+ok('o gatilho escolhe entre confirmação e relatório (nunca os dois)',
+  /ehRelatorio \?/.test(bloco) && /buildReportEmail/.test(bloco) && /buildUserEmail/.test(bloco));
+ok('e o alvo do envio sai do core, não de um endereço solto',
+  /alvos\.user \|\| alvos\.report/.test(bloco));
 
 // Com o relatório interno fora, o detalhe operacional precisa sobreviver em algum
 // lugar — e sobra é ERRO, senão some no meio de log comum.

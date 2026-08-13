@@ -11,15 +11,22 @@
  * contato@barthlabs.com. Nenhum outro destinatário. Não enviar para
  * rstbarth@gmail.com em nenhuma hipótese."_
  *
- * É UM e-mail só. Existiu por algumas horas um SEGUNDO e-mail (relatório interno
- * endereçado à caixa da empresa) — ele foi REMOVIDO, junto com o construtor, e
- * não deve voltar: "nenhum outro destinatário" cobre também um segundo envio pro
- * mesmo endereço. O detalhe operacional (uid, caminhos de sobra) vive no LOG da
- * função, que é onde detalhe de máquina pertence — não numa caixa de e-mail.
+ * É SEMPRE UM e-mail só, nunca dois — muda QUEM recebe:
+ *   conta com e-mail → confirmação pra PESSOA, com CC pra contato@barthlabs.com;
+ *   conta só-celular → relatório pra contato@barthlabs.com, e mais nada.
  *
- * Há asserção travando a ausência de rstbarth@gmail.com em código e a ausência de
- * um segundo destinatário — as duas correções foram explícitas e não podem voltar
- * por descuido ([[feedback_contact_email_always_barthlabs]]).
+ * Chegou a existir um SEGUNDO e-mail (relatório enviado JUNTO com a confirmação);
+ * ele foi removido — "nenhum outro destinatário" cobre também um segundo envio pro
+ * mesmo endereço. O relatório voltou depois com escopo diferente e chamador real:
+ * ele SUBSTITUI a confirmação quando não há a quem confirmar, nunca a acompanha.
+ *
+ * O detalhe operacional (uid, caminhos de sobra) vive no LOG da função. Ele
+ * aparece também no relatório da conta só-celular, e ali é apropriado: o
+ * destinatário é a caixa da empresa, não um usuário.
+ *
+ * Há asserção travando a ausência de rstbarth@gmail.com em código e o fato de o
+ * gatilho enfileirar UM e-mail por exclusão — as correções foram explícitas e não
+ * podem voltar por descuido ([[feedback_contact_email_always_barthlabs]]).
  *
  * POR QUE UM GATILHO DE FIRESTORE, e não uma linha dentro do deleteAccount:
  * a mesma lição do syncMatchRosters — o gatilho vê TODA escrita, de QUALQUER
@@ -48,24 +55,33 @@
 var CC_CONTATO = 'contato@barthlabs.com';
 
 /* ── ROTEAMENTO ─────────────────────────────────────────────────────────────
- * UM destino: a conta excluída, com CC pra caixa da empresa. Mora aqui, e não
- * solto no gatilho, pra "nenhum outro destinatário" ser uma regra verificável
- * num lugar só — espalhada pelo gatilho, ela divergiria no primeiro endereço novo.
+ * SEMPRE UM e-mail só — muda quem recebe, conforme a conta tenha caixa ou não:
  *
- * ⚠️ SEM E-MAIL, SEM ENVIO. Conta só-celular (13 na base) não tem caixa, e a
- * regra é "apenas para o e-mail da conta excluída" — sem esse endereço não há
- * e-mail a enviar. Mandar só pro CC transformaria a caixa da empresa em
- * destinatário PRIMÁRIO, que é exatamente o que a regra exclui. Nesses casos o
- * registro fica só no log da função.
+ *   com e-mail  → confirmação PRA PESSOA, com CC pra caixa da empresa.
+ *   só celular  → relatório PRA CAIXA DA EMPRESA, e mais nada.
+ *
+ * Mora aqui, e não solto no gatilho, pra "nenhum outro destinatário" ser uma
+ * regra verificável num lugar só.
+ *
+ * ⚠️ POR QUE A CONTA SÓ-CELULAR NÃO É AVISADA (decisão do dono, 13/ago/2026):
+ * avisá-la exigiria SMS, e **o sistema não envia SMS** — MEDIDO, não suposto: as
+ * functions só têm firebase-admin/firebase-functions/node-fetch, não há provedor
+ * (Twilio/Zenvia/SNS) em lugar nenhum, e o único SMS que existe é o CÓDIGO de
+ * verificação do Firebase, disparado pelo CLIENTE (signInWithPhoneNumber), que
+ * não manda texto livre. O canal WhatsApp morreu com o bloqueio da Meta. Adotar
+ * um provedor tem CUSTO, e o dono decidiu não adotar: _"então deixa como está. e
+ * ainda tem custo disso então não manda nada além do relatório para barthlabs por
+ * email nesses casos"_. O relatório DIZ, em destaque, que o titular não foi
+ * avisado — relatório que omite isso deixaria supor uma confirmação que não houve.
  *
  * O CC é descartado quando a própria conta excluída É a caixa da empresa — senão
  * o mesmo endereço entraria como to e cc e receberia duplicado.
  */
 function mailTargets(destinatario) {
   var alvo = String(destinatario || '').trim();
-  if (!alvo) return { user: null };
+  if (!alvo) return { user: null, report: { to: [CC_CONTATO], cc: [], replyTo: CC_CONTATO } };
   var cc = (alvo.toLowerCase() === CC_CONTATO.toLowerCase()) ? [] : [CC_CONTATO];
-  return { user: { to: [alvo], cc: cc, replyTo: CC_CONTATO } };
+  return { user: { to: [alvo], cc: cc, replyTo: CC_CONTATO }, report: null };
 }
 
 /* ── DECISÃO ────────────────────────────────────────────────────────────────
@@ -114,8 +130,16 @@ function fmtBR(d) {
   }
 }
 
-// (_phoneFmt saiu junto com o relatório interno — só ele formatava celular, e a
-//  confirmação do titular não mostra telefone.)
+// Formata o celular pro relatório da conta só-celular — ali o telefone É a única
+// identidade de contato que existe, então precisa sair legível.
+function _phoneFmt(ph) {
+  var d = String(ph || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length > 11 && d.indexOf('55') === 0) d = d.slice(2);
+  if (d.length === 11) return '+55 (' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+  if (d.length === 10) return '+55 (' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+  return ph;
+}
 
 var WRAP = 'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;' +
   'max-width:600px;margin:0 auto;padding:24px;color:#1f2937;line-height:1.55;';
@@ -202,19 +226,89 @@ function buildUserEmail(info) {
   return { subject: subject, html: html, text: text };
 }
 
-/* ── (2) O RELATÓRIO INTERNO FOI REMOVIDO ───────────────────────────────────
- * Existiu aqui um segundo e-mail — relatório operacional (uid, provedores, datas
- * da conta, varredura de sobras) endereçado primeiro ao e-mail pessoal do dono e
- * depois à caixa da empresa. Saiu junto com o construtor quando a regra virou
- * "APENAS o e-mail da conta excluída, com CC pra contato@barthlabs.com. Nenhum
- * outro destinatário" — e sai por completo de propósito: construtor sem chamador
- * é decoy, e é o que faz o próximo leitor consertar o lugar errado.
+/* ── 2) RELATÓRIO — SÓ PARA CONTA SEM E-MAIL (só celular) ───────────────────
+ * Este e-mail NÃO é um segundo envio: ele SUBSTITUI a confirmação quando não há
+ * a quem confirmar. Conta só-celular não tem caixa, e o sistema não envia SMS
+ * (medido: nenhum provedor nas functions; o único SMS é o código de verificação
+ * do Firebase, disparado pelo cliente). Sem isto, a exclusão de uma conta
+ * só-celular não deixaria nenhum registro fora do log.
  *
- * O que ele carregava de útil não se perdeu, mudou de lugar: o VEREDITO da
- * varredura virou uma linha da confirmação do titular (info.swept/info.leftovers),
- * e o detalhe de máquina (quais caminhos sobraram) vai pro LOG da função, em nível
- * de erro quando sobra algo. Detalhe operacional pertence ao log, não a uma caixa.
+ * ⚠️ ELE DIZ, EM DESTAQUE, QUE O TITULAR NÃO FOI AVISADO. Um relatório de
+ * exclusão que omite isso deixa supor uma confirmação que nunca houve — e é
+ * justamente o ponto em que alguém, meses depois, afirmaria que a pessoa foi
+ * notificada. Aqui o detalhe técnico (uid, caminhos de sobra) é bem-vindo:
+ * o destinatário é a caixa da empresa, não um usuário.
  */
+function buildReportEmail(info) {
+  info = info || {};
+  var nome = String(info.name || '').trim();
+  var quando = fmtBR(info.deletedAt);
+  var itens = info.items || [];
+  var sobras = info.leftovers || [];
+
+  var subject = '[scoreplace] Conta excluída (sem e-mail) — ' + (nome || info.uid || 'desconhecida');
+
+  var aviso = '<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 14px;' +
+    'border-radius:6px;margin:14px 0;font-size:14px;">' +
+    '<strong>O titular NÃO foi avisado.</strong> A conta não tem e-mail cadastrado (entrava só por ' +
+    'celular) e o sistema não envia SMS, então não houve confirmação para a pessoa. ' +
+    'Este relatório é o único registro da exclusão.</div>';
+
+  var selo = sobras.length === 0
+    ? '<div style="background:#ecfdf5;border-left:4px solid #10b981;padding:12px 14px;border-radius:6px;margin:14px 0;font-size:14px;">' +
+      '<strong>✓ Varredura limpa.</strong> Nenhuma referência ao uid restou na base.</div>'
+    : '<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 14px;border-radius:6px;margin:14px 0;font-size:14px;">' +
+      '<strong>⚠️ Sobraram ' + sobras.length + ' referência(s)</strong> — precisam de limpeza manual:' +
+      '<ul style="margin:8px 0 0;padding-left:20px;">' +
+      sobras.map(function (x) { return '<li style="margin:2px 0;"><code>' + esc(x) + '</code></li>'; }).join('') +
+      '</ul></div>';
+
+  var html = '<div style="' + WRAP + '">' +
+    '<div style="' + H1 + '">Conta excluída — relatório</div>' +
+    aviso +
+    '<div style="' + BOX + '">' +
+      _linhas([
+        ['Nome', nome],
+        ['Celular', _phoneFmt(info.phone)],
+        ['uid', info.uid || ''],
+        ['Provedores', (info.providers || []).join(', ')],
+        ['Conta criada em', info.createdAt ? fmtBR(info.createdAt) : ''],
+        ['Último acesso', info.lastSignIn ? fmtBR(info.lastSignIn) : ''],
+        ['Excluída em', quando],
+        ['Origem', info.origin || 'exclusão de conta']
+      ]) +
+    '</div>' +
+    (itens.length
+      ? '<p style="margin:16px 0 6px;font-weight:600;">Dados encontrados e apagados</p>' +
+        '<ul style="margin:0;padding-left:20px;font-size:14px;">' +
+        itens.map(function (i) { return '<li style="margin:3px 0;">' + esc(i) + '</li>'; }).join('') +
+        '</ul>'
+      : '') +
+    selo +
+    '<div style="' + FOOT + '">' +
+      'Registro automático de conformidade com exclusão de dados (LGPD, Lei nº 13.709/2018).<br>' +
+      'Gerado pelo gatilho <code>accountDeletionEmail</code> do scoreplace.app.' +
+    '</div>' +
+  '</div>';
+
+  var text = 'Conta excluída — relatório\n\n' +
+    'ATENÇÃO: o titular NÃO foi avisado. A conta não tem e-mail (entrava só por celular)\n' +
+    'e o sistema não envia SMS. Este relatório é o único registro da exclusão.\n\n' +
+    'Nome: ' + (nome || '(n/d)') + '\n' +
+    (info.phone ? 'Celular: ' + _phoneFmt(info.phone) + '\n' : '') +
+    'uid: ' + (info.uid || '(n/d)') + '\n' +
+    'Provedores: ' + ((info.providers || []).join(', ') || '(n/d)') + '\n' +
+    (info.createdAt ? 'Conta criada em: ' + fmtBR(info.createdAt) + '\n' : '') +
+    (info.lastSignIn ? 'Último acesso: ' + fmtBR(info.lastSignIn) + '\n' : '') +
+    'Excluída em: ' + quando + '\n' +
+    'Origem: ' + (info.origin || 'exclusão de conta') + '\n\n' +
+    (itens.length ? 'Dados encontrados e apagados:\n' + itens.map(function (i) { return '  - ' + i; }).join('\n') + '\n\n' : '') +
+    (sobras.length === 0 ? 'Varredura limpa — nenhuma referência restou na base.\n'
+                         : 'ATENÇÃO: sobraram ' + sobras.length + ' referência(s):\n' + sobras.map(function (x) { return '  - ' + x; }).join('\n') + '\n') +
+    '\nRegistro de conformidade (LGPD, Lei nº 13.709/2018).\n';
+
+  return { subject: subject, html: html, text: text };
+}
 
 /* id determinístico: reentrega do gatilho não vira e-mail duplicado (o `create()`
  * falha se já existir). É UM id porque é UM e-mail — o sufixo _admin sumiu junto
@@ -228,6 +322,7 @@ function mailDocId(uid) {
 module.exports = {
   decideDeletionNotice,
   buildUserEmail,
+  buildReportEmail,
   mailTargets,
   mailDocId,
   fmtBR,
