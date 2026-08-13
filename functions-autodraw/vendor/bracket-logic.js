@@ -2144,7 +2144,20 @@ function _updateProgressiveClassification(t) {
   // grupo de rodada (do fim pro começo) pega as próximas posições livres, sem gap. Ver [[project_podium_classif_canonical]].
   // v1.3.79: 3º lugar pode vir do t.thirdPlaceMatch separado (legado) OU do match isThirdPlace
   // canônico dentro de t.matches (fórmula mínima). Trata os dois igual. Ver [[project_third_place_always]].
-  var _thirdM = t.thirdPlaceMatch || allMatches.find(function(m){ return m && m.isThirdPlace; });
+  // ⚠️ 1.8.30 — QUEM DECIDE O 3º/4º É O JOGO QUE FOI JOGADO, não a forma em que ele está
+  // guardado. A precedência aqui era `t.thirdPlaceMatch ||` cru, e quando o doc tem AS DUAS
+  // formas o legado ganhava mesmo estando VAZIO.
+  // MEDIDO no "Duplas Mistas Sorteadas" (tour_1783511910924): `matches[7]` tem
+  // `isThirdPlace:true` e foi DECIDIDO (W.O. da Leila, vencedor Catia/Francisco), e existe um
+  // `t.thirdPlaceMatch` criado ~55min depois com `winner:null`. Rodando esta função contra o
+  // doc real: com o fantasma a classificação sai **6 de 8** (sem 3º e sem 4º, e por isso a
+  // tela dizia "parcial"); com o jogo real ela fecha **8 de 8**.
+  // A regra escolhe por CONTEÚDO (tem vencedor?) e só depois por forma — e nunca inventa: se
+  // nenhum dos dois foi decidido, segue valendo o que existir, como antes.
+  var _thirdCanon = allMatches.find(function(m){ return m && m.isThirdPlace; });
+  var _thirdLegado = t.thirdPlaceMatch;
+  var _thirdM = (_thirdLegado && _thirdLegado.winner) ? _thirdLegado
+              : ((_thirdCanon && _thirdCanon.winner) ? _thirdCanon : (_thirdLegado || _thirdCanon));
   var _runPos = _thirdM ? 5 : 3;
   var reverseOrder = rounds.slice().reverse(); // [final, semi, qf, ..., r1]
   reverseOrder.forEach(function(roundNum) {

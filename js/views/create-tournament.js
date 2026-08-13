@@ -1498,7 +1498,11 @@ function setupCreateTournamentModal() {
   window._currentSportName = function() {
     var sportEl = document.getElementById('select-sport');
     if (!sportEl || !sportEl.options[sportEl.selectedIndex]) return '';
-    return sportEl.options[sportEl.selectedIndex].text.replace(/^[^\wÀ-ɏ]+/u, '').trim();
+    // FONTE ÚNICA (_sportBaseName, store.js) — era a 3ª cópia da mesma regex.
+    var _txt = sportEl.options[sportEl.selectedIndex].text;
+    return (typeof window._sportBaseName === 'function')
+      ? window._sportBaseName(_txt)
+      : _txt.replace(/^[^\wÀ-ɏ]+/u, '').trim();
   };
   // ⚰️ v4.4.x DELETADO: _phaseGsmSelectPreset / _phaseGsmAdvantage / _phaseGsmHtml (GSM por fase — construtor fase-2+ morto).
   // (removido v4.3.3: _phaseDests tinha rótulos "Ouro"/"Prata" hardcoded e zero callers —

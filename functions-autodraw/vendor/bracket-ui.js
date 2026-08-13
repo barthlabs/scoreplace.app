@@ -1184,7 +1184,18 @@ window._isTiebreakSetScore = function (g1, g2, loserGames) {
 window._scoringUsesSets = function (sc) {
   return !!(sc && (sc.type === 'sets' || sc.type === 'gsm' || (sc.tiebreakEnabled !== false && sc.gamesPerSet)));
 };
-window._sportTiebreakAt = function (sport) { return (sport === 'Beach Tennis') ? 'g-1' : 'g'; };
+// ⚠️ NORMALIZA antes de comparar: `t.sport` chega em DUAS grafias pro mesmo esporte —
+// "Beach Tennis" (form completo) e "🎾 Beach Tennis" (quick-create, que gravava o rótulo
+// cru do seletor). Com igualdade estrita o segundo caía no `'g'` (default do tênis) e o
+// campo do tie-break só abria no 7-6, enquanto a TELA DE CONFIGURAÇÃO do mesmo torneio já
+// dizia "Tie-break em 5-5" (ela passa por _currentSportName, que tira o emoji). Ou seja: a
+// config prometia 6-5 e o lançamento exigia 7-6. [[project_sport_rules_canonical]]
+// Fallback pass-through (NÃO reimplementa a regex) pro contexto do vendor da CF, que não
+// leva o store.js — lá o comportamento fica idêntico ao anterior em vez de estourar.
+window._sportTiebreakAt = function (sport) {
+  var s = (typeof window._sportBaseName === 'function') ? window._sportBaseName(sport) : sport;
+  return (s === 'Beach Tennis') ? 'g-1' : 'g';
+};
 window._tbLoserGames = function (scoring, sport) {
   var gp = parseInt(scoring && scoring.gamesPerSet) || 6;
   var at = (scoring && scoring.tiebreakAt) || window._sportTiebreakAt(sport);

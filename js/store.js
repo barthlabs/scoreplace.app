@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.40';
+window.SCOREPLACE_VERSION = '1.8.41';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5135,6 +5135,23 @@ window._TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;ve
 // deve passar por window._sportIcon(sport). Hardcodes em template literal
 // são proibidos — sempre interpolar ${window._sportIcon('Beach Tennis')}.
 //
+// FONTE ÚNICA do nome "cru" da modalidade: tira o ícone/emoji decorativo que o
+// SELETOR usa no rótulo ("🎾 Beach Tennis" → "Beach Tennis"). Existe porque os
+// dois caminhos de criação gravavam `t.sport` DIFERENTE pro mesmo esporte: o
+// form completo grava limpo (via _currentSportName) e o quick-create gravava o
+// rótulo CRU do picker. Quem compara o esporte por igualdade (_sportTiebreakAt)
+// ou indexa por ele (_sportScoringDefaults/_sportTeamDefaults/sportPalettes)
+// então dava respostas diferentes pro MESMO esporte — foi assim que o campo do
+// tie-break parou de abrir no 6-5 (o torneio caía no default do tênis, 7-6).
+// Regra: TODO leitor que compara/indexa por esporte passa por aqui primeiro.
+// (_sportIcon não precisa: ele já casa por substring, então tolera o emoji.)
+// A regex era copiada em 2 lugares (main.js + create-tournament.js) — os dois
+// passaram a chamar esta função; uma 3ª cópia é o que faz uma delas divergir.
+window._sportBaseName = function (sport) {
+  if (!sport) return '';
+  return String(sport).replace(/^[^\wÀ-ɏ]+/u, '').trim();
+};
+
 // Ordem de matching crítica:
 // 1. futevôlei ANTES de qualquer "vôlei" (substring trap — "futevôlei"
 //    contém "vôlei", então a ordem inversa pega o ícone errado)

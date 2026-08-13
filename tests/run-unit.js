@@ -395,6 +395,9 @@ const SUITES = [
   'tests/e2e-form-pair.test.js',
   // TIE-BREAK configurável por torneio (5-5 vs 6-6) — gatilho por regra/esporte. v1.3.x.
   'tests/tiebreak-trigger.test.js',
+  // O gatilho do TB não pode depender da GRAFIA do esporte: "🎾 Beach Tennis"
+  // (quick-create) tem que abrir o campo no 6-5 igual a "Beach Tennis". v1.8.41.
+  'tests/tiebreak-sport-com-emoji.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
