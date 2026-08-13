@@ -1752,15 +1752,38 @@ function renderDashboard(container) {
 
       var pendingScoreStyle = 'font-weight:800;font-size:1rem;min-width:28px;text-align:center;color:#fbbf24;font-style:italic;flex-shrink:0;';
 
+      // ⚠️ CAMPOS DO TIE-BREAK também aqui. Este card já chamava _highlightWinner no oninput,
+      // mas NUNCA renderizava `tb1-`/`tb2-` — e a função começa com `if (tb1El && tb2El)`, ou
+      // seja virava no-op silencioso: lançar 6-5 pelo dashboard perdia os pontos do TB. Quem
+      // salva aqui é o _saveResultInline (o mesmo do bracket), que lê os campos POR ID e já
+      // exige/valida o TB — então basta eles existirem. [[feedback_sweep_all_render_sites]]
+      var _dTb = '';
+      try {
+        var _dSc = (tRef && typeof window._effectiveScoring === 'function')
+          ? window._effectiveScoring(tRef, item.m) : (tRef && tRef.scoring);
+        if (_dSc && window._scoringUsesSets && window._scoringUsesSets(_dSc) && _dSc.tiebreakEnabled !== false) {
+          _dTb = 'width:34px;text-align:center;font-size:0.72rem;font-weight:700;' +
+            'background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);' +
+            'color:var(--text-bright);border-radius:5px;padding:2px 3px;';
+        }
+      } catch (e) {}
+      var _dTbInput = function(n) {
+        if (!_dTb) return '';
+        return '<input id="tb' + n + '-' + mId + '" type="number" min="0" placeholder="tb" title="Tie-break"' +
+          ' onclick="event.stopPropagation();"' +
+          ' oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')"' +
+          ' style="' + _dTb + 'display:none;margin-left:3px;flex-shrink:0;">';
+      };
+
       var p1ScoreHtml = pendingScores
         ? '<span style="' + pendingScoreStyle + '">' + (pendingScores.p1 != null ? pendingScores.p1 : '?') + '</span>'
         : canLaunch
-          ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
+          ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(1)
           : scorePlaceholder;
       var p2ScoreHtml = pendingScores
         ? '<span style="' + pendingScoreStyle + '">' + (pendingScores.p2 != null ? pendingScores.p2 : '?') + '</span>'
         : canLaunch
-          ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
+          ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(2)
           : scorePlaceholder;
 
       var defaultHeaderBtns = '';

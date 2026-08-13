@@ -2489,10 +2489,46 @@ window._editPendingResult = function(tId, matchId) {
     window.location.hash = '#bracket/' + tId;
     return;
   }
+  // ⚠️ TIE-BREAK TAMBÉM AQUI. Este é o 3º caminho de lançamento e era o ÚNICO sem os campos
+  // do TB: com `pendingResult` o card não mostra os inputs normais (`showInputs` exige
+  // `!hasPending`), então quem edita uma proposta cai NESTE ramo — e ele montava só s1/s2, sem
+  // `tb1-`/`tb2-` e sem `oninput`. Resultado: digitar o placar do gatilho (6-5 na regra 5-5)
+  // não abria nada, porque os campos não existiam no DOM. Relato do dono (13/ago): "entrei no
+  // jogo que está 5-6 como organizador e reescrevi esses números e não abriu para mim também".
+  // O gatilho vem da MESMA fonte única dos outros dois caminhos (_tbLoserGames → config do
+  // torneio, com fallback por esporte). [[project_live_scoring_canonical]]
+  var _pesc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var _peUseSets = window._scoringUsesSets(_pesc);
+  var _peTbEnabled = _peUseSets && _pesc && _pesc.tiebreakEnabled !== false;
+  // pré-preenche com o TB que a proposta já trazia (pr.tbP1/tbP2) ou com o do set gravado
+  var _peSetTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
+  var _peTb1 = (pr && pr.tbP1 != null) ? pr.tbP1 : (_peSetTb && _peSetTb.pointsP1 != null ? _peSetTb.pointsP1 : null);
+  var _peTb2 = (pr && pr.tbP2 != null) ? pr.tbP2 : (_peSetTb && _peSetTb.pointsP2 != null ? _peSetTb.pointsP2 : null);
+  var _peTbStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;' +
+    'background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);' +
+    'color:var(--text-bright);border-radius:5px;padding:3px 4px;';
+  var _peEsc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  var _peTbInput = function(n, val) {
+    if (!_peTbEnabled) return '';
+    return '<input type="number" id="tb' + n + '-' + matchId + '" min="0" placeholder="tb" title="Tie-break"' +
+      (val != null ? ' value="' + val + '"' : '') +
+      ' onclick="event.stopPropagation()"' +
+      ' style="' + _peTbStyle + 'display:none;margin-left:4px;"' +
+      ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')">';
+  };
+
   // Suprime re-renders enquanto o usuário edita (evita dashboard destruir os inputs)
   window._suppressSoftRefresh = true;
-  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
-  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
+  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()"' +
+    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(1, _peTb1);
+  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()"' +
+    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(2, _peTb2);
+
+  // Revela JÁ se o placar que veio na proposta é do gatilho (o caso do relato: abre em 5-6
+  // sem o organizador precisar redigitar). Depois disso quem revela é o oninput.
+  if (typeof window._highlightWinner === 'function') {
+    try { window._highlightWinner(matchId); } catch (e) {}
+  }
 
   // Troca botões do header por Cancelar + Confirmar
   var headerBtnArea = document.getElementById('header-btns-' + matchId);
@@ -2524,6 +2560,30 @@ window._editPendingResult = function(tId, matchId) {
       var s1v = parseInt((document.getElementById('s1-' + matchId) || {}).value, 10);
       var s2v = parseInt((document.getElementById('s2-' + matchId) || {}).value, 10);
       if (isNaN(s1v) || isNaN(s2v)) { showNotification('Placar inválido', 'Preencha os dois campos.', 'warning'); return; }
+      // TIE-BREAK: mesma regra e mesmas validações do _saveResultInline (fonte única do gatilho
+      // em _tbLoserGames). Sem este bloco os pontos digitados eram DESCARTADOS no Confirmar —
+      // o set virava um 6-5 sem o TB, e `_approveResult` lê justamente pr.isTiebreakEntry/tbP1/tbP2.
+      var _peTrigger = _peTbEnabled ? window._tbLoserGames(_pesc, t.sport) : null;
+      var _peIsTb = false, _peTbV1 = NaN, _peTbV2 = NaN;
+      if (_peTbEnabled && window._isTiebreakSetScore(s1v, s2v, _peTrigger)) {
+        var _e1 = document.getElementById('tb1-' + matchId);
+        var _e2 = document.getElementById('tb2-' + matchId);
+        _peTbV1 = _e1 ? parseInt(_e1.value, 10) : NaN;
+        _peTbV2 = _e2 ? parseInt(_e2.value, 10) : NaN;
+        if (isNaN(_peTbV1) || isNaN(_peTbV2)) {
+          showNotification('Tie-break obrigatório',
+            'O placar ' + (_peTrigger + 1) + '-' + _peTrigger + ' foi decidido no tie-break — preencha os pontos.', 'warning');
+          return;
+        }
+        // o vencedor do TB tem que ser o mesmo do set (quem fez mais games)
+        var _setP1Venceu = s1v > s2v;
+        if ((_setP1Venceu && _peTbV1 <= _peTbV2) || (!_setP1Venceu && _peTbV2 <= _peTbV1)) {
+          showNotification('Tie-break não bate',
+            'Quem venceu o set tem que ter mais pontos no tie-break.', 'warning');
+          return;
+        }
+        _peIsTb = true;
+      }
       var isGroupMatch = m.group !== undefined;
       var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
         return (r.matches || []).some(function(rm) { return rm.id === matchId; });
@@ -2554,7 +2614,12 @@ window._editPendingResult = function(tId, matchId) {
           winner: winner,
           draw: s1v === s2v,
           scoreP1: s1v,
-          scoreP2: s2v
+          scoreP2: s2v,
+          // _approveResult lê estes 4 campos pra montar o set com o tie-break
+          useSets: !!_peUseSets,
+          isTiebreakEntry: _peIsTb,
+          tbP1: _peIsTb ? _peTbV1 : null,
+          tbP2: _peIsTb ? _peTbV2 : null
         };
         if (typeof window._approveResult === 'function') window._approveResult(tId, matchId);
         return;
@@ -2577,6 +2642,12 @@ window._editPendingResult = function(tId, matchId) {
         draw: s1v === s2v,
         scoreP1: s1v,
         scoreP2: s2v,
+        // o TB viaja na contra-proposta: quem confirmar do outro lado aprova o placar
+        // COMPLETO, não um 6-5 sem os pontos
+        useSets: !!_peUseSets,
+        isTiebreakEntry: _peIsTb,
+        tbP1: _peIsTb ? _peTbV1 : null,
+        tbP2: _peIsTb ? _peTbV2 : null,
         isCounterProposal: true,  // marca fase 2: time original verá Confirmar + Contestar
         originalProposal: _origProp
       };

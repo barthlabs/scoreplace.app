@@ -402,6 +402,10 @@ const SUITES = [
   // vence o padrão do esporte nos dois sentidos, escala com gamesPerSet e nunca é
   // cravado. Inclui a ESCRITA: o que a tela destaca é o que fica gravado. v1.8.42.
   'tests/tiebreak-segue-a-config.test.js',
+  // O campo do TB tem que existir em TODOS os caminhos de lançamento (organizador E
+  // participante). O relato foi no card com PROPOSTA PENDENTE — o único ramo que nunca
+  // renderizou tb1/tb2, então _highlightWinner virava no-op silencioso. v1.8.43.
+  'tests/tiebreak-em-todos-os-caminhos.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
