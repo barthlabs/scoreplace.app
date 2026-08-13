@@ -267,7 +267,9 @@ function compararNomes(a, b, opts) {
   // Nome INCOMPLETO é testado aqui, antes do guard de "mesmo número de tokens" — é
   // justamente a diferença de tamanho que o caracteriza. A guarda dele é outra (2+ tokens
   // no menor); ver subconjuntoDeNome.
-  if (sa.length !== sb.length) return subconjuntoDeNome(sa, sb) ? 'subconjunto' : null;
+  // `opts.freqToken` (quantas contas da base têm o token do nome curto) segue pra dentro:
+  // é ele que libera a exceção de 1 token. Sem opts, o comportamento é o de antes.
+  if (sa.length !== sb.length) return subconjuntoDeNome(sa, sb, opts) ? 'subconjunto' : null;
   const ksa = sa.join('');
   const ksb = sb.join('');
   if (!ksa || !ksb) return null;
@@ -307,12 +309,45 @@ const MIN_TOKENS_SUBCONJUNTO = 2;
  * Um token só é um primeiro nome solto: não identifica ninguém. Dois já carregam
  * sobrenome. Por isso o piso é 2 — não é número escolhido no olho.
  */
-function subconjuntoDeNome(ta, tb) {
+function subconjuntoDeNome(ta, tb, opts) {
   const menor = ta.length < tb.length ? ta : tb;
   const maior = ta.length < tb.length ? tb : ta;
   if (menor.length === maior.length) return false;
-  if (menor.length < MIN_TOKENS_SUBCONJUNTO) return false;
-  return menor.every((x) => maior.indexOf(x) !== -1);
+  if (!menor.every((x) => maior.indexOf(x) !== -1)) return false;
+  if (menor.length >= MIN_TOKENS_SUBCONJUNTO) return true;
+
+  // ── EXCEÇÃO DE 1 TOKEN: só quando o token é RARO **e** não é sobrenome ─────────────
+  // O piso de 2 tokens existe porque "primeiro nome solto não identifica ninguém" — e isso
+  // segue verdade *em geral*. Mas o caso real da Betânia (12/ago, Confra: "Betânia" ⊂
+  // "maria betania roberto faria", a MESMA pessoa em dois grupos) mostrou que o piso também
+  // descarta acertos óbvios. MEDIDO sobre as 217 contas com nome, nos 7 pares de 1 token:
+  //
+  //   token  freq  par                                        veredito
+  //   fabio    4   Fabio × Fabio Rey / Ruggiero / Simão        3 ERRADOS
+  //   marco    2   Marco × Adriana de Marco                    1 ERRADO
+  //   betania  2   Betânia × maria betania roberto faria       certo
+  //   luciana  2   Luciana × Luciana Marinho                   certo
+  //   cynthia  2   Cynthia × Cynthia Cury                      certo
+  //
+  // Duas guardas, cada uma matando um tipo de erro:
+  //  (1) RARIDADE — o token pode existir só nas DUAS contas comparadas. "fabio" aparece em
+  //      4 contas, então não distingue ninguém; "betania" aparece em 2. A frequência vem de
+  //      FORA (`opts.freqToken`), porque esta função é pura e não conhece a base — quem
+  //      consulta é a camada de detecção.
+  //  (2) NÃO SER O ÚLTIMO TOKEN do nome maior — o último é o sobrenome. É o que separa
+  //      "Marco × Adriana de Marco" (marco é o sobrenome dela) de "Betânia × maria betania
+  //      roberto faria" (o sobrenome ali é "faria"). Sem (2), a raridade sozinha ainda
+  //      deixaria o Marco passar.
+  //
+  // Com as duas: 3 aceitos, 0 errados nos 7 pares da base. E mesmo um falso positivo custa
+  // só uma PERGUNTA — a porta nunca afirma e sempre tem "não sou eu" ([[feedback_duplicate_person_signals]]).
+  // A frequência é POR TOKEN, então vem num MAPA (`freqTokens`) — um `freqToken` solto
+  // valeria pro lote inteiro e contaminaria os outros candidatos da mesma consulta
+  // (a CF compara o candidato contra vários de uma vez). `freqToken` fica aceito como
+  // atalho de 1 par só, que é como os testes exercitam.
+  const f = opts && (opts.freqTokens ? opts.freqTokens[menor[0]] : opts.freqToken);
+  if (f !== 2) return false;   // raro = existe SÓ nas duas contas comparadas
+  return maior[maior.length - 1] !== menor[0];
 }
 
 /**

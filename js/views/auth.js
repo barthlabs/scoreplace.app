@@ -4708,6 +4708,15 @@ async function simulateLoginSuccess(user) {
       }
     } else if (_dnLooksLikePhone || (cu.displayName && cu.displayName === cu.email)) {
       _nudgeText = '💡 Adicione um nome amigável para que outros usuários te reconheçam!';
+    } else if (window._nomeSoTemPrimeiroNome && window._nomeSoTemPrimeiroNome(cu.displayName)) {
+      // v1.8.38 — SÓ O PRIMEIRO NOME. Pedido do dono depois do caso da Betânia, que tinha
+      // duas contas ("Betânia" e "maria betania roberto faria") e ficou em DOIS grupos do
+      // mesmo torneio: _"coloque um sobrenome para evitar confusões"_.
+      // MEDIDO na base: 34 das 217 contas com nome (16%) têm um nome só — e é justamente
+      // aí que o app não consegue distinguir duas pessoas, nem reconhecer a mesma.
+      // É SUGESTÃO, não trava: quem quiser continuar só com o primeiro nome, continua.
+      _nudgeText = '💡 Coloque também o sobrenome. Só o primeiro nome se confunde com o de ' +
+                   'outra pessoa — e atrapalha o app a reconhecer você entre torneios.';
     }
     _setVal('profile-edit-name', _fallbackName);
     // Exibir/ocultar nudge abaixo do campo nome

@@ -45,7 +45,7 @@
         '<h1 class="landing-title">scoreplace<span class="landing-dot">.app</span></h1>' +
         (ver ? '<div class="landing-version" style="font-size:0.78rem;color:var(--text-muted,#9ca3af);margin-top:-4px;margin-bottom:14px;letter-spacing:0.3px;">v' + ver + '</div>' : '') +
         '<p class="landing-tagline">' + t('landing.tagline') + '</p>' +
-        '<button class="btn btn-cta btn-success landing-cta-btn landing-cta-hero" data-landing-cta onclick="if(window._enterApp)window._enterApp(this);else if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
+        '<button class="btn btn-cta btn-success landing-cta-btn landing-cta-hero" data-landing-cta onclick="if(window._spEnterClick)window._spEnterClick(this);else if(window._enterApp)window._enterApp(this);else if(window.openModal)window.openModal(\'modal-login\');">' +
           '<span class="landing-cta-l1">' + _ctaL1 + '</span>' +
           (_ctaL2 ? '<span class="landing-cta-l2">' + _ctaL2 + '</span>' : '') +
         '</button>' +
@@ -150,7 +150,7 @@
 
   function _ctaBottom(t) {
     return '<section class="landing-cta-section">' +
-      '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window._enterApp)window._enterApp(this);else if(window.openModal)window.openModal(\'modal-login\');else if(window.handleGoogleLogin)window.handleGoogleLogin();">' +
+      '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window._spEnterClick)window._spEnterClick(this);else if(window._enterApp)window._enterApp(this);else if(window.openModal)window.openModal(\'modal-login\');">' +
         t('landing.ctaBottom') +
       '</button>' +
       ((typeof window._installButtonHtml === 'function')

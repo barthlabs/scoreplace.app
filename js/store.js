@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.34';
+window.SCOREPLACE_VERSION = '1.8.39';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -9671,3 +9671,23 @@ window.updateViewModeVisibility = function() {};
   };
   window._dragAutoScrollStop = stop;
 })();
+
+// ── v1.8.38 · "Coloque também o sobrenome" ───────────────────────────────────────────
+// Responde se o nome tem UM token só ("Betânia", "Fabio", "Marco"). Usado APENAS pelo
+// aviso no perfil — quem decide identidade é o servidor, e é lá que mora a regra de
+// duplicata. Espelha `tokensNome` de functions/duplicate-person-core.js byte a byte
+// (normaliza sem acento, minúsculo, tudo que não é letra/dígito vira separador) pra o
+// aviso não discordar do que o servidor enxerga. Partícula NÃO é descartada, igual lá:
+// "Adriana de Marco" são 3 tokens, não 2.
+// Nasceu do caso da Betânia (12/ago/2026): duas contas, dois grupos do mesmo torneio.
+// MEDIDO: 34 das 217 contas com nome (16%) têm um nome só.
+window._nomeSoTemPrimeiroNome = function (nome) {
+  var t = String(nome == null ? '' : nome)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t) return false;
+  return t.split(' ').filter(Boolean).length === 1;
+};

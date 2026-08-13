@@ -709,6 +709,22 @@ const SUITES = [
   // O splash só sai quando os dados carregaram — o teto por tempo revelava tela vazia
   // e o app travava ao primeiro toque. v1.8.12.
   'tests/boot-libera-quando-carregou.test.js',
+  // O PWA abre sem tela branca: o topo do sw.js não pode depender da rede (era
+  // importScripts do Firebase por outra origem, bloqueando TODO fetch) e o shell
+  // sai do cache sem esperar round-trip. Roda o sw.js de verdade. v1.8.35.
+  'tests/sw-abre-sem-tela-branca.test.js',
+  // Entrar na lista de espera passa pelo SERVIDOR (enrollParticipant), nunca por
+  // saveTournament do doc inteiro — incidente da Mariana no Confra, 12/ago. v1.8.36.
+  'tests/inscricao-na-fila-passa-pelo-servidor.test.js',
+  // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
+  // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
+  'tests/entrar-nunca-fica-mudo.test.js',
+  // Nome de 1 token: sugere sobrenome no perfil e vira sinal de duplicata quando o
+  // token é RARO e não é sobrenome. Trava a paridade cliente×servidor. v1.8.38.
+  'tests/sobrenome-e-raridade.test.js',
+  // Script que chega TRUNCADO (medido no Sentry: EOF no meio de um arquivo íntegro no
+  // servidor) limpa cache, tira o SW e recarrega uma vez. v1.8.39.
+  'tests/js-truncado-se-conserta.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
 ];
 

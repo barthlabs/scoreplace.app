@@ -406,18 +406,60 @@ function _enrollToStandby(t, tId, participantObj, callback) {
     if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: newName }), 'info');
     return;
   }
-  t.standbyParticipants.push(participantObj);
-  // v2.1.5: aguardar o save e tratar erro. Antes era fire-and-forget — se o
-  // Firestore rejeitasse (permission-denied), o usuário via "você está na lista
-  // de espera" mas nada persistia no servidor (organizador nunca via, e o card
-  // dele continuava "Inscrever-se"). Agora: rollback otimista + aviso real.
-  window.FirestoreDB.saveTournament(t).then(function() {
-    var modeLabel = ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
-    if (typeof showNotification !== 'undefined') showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
+  // ── v1.8.36 · A FILA PASSA PELO SERVIDOR, como todo o resto da inscrição ──────────────
+  // INCIDENTE (Confra, 12/ago/2026): a Mariana clicou em inscrever-se, APARECEU EM AZUL na
+  // lista de espera e sumiu com "Missing or insufficient permissions". Isto aqui era o
+  // único caminho de inscrição que NÃO passava pela Cloud Function: pra pôr UMA pessoa numa
+  // fila ele gravava o DOCUMENTO INTEIRO do torneio (125 campos, `saveTournament`) a partir
+  // da cópia em memória do cliente. `isEnrollmentOnlyDiff()` só autoriza diff em 6 campos —
+  // então bastava UM campo da cópia local divergir do banco (cache local, ou outro escritor
+  // entre a leitura e o save) pra escrita inteira cair, e a pessoa sumia da fila.
+  //
+  // MEDIDO: com o `t` espelhando o banco a escrita PASSA (payload real da 1.7.76 contra o
+  // doc real do Confra e as regras reais = 200, tests/rules-inscricao-espera.test.js). Ou
+  // seja, o defeito não é a regra — é depender de que 125 campos estejam idênticos pra
+  // conseguir acrescentar um nome numa lista. É a mesma classe do save atrasado.
+  //
+  // `enrollParticipant` é a porta certa e já existia: tenta a CF (Admin SDK, lê fresco,
+  // grava só `standbyParticipants`+`memberUids`) e, se ela falhar, cai na transação do
+  // cliente — que TAMBÉM escreve só esses dois campos, por `transaction.update`. Os dois
+  // lados já tratam "fase sorteada → fila" (v1.6.86) e devolvem o MESMO shape.
+  // Ver [[project_enroll_after_draw_goes_to_waitlist]] e [[feedback_unify_dual_entry_points]].
+  //
+  // ⚠️ SEM PUSH OTIMISTA: quem decide o destino é o servidor, olhando o doc fresco. Empurrar
+  // na lista antes da resposta é o que produzia o "apareceu em azul e sumiu" — e, pior, num
+  // caso de sucesso parcial deixaria a tela afirmando algo que o banco não tem.
+  window.FirestoreDB.enrollParticipant(tId, participantObj).then(function(res) {
+    res = res || {};
+    if (res.alreadyEnrolled) {
+      if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledSingle', { name: newName }), 'info');
+      if (callback) callback();
+      return;
+    }
+    if (res.alreadyWaitlisted) {
+      if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyWaitlisted'), _t('enroll.alreadyWaitlistedMsg', { name: newName }), 'info');
+      if (callback) callback();
+      return;
+    }
+    // A cópia em memória segue o que o SERVIDOR devolveu; só cai no push local quando ele
+    // não mandou a lista (fallback antigo). Nunca inventamos posição na fila.
+    if (Array.isArray(res.standbyParticipants)) t.standbyParticipants = res.standbyParticipants;
+    else if (res.waitlisted && t.standbyParticipants.indexOf(participantObj) === -1) t.standbyParticipants.push(participantObj);
+    if (Array.isArray(res.participants)) t.participants = res.participants;
+
+    if (typeof showNotification !== 'undefined') {
+      if (res.waitlisted) {
+        var modeLabel = ((window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) === 'expand') ? _t('enroll.modeExpand') : _t('enroll.modeStandby');
+        showNotification(_t('enroll.waitlistedTitle'), _t('enroll.waitlistedMsg', { name: newName, mode: modeLabel }), 'success');
+      } else {
+        // O servidor leu o doc FRESCO e concluiu que ainda cabe no elenco (a fase não estava
+        // sorteada de verdade). Quem manda é ele — a tela não contradiz o banco.
+        // ⚠️ `enroll.enrolledMsg` interpola o nome do TORNEIO, não o da pessoa.
+        showNotification(_t('enroll.enrolledTitle'), _t('enroll.enrolledMsg', { name: t.name || '' }), 'success');
+      }
+    }
     if (callback) callback();
   }).catch(function(e) {
-    // desfaz o push otimista (referência exata — não derruba homônimo legítimo)
-    t.standbyParticipants = (Array.isArray(t.standbyParticipants) ? t.standbyParticipants : []).filter(function(sp) { return sp !== participantObj; });
     if (typeof showNotification !== 'undefined') showNotification('Não foi possível entrar na lista de espera', (e && e.message) ? e.message : 'Tente novamente em instantes.', 'error');
     if (typeof window._captureException === 'function') window._captureException(e, { area: '_enrollToStandby', tournamentId: tId });
     if (callback) callback();

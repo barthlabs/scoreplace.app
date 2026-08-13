@@ -178,6 +178,29 @@ window._registerFCMToken = async function() {
       }
     });
 
+    // v1.8.35 — O CAMINHO DE VERDADE DO TOAST EM PRIMEIRO PLANO.
+    // O `onMessage` acima depende de o SDK do Firebase estar rodando DENTRO do
+    // service worker: era ele quem, vendo uma aba visível, repassava a mensagem
+    // pra cá em vez de exibir notificação do sistema. Esse SDK saiu do sw.js —
+    // ele fazia dois `importScripts()` de outra origem no topo do arquivo e,
+    // como nenhum `fetch` é despachado antes do topo terminar, era a causa da
+    // TELA BRANCA de ~7s na abertura fria do PWA.
+    // A separação continua existindo, agora feita pelo próprio sw.js: cliente
+    // visível → `postMessage({type:'SP_PUSH'})` (cai aqui, vira toast); ninguém
+    // olhando → notificação do sistema. Nunca os dois — ver a nota anti-duplicata
+    // no handler de `push` do sw.js e [[project_notification_dedup]].
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', function(ev) {
+        var m = ev && ev.data;
+        if (!m || m.type !== 'SP_PUSH') return;
+        var ff = window._fcmToastFields({ data: m.data, notification: m.notification });
+        if (!ff.body) return;
+        if (typeof showNotification === 'function') {
+          showNotification(ff.title, ff.body, 'info');
+        }
+      });
+    }
+
   } catch (err) {
     window._warn('[FCM] Token registration error:', err);
   }
