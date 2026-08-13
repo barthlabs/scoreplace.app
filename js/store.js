@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.49';
+window.SCOREPLACE_VERSION = '1.8.50';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1632,24 +1632,120 @@ window._devWhatsAppBtnHtml = function (opts) {
       return;
     }
     window._pendingUpdateReload = false;
-    var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
-      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-    }) : Promise.resolve();
-    var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
-      return Promise.all(regs.map(function(r) { return r.unregister(); }));
-    }) : Promise.resolve();
-    // v1.3.64: CRÍTICO — o GitHub Pages serve index.html com `cache-control: max-age=600`
-    // (10min, e NÃO dá pra mudar header no Pages). Após unregister do SW, `location.reload()`
-    // é SOFT → serve o index.html do cache HTTP (cache-busters ?v= VELHOS → JS velho → trava
-    // na versão anterior; só hard-refresh resolvia). Fix: revalidar o documento com
-    // `cache:'reload'` ANTES do reload — isso baixa o HTML fresco E atualiza a entrada do
-    // cache HTTP, então o reload subsequente já pega os cache-busters novos. Funciona pra
-    // TODO usuário (não depende do SW novo). Ver [[project_pwa_auto_update]].
-    var p3 = Promise.resolve();
-    try { p3 = fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); } catch (e) {}
+
+    // ⛔⛔ NÃO TROQUE ISTO POR "apaga os caches + unregister + reload". ⛔⛔
+    //
+    // Era exatamente o que este bloco fazia — e foi a TERCEIRA encarnação da
+    // TELA BRANCA na abertura (v1.8.50). MEDIDO, não deduzido: depois do
+    // `unregister()`, o reload cai com `navigator.serviceWorker.controller ===
+    // null` e `navigation.workerStart === 0`, ou seja **a página não é servida
+    // por service worker nenhum**. Os 103 recursos vão TODOS à rede, com 9
+    // render-blocking no `<head>` — e o cache continua ali, intacto e
+    // INALCANÇÁVEL (um SW recém-registrado não controla a página que o
+    // registrou; controle só começa na navegação seguinte).
+    //
+    // POR QUE ISSO FEZ AS CORREÇÕES ANTERIORES PARECEREM "REGREDIR": as duas
+    // levas anteriores (1.8.35, topo do sw.js; 1.8.49, tamanho do precache)
+    // consertaram o caminho SERVIDO PELO SW. Este bloco garantia que, na
+    // primeira abertura depois de CADA deploy, não houvesse SW servindo — logo
+    // nenhuma delas era alcançada justo no cenário observado. Como todo deploy
+    // bumpa a versão (o gate de cache-buster exige) e se publica várias vezes
+    // por dia, o dono caía sempre nesta carga descontrolada e concluía, com
+    // razão do ponto de vista dele, que "a tela branca voltou".
+    //
+    // A REGRA, e ela é de invariante, não de implementação:
+    //   ATUALIZAR NUNCA PODE DESTRUIR O SW QUE VAI SERVIR O PRÓXIMO CARREGAMENTO.
+    // Trocar de versão é PASSAR O BASTÃO: espera o SW novo ficar `activated`
+    // (o `install` dele já precacheou o <head>, e o `activate` faz
+    // `clients.claim()`), e só então recarrega — assim o reload nasce
+    // controlado e pinta do cache. `tests/sw-abre-sem-tela-branca.test.js`
+    // trava isto; se você reintroduzir unregister/nuke no caminho normal, ele
+    // fica vermelho.
+    //
+    // Apagar cache velho NÃO é necessário aqui: o `activate` do sw.js já apaga
+    // toda chave ≠ CACHE_NAME (que carrega a versão), e o cache-first casa a
+    // URL EXATA com `?v=` — versão nova nunca é servida da antiga.
+
+    var _hardResetEReload = function(motivo) {
+      // FALLBACK — só quando o caminho do SW não existe ou não respondeu. Aqui
+      // a carga descontrolada é o preço de não deixar o usuário preso na versão
+      // velha; no caminho normal (acima) ela não acontece.
+      window._warn('[AutoUpdate] handoff do SW indisponível (' + motivo + ') — reset completo.');
+      var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
+        return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+      }) : Promise.resolve();
+      var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
+        return Promise.all(regs.map(function(r) { return r.unregister(); }));
+      }) : Promise.resolve();
+      Promise.all([p1, p2, _revalidarHtml()]).then(_recarregar);
+    };
+
+    // v1.3.64: CRÍTICO — o hosting serve index.html com `cache-control` de minutos
+    // e SEM cache-buster no próprio HTML. `location.reload()` é SOFT → poderia servir
+    // o index.html do cache HTTP (cache-busters ?v= VELHOS → JS velho → preso na versão
+    // anterior; só hard-refresh resolvia). Revalidar o documento com `cache:'reload'`
+    // ANTES do reload baixa o HTML fresco E atualiza a entrada do cache HTTP.
+    // Ver [[project_pwa_auto_update]].
+    function _revalidarHtml() {
+      try { return fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); }
+      catch (e) { return Promise.resolve(); }
+    }
     // Marca o guard ANTES do reload pra o handler de controllerchange (index.html)
-    // não disparar um segundo reload durante o churn de unregister/re-register.
-    Promise.all([p1, p2, p3]).then(function() { window._swReloading = true; window.location.reload(); });
+    // não disparar um segundo reload — só pode existir UM caminho de reload (v2.6.16).
+    function _recarregar() { window._swReloading = true; window.location.reload(); }
+
+    if (!('serviceWorker' in navigator)) { _hardResetEReload('sem suporte a SW'); return; }
+
+    // CAMINHO NORMAL: passa o bastão pro SW novo e recarrega CONTROLADO.
+    var _entregue = false;
+    var _entregar = function() {
+      if (_entregue) return;
+      _entregue = true;
+      _revalidarHtml().then(_recarregar);
+    };
+    // Rede de segurança: SW que não instala (rede caiu, sw.js com erro) não pode
+    // prender ninguém na versão velha. 8s é folgado pro install, que hoje
+    // precacheia só o <head>.
+    var _prazo = setTimeout(function() {
+      if (_entregue) return;
+      _entregue = true;
+      _hardResetEReload('o SW novo não ativou em 8s');
+    }, 8000);
+    var _pronto = function() {
+      if (_entregue) return;
+      clearTimeout(_prazo);
+      _entregar();
+    };
+
+    navigator.serviceWorker.getRegistration().then(function(reg) {
+      if (!reg) { clearTimeout(_prazo); _entregue = true; _hardResetEReload('nenhum SW registrado'); return; }
+      // Se já há um SW novo esperando/instalando, acompanha; senão provoca a busca.
+      // SW parado em `installed` fica esperando as abas antigas fecharem. O
+      // sw.js chama skipWaiting sozinho no install, mas cutucar aqui elimina o
+      // caminho em que ele estaciona e a gente cai no prazo à toa.
+      var _destravar = function(w) {
+        if (w && w.state === 'installed') { try { w.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {} }
+      };
+      var _observar = function(w) {
+        if (!w) return false;
+        if (w.state === 'activated') { _pronto(); return true; }
+        _destravar(w);
+        w.addEventListener('statechange', function() {
+          _destravar(w);
+          // `activated` = install terminou (precache do <head> incluído, via
+          // waitUntil) e o activate já chamou clients.claim().
+          if (w.state === 'activated') _pronto();
+        });
+        return true;
+      };
+      if (_observar(reg.waiting) || _observar(reg.installing)) { /* já a caminho */ }
+      reg.addEventListener('updatefound', function() { _observar(reg.installing); });
+      reg.update().catch(function() {
+        clearTimeout(_prazo); _entregue = true; _hardResetEReload('reg.update() falhou');
+      });
+    }).catch(function() {
+      clearTimeout(_prazo); _entregue = true; _hardResetEReload('getRegistration() falhou');
+    });
   };
 
   // Busca store.js sem cache e compara a versão. Throttle de 60s salvo force.

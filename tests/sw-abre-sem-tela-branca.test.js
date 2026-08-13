@@ -1,6 +1,39 @@
 'use strict';
 /* O PWA ABRE SEM TELA BRANCA — node tests/sw-abre-sem-tela-branca.test.js
  *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  LEIA ISTO ANTES DE MEXER EM sw.js, index.html <head> OU _applyUpdate.    ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * ESTE ARQUIVO GUARDA UM INVARIANTE, NÃO UM BUG:
+ *
+ *     O APP TEM QUE CONSEGUIR PINTAR SEM ESPERAR A REDE — EM TODO CARREGAMENTO,
+ *     INCLUSIVE O PRIMEIRO DEPOIS DE CADA DEPLOY.
+ *
+ * A "tela branca na abertura" já voltou TRÊS VEZES, por TRÊS mecanismos
+ * diferentes, todos com o MESMO sintoma para o dono:
+ *
+ *   1) v1.8.35 — o TOPO do sw.js fazia `importScripts()` de outra origem. O spec
+ *      não despacha nenhum `fetch` antes de o topo terminar → nem o pedido do
+ *      index.html começava.
+ *   2) v1.8.49 — o `install` precacheava a PÁGINA INTEIRA (90 arquivos), em
+ *      paralelo, disputando banda com a página que estava tentando pintar.
+ *   3) v1.8.50 — `_applyUpdate` (store.js) fazia `unregister()` do SW antes do
+ *      reload → a página recarregava SEM CONTROLLER (medido: `controller`
+ *      null, `navigation.workerStart` 0) e baixava os 103 recursos da rede,
+ *      com o cache ali do lado, intacto e inalcançável.
+ *
+ * ⚠️ POR QUE PARECIA QUE "O FIX REGREDIU" (e não tinha regredido): 1 e 2
+ * consertaram o caminho SERVIDO PELO SW; 3 garantia que, na primeira abertura
+ * depois de CADA deploy, não houvesse SW servindo. Como todo deploy bumpa a
+ * versão e se publica várias vezes por dia, o dono caía SEMPRE na carga
+ * descontrolada — os consertos existiam e não eram alcançados.
+ *
+ * ⚠️ REGRA DE MANUTENÇÃO: se aparecer uma QUARTA forma de tela branca, a
+ * asserção nova vem PARA CÁ. Cada teste anterior travou só o próprio mecanismo,
+ * e foi exatamente por isso que o sintoma voltou por outro caminho. O que se
+ * guarda aqui é o invariante lá em cima — não a implementação da vez.
+ *
  * Relato do dono (12/ago/2026, v1.8.34): "abre o PWA → tela branca por ~7 segundos →
  * daí entra na tela de carregamento normal. Na segunda abertura o tempo é menor."
  *
@@ -390,6 +423,150 @@ const CACHE_QUENTE = {
   // o motivo tem que ficar escrito onde o defeito morava, senão alguém "otimiza" de volta
   ok('  → o motivo está escrito no sw.js (pra ninguém reverter achando que é lentidão)',
     /first-paint/i.test(swFonte) && /COMPETINDO POR BANDA|competindo por banda/i.test(swFonte));
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // MECANISMO 3 (v1.8.50) — ATUALIZAR NÃO PODE DESTRUIR O SW QUE VAI SERVIR O
+  // PRÓXIMO CARREGAMENTO.
+  //
+  // `_applyUpdate` fazia `caches.delete()` em tudo + `unregister()` em todos os
+  // SWs + reload. MEDIDO no navegador: o reload caía com `controller === null`
+  // e `navigation.workerStart === 0` — página SEM service worker servindo, 103
+  // recursos pela rede, 9 render-blocking no <head>, e o cache intacto do lado
+  // sem poder ser usado (um SW recém-registrado não controla a página que o
+  // registrou).
+  //
+  // Aqui roda o `_applyUpdate` REAL extraído do store.js — não uma réplica.
+  // ───────────────────────────────────────────────────────────────────────────
+  const storeSrc = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+
+  // Extrai a função pelo casamento de chaves (regex não fecha bloco aninhado).
+  function extrairFuncao(src, assinatura) {
+    const i = src.indexOf(assinatura);
+    if (i < 0) return null;
+    let j = src.indexOf('{', i), prof = 0;
+    for (let k = j; k < src.length; k++) {
+      if (src[k] === '{') prof++;
+      else if (src[k] === '}') { prof--; if (prof === 0) return src.slice(i, k + 1); }
+    }
+    return null;
+  }
+  const fonteApply = extrairFuncao(storeSrc, 'window._applyUpdate = function');
+  ok('dá pra extrair o _applyUpdate real do store.js', !!fonteApply);
+
+  // Monta um navegador de mentira e roda o _applyUpdate de verdade dentro dele.
+  function rodarApplyUpdate(cenario) {
+    const atos = [];
+    const worker = {
+      state: cenario.estadoInicial || 'installing',
+      _handlers: {},
+      addEventListener(t, fn) { (this._handlers[t] = this._handlers[t] || []).push(fn); },
+      postMessage(m) { atos.push({ ato: 'postMessage', tipo: m && m.type }); },
+      _virar(estado) {
+        this.state = estado;
+        (this._handlers.statechange || []).forEach((fn) => fn());
+      }
+    };
+    const reg = {
+      installing: cenario.temInstalling === false ? null : worker,
+      waiting: null,
+      _handlers: {},
+      addEventListener(t, fn) { (this._handlers[t] = this._handlers[t] || []).push(fn); },
+      update() { atos.push({ ato: 'reg.update' }); return cenario.updateFalha ? Promise.reject(new Error('x')) : Promise.resolve(); }
+    };
+    const win = {
+      _isSafeToReload: () => true,
+      _log: () => {}, _warn: () => {}, _showUpdatePill: () => {},
+      _pendingUpdateReload: false, _swReloading: false,
+      location: { pathname: '/', reload() { atos.push({ ato: 'location.reload' }); } }
+    };
+    const sandbox = {
+      window: win, Promise, Date, Error, JSON,
+      setTimeout: (fn, ms) => { atos.push({ ato: 'timeout', ms }); return { _fn: fn, ms }; },
+      clearTimeout: () => { atos.push({ ato: 'clearTimeout' }); },
+      caches: { keys: () => { atos.push({ ato: 'caches.keys' }); return Promise.resolve(['c1']); },
+                delete: (k) => { atos.push({ ato: 'CACHES.DELETE', alvo: k }); return Promise.resolve(true); } },
+      fetch: (u, o) => { atos.push({ ato: 'fetch', url: u, cache: o && o.cache }); return Promise.resolve({}); },
+      navigator: {
+        serviceWorker: cenario.semSW ? undefined : {
+          getRegistration: () => Promise.resolve(cenario.semReg ? null : reg),
+          getRegistrations: () => { atos.push({ ato: 'getRegistrations' }); return Promise.resolve([{ unregister() { atos.push({ ato: 'SW.UNREGISTER' }); return Promise.resolve(true); } }]); }
+        }
+      }
+    };
+    if (cenario.semSW) delete sandbox.navigator.serviceWorker;
+    sandbox.window.caches = sandbox.caches;
+    vm.createContext(sandbox);
+    vm.runInContext(fonteApply, sandbox, { filename: 'store.js#_applyUpdate' });
+    win._applyUpdate(true);
+    return { atos, worker, reg };
+  }
+
+  // 3a) CAMINHO NORMAL: espera o SW novo ativar; NUNCA apaga cache nem desregistra.
+  {
+    const r = rodarApplyUpdate({});
+    await new Promise((res) => setTimeout(res, 30));
+    const antes = r.atos.slice();
+    ok('atualizar NÃO desregistra o service worker (era a tela branca de 1.8.50)',
+      !antes.some((a) => a.ato === 'SW.UNREGISTER'));
+    ok('atualizar NÃO apaga os caches no caminho normal',
+      !antes.some((a) => a.ato === 'CACHES.DELETE'));
+    ok('  → e NÃO recarrega antes de o SW novo ficar `activated`',
+      !antes.some((a) => a.ato === 'location.reload'));
+    // agora o SW novo termina de instalar e ativa
+    r.worker._virar('installed');
+    r.worker._virar('activated');
+    await new Promise((res) => setTimeout(res, 30));
+    ok('  → recarrega DEPOIS que o SW novo ativa (reload nasce CONTROLADO)',
+      r.atos.some((a) => a.ato === 'location.reload'));
+    ok('  → e revalida o HTML com cache:"reload" antes (cache-busters novos)',
+      r.atos.some((a) => a.ato === 'fetch' && a.cache === 'reload'));
+    ok('  → mesmo no fim, nada de unregister/nuke',
+      !r.atos.some((a) => a.ato === 'SW.UNREGISTER' || a.ato === 'CACHES.DELETE'));
+  }
+
+  // 3b) O FALLBACK CONTINUA EXISTINDO — sem ele, SW quebrado prenderia o usuário
+  //     na versão velha pra sempre. Aqui o reset completo é o comportamento certo.
+  {
+    const r = rodarApplyUpdate({ semReg: true });
+    await new Promise((res) => setTimeout(res, 30));
+    ok('sem SW registrado: cai no reset completo (não trava na versão velha)',
+      r.atos.some((a) => a.ato === 'CACHES.DELETE') && r.atos.some((a) => a.ato === 'SW.UNREGISTER'));
+  }
+  {
+    const r = rodarApplyUpdate({ updateFalha: true });
+    await new Promise((res) => setTimeout(res, 30));
+    ok('reg.update() falhando: idem — reset completo em vez de ficar preso',
+      r.atos.some((a) => a.ato === 'CACHES.DELETE'));
+  }
+  {
+    // Prazo: SW que nunca ativa não pode prender ninguém.
+    const r = rodarApplyUpdate({});
+    const prazo = r.atos.find((a) => a.ato === 'timeout');
+    ok('existe prazo pro SW ativar (SW travado não prende o usuário)',
+      !!prazo && prazo.ms > 0 && prazo.ms <= 15000);
+  }
+
+  // 3c) O MOTIVO FICA ESCRITO ONDE O DEFEITO MORAVA — senão alguém "simplifica"
+  //     de volta pro nuke, que é o caminho mais óbvio e o errado.
+  ok('o store.js explica por que atualizar não pode destruir o SW',
+    /NÃO TROQUE ISTO POR/.test(storeSrc) &&
+    /workerStart/.test(storeSrc) &&
+    /ATUALIZAR NUNCA PODE DESTRUIR O SW/.test(storeSrc));
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // ORÇAMENTO ESTRUTURAL — o <head> é o caminho crítico de pintura. Cada arquivo
+  // aqui é um round-trip que o splash espera quando o cache está frio (e ele
+  // FICA frio a cada deploy, porque CACHE_NAME carrega a versão).
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    const head = shell.split(/<\/head>/i)[0] || '';
+    const css = (head.match(/<link[^>]+rel=["']stylesheet["'][^>]*>/g) || [])
+      .filter((l) => !/media\s*=\s*["']print["']/.test(l));
+    const js = (head.match(/<script[^>]+src=/g) || []);
+    const total = css.length + js.length;
+    ok('o <head> tem no máximo 12 recursos bloqueando a pintura (tem ' + total + ')', total <= 12);
+    if (total > 12) console.error('     → css:', css.length, 'js:', js.length);
+  }
 
   console.log('\n' + (fail === 0 ? '✅' : '❌') + ' ' + pass + ' asserções ok, ' + fail + ' falha(s)');
   process.exit(fail === 0 ? 0 : 1);
