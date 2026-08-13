@@ -65,7 +65,11 @@ ok(!/pulT\+\+|pulR\+\+/.test(src), 'e nem o contador que existia só pra isso');
   // REVISADO em 03/ago/2026: "já lido" passou a exigir que o DETALHE tenha sobrevivido —
   // o cursor prova que a página abriu, não que o nome/classificação ficaram no documento.
   // A Kelly tinha tournaments:[] com os 8 marcados como lidos, e o violeta não saía nunca.
-  ok(/if \(d0 && \(d0\.name \|\| d0\.standings\)\) \{ det\[tk\] = d0; return false; \}/.test(filtro),
+  // REVISADO DE NOVO em 11/ago/2026 (ext 2.01): torneio também precisa da CHAVE, senão a
+  // ficha não tem como dizer a colocação nem a rodada em que a pessoa caiu — medido no
+  // @fabiogod, 29 de 35 torneios mudos e a releitura pulando todos por este mesmo `if`.
+  // O invariante não mudou; a régua ficou mais dura. Ver tests/lz-contagem-unica.test.js.
+  ok(/if \(d0 && \(d0\.name \|\| d0\.standings \|\| d0\.matches\)\) \{ det\[tk\] = d0; return false; \}/.test(filtro),
      'e o que já sabíamos dele é reaproveitado — mas só quando existe de verdade');
 }
 

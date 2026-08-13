@@ -5314,17 +5314,47 @@ async function simulateLoginSuccess(user) {
     window._pendingEnrollTournamentId = null;
     try { sessionStorage.removeItem('_pendingEnrollTournamentId'); } catch(e) {}
 
-    // v2.3.88: O SISTEMA NUNCA INSCREVE SOZINHO. A inscrição SEMPRE exige que a
-    // pessoa clique em "Inscrever-se" na página do torneio — inclusive vindo de
-    // convite (atender ao convite = abrir a página e clicar). Qualquer um pode
-    // se inscrever num torneio público de acesso livre; basta clicar.
-    // BUG reportado: algo auto-inscrevia o usuário num torneio que ele NÃO
-    // clicou (a conta de teste era re-inscrita todo dia). Aqui só LEVAMOS o
-    // usuário à página do torneio — ele decide se entra.
-    // A auto-amizade com quem convidou (ref no link) já foi tratada acima, antes
-    // deste bloco — vale pra qualquer login com ref, não só convite de torneio.
+    // ── CONVITE + CONTA NOVA = JÁ INSCREVE (v1.8.33) ──────────────────────────
+    // A v2.3.88 tinha proibido QUALQUER auto-inscrição, "inclusive vindo de convite".
+    // O dono reverteu em 12/ago/2026, e o motivo dele desfaz o motivo de lá:
+    //   _"essa regra no sentido contrário era quando o convite não trazia a descrição do
+    //    torneio e app. agora traz. e várias pessoas entraram e não entenderam que tinham
+    //    que se inscrever depois de cadastrar. estou revertendo o desenho para facilitar
+    //    as coisas para os que não estão familiarizados."_
+    // Ou seja: em jun/2026 a pessoa era inscrita SEM SABER no que estava entrando; hoje o
+    // convite descreve o torneio ANTES do clique, então o consentimento existe — o que
+    // sobrava era só a fricção de "clicar, cadastrar E AINDA se inscrever".
+    //
+    // ⚠️ O BUG DE LÁ ERA REAL E NÃO PODE VOLTAR: a conta de teste era re-inscrita TODO DIA.
+    // Ele não vinha de "convite auto-inscreve" — vinha do GATILHO ser largo demais. O flag
+    // `_pendingEnrollTournamentId` é setado pelo router sempre que um DESLOGADO abre
+    // `#tournaments/<id>`, e no cold start o auth é assíncrono, então um usuário LOGADO
+    // parece deslogado por um instante e o flag se re-arma sozinho, em loop.
+    // Por isso a auto-inscrição aqui exige as TRÊS coisas juntas, e cada uma mata uma
+    // parte daquele laço:
+    //   1. `_inviteRefUid` → veio de um CONVITE de verdade (`?ref=`). Abrir a página do
+    //      torneio deslogado não tem ref — e era exatamente esse o caso que disparava.
+    //   2. CONTA NOVA → `creationTime ≈ lastSignInTime` no Firebase Auth. O laço do bug
+    //      acontecia em contas ANTIGAS relogando; conta nova só existe uma vez na vida.
+    //   3. MARCA DE UM TIRO SÓ em localStorage (sobrevive ao cold start, ao contrário do
+    //      sessionStorage) → mesmo que 1 e 2 falhem juntos algum dia, não re-inscreve.
+    // A marca é gravada ANTES de inscrever de propósito: se a inscrição falhar, a pessoa
+    // clica no botão normalmente — o que não pode é o app tentar sozinho de novo.
+    //
+    // Quem JÁ TEM CONTA e clica no convite continua tendo que clicar em "Inscrever-se":
+    // ali não existe a fricção que o dono descreveu (não há cadastro no meio) e é o caso
+    // mais próximo do bug original.
+    // A DECISÃO NÃO MORA AQUI. Existem DOIS caminhos de chegada e eles são assimétricos:
+    // quem cria a conta agora passa por este `simulateLoginSuccess`; quem JÁ TEM CONTA não
+    // passa por login nenhum e chega pelo router. Duas cópias da mesma regra é como uma
+    // delas diverge — a decisão inteira (exige ?ref=, um tiro só, delega ao caminho normal)
+    // vive em `_autoEnrollFromInvite` (tournaments-enrollment.js), chamada dos dois lugares.
+    // Ver [[feedback_unify_dual_entry_points]].
     window.location.hash = '#tournaments/' + pendingEnrollId;
     if (typeof initRouter === 'function') initRouter();
+    if (_inviteRefUid && typeof window._autoEnrollFromInvite === 'function') {
+      try { window._autoEnrollFromInvite(pendingEnrollId, _inviteRefUid); } catch (e) {}
+    }
     window._simulateLoginInProgress = false;
     return;
   }

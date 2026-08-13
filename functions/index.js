@@ -26,7 +26,7 @@
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
@@ -6819,5 +6819,131 @@ exports.cacheVenuePhoto = onCall(
     }, { merge: true });
     console.log(`[cacheVenuePhoto] ${placeId} gravado: ${foto.bytes} bytes @${foto.width}px`);
     return { ok: true, gravado: true, bytes: foto.bytes };
+  }
+);
+
+// ─── purgeTournamentCopies (12/ago/2026 · CF-only) ────────────────────────────────────────────
+// APAGAR UM TORNEIO APAGA AS CÓPIAS DELE NAS PESSOAS.
+// Ordem do dono (12/ago/2026): _"um dia posso resolver apagá-lo e daí ele deve sumir de
+// todos os dados dos que participaram."_
+//
+// MEDIDO ANTES DE ESCREVER: `FirestoreDB.deleteTournament` (js/firebase-db.js) limpa
+// `results`, `letzplayScans`, `discoveryFeed/{tid}` e o doc do torneio — e NÃO limpa
+// `users/{uid}/matchHistory`, que é a CÓPIA DESNORMALIZADA gravada por participante no
+// lançamento do placar. O efeito era o oposto do pedido, e assimétrico: some da ficha dos
+// OUTROS (que leem `collectionGroup('results')`, apagado) e FICA na ficha da PRÓPRIA
+// pessoa (que lê o próprio matchHistory, intocado).
+//
+// POR QUE CF: `firestore.rules` só deixa o dono escrever no próprio matchHistory — o
+// organizador que aperta Apagar não alcança os outros 121 inscritos. A regra está certa;
+// quem limpa tem que ser o Admin SDK. E, como é gatilho, vale pra QUALQUER cliente,
+// inclusive o app NATIVO publicado, que não tem auto-update.
+//
+// DE BRINDE, o segundo órfão: `tournaments/{tid}/participants` (o espelho do roster) também
+// ficava pendurado — e não dava pra resolver no cliente, porque não existe regra pra essa
+// subcoleção e o Firestore nega por omissão (achado da 1.7.97). Mesma classe dos 151
+// `results` órfãos da 1.6.78.
+//
+// Deploy: scripts/deploy-functions.sh main   (NUNCA `firebase deploy --only functions` puro)
+const _purge = require("./tournament-purge-core");
+exports.purgeTournamentCopies = onDocumentDeleted(
+  { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 540 },
+  async (event) => {
+    const tid = event.params.tid;
+    // Handle PRÓPRIO: o `const db` do módulo é declarado abaixo e `const` fica em zona
+    // morta temporal — foi exatamente assim que o espelho do roster nasceu mudo (1.7.99).
+    const _db = admin.firestore();
+    const t = (event.data && typeof event.data.data === "function" ? event.data.data() : null) || null;
+    const conta = {};
+
+    // Apaga um punhado de refs em lotes de 400 (o teto do batch é 500).
+    const apagarRefs = async (refs, rotulo) => {
+      let n = 0;
+      for (const lote of _purge.emLotes(refs, 400)) {
+        const batch = _db.batch();
+        lote.forEach((r) => batch.delete(r));
+        try { await batch.commit(); n += lote.length; }
+        catch (e) { console.error(`[purgeTournamentCopies] ${rotulo} falhou em ${tid}:`, e && e.message); }
+      }
+      if (n) conta[rotulo] = (conta[rotulo] || 0) + n;
+      return n;
+    };
+
+    // ── (1) CÓPIAS NAS PESSOAS ────────────────────────────────────────────────
+    // matchHistory tem id DETERMINÍSTICO (`t_<tid>_<matchId>`), então a rota por
+    // REFERÊNCIA funciona sem consulta e sem índice. A VARREDURA vem por cima porque
+    // alcança quem a referência não vê — o caso real é quem levou W.O. e foi
+    // SUBSTITUÍDO: sumiu do elenco e dos slots, mas o registro do jogo que jogou ficou
+    // com ele. `notifications` não tem id derivável e depende só da varredura.
+    const planoA = _purge.planPurgePorReferencia(tid, t);
+    for (const sub of _purge.USER_SUBCOLLECTIONS_BY_TOURNAMENT) {
+      const achados = [];
+      try {
+        const snap = await _db.collectionGroup(sub).where("tournamentId", "==", tid).get();
+        snap.forEach((d) => {
+          const dono = d.ref.parent.parent;                   // users/{uid}/<sub>/{id}
+          if (dono && dono.id) achados.push({ uid: dono.id, recordId: d.id });
+        });
+      } catch (e) {
+        console.error(`[purgeTournamentCopies] varredura de ${sub} falhou em ${tid}:`, e && e.message);
+      }
+      // A referência direta só vale pra matchHistory — é a única com id determinístico.
+      const base = (sub === "matchHistory") ? planoA : { refs: [] };
+      const plano = _purge.unirPlanos(base, achados);
+      await apagarRefs(
+        plano.refs.map((r) => _db.collection("users").doc(r.uid).collection(sub).doc(r.recordId)),
+        sub
+      );
+    }
+
+    // ── (2) COLEÇÕES DE TOPO que apontam pro torneio (planos de presença) ────
+    for (const col of _purge.TOPLEVEL_COLLECTIONS_BY_TOURNAMENT) {
+      try {
+        const snap = await _db.collection(col).where("tournamentId", "==", tid).get();
+        await apagarRefs(snap.docs.map((d) => d.ref), col);
+      } catch (e) {
+        console.error(`[purgeTournamentCopies] ${col} falhou em ${tid}:`, e && e.message);
+      }
+    }
+
+    // ── (3) FILA DE E-MAIL — não tem tournamentId, só a URL ─────────────────
+    // Coleção transitória e pequena (o flush a drena): varrer inteira sai mais barato
+    // que manter índice. Sem isto, e-mail de um torneio apagado ainda sairia com link morto.
+    try {
+      const snap = await _db.collection("notif_email_queue").get();
+      const ids = _purge.filaDoTorneio(tid, snap.docs.map((d) => ({ id: d.id, tournamentUrl: (d.data() || {}).tournamentUrl })));
+      await apagarRefs(ids.map((id) => _db.collection("notif_email_queue").doc(id)), "notif_email_queue");
+    } catch (e) {
+      console.error(`[purgeTournamentCopies] fila de e-mail falhou em ${tid}:`, e && e.message);
+    }
+
+    // ── (4) SUBCOLEÇÕES DO TORNEIO — ENUMERADAS, nunca listadas à mão ───────
+    // O Firestore não apaga subcoleção junto com o pai, e o cliente só alcança as que
+    // têm regra. A lista à mão dele já deixou passar DUAS (`participants` e
+    // `communications`), ambas descobertas medindo o banco. Enumerar mata a classe:
+    // subcoleção nova nasce coberta. Funciona com o doc PAI já apagado — a subcoleção
+    // existe de forma independente dele.
+    try {
+      const subs = await _db.collection("tournaments").doc(tid).listCollections();
+      for (const col of subs) {
+        for (let volta = 0; volta < 50; volta++) {            // teto de segurança (20 mil docs)
+          const snap = await col.limit(400).get();
+          if (snap.empty) break;
+          const batch = _db.batch();
+          snap.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+          conta["sub:" + col.id] = (conta["sub:" + col.id] || 0) + snap.size;
+          if (snap.size < 400) break;
+        }
+      }
+    } catch (e) {
+      console.error(`[purgeTournamentCopies] subcoleções falharam em ${tid}:`, e && e.message);
+    }
+
+    // ── (5) o doc de índice do feed ─────────────────────────────────────────
+    try { await _db.collection("discoveryFeed").doc(tid).delete(); } catch (e) {}
+
+    const resumo = Object.keys(conta).map((k) => `${k}=${conta[k]}`).join(" · ") || "nada a apagar";
+    console.log(`[purgeTournamentCopies] ${tid} → ${resumo}`);
   }
 );

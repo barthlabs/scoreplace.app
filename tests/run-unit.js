@@ -8,6 +8,18 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // Bloco CSS sem `}` engole o RESTO do arquivo, sem erro nenhum. Aconteceu em
+  // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
+  // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
+  'tests/css-nao-perde-regra.test.js',
+  // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
+  // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
+  // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.
+  'tests/safe-area-cobre-todo-contexto.test.js',
+  // Carregando é UMA tela só. Havia CINCO — e a que o dono via "no meio da experiência"
+  // era o default do _renderBallLoader (bolinha + texto, sem barra). A do router (Entrar
+  // → dashboard) tinha barra INDETERMINADA, e por isso nunca mostrava %.
+  'tests/carregando-e-uma-tela-so.test.js',
   // a colocação do letzplay CHEGA na tela (o motor existia e estava mudo)
   'tests/lz-colocacao-na-tela.test.js',
   // nenhuma frase da leitura culpa o letzplay (regra do dono, 2 reincidências)
@@ -498,6 +510,11 @@ const SUITES = [
   // O espelho do roster saiu do cliente (onde nunca funcionou — sem regra, sempre negado)
   // e virou responsabilidade do gatilho `syncMatchRosters`. v1.7.99.
   'functions/test-roster-mirror-core.js',
+  // Apagar o torneio apaga as CÓPIAS dele nas pessoas (`users/{uid}/matchHistory`) — que
+  // o delete do cliente nunca tocou, deixando o torneio vivo na ficha da própria pessoa e
+  // morto na de todos os outros. Trava também o `t_<tid>_<matchId>` contra bracket-ui.js
+  // e o fato de `participants` ser CF-only (sem regra → cliente negado). CF-only, 12/ago/2026.
+  'functions/test-tournament-purge-core.js',
   // "Esta pessoa já não está inscrita com OUTRA conta?" — os sinais que o dono aprovou
   // (celular INTEIRO, nome idêntico, letzplay só corroborando) e, metade das asserções,
   // os que ele PROIBIU: subconjunto de nome (30% de acerto) e nascimento+1º nome.
@@ -680,6 +697,9 @@ const SUITES = [
   'tests/lz-amistoso-fecha-a-conta.test.js',
   'tests/lz-posicao-de-grupo-nao-e-podio.test.js',
   'tests/lz-colocacao-final.test.js',
+  'tests/duplas-mistas-consistencia.test.js',
+  'tests/lz-contador-nunca-abaixo-do-acervo.test.js',
+  'tests/volta-da-ficha-pro-torneio.test.js',
   // O Salvar da Análise fica cinza + "Salvando…" até o trabalho terminar, nos DOIS botões
   // (o da matriz não recebia nada), e repintar no meio do save não apaga o feedback.
   'tests/analise-botao-salvando.test.js',

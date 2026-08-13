@@ -132,6 +132,7 @@ html.sp-android .topbar {
      demais do relógio no Android. 8px mantém a separação (faixa da status bar é
      #111114 = cor do topbar) sem o gap exagerado. */
   padding-top: max(env(safe-area-inset-top, 0px), 8px) !important;
+}
 /* ── PWA INSTALADO (Add to Home Screen, display:standalone) ─────────────
    No iOS o meta apple-mobile-web-app-status-bar-style=black-translucent deixa a status
    bar SOBRE o conteúdo; sem safe-area o relógio/rede/bateria encavalam no logo da

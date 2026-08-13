@@ -444,6 +444,83 @@ window._enrollDisplayName = function (user) {
     return '';
 };
 
+/* CLICOU NO CONVITE DE UM TORNEIO = JÁ ESTÁ INSCRITO (v1.8.33) ─────────────────────────
+ *
+ * Ordem do dono (12/ago/2026): _"quando a pessoa clica no link do convite… já se inscreve
+ * automaticamente… estamos dificultando fazendo com que a pessoa tenha que clicar,
+ * cadastrar e ainda inscrever-se"_, e logo depois: _"mesmo que seja conta cadastrada.
+ * clicou em convite de torneio já inscreve. sem precisar clicar no inscrever-se"_.
+ * Motivo: _"várias pessoas entraram e não entenderam que tinham que se inscrever depois de
+ * cadastrar"_.
+ *
+ * ⚠️ REVERTE a regra da v2.3.88 ("o sistema nunca inscreve sozinho, INCLUSIVE por convite").
+ * Ela foi lida e mostrada ao dono antes; a razão dela caducou: em jun/2026 o convite NÃO
+ * trazia a descrição do torneio, então a pessoa entrava sem saber no quê. Hoje traz — o
+ * consentimento acontece ANTES do clique, e o que sobrava era só fricção.
+ *
+ * ⚠️ O BUG DAQUELA ÉPOCA ERA REAL: a conta de teste era re-inscrita TODO DIA. A causa NÃO
+ * era "convite inscreve" — era o GATILHO. `_pendingEnrollTournamentId` é setado pelo router
+ * sempre que um DESLOGADO abre `#tournaments/<id>` (abrir ≠ aceitar convite) e, no cold
+ * start, o auth é assíncrono: um usuário LOGADO parece deslogado por um instante e o flag
+ * se re-arma sozinho, em laço. As duas travas abaixo existem exatamente contra isso:
+ *
+ *   1. EXIGE `?ref=` — a marca de um convite DE VERDADE. Abrir a página do torneio não tem
+ *      ref, e era esse o caso que disparava o laço.
+ *   2. UM TIRO SÓ, em localStorage por (torneio, uid). É a trava que sustenta tudo agora que
+ *      vale também pra conta antiga: sobrevive ao cold start (sessionStorage não sobrevive),
+ *      então mesmo relendo o mesmo link com ref a inscrição automática não repete.
+ *      ⚠️ É ela também que garante que DESINSCREVER-SE VALE: quem sai por vontade própria
+ *      não é re-inscrito ao abrir o link de novo — seria o bug de 2026 de volta.
+ *
+ * FONTE ÚNICA de propósito: existem DOIS caminhos de chegada (quem cria a conta agora passa
+ * pelo `simulateLoginSuccess`; quem já está logado NÃO passa por login nenhum e chega pelo
+ * router). Duas cópias da mesma decisão é como uma delas diverge — ver
+ * [[feedback_unify_dual_entry_points]].
+ *
+ * DELEGA a inscrição ao caminho normal (`enrollCurrentUser`): assim continuam valendo a
+ * lista de espera quando a fase já foi sorteada, a porta de conta duplicada, o fail-open e
+ * a escolha de categoria (que ABRE o diálogo quando existe — categoria não se escolhe pela
+ * pessoa).
+ */
+window._autoEnrollFromInvite = function (tId, refUid) {
+  if (!tId || !refUid) return false;
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var uid = cu && cu.uid;
+  if (!uid) return false;
+
+  var chave = 'sp_inviteEnroll_' + tId + '_' + uid;
+  try { if (localStorage.getItem(chave)) return false; } catch (e) {}
+
+  // Já é membro? Marca e sai calado — nem inscrição nem aviso. `memberUids` é a lista
+  // canônica de quem está no torneio e inclui a lista de espera desde a v1.6.86.
+  var t = (typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;
+  if (t && Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) >= 0) {
+    try { localStorage.setItem(chave, 'ja-era-membro'); } catch (e) {}
+    return false;
+  }
+
+  // Marca ANTES de inscrever: se a inscrição falhar, a pessoa usa o botão normalmente — o
+  // que não pode é o app tentar sozinho outra vez.
+  try { localStorage.setItem(chave, String(Date.now())); } catch (e) {}
+  try { window._log && window._log('[convite] auto-inscrevendo em ' + tId + ' (ref=' + refUid + ')'); } catch (e) {}
+
+  setTimeout(function () {
+    try {
+      if (typeof window.enrollCurrentUser === 'function') window.enrollCurrentUser(tId);
+      // Dizer POR QUE entrou, com a saída na MESMA frase. Inscrição silenciosa foi o que
+      // gerou a regra de 2026 — o atalho só é honesto se a porta de saída for visível.
+      setTimeout(function () {
+        if (typeof showNotification === 'function') {
+          showNotification('Você entrou pelo convite',
+            'Já deixamos sua inscrição feita. Se não quiser participar, é só tocar em "Desinscrever-se" nesta página.',
+            'success');
+        }
+      }, 1500);
+    } catch (e) {}
+  }, 1200);
+  return true;
+};
+
 window.enrollCurrentUser = function (tId, _reentrouAposCarregar) {
     // Busca no scoped list primeiro; se não achar, tenta no discovery feed
     // (torneios públicos que o usuário ainda não entrou). Torneios do

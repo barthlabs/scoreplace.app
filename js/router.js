@@ -88,6 +88,21 @@ function initRouter() {
       try { sessionStorage.setItem('_pendingEnrollTournamentId', cleanParam); } catch(e) {}
     }
 
+    // ── JÁ LOGADO CHEGANDO POR CONVITE → JÁ INSCREVE (v1.8.33) ────────────────
+    // Ordem do dono (12/ago/2026): _"mesmo que seja conta cadastrada. clicou em
+    // convite de torneio já inscreve. sem precisar clicar no inscrever-se"_.
+    // Este é o caminho que o auth.js NÃO alcança: quem já está logado não passa
+    // por login nenhum, então `simulateLoginSuccess` nunca roda pra ele.
+    // ⚠️ Exige `_refUidVal` — ou seja, um CONVITE de verdade. Abrir
+    // `#tournaments/<id>` sem ref não inscreve ninguém, que é precisamente o
+    // gatilho largo demais responsável pelo bug de jun/2026 (conta re-inscrita
+    // todo dia). A trava de UM TIRO SÓ e o resto da decisão moram dentro de
+    // `_autoEnrollFromInvite` — aqui só se informa que houve convite.
+    if (_isLoggedInEarly && view === 'tournaments' && cleanParam && _refUidVal &&
+        typeof window._autoEnrollFromInvite === 'function') {
+      try { window._autoEnrollFromInvite(cleanParam, _refUidVal); } catch(e) {}
+    }
+
     links.forEach(l => {
       l.classList.remove('active');
       if (l.getAttribute('href') === hash) l.classList.add('active');

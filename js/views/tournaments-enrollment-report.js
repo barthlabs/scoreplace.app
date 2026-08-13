@@ -1556,7 +1556,16 @@
     // A trilha vem por último e em BRANCO — ela é contexto (com quem ela jogou), não
     // classificação nem categoria, e disputava a atenção quando estava colorida.
     var itens = linhas.map(function (L) {
-      var h = '<div style="padding:2px 0;">' + (L.lido ? (_rank ? '📊 ' : '🏆 ') : '⏳ ');
+      // v1.8.31: A LINHA ABRE PELA ORIGEM. Pedido do dono: _"vamos abrir cada item com o
+      // LP ou logo do scoreplace (antes da data)"_. O selo saiu do FIM da linha e tomou o
+      // lugar do 🏆/📊 genérico — que era o MESMO glifo nas duas fontes e, numa lista
+      // INTERCALADA (1.8.5), não dizia nada: a origem só aparecia no fim, depois de nome,
+      // categoria, colocação e trilha. Trocar um marcador redundante por um informativo
+      // não custa largura. O ⏳ de "ainda não lido" FICA, logo depois do selo: é estado da
+      // leitura, não origem — as duas coisas convivem na mesma linha.
+      var h = '<div style="padding:2px 0;">' +
+              (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp') + ' ' +
+              (L.lido ? '' : '⏳ ');
       if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
       if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
@@ -1579,7 +1588,13 @@
              // COM QUEM. Em torneio de duplas a colocação é DA DUPLA — omitir o parceiro
              // faria "5º/7º" parecer resultado individual. Vai em branco discreto porque é
              // contexto, a mesma regra da trilha.
-             (L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
+             // ⚠️ Só nomeia quem foi parceiro DE VERDADE o tempo todo. Quando a fase que
+             // deu a colocação rodou as duplas (Rei/Rainha nos grupos), o motor devolve
+             // `duplaVariavel` e aqui se diz isso — nomear um seria nomear o último com
+             // quem se jogou, que é o defeito que o dono pegou na própria linha.
+             (L.pos.duplaVariavel
+               ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">dupla variável</span>'
+               : L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
                 _esc(L.pos.parceiro) + '</span>' : ''))
           : L.pos.semPontuacao
           // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
@@ -1590,9 +1605,22 @@
       }
       if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
-      // de onde veio. RK vem ANTES do LP quando a competição está no letzplay como RANKING
-      // — é o que denuncia o "torneio" que foi publicado no lugar errado.
-      h += ' · ' + (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp');
+      // ── LINHA LIDA E MUDA: DIZER POR QUÊ ──────────────────────────────────────
+      // Reação do dono (12/ago/2026) na linha do "TORNEIO RP 2026 - 10 anos":
+      // _"desse outro torneio nao tem nada? classificacao, dupla, fase? que caramba"_.
+      // MEDIDO no doc dele e conferido por ele na origem: o torneio foi ABERTO
+      // (`toursDone` = 3, o carimbo de chave resolvida), veio sem chave, sem tabela de
+      // grupo, sem data e sem NENHUM dos 64 jogos apontando pra ele — a página do torneio
+      // diz, com todas as letras, que os jogos ainda não estão disponíveis.
+      // Ou seja: a linha estava CERTA e calada, e é a calada que parece defeito. Sem data
+      // (que sai do jogo mais recente dele no torneio) não há um único jogo lido — é esse
+      // o sinal, e ele não depende de reler nada.
+      else if (!L.pos && !L.data && !L.cat && !L.trilha) {
+        h += ' · <span style="opacity:0.55;">sem jogos publicados</span>';
+      }
+      // (v1.8.31: os selos RK/LP subiram pra ABERTURA da linha — ver o topo desta função.
+      // RK continua vindo ANTES do LP, que é o que denuncia o "torneio" publicado como
+      // ranking no letzplay; o que mudou é ONDE, não a regra.)
       return { ord: L.ord, h: h + '</div>' };
     });
     // PUBLICA OS ITENS pra o scoreplace poder INTERCALAR (e não concatenar) — ver
@@ -1900,6 +1928,13 @@
     return (p && (p.displayName || p.name)) || null;
   }
 
+  // Id dentro de onclick="…('X')". A BARRA VEM PRIMEIRO: escapar a aspa antes duplicaria
+  // a barra que a própria fuga acabou de escrever. É a armadilha registrada no CLAUDE.md
+  // (v0.8.6) — um id com aspa/barra fecha o atributo e derruba o arquivo inteiro.
+  function _escAttr(s) {
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  }
+
   function _lzJuntarScoreplace(uid, meNome) {
     if (!uid) return;
     var proprio = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) === uid;
@@ -1928,8 +1963,16 @@
       itens.forEach(function (it) {
         if (!it.official) return;                       // casual não é competição
         var k = it.tournamentId || ('nome:' + (it.competition || ''));
-        var b = porComp[k] || (porComp[k] = { nome: it.competition || 'Torneio', ts: 0, fmt: it.tournamentFormat || '' });
+        var b = porComp[k] || (porComp[k] = { nome: it.competition || 'Torneio', ts: 0, fmt: it.tournamentFormat || '',
+                                              tid: it.tournamentId || null, pares: {}, nPares: 0 });
         if ((it.ts || 0) > b.ts) b.ts = it.ts || 0;
+        // COM QUEM — o torneio é NOSSO, então a dupla sai dos próprios jogos gravados.
+        // Mesma lei do letzplay ([[project_letzplay_dupla_fixa_vs_variavel]]): parceiro
+        // único no torneio inteiro = dupla fixa e se nomeia; mais de um = dupla variável.
+        // Aqui não há "fase que deu a colocação" pra escopar, porque esta linha ainda não
+        // mostra colocação — o escopo é o torneio, e é o que o dado permite afirmar.
+        var _p = String(it.partner || '').trim();
+        if (_p && !b.pares[_p]) { b.pares[_p] = 1; b.nPares++; }
       });
       var linhasT = [], linhasR = [];
       Object.keys(porComp).forEach(function (k) {
@@ -1937,10 +1980,55 @@
         var liga = (typeof window._isLigaFormat === 'function') ? window._isLigaFormat(c.fmt) : /liga|ranking|pontos corridos/i.test(c.fmt || '');
         var d = c.ts ? new Date(c.ts) : null;
         var data = d ? (_lzPad2(d.getDate()) + ' ' + (_LZ_MES[d.getMonth()] || '') + ' ' + String(d.getFullYear()).slice(2)) : null;
-        var h = '<div style="padding:2px 0;">🏆 ' +
+        // O NOME VIRA LINK PRA CHAVE. Só o do scoreplace pode: é torneio nosso, o id está
+        // aqui e a tela existe. Continua um <a href> de verdade (o onclick só marca o
+        // bilhete de volta) — se o JS falhar, o link ainda leva ao torneio.
+        var _uidFicha = uid;
+        var nomeHtml = c.tid
+          ? '<a href="#tournaments/' + _esc(String(c.tid)) + '" onclick="return window._lzIrAoTorneio(' +
+              "'" + _escAttr(String(c.tid)) + "','" + _escAttr(String(_uidFicha || '')) + "'" + ')" ' +
+              'style="color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
+              _esc(c.nome) + '</a>'
+          : '<span>' + _esc(c.nome) + '</span>';
+        var _pares = Object.keys(c.pares || {});
+        var duplaHtml = _pares.length > 1
+          ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">dupla variável</span>'
+          : _pares.length === 1
+          ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' + _esc(_pares[0]) + '</span>'
+          : '';
+        // A COLOCAÇÃO, que faltava. Relato do dono: a linha do "Duplas Mistas Sorteadas"
+        // vinha muda enquanto as do letzplay ao lado traziam "5º/8º". Sai do resolvedor
+        // canônico (`_placementInTournament`), que usa as MESMAS funções que desenham a
+        // classificação na página do torneio — as duas telas não podem divergir. Só
+        // aparece com a classificação FECHADA, e o total conta apenas quem entrou em
+        // quadra (espera/ausentes fora), que é a regra que o dono deu.
+        var _tour = (c.tid && typeof window._findTournamentById === 'function')
+          ? window._findTournamentById(c.tid) : null;
+        var _plc = (_tour && typeof window._placementInTournament === 'function')
+          ? window._placementInTournament(_tour, uid) : null;
+        // ⚠️ POSIÇÃO ÚNICA — "Nº", NUNCA "Nº/Mº".
+        // Eu escrevi "7º/8º" querendo dizer "7º de 8" e o dono cortou na hora: _"cada dupla
+        // numa única posição porra. nao posso ocupar 2 posicoes"_. Ele está certo, e o erro
+        // é de VOCABULÁRIO, não de gosto: nesta MESMA lista a barra já significa FAIXA — as
+        // linhas do letzplay imprimem "5º/8º (quartas)" pra dizer "caiu nas quartas, ficou
+        // entre 5º e 8º" (é o que _lzPlacement devolve fora do pódio). Ou seja, "7º/8º"
+        // seria lido como um intervalo de duas colocações. Aqui a posição é EXATA — a chave
+        // fechou e cada dupla tem uma só. O total continua no objeto (`_plc.total`) porque é
+        // o que prova que a classificação fechou, mas NÃO vai pra tela nesta notação.
+        // Pódio em âmbar com medalha, resto em cinza — colocação fora do pódio é informação,
+        // não conquista (mesma gramática da linha irmã).
+        var posHtml = _plc
+          ? ' · <span style="color:' + (_plc.pos <= 3 ? _LZ_C_POS : _LZ_C_GRUPO) + ';font-weight:' +
+            (_plc.pos <= 3 ? '800' : '600') + ';">' +
+            (_plc.pos <= 3 ? _lzMedalhaPos(_plc.pos) + ' ' : '') +
+            _plc.pos + 'º</span>'
+          : '';
+        // v1.8.31: abre pelo selo do scoreplace, ANTES da data — mesma regra da linha do
+        // letzplay (ver _lzSelo e o topo do builder de lá). O 🏆 saiu: ele era idêntico ao
+        // das linhas do letzplay e, numa lista intercalada, não distinguia origem nenhuma.
+        var h = '<div style="padding:2px 0;">' + _lzSelo('sp') + ' ' +
           (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
-          '<span>' + _esc(c.nome) + '</span> · ' +
-          _lzSelo('sp') + '</div>';
+          nomeHtml + posHtml + duplaHtml + '</div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
       // INTERCALA — não concatena. Empurra as linhas do app pra a MESMA lista do letzplay
@@ -3028,7 +3116,8 @@
         // por exemplo). Aí o motor se cala de propósito e a tabela de grupo assume.
         if (r && r.conhecido && r.rotulo) {
           return { chave: true, rotulo: r.rotulo, podio: r.posMin != null && r.posMin <= 3,
-                   ateOnde: r.ateOnde, posMin: r.posMin, parceiro: r.parceiro || null };
+                   ateOnde: r.ateOnde, posMin: r.posMin, parceiro: r.parceiro || null,
+                   duplaVariavel: !!r.duplaVariavel };
         }
       } catch (e) { /* motor não decide → cai na tabela de grupo, nunca deixa a linha muda */ }
     }
@@ -4504,6 +4593,20 @@
       });
     });
     out.games = ordem.map(function (k) { return mapa[k]; });
+    // ── O CONTADOR SEGUE O ARRAY, SEMPRE (1.8.28) ───────────────────────────────
+    // `out` nasce de um Object.assign, então `gamesTotal` vinha do lado NOVO enquanto
+    // `out.games` é a UNIÃO dos dois. Bastava a rodada nova ter 1 jogo a menos que a união
+    // pro doc ficar auto-contraditório — e foi o que travou o @fabiogod: 397 jogos com
+    // `gamesTotal: 396`, abaixo do `indexTotal: 397`, então "incompleto" pra sempre.
+    // ⚠️ O que fazia disso um beco sem saída: RELER NÃO CONSERTAVA. Toda rodada trazia o
+    // mesmo 396, a união continuava 397, e o número gravado nunca subia — o dono passou o
+    // Fabio duas vezes e nada mudou.
+    // O `max` preserva o doc TRUNCADO (acervo > 600 jogos), onde o total é legitimamente
+    // maior que o array; e `gamesTruncated` passa a ser DERIVADO, porque bandeira guardada
+    // ao lado do dado é mais uma coisa que pode divergir dele.
+    out.gamesTotal = Math.max(antigo.gamesTotal || 0, novo.gamesTotal || 0, out.games.length);
+    if (out.gamesTotal > out.games.length) out.gamesTruncated = true;
+    else delete out.gamesTruncated;
     // cursor: união dos conjuntos — o que já foi aberto não desabre
     var ca = antigo.lzCursor || {}, cn = novo.lzCursor || {};
     out.lzCursor = Object.assign({}, ca, cn, {
@@ -4935,6 +5038,34 @@
 
   // ─── Public renderer ─ chamado pelo router ──────────────────────────
   // Padrão centralizado: igual a renderProfilePage / renderSupportPage etc.
+  // ── IDA E VOLTA: ficha → chave do torneio → ficha ────────────────────────────
+  // Pedido do dono: _"sendo torneio do scoreplace, poderia ser um link direto para o
+  // torneio no qual o voltar voltaria para essa tela (assim se pode fazer uma consulta
+  // rápida a chave do torneio)"_.
+  //
+  // A IDA só marca o bilhete e deixa o <a href> navegar — se o marcador falhar, o link
+  // continua funcionando e a pessoa só perde o atalho de volta, nunca o destino.
+  window._lzIrAoTorneio = function (tid, uid) {
+    try {
+      if (typeof window._spMarcarVolta === 'function') {
+        window._spMarcarVolta({ para: window.location.hash || '', aplicaEm: '#tournaments/' + tid, uid: uid || null });
+      }
+    } catch (e) {}
+    return true;
+  };
+  // A VOLTA reabre a ficha de quem estava aberto — voltar pra Análise "crua" seria devolver
+  // a pessoa a meio caminho, e ela teria que reencontrar o atleta na lista. Roda DEPOIS do
+  // _renderPage porque a ficha lê o contexto que ele monta (perfis, scans).
+  function _lzReabrirFichaSeVoltou() {
+    try {
+      var b = (typeof window._spLerVolta === 'function') ? window._spLerVolta() : null;
+      if (!b || !b.uid) return;
+      if ((window.location.hash || '').indexOf(b.para) !== 0) return;   // ainda não voltei
+      window._spLimparVolta();                                          // bilhete é de UM uso
+      if (typeof window._lzAthleteDialog === 'function') window._lzAthleteDialog(b.uid);
+    } catch (e) { if (window._warn) window._warn('[analise] não reabri a ficha na volta', e); }
+  }
+
   window.renderEnrollmentReportPage = function (container, tId) {
     // FONTE ÚNICA de lookup (String-safe, também olha publicDiscovery). O `find` com
     // `x.id === tId` cru dependia do tipo do id bater exatamente.
@@ -5008,6 +5139,7 @@
         window._log('[EnrollmentReport] profiles:', Object.keys(byUid).length, 'scans:', Object.keys(scanMap).length);
         _renderPage(container, t, rows, byUid, parts, fetchResult.resolvedFor || {}, scanMap);
         _doneLoading();
+        _lzReabrirFichaSeVoltou();
       });
     }).catch(function (err) {
       window._error('[EnrollmentReport] erro:', err);

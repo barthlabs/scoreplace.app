@@ -2239,12 +2239,16 @@ function renderParticipants(container, tournamentId) {
       const _orgStarC = _isOrgPC ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.9rem;line-height:1;">⭐</span>' : '';
 
       // Build sub-info with presence dots (3 states: green=presente, red=ausente, gray=aguardando)
-      const dotHtml = (name) => {
+      // `name` é a CHAVE (o rótulo gravado no jogo — é por ele que presença/ausência são
+      // indexadas); `disp` é o que se MOSTRA. Separar os dois é o que permite exibir o nome
+      // VIVO do perfil sem quebrar o casamento por nome que o resto desta tela usa.
+      const dotHtml = (name, disp) => {
         const p = window._idMapHas(t, checkedIn, name);
         const a = window._idMapHas(t, absent, name);
         const dotColor = p ? '#10b981' : a ? '#ef4444' : '#64748b';
         const textColor = p ? '#4ade80' : a ? '#f87171' : '#94a3b8';
-        return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.66rem;color:${textColor};">${name}</span></span>`;
+        const _txt = window._safeHtml(disp || name);
+        return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.66rem;color:${textColor};">${_txt}</span></span>`;
       };
 
       // Standby puro (ainda não substituiu ninguém) = sem parceiro/jogo/adversário
@@ -2266,18 +2270,56 @@ function renderParticipants(container, tournamentId) {
 
       // v0.17.35: oculta membros W.O.'d do team line (se algum) — eles
       // aparecem como cards solo separados, não devem poluir time do parceiro.
-      const _renderTeamDots = (teamStr) => {
+      // ── O NOME AQUI TAMBÉM VEM DO PERFIL (1.8.30) ──────────────────────────
+      // Relato do dono: _"a mescla da angelica reck ficou inconsistente. aparece maria em
+      // alguns pontos e angelica em outros"_. MEDIDO: o perfil dela (uid 0Jmn…) é
+      // "angelica reck", e o jogo guarda o rótulo do dia do sorteio, "Maria Reck". O título
+      // do card resolvia por uid (angelica) e ESTA linha imprimia o rótulo (Maria) — a mesma
+      // pessoa com dois nomes na mesma tela.
+      // Agora a posição i do time casa com o uid i do slot (`_slotUids`, o resolvedor
+      // canônico) e mostra o nome do perfil. O rótulo gravado continua sendo a CHAVE de
+      // presença/W.O. — só deixou de ser o que se lê. Sem uid naquela posição (fictício), o
+      // rótulo é a identidade e segue aparecendo.
+      const _renderTeamDots = (teamStr, slot) => {
         if (!teamStr) return '';
-        const members = teamStr.includes('/') ? teamStr.split('/').map(n => n.trim()).filter(n => n).filter(n => !window._woHistHas(t, n)) : [teamStr];
-        return members.map(n => dotHtml(n)).join('<span style="color:rgba(255,255,255,0.15);margin:0 2px;">/</span>');
+        // POSICIONAL: é `team1Obj`/`team2Obj` que guarda uid por POSIÇÃO da dupla (o
+        // `team*Uids` vem null em jogo formado pelo motor antigo — medido neste torneio).
+        // É o mesmo resolvedor que o card da chave usa; usar o outro devolvia lista vazia
+        // e a linha continuaria no rótulo gravado.
+        const _slotFn = (typeof window._slotUidsPositional === 'function') ? window._slotUidsPositional
+                      : (typeof window._slotUids === 'function' ? window._slotUids : null);
+        const _uids = (_matchObj && slot && _slotFn) ? (_slotFn(_matchObj, slot) || []) : [];
+        // ── W.O. TEM ESCOPO DE JOGO (1.8.30) ──────────────────────────────────
+        // Relato do dono: _"carolina entrou em time com leila que tomou wo apenas na
+        // disputa de 3o e isso deveria refletir corretamente"_.
+        // MEDIDO: `woClaims[0]` tem `scope:"match"` + `matchId` do 3º lugar, e
+        // `woHistory[uid da Leila].matchNum = 8`. Mas o filtro daqui era `_woHistHas`, um
+        // booleano SEM escopo — então ela sumia de TODAS as linhas, inclusive do jogo 4
+        // (1ª rodada), que ela jogou e VENCEU com a Carolina. Esconder de um jogo que
+        // aconteceu é apagar história.
+        // Agora só some do jogo em que o W.O. foi decretado. W.O. sem `matchNum` (legado,
+        // ou decretado pro torneio) continua sumindo de tudo, como antes.
+        const _woEsconde = (nome) => {
+          const _h = (typeof window._woHistGet === 'function') ? window._woHistGet(t, nome) : null;
+          if (!_h) return false;
+          if (_h.matchNum == null) return true;                 // sem escopo → comportamento antigo
+          return Number(_h.matchNum) === Number(ind.matchNum);  // só no jogo do W.O.
+        };
+        const members = (teamStr.includes('/') ? teamStr.split('/').map(n => n.trim()).filter(n => n) : [teamStr])
+          .map((n, i) => ({ nome: n, uid: _uids[i] || null }))
+          .filter(x => !_woEsconde(x.nome));
+        return members.map(function (x) {
+          const vivo = (x.uid && typeof window._nameForUid === 'function') ? (window._nameForUid(x.uid) || '') : '';
+          return dotHtml(x.nome, vivo || x.nome);
+        }).join('<span style="color:rgba(255,255,255,0.15);margin:0 2px;">/</span>');
       };
 
       // Top line = p1, bottom line = p2. Standby puro continua sem times.
       let teamLine = '';
       let opponentLine = '';
       if (!isStandbyPure) {
-        teamLine = _renderTeamDots(_p1Team);
-        opponentLine = _renderTeamDots(_p2Team);
+        teamLine = _renderTeamDots(_p1Team, 'p1');
+        opponentLine = _renderTeamDots(_p2Team, 'p2');
         // Fallback pra cards sem matchObj resolvido (ex: ind.teamName setado
         // mas matchNum null por algum edge case): usa ind.teamName/ind.opponent
         // como antes pra não regredir o display.

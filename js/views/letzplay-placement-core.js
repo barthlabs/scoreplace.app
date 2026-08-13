@@ -155,9 +155,23 @@
 
     vistos.forEach(function (t) { t.rotulo = rotuloDe(t); });
 
-    var porHandle = {};
+    // ── UMA PESSOA PODE ESTAR EM VÁRIOS TIMES ────────────────────────────────────
+    // Em fase de grupos no formato Rei/Rainha a dupla ROTACIONA: no torneio PAIS (dado
+    // real, 08/ago/2026) o grupo do dono são 3 jogos — ele com Stefan, com Ari e com
+    // Wilson. Cada par é um TIME distinto, e este mapa guardava o ÚLTIMO visto: era isso,
+    // e não um erro de leitura, que fazia a linha dizer "com Wilson Jr" — literalmente
+    // "com quem joguei por último". Pior, o mesmo overwrite rebaixava o CAMPEÃO: Wilson
+    // (Stefan+Wilson, campeão) aparecia depois num time de grupo com o dono, e a linha
+    // dele saía "8º/42º (fase de grupos) com Rodrigo Barth".
+    // Agora guardamos TODOS os times, e `porHandle` fica com o de MELHOR colocação — que
+    // é o único que descreve onde a pessoa terminou.
+    var timesPorHandle = {}, porHandle = {};
     vistos.forEach(function (t) {
-      (t.handles || []).forEach(function (h) { porHandle[String(h).toLowerCase()] = t; });
+      (t.handles || []).forEach(function (h) {
+        var k = String(h).toLowerCase();
+        (timesPorHandle[k] = timesPorHandle[k] || []).push(t);
+        if (!porHandle[k] || _melhorQue(t, porHandle[k])) porHandle[k] = t;
+      });
     });
 
     var faseMaisFunda = null;
@@ -166,9 +180,18 @@
     return {
       times: vistos,
       porHandle: porHandle,
+      timesPorHandle: timesPorHandle,
       temChave: !!Object.keys(rodadasVistas).length,
       temFinal: !!rodadasVistas['final']
     };
+  }
+
+  /** Qual das duas colocações é melhor. `posMin` null (sem colocação) perde de qualquer
+   *  número — é o caso de quem só tem grupo num torneio cuja chave não foi lida. */
+  function _melhorQue(a, b) {
+    var pa = (a && a.posMin != null) ? a.posMin : Infinity;
+    var pb = (b && b.posMin != null) ? b.posMin : Infinity;
+    return pa < pb;
   }
 
   function _profundidade(chave) {
@@ -216,7 +239,8 @@
     var t = r.porHandle[low];
     if (!r.temChave) return { conhecido: false, motivo: 'sem-chave' };
     if (!t) return { conhecido: true, chegouNaChave: false, ateOnde: 'fase de grupos',
-                     rotulo: 'Fase de grupos', posMin: null, posMax: null, parceiro: null };
+                     rotulo: 'Fase de grupos', posMin: null, posMax: null,
+                     parceiro: null, duplaVariavel: false };
     // o parceiro é o outro membro do time. Casa por handle; sem handle (fictício) o nome
     // é a única identidade que existe, então cai no índice — que é estável porque
     // `handles` e `names` são preenchidos no mesmo push.
@@ -226,8 +250,34 @@
       if (String(hs[i]).toLowerCase() !== low) { parceiro = ns[i] || hs[i] || null; break; }
     }
     if (!parceiro && ns.length === 2 && !hs.length) parceiro = ns[1];
+
+    // ── DUPLA FIXA × DUPLA VARIÁVEL ──────────────────────────────────────────────
+    // Ordem do dono (12/ago/2026), olhando a própria linha do torneio PAIS: _"o certo é
+    // dizer que na fase de grupos foi dupla variável (onde cai) e não que fiz dupla com o
+    // último que joguei. a dupla fixou depois da fase de grupos e isso é claro nos jogos
+    // subsequentes. assim, quando a dupla estiver mesmo fixa diz o nome da dupla, quando a
+    // dupla não for fixa indica dupla variável."_
+    //
+    // O ESCOPO é a fase que DEU a colocação, e é isso que resolve o torneio inteiro com uma
+    // regra só: quem parou nos grupos é descrito pelos grupos (lá a dupla rodou → variável);
+    // quem passou é descrito pela chave, onde a dupla é fixa POR CONSTRUÇÃO — o time é a
+    // identidade que avança, então dois pares diferentes seriam dois times diferentes.
+    // Por isso não se pergunta "ele teve vários pares no torneio?" (Wilson teve, e mesmo
+    // assim foi campeão COM Stefan), e sim "vários pares NA FASE em que ele terminou?".
+    var variavel = false;
+    if (t.ateOnde === 'fase de grupos') {
+      var meus = (r.timesPorHandle && r.timesPorHandle[low]) || [t];
+      var chaves = {}, n = 0;
+      meus.forEach(function (x) {
+        if (x.ateOnde !== 'fase de grupos') return;   // time que passou não é da fase dele
+        if (!chaves[x.key]) { chaves[x.key] = 1; n++; }
+      });
+      variavel = n > 1;
+    }
+    if (variavel) parceiro = null;                    // nomear UM seria escolher o último
+
     return { conhecido: true, chegouNaChave: true, ateOnde: t.ateOnde, rotulo: t.rotulo,
-             posMin: t.posMin, posMax: t.posMax, parceiro: parceiro };
+             posMin: t.posMin, posMax: t.posMax, parceiro: parceiro, duplaVariavel: variavel };
   }
 
   // ── QUANDO A FASE NÃO VEM ESCRITA: inferir pela ORDEM ────────────────────────

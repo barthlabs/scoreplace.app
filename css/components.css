@@ -739,6 +739,21 @@ button[style*="linear-gradient"]:not(.btn):active {
 }
 .btn-tool-amber:hover { background: #b45309; box-shadow: 0 4px 14px rgba(217,119,6,0.35); }
 
+/* --- Rótulo "FERRAMENTAS DO ORGANIZADOR" sobre foto do local (v1.8.31) ------
+   O card só sabe que TEM foto depois que o hidratador pinta (a URL saiu do
+   render na 1.7.53, quando pintar deixou de ser pago). Até lá o rótulo é
+   montado com `--text-muted`, cor calibrada pra fundo liso — e terminava
+   cinza-apagado em cima de uma foto. `data-vphoto-on` é posto pelo hidratador
+   (store.js) SÓ quando a foto foi realmente pintada, então aqui a regra nunca
+   dispara em card sem foto.
+   ⚠️ `!important` é obrigatório: a cor do rótulo é INLINE, e sem ele o inline
+   vence o CSS. É o mesmo motivo do inline !important no ramo do coverPhotoData
+   (tema claro inverte cor clara inline). Ver feedback_dark_tarja_light_text. */
+[data-vphoto-on] .org-tools-label {
+  color: #f1f5f9 !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);
+}
+
 /* --- Info Pill (badges de status: Começa hoje, Progresso, Inscritos, etc.) --- */
 .info-pill {
   display: flex;

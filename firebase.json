@@ -6,6 +6,7 @@
   "hosting": {
     "public": ".",
     "predeploy": [
+      "node scripts/check-deploy-alignment.js",
       "node scripts/check-version-ahead.js",
       "node scripts/check-release-notes.js",
       "npm test",
@@ -19,7 +20,8 @@
       ".git/**",
       ".claude/**",
       "*.backup",
-      "outputs/**"
+      "outputs/**",
+      ".deploy-alignment.json"
     ],
     "headers": [
       {

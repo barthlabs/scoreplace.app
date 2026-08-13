@@ -3194,12 +3194,15 @@ function renderTournaments(container, tournamentId = null) {
             ${tournamentId ? `<div style="margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
               ${!isFinished ? `<button class="btn btn-warning btn-sm hover-lift" onclick="event.stopPropagation(); openInviteModal('${t.id}')">📤 Convidar</button>` : ''}
               <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._shareTournament('${t.id}');">📋 Compartilhar</button>
-              ${/* Grupo do torneio no WhatsApp: pro PARTICIPANTE, "Entrar no grupo" mora à
-                    esquerda de "Desinscrever-se" (bem na cara — ver bloco enrollBtnHtml). Aqui
-                    fica só o caso do ORGANIZADOR que NÃO joga, pra ele também alcançar o grupo
-                    de um clique sem depender das Ferramentas. CRIAR/trocar o link segue nas
-                    Ferramentas do Organizador. */ ''}
-              ${(isOrg && !isParticipating && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
+              ${/* Grupo do torneio no WhatsApp — BOTÃO ÚNICO (1.8.31). Ele mora à esquerda de
+                    "Desinscrever-se" quando esse bloco existe (inscrito + inscrições abertas);
+                    AQUI é o mesmo botão, pra TODOS os outros estados. A condição é o
+                    complemento exato da de lá, então ele aparece sempre e nunca duas vezes.
+                    ⚠️ O buraco que isto fecha: organizador INSCRITO com as inscrições já
+                    FECHADAS não caía em nenhum dos dois lados — e como o chip das Ferramentas
+                    saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
+                    Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
+              ${(!(isParticipating && isAberto) && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 
@@ -3364,6 +3367,31 @@ function renderTournaments(container, tournamentId = null) {
               // ⚠️ `!important` inline é OBRIGATÓRIO no caso da foto: o tema claro tem CSS
               // com !important que inverte cores claras inline (#f1f5f9 → escuro) e viraria
               // texto escuro sobre foto. Inline !important vence. Ver feedback_dark_tarja_light_text.
+              // ── O RÓTULO "FERRAMENTAS DO ORGANIZADOR" (1.8.31) ────────────────────────
+              // Relato do dono: _"ficou uma merda. antes da regressao era bem melhor com
+              // muito mais contraste sem ser fonte maior"_. Os dois lados da frase são
+              // verdade, e vinham de commits DIFERENTES:
+              //   • O CONTRASTE caiu na 1.7.53. Antes dela `venuePhotoBg` já vinha pronto no
+              //     render, então o card com foto do Google entrava no ramo de cima de
+              //     `_toolsCss` — #f1f5f9 + sombra dupla. A 1.7.53 tirou a URL paga do render
+              //     (certíssimo: PINTAR era PAGAR) e a foto passou a ser pintada DEPOIS pelo
+              //     hidratador — mas `_toolsCss` continuou perguntando por `venuePhotoBg`, que
+              //     a partir dali responde SEMPRE "sem foto". O rótulo virou cinza-apagado
+              //     (`--text-muted`) por baixo de uma foto. É esse o "sem contraste".
+              //   • A FONTE MAIOR foi a 1.8.30, que tentou consertar a legibilidade pelo lado
+              //     errado: aumentou corpo e espaçamento sem tocar na COR, que era o problema.
+              // Agora o tamanho volta ao pré-1.8.30 (0.7rem) e o contraste é resolvido pelo
+              // CSS `[data-vphoto-on] .org-tools-label`, ligado pelo hidratador SÓ quando a
+              // foto foi mesmo pintada — se ela não vier, o rótulo segue no estilo de fundo
+              // liso, que é o correto ali. A fonte de TÍTULO (--font-display) FICA: o pedido
+              // de 1.8.30 era por ela ("uma fonte diferente mais legivel"); o que sobrou é só
+              // o corpo maior. Ver [[feedback_measure_dont_declare_fixed]].
+              // ⚠️ Fica numa const, e não em comentário HTML no meio do template, porque o
+              // bloco é varrido por `tests/torneio-abandonado.test.js`, que exige "Reabrir
+              // Torneio" a menos de 1600 chars de `_isAutoClosed`: comentário longo ali dentro
+              // empurra o texto pra fora da janela e derruba um teste que nada tem a ver.
+              var _TOOLS_LABEL_CSS = 'font-family: var(--font-display); font-size: 0.7rem; ' +
+                                     'font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;';
               var _toolsCss = venuePhotoBg
                 ? 'color:#f1f5f9 !important; text-shadow:0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);'
                 : 'color:var(--text-muted);';
@@ -3376,7 +3404,7 @@ function renderTournaments(container, tournamentId = null) {
               if (window._isAutoClosed && window._isAutoClosed(t)) {
                 return `
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
-              <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
+              <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
                 <div style="font-weight:800;font-size:0.82rem;color:#fbbf24;margin-bottom:4px;">⏸️ Encerrado por inatividade</div>
                 <div style="font-size:0.76rem;${_toolsCss}line-height:1.45;">
@@ -3392,7 +3420,7 @@ function renderTournaments(container, tournamentId = null) {
               }
               return `
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid ${_toolsBorder};">
-              <div style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
+              <div class="org-tools-label" style="${_TOOLS_LABEL_CSS} ${_toolsCss} margin-bottom: 10px;">${_t('org.tools')}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${hasDraw ? `<button class="btn btn-primary hover-lift" onclick="window._scrollToBracketSection('${t.id}')">🏆 ${_t('btn.viewBracket')}</button>` : ''}
                 ${!isFinished ? `<button class="btn btn-indigo hover-lift btn-shine" onclick="event.stopPropagation(); window.openEditModal('${t.id}')">✏️ ${_t('btn.edit')}</button>` : ''}
@@ -3403,10 +3431,12 @@ function renderTournaments(container, tournamentId = null) {
                 ${categoriasBtn}
                 ${enrollmentReportBtn}
                 ${isOrg ? `<button class="btn hover-lift" style="background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;border:none;" onclick="event.stopPropagation(); window._opOpenManage('${t.id}')">📊 Enquete</button>` : ''}
-                ${/* Criar/trocar o link do grupo do torneio É ferramenta de organizador (o grupo é
-                      oficial do evento) — diferente do grupo do JOGO, que é dos jogadores e mora no
-                      card do chaveamento. O chip só renderiza pra org/co-host. */ ''}
-                ${(typeof window._waGrpTournamentOrgChip === 'function') ? window._waGrpTournamentOrgChip(t) : ''}
+                ${/* ⛔ 1.8.31 — o chip do grupo do torneio SAIU daqui. Ordem do dono: "existe esse
+                      botao la em cima ao lado do inscrever-se/desinscrever-se. nao é o mesmo? tem
+                      que ficar só ele com toda a funcionalidade". É um botão só, lá em cima, e
+                      pro organizador ele abre o painel completo: criar, trocar, abrir e
+                      compartilhar. O grupo do JOGO continua sendo outra coisa e mora no card da
+                      chave — é dos jogadores, não do organizador. */ ''}
                 ${/* v4.1.24: "📅 Combinar jogos" REMOVIDO das Ferramentas do Organizador — NÃO é
                       ferramenta de organizador. Combinar horário é ação de PARTICIPANTE (mesmo que
                       ele seja o organizador), feita a partir do próprio JOGO no chaveamento

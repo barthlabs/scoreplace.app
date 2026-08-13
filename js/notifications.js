@@ -432,7 +432,23 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
   // de baixo, duplicado, que o dono chamou de fantasma. Quem esconde o rodapé assume a
   // responsabilidade de fechar/confirmar pelos próprios controles.
   const { confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning', maxWidth = '400px', hideFooter = false, headerHtml = '' } = options;
-  
+
+  // AS AÇÕES DO CABEÇALHO FICAM À DIREITA, inclusive quando quebram de linha (v1.8.34).
+  // Relato do dono, com print da ficha da "Flavia Campion": nome comprido empurra os botões
+  // pra uma 2ª linha e eles apareciam colados à ESQUERDA. O container do cabeçalho é
+  // `flex-wrap: wrap`, e linha nova começa em `flex-start` — então o alinhamento à direita
+  // só valia enquanto tudo coubesse numa linha só (quem empurrava era o `flex:1 1 auto` do
+  // título, e ele some da conta quando há quebra).
+  // `margin-left:auto` resolve os DOIS casos com uma regra só: na mesma linha absorve a
+  // sobra como antes; sozinho na 2ª linha, absorve a linha inteira e joga o bloco à direita.
+  // ⚠️ Fica numa const, e NÃO em comentário dentro do template, porque
+  // `tests/dialog-fits-screen.test.js` varre uma janela FIXA de 1800 caracteres a partir de
+  // `dialog.innerHTML = \``: comentário longo ali dentro empurra o corpo e o rodapé pra fora
+  // da janela e derruba 6 asserções que nada têm a ver com isto. Mesma armadilha do
+  // `_TOOLS_LABEL_CSS` em tournaments.js.
+  const _HDR_ACOES_CSS = 'display: flex; gap: 8px; align-items: center; flex: 0 0 auto; ' +
+                         'margin-left: auto; justify-content: flex-end; flex-wrap: wrap;';
+
   let dialog = document.getElementById('custom-confirm-dialog');
   if (dialog) dialog.remove();
 
@@ -482,7 +498,7 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
         <div style="flex: 1 1 auto; min-width: 0;">
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color); overflow-wrap: anywhere;">${title}</div>
         </div>
-        ${headerHtml ? `<div style="display: flex; gap: 8px; align-items: center; flex: 0 0 auto;">${headerHtml}</div>` : ''}
+        ${headerHtml ? `<div style="${_HDR_ACOES_CSS}">${headerHtml}</div>` : ''}
       </div>
       <div style="padding: 1.25rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
         ${message}

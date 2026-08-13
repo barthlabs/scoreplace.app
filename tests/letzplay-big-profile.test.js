@@ -309,13 +309,19 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
     // cursor MODERNO (v4): é este que promete retomada sem releitura. Cursor v3 é o do
     // pipeline velho e DEVE reler — isso é o cenário 2b, logo abaixo.
     const cur = { v: 4, handle: 'CamilaExemplo', toursDone: {}, ranksDone: {}, pageDone: 20, pagesTotal: 34, complete: false };
-    for (let t = 0; t < cfg.tours; t++) cur.toursDone['t/paineiras-bt/' + (300000 + t)] = 1;
-    // prior com footprint dos torneios (nome+classificação já resolvidos)
+    // ⚠️ `3` = a CHAVE já foi resolvida neste torneio. Este cenário prova "não relê o que já
+    // leu", e depois da 1.8.22 estar lido inclui ter a chave — um torneio marcado `1` (o
+    // estado antigo, nome+classificação e nada mais) DEVE ser reaberto, e é justamente o
+    // que o CENÁRIO 2f logo abaixo exige. Sem esta distinção os dois testes se
+    // contradiriam e um deles teria que ser apagado.
+    for (let t = 0; t < cfg.tours; t++) cur.toursDone['t/paineiras-bt/' + (300000 + t)] = 3;
+    // prior com footprint dos torneios (nome+classificação+chave já resolvidos)
     const fp = [];
     for (let t = 0; t < cfg.tours; t++) {
       fp.push({ official: true, club: 'paineiras-bt', tourneyId: String(300000 + t),
         name: 'Interno Ciclo ' + (300000 + t) + ' - Feminina C', categoryRaw: 'Feminina C',
-        standings: [{ group: 'Grupo 1', rows: [{ pos: 1, players: ['Camila Exemplo'], handles: ['CamilaExemplo'], wins: 3, losses: 1 }] }] });
+        standings: [{ group: 'Grupo 1', rows: [{ pos: 1, players: ['Camila Exemplo'], handles: ['CamilaExemplo'], wins: 3, losses: 1 }] }],
+        matches: [{ n: 1, phase: 'Final', sides: [{ handles: ['CamilaExemplo'], score: 6 }, { handles: ['Outra2'], score: 3 }] }] });
     }
     const prior = { source: 'letzplay', handle: 'CamilaExemplo', games: [], footprint: fp,
       categories: [], pairs: [], observations: [], declaredGames: 472, lzCursor: cur,
@@ -350,6 +356,75 @@ async function rodarCenario(page, cfg, rotulo, bloqueio) {
   });
   ok(antesDe20.length === 0, 'NÃO releu nenhuma PÁGINA DE HTML anterior à do cursor (página 20)', antesDe20.join(', '));
   ok(r2.cursor && r2.cursor.complete === true, 'a retomada chegou ao fim');
+
+  // ── CENÁRIO 2f: torneio lido SEM a chave tem que ser reaberto ────────────────
+  // Pergunta do dono (11/ago/2026, ficha do @fabiogod): _"onde está a classificação dos
+  // torneios e a rodada em que caiu?"_ — a lista estava muda em todas as linhas visíveis.
+  //
+  // ESTE É O DOC REAL DELE, reduzido: 35 torneios com nome + tabela de GRUPO, cursor
+  // marcando os 35 como lidos (valor 1) e `matches` em NENHUM. A colocação só sai da
+  // chave — tabela de grupo não vira classificação, por ordem do dono — então a tela não
+  // tinha o que dizer. E o critério de "já li" era nome/classificação, então toda
+  // releitura pulava os 35 e a chave nunca chegava: reler não consertava.
+  //
+  // O teste roda a extensão REAL contra o letzplay sintético e exige que ela vá buscar
+  // /tournaments/{id}/matches — e que a chave chegue ao footprint gravado.
+  // ⚠️ O PRIOR TEM QUE COBRIR **TODOS** OS TORNEIOS DO FIXTURE. A primeira versão deste
+  // teste declarava 4 torneios num letzplay de 35 — os outros 31 eram abertos por serem
+  // novos, a contagem de requisições de chave subia por eles, e o teste passava VERDE
+  // contra o código sem o conserto. Medido: só a asserção do carimbo acusava. Com o
+  // perfil pequeno (11 torneios) o prior cobre a lista inteira, e aí toda requisição de
+  // chave só pode ser de um torneio JÁ LIDO — que é exatamente o que se quer provar.
+  console.log('\n🔑 CENÁRIO 2f — torneio lido ANTES da chave existir é reaberto (e a chave chega)');
+  await page.close();
+  page = await novaPagina(browser);
+  await page.evaluate(async (cfg) => {
+    window.__LZ.init(cfg);
+    const N = cfg.tours;                           // TODOS os torneios do fixture
+    const cur = { v: 4, handle: 'CamilaExemplo', toursDone: {}, ranksDone: {},
+      pageDone: 34, pagesTotal: 34, complete: true };
+    const fp = [];
+    for (let t = 0; t < N; t++) {
+      cur.toursDone['t/paineiras-bt/' + (300000 + t)] = 1;   // "lido" pelo critério ANTIGO
+      fp.push({ official: true, club: 'paineiras-bt', tourneyId: String(300000 + t),
+        name: 'Interno Ciclo ' + (300000 + t) + ' - Feminina C', categoryRaw: 'Feminina C',
+        standings: [{ group: 'Grupo 1', rows: [{ pos: 2, players: ['Camila Exemplo'], handles: ['CamilaExemplo'], wins: 2, losses: 1 }] }],
+        matches: null });                                     // ← o buraco, igual ao doc real
+    }
+    const prior = { source: 'letzplay', handle: 'CamilaExemplo', games: [], footprint: fp,
+      categories: [], pairs: [], observations: [], declaredGames: 472, lzCursor: cur,
+      tournamentsList: Array.from({ length: N }, (_, t) => ({ club: 'paineiras-bt', tid: String(300000 + t), title: 'Interno Ciclo ' + t })) };
+    window.__APP.rodadas = 0; window.__APP.parciais = 0; window.__APP.done = false; window.__APP.erro = null;
+    window.__APP.escritasCanonicas = 0; window.__APP.docsPorGid = {};
+    window.__LZ.hits = {};
+    window.__APP.start('CamilaExemplo', 'uid-camila', prior, cur);
+    return true;
+  }, { games: 81, tours: 11, ranks: 6, gamesPerTour: 3 });
+  await page.waitForFunction(() => window.__APP.done === true, null, { timeout: 120000 });
+  const r2f = await page.evaluate(() => {
+    const fp = (window.__APP.imp && window.__APP.imp.footprint) || [];
+    const tor = fp.filter(f => f.official && String(f.tourneyId || '').startsWith('30000'));
+    return {
+      erro: window.__APP.erro,
+      pediuChave: Object.keys(window.__LZ.hits).filter(u => /\/tournaments\/\d+\/matches/.test(u)).length,
+      torneios: tor.length,
+      comChave: tor.filter(f => Array.isArray(f.matches) && f.matches.length).length,
+      // o que já estava lido não pode ter sido apagado pela reabertura
+      comNome: tor.filter(f => !!f.name).length,
+      comStandings: tor.filter(f => Array.isArray(f.standings) && f.standings.length).length,
+      cursor3: Object.values(((window.__APP.cursor || {}).toursDone) || {}).filter(v => v === 3).length
+    };
+  });
+  ok(!r2f.erro, 'a releitura atrás da chave não falhou', r2f.erro);
+  ok(r2f.pediuChave > 0, 'FOI BUSCAR a chave dos torneios já lidos (/tournaments/{id}/matches)',
+    'nenhuma requisição de chave — é o bug do @fabiogod: 29 de 35 torneios mudos pra sempre');
+  ok(r2f.comChave > 0, 'a chave chegou ao footprint gravado (footprint[].matches)',
+    'torneios com chave: ' + r2f.comChave + ' de ' + r2f.torneios);
+  ok(r2f.comNome === r2f.torneios && r2f.comStandings === r2f.torneios,
+    'reabrir NÃO apagou o que já estava lido (nome e classificação de grupo intactos)',
+    'nome=' + r2f.comNome + ' standings=' + r2f.comStandings + ' de ' + r2f.torneios);
+  ok(r2f.cursor3 > 0, 'o cursor carimba 3 (chave resolvida) — a próxima leitura não rebusca',
+    'nenhum torneio carimbado; sem isso um torneio sem chave seria rebuscado pra sempre');
 
   // ── CENÁRIO 2b: dado SUJO do pipeline velho tem que sair na próxima leitura ──
   // Caso real: o doc da Camila tinha 569 jogos para 478 reais — 24 duplicatas puras
