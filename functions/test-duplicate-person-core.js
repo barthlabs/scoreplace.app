@@ -471,5 +471,39 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('o "não sou eu" chama a CF de dispensa', /dismissDuplicateSuspicion'\)\(\{ tournamentId/.test(enr));
 })();
 
+// ── EXCEÇÃO DE 1 TOKEN: raridade + não-sobrenome (caso real da Betânia, 12/ago/2026) ──
+// O piso de 2 tokens descartava "Betânia" ⊂ "maria betania roberto faria" — a MESMA pessoa,
+// que ficou em DOIS grupos do Confra (K e P) sem ninguém perceber. MEDIDO nas 217 contas com
+// nome: existem 7 pares de subconjunto com 1 token; a regra nova aceita 3 e recusa 4, e os 4
+// recusados são exatamente os erros conhecidos.
+;(function () {
+  const cmp = (a, b, f) => D.compararNomes(a, b, f == null ? undefined : { freqToken: f });
+
+  // ACEITA: token raro (só nas 2 contas) e que NÃO é o sobrenome do nome maior
+  ok(cmp('Betânia', 'maria betania roberto faria', 2) === 'subconjunto',
+     'Betânia × maria betania roberto faria (token raro, sobrenome é "faria") tem que casar');
+  ok(cmp('Luciana', 'Luciana Marinho', 2) === 'subconjunto', 'Luciana × Luciana Marinho');
+  ok(cmp('Cynthia', 'Cynthia Cury', 2) === 'subconjunto', 'Cynthia × Cynthia Cury');
+
+  // RECUSA (1): token comum — "fabio" está em 4 contas, não distingue ninguém
+  ok(cmp('Fabio', 'Fabio Rey', 4) === null, 'Fabio × Fabio Rey: token comum, não casa');
+  ok(cmp('Fabio', 'Fábio Simão', 4) === null, 'Fabio × Fábio Simão: token comum, não casa');
+  ok(cmp('Fabio', 'Fábio Ruggiero', 4) === null, 'Fabio × Fábio Ruggiero: token comum, não casa');
+
+  // RECUSA (2): token raro MAS é o SOBRENOME do outro — é o que separa Marco de Betânia
+  ok(cmp('Marco', 'Adriana de Marco', 2) === null,
+     'Marco × Adriana de Marco: "marco" é o sobrenome dela — raridade sozinha deixaria passar');
+
+  // Sem a frequência informada, NADA muda (a CF antiga e qualquer chamador sem opts)
+  ok(cmp('Betânia', 'maria betania roberto faria') === null,
+     'sem freqToken, o comportamento é o de antes — a exceção é opt-in');
+  ok(cmp('Luciana', 'Luciana Marinho', 3) === null,
+     'freqToken 3 já não é raro o bastante (a régua é: só as DUAS contas comparadas)');
+
+  // O subconjunto de 2+ tokens não foi afetado
+  ok(D.compararNomes('Iliane Garcia', 'Iliane Geraldi Garcia') === 'subconjunto',
+     'subconjunto de 2+ tokens continua valendo sem precisar de frequência');
+})();
+
 console.log(`\nduplicate-person-core: ${pass} ok, ${fail} falhas`);
 process.exit(fail ? 1 : 0);
