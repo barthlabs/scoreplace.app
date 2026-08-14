@@ -307,6 +307,11 @@ const SUITES = [
   // resultado auto-gravado nunca seria regravado — agora o undo rearma o save com id
   // estável de histórico). + ♥ FC máxima do perfil sobrepondo 220−idade nas faixas.
   'tests/watch-epoca-e-desfazer-pos-fim.test.js',
+  // Caminho B (Leva 1): os vetores de paridade gravados em tests/watch-engine/vectors/
+  // são a referência dos motores nativos do relógio. Este teste re-dirige o motor GSM
+  // REAL (bracket-ui.js no harness, Chromium) e exige que ele reproduza os vetores —
+  // mudança de comportamento fica vermelha até regravar (--write) E re-validar o nativo.
+  'tests/watch-engine-vectors.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!--
+  Harness do MOTOR GSM REAL pro gerador de vetores do Caminho B (Leva 1).
+  Contrato: docs/smartwatch-bridge.md, seção "Caminho B".
+
+  Carrega js/views/sport-rules.js (fonte única das modalidades) e o
+  js/views/bracket-ui.js INTEIRO — o motor de placar ao vivo é o de produção,
+  nunca réplica. Os stubs abaixo são só o CHROME em volta (i18n, toasts, sons,
+  Firestore) — nenhum deles participa da contagem de pontos.
+
+  Aberto pelo gen-vectors.js (Playwright) via file:// — não é uma página do app.
+-->
+<meta charset="utf-8">
+<title>watch-engine harness</title>
+<body>
+<script>
+  // ── Stubs do chrome (nada aqui é regra de placar) ──────────────────────────
+  window._t = function (k, vars) { return k; };            // i18n: chave crua serve
+  window.showNotification = function () {};
+  window.showConfirmDialog = function () {};
+  window.showAlertDialog = function () {};
+  window._safeHtml = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+  window._avatarHtml = function () { return ''; };         // exibição, não regra
+  window._profileAvatarUrl = function () { return ''; };
+  window._haptic = function () {};
+  window._sound = function () {};
+  window._log = function () {};
+  window._warn = function () {};
+  window._error = function () {};
+  window._captureException = function () {};
+  window.AppStore = {
+    currentUser: null,
+    logAction: function () {},
+    syncImmediate: function () {},
+    commitTournamentTx: function () {},
+    mutate: function () {}
+  };
+  // Firestore AUSENTE de propósito: o motor guarda cada acesso com
+  // `window.FirestoreDB &&` — sem rede, sem gravação, o fold de pontos é puro.
+  window.FirestoreDB = undefined;
+</script>
+<script src="../../js/views/bracket-model.js"></script>
+<script src="../../js/views/sport-rules.js"></script>
+<script>
+  // A fonte única de modalidades alimenta o resolvedor canônico — o mesmo
+  // caminho do app (create-tournament.js linha 5).
+  window._sportScoringDefaults = window._sportScoringDefaultsMap();
+</script>
+<script src="../../js/views/bracket-ui.js"></script>
+</body>

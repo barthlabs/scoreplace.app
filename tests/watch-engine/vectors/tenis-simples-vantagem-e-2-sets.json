@@ -1,0 +1,3917 @@
+{
+ "name": "tenis-simples-vantagem-e-2-sets",
+ "sport": "Tênis",
+ "note": "Tênis simples (advantageRule): deuce → Ad → deuce → Ad → game; sem pick de 2º sacador (simples alterna sozinho); 2 sets fecham a partida.",
+ "players": {
+  "p1Name": "Ana",
+  "p2Name": "Caio",
+  "isDoubles": false
+ },
+ "config": {
+  "type": "sets",
+  "setsToWin": 2,
+  "gamesPerSet": 6,
+  "tiebreakEnabled": true,
+  "tiebreakPoints": 7,
+  "tiebreakMargin": 2,
+  "superTiebreak": true,
+  "superTiebreakPoints": 10,
+  "countingType": "tennis",
+  "advantageRule": true
+ },
+ "steps": [
+  {
+   "event": {
+    "kind": "open"
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": null,
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": true,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveSelect",
+    "team": 1,
+    "idx": 0
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": null,
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": true,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveConfirm"
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "15"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "30"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "40"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "AD",
+     "40"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "40"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "AD"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     1,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     1,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     1,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     1,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     2,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     2,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     2,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     2,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     2,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     2,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     2,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     2,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     3,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     3,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     3,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     3,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     4,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     4,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     4,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     4,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     5,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     5,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     5,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     5,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     0,
+     1
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     0,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     0,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     0,
+     2
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     3
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     0,
+     3
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     0,
+     3
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     0,
+     3
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     4
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     0,
+     4
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     0,
+     4
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     0,
+     4
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     5
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "15"
+    ],
+    "games": [
+     0,
+     5
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "30"
+    ],
+    "games": [
+     0,
+     5
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 2",
+    "points": [
+     "0",
+     "40"
+    ],
+    "games": [
+     0,
+     5
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 3",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     1
+    ],
+    "setsToWin": 2,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Tênis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": false,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  }
+ ]
+}

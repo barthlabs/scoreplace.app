@@ -173,11 +173,19 @@ Um evento por gesto, apendado localmente e sincronizado quando der (lote):
     { "n": 1, "t": 1723600000000, "kind": "point",      "team": 1 },
     { "n": 2, "t": 1723600004000, "kind": "point",      "team": 2 },
     { "n": 3, "t": 1723600009000, "kind": "undo" },
-    { "n": 4, "t": 1723600015000, "kind": "setServer",  "team": 2, "playerIdx": 1 },
-    { "n": 5, "t": 1723600020000, "kind": "resolveTie", "rule": "tiebreak" },
-    { "n": 6, "t": 1723600100000, "kind": "close" }
+    { "n": 4, "t": 1723600015000, "kind": "serveSelect", "team": 2, "playerIdx": 1 },
+    { "n": 5, "t": 1723600016000, "kind": "serveConfirm" },
+    { "n": 6, "t": 1723600020000, "kind": "resolveTie", "rule": "tiebreak" },
+    { "n": 7, "t": 1723600100000, "kind": "close" }
   ] }
 ```
+
+⚠️ **O pick de sacador é em DOIS eventos (`serveSelect` + `serveConfirm`)** —
+medido no motor real ao gerar os vetores (Leva 1): o seletor abre no início e no
+fim do game 1 (2º sacador), e **pontos disparados com o seletor aberto caem no
+vazio** (o motor bloqueia — é o exato lugar do "confirmar não iniciou o 2º game"
+do incidente). O motor nativo tem que reproduzir o bloqueio, e os vetores o
+travam (`bt-duplas-6-0-liso` tem um ponto no vazio de propósito).
 
 - `n` é sequencial POR DISPOSITIVO e POR partida — o receptor deduplica por
   `(deviceId, n)` e aplica em ordem. Reenvio de lote é idempotente.
