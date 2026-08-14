@@ -440,6 +440,12 @@ const SUITES = [
   // É a trava que permite MOVER configuração de lugar sem mudar o torneio que ela produz —
   // e ela pegou, na hora, um erro de escopo no primeiro refactor. v1.8.56.
   'tests/construtor-golden-master.js',
+  // "ONDE ESTÃO OS JOGOS DESTA FASE" é UMA pergunta só. phaseComplete (segura o avanço) e
+  // pendingMatches (lista o que falta) varriam os 3 storages CADA UMA — o comentário do
+  // código chamava a segunda de "espelho" da primeira. Agora as duas leem por phaseGames.
+  // Trava o invariante que elas deviam cumprir juntas: fase completa ⟺ zero pendentes,
+  // nos três storages, com BYE/folga não segurando e grupo vazio segurando. v1.8.57.
+  'tests/fase-uma-leitura-so.test.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

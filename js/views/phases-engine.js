@@ -1400,6 +1400,57 @@
     return _leagueGroupFromRounds(t);
   }
 
+  // ── ONDE ESTÃO OS JOGOS DESTA FASE — LEITOR ÚNICO ────────────────────────────
+  // Ordem do dono (14/ago/2026): "tinha esse erro estrutural de achar que cada detalhe do
+  // torneio (rei/rainha, pontos corridos, fase de grupos — todos os modos da classificatória)
+  // rodavam em lugares diferentes… sem rodar coisas diferentes para o que deveria ser uma
+  // coisa só: fase classificatória."
+  //
+  // O jogo de uma fase mora em UM de três storages, por razão histórica:
+  //   1. `t.rounds[].monarchGroups[].matches` — o caminho do CONFRA (Rei/Rainha incremental);
+  //   2. `t.phaseRounds[i].rounds[].matches`  — Liga incremental de uma fase 1+;
+  //   3. `t.matches` taggeado por `phaseIndex` — chave/grupos gerados de uma vez.
+  // Quem precisa responder "esta fase acabou?" tinha que conhecer os três — e a varredura
+  // estava COPIADA em phaseComplete e pendingMatches, que o próprio comentário chamava de
+  // espelhos. Espelho não é fonte única: diverge na primeira mudança. Este leitor é a
+  // varredura, UMA vez; os dois passam a derivar dele.
+  //
+  // ⚠️ NÃO é redesenho: a ordem de leitura é exatamente a que a Confra já usa (grupos
+  // primeiro, via prevPhaseGroups). O comportamento não muda — é o mesmo caminho, num lugar
+  // só. Devolve [{ match, groupIdx?, groupName?, round?, bracket? }].
+  function phaseGames(t, idx) {
+    var out = [];
+    if (!t) return out;
+    var cur = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
+    if (cur === 0) {
+      prevPhaseGroups(t).forEach(function (g, gi) {
+        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
+        (ms || []).forEach(function (m) {
+          if (m) out.push({ match: m, groupIdx: gi, groupName: g.name || ('Grupo ' + (gi + 1)) });
+        });
+      });
+      return out;
+    }
+    var slot = t.phaseRounds && t.phaseRounds[cur];
+    if (slot && Array.isArray(slot.rounds)) {
+      slot.rounds.forEach(function (r) {
+        ((r && r.matches) || []).forEach(function (m) { if (m) out.push({ match: m, round: r.round }); });
+      });
+      return out;
+    }
+    (t.matches || []).forEach(function (m) {
+      if (m && (m.phaseIndex || 0) === cur) out.push({ match: m, bracket: m.bracket, round: m.round });
+    });
+    return out;
+  }
+  // Um jogo está resolvido? BYE e folga contam como resolvidos (não seguram a fase).
+  // ⚠️ `isSitOut` só vale em fase de GRUPOS/rodadas — numa chave, folga não existe e o
+  // comportamento antigo (que a golden trava) não a considerava. Mantido como estava.
+  function _jogoResolvido(m, ehGrupo) {
+    if (!m) return true;
+    return !!(m.winner || m.isBye || (ehGrupo && m.isSitOut));
+  }
+
   // A fase ATUAL está completa? (libera o avanço)
   function phaseComplete(t) {
     if (!isMultiPhase(t)) return false;
@@ -1437,10 +1488,15 @@
         }).length;
         if (playedL < needL) return false;
       }
-      return groups.every(function (g) {
-        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
-        return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-      });
+      // Varredura pelo LEITOR ÚNICO (phaseGames) — mesma leitura de pendingMatches.
+      // ⚠️ A exigência "nenhum grupo VAZIO" é preservada contando os grupos que
+      // contribuíram: achatar sem isso deixaria um grupo sem jogo passar despercebido
+      // desde que os outros estivessem completos.
+      var _u0 = phaseGames(t, 0);
+      var _gruposComJogo = {};
+      _u0.forEach(function (u) { if (u.groupIdx != null) _gruposComJogo[u.groupIdx] = 1; });
+      if (Object.keys(_gruposComJogo).length < groups.length) return false;
+      return _u0.every(function (u) { return _jogoResolvido(u.match, true); });
     }
     // v3.1.16 (inc 8): fase atual = Liga incremental (Pontos Corridos rodada a rodada) →
     // jogos moram em t.phaseRounds[cur].rounds (não em t.matches). Completa quando TODAS
@@ -1450,47 +1506,35 @@
       if (!_liSlot.rounds.length) return false;
       var _liNeed = parseInt((t.phases[cur] || {}).rounds, 10) || 0;
       if (_liNeed && _liSlot.rounds.length < _liNeed) return false; // temporada ainda em curso
-      return _liSlot.rounds.every(function (r) {
-        var ms = (r && r.matches) || [];
-        return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-      });
+      // idem: rodada sem jogo nenhum não conta como concluída
+      var _uL = phaseGames(t, cur);
+      var _rodadasComJogo = {};
+      _uL.forEach(function (u) { if (u.round != null) _rodadasComJogo[u.round] = 1; });
+      if (Object.keys(_rodadasComJogo).length < _liSlot.rounds.length) return false;
+      return _uL.every(function (u) { return _jogoResolvido(u.match, true); });
     }
     // Fases de chave: todas as partidas da fase atual decididas (inclui grande final).
-    var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
-    if (!pm.length) return false;
-    return pm.every(function (m) { return m.winner || m.isBye; });
+    // Aqui folga NÃO conta como resolvida (numa chave ela não existe) — o 2º argumento
+    // false preserva exatamente o comportamento que a golden congela.
+    var _uK = phaseGames(t, cur);
+    if (!_uK.length) return false;
+    return _uK.every(function (u) { return _jogoResolvido(u.match, false); });
   }
 
-  // ESPELHO de phaseComplete: enumera os JOGOS PENDENTES da fase atual (sem vencedor,
-  // não-BYE, não-folga), nos MESMOS 3 formatos que phaseComplete varre. Usado pelo painel
+  // Os JOGOS PENDENTES da fase atual (sem vencedor, não-BYE, não-folga). Usado pelo painel
   // de resolução de pendentes (organizador decide: W.O. / lançar / liberar com prazo) antes
   // de avançar de fase. Retorna [{ match, groupIdx?, groupName?, round?, bracket? }].
+  // ⚠️ Já foi um ESPELHO de phaseComplete — as duas repetiam a varredura dos 3 storages, e o
+  // comentário aqui dizia isso com todas as letras. Agora as duas leem por phaseGames.
   function pendingMatches(t) {
     if (!isMultiPhase(t)) return [];
     var cur = t.currentPhaseIndex || 0;
-    var out = [];
-    if (cur === 0) {
-      var groups = prevPhaseGroups(t);
-      groups.forEach(function (g, gi) {
-        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
-        (ms || []).forEach(function (m) {
-          if (m && !m.winner && !m.isBye && !m.isSitOut) out.push({ match: m, groupIdx: gi, groupName: g.name || ('Grupo ' + (gi + 1)) });
-        });
-      });
-      return out;
-    }
-    var _liSlot = t.phaseRounds && t.phaseRounds[cur];
-    if (_liSlot && Array.isArray(_liSlot.rounds)) {
-      _liSlot.rounds.forEach(function (r) {
-        (r.matches || []).forEach(function (m) {
-          if (m && !m.winner && !m.isBye && !m.isSitOut) out.push({ match: m, round: r.round });
-        });
-      });
-      return out;
-    }
-    (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; })
-      .forEach(function (m) { if (m && !m.winner && !m.isBye) out.push({ match: m, bracket: m.bracket, round: m.round }); });
-    return out;
+    // Era uma CÓPIA da varredura de phaseComplete (o comentário acima já dizia "espelho").
+    // Agora os dois leem do mesmo lugar: some a chance de um enxergar um storage que o
+    // outro não enxerga — que é como um jogo pendente ficava invisível pro painel enquanto
+    // segurava o avanço da fase.
+    var emChave = !(cur === 0 || (t.phaseRounds && t.phaseRounds[cur] && Array.isArray(t.phaseRounds[cur].rounds)));
+    return phaseGames(t, cur).filter(function (u) { return !_jogoResolvido(u.match, !emChave); });
   }
 
   // ── Fase 1+ → próxima fase: derivar colocações de uma CHAVE já jogada ─────────
@@ -2160,6 +2204,7 @@
     bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
     pendingMatches: pendingMatches,
+    phaseGames: phaseGames,        // leitor único de "onde estão os jogos desta fase"
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings,
     resolveRepFills: resolveRepFills

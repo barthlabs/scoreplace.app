@@ -34,6 +34,13 @@ window._RELEASE_NOTES_HTML = (function () {
     // diff: tournaments-organizer.js voltou ao estado anterior). Descrever as duas seria
     // anunciar uma escolha que não existe na tela. A trava (check-release-notes) pega
     // OMISSÃO e não sabe julgar isso — a justificativa fica aqui.
+    // ⚠️ 1.8.57 NÃO ganhou item, e é DECISÃO. Ela unificou a LEITURA de "onde estão os
+    // jogos desta fase" — phaseComplete e pendingMatches varriam os 3 storages cada uma
+    // (o comentário do código chamava a segunda de "espelho" da primeira) e passaram a ler
+    // por phaseGames. Saldo pro usuário: ZERO, e provado — os três goldens (motor da R1,
+    // eliminatória gerada e construtor) saem IDÊNTICOS, que é o gate do deploy. Anunciar
+    // "unificamos uma varredura interna" seria ruído numa nota que o usuário lê pra saber
+    // o que mudou pra ele. A trava pega OMISSÃO e não sabe julgar isso — o motivo fica aqui.
     // ── v1.8 ─────────────────────────────────────────────────────────────────
     '<div style="margin-bottom:1rem;border:2px solid #a78bfa;border-radius:12px;padding:14px 16px;background:rgba(167,139,250,0.08);">' +
       '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">\uD83C\uDFC5 v1.8 \u2014 Sua coloca\u00e7\u00e3o calculada, conta duplicada que o app pergunta antes, e o app s\u00f3 abre quando terminou de carregar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
