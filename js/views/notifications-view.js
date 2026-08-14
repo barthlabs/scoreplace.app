@@ -81,6 +81,28 @@ function renderNotifications(container) {
       if (invType === 'transfer') return !!t.pendingTransfer;
       return !!(Array.isArray(t.coHosts) && t.coHosts.some(function (ch) { return ch && ch.status === 'pending'; }));
     }
+    // O RESULTADO desta notificação ainda está PENDENTE? (v1.8.70)
+    //
+    // Relato do dono (print de 14/ago, três cards seguidos): "essas notificações
+    // precisavam ser dinâmicas. na medida em que já foram aprovadas, não deveria
+    // mais ter o confirmar ou contestar (apenas o editar)". A notificação é um
+    // RETRATO do instante em que foi criada; o jogo continua andando. Oferecer
+    // "Confirmar" pra um placar JÁ aprovado é pedir uma decisão que não existe
+    // mais — e, pior, promete uma ação que a chave vai recusar.
+    //
+    // A régua é a MESMA do card da chave (bracket.js): pendente = tem
+    // `pendingResult` E ainda não tem vencedor. Aqui não se reimplementa nada —
+    // se as duas divergissem, a notificação voltaria a mentir por outro caminho.
+    // Torneio/jogo não carregado localmente → null ("não sei"), e aí vale o
+    // comportamento antigo, exatamente como nos convites logo acima.
+    function _resultStillPending(n) {
+      var t = _findTourn(n && n.tournamentId);
+      if (!t) return null;
+      if (!n.matchId || typeof window._findMatch !== 'function') return null;
+      var m = window._findMatch(t, n.matchId);
+      if (!m) return null;                       // jogo sumiu (re-sorteio) → não decide
+      return !!m.pendingResult && !m.winner;
+    }
     function _renderNotifCard(n) {
       var isUnread = !n.read;
       // Use centralized notification catalog for icon + IMPORTANCE (level) color.
@@ -124,9 +146,25 @@ function renderNotifications(container) {
         // (âmbar) levam direto pra chave, onde a ação real acontece com o card
         // do jogo (Confirmar/Editar/Contestar bem testados). A mensagem já mostra
         // o placar quebrado em linhas, então a escolha é informada.
-        actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
-          '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✏️ ' + (_t('notif.editContest') || 'Editar / Contestar') + '</button>' +
-          '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>' +
+        //
+        // v1.8.70 — E OS BOTÕES SEGUEM O JOGO, NÃO A NOTIFICAÇÃO: aprovado o
+        // placar, "Confirmar" e "Contestar" saem de cena (não há mais o que
+        // decidir) e sobra só EDITAR, que continua valendo — corrigir resultado
+        // é sempre possível. `null` = não sei (torneio/jogo não carregado) →
+        // mantém os dois, que é o comportamento antigo.
+        var _pendRes = _resultStillPending(n);
+        var _btnEditar =
+          '<button class="btn btn-sm" style="background:#f59e0b;color:#1a1a2e;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✏️ ' +
+          (_pendRes === false ? 'Editar' : (_t('notif.editContest') || 'Editar / Contestar')) + '</button>';
+        var _btnConfirmar = (_pendRes === false) ? '' :
+          '<button class="btn btn-sm" style="background:#10b981;color:#fff;border:none;padding:6px 18px;font-size:0.78rem;font-weight:700;" onclick="event.stopPropagation(); window.location.hash=\'#bracket/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">✅ ' + (_t('notif.confirm') || 'Confirmar') + '</button>';
+        // Já resolvido: uma linha diz o que aconteceu, senão o card vira só um
+        // botão solto e a pessoa não entende por que os outros sumiram.
+        var _jaResolvido = (_pendRes === false)
+          ? '<div style="margin-top:8px;font-size:0.74rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;"><span>✅</span><span>Resultado já confirmado</span></div>'
+          : '';
+        actionHtml = _jaResolvido + '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
+          _btnEditar + _btnConfirmar +
         '</div>';
       } else if (n.type === 'category-data-request') {
         // v2.3.92: inscrição pendente por falta de dado no perfil. Botão principal

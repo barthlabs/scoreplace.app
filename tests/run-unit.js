@@ -327,6 +327,10 @@ const SUITES = [
   // `n`, idempotência do reenvio (dedup deviceId#n), época nova zerando o dedup e o
   // receptor não reimplementando nada de placar.
   'tests/watch-diario-de-eventos.test.js',
+  // A notificação de placar segue o JOGO, não o retrato de quando foi criada: aprovado o
+  // resultado, somem Confirmar/Contestar e sobra só Editar. Roda o renderNotifications
+  // REAL com Firestore falso; a régua é a MESMA do card da chave (pendingResult && !winner).
+  'tests/notificacao-de-placar-segue-o-jogo.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).
