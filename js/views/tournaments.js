@@ -2411,7 +2411,14 @@ function renderTournaments(container, tournamentId = null) {
         const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
         // v2.1.6: torneio encerrado (campeão definido) SEMPRE fecha inscrição,
         // inclusive Liga — ligaAberta nunca vale com status 'finished'.
-        const ligaAberta = !isFinished && window._isLigaFormat(t) && t.ligaOpenEnrollment !== false && sorteioRealizado;
+        // v1.8.40: a regra vem do CANÔNICO (waitlist-core._enrollmentOpenState, a MESMA do
+        // servidor). A cópia daqui exigia `sorteioRealizado` — uma Liga aberta ANTES do 1º
+        // sorteio com registrationLimit vencido dava isAberto=false e o bloco de auto-close
+        // logo abaixo gravava status:'closed' num torneio que o SERVIDOR considerava aberto.
+        const _openSt = window._enrollmentOpenState(t);
+        const ligaAberta = _openSt.ligaOpen;
+        // Rótulo "(Permanente)" só depois do sorteio; antes, a Liga mostra "Abertas" comum.
+        const ligaAbertaLabel = ligaAberta && sorteioRealizado;
         // v2.1.0: quando "Fechadas" está OFF (lateEnrollment 'standby'/'expand'),
         // o SORTEIO não encerra as inscrições — elas seguem abertas após o
         // sorteio e só fecham quando o organizador clica "Encerrar Inscrições"
@@ -2426,7 +2433,7 @@ function renderTournaments(container, tournamentId = null) {
         const lateEnrollOpen = lateEnrollManaged && (typeof window._lateEnrollWindowOpen === 'function'
           ? window._lateEnrollWindowOpen(t)
           : t.status !== 'closed');
-        const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
+        const isAberto = _openSt.open || lateEnrollOpen;
 
         // Auto-close: if deadline passed but status hasn't been updated yet, close it now
         if (!isAberto && !isFinished && !sorteioRealizado && t.status !== 'closed' && t.registrationLimit && new Date(t.registrationLimit) < new Date()) {
@@ -2457,7 +2464,7 @@ function renderTournaments(container, tournamentId = null) {
         const tournamentStarted = !!(t.tournamentStarted || t.status === 'in_progress');
         const statusText = isFinished
           ? '🏆 ' + _t('status.finished')
-          : (ligaAberta ? _t('tournament.leagueOpenEnroll')
+          : (ligaAbertaLabel ? _t('tournament.leagueOpenEnroll')
             : (isAberto ? _t('status.open')
               : (tournamentStarted ? _t('status.active')
                 : _t('status.closed'))));

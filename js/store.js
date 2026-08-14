@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.39';
+window.SCOREPLACE_VERSION = '1.8.69';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1632,24 +1632,120 @@ window._devWhatsAppBtnHtml = function (opts) {
       return;
     }
     window._pendingUpdateReload = false;
-    var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
-      return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-    }) : Promise.resolve();
-    var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
-      return Promise.all(regs.map(function(r) { return r.unregister(); }));
-    }) : Promise.resolve();
-    // v1.3.64: CRÍTICO — o GitHub Pages serve index.html com `cache-control: max-age=600`
-    // (10min, e NÃO dá pra mudar header no Pages). Após unregister do SW, `location.reload()`
-    // é SOFT → serve o index.html do cache HTTP (cache-busters ?v= VELHOS → JS velho → trava
-    // na versão anterior; só hard-refresh resolvia). Fix: revalidar o documento com
-    // `cache:'reload'` ANTES do reload — isso baixa o HTML fresco E atualiza a entrada do
-    // cache HTTP, então o reload subsequente já pega os cache-busters novos. Funciona pra
-    // TODO usuário (não depende do SW novo). Ver [[project_pwa_auto_update]].
-    var p3 = Promise.resolve();
-    try { p3 = fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); } catch (e) {}
+
+    // ⛔⛔ NÃO TROQUE ISTO POR "apaga os caches + unregister + reload". ⛔⛔
+    //
+    // Era exatamente o que este bloco fazia — e foi a TERCEIRA encarnação da
+    // TELA BRANCA na abertura (v1.8.50). MEDIDO, não deduzido: depois do
+    // `unregister()`, o reload cai com `navigator.serviceWorker.controller ===
+    // null` e `navigation.workerStart === 0`, ou seja **a página não é servida
+    // por service worker nenhum**. Os 103 recursos vão TODOS à rede, com 9
+    // render-blocking no `<head>` — e o cache continua ali, intacto e
+    // INALCANÇÁVEL (um SW recém-registrado não controla a página que o
+    // registrou; controle só começa na navegação seguinte).
+    //
+    // POR QUE ISSO FEZ AS CORREÇÕES ANTERIORES PARECEREM "REGREDIR": as duas
+    // levas anteriores (1.8.35, topo do sw.js; 1.8.49, tamanho do precache)
+    // consertaram o caminho SERVIDO PELO SW. Este bloco garantia que, na
+    // primeira abertura depois de CADA deploy, não houvesse SW servindo — logo
+    // nenhuma delas era alcançada justo no cenário observado. Como todo deploy
+    // bumpa a versão (o gate de cache-buster exige) e se publica várias vezes
+    // por dia, o dono caía sempre nesta carga descontrolada e concluía, com
+    // razão do ponto de vista dele, que "a tela branca voltou".
+    //
+    // A REGRA, e ela é de invariante, não de implementação:
+    //   ATUALIZAR NUNCA PODE DESTRUIR O SW QUE VAI SERVIR O PRÓXIMO CARREGAMENTO.
+    // Trocar de versão é PASSAR O BASTÃO: espera o SW novo ficar `activated`
+    // (o `install` dele já precacheou o <head>, e o `activate` faz
+    // `clients.claim()`), e só então recarrega — assim o reload nasce
+    // controlado e pinta do cache. `tests/sw-abre-sem-tela-branca.test.js`
+    // trava isto; se você reintroduzir unregister/nuke no caminho normal, ele
+    // fica vermelho.
+    //
+    // Apagar cache velho NÃO é necessário aqui: o `activate` do sw.js já apaga
+    // toda chave ≠ CACHE_NAME (que carrega a versão), e o cache-first casa a
+    // URL EXATA com `?v=` — versão nova nunca é servida da antiga.
+
+    var _hardResetEReload = function(motivo) {
+      // FALLBACK — só quando o caminho do SW não existe ou não respondeu. Aqui
+      // a carga descontrolada é o preço de não deixar o usuário preso na versão
+      // velha; no caminho normal (acima) ela não acontece.
+      window._warn('[AutoUpdate] handoff do SW indisponível (' + motivo + ') — reset completo.');
+      var p1 = ('caches' in window) ? caches.keys().then(function(keys) {
+        return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+      }) : Promise.resolve();
+      var p2 = ('serviceWorker' in navigator) ? navigator.serviceWorker.getRegistrations().then(function(regs) {
+        return Promise.all(regs.map(function(r) { return r.unregister(); }));
+      }) : Promise.resolve();
+      Promise.all([p1, p2, _revalidarHtml()]).then(_recarregar);
+    };
+
+    // v1.3.64: CRÍTICO — o hosting serve index.html com `cache-control` de minutos
+    // e SEM cache-buster no próprio HTML. `location.reload()` é SOFT → poderia servir
+    // o index.html do cache HTTP (cache-busters ?v= VELHOS → JS velho → preso na versão
+    // anterior; só hard-refresh resolvia). Revalidar o documento com `cache:'reload'`
+    // ANTES do reload baixa o HTML fresco E atualiza a entrada do cache HTTP.
+    // Ver [[project_pwa_auto_update]].
+    function _revalidarHtml() {
+      try { return fetch(window.location.pathname, { cache: 'reload' }).catch(function() {}); }
+      catch (e) { return Promise.resolve(); }
+    }
     // Marca o guard ANTES do reload pra o handler de controllerchange (index.html)
-    // não disparar um segundo reload durante o churn de unregister/re-register.
-    Promise.all([p1, p2, p3]).then(function() { window._swReloading = true; window.location.reload(); });
+    // não disparar um segundo reload — só pode existir UM caminho de reload (v2.6.16).
+    function _recarregar() { window._swReloading = true; window.location.reload(); }
+
+    if (!('serviceWorker' in navigator)) { _hardResetEReload('sem suporte a SW'); return; }
+
+    // CAMINHO NORMAL: passa o bastão pro SW novo e recarrega CONTROLADO.
+    var _entregue = false;
+    var _entregar = function() {
+      if (_entregue) return;
+      _entregue = true;
+      _revalidarHtml().then(_recarregar);
+    };
+    // Rede de segurança: SW que não instala (rede caiu, sw.js com erro) não pode
+    // prender ninguém na versão velha. 8s é folgado pro install, que hoje
+    // precacheia só o <head>.
+    var _prazo = setTimeout(function() {
+      if (_entregue) return;
+      _entregue = true;
+      _hardResetEReload('o SW novo não ativou em 8s');
+    }, 8000);
+    var _pronto = function() {
+      if (_entregue) return;
+      clearTimeout(_prazo);
+      _entregar();
+    };
+
+    navigator.serviceWorker.getRegistration().then(function(reg) {
+      if (!reg) { clearTimeout(_prazo); _entregue = true; _hardResetEReload('nenhum SW registrado'); return; }
+      // Se já há um SW novo esperando/instalando, acompanha; senão provoca a busca.
+      // SW parado em `installed` fica esperando as abas antigas fecharem. O
+      // sw.js chama skipWaiting sozinho no install, mas cutucar aqui elimina o
+      // caminho em que ele estaciona e a gente cai no prazo à toa.
+      var _destravar = function(w) {
+        if (w && w.state === 'installed') { try { w.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {} }
+      };
+      var _observar = function(w) {
+        if (!w) return false;
+        if (w.state === 'activated') { _pronto(); return true; }
+        _destravar(w);
+        w.addEventListener('statechange', function() {
+          _destravar(w);
+          // `activated` = install terminou (precache do <head> incluído, via
+          // waitUntil) e o activate já chamou clients.claim().
+          if (w.state === 'activated') _pronto();
+        });
+        return true;
+      };
+      if (_observar(reg.waiting) || _observar(reg.installing)) { /* já a caminho */ }
+      reg.addEventListener('updatefound', function() { _observar(reg.installing); });
+      reg.update().catch(function() {
+        clearTimeout(_prazo); _entregue = true; _hardResetEReload('reg.update() falhou');
+      });
+    }).catch(function() {
+      clearTimeout(_prazo); _entregue = true; _hardResetEReload('getRegistration() falhou');
+    });
   };
 
   // Busca store.js sem cache e compara a versão. Throttle de 60s salvo force.
@@ -2545,6 +2641,32 @@ window._renderBackHeader = function(opts) {
   );
 };
 
+// Zera TODA barra de busca/filtro canônica: o estado por `stateKey` (que é o que
+// sobrevive ao re-render) E o que estiver visível no DOM. Ponto único — chamado pelo
+// Voltar; qualquer outro lugar que precise "parar de filtrar" chama daqui em vez de
+// mexer no _filterBarState na mão. Best-effort: nunca derruba a navegação.
+window._limparBarrasDeBusca = function () {
+  try {
+    var st = window._filterBarState || {};
+    Object.keys(st).forEach(function (k) { if (st[k]) st[k].search = ''; });
+  } catch (e) {}
+  // limpa também os inputs que ainda estejam na tela (o DOM sai de cena logo em
+  // seguida, mas se a navegação for pra MESMA view o input é reaproveitado)
+  try {
+    var ids = ['bracket-search', 'part-search'];
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && 'value' in el) el.value = '';
+    });
+    document.querySelectorAll('[data-fb-search]').forEach(function (el) {
+      if ('value' in el) el.value = '';
+    });
+  } catch (e) {}
+  // e desfaz o efeito nos cards que ainda estiverem montados
+  try { if (typeof window._bracketApplyFilter === 'function') window._bracketApplyFilter(); } catch (e) {}
+  try { if (typeof window._partApplyFilter === 'function') window._partApplyFilter(); } catch (e) {}
+};
+
 // Single delegated click handler for every Voltar button in the app.
 // Installed once at load; survives view re-renders because it lives on <body>.
 window._installBackNavDelegate = function() {
@@ -2563,6 +2685,17 @@ window._installBackNavDelegate = function() {
 
     // Dismiss overlays first so no stale full-screen modal masks the target view.
     try { if (typeof window._dismissAllOverlays === 'function') window._dismissAllOverlays(); } catch(err) {}
+
+    // ⚠️ VOLTAR ZERA A BUSCA. Regra do dono (13/ago): "se houve algo digitado na barra de
+    // busca/filtro e clicarmos em voltar, o conteúdo da barra deve ser limpo, zerado,
+    // parando de filtrar qualquer coisa". O texto sobrevivia de propósito ao RE-RENDER
+    // (é o que faz o filtro da chave resistir a um placar lançado, v1.4.14) — mas o
+    // estado é guardado por `stateKey` em _filterBarState e não era limpo ao SAIR da
+    // tela. Resultado: voltava-se pra uma lista filtrada por um texto que não estava
+    // mais visível em lugar nenhum — a tela parecia vazia sem explicação.
+    // Aqui, e não em cada tela: é o ÚNICO handler de Voltar do app (delegado no body),
+    // então some o risco de uma tela nova nascer sem a limpeza.
+    try { window._limparBarrasDeBusca(); } catch(err) {}
 
     // Override path: callback function registered in _backNavCallbacks.
     var cbId = el.getAttribute('data-back-cb');
@@ -4910,7 +5043,9 @@ window._fbInner = function (key) {
         // O wrapper herda o flex do input (era o input que absorvia a sobra da linha).
         var _clr = "window._fbClearSearch('" + key + "')";
         searchInp = '<span style="position:relative;display:inline-flex;align-items:center;flex:1 1 64px;min-width:60px;">'
-            + '<input id="' + opts.searchId + '" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
+            // data-fb-search: marca TODA barra canônica pro "Voltar" zerar a busca sem
+            // depender de lista de ids — barra nova nasce coberta. (_limparBarrasDeBusca)
+            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
             + '<button type="button" id="' + opts.searchId + '-clear" class="cancel-x-btn" title="Limpar busca" onclick="' + _clr + '" style="--cx-size:20px;position:absolute;right:8px;top:50%;transform:translateY(-50%);' + (search ? '' : 'display:none;') + '">✕</button>'
             + '</span>';
     }
@@ -5135,6 +5270,23 @@ window._TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;ve
 // deve passar por window._sportIcon(sport). Hardcodes em template literal
 // são proibidos — sempre interpolar ${window._sportIcon('Beach Tennis')}.
 //
+// FONTE ÚNICA do nome "cru" da modalidade: tira o ícone/emoji decorativo que o
+// SELETOR usa no rótulo ("🎾 Beach Tennis" → "Beach Tennis"). Existe porque os
+// dois caminhos de criação gravavam `t.sport` DIFERENTE pro mesmo esporte: o
+// form completo grava limpo (via _currentSportName) e o quick-create gravava o
+// rótulo CRU do picker. Quem compara o esporte por igualdade (_sportTiebreakAt)
+// ou indexa por ele (_sportScoringDefaults/_sportTeamDefaults/sportPalettes)
+// então dava respostas diferentes pro MESMO esporte — foi assim que o campo do
+// tie-break parou de abrir no 6-5 (o torneio caía no default do tênis, 7-6).
+// Regra: TODO leitor que compara/indexa por esporte passa por aqui primeiro.
+// (_sportIcon não precisa: ele já casa por substring, então tolera o emoji.)
+// A regex era copiada em 2 lugares (main.js + create-tournament.js) — os dois
+// passaram a chamar esta função; uma 3ª cópia é o que faz uma delas divergir.
+window._sportBaseName = function (sport) {
+  if (!sport) return '';
+  return String(sport).replace(/^[^\wÀ-ɏ]+/u, '').trim();
+};
+
 // Ordem de matching crítica:
 // 1. futevôlei ANTES de qualquer "vôlei" (substring trap — "futevôlei"
 //    contém "vôlei", então a ordem inversa pega o ícone errado)
@@ -8012,6 +8164,10 @@ window.AppStore = {
         if (profile.displayName) this.currentUser.displayName = profile.displayName;
         if (profile.birthDate) this.currentUser.birthDate = profile.birthDate;
         if (profile.age) this.currentUser.age = profile.age;
+        // ♥ FC máxima declarada (v1.8.64) — sobrepõe 220−idade nas faixas do
+        // relógio. ⚠️ loadUserProfile copia CAMPO A CAMPO: sem esta linha o valor
+        // seria salvo e nunca chegaria à sessão (armadilha do nameConflict/1.7.41).
+        if (profile.hrMax) this.currentUser.hrMax = profile.hrMax;
         if (profile.city) this.currentUser.city = profile.city;
         if (profile.state) this.currentUser.state = profile.state;
         if (profile.country) this.currentUser.country = profile.country;

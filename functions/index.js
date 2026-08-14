@@ -6021,6 +6021,262 @@ exports.fixMergedParticipants = onRequest(
   }
 );
 
+// ─── accountSummaryEmail (Firestore trigger, v1.8.40) ──────────────────────
+// Pedido do dono (13/ago/2026): _"o sistema mandar automaticamente um email dizendo
+// como a pessoa escolheu logar"_ + _"sempre que mudar algo consolida e envia
+// novamente um email de confirmação"_. É o registro PESQUISÁVEL contra o "esqueci
+// como entrei e criei outra conta": a pessoa busca "scoreplace" na caixa e encontra
+// a foto atual da conta (nome, e-mail, celular, formas de entrar).
+//
+// DISPARO POR ASSINATURA, não por escrita: users/{uid} muda o tempo todo (tema,
+// preferências, stats) — só os campos de IDENTIDADE (accountDocSig: nome, e-mail,
+// celular) contam. A assinatura enviada fica gravada em `accountEmailSig`; escrita
+// com a mesma assinatura (inclusive a NOSSA, do próprio marcador) é ignorada —
+// é isso que impede o loop e o spam. O conteúdo/assinatura vivem em
+// functions/account-email-core.js (PURO — o mesmo construtor do backfill
+// scripts/send-account-summary-emails.js e dos testes).
+//
+// Os provedores saem do Firebase AUTH (Admin SDK) — não do doc, que no instante do
+// nascimento pode ainda não ter authProvider. Vínculo de provedor NOVO não passa
+// por aqui (não muda o doc): o cliente avisa na hora (_notifyLoginMethodAdded).
+// replyTo = contato@barthlabs.com ([[feedback_contact_email_always_barthlabs]]).
+//
+// ⚠️ LIMITE CONHECIDO (documentado, não esquecido): e-mail @privaterelay.appleid.com
+// (Apple "Ocultar meu e-mail") só é ENCAMINHADO pela Apple quando o REMETENTE está
+// registrado no Private Email Relay Service (Apple Developer) com SPF/DKIM num
+// domínio nosso. Enquanto o SMTP da extensão for o Gmail, essas contas provavelmente
+// NÃO recebem. Registrar domínio/remetente é ação do dono; enviamos mesmo assim.
+const _accountEmail = require("./account-email-core.js");
+exports.accountSummaryEmail = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    try {
+      const after = event.data && event.data.after;
+      if (!after || !after.exists) return;                 // deleção — nada a mandar
+      const p = after.data() || {};
+      if (p.mergedInto) return;                            // conta absorvida
+      const uid = event.params.uid;
+
+      const sig = _accountEmail.accountDocSig(p);
+      if (p.accountEmailSig === sig) return;               // identidade não mudou (ou é o nosso próprio marcador)
+      const isNew = !(event.data.before && event.data.before.exists);
+
+      let providers = [];
+      let authEmail = "";
+      try {
+        const ur = await admin.auth().getUser(uid);
+        authEmail = ur.email || "";
+        providers = (ur.providerData || []).map((x) => x && x.providerId).filter(Boolean);
+      } catch (e) {
+        return; // sem conta no Auth (doc órfão/backfill) → não há a quem escrever
+      }
+      const email = (authEmail && !_isSyntheticAuthEmail(authEmail)) ? authEmail
+        : ((p.email && !_isSyntheticAuthEmail(p.email)) ? String(p.email) : "");
+
+      // Conta sem e-mail real (só-celular): grava a assinatura e para — senão toda
+      // escrita do doc re-tentaria pra sempre.
+      if (!email) { await after.ref.set({ accountEmailSig: sig }, { merge: true }); return; }
+
+      const mail = _accountEmail.buildAccountEmail({
+        name: p.displayName || "",
+        email: email,
+        phone: p.phone || "",
+        providers: providers,
+        authProviderFallback: p.authProvider || "",
+        isNew: isNew,
+      });
+      // ORDEM: enfileira PRIMEIRO, assinatura DEPOIS — se o enfileiramento falhar, a
+      // assinatura não é gravada e a próxima escrita re-tenta (perder o e-mail em
+      // silêncio seria pior que, raramente, mandar duas vezes).
+      await _enqueueMail(admin.firestore(), {
+        to: [email],
+        replyTo: "contato@barthlabs.com",
+        message: { subject: mail.subject, html: mail.html, text: mail.text },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await after.ref.set({ accountEmailSig: sig }, { merge: true });
+      console.log("[accountSummaryEmail]", isNew ? "nascimento" : "mudança", "→", email);
+    } catch (e) {
+      console.error("[accountSummaryEmail] falhou (best-effort):", e && e.message);
+    }
+  }
+);
+
+// ─── accountDeletionEmail (Firestore trigger) ──────────────────────────────
+// Ordem do dono (13/ago/2026): _"sempre que qualquer conta for excluída no app
+// (por qualquer motivo — solicitação do usuário, admin, etc.), o sistema deve
+// automaticamente enviar e-mail de confirmação"_ → titular + rstbarth@gmail.com,
+// CC contato@barthlabs.com.
+//
+// POR QUE AQUI, e não dentro do deleteAccount: a mesma lição do syncMatchRosters —
+// o gatilho vê TODA escrita, de QUALQUER origem (a CF deleteAccount, um script de
+// admin, o console do Firebase, uma limpeza agendada). Pendurar o e-mail só na CF
+// deixaria de fora justamente as exclusões feitas "por fora", que são as que mais
+// precisam de registro. O Auth de 2ª geração não tem gatilho onDelete — o doc do
+// Firestore é o ponto de observação disponível.
+//
+// ⚠️ A IDENTIDADE SAI DO `before`. A exclusão canônica grava o tombstone com `set`
+// SEM merge: no mesmo instante o doc perde nome e e-mail. Quem lê o `after` fica
+// sem destinatário. O evento traz os dois lados — é o `before` que sabe quem era.
+//
+// ⚠️ FUSÃO NÃO É EXCLUSÃO. O merge grava `mergedInto`, e o cleanupAbandonedAuth
+// APAGA esse doc 7 dias depois; sem o descarte, quem apenas uniu contas receberia
+// "sua conta foi excluída" com a conta sobrevivente viva. A regra mora no core e
+// está travada por teste.
+//
+// O relatório do dono termina com uma VARREDURA DE SOBRAS (consultas indexadas,
+// nunca full scan): relatório que só afirma "apagado" não prova nada — o que prova
+// é a conferência feita depois. Ela também pega o caso clássico do Firestore em que
+// alguém apaga users/{uid} pelo console e as SUBCOLEÇÕES continuam vivas.
+const _delEmail = require("./account-deletion-email-core.js");
+
+const _espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function _sweepDeletionLeftovers(db, uid, kind) {
+  const sobras = [];
+  const conta = async (label, q) => {
+    try { const s = await q.get(); if (!s.empty) sobras.push(label + " (" + s.size + ")"); } catch (e) {}
+  };
+
+  // ⚠️ ESPERA DELIBERADA, e ela é o que faz o aviso valer alguma coisa. A CF
+  // deleteAccount grava o tombstone no passo 6 e só apaga o Auth no passo 7 —
+  // este gatilho dispara no passo 6 e GANHARIA a corrida, acusando "Auth ainda
+  // existe" em TODA exclusão legítima. Aviso que sempre aparece é aviso que
+  // ninguém lê. Os demais passos (torneios, amizades, presenças, casuais) já
+  // terminaram antes do tombstone, então só o Auth precisa desta folga.
+  await _espera(5000);
+
+  // Auth: se o login sobreviveu à exclusão do perfil, a pessoa ainda "existe".
+  // Segunda chance antes de acusar — a primeira pode ser só lentidão do Admin SDK.
+  let authVivo = false;
+  try { await admin.auth().getUser(uid); authVivo = true; } catch (e) {}
+  if (authVivo) {
+    await _espera(5000);
+    try { await admin.auth().getUser(uid); } catch (e) { authVivo = false; }
+  }
+  if (authVivo) sobras.push("Firebase Auth — conta de login ainda existe");
+
+  await conta("tournaments.memberUids", db.collection("tournaments").where("memberUids", "array-contains", uid));
+  await conta("tournaments.creatorUid", db.collection("tournaments").where("creatorUid", "==", uid));
+  await conta("tournaments.organizerUid", db.collection("tournaments").where("organizerUid", "==", uid));
+  await conta("presences.uid", db.collection("presences").where("uid", "==", uid));
+  await conta("casualMatches.playerUids", db.collection("casualMatches").where("playerUids", "array-contains", uid));
+  await conta("users.friends[] de terceiros", db.collection("users").where("friends", "array-contains", uid));
+  await conta("results.playerUids", db.collectionGroup("results").where("playerUids", "array-contains", uid));
+  try { const d = await db.collection("letzplayScans").doc(uid).get(); if (d.exists) sobras.push("letzplayScans/" + uid); } catch (e) {}
+
+  // Subcoleções de users/{uid}: o Firestore NÃO as apaga junto com o doc pai.
+  try {
+    const cols = await db.collection("users").doc(uid).listCollections();
+    for (const c of cols) {
+      const s = await c.limit(1).get();
+      if (!s.empty) sobras.push("users/" + uid + "/" + c.id + " — subcoleção órfã");
+    }
+  } catch (e) {}
+
+  // Tombstone é o estado ESPERADO da exclusão canônica — não é sobra.
+  if (kind === "hard") {
+    try { const d = await db.collection("users").doc(uid).get(); if (d.exists) sobras.push("users/" + uid + " — doc recriado"); } catch (e) {}
+  }
+  return sobras;
+}
+
+exports.accountDeletionEmail = onDocumentWritten(
+  { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 300 },
+  async (event) => {
+    try {
+      const uid = event.params.uid;
+      const bs = event.data && event.data.before;
+      const as = event.data && event.data.after;
+      const before = (bs && bs.exists) ? (bs.data() || {}) : null;
+      const after = (as && as.exists) ? (as.data() || {}) : null;
+
+      const d = _delEmail.decideDeletionNotice(before, after);
+      if (!d.notify) return;                       // escrita comum, fusão, repetição
+      console.log("[accountDeletionEmail] " + uid + " → " + d.kind + " (" + d.reason + ")");
+
+      const db = admin.firestore();
+      const nome = String(before.displayName || "");
+      const docEmail = (before.email && !_isSyntheticAuthEmail(before.email)) ? String(before.email) : "";
+
+      // Auth pode já ter sido apagado (a CF apaga por último) — best-effort.
+      let providers = [], createdAt = null, lastSignIn = null, authEmail = "";
+      try {
+        const ur = await admin.auth().getUser(uid);
+        authEmail = (ur.email && !_isSyntheticAuthEmail(ur.email)) ? ur.email : "";
+        providers = (ur.providerData || []).map((x) => x && x.providerId).filter(Boolean);
+        createdAt = ur.metadata && ur.metadata.creationTime;
+        lastSignIn = ur.metadata && ur.metadata.lastSignInTime;
+      } catch (e) { /* já removido do Auth — o esperado */ }
+      if (!providers.length && before.authProvider) providers = [before.authProvider];
+      const destinatario = docEmail || authEmail;
+
+      // O que existia — lido do `before`, que é o último retrato real do perfil.
+      const campos = Object.keys(before).filter((k) => k !== "deleted" && k !== "deletedAt");
+      const items = ["Perfil (users/" + uid + ") — " + campos.length + " campo(s)"];
+      if (nome) items.push("Nome e e-mail de login");
+      if (before.photoURL) items.push("Foto de perfil");
+      if (before.phone) items.push("Celular cadastrado");
+      if (Array.isArray(before.friends) && before.friends.length) items.push(before.friends.length + " amizade(s)");
+      if (Array.isArray(before._trophyIds) && before._trophyIds.length) items.push(before._trophyIds.length + " troféu(s)");
+      items.push(d.kind === "hard" ? "Documento removido por completo"
+                                   : "Documento reduzido a marcador anônimo (sem dado pessoal)");
+
+      const leftovers = await _sweepDeletionLeftovers(db, uid, d.kind);
+      const info = {
+        uid, name: nome, email: destinatario, phone: before.phone || "",
+        providers, createdAt, lastSignIn, deletedAt: new Date(),
+        items, leftovers, swept: true, origin: "exclusão de conta (" + d.reason + ")",
+      };
+
+      // ids determinísticos + create(): reentrega do gatilho não vira e-mail dobrado.
+      const idMail = _delEmail.mailDocId(uid);
+      const põe = async (docId, doc) => {
+        try { await db.collection("mail").doc(docId).create(doc); return true; }
+        catch (e) {
+          if (e && (e.code === 6 || String(e.message || "").indexOf("ALREADY_EXISTS") !== -1)) {
+            console.log("[accountDeletionEmail] " + docId + " já enfileirado — ignorado"); return false;
+          }
+          throw e;
+        }
+      };
+
+      // O DETALHE OPERACIONAL VIVE NO LOG, não numa caixa de e-mail. Com o
+      // relatório interno removido (regra: "nenhum outro destinatário"), é aqui
+      // que ficam uid, provedores, datas e os caminhos de sobra. Sobra é ERRO de
+      // propósito: some no meio de log comum, e é justamente o que exige ação.
+      console.log("[accountDeletionEmail] " + JSON.stringify({
+        uid, nome, providers, criada: createdAt, ultimoAcesso: lastSignIn,
+        itens: items, sobras: leftovers.length,
+      }));
+      if (leftovers.length) {
+        console.error("[accountDeletionEmail] SOBRARAM referências de " + uid +
+          " — limpeza manual: " + leftovers.join(" | "));
+      }
+
+      // UM e-mail por exclusão, sempre — quem recebe é decisão do core, pra
+      // "nenhum outro destinatário" ser verificável num lugar só:
+      //   com e-mail → confirmação pra pessoa (CC caixa da empresa);
+      //   só celular → relatório pra caixa da empresa (o titular não é avisado,
+      //                porque avisá-lo exigiria SMS, que o sistema não envia).
+      // Os dois nunca saem juntos: o relatório SUBSTITUI a confirmação.
+      const alvos = _delEmail.mailTargets(destinatario);
+      const ehRelatorio = !alvos.user;
+      const alvo = alvos.user || alvos.report;
+      const m = ehRelatorio ? _delEmail.buildReportEmail(info) : _delEmail.buildUserEmail(info);
+      await põe(idMail, Object.assign({}, alvo, {
+        message: { subject: m.subject, html: m.html, text: m.text },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      }));
+      console.log("[accountDeletionEmail] enfileirado (" + (ehRelatorio ? "relatório — conta sem e-mail" : "confirmação ao titular") +
+        ") → " + alvo.to.join(",") + " (cc " + (alvo.cc.join(",") || "—") + ") | sobras=" + leftovers.length);
+    } catch (e) {
+      // best-effort: a conta já foi apagada; falhar aqui não pode reverter nada.
+      console.error("[accountDeletionEmail] falhou:", e && e.message);
+    }
+  }
+);
+
 // ─── autoMergeOnProfileUpdate (Firestore trigger) ─────────────────────────
 // Dispara sempre que um doc users/{uid} é criado ou atualizado.
 // Se phone ou email mudou, varre o banco por outros usuários com o mesmo

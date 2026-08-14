@@ -1,0 +1,2080 @@
+{
+ "name": "bt-duplas-6-0-liso",
+ "sport": "Beach Tennis",
+ "note": "BT duplas: pick fase 0 + pick do 2º sacador após o game 1; 6-0 fecha o set único e a partida.",
+ "players": {
+  "p1Name": "Ana/Bruno",
+  "p2Name": "Caio/Duda",
+  "isDoubles": true
+ },
+ "config": {
+  "type": "sets",
+  "setsToWin": 1,
+  "gamesPerSet": 6,
+  "tiebreakEnabled": true,
+  "tiebreakPoints": 7,
+  "tiebreakMargin": 2,
+  "superTiebreak": false,
+  "superTiebreakPoints": 10,
+  "countingType": "tennis",
+  "advantageRule": false
+ },
+ "steps": [
+  {
+   "event": {
+    "kind": "open"
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": null,
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 1,
+      "playerIdx": 0,
+      "name": "Ana"
+     },
+     {
+      "team": 1,
+      "playerIdx": 1,
+      "name": "Bruno"
+     },
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 0,
+    "servePickOpen": true,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveSelect",
+    "team": 1,
+    "idx": 0
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": null,
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 1,
+      "playerIdx": 0,
+      "name": "Ana"
+     },
+     {
+      "team": 1,
+      "playerIdx": 1,
+      "name": "Bruno"
+     },
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 0,
+    "servePickOpen": true,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveConfirm"
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 1,
+      "playerIdx": 0,
+      "name": "Ana"
+     },
+     {
+      "team": 1,
+      "playerIdx": 1,
+      "name": "Bruno"
+     },
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 0,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 1,
+      "playerIdx": 0,
+      "name": "Ana"
+     },
+     {
+      "team": 1,
+      "playerIdx": 1,
+      "name": "Bruno"
+     },
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 0,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 1,
+      "playerIdx": 0,
+      "name": "Ana"
+     },
+     {
+      "team": 1,
+      "playerIdx": 1,
+      "name": "Bruno"
+     },
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 0,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     0,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 1,
+      "playerIdx": 0,
+      "name": "Ana"
+     },
+     {
+      "team": 1,
+      "playerIdx": 1,
+      "name": "Bruno"
+     },
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 0,
+    "servePickOpen": false,
+    "servePickCurrent": "Ana",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": true,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 2
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": true,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveSelect",
+    "team": 2,
+    "idx": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": true,
+    "servePickCurrent": "Duda",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "serveConfirm"
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": false,
+    "servePickCurrent": "Duda",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": false,
+    "servePickCurrent": "Duda",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": false,
+    "servePickCurrent": "Duda",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     1,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": true,
+    "serveEligible": [
+     {
+      "team": 2,
+      "playerIdx": 0,
+      "name": "Caio"
+     },
+     {
+      "team": 2,
+      "playerIdx": 1,
+      "name": "Duda"
+     }
+    ],
+    "servePickPhase": 1,
+    "servePickOpen": false,
+    "servePickCurrent": "Duda",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     2,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Bruno"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Bruno",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     2,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Bruno"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Bruno",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     2,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Bruno"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Bruno",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     2,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Bruno"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Bruno",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     3,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     3,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     3,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     3,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Caio"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "Caio",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     4,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     4,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     4,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     4,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 1,
+    "server": {
+     "team": 1,
+     "name": "Ana"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     5,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "15",
+     "0"
+    ],
+    "games": [
+     5,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "30",
+     "0"
+    ],
+    "games": [
+     5,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": true,
+    "setLabel": "Set 1",
+    "points": [
+     "40",
+     "0"
+    ],
+    "games": [
+     5,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 2,
+     "name": "Duda"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     0,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": false,
+    "winner": null,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  },
+  {
+   "event": {
+    "kind": "point",
+    "team": 1
+   },
+   "state": {
+    "v": 1,
+    "type": "state",
+    "active": false,
+    "setLabel": "Set 1",
+    "points": [
+     "0",
+     "0"
+    ],
+    "games": [
+     6,
+     0
+    ],
+    "isTiebreak": false,
+    "courtLeft": 2,
+    "server": {
+     "team": 1,
+     "name": "Bruno"
+    },
+    "teams": {
+     "1": {
+      "players": [
+       "Ana",
+       "Bruno"
+      ]
+     },
+     "2": {
+      "players": [
+       "Caio",
+       "Duda"
+      ]
+     }
+    },
+    "sets": [
+     1,
+     0
+    ],
+    "setsToWin": 1,
+    "canReplay": true,
+    "isCasual": true,
+    "sportName": "Beach Tennis",
+    "reiRainha": false,
+    "rrRound": 0,
+    "rrStandings": [],
+    "isDoubles": true,
+    "rrSuggest": false,
+    "canSetServer": false,
+    "serveEligible": [],
+    "servePickPhase": -1,
+    "servePickOpen": false,
+    "servePickCurrent": "",
+    "isFinished": true,
+    "winner": 1,
+    "tieRulePending": false,
+    "tiedAt": null
+   }
+  }
+ ]
+}

@@ -83,17 +83,38 @@
   // Ranking AGREGADO (escopo 'overall'): mescla as standings de todos os grupos e
   // reordena por critério global (vitórias → saldo de sets → games → pontos). Sort
   // estável — empate total preserva a ordem de concatenação dos grupos.
+  // A ordem de QUEM SOBE pra próxima fase. Junta as classificações de todos os grupos e
+  // ordena por mérito — é este resultado que vira o pool da eliminatória.
+  //
+  // ⚠️ ESTA CADEIA ERA PRÓPRIA, e por isso divergia da que a pessoa VÊ na tabela: parava em
+  // pointsDiff e, empatando ali, devolvia 0 — mantendo a ordem em que os grupos foram
+  // varridos. MEDIDO no sandbox do Confra com a R1 completa: 132 classificados e **80
+  // posições** em que as duas ordens discordavam. No placar simulado o topo coincidia (a 1ª
+  // divergência caía na 40ª posição), então o corte do Confra não teria mudado — mas isso é
+  // sorte do dado, não garantia: com outro placar, ou com mais classificados, a divergência
+  // sobe. A tabela dizer uma ordem e a chave usar outra não se defende.
+  // Agora as duas perguntam ao MESMO comparador (bracket-logic._standingsCompare).
   function _globalStandings(prevGroups, computeStandings) {
     var all = [];
     (prevGroups || []).forEach(function (g) { (computeStandings(g) || []).forEach(function (s) { all.push(s); }); });
-    all.sort(function (a, b) {
-      var d;
-      d = (b.wins || 0) - (a.wins || 0); if (d) return d;
-      d = (((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0))); if (d) return d;
-      d = (((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0))); if (d) return d;
-      d = (((b.pointsFor || 0) - (b.pointsAgainst || 0)) - ((a.pointsFor || 0) - (a.pointsAgainst || 0))); if (d) return d;
-      return 0;
-    });
+    // window (browser / vendor da CF) OU require (Node) — a MESMA regra nos dois, nunca
+    // uma cópia. Sem isto, um contexto que carregue só este arquivo perdia a ordenação em
+    // silêncio: dois testes existentes acusaram exatamente isso.
+    var cmp = (typeof window !== 'undefined' && typeof window._standingsCompare === 'function')
+      ? window._standingsCompare : null;
+    if (!cmp && typeof require === 'function') {
+      try { cmp = require('./standings-core.js').standingsCompare; } catch (e) { cmp = null; }
+    }
+    if (!cmp) {
+      // Sem o comparador canônico não há como ordenar por mérito SEM inventar uma segunda
+      // regra — que é o defeito que este bloco existe pra matar. Preserva a ordem de
+      // chegada (estável) e avisa; nunca desempata por conta própria.
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[phases] _standingsCompare ausente — ordem de classificação preservada como veio');
+      }
+      return all;
+    }
+    all.sort(function (a, b) { return cmp(a, b, false); });
     return all;
   }
 
@@ -744,6 +765,60 @@
   // ranqueados/embaralhados) + cfg → estrutura. Usado em QUALQUER posição (Fase 0 com
   // pool=inscritos; Fase N com pool=transição). Esta é a forma canônica; o wrapper
   // buildPhaseGroupStage apenas deriva o pool da fase anterior e delega aqui.
+  // ── CÂNONE DO SLOT: todo jogo criado se descreve por UID ─────────────────────
+  // (v1.3.18, "item 10 do dono") TODO slot que um gerador cria carrega o UID EXPLÍCITO
+  // (team*Uids/p*Uid), não só o team*Obj/nome. Deriva do objeto do slot via `_slotUids`
+  // (uid-first); guest sem conta fica só com o nome — exceção legítima e a única.
+  // Idempotente: pula slot que já tem uid.
+  //
+  // ⚠️ ERA UM BLOCO SOLTO dentro de materializeNextPhase, e por isso valia só pra QUEM
+  // PASSA POR LÁ. A Fase de Grupos monta os jogos em genGroupsFromPool e saía com 12 de 12
+  // slots sem uid nenhum (medido) — enquanto o Confra, que é a referência, grava
+  // team1Uids/team2Uids desde o sorteio. É a mesma pergunta respondida em dois lugares:
+  // agora é função, e todo gerador chama.
+  //
+  // ⚠️ E NÃO DEPENDE DE ORDEM DE CARGA. A versão original só agia se `window._slotUids`
+  // existisse — e ele depende, por sua vez, de `window._participantUids`. Uma cadeia de dois
+  // globais que, faltando, faz o carimbo virar no-op EM SILÊNCIO: o sorteio sai sem uid e
+  // ninguém percebe até alguém trocar de nome. O caminho preferido continua sendo `_slotUids`
+  // (é o cânone e cobre os 3 esquemas históricos); o fallback lê o `team*Obj` que o `mkTeam`
+  // logo acima acabou de montar — não é regra nova, é ler o que o vizinho gravou.
+  function _uidsDoTeamObj(obj) {
+    if (!obj) return [];
+    if (typeof window !== 'undefined' && typeof window._participantUids === 'function') {
+      var u = window._participantUids(obj);
+      if (u && u.length) return u.filter(Boolean);
+    }
+    if (Array.isArray(obj.participants) && obj.participants.length) {
+      return obj.participants.map(function (p) { return p && p.uid; }).filter(Boolean);
+    }
+    return [obj.p1Uid, obj.p2Uid, obj.uid].filter(Boolean);
+  }
+  function _carimbaUidsNoSlot(m) {
+    if (!m) return m;
+    var viaCanon = (typeof window !== 'undefined' && typeof window._slotUids === 'function');
+    ['p1', 'p2'].forEach(function (lado) {
+      var chaveArr = lado === 'p1' ? 'team1Uids' : 'team2Uids';
+      var chaveUm = lado === 'p1' ? 'p1Uid' : 'p2Uid';
+      if (Array.isArray(m[chaveArr]) && m[chaveArr].length) return;   // idempotente
+      var u = viaCanon ? (window._slotUids(m, lado) || []) : [];
+      if (!u.length) u = _uidsDoTeamObj(lado === 'p1' ? m.team1Obj : m.team2Obj);
+      if (u.length) { m[chaveArr] = u; m[chaveUm] = (u.length === 1 ? u[0] : null); }
+    });
+    return m;
+  }
+  // Os uids de um GRUPO, na ordem dos players — espelha `playersUids`, que é como o Confra
+  // grava e o que faz a classificação nascer do uid (bracket-logic._ladoPares). Sem isto a
+  // tabela do grupo depende do rótulo, que envelhece quando a pessoa troca de nome.
+  function _uidsDoGrupo(players) {
+    return (players || []).map(function (p) {
+      if (!p) return null;
+      if (p.uid) return p.uid;
+      if (Array.isArray(p.participants) && p.participants.length === 1 && p.participants[0].uid) return p.participants[0].uid;
+      return null;
+    });
+  }
+
   function genGroupsFromPool(pool, phaseCfg, idPrefix) {
     idPrefix = idPrefix || 'phg';
     pool = pool || [];
@@ -777,6 +852,9 @@
       var gIdx = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
       groups[gIdx].players.push(tm);
     });
+    // O grupo também se descreve por uid (espelha `playersUids` do Confra) — é daí que a
+    // classificação nasce do uid em vez do rótulo.
+    groups.forEach(function (g) { g.playersUids = _uidsDoGrupo(g.players); });
 
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
@@ -800,6 +878,7 @@
               winner: null, scoreP1: null, scoreP2: null,
               label: (_turnos > 1 ? ((turn === 0 ? 'Ida' : 'Volta') + ' • ') : '') + g.name + ' • ' + A.displayName + ' vs ' + B.displayName
             };
+            _carimbaUidsNoSlot(m);   // o slot se descreve por uid, como no Confra
             g.matches.push(m); allMatches.push(m);
           });
         });
@@ -1261,8 +1340,28 @@
     (group.rounds || []).forEach(function (r) { if (Array.isArray(r.matches)) matches = matches.concat(r.matches); });
     var participants = group.players || group.participants || [];
     var smap = {}, h2h = {}, usesSets = false;
-    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
-    participants.forEach(function (p) { ensure(typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); });
+    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, uid: null, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
+    participants.forEach(function (p) {
+      var nm = (typeof p === 'string') ? p : ((p && (p.displayName || p.name)) || '');
+      ensure(nm);
+      // ⚠️ A LINHA CARREGA O UID. Ordem do dono: "tudo por uid sempre, inclusive confronto
+      // direto". A estrutura interna deste mapa continua chaveada por nome (é o formato que
+      // os jogos de grupo usam em p1/p2), mas o DESEMPATE passa a casar por uid — que é o
+      // que erra quando alguém se renomeia ou quando há dois homônimos no mesmo grupo.
+      if (nm && smap[nm] && !smap[nm].uid && p && typeof p === 'object' && p.uid) smap[nm].uid = p.uid;
+    });
+    // uid também dos SLOTS dos jogos (grupo legado sem uid no elenco ainda tem no jogo)
+    (function () {
+      var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids : null;
+      if (!slot) return;
+      matches.forEach(function (m) {
+        if (!m) return;
+        [['p1', m.p1], ['p2', m.p2]].forEach(function (par) {
+          var u = slot(m, par[0]) || [];
+          if (u.length === 1 && par[1] && smap[par[1]] && !smap[par[1]].uid) smap[par[1]].uid = u[0];
+        });
+      });
+    })();
     matches.forEach(function (m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
       ensure(m.p1); ensure(m.p2);
@@ -1305,33 +1404,57 @@
         else if (m.winner === nm) s.sonnebornBerger += smap[opp].points;
       });
     });
-    var birthByName = opts.birthByName || {};
+    // ── O DESEMPATE É O DO ORGANIZADOR, E CASA POR UID ──────────────────────────
+    // Era um `switch` próprio aqui dentro, com o confronto direto chaveado por NOME
+    // (`a.name+'|||'+b.name`) — o último lugar do app que ainda casava identidade assim.
+    // Agora usa o MESMO comparador da tabela e da transição de fase (standings-core), com
+    // o confronto direto montado a partir dos uids do slot. Ordem do dono: "tudo por uid
+    // sempre, inclusive confronto direto".
+    var _birth = opts.birthByName || {};
+    var _cmpCfg = (typeof window !== 'undefined' && typeof window._standingsCompareConfig === 'function')
+      ? window._standingsCompareConfig : null;
+    if (!_cmpCfg && typeof require === 'function') {
+      try { _cmpCfg = require('./standings-core.js').standingsCompareConfig; } catch (e) { _cmpCfg = null; }
+    }
+    var _buildH2H = (typeof window !== 'undefined' && typeof window._standingsBuildH2H === 'function')
+      ? window._standingsBuildH2H : null;
+    if (!_buildH2H && typeof require === 'function') {
+      try { _buildH2H = require('./standings-core.js').buildH2H; } catch (e) { _buildH2H = null; }
+    }
     var defaultTb = usesSets
       ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
       : ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     var tb = (Array.isArray(opts.tiebreakers) && opts.tiebreakers.length) ? opts.tiebreakers : defaultTb;
-    function cmp(a, b) {
-      if (b.points !== a.points) return b.points - a.points;
-      for (var i = 0; i < tb.length; i++) {
-        var d = 0;
-        switch (tb[i]) {
-          case 'confronto_direto': { var ab = h2h[a.name + '|||' + b.name] || 0, ba = h2h[b.name + '|||' + a.name] || 0; d = ba - ab; if (d) return d < 0 ? -1 : 1; break; }
-          case 'saldo_pontos': d = b.pointsDiff - a.pointsDiff; if (d) return d; break;
-          case 'vitorias': d = b.wins - a.wins; if (d) return d; break;
-          case 'buchholz': d = (b.buchholz || 0) - (a.buchholz || 0); if (d) return d; break;
-          case 'sonneborn_berger': d = (b.sonnebornBerger || 0) - (a.sonnebornBerger || 0); if (d) return d; break;
-          case 'saldo_sets': d = ((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0)); if (d) return d; break;
-          case 'saldo_games': d = ((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0)); if (d) return d; break;
-          case 'sets_vencidos': d = (b.setsWon || 0) - (a.setsWon || 0); if (d) return d; break;
-          case 'games_vencidos': d = (b.gamesWon || 0) - (a.gamesWon || 0); if (d) return d; break;
-          case 'tiebreaks_vencidos': d = (b.tiebreaksWon || 0) - (a.tiebreaksWon || 0); if (d) return d; break;
-          case 'antiguidade': { var ab2 = birthByName[a.name], bb2 = birthByName[b.name]; if (ab2 != null && bb2 != null && ab2 !== bb2) return ab2 - bb2; break; }
-          case 'juventude': { var ay = birthByName[a.name], by = birthByName[b.name]; if (ay != null && by != null && ay !== by) return by - ay; break; }
-          case 'sorteio': return 0;
-        }
-      }
-      return 0;
+    // confronto direto POR UID (nome só pra quem não tem conta — é a identidade que ele tem)
+    var _h2hUid = _buildH2H ? _buildH2H(matches, function (m, lado) {
+      var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids(m, lado) : [];
+      if (slot && slot.length) return slot;
+      var rot = (lado === 'p1') ? m.p1 : m.p2;
+      return rot ? [rot] : [];
+    }) : {};
+    if (!_cmpCfg) {
+      // Sem o comparador canônico não se inventa uma segunda regra (foi o defeito que este
+      // trabalho matou): mantém a ordem de chegada e avisa.
+      if (typeof console !== 'undefined' && console.warn) console.warn('[phases] _standingsCompareConfig ausente — grupo sem desempate aplicado');
+      return Object.keys(smap).map(function (k) { return smap[k]; });
     }
+    var _ordemChave = null;
+    var _buildOrd = (typeof window !== 'undefined' && typeof window._standingsOrdemChave === 'function')
+      ? window._standingsOrdemChave : null;
+    if (!_buildOrd && typeof require === 'function') {
+      try { _buildOrd = require('./standings-core.js').buildOrdemChave; } catch (e) { _buildOrd = null; }
+    }
+    if (_buildOrd) {
+      // `sorteio` = ORDEM DA CHAVE — quem aparece no jogo mais cedo conta como sorteado antes
+      _ordemChave = _buildOrd(matches, function (m, lado) {
+        var u = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? (window._slotUids(m, lado) || []) : [];
+        if (u.length) return u;
+        var rot = (lado === 'p1') ? m.p1 : m.p2;
+        return rot ? [rot] : [];
+      });
+    }
+    var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth, ordem: _ordemChave };
+    function cmp(a, b) { return _cmpCfg(a, b, _opts); }
     return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
   }
 
@@ -1400,6 +1523,57 @@
     return _leagueGroupFromRounds(t);
   }
 
+  // ── ONDE ESTÃO OS JOGOS DESTA FASE — LEITOR ÚNICO ────────────────────────────
+  // Ordem do dono (14/ago/2026): "tinha esse erro estrutural de achar que cada detalhe do
+  // torneio (rei/rainha, pontos corridos, fase de grupos — todos os modos da classificatória)
+  // rodavam em lugares diferentes… sem rodar coisas diferentes para o que deveria ser uma
+  // coisa só: fase classificatória."
+  //
+  // O jogo de uma fase mora em UM de três storages, por razão histórica:
+  //   1. `t.rounds[].monarchGroups[].matches` — o caminho do CONFRA (Rei/Rainha incremental);
+  //   2. `t.phaseRounds[i].rounds[].matches`  — Liga incremental de uma fase 1+;
+  //   3. `t.matches` taggeado por `phaseIndex` — chave/grupos gerados de uma vez.
+  // Quem precisa responder "esta fase acabou?" tinha que conhecer os três — e a varredura
+  // estava COPIADA em phaseComplete e pendingMatches, que o próprio comentário chamava de
+  // espelhos. Espelho não é fonte única: diverge na primeira mudança. Este leitor é a
+  // varredura, UMA vez; os dois passam a derivar dele.
+  //
+  // ⚠️ NÃO é redesenho: a ordem de leitura é exatamente a que a Confra já usa (grupos
+  // primeiro, via prevPhaseGroups). O comportamento não muda — é o mesmo caminho, num lugar
+  // só. Devolve [{ match, groupIdx?, groupName?, round?, bracket? }].
+  function phaseGames(t, idx) {
+    var out = [];
+    if (!t) return out;
+    var cur = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
+    if (cur === 0) {
+      prevPhaseGroups(t).forEach(function (g, gi) {
+        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
+        (ms || []).forEach(function (m) {
+          if (m) out.push({ match: m, groupIdx: gi, groupName: g.name || ('Grupo ' + (gi + 1)) });
+        });
+      });
+      return out;
+    }
+    var slot = t.phaseRounds && t.phaseRounds[cur];
+    if (slot && Array.isArray(slot.rounds)) {
+      slot.rounds.forEach(function (r) {
+        ((r && r.matches) || []).forEach(function (m) { if (m) out.push({ match: m, round: r.round }); });
+      });
+      return out;
+    }
+    (t.matches || []).forEach(function (m) {
+      if (m && (m.phaseIndex || 0) === cur) out.push({ match: m, bracket: m.bracket, round: m.round });
+    });
+    return out;
+  }
+  // Um jogo está resolvido? BYE e folga contam como resolvidos (não seguram a fase).
+  // ⚠️ `isSitOut` só vale em fase de GRUPOS/rodadas — numa chave, folga não existe e o
+  // comportamento antigo (que a golden trava) não a considerava. Mantido como estava.
+  function _jogoResolvido(m, ehGrupo) {
+    if (!m) return true;
+    return !!(m.winner || m.isBye || (ehGrupo && m.isSitOut));
+  }
+
   // A fase ATUAL está completa? (libera o avanço)
   function phaseComplete(t) {
     if (!isMultiPhase(t)) return false;
@@ -1437,10 +1611,15 @@
         }).length;
         if (playedL < needL) return false;
       }
-      return groups.every(function (g) {
-        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
-        return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-      });
+      // Varredura pelo LEITOR ÚNICO (phaseGames) — mesma leitura de pendingMatches.
+      // ⚠️ A exigência "nenhum grupo VAZIO" é preservada contando os grupos que
+      // contribuíram: achatar sem isso deixaria um grupo sem jogo passar despercebido
+      // desde que os outros estivessem completos.
+      var _u0 = phaseGames(t, 0);
+      var _gruposComJogo = {};
+      _u0.forEach(function (u) { if (u.groupIdx != null) _gruposComJogo[u.groupIdx] = 1; });
+      if (Object.keys(_gruposComJogo).length < groups.length) return false;
+      return _u0.every(function (u) { return _jogoResolvido(u.match, true); });
     }
     // v3.1.16 (inc 8): fase atual = Liga incremental (Pontos Corridos rodada a rodada) →
     // jogos moram em t.phaseRounds[cur].rounds (não em t.matches). Completa quando TODAS
@@ -1450,47 +1629,35 @@
       if (!_liSlot.rounds.length) return false;
       var _liNeed = parseInt((t.phases[cur] || {}).rounds, 10) || 0;
       if (_liNeed && _liSlot.rounds.length < _liNeed) return false; // temporada ainda em curso
-      return _liSlot.rounds.every(function (r) {
-        var ms = (r && r.matches) || [];
-        return ms.length > 0 && ms.every(function (m) { return m.winner || m.isBye || m.isSitOut; });
-      });
+      // idem: rodada sem jogo nenhum não conta como concluída
+      var _uL = phaseGames(t, cur);
+      var _rodadasComJogo = {};
+      _uL.forEach(function (u) { if (u.round != null) _rodadasComJogo[u.round] = 1; });
+      if (Object.keys(_rodadasComJogo).length < _liSlot.rounds.length) return false;
+      return _uL.every(function (u) { return _jogoResolvido(u.match, true); });
     }
     // Fases de chave: todas as partidas da fase atual decididas (inclui grande final).
-    var pm = (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; });
-    if (!pm.length) return false;
-    return pm.every(function (m) { return m.winner || m.isBye; });
+    // Aqui folga NÃO conta como resolvida (numa chave ela não existe) — o 2º argumento
+    // false preserva exatamente o comportamento que a golden congela.
+    var _uK = phaseGames(t, cur);
+    if (!_uK.length) return false;
+    return _uK.every(function (u) { return _jogoResolvido(u.match, false); });
   }
 
-  // ESPELHO de phaseComplete: enumera os JOGOS PENDENTES da fase atual (sem vencedor,
-  // não-BYE, não-folga), nos MESMOS 3 formatos que phaseComplete varre. Usado pelo painel
+  // Os JOGOS PENDENTES da fase atual (sem vencedor, não-BYE, não-folga). Usado pelo painel
   // de resolução de pendentes (organizador decide: W.O. / lançar / liberar com prazo) antes
   // de avançar de fase. Retorna [{ match, groupIdx?, groupName?, round?, bracket? }].
+  // ⚠️ Já foi um ESPELHO de phaseComplete — as duas repetiam a varredura dos 3 storages, e o
+  // comentário aqui dizia isso com todas as letras. Agora as duas leem por phaseGames.
   function pendingMatches(t) {
     if (!isMultiPhase(t)) return [];
     var cur = t.currentPhaseIndex || 0;
-    var out = [];
-    if (cur === 0) {
-      var groups = prevPhaseGroups(t);
-      groups.forEach(function (g, gi) {
-        var ms = (g.rounds && g.rounds[0]) ? g.rounds[0].matches : (g.matches || []);
-        (ms || []).forEach(function (m) {
-          if (m && !m.winner && !m.isBye && !m.isSitOut) out.push({ match: m, groupIdx: gi, groupName: g.name || ('Grupo ' + (gi + 1)) });
-        });
-      });
-      return out;
-    }
-    var _liSlot = t.phaseRounds && t.phaseRounds[cur];
-    if (_liSlot && Array.isArray(_liSlot.rounds)) {
-      _liSlot.rounds.forEach(function (r) {
-        (r.matches || []).forEach(function (m) {
-          if (m && !m.winner && !m.isBye && !m.isSitOut) out.push({ match: m, round: r.round });
-        });
-      });
-      return out;
-    }
-    (t.matches || []).filter(function (m) { return (m.phaseIndex || 0) === cur; })
-      .forEach(function (m) { if (m && !m.winner && !m.isBye) out.push({ match: m, bracket: m.bracket, round: m.round }); });
-    return out;
+    // Era uma CÓPIA da varredura de phaseComplete (o comentário acima já dizia "espelho").
+    // Agora os dois leem do mesmo lugar: some a chance de um enxergar um storage que o
+    // outro não enxerga — que é como um jogo pendente ficava invisível pro painel enquanto
+    // segurava o avanço da fase.
+    var emChave = !(cur === 0 || (t.phaseRounds && t.phaseRounds[cur] && Array.isArray(t.phaseRounds[cur].rounds)));
+    return phaseGames(t, cur).filter(function (u) { return !_jogoResolvido(u.match, !emChave); });
   }
 
   // ── Fase 1+ → próxima fase: derivar colocações de uma CHAVE já jogada ─────────
@@ -1708,21 +1875,7 @@
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) {
       m.phaseIndex = idx; if (m.category === undefined) m.category = null;
-      // v1.3.18 — CÂNONE DO SLOT (item 10 do dono): TODO slot que o gerador cria carrega o UID
-      // EXPLÍCITO (team*Uids/p*Uid), não só o team*Obj/nome — R1 inclusive. Deriva do objeto do
-      // slot via _slotUids (uid-first); guest sem conta (uids vazio) mantém só o nome (exceção
-      // legítima). Idempotente (pula slots que já têm uid). Antes: a R1 saía só com team1Obj →
-      // o slot NÃO se descrevia por uid; rename do perfil dependia de resolver pelo objeto.
-      if (typeof window !== 'undefined' && typeof window._slotUids === 'function') {
-        if (!(Array.isArray(m.team1Uids) && m.team1Uids.length)) {
-          var _u1 = window._slotUids(m, 'p1') || [];
-          if (_u1.length) { m.team1Uids = _u1; m.p1Uid = (_u1.length === 1 ? _u1[0] : null); }
-        }
-        if (!(Array.isArray(m.team2Uids) && m.team2Uids.length)) {
-          var _u2 = window._slotUids(m, 'p2') || [];
-          if (_u2.length) { m.team2Uids = _u2; m.p2Uid = (_u2.length === 1 ? _u2[0] : null); }
-        }
-      }
+      _carimbaUidsNoSlot(m);
     });
     t.matches = (t.matches || []).concat(built.matches);
     // v2.7.25: resolução 'standby' → os cortados vão pra lista de espera (reusa a
@@ -2160,6 +2313,8 @@
     bracketPhaseGroups: bracketPhaseGroups,
     phaseComplete: phaseComplete,
     pendingMatches: pendingMatches,
+    phaseGames: phaseGames,        // leitor único de "onde estão os jogos desta fase"
+    globalStandings: _globalStandings,   // ordem que decide quem sobe de fase
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings,
     resolveRepFills: resolveRepFills

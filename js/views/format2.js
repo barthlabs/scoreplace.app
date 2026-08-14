@@ -162,9 +162,16 @@
     // começa por UMA rodada Rei/Rainha (grupos de 4 sorteados) e as duplas se formam DENTRO de
     // cada grupo — a estratégia (performance 1º+2º/3º+4º · equilíbrio 1º+4º/2º+3º) dirige o
     // pareamento intra-grupo. Só faz sentido em DUPLAS. Corte por grupo de 4: 4 (todos → 2 duplas)
-    // ou 2 (só os 2 melhores → 1 dupla). Neste increment (v4.5.51) só vale na eliminação DIRETA
-    // (out.classifAtiva === false) — com classificatória é fase empilhada (3 fases), próximo passo.
-    e.openReiRainha = (e.openReiRainha === true) && isDupla && (out.classifAtiva === false);
+    // ou 2 (só os 2 melhores → 1 dupla). Só faz sentido em DUPLAS.
+    // ⚠️ A EXCLUSÃO MÚTUA COM A CLASSIFICATÓRIA CAIU (1.8.56). A v4.5.51 tinha travado isto em
+    // `out.classifAtiva === false` e deixado escrito "com classificatória é fase empilhada
+    // (3 fases), próximo passo" — o passo nunca veio, e o dono cobrou pelo nome: "pode fazer
+    // uma classificatoria de varias rodadas e depois definir que os x classificados para as
+    // eliminatorias vao fazer uma rodada inicial nas eliminatorias que definira as duplas que
+    // seguem na disputa — normalmente uma rodada rei rainha sorteados grupos com cabecas de
+    // chaves que foram definidos na fase classificatoria anterior". Agora vale nos dois casos
+    // e a compilação é a MESMA (_parReiRainhaMaisElim); o que muda é só DE ONDE vem o pool.
+    e.openReiRainha = (e.openReiRainha === true) && isDupla;
     e.reiRainhaCut = (parseInt(e.reiRainhaCut, 10) === 2) ? 2 : 4;
     e.qualifyAll = !!e.qualifyAll;
     // 'inherit' (default) = a elim segue a inscrição da fase inicial; só coage o que for inválido.
@@ -236,24 +243,84 @@
     };
   }
 
+  // Inscrição tardia da ELIMINATÓRIA (project_late_enrollment_per_phase + incidente 18/jul):
+  // por padrão HERDA a política da fase inicial (opts.lateEnrollment = painel do form). Só
+  // um valor EXPLÍCITO no painel da elim (closed/standby/expand) sobrepõe — "cada fase
+  // gerencia a sua" continua, mas o default deixa de FECHAR a inscrição por surpresa.
+  // ⚠️ Era uma closure recriada dentro de compileToPhases; subiu pro módulo porque a
+  // montagem do par Rei/Rainha + Eliminatória também precisa dela — e duas cópias da mesma
+  // regra de herança divergiriam na primeira mudança.
+  function _elimLE(cfgLE, opts) {
+    return (cfgLE && cfgLE !== 'inherit') ? cfgLE : ((opts && opts.lateEnrollment) || 'closed');
+  }
+  // "Novos Confrontos" da elim: valor EXPLÍCITO manda; 'inherit' segue a fase inicial
+  // (opts.newMatchups) e, na falta dela, o significado legado de lateEnrollment='expand'.
+  function _elimNM(cfgNM, opts) {
+    if (cfgNM === true || cfgNM === false) return cfgNM;
+    if (opts && (opts.newMatchups === true || opts.newMatchups === false)) return opts.newMatchups;
+    return (((opts && opts.lateEnrollment) || 'closed') === 'expand');
+  }
+
+  // ── ABRIR A ELIMINATÓRIA COM UMA RODADA REI/RAINHA ────────────────────────────
+  // FONTE ÚNICA das duas fases desse arranjo: a rodada de FORMAÇÃO (grupos de 4 que decidem
+  // as duplas) e a ELIMINATÓRIA que lê o resultado dela.
+  //
+  // POR QUE UMA FUNÇÃO, e não dois blocos: o mesmo arranjo serve DOIS lugares do modelo —
+  //   • eliminação direta que abre com Rei/Rainha  → o pool vem da INSCRIÇÃO;
+  //   • classificatória de N rodadas → rodada inicial na eliminatória → o pool vem dos
+  //     CLASSIFICADOS da fase anterior (as cabeças de chave saem dali).
+  // Muda só a `source` da fase de formação. Enquanto isto era código duplicado, o segundo
+  // caso simplesmente não existia (o normalize apagava o toggle) — que é a duplicidade que
+  // o dono apontou: "esse toggle da fase eliminatoria veio depois e deve ser assim".
+  //
+  // `sourceRR` = de onde saem as pessoas da rodada de formação.
+  function _parReiRainhaMaisElim(cfg, re, sourceRR, opts) {
+    var e0 = cfg.eliminatoria;
+    var cutRR = e0.reiRainhaCut;               // 2 (top-2 → 1 dupla) | 4 (todos → 2 duplas)
+    var daInscricao = !(sourceRR && sourceRR.type === 'previous_phase');
+    var pRR = Object.assign(_phaseBase(re), {
+      name: 'Rei/Rainha', formatCode: 'liga', format: 'Liga',
+      drawMode: 'rei_rainha', reiRainha: true, rounds: 1, groupsBy: 'sorteio',
+      source: sourceRR,
+      fixedPairs: false, gruposCount: 1, gruposClassified: cutRR,
+      // Vindo da fase anterior o pool chega ORDENADO POR MÉRITO, e é isso que faz as cabeças
+      // de chave espalharem em vez de caírem no mesmo grupo. Da inscrição não há mérito
+      // nenhum a preservar, então segue o pareamento neutro de sempre.
+      pairingStrategy: daInscricao ? 'top' : 'seed',
+      grandFinal: true, lateEnrollment: 'closed', drawManual: false
+    });
+    var dRR = _LINE_DESTS[e0.linhas] || ['main'];
+    // per_group: cada linha puxa até `cutRR` de CADA grupo de 4 (rankTo = corte).
+    var mapRR = dRR.map(function (dst, di) {
+      return { dest: dst, rankFrom: 1, rankTo: cutRR, label: (e0.nomes && e0.nomes[di]) || '' };
+    });
+    var pairRR = ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e0.formacao] || 'top');
+    var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e0.formacao] || 'seed');
+    var elimDuplaRR = !!e0.dupla;
+    var pElimRR = Object.assign(_phaseBase(re), {
+      name: 'Eliminatória',
+      formatCode: elimDuplaRR ? 'elim_dupla' : 'elim_simples',
+      format: elimDuplaRR ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
+      reiRainha: false, drawMode: 'sorteio', rounds: 1,
+      gruposCount: 1, gruposClassified: cutRR,
+      source: {
+        type: 'previous_phase', fromPhaseOffset: 1,
+        byGroupRank: true, scope: 'per_group',
+        qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: cutRR, mapping: mapRR
+      },
+      fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
+      mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
+      thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment, opts),
+      newMatchups: _elimNM(e0.newMatchups, opts), drawManual: false,
+      endDate: e0.endDate || '', endTime: e0.endTime || ''   // v1.6.80: término da ÚLTIMA fase
+    });
+    return [pRR, pElimRR];
+  }
+
   // COMPILADOR: config → { topLevel: {t.* p/ stage-0}, phases: [p0 (+p1 elim)] }.
   function compileToPhases(cfg, opts) {
     opts = opts || {};
     cfg = normalize(cfg, opts.sport);
-    // Inscrição tardia da ELIMINATÓRIA (project_late_enrollment_per_phase + incidente 18/jul):
-    // por padrão HERDA a política da fase inicial (opts.lateEnrollment = painel do form). Só
-    // um valor EXPLÍCITO no painel da elim (closed/standby/expand) sobrepõe — "cada fase
-    // gerencia a sua" continua, mas o default deixa de FECHAR a inscrição por surpresa.
-    var _elimLE = function (cfgLE) {
-      return (cfgLE && cfgLE !== 'inherit') ? cfgLE : (opts.lateEnrollment || 'closed');
-    };
-    // "Novos Confrontos" da elim: valor EXPLÍCITO manda; 'inherit' segue a fase inicial
-    // (opts.newMatchups) e, na falta dela, o significado legado de lateEnrollment='expand'.
-    var _elimNM = function (cfgNM) {
-      if (cfgNM === true || cfgNM === false) return cfgNM;
-      if (opts.newMatchups === true || opts.newMatchups === false) return opts.newMatchups;
-      return (opts.lateEnrollment || 'closed') === 'expand';
-    };
     var isDupla = cfg.disputa === 'dupla';
     var teamSize = teamSizeFor(cfg.disputa);
     var scoreInd = cfg._scoreBy === 'individual';
@@ -276,37 +343,10 @@
         top.enrollmentMode = 'individual';
         top.ligaRoundFormat = 'rei_rainha'; top.ligaDrawMode = 'standard';
         top.gruposCount = 1; top.gruposClassified = cutRR; top.drawManual = false;
-        var pRR = Object.assign(_phaseBase(re), {
-          name: 'Rei/Rainha', formatCode: 'liga', format: 'Liga',
-          drawMode: 'rei_rainha', reiRainha: true, rounds: 1, groupsBy: 'sorteio',
-          source: { type: 'enrollment' },
-          fixedPairs: false, gruposCount: 1, gruposClassified: cutRR,
-          pairingStrategy: 'top', grandFinal: true, lateEnrollment: 'closed', drawManual: false
-        });
-        var dRR = _LINE_DESTS[e0.linhas] || ['main'];
-        // per_group: cada linha puxa até `cutRR` de CADA grupo de 4 (rankTo = corte).
-        var mapRR = dRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: cutRR, label: (e0.nomes && e0.nomes[di]) || '' }; });
-        var pairRR = ({ performance: 'top', equilibrio: 'balanced', sorteio: 'draw_among' }[e0.formacao] || 'top');
-        var seedRR = ({ performance: 'seed', equilibrio: 'balanced', sorteio: 'seed' }[e0.formacao] || 'seed');
-        var elimDuplaRR = !!e0.dupla;
-        var pElimRR = Object.assign(_phaseBase(re), {
-          name: 'Eliminatória',
-          formatCode: elimDuplaRR ? 'elim_dupla' : 'elim_simples',
-          format: elimDuplaRR ? 'Dupla Eliminatória' : 'Eliminatórias Simples',
-          reiRainha: false, drawMode: 'sorteio', rounds: 1,
-          gruposCount: 1, gruposClassified: cutRR,
-          source: {
-            type: 'previous_phase', fromPhaseOffset: 1,
-            byGroupRank: true, scope: 'per_group',
-            qualifyMode: 'per_group', qualifyQuantity: 'top', qualifyTopN: cutRR, mapping: mapRR
-          },
-          fixedPairs: true, pairingStrategy: pairRR, bracketSeeding: seedRR,
-          mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
-          thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment), newMatchups: _elimNM(e0.newMatchups), drawManual: false,
-          endDate: e0.endDate || '', endTime: e0.endTime || ''   // v1.6.80: término da ÚLTIMA fase
-        });
-        if (opts.lateEnrollment) pRR.lateEnrollment = opts.lateEnrollment; // fase inicial = painel
-        return { topLevel: top, phases: [pRR, pElimRR], cfg: cfg };
+        // A rodada de formação vem da INSCRIÇÃO (é a 1ª fase do torneio).
+        var parDireto = _parReiRainhaMaisElim(cfg, re, { type: 'enrollment' }, opts);
+        if (opts.lateEnrollment) parDireto[0].lateEnrollment = opts.lateEnrollment; // fase inicial = painel
+        return { topLevel: top, phases: parDireto, cfg: cfg };
       }
 
       var formadas0 = isDupla && cfg.formacaoDupla === 'manual';
@@ -402,6 +442,39 @@
 
     var phases = [p0];
 
+    // ── A ELIMINATÓRIA ABRE COM UMA RODADA DE FORMAÇÃO (Rei/Rainha) ────────────────
+    // Regra do dono: "pode fazer uma classificatória de várias rodadas e depois definir que
+    // os x classificados para as eliminatórias vão fazer uma rodada inicial nas eliminatórias
+    // que definirá as duplas que seguem na disputa — normalmente uma rodada rei rainha
+    // sorteados grupos com cabeças de chaves que foram definidos na fase classificatória
+    // anterior." São TRÊS fases: classificatória → formação → eliminatória.
+    // É o MESMO arranjo da eliminação direta que abre com Rei/Rainha (_parReiRainhaMaisElim);
+    // muda só de onde vem o pool — aqui, os classificados da fase anterior, ORDENADOS POR
+    // MÉRITO (é isso que dá as cabeças de chave).
+    if (cfg.eliminatoria.ativa && cfg.eliminatoria.openReiRainha && isDupla) {
+      var eRR = cfg.eliminatoria;
+      var perGroupRR = cfg.grupos > 1 && cfg.classifScope === 'per_group';
+      var destsRR = _LINE_DESTS[eRR.linhas] || ['main'];
+      var mapClassif = !!eRR.qualifyAll
+        ? destsRR.map(function (dst, di) { return { dest: dst, rankFrom: 1, rankTo: 999, label: (eRR.nomes && eRR.nomes[di]) || '' }; })
+        : _buildMapping(destsRR, eRR.nomes, cfg.classificados, eRR.linhas);
+      var parEmpilhado = _parReiRainhaMaisElim(cfg, re, {
+        // quem entra na rodada de formação = os classificados da fase anterior
+        type: 'previous_phase', fromPhaseOffset: 1,
+        byGroupRank: perGroupRR, scope: perGroupRR ? 'per_group' : 'overall',
+        qualifyMode: !!eRR.qualifyAll ? 'all' : (perGroupRR ? 'per_group' : 'overall'),
+        qualifyQuantity: !!eRR.qualifyAll ? 'all' : 'top',
+        qualifyTopN: cfg.classificados, mapping: mapClassif,
+        // Rei/Rainha em escopo geral = ranking plano (mesma razão do ramo comum abaixo)
+        flatOverall: (cfg.parceria === 'rei_rainha' && !perGroupRR)
+      }, opts);
+      phases.push(parEmpilhado[0]);   // formação
+      phases.push(parEmpilhado[1]);   // eliminatória (lê a formação, fromPhaseOffset 1)
+      if (opts.lateEnrollment) phases[0].lateEnrollment = opts.lateEnrollment;
+      if (opts.newMatchups === true || opts.newMatchups === false) phases[0].newMatchups = opts.newMatchups;
+      return { topLevel: top, phases: phases, cfg: cfg };
+    }
+
     if (cfg.eliminatoria.ativa) {
       var e = cfg.eliminatoria;
       // Escopo vem do TOGGLE (classifScope), não do nº de grupos: com 2+ grupos o org escolhe
@@ -448,8 +521,8 @@
         },
         fixedPairs: elimFixedPairs, pairingStrategy: elimPairing, bracketSeeding: elimSeeding,
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
-        lateEnrollment: _elimLE(e.lateEnrollment), // inscrições durante a elim: herda a fase inicial por padrão
-        newMatchups: _elimNM(e.newMatchups),       // ⊥ de "Abertas" — a elim tem a SUA regra
+        lateEnrollment: _elimLE(e.lateEnrollment, opts), // inscrições durante a elim: herda a fase inicial por padrão
+        newMatchups: _elimNM(e.newMatchups, opts),       // ⊥ de "Abertas" — a elim tem a SUA regra
         drawManual: false,
         endDate: e.endDate || '', endTime: e.endTime || ''   // v1.6.80: término da ÚLTIMA fase
       });

@@ -34,6 +34,9 @@ const SUITES = [
   'tests/reativar-nao-desativa-sozinho.test.js',
   // W.O. sempre desativa; a fila é ato da própria pessoa
   'tests/wo-sempre-desativa.test.js',
+  // o suplente do W.O. respeita a proporção de gênero (o homem fura a fila de um grupo
+  // 0/100 em 25/75 — ordem do dono, W.O. da Glauce no R1 Grupo R)
+  'tests/wo-substituto-respeita-proporcao.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // nome não é cortado na tela
@@ -274,6 +277,16 @@ const SUITES = [
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',
   'tests/dash-enroll-late-window.test.js',
+  // 📣 Novidades no seu torneio: a MESMA grade de "Seus últimos resultados", sandbox fora
+  // dos feeds (o clone duplicava tudo e roubava vaga na lista que corta em 3) e lançamento
+  // PENDENTE entrando com o carimbo do proposedAt — sem ele o topo mostrava "há 18h" com o
+  // torneio andando hoje. O feed é somente leitura (o organizador via "Editar" fora da chave).
+  'tests/novidades-grade-ordem-e-sem-repeticao.test.js',
+  // 🏅 Seus últimos resultados: FECHADA NÃO É VAZIA. O corpo inteiro sumia (`display:none`)
+  // e a seção fechada não mostrava nada — "discreto demais". Agora o card mais recente fica
+  // à vista e os anteriores somem por CSS, igual às Novidades; havendo pendência, quem
+  // aparece é ela (é a que pede ação).
+  'tests/ultimos-resultados-mostra-o-ultimo.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',
@@ -298,6 +311,22 @@ const SUITES = [
   // "Quem saca primeiro?" do celular é CONFIRMADA — senão a partida não começa (serveOrder
   // vazio ⇒ sem sacador ⇒ sem a bolinha no nome). Dirige o js/watch-bridge.js REAL.
   'tests/watch-start-serve.test.js',
+  // Incidente de 13/ago/2026 (torneio ao vivo): relógio preso no fim de set (o guard de
+  // seq descartava a carga nova da WebView — agora há ÉPOCA de sessão no snapshot) e o
+  // Desfazer que não retomava o jogo terminado (a tela de fim não oferecia o botão e o
+  // resultado auto-gravado nunca seria regravado — agora o undo rearma o save com id
+  // estável de histórico). + ♥ FC máxima do perfil sobrepondo 220−idade nas faixas.
+  'tests/watch-epoca-e-desfazer-pos-fim.test.js',
+  // Caminho B (Leva 1): os vetores de paridade gravados em tests/watch-engine/vectors/
+  // são a referência dos motores nativos do relógio. Este teste re-dirige o motor GSM
+  // REAL (bracket-ui.js no harness, Chromium) e exige que ele reproduza os vetores —
+  // mudança de comportamento fica vermelha até regravar (--write) E re-validar o nativo.
+  'tests/watch-engine-vectors.test.js',
+  // Caminho B (fiação): o celular RECEBE o diário de eventos do relógio e o reproduz no
+  // motor JS canônico (de onde saem placar oficial/Firestore/histórico). Trava ordem por
+  // `n`, idempotência do reenvio (dedup deviceId#n), época nova zerando o dedup e o
+  // receptor não reimplementando nada de placar.
+  'tests/watch-diario-de-eventos.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).
@@ -395,6 +424,77 @@ const SUITES = [
   'tests/e2e-form-pair.test.js',
   // TIE-BREAK configurável por torneio (5-5 vs 6-6) — gatilho por regra/esporte. v1.3.x.
   'tests/tiebreak-trigger.test.js',
+  // O gatilho do TB não pode depender da GRAFIA do esporte: "🎾 Beach Tennis"
+  // (quick-create) tem que abrir o campo no 6-5 igual a "Beach Tennis". v1.8.41.
+  'tests/tiebreak-sport-com-emoji.test.js',
+  // REGRA DO DONO: o gatilho segue a CONFIGURAÇÃO do torneio (5-5 → 6-5, 6-6 → 7-6),
+  // vence o padrão do esporte nos dois sentidos, escala com gamesPerSet e nunca é
+  // cravado. Inclui a ESCRITA: o que a tela destaca é o que fica gravado. v1.8.42.
+  'tests/tiebreak-segue-a-config.test.js',
+  // O campo do TB tem que existir em TODOS os caminhos de lançamento (organizador E
+  // participante). O relato foi no card com PROPOSTA PENDENTE — o único ramo que nunca
+  // renderizou tb1/tb2, então _highlightWinner virava no-op silencioso. v1.8.43.
+  'tests/tiebreak-em-todos-os-caminhos.test.js',
+  // UMA forma de gravar o tie-break ({pointsP1,pointsP2}) + o subplacar sobrevive do
+  // lançamento até a tela (o `sets` no pendingResult é o que faltava). v1.8.44.
+  'tests/tiebreak-uma-forma-de-gravar.test.js',
+  // GOLDEN MASTER DO MOTOR: congela a saída (classificação + rodada gerada) contra os
+  // docs REAIS de produção, anonimizados. Existe pra a ordem do dono — "consertar o motor
+  // sem mudar o que já temos" — ser PROVÁVEL e não uma promessa: qualquer diferença na
+  // saída reprova, mesmo que pareça melhoria. Regravar exige --gravar e explicação no
+  // commit. Cobre 118 jogos gerados (inclui Rei/Rainha do Confra) e 291 linhas de
+  // classificação. v1.8.50.
+  'tests/motor-golden-master.js',
+  // GOLDEN MASTER DA ELIMINATÓRIA: a metade que o de cima NÃO alcança. O motor-golden
+  // congela a fase CLASSIFICATÓRIA e a leitura viva, mas nunca roda o AVANÇO DE FASE —
+  // e é exatamente a eliminatória do Confra que ainda não aconteceu e que o dono liberou
+  // pra mexer. Roda `_advanceMultiPhase` sobre o SANDBOX do Confra (137 inscritos, 33
+  // grupos, 104 jogos) com a R1 completada de forma determinística, e congela os 98
+  // confrontos gerados + a classificação por grupo que os alimentou. A cobertura dos
+  // degraus de desempate está MEDIDA no cabeçalho do arquivo (4 dos 9, e por quê).
+  'tests/eliminatoria-golden-master.js',
+  // O SLOT DA ELIMINATÓRIA NASCE COM UID. Medido no sandbox do Confra: os 98 jogos saíam
+  // com team1Uids vazio — a chave que decide o campeão nasceria presa ao rótulo do dia do
+  // sorteio. Causa: a chave da linha de classificação resolvia o uid por 3 fontes e o campo
+  // `uid` da MESMA linha por 2. Trava identidade + propagação de nome, e a exceção legítima
+  // (fictício sem conta continua pelo nome). v1.8.55.
+  'tests/eliminatoria-nasce-com-uid.test.js',
+  // GOLDEN MASTER DO CONSTRUTOR: congela em que FASES cada configuração de torneio compila.
+  // Cobre as formas que o dono definiu como modelo (só eliminatória · eliminatória que abre
+  // com Rei/Rainha · classificatória + eliminatória · só classificatória por rodadas ou por
+  // datas · dupla eliminatória · linhas Ouro/Prata · classificatória + rodada de formação).
+  // É a trava que permite MOVER configuração de lugar sem mudar o torneio que ela produz —
+  // e ela pegou, na hora, um erro de escopo no primeiro refactor. v1.8.56.
+  'tests/construtor-golden-master.js',
+  // "ONDE ESTÃO OS JOGOS DESTA FASE" é UMA pergunta só. phaseComplete (segura o avanço) e
+  // pendingMatches (lista o que falta) varriam os 3 storages CADA UMA — o comentário do
+  // código chamava a segunda de "espelho" da primeira. Agora as duas leem por phaseGames.
+  // Trava o invariante que elas deviam cumprir juntas: fase completa ⟺ zero pendentes,
+  // nos três storages, com BYE/folga não segurando e grupo vazio segurando. v1.8.57.
+  'tests/fase-uma-leitura-so.test.js',
+  // A TABELA E A CHAVE USAM A MESMA ORDEM. Havia duas respostas pra "quem está na frente":
+  // a cadeia longa da tabela (bracket-logic) e uma cadeia CURTA própria da transição de fase
+  // (phases-engine._globalStandings), que parava em saldo de pontos e, empatando, mantinha a
+  // ordem de varredura dos grupos. MEDIDO no sandbox do Confra: 132 classificados e 80
+  // posições em que as duas discordavam. Agora as duas chamam _standingsCompare. v1.8.59.
+  'tests/classificacao-uma-regra-so.test.js',
+  // OS CRITÉRIOS DE DESEMPATE SÃO OS QUE O ORGANIZADOR CONFIGUROU — em qualquer fase.
+  // Duas das quatro funções de classificação ignoravam `t.tiebreakers` (a tabela do
+  // Rei/Rainha e a ordem de quem sobe de fase). E `antiguidade`/`juventude` NUNCA
+  // funcionaram em lugar nenhum: o parser de nascimento só lia dd/mm/aaaa e o perfil grava
+  // ISO. Trava tirar/trocar/reordenar critério, confronto direto por uid, e o princípio de
+  // que critério sem dado é NEUTRO (nunca chute). v1.8.60.
+  'tests/desempate-do-organizador-vale.test.js',
+  // OS DOIS STORAGES DA FASE CLASSIFICATÓRIA DESENHAM IGUAL — e torneio NOVO nasce no
+  // canônico (`t.matches` taggeado), enquanto o legado (o Confra, único no storage antigo)
+  // fica onde está. O que bloqueava isso era o RENDER: um Rei/Rainha em t.matches caía no
+  // builder de CHAVE e saía com 4.815 bytes sem os jogadores, contra 33.401. Trava leitura,
+  // render, o ciclo completo de um torneio novo e o legado não mudar de lugar. v1.8.63.
+  'tests/dois-storages-desenham-igual.test.js',
+  // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
+  // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
+  // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.
+  'tests/participante-lanca-e-aprova.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
@@ -716,6 +816,17 @@ const SUITES = [
   // Entrar na lista de espera passa pelo SERVIDOR (enrollParticipant), nunca por
   // saveTournament do doc inteiro — incidente da Mariana no Confra, 12/ago. v1.8.36.
   'tests/inscricao-na-fila-passa-pelo-servidor.test.js',
+  // v1.8.40 — a leva do login/inscrição (13/ago/2026):
+  // "inscrições abertas" é UMA regra (paridade cliente×servidor por matriz; era o
+  // bloqueio indevido de Liga aberta pré-sorteio com prazo vencido)
+  'tests/inscricao-aberta-uma-regra.test.js',
+  // o resultado da inscrição tem UM leitor — waitlisted/closed/dupSuspect nunca mais mudos
+  'tests/inscricao-outcomes-um-leitor.test.js',
+  // modal com Google/Apple no topo + "último usado" + linking sem API morta +
+  // corrida do resgate fechada + hint precoce + pedido de celular
+  'tests/login-um-caminho-so.test.js',
+  // e-mail de consolidação da conta (assinatura anti-spam, conteúdo, gatilho, backfill)
+  'functions/test-account-email-core.js',
   // O "Entrar" da landing responde ao PRIMEIRO toque mesmo com o JS ainda na rede —
   // era isso que ficava mudo logo depois de uma atualização (cache zerado). v1.8.37.
   'tests/entrar-nunca-fica-mudo.test.js',
@@ -726,6 +837,11 @@ const SUITES = [
   // servidor) limpa cache, tira o SW e recarrega uma vez. v1.8.39.
   'tests/js-truncado-se-conserta.test.js',
   'tests/nome-e-escala-sem-lixo.test.js',
+  // Exclusão de conta manda comprovante (titular + dono, CC barthlabs) por gatilho —
+  // qualquer origem, inclusive script de admin e console. Trava o caso que dói:
+  // FUSÃO não é exclusão (o cleanupAbandonedAuth apaga o doc do merge-ghost 7 dias
+  // depois, e quem uniu contas não pode receber "sua conta foi excluída").
+  'functions/test-account-deletion-email-core.js',
 ];
 
 let failed = [];

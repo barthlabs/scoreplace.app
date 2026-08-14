@@ -159,6 +159,17 @@
   }
   function _voterName(t, u) { return (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : ''; }
 
+  // NOME DE EXIBIÇÃO CANÔNICO: perfil vivo pelo uid; o rótulo gravado é SÓ reserva
+  // (fictício sem uid, ou claim antigo em que o uid não foi gravado — em produção os
+  // dois W.O. do Confra ficaram com `absentUids: []`). Regra do dono, 13/ago: "nada de
+  // nome gravado nunca" — foi assim que "Fabi2401@" apareceu no lugar de "Dani Bataglia"
+  // depois que ela trocou o nome no perfil. [[project_uid_identity_canon_locked]]
+  function _liveNome(u, gravado) {
+    var vivo = (u && typeof window._displayNameForUid === 'function')
+      ? window._displayNameForUid(u, '') : '';
+    return vivo || gravado || '';
+  }
+
   function _findMatchById(t, id) {
     var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     return (all || []).find(function (m) { return m && String(m.id) === String(id); }) || null;
@@ -375,7 +386,9 @@
       var iCanConfirm = uid && confirmers.indexOf(uid) !== -1;
       var iAmOrg = _isOrg(t);
       var iAmDeclarer = uid === claim.byUid;
-      var absDisp = _esc(claim.absentName);
+      // nome vivo pelo uid; o gravado é só reserva (o claim de produção às vezes tem
+      // `absentUids: []` — ver o comentário lá em cima —, e fictício não tem uid nenhum)
+      var absDisp = _esc(_liveNome((claim.absentUids || [])[0], claim.absentName));
 
       // ── Stage 2: negociação do desfecho (project_wo_outcome_negotiation_canon) ──
       // A falta já foi confirmada; falta escolher COMO o jogo continua. O parceiro que
@@ -417,7 +430,10 @@
         return;
       }
 
-      var byDisp = _esc(claim.byName || _voterName(t, claim.byUid) || 'Alguém');
+      // ⚠️ ORDEM INVERTIDA antes: lia `claim.byName` (GRAVADO) primeiro e só caía no
+      // resolvedor por uid se ele faltasse — ou seja o nome vivo nunca era usado quando
+      // havia rótulo gravado, que é exatamente o caso de quem trocou o nome no perfil.
+      var byDisp = _esc(_liveNome(claim.byUid, '') || _voterName(t, claim.byUid) || claim.byName || 'Alguém');
       var info = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span></div>' +
         '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:3px;">Apontado por ' + byDisp + (rc.scope === 'group' ? ' · grupo ' + _esc(rc.groupName || '') : '') + '. O W.O. só vale quando o outro lado confirma.</div>';
       var actions = '';
@@ -468,7 +484,17 @@
     // levarem W.O., mas cada uma por escolha. O uid viaja junto (é ele que identifica).
     var picks = rc.members.map(function (mb) {
       var _u = (mb.uids || [])[0] || '';
-      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(mb.name) + '</button>';
+      // ⚠️ NOME DE EXIBIÇÃO SEMPRE PELO UID (perfil vivo). Aqui saía `mb.name` — o rótulo
+      // GRAVADO no dia do sorteio — e quem trocou o nome no perfil aparecia com o antigo:
+      // o caso "Fabi2401@" no lugar de "Dani Bataglia" (13/ago), a MESMA classe que a
+      // 1.7.46/1.7.47 fechou na classificação e na busca. O uid já estava aqui, ao lado,
+      // sem uso. Fictício (sem uid) cai no nome gravado, que é a única identidade que tem.
+      // O PAYLOAD do clique não muda de propósito: `_woDeclare` já recebe nome E uid, e
+      // mexer no contrato dele seria mexer no W.O. [[project_uid_identity_canon_locked]]
+      var _nm = (typeof window._liveRowName === 'function')
+        ? (window._liveRowName({ name: mb.name, uid: _u }) || mb.name)
+        : mb.name;
+      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(_nm) + '</button>';
     }).join('');
     _overlay(_header('Faltou alguém?') +
       '<div style="padding:1.1rem;">' +
@@ -695,7 +721,25 @@
       if (!ap.ok) { c2.status = orgResolve ? c2.status : 'pending'; if (confirmerUid) { try { delete c2.confirms[confirmerUid]; } catch (e) {} } return false; }
     }, function () {
       if (ligaGroup) {
-        _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
+        // ⚠️ AVISA O GRUPO INTEIRO no momento do W.O. — antes só o ausente era notificado
+        // aqui, e o resto do grupo só descobria SE e QUANDO a substituição fosse concluída
+        // (era o único ponto que chamava o notificador). Ordem do dono (13/ago): "ao dar o
+        // W.O., todos os que estão no grupo e o que entrou no lugar devem receber
+        // notificação automaticamente". Reusa o notificador ÚNICO do ciclo, com subName
+        // vazio = "a vaga está aberta"; quando o suplente entrar, ele dispara de novo com
+        // o nome. Best-effort: notificação nunca derruba o W.O. que já foi aplicado.
+        try {
+          if (typeof window._ligaNotifyWoCycle === 'function') {
+            var _gAf = null;
+            try { _gAf = (t.rounds && t.rounds[c.roundIndex] && (t.rounds[c.roundIndex].monarchGroups || [])
+              .filter(function (g) { return g && g.name === c.groupName; })[0]) || null; } catch (e2) {}
+            window._ligaNotifyWoCycle(t, _gAf, c.absentName, '', false);
+          } else {
+            _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
+          }
+        } catch (e3) {
+          _notify(t, c.absentUids, _notifData(t, '🚫 W.O. registrado', 'Você foi marcado como ausente em "' + (t.name || '') + '".'));
+        }
         window._woCloseOverlay();
         if (typeof window._ligaPickFill === 'function') window._ligaPickFill(String(t.id), c.roundIndex, c.groupName, c.absentName);
         return;

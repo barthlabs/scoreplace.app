@@ -214,6 +214,43 @@ window._phaseDrawDone = function (t) {
          (Array.isArray(t.groups) && t.groups.length > 0);
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// "INSCRIÇÕES ABERTAS" — A REGRA É UMA SÓ (v1.8.40).
+//
+// MEDIDO em 13/ago/2026: a mesma pergunta ("posso inscrever alguém agora?") tinha SEIS
+// respostas diferentes no app — enrollCurrentUser exigia sorteioRealizado pro ligaAberta,
+// submitTeamEnroll não checava finished, _doAddParticipant/addTeamFunction ignoravam prazo,
+// o render do card fazia AUTO-CLOSE por registrationLimit numa Liga que o SERVIDOR
+// consideraria aberta, e a CF (functions/enroll-core.enrollmentOpen) tinha a sua própria.
+// Consequência real: Liga com inscrição aberta e prazo vencido ANTES do 1º sorteio →
+// o cliente bloqueava (e ainda gravava status:'closed'), enquanto o servidor aceitaria.
+// É a reclamação do dono: "inscrições abertas durante a fase e as pessoas caem em
+// bloqueios que não permitem a inscrição".
+//
+// A regra canônica (idêntica à do servidor, que é quem decide de verdade):
+//   ligaOpen = Liga/Ranking && ligaOpenEnrollment !== false && status !== 'finished'
+//   open     = (não closed && não finished && sem sorteio && prazo ok) || ligaOpen
+//
+// ⚠️ ligaOpen NÃO olha status:'closed' nem registrationLimit DE PROPÓSITO: Liga é
+// temporada contínua, não tem botão "Encerrar Inscrições" (v0.2.0) — o status 'closed'
+// numa Liga só nasce do auto-close por prazo, que é exatamente o bloqueio indevido.
+// Quem fecha inscrição de Liga é o toggle ligaOpenEnrollment, e mais nada.
+// ⚠️ open NÃO decide o DESTINO (roster × espera) — isso é _phaseDrawDone, na gravação.
+//
+// PURO e espelhado na CF (functions/enroll-core.enrollmentOpen — paridade travada por
+// teste). Todo gate de UI e todo caminho de escrita passam por AQUI; a próxima régua
+// paralela é a próxima pessoa bloqueada. [[feedback_unify_dual_entry_points]]
+window._enrollmentOpenState = function (t, nowMs) {
+  if (!t) return { open: false, ligaOpen: false, sorteio: false, deadlinePassed: false };
+  var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+  var isLiga = !!(t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking'));
+  var ligaOpen = isLiga && t.ligaOpenEnrollment !== false && t.status !== 'finished';
+  var sorteio = window._phaseDrawDone(t);
+  var deadlinePassed = !!(t.registrationLimit && new Date(t.registrationLimit).getTime() < now);
+  var open = (t.status !== 'closed' && t.status !== 'finished' && !sorteio && !deadlinePassed) || ligaOpen;
+  return { open: open, ligaOpen: ligaOpen, sorteio: sorteio, deadlinePassed: deadlinePassed };
+};
+
 // Está JOGANDO a fase corrente? (aparece num grupo Rei/Rainha, num grupo de fase ou
 // num slot de confronto). Usado pra decidir se um reativado precisa da espera: quem já
 // está na rodada volta a jogar direto; quem ficou de fora entra na fila.

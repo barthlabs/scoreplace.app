@@ -88,6 +88,40 @@
       '<span>' + label + '</span>' +
       '<span class="toggle-switch"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + onchange + '"><span class="toggle-slider"></span></span></label>';
   }
+  // ── "ABRIR COM RODADA REI/RAINHA" — bloco ÚNICO, usado nos DOIS contextos ─────────
+  // A eliminatória pode começar por uma rodada Rei/Rainha (grupos de 4 que FORMAM as duplas
+  // pelo resultado). Isso vale nos dois arranjos do modelo, e a diferença é só de onde vêm
+  // as pessoas:
+  //   • sem classificatória → do quadro de inscritos;
+  //   • com classificatória → dos CLASSIFICADOS, e aí a colocação anterior vira cabeça de
+  //     chave (os melhores caem em grupos diferentes).
+  // ⚠️ Este bloco vivia DENTRO do ramo "sem classificatória" — era por isso que a segunda
+  // forma não existia na tela, mesmo com o motor pronto pra ela. É a duplicidade que o dono
+  // apontou: "esse toggle da fase eliminatória veio depois e deve ser assim".
+  function _blocoAbrirComRR(cfg, temClassif) {
+    var on = !!cfg.eliminatoria.openReiRainha;
+    var s = _toggleRight('Abrir com rodada Rei/Rainha', on, 'window._f2ElimOpenRR(this.checked)') +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (on
+        ? ('A eliminatória começa por <b>uma rodada Rei/Rainha</b>: grupos de 4' +
+           (temClassif ? ' formados com os <b>classificados</b> (os melhores da fase anterior viram <b>cabeças de chave</b> e caem em grupos diferentes)' : ' sorteados') +
+           ', e as <b>duplas se formam dentro de cada grupo</b> pelo resultado.')
+        : ('Ative para a eliminatória <b>começar por uma rodada Rei/Rainha</b> (grupos de 4 que formam as duplas' +
+           (temClassif ? ', semeados pela classificação' : '') + ').')) + '</div>';
+    if (!on) return s;
+    var cut = cfg.eliminatoria.reiRainhaCut === 2 ? 2 : 4;
+    s += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quantos de cada grupo de 4 avançam</div>' +
+      _pill(cut === 4, 'window._f2ElimRRCut(4)', '4 · todos (2 duplas)') +
+      _pill(cut === 2, 'window._f2ElimRRCut(2)', '2 · os melhores (1 dupla)') + '<div style="height:12px;"></div>';
+    var fx = (cfg.eliminatoria.formacao === 'equilibrio') ? 'equilibrio' : 'performance';
+    s += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Como formar as duplas no grupo</div>' +
+      _pill(fx === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
+      _pill(fx === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (fx === 'performance'
+        ? 'Performance: os melhores do grupo jogam juntos (1º+2º, depois 3º+4º).'
+        : 'Equilíbrio: forte com fraco (1º+4º, 2º+3º) — duplas mais parelhas.') + '</div>';
+    return s;
+  }
+
   // Painel "Inscrições durante a fase" DA ELIMINATÓRIA (2ª fase). Espelha visualmente o bloco do
   // form (#late-enroll-box), mas grava em cfg.eliminatoria.lateEnrollment (não em t.lateEnrollment,
   // que é da fase inicial). Mesma semântica de 2 toggles → 3 valores: closed | standby | expand.
@@ -454,27 +488,9 @@
             _pill(isDupla, 'window._f2Disputa(\'dupla\')', '👥 Duplas') + '<div style="height:12px;"></div>';
         }
         if (isDupla) {
-          // v4.5.51: nova alternativa — ABRIR COM REI/RAINHA. Quando ON, as duplas NÃO são "já
-          // formadas" nem "sorteadas": elas emergem de uma rodada Rei/Rainha (grupos de 4). Some
-          // o par Já formadas/Sorteadas e aparecem o CORTE por grupo + a ESTRATÉGIA do pareamento.
           var _openRR = !!cfg.eliminatoria.openReiRainha;
-          eb += _toggleRight('Abrir com rodada Rei/Rainha', _openRR, 'window._f2ElimOpenRR(this.checked)') +
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (_openRR
-              ? 'A eliminatória começa por <b>uma rodada Rei/Rainha</b>: grupos de 4 sorteados, e as <b>duplas se formam dentro de cada grupo</b> pelo resultado.'
-              : 'Ative para a eliminatória <b>começar por uma rodada Rei/Rainha</b> (grupos de 4 que formam as duplas).') + '</div>';
-          if (_openRR) {
-            var _cut = cfg.eliminatoria.reiRainhaCut === 2 ? 2 : 4;
-            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Quantos de cada grupo de 4 avançam</div>' +
-              _pill(_cut === 4, 'window._f2ElimRRCut(4)', '4 · todos (2 duplas)') +
-              _pill(_cut === 2, 'window._f2ElimRRCut(2)', '2 · os melhores (1 dupla)') + '<div style="height:12px;"></div>';
-            var _fxRR = (cfg.eliminatoria.formacao === 'equilibrio') ? 'equilibrio' : 'performance';
-            eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Como formar as duplas no grupo</div>' +
-              _pill(_fxRR === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
-              _pill(_fxRR === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
-              '<div style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 12px;line-height:1.45;">' + (_fxRR === 'performance'
-                ? 'Performance: os melhores do grupo jogam juntos (1º+2º, depois 3º+4º).'
-                : 'Equilíbrio: forte com fraco (1º+4º, 2º+3º) — duplas mais parelhas.') + '</div>';
-          } else {
+          eb += _blocoAbrirComRR(cfg, false);
+          if (!_openRR) {
             eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Duplas na eliminatória</div>' +
               _pill(cfg.formacaoDupla === 'manual', 'window._f2Form(\'manual\')', '🤝 Já formadas') +
               _pill(cfg.formacaoDupla !== 'manual', 'window._f2Form(\'sorteio\')', '🎲 Sorteadas') + '<div style="height:10px;"></div>';
@@ -539,11 +555,20 @@
           : 'Jogos mais disputados: confrontos parelhos (1º×2º, 3º×4º…) desde a 1ª rodada — sem proteger os melhores.';
         var _hints = { performance: _hP, equilibrio: _hE, sorteio: 'Duplas e confrontos definidos por sorteio, sem usar a classificação.' };
         var _fx = (e.formacao === 'sorteio' && !_forma) ? 'performance' : e.formacao; // sorteio só quando forma duplas
-        eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Estratégia da eliminatória</div>' +
-          '<div>' + _pill(_fx === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
-          _pill(_fx === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
-          (_forma ? _pill(_fx === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') : '') + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (_hints[_fx] || _hints.performance) + '</div>';
+        // ⚠️ COM "Abrir com Rei/Rainha" LIGADO a estratégia é escolhida DENTRO daquele bloco
+        // ("Como formar as duplas no grupo") — é o MESMO cfg.eliminatoria.formacao. Mostrar os
+        // dois seria dois controles pro mesmo valor na mesma tela, que é o tipo de duplicidade
+        // que este trabalho existe pra tirar.
+        if (!(isDupla && cfg.eliminatoria.openReiRainha)) {
+          eb += '<div style="margin-top:14px;font-size:0.72rem;color:var(--text-muted);margin-bottom:5px;">Estratégia da eliminatória</div>' +
+            '<div>' + _pill(_fx === 'performance', 'window._f2Formacao(\'performance\')', '📈 Performance') +
+            _pill(_fx === 'equilibrio', 'window._f2Formacao(\'equilibrio\')', '⚖️ Equilíbrio') +
+            (_forma ? _pill(_fx === 'sorteio', 'window._f2Formacao(\'sorteio\')', '🎲 Sorteio') : '') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.45;">' + (_hints[_fx] || _hints.performance) + '</div>';
+        }
+        // A rodada de FORMAÇÃO (Rei/Rainha) na entrada da eliminatória — agora também quando
+        // há classificatória. Vem depois do "quem avança", que é o pool que ela recebe.
+        if (isDupla) eb += '<div style="margin-top:14px;">' + _blocoAbrirComRR(cfg, true) + '</div>';
       }
       // v4.4.58: Dupla Eliminatória (repescagem) — toggle + explicação de como funciona.
       // Quando ON é UMA chave só (força 1 linha no normalize) → o controle de Linhas some.

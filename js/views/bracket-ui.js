@@ -893,7 +893,7 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
   var setsArr = [];
   if (useSets) {
     var setEntry = { gamesP1: s1, gamesP2: s2 };
-    if (isTiebreakEntry && !isNaN(tbP1) && !isNaN(tbP2)) setEntry.tiebreak = { p1: tbP1, p2: tbP2 };
+    if (isTiebreakEntry) { var _tbc = window._tbPoints(tbP1, tbP2); if (_tbc) setEntry.tiebreak = _tbc; }
     setsArr.push(setEntry);
   }
   var setsT1 = useSets ? (s1 > s2 ? 1 : 0) : 0;
@@ -941,12 +941,8 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
   else if (m.winner === m.p2) winnerTeam = 2;
   var setsArr = (sets || []).map(function(s) {
     var e = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
-    if (s.tiebreak) {
-      var _tb = s.tiebreak;
-      var _p1 = (typeof _tb.p1 === 'number') ? _tb.p1 : (typeof _tb.pointsP1 === 'number' ? _tb.pointsP1 : null);
-      var _p2 = (typeof _tb.p2 === 'number') ? _tb.p2 : (typeof _tb.pointsP2 === 'number' ? _tb.pointsP2 : null);
-      if (_p1 !== null && _p2 !== null) e.tiebreak = { p1: _p1, p2: _p2 };
-    }
+    var _tbn = window._setTiebreak(s);
+    if (_tbn) e.tiebreak = window._tbPoints(_tbn.p1, _tbn.p2);
     if (s.fixedSet) e.fixedSet = true;
     return e;
   });
@@ -955,7 +951,8 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
   var team2 = Object.assign({ points: totalGamesP2 || 0, games: totalGamesP2 || 0, sets: p2Sets || 0 }, zeroStats);
   var scoreSummary = setsArr.map(function(s) {
     var base = s.gamesP1 + '-' + s.gamesP2;
-    if (s.tiebreak) base += '(' + Math.min(s.tiebreak.p1, s.tiebreak.p2) + ')';
+    var _tbb = window._setTiebreak(s);
+    if (_tbb) base += '(' + Math.min(_tbb.p1, _tbb.p2) + ')';
     return base;
   }).join(' ');
   var recordId = 't_' + String(t.id) + '_' + String(m.id);
@@ -1184,11 +1181,41 @@ window._isTiebreakSetScore = function (g1, g2, loserGames) {
 window._scoringUsesSets = function (sc) {
   return !!(sc && (sc.type === 'sets' || sc.type === 'gsm' || (sc.tiebreakEnabled !== false && sc.gamesPerSet)));
 };
-window._sportTiebreakAt = function (sport) { return (sport === 'Beach Tennis') ? 'g-1' : 'g'; };
+// ⚠️ NORMALIZA antes de comparar: `t.sport` chega em DUAS grafias pro mesmo esporte —
+// "Beach Tennis" (form completo) e "🎾 Beach Tennis" (quick-create, que gravava o rótulo
+// cru do seletor). Com igualdade estrita o segundo caía no `'g'` (default do tênis) e o
+// campo do tie-break só abria no 7-6, enquanto a TELA DE CONFIGURAÇÃO do mesmo torneio já
+// dizia "Tie-break em 5-5" (ela passa por _currentSportName, que tira o emoji). Ou seja: a
+// config prometia 6-5 e o lançamento exigia 7-6. [[project_sport_rules_canonical]]
+// Fallback pass-through (NÃO reimplementa a regex) pro contexto do vendor da CF, que não
+// leva o store.js — lá o comportamento fica idêntico ao anterior em vez de estourar.
+window._sportTiebreakAt = function (sport) {
+  var s = (typeof window._sportBaseName === 'function') ? window._sportBaseName(sport) : sport;
+  return (s === 'Beach Tennis') ? 'g-1' : 'g';
+};
 window._tbLoserGames = function (scoring, sport) {
   var gp = parseInt(scoring && scoring.gamesPerSet) || 6;
   var at = (scoring && scoring.tiebreakAt) || window._sportTiebreakAt(sport);
   return (at === 'g-1') ? Math.max(1, gp - 1) : gp;
+};
+
+// FONTE ÚNICA do SET gravado no lançamento manual (sempre 1 set): games + o tie-break quando
+// houver. Existe porque o subplacar do TB só APARECE na tela se o jogo tiver `m.sets` — quem
+// desenha é `_formatSetForPlayer` (6⁽⁵⁾), e ele lê `sets[0].tiebreak`. Guardar só `tbP1/tbP2`
+// no pendingResult NÃO basta: `_applyApprovedResult` exige `pr.sets` ser ARRAY pra montar
+// `m.sets`; sem isso cai no ramo simples e o tie-break some na aprovação — foi exatamente o
+// buraco que sobrou quando o TB entrou no `_editPendingResult`. Chave `pointsP1/pointsP2`
+// (a forma do torneio); `_getSetTB` também aceita `p1/p2`, que é a do casual.
+window._buildManualSet = function (s1, s2, opts) {
+  opts = opts || {};
+  var set = { gamesP1: s1, gamesP2: s2 };
+  if (opts.isFixedSet) set.fixedSet = true;
+  if (opts.isTiebreakEntry) {
+    // escritor único — ele mesmo recusa valor faltando
+    var _tbc = window._tbPoints(opts.tbP1, opts.tbP2);
+    if (_tbc) set.tiebreak = _tbc;
+  }
+  return { sets: [set], setsWonP1: (s1 > s2 ? 1 : 0), setsWonP2: (s2 > s1 ? 1 : 0) };
 };
 
 window._highlightWinner = function (matchId) {
@@ -1279,7 +1306,7 @@ window._saveSetResult = function(tId, matchId) {
       // Tie — add tiebreak data
       const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
       const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
-      setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+      setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
       // Tiebreak winner gets the set
       if (tbP1 > tbP2) { setData.gamesP1 = g1 + 1; p1Sets = 1; }
       else if (tbP2 > tbP1) { setData.gamesP2 = g2 + 1; p2Sets = 1; }
@@ -1307,7 +1334,7 @@ window._saveSetResult = function(tId, matchId) {
       if (window._isTiebreakSetScore(g1, g2, window._tbLoserGames(sc, t.sport))) {
         const tbP1 = parseInt(document.getElementById('tb-p1')?.value) || 0;
         const tbP2 = parseInt(document.getElementById('tb-p2')?.value) || 0;
-        if (tbP1 || tbP2) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+        if (tbP1 || tbP2) setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
       }
 
       sets.push(setData);
@@ -1581,7 +1608,7 @@ window._applyResultToTournament = function (t, matchId, payload) {
   } else if (useSets) {
     var setData = { gamesP1: s1, gamesP2: s2 };
     if (isFixedSet) setData.fixedSet = true;
-    if (isTiebreakEntry) setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
+    if (isTiebreakEntry) setData.tiebreak = window._tbPoints(tbP1, tbP2);  // escritor único
     m.sets = [setData];
     m.setsWonP1 = s1 > s2 ? 1 : 0;
     m.setsWonP2 = s2 > s1 ? 1 : 0;
@@ -1636,6 +1663,26 @@ window._saveResultInline = function (tId, matchId) {
   if (!t) return;
   const m = _findMatch(t, matchId);
   if (!m) return;
+
+  // ⚠️ JOGO JÁ ENCERRADO NÃO ACEITA PROPOSTA NOVA DE PARTICIPANTE. O card esconde os
+  // inputs quando `isDecided` (showInputs exige !isDecided), mas isso é gate de RENDER:
+  // uma tela ABERTA HÁ TEMPO — ou o mini-card do dashboard, cuja lista pode estar velha —
+  // continua com os campos e o Confirmar vivos, e a função salvava assim mesmo.
+  // ACONTECEU (Confra, R1 Grupo S, jogo 56, 13/ago): às 16:38 o resultado foi APROVADO e
+  // entre 16:53 e 16:54 a mesma participante criou CINCO propostas novas em cima do jogo
+  // fechado — o vencedor não mudava, mas o card voltava a dizer "aguardando aprovação" e
+  // sobrou pro organizador aplicar na mão às 17:11.
+  // A AUTORIDADE passa: é ela quem legitimamente CORRIGE um placar errado (o "Editar" do
+  // organizador entra por aqui). O participante recebe o aviso e a tela é reconstruída,
+  // que é o que tira a cópia velha da frente dele. [[project_concurrency_safe_saves]]
+  var _cuGuard = window.AppStore && window.AppStore.currentUser;
+  if (m.winner && _cuGuard && typeof _isUserAuthority === 'function' && !_isUserAuthority(t, _cuGuard)) {
+    if (typeof showNotification === 'function') {
+      showNotification('Jogo já encerrado', 'Este placar já foi confirmado. Se estiver errado, fale com o organizador.', 'info');
+    }
+    _rerenderBracket(tId, matchId);   // derruba a tela velha que ainda mostrava os campos
+    return;
+  }
 
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
@@ -1739,12 +1786,12 @@ window._saveResultInline = function (tId, matchId) {
       tbP2: isTiebreakEntry ? tbP2 : null
     };
     if (useSets) {
-      var _setData = { gamesP1: s1, gamesP2: s2 };
-      if (isFixedSet) _setData.fixedSet = true;
-      if (isTiebreakEntry) _setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
-      _pendingPayload.sets = [_setData];
-      _pendingPayload.setsWonP1 = s1 > s2 ? 1 : 0;
-      _pendingPayload.setsWonP2 = s2 > s1 ? 1 : 0;
+      // FONTE ÚNICA _buildManualSet — é o `sets` daqui que faz o subplacar do TB
+      // sobreviver à aprovação (_applyApprovedResult exige o array).
+      var _mp = window._buildManualSet(s1, s2, { isFixedSet: isFixedSet, isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2 });
+      _pendingPayload.sets = _mp.sets;
+      _pendingPayload.setsWonP1 = _mp.setsWonP1;
+      _pendingPayload.setsWonP2 = _mp.setsWonP2;
     }
     m.pendingResult = _pendingPayload;
     _propagateMatchUpdate(t, m);
@@ -1770,15 +1817,11 @@ window._saveResultInline = function (tId, matchId) {
   }
 
   if (useSets) {
-    // Store as a single set for GSM compatibility
-    var setData = { gamesP1: s1, gamesP2: s2 };
-    if (isFixedSet) setData.fixedSet = true;
-    if (isTiebreakEntry) {
-      setData.tiebreak = { pointsP1: tbP1, pointsP2: tbP2 };
-    }
-    m.sets = [setData];
-    m.setsWonP1 = s1 > s2 ? 1 : 0;
-    m.setsWonP2 = s2 > s1 ? 1 : 0;
+    // Store as a single set for GSM compatibility — FONTE ÚNICA _buildManualSet
+    var _ms = window._buildManualSet(s1, s2, { isFixedSet: isFixedSet, isTiebreakEntry: isTiebreakEntry, tbP1: tbP1, tbP2: tbP2 });
+    m.sets = _ms.sets;
+    m.setsWonP1 = _ms.setsWonP1;
+    m.setsWonP2 = _ms.setsWonP2;
     if (isFixedSet) m.fixedSet = true;
     m.scoreP1 = s1;
     m.scoreP2 = s2;
@@ -2478,10 +2521,46 @@ window._editPendingResult = function(tId, matchId) {
     window.location.hash = '#bracket/' + tId;
     return;
   }
+  // ⚠️ TIE-BREAK TAMBÉM AQUI. Este é o 3º caminho de lançamento e era o ÚNICO sem os campos
+  // do TB: com `pendingResult` o card não mostra os inputs normais (`showInputs` exige
+  // `!hasPending`), então quem edita uma proposta cai NESTE ramo — e ele montava só s1/s2, sem
+  // `tb1-`/`tb2-` e sem `oninput`. Resultado: digitar o placar do gatilho (6-5 na regra 5-5)
+  // não abria nada, porque os campos não existiam no DOM. Relato do dono (13/ago): "entrei no
+  // jogo que está 5-6 como organizador e reescrevi esses números e não abriu para mim também".
+  // O gatilho vem da MESMA fonte única dos outros dois caminhos (_tbLoserGames → config do
+  // torneio, com fallback por esporte). [[project_live_scoring_canonical]]
+  var _pesc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var _peUseSets = window._scoringUsesSets(_pesc);
+  var _peTbEnabled = _peUseSets && _pesc && _pesc.tiebreakEnabled !== false;
+  // pré-preenche com o TB que a proposta já trazia (pr.tbP1/tbP2) ou com o do set gravado
+  var _peSetTb = (m.sets && m.sets[0] && m.sets[0].tiebreak) || null;
+  var _peTb1 = (pr && pr.tbP1 != null) ? pr.tbP1 : (_peSetTb && _peSetTb.pointsP1 != null ? _peSetTb.pointsP1 : null);
+  var _peTb2 = (pr && pr.tbP2 != null) ? pr.tbP2 : (_peSetTb && _peSetTb.pointsP2 != null ? _peSetTb.pointsP2 : null);
+  var _peTbStyle = 'width:40px;text-align:center;font-size:0.75rem;font-weight:700;' +
+    'background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);' +
+    'color:var(--text-bright);border-radius:5px;padding:3px 4px;';
+  var _peEsc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
+  var _peTbInput = function(n, val) {
+    if (!_peTbEnabled) return '';
+    return '<input type="number" id="tb' + n + '-' + matchId + '" min="0" placeholder="tb" title="Tie-break"' +
+      (val != null ? ' value="' + val + '"' : '') +
+      ' onclick="event.stopPropagation()"' +
+      ' style="' + _peTbStyle + 'display:none;margin-left:4px;"' +
+      ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')">';
+  };
+
   // Suprime re-renders enquanto o usuário edita (evita dashboard destruir os inputs)
   window._suppressSoftRefresh = true;
-  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
-  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()" style="' + inputStyle + '">';
+  sp1.innerHTML = '<input id="s1-' + matchId + '" type="number" min="0" value="' + s1 + '" onclick="event.stopPropagation()"' +
+    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(1, _peTb1);
+  sp2.innerHTML = '<input id="s2-' + matchId + '" type="number" min="0" value="' + s2 + '" onclick="event.stopPropagation()"' +
+    ' oninput="window._highlightWinner(\'' + _peEsc(matchId) + '\')" style="' + inputStyle + '">' + _peTbInput(2, _peTb2);
+
+  // Revela JÁ se o placar que veio na proposta é do gatilho (o caso do relato: abre em 5-6
+  // sem o organizador precisar redigitar). Depois disso quem revela é o oninput.
+  if (typeof window._highlightWinner === 'function') {
+    try { window._highlightWinner(matchId); } catch (e) {}
+  }
 
   // Troca botões do header por Cancelar + Confirmar
   var headerBtnArea = document.getElementById('header-btns-' + matchId);
@@ -2513,6 +2592,30 @@ window._editPendingResult = function(tId, matchId) {
       var s1v = parseInt((document.getElementById('s1-' + matchId) || {}).value, 10);
       var s2v = parseInt((document.getElementById('s2-' + matchId) || {}).value, 10);
       if (isNaN(s1v) || isNaN(s2v)) { showNotification('Placar inválido', 'Preencha os dois campos.', 'warning'); return; }
+      // TIE-BREAK: mesma regra e mesmas validações do _saveResultInline (fonte única do gatilho
+      // em _tbLoserGames). Sem este bloco os pontos digitados eram DESCARTADOS no Confirmar —
+      // o set virava um 6-5 sem o TB, e `_approveResult` lê justamente pr.isTiebreakEntry/tbP1/tbP2.
+      var _peTrigger = _peTbEnabled ? window._tbLoserGames(_pesc, t.sport) : null;
+      var _peIsTb = false, _peTbV1 = NaN, _peTbV2 = NaN;
+      if (_peTbEnabled && window._isTiebreakSetScore(s1v, s2v, _peTrigger)) {
+        var _e1 = document.getElementById('tb1-' + matchId);
+        var _e2 = document.getElementById('tb2-' + matchId);
+        _peTbV1 = _e1 ? parseInt(_e1.value, 10) : NaN;
+        _peTbV2 = _e2 ? parseInt(_e2.value, 10) : NaN;
+        if (isNaN(_peTbV1) || isNaN(_peTbV2)) {
+          showNotification('Tie-break obrigatório',
+            'O placar ' + (_peTrigger + 1) + '-' + _peTrigger + ' foi decidido no tie-break — preencha os pontos.', 'warning');
+          return;
+        }
+        // o vencedor do TB tem que ser o mesmo do set (quem fez mais games)
+        var _setP1Venceu = s1v > s2v;
+        if ((_setP1Venceu && _peTbV1 <= _peTbV2) || (!_setP1Venceu && _peTbV2 <= _peTbV1)) {
+          showNotification('Tie-break não bate',
+            'Quem venceu o set tem que ter mais pontos no tie-break.', 'warning');
+          return;
+        }
+        _peIsTb = true;
+      }
       var isGroupMatch = m.group !== undefined;
       var isRoundMatch = m.roundIndex !== undefined || (t.rounds && t.rounds.some(function(r) {
         return (r.matches || []).some(function(rm) { return rm.id === matchId; });
@@ -2543,8 +2646,20 @@ window._editPendingResult = function(tId, matchId) {
           winner: winner,
           draw: s1v === s2v,
           scoreP1: s1v,
-          scoreP2: s2v
+          scoreP2: s2v,
+          useSets: !!_peUseSets,
+          isTiebreakEntry: _peIsTb,
+          tbP1: _peIsTb ? _peTbV1 : null,
+          tbP2: _peIsTb ? _peTbV2 : null
         };
+        // ⚠️ o `sets` é o que faz o subplacar APARECER: _applyApprovedResult só monta
+        // `m.sets` quando `pr.sets` é ARRAY — sem ele o tie-break é gravado e some na tela.
+        if (_peUseSets) {
+          var _msA = window._buildManualSet(s1v, s2v, { isTiebreakEntry: _peIsTb, tbP1: _peTbV1, tbP2: _peTbV2 });
+          m.pendingResult.sets = _msA.sets;
+          m.pendingResult.setsWonP1 = _msA.setsWonP1;
+          m.pendingResult.setsWonP2 = _msA.setsWonP2;
+        }
         if (typeof window._approveResult === 'function') window._approveResult(tId, matchId);
         return;
       }
@@ -2566,9 +2681,22 @@ window._editPendingResult = function(tId, matchId) {
         draw: s1v === s2v,
         scoreP1: s1v,
         scoreP2: s2v,
+        // o TB viaja na contra-proposta: quem confirmar do outro lado aprova o placar
+        // COMPLETO, não um 6-5 sem os pontos
+        useSets: !!_peUseSets,
+        isTiebreakEntry: _peIsTb,
+        tbP1: _peIsTb ? _peTbV1 : null,
+        tbP2: _peIsTb ? _peTbV2 : null,
         isCounterProposal: true,  // marca fase 2: time original verá Confirmar + Contestar
         originalProposal: _origProp
       };
+      // idem: sem o `sets` a contra-proposta chega ao outro lado sem o subplacar do TB
+      if (_peUseSets) {
+        var _msC = window._buildManualSet(s1v, s2v, { isTiebreakEntry: _peIsTb, tbP1: _peTbV1, tbP2: _peTbV2 });
+        _counter.sets = _msC.sets;
+        _counter.setsWonP1 = _msC.setsWonP1;
+        _counter.setsWonP2 = _msC.setsWonP2;
+      }
       m.pendingResult = _counter; // local otimista
       // BLINDAGEM (v4.0.121): grava a contra-proposta ATÔMICO pelo portão.
       window.AppStore.mutate(tId, function (ft) {
@@ -4026,7 +4154,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // ── State ──
   var state = {
-    sets: [], // Array of { gamesP1, gamesP2, tiebreak: { p1, p2 } | null }
+    sets: [], // Array de { gamesP1, gamesP2, tiebreak: window._tbPoints(...) | null }
+              // (forma ÚNICA {pointsP1,pointsP2} — o casual gravava {p1,p2} até 1.8.44)
     currentGameP1: 0,  // Points in current game
     currentGameP2: 0,
     isTiebreak: false,  // Currently in tiebreak within a set
@@ -4068,6 +4197,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _matchStartTime = null; // Timestamp when first point is scored
   var _matchEndTime = null;   // Timestamp when match finishes
   var _resultSaved = false;   // Guards idempotent save on restart/close
+  // Id ESTÁVEL do registro de matchHistory DESTA partida (gerado lazy no 1º save,
+  // zerado junto com _resultSaved nos recomeços — nunca no Desfazer). Sem ele o
+  // registro ganhava id ALEATÓRIO a cada gravação, e o Desfazer pós-fim (que
+  // rearma _resultSaved pra regravar o placar corrigido) DUPLICARIA o histórico;
+  // com id estável a regravação SOBRESCREVE (matchHistory é chaveado por matchId).
+  var _liveRecId = null;
+  // ÉPOCA DA PARTIDA (Caminho B, docs/smartwatch-bridge.md): identidade desta
+  // partida pro relógio. Ele roda um motor NATIVO e acumula o diário de eventos;
+  // a época é o que diz "isto é outra partida" — sem ela, o diário da anterior
+  // (numeração `n` recomeçando em 1) contaminaria a nova. Nasce na abertura e é
+  // renovada nos MESMOS 4 pontos que zeram o _liveRecId (recomeço = partida nova).
+  var _liveMatchEpoch = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  function _newMatchEpoch() {
+    _liveMatchEpoch = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
   // v1.7.5-beta: "Últimas Partidas" — função armazenada pelo render de stats;
   // chamada de _saveResult().then() APÓS o write confirmar, garantindo que a
   // partida recém terminada já está no Firestore antes de consultar.
@@ -4591,14 +4735,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var cs = _currentSet();
       if (state.isTiebreak) {
         // Tiebreak won → set is won by this player
-        cs.tiebreak = { p1: state.currentGameP1, p2: state.currentGameP2 };
+        cs.tiebreak = window._tbPoints(state.currentGameP1, state.currentGameP2);
         if (gameWinner === 1) cs.gamesP1++;
         else cs.gamesP2++;
         state.isTiebreak = false;
         _finishSet(gameWinner);
       } else if (_isDecidingSet()) {
         // Super tiebreak won
-        cs.tiebreak = { p1: state.currentGameP1, p2: state.currentGameP2 };
+        cs.tiebreak = window._tbPoints(state.currentGameP1, state.currentGameP2);
         if (gameWinner === 1) cs.gamesP1++;
         else cs.gamesP2++;
         _finishSet(gameWinner);
@@ -4844,8 +4988,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }
     }
 
+    // Sem id externo (casual local), o id nasce UMA vez por partida e é reusado —
+    // regravar a mesma partida (Desfazer pós-fim → novo fim) sobrescreve o registro.
+    if (!ctx.matchId && !_liveRecId) {
+      _liveRecId = 'm_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    }
     var record = {
-      matchId: ctx.matchId || ('m_' + Date.now() + '_' + Math.floor(Math.random() * 1e6)),
+      matchId: ctx.matchId || _liveRecId,
       matchType: ctx.matchType || (isCasual ? 'casual' : 'tournament'),
       tournamentId: ctx.tournamentId || null,
       tournamentName: ctx.tournamentName || null,
@@ -4882,6 +5031,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try {
         var histKey = 'scoreplace_casual_history_v2';
         var hist2 = JSON.parse(localStorage.getItem(histKey) || '[]');
+        // Regravação da MESMA partida (Desfazer pós-fim → novo fim) substitui a
+        // linha existente em vez de empilhar uma segunda — dedup por matchId.
+        hist2 = hist2.filter(function(r) { return !r || r.matchId !== record.matchId; });
         hist2.unshift(record);
         if (hist2.length > 100) hist2 = hist2.slice(0, 100);
         localStorage.setItem(histKey, JSON.stringify(hist2));
@@ -4921,7 +5073,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
             : (ss.gamesP1 + '-' + ss.gamesP2);
           if (si < state.sets.length - 1) summary += '  ';
           var setEntry = { gamesP1: ss.gamesP1, gamesP2: ss.gamesP2 };
-          if (ss.tiebreak) setEntry.tiebreak = { pointsP1: ss.tiebreak.p1, pointsP2: ss.tiebreak.p2 };
+          var _tbs = window._setTiebreak(ss);
+          if (_tbs) setEntry.tiebreak = window._tbPoints(_tbs.p1, _tbs.p2);
           setsData.push(setEntry);
         }
       } else {
@@ -5073,7 +5226,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Save as GSM sets data
       m.sets = state.sets.map(function(s) {
         var setData = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
-        if (s.tiebreak) setData.tiebreak = { pointsP1: s.tiebreak.p1, pointsP2: s.tiebreak.p2 };
+        var _tbd = window._setTiebreak(s);
+        if (_tbd) setData.tiebreak = window._tbPoints(_tbd.p1, _tbd.p2);
         if (state.isFixedSet) setData.fixedSet = true;
         return setData;
       });
@@ -5811,7 +5965,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       for (var pi = 0; pi < state.sets.length; pi++) {
         var ps = state.sets[pi];
         totalPtsP1 += ps.gamesP1; totalPtsP2 += ps.gamesP2;
-        if (ps.tiebreak) { totalPtsP1 += ps.tiebreak.p1; totalPtsP2 += ps.tiebreak.p2; }
+        var _tbp = window._setTiebreak(ps);
+        if (_tbp) { totalPtsP1 += _tbp.p1; totalPtsP2 += _tbp.p2; }
       }
       var totalPts = totalPtsP1 + totalPtsP2;
 
@@ -6421,6 +6576,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Action section pinned at the TOP — "Jogar Novamente" (and optional
       // shuffle toggle for doubles) are always within thumb-reach. Clicking
       // "Jogar Novamente" or "✕ Fechar" both persist the result as confirmed.
+      // v1.8.64: Desfazer TAMBÉM na tela de fim — o último ponto pode ter sido
+      // acidental (relato do dono: pontos em rajada fecharam a partida em 0-40
+      // sozinha e não havia como retomar). Volta ao placar ao vivo com o ponto
+      // desfeito; a regravação do resultado corrigido é coberta dentro do próprio
+      // _liveScoreUndoLastPoint (rearme de _resultSaved + id estável do histórico).
+      var undoSection = (Array.isArray(state._undoSnapshots) && state._undoSnapshots.length > 0)
+        ? '<button onclick="window._liveScoreUndoLastPoint()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0;border:none;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;font-size:' + _fs(0.78) + ';font-weight:700;-webkit-tap-highlight-color:transparent;">↶ Desfazer último ponto</button>'
+        : '';
       container.innerHTML =
         // ⚠️ SEM `env(safe-area-inset-top)` AQUI. Quem reserva a ilha é o próprio
         // #live-scoring-overlay (padding-top em components.css). MEDIDO no iPhone 17
@@ -6430,6 +6593,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // safe-area tem UM dono, e aqui ele é o overlay.
         '<div style="flex-shrink:0;padding:8px 1rem 8px;display:flex;flex-direction:column;gap:8px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.06);">' +
           restartSection +
+          undoSection +
         '</div>' +
         '<div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;width:100%;padding:clamp(8px,2vh,16px) clamp(12px,3vw,24px) clamp(6px,1.2vh,10px);gap:clamp(8px,1.5vh,14px);">' +
           winnerSection +
@@ -8188,6 +8352,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
             }
             _isRemoteUpdate = false;
             _resultSaved = false;
+            _liveRecId = null;   // partida NOVA → registro de histórico novo
+            _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
             _matchStartTime = null;
             _matchEndTime = null;
             _lastSyncTs = (data.liveState && data.liveState._ts) || 0;
@@ -8372,7 +8538,30 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
       // mostra o prompt e devolve a intenção 'resolveTie'. Recorre a cada empate.
       tieRulePending: !!state.tieRulePending,
-      tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null
+      tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null,
+      // ── CAMINHO B: o que o MOTOR NATIVO do relógio precisa pra jogar sozinho ──
+      // (docs/smartwatch-bridge.md). `matchEpoch` identifica ESTA partida (o diário
+      // de eventos do relógio é carimbado com ela); `scoring` é a config JÁ RESOLVIDA
+      // — sai de `state`, não de `sc`, porque state guarda os valores EFETIVOS depois
+      // dos defaults do esporte e do fallback do casual (tieRule 'ask'). Sem estes
+      // dois campos o relógio não teria como contar nada por conta própria.
+      matchEpoch: _liveMatchEpoch,
+      scoring: {
+        type: useSets ? 'sets' : 'simple',
+        setsToWin: state.setsToWin,
+        gamesPerSet: state.gamesPerSet,
+        tiebreakEnabled: !!state.tiebreakEnabled,
+        tiebreakPoints: state.tiebreakPoints,
+        tiebreakMargin: state.tiebreakMargin,
+        superTiebreak: !!state.superTiebreak,
+        superTiebreakPoints: state.superTiebreakPoints,
+        countingType: state.countingType,
+        deuceRule: !!state.deuceRule,
+        twoPointAdvantage: state.twoPointAdvantage !== false,
+        tieRule: state.tieRule || null,
+        fixedSet: !!state.isFixedSet,
+        fixedSetGames: state.fixedSetGames || 0
+      }
     };
   };
   // Classificação do Rei/Rainha (vitórias por PESSOA — a dupla muda a cada jogo,
@@ -8539,6 +8728,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
     keysInSnap.forEach(function(kk) { state[kk] = snap.state[kk]; });
     _matchStartTime = snap.matchStartTime;
     _matchEndTime = snap.matchEndTime;
+    // v1.8.64: DESFAZER ATRAVESSA O FIM (relato do dono, 13/ago: "o desfazer com o
+    // set terminado não funcionou — e deveria, permitindo retomar o jogo"). O motor
+    // sempre soube voltar (o snapshot restaura isFinished=false); o que prendia era
+    // a GRAVAÇÃO: no último ponto o resultado já foi salvo automaticamente
+    // (_saveResult, idempotente via _resultSaved) — sem rearmar o flag, o novo fim
+    // NUNCA regravaria e a chave ficaria com o placar errado pra sempre. O
+    // _liveRecId NÃO é zerado aqui de propósito: é a MESMA partida continuando, e
+    // o mesmo id faz a regravação do histórico sobrescrever em vez de duplicar.
+    if (_resultSaved && !state.isFinished) _resultSaved = false;
     // Haptic distintivo — 3 pulsos curtos pra "voltei no tempo".
     if (window._haptic) window._haptic('undo');
     // Re-render. Se o último ponto tinha encerrado o match (state.isFinished
@@ -8635,7 +8833,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (useSets) {
       setsData = state.sets.map(function(ss) {
         var se = { gamesP1: ss.gamesP1, gamesP2: ss.gamesP2 };
-        if (ss.tiebreak) se.tiebreak = { pointsP1: ss.tiebreak.p1, pointsP2: ss.tiebreak.p2 };
+        var _tbe = window._setTiebreak(ss);
+        if (_tbe) se.tiebreak = window._tbPoints(_tbe.p1, _tbe.p2);
         return se;
       });
     }
@@ -8681,6 +8880,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
     _resultSaved = false;
+    _liveRecId = null;   // próximo jogo da série = partida NOVA no histórico
+    _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
 
     // 3. Registra vitórias do round atual e salva snapshot independente para histórico
     var pairing = _reiRainhaPairings[_reiRainhaRound];
@@ -8945,6 +9146,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
     _resultSaved = false;
+    _liveRecId = null;   // fecho da série = próxima gravação é de partida nova
+    _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
 
     // Registra vitórias do round 2 (se ainda não registrado)
     if (_reiRainhaRound === 2) {
@@ -9098,6 +9301,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
         }
         // Allow next completed match to be saved again.
         _resultSaved = false;
+        _liveRecId = null;   // recomeço = partida NOVA no histórico
+        _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
         // Shuffle teams if requested
         if (shouldShuffle && isDoubles) {
           var allPlayers = p1Players.concat(p2Players);
@@ -9492,8 +9697,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (useSets && Array.isArray(state.sets) && state.sets.length > 0) {
       scoreLine = state.sets.map(function(s) {
         var line = (s.gamesP1 != null ? s.gamesP1 : 0) + '-' + (s.gamesP2 != null ? s.gamesP2 : 0);
-        if (s.tiebreak && (s.tiebreak.pointsP1 != null || s.tiebreak.p1 != null)) {
-          var tbp = (s.tiebreak.pointsP1 != null ? s.tiebreak.pointsP1 : s.tiebreak.p1);
+        var _tbh = window._setTiebreak(s);
+        if (_tbh) {
+          var tbp = _tbh.p1;
           line += '(' + tbp + ')';
         }
         return line;

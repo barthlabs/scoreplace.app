@@ -65,3 +65,8 @@ node_modules
 functions/node_modules
 functions-autodraw/node_modules
 functions-stripe/node_modules
+
+# (as fixtures do golden master SÃO commitadas — o scripts/baixar-torneios.js as
+#  anonimiza na gravação: nome → "Pessoa N", e-mail → @exemplo.test, uid → uidNNNN,
+#  telefone removido. Auditado: 0 e-mail real, 0 telefone, 0 uid do Firebase.
+#  Elas precisam estar no repo pra o golden GATEAR a CI, e não só a minha máquina.)

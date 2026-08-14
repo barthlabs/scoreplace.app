@@ -146,12 +146,11 @@ window._dashEnroll = function(tId) {
   if (!t || !user) { window.enrollCurrentUser(tId); return; }
 
   // Block enrollment if inscriptions are closed
-  var _isLiga = t.format && (t.format === 'Liga' || t.format === 'Ranking' || t.format === 'liga' || t.format === 'ranking');
-  var _ligaOpen = _isLiga && t.ligaOpenEnrollment !== false; // v2.4.17: Liga aberta por default — alinha com cards/form
-  var _sorteio = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                 (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                 (Array.isArray(t.groups) && t.groups.length > 0);
-  var _aberto = (t.status !== 'closed' && t.status !== 'finished' && !_sorteio) || _ligaOpen;
+  // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+  var _sorteio = window._phaseDrawDone ? window._phaseDrawDone(t)
+    : ((Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0));
+  var _aberto = window._enrollmentOpenState ? window._enrollmentOpenState(t).open
+    : ((t.status !== 'closed' && t.status !== 'finished' && !_sorteio));
   if (!_aberto) {
     // v1.5.3 (bug de produção, torneio ao vivo): esta regra era uma CÓPIA driftada que
     // ignorava a INSCRIÇÃO DURANTE A FASE. Com o sorteio feito e o toggle em Abertas
@@ -273,13 +272,13 @@ function renderDashboard(container) {
   const torneiosCount = visible.length;
   const torneiosPublicos = visible.filter(t => t.isPublic).length;
   const inscricoesAbertas = visible.filter(t => {
-    const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    const _stF = window._enrollmentOpenState(t);
     // v2.1.4: late enrollment (Fechadas OFF) — inscrições seguem abertas após o
     // sorteio (e após iniciar) até o organizador encerrar. Mesma regra do detalhe.
     const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    const lateEnrollOpen = sorteioRealizado && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
-    return (t.status !== 'finished' && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
+    const lateEnrollOpen = _stF.sorteio && t.status !== 'finished' && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
+    return _stF.open || lateEnrollOpen;
   }).length;
 
 
@@ -420,19 +419,8 @@ function renderDashboard(container) {
   // (que exclui torneios onde o usuário é member). A semântica do label
   // "Inscrições Abertas" não sugere "só os que você não entrou"; agora é
   // o que o usuário espera: total de torneios aceitando inscrição.
-  const _isOpenEnrollment = (t) => {
-    if (!t) return false;
-    const _hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                     (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                     (Array.isArray(t.groups) && t.groups.length > 0);
-    const _ligaAberta = (typeof window._isLigaFormat === 'function'
-                          ? window._isLigaFormat(t)
-                          : t.format === 'Liga')
-                        && t.ligaOpenEnrollment !== false
-                        && _hasDraw;
-    const _deadlinePassed = t.registrationLimit && new Date(t.registrationLimit) < new Date();
-    return (t.status !== 'closed' && t.status !== 'finished' && !_hasDraw && !_deadlinePassed) || _ligaAberta;
-  };
+  // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+  const _isOpenEnrollment = (t) => !!(t && window._enrollmentOpenState(t).open);
 
   const _discoveryRaw = (window.AppStore && Array.isArray(window.AppStore.publicDiscovery))
     ? window.AppStore.publicDiscovery
@@ -588,12 +576,16 @@ function renderDashboard(container) {
     // Inscrições fecham após sorteio (status 'active'), exceto Liga com inscrições abertas na temporada
     const isFinished = t.status === 'finished';
     const sorteioRealizado = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
-    const ligaAberta = (typeof window._isLigaFormat === 'function' ? window._isLigaFormat(t) : t.format === 'Liga') && t.ligaOpenEnrollment !== false && sorteioRealizado && t.status !== 'finished';
+    // v1.8.40: regra canônica (waitlist-core._enrollmentOpenState — a mesma do servidor).
+    // A cópia daqui exigia sorteioRealizado no ligaAberta: Liga aberta pré-sorteio com
+    // prazo vencido/status closed mostrava o card FECHADO enquanto o servidor aceitaria.
+    const _openStD = window._enrollmentOpenState(t);
+    const ligaAberta = _openStD.ligaOpen;
     // v2.1.4: late enrollment (Fechadas OFF) mantém inscrições abertas após o
     // sorteio e após iniciar, até o organizador encerrar. Mesma regra do detalhe.
     const _leD = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
     const lateEnrollOpen = sorteioRealizado && !isFinished && t.status !== 'closed' && (_leD === 'standby' || _leD === 'expand');
-    const isAberto = (!isFinished && t.status !== 'closed' && !sorteioRealizado && (!t.registrationLimit || new Date(t.registrationLimit) >= new Date())) || ligaAberta || lateEnrollOpen;
+    const isAberto = _openStD.open || lateEnrollOpen;
     // v1.3.35-beta: "Em Andamento" só com t.tournamentStarted setado pelo
     // botão Iniciar Torneio. Sorteio realizado mantém "Inscrições Encerradas".
     const tournamentStarted = !!(t.tournamentStarted || t.status === 'in_progress');
@@ -1440,8 +1432,33 @@ function renderDashboard(container) {
     var noResult = [];       // match sem resultado, torneio ativo, sou participante
     var upcoming = [];       // próximas partidas (sem resultado, resultEntry = organizer)
     var recentConfirmed = []; // últimas partidas com resultado confirmado
+    var othersResults = [];  // 📣 Novidades: jogos de OUTRAS pessoas, já com resultado
+
+    // Carimbo → milissegundos. `resultAt` normalmente vem em ms (13 dígitos), mas há
+    // dado gravado em SEGUNDOS na base (a mesma armadilha que o abandon-core encontrou),
+    // e misturar as duas escalas põe um jogo de 2026 antes de um de hoje na ordenação.
+    function _tsMs(v) {
+      var n = Number(v);
+      if (!n || isNaN(n) || n <= 0) return 0;
+      return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
+    }
+
+    // v1.8.67: chave de deduplicação desta seção — `_collectAllMatches` NÃO deduplica, e
+    // um jogo que exista em `t.matches` E dentro de uma rodada entraria duas vezes.
+    var _seenMatch = {};
 
     participacoes.forEach(function(t) {
+      // ⚠️ v1.8.67: SANDBOX NÃO ENTRA. O SB é um CLONE do torneio real — mesmos jogos,
+      // mesmos placares e os MESMOS ids de match. MEDIDO em produção (14/ago): o Confra e
+      // o "(SB) Confra" tinham os 6 mesmos resultados, então cada jogo aparecia DUAS vezes
+      // no painel do dev; em "Seus últimos resultados", que corta em 3, a cópia ainda
+      // ROUBAVA uma das três vagas (o dono via 2 jogos reais + 1 clone). E o card da chave
+      // usa `id="card-<m.id>"`: com o clone junto, o MESMO id ficava duas vezes no DOM —
+      // `_editPendingResult`/`_approveResult` acham por id e agiriam no torneio errado.
+      // O SB tem a chave dele pra ser testado; contaminar a tela inicial é justamente o
+      // que o sandbox existe para NÃO fazer. `_isSandboxRef` é a fonte única já usada em
+      // stats, histórico e Análise de Inscritos.
+      if (window._isSandboxRef && window._isSandboxRef(t.id, t.name)) return;
       // v4.1.20: carimba a numeração GLOBAL "JOGO N" (fonte única, mesma do bracket) neste
       // torneio → os cards de Meus Resultados leem `m._gameNum` e mostram o número certo.
       try { if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t); } catch (e) {}
@@ -1466,6 +1483,11 @@ function renderDashboard(container) {
 
       matchSources.forEach(function(m) {
         if (!m) return;
+        // v1.8.67: o MESMO jogo nunca entra duas vezes (ver `_seenMatch`). O id é a
+        // identidade; o fallback só existe para jogo legado sem id.
+        var _mKey = t.id + '|' + (m.id || ((m.label || '') + '|' + (m.p1 || '') + '|' + (m.p2 || '')));
+        if (_seenMatch[_mKey]) return;
+        _seenMatch[_mKey] = 1;
         if (m.isSitOut || m.p1 === 'FOLGA' || m.p2 === 'FOLGA') return; // folga não é jogo a disputar
         // v3.1.26: BYE = avanço automático (não é jogo a disputar). MAS o adversário
         // pode estar "a definir" (TBD/vazio) — nesse caso o jogo AINDA aparece em
@@ -1481,9 +1503,9 @@ function renderDashboard(container) {
         if (m.isMonarch && Array.isArray(m.team2)) p2Names = m.team2.slice();
         var inP1 = p1Names.some(_isMe) || _isMe(m.p1) || p1Names.some(function(n) { return _isMeByUid(n, t); });
         var inP2 = p2Names.some(_isMe) || _isMe(m.p2) || p2Names.some(function(n) { return _isMeByUid(n, t); });
-        if (!inP1 && !inP2) return;
-
-        // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo)
+        // Fase/rodada para exibir no card (igual ao "Próximas Partidas" antigo).
+        // ⚠️ Calculado ANTES do desvio de "não sou deste jogo": desde a seção
+        // "Novidades no seu torneio" os DOIS ramos precisam deste rótulo.
         var _phaseLabel = '';
         if (m.label) _phaseLabel = String(m.label);
         else if (m.roundLabel) _phaseLabel = String(m.roundLabel);
@@ -1491,6 +1513,51 @@ function renderDashboard(container) {
         var _formatLabel = m.isMonarch ? 'Rei/Rainha' : ((window._formatDisplayName ? window._formatDisplayName(t.format) : t.format) || '');
         if (t.format === 'Liga' && t.ligaRoundFormat === 'rei_rainha' && m.isMonarch) _formatLabel = 'Pontos Corridos · Rei/Rainha';
         var _subLine = [_formatLabel, _phaseLabel].filter(Boolean).join(' · ');
+
+        if (!inP1 && !inP2) {
+          // ── 📣 Novidades no seu torneio ──────────────────────────────────────
+          // Jogo de OUTRAS pessoas, num torneio em que EU estou inscrito. Só entra
+          // quem JÁ TEM RESULTADO: `m.winner` é o que separa "jogado" de "marcado"
+          // (jogo sorteado nasce sem winner). Sem placar não aparece — regra do dono.
+          // ⚠️ SÓ TORNEIO EM ANDAMENTO. Regra do dono (13/ago): "torneios encerrados não
+          // devem popular nada aqui". "Novidades" é o que está ACONTECENDO agora — jogo de
+          // torneio terminado não é novidade, e sem este filtro um torneio antigo com
+          // dezenas de jogos afogaria o que está em curso (a ordenação é por data do
+          // lançamento, e torneio velho sem carimbo cai no desempate por rodada).
+          // Encerrado = `finished`, inclusive o encerrado automaticamente por abandono.
+          var _tEncerrado = (t.status === 'finished') || !!t.autoClosed;
+          var _confirmado = !!m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length));
+          // ⚠️ v1.8.67: LANÇAMENTO PENDENTE TAMBÉM É NOVIDADE. Exigir `m.winner` fazia a
+          // seção ignorar justamente o que ACABOU de acontecer: placar lançado por um
+          // jogador só ganha `winner` quando o outro lado confirma, o que pode levar horas.
+          // MEDIDO (14/ago, 15h): os ÚNICOS lançamentos do dia na base inteira eram os 3
+          // jogos do R1 Grupo T do Confra, lançados pela Elide às 12:43, 14:58 e 15:00 —
+          // todos em `pendingResult`. Por isso o topo da lista mostrava um jogo de "há 18h"
+          // e o dono via "novidade de ontem" com o torneio andando hoje.
+          // Entra SEM mentir: o card é o mesmo da chave, que já desenha o estado pendente
+          // (tag PENDENTE âmbar + "⏳ Aguardando aprovação" + "proposto por X") — ninguém
+          // lê como placar final. O carimbo da ordenação é o `proposedAt`, que É a hora do
+          // lançamento. Em disputa também entra: contestação é novidade do torneio.
+          var _pnd = (!m.winner && m.pendingResult) ? m.pendingResult : null;
+          var _pendente = !!_pnd && (_pnd.scoreP1 != null || (Array.isArray(_pnd.sets) && _pnd.sets.length) || !!_pnd.winner);
+          if (!_tEncerrado && (_confirmado || _pendente)) {
+            othersResults.push({
+              tId: t.id, tName: t.name || '', m: m, pendente: _pendente,
+              // MEDIDO em produção: `resultAt` é o carimbo do lançamento (7 de 8 jogos
+              // do "Duplas Mistas" o têm), mas torneio antigo (BT Corpus Christi) não
+              // tem carimbo NENHUM — daí a cadeia + o desempate por rodada/nº do jogo,
+              // a mesma régua que "Meus Últimos Resultados" já usa.
+              at: _pendente
+                ? (_tsMs(_pnd.proposedAt) || _tsMs(m.updatedAt) || 0)
+                : (_tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || 0),
+              roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
+              gameSeq: (m._gameNum != null) ? Number(m._gameNum)
+                : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),
+              subLine: _subLine
+            });
+          }
+          return;
+        }
 
         var matchInfo = {
           tId: t.id, tName: t.name || '', sport: t.sport || '', m: m,
@@ -1512,7 +1579,16 @@ function renderDashboard(container) {
           }
           var _gm = String(m.label || '').match(/Jogo\s*(\d+)/i);
           var _gSeq = _gm ? Number(_gm[1]) : 0;
-          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0, roundNum: _rNum, gameSeq: _gSeq, inP1: inP1 }, matchInfo));
+          // ⚠️ `resultAt` PRIMEIRO — é o carimbo que `_applyApprovedResult` grava quando o
+          // resultado é aprovado, ou seja O momento do lançamento. Faltava na cadeia: os 3
+          // jogos do R1 do Confra têm resultAt e NÃO têm updatedAt/proposedAt (medido no
+          // doc), então entravam com confirmedAt=0 e perdiam pra uma final ANTIGA que tinha
+          // timestamp — a lista mostrava o velho no lugar do que acabou de ser jogado.
+          // `_tsMs` normaliza segundos→ms (há dado gravado nas duas escalas na base).
+          // Mesma régua da seção "Novidades no seu torneio", pra as duas não divergirem.
+          recentConfirmed.push(Object.assign({
+            confirmedAt: _tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.proposedAt) || 0,
+            roundNum: _rNum, gameSeq: _gSeq, inP1: inP1 }, matchInfo));
         } else if (m.pendingResult) {
           var pr = m.pendingResult;
           if (pr.disputed) {
@@ -1553,7 +1629,11 @@ function renderDashboard(container) {
     });
     recentConfirmed = recentConfirmed.slice(0, 3);
 
-    var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length;
+    // ⚠️ `othersResults` entra na conta: quem se inscreveu e AINDA NÃO JOGOU não tem
+    // jogo nenhum nas outras listas, e sem isto o retorno antecipado levava junto a
+    // seção "Novidades no seu torneio" — apagando exatamente para quem ela mais serve
+    // (o recém-inscrito, que só tem os jogos dos outros para acompanhar).
+    var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length + othersResults.length;
     if (totalSection === 0) return '';
 
     var _sf = window._safeHtml || function(s) { return String(s || ''); };
@@ -1581,13 +1661,42 @@ function renderDashboard(container) {
     // Chave estável (sem número de versão → sobrevive a deploy/cache).
     var _mrCollapsed = true;
     try { var _mrPref = localStorage.getItem('scoreplace_collapse_myresults'); if (_mrPref === '0') _mrCollapsed = false; else if (_mrPref === '1') _mrCollapsed = true; } catch (e) {}
+    // v1.8.69: TOTAL de cards da seção — é o que decide o "▾ ver os N anteriores".
+    // Cada item destas quatro listas vira exatamente um card no corpo.
+    var _mrTotalCards = pendingForMe.length + pendingByMe.length + disputedMatches.length + recentConfirmed.length;
+    // v1.8.69: marca o PRIMEIRO bloco renderizado. A ordem do corpo já é a de urgência
+    // (aguardando você → aguardando o adversário → em disputa → resultados confirmados),
+    // então o card que fica à mostra sai daí de graça: havendo pendência, aparece a
+    // pendência (que pede ação sua); não havendo, aparece o último resultado.
+    var _mrFirstBlockDone = false;
+    function _mrBlockAttrs() {
+      if (_mrFirstBlockDone) return ' data-mr-block="1"';
+      _mrFirstBlockDone = true;
+      return ' data-mr-block="1" data-mr-first="1"';
+    }
     var html = '';
     if (_collapsibleHasContent) {
-      html += '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      html += '<div id="meus-resultados-section" data-mr-collapsed="' + (_mrCollapsed ? '1' : '0') + '"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      // v1.8.69: FECHADA NÃO É VAZIA — mesma regra de "📣 Novidades no seu torneio". Antes o
+      // corpo inteiro sumia (`display:none`) e a seção fechada não mostrava NADA: pedido do
+      // dono — "está discreto demais… apresenta o último com os outros colapsados, assim
+      // chama mais a atenção sem ocupar muito espaço". Agora o corpo fica sempre no DOM e o
+      // CSS esconde (a) todo bloco que não seja o primeiro e (b) dentro dele, tudo que vem
+      // DEPOIS do primeiro card — `[data-mr-card] ~ *` pega também o cabeçalho de grupo do
+      // 2º grupo, que senão ficaria órfão. O cabeçalho do bloco (ex.: "⏳ Aguardando sua
+      // aprovação (2)") fica de fora do grid de propósito: ele contextualiza o card à mostra
+      // e a contagem continua dizendo a verdade sobre o que existe.
+      // ⚠️ `!important` NÃO é enfeite, e foi MEDIDO no navegador: os cards dos resultados
+      // confirmados nascem com `style="...display:flex;..."` INLINE, e estilo inline vence
+      // folha de estilo. Sem o `!important` o seletor casava (conferido com `.matches()`) e
+      // mesmo assim os três cards apareciam — o teste estrutural passava verde e a tela
+      // continuava errada. Novidades não precisou disto porque lá o card só traz `min-width`.
+      html += '<style>#meus-resultados-section[data-mr-collapsed="1"] #meus-resultados-body > *:not([data-mr-first]){display:none !important;}' +
+        '#meus-resultados-section[data-mr-collapsed="1"] [data-mr-first] [data-mr-card] ~ *{display:none !important;}</style>';
       html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
-        '🏅 Meus Últimos Resultados</h3>';
-      html += '<div id="meus-resultados-body" style="margin-top:12px;' + (_mrCollapsed ? 'display:none;' : '') + '">';
+        '🏅 Seus últimos resultados</h3>';
+      html += '<div id="meus-resultados-body" style="margin-top:12px;">';
     }
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
@@ -1760,15 +1869,38 @@ function renderDashboard(container) {
 
       var pendingScoreStyle = 'font-weight:800;font-size:1rem;min-width:28px;text-align:center;color:#fbbf24;font-style:italic;flex-shrink:0;';
 
+      // ⚠️ CAMPOS DO TIE-BREAK também aqui. Este card já chamava _highlightWinner no oninput,
+      // mas NUNCA renderizava `tb1-`/`tb2-` — e a função começa com `if (tb1El && tb2El)`, ou
+      // seja virava no-op silencioso: lançar 6-5 pelo dashboard perdia os pontos do TB. Quem
+      // salva aqui é o _saveResultInline (o mesmo do bracket), que lê os campos POR ID e já
+      // exige/valida o TB — então basta eles existirem. [[feedback_sweep_all_render_sites]]
+      var _dTb = '';
+      try {
+        var _dSc = (tRef && typeof window._effectiveScoring === 'function')
+          ? window._effectiveScoring(tRef, item.m) : (tRef && tRef.scoring);
+        if (_dSc && window._scoringUsesSets && window._scoringUsesSets(_dSc) && _dSc.tiebreakEnabled !== false) {
+          _dTb = 'width:34px;text-align:center;font-size:0.72rem;font-weight:700;' +
+            'background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.4);' +
+            'color:var(--text-bright);border-radius:5px;padding:2px 3px;';
+        }
+      } catch (e) {}
+      var _dTbInput = function(n) {
+        if (!_dTb) return '';
+        return '<input id="tb' + n + '-' + mId + '" type="number" min="0" placeholder="tb" title="Tie-break"' +
+          ' onclick="event.stopPropagation();"' +
+          ' oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')"' +
+          ' style="' + _dTb + 'display:none;margin-left:3px;flex-shrink:0;">';
+      };
+
       var p1ScoreHtml = pendingScores
         ? '<span style="' + pendingScoreStyle + '">' + (pendingScores.p1 != null ? pendingScores.p1 : '?') + '</span>'
         : canLaunch
-          ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
+          ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(1)
           : scorePlaceholder;
       var p2ScoreHtml = pendingScores
         ? '<span style="' + pendingScoreStyle + '">' + (pendingScores.p2 != null ? pendingScores.p2 : '?') + '</span>'
         : canLaunch
-          ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">'
+          ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(2)
           : scorePlaceholder;
 
       var defaultHeaderBtns = '';
@@ -1824,9 +1956,9 @@ function renderDashboard(container) {
 
     // ── Aguardando minha aprovação ──
     if (pendingForMe.length > 0) {
-      html += '<div style="margin-bottom:10px;">';
+      html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
       var _btnStyle = function(r,g,b) { return 'border:1px solid rgba('+r+','+g+','+b+',0.4);color:rgba('+r+','+g+','+b+',1);border-radius:6px;padding:2px 7px;font-size:0.65rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba('+r+','+g+','+b+',0.15);'; };
       pendingForMe.forEach(function(item) {
@@ -1844,22 +1976,22 @@ function renderDashboard(container) {
           btns += '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(99,102,241) + '">✏️ Editar</button>';
           btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(16,185,129) + '">✅ Confirmar</button>';
         }
-        html += _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
           cardBorder: 'rgba(251,191,36,0.6)',
           cardBg: 'rgba(251,191,36,0.06)',
           cardShadow: '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)'
-        });
+        }) + '</div>';
       });
       html += '</div></div>';
     }
 
     // ── Resultado proposto aguardando adversário ──
     if (pendingByMe.length > 0) {
-      html += '<div style="margin-bottom:10px;">';
+      html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingByMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
@@ -1867,34 +1999,34 @@ function renderDashboard(container) {
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
           '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
-        html += _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
           cardBorder: 'rgba(148,163,184,0.4)',
           cardBg: 'rgba(148,163,184,0.06)',
           cardShadow: '0 4px 12px rgba(0,0,0,0.15)'
-        });
+        }) + '</div>';
       });
       html += '</div></div>';
     }
 
     // ── Em disputa — aguardando organizador (Fase 4) ──
     if (disputedMatches.length > 0) {
-      html += '<div style="margin-bottom:10px;">';
+      html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:#f87171;background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
       disputedMatches.forEach(function(item) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         // Sem botões de ação — o jogador não age mais, só o organizador (no bracket).
-        html += _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: _dispTag,
           cardBorder: 'rgba(239,68,68,0.5)',
           cardBg: 'rgba(239,68,68,0.06)',
           cardShadow: '0 0 14px rgba(239,68,68,0.18),0 4px 12px rgba(0,0,0,0.15)'
-        });
+        }) + '</div>';
       });
       html += '</div></div>';
     }
@@ -1950,7 +2082,7 @@ function renderDashboard(container) {
 
       // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
       _upHtml += '<div id="proximos-jogos-section" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Próximo Jogo</h3>';
+      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Seu próximo jogo</h3>';
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:#a5b4fc;font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
@@ -1961,8 +2093,8 @@ function renderDashboard(container) {
 
     // ── Últimos resultados confirmados — estilo chave (não card flat) ──
     if (recentConfirmed.length > 0) {
-      html += '<div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;">';
+      html += '<div' + _mrBlockAttrs() + '>';
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
       // única vez numa linha e só "JOGO N" acima de cada chave.
@@ -1993,18 +2125,21 @@ function renderDashboard(container) {
         var resultLabel = m2.draw ? 'Empate' : (isWinner ? '🏆 Vitória' : 'Derrota');
 
         // placar — mostra pelo lado do usuário (p1 ou p2)
-        function _scoreDisplay(p1, p2) {
-          return '<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">' + _sf(String(p1)) + '</span>' +
-            '<span style="font-size:0.75rem;color:#475569;margin:0 4px;">×</span>' +
-            '<span style="font-size:0.95rem;font-weight:800;color:#f1f5f9;">' + _sf(String(p2)) + '</span>';
-        }
-        var scoresHtml = '';
-        if (Array.isArray(m2.sets) && m2.sets.length > 0) {
-          scoresHtml = m2.sets.map(function(s) {
-            return _scoreDisplay(item.inP1 ? s.gamesP1 : s.gamesP2, item.inP1 ? s.gamesP2 : s.gamesP1);
-          }).join('<span style="color:#334155;margin:0 6px;">·</span>');
-        } else if (m2.scoreP1 != null && m2.scoreP2 != null) {
-          scoresHtml = _scoreDisplay(item.inP1 ? m2.scoreP1 : m2.scoreP2, item.inP1 ? m2.scoreP2 : m2.scoreP1);
+        // ⚰️ REMOVIDO (1.8.44): `_scoreDisplay` + `scoresHtml` eram montados aqui e
+        // NUNCA consumidos — quem desenha o placar deste card é o bloco "VS" mais
+        // abaixo, que lê m2.scoreP1/scoreP2. Ficavam como decoy: mexer neles parecia
+        // mexer no placar e não mudava um pixel (foi o que aconteceu ao consertar o
+        // subplacar do tie-break). O placar com tie-break vive em `_placarLado`.
+
+        // Placar de UM lado, com o subplacar do tie-break quando houver (6⁽⁷⁾).
+        // Ler m2.scoreP1 cru perdia o TB — o número dos games é o mesmo, o que some
+        // é o (7). Fonte única de formatação: window._formatSetForPlayer.
+        function _placarLado(n) {
+          if (Array.isArray(m2.sets) && m2.sets.length > 0 && typeof window._formatSetForPlayer === 'function') {
+            return m2.sets.map(function(s) { return window._formatSetForPlayer(s, n, { html: true }); }).join(' ');
+          }
+          var v = (n === 1 ? m2.scoreP1 : m2.scoreP2);
+          return v == null ? '' : _sf(String(v));
         }
 
         // mesmo estilo de coluna que _miniBracketCard — JOGO N GLOBAL (fonte única).
@@ -2071,7 +2206,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p1IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+m2.scoreP1+'</div>' : '';
+                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p1IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(1)+'</div>' : '';
                 return ph+sc3;
               })() +
             '</div>' +
@@ -2088,7 +2223,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p2IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+m2.scoreP2+'</div>' : '';
+                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p2IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(2)+'</div>' : '';
                 return ph+sc4;
               })() +
             '</div>' +
@@ -2109,7 +2244,7 @@ function renderDashboard(container) {
       _resGroups.forEach(function(g) {
         if (g.grouped && g.units.length >= 2) {
           // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
-          html += '<div style="flex-basis:100%;width:100%;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
+          html += '<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
             '<h4 style="color:' + g.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + g.color + ';padding-left:8px;flex:1;">' +
               _sf(g.group) +
               '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
@@ -2119,14 +2254,14 @@ function renderDashboard(container) {
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
           // fica uma vez no topo. Pequena margem entre os boxes via margin.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;margin-bottom:6px;">' +
+            html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;margin-bottom:6px;">' +
               u.body +
             '</div>';
           });
         } else {
           // Singleton — cabeçalho completo (grupo · jogo + torneio), como antes.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:280px;max-width:320px;display:flex;flex-direction:column;gap:0.6rem;">' +
+            html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
                 '<h4 style="color:' + u.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + u.color + ';padding-left:8px;flex:1;">' +
                   (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + _sf(u.faseStr2) +
@@ -2144,10 +2279,114 @@ function renderDashboard(container) {
 
     if (_collapsibleHasContent) {
       html += '</div>'; // fecha #meus-resultados-body
+      // v1.8.69: o convite pra abrir, igual ao de Novidades. Só existe com 2+ cards —
+      // com um só não há "anteriores" e a linha seria ruído.
+      if (_mrTotalCards > 1) {
+        html += '<p id="meus-resultados-hint" onclick="window._toggleMyResultsCollapse()" style="margin:8px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
+          (_mrCollapsed ? '▾ ver os ' + (_mrTotalCards - 1) + ' anteriores' : '▴ ocultar anteriores') + '</p>';
+      }
       html += '</div>'; // fecha #meus-resultados-section
     }
     // v3.1.24: Próximos Jogos (não colapsável) PRIMEIRO, depois Meus Últimos Resultados (colapsável).
-    return _upHtml + html;
+    // ── 📣 NOVIDADES NO SEU TORNEIO ──────────────────────────────────────────
+    // Os últimos jogos JÁ JOGADOS dos torneios em que o usuário está inscrito, mas
+    // de OUTRAS pessoas (os dele já têm as duas seções vizinhas). Ordem cronológica
+    // INVERSA do lançamento do resultado — o mais recente no topo. Vem COLAPSADA com
+    // apenas o jogo mais recente visível; abrindo, aparecem os anteriores.
+    var _novHtml = '';
+    if (othersResults.length > 0) {
+      // mais recente primeiro. Sem carimbo (torneio antigo — MEDIDO: o BT Corpus
+      // Christi não tem nenhum), desempata por rodada e nº do jogo, a mesma régua de
+      // "Meus Últimos Resultados". Sem isso a ordem vira a de inserção e a seção
+      // mentiria dizendo "mais recente".
+      othersResults.sort(function(a, b) {
+        if (b.at !== a.at) return b.at - a.at;
+        if (b.roundNum !== a.roundNum) return b.roundNum - a.roundNum;
+        return b.gameSeq - a.gameSeq;
+      });
+      var _NOV_MAX = 15;
+      var _novTotal = othersResults.length;
+      var _novList = othersResults.slice(0, _NOV_MAX);
+
+      var _novCollapsed = true;
+      try {
+        var _nvPref = localStorage.getItem('scoreplace_collapse_novidades');
+        if (_nvPref === '0') _novCollapsed = false;
+      } catch (e) {}
+
+      // "há X" — só quando existe carimbo de verdade; inventar tempo é pior que omitir.
+      function _agoLabel(ms) {
+        if (!ms) return '';
+        var d = Date.now() - ms;
+        if (d < 0) return '';
+        var min = Math.floor(d / 60000);
+        if (min < 1) return 'agora há pouco';
+        if (min < 60) return 'há ' + min + 'min';
+        var h = Math.floor(min / 60);
+        if (h < 24) return 'há ' + h + 'h';
+        var dias = Math.floor(h / 24);
+        return dias === 1 ? 'ontem' : 'há ' + dias + ' dias';
+      }
+
+      // ⚠️ O CARD É O DA CHAVE — window.renderMatchCard, o MESMO renderizador do bracket
+      // (foto de cada pessoa, os dois blocos de dupla, o "vs" no meio, vencedor em verde e
+      // o subplacar do tie-break). Reclamação do dono (13/ago) sobre a 1ª versão: eu tinha
+      // escrito um card PRÓPRIO (nome + placar em duas linhas), criando um TERCEIRO visual
+      // pra a mesma coisa. `canEnterResult=false` deixa em leitura: medido, sai com ZERO
+      // botão e ZERO input — é jogo de outra pessoa, não há o que lançar aqui.
+      // Acima do card fica só o contexto que a chave não tem: de QUAL torneio é e QUANDO
+      // o resultado saiu (esta seção cruza torneios; a chave é sempre de um só).
+      function _novCard(it) {
+        var _quando = _agoLabel(it.at);
+        var _meta = [it.tName, it.subLine].filter(Boolean).join(' · ');
+        // v1.8.67: `{readOnly:true}` — `canEnterResult=false` sozinho NÃO calava os botões
+        // de pendência/disputa/W.O., que têm gate próprio por PAPEL: como organizador, o
+        // dono via "✏️ Editar" num card fora da chave, e o clique cai num caminho que
+        // procura ids que só existem lá.
+        var _card = (typeof window.renderMatchCard === 'function')
+          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true })
+          : '';
+        return '<div data-nov-card="1" style="min-width:0;">' +
+          '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;padding:0 2px;">' +
+            '<span style="flex:1;min-width:0;font-size:0.66rem;font-weight:700;color:#94a3b8;text-transform:uppercase;' +
+            'letter-spacing:0.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(_meta) + '</span>' +
+            (_quando ? '<span style="flex-shrink:0;font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' : '') +
+          '</div>' + _card +
+        '</div>';
+      }
+
+      // ⚠️ v1.8.67: A MESMA GRADE de "Seus últimos resultados" — ordem do dono: "se cabe 1
+      // jogo na largura da tela é 1 jogo, se cabem 3 são 3". Antes cada card ocupava uma
+      // linha inteira (empilhados num `margin-bottom`), então em tela larga sobrava metade
+      // da tela vazia enquanto a seção vizinha, com o MESMO conteúdo, usava 3 colunas.
+      // `auto-fill` + `minmax(280px,1fr)` é a régua canônica do app.
+      // ⚠️ O colapso passou a ser por ATRIBUTO na seção, não por um `<div>` separado com
+      // os "anteriores": um wrapper no meio QUEBRA a grade (os cards de dentro dele
+      // formariam outra grade, e o primeiro card ficaria sozinho numa linha própria).
+      // Com `data-nov-collapsed`, os cards são todos irmãos na MESMA grade e o estado
+      // fechado apenas esconde do 2º em diante — a grade reflui sozinha.
+      _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-nov-card]:nth-child(n+2){display:none;}' +
+        '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}</style>';
+      _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+        '<span id="nov-chevron" style="font-size:0.8rem;display:inline-block;">' + (_novCollapsed ? '▸' : '▾') + '</span>' +
+        '📣 Novidades no seu torneio</h3>';
+      _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
+      for (var _nvI = 0; _nvI < _novList.length; _nvI++) _novHtml += _novCard(_novList[_nvI]);
+      _novHtml += '</div>';
+      // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
+      if (_novTotal > _NOV_MAX) {
+        _novHtml += '<p data-nov-extra="1" style="margin:8px 0 0;font-size:0.68rem;color:#64748b;text-align:center;">' +
+          'mostrando os ' + _NOV_MAX + ' mais recentes de ' + _novTotal + '</p>';
+      }
+      if (_novList.length > 1) {
+        _novHtml += '<p id="novidades-hint" onclick="window._toggleNovidadesCollapse()" style="margin:8px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
+          (_novCollapsed ? '▾ ver os ' + (_novList.length - 1) + ' jogos anteriores' : '▴ ocultar anteriores') + '</p>';
+      }
+      _novHtml += '</div>'; // fecha #novidades-section
+    }
+
+    return _upHtml + _novHtml + html;
   }
 
   const curFilter = window._dashFilter || 'todos';
@@ -3088,9 +3327,17 @@ function renderDashboard(container) {
       window._dashPendingScrolled = true;
       // v3.1.24: "Meus Últimos Resultados" é colapsada por padrão — mas se há pendência
       // pra mim, expande (sem gravar preferência) pra não esconder a ação necessária.
-      var _mrBody = document.getElementById('meus-resultados-body');
+      // v1.8.69: o estado passou a ser o atributo `data-mr-collapsed` (o corpo não some
+      // mais por `display:none`). Fechada, a seção já mostra o card da pendência — mas
+      // havendo MAIS de uma, abrir continua sendo o certo: nenhuma ação fica escondida.
+      var _mrSec = document.getElementById('meus-resultados-section');
       var _mrChev = document.getElementById('mr-chevron');
-      if (_mrBody && _mrBody.style.display === 'none') { _mrBody.style.display = ''; if (_mrChev) _mrChev.textContent = '▾'; }
+      var _mrHint = document.getElementById('meus-resultados-hint');
+      if (_mrSec && _mrSec.getAttribute('data-mr-collapsed') === '1') {
+        _mrSec.setAttribute('data-mr-collapsed', '0');
+        if (_mrChev) _mrChev.textContent = '▾';
+        if (_mrHint) _mrHint.textContent = '▴ ocultar anteriores';
+      }
       // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
       // entrada, a animação suave era interrompida no meio e parecia "pulo".
       // O guard + scroll preservado garantem que isto roda UMA vez e fica.
@@ -3332,13 +3579,47 @@ window._applyDashSearchInPlace = function() {
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(keepY); } catch (e) {}
 };
 
-window._toggleMyResultsCollapse = function() {
-  var body = document.getElementById('meus-resultados-body');
-  var chev = document.getElementById('mr-chevron');
-  if (!body) return;
-  var willCollapse = body.style.display !== 'none';
-  body.style.display = willCollapse ? 'none' : '';
+// 📣 Novidades no seu torneio — todos os cards vivem na MESMA grade responsiva (a de
+// "Seus últimos resultados"); o estado fechado esconde do 2º em diante por CSS, via o
+// atributo `data-nov-collapsed` da seção. v1.8.67: era um `<div>` separado com os
+// "anteriores", e um wrapper no meio quebrava a grade. A escolha é lembrada; o default
+// é COLAPSADA (só o lançamento mais recente à vista).
+window._toggleNovidadesCollapse = function() {
+  var sec = document.getElementById('novidades-section');
+  var chev = document.getElementById('nov-chevron');
+  var hint = document.getElementById('novidades-hint');
+  if (!sec) return;
+  var willCollapse = sec.getAttribute('data-nov-collapsed') !== '1';
+  sec.setAttribute('data-nov-collapsed', willCollapse ? '1' : '0');
   if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  if (hint) {
+    var grid = document.getElementById('novidades-grid');
+    var n = grid ? grid.querySelectorAll('[data-nov-card]').length : 0;
+    hint.textContent = willCollapse
+      ? ('▾ ver os ' + Math.max(0, n - 1) + ' jogos anteriores')
+      : '▴ ocultar anteriores';
+  }
+  try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
+};
+
+// 🏅 Seus últimos resultados — v1.8.69: mesmo mecanismo de "📣 Novidades no seu torneio".
+// O estado vive no atributo `data-mr-collapsed` da seção e quem esconde é o CSS; o corpo
+// NUNCA mais some inteiro, senão a seção fechada não mostra nada (era a queixa do dono).
+window._toggleMyResultsCollapse = function() {
+  var sec = document.getElementById('meus-resultados-section');
+  var chev = document.getElementById('mr-chevron');
+  var hint = document.getElementById('meus-resultados-hint');
+  if (!sec) return;
+  var willCollapse = sec.getAttribute('data-mr-collapsed') !== '1';
+  sec.setAttribute('data-mr-collapsed', willCollapse ? '1' : '0');
+  if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  if (hint) {
+    var body = document.getElementById('meus-resultados-body');
+    var n = body ? body.querySelectorAll('[data-mr-card]').length : 0;
+    hint.textContent = willCollapse
+      ? ('▾ ver os ' + Math.max(0, n - 1) + ' anteriores')
+      : '▴ ocultar anteriores';
+  }
   try { localStorage.setItem('scoreplace_collapse_myresults', willCollapse ? '1' : '0'); } catch (e) {}
 };
 

@@ -148,7 +148,14 @@ ok(/SEU GRUPO/i.test(htmlNomeVelho), 'controle: com o nome do sorteio, o grupo �
 const htmlRenomeado = renderComUsuario(tM, { uid: puids[0], displayName: 'Nome Trocado Depois' });
 ok(/SEU GRUPO/i.test(htmlRenomeado),
   'quem TROCOU o displayName continua sendo reconhecido no próprio grupo (casa por uid, não por rótulo)');
-ok(/Combinar<br>jogos/i.test(htmlRenomeado),
+// v1.8.65: a asserção casava o MARKUP (`Combinar<br>jogos`) e não o invariante.
+// O chip mudou de layout de propósito (pedido do dono, print de 14/ago): o badge
+// de propostas era irmão solto dentro do botão inline-flex e ALARGAVA o chip,
+// empurrando o "editar" do grupo de whats — virou pilha alinhada à esquerda com
+// o badge na linha de baixo, e o <br> saiu. O invariante desta asserção — quem
+// trocou o nome NÃO perde o "Combinar jogos" — segue travado, agora casando pela
+// AÇÃO única do chip (_schOpenGroup) + o rótulo, que sobrevivem a layout novo.
+ok(/_schOpenGroup/.test(htmlRenomeado) && /Combinar/.test(htmlRenomeado),
   'quem trocou o nome NÃO perde o "Combinar jogos"');
 ok(/Criar grupo|de whats de jogo/i.test(htmlRenomeado),
   'quem trocou o nome NÃO perde o botão do grupo de whats');

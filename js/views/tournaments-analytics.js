@@ -40,8 +40,11 @@ window._openPlayerProfile = function(playerName, opts) {
   overlay.innerHTML =
     '<div style="min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding:0 0 40px;">' +
       '<div id="ppo-card" style="background:var(--bg-card,#1e293b);width:100%;max-width:520px;border-radius:0 0 16px 16px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
-        // header
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
+        // header — id ppo-header: no PWA instalado/app nativo o safe-area empurra
+        // este cabeçalho pra baixo da status bar (regra em components.css). Sem isso
+        // o "Voltar" ficava SOB o relógio/sinal — e a faixa da status bar não recebe
+        // toque (o iOS a reserva pro scroll-to-top), então o botão parecia quebrado.
+        '<div id="ppo-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
           '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:0.82rem;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Voltar</button>' +
           '<div id="ppo-friend-btn"></div>' +
         '</div>' +
@@ -1620,12 +1623,13 @@ window._renderPersistentMatchStats = function(records, uid) {
             // {pointsP1,pointsP2} (legacy tournament m.sets saves). Handle both.
             if (Array.isArray(r.sets)) {
                 for (var sIdx = 0; sIdx < r.sets.length; sIdx++) {
-                    var _tbSet = r.sets[sIdx];
-                    var _tb = _tbSet && _tbSet.tiebreak;
-                    if (!_tb) continue;
-                    var _tbP1 = (typeof _tb.p1 === 'number') ? _tb.p1 : (typeof _tb.pointsP1 === 'number' ? _tb.pointsP1 : null);
-                    var _tbP2 = (typeof _tb.p2 === 'number') ? _tb.p2 : (typeof _tb.pointsP2 === 'number' ? _tb.pointsP2 : null);
-                    if (_tbP1 === null || _tbP2 === null) continue;
+                    // LEITOR ÚNICO (window._setTiebreak) — aqui havia a 4ª cópia da
+                    // normalização das duas formas; cada cópia é uma chance de uma
+                    // delas ficar de fora e o dado "sumir" só nesta tela.
+                    var _tbN = (typeof window._setTiebreak === 'function')
+                      ? window._setTiebreak(r.sets[sIdx]) : null;
+                    if (!_tbN) continue;
+                    var _tbP1 = _tbN.p1, _tbP2 = _tbN.p2;
                     var _myPts = myTeam === 1 ? _tbP1 : _tbP2;
                     var _oppPts = myTeam === 1 ? _tbP2 : _tbP1;
                     if (_myPts > _oppPts) {

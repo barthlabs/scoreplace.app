@@ -1423,7 +1423,10 @@ window.renderHelpPage = function (container) {
   // Criar Torneio (rápido com auto-nome)
   document.getElementById('btn-quick-create').addEventListener('click', function () {
     const sportRaw = document.getElementById('quick-create-sport').value || '';
-    const sportClean = sportRaw.replace(/^[^\w\u00C0-\u024F]+/u, '').trim() || 'Esportes';
+    // FONTE \u00DANICA (_sportBaseName, store.js) \u2014 era uma 2\u00AA c\u00F3pia da mesma regex.
+    const sportClean = ((typeof window._sportBaseName === 'function')
+      ? window._sportBaseName(sportRaw)
+      : sportRaw.replace(/^[^\w\u00C0-\u024F]+/u, '').trim()) || 'Esportes';
     const userName = (window.AppStore.currentUser && window.AppStore.currentUser.displayName)
       ? window.AppStore.currentUser.displayName : 'Organizador';
     let autoName = 'Torneio Eliminatórias de ' + sportClean + ' de ' + userName;
@@ -1452,7 +1455,12 @@ window.renderHelpPage = function (container) {
     const tourData = {
       id: 'tour_' + Date.now(),
       name: autoName,
-      sport: sportRaw,
+      // ⚠️ sportCLEAN, nunca o rótulo cru: `sport` é campo de DADO, o emoji é
+      // decoração do seletor. Gravar "🎾 Beach Tennis" fazia todo leitor que
+      // compara/indexa por esporte tratá-lo como um esporte desconhecido — o
+      // tie-break parava de abrir no 6-5 (caía no default do tênis, 7-6). O
+      // ícone continua vindo de _sportIcon(t.sport) na hora de exibir.
+      sport: sportClean,
       format: 'Eliminatórias Simples',
       venue: (_venuePref && _venuePref.venueName) || '',
       venuePlaceId: (_venuePref && _venuePref.placeId) || '',
@@ -1465,6 +1473,12 @@ window.renderHelpPage = function (container) {
       thirdPlace: true,
       elimThirdPlace: true,
       status: 'open',
+      // ⚠️ STORAGE CANÔNICO — torneio NOVO nasce com os jogos da fase classificatória em
+      // `t.matches` taggeado (junto com a chave), não mais em `t.rounds`. Doc SEM esta marca
+      // é legado e continua onde está: migrar o que já existe reescreveria sorteio feito e
+      // placar lançado (o Confra é o único nessa situação, e a limpeza dele está agendada
+      // pra 15/nov/2026). Ver `_appendCanonicalColumn` e `_matchesDeClassificatoria`.
+      storageCanonico: true,
       createdAt: new Date().toISOString(),
       organizerId: window.AppStore.currentUser ? window.AppStore.currentUser.uid : 'local',
       organizerName: window.AppStore.currentUser ? window.AppStore.currentUser.displayName : 'Organizador',

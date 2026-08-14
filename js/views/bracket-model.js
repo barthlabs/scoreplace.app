@@ -518,7 +518,44 @@
       return;
     }
 
-    // Swiss / liga / monarch → t.rounds[round-1]
+    // ── STORAGE CANÔNICO PARA TORNEIO NOVO (meio-termo pedido pelo dono, 14/ago/2026) ──
+    // A fase classificatória nasceu em `t.rounds` e a chave em `t.matches`. O canônico é
+    // `t.matches` taggeado por `phaseIndex` — é o que `prevPhaseGroups` já lê e o que o
+    // render agora desenha igual (`_matchesDeClassificatoria`).
+    //
+    // ⚠️ MIGRAR O QUE JÁ EXISTE ESTÁ PROIBIDO: o Confra é o único torneio no storage antigo
+    // e mover os 104 jogos e 33 grupos dele significaria reescrever sorteio feito e placares
+    // lançados de um torneio ao vivo. Então a chave é POR TORNEIO: quem já nasceu continua
+    // onde está; quem nascer daqui pra frente vai pro canônico. A limpeza do resto está
+    // agendada pra 15/nov/2026, quando o Confra tiver terminado.
+    //
+    // O sinal é EXPLÍCITO no doc (`t.storageCanonico`), nunca uma data ou heurística: doc
+    // sem a marca é legado, e legado nunca muda de lugar sozinho.
+    if (t.storageCanonico === true) {
+      if (!Array.isArray(t.matches)) t.matches = [];
+      var _fase = t.currentPhaseIndex || 0;
+      var _ehMonarch = (phase === 'monarch');
+      var _porNome = {};
+      (desc.monarchGroups || []).forEach(function (g, gi) {
+        (g && g.matches || []).forEach(function (gm) { if (gm && gm.id != null) _porNome[String(gm.id)] = { gi: gi, nome: g.name }; });
+      });
+      desc.matches.forEach(function (m) {
+        if (!m) return;
+        // o jogo precisa se DECLARAR classificatório — é assim que o leitor o reconhece
+        if (m.phaseIndex == null) m.phaseIndex = _fase;
+        if (m.round == null) m.round = desc.round;
+        if (_ehMonarch) m.isMonarch = true;
+        var g = _porNome[String(m.id)];
+        if (g) { if (m.monarchGroup == null) m.monarchGroup = g.gi; if (!m.groupName && g.nome) m.groupName = g.nome; }
+        else if (!_ehMonarch && m.monarchGroup == null && m.bracket == null) m.bracket = 'group';
+        // não duplica em re-geração (mesma guarda do caminho legado, por id)
+        var jaTem = t.matches.some(function (x) { return x && m.id != null && String(x.id) === String(m.id); });
+        if (!jaTem) t.matches.push(m);
+      });
+      return;
+    }
+
+    // Swiss / liga / monarch → t.rounds[round-1]  (LEGADO — torneios que já existem)
     if (!Array.isArray(t.rounds)) t.rounds = [];
     var idx = desc.round - 1;
     var existing = t.rounds[idx];
@@ -634,6 +671,64 @@
   };
 
   // ── Main entry ────────────────────────────────────────────────────────────
+  // Separa de `t.matches` os jogos que são de FASE CLASSIFICATÓRIA (Rei/Rainha ou
+  // Liga/Suíço gravados no storage canônico) e os devolve no shape de `t.rounds` —
+  // reconstruindo `monarchGroups` a partir do `monarchGroup` que o gerador carimba em cada
+  // jogo. Um jogo só entra aqui se se declara classificatório: `isMonarch`, `monarchGroup`
+  // definido, ou `bracket === 'group'`. Chave eliminatória NUNCA entra (ela não tem nenhum
+  // desses), então torneio de eliminação direta segue exatamente como era.
+  function _matchesDeClassificatoria(t) {
+    var vazio = { matches: [], rounds: [], ids: {} };
+    if (!t || !Array.isArray(t.matches) || !t.matches.length) return vazio;
+    var alvo = t.matches.filter(function (m) {
+      if (!m) return false;
+      return m.isMonarch === true || m.monarchGroup != null || m.bracket === 'group';
+    });
+    if (!alvo.length) return vazio;
+    var ids = {}; alvo.forEach(function (m) { if (m.id != null) ids[String(m.id)] = true; });
+    // agrupa por RODADA e, dentro dela, por índice de grupo (a âncora estrutural)
+    var porRodada = {};
+    alvo.forEach(function (m) {
+      var r = (m.round == null) ? 1 : m.round;
+      (porRodada[r] = porRodada[r] || []).push(m);
+    });
+    var rounds = Object.keys(porRodada).map(Number).sort(function (a, b) { return a - b; })
+      .map(function (r) {
+        var ms = porRodada[r];
+        var porGrupo = {};
+        ms.forEach(function (m) {
+          var g = (m.monarchGroup == null) ? 0 : m.monarchGroup;
+          (porGrupo[g] = porGrupo[g] || []).push(m);
+        });
+        var grupos = Object.keys(porGrupo).map(Number).sort(function (a, b) { return a - b; })
+          .map(function (g) {
+            var jogos = porGrupo[g];
+            // elenco do grupo: união posicional dos slots (uid manda, nome só de reserva)
+            var nomes = [], uids = [], visto = {};
+            jogos.forEach(function (m) {
+              [[m.team1, m.team1Uids], [m.team2, m.team2Uids]].forEach(function (par) {
+                var N = par[0] || [], U = par[1] || [];
+                for (var i = 0; i < Math.max(N.length, U.length); i++) {
+                  var k = U[i] || N[i]; if (!k || visto[k]) continue;
+                  visto[k] = 1; nomes.push(N[i] || ''); uids.push(U[i] || null);
+                }
+              });
+            });
+            return {
+              name: jogos[0].groupName || ('Grupo ' + String.fromCharCode(65 + g)),
+              groupIdx: g, players: nomes, playersUids: uids, matches: jogos
+            };
+          });
+        var ehMonarch = ms.some(function (m) { return m.isMonarch === true; });
+        var col = { round: r, matches: ms, status: 'active' };
+        if (ehMonarch) { col.format = 'rei_rainha'; col.monarchGroups = grupos; }
+        else if (grupos.length > 1 || ms.some(function (m) { return m.bracket === 'group'; })) col.monarchGroups = grupos;
+        return col;
+      });
+    return { matches: alvo, rounds: rounds, ids: ids };
+  }
+  window._matchesDeClassificatoria = _matchesDeClassificatoria;
+
   window._getUnifiedRounds = function _getUnifiedRounds(t) {
     if (!t || typeof t !== 'object') {
       return { columns: [], format: null, stage: null, context: {} };
@@ -679,14 +774,38 @@
       cols = cols.concat(_buildGroupsColumn(t));
     }
 
-    // Swiss / Liga tournaments use t.rounds exclusively.
+    // ── A FASE CLASSIFICATÓRIA PODE MORAR NOS DOIS STORAGES ─────────────────────
+    // Historicamente: Liga/Suíço/Rei-Rainha em `t.rounds`, chave em `t.matches`. O storage
+    // CANÔNICO é `t.matches` taggeado por `phaseIndex` (é o que `prevPhaseGroups` já lê via
+    // `_groupsFromTaggedMatches`), e a leitura LÓGICA já dá resultado idêntico nos dois —
+    // medido: prevPhaseGroups, phaseComplete, pendingMatches e a classificação batem.
+    //
+    // ⚠️ O RENDER NÃO BATIA. Um torneio Rei/Rainha com os jogos em `t.matches` caía direto
+    // em `_buildElimColumns` e era desenhado como CHAVE ELIMINATÓRIA: medido no harness,
+    // 4.815 bytes contra 33.401, SEM os jogadores na tela. Era o que impedia torneio novo de
+    // nascer no storage canônico. Aqui os jogos de fase CLASSIFICATÓRIA são separados dos de
+    // chave e reconstruídos no shape de `t.rounds`, para todo o resto do render (colunas,
+    // grupos, rodadas anteriores, H2H) continuar consumindo o formato que já conhece.
+    var _classif = _matchesDeClassificatoria(t);
+    var _temClassifEmMatches = _classif.matches.length > 0;
+    var _sobra = hasMatches
+      ? t.matches.filter(function (m) { return _classif.ids[String(m && m.id)] !== true; })
+      : [];
+
     if (hasRounds && !hasMatches) {
+      cols = cols.concat(_buildSwissColumns(t));
+    } else if (_temClassifEmMatches) {
+      // storage canônico: sintetiza as colunas da classificatória a partir dos matches
+      var _tSint = Object.assign({}, t, { rounds: _classif.rounds, matches: [] });
+      cols = cols.concat(_buildSwissColumns(_tSint));
+      if (hasRounds) cols = cols.concat(_buildSwissColumns(t));   // legado + canônico convivem
+    } else if (hasRounds) {
       cols = cols.concat(_buildSwissColumns(t));
     }
 
     // Elim tournaments use t.matches. Grupos+Elim after advance also falls here.
-    if (hasMatches) {
-      cols = cols.concat(_buildElimColumns(t));
+    if (hasMatches && (!_temClassifEmMatches || _sobra.length)) {
+      cols = cols.concat(_buildElimColumns(_temClassifEmMatches ? Object.assign({}, t, { matches: _sobra }) : t));
     }
 
     // 3) Terminal (third-place + grand final)
@@ -826,11 +945,22 @@
   }
 
   // ============================================================================
-  // SET SCORE FORMATTING
-  // Shared helpers for rendering set scores with per-team tiebreak scores as
-  // superscript in parentheses. Normalizes two tiebreak shapes:
-  //   - casual:     set.tiebreak = { p1, p2 }
-  //   - tournament: set.tiebreak = { pointsP1, pointsP2 }
+  // SET SCORE FORMATTING + TIE-BREAK: UMA forma de gravar, UM leitor
+  //
+  // GRAVAR → SEMPRE `set.tiebreak = { pointsP1, pointsP2 }` (window._tbPoints).
+  //   Escolhido por ser AUTODESCRITIVO ao lado de gamesP1/gamesP2, que moram no
+  //   mesmo objeto: "points" diz que são os PONTOS do tie-break, e não games.
+  //   `{p1,p2}` ali é ambíguo. Também já era a forma do doc do TORNEIO, que é o
+  //   registro autoritativo da partida.
+  // LER → SEMPRE window._setTiebreak(set), que devolve {p1,p2} NORMALIZADO
+  //   (forma interna, em memória — nunca gravada).
+  //
+  // ⚠️ O leitor aceita as DUAS formas e isso NÃO é indecisão: é compatibilidade
+  // com o que JÁ ESTÁ GRAVADO. Medido em produção (ago/2026): matchHistory tinha
+  // 100% `{p1,p2}`, casualMatches quase tudo `{p1,p2}`, e o doc do torneio
+  // `{pointsP1,pointsP2}`. Reescrever o passado exigiria migração; tolerar na
+  // LEITURA custa duas linhas. O que foi unificado é a ESCRITA — nenhum caminho
+  // novo grava a forma curta.
   // opts.html=true → <sup style="…">(n)</sup>; else Unicode superscript digits.
   // ============================================================================
   var _SUP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻' };
@@ -845,6 +975,15 @@
     if (p1 == null && p2 == null) return null;
     return { p1: p1 == null ? 0 : p1, p2: p2 == null ? 0 : p2 };
   }
+  // LEITOR ÚNICO (exposto): todo lugar que precisa dos pontos do TB passa por aqui,
+  // em vez de ler `set.tiebreak.p1` cru — era assim que uma forma "não existia" pro
+  // outro lado do app.
+  window._setTiebreak = _getSetTB;
+  // ESCRITOR ÚNICO: a forma canônica de gravar, num lugar só.
+  window._tbPoints = function (p1, p2) {
+    if (p1 == null || p2 == null || isNaN(p1) || isNaN(p2)) return null;
+    return { pointsP1: Number(p1), pointsP2: Number(p2) };
+  };
   window._formatSetForPlayer = function(set, playerNum, opts) {
     opts = opts || {};
     if (!set) return '';

@@ -42,7 +42,13 @@ service cloud.firestore {
           // espera. isParticipantBracketDiff exige já-ser-participante, então
           // sem isto a escrita era negada (permission-denied silencioso) e o
           // inscrito via "lista de espera" localmente mas nada persistia.
-          'standbyParticipants', 'waitlist']);
+          'standbyParticipants', 'waitlist',
+          // v1.8.40: a transação de FALLBACK do cliente (_enrollParticipantTx) grava
+          // `waitlistNoticeSent: true` na inscrição que ATINGE o teto no modo Vagas-por-
+          // sorteio (enrollmentLimitMode 'draw'). O campo não estava nesta lista, então
+          // SEMPRE que a CF falhava e o torneio estava no teto, a escrita inteira caía
+          // com permission-denied — determinístico, e a pessoa não conseguia se inscrever.
+          'waitlistNoticeSent']);
     }
 
     // Participante aceita convite de co-organização (muda seu próprio status

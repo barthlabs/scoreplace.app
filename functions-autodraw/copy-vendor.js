@@ -21,6 +21,7 @@ const FILES = [
   'identity-core.js',
   'persist-core.js',          // _participantUids, _memberUidByName, _idMap*, _entryHasVip (cânone uid)
   'waitlist-core.js',          // _getWaitlist/_removeFromWaitlist/_nameForms/_sanitizeWaitlistVsGroups
+  'standings-core.js',         // _standingsCompare — cadeia de desempate padrão (tabela E transição)
   'gender-ratio-core.js',      // proporção de gênero do sorteio equilibrado (o motor chama no servidor)
   'sport-rules.js',            // window.SPORT_RULES — dep de format2 (allowsSingles/teamSize)
   'tournaments-utils.js',      // _isLigaFormat, _calcNextDrawDate

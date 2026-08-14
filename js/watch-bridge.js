@@ -15,6 +15,15 @@
   if (!isNative) return;
 
   var seq = 0;
+  // ÉPOCA da sessão: identifica ESTA carga da WebView. O `seq` zera a cada
+  // recarga do app — e a regra antiga do relógio ("queda ≥ 20 = contador
+  // reiniciou") tinha um buraco: com lastSeq pequeno (partida curta), a queda
+  // ficava < 20 e TODO snapshot novo era descartado até o contador alcançar o
+  // valor antigo — o relógio congelava na tela de fim de set mesmo com jogo
+  // novo rolando no celular (incidente de 13/ago/2026). Com a época no
+  // snapshot, o relógio compara: época diferente = app recarregou → aceita e
+  // zera o lastSeq; mesma época = seq monotônico normal.
+  var epoch = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   var subscribers = [];
   var lastBody = null;      // último snapshot enviado (sem seq) pra dedup
   var seenIntents = {};     // dedup de intenções por id
@@ -66,6 +75,11 @@
   function hrMaxFromProfile() {
     try {
       var cu = window.AppStore && window.AppStore.currentUser;
+      // FC máxima DECLARADA no perfil (v1.8.64) vence a fórmula: a Apple
+      // personaliza as zonas do Atividade pela FC real da pessoa e não expõe
+      // isso a terceiros — o campo do perfil é como o usuário calibra a régua.
+      var declared = cu && parseInt(cu.hrMax, 10);
+      if (declared && declared >= 100 && declared <= 230) return declared;
       var bd = cu && cu.birthDate;                 // ISO yyyy-mm-dd
       if (!bd) return 0;
       var p = String(bd).split('-');
@@ -87,6 +101,7 @@
     if (!snapshot) snapshot = currentState();
     // Carimbado ANTES do dedup pra fazer parte do corpo comparado.
     if (!snapshot.hrMax) snapshot.hrMax = hrMaxFromProfile();
+    snapshot.epoch = epoch;   // constante nesta carga da WebView (ver topo)
     var body = JSON.stringify(snapshot);
     if (!force && body === lastBody) return;
     lastBody = body;
@@ -123,6 +138,83 @@
     }, 80);
   }
 
+  // ── CAMINHO B: recepção do DIÁRIO DE EVENTOS (docs/smartwatch-bridge.md) ──
+  // O relógio com motor nativo joga sozinho (celular no bolso, JS suspenso) e
+  // sincroniza o diário quando dá. Quem REPRODUZ o diário é o motor JS canônico
+  // — daqui saem o placar oficial, o Firestore e o histórico; o motor do relógio
+  // só desenha. Cada evento é dirigido pelas MESMAS funções dos intents
+  // unitários (nunca uma segunda implementação da regra).
+  //
+  // Dedup por (deviceId, n): `n` é sequencial POR DISPOSITIVO e por partida, então
+  // reenviar o lote inteiro (rede instável, relógio insistindo) é idempotente —
+  // é justamente pra isso que ele existe. Diferente do `id` dos intents, que é
+  // aleatório por toque: aqui a ordem importa e o número é a identidade.
+  var seenEvents = {};      // "deviceId#n" → 1
+  var seenEventsCount = 0;
+  var lastEvlogEpoch = null;
+
+  function applyEventLog(intent) {
+    var evs = intent && intent.events;
+    if (!Array.isArray(evs) || evs.length === 0) return;
+    var dev = String(intent.deviceId || 'watch');
+    // Partida NOVA (época diferente) zera o dedup: o `n` recomeça em 1 e um
+    // número já visto da partida anterior descartaria evento legítimo.
+    var epoch = intent.matchEpoch ? String(intent.matchEpoch) : null;
+    if (epoch && epoch !== lastEvlogEpoch) {
+      seenEvents = {}; seenEventsCount = 0; lastEvlogEpoch = epoch;
+    }
+    // Ordem do diário é por `n` — o transporte pode entregar fora de ordem, e
+    // aplicar um ponto antes do sacador mudaria o placar (o motor bloqueia
+    // ponto com o seletor aberto).
+    var ordered = evs.slice().sort(function (a, b) {
+      return (a && a.n ? a.n : 0) - (b && b.n ? b.n : 0);
+    });
+    for (var i = 0; i < ordered.length; i++) {
+      var ev = ordered[i];
+      if (!ev || typeof ev !== 'object') continue;
+      if (ev.n != null) {
+        var key = dev + '#' + ev.n;
+        if (seenEvents[key]) continue;
+        seenEvents[key] = 1;
+        if (++seenEventsCount > 2000) { seenEvents = {}; seenEventsCount = 0; }
+      }
+      switch (ev.kind) {
+        case 'point':
+          if ((ev.team === 1 || ev.team === 2) && typeof window._liveScorePoint === 'function') {
+            window._liveScorePoint(ev.team);
+          }
+          break;
+        case 'undo':
+          if (typeof window._liveScoreUndoLastPoint === 'function') {
+            window._liveScoreUndoLastPoint();
+          }
+          break;
+        case 'serveSelect':
+          if ((ev.team === 1 || ev.team === 2) && typeof ev.playerIdx === 'number'
+              && typeof window._liveServeSelect === 'function') {
+            window._liveServeSelect(ev.team, ev.playerIdx);
+          }
+          break;
+        case 'serveConfirm':
+          if (typeof window._liveServeConfirm === 'function') window._liveServeConfirm();
+          break;
+        case 'resolveTie':
+          if ((ev.rule === 'extend' || ev.rule === 'tiebreak')
+              && typeof window._liveResolveTie === 'function') {
+            window._liveResolveTie(ev.rule);
+          }
+          break;
+        case 'close':
+          if (typeof window._liveScoreCloseFromWatch === 'function') {
+            window._liveScoreCloseFromWatch();
+          }
+          break;
+        default:
+          break;   // evento desconhecido (relógio mais novo) é IGNORADO, nunca derruba o lote
+      }
+    }
+  }
+
   // Recebe uma intenção do relógio e dirige o motor GSM (nunca duplica regra).
   function applyIntent(intent) {
     if (!intent || typeof intent !== 'object') return;
@@ -132,6 +224,11 @@
       if (++seenCount > 500) { seenIntents = {}; seenCount = 0; } // bound
     }
     switch (intent.type) {
+      case 'evlog':
+        // Lote do diário (Caminho B). Sai do switch pelo caminho comum lá
+        // embaixo, que empurra o snapshot resultante de volta pro relógio.
+        applyEventLog(intent);
+        break;
       case 'point':
         if ((intent.team === 1 || intent.team === 2)
             && typeof window._liveScorePoint === 'function') {

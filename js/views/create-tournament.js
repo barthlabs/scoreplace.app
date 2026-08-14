@@ -1498,7 +1498,11 @@ function setupCreateTournamentModal() {
   window._currentSportName = function() {
     var sportEl = document.getElementById('select-sport');
     if (!sportEl || !sportEl.options[sportEl.selectedIndex]) return '';
-    return sportEl.options[sportEl.selectedIndex].text.replace(/^[^\wÀ-ɏ]+/u, '').trim();
+    // FONTE ÚNICA (_sportBaseName, store.js) — era a 3ª cópia da mesma regex.
+    var _txt = sportEl.options[sportEl.selectedIndex].text;
+    return (typeof window._sportBaseName === 'function')
+      ? window._sportBaseName(_txt)
+      : _txt.replace(/^[^\wÀ-ɏ]+/u, '').trim();
   };
   // ⚰️ v4.4.x DELETADO: _phaseGsmSelectPreset / _phaseGsmAdvantage / _phaseGsmHtml (GSM por fase — construtor fase-2+ morto).
   // (removido v4.3.3: _phaseDests tinha rótulos "Ouro"/"Prata" hardcoded e zero callers —
@@ -5266,6 +5270,10 @@ window._saveTournamentClickHandler = function() {
         }
 
         const tourData = {
+          // ⚠️ STORAGE CANÔNICO — ver o comentário gêmeo em js/main.js e
+          // `_appendCanonicalColumn`. Torneio novo grava a fase classificatória em
+          // `t.matches` taggeado; doc sem a marca é legado e não muda de lugar.
+          storageCanonico: true,
           name,
           isPublic: isPublicVal,
           format,
@@ -6376,6 +6384,19 @@ window._reSyncTbAt = function() {
   var stored = (document.getElementById('gsm-tiebreakAt') || {}).value;
   var at = stored || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '') : 'g');
   window._reHighlightTbAt(at);
+  // ⚠️ GRAVA o que a tela está MOSTRANDO. Antes isto só DESTACAVA a pill: quem abria a
+  // config, via "5-5" destacado e salvava sem clicar deixava `tiebreakAt` VAZIO — o gatilho
+  // passava a ser re-derivado do esporte a cada leitura. Medido: dos 8 torneios em produção,
+  // ZERO têm o campo. Enquanto o default do esporte não muda dá no mesmo, mas é promessa não
+  // registrada: editar o esporte do torneio (ou mudar o default) vira o gatilho por baixo de
+  // um organizador que viu "5-5" na tela e nunca escolheu outra coisa — a MESMA classe do bug
+  // do 6-5 (config prometia uma coisa, lançamento fazia outra). Também alinha os DOIS caminhos
+  // de config: o modal "Personalizado" já persiste o default resolvido (gsm-tbat-seg →
+  // _gsmSaveConfig) e só o atalho do form principal não persistia. [[feedback_unify_dual_entry_points]]
+  // O fallback em _tbLoserGames CONTINUA — é ele que mantém os torneios já gravados (sem o
+  // campo) funcionando sem tocar no banco.
+  var _h = document.getElementById('gsm-tiebreakAt');
+  if (_h && !_h.value) _h.value = at;
 };
 
 window._gsmToggleSuperTb = function() {

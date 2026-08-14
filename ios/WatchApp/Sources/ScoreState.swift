@@ -7,6 +7,11 @@ import Foundation
 struct ScoreState: Decodable {
     var v: Int = 1
     var seq: Int = 0
+    // Época da CARGA da WebView no celular. O `seq` zera a cada recarga do app;
+    // a época diz ao relógio QUANDO isso aconteceu (época nova → aceitar o
+    // snapshot e zerar o lastSeq, em vez de adivinhar por "queda grande").
+    // Vazia em snapshot de app antigo → o guard cai na heurística legada.
+    var epoch: String = ""
     var active: Bool = false
     var setLabel: String = ""
     var points: [String] = ["–", "–"]   // [time1, time2]
@@ -28,6 +33,12 @@ struct ScoreState: Decodable {
     var winner: Int? = nil
     var tieRulePending: Bool = false    // empate esperando decisão (prorrogar/tie-break)
     var tiedAt: Int? = nil              // games empatados (5, 6, 7…) no momento do prompt
+    // ── Caminho B ── identidade DESTA partida (o diário de eventos do relógio é
+    // carimbado com ela; época nova = partida nova, diário zerado) e a config com
+    // que o motor nativo conta. Vazios em snapshot de app antigo → o relógio
+    // simplesmente não liga o motor local e segue espelhando o celular.
+    var matchEpoch: String = ""
+    var scoring: Scoring? = nil
     // Montagem da partida casual aberta no celular → o relógio oferece "Iniciar"
     // em vez de só "Aguardando…". Vem do lobby, não do motor GSM.
     var canStart: Bool = false
@@ -75,19 +86,40 @@ struct ScoreState: Decodable {
 
     struct Server: Decodable { let team: Int; let name: String }
     struct Team: Decodable { let players: [String] }
+    /// Config de pontuação JÁ RESOLVIDA pelo celular (Caminho B) — é com ela que
+    /// o motor NATIVO do relógio conta sozinho. Nunca derivada aqui: o esporte,
+    /// os defaults e o fallback do casual são decisão do motor canônico.
+    struct Scoring: Decodable, Equatable {
+        var type: String = "sets"
+        var setsToWin: Int = 1
+        var gamesPerSet: Int = 6
+        var tiebreakEnabled: Bool = true
+        var tiebreakPoints: Int = 7
+        var tiebreakMargin: Int = 2
+        var superTiebreak: Bool = false
+        var superTiebreakPoints: Int = 10
+        var countingType: String = "numeric"
+        var deuceRule: Bool = false
+        var twoPointAdvantage: Bool = true
+        var tieRule: String? = nil
+        var fixedSet: Bool = false
+        var fixedSetGames: Int = 0
+    }
 
     // Decoding tolerante: o snapshot sempre traz as chaves-base, mas `server` e
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
-        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
+        case v, seq, epoch, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
         case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
+        case matchEpoch, scoring
     }
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         v          = (try? c.decodeIfPresent(Int.self, forKey: .v)) ?? 1
         seq        = (try? c.decodeIfPresent(Int.self, forKey: .seq)) ?? 0
+        epoch      = (try? c.decodeIfPresent(String.self, forKey: .epoch)) ?? ""
         active     = (try? c.decodeIfPresent(Bool.self, forKey: .active)) ?? false
         setLabel   = (try? c.decodeIfPresent(String.self, forKey: .setLabel)) ?? ""
         points     = (try? c.decodeIfPresent([String].self, forKey: .points)) ?? ["–", "–"]
@@ -117,6 +149,8 @@ struct ScoreState: Decodable {
         rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []
         rrSuggest  = (try? c.decodeIfPresent(Bool.self, forKey: .rrSuggest)) ?? false
         hrMax      = (try? c.decodeIfPresent(Int.self, forKey: .hrMax)) ?? 0
+        matchEpoch = (try? c.decodeIfPresent(String.self, forKey: .matchEpoch)) ?? ""
+        scoring    = (try? c.decodeIfPresent(Scoring.self, forKey: .scoring)) ?? nil
     }
 
     // ── FAIXAS DE QUEIMA (5 zonas por % da FCmáx) ─────────────────────────────
