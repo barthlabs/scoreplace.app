@@ -419,6 +419,10 @@ const SUITES = [
   // commit. Cobre 118 jogos gerados (inclui Rei/Rainha do Confra) e 291 linhas de
   // classificação. v1.8.50.
   'tests/motor-golden-master.js',
+  // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
+  // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
+  // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.
+  'tests/participante-lanca-e-aprova.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
