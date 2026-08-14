@@ -7,13 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AA10CA7A100900000A55E752 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA10CA7A100900000A55E751 /* Assets.xcassets */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
-		AB01F00D000000000000BEEF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AB01F00D000000000000FEED /* GoogleService-Info.plist */; };
-		AB01F00D000000000000BABE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB01F00D000000000000CAFE /* PrivacyInfo.xcprivacy */; };
 		3C642F95D1DC28B20B736829 /* ScoreplaceWatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C086B4DF33BE7E79AA21F7A6 /* ScoreplaceWatchPlugin.swift */; };
 		4C201DBF363C5A75D6D680AC /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2387F19430B11E865FC7A2C /* WatchSession.swift */; };
-		HR01B0000000000000000002 /* HeartRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = HR01A0000000000000000001 /* HeartRate.swift */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -25,8 +21,13 @@
 		5FF8290AD58121B557DC1B73 /* ScoreState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFC3DA374FC762CF4AA932C7 /* ScoreState.swift */; };
 		9F34E6C970F266CBB5FFCA11 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 812B0B3272C7C7938A4A81E7 /* MainViewController.swift */; };
 		A1227616F5AF7B28DA4B25B3 /* ScoreplaceWatchCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7925D9F67938D04B593D40 /* ScoreplaceWatchCompanionApp.swift */; };
+		AA10CA7A100900000A55E752 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA10CA7A100900000A55E751 /* Assets.xcassets */; };
+		AA4229D74D9B89809622C8E9 /* ScoreEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C24D373AB12A483F8A1433 /* ScoreEngine.swift */; };
+		AB01F00D000000000000BABE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AB01F00D000000000000CAFE /* PrivacyInfo.xcprivacy */; };
+		AB01F00D000000000000BEEF /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = AB01F00D000000000000FEED /* GoogleService-Info.plist */; };
 		DC2C19117C4F5CD90F288480 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5CF1AEB883856F1AC90F4389 /* Foundation.framework */; };
 		FF82F26A8FF22704CA928E27 /* RemoteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D52E37104BBD158BE5D352 /* RemoteView.swift */; };
+		HR01B0000000000000000002 /* HeartRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = HR01A0000000000000000001 /* HeartRate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,13 +55,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		AA10CA7A100900000A55E751 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		2FF51099A8018323CCBDF3D0 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		32D52E37104BBD158BE5D352 /* RemoteView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteView.swift; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
-		AB01F00D000000000000FEED /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		AB01F00D000000000000CAFE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
@@ -73,6 +71,10 @@
 		812B0B3272C7C7938A4A81E7 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		8D6F05D53D18398C59E10DFE /* ScoreplaceWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScoreplaceWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		A1C24D373AB12A483F8A1433 /* ScoreEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreEngine.swift; sourceTree = "<group>"; };
+		AA10CA7A100900000A55E751 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AB01F00D000000000000CAFE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AB01F00D000000000000FEED /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		AFC3DA374FC762CF4AA932C7 /* ScoreState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreState.swift; sourceTree = "<group>"; };
 		C086B4DF33BE7E79AA21F7A6 /* ScoreplaceWatchPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreplaceWatchPlugin.swift; sourceTree = "<group>"; };
 		D2387F19430B11E865FC7A2C /* WatchSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchSession.swift; sourceTree = "<group>"; };
@@ -173,6 +175,7 @@
 			children = (
 				32D52E37104BBD158BE5D352 /* RemoteView.swift */,
 				AFC3DA374FC762CF4AA932C7 /* ScoreState.swift */,
+				A1C24D373AB12A483F8A1433 /* ScoreEngine.swift */,
 			);
 			name = WatchShared;
 			path = ../WatchApp/Sources;
@@ -304,6 +307,7 @@
 				4C201DBF363C5A75D6D680AC /* WatchSession.swift in Sources */,
 				HR01B0000000000000000002 /* HeartRate.swift in Sources */,
 				A1227616F5AF7B28DA4B25B3 /* ScoreplaceWatchCompanionApp.swift in Sources */,
+				AA4229D74D9B89809622C8E9 /* ScoreEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -343,6 +347,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
@@ -353,7 +358,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.8.10;
-				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -479,10 +483,10 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
-				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -491,7 +495,6 @@
 				);
 				MARKETING_VERSION = 1.8.10;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
-				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -504,10 +507,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
-				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -515,7 +518,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.8.10;
-				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
@@ -529,6 +531,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_TEAM = 6724SP9XN7;
@@ -539,7 +542,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.8.10;
-				CODE_SIGN_ENTITLEMENTS = Watch/ScoreplaceWatch.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = app.scoreplace.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
