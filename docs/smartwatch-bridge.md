@@ -224,11 +224,18 @@ Vetor novo = caso novo de regressão pros três motores de uma vez.
 
 - **Leva 0 (1.8.64, FEITA):** época de sessão no snapshot; Desfazer pós-fim com
   regravação segura; ♥ BPM pelo live builder; ♥ FC máxima no perfil.
-- **Leva 1:** este contrato + gerador de vetores rodando o motor JS real.
-- **Leva 2:** motor Swift (watchOS) + Kotlin/Java (Wear) validados pelos
-  vetores, ligados às telas EXISTENTES pelos callbacks que já existem; celular
-  ganha o receptor de diário (reproduz no motor JS). Fonte do snapshot vira uma
-  CHAVE (local × celular) — a Opção A vira o modo espelho.
+- **Leva 1 (FEITA, 14/ago):** este contrato + `tests/watch-engine/` — harness
+  com o motor REAL, 7 cenários, vetores gravados, trava no npm test
+  (`watch-engine-vectors.test.js`).
+- **Leva 2 — MOTORES PRONTOS E PROVADOS (14/ago):**
+  `ios/WatchApp/Sources/ScoreEngine.swift` e
+  `android/wear/.../ScoreEngine.java` — cada um com **7 vetores / 312
+  snapshots IDÊNTICOS** ao motor JS (`run-swift-parity.sh` ·
+  `run-java-parity.sh`; rodar os dois a cada regravação de vetores e antes de
+  build nativo). ⏳ FALTA a FIAÇÃO: callbacks das telas → motor local; diário →
+  celular; receptor no watch-bridge reproduzindo no motor JS; fonte do snapshot
+  vira CHAVE (local × celular — a Opção A vira o modo espelho); e o
+  ScoreEngine.swift entrar nos targets do Xcode (cirurgia pbxproj, ver notas).
 - **Leva 3:** build nativo (gate de sempre: TestFlight primeiro, dono valida).
 
 Escopo honesto do 1º corte: o motor local cobre a PARTIDA AO VIVO (pontos,
