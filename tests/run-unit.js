@@ -433,6 +433,13 @@ const SUITES = [
   // `uid` da MESMA linha por 2. Trava identidade + propagação de nome, e a exceção legítima
   // (fictício sem conta continua pelo nome). v1.8.55.
   'tests/eliminatoria-nasce-com-uid.test.js',
+  // GOLDEN MASTER DO CONSTRUTOR: congela em que FASES cada configuração de torneio compila.
+  // Cobre as formas que o dono definiu como modelo (só eliminatória · eliminatória que abre
+  // com Rei/Rainha · classificatória + eliminatória · só classificatória por rodadas ou por
+  // datas · dupla eliminatória · linhas Ouro/Prata · classificatória + rodada de formação).
+  // É a trava que permite MOVER configuração de lugar sem mudar o torneio que ela produz —
+  // e ela pegou, na hora, um erro de escopo no primeiro refactor. v1.8.56.
+  'tests/construtor-golden-master.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

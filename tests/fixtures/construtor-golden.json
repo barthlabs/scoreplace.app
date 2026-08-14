@@ -1,0 +1,957 @@
+[
+  {
+    "caso": "A · só eliminatória direta (duplas já formadas)",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      }
+    ],
+    "nFases": 1,
+    "normalizado": {
+      "classifAtiva": false,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "manual",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawMode": "sorteio",
+      "enrollmentMode": "teams",
+      "format": "Eliminatórias Simples",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "A2 · só eliminatória direta (duplas sorteadas)",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      }
+    ],
+    "nFases": 1,
+    "normalizado": {
+      "classifAtiva": false,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Eliminatórias Simples",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "A3 · só eliminatória direta (individual)",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      }
+    ],
+    "nFases": 1,
+    "normalizado": {
+      "classifAtiva": false,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": null,
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Eliminatórias Simples",
+      "teamSize": 1
+    }
+  },
+  {
+    "caso": "B · eliminatória direta ABRINDO com rodada Rei/Rainha (corte 2)",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "rei_rainha",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Rei/Rainha",
+        "pairingStrategy": "top",
+        "reiRainha": true,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": true,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 2
+            }
+          ],
+          "scope": "per_group",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": false,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": true,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 2,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": false,
+      "drawMode": "rei_rainha",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 2,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "rei_rainha",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "B2 · idem, corte 4 e formação por equilíbrio",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "rei_rainha",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Rei/Rainha",
+        "pairingStrategy": "top",
+        "reiRainha": true,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "balanced",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "balanced",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": true,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 4
+            }
+          ],
+          "scope": "per_group",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": false,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": true,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": false,
+      "drawMode": "rei_rainha",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 4,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "rei_rainha",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "C · classificatória de 5 rodadas + eliminatória",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Pontos Corridos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 5,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": false,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 2
+            }
+          ],
+          "scope": "overall",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": true,
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 2,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "standard",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "C2 · classificatória Rei/Rainha (o Confra) + eliminatória",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "rei_rainha",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Rei/Rainha",
+        "pairingStrategy": "top",
+        "reiRainha": true,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": false,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 2
+            }
+          ],
+          "scope": "overall",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "rei_rainha",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 1,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": true,
+      "drawMode": "rei_rainha",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 2,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "rei_rainha",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "C3 · fase de grupos + eliminatória (2 de cada grupo)",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Fase de Grupos",
+        "formatCode": "grupos_mata",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 4,
+        "lateEnrollment": "closed",
+        "name": "Fase de Grupos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "gruposClassified": 2,
+        "gruposCount": 4,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": true,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 2
+            }
+          ],
+          "scope": "per_group",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "per_group",
+      "classificados": 2,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "fixa",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "todos",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Fase de Grupos",
+      "gruposClassified": 2,
+      "gruposCount": 4,
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "D · SÓ classificatória, X rodadas, sem eliminatória",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Pontos Corridos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 8,
+        "source": {
+          "type": "enrollment"
+        }
+      }
+    ],
+    "nFases": 1,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": false,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 8,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": true,
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 2,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "standard",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "D2 · SÓ classificatória por DATAS (temporada), sem eliminatória",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Pontos Corridos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 5,
+        "source": {
+          "type": "enrollment"
+        }
+      }
+    ],
+    "nFases": 1,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 2,
+      "elimAtiva": false,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": false,
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 2,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "standard",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "E · eliminatória DUPLA (repescagem) após classificatória",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Pontos Corridos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 5,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Dupla Eliminatória",
+        "formatCode": "elim_dupla",
+        "grandFinal": true,
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": false,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 4
+            }
+          ],
+          "scope": "overall",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 4,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": true,
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 4,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "standard",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "F · eliminatória em 2 linhas (Ouro/Prata)",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Pontos Corridos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 5,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": true,
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": false,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "upper",
+              "label": "Ouro",
+              "rankFrom": 1,
+              "rankTo": 2
+            },
+            {
+              "dest": "lower",
+              "label": "Prata",
+              "rankFrom": 3,
+              "rankTo": 4
+            }
+          ],
+          "scope": "overall",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 2,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 4,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": false,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 4,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": true,
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 4,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "standard",
+      "teamSize": 2
+    }
+  },
+  {
+    "caso": "G · classificatória de N rodadas + eliminatória que ABRE com Rei/Rainha semeado",
+    "erro": null,
+    "fases": [
+      {
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 4,
+        "gruposCount": 1,
+        "lateEnrollment": "expand",
+        "name": "Pontos Corridos",
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 5,
+        "source": {
+          "type": "enrollment"
+        }
+      },
+      {
+        "drawMode": "rei_rainha",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": false,
+        "format": "Liga",
+        "formatCode": "liga",
+        "grandFinal": true,
+        "groupsBy": "sorteio",
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Rei/Rainha",
+        "pairingStrategy": "seed",
+        "reiRainha": true,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": false,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 4
+            }
+          ],
+          "scope": "overall",
+          "type": "previous_phase"
+        }
+      },
+      {
+        "bracketSeeding": "seed",
+        "drawMode": "sorteio",
+        "endDate": null,
+        "endTime": null,
+        "fixedPairs": true,
+        "format": "Eliminatórias Simples",
+        "formatCode": "elim_simples",
+        "grandFinal": false,
+        "gruposClassified": 2,
+        "gruposCount": 1,
+        "lateEnrollment": "closed",
+        "name": "Eliminatória",
+        "newMatchups": false,
+        "pairingStrategy": "top",
+        "reiRainha": false,
+        "rounds": 1,
+        "source": {
+          "byGroupRank": true,
+          "fromPhaseOffset": 1,
+          "mapping": [
+            {
+              "dest": "main",
+              "label": "",
+              "rankFrom": 1,
+              "rankTo": 2
+            }
+          ],
+          "scope": "per_group",
+          "type": "previous_phase"
+        }
+      }
+    ],
+    "nFases": 3,
+    "normalizado": {
+      "classifAtiva": true,
+      "classifScope": "overall",
+      "classificados": 4,
+      "elimAtiva": true,
+      "formacaoDupla": "sorteio",
+      "openReiRainha": true,
+      "parceria": "sorteio_rodada",
+      "reiRainhaCut": 2,
+      "rodadas": {
+        "modo": "fixo",
+        "n": 5,
+        "turnos": "ida"
+      }
+    },
+    "topLevel": {
+      "drawManual": true,
+      "drawMode": "sorteio",
+      "enrollmentMode": "individual",
+      "format": "Liga",
+      "gruposClassified": 4,
+      "gruposCount": 1,
+      "ligaDrawMode": "standard",
+      "ligaRoundFormat": "standard",
+      "teamSize": 2
+    }
+  }
+]
