@@ -197,6 +197,19 @@ final class WatchMatchSession {
         d["hrMax"] = mirror.hrMax
         d["seq"] = mirror.seq
         d["epoch"] = mirror.epoch
+        // ⚠️ CONHECIMENTO QUE É DO CELULAR, NÃO DO MOTOR (v1.8.71). O motor local
+        // sabe o PLACAR desta partida; ele não tem como saber o que aconteceu nas
+        // partidas ANTERIORES da sessão — e é disso que sai a série Rei/Rainha
+        // (2 pares distintos já jogados entre os mesmos 4 ⇒ sugere o 3º). Sem
+        // repassar, o toggle "👑 Rei/Rainha" SUMIA da tela de fim assim que a
+        // posse era do relógio: defeito que a fiação introduziu, relatado pelo
+        // dono ("depois de rodar 2 sets com parceiros diferentes deveria sugerir").
+        // `canReplay` idem: no celular ele é `isCasual && !reiRainhaMode`.
+        d["rrSuggest"] = mirror.rrSuggest
+        d["reiRainha"] = mirror.reiRainha
+        d["rrRound"] = mirror.rrRound
+        d["rrStandings"] = mirror.rrStandings.map { ["name": $0.name, "wins": $0.wins] }
+        d["canReplay"] = mirror.canReplay
         let data = try JSONSerialization.data(withJSONObject: d)
         return try JSONDecoder().decode(ScoreState.self, from: data)
     }
