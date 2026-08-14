@@ -1,4 +1,5 @@
-// O CONFRONTO DA ELIMINATÓRIA NASCE COM UID — nunca só com o nome gravado.
+// TODO JOGO CRIADO POR UM GERADOR DE FASE NASCE COM UID — nunca só com o nome gravado.
+// (nasceu da ELIMINATÓRIA; o escopo cresceu pra FASE DE GRUPOS na 1.8.58 — ver seção 6)
 //
 // ORDEM DO DONO (14/ago/2026): "indicação por uid exclusivamente. sempre uid, que daí vai
 // trazer todos os dados do participante, evitando as merdas de ele trocar o nome e continuar
@@ -117,6 +118,63 @@ ok(!/uid:\s*\(uid \|\| _n2uMon\[name\] \|\| null\)/.test(src),
   'a resolução curta (sem o mapa dos jogos) não voltou pro campo uid');
 ok((src.match(/_monUid\(name, uid\)/g) || []).length >= 2,
   'a chave E o campo uid passam pela MESMA função');
+
+console.log('──── 6. a FASE DE GRUPOS carimba igual (incorporada ao jeito do Confra) ────');
+// Ordem do dono: "o resto é que precisa ser incorporado para funcionar como a confra já
+// funcionou, sem rodar coisas diferentes". MEDIDO antes: genGroupsFromPool saía com 12 de
+// 12 jogos SEM uid nenhum no slot e os grupos sem `playersUids` — enquanto o Confra grava
+// team1Uids/team2Uids desde o sorteio e é por isso que a tabela dele nasce do uid.
+// ⚠️ O carimbo era um bloco solto dentro de materializeNextPhase: valia só pra quem passava
+// por lá. Virou função (_carimbaUidsNoSlot) e todo gerador chama.
+(function () {
+  // o phases-engine exporta por module.exports (pra teste headless) — é o MESMO arquivo
+  // que o app carrega, não uma cópia.
+  var E2 = null;
+  try { E2 = require('../js/views/phases-engine.js'); } catch (e) { /* segue e falha abaixo */ }
+  if (!E2 || typeof E2.genGroupsFromPool !== 'function') {
+    ok(false, 'genGroupsFromPool não exportado — não dá pra verificar');
+    return;
+  }
+  var mk = function (n, u) { return { displayName: n, name: n, uid: u }; };
+
+  var pool = []; for (var i = 1; i <= 8; i++) pool.push(mk('P' + i, 'uid' + i));
+  var g = E2.genGroupsFromPool(pool, { gruposCount: 2 }, 'gg');
+  ok(g.matches.length > 0, '(6) gerou jogos de grupo (' + g.matches.length + ')');
+  ok(g.matches.every(function (m) { return (m.team1Uids || []).length && (m.team2Uids || []).length; }),
+    '(6) TODO jogo de grupo carrega uid nos dois lados');
+  ok(g.matches.every(function (m) { return m.p1Uid && m.p2Uid; }),
+    '(6) individual → p1Uid/p2Uid preenchidos');
+  ok((g.groups || []).every(function (x) { return Array.isArray(x.playersUids) && x.playersUids.length === x.players.length; }),
+    '(6) o GRUPO se descreve por playersUids, como o Confra (é daí que a tabela nasce do uid)');
+
+  // dupla fixa: os DOIS uids do lado, e p1Uid nulo (a dupla não tem uid único)
+  var duplas = []; for (var j = 1; j <= 4; j++) duplas.push({
+    displayName: 'A' + j + ' / B' + j, name: 'A' + j + ' / B' + j, fixedPair: true,
+    p1Name: 'A' + j, p1Uid: 'uidA' + j, p2Name: 'B' + j, p2Uid: 'uidB' + j,
+    participants: [{ name: 'A' + j, uid: 'uidA' + j }, { name: 'B' + j, uid: 'uidB' + j }]
+  });
+  var gd = E2.genGroupsFromPool(duplas, { gruposCount: 1 }, 'gd');
+  ok(gd.matches.every(function (m) { return (m.team1Uids || []).length === 2; }),
+    '(6) dupla → os DOIS uids no slot');
+  ok(gd.matches.every(function (m) { return m.p1Uid === null; }),
+    '(6) dupla → p1Uid nulo (dupla não tem uid único), e não um uid pela metade');
+
+  // quem NÃO tem conta continua entrando — a exceção legítima, igual à seção 3
+  var gm = E2.genGroupsFromPool([mk('Com Conta', 'uidX'), { displayName: 'Convidado', name: 'Convidado' }],
+    { gruposCount: 1 }, 'gm');
+  ok(gm.matches.length === 1, '(6) misto conta+convidado gera o jogo');
+  ok((gm.matches[0].team1Uids || []).length === 1, '(6) o lado COM conta ganha uid');
+  ok(!(gm.matches[0].team2Uids || []).length, '(6) o convidado sem conta NÃO ganha uid inventado');
+
+  // o carimbo não pode depender de ordem de carga (era a fragilidade da 1ª versão)
+  var fs2 = require('fs'), path2 = require('path');
+  var pe = fs2.readFileSync(path2.join(__dirname, '../js/views/phases-engine.js'), 'utf8');
+  ok(/function _carimbaUidsNoSlot\s*\(/.test(pe), '(6) existe o carimbo único _carimbaUidsNoSlot');
+  ok((pe.match(/_carimbaUidsNoSlot\(/g) || []).length >= 3,
+    '(6) o carimbo é usado por mais de um gerador (ocorrências: ' + (pe.match(/_carimbaUidsNoSlot\(/g) || []).length + ')');
+  ok(/_uidsDoTeamObj\(/.test(pe),
+    '(6) tem fallback próprio — não vira no-op silencioso se um global não tiver carregado');
+})();
 
 console.log('');
 if (fail) { console.log('❌ eliminatoria-nasce-com-uid: ' + pass + ' ok, ' + fail + ' falha(s)'); fails.forEach(function (f) { console.log('   • ' + f); }); process.exit(1); }

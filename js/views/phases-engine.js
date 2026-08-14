@@ -744,6 +744,60 @@
   // ranqueados/embaralhados) + cfg → estrutura. Usado em QUALQUER posição (Fase 0 com
   // pool=inscritos; Fase N com pool=transição). Esta é a forma canônica; o wrapper
   // buildPhaseGroupStage apenas deriva o pool da fase anterior e delega aqui.
+  // ── CÂNONE DO SLOT: todo jogo criado se descreve por UID ─────────────────────
+  // (v1.3.18, "item 10 do dono") TODO slot que um gerador cria carrega o UID EXPLÍCITO
+  // (team*Uids/p*Uid), não só o team*Obj/nome. Deriva do objeto do slot via `_slotUids`
+  // (uid-first); guest sem conta fica só com o nome — exceção legítima e a única.
+  // Idempotente: pula slot que já tem uid.
+  //
+  // ⚠️ ERA UM BLOCO SOLTO dentro de materializeNextPhase, e por isso valia só pra QUEM
+  // PASSA POR LÁ. A Fase de Grupos monta os jogos em genGroupsFromPool e saía com 12 de 12
+  // slots sem uid nenhum (medido) — enquanto o Confra, que é a referência, grava
+  // team1Uids/team2Uids desde o sorteio. É a mesma pergunta respondida em dois lugares:
+  // agora é função, e todo gerador chama.
+  //
+  // ⚠️ E NÃO DEPENDE DE ORDEM DE CARGA. A versão original só agia se `window._slotUids`
+  // existisse — e ele depende, por sua vez, de `window._participantUids`. Uma cadeia de dois
+  // globais que, faltando, faz o carimbo virar no-op EM SILÊNCIO: o sorteio sai sem uid e
+  // ninguém percebe até alguém trocar de nome. O caminho preferido continua sendo `_slotUids`
+  // (é o cânone e cobre os 3 esquemas históricos); o fallback lê o `team*Obj` que o `mkTeam`
+  // logo acima acabou de montar — não é regra nova, é ler o que o vizinho gravou.
+  function _uidsDoTeamObj(obj) {
+    if (!obj) return [];
+    if (typeof window !== 'undefined' && typeof window._participantUids === 'function') {
+      var u = window._participantUids(obj);
+      if (u && u.length) return u.filter(Boolean);
+    }
+    if (Array.isArray(obj.participants) && obj.participants.length) {
+      return obj.participants.map(function (p) { return p && p.uid; }).filter(Boolean);
+    }
+    return [obj.p1Uid, obj.p2Uid, obj.uid].filter(Boolean);
+  }
+  function _carimbaUidsNoSlot(m) {
+    if (!m) return m;
+    var viaCanon = (typeof window !== 'undefined' && typeof window._slotUids === 'function');
+    ['p1', 'p2'].forEach(function (lado) {
+      var chaveArr = lado === 'p1' ? 'team1Uids' : 'team2Uids';
+      var chaveUm = lado === 'p1' ? 'p1Uid' : 'p2Uid';
+      if (Array.isArray(m[chaveArr]) && m[chaveArr].length) return;   // idempotente
+      var u = viaCanon ? (window._slotUids(m, lado) || []) : [];
+      if (!u.length) u = _uidsDoTeamObj(lado === 'p1' ? m.team1Obj : m.team2Obj);
+      if (u.length) { m[chaveArr] = u; m[chaveUm] = (u.length === 1 ? u[0] : null); }
+    });
+    return m;
+  }
+  // Os uids de um GRUPO, na ordem dos players — espelha `playersUids`, que é como o Confra
+  // grava e o que faz a classificação nascer do uid (bracket-logic._ladoPares). Sem isto a
+  // tabela do grupo depende do rótulo, que envelhece quando a pessoa troca de nome.
+  function _uidsDoGrupo(players) {
+    return (players || []).map(function (p) {
+      if (!p) return null;
+      if (p.uid) return p.uid;
+      if (Array.isArray(p.participants) && p.participants.length === 1 && p.participants[0].uid) return p.participants[0].uid;
+      return null;
+    });
+  }
+
   function genGroupsFromPool(pool, phaseCfg, idPrefix) {
     idPrefix = idPrefix || 'phg';
     pool = pool || [];
@@ -777,6 +831,9 @@
       var gIdx = (round % 2 === 0) ? pos : (nGroups - 1 - pos);
       groups[gIdx].players.push(tm);
     });
+    // O grupo também se descreve por uid (espelha `playersUids` do Confra) — é daí que a
+    // classificação nasce do uid em vez do rótulo.
+    groups.forEach(function (g) { g.playersUids = _uidsDoGrupo(g.players); });
 
     var counter = 0;
     function mkId() { return idPrefix + '-' + (counter++); }
@@ -800,6 +857,7 @@
               winner: null, scoreP1: null, scoreP2: null,
               label: (_turnos > 1 ? ((turn === 0 ? 'Ida' : 'Volta') + ' • ') : '') + g.name + ' • ' + A.displayName + ' vs ' + B.displayName
             };
+            _carimbaUidsNoSlot(m);   // o slot se descreve por uid, como no Confra
             g.matches.push(m); allMatches.push(m);
           });
         });
@@ -1752,21 +1810,7 @@
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
     built.matches.forEach(function (m) {
       m.phaseIndex = idx; if (m.category === undefined) m.category = null;
-      // v1.3.18 — CÂNONE DO SLOT (item 10 do dono): TODO slot que o gerador cria carrega o UID
-      // EXPLÍCITO (team*Uids/p*Uid), não só o team*Obj/nome — R1 inclusive. Deriva do objeto do
-      // slot via _slotUids (uid-first); guest sem conta (uids vazio) mantém só o nome (exceção
-      // legítima). Idempotente (pula slots que já têm uid). Antes: a R1 saía só com team1Obj →
-      // o slot NÃO se descrevia por uid; rename do perfil dependia de resolver pelo objeto.
-      if (typeof window !== 'undefined' && typeof window._slotUids === 'function') {
-        if (!(Array.isArray(m.team1Uids) && m.team1Uids.length)) {
-          var _u1 = window._slotUids(m, 'p1') || [];
-          if (_u1.length) { m.team1Uids = _u1; m.p1Uid = (_u1.length === 1 ? _u1[0] : null); }
-        }
-        if (!(Array.isArray(m.team2Uids) && m.team2Uids.length)) {
-          var _u2 = window._slotUids(m, 'p2') || [];
-          if (_u2.length) { m.team2Uids = _u2; m.p2Uid = (_u2.length === 1 ? _u2[0] : null); }
-        }
-      }
+      _carimbaUidsNoSlot(m);
     });
     t.matches = (t.matches || []).concat(built.matches);
     // v2.7.25: resolução 'standby' → os cortados vão pra lista de espera (reusa a
