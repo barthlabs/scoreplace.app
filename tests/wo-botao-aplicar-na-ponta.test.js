@@ -69,7 +69,7 @@ const GRUPO_BASE = { name: 'R1 Grupo J', players: ['Toninho', 'Silvia', 'Fabiana
 
 // Posição do botão de aplicar DENTRO do html do bloco.
 function posDoBotao(html) {
-  const i = html.indexOf('Aplicar W.O.');
+  const i = html.indexOf('Aplicar');
   if (i === -1) return { achou: false };
   // é o último elemento? nada de tag depois do fecho do botão dele
   const fim = html.indexOf('</button>', i) + '</button>'.length;
@@ -80,9 +80,13 @@ function posDoBotao(html) {
 const ctxA = carrega(torneio(Object.assign({}, GRUPO_BASE)));
 const semWo = ctxA.window._ligaGroupControlsHtml(ctxA.window.AppStore.tournaments[0], 0,
   ctxA.window.AppStore.tournaments[0].rounds[0].monarchGroups[0]);
-ok(/Aplicar W\.O\./.test(semWo),
+ok(/Aplicar<br>W\.O\./.test(semWo),
    '🔒 o rótulo é "Aplicar W.O." — um VERBO. "W.O." sozinho lê como selo de estado (a tabela usa isso ao lado de quem levou)');
-ok(!/>W\.O\.</.test(semWo), 'não sobrou botão com o texto pelado "W.O."');
+// ⚠️ o `<br>` do rótulo em 2 linhas fecha com ">" e faria um regex ingênuo casar
+// (">W.O.</button>" existe dentro de "Aplicar<br>W.O.</button>"). Neutraliza a
+// quebra antes de perguntar se sobrou algum botão SÓ com "W.O.".
+ok(!/>W\.O\.<\/button>/.test(semWo.replace(/<br>/g, ' ')),
+   'não sobrou botão cujo rótulo INTEIRO seja o "W.O." pelado');
 ok(posDoBotao(semWo).ehUltimo, 'sem W.O. o botão é o último do bloco (é o único)');
 ok(/btn-danger/.test(semWo), 'segue vermelho sólido (padrão de "declarar W.O.")');
 
@@ -99,12 +103,12 @@ ok(pB.ehUltimo,
    '🔒 com W.O. aplicado o botão é o ÚLTIMO do bloco — mesma ponta da linha que no estado sem W.O. (o relato do dono)');
 ok(comWo.indexOf('W.O. →') < pB.indice,
    'a pílula de status ("Anke W.O. → Fabiana") vem ANTES do botão · achado: pílula em ' + comWo.indexOf('W.O. →') + ', botão em ' + pB.indice);
-ok(comWo.indexOf('Reverter W.O.') < pB.indice,
+ok(comWo.indexOf('Reverter<br>W.O.') < pB.indice,
    '🔒 o "Reverter W.O." também vem antes — era ele que empurrava o botão pro meio quando o botão era o primeiro');
 
 // ── 3. APARÊNCIA IDÊNTICA nos dois estados (a regressão da 1.7.90) ────────
 const classe = (h) => (h.match(/class="([^"]*btn-danger[^"]*)"/) || [])[1];
-const fonte = (h) => (h.match(/Aplicar W\.O\./) ? (h.slice(0, h.indexOf('Aplicar W.O.')).match(/font-size:([^;]+);[^"]*"$/) || [])[1] : null);
+const fonte = (h) => (h.match(/Aplicar<br>W\.O\./) ? (h.slice(0, h.indexOf('Aplicar')).match(/font-size:([^;]+);[^"]*"$/) || [])[1] : null);
 ok(classe(semWo) === classe(comWo),
    '🔒 mesma CLASSE nos dois estados (a 1.7.90 tinha btn-sm × btn-micro — visivelmente menor com W.O.)');
 ok(/font-size:0\.72rem/.test(semWo) && /font-size:0\.72rem/.test(comWo),
@@ -122,7 +126,7 @@ const tMon = {
 };
 const ctxC = carrega(tMon);
 const mon = ctxC.window._monWoControlHtml('t2', 0, 'R1 Grupo J', false);
-if (/Aplicar W\.O\./.test(mon)) {
+if (/Aplicar<br>W\.O\./.test(mon)) {
   ok(posDoBotao(mon).ehUltimo,
      '🔒 o caminho Rei/Rainha (t.matches) põe o botão na MESMA ponta — os dois usam o mesmo helper');
 } else {
@@ -130,7 +134,7 @@ if (/Aplicar W\.O\./.test(mon)) {
 }
 
 // ── 5. varredura: uma definição só, e o helper compõe com o botão no fim ──
-ok((SUB.match(/label: 'Aplicar W\.O\.'/g) || []).length === 1,
+ok((SUB.match(/label: 'Aplicar<br>W\.O\.'/g) || []).length === 1,
    '🔒 UMA definição do botão (duas montagens é o que fez uma delas divergir na 1.7.90)');
 ok(/return btn \? \(resto \? resto \+ ' ' \+ btn : btn\) : resto;/.test(SUB),
    '🔒 o compositor põe o RESTO antes e o BOTÃO por último');

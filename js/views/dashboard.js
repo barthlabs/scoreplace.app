@@ -3080,8 +3080,19 @@ function renderDashboard(container) {
         <!-- CÂNONE fit-name-to-box DENTRO da escala por área: box de altura FIXA
              em --sp-u (escala por área) + a fonte encolhe (rem) pra caber nome
              longo em vez de estourar. Ver window._fitNames (store.js). -->
-        <div style="flex:1; min-width:0; height:calc(var(--sp-u) * 2.7); overflow:hidden; display:flex; align-items:center;">
-          <h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="margin:0; font-size:2.3rem; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%;">${_t('dashboard.welcome', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo'), name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center;">
+          <!-- v1.8.72 (dono): a saudação sai da linha do NOME e vem menor por cima.
+               Numa linha só, "Bem-vindo, Rodrigo!" gastava toda a largura com a
+               saudação e obrigava o ajuste automático a encolher o NOME — que é a
+               única parte que a pessoa quer ler. Separados, o nome fica grande
+               sempre. ⚠️ A caixa de altura FIXA continua sendo o PAI DIRETO do
+               `.sp-name-fit` (o ajuste mede o parentElement — ver _fitOne no
+               store.js): por isso o nome tem a sua própria caixa aqui dentro,
+               senão ele mediria a altura das DUAS linhas e poderia vazar. -->
+          <div style="font-size:0.95rem; font-weight:600; color:var(--hero-text); opacity:0.8; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;">${_t('dashboard.welcomeGreeting', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo')})}</div>
+          <div style="height:calc(var(--sp-u) * 2.5); overflow:hidden; display:flex; align-items:center;">
+            <h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="margin:0; font-size:2.3rem; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%;">${_t('dashboard.welcomeName', {name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
+          </div>
         </div>
         ${window.AppStore.currentUser ? '<div style="display:flex;flex-direction:column;gap:5px;align-items:stretch;"><button onclick="window.location.hash=\'#trofeus\'" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">🏆</span> Conquistas</button><button onclick="if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + window._safeHtml((window.AppStore.currentUser.displayName || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')" style="background:var(--hero-glass-bg);border:1px solid var(--hero-glass-border);border-radius:12px;padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--hero-text);font-size:0.78rem;font-weight:600;white-space:nowrap;transition:background 0.2s;" onmouseover="this.style.background=\'var(--hero-glass-bg-hover)\'" onmouseout="this.style.background=\'var(--hero-glass-bg)\'"><span style="font-size:1rem;">📊</span> ' + _t('dashboard.statistics') + '</button></div>' : ''}
       </div>
