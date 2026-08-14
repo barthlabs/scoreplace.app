@@ -32,9 +32,20 @@ import java.util.UUID;
 
 /**
  * scoreplace Wear OS — controle de placar ao vivo (fase 4).
- * Contrato: docs/smartwatch-bridge.md. Relógio burro: toque = intenção
- * (+1 / desfazer) enviada via Wear Data Layer; renderiza o estado que o
- * celular devolve (motor GSM = fonte única no JS do app).
+ * Contrato: docs/smartwatch-bridge.md.
+ *
+ * ⚠️ O RELÓGIO DEIXOU DE SER BURRO (Caminho B, ago/2026). Este cabeçalho dizia
+ * "toque = intenção enviada via Data Layer; renderiza o estado que o celular
+ * devolve" — era verdade até o incidente de 13/ago mostrar o limite: o motor
+ * vivia no JS da WebView, que o sistema SUSPENDE com o celular bloqueado (o
+ * estado normal do celular na beira da quadra), e os toques chegavam em rajada.
+ * Agora há um motor NATIVO (ScoreEngine.java, paridade provada contra o motor
+ * canônico por vetores) e a posse é decidida pelo WearMatchSession.
+ *
+ * O que NÃO mudou: o placar OFICIAL continua saindo do motor JS do celular, que
+ * reproduz o diário de eventos daqui. Erro do motor nativo é cosmético e vira
+ * teste vermelho, nunca dado errado. E sem os campos novos no snapshot (app do
+ * celular antigo) nada disto arma — o caminho antigo segue intacto.
  */
 public class MainActivity extends Activity implements MessageClient.OnMessageReceivedListener {
 
@@ -42,6 +53,17 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private static final String PATH_INTENT = "/scoreplace/intent";
     /** Resumo do treino da partida → celular grava no Health Connect (ver WorkoutRecorder.kt). */
     private static final String PATH_WORKOUT = "/scoreplace/workout";
+
+    // ── CAMINHO B ── posse + diario (docs/smartwatch-bridge.md). O relogio
+    // deixou de depender do celular ACORDADO a cada toque: quando a partida
+    // comeca com ele junto, um motor NATIVO conta aqui e o toque responde na
+    // hora; o diario viaja pro celular quando da, e e' sempre o motor JS
+    // canonico de la que grava placar oficial/Firestore. Sem os campos novos no
+    // snapshot (app do celular antigo) nada disto arma — o caminho de intencao
+    // unitaria segue intacto. Espelho de ios/.../WatchMatchSession.swift.
+    private final WearMatchSession match = new WearMatchSession();
+    /** Identidade no diario — a dedup do celular e' por `deviceId#n`. */
+    private final String deviceId = "wear-" + UUID.randomUUID().toString().substring(0, 8);
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private int courtLeft = 1; // qual time está à esquerda (vem do estado)
@@ -199,7 +221,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         // Toque por POSIÇÃO → intenção pra o TIME que está naquele lado.
         halfLeft.setOnClickListener(v -> sendPoint(courtLeft));
         halfRight.setOnClickListener(v -> sendPoint(courtLeft == 1 ? 2 : 1));
-        btnUndo.setOnClickListener(v -> sendIntent("undo", 0));
+        btnUndo.setOnClickListener(v -> sendUndo());
         // "Jogar novamente?" — Cancelar dispensa o prompt; Confirmar manda a
         // intenção pro celular recomeçar (com/sem re-sortear as duplas).
         // v1.7.67: ENCERRAR manda a ordem pro celular em vez de só esconder o painel
@@ -308,6 +330,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     // Intenção "resolveTie" — escolha do desempate no empate (5-5, 6-6…).
     private void sendResolveTie(String rule) {
+        if (localFirst("resolveTie", 0, -1, rule)) return;
         try {
             JSONObject o = new JSONObject();
             o.put("v", 1);
@@ -361,6 +384,15 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     // Intenção "setServer" — escolha do sacador nos 2 primeiros jogos. O celular
     // decide se ainda vale; o hard lock vive no motor, nunca aqui.
     private void sendSetServer(int team, int playerIdx) {
+        // Caminho B: no motor o pick sao DOIS eventos — medido nos vetores;
+        // ponto com o seletor ABERTO e' bloqueado, entao confirmar faz parte do
+        // gesto, nao e' enfeite.
+        if (match.localEvent("serveSelect", team, playerIdx, null)) {
+            match.localEvent("serveConfirm", 0, -1, null);
+            renderLocal();
+            flushJournal();
+            return;
+        }
         try {
             JSONObject o = new JSONObject();
             o.put("v", 1);
@@ -599,7 +631,46 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         finishWorkoutAndSend();
     }
 
-    private void sendPoint(int team) { sendIntent("point", team); }
+    private void sendPoint(int team) {
+        if (localFirst("point", team, -1, null)) return;   // Caminho B: conta AQUI
+        sendIntent("point", team);
+    }
+    private void sendUndo() {
+        if (localFirst("undo", 0, -1, null)) return;
+        sendIntent("undo", 0);
+    }
+
+    /** Aplica no motor local, redesenha e manda o diario. false = sem motor. */
+    private boolean localFirst(String kind, int team, int playerIdx, String rule) {
+        if (!match.localEvent(kind, team, playerIdx, rule)) return false;
+        renderLocal();
+        flushJournal();
+        return true;
+    }
+    /** A tela desenha o que a POSSE mandar (motor local x espelho do celular). */
+    private void renderLocal() {
+        final org.json.JSONObject st = match.displayState();
+        ui.post(() -> { try { render(st); } catch (Exception e) { /* ignore */ } });
+    }
+    /** Empurra o diario pendente. Reenviar e' IDEMPOTENTE de proposito (dedup
+     *  por `deviceId#n` no celular) — e' o que faz o lote sobreviver a celular
+     *  suspenso, que foi a causa do incidente de 13/ago. */
+    private void flushJournal() {
+        org.json.JSONObject evlog = match.pendingEvlog(deviceId);
+        if (evlog != null) sendIntentObject(evlog);
+    }
+    /** Envia uma intencao JA MONTADA (o evlog tem lista de eventos, entao nao
+     *  cabe no sendIntent(type, team)). */
+    private void sendIntentObject(org.json.JSONObject o) {
+        try {
+            final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+            Wearable.getNodeClient(this).getConnectedNodes()
+                .addOnSuccessListener(nodes -> {
+                    MessageClient mc = Wearable.getMessageClient(this);
+                    for (Node node : nodes) mc.sendMessage(node.getId(), PATH_INTENT, bytes);
+                });
+        } catch (Exception e) { /* sem no: no-op */ }
+    }
 
     // Monta a intenção JSON e envia pro celular via Data Layer.
     private void sendIntent(String type, int team) {
@@ -625,7 +696,15 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         final String json = new String(event.getData(), StandardCharsets.UTF_8);
         gotStateSinceResume = true; // chegou estado → para o retry do hello
         ui.post(() -> {
-            try { render(new JSONObject(json)); } catch (Exception e) { /* ignore */ }
+            try {
+                // Caminho B: a SESSAO decide o que a tela ve (motor local x
+                // espelho) e guarda este snapshot como espelho. Sem os campos
+                // novos ela nunca arma o motor e devolve o proprio espelho —
+                // exatamente o comportamento anterior.
+                match.ingest(new JSONObject(json));
+                render(match.displayState());
+                flushJournal();   // voltou a falar? reenvia o diario pendente
+            } catch (Exception e) { /* ignore */ }
         });
     }
 
