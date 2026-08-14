@@ -1309,8 +1309,18 @@ function _woDeclareBtn(onclickJs, mostrar) {
 // Junta o resto do bloco daquele estado com o botão de declarar (sempre por
 // ÚLTIMO — ver o comentário acima: é o que o mantém na mesma ponta da linha
 // com e sem W.O. aplicado).
+//
+// ⚠️ v1.8.72 — E COLADO NA BORDA DIREITA, "como era antes" (ordem do dono).
+// SEM W.O. o bloco vai pro container de ações do cabeçalho, que tem
+// `margin-left:auto` (bracket.js) — daí o botão nascer na direita. COM W.O. o
+// bloco muda de casa: vai pra uma LINHA PRÓPRIA (`_woStateLine`), que é flex
+// alinhada à esquerda — e o botão vinha junto, no meio da linha. O
+// `margin-left:auto` no invólucro reproduz naquela linha o mesmo empurrão que o
+// cabeçalho já dava: pílula e Reverter à esquerda, Aplicar na ponta direita.
 function _woBlocoComBotao(btn, resto) {
-  return btn ? (resto ? resto + ' ' + btn : btn) : resto;
+  if (!btn) return resto;
+  if (!resto) return btn;
+  return resto + '<span style="margin-left:auto;display:inline-flex;">' + btn + '</span>';
 }
 
 // HTML dos controles de W.O./substituição no cabeçalho do grupo.

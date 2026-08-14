@@ -73,7 +73,11 @@ function posDoBotao(html) {
   if (i === -1) return { achou: false };
   // é o último elemento? nada de tag depois do fecho do botão dele
   const fim = html.indexOf('</button>', i) + '</button>'.length;
-  return { achou: true, indice: i, ehUltimo: html.slice(fim).trim() === '' };
+  // v1.8.72: com W.O. aplicado o botão vem dentro de um invólucro que o cola na
+  // borda direita (margin-left:auto) — o que importa é não haver mais NENHUM
+  // controle depois dele.
+  const depois = html.slice(fim).replace(/<\/span>/g, '').trim();
+  return { achou: true, indice: i, ehUltimo: depois === '' };
 }
 
 // ── 1. SEM W.O.: botão sozinho, com o rótulo novo ─────────────────────────
@@ -103,6 +107,8 @@ ok(pB.ehUltimo,
    '🔒 com W.O. aplicado o botão é o ÚLTIMO do bloco — mesma ponta da linha que no estado sem W.O. (o relato do dono)');
 ok(comWo.indexOf('W.O. →') < pB.indice,
    'a pílula de status ("Anke W.O. → Fabiana") vem ANTES do botão · achado: pílula em ' + comWo.indexOf('W.O. →') + ', botão em ' + pB.indice);
+ok(/margin-left:auto[^>]*>\s*<button[^>]*>Aplicar<br>W\.O\./.test(comWo),
+   '🔒 com W.O. aplicado o botão vai COLADO NA BORDA DIREITA da linha de estado (margin-left:auto) — "como era antes", quando o cabeçalho já o empurrava');
 ok(comWo.indexOf('Reverter<br>W.O.') < pB.indice,
    '🔒 o "Reverter W.O." também vem antes — era ele que empurrava o botão pro meio quando o botão era o primeiro');
 
@@ -136,8 +142,8 @@ if (/Aplicar<br>W\.O\./.test(mon)) {
 // ── 5. varredura: uma definição só, e o helper compõe com o botão no fim ──
 ok((SUB.match(/label: 'Aplicar<br>W\.O\.'/g) || []).length === 1,
    '🔒 UMA definição do botão (duas montagens é o que fez uma delas divergir na 1.7.90)');
-ok(/return btn \? \(resto \? resto \+ ' ' \+ btn : btn\) : resto;/.test(SUB),
-   '🔒 o compositor põe o RESTO antes e o BOTÃO por último');
+ok(/return resto \+ '<span style="margin-left:auto;[^']*'\s*\+ btn \+ '<\/span>';/.test(SUB),
+   '🔒 o compositor põe o RESTO antes e o BOTÃO por último, colado na borda direita');
 ok(!/entra SEMPRE em primeiro|PRIMEIRO elemento do bloco/.test(SUB),
    'nenhum comentário ainda afirma que o botão é o primeiro (comentário que mente é o que faz consertar o lugar errado)');
 
