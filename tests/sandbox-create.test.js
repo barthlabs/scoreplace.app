@@ -1,8 +1,16 @@
-/* Sandbox (SB) — criação do clone (Etapa 2). _openOrCreateSandbox clona o estado ATUAL do
- * original num torneio novo, PRIVADO, com killswitch de notificação e marcado isSandbox —
- * dev-only. Deep-copy do roster; NADA escrito no original; segunda chamada abre o mesmo SB.
+/* Sandbox (SB) — criação do clone. Clona num torneio novo, PRIVADO, com killswitch de
+ * notificação e marcado isSandbox — dev-only. Deep-copy do roster; NADA escrito no
+ * original; segunda chamada abre o mesmo SB.
  *
- * Reproduz a falha: no código velho não existia _openOrCreateSandbox → sem clone isolado.
+ * ⚠️ ATUALIZADO em 1.8.53 (pedido do dono): "Criar Sandbox" agora PERGUNTA o tipo de cópia
+ * — `_openOrCreateSandbox` abre a escolha e quem cria é `_criarSandbox(id, modo)`:
+ *   • 'estado' → o torneio como está AGORA (sorteio, grupos, jogos, placares, W.O.).
+ *                É o que simula a virada pra próxima fase a partir do sorteio de verdade.
+ *   • 'zerado' → só os inscritos, como se nada tivesse sido sorteado (o comportamento que
+ *                antes só se alcançava pelo "Resetar" de dentro do SB).
+ * As asserções que chamavam `_openOrCreateSandbox` esperando criação DIRETA passaram a
+ * chamar `_criarSandbox(..., 'estado')` — o invariante que elas defendiam (isolamento,
+ * deep-copy, original intacto) segue travado, agora com os DOIS modos cobertos.
  */
 const fs = require('fs');
 const path = require('path');
@@ -34,13 +42,15 @@ function mkOrig() {
 // (0) não-dev → no-op.
 W.AppStore.tournaments = [mkOrig()];
 W.AppStore.currentUser = { uid: 'uRANDO', email: 'rando@x.com', displayName: 'Rando' };
-W._openOrCreateSandbox('ORIG');
+W._criarSandbox('ORIG', 'estado');
 ok(W.AppStore.tournaments.length === 1, '0: não-dev não cria SB');
+W._openOrCreateSandbox('ORIG');
+ok(W.AppStore.tournaments.length === 1, '0: nem pela porta que pergunta');
 
 // (1) dev → cria o SB.
 W.AppStore.tournaments = [mkOrig()];
 W.AppStore.currentUser = { uid: 'uDEV', email: 'rstbarth@gmail.com', displayName: 'Rodrigo' };
-W._openOrCreateSandbox('ORIG');
+W._criarSandbox('ORIG', 'estado');
 var sb = W.AppStore.tournaments.find(function (t) { return t.isSandbox; });
 var orig = W.AppStore.tournaments.find(function (t) { return t.id === 'ORIG'; });
 ok(!!sb, '1: SB criado');
@@ -64,6 +74,49 @@ var before = W.AppStore.tournaments.length;
 W._openOrCreateSandbox('ORIG');
 ok(W.AppStore.tournaments.length === before, '3: segunda chamada não cria outro SB');
 ok(W._findSandboxOf('ORIG').id === sb.id, '3: _findSandboxOf acha o SB');
+
+
+// ── (5) OS DOIS MODOS, contra um original COM sorteio ─────────────────────────
+// É a bifurcação pedida pelo dono: um SB pra simular a virada de fase a partir do
+// sorteio REAL, e outro pra testar o sorteio do zero.
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'tournaments-draw.js'), 'utf8'),
+  W, { filename: 'tournaments-draw.js' });   // traz o _clearTournamentDraw, que o modo zerado reusa
+function mkSorteado() {
+  var o = mkOrig();
+  o.status = 'active';
+  o.rounds = [{ round: 1, roundIndex: 0,
+    monarchGroups: [{ name: 'R1 Grupo A', players: ['Ana', 'Bia'], playersUids: ['uP1', 'uP2'] }],
+    matches: [{ id: 'm1', p1: 'Ana', p2: 'Bia', roundIndex: 0, monarchGroup: 0,
+                winner: 'Ana', scoreP1: 6, scoreP2: 3 }] }];
+  return o;
+}
+W.AppStore.currentUser = { uid: 'uDEV', email: 'rstbarth@gmail.com', displayName: 'Rodrigo' };
+
+W.AppStore.tournaments = [mkSorteado()];
+W._criarSandbox('ORIG', 'estado');
+var sbE = W.AppStore.tournaments.find(function (t) { return t.isSandbox; });
+ok(!!sbE && (sbE.rounds || []).length === 1, '5: modo ESTADO preserva a rodada sorteada');
+ok(!!sbE && (sbE.rounds[0].monarchGroups || []).length === 1, '5: preserva os grupos');
+ok(!!sbE && sbE.rounds[0].matches[0].winner === 'Ana', '5: preserva o placar já lançado');
+ok(!!sbE && sbE.isSandbox === true && sbE.notificationsMuted === true, '5: e continua isolado/mudo');
+
+W.AppStore.tournaments = [mkSorteado()];
+W._criarSandbox('ORIG', 'zerado');
+var sbZ = W.AppStore.tournaments.find(function (t) { return t.isSandbox; });
+ok(!!sbZ && (sbZ.rounds || []).length === 0, '5: modo ZERADO some com a rodada sorteada');
+ok(!!sbZ && sbZ.status === 'open', '5: e volta pro estado de inscrições');
+ok(!!sbZ && (sbZ.participants || []).length >= 2, '5: mas mantém os inscritos');
+ok(!!sbZ && sbZ.isSandbox === true, '5: e também é sandbox');
+
+var origS = W.AppStore.tournaments.find(function (t) { return t.id === 'ORIG'; });
+ok(!!origS && (origS.rounds || []).length === 1, '5: o ORIGINAL não perde o sorteio em nenhum dos modos');
+
+// a porta que PERGUNTA não pode criar nada sozinha (senão o clique vira SB sem escolha)
+W.AppStore.tournaments = [mkSorteado()];
+W.showAlertDialog = function () {};
+W._openOrCreateSandbox('ORIG');
+ok(W.AppStore.tournaments.length === 1, '5: _openOrCreateSandbox só PERGUNTA — não cria sozinho');
+
 
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ sandbox-create FALHOU'); process.exit(1); }

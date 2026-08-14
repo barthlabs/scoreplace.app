@@ -7,6 +7,16 @@
 // isolamento. Depois um trigger de CF (Etapa 3) espelha o roster do original → SB. As
 // ÚNICAS diferenças: notificações mudas, stats/resultados não vazam, invisível pra não-dev.
 // Só o dev (_isTestIdentity) enxerga/usa. Ver memória project_sandbox_tournament.
+// BIFURCAÇÃO (pedido do dono, 13/ago/2026): clicar em "Criar Sandbox" passa a PERGUNTAR
+// que tipo de cópia se quer, em vez de o comportamento depender de saber qual botão faz o
+// quê depois. São dois usos diferentes e ambos legítimos:
+//   • ESTADO ATUAL → o torneio como está AGORA (sorteio, grupos, jogos, placares, W.O. e
+//     substituições aplicados). É o que serve pra simular a TRANSIÇÃO — avançar pra fase
+//     eliminatória e conferir se as duplas se formam como se espera, partindo do sorteio
+//     original de verdade. Era o que a criação já fazia, mas sem estar dito em lugar nenhum.
+//   • ZERADO → só os inscritos atuais, como se nenhum sorteio tivesse acontecido. É o que
+//     serve pra testar o sorteio inicial. Antes só se chegava aqui pelo "Resetar" de DENTRO
+//     do SB (_resyncSandboxRoster), o que fazia parecer que criar SB sempre zerava.
 window._openOrCreateSandbox = function(origId) {
     if (!(window._isTestIdentity && window._isTestIdentity())) return; // só o dev
     var orig = window._findTournamentById ? window._findTournamentById(origId) : null;
@@ -16,9 +26,70 @@ window._openOrCreateSandbox = function(origId) {
         // já é um SB — não cria SB de SB; só abre.
         window.location.hash = '#tournaments/' + orig.id; return;
     }
-    // Já existe um SB deste original? Abre.
+    // Já existe um SB deste original? Abre (sem perguntar nada).
     var existing = window._findSandboxOf ? window._findSandboxOf(origId) : null;
     if (existing) { window.location.hash = '#tournaments/' + existing.id; return; }
+
+    // ── a tela de escolha ──
+    var _sf = window._safeHtml || function (s) { return String(s == null ? '' : s); };
+    var _jogos = 0, _grupos = 0, _placares = 0;
+    try {
+        var _ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(orig) : [];
+        _jogos = _ms.filter(function (m) { return m && !m.isSitOut && !m.isBye; }).length;
+        _placares = _ms.filter(function (m) { return m && m.winner; }).length;
+        (orig.rounds || []).forEach(function (r) { _grupos += ((r && r.monarchGroups) || []).length; });
+        (orig.groups || []).forEach(function () { _grupos++; });
+    } catch (e) {}
+    var _inscritos = (Array.isArray(orig.participants) ? orig.participants.length : 0);
+    var _btn = function (id, cor, titulo, desc) {
+        return '<button type="button" id="' + id + '" class="btn hover-lift" style="display:block;width:100%;text-align:left;' +
+            'margin-bottom:10px;background:rgba(' + cor + ',0.10);border:1px solid rgba(' + cor + ',0.45);' +
+            'color:var(--text-bright);border-radius:12px;padding:12px 14px;">' +
+            '<div style="font-weight:800;font-size:0.92rem;margin-bottom:3px;">' + titulo + '</div>' +
+            '<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.35;white-space:normal;">' + desc + '</div>' +
+            '</button>';
+    };
+    var html =
+        '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">' +
+          'Cópia privada de <b>' + _sf(orig.name || 'torneio') + '</b>, com notificações mudas. Como você quer o sandbox?' +
+        '</div>' +
+        _btn('sb-estado', '16,185,129', '📸 Do estado ATUAL',
+             'Mantém o sorteio como está: ' + _grupos + ' grupo(s), ' + _jogos + ' jogo(s), ' +
+             _placares + ' com placar, mais W.O. e substituições já aplicados. ' +
+             'É este que simula a virada pra próxima fase a partir do sorteio de verdade.') +
+        _btn('sb-zerado', '99,102,241', '🧹 ZERADO (sem sorteio)',
+             'Só os ' + _inscritos + ' inscritos atuais, como se nada tivesse sido sorteado. ' +
+             'É este que serve pra testar o sorteio inicial do zero.');
+
+    if (typeof window.showAlertDialog === 'function') {
+        window.showAlertDialog('🧪 Criar Sandbox', html, function () {}, { type: 'info', confirmText: 'Cancelar' });
+        // liga os dois botões depois que o diálogo entra no DOM
+        setTimeout(function () {
+            var liga = function (id, modo) {
+                var b = document.getElementById(id);
+                if (!b) return;
+                b.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (typeof window._closeDialogs === 'function') { try { window._closeDialogs(); } catch (_e) {} }
+                    else { try { var o = document.getElementById('custom-alert-dialog'); if (o) o.remove(); } catch (_e2) {} }
+                    window._criarSandbox(origId, modo);
+                }, { once: true });
+            };
+            liga('sb-estado', 'estado');
+            liga('sb-zerado', 'zerado');
+        }, 0);
+        return;
+    }
+    window._criarSandbox(origId, 'estado');   // sem diálogo disponível: mantém o comportamento antigo
+};
+
+// modo: 'estado' (cópia fiel do agora) | 'zerado' (só os inscritos, sem sorteio)
+window._criarSandbox = function(origId, modo) {
+    if (!(window._isTestIdentity && window._isTestIdentity())) return; // só o dev
+    var orig = window._findTournamentById ? window._findTournamentById(origId) : null;
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!orig || !cu || !cu.uid) return;
+    var _zerado = (modo === 'zerado');
     // Clona o estado ATUAL (deep copy) → SB.
     var clone;
     try { clone = JSON.parse(JSON.stringify(orig)); } catch (e) { clone = Object.assign({}, orig); }
@@ -45,9 +116,23 @@ window._openOrCreateSandbox = function(origId) {
     clone.coHosts = [];                // co-host do original não administra (nem vê) o SB
     clone.adminUids = [cu.uid];
     clone.adminEmails = cu.email ? [String(cu.email).toLowerCase()] : [];
+
+    // MODO ZERADO: devolve ao estado de INSCRIÇÕES. Reusa o `_clearTournamentDraw`, que é o
+    // MESMO caminho do reset do torneio — desmonta as duplas formadas pelo sorteio, devolve
+    // a lista de espera ao elenco e limpa rodadas/grupos/presença/W.O. Escrever uma segunda
+    // limpeza aqui seria a divergência de sempre: uma esqueceria um campo que a outra zera.
+    var _resumo = 'com o sorteio, os jogos e os placares do original';
+    if (_zerado) {
+        try {
+            if (typeof window._clearTournamentDraw === 'function') window._clearTournamentDraw(clone);
+        } catch (e) { if (window._warn) window._warn('[sandbox] limpeza do sorteio falhou', e); }
+        clone.status = 'open';          // volta a aceitar inscrição, como um torneio novo
+        _resumo = 'ZERADO — só os inscritos, sem sorteio';
+    }
+
     window.AppStore.addTournament(clone);
     if (typeof showNotification === 'function') {
-        showNotification('🧪 Sandbox criado', '"' + clone.name + '" — privado, notificações mudas, espelha o original.', 'success');
+        showNotification('🧪 Sandbox criado', '"' + clone.name + '" — privado, notificações mudas, ' + _resumo + '.', 'success');
     }
     setTimeout(function() { window.location.hash = '#tournaments/' + sbId; }, 400);
 };
