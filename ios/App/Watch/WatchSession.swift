@@ -4,14 +4,60 @@ import WatchConnectivity
 /**
  * Transporte do lado do relógio (companion) — espelha o Wear MainActivity do
  * Android, trocando o Data Layer por WatchConnectivity. Contrato:
- * docs/smartwatch-bridge.md. O relógio é BURRO: toque vira intenção enviada ao
- * celular; o estado renderizado é sempre o snapshot que o celular devolve
- * (motor GSM = fonte única no JS do app). Zero regra de placar aqui.
+ * docs/smartwatch-bridge.md.
+ *
+ * ⚠️ O RELÓGIO DEIXOU DE SER BURRO (Caminho B, ago/2026). Este cabeçalho dizia
+ * "toque vira intenção enviada ao celular; zero regra de placar aqui" — era
+ * verdade até o incidente de 13/ago provar o limite: o motor vivia no JS da
+ * WebView, e o iOS SUSPENDE esse JS com o celular bloqueado (o estado normal do
+ * celular na beira da quadra). Os toques enfileiravam e chegavam em rajada.
+ * Agora há um motor NATIVO (ScoreEngine.swift, paridade provada contra o motor
+ * canônico por vetores) e a posse é decidida pelo WatchMatchSession.
+ *
+ * O que NÃO mudou, e é o que segura a arquitetura: o placar OFICIAL continua
+ * saindo do motor JS do celular, que reproduz o diário de eventos daqui. Um
+ * erro do motor nativo é cosmético e vira teste vermelho — nunca dado errado.
+ * E sem os campos novos no snapshot (app do celular antigo) nada disto arma:
+ * o caminho de intenção unitária segue intacto como fallback.
  */
 final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     @Published var state = ScoreState()
     private var lastSeq = -1
     private var lastEpoch = ""
+
+    // ── CAMINHO B ── posse + diário (docs/smartwatch-bridge.md).
+    // O relógio deixou de depender do celular ACORDADO a cada toque: quando a
+    // partida começa com ele junto, um motor NATIVO conta aqui mesmo e o toque
+    // responde na hora; o diário de eventos viaja pro celular quando dá, e é
+    // sempre o motor JS canônico de lá que grava placar oficial/Firestore.
+    // Sem os campos novos no snapshot (app do celular antigo) a sessão nem arma
+    // e tudo segue exatamente como antes — o caminho de intenção unitária.
+    private let match = WatchMatchSession()
+    /// Identidade deste dispositivo no diário (a dedup do celular é por
+    /// `deviceId#n`, então relógio e celular numerando igual não se apagam).
+    private let deviceId = "watch-" + (UUID().uuidString.prefix(8).lowercased())
+
+    /// Aplica no motor local e manda o diário. `false` = sem motor armado, o
+    /// chamador cai no caminho antigo (intenção unitária pro celular).
+    @discardableResult
+    private func localFirst(_ ev: EngineEvent) -> Bool {
+        guard match.localEvent(ev) else { return false }
+        publishLocal()
+        flushJournal()
+        return true
+    }
+    /// A tela desenha o que a POSSE mandar (motor local × espelho do celular).
+    private func publishLocal() {
+        let s = match.displayState
+        DispatchQueue.main.async { self.state = s }
+    }
+    /// Empurra o diário pendente. Reenviar é IDEMPOTENTE de propósito (o
+    /// receptor deduplica por `deviceId#n`) — é assim que o lote sobrevive a
+    /// celular suspenso, que foi a causa do incidente de 13/ago.
+    private func flushJournal() {
+        guard let evlog = match.pendingEvlog(deviceId: deviceId) else { return }
+        sendIntent(evlog)
+    }
 
     override init() {
         super.init()
@@ -23,9 +69,11 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
 
     // ── Intenções (relógio → celular) ──
     func sendPoint(_ team: Int) {
+        if localFirst(.point(team: team)) { return }   // Caminho B: conta AQUI
         sendIntent(["v": 1, "type": "point", "team": team, "id": UUID().uuidString])
     }
     func sendUndo() {
+        if localFirst(.undo) { return }
         sendIntent(["v": 1, "type": "undo", "id": UUID().uuidString])
     }
     func sendReplay(shuffle: Bool) {
@@ -40,6 +88,7 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
         sendIntent(["v": 1, "type": "close", "id": UUID().uuidString])
     }
     func sendResolveTie(_ rule: String) {   // "extend" (prorrogar) | "tiebreak"
+        if localFirst(.resolveTie(rule: rule)) { return }
         sendIntent(["v": 1, "type": "resolveTie", "rule": rule, "id": UUID().uuidString])
     }
     /// "Iniciar" — começa a partida casual que está montada no celular.
@@ -60,6 +109,15 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     /// Escolhe o sacador nos 2 primeiros jogos (equivale a arrastar a bola no
     /// celular). O celular decide se ainda vale — o hard lock vive no motor.
     func sendSetServer(team: Int, playerIdx: Int) {
+        // Caminho B: no motor o pick sao DOIS eventos (selecionar + confirmar) —
+        // medido nos vetores; ponto com o seletor ABERTO e' bloqueado, entao
+        // confirmar faz parte do gesto, nao e' enfeite.
+        if match.localEvent(.serveSelect(team: team, idx: playerIdx)) {
+            match.localEvent(.serveConfirm)
+            publishLocal()
+            flushJournal()
+            return
+        }
         sendIntent(["v": 1, "type": "setServer", "team": team,
                     "playerIdx": playerIdx, "id": UUID().uuidString])
     }
@@ -107,7 +165,15 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
             if s.seq != 0 && s.seq < lastSeq { return }
             lastSeq = s.seq
         }
-        DispatchQueue.main.async { self.state = s }
+        // Caminho B: a SESSAO decide o que a tela ve (motor local x espelho do
+        // celular) e guarda este snapshot como espelho. Sem os campos novos
+        // (app do celular antigo) ela nunca arma o motor e devolve o proprio
+        // espelho — ou seja, exatamente o comportamento anterior.
+        match.ingest(s)
+        let shown = match.displayState
+        DispatchQueue.main.async { self.state = shown }
+        // Voltou a falar com o celular? Reenvia o diario pendente (idempotente).
+        flushJournal()
     }
 
     // ── WCSessionDelegate ──

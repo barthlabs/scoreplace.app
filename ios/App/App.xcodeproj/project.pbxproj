@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2DF04606A3348FF4A757F581 /* WatchMatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6828A02FE8C1850121BA4F09 /* WatchMatchSession.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		3C642F95D1DC28B20B736829 /* ScoreplaceWatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C086B4DF33BE7E79AA21F7A6 /* ScoreplaceWatchPlugin.swift */; };
 		4C201DBF363C5A75D6D680AC /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2387F19430B11E865FC7A2C /* WatchSession.swift */; };
@@ -67,6 +68,7 @@
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		5CF1AEB883856F1AC90F4389 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS7.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		6828A02FE8C1850121BA4F09 /* WatchMatchSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchMatchSession.swift; sourceTree = "<group>"; };
 		7A7925D9F67938D04B593D40 /* ScoreplaceWatchCompanionApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScoreplaceWatchCompanionApp.swift; sourceTree = "<group>"; };
 		812B0B3272C7C7938A4A81E7 /* MainViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		8D6F05D53D18398C59E10DFE /* ScoreplaceWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScoreplaceWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -176,6 +178,7 @@
 				32D52E37104BBD158BE5D352 /* RemoteView.swift */,
 				AFC3DA374FC762CF4AA932C7 /* ScoreState.swift */,
 				A1C24D373AB12A483F8A1433 /* ScoreEngine.swift */,
+				6828A02FE8C1850121BA4F09 /* WatchMatchSession.swift */,
 			);
 			name = WatchShared;
 			path = ../WatchApp/Sources;
@@ -308,6 +311,7 @@
 				HR01B0000000000000000002 /* HeartRate.swift in Sources */,
 				A1227616F5AF7B28DA4B25B3 /* ScoreplaceWatchCompanionApp.swift in Sources */,
 				AA4229D74D9B89809622C8E9 /* ScoreEngine.swift in Sources */,
+				2DF04606A3348FF4A757F581 /* WatchMatchSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

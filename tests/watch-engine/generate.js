@@ -35,7 +35,21 @@ async function runScenario(page, sc) {
       scoring: cfg,
       sportName: s.sport
     });
-    const snap = () => JSON.parse(JSON.stringify(window._getLiveScoreState()));
+    // ⚠️ CAMPOS DE TRANSPORTE SAEM DO VETOR, e isso é decisão, não descuido:
+    //  · `matchEpoch` é IDENTIDADE DE SESSÃO (novo a cada abertura/recomeço) —
+    //    dentro do vetor ele destruiria o determinismo, que é o que dá valor a
+    //    esta bateria; quem o exercita é o teste do receptor de diário.
+    //  · `scoring` é a config, já gravada UMA vez no topo do vetor (`config`) —
+    //    repeti-la em cada passo seria redundância que os motores nativos
+    //    (que não a re-emitem) teriam de imitar sem ganho nenhum.
+    // O que fica é só o ESTADO DE PLACAR, que é o que os 3 motores têm que
+    // reproduzir igual.
+    const snap = () => {
+      const s = JSON.parse(JSON.stringify(window._getLiveScoreState()));
+      delete s.matchEpoch;
+      delete s.scoring;
+      return s;
+    };
     const steps = [{ event: { kind: 'open' }, state: snap() }];
     for (const ev of s.events) {
       switch (ev.kind) {

@@ -4203,6 +4203,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // rearma _resultSaved pra regravar o placar corrigido) DUPLICARIA o histórico;
   // com id estável a regravação SOBRESCREVE (matchHistory é chaveado por matchId).
   var _liveRecId = null;
+  // ÉPOCA DA PARTIDA (Caminho B, docs/smartwatch-bridge.md): identidade desta
+  // partida pro relógio. Ele roda um motor NATIVO e acumula o diário de eventos;
+  // a época é o que diz "isto é outra partida" — sem ela, o diário da anterior
+  // (numeração `n` recomeçando em 1) contaminaria a nova. Nasce na abertura e é
+  // renovada nos MESMOS 4 pontos que zeram o _liveRecId (recomeço = partida nova).
+  var _liveMatchEpoch = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  function _newMatchEpoch() {
+    _liveMatchEpoch = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
   // v1.7.5-beta: "Últimas Partidas" — função armazenada pelo render de stats;
   // chamada de _saveResult().then() APÓS o write confirmar, garantindo que a
   // partida recém terminada já está no Firestore antes de consultar.
@@ -8344,6 +8353,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             _isRemoteUpdate = false;
             _resultSaved = false;
             _liveRecId = null;   // partida NOVA → registro de histórico novo
+            _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
             _matchStartTime = null;
             _matchEndTime = null;
             _lastSyncTs = (data.liveState && data.liveState._ts) || 0;
@@ -8528,7 +8538,30 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v4.5.43: empate esperando decisão (prorrogar vs tie-break). O relógio
       // mostra o prompt e devolve a intenção 'resolveTie'. Recorre a cada empate.
       tieRulePending: !!state.tieRulePending,
-      tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null
+      tiedAt: (state.tieRulePending && cs) ? cs.gamesP1 : null,
+      // ── CAMINHO B: o que o MOTOR NATIVO do relógio precisa pra jogar sozinho ──
+      // (docs/smartwatch-bridge.md). `matchEpoch` identifica ESTA partida (o diário
+      // de eventos do relógio é carimbado com ela); `scoring` é a config JÁ RESOLVIDA
+      // — sai de `state`, não de `sc`, porque state guarda os valores EFETIVOS depois
+      // dos defaults do esporte e do fallback do casual (tieRule 'ask'). Sem estes
+      // dois campos o relógio não teria como contar nada por conta própria.
+      matchEpoch: _liveMatchEpoch,
+      scoring: {
+        type: useSets ? 'sets' : 'simple',
+        setsToWin: state.setsToWin,
+        gamesPerSet: state.gamesPerSet,
+        tiebreakEnabled: !!state.tiebreakEnabled,
+        tiebreakPoints: state.tiebreakPoints,
+        tiebreakMargin: state.tiebreakMargin,
+        superTiebreak: !!state.superTiebreak,
+        superTiebreakPoints: state.superTiebreakPoints,
+        countingType: state.countingType,
+        deuceRule: !!state.deuceRule,
+        twoPointAdvantage: state.twoPointAdvantage !== false,
+        tieRule: state.tieRule || null,
+        fixedSet: !!state.isFixedSet,
+        fixedSetGames: state.fixedSetGames || 0
+      }
     };
   };
   // Classificação do Rei/Rainha (vitórias por PESSOA — a dupla muda a cada jogo,
@@ -8848,6 +8881,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     _resultSaved = false;
     _liveRecId = null;   // próximo jogo da série = partida NOVA no histórico
+    _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
 
     // 3. Registra vitórias do round atual e salva snapshot independente para histórico
     var pairing = _reiRainhaPairings[_reiRainhaRound];
@@ -9113,6 +9147,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
     _resultSaved = false;
     _liveRecId = null;   // fecho da série = próxima gravação é de partida nova
+    _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
 
     // Registra vitórias do round 2 (se ainda não registrado)
     if (_reiRainhaRound === 2) {
@@ -9267,6 +9302,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // Allow next completed match to be saved again.
         _resultSaved = false;
         _liveRecId = null;   // recomeço = partida NOVA no histórico
+        _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
         // Shuffle teams if requested
         if (shouldShuffle && isDoubles) {
           var allPlayers = p1Players.concat(p2Players);

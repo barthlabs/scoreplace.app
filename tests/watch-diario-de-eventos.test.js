@@ -141,5 +141,19 @@ ok(!/state\.|currentGameP|gamesPerSet|tiebreakPoints|isFinished\s*=/.test(trecho
 ok(/sort\(function/.test(trecho) && /seenEvents\[/.test(trecho),
    'o receptor faz ordenação por n e dedup — as duas responsabilidades dele');
 
+// ── 9. o CONTRATO que o motor do relógio consome (varredura no bracket-ui) ──
+// Sem estes dois campos no snapshot o relógio não tem como contar nada por
+// conta própria — e o sintoma seria mudo: ele voltaria a espelhar em silêncio.
+const UI = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
+ok(/matchEpoch: _liveMatchEpoch/.test(UI),
+   '🔒 o snapshot leva `matchEpoch` — identidade da partida, o que carimba o diário do relógio');
+ok(/scoring: \{[\s\S]{0,400}countingType: state\.countingType/.test(UI),
+   '🔒 o snapshot leva a `scoring` RESOLVIDA (de `state`, os valores efetivos) — é com ela que o motor nativo conta');
+const epochResets = (UI.match(/_newMatchEpoch\(\)/g) || []).length;
+ok(epochResets >= 5,
+   'a época é renovada em TODO recomeço de partida (4 pontos + a definição) — senão o diário da partida velha contaminaria a nova · achado: ' + epochResets);
+ok(/_liveRecId = null;\s*\/\/[^\n]*\n\s*_newMatchEpoch\(\)/.test(UI),
+   'a renovação da época anda JUNTO com o reset do registro de histórico (os mesmos momentos de "partida nova")');
+
 console.log('watch-diario-de-eventos:', pass, 'ok,', fail, 'falhas');
 if (fail > 0) process.exit(1);
