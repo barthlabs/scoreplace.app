@@ -1664,6 +1664,26 @@ window._saveResultInline = function (tId, matchId) {
   const m = _findMatch(t, matchId);
   if (!m) return;
 
+  // ⚠️ JOGO JÁ ENCERRADO NÃO ACEITA PROPOSTA NOVA DE PARTICIPANTE. O card esconde os
+  // inputs quando `isDecided` (showInputs exige !isDecided), mas isso é gate de RENDER:
+  // uma tela ABERTA HÁ TEMPO — ou o mini-card do dashboard, cuja lista pode estar velha —
+  // continua com os campos e o Confirmar vivos, e a função salvava assim mesmo.
+  // ACONTECEU (Confra, R1 Grupo S, jogo 56, 13/ago): às 16:38 o resultado foi APROVADO e
+  // entre 16:53 e 16:54 a mesma participante criou CINCO propostas novas em cima do jogo
+  // fechado — o vencedor não mudava, mas o card voltava a dizer "aguardando aprovação" e
+  // sobrou pro organizador aplicar na mão às 17:11.
+  // A AUTORIDADE passa: é ela quem legitimamente CORRIGE um placar errado (o "Editar" do
+  // organizador entra por aqui). O participante recebe o aviso e a tela é reconstruída,
+  // que é o que tira a cópia velha da frente dele. [[project_concurrency_safe_saves]]
+  var _cuGuard = window.AppStore && window.AppStore.currentUser;
+  if (m.winner && _cuGuard && typeof _isUserAuthority === 'function' && !_isUserAuthority(t, _cuGuard)) {
+    if (typeof showNotification === 'function') {
+      showNotification('Jogo já encerrado', 'Este placar já foi confirmado. Se estiver errado, fale com o organizador.', 'info');
+    }
+    _rerenderBracket(tId, matchId);   // derruba a tela velha que ainda mostrava os campos
+    return;
+  }
+
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
 

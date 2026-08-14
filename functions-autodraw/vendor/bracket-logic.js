@@ -63,15 +63,33 @@ window._computeMonarchStandings = function(group, t, category) {
       (m.team2 || []).forEach(function (nm, i) { var u = (m.team2Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
     });
   })();
+  // ⚠️ FONTE ÚNICA DO UID DA LINHA. Isto era DUAS resoluções e elas divergiam: a CHAVE
+  // olhava 3 fontes (uid explícito → mapa dos JOGOS → mapa do elenco) e o CAMPO `uid`
+  // olhava só 2 — faltava justamente `_matchN2u`, o mapa tirado dos jogos. O efeito é
+  // silencioso e caro: a linha saía com `key: 'uid:XXX'` e `uid: null`, ou seja a tabela
+  // SABIA quem era e não contava pra ninguém. Quem lê a linha depois (a transição de
+  // fase monta os times com `m.uid`) recebia null, e a ELIMINATÓRIA inteira nascia só
+  // com nome gravado — 98 de 98 jogos do Confra, medido. É a merda que o cânone do uid
+  // existe pra impedir: trocar o nome do perfil depois deixaria a chave com o antigo.
+  function _monUid(name, uid) { return uid || _matchN2u[name] || _n2uMon[name] || null; }
   function _monKey(name, uid) {
-    var u = uid || _matchN2u[name] || _n2uMon[name] || null;
+    var u = _monUid(name, uid);
     return u ? ('uid:' + u) : ('name:' + name);
   }
   function _monEnsure(name, uid) {
     if (_isGhostMon(name)) return null;
     var k = _monKey(name, uid);
+    var _u = _monUid(name, uid);
+    // O NOME DA LINHA SAI DO PERFIL, o rótulo é só reserva. O seed do elenco já fazia isso
+    // (via _nomeVivoMon), mas quem entra por AQUI — uid conhecido só pelos jogos, ou seja
+    // grupo sem `playersUids` — ficava com o rótulo GRAVADO no dia do sorteio. Medido no
+    // navegador: perfil renomeado pra "Dani Bataglia" e a linha continuava "Fabi2401".
+    // Como o `name` da linha é o que a transição de fase usa pra montar a dupla, o nome
+    // velho vazava pra dentro dos confrontos da eliminatória.
+    var _nm = (_u && typeof window !== 'undefined' && typeof window._displayNameForUid === 'function')
+      ? (window._displayNameForUid(_u, name) || name) : name;
     if (!stats[k]) stats[k] = {
-      key: k, uid: (uid || _n2uMon[name] || null), name: name,
+      key: k, uid: _u, name: _nm,
       wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
       setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, tiebreaksLost: 0
     };
@@ -193,29 +211,42 @@ window._computeMonarchStandings = function(group, t, category) {
     });
   }
 
-  // Tiebreaker order (desc unless noted):
-  // 0. PONTOS AVANÇADOS (quando ligado)  1. wins  2. setsDiff  3. setsWon  4. gamesDiff
-  // 5. gamesWon  6. tiebreaksDiff  7. tiebreaksWon  8. pointsDiff  9. pointsFor  10. winRate  11. played (asc)
-  return Object.values(stats).sort(function(a, b) {
-    if (_adv && (b.points || 0) !== (a.points || 0)) return (b.points || 0) - (a.points || 0);
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    var aSetD = a.setsWon - a.setsLost, bSetD = b.setsWon - b.setsLost;
-    if (bSetD !== aSetD) return bSetD - aSetD;
-    if (b.setsWon !== a.setsWon) return b.setsWon - a.setsWon;
-    var aGD = a.gamesWon - a.gamesLost, bGD = b.gamesWon - b.gamesLost;
-    if (bGD !== aGD) return bGD - aGD;
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    var aTBD = a.tiebreaksWon - a.tiebreaksLost, bTBD = b.tiebreaksWon - b.tiebreaksLost;
-    if (bTBD !== aTBD) return bTBD - aTBD;
-    if (b.tiebreaksWon !== a.tiebreaksWon) return b.tiebreaksWon - a.tiebreaksWon;
-    var aDiff = a.pointsFor - a.pointsAgainst;
-    var bDiff = b.pointsFor - b.pointsAgainst;
-    if (bDiff !== aDiff) return bDiff - aDiff;
-    if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor;
-    if (b.winRate !== a.winRate) return b.winRate - a.winRate;
-    return a.played - b.played;
-  });
+  // ── APLICA OS CRITÉRIOS QUE O ORGANIZADOR CONFIGUROU ────────────────────────
+  // Ordem do dono (14/ago/2026): "os critérios de desempate devem sempre ser aplicados como
+  // quer que tenha configurado o organizador. em todo o torneio. em todos os torneios. em
+  // qualquer fase." Até aqui esta tabela usava uma cadeia FIXA no código — a Fase de Grupos
+  // e a Liga já honravam `t.tiebreakers`, o Rei/Rainha não. MEDIDO: o Confra configura
+  // `confronto_direto → saldo_pontos → vitorias → buchholz → …`, e nada disso era aplicado.
+  // Sem configuração (ou sem `t`), cai na cadeia padrão — nada muda pra quem nunca mexeu.
+  var _linhas = Object.values(stats);
+  var _cfgTb = (t && Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
+  if (!_cfgTb || typeof window._standingsCompareConfig !== 'function') {
+    return _linhas.sort(function (a, b) { return window._standingsCompare(a, b, _adv); });
+  }
+  var _opts = {
+    tiebreakers: _cfgTb, adv: _adv,
+    // confronto direto sai dos JOGOS DESTE GRUPO, por uid (nome só pra quem não tem conta)
+    h2h: (typeof window._standingsBuildH2H === 'function')
+      ? window._standingsBuildH2H(matches, function (m, lado) {
+          var u = (typeof window._slotUids === 'function') ? (window._slotUids(m, lado) || []) : [];
+          if (u.length) return u;
+          var nomes = (lado === 'p1') ? m.team1 : m.team2;
+          if (Array.isArray(nomes) && nomes.length) return nomes.filter(Boolean);
+          var rot = (lado === 'p1') ? m.p1 : m.p2;
+          return rot ? String(rot).split(' / ').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+        })
+      : {},
+    birth: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {}
+  };
+  return _linhas.sort(function (a, b) { return window._standingsCompareConfig(a, b, _opts); });
 };
+
+// ── QUEM ESTÁ NA FRENTE ───────────────────────────────────────────────────────
+// A cadeia de desempate PADRÃO mora em js/views/standings-core.js (window._standingsCompare
+// no browser/CF, require em Node). Vive lá, e não aqui, porque a ordem de QUEM SOBE pra
+// eliminatória (phases-engine._globalStandings) tem que ser a MESMA da tabela — e este
+// arquivo não é `require`-ável, então a regra ficaria inalcançável de metade dos contextos.
+// Ver o cabeçalho do core: 80 posições divergiam entre as duas ordens no sandbox do Confra.
 
 function _checkGroupRoundComplete(t, groupIndex) {
   if (!t.groups || !t.groups[groupIndex]) return;
@@ -580,8 +611,21 @@ window._sitOutComp = _sitOutComp;
 // desempate antiguidade/juventude). birthDate vem no formato "DD/MM/AAAA".
 // Para duplas/times, usa a MÉDIA das datas dos membros que tiverem data.
 // Também mapeia cada membro individualmente (útil em Rei/Rainha).
+// ⚠️ LIA SÓ dd/mm/aaaa — e o perfil grava ISO. Este parser exigia 3 partes separadas por
+// barra (`String(bd).split('/')`), então `1980-05-10` devolvia null. O `birthDate` do perfil
+// é gravado por `_displayDateToIso` (auth.js), ou seja SEMPRE ISO: na prática os critérios
+// `antiguidade` e `juventude` que o organizador configura NUNCA desempataram nada — em fase
+// nenhuma, em torneio nenhum. Não era regra desligada, era data que não era lida.
+// Agora usa `_spTsData`, o parser ÚNICO de data do app (ISO → dd/mm/aa(aa) → mês por
+// extenso → Date.parse), que é o mesmo cânone de [[project_date_parsing_canonical]].
+// O fallback antigo fica só pro vendor da CF, que não carrega o store.js — e ele lê o
+// formato com barra, que continua válido para dado legado.
 function _tbParseBirth(bd) {
   if (!bd) return null;
+  if (typeof window !== 'undefined' && typeof window._spTsData === 'function') {
+    var ts0 = window._spTsData(bd, { fallback: null });
+    return (ts0 == null || isNaN(ts0)) ? null : ts0;
+  }
   var p = String(bd).split('/');
   if (p.length !== 3) return null;
   var d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2], 10);
@@ -606,7 +650,21 @@ window._tbBirthByName = function(t) {
         if (sn && st != null && map[sn] == null) map[sn] = st;
       });
     }
-    if (nm && times.length) map[nm] = times.reduce(function(a, b) { return a + b; }, 0) / times.length;
+    if (times.length) {
+      var media = times.reduce(function (a, b) { return a + b; }, 0) / times.length;
+      if (nm) map[nm] = media;
+      // ⚠️ INDEXA TAMBÉM POR UID. O mapa era só por nome, e nome envelhece (a pessoa se
+      // renomeia) e repete (dois homônimos viram um) — então o critério `antiguidade`
+      // configurado pelo organizador podia cair na pessoa errada, ou não cair em ninguém.
+      // As chaves por nome ficam: quem não tem conta só tem o nome.
+      if (p.uid) map[p.uid] = media;
+      if (Array.isArray(p.participants)) {
+        p.participants.forEach(function (sub) {
+          var st2 = _tbParseBirth(sub && sub.birthDate);
+          if (sub && sub.uid && st2 != null && map[sub.uid] == null) map[sub.uid] = st2;
+        });
+      }
+    }
   });
   return map;
 };
