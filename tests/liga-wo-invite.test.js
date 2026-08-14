@@ -296,8 +296,12 @@ function mkT() {
   });
   g.subStatus = 'filled'; g.subName = 'Sub Real'; g.subIsGuest = false;
   var htmlC = RW.renderStandings(t, true, true, '', '') || '';
-  ok(/W\.O\. →/.test(htmlC), 'render: estado preenchido (X W.O. → substituto)');
-  ok(htmlC.indexOf('Reverter W.O.') !== -1, 'render: botão Reverter presente junto do estado');
+  // v1.8.72: os rótulos passaram a QUEBRAR em 2 linhas (ordem do dono — os botões
+  // gastavam largura demais e o cabeçalho do grupo quebrava feio). O invariante
+  // destas asserções — a pílula mostra quem saiu → quem entrou, e o Reverter vem
+  // junto — não mudou; o que mudou é onde cai a quebra de linha.
+  ok(/W\.O\.<br>→/.test(htmlC), 'render: estado preenchido (X W.O. → substituto)');
+  ok(htmlC.indexOf('Reverter<br>W.O.') !== -1, 'render: botão Reverter presente junto do estado');
   ok(htmlC.indexOf('Sub Real') !== -1, 'preenchido: substituto ACRESCENTADO na tabela do grupo');
   ok(new RegExp('color:#f87171;">[^<]*' + absent).test(htmlC), 'preenchido: ausente CONTINUA na tabela (vermelho, não some)');
 

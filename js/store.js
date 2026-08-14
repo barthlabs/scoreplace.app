@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.71';
+window.SCOREPLACE_VERSION = '1.8.72';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2859,8 +2859,14 @@ window._spLoaderFinish = function (raiz) {
 
 // A MARCA da tela de carregando — a mesma do boot inline (barras + estrela + wordmark).
 window._spLoaderLogoHtml = function () {
-  return '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:2px;" aria-hidden="true">' +
-      '<svg width="40" height="30" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
+  // v1.8.72 (dono): "o logo pode ficar maior e centralizado EM CIMA do
+  // scoreplace.app, em vez de ficar na esquerda pequeno". Virou COLUNA — o
+  // símbolo grande no topo, a marca embaixo. ⚠️ O boot inline do index.html
+  // repete esta composição por obrigação técnica (roda antes de qualquer
+  // script) e há teste travando que os dois continuem iguais: mexeu aqui,
+  // mexa lá.
+  return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:2px;" aria-hidden="true">' +
+      '<svg width="76" height="57" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
       '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
     '</div>';
 };

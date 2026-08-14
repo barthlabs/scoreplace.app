@@ -1296,16 +1296,31 @@ window._ligaGroupPending = function (group) { return !!(group && group.subStatus
 // montagens do mesmo botão é exatamente o que faz uma delas divergir.
 function _woDeclareBtn(onclickJs, mostrar) {
   if (!mostrar || typeof window._woBtnHtml !== 'function') return '';
+  // ⚠️ v1.8.72 — RÓTULO EM DUAS LINHAS (ordem do dono, print de 14/ago: os botões
+  // gastavam largura demais e a linha do cabeçalho quebrava feio). "Aplicar" em
+  // cima, "W.O." embaixo: o botão fica estreito e o cabeçalho cabe numa linha só.
+  // O <br> é literal de propósito — deixar o navegador decidir onde quebrar daria
+  // resultado diferente conforme a largura do nome do grupo.
   return window._woBtnHtml(onclickJs, true, {
-    label: 'Aplicar W.O.',
+    label: 'Aplicar<br>W.O.',
     title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto (folga ou Jogador X).'
   });
 }
 // Junta o resto do bloco daquele estado com o botão de declarar (sempre por
 // ÚLTIMO — ver o comentário acima: é o que o mantém na mesma ponta da linha
 // com e sem W.O. aplicado).
+//
+// ⚠️ v1.8.72 — E COLADO NA BORDA DIREITA, "como era antes" (ordem do dono).
+// SEM W.O. o bloco vai pro container de ações do cabeçalho, que tem
+// `margin-left:auto` (bracket.js) — daí o botão nascer na direita. COM W.O. o
+// bloco muda de casa: vai pra uma LINHA PRÓPRIA (`_woStateLine`), que é flex
+// alinhada à esquerda — e o botão vinha junto, no meio da linha. O
+// `margin-left:auto` no invólucro reproduz naquela linha o mesmo empurrão que o
+// cabeçalho já dava: pílula e Reverter à esquerda, Aplicar na ponta direita.
 function _woBlocoComBotao(btn, resto) {
-  return btn ? (resto ? resto + ' ' + btn : btn) : resto;
+  if (!btn) return resto;
+  if (!resto) return btn;
+  return resto + '<span style="margin-left:auto;display:inline-flex;">' + btn + '</span>';
 }
 
 // HTML dos controles de W.O./substituição no cabeçalho do grupo.
@@ -1358,18 +1373,18 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
       // o organizador pode desfazer o W.O. (cancela o convite e reabre o grupo).
       var _woPlayedP = (typeof window._matchHasRealPlay === 'function')
         && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
-      if (!_woPlayedP) s += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
+      if (!_woPlayedP) s += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter<br>W.O.' });
     }
     return _woBlocoComBotao(_btnNovoWo, s);   // dar W.O. em OUTRA pessoa continua possível
   }
   // Estado: preenchido (W.O. ativo)
   if (group.subStatus === 'filled' && group.woAbsent) {
     var lbl = group.subIsGuest ? (_safe(group.subName) + ' (Jogador X)') : _safe(group.subName);
-    var s2 = '<span style="font-size:0.66rem;font-weight:700;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:2px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O. → ' + lbl + '</span>';
+    var s2 = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O.<br>→ ' + lbl + '</span>';
     // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
     var _woPlayed = (typeof window._matchHasRealPlay === 'function')
       && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
-    if (manage && !_woPlayed) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter W.O.' });
+    if (manage && !_woPlayed) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter<br>W.O.' });
     return _woBlocoComBotao(_btnNovoWo, s2);  // idem — o Reverter é do W.O. desta pessoa
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher
@@ -1587,10 +1602,10 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
     !groupDone && manage);
   if (wm) {
     var lbl = wm.woIsGuest ? (_safe(wm.woReplacedBy) + ' (Jogador X)') : _safe(wm.woReplacedBy);
-    var s = '<span style="font-size:0.66rem;font-weight:700;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:2px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O. → ' + lbl + '</span>';
+    var s = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O.<br>→ ' + lbl + '</span>';
     var played = (typeof window._matchHasRealPlay === 'function') && _monPlaying(t, gName, pIdx).some(function (m) { return window._matchHasRealPlay(m); });
     if (manage && !played && typeof window._woBtnHtml === 'function') {
-      s += ' ' + window._woBtnHtml("window._monWoRevert('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')", false, { label: '↩️ Reverter W.O.', size: 'btn-sm' });
+      s += ' ' + window._woBtnHtml("window._monWoRevert('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')", false, { label: '↩️ Reverter<br>W.O.', size: 'btn-sm' });
     }
     return _woBlocoComBotao(_btnNovoWo, s);
   }

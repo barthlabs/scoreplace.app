@@ -11,7 +11,9 @@ window._translations['pt'] = {
   'nav.participant': 'Participante',
 
   // Dashboard
-  'dashboard.welcome': '{greeting}, {name}!',
+  // v1.8.72: a saudação virou DUAS linhas (menor em cima, nome grande embaixo).
+  'dashboard.welcomeGreeting': '{greeting},',
+  'dashboard.welcomeName': '{name}!',
   'dashboard.newTournament': 'Novo Torneio',
   'dashboard.filterAll': 'Todos',
   'dashboard.filterOrganized': 'Organizados',
