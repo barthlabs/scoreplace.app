@@ -277,6 +277,11 @@ const SUITES = [
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',
   'tests/dash-enroll-late-window.test.js',
+  // 📣 Novidades no seu torneio: a MESMA grade de "Seus últimos resultados", sandbox fora
+  // dos feeds (o clone duplicava tudo e roubava vaga na lista que corta em 3) e lançamento
+  // PENDENTE entrando com o carimbo do proposedAt — sem ele o topo mostrava "há 18h" com o
+  // torneio andando hoje. O feed é somente leitura (o organizador via "Editar" fora da chave).
+  'tests/novidades-grade-ordem-e-sem-repeticao.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',

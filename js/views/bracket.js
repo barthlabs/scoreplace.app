@@ -3403,9 +3403,19 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   return html;
 }
 
-function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingSub) {
+function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingSub, opts) {
   var _t = window._t || function(k) { return k; };
   if (!m) return '';
+
+  // v1.8.67: MODO SOMENTE LEITURA — o card é o mesmo, mas SEM nenhuma ação. Existe
+  // porque a dashboard ("📣 Novidades no seu torneio") reusa este renderizador para
+  // mostrar jogo de OUTRAS pessoas: ali não há o que aprovar, contestar, dar W.O. nem
+  // pontuar. `canEnterResult=false` NÃO cobria isso — os botões de pendência, o painel
+  // de disputa do organizador e o chip de W.O. têm gates PRÓPRIOS (papel do usuário),
+  // então o organizador via "✏️ Editar" num card fora da chave; clicar ali cai em
+  // `_editPendingResult`, que mexe no DOM por `getElementById('score-p1-'+matchId)` —
+  // ids que só existem na tela da chave.
+  var _readOnly = !!(opts && opts.readOnly);
 
   // Sit-out (Folga): render compact info card instead of full match card
   if (m.isSitOut) {
@@ -3559,8 +3569,18 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _woAbsent = m.wo
     ? (m.woAbsentSide || (isDecided ? (p1IsWinner ? 'p2' : 'p1') : null))
     : null;
+  // v1.8.67: o placar PENDENTE passa pelo MESMO formatador do decidido (formatSetScores →
+  // window._formatSetForPlayer), que é quem sabe desenhar o subplacar do tie-break (6⁽⁷⁾).
+  // Antes ele era montado à mão com `.map(s => s.gamesP1)`, o que lia SÓ os games e jogava
+  // fora o `s.tiebreak` — então um 5×6 decidido no tie-break aparecia como "5" e "6" secos.
+  // MEDIDO no doc do Confra (14/ago, R1 Grupo T • Jogo 2): o pendente traz
+  // `sets:[{gamesP1:5,gamesP2:6,tiebreak:{pointsP1:4,pointsP2:7}}]` — o dado sempre esteve
+  // lá, faltava ler. Duas formatações do mesmo placar divergem na primeira mudança; por isso
+  // aqui é REUSO, não uma segunda regra. `isFixedSet` é o nome do campo no pendingResult
+  // (no match decidido ele se chama `fixedSet`).
+  const _prFmt = hasPending ? Object.assign({}, _pr, { fixedSet: !!_pr.isFixedSet }) : null;
   const _p1Display = hasPending
-    ? (_pr.useSets && Array.isArray(_pr.sets) ? _pr.sets.map(function(s) { return s.gamesP1; }).join(' ') : _pr.scoreP1)
+    ? formatSetScores(_prFmt, 1)
     : _woAbsent
       ? (_woAbsent === 'p1' ? 'W.O.' : '')
       : (useSets && isDecided ? formatSetScores(m, 1) : m.scoreP1);
@@ -3580,7 +3600,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         oninput="window._highlightWinner('${_esc(m.id)}')">${p2TbInput}`
     : null;
   const _p2Display = hasPending
-    ? (_pr.useSets && Array.isArray(_pr.sets) ? _pr.sets.map(function(s) { return s.gamesP2; }).join(' ') : _pr.scoreP2)
+    ? formatSetScores(_prFmt, 2)   // mesmo formatador do lado 1 — ver o comentário acima
     : _woAbsent
       ? (_woAbsent === 'p2' ? 'W.O.' : '')
       : (useSets && isDecided ? formatSetScores(m, 2) : m.scoreP2);
@@ -3755,6 +3775,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       pendingActionBtns = _btnEdit;
     }
     // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
+    // Somente leitura vence QUALQUER papel: fora da chave não há ação possível.
+    if (_readOnly) pendingActionBtns = '';
   }
   // CANÔNICO (dono, 18/jul): "é o meu jogo?" — SÓ pelo UID do slot (_userTeamInMatch →
   // _slotUids). Sem fallback de nome/e-mail/substring: casar nome mostrava o input de placar
@@ -3835,7 +3857,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       // autoridade (org/co-host). Deixa claro que ele troca de papel: atuava
       // como jogador (Fases 1-3), agora atua como ORGANIZADOR.
       var _orgResolvePanel = '';
-      if (_isAuthorityInner) {
+      if (_isAuthorityInner && !_readOnly) {
         // v1.9.77: caminho ÚNICO do organizador. "Confirmar placar (X × Y)"
         // finaliza o placar atual direto (via _approveResult). "Editar" abre os
         // campos pra lançar outro placar (e finaliza). "Refazer (0×0)" reabre.
@@ -3903,9 +3925,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // v4.1.19 CANÔNICO: botão W.O. compacto no HEADER, à esquerda do "Ao Vivo" (substitui o
   // "⚠️ Faltou alguém?" largo que ficava embaixo do card). Mesmo gate do chip antigo.
-  var _woHeaderChip = (typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))
+  var _woHeaderChip = (!_readOnly && typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))
     ? window._woClaimChip(t, { scope: 'match', matchId: m.id, compact: true })
     : '';
+  // Cluster de ações do cabeçalho — vazio inteiro em somente leitura (cada botão tem
+  // gate próprio; um `if` por botão deixaria o próximo passar despercebido).
+  var _headerActions = _readOnly ? '' : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`;
 
   var _headerHtml;
   if (_showHeaderPending) {
@@ -3928,7 +3953,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${readyBadge}
         </div>
-        <div id="header-btns-${m.id}" class="btn-row" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}</div>
+        <div id="header-btns-${m.id}" class="btn-row" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_headerActions}</div>
       </div>`;
   }
 

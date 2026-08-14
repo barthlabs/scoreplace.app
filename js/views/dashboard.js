@@ -1443,7 +1443,22 @@ function renderDashboard(container) {
       return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
     }
 
+    // v1.8.67: chave de deduplicação desta seção — `_collectAllMatches` NÃO deduplica, e
+    // um jogo que exista em `t.matches` E dentro de uma rodada entraria duas vezes.
+    var _seenMatch = {};
+
     participacoes.forEach(function(t) {
+      // ⚠️ v1.8.67: SANDBOX NÃO ENTRA. O SB é um CLONE do torneio real — mesmos jogos,
+      // mesmos placares e os MESMOS ids de match. MEDIDO em produção (14/ago): o Confra e
+      // o "(SB) Confra" tinham os 6 mesmos resultados, então cada jogo aparecia DUAS vezes
+      // no painel do dev; em "Seus últimos resultados", que corta em 3, a cópia ainda
+      // ROUBAVA uma das três vagas (o dono via 2 jogos reais + 1 clone). E o card da chave
+      // usa `id="card-<m.id>"`: com o clone junto, o MESMO id ficava duas vezes no DOM —
+      // `_editPendingResult`/`_approveResult` acham por id e agiriam no torneio errado.
+      // O SB tem a chave dele pra ser testado; contaminar a tela inicial é justamente o
+      // que o sandbox existe para NÃO fazer. `_isSandboxRef` é a fonte única já usada em
+      // stats, histórico e Análise de Inscritos.
+      if (window._isSandboxRef && window._isSandboxRef(t.id, t.name)) return;
       // v4.1.20: carimba a numeração GLOBAL "JOGO N" (fonte única, mesma do bracket) neste
       // torneio → os cards de Meus Resultados leem `m._gameNum` e mostram o número certo.
       try { if (typeof window._assignGlobalGameNumbers === 'function') window._assignGlobalGameNumbers(t); } catch (e) {}
@@ -1468,6 +1483,11 @@ function renderDashboard(container) {
 
       matchSources.forEach(function(m) {
         if (!m) return;
+        // v1.8.67: o MESMO jogo nunca entra duas vezes (ver `_seenMatch`). O id é a
+        // identidade; o fallback só existe para jogo legado sem id.
+        var _mKey = t.id + '|' + (m.id || ((m.label || '') + '|' + (m.p1 || '') + '|' + (m.p2 || '')));
+        if (_seenMatch[_mKey]) return;
+        _seenMatch[_mKey] = 1;
         if (m.isSitOut || m.p1 === 'FOLGA' || m.p2 === 'FOLGA') return; // folga não é jogo a disputar
         // v3.1.26: BYE = avanço automático (não é jogo a disputar). MAS o adversário
         // pode estar "a definir" (TBD/vazio) — nesse caso o jogo AINDA aparece em
@@ -1506,14 +1526,30 @@ function renderDashboard(container) {
           // lançamento, e torneio velho sem carimbo cai no desempate por rodada).
           // Encerrado = `finished`, inclusive o encerrado automaticamente por abandono.
           var _tEncerrado = (t.status === 'finished') || !!t.autoClosed;
-          if (!_tEncerrado && m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length))) {
+          var _confirmado = !!m.winner && (m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length));
+          // ⚠️ v1.8.67: LANÇAMENTO PENDENTE TAMBÉM É NOVIDADE. Exigir `m.winner` fazia a
+          // seção ignorar justamente o que ACABOU de acontecer: placar lançado por um
+          // jogador só ganha `winner` quando o outro lado confirma, o que pode levar horas.
+          // MEDIDO (14/ago, 15h): os ÚNICOS lançamentos do dia na base inteira eram os 3
+          // jogos do R1 Grupo T do Confra, lançados pela Elide às 12:43, 14:58 e 15:00 —
+          // todos em `pendingResult`. Por isso o topo da lista mostrava um jogo de "há 18h"
+          // e o dono via "novidade de ontem" com o torneio andando hoje.
+          // Entra SEM mentir: o card é o mesmo da chave, que já desenha o estado pendente
+          // (tag PENDENTE âmbar + "⏳ Aguardando aprovação" + "proposto por X") — ninguém
+          // lê como placar final. O carimbo da ordenação é o `proposedAt`, que É a hora do
+          // lançamento. Em disputa também entra: contestação é novidade do torneio.
+          var _pnd = (!m.winner && m.pendingResult) ? m.pendingResult : null;
+          var _pendente = !!_pnd && (_pnd.scoreP1 != null || (Array.isArray(_pnd.sets) && _pnd.sets.length) || !!_pnd.winner);
+          if (!_tEncerrado && (_confirmado || _pendente)) {
             othersResults.push({
-              tId: t.id, tName: t.name || '', m: m,
+              tId: t.id, tName: t.name || '', m: m, pendente: _pendente,
               // MEDIDO em produção: `resultAt` é o carimbo do lançamento (7 de 8 jogos
               // do "Duplas Mistas" o têm), mas torneio antigo (BT Corpus Christi) não
               // tem carimbo NENHUM — daí a cadeia + o desempate por rodada/nº do jogo,
               // a mesma régua que "Meus Últimos Resultados" já usa.
-              at: _tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || 0,
+              at: _pendente
+                ? (_tsMs(_pnd.proposedAt) || _tsMs(m.updatedAt) || 0)
+                : (_tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.completedAt) || 0),
               roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
               gameSeq: (m._gameNum != null) ? Number(m._gameNum)
                 : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),
@@ -2268,10 +2304,14 @@ function renderDashboard(container) {
       function _novCard(it) {
         var _quando = _agoLabel(it.at);
         var _meta = [it.tName, it.subLine].filter(Boolean).join(' · ');
+        // v1.8.67: `{readOnly:true}` — `canEnterResult=false` sozinho NÃO calava os botões
+        // de pendência/disputa/W.O., que têm gate próprio por PAPEL: como organizador, o
+        // dono via "✏️ Editar" num card fora da chave, e o clique cai num caminho que
+        // procura ids que só existem lá.
         var _card = (typeof window.renderMatchCard === 'function')
-          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null)
+          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true })
           : '';
-        return '<div data-nov-card="1" style="margin-bottom:10px;">' +
+        return '<div data-nov-card="1" style="min-width:0;">' +
           '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;padding:0 2px;">' +
             '<span style="flex:1;min-width:0;font-size:0.66rem;font-weight:700;color:#94a3b8;text-transform:uppercase;' +
             'letter-spacing:0.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(_meta) + '</span>' +
@@ -2280,22 +2320,32 @@ function renderDashboard(container) {
         '</div>';
       }
 
-      _novHtml += '<div id="novidades-section" style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      // ⚠️ v1.8.67: A MESMA GRADE de "Seus últimos resultados" — ordem do dono: "se cabe 1
+      // jogo na largura da tela é 1 jogo, se cabem 3 são 3". Antes cada card ocupava uma
+      // linha inteira (empilhados num `margin-bottom`), então em tela larga sobrava metade
+      // da tela vazia enquanto a seção vizinha, com o MESMO conteúdo, usava 3 colunas.
+      // `auto-fill` + `minmax(280px,1fr)` é a régua canônica do app.
+      // ⚠️ O colapso passou a ser por ATRIBUTO na seção, não por um `<div>` separado com
+      // os "anteriores": um wrapper no meio QUEBRA a grade (os cards de dentro dele
+      // formariam outra grade, e o primeiro card ficaria sozinho numa linha própria).
+      // Com `data-nov-collapsed`, os cards são todos irmãos na MESMA grade e o estado
+      // fechado apenas esconde do 2º em diante — a grade reflui sozinha.
+      _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-nov-card]:nth-child(n+2){display:none;}' +
+        '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}</style>';
       _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '<span id="nov-chevron" style="font-size:0.8rem;display:inline-block;">' + (_novCollapsed ? '▸' : '▾') + '</span>' +
         '📣 Novidades no seu torneio</h3>';
-      // o mais recente fica SEMPRE visível — é o "apenas o último jogo" do estado colapsado
-      _novHtml += '<div style="margin-top:12px;">' + _novCard(_novList[0]) + '</div>';
+      _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
+      for (var _nvI = 0; _nvI < _novList.length; _nvI++) _novHtml += _novCard(_novList[_nvI]);
+      _novHtml += '</div>';
+      // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
+      if (_novTotal > _NOV_MAX) {
+        _novHtml += '<p data-nov-extra="1" style="margin:8px 0 0;font-size:0.68rem;color:#64748b;text-align:center;">' +
+          'mostrando os ' + _NOV_MAX + ' mais recentes de ' + _novTotal + '</p>';
+      }
       if (_novList.length > 1) {
-        _novHtml += '<div id="novidades-body" style="' + (_novCollapsed ? 'display:none;' : '') + '">';
-        for (var _nvI = 1; _nvI < _novList.length; _nvI++) _novHtml += _novCard(_novList[_nvI]);
-        // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
-        if (_novTotal > _NOV_MAX) {
-          _novHtml += '<p style="margin:2px 0 0;font-size:0.68rem;color:#64748b;text-align:center;">' +
-            'mostrando os ' + _NOV_MAX + ' mais recentes de ' + _novTotal + '</p>';
-        }
-        _novHtml += '</div>';
-        _novHtml += '<p id="novidades-hint" onclick="window._toggleNovidadesCollapse()" style="margin:6px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
+        _novHtml += '<p id="novidades-hint" onclick="window._toggleNovidadesCollapse()" style="margin:8px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
           (_novCollapsed ? '▾ ver os ' + (_novList.length - 1) + ' jogos anteriores' : '▴ ocultar anteriores') + '</p>';
       }
       _novHtml += '</div>'; // fecha #novidades-section
@@ -3486,21 +3536,24 @@ window._applyDashSearchInPlace = function() {
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(keepY); } catch (e) {}
 };
 
-// 📣 Novidades no seu torneio — mesmo padrão do "Meus Últimos Resultados": o mais
-// recente fica FORA do corpo colapsável (é o "apenas o último jogo visível"), então
-// aqui só entram/saem os anteriores. A escolha é lembrada; o default é COLAPSADA.
+// 📣 Novidades no seu torneio — todos os cards vivem na MESMA grade responsiva (a de
+// "Seus últimos resultados"); o estado fechado esconde do 2º em diante por CSS, via o
+// atributo `data-nov-collapsed` da seção. v1.8.67: era um `<div>` separado com os
+// "anteriores", e um wrapper no meio quebrava a grade. A escolha é lembrada; o default
+// é COLAPSADA (só o lançamento mais recente à vista).
 window._toggleNovidadesCollapse = function() {
-  var body = document.getElementById('novidades-body');
+  var sec = document.getElementById('novidades-section');
   var chev = document.getElementById('nov-chevron');
   var hint = document.getElementById('novidades-hint');
-  if (!body) return;
-  var willCollapse = body.style.display !== 'none';
-  body.style.display = willCollapse ? 'none' : '';
+  if (!sec) return;
+  var willCollapse = sec.getAttribute('data-nov-collapsed') !== '1';
+  sec.setAttribute('data-nov-collapsed', willCollapse ? '1' : '0');
   if (chev) chev.textContent = willCollapse ? '▸' : '▾';
   if (hint) {
-    var n = body.querySelectorAll ? body.querySelectorAll('[data-nov-card]').length : 0;
+    var grid = document.getElementById('novidades-grid');
+    var n = grid ? grid.querySelectorAll('[data-nov-card]').length : 0;
     hint.textContent = willCollapse
-      ? ('▾ ver os ' + (n || body.children.length) + ' jogos anteriores')
+      ? ('▾ ver os ' + Math.max(0, n - 1) + ' jogos anteriores')
       : '▴ ocultar anteriores';
   }
   try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
