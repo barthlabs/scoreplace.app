@@ -82,22 +82,68 @@ function un(v) {
     // dupla é tipografia ("A / B"): cada lado é uma pessoa
     s.split(' / ').forEach((x) => { const y = x.trim(); if (y) sintetico(y); });
   };
-  const varre = (node) => {
-    if (Array.isArray(node)) return node.forEach(varre);
+  // ⚠️ COLHE POR SUFIXO DE CHAVE, NÃO POR LISTA. A 1ª versão listava as chaves conhecidas
+  // e a auditoria pegou `organizerName` com nome real sobrevivendo — a MESMA armadilha que
+  // o comentário do uid logo abaixo já descreve. A assimetria decide a regra: esquecer de
+  // INCLUIR numa lista é vazamento; esquecer de EXCLUIR é só um rótulo trocado. Então:
+  // toda chave terminada em "name" é pessoa, salvo as que sabidamente nomeiam OUTRA coisa.
+  const NAO_E_PESSOA = /^(venue|tournament|group|round|category|sport|phase|format|city|state|country|club|file|team|event|channel|display)?name$/i;
+  const CHAVE_E_PESSOA = (k) => /name$/i.test(k) && !NAO_E_PESSOA.test(k);
+  const varre = (node, ehRaiz) => {
+    if (Array.isArray(node)) return node.forEach((x) => varre(x, false));
     if (!node || typeof node !== 'object') return;
-    ['displayName', 'name', 'p1', 'p2', 'p1Name', 'p2Name', 'winner', 'absentName',
-     'subName', 'byName', 'proposedByName'].forEach((k) => colhe(node[k]));
+    Object.keys(node).forEach((k) => {
+      // no torneio, `name` é o nome do EVENTO — não colher (e ele é restaurado no fim)
+      if (ehRaiz && k === 'name') return;
+      if (typeof node[k] === 'string') { if (k === 'displayName' || CHAVE_E_PESSOA(k)) colhe(node[k]); }
+    });
+    ['p1', 'p2', 'winner'].forEach((k) => colhe(node[k]));
     ['team1', 'team2', 'players', 'participants'].forEach((k) => {
       if (Array.isArray(node[k])) node[k].forEach((x) => { if (typeof x === 'string') colhe(x); });
     });
-    Object.keys(node).forEach((k) => { if (k !== 'name' || typeof node[k] === 'object') varre(node[k]); });
+    Object.keys(node).forEach((k) => { if (typeof node[k] === 'object') varre(node[k], false); });
   };
-  out.forEach((t) => { const nomeT = t.name; varre(t); t.name = nomeT; }); // nome do TORNEIO fica
-  // 2ª passada: substitui em QUALQUER string, inclusive dentro de "A / B" e de winner.
+  out.forEach((t) => { const nomeT = t.name; varre(t, true); t.name = nomeT; }); // nome do TORNEIO fica
+  // 2ª passada: substitui em QUALQUER string.
+  // ⚠️ POR OCORRÊNCIA, NUNCA POR IGUALDADE. A versão anterior casava a string INTEIRA (ou
+  // cada lado de "A / B") e a auditoria pegou dois vetores inteiros passando batido:
+  //   • PROSA — `history[].message` é texto livre com o nome dentro
+  //     ("Resultado proposto: Fulano / Beltrano 6 × 3 …", "Participante movido: Fulano D → C");
+  //   • CHAVE COMPOSTA POR NOME — `opponentHistory` usa "Fulano|||Beltrano" como chave.
+  // É a mesma lição do uid (que já virou substituição por token logo abaixo): identidade
+  // aparece DENTRO de string, não só como string. Mais longo primeiro, pra "Ana Paula" não
+  // ser comida por "Ana"; limite de palavra Unicode, pra não atingir substring de outra.
+  // ⚠️ DUAS VARIAÇÕES que a igualdade literal não alcança, ambas achadas na auditoria:
+  //   • GRAFIA — a base tem "Dėbora Castello" (ė = U+0117) no elenco e "Debora Castello"
+  //     na prosa do histórico. São strings diferentes; casar só a literal deixou 10 passar.
+  //   • TOKEN SOLTO — o nome auto-gerado do torneio ("Torneio … de Hellen") traz só o
+  //     PRIMEIRO nome, enquanto o colhido foi "Hellen Motoyama".
+  // Então cada pessoa entra no índice com o nome completo, a versão sem diacrítico, e
+  // cada token de 4+ letras (também sem diacrítico) — todos apontando pro MESMO sintético.
+  const semAcento = (x) => x.normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const idx = new Map();
+  const põeIdx = (chave, valor) => { const c = chave.trim(); if (c.length >= 3 && !idx.has(c)) idx.set(c, valor); };
+  // ⚠️ DUAS PASSADAS, e a ordem é o que impede COLAPSO DE PESSOAS DISTINTAS. Muita gente
+  // se cadastra só com o primeiro nome, então o TOKEN de uma ("Luciana", de "Luciana
+  // Marinho") é o NOME COMPLETO de outra. Numa passada só, quem chegasse antes levava a
+  // chave e as duas viravam a MESMA pessoa sintética — medido: 2 colapsos no Confra,
+  // que mudariam a saída do motor por dado de entrada errado, não por refactor.
+  // Nome completo primeiro, sempre; token só preenche o que sobrou.
+  mapa.forEach((sint, real) => { põeIdx(real, sint); põeIdx(semAcento(real), sint); });
+  mapa.forEach((sint, real) => {
+    real.split(/[\s.]+/).forEach((tk) => { if (tk.length >= 4) { põeIdx(tk, sint); põeIdx(semAcento(tk), sint); } });
+  });
+  const nomesOrdenados = [...idx.keys()].sort((a, b) => b.length - a.length);
+  const RE_NOMES = nomesOrdenados.length
+    ? new RegExp('(?<![\\p{L}\\p{N}])(' + nomesOrdenados.map(esc).join('|') + ')(?![\\p{L}\\p{N}])', 'gu')
+    : null;
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   const troca = (s) => {
-    if (typeof s !== 'string') return s;
-    if (s.indexOf(' / ') !== -1) return s.split(' / ').map((x) => mapa.get(x.trim()) || x).join(' / ');
-    return mapa.get(s.trim()) || s;
+    if (typeof s !== 'string' || !RE_NOMES) return s;
+    if (s.indexOf('data:') === 0) return s;                    // logo base64: não mexer
+    const direto = idx.get(s.trim());
+    if (direto) return direto;                                 // caminho rápido e exato
+    return s.replace(RE_NOMES, (m) => idx.get(m) || m);
   };
   // UMA função pra toda string, usada nos DOIS ramos (objeto e array). Antes o ramo de
   // ARRAY só trocava nome — e-mail dentro de `memberEmails[]` passava batido: a auditoria
@@ -133,12 +179,20 @@ function un(v) {
   };
 
   const limpaString = (k, v) => {
+    // ⚠️ E-MAIL PRIMEIRO. Estava DEPOIS do token de uid, e a auditoria pegou
+    // `uid0110@gmail.com` sobrevivendo: o local-part do endereço real tinha 26+
+    // alfanuméricos, `trocaUidsEm` casou nele e retornou cedo — o domínio real ficou.
+    // E-mail é e-mail antes de ser qualquer outra coisa.
+    if (/@/.test(v) && v.indexOf('data:') !== 0) return 'pessoa' + (Math.abs(hash(v)) % 9999) + '@exemplo.test';
     if (PARECE_UID.test(v)) return pseudoUid(v);
     const comToken = trocaUidsEm(v);
     if (comToken !== v) return comToken;
-    if (/@/.test(v)) return 'pessoa' + (Math.abs(hash(v)) % 9999) + '@exemplo.test';
     if (/^\+?\d[\d\s()-]{7,}$/.test(v)) return '';                       // telefone some
-    if (k === 'id' || k === 'uid' || k === 'name') return v;               // identidade fica
+    // ⚠️ `name` NÃO entra nesta linha. Ele estava aqui como "identidade fica" — a intenção
+    // era preservar o nome do TORNEIO, mas `name` é também o campo de PESSOA em
+    // participantes, classificação, grupos e notificações: 83 nomes reais escaparam por
+    // aqui. O nome do torneio já é restaurado explicitamente depois do `aplica`.
+    if (k === 'id' || k === 'uid') return v;                               // identidade fica
     return troca(v);
   };
   const aplica = (node) => {
@@ -150,13 +204,18 @@ function un(v) {
       const v = node[k];
       if (typeof v === 'string') node[k] = limpaString(k, v);
       else aplica(v);
-      // mapa chaveado por uid (checkedIn, confirms, sitOutHistory…): a CHAVE também é identidade
-      const kNovo = PARECE_UID.test(k) ? pseudoUid(k) : trocaUidsEm(k);
+      // mapa chaveado por uid (checkedIn, confirms, sitOutHistory…): a CHAVE também é
+      // identidade — e nem sempre por uid: `opponentHistory` chaveia por NOME
+      // ("Fulano|||Beltrano"), então a chave passa pelas DUAS trocas.
+      const kNovo = PARECE_UID.test(k) ? pseudoUid(k) : troca(trocaUidsEm(k));
       if (kNovo !== k) { node[kNovo] = node[k]; delete node[k]; }
     });
   };
   function hash(str) { let h = 0; for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; } return h; }
-  out.forEach((t) => { const nomeT = t.name, idT = t.id; aplica(t); t.name = nomeT; t.id = idT; });
+  // O nome do TORNEIO fica (é o que dá legibilidade ao golden), mas passa pela troca:
+  // o quick-create gera "Torneio <formato> de <modalidade> de <PRIMEIRO NOME>", então o
+  // rótulo do evento carrega nome de gente real. Trocar preserva a estrutura do nome.
+  out.forEach((t) => { const nomeT = t.name, idT = t.id; aplica(t); t.name = troca(nomeT); t.id = idT; });
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(out, null, 1));

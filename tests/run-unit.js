@@ -419,6 +419,14 @@ const SUITES = [
   // commit. Cobre 118 jogos gerados (inclui Rei/Rainha do Confra) e 291 linhas de
   // classificação. v1.8.50.
   'tests/motor-golden-master.js',
+  // GOLDEN MASTER DA ELIMINATÓRIA: a metade que o de cima NÃO alcança. O motor-golden
+  // congela a fase CLASSIFICATÓRIA e a leitura viva, mas nunca roda o AVANÇO DE FASE —
+  // e é exatamente a eliminatória do Confra que ainda não aconteceu e que o dono liberou
+  // pra mexer. Roda `_advanceMultiPhase` sobre o SANDBOX do Confra (137 inscritos, 33
+  // grupos, 104 jogos) com a R1 completada de forma determinística, e congela os 98
+  // confrontos gerados + a classificação por grupo que os alimentou. A cobertura dos
+  // degraus de desempate está MEDIDA no cabeçalho do arquivo (4 dos 9, e por quê).
+  'tests/eliminatoria-golden-master.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

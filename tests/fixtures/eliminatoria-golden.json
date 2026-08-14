@@ -1,0 +1,2605 @@
+{
+  "avisos": [],
+  "classificacaoPorGrupo": [
+    {
+      "grupo": 0,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 10,
+          "pf": 18,
+          "uid": "uid0010",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 12,
+          "pf": 16,
+          "uid": "uid0011",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 11,
+          "uid": "uid0012",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 11,
+          "uid": "uid0009",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo A"
+    },
+    {
+      "grupo": 1,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 10,
+          "pf": 17,
+          "uid": "uid0015",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 16,
+          "uid": "uid0014",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 15,
+          "pf": 12,
+          "uid": "uid0016",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 9,
+          "uid": "uid0013",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo B"
+    },
+    {
+      "grupo": 2,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 18,
+          "uid": "uid0018",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 16,
+          "uid": "uid0020",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 15,
+          "pf": 14,
+          "uid": "uid0017",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 10,
+          "uid": "uid0019",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo C"
+    },
+    {
+      "grupo": 3,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 15,
+          "uid": "uid0021",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 15,
+          "uid": "uid0022",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 14,
+          "uid": "uid0023",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 8,
+          "uid": "uid0024",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo D"
+    },
+    {
+      "grupo": 4,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 8,
+          "pf": 18,
+          "uid": "uid0025",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 14,
+          "uid": "uid0027",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 13,
+          "uid": "uid0026",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 7,
+          "uid": "uid0028",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo E"
+    },
+    {
+      "grupo": 5,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 18,
+          "uid": "uid0029",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 18,
+          "uid": "uid0030",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 17,
+          "pf": 15,
+          "uid": "uid0031",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 13,
+          "uid": "uid0032",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo F"
+    },
+    {
+      "grupo": 6,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 14,
+          "pf": 20,
+          "uid": "uid0034",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 18,
+          "uid": "uid0035",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 19,
+          "pf": 15,
+          "uid": "uid0033",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 19,
+          "pf": 15,
+          "uid": "uid0036",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo G"
+    },
+    {
+      "grupo": 7,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 16,
+          "pf": 19,
+          "uid": "uid0039",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 17,
+          "uid": "uid0040",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 17,
+          "uid": "uid0037",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 17,
+          "uid": "uid0038",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo H"
+    },
+    {
+      "grupo": 8,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 18,
+          "uid": "uid0044",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 17,
+          "uid": "uid0042",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 16,
+          "pf": 15,
+          "uid": "uid0041",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 12,
+          "uid": "uid0043",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo I"
+    },
+    {
+      "grupo": 9,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 9,
+          "pf": 19,
+          "uid": "uid0045",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 14,
+          "uid": "uid0048",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 15,
+          "pf": 13,
+          "uid": "uid0047",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 10,
+          "uid": "uid0046",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo J"
+    },
+    {
+      "grupo": 10,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 19,
+          "uid": "uid0049",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 19,
+          "uid": "uid0052",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 18,
+          "pf": 15,
+          "uid": "uid0050",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 20,
+          "pf": 13,
+          "uid": "uid0051",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo K"
+    },
+    {
+      "grupo": 11,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 17,
+          "uid": "uid0053",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 15,
+          "uid": "uid0055",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 14,
+          "uid": "uid0056",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 10,
+          "uid": "uid0054",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo L"
+    },
+    {
+      "grupo": 12,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 9,
+          "pf": 16,
+          "uid": "uid0058",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 10,
+          "pf": 15,
+          "uid": "uid0059",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 12,
+          "uid": "uid0060",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 7,
+          "uid": "uid0057",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo M"
+    },
+    {
+      "grupo": 13,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 13,
+          "pf": 18,
+          "uid": "uid0061",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 15,
+          "pf": 16,
+          "uid": "uid0062",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 14,
+          "uid": "uid0063",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 14,
+          "uid": "uid0064",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo N"
+    },
+    {
+      "grupo": 14,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 9,
+          "pf": 15,
+          "uid": "uid0065",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 10,
+          "pf": 14,
+          "uid": "uid0068",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 13,
+          "uid": "uid0067",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 6,
+          "uid": "uid0066",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo O"
+    },
+    {
+      "grupo": 15,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 15,
+          "pf": 19,
+          "uid": "uid0069",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 17,
+          "uid": "uid0072",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 16,
+          "uid": "uid0071",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 16,
+          "uid": "uid0070",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo P"
+    },
+    {
+      "grupo": 16,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 8,
+          "pf": 13,
+          "uid": "uid0005",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 10,
+          "pf": 11,
+          "uid": "uid0008",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 12,
+          "pf": 9,
+          "uid": "uid0003",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 12,
+          "pf": 9,
+          "uid": "uid0001",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo Q"
+    },
+    {
+      "grupo": 17,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 11,
+          "pf": 19,
+          "uid": "uid0075",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 16,
+          "uid": "uid0073",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 13,
+          "uid": "uid0077",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 12,
+          "uid": "uid0076",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo R"
+    },
+    {
+      "grupo": 18,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 10,
+          "pf": 18,
+          "uid": "uid0004",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 14,
+          "uid": "uid0007",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 15,
+          "pf": 13,
+          "uid": "uid0002",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 11,
+          "uid": "uid0006",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo S"
+    },
+    {
+      "grupo": 19,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 8,
+          "pf": 18,
+          "uid": "uid0078",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 12,
+          "uid": "uid0080",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 12,
+          "uid": "uid0081",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 10,
+          "uid": "uid0079",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo T"
+    },
+    {
+      "grupo": 20,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 7,
+          "pf": 13,
+          "uid": "uid0082",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 7,
+          "pf": 13,
+          "uid": "uid0083",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 8,
+          "pf": 12,
+          "uid": "uid0084",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 2,
+          "uid": "uid0085",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo U"
+    },
+    {
+      "grupo": 21,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 17,
+          "uid": "uid0088",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 16,
+          "uid": "uid0087",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 15,
+          "pf": 13,
+          "uid": "uid0086",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 10,
+          "uid": "uid0089",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo V"
+    },
+    {
+      "grupo": 22,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 7,
+          "pf": 18,
+          "uid": "uid0093",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 13,
+          "pf": 12,
+          "uid": "uid0090",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 13,
+          "pf": 12,
+          "uid": "uid0092",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 8,
+          "uid": "uid0091",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo W"
+    },
+    {
+      "grupo": 23,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 18,
+          "uid": "uid0094",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 16,
+          "uid": "uid0097",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 15,
+          "pf": 14,
+          "uid": "uid0095",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 10,
+          "uid": "uid0096",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo X"
+    },
+    {
+      "grupo": 24,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 6,
+          "pf": 18,
+          "uid": "uid0099",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 12,
+          "pf": 12,
+          "uid": "uid0100",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 13,
+          "pf": 11,
+          "uid": "uid0098",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 7,
+          "uid": "uid0101",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo Y"
+    },
+    {
+      "grupo": 25,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 14,
+          "pf": 19,
+          "uid": "uid0105",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 16,
+          "uid": "uid0103",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 16,
+          "uid": "uid0104",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 15,
+          "uid": "uid0102",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo Z"
+    },
+    {
+      "grupo": 26,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 19,
+          "uid": "uid0107",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 19,
+          "uid": "uid0110",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 18,
+          "pf": 14,
+          "uid": "uid0108",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 20,
+          "pf": 12,
+          "uid": "uid0109",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo A2"
+    },
+    {
+      "grupo": 27,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 9,
+          "pf": 18,
+          "uid": "uid0113",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 12,
+          "pf": 15,
+          "uid": "uid0112",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 11,
+          "uid": "uid0114",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 10,
+          "uid": "uid0111",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo B2"
+    },
+    {
+      "grupo": 28,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 8,
+          "pf": 18,
+          "uid": "uid0115",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 12,
+          "pf": 14,
+          "uid": "uid0118",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 10,
+          "uid": "uid0116",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 10,
+          "uid": "uid0117",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo C2"
+    },
+    {
+      "grupo": 29,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 9,
+          "pf": 16,
+          "uid": "uid0122",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 10,
+          "pf": 15,
+          "uid": "uid0119",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 12,
+          "uid": "uid0120",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 7,
+          "uid": "uid0121",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo D2"
+    },
+    {
+      "grupo": 30,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 9,
+          "pf": 18,
+          "uid": "uid0125",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 15,
+          "uid": "uid0124",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 13,
+          "uid": "uid0126",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 8,
+          "uid": "uid0123",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo E2"
+    },
+    {
+      "grupo": 31,
+      "linhas": [
+        {
+          "d": 0,
+          "pc": 13,
+          "pf": 19,
+          "uid": "uid0129",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 15,
+          "pf": 17,
+          "uid": "uid0130",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 14,
+          "uid": "uid0127",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 14,
+          "uid": "uid0128",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo F2"
+    },
+    {
+      "grupo": 32,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 16,
+          "pf": 18,
+          "uid": "uid0134",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 16,
+          "pf": 18,
+          "uid": "uid0133",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 17,
+          "pf": 17,
+          "uid": "uid0131",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 19,
+          "pf": 15,
+          "uid": "uid0132",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo G2"
+    }
+  ],
+  "eliminatoria": [
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 9 / Pessoa 8",
+      "p1Uid": null,
+      "p2": "Pessoa 133 / Pessoa 132",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 12 / Pessoa 14",
+      "p1Uid": null,
+      "p2": "Pessoa 128 / Pessoa 129",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 15 / Pessoa 16",
+      "p1Uid": null,
+      "p2": "Pessoa 124 / Pessoa 123",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 19 / Pessoa 21",
+      "p1Uid": null,
+      "p2": "Pessoa 121 / Pessoa 118",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P5",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 24 / Pessoa 25",
+      "p1Uid": null,
+      "p2": "Pessoa 114 / Pessoa 117",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P6",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 28 / Pessoa 27",
+      "p1Uid": null,
+      "p2": "Pessoa 112 / Pessoa 111",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P7",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 33 / Pessoa 34",
+      "p1Uid": null,
+      "p2": "Pessoa 106 / Pessoa 109",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P8",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 38 / Pessoa 36",
+      "p1Uid": null,
+      "p2": "Pessoa 105 / Pessoa 103",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P9",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 39 / Pessoa 42",
+      "p1Uid": null,
+      "p2": "Pessoa 99 / Pessoa 100",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P10",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 43 / Pessoa 46",
+      "p1Uid": null,
+      "p2": "Pessoa 94 / Pessoa 97",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P11",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 47 / Pessoa 49",
+      "p1Uid": null,
+      "p2": "Pessoa 93 / Pessoa 90",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P12",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 52 / Pessoa 53",
+      "p1Uid": null,
+      "p2": "Pessoa 88 / Pessoa 87",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P13",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 55 / Pessoa 56",
+      "p1Uid": null,
+      "p2": "Pessoa 82 / Pessoa 83",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P14",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 59 / Pessoa 62",
+      "p1Uid": null,
+      "p2": "Pessoa 78 / Pessoa 80",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P15",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 63 / Pessoa 66",
+      "p1Uid": null,
+      "p2": "Pessoa 75 / Pessoa 76",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P16",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 67 / Pessoa 69",
+      "p1Uid": null,
+      "p2": "Pessoa 71 / Pessoa 70",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P17",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 4 / Pessoa 5",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P5",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P6",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P7",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P8",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P9",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P10",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P11",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P12",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P13",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P14",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P15",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R2-P16",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P5",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P6",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P7",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R3-P8",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R4-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R4-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R4-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R4-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R5-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 5,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R5-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 5,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R6-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 6,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-3P",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 6,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 10 / Pessoa 7",
+      "p1Uid": null,
+      "p2": "Pessoa 130 / Pessoa 131",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 11 / Pessoa 13",
+      "p1Uid": null,
+      "p2": "Pessoa 126 / Pessoa 127",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 17 / Pessoa 18",
+      "p1Uid": null,
+      "p2": "Pessoa 125 / Pessoa 122",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 20 / Pessoa 22",
+      "p1Uid": null,
+      "p2": "Pessoa 119 / Pessoa 120",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P5",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 23 / Pessoa 26",
+      "p1Uid": null,
+      "p2": "Pessoa 115 / Pessoa 116",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P6",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 30 / Pessoa 29",
+      "p1Uid": null,
+      "p2": "Pessoa 113 / Pessoa 110",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P7",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 31 / Pessoa 32",
+      "p1Uid": null,
+      "p2": "Pessoa 107 / Pessoa 108",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P8",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 35 / Pessoa 37",
+      "p1Uid": null,
+      "p2": "Pessoa 104 / Pessoa 102",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P9",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 41 / Pessoa 40",
+      "p1Uid": null,
+      "p2": "Pessoa 98 / Pessoa 101",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P10",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 44 / Pessoa 45",
+      "p1Uid": null,
+      "p2": "Pessoa 95 / Pessoa 96",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P11",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 50 / Pessoa 48",
+      "p1Uid": null,
+      "p2": "Pessoa 92 / Pessoa 91",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P12",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 54 / Pessoa 51",
+      "p1Uid": null,
+      "p2": "Pessoa 86 / Pessoa 89",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P13",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 57 / Pessoa 58",
+      "p1Uid": null,
+      "p2": "Pessoa 84 / Pessoa 85",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P14",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 61 / Pessoa 60",
+      "p1Uid": null,
+      "p2": "Pessoa 81 / Pessoa 79",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P15",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 65 / Pessoa 64",
+      "p1Uid": null,
+      "p2": "Pessoa 74 / Pessoa 77",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P16",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 68 / Pessoa 2",
+      "p1Uid": null,
+      "p2": "pessoa11@exemplo.test / Pessoa 72",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": [],
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R1-P17",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 6 / Pessoa 3",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [],
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P5",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P6",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P7",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P8",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P9",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P10",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P11",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P12",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P13",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P14",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P15",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R2-P16",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 2,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P5",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P6",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P7",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R3-P8",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 3,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R4-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R4-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R4-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R4-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 4,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R5-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 5,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R5-P2",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 5,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-VC-R6-P1",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 6,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    },
+    {
+      "bracket": "silver",
+      "id": "ph-tour_1780009816637-1-silver-3P",
+      "isBye": false,
+      "label": null,
+      "p1": "TBD",
+      "p1Uid": null,
+      "p2": "TBD",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 6,
+      "team1Uids": null,
+      "team2Uids": null,
+      "winner": null
+    }
+  ],
+  "erro": null,
+  "faseAntes": 0,
+  "faseDepois": 1,
+  "jogosFechadosParaCompletar": 93,
+  "torneio": "tour_1780009816637",
+  "totalJogosEliminatoria": 98
+}
