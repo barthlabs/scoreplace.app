@@ -45,6 +45,21 @@
   // devolvem 0 e a decisão passa adiante. Inventar valor aqui seria decidir classificação
   // por ruído. Quem quiser saber o que não pôde ser aplicado usa `explainTiebreakers`.
   var _n = function (v) { return v || 0; };
+  // ⚠️ IDENTIDADE É O UID. A chave de lookup (nascimento, confronto direto) é o uid de quem
+  // tem conta; só quem NÃO tem conta é procurado pelo nome, que é a única identidade que ele
+  // possui. Nome de quem tem conta nunca entra: ele envelhece (a pessoa se renomeia) e
+  // repete (dois homônimos viram um). [[project_uid_identity_canon_locked]]
+  var _chave = function (linha) { return (linha && linha.uid) ? linha.uid : (linha && linha.name) || null; };
+  // sentido = +1 antiguidade (mais velho antes) · -1 juventude (mais novo antes)
+  function _porIdade(a, b, ctx, sentido) {
+    var m = (ctx && ctx.birth) || {};
+    var x = m[_chave(a)], y = m[_chave(b)];
+    var temA = (x != null), temB = (y != null);
+    if (temA && !temB) return -1;                     // quem preencheu passa na frente
+    if (!temA && temB) return 1;
+    if (!temA || x === y) return 0;                   // nenhum tem, ou empatam: passa adiante
+    return sentido > 0 ? (x - y) : (y - x);
+  }
   var CRITERIOS = {
     // "pontos" da tabela (pontuação avançada / pontos corridos)
     pontos_avancados: function (a, b) { return _n(b.points) - _n(a.points); },
@@ -76,24 +91,19 @@
     // só pra quem não tem conta. [[project_uid_identity_canon_locked]]
     confronto_direto: function (a, b, ctx) {
       var h = ctx && ctx.h2h; if (!h) return 0;
-      var ka = a.uid || a.name, kb = b.uid || b.name;
+      var ka = _chave(a), kb = _chave(b);
       if (!ka || !kb) return 0;
       var ab = _n(h[ka + '|||' + kb]), ba = _n(h[kb + '|||' + ka]);
       if (ab === ba) return 0;
       return ba - ab;
     },
-    antiguidade: function (a, b, ctx) {
-      var m = (ctx && ctx.birth) || {};
-      var x = m[a.uid || a.name], y = m[b.uid || b.name];
-      if (x == null || y == null || x === y) return 0;
-      return x - y;                                   // nasceu antes = mais velho vem antes
-    },
-    juventude: function (a, b, ctx) {
-      var m = (ctx && ctx.birth) || {};
-      var x = m[a.uid || a.name], y = m[b.uid || b.name];
-      if (x == null || y == null || x === y) return 0;
-      return y - x;
-    },
+    // ⚠️ QUEM OMITIU A DATA PERDE O DESEMPATE — ordem do dono (14/ago/2026): "por idade, se
+    // um não tiver a idade no perfil, beneficia quem tem a idade no perfil contra quem
+    // omitiu (por antiguidade e por juventude)". Vale nos DOIS sentidos: não é "o mais
+    // velho ganha" nem "o mais novo ganha", é QUEM PREENCHEU ganha de quem não preencheu.
+    // Só quando NENHUM dos dois tem data o critério é neutro e a decisão passa adiante.
+    antiguidade: function (a, b, ctx) { return _porIdade(a, b, ctx, +1); },
+    juventude: function (a, b, ctx) { return _porIdade(a, b, ctx, -1); },
     // Sorteio encerra a fila: daqui não se desempata mais (a ordem estável decide).
     sorteio: function () { return 0; }
   };

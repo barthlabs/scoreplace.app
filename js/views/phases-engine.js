@@ -1340,8 +1340,28 @@
     (group.rounds || []).forEach(function (r) { if (Array.isArray(r.matches)) matches = matches.concat(r.matches); });
     var participants = group.players || group.participants || [];
     var smap = {}, h2h = {}, usesSets = false;
-    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
-    participants.forEach(function (p) { ensure(typeof p === 'string' ? p : (p && (p.displayName || p.name)) || ''); });
+    function ensure(nm) { if (nm && !smap[nm]) smap[nm] = { name: nm, uid: null, points: 0, wins: 0, losses: 0, draws: 0, pointsDiff: 0, played: 0, setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, buchholz: 0, sonnebornBerger: 0 }; }
+    participants.forEach(function (p) {
+      var nm = (typeof p === 'string') ? p : ((p && (p.displayName || p.name)) || '');
+      ensure(nm);
+      // ⚠️ A LINHA CARREGA O UID. Ordem do dono: "tudo por uid sempre, inclusive confronto
+      // direto". A estrutura interna deste mapa continua chaveada por nome (é o formato que
+      // os jogos de grupo usam em p1/p2), mas o DESEMPATE passa a casar por uid — que é o
+      // que erra quando alguém se renomeia ou quando há dois homônimos no mesmo grupo.
+      if (nm && smap[nm] && !smap[nm].uid && p && typeof p === 'object' && p.uid) smap[nm].uid = p.uid;
+    });
+    // uid também dos SLOTS dos jogos (grupo legado sem uid no elenco ainda tem no jogo)
+    (function () {
+      var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids : null;
+      if (!slot) return;
+      matches.forEach(function (m) {
+        if (!m) return;
+        [['p1', m.p1], ['p2', m.p2]].forEach(function (par) {
+          var u = slot(m, par[0]) || [];
+          if (u.length === 1 && par[1] && smap[par[1]] && !smap[par[1]].uid) smap[par[1]].uid = u[0];
+        });
+      });
+    })();
     matches.forEach(function (m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
       ensure(m.p1); ensure(m.p2);
@@ -1384,33 +1404,42 @@
         else if (m.winner === nm) s.sonnebornBerger += smap[opp].points;
       });
     });
-    var birthByName = opts.birthByName || {};
+    // ── O DESEMPATE É O DO ORGANIZADOR, E CASA POR UID ──────────────────────────
+    // Era um `switch` próprio aqui dentro, com o confronto direto chaveado por NOME
+    // (`a.name+'|||'+b.name`) — o último lugar do app que ainda casava identidade assim.
+    // Agora usa o MESMO comparador da tabela e da transição de fase (standings-core), com
+    // o confronto direto montado a partir dos uids do slot. Ordem do dono: "tudo por uid
+    // sempre, inclusive confronto direto".
+    var _birth = opts.birthByName || {};
+    var _cmpCfg = (typeof window !== 'undefined' && typeof window._standingsCompareConfig === 'function')
+      ? window._standingsCompareConfig : null;
+    if (!_cmpCfg && typeof require === 'function') {
+      try { _cmpCfg = require('./standings-core.js').standingsCompareConfig; } catch (e) { _cmpCfg = null; }
+    }
+    var _buildH2H = (typeof window !== 'undefined' && typeof window._standingsBuildH2H === 'function')
+      ? window._standingsBuildH2H : null;
+    if (!_buildH2H && typeof require === 'function') {
+      try { _buildH2H = require('./standings-core.js').buildH2H; } catch (e) { _buildH2H = null; }
+    }
     var defaultTb = usesSets
       ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
       : ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     var tb = (Array.isArray(opts.tiebreakers) && opts.tiebreakers.length) ? opts.tiebreakers : defaultTb;
-    function cmp(a, b) {
-      if (b.points !== a.points) return b.points - a.points;
-      for (var i = 0; i < tb.length; i++) {
-        var d = 0;
-        switch (tb[i]) {
-          case 'confronto_direto': { var ab = h2h[a.name + '|||' + b.name] || 0, ba = h2h[b.name + '|||' + a.name] || 0; d = ba - ab; if (d) return d < 0 ? -1 : 1; break; }
-          case 'saldo_pontos': d = b.pointsDiff - a.pointsDiff; if (d) return d; break;
-          case 'vitorias': d = b.wins - a.wins; if (d) return d; break;
-          case 'buchholz': d = (b.buchholz || 0) - (a.buchholz || 0); if (d) return d; break;
-          case 'sonneborn_berger': d = (b.sonnebornBerger || 0) - (a.sonnebornBerger || 0); if (d) return d; break;
-          case 'saldo_sets': d = ((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0)); if (d) return d; break;
-          case 'saldo_games': d = ((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0)); if (d) return d; break;
-          case 'sets_vencidos': d = (b.setsWon || 0) - (a.setsWon || 0); if (d) return d; break;
-          case 'games_vencidos': d = (b.gamesWon || 0) - (a.gamesWon || 0); if (d) return d; break;
-          case 'tiebreaks_vencidos': d = (b.tiebreaksWon || 0) - (a.tiebreaksWon || 0); if (d) return d; break;
-          case 'antiguidade': { var ab2 = birthByName[a.name], bb2 = birthByName[b.name]; if (ab2 != null && bb2 != null && ab2 !== bb2) return ab2 - bb2; break; }
-          case 'juventude': { var ay = birthByName[a.name], by = birthByName[b.name]; if (ay != null && by != null && ay !== by) return by - ay; break; }
-          case 'sorteio': return 0;
-        }
-      }
-      return 0;
+    // confronto direto POR UID (nome só pra quem não tem conta — é a identidade que ele tem)
+    var _h2hUid = _buildH2H ? _buildH2H(matches, function (m, lado) {
+      var slot = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? window._slotUids(m, lado) : [];
+      if (slot && slot.length) return slot;
+      var rot = (lado === 'p1') ? m.p1 : m.p2;
+      return rot ? [rot] : [];
+    }) : {};
+    if (!_cmpCfg) {
+      // Sem o comparador canônico não se inventa uma segunda regra (foi o defeito que este
+      // trabalho matou): mantém a ordem de chegada e avisa.
+      if (typeof console !== 'undefined' && console.warn) console.warn('[phases] _standingsCompareConfig ausente — grupo sem desempate aplicado');
+      return Object.keys(smap).map(function (k) { return smap[k]; });
     }
+    var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth };
+    function cmp(a, b) { return _cmpCfg(a, b, _opts); }
     return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
   }
 

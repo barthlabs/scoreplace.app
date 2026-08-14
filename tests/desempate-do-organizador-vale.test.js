@@ -80,7 +80,21 @@ ok(C.standingsCompareConfig(V, N, { tiebreakers: ['antiguidade'], birth: birth }
 ok(C.standingsCompareConfig(V, N, { tiebreakers: ['juventude'], birth: birth }) > 0,
   'juventude → o mais NOVO vem antes');
 ok(C.standingsCompareConfig(V, N, { tiebreakers: ['antiguidade'], birth: {} }) === 0,
-  'sem data de nascimento, o critério é NEUTRO — nunca chuta');
+  'NENHUM dos dois tem data → o critério é neutro e a decisão passa adiante');
+// ⚠️ REGRA DO DONO (14/ago/2026): "por idade, se um não tiver a idade no perfil, beneficia
+// quem tem a idade no perfil contra quem omitiu (por antiguidade e por juventude)". Vale
+// nos DOIS sentidos — não é "o mais velho ganha" nem "o mais novo ganha": é QUEM PREENCHEU
+// ganha de quem omitiu.
+var soV = { uV: birth.uV };            // só V tem data
+var soN = { uN: birth.uN };            // só N tem data
+ok(C.standingsCompareConfig(V, N, { tiebreakers: ['antiguidade'], birth: soV }) < 0,
+  'antiguidade: só V preencheu → V passa na frente');
+ok(C.standingsCompareConfig(V, N, { tiebreakers: ['antiguidade'], birth: soN }) > 0,
+  'antiguidade: só N preencheu → N passa na frente');
+ok(C.standingsCompareConfig(V, N, { tiebreakers: ['juventude'], birth: soV }) < 0,
+  'juventude TAMBÉM beneficia quem preencheu (V), mesmo sendo o mais velho');
+ok(C.standingsCompareConfig(V, N, { tiebreakers: ['juventude'], birth: soN }) > 0,
+  'juventude: só N preencheu → N passa na frente');
 
 console.log('──── 5. o Rei/Rainha (a fase do Confra) aplica a configuração ────');
 // 4 pessoas, 2 jogos. E venceu F no confronto direto; F tem mais games.
@@ -130,6 +144,34 @@ const bl = fs.readFileSync(path.join(__dirname, '../js/views/bracket-logic.js'),
 ok(/_standingsCompareConfig\(/.test(bl), 'bracket-logic consome o comparador configurável');
 ok(/_spTsData/.test(bl), 'o nascimento passa pelo parser único de data do app');
 ok(/map\[p\.uid\] = media/.test(bl), 'o mapa de nascimento indexa por uid (não só por nome)');
+
+console.log('──── 8. a FASE DE GRUPOS desempata por UID (era o último lugar por nome) ────');
+// Ordem do dono: "tudo por uid sempre, inclusive confronto direto". O confronto direto do
+// _groupTeamStandings era chaveado por NOME (`a.name+'|||'+b.name`) — o último do app.
+(function () {
+  var E2 = null;
+  try { E2 = require('../js/views/phases-engine.js'); } catch (e) {}
+  if (!E2 || typeof E2.groupTeamStandings !== 'function') { ok(false, '(8) groupTeamStandings não exportado'); return; }
+  var pe = fs.readFileSync(path.join(__dirname, '../js/views/phases-engine.js'), 'utf8');
+  var corpo = (pe.match(/function _groupTeamStandings[\s\S]*?\n  \}/) || [''])[0];
+  ok(!/h2h\[a\.name \+ '\|\|\|' \+ b\.name\]/.test(corpo),
+    '(8) o confronto direto por NOME saiu do grupo');
+  ok(/_standingsCompareConfig|standingsCompareConfig/.test(corpo),
+    '(8) o grupo usa o comparador único (não um switch próprio)');
+  ok(/_slotUids/.test(corpo), '(8) o confronto direto sai dos uids do slot');
+  ok(/uid: null/.test(corpo) || /smap\[nm\]\.uid/.test(corpo),
+    '(8) a linha do grupo carrega uid');
+  // comportamento: duas pessoas, uma venceu a outra
+  var g = {
+    players: [{ displayName: 'Um', uid: 'u1' }, { displayName: 'Dois', uid: 'u2' }],
+    matches: [{ id: 'x1', p1: 'Um', p2: 'Dois', team1Uids: ['u1'], team2Uids: ['u2'],
+      scoreP1: 6, scoreP2: 4, winner: 'Um' }]
+  };
+  var linhas2 = E2.groupTeamStandings(g, { tiebreakers: ['confronto_direto', 'sorteio'] });
+  ok(linhas2.length === 2, '(8) a tabela do grupo tem as 2 pessoas');
+  ok(linhas2.every(function (l) { return !!l.uid; }), '(8) as linhas carregam uid');
+  ok(linhas2[0].name === 'Um', '(8) quem venceu o confronto direto fica na frente');
+})();
 
 console.log('');
 if (fail) { console.log('❌ desempate-do-organizador-vale: ' + pass + ' ok, ' + fail + ' falha(s)'); fails.forEach(function (f) { console.log('   • ' + f); }); process.exit(1); }
