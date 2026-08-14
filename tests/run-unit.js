@@ -446,6 +446,12 @@ const SUITES = [
   // Trava o invariante que elas deviam cumprir juntas: fase completa ⟺ zero pendentes,
   // nos três storages, com BYE/folga não segurando e grupo vazio segurando. v1.8.57.
   'tests/fase-uma-leitura-so.test.js',
+  // A TABELA E A CHAVE USAM A MESMA ORDEM. Havia duas respostas pra "quem está na frente":
+  // a cadeia longa da tabela (bracket-logic) e uma cadeia CURTA própria da transição de fase
+  // (phases-engine._globalStandings), que parava em saldo de pontos e, empatando, mantinha a
+  // ordem de varredura dos grupos. MEDIDO no sandbox do Confra: 132 classificados e 80
+  // posições em que as duas discordavam. Agora as duas chamam _standingsCompare. v1.8.59.
+  'tests/classificacao-uma-regra-so.test.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

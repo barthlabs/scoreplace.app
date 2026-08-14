@@ -83,17 +83,38 @@
   // Ranking AGREGADO (escopo 'overall'): mescla as standings de todos os grupos e
   // reordena por critério global (vitórias → saldo de sets → games → pontos). Sort
   // estável — empate total preserva a ordem de concatenação dos grupos.
+  // A ordem de QUEM SOBE pra próxima fase. Junta as classificações de todos os grupos e
+  // ordena por mérito — é este resultado que vira o pool da eliminatória.
+  //
+  // ⚠️ ESTA CADEIA ERA PRÓPRIA, e por isso divergia da que a pessoa VÊ na tabela: parava em
+  // pointsDiff e, empatando ali, devolvia 0 — mantendo a ordem em que os grupos foram
+  // varridos. MEDIDO no sandbox do Confra com a R1 completa: 132 classificados e **80
+  // posições** em que as duas ordens discordavam. No placar simulado o topo coincidia (a 1ª
+  // divergência caía na 40ª posição), então o corte do Confra não teria mudado — mas isso é
+  // sorte do dado, não garantia: com outro placar, ou com mais classificados, a divergência
+  // sobe. A tabela dizer uma ordem e a chave usar outra não se defende.
+  // Agora as duas perguntam ao MESMO comparador (bracket-logic._standingsCompare).
   function _globalStandings(prevGroups, computeStandings) {
     var all = [];
     (prevGroups || []).forEach(function (g) { (computeStandings(g) || []).forEach(function (s) { all.push(s); }); });
-    all.sort(function (a, b) {
-      var d;
-      d = (b.wins || 0) - (a.wins || 0); if (d) return d;
-      d = (((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0))); if (d) return d;
-      d = (((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0))); if (d) return d;
-      d = (((b.pointsFor || 0) - (b.pointsAgainst || 0)) - ((a.pointsFor || 0) - (a.pointsAgainst || 0))); if (d) return d;
-      return 0;
-    });
+    // window (browser / vendor da CF) OU require (Node) — a MESMA regra nos dois, nunca
+    // uma cópia. Sem isto, um contexto que carregue só este arquivo perdia a ordenação em
+    // silêncio: dois testes existentes acusaram exatamente isso.
+    var cmp = (typeof window !== 'undefined' && typeof window._standingsCompare === 'function')
+      ? window._standingsCompare : null;
+    if (!cmp && typeof require === 'function') {
+      try { cmp = require('./standings-core.js').standingsCompare; } catch (e) { cmp = null; }
+    }
+    if (!cmp) {
+      // Sem o comparador canônico não há como ordenar por mérito SEM inventar uma segunda
+      // regra — que é o defeito que este bloco existe pra matar. Preserva a ordem de
+      // chegada (estável) e avisa; nunca desempata por conta própria.
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[phases] _standingsCompare ausente — ordem de classificação preservada como veio');
+      }
+      return all;
+    }
+    all.sort(function (a, b) { return cmp(a, b, false); });
     return all;
   }
 
@@ -2249,6 +2270,7 @@
     phaseComplete: phaseComplete,
     pendingMatches: pendingMatches,
     phaseGames: phaseGames,        // leitor único de "onde estão os jogos desta fase"
+    globalStandings: _globalStandings,   // ordem que decide quem sobe de fase
     materializeNextPhase: materializeNextPhase,
     groupTeamStandings: _groupTeamStandings,
     resolveRepFills: resolveRepFills

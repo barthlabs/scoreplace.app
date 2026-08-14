@@ -211,29 +211,15 @@ window._computeMonarchStandings = function(group, t, category) {
     });
   }
 
-  // Tiebreaker order (desc unless noted):
-  // 0. PONTOS AVANÇADOS (quando ligado)  1. wins  2. setsDiff  3. setsWon  4. gamesDiff
-  // 5. gamesWon  6. tiebreaksDiff  7. tiebreaksWon  8. pointsDiff  9. pointsFor  10. winRate  11. played (asc)
-  return Object.values(stats).sort(function(a, b) {
-    if (_adv && (b.points || 0) !== (a.points || 0)) return (b.points || 0) - (a.points || 0);
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    var aSetD = a.setsWon - a.setsLost, bSetD = b.setsWon - b.setsLost;
-    if (bSetD !== aSetD) return bSetD - aSetD;
-    if (b.setsWon !== a.setsWon) return b.setsWon - a.setsWon;
-    var aGD = a.gamesWon - a.gamesLost, bGD = b.gamesWon - b.gamesLost;
-    if (bGD !== aGD) return bGD - aGD;
-    if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
-    var aTBD = a.tiebreaksWon - a.tiebreaksLost, bTBD = b.tiebreaksWon - b.tiebreaksLost;
-    if (bTBD !== aTBD) return bTBD - aTBD;
-    if (b.tiebreaksWon !== a.tiebreaksWon) return b.tiebreaksWon - a.tiebreaksWon;
-    var aDiff = a.pointsFor - a.pointsAgainst;
-    var bDiff = b.pointsFor - b.pointsAgainst;
-    if (bDiff !== aDiff) return bDiff - aDiff;
-    if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor;
-    if (b.winRate !== a.winRate) return b.winRate - a.winRate;
-    return a.played - b.played;
-  });
+  return Object.values(stats).sort(function (a, b) { return window._standingsCompare(a, b, _adv); });
 };
+
+// ── QUEM ESTÁ NA FRENTE ───────────────────────────────────────────────────────
+// A cadeia de desempate PADRÃO mora em js/views/standings-core.js (window._standingsCompare
+// no browser/CF, require em Node). Vive lá, e não aqui, porque a ordem de QUEM SOBE pra
+// eliminatória (phases-engine._globalStandings) tem que ser a MESMA da tabela — e este
+// arquivo não é `require`-ável, então a regra ficaria inalcançável de metade dos contextos.
+// Ver o cabeçalho do core: 80 posições divergiam entre as duas ordens no sandbox do Confra.
 
 function _checkGroupRoundComplete(t, groupIndex) {
   if (!t.groups || !t.groups[groupIndex]) return;
