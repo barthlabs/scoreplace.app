@@ -63,15 +63,33 @@ window._computeMonarchStandings = function(group, t, category) {
       (m.team2 || []).forEach(function (nm, i) { var u = (m.team2Uids || [])[i]; if (nm && u && !_matchN2u[nm]) _matchN2u[nm] = u; });
     });
   })();
+  // ⚠️ FONTE ÚNICA DO UID DA LINHA. Isto era DUAS resoluções e elas divergiam: a CHAVE
+  // olhava 3 fontes (uid explícito → mapa dos JOGOS → mapa do elenco) e o CAMPO `uid`
+  // olhava só 2 — faltava justamente `_matchN2u`, o mapa tirado dos jogos. O efeito é
+  // silencioso e caro: a linha saía com `key: 'uid:XXX'` e `uid: null`, ou seja a tabela
+  // SABIA quem era e não contava pra ninguém. Quem lê a linha depois (a transição de
+  // fase monta os times com `m.uid`) recebia null, e a ELIMINATÓRIA inteira nascia só
+  // com nome gravado — 98 de 98 jogos do Confra, medido. É a merda que o cânone do uid
+  // existe pra impedir: trocar o nome do perfil depois deixaria a chave com o antigo.
+  function _monUid(name, uid) { return uid || _matchN2u[name] || _n2uMon[name] || null; }
   function _monKey(name, uid) {
-    var u = uid || _matchN2u[name] || _n2uMon[name] || null;
+    var u = _monUid(name, uid);
     return u ? ('uid:' + u) : ('name:' + name);
   }
   function _monEnsure(name, uid) {
     if (_isGhostMon(name)) return null;
     var k = _monKey(name, uid);
+    var _u = _monUid(name, uid);
+    // O NOME DA LINHA SAI DO PERFIL, o rótulo é só reserva. O seed do elenco já fazia isso
+    // (via _nomeVivoMon), mas quem entra por AQUI — uid conhecido só pelos jogos, ou seja
+    // grupo sem `playersUids` — ficava com o rótulo GRAVADO no dia do sorteio. Medido no
+    // navegador: perfil renomeado pra "Dani Bataglia" e a linha continuava "Fabi2401".
+    // Como o `name` da linha é o que a transição de fase usa pra montar a dupla, o nome
+    // velho vazava pra dentro dos confrontos da eliminatória.
+    var _nm = (_u && typeof window !== 'undefined' && typeof window._displayNameForUid === 'function')
+      ? (window._displayNameForUid(_u, name) || name) : name;
     if (!stats[k]) stats[k] = {
-      key: k, uid: (uid || _n2uMon[name] || null), name: name,
+      key: k, uid: _u, name: _nm,
       wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
       setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, tiebreaksLost: 0
     };

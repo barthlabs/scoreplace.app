@@ -1136,8 +1136,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0015",
+        "uid0014"
+      ],
+      "team2Uids": [
+        "uid0134",
+        "uid0133"
+      ],
       "winner": null
     },
     {
@@ -1151,8 +1157,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0018",
+        "uid0020"
+      ],
+      "team2Uids": [
+        "uid0129",
+        "uid0130"
+      ],
       "winner": null
     },
     {
@@ -1166,8 +1178,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0021",
+        "uid0022"
+      ],
+      "team2Uids": [
+        "uid0125",
+        "uid0124"
+      ],
       "winner": null
     },
     {
@@ -1181,8 +1199,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0025",
+        "uid0027"
+      ],
+      "team2Uids": [
+        "uid0122",
+        "uid0119"
+      ],
       "winner": null
     },
     {
@@ -1196,8 +1220,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0030",
+        "uid0031"
+      ],
+      "team2Uids": [
+        "uid0115",
+        "uid0118"
+      ],
       "winner": null
     },
     {
@@ -1211,8 +1241,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0034",
+        "uid0033"
+      ],
+      "team2Uids": [
+        "uid0113",
+        "uid0112"
+      ],
       "winner": null
     },
     {
@@ -1226,8 +1262,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0039",
+        "uid0040"
+      ],
+      "team2Uids": [
+        "uid0107",
+        "uid0110"
+      ],
       "winner": null
     },
     {
@@ -1241,8 +1283,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0044",
+        "uid0042"
+      ],
+      "team2Uids": [
+        "uid0105",
+        "uid0103"
+      ],
       "winner": null
     },
     {
@@ -1256,8 +1304,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0045",
+        "uid0048"
+      ],
+      "team2Uids": [
+        "uid0099",
+        "uid0100"
+      ],
       "winner": null
     },
     {
@@ -1271,8 +1325,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0049",
+        "uid0052"
+      ],
+      "team2Uids": [
+        "uid0094",
+        "uid0097"
+      ],
       "winner": null
     },
     {
@@ -1286,8 +1346,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0053",
+        "uid0055"
+      ],
+      "team2Uids": [
+        "uid0093",
+        "uid0090"
+      ],
       "winner": null
     },
     {
@@ -1301,8 +1367,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0058",
+        "uid0059"
+      ],
+      "team2Uids": [
+        "uid0088",
+        "uid0087"
+      ],
       "winner": null
     },
     {
@@ -1316,8 +1388,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0061",
+        "uid0062"
+      ],
+      "team2Uids": [
+        "uid0082",
+        "uid0083"
+      ],
       "winner": null
     },
     {
@@ -1331,8 +1409,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0065",
+        "uid0068"
+      ],
+      "team2Uids": [
+        "uid0078",
+        "uid0080"
+      ],
       "winner": null
     },
     {
@@ -1346,8 +1430,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0069",
+        "uid0072"
+      ],
+      "team2Uids": [
+        "uid0004",
+        "uid0007"
+      ],
       "winner": null
     },
     {
@@ -1361,8 +1451,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0005",
+        "uid0008"
+      ],
+      "team2Uids": [
+        "uid0075",
+        "uid0073"
+      ],
       "winner": null
     },
     {
@@ -1376,7 +1472,10 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
+      "team1Uids": [
+        "uid0010",
+        "uid0011"
+      ],
       "team2Uids": null,
       "winner": null
     },
@@ -1871,8 +1970,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0016",
+        "uid0013"
+      ],
+      "team2Uids": [
+        "uid0131",
+        "uid0132"
+      ],
       "winner": null
     },
     {
@@ -1886,8 +1991,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0017",
+        "uid0019"
+      ],
+      "team2Uids": [
+        "uid0127",
+        "uid0128"
+      ],
       "winner": null
     },
     {
@@ -1901,8 +2012,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0023",
+        "uid0024"
+      ],
+      "team2Uids": [
+        "uid0126",
+        "uid0123"
+      ],
       "winner": null
     },
     {
@@ -1916,8 +2033,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0026",
+        "uid0028"
+      ],
+      "team2Uids": [
+        "uid0120",
+        "uid0121"
+      ],
       "winner": null
     },
     {
@@ -1926,13 +2049,18 @@
       "isBye": false,
       "label": null,
       "p1": "Pessoa 23 / Pessoa 26",
-      "p1Uid": null,
+      "p1Uid": "uid0032",
       "p2": "Pessoa 115 / Pessoa 116",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0032"
+      ],
+      "team2Uids": [
+        "uid0116",
+        "uid0117"
+      ],
       "winner": null
     },
     {
@@ -1941,13 +2069,18 @@
       "isBye": false,
       "label": null,
       "p1": "Pessoa 30 / Pessoa 29",
-      "p1Uid": null,
+      "p1Uid": "uid0036",
       "p2": "Pessoa 113 / Pessoa 110",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0036"
+      ],
+      "team2Uids": [
+        "uid0114",
+        "uid0111"
+      ],
       "winner": null
     },
     {
@@ -1961,8 +2094,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0037",
+        "uid0038"
+      ],
+      "team2Uids": [
+        "uid0108",
+        "uid0109"
+      ],
       "winner": null
     },
     {
@@ -1976,8 +2115,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0041",
+        "uid0043"
+      ],
+      "team2Uids": [
+        "uid0104",
+        "uid0102"
+      ],
       "winner": null
     },
     {
@@ -1991,8 +2136,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0047",
+        "uid0046"
+      ],
+      "team2Uids": [
+        "uid0098",
+        "uid0101"
+      ],
       "winner": null
     },
     {
@@ -2001,13 +2152,18 @@
       "isBye": false,
       "label": null,
       "p1": "Pessoa 44 / Pessoa 45",
-      "p1Uid": null,
+      "p1Uid": "uid0051",
       "p2": "Pessoa 95 / Pessoa 96",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0051"
+      ],
+      "team2Uids": [
+        "uid0095",
+        "uid0096"
+      ],
       "winner": null
     },
     {
@@ -2021,8 +2177,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0056",
+        "uid0054"
+      ],
+      "team2Uids": [
+        "uid0092",
+        "uid0091"
+      ],
       "winner": null
     },
     {
@@ -2036,8 +2198,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0060",
+        "uid0057"
+      ],
+      "team2Uids": [
+        "uid0086",
+        "uid0089"
+      ],
       "winner": null
     },
     {
@@ -2051,8 +2219,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0063",
+        "uid0064"
+      ],
+      "team2Uids": [
+        "uid0084",
+        "uid0085"
+      ],
       "winner": null
     },
     {
@@ -2066,8 +2240,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0067",
+        "uid0066"
+      ],
+      "team2Uids": [
+        "uid0081",
+        "uid0079"
+      ],
       "winner": null
     },
     {
@@ -2081,8 +2261,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0071",
+        "uid0070"
+      ],
+      "team2Uids": [
+        "uid0002",
+        "uid0006"
+      ],
       "winner": null
     },
     {
@@ -2096,8 +2282,14 @@
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
-      "team2Uids": [],
+      "team1Uids": [
+        "uid0003",
+        "uid0001"
+      ],
+      "team2Uids": [
+        "uid0077",
+        "uid0076"
+      ],
       "winner": null
     },
     {
@@ -2106,12 +2298,14 @@
       "isBye": false,
       "label": null,
       "p1": "Pessoa 6 / Pessoa 3",
-      "p1Uid": null,
+      "p1Uid": "uid0012",
       "p2": "TBD",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
-      "team1Uids": [],
+      "team1Uids": [
+        "uid0012"
+      ],
       "team2Uids": null,
       "winner": null
     },

@@ -427,6 +427,12 @@ const SUITES = [
   // confrontos gerados + a classificação por grupo que os alimentou. A cobertura dos
   // degraus de desempate está MEDIDA no cabeçalho do arquivo (4 dos 9, e por quê).
   'tests/eliminatoria-golden-master.js',
+  // O SLOT DA ELIMINATÓRIA NASCE COM UID. Medido no sandbox do Confra: os 98 jogos saíam
+  // com team1Uids vazio — a chave que decide o campeão nasceria presa ao rótulo do dia do
+  // sorteio. Causa: a chave da linha de classificação resolvia o uid por 3 fontes e o campo
+  // `uid` da MESMA linha por 2. Trava identidade + propagação de nome, e a exceção legítima
+  // (fictício sem conta continua pelo nome). v1.8.55.
+  'tests/eliminatoria-nasce-com-uid.test.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

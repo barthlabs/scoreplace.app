@@ -107,9 +107,15 @@ const cache = {}, porUid = {};
 (function varre(n) {
   if (Array.isArray(n)) return n.forEach(varre);
   if (!n || typeof n !== 'object') return;
+  // ⚠️ NOME CONHECIDO NUNCA PERDE PRO FALLBACK. O mesmo uid aparece em vários lugares do
+  // doc, e em alguns deles sem rótulo (o strip da v1.3.52 tira o nome de toda entrada com
+  // uid). Sobrescrevendo sempre, a ÚLTIMA ocorrência vencia e o perfil ficava com o nome
+  // sintético do fallback — o retrato virava ilegível sem nenhum motivo real.
   const põe = function (u, nome) {
     if (!u) return;
-    const x = nome || ('P' + String(u).slice(-4));
+    if (nome) { cache[u] = { uid: u, displayName: nome }; porUid[u] = nome; return; }
+    if (cache[u]) return;                                    // já tem nome de verdade
+    const x = 'P' + String(u).slice(-4);
     cache[u] = { uid: u, displayName: x }; porUid[u] = x;
   };
   if (n.uid) põe(n.uid, n.displayName || n.name);
