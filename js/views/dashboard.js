@@ -1543,7 +1543,16 @@ function renderDashboard(container) {
           }
           var _gm = String(m.label || '').match(/Jogo\s*(\d+)/i);
           var _gSeq = _gm ? Number(_gm[1]) : 0;
-          recentConfirmed.push(Object.assign({ confirmedAt: m.updatedAt || m.proposedAt || 0, roundNum: _rNum, gameSeq: _gSeq, inP1: inP1 }, matchInfo));
+          // ⚠️ `resultAt` PRIMEIRO — é o carimbo que `_applyApprovedResult` grava quando o
+          // resultado é aprovado, ou seja O momento do lançamento. Faltava na cadeia: os 3
+          // jogos do R1 do Confra têm resultAt e NÃO têm updatedAt/proposedAt (medido no
+          // doc), então entravam com confirmedAt=0 e perdiam pra uma final ANTIGA que tinha
+          // timestamp — a lista mostrava o velho no lugar do que acabou de ser jogado.
+          // `_tsMs` normaliza segundos→ms (há dado gravado nas duas escalas na base).
+          // Mesma régua da seção "Novidades no seu torneio", pra as duas não divergirem.
+          recentConfirmed.push(Object.assign({
+            confirmedAt: _tsMs(m.resultAt) || _tsMs(m.updatedAt) || _tsMs(m.proposedAt) || 0,
+            roundNum: _rNum, gameSeq: _gSeq, inP1: inP1 }, matchInfo));
         } else if (m.pendingResult) {
           var pr = m.pendingResult;
           if (pr.disputed) {
