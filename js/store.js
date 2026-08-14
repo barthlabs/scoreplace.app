@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.63';
+window.SCOREPLACE_VERSION = '1.8.64';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -8164,6 +8164,10 @@ window.AppStore = {
         if (profile.displayName) this.currentUser.displayName = profile.displayName;
         if (profile.birthDate) this.currentUser.birthDate = profile.birthDate;
         if (profile.age) this.currentUser.age = profile.age;
+        // ♥ FC máxima declarada (v1.8.64) — sobrepõe 220−idade nas faixas do
+        // relógio. ⚠️ loadUserProfile copia CAMPO A CAMPO: sem esta linha o valor
+        // seria salvo e nunca chegaria à sessão (armadilha do nameConflict/1.7.41).
+        if (profile.hrMax) this.currentUser.hrMax = profile.hrMax;
         if (profile.city) this.currentUser.city = profile.city;
         if (profile.state) this.currentUser.state = profile.state;
         if (profile.country) this.currentUser.country = profile.country;

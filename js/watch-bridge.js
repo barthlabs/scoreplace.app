@@ -15,6 +15,15 @@
   if (!isNative) return;
 
   var seq = 0;
+  // ÉPOCA da sessão: identifica ESTA carga da WebView. O `seq` zera a cada
+  // recarga do app — e a regra antiga do relógio ("queda ≥ 20 = contador
+  // reiniciou") tinha um buraco: com lastSeq pequeno (partida curta), a queda
+  // ficava < 20 e TODO snapshot novo era descartado até o contador alcançar o
+  // valor antigo — o relógio congelava na tela de fim de set mesmo com jogo
+  // novo rolando no celular (incidente de 13/ago/2026). Com a época no
+  // snapshot, o relógio compara: época diferente = app recarregou → aceita e
+  // zera o lastSeq; mesma época = seq monotônico normal.
+  var epoch = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   var subscribers = [];
   var lastBody = null;      // último snapshot enviado (sem seq) pra dedup
   var seenIntents = {};     // dedup de intenções por id
@@ -66,6 +75,11 @@
   function hrMaxFromProfile() {
     try {
       var cu = window.AppStore && window.AppStore.currentUser;
+      // FC máxima DECLARADA no perfil (v1.8.64) vence a fórmula: a Apple
+      // personaliza as zonas do Atividade pela FC real da pessoa e não expõe
+      // isso a terceiros — o campo do perfil é como o usuário calibra a régua.
+      var declared = cu && parseInt(cu.hrMax, 10);
+      if (declared && declared >= 100 && declared <= 230) return declared;
       var bd = cu && cu.birthDate;                 // ISO yyyy-mm-dd
       if (!bd) return 0;
       var p = String(bd).split('-');
@@ -87,6 +101,7 @@
     if (!snapshot) snapshot = currentState();
     // Carimbado ANTES do dedup pra fazer parte do corpo comparado.
     if (!snapshot.hrMax) snapshot.hrMax = hrMaxFromProfile();
+    snapshot.epoch = epoch;   // constante nesta carga da WebView (ver topo)
     var body = JSON.stringify(snapshot);
     if (!force && body === lastBody) return;
     lastBody = body;

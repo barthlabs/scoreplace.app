@@ -4197,6 +4197,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _matchStartTime = null; // Timestamp when first point is scored
   var _matchEndTime = null;   // Timestamp when match finishes
   var _resultSaved = false;   // Guards idempotent save on restart/close
+  // Id ESTÁVEL do registro de matchHistory DESTA partida (gerado lazy no 1º save,
+  // zerado junto com _resultSaved nos recomeços — nunca no Desfazer). Sem ele o
+  // registro ganhava id ALEATÓRIO a cada gravação, e o Desfazer pós-fim (que
+  // rearma _resultSaved pra regravar o placar corrigido) DUPLICARIA o histórico;
+  // com id estável a regravação SOBRESCREVE (matchHistory é chaveado por matchId).
+  var _liveRecId = null;
   // v1.7.5-beta: "Últimas Partidas" — função armazenada pelo render de stats;
   // chamada de _saveResult().then() APÓS o write confirmar, garantindo que a
   // partida recém terminada já está no Firestore antes de consultar.
@@ -4973,8 +4979,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }
     }
 
+    // Sem id externo (casual local), o id nasce UMA vez por partida e é reusado —
+    // regravar a mesma partida (Desfazer pós-fim → novo fim) sobrescreve o registro.
+    if (!ctx.matchId && !_liveRecId) {
+      _liveRecId = 'm_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    }
     var record = {
-      matchId: ctx.matchId || ('m_' + Date.now() + '_' + Math.floor(Math.random() * 1e6)),
+      matchId: ctx.matchId || _liveRecId,
       matchType: ctx.matchType || (isCasual ? 'casual' : 'tournament'),
       tournamentId: ctx.tournamentId || null,
       tournamentName: ctx.tournamentName || null,
@@ -5011,6 +5022,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try {
         var histKey = 'scoreplace_casual_history_v2';
         var hist2 = JSON.parse(localStorage.getItem(histKey) || '[]');
+        // Regravação da MESMA partida (Desfazer pós-fim → novo fim) substitui a
+        // linha existente em vez de empilhar uma segunda — dedup por matchId.
+        hist2 = hist2.filter(function(r) { return !r || r.matchId !== record.matchId; });
         hist2.unshift(record);
         if (hist2.length > 100) hist2 = hist2.slice(0, 100);
         localStorage.setItem(histKey, JSON.stringify(hist2));
@@ -6553,6 +6567,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Action section pinned at the TOP — "Jogar Novamente" (and optional
       // shuffle toggle for doubles) are always within thumb-reach. Clicking
       // "Jogar Novamente" or "✕ Fechar" both persist the result as confirmed.
+      // v1.8.64: Desfazer TAMBÉM na tela de fim — o último ponto pode ter sido
+      // acidental (relato do dono: pontos em rajada fecharam a partida em 0-40
+      // sozinha e não havia como retomar). Volta ao placar ao vivo com o ponto
+      // desfeito; a regravação do resultado corrigido é coberta dentro do próprio
+      // _liveScoreUndoLastPoint (rearme de _resultSaved + id estável do histórico).
+      var undoSection = (Array.isArray(state._undoSnapshots) && state._undoSnapshots.length > 0)
+        ? '<button onclick="window._liveScoreUndoLastPoint()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0;border:none;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;font-size:' + _fs(0.78) + ';font-weight:700;-webkit-tap-highlight-color:transparent;">↶ Desfazer último ponto</button>'
+        : '';
       container.innerHTML =
         // ⚠️ SEM `env(safe-area-inset-top)` AQUI. Quem reserva a ilha é o próprio
         // #live-scoring-overlay (padding-top em components.css). MEDIDO no iPhone 17
@@ -6562,6 +6584,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // safe-area tem UM dono, e aqui ele é o overlay.
         '<div style="flex-shrink:0;padding:8px 1rem 8px;display:flex;flex-direction:column;gap:8px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.06);">' +
           restartSection +
+          undoSection +
         '</div>' +
         '<div style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;width:100%;padding:clamp(8px,2vh,16px) clamp(12px,3vw,24px) clamp(6px,1.2vh,10px);gap:clamp(8px,1.5vh,14px);">' +
           winnerSection +
@@ -8320,6 +8343,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
             }
             _isRemoteUpdate = false;
             _resultSaved = false;
+            _liveRecId = null;   // partida NOVA → registro de histórico novo
             _matchStartTime = null;
             _matchEndTime = null;
             _lastSyncTs = (data.liveState && data.liveState._ts) || 0;
@@ -8671,6 +8695,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
     keysInSnap.forEach(function(kk) { state[kk] = snap.state[kk]; });
     _matchStartTime = snap.matchStartTime;
     _matchEndTime = snap.matchEndTime;
+    // v1.8.64: DESFAZER ATRAVESSA O FIM (relato do dono, 13/ago: "o desfazer com o
+    // set terminado não funcionou — e deveria, permitindo retomar o jogo"). O motor
+    // sempre soube voltar (o snapshot restaura isFinished=false); o que prendia era
+    // a GRAVAÇÃO: no último ponto o resultado já foi salvo automaticamente
+    // (_saveResult, idempotente via _resultSaved) — sem rearmar o flag, o novo fim
+    // NUNCA regravaria e a chave ficaria com o placar errado pra sempre. O
+    // _liveRecId NÃO é zerado aqui de propósito: é a MESMA partida continuando, e
+    // o mesmo id faz a regravação do histórico sobrescrever em vez de duplicar.
+    if (_resultSaved && !state.isFinished) _resultSaved = false;
     // Haptic distintivo — 3 pulsos curtos pra "voltei no tempo".
     if (window._haptic) window._haptic('undo');
     // Re-render. Se o último ponto tinha encerrado o match (state.isFinished
@@ -8814,6 +8847,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
     _resultSaved = false;
+    _liveRecId = null;   // próximo jogo da série = partida NOVA no histórico
 
     // 3. Registra vitórias do round atual e salva snapshot independente para histórico
     var pairing = _reiRainhaPairings[_reiRainhaRound];
@@ -9078,6 +9112,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
     _resultSaved = false;
+    _liveRecId = null;   // fecho da série = próxima gravação é de partida nova
 
     // Registra vitórias do round 2 (se ainda não registrado)
     if (_reiRainhaRound === 2) {
@@ -9231,6 +9266,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         }
         // Allow next completed match to be saved again.
         _resultSaved = false;
+        _liveRecId = null;   // recomeço = partida NOVA no histórico
         // Shuffle teams if requested
         if (shouldShuffle && isDoubles) {
           var allPlayers = p1Players.concat(p2Players);

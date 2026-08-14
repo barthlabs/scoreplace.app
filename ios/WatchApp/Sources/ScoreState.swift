@@ -7,6 +7,11 @@ import Foundation
 struct ScoreState: Decodable {
     var v: Int = 1
     var seq: Int = 0
+    // Época da CARGA da WebView no celular. O `seq` zera a cada recarga do app;
+    // a época diz ao relógio QUANDO isso aconteceu (época nova → aceitar o
+    // snapshot e zerar o lastSeq, em vez de adivinhar por "queda grande").
+    // Vazia em snapshot de app antigo → o guard cai na heurística legada.
+    var epoch: String = ""
     var active: Bool = false
     var setLabel: String = ""
     var points: [String] = ["–", "–"]   // [time1, time2]
@@ -79,7 +84,7 @@ struct ScoreState: Decodable {
     // Decoding tolerante: o snapshot sempre traz as chaves-base, mas `server` e
     // `winner` podem vir null e chaves opcionais (sets/matchId) podem faltar.
     enum CodingKeys: String, CodingKey {
-        case v, seq, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
+        case v, seq, epoch, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
         case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
     }
@@ -88,6 +93,7 @@ struct ScoreState: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         v          = (try? c.decodeIfPresent(Int.self, forKey: .v)) ?? 1
         seq        = (try? c.decodeIfPresent(Int.self, forKey: .seq)) ?? 0
+        epoch      = (try? c.decodeIfPresent(String.self, forKey: .epoch)) ?? ""
         active     = (try? c.decodeIfPresent(Bool.self, forKey: .active)) ?? false
         setLabel   = (try? c.decodeIfPresent(String.self, forKey: .setLabel)) ?? ""
         points     = (try? c.decodeIfPresent([String].self, forKey: .points)) ?? ["–", "–"]

@@ -11,6 +11,7 @@ import WatchConnectivity
 final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     @Published var state = ScoreState()
     private var lastSeq = -1
+    private var lastEpoch = ""
 
     override init() {
         super.init()
@@ -86,13 +87,26 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     private func apply(_ json: String, isCached: Bool = false) {
         guard let data = json.data(using: .utf8),
               let s = try? JSONDecoder().decode(ScoreState.self, from: data) else { return }
-        // `seq` monotônico: descarta snapshot mais antigo que o último visto (protege contra
-        // reordenação do transporte). MAS o contador vive no JS do celular e REINICIA a cada
-        // carga da WebView (relançar o app, recarregar) — quando isso acontece o `seq` novo
-        // volta pra 1 e, com a regra crua, o relógio descartava TODO snapshot novo e
-        // congelava no estado velho. Uma queda GRANDE = contador reiniciado, não reordenação.
-        if !isCached && s.seq != 0 && s.seq < lastSeq && (lastSeq - s.seq) < 20 { return }
-        if !isCached { lastSeq = s.seq }
+        // `seq` monotônico POR ÉPOCA: o contador vive no JS do celular e REINICIA a cada
+        // carga da WebView (relançar o app, recarregar). A época identifica a carga:
+        // época DIFERENTE = app recarregou → aceita o snapshot e zera o lastSeq; época
+        // IGUAL = seq monotônico (descarta reordenação do transporte). A heurística
+        // antiga ("queda ≥ 20 = contador reiniciou") tinha um buraco REAL: com lastSeq
+        // pequeno (partida curta), a queda ficava < 20 e todo snapshot da carga nova era
+        // descartado — o relógio congelava no fim de set com o jogo novo já rolando no
+        // celular (incidente de 13/ago/2026). Ela sobrevive SÓ como fallback pra
+        // snapshot sem época (app do celular antigo, contexto em cache de build velha).
+        if !isCached {
+            if !s.epoch.isEmpty && s.epoch != lastEpoch {
+                lastEpoch = s.epoch
+                lastSeq = -1                        // época nova: contador recomeçou
+            } else if s.epoch.isEmpty
+                      && s.seq != 0 && s.seq < lastSeq && (lastSeq - s.seq) >= 20 {
+                lastSeq = -1                        // legado: queda grande = reinício
+            }
+            if s.seq != 0 && s.seq < lastSeq { return }
+            lastSeq = s.seq
+        }
         DispatchQueue.main.async { self.state = s }
     }
 

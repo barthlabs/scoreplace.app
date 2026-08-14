@@ -301,6 +301,12 @@ const SUITES = [
   // "Quem saca primeiro?" do celular é CONFIRMADA — senão a partida não começa (serveOrder
   // vazio ⇒ sem sacador ⇒ sem a bolinha no nome). Dirige o js/watch-bridge.js REAL.
   'tests/watch-start-serve.test.js',
+  // Incidente de 13/ago/2026 (torneio ao vivo): relógio preso no fim de set (o guard de
+  // seq descartava a carga nova da WebView — agora há ÉPOCA de sessão no snapshot) e o
+  // Desfazer que não retomava o jogo terminado (a tela de fim não oferecia o botão e o
+  // resultado auto-gravado nunca seria regravado — agora o undo rearma o save com id
+  // estável de histórico). + ♥ FC máxima do perfil sobrepondo 220−idade nas faixas.
+  'tests/watch-epoca-e-desfazer-pos-fim.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).

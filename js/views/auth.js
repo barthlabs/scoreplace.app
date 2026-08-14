@@ -4850,6 +4850,7 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-gender', cu.gender || '');
     _setVal('profile-edit-birthdate', (typeof window._isoToDisplayDate === 'function') ? window._isoToDisplayDate(cu.birthDate) : (cu.birthDate || ''));
     _setVal('profile-edit-city', cu.city || '');
+    _setVal('profile-edit-hrmax', cu.hrMax ? String(cu.hrMax) : '');
     _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
     var _lpConsentEl = document.getElementById('profile-letzplay-consent');
     if (_lpConsentEl) _lpConsentEl.checked = (cu.letzplayConsent === true);
@@ -4981,6 +4982,7 @@ async function simulateLoginSuccess(user) {
       birthDate: _baseVal('profile-edit-birthdate'),
       gender: _baseVal('profile-edit-gender'),
       city: _baseVal('profile-edit-city'),
+      hrMax: _baseVal('profile-edit-hrmax'),
       letzplayHandle: _baseVal('profile-edit-letzplay'),
       preferredCeps: _baseVal('profile-edit-ceps'),
       preferredSports: Array.isArray(window._profileSelectedSports) ? window._profileSelectedSports.slice() : [],
@@ -6179,7 +6181,7 @@ function _setupPhoneMask(inputEl, countryCode) {
 // Campos que a pessoa pode APAGAR (voltar a "não informado"). Nome, e-mail e
 // celular ficam de fora de propósito: são identidade e credencial de login,
 // não informação opcional.
-window._PROFILE_ERASABLE = ['gender', 'birthDate', 'city', 'letzplayHandle',
+window._PROFILE_ERASABLE = ['gender', 'birthDate', 'city', 'hrMax', 'letzplayHandle',
                             'preferredCeps', 'preferredSports', 'preferredLocations'];
 
 // Decide quais campos a pessoa APAGOU — a regra inteira, num lugar só.
@@ -6899,6 +6901,16 @@ function setupProfileModal() {
             '<div class="form-group" style="margin-bottom: 10px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelCity') + '</label>' +
               '<input type="text" id="profile-edit-city" class="form-control" style="width: 100%; box-sizing: border-box;" placeholder="Ex: São Paulo">' +
+            '</div>' +
+            // ♥ FC máxima (v1.8.64, pedido do dono): as faixas de queima do relógio
+            // usavam SÓ 220 − idade, mas o app Atividade da Apple personaliza as
+            // zonas pela FC real da pessoa (e não expõe isso a terceiros) — na
+            // mesma sensação, a faixa do scoreplace lia mais baixa. Preenchido,
+            // este valor SOBREPÕE a fórmula (watch-bridge hrMaxFromProfile).
+            '<div class="form-group" style="margin-bottom: 10px;">' +
+              '<label class="form-label" style="font-size: 0.75rem;">♥ FC máxima <span style="opacity:0.55;font-weight:400;">(opcional, bpm)</span></label>' +
+              '<input type="text" inputmode="numeric" id="profile-edit-hrmax" class="form-control" maxlength="3" style="width: 100%; box-sizing: border-box;" placeholder="Ex: 185 — vazio usa 220 − idade" autocomplete="off">' +
+              '<div style="font-size:0.62rem;color:var(--text-muted);margin-top:3px;">Calibra as faixas de batimento no relógio. Use o valor do seu app de treino ou de um teste de esforço.</div>' +
             '</div>' +
             // Conta letzplay: handle + consentimento (pré-requisito do import do
             // histórico). Campo aditivo/opcional; a LEITURA dos dados (extensão do
@@ -9022,6 +9034,12 @@ window._profileHydrateNameConflict = function () {
       var genderIn = _v('profile-edit-gender'); // select value ('', 'feminino', 'masculino', 'outro')
       var birthRaw = _v('profile-edit-birthdate');
       var cityIn = (_v('profile-edit-city') || '').trim();
+      // ♥ FC máxima (v1.8.64): plausível = 100–230 bpm. Digitado fora disso NÃO
+      // é apagamento (mesma regra do typo de data): preserva o valor existente.
+      var hrMaxRaw = (_v('profile-edit-hrmax') || '').trim();
+      var hrMaxIn = parseInt(hrMaxRaw.replace(/\D/g, ''), 10);
+      var hrMaxValid = !isNaN(hrMaxIn) && hrMaxIn >= 100 && hrMaxIn <= 230;
+      if (hrMaxRaw && !hrMaxValid && cu.hrMax) { hrMaxIn = cu.hrMax; hrMaxValid = true; }
       // letzplay: guarda o handle SEM '@' (canônico); consentimento é boolean.
       var letzplayHandleIn = (_v('profile-edit-letzplay') || '').trim().replace(/^@+/, '');
       var letzplayConsentIn = _chk('profile-letzplay-consent', false);
@@ -9267,6 +9285,7 @@ window._profileHydrateNameConflict = function () {
       if (birthDate) payload.birthDate = birthDate;
       if (age != null) payload.age = age;
       if (cityIn) payload.city = cityIn;
+      if (hrMaxRaw && hrMaxValid) payload.hrMax = hrMaxIn;
       if (letzplayHandleIn) payload.letzplayHandle = letzplayHandleIn;
       // v2.5.x: celular NÃO é gravado direto quando MUDA — precisa ser verificado
       // por SMS/WhatsApp (botão "Verificar e vincular", que prova posse e, se for
@@ -9362,6 +9381,9 @@ window._profileHydrateNameConflict = function () {
             // o parse acima já devolve a data antiga nesse caso.
             birthDate: birthRaw,
             city: cityIn,
+            // hrMaxRaw (não o parseado): valor digitado errado NÃO é apagamento —
+            // a leitura acima já preservou o valor antigo nesse caso.
+            hrMax: hrMaxRaw,
             letzplayHandle: letzplayHandleIn,
             preferredCeps: preferredCeps,
             preferredSports: sportsArr,
