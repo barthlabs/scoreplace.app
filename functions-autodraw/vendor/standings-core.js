@@ -50,6 +50,12 @@
   // possui. Nome de quem tem conta nunca entra: ele envelhece (a pessoa se renomeia) e
   // repete (dois homônimos viram um). [[project_uid_identity_canon_locked]]
   var _chave = function (linha) { return (linha && linha.uid) ? linha.uid : (linha && linha.name) || null; };
+  // hash 32 bits determinístico (FNV-1a) — mesma entrada, mesmo número, sempre.
+  function _hash32(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 16777619) >>> 0; }
+    return h >>> 0;
+  }
   // sentido = +1 antiguidade (mais velho antes) · -1 juventude (mais novo antes)
   function _porIdade(a, b, ctx, sentido) {
     var m = (ctx && ctx.birth) || {};
@@ -104,8 +110,31 @@
     // Só quando NENHUM dos dois tem data o critério é neutro e a decisão passa adiante.
     antiguidade: function (a, b, ctx) { return _porIdade(a, b, ctx, +1); },
     juventude: function (a, b, ctx) { return _porIdade(a, b, ctx, -1); },
-    // Sorteio encerra a fila: daqui não se desempata mais (a ordem estável decide).
-    sorteio: function () { return 0; }
+    // ⚠️ SORTEIO = ORDEM DA CHAVE, não número aleatório. Regra do dono (14/ago/2026):
+    // "a questão do sorteio já definimos: deve ser de acordo com a ORDEM DA CHAVE (e não do
+    // sorteio, caso o seed distribua as pessoas na chave). Assim, o que aparece em jogos
+    // ANTERIORES é considerado como sorteado primeiro, apesar de não ser. A aparência aqui é
+    // mais importante, para transparência e para evitar questionamentos: se o primeiro
+    // sorteado vai para o último jogo, ninguém entenderia que ele é o primeiro sorteado —
+    // está na última posição, então é isso que conta."
+    //
+    // Ou seja: quem aparece no JOGO MAIS CEDO da chave vem na frente. É a única leitura que
+    // o participante consegue conferir olhando a tela.
+    //
+    // ⚠️ O QUE ISTO SUBSTITUIU, e por que não podia ficar: `_computeStandings` fazia
+    // `return Math.random() - 0.5` DENTRO do comparador. MEDIDO: 40 execuções do MESMO dado
+    // deram duas ordens (24× A>B, 16× B>A) — a classificação dançava entre um render e outro,
+    // e aleatório em comparador ainda viola a consistência que o `sort` exige (podia
+    // embaralhar até quem NÃO estava empatado). Sem o mapa de ordem, o critério é NEUTRO:
+    // nunca volta a sortear na hora.
+    sorteio: function (a, b, ctx) {
+      var ord = ctx && ctx.ordem; if (!ord) return 0;
+      var ia = ord[_chave(a)], ib = ord[_chave(b)];
+      if (ia == null && ib == null) return 0;
+      if (ia == null) return 1;                       // quem não aparece na chave vai pro fim
+      if (ib == null) return -1;
+      return ia - ib;                                 // jogo mais cedo = na frente
+    }
   };
 
   // Aplica a configuração do organizador. `opts`:
@@ -116,15 +145,17 @@
     opts = opts || {};
     var lista = opts.tiebreakers;
     if (!Array.isArray(lista) || !lista.length) return standingsCompare(a, b, opts.adv);
-    // `points` sempre lidera quando a tabela os tem — é assim em _groupTeamStandings e em
-    // _computeStandings, e mudar isso mudaria classificação de torneio em andamento.
-    if (a.points != null && b.points != null && _n(b.points) !== _n(a.points)) return _n(b.points) - _n(a.points);
+    // O CAMPO PRIMÁRIO lidera antes de qualquer critério. Normalmente é `points` (é assim em
+    // _groupTeamStandings e em _computeStandings); com PONTUAÇÃO AVANÇADA ligada o primário
+    // passa a ser `advancedPoints` — quem chama diz qual, em vez de o core adivinhar.
+    var pf = opts.primaryField || 'points';
+    if (a[pf] != null && b[pf] != null && _n(b[pf]) !== _n(a[pf])) return _n(b[pf]) - _n(a[pf]);
     for (var i = 0; i < lista.length; i++) {
       var fn = CRITERIOS[lista[i]];
       if (!fn) continue;                              // critério desconhecido: ignora
       var d = fn(a, b, opts);
       if (d) return d;
-      if (lista[i] === 'sorteio') return 0;            // encerra a fila
+      if (lista[i] === 'sorteio') return 0;            // sorteio decidiu (ou é a mesma pessoa)
     }
     return 0;
   }
@@ -146,6 +177,27 @@
       (falta ? out.semDado : out.aplicaveis).push(k);
     });
     return out;
+  }
+
+  // Mapa "quem aparece primeiro na chave": identidade → índice do PRIMEIRO jogo em que ela
+  // aparece, na ordem em que os jogos são exibidos (rodada, depois posição). É o que o
+  // critério `sorteio` usa — ver o comentário dele acima.
+  function buildOrdemChave(matches, slotKeys) {
+    var ord = {}, i = 0;
+    var lista = (matches || []).slice().sort(function (m1, m2) {
+      var r1 = (m1 && m1.round) || 0, r2 = (m2 && m2.round) || 0;
+      if (r1 !== r2) return r1 - r2;
+      var n1 = (m1 && (m1.gameNumber || m1.number)) || 0, n2 = (m2 && (m2.gameNumber || m2.number)) || 0;
+      return n1 - n2;
+    });
+    lista.forEach(function (m) {
+      if (!m) return;
+      ['p1', 'p2'].forEach(function (lado) {
+        var ks = slotKeys ? (slotKeys(m, lado) || []) : [];
+        ks.forEach(function (k) { if (k != null && ord[k] == null) ord[k] = i++; });
+      });
+    });
+    return ord;
   }
 
   // Monta o mapa de CONFRONTO DIRETO a partir dos jogos, chaveado por uid (nome só pra quem
@@ -197,6 +249,7 @@
     window._standingsCompare = standingsCompare;              // cadeia padrão
     window._standingsCompareConfig = standingsCompareConfig;  // com a config do organizador
     window._standingsBuildH2H = buildH2H;
+    window._standingsOrdemChave = buildOrdemChave;
     window._standingsExplain = explainTiebreakers;
   }
   // Node (teste headless e qualquer módulo que carregue só o phases-engine)
@@ -205,6 +258,7 @@
       standingsCompare: standingsCompare,
       standingsCompareConfig: standingsCompareConfig,
       buildH2H: buildH2H,
+      buildOrdemChave: buildOrdemChave,
       explainTiebreakers: explainTiebreakers,
       CRITERIOS: CRITERIOS
     };

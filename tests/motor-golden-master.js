@@ -12,6 +12,13 @@
  * A metade viva entra porque é ela que o dono mandou NÃO mexer: se um refactor da geração
  * encostar nela sem querer, este arquivo acusa.
  *
+ * ⚠️ REGRAVADO NA 1.8.62, DE PROPÓSITO. O critério `sorteio` fazia `Math.random() - 0.5`
+ * DENTRO do comparador: com empate total não havia UMA ordem — ela mudava a cada render
+ * (medido: 40 execuções do mesmo dado, 24× A>B e 16× B>A). Virou sorteio DETERMINÍSTICO
+ * (hash da identidade + semente do torneio). PROVADO antes de regravar: nenhum número e
+ * nenhum campeão mudaram em torneio nenhum — só a ordem ENTRE EMPATADOS, que antes dançava.
+ * No Confra isso vale pras 131 pessoas ainda sem jogo, que embaralhavam a cada tela.
+ *
  * Uso:
  *   node tests/motor-golden-master.js --gravar    → grava tests/fixtures/motor-golden.json
  *   node tests/motor-golden-master.js             → compara com o gravado (exit 1 se mudou)

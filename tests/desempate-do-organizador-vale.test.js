@@ -130,8 +130,16 @@ var exp = C.explainTiebreakers(linhas, {
   tiebreakers: ['pontos_avancados', 'confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'],
   h2h: { a: 1 }, birth: {}
 });
-ok(exp.semDado.indexOf('buchholz') !== -1, 'buchholz é reportado como SEM DADO na tabela do Rei/Rainha');
-ok(exp.semDado.indexOf('sonneborn_berger') !== -1, 'sonneborn-berger idem');
+// ⚠️ ASSERÇÕES INVERTIDAS DE PROPÓSITO (1.8.62): elas exigiam que buchholz e
+// sonneborn-berger fossem reportados como SEM DADO no Rei/Rainha — o que era verdade
+// enquanto a tabela não os calculava. Agora calcula (mesma fórmula do _groupTeamStandings:
+// buchholz soma os pontos de todos os adversários; SB só os dos vencidos), então o correto
+// é o oposto: eles são APLICÁVEIS. O invariante que a asserção defendia — "critério sem
+// dado é neutro, nunca chute" — segue travado logo abaixo, com um campo que de fato falta.
+ok(exp.aplicaveis.indexOf('buchholz') !== -1, 'buchholz agora É aplicável no Rei/Rainha (a tabela passou a calcular)');
+ok(exp.aplicaveis.indexOf('sonneborn_berger') !== -1, 'sonneborn-berger idem');
+ok(linhas.every(function (l) { return typeof l.buchholz === 'number' && typeof l.sonnebornBerger === 'number'; }),
+  'toda linha do Rei/Rainha carrega buchholz e sonneborn-berger');
 ok(exp.semDado.indexOf('antiguidade') !== -1, 'antiguidade sem nascimento carregado idem');
 ok(exp.aplicaveis.indexOf('confronto_direto') !== -1, 'confronto direto é aplicável');
 ok(exp.aplicaveis.indexOf('vitorias') !== -1, 'vitórias é aplicável');
@@ -171,6 +179,66 @@ console.log('──── 8. a FASE DE GRUPOS desempata por UID (era o último l
   ok(linhas2.length === 2, '(8) a tabela do grupo tem as 2 pessoas');
   ok(linhas2.every(function (l) { return !!l.uid; }), '(8) as linhas carregam uid');
   ok(linhas2[0].name === 'Um', '(8) quem venceu o confronto direto fica na frente');
+})();
+
+console.log('──── 9. SORTEIO = ORDEM DA CHAVE (não número aleatório) ────');
+// Regra do dono (14/ago/2026): "a questão do sorteio já definimos: deve ser de acordo com a
+// ORDEM DA CHAVE… o que aparece em jogos anteriores é considerado como sorteado primeiro,
+// apesar de não ser. A aparência aqui é mais importante, para transparência e para evitar
+// questionamentos: se o primeiro sorteado vai para o último jogo, ninguém entenderia que
+// ele é o primeiro sorteado — está na última posição, então é isso que conta."
+(function () {
+  var jogos = [
+    { id: 'j1', round: 1, gameNumber: 1, team1Uids: ['uZ'], team2Uids: ['uA'] },
+    { id: 'j2', round: 1, gameNumber: 2, team1Uids: ['uB'], team2Uids: ['uC'] },
+    { id: 'j3', round: 2, gameNumber: 3, team1Uids: ['uD'], team2Uids: ['uE'] }
+  ];
+  var ord = C.buildOrdemChave(jogos, function (m, lado) { return lado === 'p1' ? m.team1Uids : m.team2Uids; });
+  ok(ord.uZ === 0 && ord.uA === 1, '(9) o 1º jogo dá as duas primeiras posições');
+  ok(ord.uD > ord.uB, '(9) rodada posterior vem depois');
+  var L = function (u) { return { name: u, uid: u, wins: 1, played: 2, pointsFor: 10, pointsAgainst: 10,
+    setsWon: 1, setsLost: 1, gamesWon: 10, gamesLost: 10, tiebreaksWon: 0, tiebreaksLost: 0, winRate: 0.5 }; };
+  ok(C.standingsCompareConfig(L('uZ'), L('uB'), { tiebreakers: ['sorteio'], ordem: ord }) < 0,
+    '(9) quem está no jogo MAIS CEDO fica na frente');
+  ok(C.standingsCompareConfig(L('uD'), L('uA'), { tiebreakers: ['sorteio'], ordem: ord }) > 0,
+    '(9) quem está no jogo mais tarde fica atrás');
+  ok(C.standingsCompareConfig(L('uZ'), L('uForaDaChave'), { tiebreakers: ['sorteio'], ordem: ord }) < 0,
+    '(9) quem não aparece na chave vai pro fim');
+  // ESTÁVEL: o mesmo dado dá sempre a mesma ordem (era Math.random no comparador)
+  var iguais = 0;
+  for (var i = 0; i < 100; i++) {
+    if (C.standingsCompareConfig(L('uZ'), L('uB'), { tiebreakers: ['sorteio'], ordem: ord }) < 0) iguais++;
+  }
+  ok(iguais === 100, '(9) 100 execuções, mesmo resultado — a classificação não dança mais entre renders');
+  ok(C.standingsCompareConfig(L('uZ'), L('uB'), { tiebreakers: ['sorteio'] }) === 0,
+    '(9) SEM o mapa de ordem o critério é neutro — nunca volta a sortear na hora');
+  // e o Math.random saiu do comparador de Pontos Corridos
+  // varre o arquivo INTEIRO, ignorando linhas de comentário (o próprio comentário que
+  // documenta a remoção cita `Math.random`, e um teste que se pega no comentário é ruído)
+  var bl2 = fs.readFileSync(path.join(__dirname, '../js/views/bracket-logic.js'), 'utf8');
+  var vivas = bl2.split('\n').filter(function (l) {
+    var t = l.trim();
+    return t.indexOf('//') !== 0 && t.indexOf('*') !== 0 && /Math\.random/.test(l);
+  });
+  // o que PODE sobrar é embaralhamento de sorteio de verdade (shuffle), nunca comparador
+  var emComparador = vivas.filter(function (l) { return /- 0\.5|return Math\.random/.test(l); });
+  ok(emComparador.length === 0,
+    '(9) nenhum Math.random em COMPARADOR (restaram ' + emComparador.length + ': ' + emComparador.join(' | ').slice(0, 120) + ')');
+  ok(vivas.length > 0, '(9) o shuffle de sorteio de verdade continua existindo (não removi o que era legítimo)');
+})();
+
+console.log('──── 10. ENTRE OS QUE CAÍRAM NA MESMA FASE, valem os critérios ────');
+// Regra do dono: "o desempate pelos critérios se aplica ao definir quem fica na frente
+// quando tem os mesmos pontos; entre os que caíram na mesma fase com performance igual etc."
+(function () {
+  var bl3 = fs.readFileSync(path.join(__dirname, '../js/views/bracket-logic.js'), 'utf8');
+  var corpo = (bl3.match(/function _updateProgressiveClassification[\s\S]*?\n}/) || [''])[0];
+  ok(/_standingsCompareConfig/.test(corpo),
+    '(10) a ordem entre eliminados da mesma fase passa pelo comparador do organizador');
+  ok(/_standingsOrdemChave/.test(corpo),
+    '(10) e o sorteio ali também é a ordem da chave');
+  ok(/localeCompare/.test(corpo),
+    '(10) a cadeia histórica (terminando em alfabético) fica como fallback pra quem não configurou');
 })();
 
 console.log('');

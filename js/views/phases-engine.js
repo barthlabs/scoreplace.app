@@ -1438,7 +1438,22 @@
       if (typeof console !== 'undefined' && console.warn) console.warn('[phases] _standingsCompareConfig ausente — grupo sem desempate aplicado');
       return Object.keys(smap).map(function (k) { return smap[k]; });
     }
-    var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth };
+    var _ordemChave = null;
+    var _buildOrd = (typeof window !== 'undefined' && typeof window._standingsOrdemChave === 'function')
+      ? window._standingsOrdemChave : null;
+    if (!_buildOrd && typeof require === 'function') {
+      try { _buildOrd = require('./standings-core.js').buildOrdemChave; } catch (e) { _buildOrd = null; }
+    }
+    if (_buildOrd) {
+      // `sorteio` = ORDEM DA CHAVE — quem aparece no jogo mais cedo conta como sorteado antes
+      _ordemChave = _buildOrd(matches, function (m, lado) {
+        var u = (typeof window !== 'undefined' && typeof window._slotUids === 'function') ? (window._slotUids(m, lado) || []) : [];
+        if (u.length) return u;
+        var rot = (lado === 'p1') ? m.p1 : m.p2;
+        return rot ? [rot] : [];
+      });
+    }
+    var _opts = { tiebreakers: tb, h2h: _h2hUid, birth: _birth, ordem: _ordemChave };
     function cmp(a, b) { return _cmpCfg(a, b, _opts); }
     return Object.keys(smap).map(function (k) { return smap[k]; }).sort(cmp);
   }
