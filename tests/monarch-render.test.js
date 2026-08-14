@@ -178,7 +178,10 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   const nCheguei = (html.match(/📍 Cheguei/g) || []).length;
   ok(nCheguei === 1, 'jogador: exatamente 1 "Cheguei" (header do grupo dele) — got ' + nCheguei);
   ok(html.indexOf('Faltou alguém') === -1, 'label antigo "Faltou alguém?" não aparece (virou W.O.)');
-  const nWo = (html.match(/>W\.O\.<\/button>/g) || []).length;
+  // v1.8.71: o rótulo virou "Aplicar W.O." (verbo) — "W.O." pelado lia como
+  // SELO de estado, que é o que a tabela do grupo usa ao lado de quem levou.
+  // O invariante desta asserção (QUANTOS botões aparecem e pra quem) não mudou.
+  const nWo = (html.match(/>Aplicar W\.O\.<\/button>/g) || []).length;
   ok(nWo === 1, 'jogador: botão W.O. só no PRÓPRIO grupo (não vê o dos outros) — got ' + nWo);
   // header do grupo: SEU GRUPO presente (grupo do usuário) e SEM o badge
   // "Em andamento" (removido pra todos — pedido do dono).
@@ -196,7 +199,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   W._canManagePresence = function () { return true; };
   const htmlOrg = W.renderStandings(t, true, true, '', '') || '';
   W._canManagePresence = prevMng;
-  const nWoOrg = (htmlOrg.match(/>W\.O\.<\/button>/g) || []).length;
+  const nWoOrg = (htmlOrg.match(/>Aplicar W\.O\.<\/button>/g) || []).length;
   ok(nWoOrg === 2, 'organizador: W.O. em cada grupo (2) — got ' + nWoOrg);
   ok((htmlOrg.match(/📍 Cheguei/g) || []).length === 0, 'organizador (não joga): sem botão Cheguei');
   W.AppStore.currentUser = prev;

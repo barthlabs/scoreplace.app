@@ -137,6 +137,20 @@ public final class WearMatchSession {
             o.put("hrMax", mirrored.optInt("hrMax", 0));
             o.put("seq", mirrored.optInt("seq", 0));
             o.put("epoch", mirrored.optString("epoch", ""));
+            // ⚠️ CONHECIMENTO QUE E' DO CELULAR, NAO DO MOTOR (v1.8.71). O motor
+            // local sabe o PLACAR desta partida; ele nao tem como saber o que
+            // aconteceu nas partidas ANTERIORES da sessao — e e' disso que sai a
+            // serie Rei/Rainha (2 pares distintos entre os mesmos 4 ⇒ sugere o
+            // 3º). Sem repassar, o toggle "👑 Rei/Rainha" SUMIA da tela de fim
+            // assim que a posse era do relogio. `canReplay` idem (no celular e'
+            // `isCasual && !reiRainhaMode`). Espelha o WatchMatchSession.swift.
+            o.put("rrSuggest", mirrored.optBoolean("rrSuggest", false));
+            o.put("reiRainha", mirrored.optBoolean("reiRainha", false));
+            o.put("rrRound", mirrored.optInt("rrRound", 0));
+            if (mirrored.optJSONArray("rrStandings") != null) {
+                o.put("rrStandings", mirrored.optJSONArray("rrStandings"));
+            }
+            o.put("canReplay", mirrored.optBoolean("canReplay", o.optBoolean("canReplay", false)));
             return o;
         } catch (Exception e) { return null; }
     }

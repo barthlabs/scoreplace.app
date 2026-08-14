@@ -1273,22 +1273,39 @@ window._ligaGroupPending = function (group) { return !!(group && group.subStatus
 // menor e mais achatado. E era ACRESCENTADO no fim do bloco, então com W.O. aplicado
 // ele pulava pra depois da pílula e do "Reverter".
 //
-// Agora existe UMA definição (mesma classe, mesmo tamanho, mesmo título) e ela entra
-// SEMPRE como PRIMEIRO elemento do bloco — que é onde o botão já ficava quando o grupo
-// não tinha W.O. nenhum. Assim ele não muda de tamanho nem de lugar quando alguém leva
-// W.O.: a pílula de status e o "Reverter" é que vêm depois dele.
+// Agora existe UMA definição (mesma classe, mesmo tamanho, mesmo título).
+//
+// ⚠️ v1.8.71 — A POSIÇÃO MUDOU, E A DECISÃO DE 1.7.93 FOI SUPERADA PELO USO.
+// Lá o botão passou a entrar como PRIMEIRO do bloco, com o argumento de que era
+// "onde ele já ficava quando o grupo não tinha W.O.". Isso vale olhando SÓ o
+// bloco — mas na TELA o bloco é o último da linha do cabeçalho do grupo
+// (Combinar jogos · Grupo · Cheguei · [bloco W.O.]). Sem W.O., o botão é a
+// última coisa da linha; com W.O., a pílula de status e o "Reverter" nasciam
+// DEPOIS dele e o empurravam pro meio. Relato do dono (print de 14/ago): "aqui
+// que já tem um W.O. aplicado o botão mudou de lado (na esquerda) quando deveria
+// estar na direita".
+// Agora ele entra por ÚLTIMO: fica na mesma ponta da linha nos dois estados, que
+// é o invariante que a 1.7.93 queria e mediu do jeito errado.
+//
+// ⚠️ E o RÓTULO virou "Aplicar W.O." (ordem do dono no mesmo relato: "esse botão
+// está causando alguma confusão"). "W.O." sozinho, em pílula vermelha, lê como
+// SELO DE ESTADO — e a tabela do grupo usa exatamente isso ao lado de quem levou
+// W.O. ("Anke W.O."). Duas coisas com o mesmo texto, uma sendo status e a outra
+// ação. O verbo desfaz a ambiguidade sem mexer em nada além do texto.
 // Ver [[project_wo_button_standard]] e [[feedback_unify_dual_entry_points]] — duas
 // montagens do mesmo botão é exatamente o que faz uma delas divergir.
 function _woDeclareBtn(onclickJs, mostrar) {
   if (!mostrar || typeof window._woBtnHtml !== 'function') return '';
   return window._woBtnHtml(onclickJs, true, {
-    label: 'W.O.',
+    label: 'Aplicar W.O.',
     title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto (folga ou Jogador X).'
   });
 }
-// Junta o botão de declarar (sempre primeiro) com o resto do bloco daquele estado.
+// Junta o resto do bloco daquele estado com o botão de declarar (sempre por
+// ÚLTIMO — ver o comentário acima: é o que o mantém na mesma ponta da linha
+// com e sem W.O. aplicado).
 function _woBlocoComBotao(btn, resto) {
-  return btn ? (resto ? btn + ' ' + resto : btn) : resto;
+  return btn ? (resto ? resto + ' ' + btn : btn) : resto;
 }
 
 // HTML dos controles de W.O./substituição no cabeçalho do grupo.
@@ -1322,7 +1339,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   // O "Reverter" de cada estado continua citando o NOME de quem levou aquele W.O.
   // (`group.woAbsent`) — é ele que fica vinculado à pessoa, como o dono pediu.
   // v1.7.92: UMA definição só (era montado aqui em btn-micro e lá embaixo em btn-sm) e
-  // entra SEMPRE em primeiro, via `_woBlocoComBotao` — ver o comentário do helper.
+  // entra SEMPRE por ÚLTIMO, via `_woBlocoComBotao` — ver o comentário do helper.
   var _btnNovoWo = _woDeclareBtn("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", manage && !gDone);
   // Estado: pendente de aceite
   if (group.subStatus === 'pending') {
@@ -1562,7 +1579,8 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
   var manage = _monCanManage(t, gName, pIdx);
   var wm = _monWoMarker(t, gName, pIdx);
   // v1.7.92 — MESMA REGRA do bloco da rota Liga (`_ligaGroupControlsHtml`): um botão só,
-  // sempre em PRIMEIRO, com ou sem W.O. aplicado. Aqui ele nem chegava a aparecer quando
+  // na mesma ponta da linha com ou sem W.O. aplicado (por ÚLTIMO desde a 1.8.71 — ver o
+  // comentário do `_woBlocoComBotao`). Aqui ele nem chegava a aparecer quando
   // havia W.O. no grupo (a função retornava antes), o que é a mesma trava que a 1.7.90
   // consertou do outro lado — dar W.O. em OUTRA pessoa tem que continuar possível.
   var _btnNovoWo = _woDeclareBtn("window._monWoFlow('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')",

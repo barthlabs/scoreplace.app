@@ -160,6 +160,26 @@ public final class SessionMain {
                 ds.optJSONObject("teams").optJSONObject("2").optJSONArray("players"))),
            "os nomes seguem os do celular");
 
+        // 9. conhecimento do CELULAR viaja pelo espelho (mesma bateria do Swift)
+        WearMatchSession g = newSession();
+        JSONObject sug = start("m9", 3);
+        sug.put("rrSuggest", true); sug.put("reiRainha", false); sug.put("rrRound", 1);
+        sug.put("canReplay", false);
+        sug.put("rrStandings", new JSONArray()
+            .put(new JSONObject().put("name", "Ana").put("wins", 1))
+            .put(new JSONObject().put("name", "Caio").put("wins", 1)));
+        g.ingest(sug);
+        g.localEvent("serveSelect", 1, 0, null);
+        g.localEvent("serveConfirm", 0, -1, null);
+        g.localEvent("point", 1, -1, null);
+        JSONObject d9 = g.displayState();
+        ok(d9.optBoolean("rrSuggest"),
+           "🔒 rrSuggest do CELULAR sobrevive com a posse no relógio (senão o toggle 👑 Rei/Rainha sumia no fim)");
+        ok(d9.optInt("rrRound") == 1 && d9.optJSONArray("rrStandings").length() == 2,
+           "…e a rodada/classificação da série também");
+        ok(!d9.optBoolean("canReplay"), "canReplay vem do celular");
+        ok("[\"15\",\"0\"]".equals(pts(d9)), "…sem perder o placar LOCAL · achado: " + pts(d9));
+
         System.out.println("wear-session: " + pass + " ok, " + fail + " falhas");
         if (fail > 0) System.exit(1);
     }

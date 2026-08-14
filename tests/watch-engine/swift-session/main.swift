@@ -133,5 +133,37 @@ ok(ds.matchEpoch == "m6" && ds.hrMax == f.mirrored.hrMax,
    "campos que o motor não conhece (época, ♥) vêm do espelho, que é quem os recebe")
 ok(ds.teams["2"]?.players == ["Caio", "Duda"], "os nomes seguem os do celular")
 
+// ── 9. O QUE É CONHECIMENTO DO CELULAR VIAJA PELO ESPELHO ────────────────
+// O motor local sabe o placar DESTA partida; a série Rei/Rainha sai do que
+// aconteceu nas ANTERIORES (2 pares distintos entre os mesmos 4 ⇒ sugere o 3º).
+// Sem repassar, o toggle "👑 Rei/Rainha" sumia da tela de fim assim que a posse
+// era do relógio — defeito que a fiação introduziu (relato do dono, 14/ago).
+let g = newSession()
+var dSug: [String: Any] = [
+    "v": 1, "type": "state", "seq": 3, "active": true, "points": ["0", "0"],
+    "games": [0, 0], "sets": [0, 0], "setsToWin": 1, "isDoubles": true, "isCasual": true,
+    "teams": ["1": ["players": ["Ana", "Bruno"]], "2": ["players": ["Caio", "Duda"]]],
+    "sportName": "Beach Tennis", "servePickOpen": true, "matchEpoch": "m9",
+    "rrSuggest": true, "reiRainha": false, "rrRound": 1, "canReplay": false,
+    "rrStandings": [["name": "Ana", "wins": 1], ["name": "Caio", "wins": 1]],
+    "scoring": ["type": "sets", "setsToWin": 1, "gamesPerSet": 6, "tiebreakEnabled": true,
+                "tiebreakPoints": 7, "tiebreakMargin": 2, "superTiebreak": false,
+                "superTiebreakPoints": 10, "countingType": "tennis", "deuceRule": false,
+                "twoPointAdvantage": true, "tieRule": "ask", "fixedSet": false, "fixedSetGames": 0]
+]
+let dataSug = try! JSONSerialization.data(withJSONObject: dSug)
+g.ingest(try! JSONDecoder().decode(ScoreState.self, from: dataSug))
+_ = g.localEvent(.serveSelect(team: 1, idx: 0))
+_ = g.localEvent(.serveConfirm)
+_ = g.localEvent(.point(team: 1))
+let ds9 = g.displayState
+ok(ds9.rrSuggest == true,
+   "🔒 rrSuggest do CELULAR sobrevive com a posse no relógio (senão o toggle 👑 Rei/Rainha sumia no fim do jogo)")
+ok(ds9.rrRound == 1 && ds9.rrStandings.count == 2,
+   "…e a rodada/classificação da série também (o motor local não tem como saber disso)")
+ok(ds9.canReplay == false,
+   "canReplay vem do celular (lá é isCasual && !reiRainhaMode) — o motor sozinho diria true")
+ok(ds9.points == ["15", "0"], "…sem perder o placar LOCAL, que é o que o motor sabe melhor")
+
 print("watch-session: \(pass) ok, \(fail) falhas")
 if fail > 0 { exit(1) }
