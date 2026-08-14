@@ -459,6 +459,12 @@ const SUITES = [
   // ISO. Trava tirar/trocar/reordenar critério, confronto direto por uid, e o princípio de
   // que critério sem dado é NEUTRO (nunca chute). v1.8.60.
   'tests/desempate-do-organizador-vale.test.js',
+  // OS DOIS STORAGES DA FASE CLASSIFICATÓRIA DESENHAM IGUAL — e torneio NOVO nasce no
+  // canônico (`t.matches` taggeado), enquanto o legado (o Confra, único no storage antigo)
+  // fica onde está. O que bloqueava isso era o RENDER: um Rei/Rainha em t.matches caía no
+  // builder de CHAVE e saía com 4.815 bytes sem os jogadores, contra 33.401. Trava leitura,
+  // render, o ciclo completo de um torneio novo e o legado não mudar de lugar. v1.8.63.
+  'tests/dois-storages-desenham-igual.test.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

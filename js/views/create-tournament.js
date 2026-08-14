@@ -5270,6 +5270,10 @@ window._saveTournamentClickHandler = function() {
         }
 
         const tourData = {
+          // ⚠️ STORAGE CANÔNICO — ver o comentário gêmeo em js/main.js e
+          // `_appendCanonicalColumn`. Torneio novo grava a fase classificatória em
+          // `t.matches` taggeado; doc sem a marca é legado e não muda de lugar.
+          storageCanonico: true,
           name,
           isPublic: isPublicVal,
           format,

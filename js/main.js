@@ -1473,6 +1473,12 @@ window.renderHelpPage = function (container) {
       thirdPlace: true,
       elimThirdPlace: true,
       status: 'open',
+      // ⚠️ STORAGE CANÔNICO — torneio NOVO nasce com os jogos da fase classificatória em
+      // `t.matches` taggeado (junto com a chave), não mais em `t.rounds`. Doc SEM esta marca
+      // é legado e continua onde está: migrar o que já existe reescreveria sorteio feito e
+      // placar lançado (o Confra é o único nessa situação, e a limpeza dele está agendada
+      // pra 15/nov/2026). Ver `_appendCanonicalColumn` e `_matchesDeClassificatoria`.
+      storageCanonico: true,
       createdAt: new Date().toISOString(),
       organizerId: window.AppStore.currentUser ? window.AppStore.currentUser.uid : 'local',
       organizerName: window.AppStore.currentUser ? window.AppStore.currentUser.displayName : 'Organizador',
