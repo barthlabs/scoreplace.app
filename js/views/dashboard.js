@@ -3086,7 +3086,7 @@ function renderDashboard(container) {
                saudação e obrigava o ajuste automático a encolher o NOME — que é a
                única parte que a pessoa quer ler. Separados, o nome fica grande
                sempre. ⚠️ A caixa de altura FIXA continua sendo o PAI DIRETO do
-               `.sp-name-fit` (o ajuste mede o parentElement — ver _fitOne no
+               .sp-name-fit (o ajuste mede o parentElement — ver _fitOne no
                store.js): por isso o nome tem a sua própria caixa aqui dentro,
                senão ele mediria a altura das DUAS linhas e poderia vazar. -->
           <div style="font-size:0.95rem; font-weight:600; color:var(--hero-text); opacity:0.8; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;">${_t('dashboard.welcomeGreeting', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo')})}</div>
