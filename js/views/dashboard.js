@@ -1661,13 +1661,42 @@ function renderDashboard(container) {
     // Chave estável (sem número de versão → sobrevive a deploy/cache).
     var _mrCollapsed = true;
     try { var _mrPref = localStorage.getItem('scoreplace_collapse_myresults'); if (_mrPref === '0') _mrCollapsed = false; else if (_mrPref === '1') _mrCollapsed = true; } catch (e) {}
+    // v1.8.69: TOTAL de cards da seção — é o que decide o "▾ ver os N anteriores".
+    // Cada item destas quatro listas vira exatamente um card no corpo.
+    var _mrTotalCards = pendingForMe.length + pendingByMe.length + disputedMatches.length + recentConfirmed.length;
+    // v1.8.69: marca o PRIMEIRO bloco renderizado. A ordem do corpo já é a de urgência
+    // (aguardando você → aguardando o adversário → em disputa → resultados confirmados),
+    // então o card que fica à mostra sai daí de graça: havendo pendência, aparece a
+    // pendência (que pede ação sua); não havendo, aparece o último resultado.
+    var _mrFirstBlockDone = false;
+    function _mrBlockAttrs() {
+      if (_mrFirstBlockDone) return ' data-mr-block="1"';
+      _mrFirstBlockDone = true;
+      return ' data-mr-block="1" data-mr-first="1"';
+    }
     var html = '';
     if (_collapsibleHasContent) {
-      html += '<div id="meus-resultados-section"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      html += '<div id="meus-resultados-section" data-mr-collapsed="' + (_mrCollapsed ? '1' : '0') + '"' + (_hasPendingApproval ? ' data-has-pending="1"' : '') + ' style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      // v1.8.69: FECHADA NÃO É VAZIA — mesma regra de "📣 Novidades no seu torneio". Antes o
+      // corpo inteiro sumia (`display:none`) e a seção fechada não mostrava NADA: pedido do
+      // dono — "está discreto demais… apresenta o último com os outros colapsados, assim
+      // chama mais a atenção sem ocupar muito espaço". Agora o corpo fica sempre no DOM e o
+      // CSS esconde (a) todo bloco que não seja o primeiro e (b) dentro dele, tudo que vem
+      // DEPOIS do primeiro card — `[data-mr-card] ~ *` pega também o cabeçalho de grupo do
+      // 2º grupo, que senão ficaria órfão. O cabeçalho do bloco (ex.: "⏳ Aguardando sua
+      // aprovação (2)") fica de fora do grid de propósito: ele contextualiza o card à mostra
+      // e a contagem continua dizendo a verdade sobre o que existe.
+      // ⚠️ `!important` NÃO é enfeite, e foi MEDIDO no navegador: os cards dos resultados
+      // confirmados nascem com `style="...display:flex;..."` INLINE, e estilo inline vence
+      // folha de estilo. Sem o `!important` o seletor casava (conferido com `.matches()`) e
+      // mesmo assim os três cards apareciam — o teste estrutural passava verde e a tela
+      // continuava errada. Novidades não precisou disto porque lá o card só traz `min-width`.
+      html += '<style>#meus-resultados-section[data-mr-collapsed="1"] #meus-resultados-body > *:not([data-mr-first]){display:none !important;}' +
+        '#meus-resultados-section[data-mr-collapsed="1"] [data-mr-first] [data-mr-card] ~ *{display:none !important;}</style>';
       html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
         '🏅 Seus últimos resultados</h3>';
-      html += '<div id="meus-resultados-body" style="margin-top:12px;' + (_mrCollapsed ? 'display:none;' : '') + '">';
+      html += '<div id="meus-resultados-body" style="margin-top:12px;">';
     }
 
     // Calcula label de fase para eliminatórias (FINAL, SEMI-FINAL etc.)
@@ -1927,7 +1956,7 @@ function renderDashboard(container) {
 
     // ── Aguardando minha aprovação ──
     if (pendingForMe.length > 0) {
-      html += '<div style="margin-bottom:10px;">';
+      html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
@@ -1947,20 +1976,20 @@ function renderDashboard(container) {
           btns += '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(99,102,241) + '">✏️ Editar</button>';
           btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(16,185,129) + '">✅ Confirmar</button>';
         }
-        html += _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
           cardBorder: 'rgba(251,191,36,0.6)',
           cardBg: 'rgba(251,191,36,0.06)',
           cardShadow: '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)'
-        });
+        }) + '</div>';
       });
       html += '</div></div>';
     }
 
     // ── Resultado proposto aguardando adversário ──
     if (pendingByMe.length > 0) {
-      html += '<div style="margin-bottom:10px;">';
+      html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
@@ -1970,20 +1999,20 @@ function renderDashboard(container) {
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
           '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
-        html += _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
           cardBorder: 'rgba(148,163,184,0.4)',
           cardBg: 'rgba(148,163,184,0.06)',
           cardShadow: '0 4px 12px rgba(0,0,0,0.15)'
-        });
+        }) + '</div>';
       });
       html += '</div></div>';
     }
 
     // ── Em disputa — aguardando organizador (Fase 4) ──
     if (disputedMatches.length > 0) {
-      html += '<div style="margin-bottom:10px;">';
+      html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:#f87171;background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
@@ -1991,13 +2020,13 @@ function renderDashboard(container) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         // Sem botões de ação — o jogador não age mais, só o organizador (no bracket).
-        html += _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: _dispTag,
           cardBorder: 'rgba(239,68,68,0.5)',
           cardBg: 'rgba(239,68,68,0.06)',
           cardShadow: '0 0 14px rgba(239,68,68,0.18),0 4px 12px rgba(0,0,0,0.15)'
-        });
+        }) + '</div>';
       });
       html += '</div></div>';
     }
@@ -2064,7 +2093,7 @@ function renderDashboard(container) {
 
     // ── Últimos resultados confirmados — estilo chave (não card flat) ──
     if (recentConfirmed.length > 0) {
-      html += '<div>';
+      html += '<div' + _mrBlockAttrs() + '>';
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
@@ -2225,14 +2254,14 @@ function renderDashboard(container) {
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
           // fica uma vez no topo. Pequena margem entre os boxes via margin.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:0;display:flex;flex-direction:column;margin-bottom:6px;">' +
+            html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;margin-bottom:6px;">' +
               u.body +
             '</div>';
           });
         } else {
           // Singleton — cabeçalho completo (grupo · jogo + torneio), como antes.
           g.units.forEach(function(u) {
-            html += '<div style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
+            html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
                 '<h4 style="color:' + u.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + u.color + ';padding-left:8px;flex:1;">' +
                   (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + _sf(u.faseStr2) +
@@ -2250,6 +2279,12 @@ function renderDashboard(container) {
 
     if (_collapsibleHasContent) {
       html += '</div>'; // fecha #meus-resultados-body
+      // v1.8.69: o convite pra abrir, igual ao de Novidades. Só existe com 2+ cards —
+      // com um só não há "anteriores" e a linha seria ruído.
+      if (_mrTotalCards > 1) {
+        html += '<p id="meus-resultados-hint" onclick="window._toggleMyResultsCollapse()" style="margin:8px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
+          (_mrCollapsed ? '▾ ver os ' + (_mrTotalCards - 1) + ' anteriores' : '▴ ocultar anteriores') + '</p>';
+      }
       html += '</div>'; // fecha #meus-resultados-section
     }
     // v3.1.24: Próximos Jogos (não colapsável) PRIMEIRO, depois Meus Últimos Resultados (colapsável).
@@ -3292,9 +3327,17 @@ function renderDashboard(container) {
       window._dashPendingScrolled = true;
       // v3.1.24: "Meus Últimos Resultados" é colapsada por padrão — mas se há pendência
       // pra mim, expande (sem gravar preferência) pra não esconder a ação necessária.
-      var _mrBody = document.getElementById('meus-resultados-body');
+      // v1.8.69: o estado passou a ser o atributo `data-mr-collapsed` (o corpo não some
+      // mais por `display:none`). Fechada, a seção já mostra o card da pendência — mas
+      // havendo MAIS de uma, abrir continua sendo o certo: nenhuma ação fica escondida.
+      var _mrSec = document.getElementById('meus-resultados-section');
       var _mrChev = document.getElementById('mr-chevron');
-      if (_mrBody && _mrBody.style.display === 'none') { _mrBody.style.display = ''; if (_mrChev) _mrChev.textContent = '▾'; }
+      var _mrHint = document.getElementById('meus-resultados-hint');
+      if (_mrSec && _mrSec.getAttribute('data-mr-collapsed') === '1') {
+        _mrSec.setAttribute('data-mr-collapsed', '0');
+        if (_mrChev) _mrChev.textContent = '▾';
+        if (_mrHint) _mrHint.textContent = '▴ ocultar anteriores';
+      }
       // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
       // entrada, a animação suave era interrompida no meio e parecia "pulo".
       // O guard + scroll preservado garantem que isto roda UMA vez e fica.
@@ -3559,13 +3602,24 @@ window._toggleNovidadesCollapse = function() {
   try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
 };
 
+// 🏅 Seus últimos resultados — v1.8.69: mesmo mecanismo de "📣 Novidades no seu torneio".
+// O estado vive no atributo `data-mr-collapsed` da seção e quem esconde é o CSS; o corpo
+// NUNCA mais some inteiro, senão a seção fechada não mostra nada (era a queixa do dono).
 window._toggleMyResultsCollapse = function() {
-  var body = document.getElementById('meus-resultados-body');
+  var sec = document.getElementById('meus-resultados-section');
   var chev = document.getElementById('mr-chevron');
-  if (!body) return;
-  var willCollapse = body.style.display !== 'none';
-  body.style.display = willCollapse ? 'none' : '';
+  var hint = document.getElementById('meus-resultados-hint');
+  if (!sec) return;
+  var willCollapse = sec.getAttribute('data-mr-collapsed') !== '1';
+  sec.setAttribute('data-mr-collapsed', willCollapse ? '1' : '0');
   if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  if (hint) {
+    var body = document.getElementById('meus-resultados-body');
+    var n = body ? body.querySelectorAll('[data-mr-card]').length : 0;
+    hint.textContent = willCollapse
+      ? ('▾ ver os ' + Math.max(0, n - 1) + ' anteriores')
+      : '▴ ocultar anteriores';
+  }
   try { localStorage.setItem('scoreplace_collapse_myresults', willCollapse ? '1' : '0'); } catch (e) {}
 };
 

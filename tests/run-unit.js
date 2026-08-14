@@ -282,6 +282,11 @@ const SUITES = [
   // PENDENTE entrando com o carimbo do proposedAt — sem ele o topo mostrava "há 18h" com o
   // torneio andando hoje. O feed é somente leitura (o organizador via "Editar" fora da chave).
   'tests/novidades-grade-ordem-e-sem-repeticao.test.js',
+  // 🏅 Seus últimos resultados: FECHADA NÃO É VAZIA. O corpo inteiro sumia (`display:none`)
+  // e a seção fechada não mostrava nada — "discreto demais". Agora o card mais recente fica
+  // à vista e os anteriores somem por CSS, igual às Novidades; havendo pendência, quem
+  // aparece é ela (é a que pede ação).
+  'tests/ultimos-resultados-mostra-o-ultimo.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',
