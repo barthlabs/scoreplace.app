@@ -31,6 +31,15 @@
  * DECIDEM classificação neste torneio estão travados; os outros são desempate do
  * desempate. Declarado aqui pra ninguém ler este arquivo como cobertura total.
  *
+ * ⚠️ REGRAVADO NA 1.8.60, DE PROPÓSITO — e o motivo fica aqui pra ninguém achar que foi
+ * pra calar o teste. O Rei/Rainha passou a aplicar os CRITÉRIOS DE DESEMPATE que o
+ * organizador configurou (ordem do dono: "sempre aplicados… em qualquer fase"), e o Confra
+ * configura `confronto_direto → saldo_pontos → vitorias → …` — nada disso era usado antes.
+ * Efeito MEDIDO: a classificação por grupo muda, e com ela 6 dos 66 pares formados e 6 dos
+ * 98 confrontos. Isso é sorteio que AINDA NÃO FOI FEITO, expressamente liberado pelo dono
+ * ("sorteios que ainda serão feitos ok"); o que não podia mudar — grupos montados, jogos e
+ * placares da R1 — segue IDÊNTICO no motor-golden.
+ *
  * Uso:
  *   node tests/eliminatoria-golden-master.js --gravar   → grava a fixture
  *   node tests/eliminatoria-golden-master.js            → compara (exit 1 se mudou)
@@ -201,7 +210,10 @@ const classifPorGrupo = [];
   (rd.monarchGroups || []).forEach(function (g, gi) {
     let linhas = [];
     try {
-      const s = W._computeMonarchStandings ? W._computeMonarchStandings(g) : null;
+      // ⚠️ PASSA O TORNEIO. Sem `t` esta chamada não enxerga `t.tiebreakers` e o retrato
+      // media uma classificação que o motor NÃO usa — o avanço de fase chama com `t`. O
+      // golden ficava dizendo "a classificação não mudou" enquanto os confrontos mudavam.
+      const s = W._computeMonarchStandings ? W._computeMonarchStandings(g, t) : null;
       if (Array.isArray(s)) {
         linhas = s.map(function (x) {
           return { uid: x.uid || null, pts: x.points, v: x.wins, d: x.losses,

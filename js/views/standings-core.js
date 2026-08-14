@@ -29,6 +29,134 @@
 (function () {
   'use strict';
 
+  // ── OS CRITÉRIOS QUE O ORGANIZADOR CONFIGURA ─────────────────────────────────
+  // Ordem do dono (14/ago/2026): "os critérios de desempate devem sempre ser aplicados como
+  // quer que tenha configurado o organizador. em todo o torneio. em todos os torneios. em
+  // qualquer fase. ele pode tirar critérios e esses passam a não valer; pode colocar um
+  // critério no lugar de outro; pode mudar a ordem de aplicação e isso tudo deve sempre ser
+  // observado. o que configurou o organizador e o que aparece deve ser considerado no motor."
+  //
+  // A configuração mora em `t.tiebreakers` (array ORDENADO) — o que ele tirou simplesmente
+  // não está lá. Cada entrada é uma função (a, b, ctx) → número (negativo = `a` na frente),
+  // 0 = não desempatou, segue pro próximo.
+  //
+  // ⚠️ CRITÉRIO SEM DADO É NEUTRO, NUNCA CHUTE. `antiguidade` sem data de nascimento,
+  // `confronto_direto` sem os jogos, `buchholz` numa tabela que não os calcula — todos
+  // devolvem 0 e a decisão passa adiante. Inventar valor aqui seria decidir classificação
+  // por ruído. Quem quiser saber o que não pôde ser aplicado usa `explainTiebreakers`.
+  var _n = function (v) { return v || 0; };
+  var CRITERIOS = {
+    // "pontos" da tabela (pontuação avançada / pontos corridos)
+    pontos_avancados: function (a, b) { return _n(b.points) - _n(a.points); },
+    vitorias: function (a, b) { return _n(b.wins) - _n(a.wins); },
+    saldo_pontos: function (a, b) {
+      var da = (a.pointsDiff != null) ? a.pointsDiff : (_n(a.pointsFor) - _n(a.pointsAgainst));
+      var db = (b.pointsDiff != null) ? b.pointsDiff : (_n(b.pointsFor) - _n(b.pointsAgainst));
+      return db - da;
+    },
+    saldo_sets: function (a, b) { return (_n(b.setsWon) - _n(b.setsLost)) - (_n(a.setsWon) - _n(a.setsLost)); },
+    sets_vencidos: function (a, b) { return _n(b.setsWon) - _n(a.setsWon); },
+    saldo_games: function (a, b) { return (_n(b.gamesWon) - _n(b.gamesLost)) - (_n(a.gamesWon) - _n(a.gamesLost)); },
+    games_vencidos: function (a, b) { return _n(b.gamesWon) - _n(a.gamesWon); },
+    saldo_tiebreaks: function (a, b) { return (_n(b.tiebreaksWon) - _n(b.tiebreaksLost)) - (_n(a.tiebreaksWon) - _n(a.tiebreaksLost)); },
+    tiebreaks_vencidos: function (a, b) { return _n(b.tiebreaksWon) - _n(a.tiebreaksWon); },
+    pontos_a_favor: function (a, b) { return _n(b.pointsFor) - _n(a.pointsFor); },
+    aproveitamento: function (a, b) { return _n(b.winRate) - _n(a.winRate); },
+    menos_jogos: function (a, b) { return _n(a.played) - _n(b.played); },
+    buchholz: function (a, b) {
+      if (a.buchholz == null && b.buchholz == null) return 0;   // tabela não calcula → neutro
+      return _n(b.buchholz) - _n(a.buchholz);
+    },
+    sonneborn_berger: function (a, b) {
+      if (a.sonnebornBerger == null && b.sonnebornBerger == null) return 0;
+      return _n(b.sonnebornBerger) - _n(a.sonnebornBerger);
+    },
+    // ⚠️ CONFRONTO DIRETO POR UID quando há uid — o mapa antigo era chaveado por NOME, e
+    // nome envelhece (a pessoa se renomeia) e repete (dois homônimos viram um). Cai no nome
+    // só pra quem não tem conta. [[project_uid_identity_canon_locked]]
+    confronto_direto: function (a, b, ctx) {
+      var h = ctx && ctx.h2h; if (!h) return 0;
+      var ka = a.uid || a.name, kb = b.uid || b.name;
+      if (!ka || !kb) return 0;
+      var ab = _n(h[ka + '|||' + kb]), ba = _n(h[kb + '|||' + ka]);
+      if (ab === ba) return 0;
+      return ba - ab;
+    },
+    antiguidade: function (a, b, ctx) {
+      var m = (ctx && ctx.birth) || {};
+      var x = m[a.uid || a.name], y = m[b.uid || b.name];
+      if (x == null || y == null || x === y) return 0;
+      return x - y;                                   // nasceu antes = mais velho vem antes
+    },
+    juventude: function (a, b, ctx) {
+      var m = (ctx && ctx.birth) || {};
+      var x = m[a.uid || a.name], y = m[b.uid || b.name];
+      if (x == null || y == null || x === y) return 0;
+      return y - x;
+    },
+    // Sorteio encerra a fila: daqui não se desempata mais (a ordem estável decide).
+    sorteio: function () { return 0; }
+  };
+
+  // Aplica a configuração do organizador. `opts`:
+  //   { tiebreakers: [...], h2h: {}, birth: {}, adv: bool }
+  // Sem `tiebreakers` (ou lista vazia) cai na cadeia PADRÃO — é o comportamento de quem
+  // nunca abriu a tela de desempate, e o que os testes antigos congelam.
+  function standingsCompareConfig(a, b, opts) {
+    opts = opts || {};
+    var lista = opts.tiebreakers;
+    if (!Array.isArray(lista) || !lista.length) return standingsCompare(a, b, opts.adv);
+    // `points` sempre lidera quando a tabela os tem — é assim em _groupTeamStandings e em
+    // _computeStandings, e mudar isso mudaria classificação de torneio em andamento.
+    if (a.points != null && b.points != null && _n(b.points) !== _n(a.points)) return _n(b.points) - _n(a.points);
+    for (var i = 0; i < lista.length; i++) {
+      var fn = CRITERIOS[lista[i]];
+      if (!fn) continue;                              // critério desconhecido: ignora
+      var d = fn(a, b, opts);
+      if (d) return d;
+      if (lista[i] === 'sorteio') return 0;            // encerra a fila
+    }
+    return 0;
+  }
+
+  // Diz QUAIS critérios da configuração não puderam ser aplicados nesta tabela (e por quê).
+  // Existe pra a resposta "esse critério não pegou" ser verificável em vez de suposta.
+  function explainTiebreakers(linhas, opts) {
+    opts = opts || {};
+    var lista = Array.isArray(opts.tiebreakers) ? opts.tiebreakers : [];
+    var amostra = (linhas && linhas[0]) || {};
+    var out = { aplicaveis: [], semDado: [], desconhecidos: [] };
+    lista.forEach(function (k) {
+      if (!CRITERIOS[k]) { out.desconhecidos.push(k); return; }
+      var falta = (k === 'buchholz' && amostra.buchholz == null)
+        || (k === 'sonneborn_berger' && amostra.sonnebornBerger == null)
+        || (k === 'pontos_avancados' && amostra.points == null)
+        || ((k === 'antiguidade' || k === 'juventude') && !(opts.birth && Object.keys(opts.birth).length))
+        || (k === 'confronto_direto' && !(opts.h2h && Object.keys(opts.h2h).length));
+      (falta ? out.semDado : out.aplicaveis).push(k);
+    });
+    return out;
+  }
+
+  // Monta o mapa de CONFRONTO DIRETO a partir dos jogos, chaveado por uid (nome só pra quem
+  // não tem conta). `h2h['X|||Y'] = n` → X venceu Y n vezes.
+  function buildH2H(matches, slotKeys) {
+    var h = {};
+    (matches || []).forEach(function (m) {
+      if (!m || !m.winner || m.isBye || m.isSitOut) return;
+      var k1 = slotKeys ? slotKeys(m, 'p1') : [], k2 = slotKeys ? slotKeys(m, 'p2') : [];
+      if (!k1.length || !k2.length) return;
+      var venceu1 = (m.winner === m.p1);
+      var venceu2 = (m.winner === m.p2);
+      if (!venceu1 && !venceu2) return;                // empate ou vencedor irreconhecível
+      var vencedores = venceu1 ? k1 : k2, perdedores = venceu1 ? k2 : k1;
+      vencedores.forEach(function (v) {
+        perdedores.forEach(function (p) { h[v + '|||' + p] = (h[v + '|||' + p] || 0) + 1; });
+      });
+    });
+    return h;
+  }
+
   // `adv` = pontuação avançada ligada (aí `points` manda antes de tudo).
   // Tiebreakers (desc, salvo nota):
   // 0. PONTOS AVANÇADOS (quando ligado)  1. wins  2. saldo de sets  3. sets vencidos
@@ -55,9 +183,20 @@
   }
 
   // browser + vendor da CF (que faz `window = globalThis`)
-  if (typeof window !== 'undefined') window._standingsCompare = standingsCompare;
+  if (typeof window !== 'undefined') {
+    window._standingsCompare = standingsCompare;              // cadeia padrão
+    window._standingsCompareConfig = standingsCompareConfig;  // com a config do organizador
+    window._standingsBuildH2H = buildH2H;
+    window._standingsExplain = explainTiebreakers;
+  }
   // Node (teste headless e qualquer módulo que carregue só o phases-engine)
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { standingsCompare: standingsCompare };
+    module.exports = {
+      standingsCompare: standingsCompare,
+      standingsCompareConfig: standingsCompareConfig,
+      buildH2H: buildH2H,
+      explainTiebreakers: explainTiebreakers,
+      CRITERIOS: CRITERIOS
+    };
   }
 })();

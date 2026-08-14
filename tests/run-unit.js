@@ -452,6 +452,13 @@ const SUITES = [
   // ordem de varredura dos grupos. MEDIDO no sandbox do Confra: 132 classificados e 80
   // posições em que as duas discordavam. Agora as duas chamam _standingsCompare. v1.8.59.
   'tests/classificacao-uma-regra-so.test.js',
+  // OS CRITÉRIOS DE DESEMPATE SÃO OS QUE O ORGANIZADOR CONFIGUROU — em qualquer fase.
+  // Duas das quatro funções de classificação ignoravam `t.tiebreakers` (a tabela do
+  // Rei/Rainha e a ordem de quem sobe de fase). E `antiguidade`/`juventude` NUNCA
+  // funcionaram em lugar nenhum: o parser de nascimento só lia dd/mm/aaaa e o perfil grava
+  // ISO. Trava tirar/trocar/reordenar critério, confronto direto por uid, e o princípio de
+  // que critério sem dado é NEUTRO (nunca chute). v1.8.60.
+  'tests/desempate-do-organizador-vale.test.js',
   // O CICLO DE RESULTADO PELO PARTICIPANTE (propor → adversário aprova → contestar →
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.

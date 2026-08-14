@@ -211,7 +211,34 @@ window._computeMonarchStandings = function(group, t, category) {
     });
   }
 
-  return Object.values(stats).sort(function (a, b) { return window._standingsCompare(a, b, _adv); });
+  // ── APLICA OS CRITÉRIOS QUE O ORGANIZADOR CONFIGUROU ────────────────────────
+  // Ordem do dono (14/ago/2026): "os critérios de desempate devem sempre ser aplicados como
+  // quer que tenha configurado o organizador. em todo o torneio. em todos os torneios. em
+  // qualquer fase." Até aqui esta tabela usava uma cadeia FIXA no código — a Fase de Grupos
+  // e a Liga já honravam `t.tiebreakers`, o Rei/Rainha não. MEDIDO: o Confra configura
+  // `confronto_direto → saldo_pontos → vitorias → buchholz → …`, e nada disso era aplicado.
+  // Sem configuração (ou sem `t`), cai na cadeia padrão — nada muda pra quem nunca mexeu.
+  var _linhas = Object.values(stats);
+  var _cfgTb = (t && Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
+  if (!_cfgTb || typeof window._standingsCompareConfig !== 'function') {
+    return _linhas.sort(function (a, b) { return window._standingsCompare(a, b, _adv); });
+  }
+  var _opts = {
+    tiebreakers: _cfgTb, adv: _adv,
+    // confronto direto sai dos JOGOS DESTE GRUPO, por uid (nome só pra quem não tem conta)
+    h2h: (typeof window._standingsBuildH2H === 'function')
+      ? window._standingsBuildH2H(matches, function (m, lado) {
+          var u = (typeof window._slotUids === 'function') ? (window._slotUids(m, lado) || []) : [];
+          if (u.length) return u;
+          var nomes = (lado === 'p1') ? m.team1 : m.team2;
+          if (Array.isArray(nomes) && nomes.length) return nomes.filter(Boolean);
+          var rot = (lado === 'p1') ? m.p1 : m.p2;
+          return rot ? String(rot).split(' / ').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+        })
+      : {},
+    birth: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {}
+  };
+  return _linhas.sort(function (a, b) { return window._standingsCompareConfig(a, b, _opts); });
 };
 
 // ── QUEM ESTÁ NA FRENTE ───────────────────────────────────────────────────────
@@ -584,8 +611,21 @@ window._sitOutComp = _sitOutComp;
 // desempate antiguidade/juventude). birthDate vem no formato "DD/MM/AAAA".
 // Para duplas/times, usa a MÉDIA das datas dos membros que tiverem data.
 // Também mapeia cada membro individualmente (útil em Rei/Rainha).
+// ⚠️ LIA SÓ dd/mm/aaaa — e o perfil grava ISO. Este parser exigia 3 partes separadas por
+// barra (`String(bd).split('/')`), então `1980-05-10` devolvia null. O `birthDate` do perfil
+// é gravado por `_displayDateToIso` (auth.js), ou seja SEMPRE ISO: na prática os critérios
+// `antiguidade` e `juventude` que o organizador configura NUNCA desempataram nada — em fase
+// nenhuma, em torneio nenhum. Não era regra desligada, era data que não era lida.
+// Agora usa `_spTsData`, o parser ÚNICO de data do app (ISO → dd/mm/aa(aa) → mês por
+// extenso → Date.parse), que é o mesmo cânone de [[project_date_parsing_canonical]].
+// O fallback antigo fica só pro vendor da CF, que não carrega o store.js — e ele lê o
+// formato com barra, que continua válido para dado legado.
 function _tbParseBirth(bd) {
   if (!bd) return null;
+  if (typeof window !== 'undefined' && typeof window._spTsData === 'function') {
+    var ts0 = window._spTsData(bd, { fallback: null });
+    return (ts0 == null || isNaN(ts0)) ? null : ts0;
+  }
   var p = String(bd).split('/');
   if (p.length !== 3) return null;
   var d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2], 10);
@@ -610,7 +650,21 @@ window._tbBirthByName = function(t) {
         if (sn && st != null && map[sn] == null) map[sn] = st;
       });
     }
-    if (nm && times.length) map[nm] = times.reduce(function(a, b) { return a + b; }, 0) / times.length;
+    if (times.length) {
+      var media = times.reduce(function (a, b) { return a + b; }, 0) / times.length;
+      if (nm) map[nm] = media;
+      // ⚠️ INDEXA TAMBÉM POR UID. O mapa era só por nome, e nome envelhece (a pessoa se
+      // renomeia) e repete (dois homônimos viram um) — então o critério `antiguidade`
+      // configurado pelo organizador podia cair na pessoa errada, ou não cair em ninguém.
+      // As chaves por nome ficam: quem não tem conta só tem o nome.
+      if (p.uid) map[p.uid] = media;
+      if (Array.isArray(p.participants)) {
+        p.participants.forEach(function (sub) {
+          var st2 = _tbParseBirth(sub && sub.birthDate);
+          if (sub && sub.uid && st2 != null && map[sub.uid] == null) map[sub.uid] = st2;
+        });
+      }
+    }
   });
   return map;
 };

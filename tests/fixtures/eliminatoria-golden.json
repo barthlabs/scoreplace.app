@@ -253,13 +253,6 @@
           "d": 2,
           "pc": 18,
           "pf": 17,
-          "uid": "uid0040",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 18,
-          "pf": 17,
           "uid": "uid0037",
           "v": 1
         },
@@ -268,6 +261,13 @@
           "pc": 18,
           "pf": 17,
           "uid": "uid0038",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 17,
+          "uid": "uid0040",
           "v": 1
         }
       ],
@@ -532,14 +532,14 @@
           "d": 2,
           "pc": 18,
           "pf": 16,
-          "uid": "uid0071",
+          "uid": "uid0070",
           "v": 1
         },
         {
           "d": 2,
           "pc": 18,
           "pf": 16,
-          "uid": "uid0070",
+          "uid": "uid0071",
           "v": 1
         }
       ],
@@ -1096,14 +1096,14 @@
           "d": 1,
           "pc": 16,
           "pf": 18,
-          "uid": "uid0134",
+          "uid": "uid0133",
           "v": 2
         },
         {
           "d": 1,
           "pc": 16,
           "pf": 18,
-          "uid": "uid0133",
+          "uid": "uid0134",
           "v": 2
         },
         {
@@ -1132,7 +1132,7 @@
       "label": null,
       "p1": "Pessoa 9 / Pessoa 8",
       "p1Uid": null,
-      "p2": "Pessoa 133 / Pessoa 132",
+      "p2": "Pessoa 132 / Pessoa 133",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
@@ -1141,8 +1141,8 @@
         "uid0014"
       ],
       "team2Uids": [
-        "uid0134",
-        "uid0133"
+        "uid0133",
+        "uid0134"
       ],
       "winner": null
     },
@@ -1214,15 +1214,14 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P5",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 24 / Pessoa 25",
-      "p1Uid": null,
+      "p1": "Pessoa 24 / Pessoa 23",
+      "p1Uid": "uid0030",
       "p2": "Pessoa 114 / Pessoa 117",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0030",
-        "uid0031"
+        "uid0030"
       ],
       "team2Uids": [
         "uid0115",
@@ -1235,15 +1234,14 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P6",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 28 / Pessoa 27",
-      "p1Uid": null,
+      "p1": "Pessoa 28 / Pessoa 29",
+      "p1Uid": "uid0034",
       "p2": "Pessoa 112 / Pessoa 111",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0034",
-        "uid0033"
+        "uid0034"
       ],
       "team2Uids": [
         "uid0113",
@@ -1256,7 +1254,7 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P7",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 33 / Pessoa 34",
+      "p1": "Pessoa 33 / Pessoa 31",
       "p1Uid": null,
       "p2": "Pessoa 106 / Pessoa 109",
       "p2Uid": null,
@@ -1264,7 +1262,7 @@
       "round": 1,
       "team1Uids": [
         "uid0039",
-        "uid0040"
+        "uid0037"
       ],
       "team2Uids": [
         "uid0107",
@@ -2048,13 +2046,14 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P5",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 23 / Pessoa 26",
-      "p1Uid": "uid0032",
+      "p1": "Pessoa 25 / Pessoa 26",
+      "p1Uid": null,
       "p2": "Pessoa 115 / Pessoa 116",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
+        "uid0031",
         "uid0032"
       ],
       "team2Uids": [
@@ -2068,13 +2067,14 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P6",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 30 / Pessoa 29",
-      "p1Uid": "uid0036",
+      "p1": "Pessoa 27 / Pessoa 30",
+      "p1Uid": null,
       "p2": "Pessoa 113 / Pessoa 110",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
+        "uid0033",
         "uid0036"
       ],
       "team2Uids": [
@@ -2088,15 +2088,15 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P7",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 31 / Pessoa 32",
+      "p1": "Pessoa 32 / Pessoa 34",
       "p1Uid": null,
       "p2": "Pessoa 107 / Pessoa 108",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0037",
-        "uid0038"
+        "uid0038",
+        "uid0040"
       ],
       "team2Uids": [
         "uid0108",
@@ -2255,15 +2255,15 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P15",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 65 / Pessoa 64",
+      "p1": "Pessoa 64 / Pessoa 65",
       "p1Uid": null,
       "p2": "Pessoa 74 / Pessoa 77",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0071",
-        "uid0070"
+        "uid0070",
+        "uid0071"
       ],
       "team2Uids": [
         "uid0002",
@@ -2297,7 +2297,7 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P17",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 6 / Pessoa 3",
+      "p1": "Pessoa 3 / Pessoa 6",
       "p1Uid": "uid0012",
       "p2": "TBD",
       "p2Uid": null,

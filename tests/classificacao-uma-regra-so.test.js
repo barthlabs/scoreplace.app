@@ -95,7 +95,8 @@ const pe = fs.readFileSync(path.join(__dirname, '../js/views/phases-engine.js'),
 const core = fs.readFileSync(path.join(__dirname, '../js/views/standings-core.js'), 'utf8');
 ok(/function standingsCompare\s*\(/.test(core), 'o comparador é definido UMA vez, no standings-core');
 ok(/window\._standingsCompare = standingsCompare/.test(core), 'o core publica no window (browser + vendor da CF)');
-ok(/module\.exports = \{ standingsCompare/.test(core), 'e exporta pra Node (require) — era o elo que faltava');
+ok(/module\.exports = \{/.test(core) && /standingsCompare: standingsCompare/.test(core),
+  'e exporta pra Node (require) — era o elo que faltava');
 ok(!/window\._standingsCompare = function/.test(bl), 'bracket-logic não define mais a cadeia (só consome)');
 ok(/_standingsCompare\(a, b, _adv\)/.test(bl), 'a TABELA usa o comparador');
 ok(/window\._standingsCompare\b/.test(pe), 'a TRANSIÇÃO usa o mesmo comparador');
