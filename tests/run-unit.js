@@ -312,6 +312,11 @@ const SUITES = [
   // REAL (bracket-ui.js no harness, Chromium) e exige que ele reproduza os vetores —
   // mudança de comportamento fica vermelha até regravar (--write) E re-validar o nativo.
   'tests/watch-engine-vectors.test.js',
+  // Caminho B (fiação): o celular RECEBE o diário de eventos do relógio e o reproduz no
+  // motor JS canônico (de onde saem placar oficial/Firestore/histórico). Trava ordem por
+  // `n`, idempotência do reenvio (dedup deviceId#n), época nova zerando o dedup e o
+  // receptor não reimplementando nada de placar.
+  'tests/watch-diario-de-eventos.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).
