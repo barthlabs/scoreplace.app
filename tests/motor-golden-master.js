@@ -74,6 +74,43 @@ function estavel(v) {
 }
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
+// ⚠️ SEM PERFIL O MOTOR NÃO SORTEIA — e isso não é bug, é o desenho. O storage é SÓ-UID
+// (identity-core tira o nome de toda entrada cujo uid resolve), então `_generateNextRound`
+// começa chamando `_rehydrateEntryNames`, que reidrata o nome a partir do PERFIL VIVO. Num
+// harness sem perfil nenhum o nome fica vazio e `_getActiveLigaPlayers` descarta todo
+// mundo: MEDIDO, o Confra (137 inscritos) devolvia `{}` e gerava 0 rodadas — foi por isso
+// que a geração de Liga/Rei-Rainha ficou fora do retrato na primeira versão deste arquivo.
+// Aqui os perfis são semeados a partir dos uids do próprio doc, com o nome sintético que a
+// fixture já carrega. Determinístico e sem inventar identidade: o uid continua sendo a
+// identidade, o nome é só rótulo. [[project_uid_identity_canon_locked]]
+function semearPerfis(t) {
+  const cache = {}, porUid = {};
+  const põe = (uid, nome) => {
+    if (!uid) return;
+    const n = nome || ('Pessoa ' + String(uid).slice(-4));
+    cache[uid] = { uid: uid, displayName: n, gender: '', birthDate: '' };
+    porUid[uid] = n;
+  };
+  const varre = (node) => {
+    if (Array.isArray(node)) return node.forEach(varre);
+    if (!node || typeof node !== 'object') return;
+    if (node.uid) põe(node.uid, node.displayName || node.name);
+    if (node.p1Uid) põe(node.p1Uid, node.p1Name);
+    if (node.p2Uid) põe(node.p2Uid, node.p2Name);
+    ['team1Uids', 'team2Uids', 'playersUids', 'memberUids'].forEach((k) => {
+      const arr = node[k];
+      if (!Array.isArray(arr)) return;
+      const nomes = node[k === 'team1Uids' ? 'team1' : k === 'team2Uids' ? 'team2' : 'players'];
+      arr.forEach((u, i) => põe(u, Array.isArray(nomes) ? nomes[i] : null));
+    });
+    Object.keys(node).forEach((k) => varre(node[k]));
+  };
+  varre(t);
+  W._userProfileCache = cache;
+  W._profileNameByUid = porUid;
+  return Object.keys(cache).length;
+}
+
 function categorias(t) {
   try {
     if (typeof W._getTournamentCategories === 'function') {
@@ -86,7 +123,8 @@ function categorias(t) {
 
 function retratoDeUmTorneio(tRaw) {
   const r = { id: tRaw.id, nome: tRaw.name, formato: tRaw.format, modo: tRaw.drawMode || null,
-              rodadaFmt: tRaw.ligaRoundFormat || null, leitura: {}, geracao: {} };
+              rodadaFmt: tRaw.ligaRoundFormat || null, perfisSemeados: semearPerfis(tRaw),
+              leitura: {}, geracao: {} };
 
   // ── METADE VIVA (roda a cada tela): classificação e derivados ──
   categorias(tRaw).forEach(function (cat) {

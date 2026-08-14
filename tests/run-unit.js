@@ -412,6 +412,13 @@ const SUITES = [
   // UMA forma de gravar o tie-break ({pointsP1,pointsP2}) + o subplacar sobrevive do
   // lançamento até a tela (o `sets` no pendingResult é o que faltava). v1.8.44.
   'tests/tiebreak-uma-forma-de-gravar.test.js',
+  // GOLDEN MASTER DO MOTOR: congela a saída (classificação + rodada gerada) contra os
+  // docs REAIS de produção, anonimizados. Existe pra a ordem do dono — "consertar o motor
+  // sem mudar o que já temos" — ser PROVÁVEL e não uma promessa: qualquer diferença na
+  // saída reprova, mesmo que pareça melhoria. Regravar exige --gravar e explicação no
+  // commit. Cobre 118 jogos gerados (inclui Rei/Rainha do Confra) e 291 linhas de
+  // classificação. v1.8.50.
+  'tests/motor-golden-master.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
