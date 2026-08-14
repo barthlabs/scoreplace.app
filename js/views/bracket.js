@@ -4127,6 +4127,15 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
 
     // Standings table — no crown; qualified rows still highlighted via CLASSIF badge
     var classified = window._phaseClassifiedCount(t, standings.length);
+    // v1.8.65: PRESENÇA na classificação do grupo — mesma regra do outro render de
+    // grupo Rei/Rainha (rota Liga, _renderGroup): quem marcou "Cheguei" ganha bolinha
+    // verde + nome verde. checkedIn E não absent; por uid quando há conta.
+    var _ciMonSt = t.checkedIn || {}, _abMonSt = t.absent || {};
+    var _monStPresente = function (s) {
+      if (typeof window._idMapHas !== 'function') return false;
+      var who = { uid: s.uid || '', name: s.name };
+      return window._idMapHas(t, _ciMonSt, who) && !window._idMapHas(t, _abMonSt, who);
+    };
     var standingsRows = standings.map(function(s, i) {
       var diff = s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;
@@ -4134,9 +4143,13 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var winRatePct = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0;
       var bg = i < classified ? 'rgba(34,197,94,0.10)' : '';
       var clr = i < classified ? '#4ade80' : 'var(--text-muted)';
+      var _presM = _monStPresente(s);
+      var _presDotM = _presM
+        ? '<span title="Presente no local" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.7);margin-right:5px;vertical-align:middle;"></span>'
+        : '';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:var(--text-bright);">' + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td style="padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -5295,6 +5308,18 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // âmbar antes do vermelho; estável entre os demais.
             var _stRank = function (nm) { return _woRed[nm] ? 2 : _woAmber[nm] ? 1 : 0; };
             _gst = _gst.slice().sort(function (a, b) { return _stRank(a.name) - _stRank(b.name); });
+            // v1.8.65: PRESENÇA na classificação do grupo (pedido do dono) — quem marcou
+            // "Cheguei" ganha bolinha verde + nome verde na lista. Antes a única pista
+            // era o pontinho de check-in POR TIME no card do jogo (âmbar = parcial),
+            // que não diz QUEM está e quem não. Mesma leitura da elegibilidade da
+            // espera (linha ~5030): está em checkedIn E não está em absent — por uid
+            // quando há conta, nome só pro fictício (_idMapGet resolve os dois).
+            var _ciGst = t.checkedIn || {}, _abGst = t.absent || {};
+            var _gstPresente = function (s) {
+              if (typeof window._idMapHas !== 'function') return false;
+              var who = { uid: s.uid || '', name: s.name };
+              return window._idMapHas(t, _ciGst, who) && !window._idMapHas(t, _abGst, who);
+            };
             // Pts AVANÇADOS visíveis na tabela quando o torneio usa Pontos Avançados.
             var _advPtsOn = !!(t.advancedScoring && t.advancedScoring.enabled);
             // Quantos classificam POR GRUPO pra próxima fase (0 = fase única → sem tarja verde).
@@ -5342,14 +5367,20 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
                 var _isRed = !!_woRed[s.name];
                 var _isAmb = !_isRed && !!_woAmber[s.name];
-                var _nmColor = _isRed ? '#f87171' : _isAmb ? '#fbbf24' : 'var(--text-bright)';
+                // Presença NUNCA vence o estado de W.O. — vermelho/âmbar continuam
+                // mandando na cor (o W.O. é o acionável; a presença é informativa).
+                var _isPres = !_isRed && !_isAmb && _gstPresente(s);
+                var _nmColor = _isRed ? '#f87171' : _isAmb ? '#fbbf24' : _isPres ? '#4ade80' : 'var(--text-bright)';
+                var _presDot = _isPres
+                  ? '<span title="Presente no local" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.7);margin-right:5px;vertical-align:middle;"></span>'
+                  : '';
                 var _woTag = (_isRed || _isAmb)
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
                 var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
                 return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
-                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
+                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:#4ade80;font-weight:700;">' + (s.wins || 0) + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +

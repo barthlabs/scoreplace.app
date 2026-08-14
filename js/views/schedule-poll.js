@@ -471,7 +471,18 @@
       var n = (m0.schedule && Array.isArray(m0.schedule.options)) ? m0.schedule.options.length : 0;
       // Azul via INLINE (não .btn-primary — responsive.css força .btn-primary a
       // width:100% no mobile, o que estourava o tamanho e jogava o botão pra outra linha).
-      return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;padding:4px 9px;line-height:1.05;text-align:center;">📅 Combinar<br>jogos' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '') + '</button>';
+      // v1.8.65 (print do dono): o badge de propostas era irmão SOLTO dentro do botão —
+      // e .btn é inline-flex, então ele virava um item de flex ao LADO do texto,
+      // alargando o botão e empurrando o "editar" do grupo de WhatsApp. Agora o
+      // conteúdo é UMA pilha (coluna, alinhada à esquerda) e o badge mora na linha
+      // de baixo, ao lado de "jogos" — a largura do botão é a de "📅 Combinar",
+      // com ou sem badge.
+      var _badge = n ? '<span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '';
+      return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;">' +
+        '<span style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">' +
+          '<span>📅 Combinar</span>' +
+          '<span style="display:inline-flex;align-items:center;gap:5px;">jogos' + _badge + '</span>' +
+        '</span></button>';
     } catch (e) { return ''; }
   };
 

@@ -147,6 +147,23 @@ html.sp-native #venues-detail-overlay .sticky-back-header {
     padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
   }
 }
+/* v1.8.65: FICHA DO JOGADOR (#player-profile-overlay, tournaments-analytics.js) — o
+   cabeçalho (Voltar + botão de amizade) é o topo do card, colado no topo da tela.
+   No PWA instalado (status bar translúcida SOBRE o conteúdo) e no app nativo
+   (viewport-fit=cover) ele ficava SOB o relógio/sinal/bateria — e sob a status bar
+   também significa SEM TOQUE (o iOS reserva a faixa pro scroll-to-top): o "Voltar"
+   parecia quebrado, quando na verdade o toque nunca chegava nele (print do dono,
+   14/ago). Mesmo padrão das overlays acima; no NATIVO com PISO de 50px porque
+   env(safe-area-inset-top) volta 0 em contexto fixed no WKWebView — o mesmo
+   diagnóstico do .modal-header em layout.css. Inerte no browser comum. */
+html.sp-native #ppo-header {
+  padding-top: max(calc(10px + env(safe-area-inset-top, 0px)), 50px) !important;
+}
+@media (display-mode: standalone) {
+  html:not(.sp-native) #ppo-header {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+  }
+}
 /* Suppress default 50px spacer in overlay contexts — JS sets it dynamically */
 #modal-quick-create .sticky-back-header + *,
 #casual-match-overlay .sticky-back-header + *,
