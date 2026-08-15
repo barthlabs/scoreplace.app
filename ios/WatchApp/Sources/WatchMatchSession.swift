@@ -210,6 +210,12 @@ final class WatchMatchSession {
         d["rrRound"] = mirror.rrRound
         d["rrStandings"] = mirror.rrStandings.map { ["name": $0.name, "wins": $0.wins] }
         d["canReplay"] = mirror.canReplay
+        // Os 3 interruptores da tela de fim são do CELULAR (🎲 é local, mas
+        // 👑/⚥ são configuração da sessão). O motor local não os conhece —
+        // sem carregar do espelho, o relógio apagaria as chaves ao assumir.
+        d["shuffleOn"] = mirror.shuffleOn
+        d["mixedOn"] = mirror.mixedOn
+        d["canMix"] = mirror.canMix
         let data = try JSONSerialization.data(withJSONObject: d)
         return try JSONDecoder().decode(ScoreState.self, from: data)
     }

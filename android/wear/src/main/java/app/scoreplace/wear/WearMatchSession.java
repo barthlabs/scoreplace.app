@@ -151,6 +151,12 @@ public final class WearMatchSession {
                 o.put("rrStandings", mirrored.optJSONArray("rrStandings"));
             }
             o.put("canReplay", mirrored.optBoolean("canReplay", o.optBoolean("canReplay", false)));
+            // Os 3 interruptores da tela de fim são do CELULAR (🎲 é local, mas
+            // 👑/⚥ são configuração da sessão). O motor local não os conhece —
+            // sem carregar do espelho, o relógio apagaria as chaves ao assumir.
+            o.put("shuffleOn", mirrored.optBoolean("shuffleOn", false));
+            o.put("mixedOn", mirrored.optBoolean("mixedOn", false));
+            o.put("canMix", mirrored.optBoolean("canMix", false));
             return o;
         } catch (Exception e) { return null; }
     }

@@ -106,6 +106,18 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     func sendReiRainhaStart() {
         sendIntent(["v": 1, "type": "rrActivate", "id": UUID().uuidString])
     }
+    /// 👑 fora da sugestão de fim de série: liga/desliga o modo Rei/Rainha.
+    /// Separado do `rrActivate` de propósito — aquele ACEITA a sugestão (ativa
+    /// retroativo E já avança pro 3º jogo); este só mexe no interruptor.
+    func sendSetReiRainha(_ on: Bool) {
+        sendIntent(["v": 1, "type": "setRR", "on": on, "id": UUID().uuidString])
+    }
+    /// ⚥ duplas mistas. É CONFIGURAÇÃO da sessão (o celular propaga pros outros
+    /// jogadores), então o relógio só manda a intenção e redesenha com o que
+    /// voltar — nunca guarda uma cópia própria do estado.
+    func sendSetMixed(_ on: Bool) {
+        sendIntent(["v": 1, "type": "setMixed", "on": on, "id": UUID().uuidString])
+    }
     /// Escolhe o sacador nos 2 primeiros jogos (equivale a arrastar a bola no
     /// celular). O celular decide se ainda vale — o hard lock vive no motor.
     func sendSetServer(team: Int, playerIdx: Int) {

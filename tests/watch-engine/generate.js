@@ -42,12 +42,21 @@ async function runScenario(page, sc) {
     //  · `scoring` é a config, já gravada UMA vez no topo do vetor (`config`) —
     //    repeti-la em cada passo seria redundância que os motores nativos
     //    (que não a re-emitem) teriam de imitar sem ganho nenhum.
+    //  · `shuffleOn`/`mixedOn`/`canMix` são os INTERRUPTORES da tela de fim
+    //    (🎲/👑/⚥, 1.8.77). São preferência da sessão, não placar: o motor não
+    //    os lê nem os produz, e os nativos os copiam do espelho. Deixá-los no
+    //    vetor obrigaria os 3 motores a reproduzir um estado de UI — e a
+    //    bateria ficaria vermelha a cada opção nova de tela, que é ruído, não
+    //    drift. Quem os cobre é tests/relogio-tres-chaves.test.js.
     // O que fica é só o ESTADO DE PLACAR, que é o que os 3 motores têm que
     // reproduzir igual.
     const snap = () => {
       const s = JSON.parse(JSON.stringify(window._getLiveScoreState()));
       delete s.matchEpoch;
       delete s.scoring;
+      delete s.shuffleOn;
+      delete s.mixedOn;
+      delete s.canMix;
       return s;
     };
     const steps = [{ event: { kind: 'open' }, state: snap() }];
