@@ -5086,16 +5086,20 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _wlRatio = (typeof window._ratioForPhase === 'function') ? window._ratioForPhase(t) : '';
             var _wlRatioTxt = (_wlRatio && typeof window._ratioLabel === 'function') ? window._ratioLabel(_wlRatio) : _wlRatio;
             var _wlTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            // ORDEM: rótulo à ESQUERDA, chave à DIREITA, e o conjunto colado na borda
+            // direita do box (`margin-left:auto`). O toggle é a última coisa da linha de
+            // propósito — é o alvo de toque, e alvo de toque na borda é o que a mão alcança.
             var _wlToggle = (!_wlOrg || !_wlRatio) ? '' :
-              ('<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;flex-shrink:0;">' +
+              ('<span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;">' +
+                '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
+                'Travar proporção</span>' +
                 '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
                 (window._safeHtml || String)(_wlEquil
                   ? ('Proporção travada: grupo novo só fecha em ' + _wlRatioTxt)
                   : ('Proporção destravada: busca ' + _wlRatioTxt + ' e depois flexibiliza para incluir mais gente')) + '">' +
                 '<input type="checkbox" ' + (_wlEquil ? 'checked' : '') +
                 ' onclick="event.stopPropagation();window._toggleWlBalance(\'' + _wlTid + '\')"><span class="toggle-slider"></span></label>' +
-                '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
-                'Travar proporção</span></span>');
+                '</span>');
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
               '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
               '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
