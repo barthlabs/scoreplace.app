@@ -149,8 +149,20 @@ struct RemoteView: View {
         // nasce DESABILITADO. A pessoa já tinha respondido a pergunta e ficava presa,
         // tendo que começar pelo celular. Quem zera é o onChange de `servePickPhase`
         // acima, que é onde a PERGUNTA de fato muda (1º → 2º sacador).
+        // ⚠️ v1.8.84 — E FECHAR TAMBÉM. Relato do dono: _"quando escolhe o sacador e
+        // clica em confirmar, inicia no celular mas no relógio tem que clicar em
+        // confirmar de novo, senão fica na tela de escolha de sacador"_.
+        // Este onChange só ABRIA. `servePickOpen` é o celular dizendo "estou
+        // perguntando"; quando ele vira FALSE a pergunta já foi respondida — do outro
+        // lado, mas foi. O relógio ficava com o seletor aberto por cima de uma partida
+        // que já tinha começado, e o único jeito de sair era responder de novo aqui.
+        // Fechar aqui NÃO conflita com a abertura local do 2º sacador
+        // (`servePickPhase == 1`): o celular liga `servePickOpen` nas DUAS telas (é o
+        // mesmo `_needsServePick()` de lá), então quem fecha é sempre quem respondeu.
+        // ⚠️ Não mexer em `pendingPick` aqui — ver o comentário da v1.7.9 acima: zerá-lo
+        // neste ponto foi o que já prendeu quem escolhia o sacador na tela "Iniciar".
         .onChange(of: state.servePickOpen) { open in
-            if open { pickingServer = true }
+            pickingServer = open
         }
         // Variante de UMA closure de propósito: `onChange(of:initial:_:)` (duas
         // closures) é API de watchOS 10+ e barraria o Series 3 (watchOS 8) da Kelly.

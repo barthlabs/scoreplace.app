@@ -135,7 +135,16 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
     }
     func hello() {
         sendIntent(["v": 1, "type": "hello"])
+        // v1.8.84: rearma a insistência. O `hello` do `.onAppear` era UM tiro — reabrir o
+        // app do relógio com o iPhone dormindo caía no mesmo silêncio de sempre. O flag
+        // impede dois laços concorrentes (abrir/fechar a tela várias vezes).
+        if lastSeq < 0 && !insistindo {
+            insistindo = true
+            retryHelloUntilAnswered()
+        }
     }
+    /// Há um laço de `hello` em andamento? (evita laços empilhados)
+    private var insistindo = false
 
     private func sendIntent(_ intent: [String: Any]) {
         guard WCSession.isSupported() else { return }
@@ -196,19 +205,33 @@ final class WatchSession: NSObject, ObservableObject, WCSessionDelegate {
         //    respondesse, a tela ficava em "Aguardando…" mesmo havendo estado conhecido.
         if let json = session.receivedApplicationContext["state"] as? String { apply(json, isCached: true) }
         // 2) pede o estado atual
-        hello()
         // 3) o `hello` é UM tiro: se o app do iPhone estava fechado/suspenso, ninguém
-        //    respondia e o relógio esperava pra sempre. Re-tenta algumas vezes enquanto
-        //    nenhum snapshot tiver chegado (para assim que `lastSeq` avança).
-        retryHelloUntilAnswered()
+        //    respondia e o relógio esperava pra sempre. O próprio `hello()` REARMA a
+        //    insistência (v1.8.84) — por isso a chamada extra a `retryHelloUntilAnswered`
+        //    saiu daqui: com o rearme, ela empilharia um segundo laço.
+        hello()
     }
 
-    /// Re-envia `hello` (3×, a cada 2s) enquanto nenhum estado tiver chegado.
+    /// Re-envia `hello` enquanto nenhum estado tiver chegado, com espera CRESCENTE.
+    ///
+    /// ⚠️ v1.8.84 — antes eram 3 tentativas a cada 2s e depois DESISTIA pra sempre.
+    /// Relato do dono: _"os nomes do celular só vêm quando toca na tela"_. É isto: com o
+    /// iPhone bloqueado — que é o estado normal dele na beira da quadra — o app de lá não
+    /// responde ao `hello`, os 6 segundos passam, e o relógio fica calado. Aí qualquer
+    /// toque manda uma intenção, ACORDA o app do celular, e a resposta traz os nomes:
+    /// parecia que só o toque buscava o estado, quando na verdade era o toque acordando
+    /// quem devia ter respondido.
+    /// Agora insiste por ~2 minutos com espera crescente (2, 3, 4… até 15s): pega o
+    /// celular que acorda tarde sem ficar martelando rádio a cada 2s — o custo de bateria
+    /// de um `hello` é desprezível perto de ficar sem os nomes.
+    /// Para sozinho no primeiro snapshot (`lastSeq` avança).
     private func retryHelloUntilAnswered(attempt: Int = 0) {
-        guard attempt < 3, lastSeq < 0 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard let self = self, self.lastSeq < 0 else { return }
-            self.hello()
+        guard attempt < 20, lastSeq < 0 else { insistindo = false; return }
+        let espera = min(2.0 + Double(attempt), 15.0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + espera) { [weak self] in
+            guard let self = self else { return }
+            guard self.lastSeq < 0 else { self.insistindo = false; return }
+            self.sendIntent(["v": 1, "type": "hello"])   // direto: `hello()` rearmaria o laço
             self.retryHelloUntilAnswered(attempt: attempt + 1)
         }
     }
