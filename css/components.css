@@ -812,6 +812,39 @@ button[style*="linear-gradient"]:not(.btn):active {
   text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);
 }
 
+/* --- As caixas INSCRITOS / EQUIPES / LISTA DE ESPERA sobre a foto (v1.8.80) -
+   MESMA raiz do rótulo acima, e o relato do dono é o mesmo sintoma: _"essa lista de
+   espera não está dando leitura, especialmente quando há foto no torneio"_.
+   ⚠️ A 1.8.78 tentou consertar isto passando a tarja (`_photoReadBox()`) pras caixas —
+   e NÃO adiantou, porque desde a 1.7.53 quem lê `venuePhotoBg` no RENDER recebe sempre
+   "não tem foto": a foto do Google só é pintada depois, pelo hidratador. A tarja existia
+   no código e valia `null` na prática. Só o caminho do CSS enxerga o estado real.
+   (O `_photoReadBox()` inline segue valendo pro outro caso — capa ENVIADA pelo
+   organizador, `t.coverPhotoData`, que existe no render. Os dois caminhos coexistem.)
+   Sobre foto: tarja escura + desfoque, e o âmbar CLAREIA — #fbbf24 é calibrado pra
+   fundo liso e some numa foto clara. */
+[data-vphoto-on] .stat-box {
+  background: rgba(0,0,0,0.60) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  color: #e2e8f0 !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+}
+[data-theme="light"] [data-vphoto-on] .stat-box {
+  background: rgba(30,41,59,0.85) !important;
+  color: #f1f5f9 !important;
+}
+/* a caixa da espera mantém a identidade âmbar — só num tom que sobrevive à foto */
+[data-vphoto-on] .stat-box[data-stat="waitlist"] {
+  border-color: rgba(252,211,77,0.55) !important;
+}
+[data-vphoto-on] .stat-box[data-stat="waitlist"] .stat-value,
+[data-vphoto-on] .stat-box[data-stat="waitlist"] span {
+  color: #fcd34d !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+}
+
 /* --- Info Pill (badges de status: Começa hoje, Progresso, Inscritos, etc.) --- */
 .info-pill {
   display: flex;
