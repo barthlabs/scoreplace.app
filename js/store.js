@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.72';
+window.SCOREPLACE_VERSION = '1.8.76';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2865,8 +2865,13 @@ window._spLoaderLogoHtml = function () {
   // repete esta composição por obrigação técnica (roda antes de qualquer
   // script) e há teste travando que os dois continuem iguais: mexeu aqui,
   // mexa lá.
+  // v1.8.75 (dono): "dobrar o tamanho do logo" — 76×57 → 152×114. O boot inline
+  // dobrou junto (104×78 → 208×156) pra a proporção entre as duas telas não
+  // inverter: elas aparecem em SEQUÊNCIA na abertura, e o símbolo encolher do
+  // splash pra cá seria lido como troca de tela, não como continuidade.
+  // O WORDMARK não muda — "scoreplace.app" já ocupa quase a largura do iPhone.
   return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:2px;" aria-hidden="true">' +
-      '<svg width="76" height="57" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
+      '<svg width="152" height="114" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
       '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
     '</div>';
 };

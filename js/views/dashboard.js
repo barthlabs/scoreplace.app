@@ -3086,10 +3086,15 @@ function renderDashboard(container) {
                saudação e obrigava o ajuste automático a encolher o NOME — que é a
                única parte que a pessoa quer ler. Separados, o nome fica grande
                sempre. ⚠️ A caixa de altura FIXA continua sendo o PAI DIRETO do
-               `.sp-name-fit` (o ajuste mede o parentElement — ver _fitOne no
+               .sp-name-fit (o ajuste mede o parentElement — ver _fitOne no
                store.js): por isso o nome tem a sua própria caixa aqui dentro,
                senão ele mediria a altura das DUAS linhas e poderia vazar. -->
-          <div style="font-size:0.95rem; font-weight:600; color:var(--hero-text); opacity:0.8; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;">${_t('dashboard.welcomeGreeting', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo')})}</div>
+          <!-- v1.8.76 (dono): "o bem-vindo(a) não precisa ser tão pequeno" — 0.95rem
+               → 1.35rem. A saudação continua MENOR que o nome de propósito (a
+               hierarquia da 1.8.72 é o que mantém o nome grande), mas 0.95rem a
+               deixava quase legenda. Ela segue com nowrap + reticência: a variante
+               mais longa ("Bem-vindo(a),") tem que caber ao lado dos botões. -->
+          <div style="font-size:1.35rem; font-weight:600; color:var(--hero-text); opacity:0.85; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;">${_t('dashboard.welcomeGreeting', {greeting: (window._welcomeWord ? window._welcomeWord() : 'Bem-vindo')})}</div>
           <div style="height:calc(var(--sp-u) * 2.5); overflow:hidden; display:flex; align-items:center;">
             <h2 class="sp-name-fit" data-maxrem="2.3" data-minrem="1.1" style="margin:0; font-size:2.3rem; font-weight:700; color:var(--hero-text); line-height:1.1; white-space:nowrap; max-width:100%;">${_t('dashboard.welcomeName', {name: (window._firstNameOnly ? window._firstNameOnly(userName) : userName)})}${_proBadge}</h2>
           </div>
