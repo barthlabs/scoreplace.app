@@ -845,6 +845,32 @@ button[style*="linear-gradient"]:not(.btn):active {
   text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
 
+/* --- A PREVISÃO DO TEMPO sobre a foto do local (v1.8.81) -------------------
+   MESMA raiz das caixas acima, e foi o que fez o dono procurar a previsão e não achar:
+   ela ESTAVA na tela — renderizada, hidratada, no lugar certo — só que com fundo azul de
+   8% de opacidade por cima da foto do clube. Invisível na prática.
+   MEDIDO: com o doc REAL do Confra o widget sai com 4230 bytes, 346px de altura, entre o
+   cronômetro e o bloco do local — e some visualmente assim que a foto entra.
+   Escurece junto com o resto quando a foto é pintada; os cinzas de apoio (umidade, vento,
+   descrição dos dias) clareiam, senão continuam sumindo mesmo com a tarja. */
+[data-vphoto-on] .weather-box {
+  background: rgba(0,0,0,0.60) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: rgba(255,255,255,0.20) !important;
+}
+[data-theme="light"] [data-vphoto-on] .weather-box {
+  background: rgba(30,41,59,0.85) !important;
+}
+[data-vphoto-on] .weather-box span {
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+}
+/* os tons de apoio (#cbd5e1 / #94a3b8) são calibrados pra fundo liso */
+[data-vphoto-on] .weather-box span[style*="#cbd5e1"],
+[data-vphoto-on] .weather-box span[style*="#94a3b8"] {
+  color: #e2e8f0 !important;
+}
+
 /* --- Info Pill (badges de status: Começa hoje, Progresso, Inscritos, etc.) --- */
 .info-pill {
   display: flex;

@@ -175,7 +175,12 @@
     if (!r) return '';
     var lg = (size !== 'sm');
     var _sf = window._safeHtml || function (s) { return String(s == null ? '' : s); };
-    var h = '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);' +
+    // ⚠️ `weather-box`: o card do torneio pode ter FOTO do local, e a foto só é pintada
+    // DEPOIS do render (desde a 1.7.53). Este fundo azul de 8% de opacidade some por
+    // completo em cima dela — foi exatamente o relato do dono, que procurou a previsão e
+    // não achou: ela ESTAVA na tela, invisível. Quem escurece é o CSS sob
+    // `[data-vphoto-on]` (components.css), ligado pelo hidratador da foto.
+    var h = '<div class="weather-box" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);' +
       'border-radius:12px;padding:' + (lg ? '12px 14px' : '10px 12px') + ';margin-top:10px;">';
     h += '<div style="font-size:0.65rem;font-weight:800;color:#60a5fa;text-transform:uppercase;' +
       'letter-spacing:0.06em;margin-bottom:8px;">🌤️ Previsão do tempo</div>';
