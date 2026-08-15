@@ -3637,8 +3637,15 @@ function renderTournaments(container, tournamentId = null) {
           return '<div class="sp-org-card"' + _tapAttrs + _orgFiltro + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
             '<div style="flex:1;min-width:0;">' +
+              // v1.8.79: a coroa fica COLADA à direita do nome (pedido do dono). O box do
+              // nome tinha `flex:1` e engolia toda a sobra da linha, então a coroa era
+              // empurrada pra borda do card e parecia solta, longe de quem ela qualifica.
+              // Com `flex:0 1 auto` o box mede o texto e só encolhe quando falta espaço —
+              // a coroa vem logo depois em qualquer largura, e a sobra fica DEPOIS dela.
+              // ⚠️ O pai do `.sp-name-fit` continua sendo este box (é ele que `_fitOne`
+              // mede pra encolher a fonte); só mudou como ele reparte a linha.
               '<div style="display:flex;align-items:center;gap:4px;">' +
-                '<div style="flex:1;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
+                '<div style="flex:0 1 auto;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
                   '<span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' +
                 '</div>' + _starSpan + '</div>' +
               '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;">' + role + '</div>' +

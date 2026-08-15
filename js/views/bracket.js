@@ -5090,8 +5090,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // direita do box (`margin-left:auto`). O toggle é a última coisa da linha de
             // propósito — é o alvo de toque, e alvo de toque na borda é o que a mão alcança.
             var _wlToggle = (!_wlOrg || !_wlRatio) ? '' :
-              ('<span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;">' +
-                '<span style="font-size:0.62rem;font-weight:700;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
+              // v1.8.79: o conjunto pode ENCOLHER (o rótulo ganha reticências em tela
+              // estreita); o que nunca encolhe é o interruptor — alvo de toque não cede.
+              ('<span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto;min-width:0;">' +
+                '<span style="font-size:0.62rem;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
                 'Travar proporção</span>' +
                 '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
                 (window._safeHtml || String)(_wlEquil
@@ -5100,11 +5102,26 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 '<input type="checkbox" ' + (_wlEquil ? 'checked' : '') +
                 ' onclick="event.stopPropagation();window._toggleWlBalance(\'' + _wlTid + '\')"><span class="toggle-slider"></span></label>' +
                 '</span>');
+            // v1.8.79: "Travar proporção" subiu pra LINHA DO TÍTULO, à direita (pedido do
+            // dono). Ele já tinha `margin-left:auto`, mas dividia a linha com a descrição
+            // longa ("— pode entrar no lugar de um W.O. · … · faltam 1 …"): com
+            // `flex-wrap:wrap`, a descrição consumia a linha e o toggle era jogado pra
+            // baixo, sozinho e solto no meio do box. Agora são DUAS linhas declaradas —
+            // título + toggle em cima, descrição embaixo — e nada mais disputa espaço com
+            // ele. `nowrap` + `min-width:0` no título: em tela estreita quem encolhe é o
+            // texto, nunca o alvo de toque.
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
-              '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;margin-bottom:6px;flex-wrap:wrap;">🕒 <span>Lista de espera (' + _wlNames.length + ')</span>' +
-              '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
+              '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;flex-wrap:nowrap;">' +
+                // ⚠️ o TÍTULO não encolhe: medido a 320px, ele truncava em "Lista de
+                // espera …" e comia a CONTAGEM — que é o dado. Quem cede é o rótulo do
+                // toggle, que é dica repetida e já vive no `title` do próprio controle.
+                '<span style="flex-shrink:0;">🕒</span>' +
+                '<span style="flex-shrink:0;white-space:nowrap;">Lista de espera (' + _wlNames.length + ')</span>' +
+                _wlToggle +
+              '</div>' +
+              '<div style="font-size:0.66rem;font-weight:400;color:var(--text-muted);margin:3px 0 6px;">— pode entrar no lugar de um W.O. · ao juntar 4, forma um novo grupo · ' + _hint +
               ((_wlOrg && _wlRatio) ? (window._safeHtml || String)(_wlEquil ? (' · ' + _wlRatioTxt + ', exata')
-                                           : (' · busca ' + _wlRatioTxt + ' e flexibiliza')) : '') + '</span>' + _wlToggle + '</div>' +
+                                           : (' · busca ' + _wlRatioTxt + ' e flexibiliza')) : '') + '</div>' +
               '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _wPills + '</div>' +
             '</div>';
           }

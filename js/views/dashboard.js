@@ -1477,9 +1477,23 @@ function renderDashboard(container) {
     // v1.8.78: o convite de abrir/fechar. Era um chevron (▸/▾) à ESQUERDA do título —
     // "muito discreto", disse o dono. Virou tag à DIREITA, fonte menor que o título
     // (0.7 contra 0.85rem) e no azul-céu que o app já usa pra dado clicável.
+    // v1.8.79: virou TAG com box (pedido do dono) — texto solto num cabeçalho não lê como
+    // coisa clicável, ainda mais ao lado de um título que também é clicável. O box em
+    // azul-céu translúcido com borda dá o contorno de "isto é um controle".
     function _verMaisTag(id, colapsado) {
       return '<span id="' + id + '" style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
-        'color:#7dd3fc;text-transform:none;letter-spacing:0;">' + (colapsado ? 'ver mais' : 'ver menos') + '</span>';
+        'color:#7dd3fc;background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
+        'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;">' +
+        (colapsado ? 'ver mais' : 'ver menos') + '</span>';
+    }
+    // O convite do RODAPÉ é o MESMO controle, então usa o MESMO desenho — só centralizado
+    // e com a contagem, que é a informação que o cabeçalho não carrega.
+    function _verMaisRodape(id, onclick, texto) {
+      return '<p style="margin:8px 0 0;text-align:center;">' +
+        '<span id="' + id + '" onclick="' + onclick + '" style="display:inline-block;cursor:pointer;user-select:none;' +
+        'font-size:0.7rem;font-weight:700;color:#7dd3fc;background:rgba(125,211,252,0.14);' +
+        'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:4px 12px;line-height:1.2;">' +
+        texto + '</span></p>';
     }
 
     // v1.8.67: chave de deduplicação desta seção — `_collectAllMatches` NÃO deduplica, e
@@ -2322,8 +2336,8 @@ function renderDashboard(container) {
       // v1.8.69: o convite pra abrir, igual ao de Novidades. Só existe com 2+ cards —
       // com um só não há "anteriores" e a linha seria ruído.
       if (_mrTotalCards > 1) {
-        html += '<p id="meus-resultados-hint" onclick="window._toggleMyResultsCollapse()" style="margin:8px 0 0;font-size:0.7rem;font-weight:700;color:#7dd3fc;cursor:pointer;user-select:none;text-align:center;">' +
-          (_mrCollapsed ? 'ver os ' + (_mrTotalCards - 1) + ' anteriores' : 'ver menos') + '</p>';
+        html += _verMaisRodape('meus-resultados-hint', 'window._toggleMyResultsCollapse()',
+          (_mrCollapsed ? 'ver os ' + (_mrTotalCards - 1) + ' anteriores' : 'ver menos'));
       }
       html += '</div>'; // fecha #meus-resultados-section
     }
@@ -2449,8 +2463,8 @@ function renderDashboard(container) {
       if (_novList.length > 1) {
         // v1.8.78: sem as setinhas (o dono achou o glifo discreto demais) e no mesmo
         // azul-céu da tag do cabeçalho — é o MESMO controle, em dois lugares.
-        _novHtml += '<p id="novidades-hint" onclick="window._toggleNovidadesCollapse()" style="margin:8px 0 0;font-size:0.7rem;font-weight:700;color:#7dd3fc;cursor:pointer;user-select:none;text-align:center;">' +
-          (_novCollapsed ? 'ver os ' + (_novList.length - 1) + ' jogos anteriores' : 'ver menos') + '</p>';
+        _novHtml += _verMaisRodape('novidades-hint', 'window._toggleNovidadesCollapse()',
+          (_novCollapsed ? 'ver os ' + (_novList.length - 1) + ' jogos anteriores' : 'ver menos'));
       }
       _novHtml += '</div>'; // fecha #novidades-section
     }
