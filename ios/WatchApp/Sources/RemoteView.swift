@@ -796,8 +796,12 @@ struct RemoteView: View {
                         Spacer(minLength: sz(4))
                     } else {
                         Spacer(minLength: sz(4))
-                        VStack(spacing: sz(2)) {                 // troféu → placar (sobe um pouco)
-                            Text("🏆").font(.system(size: sz(24)))
+                        VStack(spacing: sz(2)) {                 // vencedor → placar
+                            // v1.8.83 (ordem do dono): o 🏆 SAIU. Ele custava ~24pt de
+                            // altura num mostrador de centímetros e não dizia nada que
+                            // "Vencedor" logo abaixo já não diga. A altura que ele comia
+                            // foi pras três chaves (🎲👑⚥), que estavam pequenas demais
+                            // pra acertar com o dedo — e essas SÃO acionáveis.
                             if w == 1 || w == 2 {
                                 Text("Vencedor").font(.system(size: sz(11))).kerning(1).foregroundColor(.spMeta)
                                 ForEach(state.winnerNames, id: \.self) { n in
@@ -904,20 +908,25 @@ struct RemoteView: View {
         Button(action: acao) {
             VStack(spacing: sz(3)) {
                 Text(simbolo)
-                    .font(.system(size: destaque ? sz(22) : sz(18)))
+                    // v1.8.83 (ordem do dono): "os ícones estão muito pequenos".
+                    // 18→30pt (destaque 22→34). Coube porque o 🏆 do vencedor saiu
+                    // da tela — era ele que ocupava a altura. O símbolo é o que se
+                    // LÊ e o que se ACERTA com o dedo; a chavinha abaixo só confirma
+                    // o estado, então quem tinha que crescer era ele.
+                    .font(.system(size: destaque ? sz(34) : sz(30)))
                     // Desligado fica apagado — a cor sozinha não diz o estado pra
                     // quem não distingue bem tom, e o mostrador vive no sol.
                     .opacity(ligado ? 1.0 : 0.38)
                 Capsule()
                     .fill(ligado ? cor : Color.white.opacity(0.18))
-                    .frame(width: sz(26), height: sz(14))
+                    .frame(width: sz(30), height: sz(16))
                     .overlay(
                         Circle().fill(Color.white)
-                            .frame(width: sz(10), height: sz(10))
-                            .offset(x: ligado ? sz(6) : -sz(6))
+                            .frame(width: sz(12), height: sz(12))
+                            .offset(x: ligado ? sz(7) : -sz(7))
                     )
             }
-            .padding(.horizontal, sz(4)).padding(.vertical, sz(2))
+            .padding(.horizontal, sz(6)).padding(.vertical, sz(3))
         }
         .buttonStyle(.plain)
     }

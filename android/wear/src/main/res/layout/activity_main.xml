@@ -418,12 +418,10 @@
                 android:paddingStart="18dp"
                 android:paddingEnd="18dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🏆"
-                    android:textSize="22sp"
-                    android:includeFontPadding="false" />
+                <!-- v1.8.83 (ordem do dono): o 🏆 SAIU. Comia ~22sp de altura num
+                     mostrador de centímetros e não dizia nada que o "Vencedor" logo
+                     abaixo já não diga. A altura foi pras três chaves (🎲👑⚥), que
+                     estavam pequenas demais pra acertar com o dedo. -->
 
                 <TextView
                     android:id="@+id/winner_label"
@@ -572,7 +570,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="🎲"
-                            android:textSize="18sp" />
+                            android:textSize="30sp" />
                         <Switch
                             android:id="@+id/reshuffle_switch"
                             android:layout_width="wrap_content"
@@ -590,7 +588,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="👑"
-                            android:textSize="18sp" />
+                            android:textSize="30sp" />
                         <Switch
                             android:id="@+id/rr_switch"
                             android:layout_width="wrap_content"
@@ -609,7 +607,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="⚥"
-                            android:textSize="18sp" />
+                            android:textSize="30sp" />
                         <Switch
                             android:id="@+id/mixed_switch"
                             android:layout_width="wrap_content"
