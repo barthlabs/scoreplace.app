@@ -859,7 +859,12 @@ function renderDashboard(container) {
                 var _boxD = (typeof window._ligaCountdownBoxHtml === 'function')
                   ? window._ligaCountdownBoxHtml(t, 'sm', _toggleRowDash ? '4px' : '10px') : '';
                 if (!_boxD) return _toggleRowDash; // sem countdown → só o toggle (direita)
-                return _toggleRowDash + _boxD;
+                // v1.8.82: a previsão do tempo também AQUI. Ela existia só na tela de
+                // DETALHE, e o dono passou três mensagens procurando por ela na TELA
+                // INICIAL — que é onde ele estava o tempo todo. "Abaixo de rodada em
+                // andamento" quer dizer abaixo DESTE box, em qualquer tela onde ele apareça.
+                return _toggleRowDash + _boxD +
+                  ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'sm') : '');
               }
 
               // Não-Liga: countdown do evento mais próximo
@@ -3482,6 +3487,11 @@ function renderDashboard(container) {
   // ─── Friends' presences widget (async load) ───
   _hydrateMyActivePresenceWidget();
   _hydrateFriendsPresenceWidget();
+
+  // ─── v1.8.82: previsão do tempo dos cards de torneio ───
+  // O slot nasce vazio e é preenchido aqui; ele mesmo se marca como feito, então
+  // re-render por snapshot não gera requisição nova (uma por local, cache de 30 min).
+  if (typeof window._hydrateWeatherSlots === 'function') { try { window._hydrateWeatherSlots(); } catch (e) {} }
 
   // v0.16.60: re-fetch do discovery feed sempre que renderiza dashboard.
   // Throttle de 15s (bem mais agressivo que v0.16.59 que era 30s) E ignora

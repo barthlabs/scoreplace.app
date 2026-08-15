@@ -498,6 +498,15 @@ function renderBracket(container, tournamentId, isInline) {
     headerHtml += window._bracketBar(true);
   }
 
+  // v1.8.82: previsão do tempo do LOCAL também na CHAVE (pedido do dono). É aqui que se
+  // acompanha o jogo, então é aqui que saber se vai chover importa. Só no modo NÃO-inline:
+  // no inline este HTML aterrissa dentro do card do torneio, que já tem a sua.
+  // O slot nasce vazio; quem o preenche é `_hydrateWeatherSlots` (uma requisição por
+  // local, cache de 30 min compartilhado com as outras telas).
+  if (!isInline && typeof window._weatherSlotHtml === 'function') {
+    headerHtml += window._weatherSlotHtml(t, 'sm');
+  }
+
   // ── Banner "Iniciar Torneio" e Progress Bar (skip quando inline — já existem no card acima) ──
   const hasDrawContent = (t.matches && t.matches.length > 0) || (t.rounds && t.rounds.length > 0) || (t.groups && t.groups.length > 0);
   // v2.7.5: banner "Iniciar Torneio" segue SÓ tournamentStarted (fonte única). Auto-draw

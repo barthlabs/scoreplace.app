@@ -255,6 +255,32 @@
     });
   };
 
+  // ⚠️ v1.8.82: OBSERVADOR — o slot se hidrata sozinho, venha de onde vier.
+  // Antes cada tela precisava lembrar de chamar `_hydrateWeatherSlots` depois do render, e
+  // foi assim que a previsão ficou três mensagens sem aparecer: ela existia na tela de
+  // DETALHE e o dono estava na TELA INICIAL, onde ninguém a emitia nem hidratava. Com o
+  // observador, quem emitir o slot (dashboard, detalhe, chave ou o que vier) ganha a
+  // previsão de graça — não há mais lista de call sites pra esquecer.
+  // Mesmo padrão do hidratador de foto de local (store.js). Debounce de 250ms porque o
+  // app re-renderiza em rajada a cada snapshot do Firestore; e como o próprio slot se
+  // marca com `data-w-done`, rodar demais não custa requisição.
+  var _obsDeb = null;
+  function _kickWeather() {
+    if (_obsDeb) return;
+    _obsDeb = setTimeout(function () {
+      _obsDeb = null;
+      try { window._hydrateWeatherSlots(); } catch (e) {}
+    }, 250);
+  }
+  if (typeof MutationObserver === 'function' && document.body) {
+    new MutationObserver(_kickWeather).observe(document.body, { childList: true, subtree: true });
+  } else if (typeof MutationObserver === 'function') {
+    document.addEventListener('DOMContentLoaded', function () {
+      new MutationObserver(_kickWeather).observe(document.body, { childList: true, subtree: true });
+      _kickWeather();
+    });
+  }
+
   /** O slot que o render do torneio insere. Vazio até a rede responder — nunca "carregando". */
   window._weatherSlotHtml = function (t, size) {
     if (!t || !t.venueLat || !t.venueLon) return '';
