@@ -253,7 +253,13 @@ function renderNotifications(container) {
 
       var safeNotifIdOnclick = (n._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       // Borda esquerda colorida pela IMPORTÂNCIA (sempre visível, lida ou não).
-      return '<div class="card" style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + accentColor + ';' +
+      // v1.8.78: `data-notif-id` + `data-notif-autoread` alimentam o observador de
+      // permanência em tela (ver `_observeNotifDwell` no fim do render). O id já existia,
+      // mas só dentro da string do onclick — de onde não dá pra lê-lo.
+      var _autoRead = isUnread && _AUTOREAD_TYPES_OK(n.type);
+      return '<div class="card" data-notif-id="' + window._safeHtml(n._id || '') + '"' +
+        (_autoRead ? ' data-notif-autoread="1"' : '') +
+        ' style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + accentColor + ';' +
         (isUnread ? ' background: rgba(37, 99, 235, 0.05);' : ' opacity: 0.62;') + '" ' +
         (isUnread ? 'onclick="_markNotifRead(\'' + safeNotifIdOnclick + '\', this)"' : '') + '>' +
         '<div style="font-size: 1.5rem; flex-shrink: 0; line-height: 1;">' + icon + '</div>' +
@@ -285,15 +291,19 @@ function renderNotifications(container) {
 
     listDiv.innerHTML = html;
 
-    // Mark all as read after viewing (skip notifications with pending actions)
-    var _actionTypes = ['host_transfer_invite', 'cohost_invite', 'host_transfer_sent', 'cohost_invite_sent', 'friend_request', 'casual_link_request', 'match-pending-approval'];
-    notifs.forEach(function(n) {
-      if (!n.read && _actionTypes.indexOf(n.type) === -1) {
-        window.FirestoreDB.markNotificationRead(uid, n._id);
-      }
-    });
-    // Update badge after a delay
-    setTimeout(function() { _updateNotificationBadge(); }, 1000);
+    // ── v1.8.78: LIDA = FICOU 5s NA TELA ──────────────────────────────────────
+    // Ordem do dono (15/ago): "quando abrimos as notificações, aquelas que aparecerem
+    // na tela devem ser consideradas lidas se ficarem mais do que 5 segs na tela."
+    // ⚠️ Isto RESTRINGE o comportamento anterior, não o amplia: até aqui o render
+    // marcava TODAS como lidas de imediato (um `forEach` sobre a lista inteira), então
+    // notificação que morava 20 telas abaixo da dobra — e que ninguém chegou a ver —
+    // era carimbada como lida e o contador zerava. Agora só conta o que apareceu de
+    // fato, e só depois de permanecer meio visível por 5 segundos: passar batido numa
+    // rolagem rápida não marca nada.
+    // Os tipos que pedem AÇÃO (convite, pedido de amizade, placar aguardando você)
+    // seguem de fora — quem marca lida ali é a ação aplicada, e escondê-los por
+    // permanência tiraria o convite da vista de quem ainda não respondeu.
+    _observeNotifDwell(uid, listDiv);
   });
 }
 
@@ -317,6 +327,97 @@ function _timeAgo(dateStr) {
 }
 
 // Mark a single notification as read + update UI
+// ── v1.8.78: leitura por PERMANÊNCIA EM TELA ────────────────────────────────
+// Tipos que pedem uma AÇÃO do usuário nunca são marcados por permanência: quem os
+// marca lida é a ação aplicada (aceitar/recusar/confirmar). Fonte única — o render
+// e o observador consultam a MESMA lista; se divergissem, um convite poderia sumir
+// da lista de não lidas sem ninguém ter respondido.
+window._NOTIF_ACTION_TYPES = ['host_transfer_invite', 'cohost_invite', 'host_transfer_sent',
+  'cohost_invite_sent', 'friend_request', 'casual_link_request', 'match-pending-approval'];
+function _AUTOREAD_TYPES_OK(tipo) {
+  return window._NOTIF_ACTION_TYPES.indexOf(tipo) === -1;
+}
+
+// Quanto tempo o cartão precisa ficar visível pra contar como lido, e o quanto dele
+// precisa estar à vista. Meia altura evita que um cartão só espiando na borda da tela
+// durante a rolagem já comece a contar.
+window._NOTIF_DWELL_MS = 5000;
+var _NOTIF_DWELL_RATIO = 0.5;
+
+function _observeNotifDwell(uid, listDiv) {
+  // Re-render cria cartões novos: o observador velho ficaria vigiando nós órfãos.
+  if (window._notifDwellObserver) {
+    try { window._notifDwellObserver.disconnect(); } catch (e) {}
+    window._notifDwellObserver = null;
+  }
+  if (window._notifDwellTimers) {
+    Object.keys(window._notifDwellTimers).forEach(function(k) { clearTimeout(window._notifDwellTimers[k]); });
+  }
+  window._notifDwellTimers = {};
+
+  // Sem um container consultável não há o que vigiar. (Acontece de verdade: o
+  // `listDiv` pode não existir ainda, e os testes de render usam um DOM mínimo.)
+  var alvos = (listDiv && typeof listDiv.querySelectorAll === 'function')
+    ? listDiv.querySelectorAll('[data-notif-autoread="1"]') : [];
+  if (!alvos.length) return;
+
+  // Sem IntersectionObserver (navegador antigo) o recurso não existe — e aí é melhor
+  // marcar ao abrir do que nunca marcar, senão o contador do sininho nunca zera.
+  if (typeof IntersectionObserver !== 'function') {
+    Array.prototype.forEach.call(alvos, function(el) {
+      var id = el.getAttribute('data-notif-id');
+      if (id) window.FirestoreDB.markNotificationRead(uid, id);
+    });
+    setTimeout(function() { window._updateNotificationBadge(); }, 800);
+    return;
+  }
+
+  var _pendentesDeBadge = 0;
+  function _agendaBadge() {
+    _pendentesDeBadge++;
+    clearTimeout(window._notifBadgeTid);
+    // Uma atualização só pro lote — o sininho não precisa piscar a cada cartão.
+    window._notifBadgeTid = setTimeout(function() {
+      _pendentesDeBadge = 0;
+      window._updateNotificationBadge();
+    }, 600);
+  }
+
+  window._notifDwellObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      var el = entry.target;
+      var id = el.getAttribute('data-notif-id');
+      if (!id) return;
+      // Já marcado: o `unobserve` abaixo tira o cartão da vigilância, mas uma entrada
+      // ENFILEIRADA antes disso ainda pode chegar — e marcaria a mesma notificação duas
+      // vezes. A ausência do atributo é o registro de "esse já foi".
+      if (!el.getAttribute('data-notif-autoread')) return;
+      if (entry.isIntersecting && entry.intersectionRatio >= _NOTIF_DWELL_RATIO) {
+        if (window._notifDwellTimers[id]) return;      // já contando
+        window._notifDwellTimers[id] = setTimeout(function() {
+          delete window._notifDwellTimers[id];
+          el.removeAttribute('data-notif-autoread');   // não conta duas vezes
+          try { window._notifDwellObserver.unobserve(el); } catch (e) {}
+          window.FirestoreDB.markNotificationRead(uid, id);
+          // o cartão mostra na hora que foi lido (o ponto azul some) — sem re-render,
+          // que reordenaria a lista embaixo do dedo de quem está lendo.
+          var dot = el.querySelector('.notif-unread-dot');
+          if (dot) dot.style.display = 'none';
+          el.style.background = 'transparent';
+          el.style.opacity = '0.62';
+          _agendaBadge();
+        }, window._NOTIF_DWELL_MS);
+      } else if (window._notifDwellTimers[id]) {
+        // saiu da tela antes dos 5s — a contagem recomeça do zero na próxima vez
+        clearTimeout(window._notifDwellTimers[id]);
+        delete window._notifDwellTimers[id];
+      }
+    });
+  }, { threshold: [0, _NOTIF_DWELL_RATIO, 1] });
+
+  Array.prototype.forEach.call(alvos, function(el) { window._notifDwellObserver.observe(el); });
+}
+
 window._markNotifRead = function(notifId, el) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;

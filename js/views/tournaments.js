@@ -820,9 +820,39 @@ window._waitlistPeopleCount = function(t) {
     return n;
 };
 
+// v1.8.78: FONTE ÚNICA da caixa "Lista de Espera".
+// ⚠️ Ela existia DUAS VEZES — uma no template do card (que aplica a tarja de leitura
+// quando há foto do local) e outra montada à mão em `_updateStatBoxes`, que NÃO aplicava
+// nada. Como a caixa nasce/some conforme a fila enche e esvazia, quem a via na prática era
+// quase sempre a versão SEM tarja: fundo `rgba(251,191,36,0.12)` — quase transparente —
+// com número âmbar por cima da foto. Foi exatamente o relato do dono ("essa lista de
+// espera não está dando leitura, especialmente quando há foto no torneio").
+// Sobre foto o âmbar também clareia (#fcd34d) e ganha sombra: #fbbf24 é calibrado pra
+// fundo escuro e some numa foto clara. [[feedback_unify_dual_entry_points]]
+window._waitlistStatBoxHtml = function(count, photo) {
+    var _p = photo || null;
+    var _amb = _p ? '#fcd34d' : '#fbbf24';
+    var _sh = _p ? 'text-shadow:0 1px 3px rgba(0,0,0,0.85);' : '';
+    return '<span style="font-size:1.1rem;margin-right:4px;' + _sh + '">⏳</span>' +
+        '<span class="stat-value" style="font-size:1.4rem;font-weight:800;line-height:1;color:' + _amb + ';' + _sh + '">' + count + '</span>' +
+        '<span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin-left:8px;color:' + _amb + ';opacity:0.9;' + _sh + '">Lista de Espera</span>';
+};
+window._waitlistStatBoxStyle = function(photo) {
+    return photo
+        ? 'background:' + photo.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(252,211,77,0.55);'
+        : 'background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.5);';
+};
+// A tarja fica gravada na própria linha das caixas, então o caminho dinâmico não precisa
+// de variável global nem de recalcular tema — lê do DOM o que o render já decidiu.
+window._statRowPhoto = function(row) {
+    if (!row || !row.getAttribute('data-photo-bg')) return null;
+    return { bg: row.getAttribute('data-photo-bg'), fg: row.getAttribute('data-photo-fg'), border: row.getAttribute('data-photo-bd') };
+};
+
 window._updateStatBoxes = function(t) {
     var row = document.getElementById('stat-boxes-row');
     if (!row || !t) return;
+    var _photo = window._statRowPhoto(row);
 
     // v3.0.x: usa a contagem canônica (deduplicada, equipe-aware) — antes contava
     // equipe da espera como "1 pessoa" e somava waitlist.length duas vezes.
@@ -849,11 +879,8 @@ window._updateStatBoxes = function(t) {
         var div = document.createElement('div');
         div.className = 'stat-box';
         div.setAttribute('data-stat', 'waitlist');
-        div.style.cssText = 'background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.3);';
-        div.innerHTML =
-            '<span style="font-size: 1.1rem; margin-right: 4px;">⏳</span>' +
-            '<span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; color: #fbbf24;">' + wlCount + '</span>' +
-            '<span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; color: #fbbf24; opacity: 0.9;">Lista de Espera</span>';
+        div.style.cssText = window._waitlistStatBoxStyle(_photo);
+        div.innerHTML = window._waitlistStatBoxHtml(wlCount, _photo);
         row.appendChild(div);
     } else if (wlCount > 0 && wlBox) {
         var wlVal = wlBox.querySelector('.stat-value');
@@ -3256,7 +3283,11 @@ function renderTournaments(container, tournamentId = null) {
                 // cópias divergiram no tratamento do evento vazio ('round-in-progress' sem
                 // linha de decorrido pra mostrar): aqui sumia o box, no card saía "null null 0s".
                 // O toggle Liga NÃO vive aqui (v0.16.90) — está na linha "Atualizado em…".
-                return (typeof window._ligaCountdownBoxHtml === 'function') ? window._ligaCountdownBoxHtml(t, 'lg') : '';
+                // v1.8.78: a previsão do tempo do LOCAL entra logo abaixo do box (pedido do
+                // dono: "abaixo de rodada em andamento"). O slot nasce vazio e é preenchido
+                // pela rede — ver `_hydrateWeatherSlots` (uma requisição por local, cacheada).
+                return ((typeof window._ligaCountdownBoxHtml === 'function') ? window._ligaCountdownBoxHtml(t, 'lg') : '') +
+                       ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
               }
 
               // Não-Liga: múltiplos countdowns (inscrições, início, fim)
@@ -3316,7 +3347,7 @@ function renderTournaments(container, tournamentId = null) {
 
                <!-- Stats Column -->
                 <div style="display: inline-flex; flex-direction: column; gap: 8px; width: 100%;">
-                    <div id="stat-boxes-row" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
+                    <div id="stat-boxes-row" ${_pReadBg ? 'data-photo-bg="'+_pReadBg+'" data-photo-fg="'+_pReadFg+'" data-photo-bd="'+_pReadBd+'"' : ''} style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
                         <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
                            <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
@@ -3330,11 +3361,7 @@ function renderTournaments(container, tournamentId = null) {
                         </div>
                         ` : ''}
                         ${standbyCount > 0 ? `
-                        <div class="stat-box" data-stat="waitlist" style="${_pReadBg ? 'background:'+_pReadBg+';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);' : 'background: rgba(251,191,36,0.12);'} border: 1px solid rgba(251,191,36,0.5);">
-                           <span style="font-size: 1.1rem; margin-right: 4px;">⏳</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; color: #fbbf24;">${standbyCount}</span>
-                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; color: #fbbf24; opacity: 0.9;">Lista de Espera</span>
-                        </div>
+                        <div class="stat-box" data-stat="waitlist" style="${window._waitlistStatBoxStyle(_rb)}">${window._waitlistStatBoxHtml(standbyCount, _rb)}</div>
                         ` : ''}
                     </div>
                     ${(typeof window._buildCategoryCountHtml === 'function') ? window._buildCategoryCountHtml(t) : ''}
@@ -3610,8 +3637,15 @@ function renderTournaments(container, tournamentId = null) {
           return '<div class="sp-org-card"' + _tapAttrs + _orgFiltro + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
             '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
             '<div style="flex:1;min-width:0;">' +
+              // v1.8.79: a coroa fica COLADA à direita do nome (pedido do dono). O box do
+              // nome tinha `flex:1` e engolia toda a sobra da linha, então a coroa era
+              // empurrada pra borda do card e parecia solta, longe de quem ela qualifica.
+              // Com `flex:0 1 auto` o box mede o texto e só encolhe quando falta espaço —
+              // a coroa vem logo depois em qualquer largura, e a sobra fica DEPOIS dela.
+              // ⚠️ O pai do `.sp-name-fit` continua sendo este box (é ele que `_fitOne`
+              // mede pra encolher a fonte); só mudou como ele reparte a linha.
               '<div style="display:flex;align-items:center;gap:4px;">' +
-                '<div style="flex:1;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
+                '<div style="flex:0 1 auto;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
                   '<span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' +
                 '</div>' + _starSpan + '</div>' +
               '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;">' + role + '</div>' +
@@ -3820,6 +3854,11 @@ function renderTournaments(container, tournamentId = null) {
         function _hydrateNamesNow() {
             if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (_e) {} }
         }
+        // v1.8.78: preenche o slot da previsão do tempo (o próprio hidratador marca o slot
+        // como feito, então re-render por snapshot NÃO gera requisição nova).
+        setTimeout(function () {
+            if (typeof window._hydrateWeatherSlots === 'function') { try { window._hydrateWeatherSlots(); } catch (_e) {} }
+        }, 0);
         // Pre-load player photos for avatar display (async, updates DOM after load)
         if (typeof _preloadPlayerPhotos === 'function') {
             _preloadPlayerPhotos(t).then(function() {

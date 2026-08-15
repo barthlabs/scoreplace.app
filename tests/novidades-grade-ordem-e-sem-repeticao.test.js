@@ -221,9 +221,30 @@ ok(NOV.indexOf('data-nov-card="1" style="margin-bottom') === -1,
 ok(NOV.indexOf('(SB)') === -1, 'B1. torneio sandbox NÃO aparece nas Novidades');
 ok(HTML.indexOf('(SB)') === -1, 'B2. torneio sandbox não aparece em NENHUMA das seções (inclusive "Seus últimos resultados")');
 
-// cada jogo de outros aparece UMA vez
-ok(contar(NOV, 'R1 Grupo S • Jogo 1') === 1, 'B3. o jogo S1 aparece exatamente 1 vez — vi ' + contar(NOV, 'R1 Grupo S • Jogo 1'));
-ok(contar(NOV, 'R1 Grupo T • Jogo 1') === 1, 'B4. o jogo T1 aparece exatamente 1 vez — vi ' + contar(NOV, 'R1 Grupo T • Jogo 1'));
+// ⚠️ SONDAS REVISADAS DE PROPÓSITO em v1.8.78 — o INVARIANTE não mudou, o MARKUP mudou.
+// Pedido do dono (15/ago): "colocar o nome de grupo numa linha e o nome do torneio na de
+// baixo; sempre que for mesmo grupo e torneio, omitir dos demais jogos do mesmo grupo".
+// O rótulo "R1 Grupo S • Jogo 1" DEIXOU DE EXISTIR como string única: o grupo virou
+// cabeçalho compartilhado (`data-nov-head`) e o "Jogo N" ficou no card. Procurar a string
+// antiga passaria a medir a ausência do rótulo, não a duplicação — que é o que estas
+// asserções nasceram pra pegar (o clone do sandbox). Elas continuam pegando exatamente
+// isso, agora contando CARDS e CABEÇALHOS.
+function cabecalhosNov(html) {
+  var out = [], re = /data-nov-head="1"[\s\S]*?letter-spacing:2px;[^"]*">([^<]+)</g, m;
+  while ((m = re.exec(html))) out.push(m[1].trim());
+  return out;
+}
+const HEADS = cabecalhosNov(NOV);
+ok(contar(NOV, 'data-nov-card="1"') === 3,
+  'B3. os 3 jogos de outros entram uma vez cada (o clone do sandbox não duplica) — vi ' + contar(NOV, 'data-nov-card="1"'));
+ok(HEADS.filter(function (h) { return h === 'R1 Grupo S'; }).length === 1,
+  'B4. o cabeçalho "R1 Grupo S" aparece UMA vez para os seus 2 jogos (a omissão pedida pelo dono) — vi ' +
+  HEADS.filter(function (h) { return h === 'R1 Grupo S'; }).length);
+ok(HEADS.length === 2 && HEADS.indexOf('R1 Grupo T') !== -1 && HEADS.indexOf('R1 Grupo S') !== -1,
+  'B4b. há exatamente 2 cabeçalhos (Grupo T e Grupo S) para os 3 jogos — vi [' + HEADS.join(' | ') + ']');
+// o torneio vai na LINHA DE BAIXO do mesmo cabeçalho (nunca colado ao grupo)
+ok(/data-nov-head="1"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo T<\/div><div style="color:var\(--text-muted\)/.test(NOV),
+  'B4c. o nome do torneio vem numa segunda linha, logo abaixo do grupo');
 
 // id de DOM repetido é o que faria _editPendingResult/_approveResult agirem no card errado
 const idsCard = (HTML.match(/id="card-[^"]+"/g) || []);
@@ -241,23 +262,40 @@ const MR = secaoMeusResultados(HTML);
 const T2 = confra();
 T2.matches = [T2.rounds[0].matches[0]];      // o MESMO objeto, também solto em t.matches
 const NOV2 = secaoNovidades(render([T2]));
-ok(contar(NOV2, 'R1 Grupo S • Jogo 1') === 1,
-  'B7. jogo presente em t.matches E dentro da rodada entra 1 vez só — vi ' + contar(NOV2, 'R1 Grupo S • Jogo 1'));
+ok(contar(NOV2, 'data-nov-card="1"') === 3,
+  'B7. jogo presente em t.matches E dentro da rodada entra 1 vez só (3 cards, não 4) — vi ' + contar(NOV2, 'data-nov-card="1"'));
 
 // ═══════════════════════════════════════════════════════════════════════════
 // C. ORDEM — o lançamento de hoje acima do de ontem
 // ═══════════════════════════════════════════════════════════════════════════
-ok(NOV.indexOf('R1 Grupo T • Jogo 1') !== -1,
+// ⚠️ SONDAS REVISADAS em v1.8.78 pelo mesmo motivo do bloco B: o grupo agora é cabeçalho
+// e o jogo é o rótulo do card. A ORDEM continua sendo a mesma coisa medida — e o
+// agrupamento não a afrouxa: os grupos entram na ordem da PRIMEIRA aparição, então o
+// grupo do lançamento mais recente continua obrigado a vir primeiro.
+ok(NOV.indexOf('R1 Grupo T') !== -1,
   'C1. O BUG DO RELATO: o lançamento de HOJE (pendente de confirmação) aparece nas Novidades');
 
-const posHoje = NOV.indexOf('R1 Grupo T • Jogo 1');
-const posOntem = NOV.indexOf('R1 Grupo S • Jogo 1');
+const posHoje = NOV.indexOf('R1 Grupo T');
+const posOntem = NOV.indexOf('R1 Grupo S');
 ok(posHoje !== -1 && posOntem !== -1 && posHoje < posOntem,
   'C2. o lançamento de hoje vem ACIMA do confirmado de ontem (hoje@' + posHoje + ' < ontem@' + posOntem + ')');
 
-const posOntemCedo = NOV.indexOf('R1 Grupo S • Jogo 2');
-ok(posOntem !== -1 && posOntemCedo !== -1 && posOntem < posOntemCedo,
-  'C3. entre os confirmados, o mais recente continua no topo');
+ok(HEADS[0] === 'R1 Grupo T' && HEADS[1] === 'R1 Grupo S',
+  'C2b. a ordem dos cabeçalhos segue a do lançamento mais recente — vi [' + HEADS.join(' | ') + ']');
+
+// A sonda é o id do card (`id="card-<m.id>"`), que é estável e não depende de rótulo.
+const posS1 = NOV.indexOf('id="card-m-S1"');
+const posS2 = NOV.indexOf('id="card-m-S2"');
+ok(posS1 !== -1 && posS2 !== -1 && posS1 < posS2,
+  'C3. dentro do grupo, o mais recente continua no topo (S1@' + posS1 + ' < S2@' + posS2 + ')');
+// ⚠️ o número do jogo é do CARD e não pode ser repetido na linha acima dele — foi o que a
+// verificação no navegador pegou: "JOGO 1" saía DUAS vezes, uma coladinha na outra. Quem
+// mostra o número é `renderMatchCard` (o `_gameNum` da fonte única), então a contagem tem
+// que ser 1 por jogo; a linha de cima carrega só o "quando", que o card não tem.
+ok(contar(NOV, 'Jogo 1') === 1,
+  'C3b. o "Jogo N" aparece uma vez só — quem o mostra é o card, não a linha acima — vi ' + contar(NOV, 'Jogo 1'));
+ok(contar(NOV, 'data-nov-quando="1"') === 3,
+  'C3c. cada card mantém o carimbo de tempo, que é o que varia entre jogos do mesmo grupo');
 
 // o carimbo do pendente é o proposedAt — sem isso ele cairia pro fim com at=0
 ok(NOV.indexOf('há 5min') !== -1 || NOV.indexOf('agora há pouco') !== -1,

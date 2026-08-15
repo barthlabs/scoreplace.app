@@ -1164,7 +1164,26 @@ window._buildProgressInner = function(t) {
     // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
     var _durRow = '';
     if (_firstPointMs && _lastPointMs && _lastPointMs >= _firstPointMs) {
-      var _tDurMs = _lastPointMs - _firstPointMs;
+      // ── v1.8.80 · O RELÓGIO DO TORNEIO COMPLETO ────────────────────────────
+      // Relato do dono: _"o relógio do torneio completo está travado. vamos mudar a
+      // consideração aqui para contar a partir do início programado até o final real
+      // (assim não ficam 2 relógios com o mesmo valor durante toda a primeira fase)"_.
+      // Eram DOIS defeitos numa conta só, e a conta antiga era
+      // `último placar − primeiro placar`:
+      //   • TRAVADO — o fim era o ÚLTIMO PLACAR, que não anda sozinho. Entre um jogo e
+      //     outro o número ficava parado, parecendo relógio quebrado.
+      //   • DUPLICADO — durante a 1ª fase o primeiro e o último placar do TORNEIO são
+      //     os mesmos da FASE, então os dois painéis mostravam o mesmo valor o tempo
+      //     todo. Dois relógios idênticos não informam nada; um deles é ruído.
+      // Agora o torneio inteiro conta da sua PRÓPRIA âncora — o início PROGRAMADO
+      // (`_win.startMs`, o início da 1ª fase, que já aparece na linha de baixo) — até o
+      // final REAL quando encerra, ou até AGORA enquanto corre (é o `_progressTick` de
+      // 1s que repinta este bloco, então o número anda de verdade).
+      // Sem janela programada (torneio de fase única) NADA muda: não há segundo relógio
+      // pra duplicar, e a medida entre placares é a que faz sentido ali.
+      var _tStartMs = (_win && _win.startMs) ? _win.startMs : _firstPointMs;
+      var _tEndMs = _tournDone ? _lastPointMs : Date.now();
+      var _tDurMs = Math.max(0, _tEndMs - _tStartMs);
       var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
       var _tEndLabel = _tournDone ? 'final real' : 'último placar lançado';
       var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
@@ -1184,7 +1203,10 @@ window._buildProgressInner = function(t) {
       var _rightCol = _tournDone ? _tCol(_lastPointMs, 'final real', 'flex-end') : '<div></div>';
       _durRow = '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-top:9px;gap:8px;">' +
         _tCol(_firstPointMs, 'início real', 'flex-start') +
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+        // O `title` diz de ONDE o número parte: a coluna à esquerda mostra o início REAL
+        // (primeira bola jogada), mas a contagem ancora no PROGRAMADO — sem isso o leitor
+        // não teria como saber por que os dois não fecham.
+        '<div title="' + (_tStartMs === _firstPointMs ? 'Desde o primeiro placar lançado' : 'Desde o início programado do torneio (' + _date(_tStartMs) + ' ' + _time(_tStartMs) + ')') + '" style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
           '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(_tDurMs) + '</span>' +
           '<span style="' + _tLblS + '">' + _tDurLabel + '</span>' +
         '</div>' +
