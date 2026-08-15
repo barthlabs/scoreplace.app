@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.82';
+window.SCOREPLACE_VERSION = '1.8.83';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5344,10 +5344,20 @@ window._anchorUserFirst = function (t1, t2, uidOf, cuUid, cuName) {
   var b = Array.isArray(t2) ? t2.slice() : [];
   var _uid = typeof uidOf === 'function' ? uidOf : function () { return null; };
   var nome = (cuName || '').trim().toLowerCase();
+  // v1.8.83: a reserva por nome passou a aceitar o PRIMEIRO NOME.
+  // ⚠️ MEDIDO com a função real e o caso do dono: no placar o slot dele mostrava
+  // "Rodrigo" e o perfil é "Rodrigo Barth" — a comparação exata não casava, a âncora
+  // virava no-op e ele jogava de VERMELHO. Não é frouxidão inventada: o próprio
+  // `_playerMeta` (bracket-ui) já identifica o usuário por
+  // `pn === cu.displayName.split(' ')[0]`. As duas regras tinham que ser a MESMA —
+  // divergindo, uma diz "é o usuário" (e põe a foto dele) e a outra diz "não é".
+  var primeiro = nome.split(' ')[0];
   function ehUsuario(n) {
     if (!n) return false;
     if (cuUid && _uid(n) === cuUid) return true;          // uid manda
-    return !!nome && String(n).trim().toLowerCase() === nome; // nome só como reserva
+    if (!nome) return false;
+    var v = String(n).trim().toLowerCase();               // nome só como reserva
+    return v === nome || (!!primeiro && v === primeiro);
   }
   var i = a.findIndex(ehUsuario);
   if (i < 0) {
