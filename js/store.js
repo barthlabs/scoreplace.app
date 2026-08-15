@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.76';
+window.SCOREPLACE_VERSION = '1.8.77';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5296,6 +5296,55 @@ window._TENNIS_ICON = '<svg viewBox="0 0 100 100" style="width:1em;height:1em;ve
 window._sportBaseName = function (sport) {
   if (!sport) return '';
   return String(sport).replace(/^[^\wÀ-ɏ]+/u, '').trim();
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O USUÁRIO É SEMPRE O TIME AZUL, NO PRIMEIRO SLOT — fonte ÚNICA da regra.
+//
+// Ordem do dono (15/ago/2026): "o usuário deve ocupar sempre o slot que seria do
+// jogador 1, ficando o parceiro como jogador 2 e os adversários como jogador 3 e
+// 4. se resortear no segundo jogo são esses os nomes." E, sobre o sintoma:
+// "os slots estão frouxos e trocam de nome parece" · "o ideal seria o usuário
+// ser sempre o time azul".
+//
+// POR QUE PRECISOU DE UMA FUNÇÃO SÓ: havia TRÊS lugares que distribuem 4 pessoas
+// em 2 times e só UM respeitava a regra —
+//   (1) a montagem da partida (_buildPlayers + shuffle) tinha "Ensure current
+//       user is in Team 1" e funcionava;
+//   (2) `_computeRestartTeams` ("Jogar novamente"/"Re-sortear", que é POR ONDE
+//       o relógio recomeça) fazia Fisher-Yates puro e não olhava o usuário;
+//   (3) `_reiRainhaNextRound` montava os times direto dos índices do pairing.
+// MEDIDO com a função REAL, 2000 sorteios: (2) tirava o usuário do slot azul em
+// **73,2%** das vezes (51,0% com duplas mistas). Daí a sensação de slot frouxo:
+// a cada jogo o nome dele pulava de lado, e o adversário aparecia onde ele
+// deveria estar.
+//
+// ⚠️ A TROCA É SEGURA porque não muda a PARTIÇÃO, só o rótulo do lado e a ordem
+// dentro do time: trocar time1↔time2 mantém exatamente quem joga com quem — que
+// é a única coisa que o Rei/Rainha precisa preservar (a série são as 3 partições
+// possíveis de 4 pessoas). Por isso dá pra ancorar sem inventar confronto novo.
+//
+// Devolve {t1, t2} novos; se o usuário não estiver entre os 4 (ex.: modo técnico,
+// em que o dono do celular NÃO joga), devolve as listas como vieram — presumir
+// que ele joga seria pior do que não ancorar.
+window._anchorUserFirst = function (t1, t2, uidOf, cuUid, cuName) {
+  var a = Array.isArray(t1) ? t1.slice() : [];
+  var b = Array.isArray(t2) ? t2.slice() : [];
+  var _uid = typeof uidOf === 'function' ? uidOf : function () { return null; };
+  var nome = (cuName || '').trim().toLowerCase();
+  function ehUsuario(n) {
+    if (!n) return false;
+    if (cuUid && _uid(n) === cuUid) return true;          // uid manda
+    return !!nome && String(n).trim().toLowerCase() === nome; // nome só como reserva
+  }
+  var i = a.findIndex(ehUsuario);
+  if (i < 0) {
+    var j = b.findIndex(ehUsuario);
+    if (j < 0) return { t1: a, t2: b };  // não está em campo → não mexe
+    var tmp = a; a = b; b = tmp; i = j;  // estava no vermelho → vira azul
+  }
+  if (i > 0) { var s = a[0]; a[0] = a[i]; a[i] = s; }     // e no PRIMEIRO slot
+  return { t1: a, t2: b };
 };
 
 // Ordem de matching crítica:

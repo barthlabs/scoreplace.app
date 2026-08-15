@@ -63,6 +63,12 @@ struct ScoreState: Decodable {
     var servePickOpen: Bool = false
     // ── Rei/Rainha: 3 jogos, 4 pessoas, duplas trocam a cada jogo ──
     var reiRainha: Bool = false
+    // Os 3 interruptores da tela de fim (🎲 / 👑 / ⚥). O ESTADO é do celular —
+    // o relógio desenha o que chega e manda a intenção; guardar cópia local
+    // faria os dois divergirem na mesma sessão.
+    var shuffleOn: Bool = false
+    var mixedOn: Bool = false
+    var canMix: Bool = false
     // 0=1º jogo · 1=2º · 2=3º · 3=série encerrada.
     var rrRound: Int = 0
     // Vitórias por PESSOA, já ordenado pelo celular (a dupla muda todo jogo, o
@@ -112,6 +118,7 @@ struct ScoreState: Decodable {
         case v, seq, epoch, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
         case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
+        case shuffleOn, mixedOn, canMix
         case matchEpoch, scoring
     }
     init() {}
@@ -148,6 +155,9 @@ struct ScoreState: Decodable {
         rrRound    = (try? c.decodeIfPresent(Int.self, forKey: .rrRound)) ?? 0
         rrStandings = (try? c.decodeIfPresent([RRStanding].self, forKey: .rrStandings)) ?? []
         rrSuggest  = (try? c.decodeIfPresent(Bool.self, forKey: .rrSuggest)) ?? false
+        shuffleOn  = (try? c.decodeIfPresent(Bool.self, forKey: .shuffleOn)) ?? false
+        mixedOn    = (try? c.decodeIfPresent(Bool.self, forKey: .mixedOn)) ?? false
+        canMix     = (try? c.decodeIfPresent(Bool.self, forKey: .canMix)) ?? false
         hrMax      = (try? c.decodeIfPresent(Int.self, forKey: .hrMax)) ?? 0
         matchEpoch = (try? c.decodeIfPresent(String.self, forKey: .matchEpoch)) ?? ""
         scoring    = (try? c.decodeIfPresent(Scoring.self, forKey: .scoring)) ?? nil

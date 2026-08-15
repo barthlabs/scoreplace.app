@@ -24,6 +24,8 @@ struct ScoreplaceWatchCompanionApp: App {
                 onReiRainhaNext: { session.sendReiRainhaNext() },
                 onReiRainhaFinal: { session.sendReiRainhaFinal() },
                 onReiRainhaStart: { session.sendReiRainhaStart() },
+                onSetReiRainha: { on in session.sendSetReiRainha(on) },
+                onSetMixed: { on in session.sendSetMixed(on) },
                 onClose: { session.sendClose() },
                 bpm: heart.bpm
             )

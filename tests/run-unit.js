@@ -340,6 +340,8 @@ const SUITES = [
   // preta da 1.8.72, em produção). Varre js/ atrás de comentário HTML com crase E
   // AVALIA o template do hero da dashboard de verdade.
   'tests/template-literal-nao-quebra.test.js',
+  'tests/usuario-sempre-time-azul.test.js',
+  'tests/relogio-tres-chaves.test.js',
   // Sandbox (SB) do dev — rede de isolamento: notif mudas, stats/resultados não vazam, invisível
   // pra não-dev. Trava _statsEligibleTournaments + getVisibleTournaments/getMyParticipations +
   // ENTREGA (memberUids do SB = só o dev, senão o Firestore entrega o doc pra todo participante).

@@ -301,6 +301,29 @@
           window._reiRainhaShowFinal();
         }
         break;
+      case 'setShuffle':
+        // 🎲 no relógio: liga/desliga o re-sorteio de duplas. Dirige a MESMA
+        // função do checkbox do celular — quem propaga pros outros jogadores
+        // (_syncStatsConfig) vive lá, nunca aqui.
+        if (typeof window._statsToggleShuffle === 'function') {
+          window._statsToggleShuffle({ checked: !!intent.on });
+        }
+        break;
+      case 'setMixed':
+        // ⚥ no relógio: duplas mistas. Mesma função do celular.
+        if (typeof window._statsToggleMixed === 'function') {
+          window._statsToggleMixed({ checked: !!intent.on });
+        }
+        break;
+      case 'setRR':
+        // 👑 no relógio quando NÃO é a sugestão de fim de série: liga/desliga o
+        // modo Rei/Rainha. Separado do `rrActivate` de propósito — aquele
+        // ACEITA a sugestão (ativa retroativo E já avança pro 3º jogo), este
+        // aqui só mexe no interruptor.
+        if (typeof window._statsToggleReiRainha === 'function') {
+          window._statsToggleReiRainha({ checked: !!intent.on });
+        }
+        break;
       case 'rrActivate':
         // Sugestão de Rei/Rainha aceita no fim de jogo (toggle "👑 Rei/Rainha" +
         // Iniciar): ativa a série RETROATIVA (os 2 jogos já disputados viram

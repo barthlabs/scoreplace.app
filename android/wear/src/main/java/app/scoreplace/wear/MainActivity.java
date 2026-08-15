@@ -80,7 +80,12 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private TextView btnReplayCancel, btnReplayConfirm, reshuffleLabel;
     private boolean rrSuggestNow = false;   // fim de jogo com sugestão de Rei/Rainha
     private TextView tieScoreL, tieScoreR, btnTieExtend, btnTieTiebreak;
-    private Switch reshuffleSwitch;
+    private Switch reshuffleSwitch, rrSwitch, mixedSwitch;
+    private View mixedCol;
+    private TextView rrIcon, mixedIcon;
+    // Guarda contra reentrância: setChecked() dispara o listener, e sem isto o
+    // relógio reenviaria a intenção que ACABOU de chegar do celular — laço.
+    private boolean aplicandoDoCelular = false;
     private boolean replayDismissed = false; // Cancelar esconde o prompt
 
     // Iniciar (start)
@@ -155,6 +160,11 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         reshuffleRow = findViewById(R.id.reshuffle_row);
         reshuffleSwitch = findViewById(R.id.reshuffle_switch);
         reshuffleLabel = findViewById(R.id.reshuffle_label);
+        rrSwitch = findViewById(R.id.rr_switch);
+        rrIcon = findViewById(R.id.rr_icon);
+        mixedSwitch = findViewById(R.id.mixed_switch);
+        mixedIcon = findViewById(R.id.mixed_icon);
+        mixedCol = findViewById(R.id.mixed_col);
         btnReplayCancel = findViewById(R.id.btn_replay_cancel);
         btnReplayConfirm = findViewById(R.id.btn_replay_confirm);
         tieOverlay = findViewById(R.id.tie_overlay);
@@ -236,16 +246,27 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             sendIntent("close", 0);
         });
         btnReplayConfirm.setOnClickListener(v -> {
-            // RR ligado → aceita a sugestão de Rei/Rainha; senão, replay normal.
-            if (rrSuggestNow && reshuffleSwitch.isChecked()) sendRrActivate();
+            // Com a sugestão na tela, a COROA é o gesto de aceitar a série;
+            // fora dela ela é só o interruptor e o Iniciar faz replay normal.
+            if (rrSuggestNow && rrSwitch.isChecked()) sendRrActivate();
             else sendReplay(reshuffleSwitch.isChecked());
         });
-        // Rei/Rainha ligado → o Iniciar fica DOURADO (vai começar a série).
-        reshuffleSwitch.setOnCheckedChangeListener((b, checked) -> {
-            boolean gold = rrSuggestNow && checked;
-            btnReplayConfirm.setBackgroundColor(getColor(gold ? R.color.rr_amber : R.color.start_green));
-            btnReplayConfirm.setTextColor(getColor(gold ? R.color.rr_amber_text : R.color.start_green_text));
+        // 👑 — com a sugestão na tela é a escolha do que o Iniciar vai fazer
+        // (estado LOCAL, igual ao 🎲); fora dela é CONFIGURAÇÃO da sessão e
+        // quem manda é o celular, então só mandamos a intenção.
+        rrSwitch.setOnCheckedChangeListener((b, checked) -> {
+            if (aplicandoDoCelular) return;
+            if (!rrSuggestNow) sendToggle("setRR", checked);
+            pintarIniciar();
         });
+        // ⚥ duplas mistas — sempre configuração da sessão.
+        mixedSwitch.setOnCheckedChangeListener((b, checked) -> {
+            if (aplicandoDoCelular) return;
+            sendToggle("setMixed", checked);
+        });
+        // 🎲 re-sortear: estado LOCAL (decide o que ESTE Iniciar faz), não vai
+        // pro celular — some quando a tela fecha.
+        reshuffleSwitch.setOnCheckedChangeListener((b, checked) -> pintarIniciar());
         // Empate → prorrogar (mantém 'ask' no motor → recorre) ou tie-break.
         btnTieExtend.setOnClickListener(v -> sendResolveTie("extend"));
         btnTieTiebreak.setOnClickListener(v -> sendResolveTie("tiebreak"));
@@ -353,6 +374,32 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             o.put("v", 1);
             o.put("type", "replay");
             o.put("shuffle", shuffle);
+            o.put("id", UUID.randomUUID().toString());
+            final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+            Wearable.getNodeClient(this).getConnectedNodes()
+                .addOnSuccessListener(nodes -> {
+                    MessageClient mc = Wearable.getMessageClient(this);
+                    for (Node node : nodes) mc.sendMessage(node.getId(), PATH_INTENT, bytes);
+                });
+        } catch (Exception e) { /* no-op */ }
+    }
+
+    // Rei/Rainha aceito → o Iniciar fica DOURADO (vai começar a série).
+    private void pintarIniciar() {
+        boolean gold = rrSuggestNow && rrSwitch.isChecked();
+        btnReplayConfirm.setBackgroundColor(getColor(gold ? R.color.rr_amber : R.color.start_green));
+        btnReplayConfirm.setTextColor(getColor(gold ? R.color.rr_amber_text : R.color.start_green_text));
+    }
+
+    // Interruptor de CONFIGURAÇÃO (👑 fora da sugestão, ⚥ mistas): o relógio só
+    // manda a intenção; o estado volta no próximo snapshot. Guardar cópia local
+    // faria celular e relógio divergirem na mesma sessão.
+    private void sendToggle(String tipo, boolean on) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("v", 1);
+            o.put("type", tipo);
+            o.put("on", on);
             o.put("id", UUID.randomUUID().toString());
             final byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
             Wearable.getNodeClient(this).getConnectedNodes()
@@ -893,27 +940,32 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
                     replayControls.setVisibility(View.VISIBLE);
                     reshuffleRow.setVisibility(isDoubles ? View.VISIBLE : View.GONE);
                     winnerWaiting.setVisibility(View.GONE);
-                    // VARIAÇÃO Rei/Rainha: 2 pares distintos jogados, falta o 3º →
-                    // o toggle vira "👑 Rei/Rainha" DOURADO e um pouco maior.
+                    // As três chaves de símbolo. A COROA cresce e fica dourada
+                    // quando há sugestão de fechar a série (2 pares distintos
+                    // jogados, falta o 3º). Símbolo apagado = desligado: a cor
+                    // sozinha não diz o estado no sol nem pra quem distingue
+                    // tom com dificuldade.
                     rrSuggestNow = s.optBoolean("rrSuggest", false);
+                    boolean mixOn = s.optBoolean("mixedOn", false);
+                    boolean rrOn = s.optBoolean("reiRainha", false);
+                    boolean podeMix = s.optBoolean("canMix", false);
+                    aplicandoDoCelular = true;   // setChecked dispara listener
                     if (rrSuggestNow) {
-                        reshuffleLabel.setText("👑 Rei/\nRainha");
-                        reshuffleLabel.setTextColor(getColor(R.color.rr_amber));
-                        reshuffleLabel.setTextSize(13);
-                        reshuffleLabel.setTypeface(null, android.graphics.Typeface.BOLD);
-                        reshuffleSwitch.setThumbTintList(getColorStateList(R.color.rr_amber));
+                        rrIcon.setTextSize(22);
+                        rrSwitch.setThumbTintList(getColorStateList(R.color.rr_amber));
                     } else {
-                        reshuffleLabel.setText("Re-sortear\nduplas");
-                        reshuffleLabel.setTextColor(getColor(R.color.meta));
-                        reshuffleLabel.setTextSize(11);
-                        reshuffleLabel.setTypeface(null, android.graphics.Typeface.NORMAL);
-                        reshuffleSwitch.setThumbTintList(null);
+                        rrIcon.setTextSize(18);
+                        rrSwitch.setThumbTintList(null);
+                        rrSwitch.setChecked(rrOn);   // fora da sugestão o estado é do celular
                     }
-                    // Reaplica a cor do Iniciar conforme o estado atual do switch.
-                    boolean gold = rrSuggestNow && reshuffleSwitch.isChecked();
-                    btnReplayConfirm.setBackgroundColor(getColor(gold ? R.color.rr_amber : R.color.start_green));
-                    btnReplayConfirm.setTextColor(getColor(gold ? R.color.rr_amber_text : R.color.start_green_text));
-                    if (mScale != 1f) scaleTree(reshuffleLabel, mScale);
+                    rrIcon.setAlpha(rrSwitch.isChecked() ? 1f : 0.38f);
+                    reshuffleLabel.setAlpha(reshuffleSwitch.isChecked() ? 1f : 0.38f);
+                    mixedCol.setVisibility(podeMix ? View.VISIBLE : View.GONE);
+                    mixedSwitch.setChecked(mixOn);
+                    mixedIcon.setAlpha(mixOn ? 1f : 0.38f);
+                    aplicandoDoCelular = false;
+                    pintarIniciar();
+                    if (mScale != 1f) scaleTree(reshuffleRow, mScale);
                 } else {
                     replayControls.setVisibility(View.GONE);
                     // Sem controles = à espera do celular (não é "travado").

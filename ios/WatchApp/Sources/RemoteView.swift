@@ -68,6 +68,8 @@ struct RemoteView: View {
     var onReiRainhaNext: () -> Void = {}          // próximo jogo da série de 3
     var onReiRainhaFinal: () -> Void = {}         // encerra a série → classificação
     var onReiRainhaStart: () -> Void = {}         // aceita a sugestão de Rei/Rainha (ativa retroativa + 3º jogo)
+    var onSetReiRainha: (Bool) -> Void = { _ in } // 👑 fora da sugestão: liga/desliga o modo
+    var onSetMixed: (Bool) -> Void = { _ in }     // ⚥ duplas mistas
     // ENCERRAR: fecha o placar NO CELULAR e devolve este app à espera (v1.7.67).
     // Antes o "Fechar" só escondia o painel aqui e o celular seguia com o placar
     // aberto — o relógio ficava preso na tela de resultado da última partida.
@@ -893,6 +895,33 @@ struct RemoteView: View {
     // Ações na BASE do fim de jogo. Casual = toggle "Re-sortear" (OFF por padrão)
     // ACIMA de uma barra dividida ao meio: Cancelar (VERMELHO, esquerda) +
     // Confirmar (VERDE, direita) — como o "Iniciar" cortado ao meio. Rei/Rainha no
+    // Uma opção da tela de fim: o símbolo em cima, a chave embaixo. O alvo de
+    // toque é o CONJUNTO (símbolo + chave), não só a chavinha — no pulso, mira
+    // de 20pt não se acerta com a mão molhada.
+    @ViewBuilder private func chaveDeSimbolo(_ simbolo: String, ligado: Bool,
+                                             cor: Color, destaque: Bool,
+                                             _ acao: @escaping () -> Void) -> some View {
+        Button(action: acao) {
+            VStack(spacing: sz(3)) {
+                Text(simbolo)
+                    .font(.system(size: destaque ? sz(22) : sz(18)))
+                    // Desligado fica apagado — a cor sozinha não diz o estado pra
+                    // quem não distingue bem tom, e o mostrador vive no sol.
+                    .opacity(ligado ? 1.0 : 0.38)
+                Capsule()
+                    .fill(ligado ? cor : Color.white.opacity(0.18))
+                    .frame(width: sz(26), height: sz(14))
+                    .overlay(
+                        Circle().fill(Color.white)
+                            .frame(width: sz(10), height: sz(10))
+                            .offset(x: ligado ? sz(6) : -sz(6))
+                    )
+            }
+            .padding(.horizontal, sz(4)).padding(.vertical, sz(2))
+        }
+        .buttonStyle(.plain)
+    }
+
     // meio da série = botão do próximo jogo. Torneio = "Aguardando o celular…".
     @ViewBuilder private var winnerBottomControls: some View {
         if state.reiRainha && state.rrRound < 3 {
@@ -900,19 +929,37 @@ struct RemoteView: View {
         } else if state.canReplay && !replayDismissed {
             VStack(spacing: sz(14)) {
                 if state.isDoubles {
-                    // Toggle COMPACTO e centrado. VARIAÇÃO Rei/Rainha: quando 2 jogos
-                    // com pares distintos já rolaram e só falta o 3º par (rrSuggest),
-                    // o toggle vira "👑 Rei/Rainha" DOURADO e um pouco maior.
-                    HStack(spacing: sz(6)) {
-                        Text(state.rrSuggest ? "👑 Rei/\nRainha" : "Re-sortear\nduplas")
-                            .font(.system(size: state.rrSuggest ? sz(13) : sz(11),
-                                          weight: state.rrSuggest ? .bold : .regular))
-                            .foregroundColor(state.rrSuggest ? Color(hex: 0xF59E0B) : .spMeta)
-                            .multilineTextAlignment(.trailing)
-                            .lineLimit(2)
-                        Toggle("", isOn: $reshuffle)
-                            .labelsHidden()
-                            .toggleStyle(SwitchToggleStyle(tint: state.rrSuggest ? Color(hex: 0xF59E0B) : .spBlue))
+                    // ORDEM DO DONO (15/ago): no relógio cada opção é um SÍMBOLO
+                    // com a sua chave — 🎲 re-sortear · 👑 Rei/Rainha · ⚥ mistas.
+                    // O texto ("Re-sortear duplas") comia duas linhas num mostrador
+                    // que tem centímetros; o símbolo diz a mesma coisa e sobra
+                    // espaço pras três caberem lado a lado.
+                    //
+                    // ⚠️ A CHAVE DO 🎲 É LOCAL, as outras duas são do CELULAR — e a
+                    // diferença não é descuido: `reshuffle` decide o que ESTE toque
+                    // em "Iniciar" vai fazer (re-sortear ou repetir os times), então
+                    // vive aqui e some quando a tela fecha. Rei/Rainha e Mistas são
+                    // CONFIGURAÇÃO da sessão, valem pros outros jogadores e são
+                    // sincronizadas pelo celular — por isso desenham `state.…` e
+                    // mandam a intenção, sem guardar cópia local que divergiria.
+                    HStack(spacing: sz(10)) {
+                        chaveDeSimbolo("🎲", ligado: reshuffle,
+                                       cor: Color(hex: 0x3B82F6),
+                                       destaque: false) { reshuffle.toggle() }
+                        chaveDeSimbolo("👑", ligado: state.rrSuggest ? reshuffle : state.reiRainha,
+                                       cor: Color(hex: 0xF59E0B),
+                                       destaque: state.rrSuggest) {
+                            // Com a sugestão na tela, a coroa É o gesto de aceitar a
+                            // série — usa a mesma chave do Iniciar. Fora dela, é o
+                            // interruptor de configuração.
+                            if state.rrSuggest { reshuffle.toggle() }
+                            else { onSetReiRainha(!state.reiRainha) }
+                        }
+                        if state.canMix {
+                            chaveDeSimbolo("⚥", ligado: state.mixedOn,
+                                           cor: Color(hex: 0xEC4899),
+                                           destaque: false) { onSetMixed(!state.mixedOn) }
+                        }
                     }
                 }
                 HStack(spacing: 0) {

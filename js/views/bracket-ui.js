@@ -8511,6 +8511,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // 3º) → o toggle "Re-sortear" vira "👑 Rei/Rainha" e o Iniciar (ligado)
       // dispara o rrActivate (ativa a série retroativa e começa o 3º jogo).
       rrSuggest: _rrSuggestNow(),
+      // Os 3 interruptores da tela de fim, pro relógio desenhar 🎲 / 👑 / ⚥
+      // (ordem do dono, 15/ago). O ESTADO vem daqui — o relógio não guarda
+      // opinião própria sobre eles, só manda a intenção e redesenha com o que
+      // voltar; senão o celular e o relógio divergiriam na mesma sessão.
+      shuffleOn: !!autoShuffle,
+      mixedOn: !!_mixedDoublesEnabled,
+      canMix: isCasual && isDoubles && _canShowMixedToggle(),
       // Seleção de sacador. A REGRA é toda daqui — o relógio recebe a lista
       // pronta e só desenha. canSetServer sai da própria lista (vazia = travado),
       // então o seletor nunca aparece oferecendo alguém que o _liveSetServer
@@ -8866,6 +8873,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
     } catch(e) {}
   };
 
+  // Credita a vitória de um jogo do Rei/Rainha POR NOME. O mérito é individual
+  // (a dupla muda a cada jogo), então quem ganha é quem estava em campo — nunca
+  // "o índice t1 do pairing". Ponto único: usado pelo avanço de rodada e pelo
+  // fecho da série, que antes tinham a MESMA conta escrita duas vezes.
+  function _rrCreditar(timeA, timeB, vencedor) {
+    if (!_reiRainhaPlayers) return;
+    var lado = vencedor === 1 ? timeA : (vencedor === 2 ? timeB : null);
+    if (!lado) return; // empate: ninguém pontua
+    lado.forEach(function (n) {
+      var i = _reiRainhaPlayers.indexOf(n);
+      if (i >= 0) _reiRainhaWins[i]++;
+    });
+  }
+
   // Avança para o próximo jogo: salva resultado, rotaciona duplas e reinicia placar.
   window._reiRainhaNextRound = function() {
     // 1. Captura jogadores fixos na transição round 0→1
@@ -8884,12 +8905,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
 
     // 3. Registra vitórias do round atual e salva snapshot independente para histórico
-    var pairing = _reiRainhaPairings[_reiRainhaRound];
-    if (state.winner === 1) {
-      pairing.t1.forEach(function(i) { _reiRainhaWins[i]++; });
-    } else if (state.winner === 2) {
-      pairing.t2.forEach(function(i) { _reiRainhaWins[i]++; });
-    }
+    //    ⚠️ Credita por NOME (quem estava em campo), NÃO pelos índices do
+    //    pairing: desde que a âncora do usuário pode trocar time1↔time2 no
+    //    passo 5, `state.winner === 1` deixou de significar "pairing.t1".
+    //    Por nome a contagem fica imune ao lado.
+    _rrCreditar(p1Players, p2Players, state.winner);
     // empate: ninguém ganha
     // v1.6.105-beta: salva doc separado para este round aparecer no histórico
     _saveReiRainhaRoundSnapshot(_reiRainhaRound, p1Players.slice(), p2Players.slice(), state.winner || 0);
@@ -8897,12 +8917,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // 4. Avança rodada
     _reiRainhaRound++;
 
-    // 5. Define novas duplas com base no pairing da próxima rodada
+    // 5. Define novas duplas com base no pairing da próxima rodada.
+    //    A rotação sai de ÍNDICES, que não sabem quem é o usuário — sem a âncora
+    //    ele pulava pro time vermelho no meio da série (ver _ancorarUsuario).
     var nextPairing = _reiRainhaPairings[_reiRainhaRound];
+    var _nt1 = nextPairing.t1.map(function(i) { return _reiRainhaPlayers[i]; });
+    var _nt2 = nextPairing.t2.map(function(i) { return _reiRainhaPlayers[i]; });
+    var _anc = _ancorarUsuario(_nt1, _nt2);
     p1Players.length = 0;
-    nextPairing.t1.forEach(function(i) { p1Players.push(_reiRainhaPlayers[i]); });
+    _anc.t1.forEach(function(n) { p1Players.push(n); });
     p2Players.length = 0;
-    nextPairing.t2.forEach(function(i) { p2Players.push(_reiRainhaPlayers[i]); });
+    _anc.t2.forEach(function(n) { p2Players.push(n); });
 
     // 6. Reinicia estado de placar
     state.sets = [{ gamesP1: 0, gamesP2: 0, tiebreak: null }];
@@ -9045,6 +9070,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // quando o usuário clicar no botão "Jogo N" (via _reiRainhaNextRound).
   // Exceção: se há 2 históricos válidos + atual = 3 rodadas completas,
   // conta wins do atual imediatamente e mostra "Ver Resultado Final".
+  // ⚠️ NÃO ancorar aqui, e o motivo é o que quase virou bug: esta função é
+  // BOOKKEEPING — ela credita vitórias comparando `state.winner` (que fala dos
+  // lados COMO FORAM JOGADOS) com os pares guardados. Trocar time1↔time2 aqui
+  // daria a vitória à dupla errada. A âncora do usuário mora no ÚNICO ponto em
+  // que os lados do PRÓXIMO jogo são definidos (_reiRainhaNextRound, passo 5).
   function _activateReiRainhaRetroactive() {
     var curP1 = p1Players.slice();
     var curP2 = p2Players.slice();
@@ -9107,6 +9137,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var orderedPairings = playedPairings.concat(missingPartitions).slice(0, 3);
 
     // Reconstrói _reiRainhaPairings com índices para _reiRainhaPlayers.
+    // Guarda o lado COMO FOI JOGADO — é isso que casa com `state.winner`.
     for (var ri = 0; ri < orderedPairings.length; ri++) {
       var part = orderedPairings[ri];
       _reiRainhaPairings[ri] = {
@@ -9118,11 +9149,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var numHistory = validHistory.length;
 
     if (numHistory >= 2) {
-      // Todos os 3 jogos já foram disputados — conta o atual e vai direto ao final.
-      var curT1i = curP1.map(function(n) { return _reiRainhaPlayers.indexOf(n); });
-      var curT2i = curP2.map(function(n) { return _reiRainhaPlayers.indexOf(n); });
-      if (state.winner === 1) { curT1i.forEach(function(i) { if (i >= 0) _reiRainhaWins[i]++; }); }
-      else if (state.winner === 2) { curT2i.forEach(function(i) { if (i >= 0) _reiRainhaWins[i]++; }); }
+      // Todos os 3 jogos já foram disputados — conta o atual e vai direto ao
+      // final, pelo MESMO creditador por nome dos outros dois pontos.
+      _rrCreditar(curP1, curP2, state.winner);
       _reiRainhaRound = 3; // sentinela: _reiRainhaShowFinal não re-conta
     } else {
       // numHistory = 0 ou 1:
@@ -9149,14 +9178,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _liveRecId = null;   // fecho da série = próxima gravação é de partida nova
     _newMatchEpoch();    // …e diário do relógio novo (Caminho B)
 
-    // Registra vitórias do round 2 (se ainda não registrado)
+    // Registra vitórias do round 2 (se ainda não registrado) — pelo MESMO
+    // creditador por nome do avanço de rodada; duas contas do mesmo fato é o
+    // que faz uma delas divergir quando o lado é ancorado.
     if (_reiRainhaRound === 2) {
-      var pairing = _reiRainhaPairings[2];
-      if (state.winner === 1) {
-        pairing.t1.forEach(function(i) { _reiRainhaWins[i]++; });
-      } else if (state.winner === 2) {
-        pairing.t2.forEach(function(i) { _reiRainhaWins[i]++; });
-      }
+      _rrCreditar(p1Players, p2Players, state.winner);
       // v1.6.105-beta: snapshot do round 2 para histórico independente
       _saveReiRainhaRoundSnapshot(2, p1Players.slice(), p2Players.slice(), state.winner || 0);
       _reiRainhaRound = 3; // sentinela: bloqueia re-registro
@@ -9509,20 +9535,80 @@ window._openLiveScoring = function(tId, matchId, opts) {
     return m;
   }
   // Times da próxima partida: embaralha se autoShuffle; respeita duplas mistas.
+  // Âncora do usuário no time AZUL, slot 1 (regra do dono — ver
+  // window._anchorUserFirst em store.js, que é a fonte única). Aqui só
+  // resolvemos o uid pelo nome usando o _playerMeta desta partida.
+  function _ancorarUsuario(t1, t2) {
+    if (typeof window._anchorUserFirst !== 'function') return { t1: t1, t2: t2 };
+    if (_coachMode) return { t1: t1, t2: t2 }; // técnico não joga
+    var cu = window.AppStore && window.AppStore.currentUser;
+    return window._anchorUserFirst(t1, t2, function (n) {
+      var mm = _playerMeta[n];
+      return mm ? (mm.uid || null) : null;
+    }, cu && cu.uid, cu && cu.displayName);
+  }
+
+  // Chave canônica de uma dupla-contra-dupla: independe do lado e da ordem.
+  // MESMA regra do _rrSuggestNow/_activateReiRainhaRetroactive — é ela que
+  // decide se dois jogos foram "pares diferentes".
+  function _parKey(t1, t2) {
+    var a = t1.slice().sort().join('|'), b = t2.slice().sort().join('|');
+    return [a, b].sort().join('::');
+  }
+
   function _computeRestartTeams() {
     var t1 = p1Players.slice(), t2 = p2Players.slice();
-    if (!isDoubles || !autoShuffle) return { t1: t1, t2: t2 };
+    if (!isDoubles || !autoShuffle) return _ancorarUsuario(t1, t2);
     var all = p1Players.concat(p2Players);
-    if (all.length < 4) return { t1: t1, t2: t2 };
+    if (all.length < 4) return _ancorarUsuario(t1, t2);
     var gmap = _genderByNameLS();
-    var males = all.filter(function(n) { return gmap[n] === 'masculino'; });
-    var females = all.filter(function(n) { return gmap[n] === 'feminino'; });
-    if (_mixedDoublesEnabled && males.length === 2 && females.length === 2) {
-      _shuffleArrLS(males); _shuffleArrLS(females);
-      return { t1: [males[0], females[0]], t2: [males[1], females[1]] };
+
+    // As 3 (únicas) maneiras de dividir 4 pessoas em 2 duplas.
+    var A = all[0], B = all[1], C = all[2], D = all[3];
+    var cand = [
+      { t1: [A, B], t2: [C, D] },
+      { t1: [A, C], t2: [B, D] },
+      { t1: [A, D], t2: [B, C] }
+    ];
+
+    // Duplas mistas: só valem as divisões com 1 homem + 1 mulher de cada lado.
+    if (_mixedDoublesEnabled) {
+      var mistas = cand.filter(function (p) {
+        function ok(t) {
+          var g = t.map(function (n) { return gmap[n]; }).sort().join(',');
+          return g === 'feminino,masculino';
+        }
+        return ok(p.t1) && ok(p.t2);
+      });
+      if (mistas.length) cand = mistas;
     }
-    var arr = _shuffleArrLS(all.slice());
-    return { t1: [arr[0], arr[1]], t2: [arr[2], arr[3]] };
+
+    // ⚠️ NÃO REPETIR DUPLA JÁ JOGADA NESTA SESSÃO.
+    // Relato do dono (15/ago): "não funcionou o terceiro jogo rei/rainha quando
+    // rodou 2 duplas antes". MEDIDO com esta função antes do conserto: o
+    // re-sorteio era um Fisher-Yates livre e caía na MESMA divisão do jogo
+    // anterior em **33,4%** das vezes (6000 sorteios). Quando repetia, a sessão
+    // seguia com UMA divisão só — e a sugestão "👑 Rei/Rainha" (que exige 2
+    // pares distintos) nunca aparecia. O 3º jogo simplesmente não era oferecido.
+    // Preferir o que ainda não jogou também é o que a série do Rei/Rainha quer:
+    // 3 jogos, 3 duplas diferentes.
+    var vistos = {};
+    vistos[_parKey(t1, t2)] = true;
+    for (var hi = 0; hi < _sessionGameHistory.length; hi++) {
+      var gh = _sessionGameHistory[hi];
+      if (!gh || !gh.p1 || !gh.p2) continue;
+      if (gh.p1.concat(gh.p2).slice().sort().join('\x00') !== all.slice().sort().join('\x00')) continue;
+      vistos[_parKey(gh.p1, gh.p2)] = true;
+    }
+    var novos = cand.filter(function (p) { return !vistos[_parKey(p.t1, p.t2)]; });
+    // Esgotadas as 3 (ou mistas que não deixam alternativa), volta a sortear
+    // livre — repetir é melhor que travar sem próximo jogo.
+    var pool = novos.length ? novos : cand;
+
+    var esc = pool[Math.floor(Math.random() * pool.length)];
+    // Ordem interna aleatória; a âncora depois garante o usuário no 1º slot azul.
+    var e1 = _shuffleArrLS(esc.t1.slice()), e2 = _shuffleArrLS(esc.t2.slice());
+    return _ancorarUsuario(e1, e2);
   }
   function _buildRestartPlayers(t1, t2) {
     var gmap = _genderByNameLS();
@@ -12825,9 +12911,24 @@ window._openCasualMatch = function(restoreOpts) {
           // Slot vazio ou coach mode — lê o input (nome digitado pelo técnico/org)
           var inp = document.getElementById(inputIds[slotIdx]);
           var v = inp ? (inp.value || '').trim() : '';
+          // ⚠️ O SLOT 1 É O USUÁRIO (regra do dono). Em duplas ele nunca era
+          // semeado — só o modo simples fazia isso —, então o slot dele nascia
+          // SEM uid e com o rótulo "Jogador 1". Duas consequências medidas:
+          // (a) aparecia "Jogador 1" onde deveria estar o nome dele, e
+          // (b) sem uid, toda âncora de "usuário fica no azul" virava no-op,
+          //     porque nenhum slot casava com o uid do usuário logado.
+          // Só preenche quando o campo está VAZIO — nome digitado manda.
+          if (!v && slotIdx === 0 && !_coachMode) {
+            var _cuS = window.AppStore && window.AppStore.currentUser;
+            if (_cuS && _cuS.displayName) v = _cuS.displayName;
+          }
           if (!v) v = 'Jogador ' + (slotIdx + 1);
           // v1.6.51: uid de amigo vinculado via autocomplete
           var _lUid = _slotLinkedUid[slotIdx] || null;
+          if (!_lUid && slotIdx === 0 && !_coachMode) {
+            var _cuU = window.AppStore && window.AppStore.currentUser;
+            if (_cuU && _cuU.uid && _cuU.displayName && v === _cuU.displayName) _lUid = _cuU.uid;
+          }
           var _lProf = _lUid && window._friendProfilesCache ? window._friendProfilesCache[_lUid] : null;
           resolved[slotIdx] = {
             name: v,
@@ -13332,6 +13433,21 @@ window._openCasualMatch = function(restoreOpts) {
         }
         if (isDefault1) {
           p1p.name = 'Jogador ' + (ti + 1);
+        }
+      }
+      // ⚠️ "Jogador 1" NÃO PODE EXISTIR — aquele slot é o usuário (regra do
+      // dono: "não pode aparecer um jogador 1, isso seria o usuário"). Se
+      // nenhum slot casou com ele (slot sem uid, nome ainda não digitado), o
+      // PRIMEIRO do time azul passa a ser ele, com uid — que é também o que
+      // faz a âncora do time azul funcionar nas rodadas seguintes.
+      // Modo técnico fica de fora: ali o dono do celular não joga.
+      if (!userTaken && !_coachMode && cu && cu.displayName && t1List.length) {
+        var _alvo = t1List[0];
+        if (!_alvo.name || defaultNames.indexOf(_alvo.name) !== -1) {
+          _alvo.name = cu.displayName;
+          if (!_alvo.uid && cu.uid) _alvo.uid = cu.uid;
+          if (!_alvo.photoURL && cu.photoURL) _alvo.photoURL = cu.photoURL;
+          userTaken = true;
         }
       }
       for (var tj = 0; tj < t2List.length; tj++) {

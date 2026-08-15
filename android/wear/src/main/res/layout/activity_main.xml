@@ -545,29 +545,76 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <!-- Toggle COMPACTO: "Re-sortear / duplas" (2 linhas) + switch, centrado. -->
+                <!-- SÓ ENTRE PARTIDAS (tela Fechar/Iniciar): três opções, cada uma
+                     um SÍMBOLO com a sua chave — 🎲 re-sortear · 👑 Rei/Rainha ·
+                     ⚥ duplas mistas. Ordem do dono (15/ago): o texto
+                     "Re-sortear duplas" comia duas linhas num mostrador de
+                     centímetros; o símbolo diz o mesmo e as três cabem lado a
+                     lado. Espelha 1:1 o RemoteView.swift. -->
                 <LinearLayout
                     android:id="@+id/reshuffle_row"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
                     android:orientation="horizontal"
-                    android:gravity="center_vertical"
+                    android:gravity="center"
                     android:layout_marginBottom="8dp"
                     android:visibility="gone">
-                    <TextView
-                        android:id="@+id/reshuffle_label"
+
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Re-sortear\nduplas"
-                        android:textColor="@color/meta"
-                        android:textSize="11sp"
-                        android:gravity="end"
-                        android:layout_marginEnd="6dp" />
-                    <Switch
-                        android:id="@+id/reshuffle_switch"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:layout_marginEnd="10dp">
+                        <TextView
+                            android:id="@+id/reshuffle_label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🎲"
+                            android:textSize="18sp" />
+                        <Switch
+                            android:id="@+id/reshuffle_switch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:layout_marginEnd="10dp">
+                        <TextView
+                            android:id="@+id/rr_icon"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="👑"
+                            android:textSize="18sp" />
+                        <Switch
+                            android:id="@+id/rr_switch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/mixed_col"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="center"
+                        android:visibility="gone">
+                        <TextView
+                            android:id="@+id/mixed_icon"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="⚥"
+                            android:textSize="18sp" />
+                        <Switch
+                            android:id="@+id/mixed_switch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- Barra dividida: Fechar (vermelho) | Iniciar (verde), topo reto. -->
