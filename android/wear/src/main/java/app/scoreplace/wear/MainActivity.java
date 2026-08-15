@@ -648,18 +648,32 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         sendIntent("hello", 0); // pede o estado atual ao celular
         // O `hello` era UM tiro: se o app do celular estava fechado/suspenso, ninguém
         // respondia e o relógio ficava em "Aguardando…" pra sempre — a sensação de
-        // "o relógio nunca conversou com o celular". Re-tenta 3× a cada 2s até chegar
-        // estado. Espelha o WatchSession.retryHelloUntilAnswered do lado Apple.
+        // "o relógio nunca conversou com o celular". Insiste com espera crescente até
+        // chegar estado (ver retryHello). Espelha o WatchSession do lado Apple.
         retryHello(0);
     }
 
+    /**
+     * ⚠️ v1.8.84 — antes eram 3 tentativas a cada 2s e depois DESISTIA pra sempre.
+     * Relato do dono (no relógio Apple, e o Wear tinha o MESMO defeito): "os nomes do
+     * celular só vêm quando toca na tela". É isto: com o celular bloqueado — o estado
+     * normal dele na beira da quadra — o app de lá não responde ao `hello`, os 6 segundos
+     * passam, e o relógio fica calado. Aí qualquer toque manda uma intenção, ACORDA o app
+     * do celular, e a resposta traz os nomes: parecia que só o toque buscava o estado,
+     * quando era o toque acordando quem devia ter respondido.
+     * Agora insiste ~2 min com espera CRESCENTE (2,3,4…15s) — pega o celular que acorda
+     * tarde sem martelar o rádio a cada 2s. Para sozinho no 1º estado que chega
+     * (`gotStateSinceResume`), e o `onResume` rearma a cada volta à tela.
+     * Espelha o WatchSession.retryHelloUntilAnswered do lado Apple.
+     */
     private void retryHello(int attempt) {
-        if (attempt >= 3 || gotStateSinceResume) return;
+        if (attempt >= 20 || gotStateSinceResume) return;
+        long espera = Math.min(2000L + attempt * 1000L, 15000L);
         ui.postDelayed(() -> {
             if (gotStateSinceResume) return;
             sendIntent("hello", 0);
             retryHello(attempt + 1);
-        }, 2000);
+        }, espera);
     }
 
     @Override
@@ -848,9 +862,21 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         // acima não cobria na SEGUNDA partida (ela já nasce ativa, então a tela
         // "Iniciar", que era quem perguntava, não aparece). Sem isto o 2º jogo
         // começava sem ninguém escolher o saque.
+        // ⚠️ v1.8.84 — E FECHAR TAMBÉM (mesmo conserto do lado Apple). Relato do dono:
+        // "confirma o sacador, inicia no celular, mas no relógio tem que confirmar de
+        // novo, senão fica na tela de escolha de sacador". Este bloco só ABRIA:
+        // `servePickOpen` é o celular dizendo "estou perguntando"; quando vira FALSE a
+        // pergunta já foi respondida — do outro lado, mas foi. O relógio ficava com o
+        // seletor por cima de uma partida já em andamento.
+        // ⚠️ E o `pendingPickName = null` SAIU daqui: era a v1.7.9 do lado Apple, que o
+        // Wear nunca recebeu. Quem escolhia o sacador na tela "Iniciar" via o seletor
+        // reabrir COM A ESCOLHA APAGADA (o celular liga `servePickOpen` ao abrir o
+        // placar) e o Confirmar nascia desabilitado — a pessoa já tinha respondido e
+        // ficava presa. Quem zera é a virada de FASE, logo acima, que é onde a pergunta
+        // de fato muda (1º → 2º sacador).
         boolean pickOpen = s.optBoolean("servePickOpen", false);
         if (pickOpen != lastPickOpen) {
-            if (pickOpen) { serveOpen = true; pendingPickName = null; }
+            serveOpen = pickOpen;
             lastPickOpen = pickOpen;
         }
         // Barra do sacador no rodapé: só durante os 2 primeiros jogos.
