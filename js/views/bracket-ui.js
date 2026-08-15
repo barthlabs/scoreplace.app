@@ -3978,16 +3978,20 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // técnico a um jogador cujo nome coincida com o primeiro nome do técnico.
   if (!opts || !opts.coachMode) (function() {
     var cu = window.AppStore && window.AppStore.currentUser;
-    if (cu && cu.photoURL) {
-      // Match by first name or displayName in any player name
-      var allP = p1Players.concat(p2Players);
-      for (var api = 0; api < allP.length; api++) {
-        var pn = allP[api];
-        if (cu.displayName && (pn === cu.displayName.split(' ')[0] || pn === cu.displayName)) {
-          if (!_playerMeta[pn]) _playerMeta[pn] = {};
-          if (!_playerMeta[pn].photoURL) _playerMeta[pn].photoURL = cu.photoURL;
-          if (!_playerMeta[pn].uid) _playerMeta[pn].uid = cu.uid;
-        }
+    // ⚠️ v1.8.83: o UID deixou de depender da FOTO. Este bloco inteiro vivia dentro de
+    // `if (cu && cu.photoURL)`, então quem não tem foto de perfil nunca recebia `uid` no
+    // `_playerMeta` — e sem uid a âncora do time azul (`_anchorUserFirst`) vira NO-OP,
+    // porque ela casa por uid primeiro. Foto é enfeite; uid é IDENTIDADE, e era ela que
+    // estava amarrada ao enfeite. Agora o uid entra sempre e a foto só quando existe.
+    if (!cu || !cu.displayName) return;
+    var _pri = cu.displayName.split(' ')[0];
+    var allP = p1Players.concat(p2Players);
+    for (var api = 0; api < allP.length; api++) {
+      var pn = allP[api];
+      if (pn === _pri || pn === cu.displayName) {
+        if (!_playerMeta[pn]) _playerMeta[pn] = {};
+        if (cu.photoURL && !_playerMeta[pn].photoURL) _playerMeta[pn].photoURL = cu.photoURL;
+        if (!_playerMeta[pn].uid && cu.uid) _playerMeta[pn].uid = cu.uid;
       }
     }
   })();
@@ -13431,8 +13435,20 @@ window._openCasualMatch = function(restoreOpts) {
           }
           continue;
         }
-        if (isDefault1) {
+        // ── v1.8.83 · O RÓTULO GRUDA NA PESSOA, NÃO NA POSIÇÃO ──────────────
+        // Relato do dono: _"slots dos jogadores fixos. kelly era jogador 2 no primeiro
+        // jogo e mudou de slot no re-sorteio"_.
+        // Aqui se re-rotulava por ÍNDICE todo nome que ainda fosse padrão — então
+        // "Jogador 3", ao cair no slot 2 depois do re-sorteio, virava "Jogador 2", e
+        // quem estava no 2 virava outro. Como o re-sorteio permuta os NOMES (é o nome
+        // que viaja), o rótulo já acompanharia a pessoa sozinho; era esta reescrita
+        // que o arrancava dela.
+        // Agora só preenche slot VAZIO. Exceção: "Jogador 1" nunca pode sobrar em
+        // ninguém — aquele lugar é do usuário (cânone) —, então esse é reescrito.
+        if (!p1p.name) {
           p1p.name = 'Jogador ' + (ti + 1);
+        } else if (p1p.name === 'Jogador 1') {
+          p1p.name = 'Jogador ' + (ti + 1 === 1 ? 2 : ti + 1);
         }
       }
       // ⚠️ "Jogador 1" NÃO PODE EXISTIR — aquele slot é o usuário (regra do
@@ -13452,8 +13468,11 @@ window._openCasualMatch = function(restoreOpts) {
       }
       for (var tj = 0; tj < t2List.length; tj++) {
         var p2p = t2List[tj];
-        var isDefault2 = !p2p.name || defaultNames.indexOf(p2p.name) !== -1;
-        if (isDefault2) p2p.name = 'Jogador ' + (_isDbl ? (tj + 3) : 2);
+        // idem no time 2: só preenche slot VAZIO (ver o comentário do time 1).
+        // ⚠️ o `isDefault2` que existia aqui virou código morto com a mudança — no time 2
+        // não há o caso "sobrescrever com o nome do usuário", então ele só alimentava a
+        // reescrita por índice que acabou de sair.
+        if (!p2p.name) p2p.name = 'Jogador ' + (_isDbl ? (tj + 3) : 2);
       }
       // v1.9.72: dedupe de segurança — dois jogadores do MESMO time nunca
       // podem ter o mesmo nome (ex.: slot do parceiro carregando o nome real
