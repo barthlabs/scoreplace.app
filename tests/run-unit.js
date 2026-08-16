@@ -18,6 +18,12 @@ const SUITES = [
   // Guarda o INVARIANTE (todo hábito tem tradução declarada no claro, e nenhuma toca o
   // escuro), não os mecanismos: forma nova de quebrar contraste entra NAQUELE arquivo.
   'tests/contraste-nos-dois-temas.test.js',
+  // Texto do usuário não pode ser CORTADO, e o encolhedor de nome (.sp-name-fit, feito
+  // na v1.2.30) não pode virar enfeite — ficou em 2 usos porque nada cobrava. Trava as
+  // duas causas reais: `overflow-wrap:break-word` (permite quebrar mas NÃO reduz a
+  // largura mínima → vaza em flex) e restauração de cor presa a TAG em superfície
+  // invertida (foi o `span[style*=…]` que deixou metade da previsão ilegível).
+  'tests/texto-nunca-corta.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.
