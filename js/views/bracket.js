@@ -2151,7 +2151,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._resolveClassifName(t, name), t) : window._safeHtml(window._resolveClassifName(t, name)));
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + color + ';">' + posLabel + '</span>' +
-        '<span style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;">' + nameHtml + '</span>' +
+        '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;">' + nameHtml + '</span>' +
         (medalEmoji ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medalEmoji + '</span>' : '') +
         '</div>';
     }).join('');
@@ -2396,7 +2396,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._resolveClassifName(t, name), t) : window._safeHtml(window._resolveClassifName(t, name)));
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
         '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + color + ';">' + posLabel + '</span>' +
-        '<span style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;">' + nameHtml + '</span>' +
+        '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;">' + nameHtml + '</span>' +
         (medalEmoji ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medalEmoji + '</span>' : '') +
         '</div>';
     }).join('');
@@ -4200,7 +4200,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td style="padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -4430,7 +4430,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td style="padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s)))}</td>
+        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s)))}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}

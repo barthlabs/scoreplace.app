@@ -94,7 +94,7 @@ console.log('\n== Texto nunca corta ==');
   // CATRACA: o número só pode CRESCER. O helper foi construído na v1.2.30 e ficou em
   // 2 usos porque nada cobrava; o piso aqui impede que alguém o remova em silêncio, e
   // sobe junto quando ele for propagado pra mais telas.
-  const PISO = 7;
+  const PISO = 11;   // sobe quando o helper é propagado; NUNCA desce
   ok(usos.length >= PISO,
     'a classe .sp-name-fit está em uso em pelo menos ' + PISO + ' lugares (achado: ' + usos.length + ')');
   const semLimite = usos.filter(u => !/data-maxrem/.test(u.tag) || !/data-minrem/.test(u.tag))
