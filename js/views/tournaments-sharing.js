@@ -871,9 +871,14 @@ function _buildFlyerPrintHtml(o) {
   // play.google.com/store/apps/details?id=app.scoreplace responde **404** — o app
   // segue em teste fechado (o Play exige mais testadores antes de liberar produção).
   // Papel impresso não se corrige depois: anunciar a Play mandaria quem lê para uma
-  // página inexistente. No dia em que sair, é UMA linha — `play: true` abaixo — e o
-  // selo aparece nos dois convites de uma vez.
-  var _LOJAS = {
+  // página inexistente. No dia em que sair, é UMA linha e o selo aparece de uma vez.
+  //
+  // v1.8.91: essa "uma linha" saiu daqui e virou `window.SP_LOJAS` (store.js), porque o
+  // botão "Baixar na loja" da tela inicial passou a precisar da MESMA informação. Duas
+  // listas de "qual loja já está no ar" divergem na primeira mudança — e a mudança é
+  // exatamente a que vai acontecer. O literal abaixo é só a rede pro caso de o flyer ser
+  // montado sem o store.js carregado; ele NÃO é uma segunda verdade.
+  var _LOJAS = window.SP_LOJAS || {
     apple: { on: true,  nome: 'App Store',   glifo: '' },
     play:  { on: false, nome: 'Google Play', glifo: '▶' }
   };

@@ -256,7 +256,34 @@ function renderNotifications(container) {
       // v1.8.78: `data-notif-id` + `data-notif-autoread` alimentam o observador de
       // permanência em tela (ver `_observeNotifDwell` no fim do render). O id já existia,
       // mas só dentro da string do onclick — de onde não dá pra lê-lo.
-      var _autoRead = isUnread && _AUTOREAD_TYPES_OK(n.type);
+      // ── v1.8.91: o que barra a leitura automática é AINDA PEDIR DECISÃO ───────
+      // Relato do dono: "as notificacoes nao estao sendo marcadas como lidas depois de
+      // 5s de tela porra" — sobre avisos que diziam, no próprio card, "✅ Resultado já
+      // confirmado". Ele mesmo cravou a regra: "nesses já foi aprovado pelo outro time
+      // entao nao tem acao necessaria alguma aqui."
+      //
+      // A exclusão da v1.8.78 era por TIPO: `match-pending-approval` (e os convites)
+      // nunca marcavam por permanência, porque "quem marca é a ação aplicada". Isso vale
+      // enquanto a ação EXISTE. Depois de resolvido não há ação nenhuma a aplicar, então
+      // a notificação ficava não lida PARA SEMPRE e o sininho nunca zerava — que é o
+      // oposto do que a regra queria proteger.
+      //
+      // A pergunta certa já era respondida no card, logo acima: é o MESMO cálculo que
+      // apaga os botões Confirmar/Contestar (`_pendRes`) e os de aceitar/recusar
+      // (`_pend`). Reusar essa resposta garante que o card e a marcação nunca discordem —
+      // não pode existir aviso mostrando "Confirmar" e sumindo dos não lidos sozinho.
+      //
+      // ⚠️ `null` = NÃO SEI (torneio/jogo ainda não carregado) e conta como PENDENTE, o
+      // mesmo default conservador dos botões: na dúvida, não marca. E `friend_request` /
+      // `casual_link_request` seguem de fora — para eles não existe cálculo de "já
+      // resolvido", e inventar um aqui seria pior que a espera.
+      var _pedeDecisao;
+      if (_AUTOREAD_TYPES_OK(n.type)) _pedeDecisao = false;
+      else if (n.type === 'match-pending-approval') _pedeDecisao = (_pendRes !== false);
+      else if (_isInvite) _pedeDecisao = (_pend !== false);
+      else if (_isSent) _pedeDecisao = (_sentPend !== false);
+      else _pedeDecisao = true;
+      var _autoRead = isUnread && !_pedeDecisao;
       return '<div class="card" data-notif-id="' + window._safeHtml(n._id || '') + '"' +
         (_autoRead ? ' data-notif-autoread="1"' : '') +
         ' style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + accentColor + ';' +

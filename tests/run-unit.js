@@ -29,6 +29,12 @@ const SUITES = [
   // Cobre LISTA e CONTADOR juntos: na 1.8.89 consertei só a lista e o pill seguiu
   // dizendo "Todos 3" com 16 torneios na base — meia correção faz a tela se contradizer.
   'tests/filtros-varrem-a-plataforma.test.js',
+  // Duas regras, a mesma armadilha: decidir por TIPO/RÓTULO quando o que importa é o
+  // ESTADO. (a) o aviso marca como lido sozinho quando não há mais NADA A DECIDIR nele —
+  // era barrado pelo tipo `match-pending-approval` mesmo já aprovado, e ficava não lido
+  // pra sempre; (b) o botão de baixar só existe quando LEVA a algum lugar — nunca no
+  // nativo, e só onde a ficha da loja está publicada de verdade (Play em 404 = sem botão).
+  'tests/notificacao-lida-e-botao-da-loja.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.

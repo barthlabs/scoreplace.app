@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.90';
+window.SCOREPLACE_VERSION = '1.8.91';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1058,6 +1058,23 @@ window._ensureBootOverlay();
 // 'android' ANTES deste script carregar. Seam pra gates específicos de plataforma
 // (ex: esconder a venda do Pro no iOS → modelo "reader app" web-only / IAP).
 window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
+
+// ── AS FICHAS NAS LOJAS — FONTE ÚNICA (v1.8.91) ─────────────────────────────
+// Quem consome: o selo "Baixe o app" do convite IMPRESSO (tournaments-sharing) e o
+// botão "Baixar na App Store / Google Play" da tela inicial (_storeButtonHtml).
+// Eram duas listas; duas listas de "qual loja já está no ar" divergem na primeira
+// mudança — e a mudança aqui é justamente a que vai acontecer (a Play sai do teste
+// fechado). Ligando `on: true` num lugar só, o selo e o botão aparecem juntos.
+//
+// ⚠️ `on` É MEDIÇÃO, NÃO PALPITE. Conferido em 16/ago/2026: a ficha da Apple responde
+// HTTP 200 (pública) e `play.google.com/store/apps/details?id=app.scoreplace` responde
+// **404** — o app segue em teste fechado (o Play exige mais testadores pra liberar
+// produção). Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
+// impresso não tem correção depois. Antes de virar `play.on` pra true, conferir o 200.
+window.SP_LOJAS = {
+  apple: { on: true,  nome: 'App Store',   glifo: '',  url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
+  play:  { on: false, nome: 'Google Play', glifo: '▶', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
+};
 
 // Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.
 // Aceita e-mail (minúsculo) OU uid.
