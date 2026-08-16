@@ -12,14 +12,14 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.4.1"),
-        .package(name: "CapacitorFirebaseAuthentication", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor-firebase/authentication"),
-        .package(name: "CapacitorFirebaseMessaging", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor-firebase/messaging"),
-        .package(name: "CapacitorCommunityAppleSignIn", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor-community/apple-sign-in"),
-        .package(name: "CapacitorApp", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor/app"),
-        .package(name: "CapacitorHaptics", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor/haptics"),
-        .package(name: "CapacitorShare", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor/share"),
-        .package(name: "CapacitorSplashScreen", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor/splash-screen"),
-        .package(name: "CapacitorStatusBar", path: "../../../../../../Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules/@capacitor/status-bar")
+        .package(name: "CapacitorFirebaseAuthentication", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor-firebase/authentication"),
+        .package(name: "CapacitorFirebaseMessaging", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor-firebase/messaging"),
+        .package(name: "CapacitorCommunityAppleSignIn", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor-community/apple-sign-in"),
+        .package(name: "CapacitorApp", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor/app"),
+        .package(name: "CapacitorHaptics", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor/haptics"),
+        .package(name: "CapacitorShare", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor/share"),
+        .package(name: "CapacitorSplashScreen", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor/splash-screen"),
+        .package(name: "CapacitorStatusBar", path: "../../../../../../Users/rtb/dev/scoreplace.app/node_modules/@capacitor/status-bar")
     ],
     targets: [
         .target(
