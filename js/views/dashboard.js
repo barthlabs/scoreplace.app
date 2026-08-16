@@ -2525,13 +2525,6 @@ function renderDashboard(container) {
   };
   const _dashDateKey = function(t){ var d = t.startDate || t.registrationLimit || t.endDate; var ms = d ? new Date(d).getTime() : 0; return isNaN(ms) ? 0 : ms; };
 
-  // Favorites count
-  const favIds = typeof window._getFavorites === 'function' ? window._getFavorites() : [];
-  const favoritosCount = allUnique.filter(t => favIds.indexOf(String(t.id)) !== -1).length;
-
-  // Count finished tournaments
-  const encerradosCount = allUnique.filter(t => t.status === 'finished').length;
-
   // ── v1.8.89: TODOS / INSCRIÇÕES ABERTAS / ENCERRADOS = A PLATAFORMA INTEIRA ──
   // Ordem do dono: "aqui deve ser todos os que tem na plataforma, mesmo encerrados,
   // mesmo ocultos e mesmo de outros organizadores" — e, na sequência, o mesmo para
@@ -2557,6 +2550,26 @@ function renderDashboard(container) {
     });
     return out;
   })();
+  // v1.8.90: a LISTA mostra o pool sem os ocultos; os ocultos vão para a seção
+  // "Torneios ocultados" (colapsável), que é onde o dono quer vê-los. Eles seguem
+  // dentro de _poolPlataforma — ou seja, continuam CONTANDO como parte da
+  // plataforma —, só não se misturam na lista.
+  const _poolVisivel = _poolPlataforma.filter(function (t) { return t && !_hidSet[String(t.id)]; });
+
+  // ── v1.8.90: os NÚMEROS dos pills contam a PLATAFORMA, não o pool do usuário ──
+  // Os ocultos entram na conta: eles continuam na tela (na seção "Torneios
+  // ocultados"), então contá-los não promete nada que a tela não entregue. O que
+  // não pode é o pill dizer 3 quando existem 16 — o rótulo é "Todos".
+  const _todosCount = _poolPlataforma.length;
+  const _abertosCount = _poolPlataforma.filter(_isOpenEnrollment).length;
+  const _encerradosPillCount = _poolPlataforma.filter(t => t && t.status === 'finished').length;
+
+  // Favorites count
+  const favIds = typeof window._getFavorites === 'function' ? window._getFavorites() : [];
+  const favoritosCount = allUnique.filter(t => favIds.indexOf(String(t.id)) !== -1).length;
+
+  // Count finished tournaments
+  const encerradosCount = allUnique.filter(t => t.status === 'finished').length;
 
   // Apply main filter
   let filtered = [];
@@ -2565,7 +2578,7 @@ function renderDashboard(container) {
   // v1.8.89: inscrições abertas de QUALQUER organizador, ocultos incluídos.
   // A regra de "aberto" continua sendo a canônica (_enrollmentOpenState, fonte única
   // desde a 1.8.40) — aqui muda só o CONJUNTO em que ela é aplicada.
-  else if (curFilter === 'abertos') filtered = _poolPlataforma.filter(_isOpenEnrollment).sort(sortByUrgency);
+  else if (curFilter === 'abertos') filtered = _poolVisivel.filter(_isOpenEnrollment).sort(sortByUrgency);
   else if (curFilter === 'favoritos') {
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce].forEach(t => {
@@ -2574,7 +2587,7 @@ function renderDashboard(container) {
     filtered.sort(sortByRecency); // Favoritos: mais recente primeiro
   } else if (curFilter === 'encerrados') {
     // v1.8.89: encerrados da plataforma inteira, de outros organizadores e ocultos.
-    filtered = _poolPlataforma.filter(t => t && t.status === 'finished');
+    filtered = _poolVisivel.filter(t => t && t.status === 'finished');
     filtered.sort(sortByRecency); // Encerrados: mais recente primeiro
   } else {
     // v1.8.89: TODOS = a plataforma inteira. Os próprios do usuário vêm primeiro
@@ -2583,7 +2596,7 @@ function renderDashboard(container) {
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
       if (!seen.has(t.id)) { seen.add(t.id); filtered.push(t); }
     });
-    _poolPlataforma.forEach(t => { if (t && !seen.has(t.id)) { seen.add(t.id); filtered.push(t); } });
+    _poolVisivel.forEach(t => { if (t && !seen.has(t.id)) { seen.add(t.id); filtered.push(t); } });
     filtered.sort(sortByDate);
   }
 
@@ -3297,12 +3310,12 @@ function renderDashboard(container) {
            pill mantém leitura consistente. -->
       <!-- Tournament filter pills (clickable — apply filter to list) -->
       <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
-        ${_fStyle('todos', '📋', allUnique.length, _t('dashboard.filterAll'))}
+        ${_fStyle('todos', '📋', _todosCount, _t('dashboard.filterAll'))}
         ${_fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized'))}
         ${_fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating'))}
-        ${_fStyle('abertos', '🗓️', abertosParaVoce.length, _t('dashboard.filterOpen'))}
+        ${_fStyle('abertos', '🗓️', _abertosCount, _t('dashboard.filterOpen'))}
         ${favoritosCount > 0 ? _fStyle('favoritos', '❤️', favoritosCount, _t('dashboard.filterFavorites')) : ''}
-        ${encerradosCount > 0 ? _fStyle('encerrados', '🏆', encerradosCount, _t('dashboard.filterFinished')) : ''}
+        ${_encerradosPillCount > 0 ? _fStyle('encerrados', '🏆', _encerradosPillCount, _t('dashboard.filterFinished')) : ''}
       </div>
       <!-- v1.0.44-beta: Social/personal stats pills (separadas das de torneio
            pra não misturar contextos). Usuários = unique participantes
@@ -3420,15 +3433,13 @@ function renderDashboard(container) {
     })()}
     ${(function(){
       // v2.8.40: seção dos torneios que o usuário ocultou — colapsável, no fim de tudo.
-      if (!hiddenTournaments || !hiddenTournaments.length) return '';
-      // v1.8.89: desde que TODOS/ABERTOS/ENCERRADOS passaram a incluir os ocultos,
-      // esta secao repetiria o mesmo card na mesma tela. Ela existe pra dar um caminho
-      // de volta (desocultar) na lista PADRAO — nos filtros explicitos o torneio ja
-      // esta la em cima, e mostrar de novo aqui so confunde.
-      if (curFilter === 'todos' || curFilter === 'abertos' || curFilter === 'encerrados') {
-        var _jaNaLista = (filtered || []).some(function (x) { return x && _hidSet[String(x.id)]; });
-        if (_jaNaLista) return '';
-      }
+      // v1.8.90: OCULTADO É OCULTADO — a seção lista TODOS os que o usuário ocultou,
+      // em andamento ou encerrados, independente do filtro ativo (ordem do dono).
+      // Uma tentativa anterior filtrou esta seção pelo filtro da tela; estava errado:
+      // quem ocultou quer achar o torneio AQUI, e não depender de escolher o filtro
+      // certo antes. A lista principal é que não os mostra — a separação é essa.
+      var _ocultos = hiddenTournaments || [];
+      if (!_ocultos.length) return '';
       return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;">' + _renderTGroup(hiddenTournaments) + '</div></details></div>';
     })()}
   `;
