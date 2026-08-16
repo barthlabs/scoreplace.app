@@ -1892,6 +1892,42 @@ window._installButtonHtml = function (opts) {
   return '<button type="button" data-install-app-btn class="' + cls + '" onclick="window._promptAppInstall()" style="' + style + '">' + label + '</button>';
 };
 
+// ── BOTÃO QUE LEVA DIRETO À FICHA NA LOJA (v1.8.91) ─────────────────────────
+// Ordem do dono, em duas mensagens: primeiro "vamos tirar esse instalar app" e, em
+// seguida, "a menos que ele possa apontar e ir direto para a loja com o scoreplace.app
+// na tela da loja" + "e ele só deve aparecer entao na versao web".
+//
+// O que ele estava vendo era "📲 Instalar app" (atalho PWA). Com o app publicado, esse
+// botão COMPETE com a instalação de verdade: ocupa a linha nobre da tela inicial pra
+// oferecer o pior dos dois caminhos. Então ele não some — ele passa a levar à ficha.
+//
+// As três condições, cada uma com o seu porquê:
+//   1) NATIVO nunca mostra. Quem já está dentro do app não tem o que baixar, e o botão
+//      ainda mandaria pra loja de onde ele veio. É o "só na versão web".
+//   2) Só aparece quando EXISTE ficha PUBLICADA pra aquele aparelho (window.SP_LOJAS,
+//      onde `on` é medição). Sem ficha, nada — mandar pra 404 é pior que não oferecer.
+//      Hoje isso significa iPhone/iPad; o Android entra sozinho quando `play.on` virar.
+//   3) Desktop fica de fora: não há app de loja pra rodar ali, e a ficha aberta no
+//      navegador do computador não instala nada — seria um beco.
+window._storeButtonHtml = function (opts) {
+  opts = opts || {};
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return '';
+  var L = window.SP_LOJAS || {};
+  var ua = navigator.userAgent || '';
+  // iPad moderno se declara Mac — o toque é o que o denuncia (mesma checagem do
+  // _installButtonHtml, mantida idêntica de propósito pros dois concordarem).
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/.test(ua);
+  var loja = (isIOS && L.apple && L.apple.on) ? L.apple
+           : (isAndroid && L.play && L.play.on) ? L.play
+           : null;
+  if (!loja || !loja.url) return '';
+  var label = opts.label || ('📲 Baixar na ' + loja.nome);
+  return '<a href="' + loja.url + '" target="_blank" rel="noopener" class="' + (opts.cls || '') + '"' +
+    ' data-store-app-btn style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;' +
+    (opts.style || '') + '">' + label + '</a>';
+};
+
 // v2.3.99: "Entrar" que JÁ INSTALA antes de logar quando há prompt nativo
 // (Android Chrome/Edge, desktop) — "instala e já entra". No iOS Safari (sem prompt
 // nativo) só abre o login; o botão separado de instalar continua na tela.

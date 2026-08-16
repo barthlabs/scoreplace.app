@@ -2433,6 +2433,53 @@ window.FirestoreDB = {
     }
   },
 
+  // ── v1.8.92: TODA notificação não lida tem que ser ALCANÇÁVEL ───────────────
+  // A tela pede as 50 MAIS RECENTES; o sino conta TODAS as não lidas. Quando a não
+  // lida é mais antiga que a 50ª, o ponto vermelho aponta pra algo que a tela não
+  // consegue mostrar — e não existe gesto que resolva. Foi exatamente o caso: 466
+  // notificações, 60 não lidas, TODAS de 11–15/jul, enquanto as 50 recentes (agosto)
+  // estavam todas lidas. Medido, não deduzido.
+  //
+  // ⚠️ Sem `orderBy` de propósito: combinar `where` com `orderBy` num campo opcional
+  // EXCLUI silenciosamente quem não tem o campo — foi assim que a Liga sumiu do
+  // discovery (v0.16.62). A ordenação fica no cliente, que já ordena a lista.
+  async getUnreadNotifications(uid, limit) {
+    if (!this.db || !uid) return [];
+    try {
+      var q = this.db.collection('users').doc(uid).collection('notifications')
+        .where('read', '==', false);
+      if (limit) q = q.limit(limit);
+      var snap = await q.get();
+      var out = [];
+      snap.forEach(function (d) { var o = d.data() || {}; o._id = d.id; out.push(o); });
+      return out;
+    } catch (e) {
+      // Falhar aqui NÃO pode esvaziar a tela: o caller funde isto com as recentes,
+      // então devolver [] degrada pro comportamento anterior em vez de quebrar.
+      return [];
+    }
+  },
+
+  // Marca TODAS as não lidas de uma vez. Existe porque, com 60 não lidas de um mês
+  // atrás, exigir que cada uma fique 5s na tela é um pedido irreal.
+  async markAllNotificationsRead(uid) {
+    if (!this.db || !uid) return 0;
+    try {
+      var pend = await this.getUnreadNotifications(uid);
+      if (!pend.length) return 0;
+      var col = this.db.collection('users').doc(uid).collection('notifications');
+      // Lotes de 400: o teto do batch do Firestore é 500.
+      for (var i = 0; i < pend.length; i += 400) {
+        var batch = this.db.batch();
+        pend.slice(i, i + 400).forEach(function (n) { batch.update(col.doc(n._id), { read: true }); });
+        await batch.commit();
+      }
+      return pend.length;
+    } catch (e) {
+      return 0;
+    }
+  },
+
   async getUnreadNotificationCount(uid) {
     if (!this.db || !uid) return 0;
     try {
@@ -2853,9 +2900,18 @@ window.FirestoreDB = {
       if (options.limit) q = q.limit(options.limit);
       var snap = await q.get();
       var out = [];
+      // v1.8.93: PARTIDA EM RAJADA NÃO ENTRA. Filtrar aqui, na origem, é o que faz a
+      // regra valer nos QUATRO consumidores do histórico (pill da tela inicial, ficha
+      // do jogador, tela de histórico, Análise de Inscritos) sem que nenhum precise
+      // saber dela. Ver `window._isPartidaEmRajada` (store.js) para o critério e o
+      // porquê — resumidamente: 6-0 em 12 segundos é teste, e contá-lo é a porta pra
+      // inflar aproveitamento ("assim evitamos manipulacoes nos dados").
+      var _rajada = (typeof window !== 'undefined' && typeof window._isPartidaEmRajada === 'function')
+        ? window._isPartidaEmRajada : null;
       snap.forEach(function(doc) {
         var d = doc.data();
         d._id = doc.id;
+        if (_rajada && _rajada(d)) return;   // descartada: não é jogo disputado
         out.push(d);
       });
       return out;

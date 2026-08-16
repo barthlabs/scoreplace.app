@@ -26,7 +26,44 @@ function renderNotifications(container) {
       '</div>' +
     '</div>';
 
-  window.FirestoreDB.getNotifications(uid, 50).then(function(notifs) {
+  // ── v1.8.92: as 50 mais recentes + TODAS as não lidas ───────────────────────
+  // Relato do dono: "nao há nenhuma notificacao nao lida. nao tem que ter o ponto
+  // vermelho no sino indicando haver nao lidas." O sino estava CERTO — medido na conta
+  // dele: 466 notificações, 60 não lidas, todas de 11–15/jul. A tela pedia só as 50 mais
+  // recentes (agosto, todas lidas), então as 60 não tinham como aparecer: o ponto
+  // apontava pra algo inalcançável, sem gesto nenhum que resolvesse.
+  //
+  // A busca das não lidas é SEPARADA de propósito, e não um `limit` maior: aumentar o
+  // limite só empurra o problema (com 500 notificações e uma não lida na 501ª, volta).
+  // O que a tela precisa garantir é o INVARIANTE — nenhuma não lida fica fora —, e isso
+  // se consegue perguntando por elas, não por mais páginas.
+  // Quantas "recentes" a tela pede. Cresce em blocos pelo "Carregar mais" do fim, e
+  // VOLTA ao padrão quando a tela é aberta de novo — quem rolou muito numa visita não
+  // deve pagar por isso (em leituras) em todas as seguintes. O sinalizador distingue
+  // "re-render por causa do botão" de "entrei na tela".
+  window._NOTIF_PAGE = 50;
+  if (window._notifKeepLimit) { window._notifKeepLimit = false; }
+  else { window._notifLimit = window._NOTIF_PAGE; }
+  window._notifLoadMore = function () {
+    window._notifLimit = (window._notifLimit || window._NOTIF_PAGE) + window._NOTIF_PAGE;
+    window._notifKeepLimit = true;
+    if (typeof window.renderNotifications === 'function') window.renderNotifications(container);
+  };
+
+  Promise.all([
+    window.FirestoreDB.getNotifications(uid, window._notifLimit),
+    (typeof window.FirestoreDB.getUnreadNotifications === 'function')
+      ? window.FirestoreDB.getUnreadNotifications(uid)
+      : Promise.resolve([])
+  ]).then(function(res) {
+    var recentes = res[0] || [];
+    var naoLidas = res[1] || [];
+    // Funde sem duplicar: a não lida que JÁ está entre as recentes tem que aparecer uma
+    // vez só. A entrada das recentes vence (é a mesma, e mantém a ordem já resolvida).
+    var vistos = {};
+    var notifs = [];
+    recentes.forEach(function (n) { if (n && n._id && !vistos[n._id]) { vistos[n._id] = 1; notifs.push(n); } });
+    naoLidas.forEach(function (n) { if (n && n._id && !vistos[n._id]) { vistos[n._id] = 1; notifs.push(n); } });
     var listDiv = document.getElementById('notif-list');
     if (!listDiv) return;
 
@@ -256,7 +293,34 @@ function renderNotifications(container) {
       // v1.8.78: `data-notif-id` + `data-notif-autoread` alimentam o observador de
       // permanência em tela (ver `_observeNotifDwell` no fim do render). O id já existia,
       // mas só dentro da string do onclick — de onde não dá pra lê-lo.
-      var _autoRead = isUnread && _AUTOREAD_TYPES_OK(n.type);
+      // ── v1.8.91: o que barra a leitura automática é AINDA PEDIR DECISÃO ───────
+      // Relato do dono: "as notificacoes nao estao sendo marcadas como lidas depois de
+      // 5s de tela porra" — sobre avisos que diziam, no próprio card, "✅ Resultado já
+      // confirmado". Ele mesmo cravou a regra: "nesses já foi aprovado pelo outro time
+      // entao nao tem acao necessaria alguma aqui."
+      //
+      // A exclusão da v1.8.78 era por TIPO: `match-pending-approval` (e os convites)
+      // nunca marcavam por permanência, porque "quem marca é a ação aplicada". Isso vale
+      // enquanto a ação EXISTE. Depois de resolvido não há ação nenhuma a aplicar, então
+      // a notificação ficava não lida PARA SEMPRE e o sininho nunca zerava — que é o
+      // oposto do que a regra queria proteger.
+      //
+      // A pergunta certa já era respondida no card, logo acima: é o MESMO cálculo que
+      // apaga os botões Confirmar/Contestar (`_pendRes`) e os de aceitar/recusar
+      // (`_pend`). Reusar essa resposta garante que o card e a marcação nunca discordem —
+      // não pode existir aviso mostrando "Confirmar" e sumindo dos não lidos sozinho.
+      //
+      // ⚠️ `null` = NÃO SEI (torneio/jogo ainda não carregado) e conta como PENDENTE, o
+      // mesmo default conservador dos botões: na dúvida, não marca. E `friend_request` /
+      // `casual_link_request` seguem de fora — para eles não existe cálculo de "já
+      // resolvido", e inventar um aqui seria pior que a espera.
+      var _pedeDecisao;
+      if (_AUTOREAD_TYPES_OK(n.type)) _pedeDecisao = false;
+      else if (n.type === 'match-pending-approval') _pedeDecisao = (_pendRes !== false);
+      else if (_isInvite) _pedeDecisao = (_pend !== false);
+      else if (_isSent) _pedeDecisao = (_sentPend !== false);
+      else _pedeDecisao = true;
+      var _autoRead = isUnread && !_pedeDecisao;
       return '<div class="card" data-notif-id="' + window._safeHtml(n._id || '') + '"' +
         (_autoRead ? ' data-notif-autoread="1"' : '') +
         ' style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + accentColor + ';' +
@@ -287,6 +351,19 @@ function renderNotifications(container) {
     if (_read.length > 0) {
       html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);opacity:0.7;margin:0 0 8px 2px;">' + (_t('notif.read') || 'Lidas') + ' · ' + _read.length + '</div>';
       html += '<div style="display:flex;flex-direction:column;gap:8px;">' + _read.map(_renderNotifCard).join('') + '</div>';
+    }
+
+    // ── v1.8.92: "Carregar mais" no fim ─────────────────────────────────────
+    // Pedido do dono: "depois das 50 apresentadas, pode haver um carregar mais la em
+    // baixo". O botão só aparece quando a busca das recentes VOLTOU CHEIA — ou seja,
+    // quando é plausível existir mais. Voltando menos que o pedido, chegamos ao fim e
+    // um botão ali só decepcionaria.
+    // ⚠️ Conta as RECENTES, não a lista fundida: a fusão traz também as não lidas
+    // antigas, que inflariam o total e fariam o botão aparecer no fim da coleção.
+    if (recentes.length >= window._NOTIF_PAGE) {
+      html += '<div style="text-align:center;padding:1.25rem 0 0.5rem;">' +
+        '<button onclick="window._notifLoadMore()" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' +
+        (_t('dashboard.loadMore', { count: '' }) || 'Carregar mais') + '</button></div>';
     }
 
     listDiv.innerHTML = html;

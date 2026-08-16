@@ -171,7 +171,7 @@
     return '<span style="font-size:0.62rem;font-weight:700;color:' + cor + ';white-space:nowrap;">💧' + p + '%</span>';
   }
 
-  window._weatherWidgetHtml = function (r, size) {
+  window._weatherWidgetHtml = function (r, size, local) {
     if (!r) return '';
     var lg = (size !== 'sm');
     var _sf = window._safeHtml || function (s) { return String(s == null ? '' : s); };
@@ -182,8 +182,17 @@
     // `[data-vphoto-on]` (components.css), ligado pelo hidratador da foto.
     var h = '<div class="weather-box" style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.22);' +
       'border-radius:12px;padding:' + (lg ? '12px 14px' : '10px 12px') + ';margin-top:10px;">';
-    h += '<div style="font-size:0.65rem;font-weight:800;color:#60a5fa;text-transform:uppercase;' +
-      'letter-spacing:0.06em;margin-bottom:8px;">🌤️ Previsão do tempo</div>';
+    // v1.8.87: o título quebra a linha e o LOCAL do torneio vem logo abaixo — a previsão
+    // é daquele endereço, e sem dizer de onde ela é o número fica solto (pedido do dono).
+    // `overflow-wrap:anywhere` porque nome de local também traz token que não quebra.
+    h += '<div style="margin-bottom:8px;">' +
+      '<div style="font-size:0.65rem;font-weight:800;color:#60a5fa;text-transform:uppercase;' +
+        'letter-spacing:0.06em;">🌤️ Previsão do tempo</div>' +
+      (local
+        ? '<div style="font-size:0.7rem;font-weight:600;color:#cbd5e1;margin-top:2px;' +
+          'overflow-wrap:anywhere;line-height:1.25;">📍 ' + _sf(local) + '</div>'
+        : '') +
+      '</div>';
 
     // AGORA
     h += '<div style="display:flex;align-items:center;gap:10px;">' +
@@ -250,7 +259,7 @@
       window._weatherFetch(lat, lon).then(function (d) {
         if (!document.body.contains(el)) return;   // saiu da tela no meio do caminho
         var r = window._weatherResumo(d, Date.now());
-        el.innerHTML = r ? window._weatherWidgetHtml(r, el.getAttribute('data-size') || 'lg') : '';
+        el.innerHTML = r ? window._weatherWidgetHtml(r, el.getAttribute('data-size') || 'lg', el.getAttribute('data-venue') || '') : '';
       });
     });
   };
@@ -284,7 +293,7 @@
   /** O slot que o render do torneio insere. Vazio até a rede responder — nunca "carregando". */
   window._weatherSlotHtml = function (t, size) {
     if (!t || !t.venueLat || !t.venueLon) return '';
-    return '<div data-weather-slot="1" data-lat="' + window._safeHtml(String(t.venueLat)) +
+    return '<div data-weather-slot="1" data-venue="' + window._safeHtml(String(t.venue || '')) + '" data-lat="' + window._safeHtml(String(t.venueLat)) +
       '" data-lon="' + window._safeHtml(String(t.venueLon)) +
       '" data-size="' + (size === 'sm' ? 'sm' : 'lg') + '"></div>';
   };

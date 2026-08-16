@@ -103,6 +103,26 @@ eqArr(woDoc.playerUids, ["uA", "uB"], "buildMirrorDoc inclui roster");
 const cleared = buildMirrorDoc(tNoRes, tNoRes.matches[0], "T1", "z");
 ok(!("winner" in cleared) && !("scoreP1" in cleared), "buildMirrorDoc de match zerado OMITE resultado (clobber remove no subdoc)");
 
+// ── v1.8.79 REPLAY: o espelho não pode ENGOLIR o ponto a ponto ──────────────
+// O espelho grava com `set` SEM merge — é isso que apaga campo que sumiu (reverter,
+// refazer, editar). Só que `replay` NASCE NO CLIENTE (placar ao vivo) e o servidor não
+// tem como recalculá-lo: apagado, some pra sempre e o botão Replay do jogo morre.
+// Por isso buildMirrorDoc carrega o campo adiante a partir do doc anterior.
+const _replay = { v: 1, points: [{ w: 1, a: 0, b: 0 }, { w: 2, a: 1, b: 0 }] };
+const comReplay = buildMirrorDoc(tWO, tWO.matches[0], "T1", "2026-01-02", { replay: _replay, winner: "velho" });
+ok(comReplay.replay && comReplay.replay.points.length === 2,
+  "buildMirrorDoc PRESERVA o replay do doc anterior (senão o espelho apagaria o ponto a ponto)");
+ok(comReplay.winner === "A",
+  "…e o resto continua vindo da ESTRUTURA, não do doc anterior (winner do match, não o 'velho')");
+const semAnterior = buildMirrorDoc(tWO, tWO.matches[0], "T1", "2026-01-02", null);
+ok(!("replay" in semAnterior), "sem doc anterior não inventa replay");
+const anteriorSemReplay = buildMirrorDoc(tWO, tWO.matches[0], "T1", "2026-01-02", { winner: "A" });
+ok(!("replay" in anteriorSemReplay), "doc anterior sem replay não vira replay vazio");
+// A assinatura NÃO pode enxergar o replay: se enxergasse, gravar o ponto a ponto faria
+// a CF achar que o espelho mudou e reescrever em laço.
+ok(subdocSignature({ ...comReplay }) === subdocSignature({ ...comReplay, replay: null }),
+  "subdocSignature IGNORA o replay (não dispara re-espelho em laço)");
+
 // ── DISPLAY_FIELDS: contexto de exibição denormalizado (Fase B) ──
 console.log("──── contexto de exibição (Fase B) ────");
 const tDisp = { name: "Copa Teste", participants: parts, matches: [

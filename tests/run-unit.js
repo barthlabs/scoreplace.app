@@ -12,6 +12,29 @@ const SUITES = [
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
   'tests/css-nao-perde-regra.test.js',
+  // O app foi escrito olhando o tema ESCURO: caixa se destaca CLAREANDO o fundo, recua
+  // ESCURECENDO, e texto de destaque é pastel. Os três hábitos INVERTEM no tema claro —
+  // por isso o dono via "fonte preta em box escuro" e placar da mesma cor do card.
+  // Guarda o INVARIANTE (todo hábito tem tradução declarada no claro, e nenhuma toca o
+  // escuro), não os mecanismos: forma nova de quebrar contraste entra NAQUELE arquivo.
+  'tests/contraste-nos-dois-temas.test.js',
+  // Texto do usuário não pode ser CORTADO, e o encolhedor de nome (.sp-name-fit, feito
+  // na v1.2.30) não pode virar enfeite — ficou em 2 usos porque nada cobrava. Trava as
+  // duas causas reais: `overflow-wrap:break-word` (permite quebrar mas NÃO reduz a
+  // largura mínima → vaza em flex) e restauração de cor presa a TAG em superfície
+  // invertida (foi o `span[style*=…]` que deixou metade da previsão ilegível).
+  'tests/texto-nunca-corta.test.js',
+  // "Todos / Inscrições abertas / Encerrados" varrem a PLATAFORMA (outros organizadores
+  // e ocultos incluídos); os ocultos aparecem na seção colapsável, em qualquer estado.
+  // Cobre LISTA e CONTADOR juntos: na 1.8.89 consertei só a lista e o pill seguiu
+  // dizendo "Todos 3" com 16 torneios na base — meia correção faz a tela se contradizer.
+  'tests/filtros-varrem-a-plataforma.test.js',
+  // Duas regras, a mesma armadilha: decidir por TIPO/RÓTULO quando o que importa é o
+  // ESTADO. (a) o aviso marca como lido sozinho quando não há mais NADA A DECIDIR nele —
+  // era barrado pelo tipo `match-pending-approval` mesmo já aprovado, e ficava não lido
+  // pra sempre; (b) o botão de baixar só existe quando LEVA a algum lugar — nunca no
+  // nativo, e só onde a ficha da loja está publicada de verdade (Play em 404 = sem botão).
+  'tests/notificacao-lida-e-botao-da-loja.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.

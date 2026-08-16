@@ -778,7 +778,18 @@ function renderDashboard(container) {
               ${t.logoData ? `<div style="width:33%;min-width:80px;flex-shrink:0;"><img src="${t.logoData}" alt="Logo" style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.4);"></div>` : ''}
               <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:flex-start;gap:6px;">
-                  <h4 style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;overflow-wrap:break-word;">
+                  ${/* v1.8.85: o nome era CORTADO quando trazia um token que não quebra —
+                        no relato, um torneio nomeado com o e-mail do organizador
+                        ("…de viniciusna1@hotmail.com"): o texto ia até a borda e sumia.
+                        ⚠️ `overflow-wrap:anywhere` (que já estava aqui) NÃO resolve num
+                        flex: ele permite quebrar, mas a largura MÍNIMA do elemento continua
+                        sendo a da palavra inteira, então o item não encolhe e o texto vaza.
+                        Quem afeta a largura mínima é `anywhere` — com `min-width:0` no item.
+                        E, quando mesmo quebrando não couber, a FONTE ENCOLHE: `.sp-name-fit`
+                        é o encolhedor canônico do app (store.js), em rem por causa da escala
+                        por área — nunca px. Ver project_name_fit_box_canonical. */''}
+                  <h4 class="sp-name-fit" data-maxrem="1.5" data-minrem="0.95"
+                      style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-word;">
                     ${window._safeHtml(t.name)}
                   </h4>
                   <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '❤️' : '♡'}</span>
@@ -934,13 +945,25 @@ function renderDashboard(container) {
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statTeams')}</span>
                        </div>
                        ` : ''}
+                       ${/* v1.8.78 — o box de ESPERA era o ÚNICO dos três que não seguia a tarja.
+                             `.stat-box` é tarja ESCURA com texto CLARO nos DOIS temas, mas aqui um
+                             `background: rgba(251,191,36,0.08)` INLINE vencia a tarja. No tema escuro
+                             isso passava (âmbar 8% sobre card escuro continua escuro); no CLARO virava
+                             caixa quase branca segurando o texto `#f1f5f9` da tarja + âmbar claro —
+                             ou seja claro sobre claro, que é o relato do dono.
+                             Agora o fundo é o da tarja (igual a INSCRITOS/EQUIPES) e a identidade
+                             âmbar vive na BORDA + no texto. O âmbar vem da classe `.stat-accent`, não
+                             de style inline, de propósito: assim ele fica fora do remap de contraste
+                             do tema claro — que só reescreve inline — e não é escurecido sobre a
+                             tarja escura. Opacidade 0.8→0.95: o branco dos irmãos aguenta 0.8, o
+                             âmbar rebaixado não. */''}
                        ${_standbyCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08);">
+                       <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.45);${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">⏱️</span>
-                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95; color: #fbbf24;">${_standbyCount}</span>
+                             <span class="stat-accent" style="font-size: 1.4rem; font-weight: 800; line-height: 1;">${_standbyCount}</span>
                           </div>
-                          <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8; color: #fbbf24;">${_t('dashboard.statWaiting')}</span>
+                          <span class="stat-accent" style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.95;">${_t('dashboard.statWaiting')}</span>
                        </div>
                        ` : ''}
                    </div>
@@ -1030,11 +1053,11 @@ function renderDashboard(container) {
               // "Desocultar". isOrg (do card) só pega org por email — reforço aqui
               // com creatorUid + co-hosts (org por uid/telefone não tem email).
               var _hid = (typeof window._isHidden === 'function') && window._isHidden(t.id);
-              if (_hid) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Mostrar de novo na lista" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.9);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Desocultar</button></div>';
+              if (_hid) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Mostrar de novo na lista" style="background:var(--stat-box-bg);border:1px solid var(--border-color);color:var(--text-main);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Desocultar</button></div>';
               var _cuX = window.AppStore && window.AppStore.currentUser;
               var _amOrgX = isOrg || (_cuX && t.creatorUid && _cuX.uid === t.creatorUid) ||
                 (_cuX && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch && ch.status === 'active' && ch.uid && ch.uid === _cuX.uid; }));
-              if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.5);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'rgba(255,255,255,0.85)\'" onmouseout="this.style.color=\'rgba(255,255,255,0.5)\'">🙈 Ocultar</button></div>';
+              if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid var(--border-color);color:var(--text-muted);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'var(--text-bright)\'" onmouseout="this.style.color=\'var(--text-muted)\'">🙈 Ocultar</button></div>';
               return '';
             })()}
 
@@ -2502,6 +2525,45 @@ function renderDashboard(container) {
   };
   const _dashDateKey = function(t){ var d = t.startDate || t.registrationLimit || t.endDate; var ms = d ? new Date(d).getTime() : 0; return isNaN(ms) ? 0 : ms; };
 
+  // ── v1.8.89: TODOS / INSCRIÇÕES ABERTAS / ENCERRADOS = A PLATAFORMA INTEIRA ──
+  // Ordem do dono: "aqui deve ser todos os que tem na plataforma, mesmo encerrados,
+  // mesmo ocultos e mesmo de outros organizadores" — e, na sequência, o mesmo para
+  // "inscrições abertas" e para "encerrados".
+  //
+  // Os três liam pools do USUÁRIO (organizados / participando / abertos-pra-você), e
+  // esses saem de `visible` — que já vem com os OCULTOS removidos (v2.8.40) e é
+  // escopado ao uid pelo listener em tempo real. Daí o contador marcar 3 num app com
+  // dezenas de torneios: não era contagem errada, era a FONTE errada.
+  //
+  // Aqui o pool é a UNIÃO do que o usuário enxerga com a descoberta pública, ambos nas
+  // versões CRUAS (`_allVisibleRaw` / `_discoveryRaw`, sem o corte de ocultos).
+  // ⚠️ "Ocultar" continua valendo onde ele foi feito pra valer — nas seções curadas da
+  // tela e na lista padrão —, mas não pode esconder nada de quem pediu explicitamente
+  // TODOS. Esconder ali seria a tela contradizendo o próprio rótulo.
+  const _poolPlataforma = (function () {
+    const vistos = new Set(); const out = [];
+    [].concat(_allVisibleRaw || [], _discoveryRaw || []).forEach(function (t) {
+      if (!t || t.id == null) return;
+      const k = String(t.id);
+      if (vistos.has(k)) return;
+      vistos.add(k); out.push(t);
+    });
+    return out;
+  })();
+  // v1.8.90: a LISTA mostra o pool sem os ocultos; os ocultos vão para a seção
+  // "Torneios ocultados" (colapsável), que é onde o dono quer vê-los. Eles seguem
+  // dentro de _poolPlataforma — ou seja, continuam CONTANDO como parte da
+  // plataforma —, só não se misturam na lista.
+  const _poolVisivel = _poolPlataforma.filter(function (t) { return t && !_hidSet[String(t.id)]; });
+
+  // ── v1.8.90: os NÚMEROS dos pills contam a PLATAFORMA, não o pool do usuário ──
+  // Os ocultos entram na conta: eles continuam na tela (na seção "Torneios
+  // ocultados"), então contá-los não promete nada que a tela não entregue. O que
+  // não pode é o pill dizer 3 quando existem 16 — o rótulo é "Todos".
+  const _todosCount = _poolPlataforma.length;
+  const _abertosCount = _poolPlataforma.filter(_isOpenEnrollment).length;
+  const _encerradosPillCount = _poolPlataforma.filter(t => t && t.status === 'finished').length;
+
   // Favorites count
   const favIds = typeof window._getFavorites === 'function' ? window._getFavorites() : [];
   const favoritosCount = allUnique.filter(t => favIds.indexOf(String(t.id)) !== -1).length;
@@ -2513,7 +2575,10 @@ function renderDashboard(container) {
   let filtered = [];
   if (curFilter === 'organizados') filtered = [...organizadosSorted];
   else if (curFilter === 'participando') filtered = [...participacoesSorted];
-  else if (curFilter === 'abertos') filtered = [...abertosParaVoce];
+  // v1.8.89: inscrições abertas de QUALQUER organizador, ocultos incluídos.
+  // A regra de "aberto" continua sendo a canônica (_enrollmentOpenState, fonte única
+  // desde a 1.8.40) — aqui muda só o CONJUNTO em que ela é aplicada.
+  else if (curFilter === 'abertos') filtered = _poolVisivel.filter(_isOpenEnrollment).sort(sortByUrgency);
   else if (curFilter === 'favoritos') {
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce].forEach(t => {
@@ -2521,16 +2586,17 @@ function renderDashboard(container) {
     });
     filtered.sort(sortByRecency); // Favoritos: mais recente primeiro
   } else if (curFilter === 'encerrados') {
-    const seen = new Set();
-    [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
-      if (!seen.has(t.id) && t.status === 'finished') { seen.add(t.id); filtered.push(t); }
-    });
+    // v1.8.89: encerrados da plataforma inteira, de outros organizadores e ocultos.
+    filtered = _poolVisivel.filter(t => t && t.status === 'finished');
     filtered.sort(sortByRecency); // Encerrados: mais recente primeiro
   } else {
+    // v1.8.89: TODOS = a plataforma inteira. Os próprios do usuário vêm primeiro
+    // (são os que ele age em cima); o resto da plataforma vem depois.
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
       if (!seen.has(t.id)) { seen.add(t.id); filtered.push(t); }
     });
+    _poolVisivel.forEach(t => { if (t && !seen.has(t.id)) { seen.add(t.id); filtered.push(t); } });
     filtered.sort(sortByDate);
   }
 
@@ -2657,6 +2723,41 @@ function renderDashboard(container) {
     }
   }
 
+  // ── v1.8.92: ENCERRADO NUNCA DIVIDE LISTA COM EM ANDAMENTO ──────────────────
+  // Ordem do dono: "os encerrados nao devem aparecer com os em andamento (mesmo na
+  // lista)." Ele estava vendo, logo abaixo da faixa "Em andamento (1)", três cards
+  // marcados "Encerrado" na lista principal.
+  //
+  // A CAUSA É DE DESENHO, não um `if` errado: essa extração existia em TRÊS lugares,
+  // cada um com um gate próprio — o ramo "todos" (gated em `encerradosCount > 0` e em
+  // não haver filtro secundário), o ramo de "organizados/participando" (outro gate), e
+  // nenhum para o resto. Basta um dos gates não fechar e o encerrado volta pra lista.
+  // É a mesma classe do contador do sino: consertar um lugar e deixar o irmão.
+  //
+  // Aqui vira UMA regra só, aplicada ANTES de qualquer ramo de render: quem está
+  // encerrado sai de `filtered` e vai para a seção própria. A única exceção é o filtro
+  // "encerrados" — ali a lista É de encerrados, e extraí-los esvaziaria a tela.
+  const _isRecentlyFinished = function (t) {
+    // Encerrado há menos de 12h continua na lista principal de propósito (v2.1.48):
+    // é a janela em que todo mundo quer ver o resultado/pódio fresco. Sem `finishedAt`
+    // (dado legado) trata como antigo — na dúvida, vai pra seção.
+    if (!t || t.status !== 'finished') return false;
+    var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
+    if (!fa || isNaN(fa)) return false;
+    return (Date.now() - fa) < 12 * 60 * 60 * 1000;
+  };
+  let _encerradosExtraidos = [];
+  if (curFilter !== 'encerrados') {
+    _encerradosExtraidos = filtered.filter(function (t) {
+      return t && t.status === 'finished' && !_isRecentlyFinished(t);
+    });
+    if (_encerradosExtraidos.length) {
+      var _encSet = new Set(_encerradosExtraidos.map(function (t) { return String(t.id); }));
+      filtered = filtered.filter(function (t) { return !_encSet.has(String(t.id)); });
+      _encerradosExtraidos.sort(sortByRecency); // mais recente primeiro
+    }
+  }
+
   // Pagination — show N items initially, with "load more" button
   const PAGE_SIZE = 12;
   const pageNum = window._dashPage || 1;
@@ -2668,28 +2769,12 @@ function renderDashboard(container) {
   // do runningBottomHtml ("Em andamento" que não é desta semana) — encerrado só fica na frente
   // dos OCULTADOS (pedido do dono). Assim o de casais (em andamento) vem ANTES dos encerrados.
   let finishedSectionHtml = '';
-  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0) {
-    // v2.1.12: torneio encerrado só vai pra seção "Encerrados" depois de 24h.
-    // v2.1.48: nas primeiras 12h após encerrar, continua na lista principal (pra
-    // todo mundo ver o resultado/pódio fresquinho); depois vai pra "Encerrados".
-    // finishedAt é setado em todos os caminhos de encerramento; se faltar
-    // (legado), trata como antigo.
-    const _isRecentlyFinished = function(t) {
-      if (!t || t.status !== 'finished') return false;
-      var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
-      if (!fa || isNaN(fa)) return false;
-      return (Date.now() - fa) < 12 * 60 * 60 * 1000;
-    };
-    const activeList = filtered.filter(t => t.status !== 'finished' || _isRecentlyFinished(t));
-    const finishedList = filtered.filter(t => t.status === 'finished' && !_isRecentlyFinished(t));
-    finishedList.sort(sortByRecency); // mais recente primeiro (myFinished/otherFinished herdam)
-    const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
-    filteredHtml = visibleActive.length > 0
-      ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml || finishedList.length > 0) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
-    if (activeList.length > visibleActive.length) {
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
-    }
+  // v1.8.92: a seção de encerrados é montada UMA vez, para QUALQUER filtro (menos o
+  // próprio "encerrados", onde não há extração). Antes ela só existia no ramo "todos",
+  // e em "organizados"/"participando" havia uma segunda montagem, parecida mas separada
+  // — duas versões do mesmo bloco que divergem na primeira mudança.
+  (function () {
+    const finishedList = _encerradosExtraidos;
     if (finishedList.length > 0) {
       // Separate: user's finished tournaments first, then others
       var _cu = window.AppStore.currentUser;
@@ -2715,6 +2800,31 @@ function renderDashboard(container) {
       }
       finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
     }
+  })();
+
+  // ── v1.8.93: "Nenhum torneio encontrado" só quando a TELA está mesmo vazia ──
+  // Relato do dono (modo Lista): "essa de nenhum torneio encontrado nao deveria estar
+  // ai. esta mostrando torneio, como assim nenhum encontrado."
+  // A lista principal pode ficar legitimamente vazia com a tela CHEIA — as bandas
+  // (Em andamento / Favoritos / Aguardando), a seção de Encerrados e a de Ocultados
+  // são renderizadas FORA dela. O aviso de vazio precisa olhar a tela inteira, não só
+  // o próprio bloco; era uma condição por ramo, e o modo Lista nem tinha condição.
+  const _telaTemOutroConteudo = !!(runningBandHtml || runningBottomHtml ||
+    favoritesBandHtml || awaitingStartHtml || finishedSectionHtml ||
+    (hiddenTournaments && hiddenTournaments.length));
+  const _vazioHtml = _telaTemOutroConteudo ? ''
+    : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
+
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+    // Os encerrados já saíram de `filtered`; aqui é só paginação da lista ativa.
+    const activeList = filtered;
+    const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
+    filteredHtml = visibleActive.length > 0
+      ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
+      : _vazioHtml;
+    if (activeList.length > visibleActive.length) {
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
+    }
   } else {
     // When viewing "encerrados" filter, sort user's tournaments first
     var _sortedFiltered = filtered;
@@ -2731,17 +2841,11 @@ function renderDashboard(container) {
       var _otherEnc = filtered.filter(function(t) { return !_isMine(t); });
       _sortedFiltered = _myEnc.concat(_otherEnc);
     }
-    // v2.2.7: Para filtros "organizados" e "participando", torneios encerrados
-    // vão para seção separada colapsável no final — mesmo padrão do "todos".
-    var _finishedSubSection = '';
-    if ((curFilter === 'organizados' || curFilter === 'participando') && !curSport && !curLocation && !curFormat) {
-      var _activeItems = _sortedFiltered.filter(function(t) { return t.status !== 'finished'; });
-      var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; }).sort(sortByRecency);
-      if (_finishedItems.length > 0) {
-        _sortedFiltered = _activeItems;
-        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;">' + _renderTGroup(_finishedItems) + '</div></details></div>';
-      }
-    }
+    // v1.8.92: aqui morava uma SEGUNDA extração de encerrados (v2.2.7), só para
+    // "organizados"/"participando", montando uma seção própria e parecida. Ela foi
+    // removida junto com a variável que a carregava: a regra agora é única e roda lá
+    // em cima, para todo filtro. Era a divergência entre as duas que deixava encerrado
+    // na lista quando um dos gates não fechava.
     const visibleItems = _sortedFiltered.slice(0, pageNum * PAGE_SIZE);
     // Empty state: dois níveis de experiência dependendo do contexto.
     // (a) Usuário novo sem nenhum torneio em lugar nenhum (allUnique zero),
@@ -2789,7 +2893,6 @@ function renderDashboard(container) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._loadMoreDiscovery()" class="btn hover-lift" style="background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">🔍 ' + _t('dashboard.discoverMore') + '</button></div>';
     }
     // Seção de encerrados para filtros organizados/participando (v2.2.7)
-    if (_finishedSubSection) filteredHtml += _finishedSubSection;
   }
 
   // v2.8.43: pills de modalidade/local/formato removidas (substituídas pelo filtro
@@ -3098,6 +3201,13 @@ function renderDashboard(container) {
     try {
       var _v2raw = localStorage.getItem('scoreplace_casual_history_v2') || '[]';
       var _v2 = JSON.parse(_v2raw);
+      // v1.8.93: o cache local NÃO passa por loadUserMatchHistory, então a regra da
+      // rajada precisa ser aplicada aqui também — senão o primeiro desenho da tela
+      // mostraria o número contaminado e ele só se corrigiria quando o Firestore
+      // respondesse (um "pisca" com dado errado é pior que esperar).
+      if (Array.isArray(_v2) && typeof window._isPartidaEmRajada === 'function') {
+        _v2 = _v2.filter(function (r) { return !window._isPartidaEmRajada(r); });
+      }
       if (Array.isArray(_v2) && _v2.length > 0) {
         var agg = _aggregateWL(_v2, _myUid, _myDn);
         var fmt = _formatMatchesPill(agg.w, agg.l);
@@ -3116,8 +3226,40 @@ function renderDashboard(container) {
     (async function() {
       try {
         var records = await window.FirestoreDB.loadUserMatchHistory(_myUid, { limit: 500 });
-        if (!Array.isArray(records) || records.length === 0) return;
-        var agg = _aggregateWL(records, _myUid, _myDn);
+        var agg = _aggregateWL(Array.isArray(records) ? records : [], _myUid, _myDn);
+
+        // ── v1.8.92: havendo letzplay, o total é letzplay + scoreplace ──────────
+        // Relato do dono: "aqui o partidas esta divergente. vamos usar o
+        // letzplay+scoreplace quando houver historico letzplay."
+        // O pill contava só o scoreplace (27 partidas · 78%) enquanto a ficha do
+        // atleta, na MESMA sessão, mostrava 40V–50D · 44% rotulado "letzplay +
+        // scoreplace" — duas respostas para a mesma pergunta, na mesma tela.
+        // A soma é a mesma do card (letzplay-profile.js): totais do letzplay mais o
+        // V/D do scoreplace. Sem leitura do letzplay nada muda — segue só o
+        // scoreplace, que é o comportamento anterior; por isso a falha é silenciosa.
+        // ⚠️ O CAMINHO DO CAMPO FOI MEDIDO no doc real, não deduzido: em
+        // `letzplayScans/{uid}` os totais vivem em `scan.totals` ({wins, losses,
+        // matches}). Não existe `profile.totals` no documento — eu tinha escrito esse
+        // caminho de cabeça e ele simplesmente não casaria com nada, somando zero em
+        // silêncio (o pior tipo de erro: nada quebra, o número só continua errado).
+        try {
+          var _db = window.FirestoreDB && (window.FirestoreDB.db ||
+            (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+          if (_db) {
+            var _snap = await _db.collection('letzplayScans').doc(_myUid).get();
+            if (_snap && _snap.exists) {
+              var _d = _snap.data() || {};
+              var _tot = (_d.scan && _d.scan.totals) || (_d.stats) ||
+                         (_d.profile && _d.profile.totals) || null;
+              if (_tot) {
+                var _lw = parseInt(_tot.wins, 10) || 0;
+                var _ll = parseInt(_tot.losses, 10) || 0;
+                if (_lw + _ll > 0) { agg.w += _lw; agg.l += _ll; }
+              }
+            }
+          }
+        } catch (_lzErr) { /* sem letzplay → segue só com o scoreplace */ }
+
         var fmt = _formatMatchesPill(agg.w, agg.l);
         if (!fmt) return;
         window._dashMatchesCache = fmt; // v3.1.40: fonte de verdade — persiste entre re-renders
@@ -3217,7 +3359,7 @@ function renderDashboard(container) {
              saiu por ora (volta quando reativarmos o plano Pro). -->
         <!-- Linha: Convidar + Pessoas -->
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center;">
-          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:1.5s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">📱 ${_t('invite.inviteFriends')}</button>
+          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:1.5s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">✉️ ${_t('invite.inviteFriends')}</button>
           <button id="btn-people" class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="--shine-delay:1.8s;background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
         </div>
         <!-- Linha: Ler QR Code + Fale com o Desenvolvedor -->
@@ -3228,9 +3370,18 @@ function renderDashboard(container) {
           </button>
           ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'height:58px;padding:0 18px;font-size:0.92rem;letter-spacing:0.01em;border:1px solid rgba(255,255,255,0.25);' }) : ''}
         </div>
-        <!-- Linha: Instalar app (some se já instalado) + Apoie -->
+        <!-- Linha: Baixar na loja (só web, e só onde a ficha existe) + Apoie -->
+        <!-- v1.8.91: era "📲 Instalar app" (atalho PWA). Com o app publicado, esse botão
+             competia com a instalação de verdade. Agora leva DIRETO à ficha na loja e
+             some no app nativo — ordem do dono: "a menos que ele possa apontar e ir
+             direto para a loja com o scoreplace.app na tela da loja" + "só deve aparecer
+             entao na versao web". Quem decide se aparece é _storeButtonHtml (main.js),
+             lendo window.SP_LOJAS. O _installButtonHtml continua vivo, usado pela landing
+             e pelo manual — lá o atalho na tela inicial ainda faz sentido.
+             (Sem crases neste comentário: ele mora DENTRO de um template literal, onde a
+             crase fecha a string e o texto vira código — trava própria pega isso.) -->
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: -2px;">
-          ${(typeof window._installButtonHtml === 'function') ? window._installButtonHtml({ cls: 'btn hover-lift', label: '📲 Instalar app', style: 'background:#1e3a8a;color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;font-weight:600;padding:0 14px;height:34px;border-radius:9px;' }) : ''}
+          ${(typeof window._storeButtonHtml === 'function') ? window._storeButtonHtml({ cls: 'btn hover-lift', style: 'background:#1e3a8a;color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;font-weight:600;padding:0 14px;height:34px;border-radius:9px;' }) : ''}
           <button id="btn-support-pix" class="btn hover-lift" title="${_t('common.support')}" style="background: #047857; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window.location.hash='#support'">💚 ${_t('common.support')}</button>
         </div>
       </div>
@@ -3244,12 +3395,12 @@ function renderDashboard(container) {
            pill mantém leitura consistente. -->
       <!-- Tournament filter pills (clickable — apply filter to list) -->
       <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
-        ${_fStyle('todos', '📋', allUnique.length, _t('dashboard.filterAll'))}
+        ${_fStyle('todos', '📋', _todosCount, _t('dashboard.filterAll'))}
         ${_fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized'))}
         ${_fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating'))}
-        ${_fStyle('abertos', '🗓️', abertosParaVoce.length, _t('dashboard.filterOpen'))}
+        ${_fStyle('abertos', '🗓️', _abertosCount, _t('dashboard.filterOpen'))}
         ${favoritosCount > 0 ? _fStyle('favoritos', '❤️', favoritosCount, _t('dashboard.filterFavorites')) : ''}
-        ${encerradosCount > 0 ? _fStyle('encerrados', '🏆', encerradosCount, _t('dashboard.filterFinished')) : ''}
+        ${_encerradosPillCount > 0 ? _fStyle('encerrados', '🏆', _encerradosPillCount, _t('dashboard.filterFinished')) : ''}
       </div>
       <!-- v1.0.44-beta: Social/personal stats pills (separadas das de torneio
            pra não misturar contextos). Usuários = unique participantes
@@ -3311,9 +3462,16 @@ function renderDashboard(container) {
       ${runningBottomHtml}
       ${awaitingStartHtml}
       ${favoritesBandHtml}
-      ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
+      ${(window._dashView === 'compact')
+        ? (filtered.length ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : _vazioHtml)
+        : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
-    ${(window._dashView === 'compact') ? '' : finishedSectionHtml}
+    <!-- v1.8.93: a seção "Encerrados" também aparece no modo LISTA. A supressão era
+         resíduo de antes da v2.8.81, quando as bandas ainda não respeitavam o toggle;
+         hoje _renderTGroup já monta lista compacta sozinho, então esconder a seção só
+         fazia os encerrados sumirem da tela inteira em modo Lista (relato do dono:
+         "na lista onde estao os encerrados? deveria estar no colapsavel"). -->
+    ${finishedSectionHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
       // reportou "nelson ainda nao ve torneio algum" mas o diag da v0.16.59
@@ -3367,7 +3525,13 @@ function renderDashboard(container) {
     })()}
     ${(function(){
       // v2.8.40: seção dos torneios que o usuário ocultou — colapsável, no fim de tudo.
-      if (!hiddenTournaments || !hiddenTournaments.length) return '';
+      // v1.8.90: OCULTADO É OCULTADO — a seção lista TODOS os que o usuário ocultou,
+      // em andamento ou encerrados, independente do filtro ativo (ordem do dono).
+      // Uma tentativa anterior filtrou esta seção pelo filtro da tela; estava errado:
+      // quem ocultou quer achar o torneio AQUI, e não depender de escolher o filtro
+      // certo antes. A lista principal é que não os mostra — a separação é essa.
+      var _ocultos = hiddenTournaments || [];
+      if (!_ocultos.length) return '';
       return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;">' + _renderTGroup(hiddenTournaments) + '</div></details></div>';
     })()}
   `;

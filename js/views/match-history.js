@@ -240,6 +240,10 @@
     if (w === 0) result = 'E';
     var ts = r.finishedAt ? (Date.parse(r.finishedAt) || 0) : 0;
     var isCasual = r.matchType === 'casual';
+    // v1.8.79: guarda o registro pro replay poder abrir depois só com o id.
+    if (r.matchId && r.replay && typeof window._registerMatchReplay === 'function') {
+      window._registerMatchReplay(r.matchId, r);
+    }
     var comp = isCasual ? 'Partida casual' : (r.tournamentName || 'Torneio');
     return {
       ts: ts,
@@ -255,7 +259,11 @@
       partner: partner.filter(Boolean).join(' / ') || null,
       result: result,
       scoreA: _splitScore(r.scoreSummary, result).a,
-      scoreB: _splitScore(r.scoreSummary, result).b
+      scoreB: _splitScore(r.scoreSummary, result).b,
+      // v1.8.79: só partida jogada AO VIVO tem ponto a ponto gravado. O card guarda
+      // apenas o id — o payload fica no registro, senão cada card carregaria centenas
+      // de pontos só pra decidir se mostra um botão.
+      replayId: (r.replay && Array.isArray(r.replay.points) && r.replay.points.length && r.matchId) ? r.matchId : null
     };
   }
 
@@ -348,6 +356,13 @@
         _teamRow(teamA, it.scoreA != null ? it.scoreA : '', aColor) +
         _teamRow(teamB, it.scoreB != null ? it.scoreB : '', bColor) +
         (meta.length ? '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-top:4px;overflow-wrap:anywhere;">' + meta.join(' · ') + '</div>' : '') +
+        // v1.8.79: o botão só existe quando há ponto a ponto gravado — ou seja, só em
+        // partida jogada AO VIVO, e a partir da versão que passou a gravar. Botão que
+        // aparece e não tem o que reproduzir é pior que botão nenhum.
+        (it.replayId
+          ? '<button class="btn btn-sm" onclick="window._openMatchReplayById(\'' + _esc(String(it.replayId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')" ' +
+            'style="margin-top:8px;align-self:flex-start;background:var(--btn-secondary-bg);color:var(--btn-secondary-text);border:1px solid var(--border-color);">▶️ Replay</button>'
+          : '') +
       '</div>';
   }
 

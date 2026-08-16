@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.83';
+window.SCOREPLACE_VERSION = '1.8.93';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1058,6 +1058,53 @@ window._ensureBootOverlay();
 // 'android' ANTES deste script carregar. Seam pra gates específicos de plataforma
 // (ex: esconder a venda do Pro no iOS → modelo "reader app" web-only / IAP).
 window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
+
+// ── AS FICHAS NAS LOJAS — FONTE ÚNICA (v1.8.91) ─────────────────────────────
+// Quem consome: o selo "Baixe o app" do convite IMPRESSO (tournaments-sharing) e o
+// botão "Baixar na App Store / Google Play" da tela inicial (_storeButtonHtml).
+// Eram duas listas; duas listas de "qual loja já está no ar" divergem na primeira
+// mudança — e a mudança aqui é justamente a que vai acontecer (a Play sai do teste
+// fechado). Ligando `on: true` num lugar só, o selo e o botão aparecem juntos.
+//
+// ⚠️ `on` É MEDIÇÃO, NÃO PALPITE. Conferido em 16/ago/2026: a ficha da Apple responde
+// HTTP 200 (pública) e `play.google.com/store/apps/details?id=app.scoreplace` responde
+// **404** — o app segue em teste fechado (o Play exige mais testadores pra liberar
+// produção). Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
+// impresso não tem correção depois. Antes de virar `play.on` pra true, conferir o 200.
+// ── PARTIDA EM RAJADA NÃO É JOGO (v1.8.93) ──────────────────────────────────
+// Ordem do dono: "pode descatar todos as partidas casuais em rajada e desconsidere
+// estatisticas de qualquer jogo em rajada" · "mesmo as que nao forem minhas" · e o
+// motivo, que é o que faz disto uma REGRA e não uma limpeza: "assim evitamos
+// manipulacoes nos dados".
+//
+// Um 6-0 lançado em 12 segundos é teste do sistema (ou inflação de aproveitamento) —
+// nunca uma partida disputada. Contá-lo suja vitórias, aproveitamento, sequência,
+// ranking e a ficha do atleta.
+//
+// ⚠️ POR QUE A REGRA MORA NA LEITURA, e não em cada contador: são pelo menos quatro
+// consumidores do histórico (pill da tela inicial, ficha do jogador, tela de histórico,
+// Análise de Inscritos). Regra copiada em quatro lugares diverge no primeiro ajuste —
+// foi exatamente assim que "encerrado na lista" e o contador do sino sobreviveram. Aqui
+// `loadUserMatchHistory` filtra na origem e todo consumidor herda de graça.
+//
+// O CRITÉRIO é a duração REAL de jogo (`durationMs`, cronometrado ponto a ponto), não
+// o tempo da sala. Registro SEM duração (dado legado) NÃO é descartado: ausência de
+// medida não é prova de rajada, e descartar por omissão apagaria histórico verdadeiro.
+// A única exceção é o 0-0, que não é jogo realizado por definição — não teve ponto.
+window.SP_RAJADA_MS = 2 * 60 * 1000;   // 2 minutos, régua dada pelo dono
+window._isPartidaEmRajada = function (rec) {
+  if (!rec) return false;
+  var sc = String(rec.scoreSummary == null ? '' : rec.scoreSummary).replace(/\s/g, '');
+  if (sc === '0-0') return true;                 // sem nenhum ponto: não houve jogo
+  var ms = Number(rec.durationMs);
+  if (!isFinite(ms) || ms <= 0) return false;    // sem medida → mantém (ver acima)
+  return ms < window.SP_RAJADA_MS;
+};
+
+window.SP_LOJAS = {
+  apple: { on: true,  nome: 'App Store',   glifo: '',  url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
+  play:  { on: false, nome: 'Google Play', glifo: '▶', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
+};
 
 // Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.
 // Aceita e-mail (minúsculo) OU uid.
@@ -7538,6 +7585,34 @@ window.AppStore = {
   // do dual-write/seed: o doc do torneio é autoritativo, uma falha aqui é inofensiva
   // — ex.: torneio legado sem roster semeado → participante toma permission-denied
   // no subdoc; não pode virar toast "Erro ao salvar" já que o save real deu certo).
+  // v1.8.79 (REPLAY PÚBLICO): grava o ponto a ponto no doc DO JOGO
+  // (`tournaments/{tid}/results/{matchId}`), que é o único lugar que QUALQUER pessoa
+  // pode ler — as regras liberam leitura pra todo autenticado, e pro público quando o
+  // torneio é público. O `matchHistory` NÃO serve aqui: ele é do jogador e obedece ao
+  // `statsVisibility`, então o replay sumiria pra quem só está assistindo.
+  //
+  // ⚠️ CORRIDA CONHECIDA, e é por isso que existe retentativa: `allow create` no subdoc
+  // é SÓ de admin. Quando quem termina a partida é PARTICIPANTE e o doc ainda não
+  // existe, a 1ª tentativa falha — e é a CF `syncMatchRosters` que cria o doc ao ver a
+  // escrita do resultado no torneio. As tentativas seguintes dão tempo pra ela rodar.
+  // Organizador acerta de primeira (ele pode criar). Best-effort SEMPRE: o replay é um
+  // extra, e falhar aqui não pode atrapalhar o placar, que já foi gravado.
+  async saveMatchReplay(tournamentId, matchId, replay) {
+    if (!tournamentId || matchId == null || matchId === '' || !replay) return false;
+    var esperas = [0, 2500, 7000, 16000];
+    for (var i = 0; i < esperas.length; i++) {
+      if (esperas[i]) await new Promise(function (r) { setTimeout(r, esperas[i]); });
+      try {
+        var ok = await this.commitMatchResult(tournamentId, String(matchId), function (res) {
+          res.replay = replay;
+        }, { silent: true });
+        if (ok) return true;
+      } catch (e) { /* segue pra próxima tentativa */ }
+    }
+    if (window._warn) window._warn('[replay] não consegui gravar o ponto a ponto do jogo ' + matchId);
+    return false;
+  },
+
   async commitMatchResult(tournamentId, matchId, mutatorFn, opts) {
     var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
     if (t) {

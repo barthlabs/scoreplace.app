@@ -1007,6 +1007,30 @@
     var p2 = window._formatSetForPlayer(set, 2, opts);
     return p1 + '-' + p2;
   };
+  // v1.8.79: "quantos pontos viram 0/15/30/40/AD" saiu de dentro do overlay do
+  // placar ao vivo e virou função PURA aqui, porque o REPLAY precisa da MESMA
+  // conversão pra redesenhar uma partida gravada. Duas implementações da mesma
+  // regra divergem na primeira mudança (e aí o replay mostraria um placar que
+  // nunca existiu) — por isso o overlay passou a delegar pra cá em vez de manter
+  // a cópia dele. `cfg` traz o que antes vinha do closure: countingType,
+  // isFixedSet e deuceRule.
+  window._formatGamePoint = function(pts, oppPts, isTb, cfg) {
+    cfg = cfg || {};
+    if (isTb) return String(pts);
+    if (cfg.countingType === 'tennis' && !cfg.isFixedSet) {
+      if (pts >= 3 && oppPts >= 3) {
+        if (cfg.deuceRule) {
+          if (pts === oppPts) return '40';
+          if (pts > oppPts) return 'AD';
+          return '40';
+        }
+        return '40'; // sem vantagem: ponto de ouro no 40-40
+      }
+      var map = [0, 15, 30, 40];
+      return String(pts < 4 ? map[pts] : 40);
+    }
+    return String(pts);
+  };
 
   // Expose for manual invocation: window._bracketModelSanityChecks()
   window._bracketModelSanityChecks = _runSanityChecks;

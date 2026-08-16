@@ -6920,9 +6920,22 @@ exports.syncMatchRosters = onDocumentWritten(
       try {
         const ref = resultsCol.doc(id);
         const snap = await ref.get();
-        if (!snap.exists) continue; // não semeado → é a migração que cuida, não backfill aqui
-        if (subdocSignature(snap.data()) === sig) continue; // espelho já bate → idempotente
-        await ref.set(buildMirrorDoc(after, m, tid, nowIso)); // set SEM merge = cópia fiel (trata deletes)
+        // v1.8.79: ANTES aqui havia `if (!snap.exists) continue` — "não semeado, é a
+        // migração que cuida". MEDIDO em produção (16/ago) e isso não se sustentava:
+        // Confra tinha 4 docs pra dezenas de jogos, e dois torneios de eliminatórias
+        // tinham ZERO. A causa é que o seed vive no CLIENTE (`seedMatchResultDocs`, em
+        // `_commitInitialDraw`) e o SORTEIO AUTOMÁTICO roda no SERVIDOR — que nunca o
+        // chama. Ou seja: quem dependesse do subdoc existir tinha cobertura aleatória.
+        // Agora o doc é CRIADO aqui quando falta. Este gatilho é o lugar certo: ele vê
+        // TODA escrita no torneio, de QUALQUER cliente (inclusive o nativo antigo) e de
+        // qualquer caminho de sorteio, e roda como ADMIN — que é justamente quem a regra
+        // deixa criar (`allow create: só admin`). Nenhuma regra precisou mudar.
+        // Só entram jogos cuja assinatura MUDOU, então isto não varre o torneio inteiro
+        // a cada escrita: cria sob demanda, no jogo que mexeu.
+        const existia = snap.exists;
+        if (existia && subdocSignature(snap.data()) === sig) continue; // espelho já bate → idempotente
+        // `anterior` carrega adiante o que o espelho não sabe recalcular (replay).
+        await ref.set(buildMirrorDoc(after, m, tid, nowIso, existia ? snap.data() : null));
         synced++;
       } catch (e) {
         console.error(`[syncMatchRosters] ${tid}/${id}:`, e);

@@ -1212,20 +1212,27 @@ window._buildActivityLog = function(tournamentId) {
         }
     }
 
-    // Sort by date (known dates first, then unknown)
+    // ── v1.8.92: O ÚLTIMO EVENTO EM CIMA ────────────────────────────────────
+    // Ordem do dono: "o historico de atividades deve ser apresentado com o ultimo
+    // evento no topo e os ver eventos anteriores deve ficar lá embaixo."
+    // Era o inverso — cronológico crescente. Num torneio jogando em AGOSTO, o topo
+    // da lista mostrava inscrições de MAIO, e o "Ver 135 eventos anteriores" ficava
+    // ACIMA de tudo: oferecia o passado antes do presente.
+    // Evento sem data continua no FIM (não dá pra afirmar que é recente).
     events.sort(function(a, b) {
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
         if (!b.date) return -1;
-        return new Date(a.date) - new Date(b.date);
+        return new Date(b.date) - new Date(a.date);   // desc: mais recente primeiro
     });
 
     if (events.length === 0) return;
 
-    // Limit display to latest 20 by default, expandable
+    // Com a ordem invertida, os visíveis são os PRIMEIROS (mais recentes) e os
+    // "anteriores" são a cauda — os dois cortes viraram o oposto do que eram.
     var maxShow = 15;
     var hasMore = events.length > maxShow;
-    var displayEvents = hasMore ? events.slice(events.length - maxShow) : events;
+    var displayEvents = hasMore ? events.slice(0, maxShow) : events;
 
     var timelineHtml = displayEvents.map(function(ev) {
         var dateStr = '';
@@ -1246,7 +1253,8 @@ window._buildActivityLog = function(tournamentId) {
 
     var allEventsHtml = '';
     if (hasMore) {
-        allEventsHtml = events.slice(0, events.length - maxShow).map(function(ev) {
+        // a cauda: tudo que ficou depois dos `maxShow` mais recentes
+        allEventsHtml = events.slice(maxShow).map(function(ev) {
             var dateStr = '';
             if (ev.date) {
                 try { var d = new Date(ev.date); dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch(e) {}
@@ -1265,8 +1273,10 @@ window._buildActivityLog = function(tournamentId) {
           '📜 Histórico de Atividades <span style="font-size:0.75rem;font-weight:400;color:var(--text-muted,#94a3b8);">(' + events.length + ' eventos)</span>' +
         '</summary>' +
         '<div style="padding:8px 0;">' +
-          (hasMore ? '<details style="margin-bottom:8px;"><summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted,#64748b);padding:4px 0;">Ver ' + (events.length - maxShow) + ' eventos anteriores...</summary><div>' + allEventsHtml + '</div></details>' : '') +
+          // v1.8.92: os recentes primeiro; o "Ver anteriores" foi pro FIM (era o
+          // primeiro elemento). Passado se busca depois de ver o presente.
           timelineHtml +
+          (hasMore ? '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted,#64748b);padding:4px 0;">Ver ' + (events.length - maxShow) + ' eventos anteriores...</summary><div>' + allEventsHtml + '</div></details>' : '') +
         '</div>' +
       '</details>' +
     '</div>';

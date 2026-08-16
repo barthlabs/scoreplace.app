@@ -865,10 +865,47 @@ button[style*="linear-gradient"]:not(.btn):active {
 [data-vphoto-on] .weather-box span {
   text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
-/* os tons de apoio (#cbd5e1 / #94a3b8) são calibrados pra fundo liso */
-[data-vphoto-on] .weather-box span[style*="#cbd5e1"],
-[data-vphoto-on] .weather-box span[style*="#94a3b8"] {
+/* os tons de apoio (#cbd5e1 / #94a3b8) são calibrados pra fundo liso.
+   ⚠️ v1.8.86: o seletor era `span[style*=…]` e por isso PEGAVA SÓ METADE — no
+   weather.js a descrição ("Nuvens Dispersas", linha 196), a linha de umidade/vento
+   (197) e o título "PRÓXIMOS DIAS" (220) são <div>, não <span>. Ficavam escuros
+   sobre a tarja escura: é o que sobrou ilegível no print depois da 1.8.85.
+   Sem restrição de TAG agora — o que define a regra é estar dentro da caixa. */
+[data-vphoto-on] .weather-box [style*="#cbd5e1"],
+[data-vphoto-on] .weather-box [style*="#94a3b8"],
+[data-vphoto-on] .weather-box [style*="rgb(203, 213, 225)"],
+[data-vphoto-on] .weather-box [style*="rgb(148, 163, 184)"] {
   color: #e2e8f0 !important;
+}
+
+/* ── v1.8.85: a caixa da previsão sobre foto é SUPERFÍCIE INVERTIDA ────────────
+   Com a foto ligada ela vira tarja ESCURA nos dois temas (regra acima). No tema
+   CLARO isso inverte a polaridade OUTRA VEZ: lá dentro o texto tem que ser CLARO.
+   Duas coisas quebravam aqui, e só uma era nova:
+   (a) `var(--text-bright)` vale #1c1c1e no tema claro → preto sobre a tarja. Isso
+       JÁ estava quebrado (é o "21°" do print). Resolvido redefinindo os tokens
+       DENTRO da caixa: tudo que usa token passa a ler claro, sem tocar em cada uso.
+   (b) `#60a5fa` (PREVISÃO DO TEMPO / AGORA / HOJE) e `#a5b4fc` eram escurecidos
+       pelo remap de contraste do tema claro (css/style.css) — REGRESSÃO introduzida
+       por ele. O remap se desliga aqui, como já se desliga na tarja do _photoReadBox.
+   ⚠️ O remap casa o fundo INLINE; aqui o escuro vem de CLASSE, por isso ele não
+   alcançava e precisou desta regra própria. Superfície invertida nova = entra aqui. */
+[data-theme="light"] [data-vphoto-on] .weather-box {
+  --text-bright: #f8fafc;
+  --text-main: #e2e8f0;
+  --text-muted: #cbd5e1;
+}
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:#60a5fa"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: #60a5fa"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:rgb(96, 165, 250)"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: rgb(96, 165, 250)"] {
+  color: #93c5fd !important;
+}
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:#a5b4fc"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: #a5b4fc"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:rgb(165, 180, 252)"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: rgb(165, 180, 252)"] {
+  color: #c7d2fe !important;
 }
 
 /* --- Info Pill (badges de status: Começa hoje, Progresso, Inscritos, etc.) --- */
@@ -932,6 +969,16 @@ button[style*="linear-gradient"]:not(.btn):active {
   color: #f1f5f9;
   border: 1px solid rgba(255,255,255,0.12);
 }
+/* v1.8.78: acento ÂMBAR dentro de uma tarja (.stat-box) — o caso da "ESPERA".
+   Ele existe como CLASSE, e não como `style="color:#fbbf24"`, POR DUAS RAZÕES:
+   (1) a tarja é escura nos DOIS temas (regra acima), então o âmbar claro é a cor
+       certa nos dois — não há o que inverter aqui;
+   (2) o remap de contraste do tema claro (css/style.css) age só sobre `style`
+       INLINE. Vindo de classe, este âmbar fica naturalmente FORA do remap — que é
+       exatamente o desejado, senão ele escureceria o texto e produziria escuro
+       sobre escuro. É este o caminho canônico pra texto sobre superfície invertida:
+       cor por CLASSE, nunca hex pálido inline. */
+.stat-accent { color: #fbbf24; }
 /* v2.6.32: dentro da config-box EXPANDIDA, os rótulos (strong) seguiam
    var(--text-bright) do TEMA — mas o FUNDO do box é invertido (claro no tema
    escuro, escuro no tema claro, tarja escura sobre foto). Isso dava texto claro
@@ -1562,6 +1609,17 @@ input[type="number"] {
   color: var(--info-color);
   border: 1px solid rgba(88, 166, 255, 0.4);
 }
+
+/* v1.8.78: no tema CLARO os 3 badges falhavam o AA. O fundo é uma tinta de 15%
+   que no escuro fica ESCURA (e o texto vivo lê bem) e no claro fica quase branca
+   — aí `--success-color` (#34c759), `--secondary-color` (#af52de) e `--info-color`
+   (#007aff) viram texto claro sobre fundo claro. MEDIDO sobre o fundo composto
+   real: success 1.88:1 (praticamente invisível), warning 3.64:1, info 3.53:1.
+   Só a COR DO TEXTO muda, e só no claro — fundo, borda e o tema escuro ficam
+   exatamente como estão. Novos valores: 6.05 / 6.15 / 5.89. */
+[data-theme="light"] .badge-success { color: #166534; }
+[data-theme="light"] .badge-warning { color: #7e22ce; }
+[data-theme="light"] .badge-info    { color: #1d4ed8; }
 
 /* Mobile badge styling */
 @media (max-width: 767px) {

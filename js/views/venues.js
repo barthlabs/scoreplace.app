@@ -426,10 +426,10 @@
       _venueLogoThumb(v, 40) +
       '<div style="flex:1;min-width:0;">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
-          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;line-height:1.2;overflow-wrap:break-word;word-break:normal;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</span>' +
+          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;line-height:1.2;overflow-wrap:anywhere;word-break:normal;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</span>' +
           officialBadge +
         '</div>' +
-        (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow-wrap:break-word;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
+        (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow-wrap:anywhere;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
         (sportsHtml ? '<div style="display:flex;flex-wrap:wrap;gap:3px;">' + sportsHtml + '</div>' : '') +
       '</div>' +
       (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
@@ -476,7 +476,7 @@
       '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;flex-direction:column;gap:7px;">' +
         '<div style="display:flex;align-items:flex-start;gap:8px;">' +
           '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
-            '<span style="font-weight:700;color:var(--text-bright);font-size:0.95rem;line-height:1.2;overflow-wrap:break-word;word-break:normal;">' + _safe(v.name) + '</span>' +
+            '<span style="font-weight:700;color:var(--text-bright);font-size:0.95rem;line-height:1.2;overflow-wrap:anywhere;word-break:normal;">' + _safe(v.name) + '</span>' +
             officialBadge +
           '</div>' +
           (distText ? '<span style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);margin-top:2px;">' + _safe(distText) + '</span>' : '') +
