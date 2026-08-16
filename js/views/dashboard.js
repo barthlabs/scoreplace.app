@@ -1053,11 +1053,11 @@ function renderDashboard(container) {
               // "Desocultar". isOrg (do card) só pega org por email — reforço aqui
               // com creatorUid + co-hosts (org por uid/telefone não tem email).
               var _hid = (typeof window._isHidden === 'function') && window._isHidden(t.id);
-              if (_hid) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Mostrar de novo na lista" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.9);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Desocultar</button></div>';
+              if (_hid) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Mostrar de novo na lista" style="background:var(--stat-box-bg);border:1px solid var(--border-color);color:var(--text-main);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;">👁 Desocultar</button></div>';
               var _cuX = window.AppStore && window.AppStore.currentUser;
               var _amOrgX = isOrg || (_cuX && t.creatorUid && _cuX.uid === t.creatorUid) ||
                 (_cuX && Array.isArray(t.coHosts) && t.coHosts.some(function(ch){ return ch && ch.status === 'active' && ch.uid && ch.uid === _cuX.uid; }));
-              if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid rgba(255,255,255,0.16);color:rgba(255,255,255,0.5);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'rgba(255,255,255,0.85)\'" onmouseout="this.style.color=\'rgba(255,255,255,0.5)\'">🙈 Ocultar</button></div>';
+              if (!isParticipating && !_amOrgX) return '<div style="margin-top:12px;text-align:center;"><button onclick="window._toggleHidden(\'' + t.id + '\', event)" title="Ocultar este torneio da sua lista" style="background:transparent;border:1px solid var(--border-color);color:var(--text-muted);border-radius:8px;padding:6px 14px;font-size:0.74rem;font-weight:700;cursor:pointer;" onmouseover="this.style.color=\'var(--text-bright)\'" onmouseout="this.style.color=\'var(--text-muted)\'">🙈 Ocultar</button></div>';
               return '';
             })()}
 

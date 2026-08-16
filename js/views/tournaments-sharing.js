@@ -404,7 +404,7 @@ window._showQRCode = function(tournamentId) {
     overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
     var modal = document.createElement('div');
-    modal.style.cssText = 'background:var(--card-bg,#1e2235);border-radius:20px;padding:2rem;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
+    modal.style.cssText = 'background:var(--bg-card,#1e2235);border-radius:20px;padding:2rem;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
 
     modal.innerHTML = '' +
       '<button onclick="document.getElementById(\'qr-modal-overlay\').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:1.8rem;cursor:pointer;line-height:1;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;">&times;</button>' +
@@ -628,7 +628,7 @@ window._openInvitePrint = function(opts) {
     '</div>';
 
   overlay.innerHTML =
-    '<div style="background:var(--card-bg,#1e2235);border-radius:18px;padding:18px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92%;">' +
+    '<div style="background:var(--bg-card,#1e2235);border-radius:18px;padding:18px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;display:flex;flex-direction:column;max-height:92%;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:var(--text-bright,#fff);">🖨️ Imprimir convite</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);">ajuste e veja na hora</div>' +
@@ -860,6 +860,34 @@ function _buildFlyerPrintHtml(o) {
   // fixos) — aumentar o logo/nome do torneio NÃO o empurra. O conteúdo do
   // torneio (texto + QR) é centralizado no espaço abaixo do logo. Em paisagem
   // esse conteúdo vira 2 colunas (texto à esquerda, QR à direita).
+  // ── v1.8.88: "baixe nas lojas" no convite IMPRESSO ──────────────────────────
+  // Pedido do dono: "no convite do app impresso (e porque nao dos torneios tambem)
+  // vamos colocar aquele anuncio de que esta nas lojas apple store e google play."
+  // Fica aqui, no flyer COMPARTILHADO, então vale de uma vez pro convite do app e
+  // pro do torneio — que era exatamente o "por que não dos torneios também".
+  //
+  // ⚠️ A PLAY ESTÁ DESLIGADA, E ISSO É MEDIÇÃO, NÃO ESQUECIMENTO. Conferido em
+  // 16/ago/2026: a ficha da Apple responde HTTP 200 (pública), e
+  // play.google.com/store/apps/details?id=app.scoreplace responde **404** — o app
+  // segue em teste fechado (o Play exige mais testadores antes de liberar produção).
+  // Papel impresso não se corrige depois: anunciar a Play mandaria quem lê para uma
+  // página inexistente. No dia em que sair, é UMA linha — `play: true` abaixo — e o
+  // selo aparece nos dois convites de uma vez.
+  var _LOJAS = {
+    apple: { on: true,  nome: 'App Store',   glifo: '' },
+    play:  { on: false, nome: 'Google Play', glifo: '▶' }
+  };
+  function _flyerLojasHtml() {
+    var itens = [];
+    if (_LOJAS.apple.on) itens.push(_LOJAS.apple.glifo + ' ' + _LOJAS.apple.nome);
+    if (_LOJAS.play.on)  itens.push(_LOJAS.play.glifo + ' ' + _LOJAS.play.nome);
+    if (!itens.length) return '';
+    return '<div class="lojas">' +
+      '<span class="lojas-cta">Baixe o app</span>' +
+      itens.map(function (i) { return '<span class="loja">' + esc(i) + '</span>'; }).join('') +
+      '</div>';
+  }
+
   var inner;
   if (qrOnly) {
     inner =
@@ -873,6 +901,7 @@ function _buildFlyerPrintHtml(o) {
         '<div class="col-qr">' +
           '<div class="qr-wrap"><img class="qr" src="' + esc(qrUrl) + '" alt="QR Code" /></div>' +
           '<div class="caption">' + esc(caption) + '</div>' +
+          _flyerLojasHtml() +
           '<div class="brand">scoreplace.app · Jogue em outro nível</div>' +
         '</div>' +
       '</div>';
@@ -937,6 +966,15 @@ function _buildFlyerPrintHtml(o) {
       '.app-line0 { font-size:' + cpx(15, 5, 30) + 'px; font-weight:800; color:#0f172a; }' +
       '.app-line1 { font-size:' + cpx(12, 3.6, 22) + 'px; font-weight:700; color:#4f46e5; }' +
       '.app-line2 { font-size:' + cpx(9, 2.4, 15) + 'px; font-weight:500; color:#475569; }' +
+      // v1.8.88: selo das lojas. Cores CRAVADAS (não tokens) de propósito — isto é
+      // documento IMPRESSO em papel branco, não tela: não tem tema, e herdar token
+      // faria o selo sair invisível quando o app estivesse no tema claro.
+      '.lojas { margin-top:' + cpx(3, 0.8, 6) + 'px; display:flex; align-items:center; justify-content:center;' +
+        ' gap:' + cpx(3, 0.9, 7) + 'px; flex-wrap:wrap; }' +
+      '.lojas-cta { font-size:' + cpx(7, 1.9, 11) + 'px; font-weight:700; color:#475569; }' +
+      '.loja { font-size:' + cpx(7, 1.9, 11) + 'px; font-weight:700; color:#1e293b;' +
+        ' border:1px solid #cbd5e1; border-radius:' + cpx(3, 0.8, 6) + 'px;' +
+        ' padding:' + cpx(2, 0.5, 4) + 'px ' + cpx(4, 1.1, 8) + 'px; white-space:nowrap; }' +
     '</style>' +
     // size-style: separado pra ser atualizado IN-PLACE pelos sliders sem
     // recarregar o iframe (e portanto sem o QR piscar/desaparecer).
