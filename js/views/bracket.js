@@ -249,14 +249,16 @@ function _applyMyMatchesFilter() {
       setTimeout(_tick, 220);
     };
     _reafirmar();
-    setTimeout(function () {
-      _goMine('auto');
-      // ⚠️ A CHAVE NÃO É APAGADA AQUI. O laço `_reafirmar` pode rodar até ~3s, e ele
-      // RELÊ a chave a cada volta; apagar agora o faria cair na regra antiga (o próximo
-      // jogo do usuário) e rolar pra OUTRO grupo no meio da correção. Quem apaga é o
-      // próprio laço, quando termina.
-      window._suppressSoftRefresh = false;
-    }, 1400);
+    // ⚠️ v1.9.1: AQUI NÃO SE ROLA MAIS. Havia DOIS mecanismos disputando o mesmo
+    // scroll: o laço `_reafirmar` (que corrige até o alvo estar no lugar) e este passe
+    // fixo de 1400ms. Quando o laço terminava cedo — alvo já certo em 3 leituras — ele
+    // consumia a chave; o passe de 1400ms então rodava SEM a chave, caía na regra antiga
+    // e **desfazia a posição correta**. Relato do dono: "foi para o lugar certo e dai
+    // pulou pra ca".
+    // Quem posiciona é UM só: o laço. Aqui sobra apenas soltar a supressão do
+    // soft-refresh, que é o outro papel deste timeout — e ele passa a esperar o laço
+    // terminar, senão um re-render no meio da correção mataria o alvo.
+    setTimeout(function () { window._suppressSoftRefresh = false; }, 3400);
   }
 }
 

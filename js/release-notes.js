@@ -45,6 +45,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📍 A tela para de pular depois de chegar no grupo:</b> ao abrir um grupo pelo botão, a tela chegava no lugar certo e <b>saltava</b> logo em seguida. Havia dois mecanismos disputando a rolagem; agora só um posiciona.</li>' +
         '<li><b>🎯 “Ir para o torneio” acerta o grupo já na primeira vez:</b> na primeira abertura a tela parava <b>abaixo</b> do grupo (o cabeçalho, com a classificação, ficava escondido) e só acertava na segunda. Era a barra de busca fixa, que ainda não existia no instante da rolagem — o recuo do topo saía menor do que o necessário. Agora a rolagem se corrige sozinha até o grupo ficar exatamente no lugar.</li>' +
       '</ul>' +
     '</div>' +

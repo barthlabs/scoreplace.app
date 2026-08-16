@@ -397,5 +397,30 @@ if (codPools && codCont) {
     'o timeout de 1400ms NÃO apaga mais a chave (apagar ali derrubaria a correção em curso)');
 })();
 
+
+// ── UM ÚNICO MECANISMO POSICIONA A ROLAGEM (v1.9.1) ────────────────────────
+// Relato do dono: "foi para o lugar certo e dai pulou pra ca".
+// A 1.9.0 deixou DOIS mecanismos escrevendo o mesmo scroll: o laço `_reafirmar` e um
+// passe fixo em 1400ms. Quando o laço terminava cedo (alvo já certo em 3 leituras) ele
+// CONSUMIA a chave; o passe de 1400ms então rodava SEM a chave, caía na regra antiga
+// (próximo jogo do usuário) e desfazia a posição correta.
+// A regra: quem posiciona é UM só. O passe fixo sobrou apenas pra soltar a supressão
+// do soft-refresh — e agora espera o laço terminar, senão um re-render no meio da
+// correção mataria o alvo.
+(function () {
+  const br = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+  const chamadas = (br.match(/_goMine\(/g) || []).length;
+  ok(chamadas === 2,
+    'só DUAS chamadas de _goMine: a inicial (smooth) e a do laço (corretiva). Achadas: ' + chamadas);
+  ok(!/setTimeout\(function \(\) \{\s*\n\s*_goMine\('auto'\);/.test(br),
+    'o passe fixo de 1400ms NÃO rola mais — era ele que desfazia a posição certa');
+  ok(/setTimeout\(function \(\) \{ window\._suppressSoftRefresh = false; \}, 3400\);/.test(br),
+    'a supressão do soft-refresh só é solta DEPOIS do laço (3400ms > teto do laço)');
+  // o teto do laço tem que caber dentro da supressão, senão um re-render entra no meio
+  const mTeto = br.match(/_voltas < (\d+)/);
+  ok(!!mTeto && (220 + Number(mTeto[1]) * 100) <= 3400,
+    'o teto do laço cabe dentro da janela de supressão (laço ~' + (mTeto ? 220 + Number(mTeto[1]) * 100 : '?') + 'ms < 3400ms)');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
