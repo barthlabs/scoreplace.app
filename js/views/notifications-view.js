@@ -26,7 +26,44 @@ function renderNotifications(container) {
       '</div>' +
     '</div>';
 
-  window.FirestoreDB.getNotifications(uid, 50).then(function(notifs) {
+  // ── v1.8.92: as 50 mais recentes + TODAS as não lidas ───────────────────────
+  // Relato do dono: "nao há nenhuma notificacao nao lida. nao tem que ter o ponto
+  // vermelho no sino indicando haver nao lidas." O sino estava CERTO — medido na conta
+  // dele: 466 notificações, 60 não lidas, todas de 11–15/jul. A tela pedia só as 50 mais
+  // recentes (agosto, todas lidas), então as 60 não tinham como aparecer: o ponto
+  // apontava pra algo inalcançável, sem gesto nenhum que resolvesse.
+  //
+  // A busca das não lidas é SEPARADA de propósito, e não um `limit` maior: aumentar o
+  // limite só empurra o problema (com 500 notificações e uma não lida na 501ª, volta).
+  // O que a tela precisa garantir é o INVARIANTE — nenhuma não lida fica fora —, e isso
+  // se consegue perguntando por elas, não por mais páginas.
+  // Quantas "recentes" a tela pede. Cresce em blocos pelo "Carregar mais" do fim, e
+  // VOLTA ao padrão quando a tela é aberta de novo — quem rolou muito numa visita não
+  // deve pagar por isso (em leituras) em todas as seguintes. O sinalizador distingue
+  // "re-render por causa do botão" de "entrei na tela".
+  window._NOTIF_PAGE = 50;
+  if (window._notifKeepLimit) { window._notifKeepLimit = false; }
+  else { window._notifLimit = window._NOTIF_PAGE; }
+  window._notifLoadMore = function () {
+    window._notifLimit = (window._notifLimit || window._NOTIF_PAGE) + window._NOTIF_PAGE;
+    window._notifKeepLimit = true;
+    if (typeof window.renderNotifications === 'function') window.renderNotifications(container);
+  };
+
+  Promise.all([
+    window.FirestoreDB.getNotifications(uid, window._notifLimit),
+    (typeof window.FirestoreDB.getUnreadNotifications === 'function')
+      ? window.FirestoreDB.getUnreadNotifications(uid)
+      : Promise.resolve([])
+  ]).then(function(res) {
+    var recentes = res[0] || [];
+    var naoLidas = res[1] || [];
+    // Funde sem duplicar: a não lida que JÁ está entre as recentes tem que aparecer uma
+    // vez só. A entrada das recentes vence (é a mesma, e mantém a ordem já resolvida).
+    var vistos = {};
+    var notifs = [];
+    recentes.forEach(function (n) { if (n && n._id && !vistos[n._id]) { vistos[n._id] = 1; notifs.push(n); } });
+    naoLidas.forEach(function (n) { if (n && n._id && !vistos[n._id]) { vistos[n._id] = 1; notifs.push(n); } });
     var listDiv = document.getElementById('notif-list');
     if (!listDiv) return;
 
@@ -314,6 +351,19 @@ function renderNotifications(container) {
     if (_read.length > 0) {
       html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);opacity:0.7;margin:0 0 8px 2px;">' + (_t('notif.read') || 'Lidas') + ' · ' + _read.length + '</div>';
       html += '<div style="display:flex;flex-direction:column;gap:8px;">' + _read.map(_renderNotifCard).join('') + '</div>';
+    }
+
+    // ── v1.8.92: "Carregar mais" no fim ─────────────────────────────────────
+    // Pedido do dono: "depois das 50 apresentadas, pode haver um carregar mais la em
+    // baixo". O botão só aparece quando a busca das recentes VOLTOU CHEIA — ou seja,
+    // quando é plausível existir mais. Voltando menos que o pedido, chegamos ao fim e
+    // um botão ali só decepcionaria.
+    // ⚠️ Conta as RECENTES, não a lista fundida: a fusão traz também as não lidas
+    // antigas, que inflariam o total e fariam o botão aparecer no fim da coleção.
+    if (recentes.length >= window._NOTIF_PAGE) {
+      html += '<div style="text-align:center;padding:1.25rem 0 0.5rem;">' +
+        '<button onclick="window._notifLoadMore()" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' +
+        (_t('dashboard.loadMore', { count: '' }) || 'Carregar mais') + '</button></div>';
     }
 
     listDiv.innerHTML = html;

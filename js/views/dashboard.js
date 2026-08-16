@@ -2723,6 +2723,41 @@ function renderDashboard(container) {
     }
   }
 
+  // ── v1.8.92: ENCERRADO NUNCA DIVIDE LISTA COM EM ANDAMENTO ──────────────────
+  // Ordem do dono: "os encerrados nao devem aparecer com os em andamento (mesmo na
+  // lista)." Ele estava vendo, logo abaixo da faixa "Em andamento (1)", três cards
+  // marcados "Encerrado" na lista principal.
+  //
+  // A CAUSA É DE DESENHO, não um `if` errado: essa extração existia em TRÊS lugares,
+  // cada um com um gate próprio — o ramo "todos" (gated em `encerradosCount > 0` e em
+  // não haver filtro secundário), o ramo de "organizados/participando" (outro gate), e
+  // nenhum para o resto. Basta um dos gates não fechar e o encerrado volta pra lista.
+  // É a mesma classe do contador do sino: consertar um lugar e deixar o irmão.
+  //
+  // Aqui vira UMA regra só, aplicada ANTES de qualquer ramo de render: quem está
+  // encerrado sai de `filtered` e vai para a seção própria. A única exceção é o filtro
+  // "encerrados" — ali a lista É de encerrados, e extraí-los esvaziaria a tela.
+  const _isRecentlyFinished = function (t) {
+    // Encerrado há menos de 12h continua na lista principal de propósito (v2.1.48):
+    // é a janela em que todo mundo quer ver o resultado/pódio fresco. Sem `finishedAt`
+    // (dado legado) trata como antigo — na dúvida, vai pra seção.
+    if (!t || t.status !== 'finished') return false;
+    var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
+    if (!fa || isNaN(fa)) return false;
+    return (Date.now() - fa) < 12 * 60 * 60 * 1000;
+  };
+  let _encerradosExtraidos = [];
+  if (curFilter !== 'encerrados') {
+    _encerradosExtraidos = filtered.filter(function (t) {
+      return t && t.status === 'finished' && !_isRecentlyFinished(t);
+    });
+    if (_encerradosExtraidos.length) {
+      var _encSet = new Set(_encerradosExtraidos.map(function (t) { return String(t.id); }));
+      filtered = filtered.filter(function (t) { return !_encSet.has(String(t.id)); });
+      _encerradosExtraidos.sort(sortByRecency); // mais recente primeiro
+    }
+  }
+
   // Pagination — show N items initially, with "load more" button
   const PAGE_SIZE = 12;
   const pageNum = window._dashPage || 1;
@@ -2734,28 +2769,12 @@ function renderDashboard(container) {
   // do runningBottomHtml ("Em andamento" que não é desta semana) — encerrado só fica na frente
   // dos OCULTADOS (pedido do dono). Assim o de casais (em andamento) vem ANTES dos encerrados.
   let finishedSectionHtml = '';
-  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0) {
-    // v2.1.12: torneio encerrado só vai pra seção "Encerrados" depois de 24h.
-    // v2.1.48: nas primeiras 12h após encerrar, continua na lista principal (pra
-    // todo mundo ver o resultado/pódio fresquinho); depois vai pra "Encerrados".
-    // finishedAt é setado em todos os caminhos de encerramento; se faltar
-    // (legado), trata como antigo.
-    const _isRecentlyFinished = function(t) {
-      if (!t || t.status !== 'finished') return false;
-      var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
-      if (!fa || isNaN(fa)) return false;
-      return (Date.now() - fa) < 12 * 60 * 60 * 1000;
-    };
-    const activeList = filtered.filter(t => t.status !== 'finished' || _isRecentlyFinished(t));
-    const finishedList = filtered.filter(t => t.status === 'finished' && !_isRecentlyFinished(t));
-    finishedList.sort(sortByRecency); // mais recente primeiro (myFinished/otherFinished herdam)
-    const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
-    filteredHtml = visibleActive.length > 0
-      ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml || finishedList.length > 0) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
-    if (activeList.length > visibleActive.length) {
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
-    }
+  // v1.8.92: a seção de encerrados é montada UMA vez, para QUALQUER filtro (menos o
+  // próprio "encerrados", onde não há extração). Antes ela só existia no ramo "todos",
+  // e em "organizados"/"participando" havia uma segunda montagem, parecida mas separada
+  // — duas versões do mesmo bloco que divergem na primeira mudança.
+  (function () {
+    const finishedList = _encerradosExtraidos;
     if (finishedList.length > 0) {
       // Separate: user's finished tournaments first, then others
       var _cu = window.AppStore.currentUser;
@@ -2781,6 +2800,18 @@ function renderDashboard(container) {
       }
       finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
     }
+  })();
+
+  if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
+    // Os encerrados já saíram de `filtered`; aqui é só paginação da lista ativa.
+    const activeList = filtered;
+    const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
+    filteredHtml = visibleActive.length > 0
+      ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
+      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml || _encerradosExtraidos.length > 0) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+    if (activeList.length > visibleActive.length) {
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
+    }
   } else {
     // When viewing "encerrados" filter, sort user's tournaments first
     var _sortedFiltered = filtered;
@@ -2797,17 +2828,11 @@ function renderDashboard(container) {
       var _otherEnc = filtered.filter(function(t) { return !_isMine(t); });
       _sortedFiltered = _myEnc.concat(_otherEnc);
     }
-    // v2.2.7: Para filtros "organizados" e "participando", torneios encerrados
-    // vão para seção separada colapsável no final — mesmo padrão do "todos".
-    var _finishedSubSection = '';
-    if ((curFilter === 'organizados' || curFilter === 'participando') && !curSport && !curLocation && !curFormat) {
-      var _activeItems = _sortedFiltered.filter(function(t) { return t.status !== 'finished'; });
-      var _finishedItems = _sortedFiltered.filter(function(t) { return t.status === 'finished'; }).sort(sortByRecency);
-      if (_finishedItems.length > 0) {
-        _sortedFiltered = _activeItems;
-        _finishedSubSection = '<div style="grid-column:1/-1;margin-top:0.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: _finishedItems.length}) + '</summary><div style="margin-top:0.75rem;">' + _renderTGroup(_finishedItems) + '</div></details></div>';
-      }
-    }
+    // v1.8.92: aqui morava uma SEGUNDA extração de encerrados (v2.2.7), só para
+    // "organizados"/"participando", montando uma seção própria e parecida. Ela foi
+    // removida junto com a variável que a carregava: a regra agora é única e roda lá
+    // em cima, para todo filtro. Era a divergência entre as duas que deixava encerrado
+    // na lista quando um dos gates não fechava.
     const visibleItems = _sortedFiltered.slice(0, pageNum * PAGE_SIZE);
     // Empty state: dois níveis de experiência dependendo do contexto.
     // (a) Usuário novo sem nenhum torneio em lugar nenhum (allUnique zero),
@@ -2855,7 +2880,6 @@ function renderDashboard(container) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._loadMoreDiscovery()" class="btn hover-lift" style="background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">🔍 ' + _t('dashboard.discoverMore') + '</button></div>';
     }
     // Seção de encerrados para filtros organizados/participando (v2.2.7)
-    if (_finishedSubSection) filteredHtml += _finishedSubSection;
   }
 
   // v2.8.43: pills de modalidade/local/formato removidas (substituídas pelo filtro
@@ -3182,8 +3206,40 @@ function renderDashboard(container) {
     (async function() {
       try {
         var records = await window.FirestoreDB.loadUserMatchHistory(_myUid, { limit: 500 });
-        if (!Array.isArray(records) || records.length === 0) return;
-        var agg = _aggregateWL(records, _myUid, _myDn);
+        var agg = _aggregateWL(Array.isArray(records) ? records : [], _myUid, _myDn);
+
+        // ── v1.8.92: havendo letzplay, o total é letzplay + scoreplace ──────────
+        // Relato do dono: "aqui o partidas esta divergente. vamos usar o
+        // letzplay+scoreplace quando houver historico letzplay."
+        // O pill contava só o scoreplace (27 partidas · 78%) enquanto a ficha do
+        // atleta, na MESMA sessão, mostrava 40V–50D · 44% rotulado "letzplay +
+        // scoreplace" — duas respostas para a mesma pergunta, na mesma tela.
+        // A soma é a mesma do card (letzplay-profile.js): totais do letzplay mais o
+        // V/D do scoreplace. Sem leitura do letzplay nada muda — segue só o
+        // scoreplace, que é o comportamento anterior; por isso a falha é silenciosa.
+        // ⚠️ O CAMINHO DO CAMPO FOI MEDIDO no doc real, não deduzido: em
+        // `letzplayScans/{uid}` os totais vivem em `scan.totals` ({wins, losses,
+        // matches}). Não existe `profile.totals` no documento — eu tinha escrito esse
+        // caminho de cabeça e ele simplesmente não casaria com nada, somando zero em
+        // silêncio (o pior tipo de erro: nada quebra, o número só continua errado).
+        try {
+          var _db = window.FirestoreDB && (window.FirestoreDB.db ||
+            (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb()));
+          if (_db) {
+            var _snap = await _db.collection('letzplayScans').doc(_myUid).get();
+            if (_snap && _snap.exists) {
+              var _d = _snap.data() || {};
+              var _tot = (_d.scan && _d.scan.totals) || (_d.stats) ||
+                         (_d.profile && _d.profile.totals) || null;
+              if (_tot) {
+                var _lw = parseInt(_tot.wins, 10) || 0;
+                var _ll = parseInt(_tot.losses, 10) || 0;
+                if (_lw + _ll > 0) { agg.w += _lw; agg.l += _ll; }
+              }
+            }
+          }
+        } catch (_lzErr) { /* sem letzplay → segue só com o scoreplace */ }
+
         var fmt = _formatMatchesPill(agg.w, agg.l);
         if (!fmt) return;
         window._dashMatchesCache = fmt; // v3.1.40: fonte de verdade — persiste entre re-renders

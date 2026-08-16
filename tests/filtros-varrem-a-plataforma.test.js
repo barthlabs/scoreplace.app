@@ -128,5 +128,68 @@ if (codPools && codCont) {
   }
 })();
 
+// ── ENCERRADO NUNCA DIVIDE LISTA COM EM ANDAMENTO ───────────────────────────
+// Ordem do dono: "os encerrados nao devem aparecer com os em andamento (mesmo na
+// lista)." Ele viu, logo abaixo da faixa "Em andamento (1)", três cards "Encerrado".
+//
+// A causa era de DESENHO: a extração existia em TRÊS lugares, cada um com um gate
+// próprio (o ramo "todos" gated em `encerradosCount > 0` + ausência de filtro
+// secundário; o ramo "organizados/participando" com outro gate; e nenhum pro resto).
+// Bastava um gate não fechar. Agora é UMA regra, antes de qualquer ramo.
+(function () {
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+
+  // 1. a extração é única e roda pra todo filtro que não seja "encerrados"
+  ok(/if \(curFilter !== 'encerrados'\) \{\s*\n\s*_encerradosExtraidos = filtered\.filter/.test(dash),
+    'a extração de encerrados roda pra QUALQUER filtro exceto "encerrados"');
+  ok(!/curFilter === 'todos' && !curSport && !curLocation && !curFormat && encerradosCount > 0/.test(dash),
+    'o gate antigo (encerradosCount > 0 + sem filtro secundário) saiu — era ele que deixava passar');
+
+  // 2. e é UMA só: a segunda cópia (organizados/participando) não existe mais
+  const extras = (dash.match(/status === 'finished'\s*\}\)\.sort\(sortByRecency\)/g) || []).length;
+  ok(extras === 0, 'a segunda extração (v2.2.7, de organizados/participando) foi removida — não há duas cópias da regra');
+  ok(!/_finishedSubSection/.test(dash), 'a variável da segunda seção sumiu junto (nada de decoy)');
+
+  // 3. o recém-encerrado (<12h) CONTINUA na lista, de propósito
+  ok(/_isRecentlyFinished\(t\)/.test(dash) && /12 \* 60 \* 60 \* 1000/.test(dash),
+    'quem encerrou há menos de 12h segue na lista principal (janela do pódio fresco)');
+
+  // 4. comportamento: roda a regra REAL extraída do arquivo
+  const ini = dash.indexOf('  let _encerradosExtraidos = [];');
+  const fim = dash.indexOf('\n', dash.indexOf('  // Pagination — show N items'));
+  if (ini > 0 && fim > ini) {
+    const cod = dash.slice(ini, fim);
+    const agora = Date.now();
+    function roda(curFilter) {
+      let filtered = [
+        { id: 'a1', status: 'active' },
+        { id: 'e1', status: 'finished', finishedAt: new Date(agora - 40 * 24 * 3600e3).toISOString() },
+        { id: 'o1', status: 'open' },
+        { id: 'e2', status: 'finished', finishedAt: new Date(agora - 2 * 3600e3).toISOString() } // 2h → fica
+      ];
+      const _isRecentlyFinished = function (t) {
+        if (!t || t.status !== 'finished') return false;
+        var fa = t.finishedAt ? new Date(t.finishedAt).getTime() : 0;
+        if (!fa || isNaN(fa)) return false;
+        return (Date.now() - fa) < 12 * 60 * 60 * 1000;
+      };
+      const sortByRecency = () => 0;
+      let _encerradosExtraidos = [];
+      eval(cod.replace('  let _encerradosExtraidos = [];', ''));
+      return { lista: filtered.map(t => t.id).join(','), secao: _encerradosExtraidos.map(t => t.id).join(',') };
+    }
+    const r = roda('todos');
+    ok(r.lista === 'a1,o1,e2', 'na lista sobram os ativos + o recém-encerrado (deu: ' + r.lista + ')');
+    ok(r.secao === 'e1', 'o encerrado antigo vai pra seção (deu: ' + r.secao + ')');
+    const rOrg = roda('organizados');
+    ok(rOrg.secao === 'e1', 'em "organizados" a regra vale igual — era o gate que faltava lá');
+    const rEnc = roda('encerrados');
+    ok(rEnc.lista.indexOf('e1') !== -1 && rEnc.secao === '',
+      'no filtro "encerrados" NADA é extraído — senão a tela ficaria vazia');
+  } else {
+    ok(false, 'não achei o bloco da extração pra exercitar');
+  }
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

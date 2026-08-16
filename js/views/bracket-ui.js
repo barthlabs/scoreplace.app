@@ -12046,7 +12046,13 @@ window._openCasualMatch = function(restoreOpts) {
       return p.displayName || p.name || null;
     }
     function _teamBlock(st, players, score, win) {
-      var nameColor = win ? '#fff' : 'rgba(255,255,255,0.72)';
+      // v1.8.92: os nomes eram BRANCO CRAVADO — `#fff` no vencedor e
+      // `rgba(255,255,255,0.72)` no perdedor. Branco sobre card claro é invisível, e
+      // junto com o `opacity:0.5` da linha era o que sumia com o time perdedor no tema
+      // claro. Tokens resolvem nos dois: no escuro dão claro, no claro dão escuro — e
+      // eles JÁ são cobertos pelo gate de contraste, então não podem apodrecer.
+      // O perdedor recua pelo TOM (`--text-muted`), não por transparência.
+      var nameColor = win ? 'var(--text-bright)' : 'var(--text-muted)';
       var nameWeight = win ? '700' : '600';
       var realNames = players.filter(function(nm) { return nm != null; });
       var namesHtml = (realNames.length ? realNames : ['—']).map(function(nm) {
@@ -12106,7 +12112,19 @@ window._openCasualMatch = function(restoreOpts) {
       }
 
       var wRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
-      var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);opacity:0.5;';
+      // ── v1.8.92: RECUAR NÃO PODE SER `opacity` ─────────────────────────────
+      // Bronca do dono: "as partidas casuais aqui esta ilegivel, porra! nao ajustamos
+      // para ser sempre legivel nos 2 temas? em todo o programa!"
+      //
+      // O time PERDEDOR recuava com `opacity:0.5` na linha inteira — mais um hábito que
+      // só funciona no tema ESCURO: lá esmaecer aproxima o texto do fundo escuro e ainda
+      // sobra contraste; no CLARO joga o texto contra o BRANCO e o contraste vai a quase
+      // zero. A varredura da 1.8.78 cobriu fundo, borda, scrim e cor — `opacity` era a
+      // QUARTA forma de recuar, e passou por isso.
+      //
+      // Agora o recuo mora na classe `.sp-row-lost`, e o tema claro o resolve com COR
+      // legível em vez de transparência. O escuro fica idêntico ao que era.
+      var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);';
       var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.25);border-left:3px solid rgba(99,102,241,0.5);';
       var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
       var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;

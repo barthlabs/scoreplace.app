@@ -177,5 +177,49 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
     '_installButtonHtml continua vivo — a landing e o manual ainda oferecem o atalho');
 })();
 
+// ═══ C) NENHUMA NÃO LIDA PODE FICAR INALCANÇÁVEL ═════════════════════════════
+// Relato: "nao há nenhuma notificacao nao lida. nao tem que ter o ponto vermelho no
+// sino." O sino estava CERTO — medido na conta do dono: 466 notificações, 60 não lidas,
+// TODAS de 11–15/jul, enquanto as 50 mais recentes (agosto) estavam todas lidas.
+//
+// O defeito é a assimetria: a tela pedia as 50 MAIS RECENTES, o sino contava TODAS as
+// não lidas. Quando a não lida é mais antiga que a 50ª, o ponto aponta pra algo que a
+// tela não mostra — e não existe gesto que resolva. Aumentar o limite não conserta,
+// só empurra: o que a tela tem que garantir é o INVARIANTE.
+(function () {
+  const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
+
+  ok(/async getUnreadNotifications\(uid, limit\)/.test(db),
+    'existe uma busca dedicada pelas NÃO LIDAS (independente da posição)');
+  const bloco = db.slice(db.indexOf('async getUnreadNotifications'), db.indexOf('async getUnreadNotificationCount'));
+  ok(/\.where\('read', '==', false\)/.test(bloco), 'ela filtra por read == false');
+  ok(!/orderBy/.test(bloco),
+    'ela NÃO usa orderBy — combinar where com orderBy num campo opcional exclui quem não tem o campo (o bug da Liga sumida, v0.16.62)');
+  ok(/return \[\];/.test(bloco),
+    'falha devolve [] — a tela funde com as recentes, então degrada pro comportamento anterior em vez de quebrar');
+
+  ok(/async markAllNotificationsRead\(uid\)/.test(db), 'existe "marcar todas como lidas"');
+  const blocoAll = db.slice(db.indexOf('async markAllNotificationsRead'), db.indexOf('async getUnreadNotificationCount'));
+  ok(/i \+= 400/.test(blocoAll), 'marca em lotes de 400 (o teto do batch do Firestore é 500)');
+
+  // a tela funde as duas buscas, sem duplicar
+  ok(/Promise\.all\(\[\s*\n\s*window\.FirestoreDB\.getNotifications\(uid, window\._notifLimit\)/.test(notif),
+    'a tela pede as recentes E as não lidas juntas');
+  ok(/getUnreadNotifications\(uid\)/.test(notif), 'a tela consome a busca das não lidas');
+  ok(/vistos\[n\._id\]/.test(notif), 'a fusão deduplica por id — a não lida que já está entre as recentes aparece uma vez só');
+
+  // não lidas no topo (ordem do dono: "as nao lidas devem ficar no topo sempre")
+  const iU = notif.indexOf("_t('notif.unread')");
+  const iR = notif.indexOf("_t('notif.read')");
+  ok(iU > 0 && iR > 0 && iU < iR, 'a seção "Não lidas" é montada ANTES da de "Lidas" — não lida fica no topo');
+
+  // "carregar mais" no fim, e o gate certo
+  ok(/window\._notifLoadMore\(\)/.test(notif), 'existe o "Carregar mais" no fim da lista');
+  ok(/if \(recentes\.length >= window\._NOTIF_PAGE\)/.test(notif),
+    'o botão aparece contando as RECENTES, não a lista fundida — a fusão traz não lidas antigas que inflariam o total');
+  ok(/window\._notifKeepLimit/.test(notif),
+    'o limite volta ao padrão ao reabrir a tela (só o botão o mantém) — quem rolou muito uma vez não paga em toda visita');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

@@ -228,5 +228,44 @@ console.log('\n== Contraste nos DOIS temas ==');
     'no CLARO o texto é mais escuro que o fundo');
 })();
 
+
+// ── O QUARTO HÁBITO: RECUAR COM `opacity` E TEXTO BRANCO CRAVADO ────────────
+// (v1.8.92) Bronca do dono sobre "Últimas Partidas" da Partida Casual: "as partidas
+// casuais aqui esta ilegivel, porra! nao ajustamos para ser sempre legivel nos 2 temas?
+// em todo o programa!"
+//
+// A varredura da 1.8.78 cobriu TRÊS hábitos do tema escuro (fundo translúcido, borda,
+// cor pastel). Este é o QUARTO, e passou justamente por isso: o time perdedor recuava
+// com `opacity:0.5` na linha inteira, e os nomes eram BRANCO CRAVADO (`#fff` no
+// vencedor, `rgba(255,255,255,0.72)` no perdedor).
+//
+// Por que só quebra no claro: esmaecer aproxima o texto do FUNDO. No escuro o fundo é
+// escuro e o texto claro, então esmaecer ainda deixa contraste; no claro o fundo é
+// branco e esmaecer texto claro o faz sumir. Branco cravado nem chega a ter chance.
+//
+// A REGRA: recuo se faz por TOM (`--text-muted`, que o gate já cobre), nunca por
+// transparência; e texto sobre superfície do app usa TOKEN, nunca `#fff` literal.
+(function () {
+  const bu = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
+
+  const i = bu.indexOf('function _teamBlock(st, players, score, win)');
+  ok(i > 0, 'o bloco de time das Últimas Partidas existe');
+  if (i > 0) {
+    const trecho = bu.slice(i, i + 1600);
+    ok(!/nameColor = win \? '#fff'/.test(trecho),
+      'o nome do vencedor não é mais branco cravado (invisível em card claro)');
+    ok(/var nameColor = win \? 'var\(--text-bright\)' : 'var\(--text-muted\)'/.test(trecho),
+      'os nomes saem de TOKEN — claro no tema escuro, escuro no tema claro');
+  }
+
+  const iL = bu.indexOf('var lRow = ');
+  ok(iL > 0, 'a linha do time perdedor existe');
+  if (iL > 0) {
+    const linha = bu.slice(iL, bu.indexOf('\n', iL));
+    ok(!/opacity\s*:/.test(linha),
+      'a linha do perdedor NÃO recua por opacity — esmaecer contra fundo branco mata o contraste');
+  }
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
