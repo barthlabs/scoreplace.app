@@ -778,7 +778,18 @@ function renderDashboard(container) {
               ${t.logoData ? `<div style="width:33%;min-width:80px;flex-shrink:0;"><img src="${t.logoData}" alt="Logo" style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 16px rgba(0,0,0,0.4);"></div>` : ''}
               <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0;">
                 <div style="display:flex;align-items:flex-start;gap:6px;">
-                  <h4 style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;overflow-wrap:break-word;">
+                  ${/* v1.8.85: o nome era CORTADO quando trazia um token que não quebra —
+                        no relato, um torneio nomeado com o e-mail do organizador
+                        ("…de viniciusna1@hotmail.com"): o texto ia até a borda e sumia.
+                        ⚠️ `overflow-wrap:break-word` (que já estava aqui) NÃO resolve num
+                        flex: ele permite quebrar, mas a largura MÍNIMA do elemento continua
+                        sendo a da palavra inteira, então o item não encolhe e o texto vaza.
+                        Quem afeta a largura mínima é `anywhere` — com `min-width:0` no item.
+                        E, quando mesmo quebrando não couber, a FONTE ENCOLHE: `.sp-name-fit`
+                        é o encolhedor canônico do app (store.js), em rem por causa da escala
+                        por área — nunca px. Ver project_name_fit_box_canonical. */''}
+                  <h4 class="sp-name-fit" data-maxrem="1.5" data-minrem="0.95"
+                      style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-word;">
                     ${window._safeHtml(t.name)}
                   </h4>
                   <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '❤️' : '♡'}</span>

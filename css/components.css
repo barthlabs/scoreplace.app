@@ -871,6 +871,36 @@ button[style*="linear-gradient"]:not(.btn):active {
   color: #e2e8f0 !important;
 }
 
+/* ── v1.8.85: a caixa da previsão sobre foto é SUPERFÍCIE INVERTIDA ────────────
+   Com a foto ligada ela vira tarja ESCURA nos dois temas (regra acima). No tema
+   CLARO isso inverte a polaridade OUTRA VEZ: lá dentro o texto tem que ser CLARO.
+   Duas coisas quebravam aqui, e só uma era nova:
+   (a) `var(--text-bright)` vale #1c1c1e no tema claro → preto sobre a tarja. Isso
+       JÁ estava quebrado (é o "21°" do print). Resolvido redefinindo os tokens
+       DENTRO da caixa: tudo que usa token passa a ler claro, sem tocar em cada uso.
+   (b) `#60a5fa` (PREVISÃO DO TEMPO / AGORA / HOJE) e `#a5b4fc` eram escurecidos
+       pelo remap de contraste do tema claro (css/style.css) — REGRESSÃO introduzida
+       por ele. O remap se desliga aqui, como já se desliga na tarja do _photoReadBox.
+   ⚠️ O remap casa o fundo INLINE; aqui o escuro vem de CLASSE, por isso ele não
+   alcançava e precisou desta regra própria. Superfície invertida nova = entra aqui. */
+[data-theme="light"] [data-vphoto-on] .weather-box {
+  --text-bright: #f8fafc;
+  --text-main: #e2e8f0;
+  --text-muted: #cbd5e1;
+}
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:#60a5fa"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: #60a5fa"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:rgb(96, 165, 250)"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: rgb(96, 165, 250)"] {
+  color: #93c5fd !important;
+}
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:#a5b4fc"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: #a5b4fc"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color:rgb(165, 180, 252)"],
+[data-theme="light"] [data-vphoto-on] .weather-box [style*="color: rgb(165, 180, 252)"] {
+  color: #c7d2fe !important;
+}
+
 /* --- Info Pill (badges de status: Começa hoje, Progresso, Inscritos, etc.) --- */
 .info-pill {
   display: flex;
