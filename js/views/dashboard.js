@@ -2532,11 +2532,40 @@ function renderDashboard(container) {
   // Count finished tournaments
   const encerradosCount = allUnique.filter(t => t.status === 'finished').length;
 
+  // ── v1.8.89: TODOS / INSCRIÇÕES ABERTAS / ENCERRADOS = A PLATAFORMA INTEIRA ──
+  // Ordem do dono: "aqui deve ser todos os que tem na plataforma, mesmo encerrados,
+  // mesmo ocultos e mesmo de outros organizadores" — e, na sequência, o mesmo para
+  // "inscrições abertas" e para "encerrados".
+  //
+  // Os três liam pools do USUÁRIO (organizados / participando / abertos-pra-você), e
+  // esses saem de `visible` — que já vem com os OCULTOS removidos (v2.8.40) e é
+  // escopado ao uid pelo listener em tempo real. Daí o contador marcar 3 num app com
+  // dezenas de torneios: não era contagem errada, era a FONTE errada.
+  //
+  // Aqui o pool é a UNIÃO do que o usuário enxerga com a descoberta pública, ambos nas
+  // versões CRUAS (`_allVisibleRaw` / `_discoveryRaw`, sem o corte de ocultos).
+  // ⚠️ "Ocultar" continua valendo onde ele foi feito pra valer — nas seções curadas da
+  // tela e na lista padrão —, mas não pode esconder nada de quem pediu explicitamente
+  // TODOS. Esconder ali seria a tela contradizendo o próprio rótulo.
+  const _poolPlataforma = (function () {
+    const vistos = new Set(); const out = [];
+    [].concat(_allVisibleRaw || [], _discoveryRaw || []).forEach(function (t) {
+      if (!t || t.id == null) return;
+      const k = String(t.id);
+      if (vistos.has(k)) return;
+      vistos.add(k); out.push(t);
+    });
+    return out;
+  })();
+
   // Apply main filter
   let filtered = [];
   if (curFilter === 'organizados') filtered = [...organizadosSorted];
   else if (curFilter === 'participando') filtered = [...participacoesSorted];
-  else if (curFilter === 'abertos') filtered = [...abertosParaVoce];
+  // v1.8.89: inscrições abertas de QUALQUER organizador, ocultos incluídos.
+  // A regra de "aberto" continua sendo a canônica (_enrollmentOpenState, fonte única
+  // desde a 1.8.40) — aqui muda só o CONJUNTO em que ela é aplicada.
+  else if (curFilter === 'abertos') filtered = _poolPlataforma.filter(_isOpenEnrollment).sort(sortByUrgency);
   else if (curFilter === 'favoritos') {
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce].forEach(t => {
@@ -2544,16 +2573,17 @@ function renderDashboard(container) {
     });
     filtered.sort(sortByRecency); // Favoritos: mais recente primeiro
   } else if (curFilter === 'encerrados') {
-    const seen = new Set();
-    [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
-      if (!seen.has(t.id) && t.status === 'finished') { seen.add(t.id); filtered.push(t); }
-    });
+    // v1.8.89: encerrados da plataforma inteira, de outros organizadores e ocultos.
+    filtered = _poolPlataforma.filter(t => t && t.status === 'finished');
     filtered.sort(sortByRecency); // Encerrados: mais recente primeiro
   } else {
+    // v1.8.89: TODOS = a plataforma inteira. Os próprios do usuário vêm primeiro
+    // (são os que ele age em cima); o resto da plataforma vem depois.
     const seen = new Set();
     [...organizadosSorted, ...participacoesSorted, ...abertosParaVoce, ...encerradosVisiveis].forEach(t => {
       if (!seen.has(t.id)) { seen.add(t.id); filtered.push(t); }
     });
+    _poolPlataforma.forEach(t => { if (t && !seen.has(t.id)) { seen.add(t.id); filtered.push(t); } });
     filtered.sort(sortByDate);
   }
 
@@ -3240,7 +3270,7 @@ function renderDashboard(container) {
              saiu por ora (volta quando reativarmos o plano Pro). -->
         <!-- Linha: Convidar + Pessoas -->
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center;">
-          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:1.5s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">📱 ${_t('invite.inviteFriends')}</button>
+          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:1.5s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">✉️ ${_t('invite.inviteFriends')}</button>
           <button id="btn-people" class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="--shine-delay:1.8s;background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
         </div>
         <!-- Linha: Ler QR Code + Fale com o Desenvolvedor -->
@@ -3391,6 +3421,14 @@ function renderDashboard(container) {
     ${(function(){
       // v2.8.40: seção dos torneios que o usuário ocultou — colapsável, no fim de tudo.
       if (!hiddenTournaments || !hiddenTournaments.length) return '';
+      // v1.8.89: desde que TODOS/ABERTOS/ENCERRADOS passaram a incluir os ocultos,
+      // esta secao repetiria o mesmo card na mesma tela. Ela existe pra dar um caminho
+      // de volta (desocultar) na lista PADRAO — nos filtros explicitos o torneio ja
+      // esta la em cima, e mostrar de novo aqui so confunde.
+      if (curFilter === 'todos' || curFilter === 'abertos' || curFilter === 'encerrados') {
+        var _jaNaLista = (filtered || []).some(function (x) { return x && _hidSet[String(x.id)]; });
+        if (_jaNaLista) return '';
+      }
       return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;">' + _renderTGroup(hiddenTournaments) + '</div></details></div>';
     })()}
   `;
