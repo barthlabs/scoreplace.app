@@ -374,11 +374,27 @@ if (codPools && codCont) {
   // ⚠️ grupo inexistente NÃO pode travar no topo — cai na regra antiga
   ok(/\/\/ grupo não encontrado \(re-sorteio, fase avançada\)/.test(br),
     'grupo não encontrado cai na regra antiga em vez de ficar no topo sem explicação');
-  // a chave é consumida DEPOIS da 2ª passada, senão a re-afirmação desfaz o scroll
+  // ── v1.9.0: a rolagem se CORRIGE até o alvo estar no lugar certo ──────────
+  // Relato do dono: "na segunda vez vai certo, mas na primeira fica mais abaixo".
+  // MEDIDO no harness: com o recuo (--scroll-anchor) medido pequeno no instante do
+  // scroll — a barra sticky de busca ainda não existia — o grupo pousava 1210px fora
+  // e NADA mais se movia. Depois: erro 0.
+  ok(/var _reafirmar = function/.test(br), 'existe o laço que re-afirma a rolagem');
+  ok(/getPropertyValue\('--scroll-anchor'\)/.test(br),
+    'ele compara o topo do alvo com o recuo ATUAL');
+  ok(/var _erro = Math\.abs\(_topo - _recuo\);/.test(br),
+    'a régua é o ERRO de posição, não a estabilidade');
+  // ⚠️ a distinção que fez o conserto funcionar: parar por "não se mexeu mais" deixava
+  // o alvo parado no lugar ERRADO, que é exatamente o sintoma relatado.
+  ok(/_erro <= 3 && _ultimo !== null/.test(br),
+    'só conta como estável quando ESTÁ no lugar certo E parou de mexer');
+  // a chave é consumida quando o LAÇO termina — não no timeout de 1400ms, que rodaria
+  // no meio da correção e faria o laço cair na regra antiga (outro grupo).
   const iRemove = br.indexOf("sessionStorage.removeItem('sp_scrollToGroup')");
-  const iGoAuto = br.indexOf("_goMine('auto')");
-  ok(iRemove > iGoAuto && iRemove - iGoAuto < 400,
-    'a chave só é consumida DEPOIS da re-afirmação do alvo (apagar antes desfaria o scroll)');
+  const iLaco = br.indexOf('var _reafirmar = function');
+  ok(iRemove > iLaco, 'a chave é consumida DENTRO do laço, ao terminar');
+  ok(!/_goMine\('auto'\);\s*\n\s*try \{ sessionStorage\.removeItem\('sp_scrollToGroup'\)/.test(br),
+    'o timeout de 1400ms NÃO apaga mais a chave (apagar ali derrubaria a correção em curso)');
 })();
 
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');

@@ -198,11 +198,63 @@ function _applyMyMatchesFilter() {
       } catch (e) {}
     };
     setTimeout(function () { _goMine('smooth'); }, 80);
+    // ── v1.9.0: RE-AFIRMA ATÉ A POSIÇÃO PARAR DE MUDAR ──────────────────────
+    // Relato do dono: "quando vai para o grupo B... na segunda vez vai certo, mas na
+    // primeira fica mais abaixo."
+    // CAUSA: na PRIMEIRA visita o layout ainda está crescendo quando eu rolo — foto do
+    // local, previsão do tempo, avatares e a barra sticky de busca entram DEPOIS e
+    // empurram o conteúdo. O alvo se move após o scroll, e a rolagem fica no lugar
+    // errado. Na segunda visita tudo já está em cache, o layout nasce pronto e acerta —
+    // que é exatamente o padrão que ele descreveu.
+    // As duas passadas fixas (80ms e 1400ms) não bastam: elas apostam num instante, e
+    // numa carga fria o instante certo não existe. Aqui a régua é o próprio DOM — a
+    // posição do alvo — e a rolagem se corrige enquanto ela mudar.
+    var _reafirmar = function () {
+      var _ultimo = null, _estaveis = 0, _voltas = 0;
+      var _tick = function () {
+        _voltas++;
+        var _el = null;
+        try {
+          var _p = sessionStorage.getItem('sp_scrollToGroup');
+          if (_p) _el = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
+        } catch (e) {}
+        if (!_el) _el = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
+        if (_el && typeof _el.closest === 'function') _el = _el.closest('[data-group-box]') || _el;
+        if (!_el) return;
+        var _topo = Math.round(_el.getBoundingClientRect().top);
+        // ⚠️ A RÉGUA É A CORREÇÃO, NÃO A ESTABILIDADE. Minha 1ª versão só re-rolava
+        // quando o alvo SE MOVIA — e o defeito do dono é justamente ficar PARADO no
+        // lugar errado: o recuo (`--scroll-anchor`) foi medido pequeno demais no
+        // instante do scroll (a barra sticky de busca ainda não existia), o topo do
+        // grupo pousou ACIMA da viewport e nada mais se mexeu. Estabilidade ali é o
+        // sintoma, não a cura. Agora comparo o topo com o recuo ATUAL: enquanto os
+        // dois não baterem, corrige.
+        var _recuo = 0;
+        try {
+          var _cs = getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor');
+          _recuo = Math.round(parseFloat(_cs) || 0);
+          if (!_recuo && _el.style) _recuo = Math.round(parseFloat(getComputedStyle(_el).scrollMarginTop) || 0);
+        } catch (e) {}
+        var _erro = Math.abs(_topo - _recuo);
+        if (_erro <= 3 && _ultimo !== null && Math.abs(_topo - _ultimo) <= 2) _estaveis++;
+        else { _estaveis = 0; _goMine('auto'); }   // fora do lugar ou ainda mexendo → corrige
+        _ultimo = _topo;
+        // para quando ficou parado em 3 medições seguidas, ou depois de ~3s.
+        // O teto existe pra não ficar um laço vivo em tela com animação eterna.
+        if (_estaveis < 3 && _voltas < 30) { setTimeout(_tick, 100); return; }
+        // acabou (estabilizou ou estourou o teto): só agora a chave sai, senão a
+        // próxima entrada na chave herdaria um pedido velho.
+        try { sessionStorage.removeItem('sp_scrollToGroup'); } catch (e) {}
+      };
+      setTimeout(_tick, 220);
+    };
+    _reafirmar();
     setTimeout(function () {
       _goMine('auto');
-      // consumida só DEPOIS da 2ª passada: a 1ª é a animação, a 2ª re-afirma o alvo.
-      // Apagar antes faria a re-afirmação cair na regra antiga e desfazer o scroll.
-      try { sessionStorage.removeItem('sp_scrollToGroup'); } catch (e) {}
+      // ⚠️ A CHAVE NÃO É APAGADA AQUI. O laço `_reafirmar` pode rodar até ~3s, e ele
+      // RELÊ a chave a cada volta; apagar agora o faria cair na regra antiga (o próximo
+      // jogo do usuário) e rolar pra OUTRO grupo no meio da correção. Quem apaga é o
+      // próprio laço, quando termina.
       window._suppressSoftRefresh = false;
     }, 1400);
   }

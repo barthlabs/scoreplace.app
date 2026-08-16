@@ -41,6 +41,14 @@ window._RELEASE_NOTES_HTML = (function () {
     // eliminatória gerada e construtor) saem IDÊNTICOS, que é o gate do deploy. Anunciar
     // "unificamos uma varredura interna" seria ruído numa nota que o usuário lê pra saber
     // o que mudou pra ele. A trava pega OMISSÃO e não sabe julgar isso — o motivo fica aqui.
+    // ── v1.9 ─────────────────────────────────────────────────────────────────
+    '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
+      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🎯 “Ir para o torneio” acerta o grupo já na primeira vez:</b> na primeira abertura a tela parava <b>abaixo</b> do grupo (o cabeçalho, com a classificação, ficava escondido) e só acertava na segunda. Era a barra de busca fixa, que ainda não existia no instante da rolagem — o recuo do topo saía menor do que o necessário. Agora a rolagem se corrige sozinha até o grupo ficar exatamente no lugar.</li>' +
+      '</ul>' +
+    '</div>' +
+
     // ── v1.8 ─────────────────────────────────────────────────────────────────
     '<div style="margin-bottom:1rem;border:2px solid #a78bfa;border-radius:12px;padding:14px 16px;background:rgba(167,139,250,0.08);">' +
       '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">\uD83C\uDFC5 v1.8 \u2014 Sua coloca\u00e7\u00e3o calculada, conta duplicada que o app pergunta antes, e o app s\u00f3 abre quando terminou de carregar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
