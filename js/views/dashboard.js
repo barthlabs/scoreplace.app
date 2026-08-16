@@ -929,13 +929,25 @@ function renderDashboard(container) {
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statTeams')}</span>
                        </div>
                        ` : ''}
+                       ${/* v1.8.78 — o box de ESPERA era o ÚNICO dos três que não seguia a tarja.
+                             `.stat-box` é tarja ESCURA com texto CLARO nos DOIS temas, mas aqui um
+                             `background: rgba(251,191,36,0.08)` INLINE vencia a tarja. No tema escuro
+                             isso passava (âmbar 8% sobre card escuro continua escuro); no CLARO virava
+                             caixa quase branca segurando o texto `#f1f5f9` da tarja + âmbar claro —
+                             ou seja claro sobre claro, que é o relato do dono.
+                             Agora o fundo é o da tarja (igual a INSCRITOS/EQUIPES) e a identidade
+                             âmbar vive na BORDA + no texto. O âmbar vem da classe `.stat-accent`, não
+                             de style inline, de propósito: assim ele fica fora do remap de contraste
+                             do tema claro — que só reescreve inline — e não é escurecido sobre a
+                             tarja escura. Opacidade 0.8→0.95: o branco dos irmãos aguenta 0.8, o
+                             âmbar rebaixado não. */''}
                        ${_standbyCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08);">
+                       <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.45);${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">⏱️</span>
-                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95; color: #fbbf24;">${_standbyCount}</span>
+                             <span class="stat-accent" style="font-size: 1.4rem; font-weight: 800; line-height: 1;">${_standbyCount}</span>
                           </div>
-                          <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8; color: #fbbf24;">${_t('dashboard.statWaiting')}</span>
+                          <span class="stat-accent" style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.95;">${_t('dashboard.statWaiting')}</span>
                        </div>
                        ` : ''}
                    </div>

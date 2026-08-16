@@ -4328,22 +4328,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
 
   // Format game points for display
+  // v1.8.79: a REGRA mora em window._formatGamePoint (bracket-model.js) — o replay
+  // precisa da mesma conversão pra redesenhar partida gravada, e duas cópias
+  // divergiriam. Aqui fica só a leitura do estado do overlay.
   function _formatGamePoint(pts, oppPts, isTb) {
-    if (isTb) return String(pts);
-    if (state.countingType === 'tennis' && !state.isFixedSet) {
-      // Tennis counting: 0, 15, 30, 40, AD
-      if (pts >= 3 && oppPts >= 3) {
-        if (state.deuceRule) {
-          if (pts === oppPts) return '40';
-          if (pts > oppPts) return 'AD';
-          return '40';
-        }
-        return '40'; // No deuce: sudden death (golden point) at 40-40
-      }
-      var map = [0, 15, 30, 40];
-      return String(pts < 4 ? map[pts] : 40);
-    }
-    return String(pts);
+    return window._formatGamePoint(pts, oppPts, isTb, {
+      countingType: state.countingType,
+      isFixedSet: state.isFixedSet,
+      deuceRule: state.deuceRule
+    });
   }
 
   // Check if game is won
@@ -4647,6 +4640,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var _p2Before = state.currentGameP2;
     var _wasTiebreak = !!state.isTiebreak;
     var _srvNow = (typeof _getCurrentServer === 'function') ? _getCurrentServer() : null;
+    // v1.8.79 (REPLAY): o log guardava só o placar do GAME. Sem os games e sem qual
+    // set estava em jogo, o replay teria que ADIVINHAR onde cada ponto caiu — e
+    // adivinhação vira placar errado na tela. Aqui os três saem do estado que já
+    // existe (nenhum cálculo novo): games do set corrente e o índice do set.
+    // Quantos sets cada lado já tinha é derivado no replay a partir de `sets`, que
+    // o registro da partida já grava — por isso não é capturado de novo aqui.
+    var _setIdxNow = state.sets.length - 1;
+    var _setNow = _setIdxNow >= 0 ? state.sets[_setIdxNow] : null;
+    var _g1Before = _setNow ? _setNow.gamesP1 : 0;
+    var _g2Before = _setNow ? _setNow.gamesP2 : 0;
 
     if (player === 1) state.currentGameP1++;
     else state.currentGameP2++;
@@ -4698,7 +4701,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       p1Before: _p1Before,
       p2Before: _p2Before,
       isTiebreak: _wasTiebreak,
-      t: _pointTs
+      t: _pointTs,
+      g1: _g1Before,      // v1.8.79 (REPLAY) — games do set corrente antes do ponto
+      g2: _g2Before,
+      si: _setIdxNow      // índice do set em que o ponto foi disputado
     });
 
     if (!useSets || state.isFixedSet) {
@@ -4988,6 +4994,43 @@ window._openLiveScoring = function(tId, matchId, opts) {
       }
     }
 
+    // v1.8.79 (REPLAY): monta o ponto a ponto que o replay reproduz depois.
+    // Guarda SÓ o que a tela do replay precisa — nada de estado de motor, porque
+    // replay é uma REPRODUÇÃO visual, não uma partida: ele não recalcula placar,
+    // apenas mostra o que cada ponto já registrou. Assim nenhuma mudança futura no
+    // motor de pontuação consegue reescrever o passado de uma partida gravada.
+    // Campos curtos de propósito: são ~10 bytes por ponto × centenas de pontos, e
+    // o registro é gravado no matchHistory de CADA jogador.
+    function _buildReplayPayload() {
+      var pts = Array.isArray(state.pointLog) ? state.pointLog : [];
+      if (!pts.length) return null;          // sem ponto a ponto não há replay
+      // Teto de segurança: partida muito longa não pode aproximar o limite de 1MiB
+      // do documento. Corta os mais ANTIGOS (o fim é o que interessa) e declara.
+      var MAX = 600;
+      var corte = pts.length > MAX;
+      var usados = corte ? pts.slice(pts.length - MAX) : pts;
+      return {
+        v: 1,
+        truncated: corte,
+        totalPoints: pts.length,
+        useSets: !!useSets,
+        isFixedSet: !!state.isFixedSet,
+        countingType: (state.countingType || (opts && opts.countingType) || null),
+        points: usados.map(function (p) {
+          return {
+            w: p.team,                                    // quem marcou
+            a: p.p1Before, b: p.p2Before,                 // placar do game ANTES
+            g1: p.g1 != null ? p.g1 : null,               // games antes (null = registro velho)
+            g2: p.g2 != null ? p.g2 : null,
+            si: p.si != null ? p.si : 0,                  // set em disputa
+            tb: p.isTiebreak ? 1 : 0,
+            sv: p.serverTeam || null,                     // time que sacava
+            t: p.t || null
+          };
+        })
+      };
+    }
+
     // Sem id externo (casual local), o id nasce UMA vez por partida e é reusado —
     // regravar a mesma partida (Desfazer pós-fim → novo fim) sobrescreve o registro.
     if (!ctx.matchId && !_liveRecId) {
@@ -5014,13 +5057,33 @@ window._openLiveScoring = function(tId, matchId, opts) {
         return e;
       }),
       stats: { team1: team[1], team2: team[2] },
-      playerStats: plrs
+      playerStats: plrs,
+      // v1.8.79: o PONTO A PONTO passa a ser gravado — é o que sustenta o REPLAY.
+      // Fica AQUI, no único ponto onde o registro da partida ao vivo nasce, e por
+      // isso vale de uma vez pra CASUAL e pra TORNEIO (o `matchType` distingue).
+      // ⚠️ Antes disto o pointLog morria com o overlay no torneio (no casual ele
+      // sobrevivia por acaso, dentro do `liveState` do doc). Ou seja: replay só
+      // existe pra partidas jogadas a partir desta versão — as antigas de torneio
+      // não têm como voltar, porque o dado nunca foi gravado.
+      replay: _buildReplayPayload()
     };
     if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveUserMatchRecords) {
       try {
         var p = window.FirestoreDB.saveUserMatchRecords(record);
         if (p && typeof p.catch === 'function') p.catch(function(){});
       } catch(e) {}
+    }
+    // v1.8.79 (REPLAY PÚBLICO): além do matchHistory (que é do jogador e obedece ao
+    // `statsVisibility`), o ponto a ponto de jogo de TORNEIO vai também pro doc DO JOGO
+    // — o único lugar que qualquer pessoa consegue ler. É isso que faz o botão Replay
+    // valer pra quem só está assistindo, e não só pra quem jogou.
+    // Casual não passa por aqui: o doc de `casualMatches` já é legível por qualquer um.
+    if (record.matchType === 'tournament' && record.tournamentId && record.replay &&
+        window.AppStore && typeof window.AppStore.saveMatchReplay === 'function') {
+      try {
+        var _pr = window.AppStore.saveMatchReplay(record.tournamentId, record.matchId, record.replay);
+        if (_pr && typeof _pr.catch === 'function') _pr.catch(function(){});
+      } catch (e) {}
     }
     // Mirror casual records into localStorage so the hero-box "Minhas
     // estatísticas" view can render the full detailed metric set even when

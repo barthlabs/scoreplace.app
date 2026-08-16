@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.77';
+window.SCOREPLACE_VERSION = '1.8.79';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -7516,6 +7516,34 @@ window.AppStore = {
   // do dual-write/seed: o doc do torneio é autoritativo, uma falha aqui é inofensiva
   // — ex.: torneio legado sem roster semeado → participante toma permission-denied
   // no subdoc; não pode virar toast "Erro ao salvar" já que o save real deu certo).
+  // v1.8.79 (REPLAY PÚBLICO): grava o ponto a ponto no doc DO JOGO
+  // (`tournaments/{tid}/results/{matchId}`), que é o único lugar que QUALQUER pessoa
+  // pode ler — as regras liberam leitura pra todo autenticado, e pro público quando o
+  // torneio é público. O `matchHistory` NÃO serve aqui: ele é do jogador e obedece ao
+  // `statsVisibility`, então o replay sumiria pra quem só está assistindo.
+  //
+  // ⚠️ CORRIDA CONHECIDA, e é por isso que existe retentativa: `allow create` no subdoc
+  // é SÓ de admin. Quando quem termina a partida é PARTICIPANTE e o doc ainda não
+  // existe, a 1ª tentativa falha — e é a CF `syncMatchRosters` que cria o doc ao ver a
+  // escrita do resultado no torneio. As tentativas seguintes dão tempo pra ela rodar.
+  // Organizador acerta de primeira (ele pode criar). Best-effort SEMPRE: o replay é um
+  // extra, e falhar aqui não pode atrapalhar o placar, que já foi gravado.
+  async saveMatchReplay(tournamentId, matchId, replay) {
+    if (!tournamentId || matchId == null || matchId === '' || !replay) return false;
+    var esperas = [0, 2500, 7000, 16000];
+    for (var i = 0; i < esperas.length; i++) {
+      if (esperas[i]) await new Promise(function (r) { setTimeout(r, esperas[i]); });
+      try {
+        var ok = await this.commitMatchResult(tournamentId, String(matchId), function (res) {
+          res.replay = replay;
+        }, { silent: true });
+        if (ok) return true;
+      } catch (e) { /* segue pra próxima tentativa */ }
+    }
+    if (window._warn) window._warn('[replay] não consegui gravar o ponto a ponto do jogo ' + matchId);
+    return false;
+  },
+
   async commitMatchResult(tournamentId, matchId, mutatorFn, opts) {
     var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
     if (t) {

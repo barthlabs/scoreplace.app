@@ -174,10 +174,18 @@ function subdocSignature(data) {
 
 // Doc de espelho COMPLETO pra CF gravar (set SEM merge = clobber fiel, remove campos
 // que sumiram do match, ex.: reset/revert). buildSeedDoc + tournamentId + updatedAt.
-function buildMirrorDoc(t, m, tid, nowIso) {
+function buildMirrorDoc(t, m, tid, nowIso, anterior) {
   const doc = buildSeedDoc(t, m);
   doc.tournamentId = String(tid);
   doc.updatedAt = nowIso || new Date().toISOString();
+  // v1.8.79: o espelho é gravado com `set` SEM merge (de propósito: é o que apaga
+  // campo que sumiu — refazer/reverter/editar). Só que isso APAGARIA campos que o
+  // espelho não conhece. `replay` (o ponto a ponto da partida ao vivo) é um deles:
+  // ele é gravado pelo CLIENTE, nasce do placar ao vivo e o servidor não tem como
+  // recalculá-lo — apagado, some pra sempre. Por isso ele é carregado adiante aqui,
+  // explicitamente. Campo novo que também não seja derivável da estrutura precisa
+  // entrar NESTA lista, senão o próximo espelho o engole em silêncio.
+  if (anterior && anterior.replay) doc.replay = anterior.replay;
   return doc;
 }
 

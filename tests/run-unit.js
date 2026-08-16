@@ -12,6 +12,12 @@ const SUITES = [
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
   'tests/css-nao-perde-regra.test.js',
+  // O app foi escrito olhando o tema ESCURO: caixa se destaca CLAREANDO o fundo, recua
+  // ESCURECENDO, e texto de destaque é pastel. Os três hábitos INVERTEM no tema claro —
+  // por isso o dono via "fonte preta em box escuro" e placar da mesma cor do card.
+  // Guarda o INVARIANTE (todo hábito tem tradução declarada no claro, e nenhuma toca o
+  // escuro), não os mecanismos: forma nova de quebrar contraste entra NAQUELE arquivo.
+  'tests/contraste-nos-dois-temas.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.

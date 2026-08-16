@@ -3928,9 +3928,26 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _woHeaderChip = (!_readOnly && typeof window._woClaimChip === 'function' && typeof window._woIsKnockoutMatch === 'function' && window._woIsKnockoutMatch(t, m))
     ? window._woClaimChip(t, { scope: 'match', matchId: m.id, compact: true })
     : '';
+  // v1.8.79: REPLAY — só existe se o jogo tem ponto a ponto gravado no doc do jogo
+  // (`t._results[m.id].replay`), o que acontece quando ele foi disputado no PLACAR AO
+  // VIVO. Fica FORA de `_headerActions` de propósito: aquele cluster é de AÇÃO e some
+  // inteiro em somente leitura, e o replay é justamente o contrário — ele existe pra
+  // quem só está ASSISTINDO. Ordem do dono: "deve aparecer para todos os usuários e
+  // não só para quem participou do jogo".
+  var _replayBtn = '';
+  try {
+    var _rr = t && t._results && t._results[m.id];
+    if (isDecided && _rr && _rr.replay && _rr.replay.points && _rr.replay.points.length) {
+      _replayBtn = '<button class="btn btn-sm" onclick="event.stopPropagation();window._openMatchReplayFromBracket(\'' +
+        String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',\'' +
+        String(m.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" ' +
+        'title="Rever a partida ponto a ponto" ' +
+        'style="background:var(--btn-secondary-bg);color:var(--btn-secondary-text);border:1px solid var(--border-color);font-size:0.68rem;padding:3px 8px;">▶️ Replay</button>';
+    }
+  } catch (_re) {}
   // Cluster de ações do cabeçalho — vazio inteiro em somente leitura (cada botão tem
   // gate próprio; um `if` por botão deixaria o próximo passar despercebido).
-  var _headerActions = _readOnly ? '' : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`;
+  var _headerActions = (_readOnly ? '' : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
 
   var _headerHtml;
   if (_showHeaderPending) {
