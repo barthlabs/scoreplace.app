@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.96';
+window.SCOREPLACE_VERSION = '1.8.97';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1071,6 +1071,48 @@ window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
 // **404** — o app segue em teste fechado (o Play exige mais testadores pra liberar
 // produção). Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
 // impresso não tem correção depois. Antes de virar `play.on` pra true, conferir o 200.
+// ── SEQUÊNCIA ATUAL: TODO JOGO CONTA, NÃO SÓ O LETZPLAY (v1.8.97) ───────────
+// Relato do dono: "minha ultima sequencia é 1V e esta marcando 2".
+// MEDIDO no histórico dele: 13/08 vitória, e as DUAS antes derrotas → 1V. O card
+// mostrava 2V porque a sequência saía SÓ dos jogos do letzplay, cujo último é bem
+// mais antigo — enquanto o "Total" logo ao lado já somava letzplay + scoreplace.
+// Mesma família dos outros de hoje: metade do card olhando um conjunto, a outra
+// metade olhando outro.
+//
+// ⚠️ REGRA DE DATA, e ela decide o resultado: item SEM data não pode ser tratado
+// como o mais recente. O card usava `ts || (1e12 - i)` pra ordenar os jogos do
+// letzplay entre si — inofensivo enquanto a lista era só dele, mas ao juntar com o
+// scoreplace (que sempre tem data) esse 1e12 jogaria o não-datado pro topo e
+// sequestraria a sequência. Aqui o não-datado vai pro FIM, preservando a ordem
+// relativa em que veio (a lista do letzplay já chega do mais recente pro mais antigo).
+window._sequenciaAtual = function (itens) {
+  var lista = (itens || []).filter(function (x) { return x && typeof x.won === 'boolean'; });
+  if (!lista.length) return { n: 0, won: null };
+  var comData = [], semData = [];
+  lista.forEach(function (x, i) {
+    var t = Number(x.ts);
+    if (isFinite(t) && t > 0) comData.push({ ts: t, won: x.won });
+    else semData.push({ ordem: i, won: x.won });
+  });
+  comData.sort(function (a, b) { return b.ts - a.ts; });         // mais recente primeiro
+  semData.sort(function (a, b) { return a.ordem - b.ordem; });   // preserva a ordem de chegada
+  var ord = comData.concat(semData);
+  var n = 0, t = ord[0].won;
+  for (var i = 0; i < ord.length; i++) {
+    if (ord[i].won === t) n++; else break;
+  }
+  // MAIOR sequência de vitórias de todos os tempos (pedido do dono: "poderia ter um
+  // maior sequencia de vitorias tambem"). Varre do mais ANTIGO pro mais recente, e a
+  // derrota ZERA o contador — a mesma regra da sequência atual, aplicada à história
+  // inteira em vez de só à ponta.
+  var maior = 0, corrida = 0;
+  for (var j = ord.length - 1; j >= 0; j--) {
+    corrida = ord[j].won ? (corrida + 1) : 0;
+    if (corrida > maior) maior = corrida;
+  }
+  return { n: n, won: t, maiorV: maior };
+};
+
 // ── VITÓRIAS E DERROTAS: UMA CONTA SÓ (v1.8.95) ─────────────────────────────
 // Relato do dono: "v/d ainda nao bate com o que consta da dashboard".
 // MEDIDO na conta dele: o pill da tela inicial somava o histórico INTEIRO

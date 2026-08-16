@@ -325,15 +325,20 @@
 
     // Sequência atual: derivada dos jogos letzplay (com data), do mais recente
     // pra trás — conta a fila de resultados iguais no topo.
-    var _sg = _games.filter(function (g) { return typeof g.won === 'boolean'; })
-      .map(function (g, i) { return { ts: _ts(g.date) || (1e12 - i), won: g.won }; })
-      .sort(function (a, b) { return b.ts - a.ts; });
-    var _stN = 0, _stT = null;
-    for (var _si = 0; _si < _sg.length; _si++) {
-      if (_si === 0) { _stT = _sg[0].won; _stN = 1; }
-      else if (_sg[_si].won === _stT) _stN++;
-      else break;
-    }
+    // ── v1.8.97: a sequência considera letzplay + scoreplace ────────────────
+    // Antes saía só de `_games` (letzplay). O "Total" ao lado já somava os dois, então
+    // o card se contradizia: o dono tinha 1V e o tile marcava 2V, porque o último jogo
+    // do letzplay é bem mais antigo que as partidas dele no scoreplace.
+    // `spExtra.resultados` traz os jogos do scoreplace já como {ts, won}; a ordenação e
+    // a regra de "sem data não é o mais recente" moram em window._sequenciaAtual.
+    var _seqItens = _games
+      .filter(function (g) { return typeof g.won === 'boolean'; })
+      .map(function (g) { return { ts: _ts(g.date), won: g.won }; })
+      .concat(Array.isArray(spExtra.resultados) ? spExtra.resultados : []);
+    var _seq = (typeof root._sequenciaAtual === 'function')
+      ? root._sequenciaAtual(_seqItens)
+      : { n: 0, won: null };
+    var _stN = _seq.n, _stT = _seq.won;
     var streakHtml = _stN
       ? '<span style="color:' + (_stT ? '#2dd4a0' : '#f87171') + ';">' + _stN + (_stT ? 'V' : 'D') + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
@@ -348,7 +353,9 @@
         // tiles
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px;">' +
           tileH('Total', totalHtml, winPct + '% · letzplay + scoreplace') +
-          tileH('Sequência', streakHtml, 'atual') +
+          // v1.8.97: o rodapé do tile mostra o RECORDE (pedido do dono). Fica aqui,
+          // e não num 4º tile, pra não quebrar a grade de 3 colunas do card.
+          tileH('Sequência', streakHtml, _seq.maiorV > 1 ? ('atual · recorde ' + _seq.maiorV + 'V') : 'atual') +
           tile('Oficiais', footOff.length, 'torneios') +
         '</div>' +
 

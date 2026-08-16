@@ -1060,6 +1060,22 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                 var _vd = window._totaisVD(merged, resolvedUid, playerName);
                 if (_vd.wins + _vd.losses > 0) {
                   _spExtra.wins = _vd.wins; _spExtra.losses = _vd.losses;
+                  // v1.8.97: e os resultados COM DATA, pro card calcular a SEQUÊNCIA
+                  // considerando scoreplace + letzplay. Sem isto o tile mostrava a
+                  // sequência só do letzplay, que costuma ser bem mais antiga.
+                  var _dn = String(playerName || '').toLowerCase().trim();
+                  _spExtra.resultados = (merged || []).map(function (r) {
+                    if (!r) return null;
+                    var team = null;
+                    (r.players || []).forEach(function (p) {
+                      if (!p) return;
+                      if (resolvedUid && p.uid === resolvedUid) team = p.team;
+                      else if (team == null && _dn && p.name && String(p.name).toLowerCase().trim() === _dn) team = p.team;
+                    });
+                    if (team == null || !r.winnerTeam || r.winnerTeam === 0) return null;
+                    var ts = r.finishedAt ? new Date(r.finishedAt).getTime() : 0;
+                    return { ts: (isFinite(ts) && ts > 0) ? ts : 0, won: String(r.winnerTeam) === String(team) };
+                  }).filter(Boolean);
                   var _cardSlot = document.getElementById('letzplay-card-stats-slot');
                   if (_cardSlot && typeof window._renderLetzplayCard === 'function') {
                     _cardSlot.innerHTML = window._renderLetzplayCard(_lpCu.letzplayImport, _spExtra);

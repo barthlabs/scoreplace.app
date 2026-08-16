@@ -344,5 +344,82 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
     'na ficha, o registro local também passa pelo filtro de rajada (era por onde as apagadas voltavam)');
 })();
 
+
+// ── SEQUÊNCIA: MESCLA OS DOIS, DERROTA ZERA (v1.8.97) ───────────────────────
+// Relato: "minha ultima sequencia é 1V e esta marcando 2". E a regra, dele:
+// "tem que considerar tudo e até mesclar: se tem 1V letz e 2 score conta 3;
+//  perdeu zera o contador. poderia ter um maior sequencia de vitorias tambem."
+//
+// MEDIDO no histórico dele: 13/08 vitória, e as DUAS antes derrotas → 1V. O card
+// mostrava 2V porque a sequência saía SÓ do letzplay, cujo último jogo é mais antigo,
+// enquanto o "Total" ao lado já somava os dois. Metade do card num conjunto, metade
+// no outro.
+(function () {
+  const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+  const perfil = fs.readFileSync(path.join(ROOT, 'js', 'views', 'letzplay-profile.js'), 'utf8');
+  const ana = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-analytics.js'), 'utf8');
+
+  const m = store.match(/window\._sequenciaAtual = function[\s\S]*?\n\};/);
+  ok(!!m, 'a conta canônica window._sequenciaAtual existe');
+  if (m) {
+    const win = {};
+    eval(m[0].replace('window._sequenciaAtual', 'win._sequenciaAtual'));
+    const f = win._sequenciaAtual;
+    const d = s => new Date(s).getTime();
+
+    // O CASO DO DONO, literal: 1 vitória no letzplay + 2 no scoreplace = 3
+    const mesclado = [
+      { ts: d('2026-01-10'), won: true },   // letzplay (mais antigo)
+      { ts: d('2026-02-01'), won: true },   // scoreplace
+      { ts: d('2026-02-02'), won: true }    // scoreplace (mais recente)
+    ];
+    ok(f(mesclado).n === 3 && f(mesclado).won === true,
+      'sequência atravessa as duas fontes: 1V letzplay + 2V scoreplace = 3V');
+
+    // derrota ZERA
+    const comDerrota = mesclado.concat([{ ts: d('2026-02-03'), won: false }]);
+    ok(f(comDerrota).n === 1 && f(comDerrota).won === false,
+      'a derrota mais recente zera o contador de vitórias');
+
+    // o caso REAL do dono: vitória, e antes duas derrotas → 1V
+    const real = [
+      { ts: d('2026-08-13T21:31:33'), won: false },
+      { ts: d('2026-08-13T22:06:05'), won: false },
+      { ts: d('2026-08-13T22:39:53'), won: true }
+    ];
+    ok(f(real).n === 1 && f(real).won === true,
+      'o caso medido na conta dele dá 1V (o card mostrava 2V)');
+
+    // ⚠️ item SEM data não pode se passar por mais recente — era o `1e12 - i` do card,
+    // inofensivo numa lista só de letzplay e destrutivo ao juntar com o scoreplace.
+    const semData = [
+      { ts: d('2026-08-13'), won: true },
+      { ts: 0, won: false }
+    ];
+    ok(f(semData).n === 1 && f(semData).won === true,
+      'jogo sem data NÃO sequestra a ponta da sequência');
+
+    // recorde
+    const hist = [
+      { ts: d('2026-01-01'), won: true }, { ts: d('2026-01-02'), won: true },
+      { ts: d('2026-01-03'), won: true }, { ts: d('2026-01-04'), won: false },
+      { ts: d('2026-01-05'), won: true }
+    ];
+    ok(f(hist).maiorV === 3, 'maior sequência de vitórias = 3 (a derrota parte a série) — deu ' + f(hist).maiorV);
+    ok(f(hist).n === 1, 'e a atual continua sendo 1');
+    ok(f([]).n === 0 && f([]).won === null, 'lista vazia não quebra');
+  }
+
+  // fiação: o card usa a conta canônica e recebe os resultados do scoreplace
+  ok(/root\._sequenciaAtual\(_seqItens\)/.test(perfil), 'o card usa a conta canônica');
+  ok(/\.concat\(Array\.isArray\(spExtra\.resultados\) \? spExtra\.resultados : \[\]\)/.test(perfil),
+    'o card mescla os resultados do scoreplace com os do letzplay');
+  ok(/recorde ' \+ _seq\.maiorV/.test(perfil), 'o card mostra o recorde de vitórias');
+  ok(/_spExtra\.resultados = \(merged \|\| \[\]\)/.test(ana),
+    'a ficha alimenta o card com os resultados datados do scoreplace');
+  ok(!/1e12 - i/.test(perfil),
+    'o `1e12 - i` saiu — era ele que jogaria jogo sem data pro topo ao mesclar');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
