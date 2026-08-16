@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.79';
+window.SCOREPLACE_VERSION = '1.8.84';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -5056,8 +5056,20 @@ window._fbInner = function (key) {
         searchInp = '<span style="position:relative;display:inline-flex;align-items:center;flex:1 1 64px;min-width:60px;">'
             // data-fb-search: marca TODA barra canônica pro "Voltar" zerar a busca sem
             // depender de lista de ids — barra nova nasce coberta. (_limparBarrasDeBusca)
-            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 34px 0 10px;font-size:0.8rem;">'
-            + '<button type="button" id="' + opts.searchId + '-clear" class="cancel-x-btn" title="Limpar busca" onclick="' + _clr + '" style="--cx-size:20px;position:absolute;right:8px;top:50%;transform:translateY(-50%);' + (search ? '' : 'display:none;') + '">✕</button>'
+            // v1.8.78: `padding-right` 34→46px pra o texto não correr por baixo do ALVO
+            // do ✕ (que agora tem 44px). Sem isso, tocar no fim do próprio texto limparia
+            // a busca em vez de posicionar o cursor.
+            + '<input id="' + opts.searchId + '" data-fb-search="1" type="text" oninput="window._fbSearchInput(\'' + key + '\',this)" placeholder="🔎 Buscar…" autocomplete="off" value="' + esc(search) + '" style="' + sctrl + 'width:100%;height:44px;min-height:44px;padding:0 46px 0 10px;font-size:0.8rem;">'
+            // v1.8.78: o ALVO DE TOQUE e o DESENHO viraram coisas diferentes. O botão é
+            // transparente e tem 44px de largura pela altura inteira do campo; o círculo
+            // vermelho de 20px é o <span class="cancel-x-btn"> lá dentro. Antes o círculo
+            // de 20px ERA o alvo, e errar por 3px fazia o toque cair no input atrás — o
+            // campo posicionava o cursor e o iOS abria copiar/colar (relato do dono).
+            // O id continua no BOTÃO: `_fbSearchInput`/`_fbClearSearch` alternam o
+            // `display` por `searchId + '-clear'` e não precisam saber da mudança.
+            + '<button type="button" id="' + opts.searchId + '-clear" class="fb-clear-btn" title="Limpar busca" aria-label="Limpar busca" onclick="' + _clr + '" style="' + (search ? '' : 'display:none;') + '">'
+            +   '<span class="cancel-x-btn" style="--cx-size:20px;" aria-hidden="true"></span>'
+            + '</button>'
             + '</span>';
     }
     // v3.0.91: TUDO numa linha só (pedido do usuário) — flex-wrap:nowrap. A busca
@@ -5332,10 +5344,20 @@ window._anchorUserFirst = function (t1, t2, uidOf, cuUid, cuName) {
   var b = Array.isArray(t2) ? t2.slice() : [];
   var _uid = typeof uidOf === 'function' ? uidOf : function () { return null; };
   var nome = (cuName || '').trim().toLowerCase();
+  // v1.8.83: a reserva por nome passou a aceitar o PRIMEIRO NOME.
+  // ⚠️ MEDIDO com a função real e o caso do dono: no placar o slot dele mostrava
+  // "Rodrigo" e o perfil é "Rodrigo Barth" — a comparação exata não casava, a âncora
+  // virava no-op e ele jogava de VERMELHO. Não é frouxidão inventada: o próprio
+  // `_playerMeta` (bracket-ui) já identifica o usuário por
+  // `pn === cu.displayName.split(' ')[0]`. As duas regras tinham que ser a MESMA —
+  // divergindo, uma diz "é o usuário" (e põe a foto dele) e a outra diz "não é".
+  var primeiro = nome.split(' ')[0];
   function ehUsuario(n) {
     if (!n) return false;
     if (cuUid && _uid(n) === cuUid) return true;          // uid manda
-    return !!nome && String(n).trim().toLowerCase() === nome; // nome só como reserva
+    if (!nome) return false;
+    var v = String(n).trim().toLowerCase();               // nome só como reserva
+    return v === nome || (!!primeiro && v === primeiro);
   }
   var i = a.findIndex(ehUsuario);
   if (i < 0) {

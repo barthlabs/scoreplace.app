@@ -263,8 +263,18 @@ ok(COM_PENDENCIA.indexOf('ver os 3 anteriores') !== -1,
   'F3 — com 4 cards → 3 anteriores');
 ok(UM_SO.indexOf('id="meus-resultados-hint"') === -1,
   'F4 — com UM card não há "anteriores": o convite some (seria ruído)');
-ok(secao(render([confra(MEUS_CONFIRMADOS)], { aberta: true })).indexOf('ocultar anteriores') !== -1,
-  'F5 — aberta, o convite vira "ocultar anteriores"');
+// ⚠️ SONDA REVISADA DE PROPÓSITO em v1.8.78 — o texto mudou por pedido do dono (15/ago):
+// "a setinha de expandir ou colapsar está muito discreta; substituir essas setas na
+// esquerda por uma tag na direita 'ver mais' e 'ver menos'". As setinhas ▾/▴ saíram e
+// "ocultar anteriores" virou "ver menos", o mesmo par do cabeçalho. O invariante — aberta,
+// o convite passa a OFERECER FECHAR — é o mesmo.
+const ABERTA = secao(render([confra(MEUS_CONFIRMADOS)], { aberta: true }));
+ok(ABERTA.indexOf('ver menos') !== -1,
+  'F5 — aberta, o convite vira "ver menos"');
+ok(ABERTA.indexOf('▾') === -1 && ABERTA.indexOf('▴') === -1 && ABERTA.indexOf('▸') === -1,
+  'F6 — nenhuma setinha sobrou na seção (o dono achou o glifo discreto demais)');
+ok(/id="mr-toggle-tag"[^>]*color:#7dd3fc/.test(ABERTA),
+  'F7 — a tag de abrir/fechar mora à DIREITA do título, em azul-claro');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // G. O ALTERNADOR mexe no ATRIBUTO — nunca mais esconde o corpo

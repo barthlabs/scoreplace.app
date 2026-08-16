@@ -3102,7 +3102,8 @@ function setupCreateTournamentModal() {
   let _placesLibLoaded = false;
   let _placesInitialized = false;
   let _venueSearchTimer = null;
-  const OPENWEATHER_API_KEY = ['8fc3ddd6','9fcd76f8','0ba767c3','0ebd8b9d'].join('');
+  // v1.8.78: a chave do OpenWeather mora em js/views/weather.js — UMA cópia. Duas cópias
+  // é como se erra rotação de chave: troca-se uma e a outra segue chamando com a antiga.
 
   window._initPlacesAutocomplete = function () {
     if (_placesInitialized) return;
@@ -3483,18 +3484,19 @@ function setupCreateTournamentModal() {
         return;
       }
 
-      // If no API key, hide weather
-      if (!OPENWEATHER_API_KEY) {
+      // v1.8.78: quem tem a chave é o módulo do tempo. Sem ele carregado, não há previsão.
+      if (typeof window._weatherFetch !== 'function') {
         weatherDiv.style.display = 'none';
         return;
       }
 
-      // Fetch weather data
-      fetch('https://api.openweathermap.org/data/2.5/forecast?lat=' + lat + '&lon=' + lon +
-        '&appid=' + OPENWEATHER_API_KEY + '&units=metric&lang=pt_br')
-        .then(r => r.json())
+      // v1.8.78: a busca saiu daqui e virou `window._weatherFetch` (js/views/weather.js) —
+      // UMA chave, UM caminho de rede e cache de 30 min compartilhado com o widget do
+      // detalhe do torneio. Sem isso seriam duas requisições pro mesmo local, e o
+      // formulário dispara a cada tecla do campo de data (é debounced, mas ainda assim).
+      (window._weatherFetch ? window._weatherFetch(lat, lon) : Promise.resolve(null))
         .then(data => {
-          if (!data.list || !Array.isArray(data.list)) {
+          if (!data || !data.list || !Array.isArray(data.list)) {
             weatherDiv.style.display = 'none';
             return;
           }

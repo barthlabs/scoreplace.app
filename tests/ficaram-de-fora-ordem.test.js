@@ -82,9 +82,22 @@ ok(meio.indexOf('W.O. (') === -1 && meio.indexOf('Sem grupo (') === -1,
   'a Lista de espera tem que vir IMEDIATAMENTE depois dos Desativados, sem W.O./Sem grupo no meio');
 
 // ── 4. Box PRÓPRIO e ÂMBAR ──────────────────────────────────────────────────
-const caixaEspera = html.slice(html.lastIndexOf('<div', iEspera - 200) , iEspera);
-ok(caixaEspera.indexOf('251,191,36') !== -1, 'a Lista de espera precisa do seu box âmbar (rgba(251,191,36,…))');
+// ⚠️ SONDA REVISADA DE PROPÓSITO em v1.8.79 — o INVARIANTE é o mesmo (a espera tem box
+// próprio e âmbar); o que quebrou foi a HEURÍSTICA de achá-lo. Ela pegava
+// `lastIndexOf('<div', iEspera - 200)`, ou seja "a abertura de div uns 200 caracteres
+// antes do título" — e a 1.8.79 inseriu um `<div>` no meio (a linha do título, pra o
+// toggle "Travar proporção" subir pra ela, a pedido do dono). O offset fixo passou a
+// cair nessa linha nova, que não carrega o fundo do box.
+// Agora procura o PRÓPRIO box: a última abertura de div ANTES do título que declara o
+// fundo âmbar. Não depende de quantos elementos existem entre o box e o texto.
+const iCaixaEspera = html.lastIndexOf('<div style="margin-bottom:8px;background:rgba(251,191,36,0.06)', iEspera);
+ok(iCaixaEspera !== -1 && iCaixaEspera < iEspera,
+  'a Lista de espera precisa do seu box âmbar (rgba(251,191,36,…))');
+const caixaEspera = html.slice(iCaixaEspera, iEspera);
 ok(caixaEspera.indexOf('border-radius:10px') !== -1, 'box próprio (mesma moldura das outras seções)');
+// o box tem que ENVOLVER o título — se alguém fechá-lo antes, o título fica fora dele
+ok(caixaEspera.indexOf('</div>') === -1 || caixaEspera.lastIndexOf('<div') > caixaEspera.lastIndexOf('</div>'),
+  'o box âmbar ENVOLVE o título da espera (não foi fechado antes dele)');
 // e o dos inativos continua vermelho — os dois não podem virar a mesma cor
 const caixaInat = html.slice(html.lastIndexOf('<div', iInativos - 200), iInativos);
 ok(caixaInat.indexOf('239,68,68') !== -1, 'Desativados continua no box vermelho');

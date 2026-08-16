@@ -859,7 +859,12 @@ function renderDashboard(container) {
                 var _boxD = (typeof window._ligaCountdownBoxHtml === 'function')
                   ? window._ligaCountdownBoxHtml(t, 'sm', _toggleRowDash ? '4px' : '10px') : '';
                 if (!_boxD) return _toggleRowDash; // sem countdown → só o toggle (direita)
-                return _toggleRowDash + _boxD;
+                // v1.8.82: a previsão do tempo também AQUI. Ela existia só na tela de
+                // DETALHE, e o dono passou três mensagens procurando por ela na TELA
+                // INICIAL — que é onde ele estava o tempo todo. "Abaixo de rodada em
+                // andamento" quer dizer abaixo DESTE box, em qualquer tela onde ele apareça.
+                return _toggleRowDash + _boxD +
+                  ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'sm') : '');
               }
 
               // Não-Liga: countdown do evento mais próximo
@@ -1455,6 +1460,59 @@ function renderDashboard(container) {
       return n < 1e12 ? Math.round(n * 1000) : Math.round(n);
     }
 
+    // v1.8.78: separa "R1 Grupo S • Jogo 1" em { group:'R1 Grupo S', jogo:'Jogo 1' }.
+    // ⚠️ FONTE ÚNICA: nasceu dentro do `if (recentConfirmed.length)` de "Seus últimos
+    // resultados" e subiu pra cá quando as Novidades passaram a agrupar pelo MESMO
+    // critério (grupo + torneio). Duas cópias divergiriam, e aí as duas seções
+    // agrupariam diferente com o mesmo dado — [[feedback_unify_dual_entry_points]].
+    function _splitFase(s) {
+      s = String(s || '');
+      var mm = s.match(/^(.*?)[\s·•\-]*\b([Jj][Oo][Gg][Oo]\s*\d+)\s*$/);
+      if (mm && mm[1].trim()) return { group: mm[1].replace(/[\s·•\-]+$/, '').trim(), jogo: mm[2].trim() };
+      return { group: s.trim(), jogo: '' };
+    }
+
+    // v1.8.78: cabeçalho de grupo em DUAS LINHAS (grupo em cima, torneio embaixo) —
+    // pedido do dono. Ocupa a linha inteira da grade (`grid-column:1/-1`) de propósito:
+    // com o rótulo dentro do card, só o 1º card de cada grupo teria cabeçalho e os
+    // vizinhos da mesma linha subiriam desalinhados. Aparece UMA vez por (grupo+torneio)
+    // e é omitido dos demais jogos do mesmo grupo — que é a outra metade do pedido.
+    // `inline=true` desenha o mesmo bloco DENTRO de um card (usado no caso avulso de
+    // "Seus últimos resultados", onde o rótulo não se repete e portanto não precisa
+    // — nem deve — roubar uma linha inteira da grade).
+    function _grupoHeadHtml(grupo, tName, cor, attr, inline) {
+      return '<div ' + (attr || '') + ' style="' + (inline ? '' : 'grid-column:1/-1;') + 'margin:' + (inline ? '0 0 2px' : '6px 0 -2px') + ';min-width:0;">' +
+        '<div style="border-left:3px solid ' + cor + ';padding-left:8px;">' +
+          '<div style="color:' + cor + ';font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;' +
+            'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(grupo) + '</div>' +
+          (tName ? '<div style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:uppercase;' +
+            'letter-spacing:0.03em;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+            _sf(tName) + '</div>' : '') +
+        '</div></div>';
+    }
+
+    // v1.8.78: o convite de abrir/fechar. Era um chevron (▸/▾) à ESQUERDA do título —
+    // "muito discreto", disse o dono. Virou tag à DIREITA, fonte menor que o título
+    // (0.7 contra 0.85rem) e no azul-céu que o app já usa pra dado clicável.
+    // v1.8.79: virou TAG com box (pedido do dono) — texto solto num cabeçalho não lê como
+    // coisa clicável, ainda mais ao lado de um título que também é clicável. O box em
+    // azul-céu translúcido com borda dá o contorno de "isto é um controle".
+    function _verMaisTag(id, colapsado) {
+      return '<span id="' + id + '" style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
+        'color:#7dd3fc;background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
+        'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;">' +
+        (colapsado ? 'ver mais' : 'ver menos') + '</span>';
+    }
+    // O convite do RODAPÉ é o MESMO controle, então usa o MESMO desenho — só centralizado
+    // e com a contagem, que é a informação que o cabeçalho não carrega.
+    function _verMaisRodape(id, onclick, texto) {
+      return '<p style="margin:8px 0 0;text-align:center;">' +
+        '<span id="' + id + '" onclick="' + onclick + '" style="display:inline-block;cursor:pointer;user-select:none;' +
+        'font-size:0.7rem;font-weight:700;color:#7dd3fc;background:rgba(125,211,252,0.14);' +
+        'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:4px 12px;line-height:1.2;">' +
+        texto + '</span></p>';
+    }
+
     // v1.8.67: chave de deduplicação desta seção — `_collectAllMatches` NÃO deduplica, e
     // um jogo que exista em `t.matches` E dentro de uma rodada entraria duas vezes.
     var _seenMatch = {};
@@ -1565,7 +1623,12 @@ function renderDashboard(container) {
               roundNum: (m.round != null && !isNaN(Number(m.round))) ? Number(m.round) : 0,
               gameSeq: (m._gameNum != null) ? Number(m._gameNum)
                 : (function(){ var g = String(m.label || '').match(/Jogo\s*(\d+)/i); return g ? Number(g[1]) : 0; })(),
-              subLine: _subLine
+              subLine: _subLine,
+              // v1.8.78: o rótulo da FASE separado do formato. O agrupamento por
+              // (grupo + torneio) das Novidades precisa de "R1 Grupo S • Jogo 1" puro —
+              // `subLine` vem com o formato colado na frente ("Pontos Corridos · …") e
+              // agrupar por ela juntaria grupos diferentes do mesmo formato.
+              phaseLabel: _phaseLabel
             });
           }
           return;
@@ -1706,8 +1769,9 @@ function renderDashboard(container) {
       html += '<style>#meus-resultados-section[data-mr-collapsed="1"] #meus-resultados-body > *:not([data-mr-first]){display:none !important;}' +
         '#meus-resultados-section[data-mr-collapsed="1"] [data-mr-first] [data-mr-card] ~ *{display:none !important;}</style>';
       html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
-        '<span id="mr-chevron" style="font-size:0.8rem;display:inline-block;">' + (_mrCollapsed ? '▸' : '▾') + '</span>' +
-        '🏅 Seus últimos resultados</h3>';
+        '🏅 Seus últimos resultados' +
+        (_mrTotalCards > 1 ? _verMaisTag('mr-toggle-tag', _mrCollapsed) : '') +
+        '</h3>';
       html += '<div id="meus-resultados-body" style="margin-top:12px;">';
     }
 
@@ -2110,12 +2174,8 @@ function renderDashboard(container) {
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
       // única vez numa linha e só "JOGO N" acima de cada chave.
-      function _splitFase(s) {
-        s = String(s || '');
-        var mm = s.match(/^(.*?)[\s·•\-]*\b([Jj][Oo][Gg][Oo]\s*\d+)\s*$/);
-        if (mm && mm[1].trim()) return { group: mm[1].replace(/[\s·•\-]+$/, '').trim(), jogo: mm[2].trim() };
-        return { group: s.trim(), jogo: '' };
-      }
+      // v1.8.78: `_splitFase` subiu pro topo de _buildMyResultsHtml (fonte única —
+      // as Novidades agrupam pelo mesmo critério e não podem ter outra cópia).
       var _units = [];
       recentConfirmed.forEach(function(item) {
         var m2 = item.m;
@@ -2256,11 +2316,9 @@ function renderDashboard(container) {
       _resGroups.forEach(function(g) {
         if (g.grouped && g.units.length >= 2) {
           // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
-          html += '<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:6px 0 -2px;">' +
-            '<h4 style="color:' + g.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + g.color + ';padding-left:8px;flex:1;">' +
-              _sf(g.group) +
-              '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(g.tName) + '</span>' +
-            '</h4></div>';
+          // v1.8.78: grupo e torneio em DUAS LINHAS (antes lado a lado, e o torneio
+          // sumia no `ellipsis` em tela estreita). Mesmo desenho das Novidades.
+          html += _grupoHeadHtml(g.group, g.tName, g.color, '');
           // v2.3.62: o rótulo "JOGO N" com a barra colorida acima de cada chave
           // foi removido — essa info já aparece no header de cada box
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
@@ -2273,13 +2331,14 @@ function renderDashboard(container) {
         } else {
           // Singleton — cabeçalho completo (grupo · jogo + torneio), como antes.
           g.units.forEach(function(u) {
+            // v1.8.78: também em duas linhas — mas INLINE, dentro do card: sendo avulso,
+            // o rótulo não se repete em ninguém e um cabeçalho de linha inteira deixaria
+            // o resto da linha vazio.
             html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
-              '<div style="display:flex;align-items:center;gap:8px;">' +
-                '<h4 style="color:' + u.color + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + u.color + ';padding-left:8px;flex:1;">' +
-                  (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + _sf(u.faseStr2) +
-                  '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(u.tName) + '</span>' +
-                '</h4>' +
-              '</div>' +
+              _grupoHeadHtml(
+                (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + u.faseStr2,
+                u.tName, u.color, '', true
+              ) +
               u.body +
             '</div>';
           });
@@ -2294,8 +2353,8 @@ function renderDashboard(container) {
       // v1.8.69: o convite pra abrir, igual ao de Novidades. Só existe com 2+ cards —
       // com um só não há "anteriores" e a linha seria ruído.
       if (_mrTotalCards > 1) {
-        html += '<p id="meus-resultados-hint" onclick="window._toggleMyResultsCollapse()" style="margin:8px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
-          (_mrCollapsed ? '▾ ver os ' + (_mrTotalCards - 1) + ' anteriores' : '▴ ocultar anteriores') + '</p>';
+        html += _verMaisRodape('meus-resultados-hint', 'window._toggleMyResultsCollapse()',
+          (_mrCollapsed ? 'ver os ' + (_mrTotalCards - 1) + ' anteriores' : 'ver menos'));
       }
       html += '</div>'; // fecha #meus-resultados-section
     }
@@ -2350,7 +2409,12 @@ function renderDashboard(container) {
       // o resultado saiu (esta seção cruza torneios; a chave é sempre de um só).
       function _novCard(it) {
         var _quando = _agoLabel(it.at);
-        var _meta = [it.tName, it.subLine].filter(Boolean).join(' · ');
+        // v1.8.78: o contexto "de qual torneio/grupo" saiu daqui e virou o cabeçalho
+        // compartilhado de duas linhas, mostrado UMA vez por (grupo + torneio). Aqui
+        // sobra só o "quando", que muda de card pra card.
+        // ⚠️ MEDIDO no navegador: pôr o "Jogo N" aqui imprimia o número DUAS VEZES,
+        // uma coladinha na outra — o próprio card da chave já abre com "JOGO N" (é o
+        // `_gameNum` da fonte única). Fica só o carimbo de tempo, que o card não tem.
         // v1.8.67: `{readOnly:true}` — `canEnterResult=false` sozinho NÃO calava os botões
         // de pendência/disputa/W.O., que têm gate próprio por PAPEL: como organizador, o
         // dono via "✏️ Editar" num card fora da chave, e o clique cai num caminho que
@@ -2359,11 +2423,11 @@ function renderDashboard(container) {
           ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true })
           : '';
         return '<div data-nov-card="1" style="min-width:0;">' +
-          '<div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px;padding:0 2px;">' +
-            '<span style="flex:1;min-width:0;font-size:0.66rem;font-weight:700;color:#94a3b8;text-transform:uppercase;' +
-            'letter-spacing:0.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(_meta) + '</span>' +
-            (_quando ? '<span style="flex-shrink:0;font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' : '') +
-          '</div>' + _card +
+          (_quando
+            ? '<div data-nov-quando="1" style="display:flex;justify-content:flex-end;margin-bottom:5px;padding:0 2px;">' +
+                '<span style="font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' +
+              '</div>'
+            : '') + _card +
         '</div>';
       }
 
@@ -2378,13 +2442,35 @@ function renderDashboard(container) {
       // Com `data-nov-collapsed`, os cards são todos irmãos na MESMA grade e o estado
       // fechado apenas esconde do 2º em diante — a grade reflui sozinha.
       _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-      _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-nov-card]:nth-child(n+2){display:none;}' +
+      // ⚠️ v1.8.78: o corte do colapso deixou de ser `[data-nov-card]:nth-child(n+2)` e
+      // passou a ser "tudo que vem DEPOIS do primeiro card" — mesmo `~` que "Seus últimos
+      // resultados" já usa. Com os cabeçalhos de grupo dentro da grade, contar por
+      // posição deixaria de fora o cabeçalho do 2º grupo, que ficaria ÓRFÃO na tela
+      // fechada (um título anunciando cards que estão escondidos).
+      _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-nov-card] ~ *{display:none;}' +
         '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}</style>';
       _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
-        '<span id="nov-chevron" style="font-size:0.8rem;display:inline-block;">' + (_novCollapsed ? '▸' : '▾') + '</span>' +
-        '📣 Novidades no seu torneio</h3>';
+        '📣 Novidades no seu torneio' +
+        (_novList.length > 1 ? _verMaisTag('nov-toggle-tag', _novCollapsed) : '') +
+        '</h3>';
       _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
-      for (var _nvI = 0; _nvI < _novList.length; _nvI++) _novHtml += _novCard(_novList[_nvI]);
+      // v1.8.78: agrupa por (grupo + torneio) preservando a ordem de PRIMEIRA aparição —
+      // a mesma regra de "Seus últimos resultados", pra as duas não divergirem. A promessa
+      // da seção ("o lançamento mais recente no topo") continua de pé: quem abre cada
+      // grupo é o jogo mais recente dele, e os grupos entram na ordem em que apareceram.
+      var _novGroups = [], _novGIdx = {};
+      _novList.forEach(function(it) {
+        var _fp = _splitFase(it.phaseLabel || it.subLine || '');
+        var _key = _fp.group.toLowerCase() + '||' + String(it.tName || '').toLowerCase();
+        var _can = !!_fp.group;
+        if (_can && _novGIdx[_key] != null) { _novGroups[_novGIdx[_key]].items.push({ it: it, jogo: _fp.jogo }); return; }
+        if (_can) _novGIdx[_key] = _novGroups.length;
+        _novGroups.push({ grupo: _fp.group, tName: it.tName, items: [{ it: it, jogo: _fp.jogo }] });
+      });
+      _novGroups.forEach(function(g) {
+        _novHtml += _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"');
+        g.items.forEach(function(u) { _novHtml += _novCard(u.it); });
+      });
       _novHtml += '</div>';
       // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
       if (_novTotal > _NOV_MAX) {
@@ -2392,8 +2478,10 @@ function renderDashboard(container) {
           'mostrando os ' + _NOV_MAX + ' mais recentes de ' + _novTotal + '</p>';
       }
       if (_novList.length > 1) {
-        _novHtml += '<p id="novidades-hint" onclick="window._toggleNovidadesCollapse()" style="margin:8px 0 0;font-size:0.7rem;color:#94a3b8;cursor:pointer;user-select:none;text-align:center;">' +
-          (_novCollapsed ? '▾ ver os ' + (_novList.length - 1) + ' jogos anteriores' : '▴ ocultar anteriores') + '</p>';
+        // v1.8.78: sem as setinhas (o dono achou o glifo discreto demais) e no mesmo
+        // azul-céu da tag do cabeçalho — é o MESMO controle, em dois lugares.
+        _novHtml += _verMaisRodape('novidades-hint', 'window._toggleNovidadesCollapse()',
+          (_novCollapsed ? 'ver os ' + (_novList.length - 1) + ' jogos anteriores' : 'ver menos'));
       }
       _novHtml += '</div>'; // fecha #novidades-section
     }
@@ -3359,12 +3447,12 @@ function renderDashboard(container) {
       // mais por `display:none`). Fechada, a seção já mostra o card da pendência — mas
       // havendo MAIS de uma, abrir continua sendo o certo: nenhuma ação fica escondida.
       var _mrSec = document.getElementById('meus-resultados-section');
-      var _mrChev = document.getElementById('mr-chevron');
+      var _mrTag = document.getElementById('mr-toggle-tag');   // v1.8.78: era o chevron
       var _mrHint = document.getElementById('meus-resultados-hint');
       if (_mrSec && _mrSec.getAttribute('data-mr-collapsed') === '1') {
         _mrSec.setAttribute('data-mr-collapsed', '0');
-        if (_mrChev) _mrChev.textContent = '▾';
-        if (_mrHint) _mrHint.textContent = '▴ ocultar anteriores';
+        if (_mrTag) _mrTag.textContent = 'ver menos';
+        if (_mrHint) _mrHint.textContent = 'ver menos';
       }
       // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
       // entrada, a animação suave era interrompida no meio e parecia "pulo".
@@ -3411,6 +3499,11 @@ function renderDashboard(container) {
   // ─── Friends' presences widget (async load) ───
   _hydrateMyActivePresenceWidget();
   _hydrateFriendsPresenceWidget();
+
+  // ─── v1.8.82: previsão do tempo dos cards de torneio ───
+  // O slot nasce vazio e é preenchido aqui; ele mesmo se marca como feito, então
+  // re-render por snapshot não gera requisição nova (uma por local, cache de 30 min).
+  if (typeof window._hydrateWeatherSlots === 'function') { try { window._hydrateWeatherSlots(); } catch (e) {} }
 
   // v0.16.60: re-fetch do discovery feed sempre que renderiza dashboard.
   // Throttle de 15s (bem mais agressivo que v0.16.59 que era 30s) E ignora
@@ -3614,18 +3707,18 @@ window._applyDashSearchInPlace = function() {
 // é COLAPSADA (só o lançamento mais recente à vista).
 window._toggleNovidadesCollapse = function() {
   var sec = document.getElementById('novidades-section');
-  var chev = document.getElementById('nov-chevron');
+  var tag = document.getElementById('nov-toggle-tag');
   var hint = document.getElementById('novidades-hint');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-nov-collapsed') !== '1';
   sec.setAttribute('data-nov-collapsed', willCollapse ? '1' : '0');
-  if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  if (tag) tag.textContent = willCollapse ? 'ver mais' : 'ver menos';
   if (hint) {
     var grid = document.getElementById('novidades-grid');
     var n = grid ? grid.querySelectorAll('[data-nov-card]').length : 0;
     hint.textContent = willCollapse
-      ? ('▾ ver os ' + Math.max(0, n - 1) + ' jogos anteriores')
-      : '▴ ocultar anteriores';
+      ? ('ver os ' + Math.max(0, n - 1) + ' jogos anteriores')
+      : 'ver menos';
   }
   try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
 };
@@ -3635,18 +3728,18 @@ window._toggleNovidadesCollapse = function() {
 // NUNCA mais some inteiro, senão a seção fechada não mostra nada (era a queixa do dono).
 window._toggleMyResultsCollapse = function() {
   var sec = document.getElementById('meus-resultados-section');
-  var chev = document.getElementById('mr-chevron');
+  var tag = document.getElementById('mr-toggle-tag');
   var hint = document.getElementById('meus-resultados-hint');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-mr-collapsed') !== '1';
   sec.setAttribute('data-mr-collapsed', willCollapse ? '1' : '0');
-  if (chev) chev.textContent = willCollapse ? '▸' : '▾';
+  if (tag) tag.textContent = willCollapse ? 'ver mais' : 'ver menos';
   if (hint) {
     var body = document.getElementById('meus-resultados-body');
     var n = body ? body.querySelectorAll('[data-mr-card]').length : 0;
     hint.textContent = willCollapse
-      ? ('▾ ver os ' + Math.max(0, n - 1) + ' anteriores')
-      : '▴ ocultar anteriores';
+      ? ('ver os ' + Math.max(0, n - 1) + ' anteriores')
+      : 'ver menos';
   }
   try { localStorage.setItem('scoreplace_collapse_myresults', willCollapse ? '1' : '0'); } catch (e) {}
 };

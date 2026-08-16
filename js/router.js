@@ -279,6 +279,19 @@ function initRouter() {
     switch (view) {
       case '':
       case 'dashboard':
+        // v1.8.78: "Novidades no seu torneio" e "Seus últimos resultados" voltam
+        // RECOLHIDAS (só o jogo mais recente) sempre que se CHEGA na dashboard vindo
+        // de outra tela — ordem do dono. A escolha de abrir vale só enquanto se está
+        // aqui: apagando a chave, o default (fechada) volta a valer no próximo render.
+        // ⚠️ Só em NAVEGAÇÃO: `_isSoftRefresh` marca o re-render disparado pelo
+        // onSnapshot do Firestore, e recolher ali fecharia a seção embaixo do dedo de
+        // quem está lendo, sem ninguém ter saído da tela.
+        if (!window._isSoftRefresh) {
+          try {
+            localStorage.removeItem('scoreplace_collapse_novidades');
+            localStorage.removeItem('scoreplace_collapse_myresults');
+          } catch (e) {}
+        }
         renderDashboard(viewContainer);
         break;
       case 'tournament':

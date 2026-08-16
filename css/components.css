@@ -690,6 +690,47 @@ button[style*="linear-gradient"]:not(.btn):active {
 .cancel-x-btn::after  { transform: translate(-50%, -50%) rotate(-45deg); }
 .cancel-x-btn:hover { background: #b91c1c; transform: scale(1.08); }
 .cancel-x-btn:active { transform: scale(0.92); }
+
+/* --- Área de toque do ✕ DENTRO do campo de busca (v1.8.78) ---
+   RELATO DO DONO (15/ago/2026): "no celular, o x da barra de buscas/filtro para limpar
+   o texto ali digitado está difícil de clicar. ao clicar acaba aparecendo o copiar,
+   colar…"
+   CAUSA: o ✕ visível tem 20px (`--cx-size:20px`) e ERA ele próprio o alvo de toque —
+   menos da METADE do mínimo de 44px. Errar o círculo por 3px faz o toque atravessar pro
+   <input> que está atrás: o campo recebe o toque, posiciona o cursor e o iOS abre o
+   menu de seleção (copiar/colar). Ou seja o menu não era um bug à parte — era o sintoma
+   de ter errado o botão.
+   CONSERTO: o ALVO e o DESENHO passam a ser coisas diferentes. Este botão é transparente
+   e ocupa 44px de largura pela ALTURA INTEIRA do campo; o círculo vermelho continua com
+   20px, desenhado por um .cancel-x-btn lá dentro (o cânone do símbolo fica intocado —
+   ele desenha o X com ::before/::after, então não dava pra usar os pseudo-elementos dele
+   pra ampliar a área).
+   `z-index` põe o alvo ACIMA do input; `touch-action:manipulation` tira o atraso de
+   ~300ms do duplo-toque; `user-select:none` impede que o gesto vire seleção de texto. */
+.fb-clear-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  z-index: 2;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* O realce responde na área toda, não só nos 20px do círculo — senão o alvo aumenta
+   mas o retorno visual continua dizendo que só o miolo vale. */
+.fb-clear-btn:hover .cancel-x-btn { background: #b91c1c; transform: scale(1.08); }
+.fb-clear-btn:active .cancel-x-btn { transform: scale(0.92); }
 /* Spinner do feedback "Formando dupla…" (drag-drop na lista de espera, enquanto a CF responde). */
 .lj-spin { width: 16px; height: 16px; border: 2.5px solid rgba(34,211,238,0.30); border-top-color: #22d3ee; border-radius: 50%; display: inline-block; animation: lj-spin-kf 0.7s linear infinite; }
 @keyframes lj-spin-kf { to { transform: rotate(360deg); } }
@@ -769,6 +810,65 @@ button[style*="linear-gradient"]:not(.btn):active {
 [data-vphoto-on] .org-tools-label {
   color: #f1f5f9 !important;
   text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95);
+}
+
+/* --- As caixas INSCRITOS / EQUIPES / LISTA DE ESPERA sobre a foto (v1.8.80) -
+   MESMA raiz do rótulo acima, e o relato do dono é o mesmo sintoma: _"essa lista de
+   espera não está dando leitura, especialmente quando há foto no torneio"_.
+   ⚠️ A 1.8.78 tentou consertar isto passando a tarja (`_photoReadBox()`) pras caixas —
+   e NÃO adiantou, porque desde a 1.7.53 quem lê `venuePhotoBg` no RENDER recebe sempre
+   "não tem foto": a foto do Google só é pintada depois, pelo hidratador. A tarja existia
+   no código e valia `null` na prática. Só o caminho do CSS enxerga o estado real.
+   (O `_photoReadBox()` inline segue valendo pro outro caso — capa ENVIADA pelo
+   organizador, `t.coverPhotoData`, que existe no render. Os dois caminhos coexistem.)
+   Sobre foto: tarja escura + desfoque, e o âmbar CLAREIA — #fbbf24 é calibrado pra
+   fundo liso e some numa foto clara. */
+[data-vphoto-on] .stat-box {
+  background: rgba(0,0,0,0.60) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  color: #e2e8f0 !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+}
+[data-theme="light"] [data-vphoto-on] .stat-box {
+  background: rgba(30,41,59,0.85) !important;
+  color: #f1f5f9 !important;
+}
+/* a caixa da espera mantém a identidade âmbar — só num tom que sobrevive à foto */
+[data-vphoto-on] .stat-box[data-stat="waitlist"] {
+  border-color: rgba(252,211,77,0.55) !important;
+}
+[data-vphoto-on] .stat-box[data-stat="waitlist"] .stat-value,
+[data-vphoto-on] .stat-box[data-stat="waitlist"] span {
+  color: #fcd34d !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+}
+
+/* --- A PREVISÃO DO TEMPO sobre a foto do local (v1.8.81) -------------------
+   MESMA raiz das caixas acima, e foi o que fez o dono procurar a previsão e não achar:
+   ela ESTAVA na tela — renderizada, hidratada, no lugar certo — só que com fundo azul de
+   8% de opacidade por cima da foto do clube. Invisível na prática.
+   MEDIDO: com o doc REAL do Confra o widget sai com 4230 bytes, 346px de altura, entre o
+   cronômetro e o bloco do local — e some visualmente assim que a foto entra.
+   Escurece junto com o resto quando a foto é pintada; os cinzas de apoio (umidade, vento,
+   descrição dos dias) clareiam, senão continuam sumindo mesmo com a tarja. */
+[data-vphoto-on] .weather-box {
+  background: rgba(0,0,0,0.60) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: rgba(255,255,255,0.20) !important;
+}
+[data-theme="light"] [data-vphoto-on] .weather-box {
+  background: rgba(30,41,59,0.85) !important;
+}
+[data-vphoto-on] .weather-box span {
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+}
+/* os tons de apoio (#cbd5e1 / #94a3b8) são calibrados pra fundo liso */
+[data-vphoto-on] .weather-box span[style*="#cbd5e1"],
+[data-vphoto-on] .weather-box span[style*="#94a3b8"] {
+  color: #e2e8f0 !important;
 }
 
 /* --- Info Pill (badges de status: Começa hoje, Progresso, Inscritos, etc.) --- */
