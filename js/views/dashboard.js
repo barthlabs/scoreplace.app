@@ -1547,9 +1547,15 @@ function renderDashboard(container) {
     // destino cai na classificação certa sem precisar de âncora por grupo (que não
     // existe hoje na chave).
     function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId) {
+      // v1.8.99: leva o GRUPO junto — ordem do dono: "tem que ir com o grupo clicado
+      // no topo e nao no topo do torneio". O rótulo vai por sessionStorage (não pela
+      // URL) porque a chave é normalizada e nome de grupo tem espaço/acento; a chave é
+      // consumida pelo bracket assim que ele rola até lá.
+      var _grpK = (typeof window._grpKey === 'function') ? window._grpKey(grupo) : '';
       var _btn = tId
         ? '<a href="#bracket/' + String(tId).replace(/"/g, '&quot;') + '" ' +
-          'onclick="event.stopPropagation();" ' +
+          'onclick="event.stopPropagation();try{sessionStorage.setItem(\'sp_scrollToGroup\',\'' +
+            String(_grpK).replace(/'/g, '') + '\')}catch(e){}" ' +
           'style="flex-shrink:0;margin-left:auto;align-self:center;font-size:0.62rem;font-weight:700;' +
           'text-decoration:none;color:#7dd3fc;background:rgba(125,211,252,0.14);' +
           'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:3px 9px;line-height:1.2;' +

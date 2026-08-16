@@ -177,6 +177,20 @@ function _applyMyMatchesFilter() {
         // grupo do usuário. Só existe pro organizador quando a fase fecha (bracket.js).
         var _adv = document.getElementById('phase-advance-banner');
         if (_adv) { _adv.scrollIntoView({ behavior: behavior, block: 'start' }); return; }
+        // v1.8.99: GRUPO PEDIDO tem prioridade. Quem chegou pelo "Ir para o torneio"
+        // de um grupo específico (dashboard) quer AQUELE grupo no topo — não o seu
+        // próximo jogo, que pode estar em outro grupo. Sem pedido, segue a regra antiga.
+        var _pedido = null;
+        try { _pedido = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
+        if (_pedido) {
+          var _alvoGrp = document.querySelector('[data-group-label="' + String(_pedido).replace(/"/g, '') + '"]');
+          if (_alvoGrp) {
+            _alvoGrp.scrollIntoView({ behavior: behavior, block: 'start' });
+            return;
+          }
+          // grupo não encontrado (re-sorteio, fase avançada) → NÃO insiste: cai na
+          // regra normal, que é melhor que ficar no topo do torneio sem explicação.
+        }
         var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
         if (!_mine) return;
         var _target = (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
@@ -184,9 +198,28 @@ function _applyMyMatchesFilter() {
       } catch (e) {}
     };
     setTimeout(function () { _goMine('smooth'); }, 80);
-    setTimeout(function () { _goMine('auto'); window._suppressSoftRefresh = false; }, 1400);
+    setTimeout(function () {
+      _goMine('auto');
+      // consumida só DEPOIS da 2ª passada: a 1ª é a animação, a 2ª re-afirma o alvo.
+      // Apagar antes faria a re-afirmação cair na regra antiga e desfazer o scroll.
+      try { sessionStorage.removeItem('sp_scrollToGroup'); } catch (e) {}
+      window._suppressSoftRefresh = false;
+    }, 1400);
   }
 }
+
+// ── v1.8.99: ÂNCORA POR GRUPO ───────────────────────────────────────────────
+// Ordem do dono: "o ir para o torneio tem que ir com o grupo clicado no topo e nao no
+// topo do torneio". O botão da dashboard passava só o id do torneio, e a chave abria
+// no começo — os boxes de grupo tinham `data-group-box` (usado pra rolar até o SEU
+// jogo) mas nenhum RÓTULO, então não havia como escolher um grupo específico.
+// Chave de comparação normalizada (sem acento, sem caixa, espaços colapsados) porque o
+// mesmo grupo aparece como "R1 Grupo B" na chave e "R1 GRUPO B" na dashboard.
+window._grpKey = function (s) {
+  return String(s == null ? '' : s)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+};
 
 function renderBracket(container, tournamentId, isInline) {
   // v1.4.20: a barra de busca da CLASSIFICAÇÃO sai no PRIMEIRO bloco deste render.
@@ -4262,7 +4295,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
-    html += '<div data-group-box="1" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1" data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
         '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
         (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
@@ -4469,7 +4502,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     return `
-      <div class="card" id="group-section-${gi}" data-group-box="1" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
+      <div class="card" id="group-section-${gi}" data-group-box="1" data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
         <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
@@ -5534,7 +5567,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
-          return '<div data-group-box="1" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
+          return '<div data-group-box="1" data-group-label="' + window._safeHtml(window._grpKey(g.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
             // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
             // dono); com botões, empilha à esquerda e deixa os controles à direita.

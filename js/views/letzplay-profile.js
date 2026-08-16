@@ -337,11 +337,18 @@
     // v1.8.98: SEM o traço entre V e D (ordem do dono) — ele empurrava a segunda
     // linha e desalinhava os números. Agora são duas linhas de grade: o número à
     // direita e a letra à esquerda, então 53/53 ficam na mesma coluna.
+    // v1.8.99: o bloco fica CENTRALIZADO no box (ordem do dono: "quem mandou jogar na
+    // direita do box"). Eu tinha alinhado à direita por conta própria — o pedido era só
+    // tirar o traço pra os números alinharem entre si.
+    // A grade continua existindo, mas agora ela é `inline-grid` e o container centraliza:
+    // os DÍGITOS seguem alinhados um sob o outro (é o que o traço estragava) e o
+    // conjunto fica no meio da caixa.
     var _linhaVD = function (n, letra, cor) {
-      return '<div style="display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:6px;color:' + cor + ';">' +
-        '<span style="text-align:right;">' + n + '</span><span>' + letra + '</span></div>';
+      return '<div style="display:inline-grid;grid-template-columns:auto auto;align-items:baseline;gap:6px;color:' + cor + ';">' +
+        '<span style="text-align:right;">' + n + '</span><span style="text-align:left;">' + letra + '</span></div>';
     };
-    var totalHtml = _linhaVD(totWn, 'V', '#2dd4a0') + _linhaVD(totLn, 'D', '#f87171');
+    var totalHtml = '<div style="text-align:center;">' + _linhaVD(totWn, 'V', '#2dd4a0') + '</div>' +
+                    '<div style="text-align:center;">' + _linhaVD(totLn, 'D', '#f87171') + '</div>';
 
     // Sequência atual: derivada dos jogos letzplay (com data), do mais recente
     // pra trás — conta a fila de resultados iguais no topo.

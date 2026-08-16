@@ -338,5 +338,48 @@ if (codPools && codCont) {
     '"Novidades no seu torneio" passa o id');
 })();
 
+
+// ── "IR PARA O TORNEIO" CAI NO GRUPO CLICADO (v1.8.99) ─────────────────────
+// Ordem do dono: "o ir para o torneio tem que ir com o grupo clicado no topo e nao no
+// topo do torneio". A 1.8.98 mandava só `#bracket/<id>` e a chave abria no começo.
+// Os boxes de grupo já tinham `data-group-box` (usado pra rolar até o SEU jogo) mas
+// nenhum RÓTULO — não havia como escolher um grupo específico.
+(function () {
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+  const br = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+
+  // normalização é FONTE ÚNICA: a dashboard escreve "R1 GRUPO B" e a chave "R1 Grupo B"
+  const m = br.match(/window\._grpKey = function[\s\S]*?\n\};/);
+  ok(!!m, 'existe a normalização canônica de rótulo de grupo (_grpKey)');
+  if (m) {
+    const win = {};
+    eval(m[0].replace('window._grpKey', 'win._grpKey'));
+    ok(win._grpKey('R1 GRUPO B') === win._grpKey('R1 Grupo B'),
+      'a chave ignora CAIXA — a dashboard mostra em maiúsculas e a chave não');
+    ok(win._grpKey('R2 Grupo Ú') === 'r2 grupo u', 'a chave ignora ACENTO');
+    ok(win._grpKey('  R1   GRUPO   b  ') === 'r1 grupo b', 'a chave colapsa espaços');
+  }
+
+  // os TRÊS renders de grupo carregam o rótulo (Rei/Rainha por t.matches, Fase de
+  // Grupos, e Rei/Rainha por t.rounds) — faltando um, aquele formato não seria alcançado
+  const marcados = (br.match(/data-group-label=/g) || []).length;
+  ok(marcados >= 3, 'os 3 renders de box de grupo carregam data-group-label (achados: ' + marcados + ')');
+
+  ok(/sessionStorage\.setItem\(\\'sp_scrollToGroup/.test(dash) || /sp_scrollToGroup/.test(dash),
+    'o botão da dashboard grava o grupo pedido');
+  ok(/_pedido = sessionStorage\.getItem\('sp_scrollToGroup'\)/.test(br),
+    'a chave lê o grupo pedido');
+  ok(/querySelector\('\[data-group-label="' \+ String\(_pedido\)/.test(br),
+    'e rola pro box daquele rótulo');
+  // ⚠️ grupo inexistente NÃO pode travar no topo — cai na regra antiga
+  ok(/\/\/ grupo não encontrado \(re-sorteio, fase avançada\)/.test(br),
+    'grupo não encontrado cai na regra antiga em vez de ficar no topo sem explicação');
+  // a chave é consumida DEPOIS da 2ª passada, senão a re-afirmação desfaz o scroll
+  const iRemove = br.indexOf("sessionStorage.removeItem('sp_scrollToGroup')");
+  const iGoAuto = br.indexOf("_goMine('auto')");
+  ok(iRemove > iGoAuto && iRemove - iGoAuto < 400,
+    'a chave só é consumida DEPOIS da re-afirmação do alvo (apagar antes desfaria o scroll)');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
