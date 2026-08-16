@@ -1004,6 +1004,15 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                     for (var j = 0; j < v2.length; j++) {
                         var r = v2[j];
                         if (!r || (r.matchId && seen[r.matchId])) continue;
+                        // ── v1.8.96: o cache LOCAL também obedece à regra da rajada ──────
+                        // Relato do dono: "ainda divergente 54/54 contra 52/53" — 2V/1D de
+                        // diferença entre a ficha e o contador. Causa: `loadUserMatchHistory`
+                        // filtra rajada na LEITURA do Firestore, mas este cache local NÃO passa
+                        // por lá. As partidas de teste apagadas do banco seguiam vivas aqui e
+                        // ressuscitavam só nesta tela.
+                        // ⚠️ Filtrar aqui é obrigatório porque este é o ÚNICO ponto em que
+                        // registro local entra na conta sem passar pelo loader.
+                        if (typeof window._isPartidaEmRajada === 'function' && window._isPartidaEmRajada(r)) continue;
                         // Ensure my uid is present so _renderPersistentMatchStats can locate me.
                         var seeded = Object.assign({}, r);
                         seeded.players = (r.players || []).map(function(p) {

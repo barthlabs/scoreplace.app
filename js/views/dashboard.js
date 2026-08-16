@@ -3272,7 +3272,27 @@ function renderDashboard(container) {
     (async function() {
       try {
         var records = await window.FirestoreDB.loadUserMatchHistory(_myUid, { limit: 500 });
-        var agg = _aggregateWL(Array.isArray(records) ? records : [], _myUid, _myDn);
+        // ── v1.8.96: MESMA ENTRADA que a ficha do atleta ───────────────────────
+        // Relato do dono: "ainda divergente 54/54 contra 52/53". Unificar o CÁLCULO
+        // (1.8.95) não bastou: os dois lados calculavam igual sobre entradas
+        // DIFERENTES. A ficha funde o cache local de casuais (partida que ainda não
+        // subiu pro Firestore); o pill usava esse cache só na primeira pintura e
+        // depois o descartava. Agora os dois fundem — mesma conta, mesma entrada.
+        var _base = Array.isArray(records) ? records.slice() : [];
+        try {
+          var _loc = JSON.parse(localStorage.getItem('scoreplace_casual_history_v2') || '[]');
+          if (Array.isArray(_loc) && _loc.length) {
+            var _vistos = {};
+            _base.forEach(function (r) { if (r && r.matchId) _vistos[r.matchId] = 1; });
+            _loc.forEach(function (r) {
+              if (!r || (r.matchId && _vistos[r.matchId])) return;
+              // o cache local não passa pelo loader → a regra da rajada vale aqui
+              if (typeof window._isPartidaEmRajada === 'function' && window._isPartidaEmRajada(r)) return;
+              _base.push(r);
+            });
+          }
+        } catch (_e) {}
+        var agg = _aggregateWL(_base, _myUid, _myDn);
 
         // ── v1.8.92: havendo letzplay, o total é letzplay + scoreplace ──────────
         // Relato do dono: "aqui o partidas esta divergente. vamos usar o

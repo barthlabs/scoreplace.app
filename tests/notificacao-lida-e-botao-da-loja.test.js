@@ -318,5 +318,31 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
     'ela redesenha no slot que EXISTE (o id foi conferido no arquivo, não inventado)');
 })();
 
+
+// ── ...E A MESMA ENTRADA, NÃO SÓ A MESMA CONTA (v1.8.96) ────────────────────
+// Relato do dono depois da 1.8.95: "ainda divergente 54/54 contra 52/53".
+// Unificar o CÁLCULO não bastou — os dois lados calculavam igual sobre entradas
+// DIFERENTES: a ficha funde o cache local de casuais (partida que ainda não subiu
+// pro Firestore), o pill usava esse cache só na 1ª pintura e depois o descartava.
+// E o cache local NÃO passa por `loadUserMatchHistory`, então escapava do filtro de
+// rajada: as partidas de teste apagadas do banco ressuscitavam ali.
+(function () {
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+  const ana = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-analytics.js'), 'utf8');
+
+  ok(/_loc = JSON\.parse\(localStorage\.getItem\('scoreplace_casual_history_v2'/.test(dash),
+    'o pill funde o cache local de casuais — a MESMA entrada da ficha');
+  ok(/_vistos\[r\.matchId\]/.test(dash),
+    'a fusão do pill deduplica por matchId (o que já está no Firestore não conta duas vezes)');
+  // os DOIS pontos onde registro local entra têm que filtrar rajada
+  const trechoDash = dash.slice(dash.indexOf('_loc.forEach'), dash.indexOf('_loc.forEach') + 400);
+  ok(/_isPartidaEmRajada\(r\)/.test(trechoDash),
+    'no pill, o registro local passa pelo filtro de rajada');
+  const iMerge = ana.indexOf('function _mergeLocalCasualV2');
+  const trechoAna = ana.slice(iMerge, iMerge + 2600);
+  ok(/_isPartidaEmRajada\(r\)\) continue;/.test(trechoAna),
+    'na ficha, o registro local também passa pelo filtro de rajada (era por onde as apagadas voltavam)');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
