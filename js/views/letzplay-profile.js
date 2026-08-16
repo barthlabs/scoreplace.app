@@ -269,9 +269,9 @@
     // OFICIAL = torneios (eventos únicos): letzplay (🎾) + scoreplace mata-mata (🏆).
     // RANKING = temporadas contínuas: rankings letzplay (🎾) + Liga/Pontos Corridos do
     // scoreplace (🏆). Liga é ranking, NÃO torneio — vai na coluna de ranking.
-    var footOff = (imp.footprint || []).filter(function (f) { return f.official; })
+    var footOff = (imp.footprint || []).filter(function (f) { return f.official && lpClubeValido(f); })
       .map(function (f) { var c = concluded(f, true); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾', logo: f.logo || null, ref: (f.tourneyId != null && f.club) ? ('t/' + f.club + '/' + f.tourneyId) : null }; });
-    var footRec = (imp.footprint || []).filter(function (f) { return !f.official; })
+    var footRec = (imp.footprint || []).filter(function (f) { return !f.official && lpClubeValido(f); })
       .map(function (f) { var c = concluded(f, false); var nm = lpName(f); return { name: nm, cat: (f.categoryRaw && f.categoryRaw !== nm) ? f.categoryRaw : '', when: c.when, ts: c.ts, pos: f.position, wins: f.wins, losses: f.losses, src: '🎾', logo: f.logo || null, ref: (f.rankingId != null && f.club) ? ('r/' + f.club + '/' + f.rankingId) : null }; });
     spT.forEach(function (s) {
       var t = _ts(s.date);
@@ -440,6 +440,40 @@
       '<circle cx="' + X(pts.length - 1).toFixed(1) + '" cy="' + Y(last).toFixed(1) + '" r="3.6" fill="' + clr + '"/>' +
     '</svg>';
   }
+  // Fonte única em store.js (window._lzClubeValido) — a Análise de Inscritos usa a MESMA.
+  function lpClubeValido(f) {
+    return (typeof window._lzClubeValido === 'function') ? window._lzClubeValido(f) : !!f;
+  }
+
+  // CURA DE LEITURA para classificações já gravadas por uma extensão anterior a 2.02.
+  // Dois estragos, ambos medidos no doc real: (a) o badge do letzplay entrava COLADO no
+  // nome ("Fabio Ruggiero Inativo"); (b) o nome de uma linha vazava para todas as
+  // seguintes, então a classificação inteira saía com a MESMA pessoa. O handle, esse,
+  // sempre esteve certo em toda linha.
+  // Mostrar o nome de OUTRA pessoa é pior que não mostrar nome: quando o mesmo rótulo se
+  // repete no grupo, ele deixa de ser identidade e cai para o handle, que é.
+  function lpCuraNomes(rows) {
+    var vezes = {};
+    (rows || []).forEach(function (r) {
+      var k = ((r.players || []).join('/') || '').trim().toLowerCase();
+      if (k) vezes[k] = (vezes[k] || 0) + 1;
+    });
+    return (rows || []).map(function (r) {
+      var nomes = (r.players || []).map(function (s) {
+        return String(s).replace(/\s+(Inativo|Ativo)$/i, '').replace(/\s+/g, ' ').trim();
+      }).filter(Boolean);
+      var k = (nomes.join('/') || '').trim().toLowerCase();
+      var repetido = k && vezes[((r.players || []).join('/') || '').trim().toLowerCase()] > 1;
+      if (!nomes.length || repetido) {
+        var h = (r.handles || []).filter(Boolean);
+        if (h.length) nomes = h.slice();
+      }
+      return { pos: r.pos, players: nomes, handles: r.handles, points: r.points,
+               wins: r.wins, losses: r.losses, inactive: r.inactive };
+    });
+  }
+  root._lpCuraNomes = lpCuraNomes;
+
   function standingsHtml(standings, myHandle) {
     if (!standings || !standings.length) {
       return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:8px 0;">Classificação completa disponível após reimportar com a extensão atualizada.</div>';
@@ -447,7 +481,7 @@
     var myH = String(myHandle || '').toLowerCase();
     return standings.map(function (grp) {
       var isRk = grp.ranking === true;   // ranking: mostra PONTOS; torneio: mostra V–D
-      var rows = (grp.rows || []).map(function (r) {
+      var rows = lpCuraNomes(grp.rows).map(function (r) {
         var mine = (r.handles || []).some(function (h) { return String(h).toLowerCase() === myH; });
         var players = (r.players || []).map(esc).join(' / ') || '—';
         var rightVal = isRk

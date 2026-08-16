@@ -1505,6 +1505,7 @@
     var linhas = [], vistos = {}, porId = {};
     ((imp.footprint) || []).forEach(function (f) {
       if (!f || (!!f.official === _rank)) return;
+      if (window._lzClubeValido && !window._lzClubeValido(f)) return;   // fantasma `/u/...`
       var k = _pre + (f.club || '') + '/' + (_rank ? (f.rankingId || '') : (f.tourneyId || ''));
       vistos[k] = 1;
       // UMA LINHA POR TORNEIO. Imports antigos têm o footprint fragmentado (o mesmo torneio

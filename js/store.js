@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.1';
+window.SCOREPLACE_VERSION = '1.9.2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,7 +105,7 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-window.SP_EXT_VERSION = '2.01';
+window.SP_EXT_VERSION = '2.02';
 
 // ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
 // A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",
@@ -432,6 +432,21 @@ window._formatDisplayName = function (fmt) {
 //   2) nome real do footprint casado por (clube|categoria|ano) — resgata imports antigos
 //      cujo footprint.name já traz o nome real mas os jogos ainda guardam só a categoria;
 //   3) g.competition (categoria — fallback, ex: "Masculina D").
+// Segmentos de URL do letzplay que NÃO são clube — o gêmeo desta lista vive em
+// extension/content.js (guard de escrita); aqui é o guard de LEITURA, que cura quem já
+// tem a entrada gravada sem tocar no banco. `/u/` é a área do usuário logado (feed,
+// histórico) e o regex `^/([^/]+)/rankings/(\d+)` a aceitava como clube: nascia a
+// competição fantasma `r/u/48552`, com o MESMO id de um ranking real mas clube errado —
+// ou seja uma SEGUNDA entrada, que nunca resolve nada (`/u/rankings/48552` redireciona
+// pra home) e aparecia no app como "U · Feed", sem classificação e com 0 V/0 D.
+// Duas listas em dois arquivos divergem no primeiro ajuste; por isso a regra é UMA e os
+// dois consumidores (ficha do jogador e Análise de Inscritos) chamam esta função.
+window._LZ_CLUBE_RESERVADO = { u: 1, home: 1, login: 1, search: 1, api: 1, static: 1, assets: 1 };
+window._lzClubeValido = function (f) {
+  if (!f) return false;
+  return !window._LZ_CLUBE_RESERVADO[String(f.club || '').toLowerCase()];
+};
+
 // `imp` é o letzplayImport (pra achar o footprint). Rankings (não-oficiais) não têm nome
 // de torneio → sempre a categoria. Usado por Estatísticas, gráfico de forma e Histórico.
 // Índice canônico das COMPETIÇÕES do letzplay por REFERÊNCIA: torneio = `t/club/tourneyId`,

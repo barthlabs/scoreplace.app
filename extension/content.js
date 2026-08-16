@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '2.01';
+  var EXT_VERSION = '2.02';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -289,6 +289,31 @@
   // Classificação de RANKING (`.table-ranking`, estrutura diferente do torneio) — jogadores
   // (individual ou dupla) ordenados por PONTOS. A posição É a ordem na tabela (a página já
   // vem ordenada). Retorna [{ group:'Classificação', ranking:true, rows:[{pos,players,handles,points,inactive}] }].
+  // O NOME DO JOGADOR MORA NUM <a class="btn-link-default"> — NUNCA no a[href^="/"].
+  // Medido na página real (paineiras-bt/rankings/48552, 16/ago/2026): o href^="/" é o
+  // link do AVATAR, que é uma <img> (texto vazio) ou as INICIAIS num <span> ("AR", "FR").
+  // Era daí que saíam as linhas "AR" e as linhas sem nome nenhum ("—") no app.
+  // O badge Ativo/Inativo é um <span class="label"> IRMÃO do nome, sem <br> entre eles:
+  // por isso "Fabio Ruggiero" + "Inativo" viravam UMA string "Fabio Ruggiero Inativo" ao
+  // tirar as tags, e o filtro /^(Inativo|Ativo)$/ (que exige a string INTEIRA) nunca casava.
+  function _nomesDaLinha(row, linkAvatar) {
+    var nomes = [].slice.call(row.querySelectorAll('a.btn-link-default'))
+      .map(function (a) { return (a.textContent || '').replace(/\s+/g, ' ').trim(); })
+      .filter(Boolean);
+    if (nomes.length) return nomes;
+    // Reserva 1: markup antigo, com os nomes da dupla separados por <br>.
+    var nmEl = row.querySelector('.break-line');
+    if (nmEl) {
+      nomes = (nmEl.innerHTML || '').split(/<br\s*\/?>/i)
+        .map(function (s) { return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); })
+        .filter(function (s) { return s && !/^(Inativo|Ativo)$/i.test(s); });
+      if (nomes.length) return nomes;
+    }
+    // Reserva 2: o texto do link do avatar — SÓ se for longo o bastante pra ser um nome.
+    // Sem esse piso, as iniciais do avatar ("AR") voltariam a virar "nome do jogador".
+    var t = ((linkAvatar && linkAvatar.textContent) || '').replace(/\s+/g, ' ').trim();
+    return (t && t.length > 3) ? [t] : [];
+  }
   function rankingStandingsFromDoc(doc) {
     try {
       var tr = doc.querySelector('.table-ranking');
@@ -300,28 +325,28 @@
         if (!row.classList || !row.classList.contains('row')) continue;
         var link = row.querySelector('a[href^="/"]');
         if (!link) continue;   // linha de cabeçalho (sem jogador)
-        var players;
-        var nmEl = row.querySelector('.break-line');
-        if (nmEl) {
-          players = (nmEl.innerHTML || '').split(/<br\s*\/?>/i)
-            .map(function (s) { return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); })
-            .filter(function (s) { return s && !/^(Inativo|Ativo)$/i.test(s); });
-        }
-        if (!players || !players.length) {
-          players = [(link.textContent || '').replace(/\s+/g, ' ').trim()].filter(Boolean);
-        }
+        // ⚠️ DECLARADO AQUI DENTRO, A CADA LINHA, DE PROPÓSITO. `var` é escopado à FUNÇÃO:
+        // a versão anterior declarava `players` uma vez e só o reatribuía quando achava
+        // `.break-line` (que só existe na linha de quem tem badge Inativo). Nas linhas
+        // seguintes o valor da linha ANTERIOR sobrevivia, o teste `!players.length` dava
+        // falso e o nome vazava para todas — foi assim que a classificação inteira do
+        // ranking 48552 saiu com "Fabio Ruggiero Inativo" em todas as 6 posições.
+        var players = _nomesDaLinha(row, link);
         var handles = [].slice.call(row.querySelectorAll('a[href^="/"]'))
           .map(function (a) { return a.getAttribute('href'); })
           .filter(function (h) { return /^\/[A-Za-z0-9_]+$/.test(h); })
           .map(function (h) { return h.slice(1); });
         var ptsM = ((row.querySelector('.points') || {}).textContent || '').match(/(\d+)/);
+        var lbl = row.querySelector('.label');
         pos++;
         rows.push({
           pos: pos,
           players: players,
           handles: handles,
           points: ptsM ? +ptsM[1] : null,
-          inactive: /Inativo/i.test(row.textContent || '')
+          // pelo ELEMENTO do badge, não por regex no texto da linha inteira: "Inativo"
+          // pode aparecer no nome de alguém (ex.: um clube "Inativos") e marcaria à toa.
+          inactive: !!lbl && /Inativo/i.test(lbl.textContent || '')
         });
       }
       return rows.length ? [{ group: 'Classificação', ranking: true, rows: rows }] : null;
@@ -1246,12 +1271,21 @@
       return c;
     }
 
+    // Segmentos de URL do letzplay que NÃO são clube. `/u/` é a área do usuário logado
+    // (feed, histórico) e o regex `^/([^/]+)/rankings/(\d+)` a aceitava como se fosse um
+    // clube: nascia a competição fantasma `r/u/48552` — MESMO id de um ranking real, mas
+    // com clube errado, então virava uma SEGUNDA entrada. Ela nunca resolve nada
+    // (`/u/rankings/48552` redireciona pra home — medido), e por isso aparecia no app como
+    // "U · Feed", sem classificação e com 0 V/0 D. Mesma classe do bug de 1.6.8: chave de
+    // competição montada com dado que não é identidade.
+    var _CLUBE_RESERVADO = { u: 1, home: 1, login: 1, search: 1, api: 1, static: 1, assets: 1 };
     async function lerLista(url, re, campo, esperado) {
       var achados = [], visto = {};
       function colher(doc) {
         [].slice.call(doc.querySelectorAll('a[href]')).forEach(function (a) {
           var h = a.getAttribute('href') || '', m = h.match(re);
           if (!m) return;
+          if (_CLUBE_RESERVADO[String(m[1]).toLowerCase()]) return;   // /u/... não é clube
           // DEDUP PELO ID DA COMPETIÇÃO, NUNCA PELO HREF. Verificado na página real
           // (letzplay.me/camilacalia/tournaments, 30/jul): são 59 links pra ~20 torneios —
           // cada torneio aparece 3 vezes, em /{id}, /{id}/players e /{id}/matches. Dedup
