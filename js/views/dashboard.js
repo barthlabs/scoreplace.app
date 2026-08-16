@@ -3216,26 +3216,18 @@ function renderDashboard(container) {
   var _socialMatchesClick = "if(typeof window._showPlayerStats==='function' && window.AppStore.currentUser){window._showPlayerStats(window.AppStore.currentUser.displayName||'')}";
 
   // Helper compartilhado: agrega W/L de uma lista de records.
+  // v1.8.95: DELEGA pra conta canônica (`window._totaisVD`, store.js). Havia duas
+  // implementações do mesmo V/D — esta e a da ficha do atleta — e elas divergiam:
+  // na conta do dono o pill somava 13V/5D e a ficha 1V/2D. Duas contas para a mesma
+  // pergunta é o defeito; a assinatura fica pra não mexer nos chamadores.
   function _aggregateWL(records, myUid, myDn) {
-    var _w = 0, _l = 0;
-    records.forEach(function(r) {
-      if (!r) return;
-      var team = null;
-      if (Array.isArray(r.players)) {
-        var mySlot = r.players.find(function(p) {
-          if (!p) return false;
-          if (myUid && p.uid === myUid) return true;
-          if (myDn && p.name && String(p.name).toLowerCase().trim() === myDn) return true;
-          return false;
-        });
-        if (mySlot) team = mySlot.team;
-      }
-      if (!team) return;
-      if (r.winnerTeam === team) _w++;
-      else if (r.winnerTeam && r.winnerTeam !== 0) _l++;
-    });
-    return { w: _w, l: _l };
+    if (typeof window._totaisVD === 'function') {
+      var r = window._totaisVD(records, myUid, myDn);
+      return { w: r.wins, l: r.losses };
+    }
+    return { w: 0, l: 0 };
   }
+
   function _formatMatchesPill(w, l) {
     var total = w + l;
     if (total === 0) return null;

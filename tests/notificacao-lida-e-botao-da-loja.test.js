@@ -263,5 +263,60 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
     'o cache local também filtra — senão o primeiro desenho da tela mostraria o número contaminado');
 })();
 
+
+// ═══ E) V/D É UMA CONTA SÓ (v1.8.95) ═════════════════════════════════════════
+// Relato do dono: "v/d ainda nao bate com o que consta da dashboard".
+// MEDIDO na conta dele: o pill somava o histórico INTEIRO (casual 9V/3D + torneio
+// 4V/2D = 13V/5D) + letzplay (39V/48D) = 52V/53D em 105 jogos; a ficha do atleta
+// somava o letzplay com apenas 1V/2D — o recorte que o cliente por acaso carregou —
+// e mostrava 40V/50D em 90 jogos. Duas contas para a mesma pergunta.
+(function () {
+  const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+  const ana = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-analytics.js'), 'utf8');
+
+  const m = store.match(/window\._totaisVD = function[\s\S]*?\n\};/);
+  ok(!!m, 'a conta canônica window._totaisVD existe (store.js)');
+  if (m) {
+    const win = {};
+    eval(m[0].replace('window._totaisVD', 'win._totaisVD'));
+    const f = win._totaisVD;
+    const EU = 'U1';
+    const rec = (team, venc, uid) => ({ players: [{ uid: uid || EU, team }, { uid: 'X', team: team === 1 ? 2 : 1 }], winnerTeam: venc });
+
+    // os números REAIS do dono, do histórico dele
+    const hist = [];
+    for (let i = 0; i < 9; i++) hist.push(rec(1, 1));   // 9 vitórias
+    for (let i = 0; i < 3; i++) hist.push(rec(1, 2));   // 3 derrotas
+    for (let i = 0; i < 4; i++) hist.push(rec(2, 2));   // +4 vitórias (do outro lado)
+    for (let i = 0; i < 2; i++) hist.push(rec(2, 1));   // +2 derrotas
+    const r = f(hist, EU, 'Rodrigo');
+    ok(r.wins === 13 && r.losses === 5,
+      'soma casual + torneio do histórico real: 13V/5D — deu ' + r.wins + 'V/' + r.losses + 'D');
+
+    // o lado sai do UID, não da posição
+    ok(f([rec(2, 2)], EU).wins === 1, 'quem joga no time 2 e vence conta VITÓRIA (o lado sai do uid)');
+    // jogo sem vencedor não conta
+    ok(f([rec(1, 0)], EU).wins === 0 && f([rec(1, 0)], EU).losses === 0,
+      'jogo sem vencedor não conta pra nenhum lado');
+    ok(f([{ players: [{ uid: 'OUTRO', team: 1 }], winnerTeam: 1 }], EU).wins === 0,
+      'jogo de terceiro não entra na minha conta');
+    // nome como reserva, pra registro sem uid
+    ok(f([{ players: [{ name: 'Rodrigo', team: 1 }], winnerTeam: 1 }], EU, 'Rodrigo').wins === 1,
+      'sem uid no slot, o nome serve de reserva');
+    ok(f(null, EU).wins === 0, 'entrada nula não quebra');
+  }
+
+  // os DOIS consumidores usam a mesma conta — é isso que impede a divergência
+  ok(/window\._totaisVD\(records, myUid, myDn\)/.test(dash),
+    'o pill da tela inicial DELEGA pra conta canônica');
+  ok(!/var team = null;[\s\S]{0,400}?r\.winnerTeam === team/.test(dash),
+    'o pill não tem mais a própria implementação de V/D');
+  ok(/window\._totaisVD\(merged, resolvedUid, playerName\)/.test(ana),
+    'a ficha do atleta recalcula com a MESMA conta quando o histórico completo chega');
+  ok(/getElementById\('letzplay-card-stats-slot'\)/.test(ana),
+    'ela redesenha no slot que EXISTE (o id foi conferido no arquivo, não inventado)');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

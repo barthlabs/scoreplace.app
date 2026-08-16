@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.94';
+window.SCOREPLACE_VERSION = '1.8.95';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1071,6 +1071,43 @@ window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
 // **404** — o app segue em teste fechado (o Play exige mais testadores pra liberar
 // produção). Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
 // impresso não tem correção depois. Antes de virar `play.on` pra true, conferir o 200.
+// ── VITÓRIAS E DERROTAS: UMA CONTA SÓ (v1.8.95) ─────────────────────────────
+// Relato do dono: "v/d ainda nao bate com o que consta da dashboard".
+// MEDIDO na conta dele: o pill da tela inicial somava o histórico INTEIRO
+// (casual 9V/3D + torneio 4V/2D = 13V/5D) mais o letzplay (39V/48D) = 52V/53D;
+// a ficha do atleta somava o letzplay com apenas 1V/2D — um recorte do que o
+// cliente por acaso tinha carregado. Duas respostas para a mesma pergunta, e a
+// diferença era grande: 105 jogos contra 90.
+//
+// A causa é a de sempre neste app: DOIS cálculos para o mesmo número. Aqui vira um.
+// Quem consome o histórico (que já exclui rajada, ver _isPartidaEmRajada) chama esta
+// função e pronto — pill, ficha e qualquer contador novo dão o mesmo.
+//
+// O lado da pessoa sai do UID do slot; o nome é reserva para registro sem uid.
+// Jogo sem vencedor (`winnerTeam` ausente/0) não conta pra nenhum lado — é o mesmo
+// critério do cânone "jogo só existe com placar".
+window._totaisVD = function (records, uid, displayName) {
+  var w = 0, l = 0;
+  var dn = String(displayName == null ? '' : displayName).toLowerCase().trim();
+  (records || []).forEach(function (r) {
+    if (!r) return;
+    var team = null;
+    if (Array.isArray(r.players)) {
+      for (var i = 0; i < r.players.length; i++) {
+        var p = r.players[i];
+        if (!p) continue;
+        if (uid && p.uid === uid) { team = p.team; break; }
+        if (!team && dn && p.name && String(p.name).toLowerCase().trim() === dn) team = p.team;
+      }
+    }
+    if (team == null) return;
+    var venc = r.winnerTeam;
+    if (!venc || venc === 0) return;          // sem vencedor: não é jogo decidido
+    if (String(venc) === String(team)) w++; else l++;
+  });
+  return { wins: w, losses: l };
+};
+
 // ── PARTIDA EM RAJADA NÃO É JOGO (v1.8.93) ──────────────────────────────────
 // Ordem do dono: "pode descatar todos as partidas casuais em rajada e desconsidere
 // estatisticas de qualquer jogo em rajada" · "mesmo as que nao forem minhas" · e o

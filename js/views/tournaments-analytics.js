@@ -1040,6 +1040,24 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
             }
             var merged = _mergeLocalCasualV2(records || []);
             _lastMerged = merged;   // pro re-render quando o letzplay de terceiro chega
+            // ── v1.8.95: o card de nível passa a somar o histórico COMPLETO ──────
+            // Relato do dono: "v/d ainda nao bate com o que consta da dashboard".
+            // `_spExtra` nasce de `stats`, que é o que o CLIENTE por acaso carregou
+            // (na conta dele: 1V/2D). O pill da tela inicial soma o histórico inteiro
+            // — casual + torneio (13V/5D). Agora que o histórico chegou, os dois usam
+            // a MESMA conta (`window._totaisVD`), e o card é redesenhado com ela.
+            try {
+              if (_lpIsCurUser && _lpCu && _lpCu.letzplayImport && typeof window._totaisVD === 'function') {
+                var _vd = window._totaisVD(merged, resolvedUid, playerName);
+                if (_vd.wins + _vd.losses > 0) {
+                  _spExtra.wins = _vd.wins; _spExtra.losses = _vd.losses;
+                  var _cardSlot = document.getElementById('letzplay-card-stats-slot');
+                  if (_cardSlot && typeof window._renderLetzplayCard === 'function') {
+                    _cardSlot.innerHTML = window._renderLetzplayCard(_lpCu.letzplayImport, _spExtra);
+                  }
+                }
+              }
+            } catch (e) { if (window._warn) window._warn('[nivel] recalculo V/D', e); }
             // Always render the full metric grid (zeros if no data) so players
             // see what's trackable and are encouraged to play matches via the app.
             var _footer = (stats.tournamentsPlayed > 0 ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-bright,#fff);padding:6px 0;">📋 Torneios Disputados (' + stats.tournamentsPlayed + ')</summary><div style="margin-top:6px;">' + tourListHtml + '</div></details>' : '');
