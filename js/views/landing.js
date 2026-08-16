@@ -215,7 +215,7 @@
        com folga — em tela estreita quebra sozinho (ENTRAR / no / scoreplace.app),
        em tela larga fica em 2 linhas. Composição sempre uniforme. */
     '.landing-cta-hero .landing-cta-l1 { font-size: clamp(2rem, 4.4vw + 1.2rem, 3.8rem); font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; max-width: 100%; }' +
-    '.landing-cta-hero .landing-cta-l2 { font-size: clamp(1.45rem, 3.1vw + 0.85rem, 2.9rem); font-weight: 800; letter-spacing: 0.2px; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }' +
+    '.landing-cta-hero .landing-cta-l2 { font-size: clamp(1.45rem, 3.1vw + 0.85rem, 2.9rem); font-weight: 800; letter-spacing: 0.2px; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }' +
     '.landing-sports-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: clamp(40px, 7vh, 72px); }' +
     '.landing-sport-pill { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 14px; font-size: 0.82rem; color: var(--text-main); cursor: default; }' +
 

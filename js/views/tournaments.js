@@ -957,7 +957,7 @@ window._buildPodiumHtml = function(p1, p2, p3, sub1, sub2, sub3, opts) {
   }
   function _half(name, color, fw, maxFs, minFs, boxH) {
     return '<div class="sp-podium-box" style="flex:1;min-width:0;height:' + boxH + 'px;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-      '<div class="sp-podium-name" data-maxfs="' + maxFs + '" data-minfs="' + minFs + '" style="font-weight:' + fw + ';color:' + color + ';font-size:' + maxFs + 'px;line-height:1.15;text-align:center;overflow-wrap:break-word;">' + _stack(name) + '</div>' +
+      '<div class="sp-podium-name" data-maxfs="' + maxFs + '" data-minfs="' + minFs + '" style="font-weight:' + fw + ';color:' + color + ';font-size:' + maxFs + 'px;line-height:1.15;text-align:center;overflow-wrap:anywhere;">' + _stack(name) + '</div>' +
     '</div>';
   }
   function _names(name, color, fw, maxFs, minFs, boxH) {
@@ -3205,7 +3205,7 @@ function renderTournaments(container, tournamentId = null) {
                 </div>
               ` : ''}
               <div style="flex:1;min-width:0;">
-                <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; overflow-wrap: break-word;">
+                <h4 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: white; line-height: 1.2; text-align: left; overflow-wrap: anywhere;">
                   ${window._safeHtml(t.name)}
                 </h4>
               </div>

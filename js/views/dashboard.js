@@ -781,7 +781,7 @@ function renderDashboard(container) {
                   ${/* v1.8.85: o nome era CORTADO quando trazia um token que não quebra —
                         no relato, um torneio nomeado com o e-mail do organizador
                         ("…de viniciusna1@hotmail.com"): o texto ia até a borda e sumia.
-                        ⚠️ `overflow-wrap:break-word` (que já estava aqui) NÃO resolve num
+                        ⚠️ `overflow-wrap:anywhere` (que já estava aqui) NÃO resolve num
                         flex: ele permite quebrar, mas a largura MÍNIMA do elemento continua
                         sendo a da palavra inteira, então o item não encolhe e o texto vaza.
                         Quem afeta a largura mínima é `anywhere` — com `min-width:0` no item.

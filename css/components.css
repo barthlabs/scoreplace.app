@@ -865,9 +865,16 @@ button[style*="linear-gradient"]:not(.btn):active {
 [data-vphoto-on] .weather-box span {
   text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
-/* os tons de apoio (#cbd5e1 / #94a3b8) são calibrados pra fundo liso */
-[data-vphoto-on] .weather-box span[style*="#cbd5e1"],
-[data-vphoto-on] .weather-box span[style*="#94a3b8"] {
+/* os tons de apoio (#cbd5e1 / #94a3b8) são calibrados pra fundo liso.
+   ⚠️ v1.8.86: o seletor era `span[style*=…]` e por isso PEGAVA SÓ METADE — no
+   weather.js a descrição ("Nuvens Dispersas", linha 196), a linha de umidade/vento
+   (197) e o título "PRÓXIMOS DIAS" (220) são <div>, não <span>. Ficavam escuros
+   sobre a tarja escura: é o que sobrou ilegível no print depois da 1.8.85.
+   Sem restrição de TAG agora — o que define a regra é estar dentro da caixa. */
+[data-vphoto-on] .weather-box [style*="#cbd5e1"],
+[data-vphoto-on] .weather-box [style*="#94a3b8"],
+[data-vphoto-on] .weather-box [style*="rgb(203, 213, 225)"],
+[data-vphoto-on] .weather-box [style*="rgb(148, 163, 184)"] {
   color: #e2e8f0 !important;
 }
 
