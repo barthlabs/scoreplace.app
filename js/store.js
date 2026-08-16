@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.8.92';
+window.SCOREPLACE_VERSION = '1.8.93';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1071,6 +1071,36 @@ window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
 // **404** — o app segue em teste fechado (o Play exige mais testadores pra liberar
 // produção). Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
 // impresso não tem correção depois. Antes de virar `play.on` pra true, conferir o 200.
+// ── PARTIDA EM RAJADA NÃO É JOGO (v1.8.93) ──────────────────────────────────
+// Ordem do dono: "pode descatar todos as partidas casuais em rajada e desconsidere
+// estatisticas de qualquer jogo em rajada" · "mesmo as que nao forem minhas" · e o
+// motivo, que é o que faz disto uma REGRA e não uma limpeza: "assim evitamos
+// manipulacoes nos dados".
+//
+// Um 6-0 lançado em 12 segundos é teste do sistema (ou inflação de aproveitamento) —
+// nunca uma partida disputada. Contá-lo suja vitórias, aproveitamento, sequência,
+// ranking e a ficha do atleta.
+//
+// ⚠️ POR QUE A REGRA MORA NA LEITURA, e não em cada contador: são pelo menos quatro
+// consumidores do histórico (pill da tela inicial, ficha do jogador, tela de histórico,
+// Análise de Inscritos). Regra copiada em quatro lugares diverge no primeiro ajuste —
+// foi exatamente assim que "encerrado na lista" e o contador do sino sobreviveram. Aqui
+// `loadUserMatchHistory` filtra na origem e todo consumidor herda de graça.
+//
+// O CRITÉRIO é a duração REAL de jogo (`durationMs`, cronometrado ponto a ponto), não
+// o tempo da sala. Registro SEM duração (dado legado) NÃO é descartado: ausência de
+// medida não é prova de rajada, e descartar por omissão apagaria histórico verdadeiro.
+// A única exceção é o 0-0, que não é jogo realizado por definição — não teve ponto.
+window.SP_RAJADA_MS = 2 * 60 * 1000;   // 2 minutos, régua dada pelo dono
+window._isPartidaEmRajada = function (rec) {
+  if (!rec) return false;
+  var sc = String(rec.scoreSummary == null ? '' : rec.scoreSummary).replace(/\s/g, '');
+  if (sc === '0-0') return true;                 // sem nenhum ponto: não houve jogo
+  var ms = Number(rec.durationMs);
+  if (!isFinite(ms) || ms <= 0) return false;    // sem medida → mantém (ver acima)
+  return ms < window.SP_RAJADA_MS;
+};
+
 window.SP_LOJAS = {
   apple: { on: true,  nome: 'App Store',   glifo: '',  url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
   play:  { on: false, nome: 'Google Play', glifo: '▶', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }

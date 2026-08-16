@@ -2900,9 +2900,18 @@ window.FirestoreDB = {
       if (options.limit) q = q.limit(options.limit);
       var snap = await q.get();
       var out = [];
+      // v1.8.93: PARTIDA EM RAJADA NÃO ENTRA. Filtrar aqui, na origem, é o que faz a
+      // regra valer nos QUATRO consumidores do histórico (pill da tela inicial, ficha
+      // do jogador, tela de histórico, Análise de Inscritos) sem que nenhum precise
+      // saber dela. Ver `window._isPartidaEmRajada` (store.js) para o critério e o
+      // porquê — resumidamente: 6-0 em 12 segundos é teste, e contá-lo é a porta pra
+      // inflar aproveitamento ("assim evitamos manipulacoes nos dados").
+      var _rajada = (typeof window !== 'undefined' && typeof window._isPartidaEmRajada === 'function')
+        ? window._isPartidaEmRajada : null;
       snap.forEach(function(doc) {
         var d = doc.data();
         d._id = doc.id;
+        if (_rajada && _rajada(d)) return;   // descartada: não é jogo disputado
         out.push(d);
       });
       return out;

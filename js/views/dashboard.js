@@ -2802,13 +2802,26 @@ function renderDashboard(container) {
     }
   })();
 
+  // ── v1.8.93: "Nenhum torneio encontrado" só quando a TELA está mesmo vazia ──
+  // Relato do dono (modo Lista): "essa de nenhum torneio encontrado nao deveria estar
+  // ai. esta mostrando torneio, como assim nenhum encontrado."
+  // A lista principal pode ficar legitimamente vazia com a tela CHEIA — as bandas
+  // (Em andamento / Favoritos / Aguardando), a seção de Encerrados e a de Ocultados
+  // são renderizadas FORA dela. O aviso de vazio precisa olhar a tela inteira, não só
+  // o próprio bloco; era uma condição por ramo, e o modo Lista nem tinha condição.
+  const _telaTemOutroConteudo = !!(runningBandHtml || runningBottomHtml ||
+    favoritesBandHtml || awaitingStartHtml || finishedSectionHtml ||
+    (hiddenTournaments && hiddenTournaments.length));
+  const _vazioHtml = _telaTemOutroConteudo ? ''
+    : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
+
   if (curFilter === 'todos' && !curSport && !curLocation && !curFormat) {
     // Os encerrados já saíram de `filtered`; aqui é só paginação da lista ativa.
     const activeList = filtered;
     const visibleActive = activeList.slice(0, pageNum * PAGE_SIZE);
     filteredHtml = visibleActive.length > 0
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
-      : ((runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml || _encerradosExtraidos.length > 0) ? '' : '<div style="text-align:center;padding:1rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>');
+      : _vazioHtml;
     if (activeList.length > visibleActive.length) {
       filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
@@ -3188,6 +3201,13 @@ function renderDashboard(container) {
     try {
       var _v2raw = localStorage.getItem('scoreplace_casual_history_v2') || '[]';
       var _v2 = JSON.parse(_v2raw);
+      // v1.8.93: o cache local NÃO passa por loadUserMatchHistory, então a regra da
+      // rajada precisa ser aplicada aqui também — senão o primeiro desenho da tela
+      // mostraria o número contaminado e ele só se corrigiria quando o Firestore
+      // respondesse (um "pisca" com dado errado é pior que esperar).
+      if (Array.isArray(_v2) && typeof window._isPartidaEmRajada === 'function') {
+        _v2 = _v2.filter(function (r) { return !window._isPartidaEmRajada(r); });
+      }
       if (Array.isArray(_v2) && _v2.length > 0) {
         var agg = _aggregateWL(_v2, _myUid, _myDn);
         var fmt = _formatMatchesPill(agg.w, agg.l);
@@ -3442,9 +3462,16 @@ function renderDashboard(container) {
       ${runningBottomHtml}
       ${awaitingStartHtml}
       ${favoritesBandHtml}
-      ${(window._dashView === 'compact') ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : '<div class="cards-grid">' + filteredHtml + '</div>'}
+      ${(window._dashView === 'compact')
+        ? (filtered.length ? '<div class="compact-list">' + _buildCompactList(filtered) + '</div>' : _vazioHtml)
+        : '<div class="cards-grid">' + filteredHtml + '</div>'}
     </div>
-    ${(window._dashView === 'compact') ? '' : finishedSectionHtml}
+    <!-- v1.8.93: a seção "Encerrados" também aparece no modo LISTA. A supressão era
+         resíduo de antes da v2.8.81, quando as bandas ainda não respeitavam o toggle;
+         hoje _renderTGroup já monta lista compacta sozinho, então esconder a seção só
+         fazia os encerrados sumirem da tela inteira em modo Lista (relato do dono:
+         "na lista onde estao os encerrados? deveria estar no colapsavel"). -->
+    ${finishedSectionHtml}
     ${(() => {
       // v0.16.60: diag SEMPRE visível, independente de filtro — usuário
       // reportou "nelson ainda nao ve torneio algum" mas o diag da v0.16.59

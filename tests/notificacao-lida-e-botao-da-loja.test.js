@@ -221,5 +221,47 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
     'o limite volta ao padrão ao reabrir a tela (só o botão o mantém) — quem rolou muito uma vez não paga em toda visita');
 })();
 
+
+// ═══ D) PARTIDA EM RAJADA NÃO CONTA ══════════════════════════════════════════
+// Ordem do dono: "pode descatar todos as partidas casuais em rajada e desconsidere
+// estatisticas de qualquer jogo em rajada" · "mesmo as que nao forem minhas" · e o
+// motivo, que faz disto REGRA e não faxina: "assim evitamos manipulacoes nos dados".
+//
+// Um 6-0 em 12 segundos é teste do sistema — ou inflação de aproveitamento. A regra
+// mora na LEITURA porque são quatro consumidores do histórico; copiá-la em quatro
+// lugares é como o contador do sino e o "encerrado na lista" sobreviveram.
+(function () {
+  const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+  const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
+
+  const m = store.match(/window\._isPartidaEmRajada = function[\s\S]*?\n\};/);
+  ok(!!m, 'o critério canônico _isPartidaEmRajada existe (store.js)');
+  ok(/window\.SP_RAJADA_MS = 2 \* 60 \* 1000/.test(store), 'a régua é 2 minutos, como o dono definiu');
+  if (m) {
+    const win = { SP_RAJADA_MS: 2 * 60 * 1000 };
+    eval(m[0].replace('window._isPartidaEmRajada', 'win._isPartidaEmRajada').replace(/window\./g, 'win.'));
+    const f = win._isPartidaEmRajada;
+    ok(f({ durationMs: 12000, scoreSummary: '6-0' }) === true, '6-0 em 12 segundos é rajada');
+    ok(f({ durationMs: 119000 }) === true, '1min59 é rajada');
+    ok(f({ durationMs: 120000 }) === false, '2min exatos NÃO é rajada (o corte é abaixo de 2min)');
+    ok(f({ durationMs: 1500000, scoreSummary: '6-4' }) === false, 'partida de 25 min conta normalmente');
+    ok(f({ scoreSummary: '0-0' }) === true, '0-0 não é jogo realizado — não teve ponto');
+    ok(f({ scoreSummary: '0 - 0' }) === true, 'o 0-0 é reconhecido com espaços');
+    // ⚠️ o caso que protege histórico verdadeiro: SEM duração não se descarta
+    ok(f({ scoreSummary: '6-4' }) === false,
+      'registro SEM duração (dado legado) NÃO é descartado — ausência de medida não é prova de rajada');
+    ok(f({ durationMs: 0, scoreSummary: '6-3' }) === false, 'duração zero/inválida também não descarta');
+    ok(f(null) === false, 'entrada nula não quebra');
+  }
+
+  // e a regra é aplicada NA LEITURA, alcançando todos os consumidores
+  const bloco = db.slice(db.indexOf('async loadUserMatchHistory'), db.indexOf('async loadUserMatchHistory') + 1800);
+  ok(/_rajada\(d\)\) return;/.test(bloco),
+    'loadUserMatchHistory descarta as rajadas na origem — os 4 consumidores herdam de graça');
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+  ok(/_v2\.filter\(function \(r\) \{ return !window\._isPartidaEmRajada\(r\); \}\)/.test(dash),
+    'o cache local também filtra — senão o primeiro desenho da tela mostraria o número contaminado');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

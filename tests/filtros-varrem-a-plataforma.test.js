@@ -191,5 +191,38 @@ if (codPools && codCont) {
   }
 })();
 
+// ── O MODO LISTA MOSTRA O MESMO QUE O MODO CARDS ────────────────────────────
+// Relato do dono, em modo Lista: "na lista onde estao os encerrados? deveria estar no
+// colapsavel" + "essa de nenhum torneio encontrado nao deveria estar ai. esta mostrando
+// torneio, como assim nenhum encontrado."
+//
+// Dois defeitos, os dois de ramo divergente:
+//  (a) a seção de Encerrados era SUPRIMIDA no modo Lista — resíduo de antes da v2.8.81,
+//      quando as bandas ainda não respeitavam o toggle. Hoje `_renderTGroup` já monta
+//      lista compacta sozinho, então a supressão só sumia com os encerrados.
+//  (b) o "Nenhum torneio encontrado" saía sempre que a LISTA PRINCIPAL ficava vazia —
+//      mas ela pode esvaziar legitimamente com a tela cheia, porque as bandas, os
+//      Encerrados e os Ocultados são renderizados FORA dela. O ramo de cards tinha uma
+//      condição (incompleta); o de lista não tinha nenhuma.
+(function () {
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+
+  ok(!/\(window\._dashView === 'compact'\) \? '' : finishedSectionHtml/.test(dash),
+    'a seção "Encerrados" NÃO é mais suprimida no modo Lista');
+  ok(/\n    \$\{finishedSectionHtml\}/.test(dash),
+    'ela é renderizada nos dois modos');
+
+  ok(/const _telaTemOutroConteudo = !!\(runningBandHtml \|\| runningBottomHtml \|\|/.test(dash),
+    'existe uma leitura única de "a tela já tem conteúdo?"');
+  ok(/finishedSectionHtml \|\|\s*\n\s*\(hiddenTournaments && hiddenTournaments\.length\)\)/.test(dash),
+    'ela inclui os Encerrados E os Ocultados — os dois vivem fora da lista principal');
+  ok(/const _vazioHtml = _telaTemOutroConteudo \? ''/.test(dash),
+    'o aviso de vazio deriva dessa leitura, em vez de cada ramo ter a sua');
+  // e OS DOIS ramos consomem o mesmo `_vazioHtml`
+  ok(/: _vazioHtml;/.test(dash), 'o modo cards usa _vazioHtml');
+  ok(/_buildCompactList\(filtered\) \+ '<\/div>' : _vazioHtml\)/.test(dash),
+    'o modo lista usa o MESMO _vazioHtml (antes não tinha condição nenhuma)');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
