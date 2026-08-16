@@ -414,7 +414,8 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ok(/root\._sequenciaAtual\(_seqItens\)/.test(perfil), 'o card usa a conta canônica');
   ok(/\.concat\(Array\.isArray\(spExtra\.resultados\) \? spExtra\.resultados : \[\]\)/.test(perfil),
     'o card mescla os resultados do scoreplace com os do letzplay');
-  ok(/recorde ' \+ _seq\.maiorV/.test(perfil), 'o card mostra o recorde de vitórias');
+  ok(/_tileSeq\(streakHtml, _seq\.maiorV\)/.test(perfil) && /maior sequência/.test(perfil),
+    'o card mostra o recorde de vitórias, com o mesmo destaque da atual (ordem do dono na 1.8.98)');
   ok(/_spExtra\.resultados = \(merged \|\| \[\]\)/.test(ana),
     'a ficha alimenta o card com os resultados datados do scoreplace');
   ok(!/1e12 - i/.test(perfil),

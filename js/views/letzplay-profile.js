@@ -131,6 +131,21 @@
       (x ? '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:1px;">' + esc(x) + '</div>' : '') + '</div>';
   }
   function tile(k, v, x) { return tileH(k, esc(v), x); }
+  // v1.8.98: tile de duas medidas com o mesmo peso visual (atual e recorde). O
+  // `tileH` só tem UM valor grande + um rodapé pequeno, e o rodapé rebaixaria o
+  // recorde a legenda.
+  function _tileSeq(atualHtml, maior) {
+    var linha = function (rot, val) {
+      return '<div style="margin-top:2px;">' +
+        '<div style="font-size:11px;color:var(--text-muted,#8b93a3);font-weight:600;">' + esc(rot) + '</div>' +
+        '<div style="font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:700;">' + val + '</div>' +
+      '</div>';
+    };
+    return '<div style="background:var(--bg-darker,#0f1420);border:1px solid var(--border-color,#28313f);border-radius:9px;padding:9px 11px;text-align:center;">' +
+      linha('sequência atual', atualHtml) +
+      (maior > 0 ? linha('maior sequência', '<span style="color:#2dd4a0;">' + maior + 'V</span>') : '') +
+    '</div>';
+  }
 
   /** Retorna o HTML do card "Seu nível (geral)", ou '' se não há import.
    * spExtra (opcional) mistura o scoreplace: { tournaments:[{name,sport,year}],
@@ -319,9 +334,14 @@
     var _gTot = totWn + totLn;
     var winPct = _gTot ? Math.round(totWn / _gTot * 100) : 0;
     // Total: verde nas vitórias (V), vermelho nas derrotas (D).
-    var totalHtml = '<span style="color:#2dd4a0;">' + totWn + ' V</span>' +
-      '<span style="color:var(--text-muted,#8b93a3);"> – </span>' +
-      '<span style="color:#f87171;">' + totLn + ' D</span>';
+    // v1.8.98: SEM o traço entre V e D (ordem do dono) — ele empurrava a segunda
+    // linha e desalinhava os números. Agora são duas linhas de grade: o número à
+    // direita e a letra à esquerda, então 53/53 ficam na mesma coluna.
+    var _linhaVD = function (n, letra, cor) {
+      return '<div style="display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:6px;color:' + cor + ';">' +
+        '<span style="text-align:right;">' + n + '</span><span>' + letra + '</span></div>';
+    };
+    var totalHtml = _linhaVD(totWn, 'V', '#2dd4a0') + _linhaVD(totLn, 'D', '#f87171');
 
     // Sequência atual: derivada dos jogos letzplay (com data), do mais recente
     // pra trás — conta a fila de resultados iguais no topo.
@@ -352,10 +372,14 @@
 
         // tiles
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px;">' +
-          tileH('Total', totalHtml, winPct + '% · letzplay + scoreplace') +
-          // v1.8.97: o rodapé do tile mostra o RECORDE (pedido do dono). Fica aqui,
-          // e não num 4º tile, pra não quebrar a grade de 3 colunas do card.
-          tileH('Sequência', streakHtml, _seq.maiorV > 1 ? ('atual · recorde ' + _seq.maiorV + 'V') : 'atual') +
+          // v1.8.98: o rodapé perdeu "letzplay + scoreplace" (ordem do dono) — o card já
+          // diz isso no cabeçalho, e ali embaixo virava três linhas de ruído.
+          tileH('Total', totalHtml, winPct + '%') +
+          // v1.8.98: DUAS linhas com o MESMO destaque — ordem do dono: "sequencia
+          // atual: x vitorias e abaixo, maior sequencia: x vitorias (com o mesmo
+          // destaque)". Antes o recorde ia no rodapé, em letra pequena, como se fosse
+          // legenda; ele é um número tão relevante quanto o atual.
+          _tileSeq(streakHtml, _seq.maiorV) +
           tile('Oficiais', footOff.length, 'torneios') +
         '</div>' +
 

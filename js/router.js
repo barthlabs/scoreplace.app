@@ -276,6 +276,20 @@ function initRouter() {
     window._inRouterRender = true;
     setTimeout(function() { window._inRouterRender = false; }, 0);
 
+    // ── v1.8.98: RENDER QUE FALHA NÃO PODE VIRAR TELA PRETA ─────────────────
+    // Relato do dono (app nativo): "mostra a dash e tela preta. volta, ok. entra nas
+    // notificacoes ok, sai e volta pra dash tela preta."
+    //
+    // A CAUSA ESTRUTURAL está logo acima: o router ESVAZIA o `#view-container` e SÓ
+    // DEPOIS chama o render. Se o render lança, ninguém repõe nada — sobra o container
+    // vazio, que no tema escuro é exatamente uma TELA PRETA. E como o erro morre sem
+    // `catch`, não vai pro Sentry: fica sem rastro, e foi por isso que eu não achei o
+    // defeito olhando log nenhum.
+    //
+    // O `try` aqui não conserta o bug que lança — ele garante que QUALQUER falha de
+    // render vire uma tela que DIZ o que aconteceu, com o erro no Sentry e um caminho
+    // de volta. Tela preta muda deixa de ser um desfecho possível.
+    try {
     switch (view) {
       case '':
       case 'dashboard':
@@ -554,6 +568,38 @@ function initRouter() {
         // Rota desconhecida — redireciona para dashboard
         window.location.replace('#dashboard');
         return;
+    }
+    } catch (_erroRender) {
+      // Reporta ANTES de desenhar: se o próprio desenho de erro falhar, o Sentry
+      // já tem o original — que é o que interessa pra consertar.
+      try {
+        if (typeof window._captureException === 'function') {
+          window._captureException(_erroRender, { tags: { view: String(view || 'dashboard') } });
+        }
+        window._warn('[router] render de "' + view + '" falhou:', _erroRender);
+      } catch (_e2) {}
+      try {
+        var _msg = (_erroRender && _erroRender.message) ? String(_erroRender.message) : 'erro desconhecido';
+        viewContainer.innerHTML =
+          '<div style="max-width:520px;margin:2.5rem auto;padding:1.25rem;text-align:center;' +
+          'background:var(--bg-card,#1e2235);border:1px solid var(--border-color,#333);border-radius:14px;">' +
+            '<div style="font-size:2rem;line-height:1;margin-bottom:10px;">😕</div>' +
+            '<div style="font-size:1rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">' +
+              'Não consegui desenhar esta tela</div>' +
+            '<div style="font-size:0.86rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-bottom:14px;">' +
+              'O problema já foi reportado. Você pode tentar de novo ou voltar ao início.</div>' +
+            '<div style="font-size:0.72rem;color:var(--text-muted,#94a3b8);opacity:0.8;font-family:ui-monospace,Menlo,monospace;' +
+            'word-break:break-word;margin-bottom:16px;">' + (window._safeHtml ? window._safeHtml(_msg) : _msg) + '</div>' +
+            '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+              '<button class="btn" style="background:var(--primary-color,#007aff);color:#fff;border:none;' +
+              'padding:10px 20px;border-radius:10px;font-weight:700;cursor:pointer;" ' +
+              'onclick="window.location.reload()">Tentar de novo</button>' +
+              '<button class="btn" style="background:transparent;color:var(--text-main,#ddd);' +
+              'border:1px solid var(--border-color,#444);padding:10px 20px;border-radius:10px;' +
+              'font-weight:600;cursor:pointer;" onclick="window.location.hash=\'#dashboard\'">Início</button>' +
+            '</div>' +
+          '</div>';
+      } catch (_e3) {}
     }
   };
 

@@ -138,5 +138,36 @@ console.log('\n== Texto nunca corta ==');
     'a caixa da previsão declara os tokens INVERTIDOS no tema claro (resolve var(--text-bright) preto sobre tarja)');
 })();
 
+
+// ── 6. relógios à DIREITA, rótulo à esquerda — sem reabrir o truncamento ────
+// Ordem do dono (v1.8.98): "vamos alinhar os contadores na direita e deixar o titulo
+// e icone como estao na esquerda".
+// ⚠️ O CUIDADO QUE ESTA ASSERÇÃO GUARDA: em UMA linha simples o rótulo truncava
+// ("Fim da r…") — e foi o próprio dono quem mandou empilhar por isso (v1.7.86).
+// A saída é GRADE de 3 colunas: ícone | rótulo que QUEBRA | relógio `nowrap` à direita.
+// Medido no navegador: os dois relógios da caixa terminam no MESMO x, e nenhum
+// rótulo corta.
+(function () {
+  const utils = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-utils.js'), 'utf8');
+  const grades = (utils.match(/grid-template-columns:auto 1fr auto/g) || []).length;
+  ok(grades >= 3,
+    'as linhas da caixa de regressiva usam a MESMA grade de 3 colunas (achadas: ' + grades + ') — se divergirem, um relógio sai do prumo do outro');
+  ok(/white-space:nowrap;text-align:right;">' \+ _txt/.test(utils),
+    'o relógio principal fica à direita e nunca parte no meio');
+  ok(/text-align:right;white-space:nowrap;">' \+ valorHtml/.test(utils),
+    'o relógio da 2ª linha idem');
+  // o rótulo tem que poder QUEBRAR — é o que substitui o corte.
+  // ⚠️ Asserção por PROXIMIDADE não serve aqui: o estilo do rótulo da 2ª linha mora
+  // em `_lblStyle`, longe da grade. Duas vezes hoje eu fatiei uma janela curta e o
+  // teste acusou o código certo. O que importa é que AMBOS os rótulos quebrem.
+  ok(/_lblStyle = [^;]*overflow-wrap:anywhere/.test(utils.replace(/\n/g, ' ')) ||
+     /_lblStyle[\s\S]{0,300}?overflow-wrap:anywhere/.test(utils),
+    'o rótulo da 2ª linha quebra (via _lblStyle)');
+  ok(/font-weight:700;color:' \+ _fg \+ ' !important;line-height:1\.2;overflow-wrap:anywhere/.test(utils),
+    'o rótulo principal quebra em vez de cortar (era o "Fim da r…" da v1.7.85)');
+  ok(!/flex-direction:column;gap:2px;min-width:0;flex:1;'[\s\S]{0,80}_lblStyle/.test(utils),
+    'o empilhamento antigo saiu — o alinhamento agora vem da grade, não de coluna');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

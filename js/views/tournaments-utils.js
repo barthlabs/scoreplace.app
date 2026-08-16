@@ -1834,11 +1834,15 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
     // coisa logo abaixo." O ícone segue na coluna da esquerda.
     var _valStyle = 'font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;';
     var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;line-height:1.2;overflow-wrap:anywhere;';
+    // v1.8.98: mesma grade da linha de cima — ícone, rótulo (pode quebrar) e o relógio
+    // à DIREITA. O nome `_pilha` ficou do layout empilhado anterior; o que ele monta
+    // agora são três colunas. Os dois relógios da caixa precisam alinhar entre si, então
+    // as duas linhas TÊM que usar a mesma grade — se divergirem, um fica fora do prumo
+    // do outro e o alinhamento pedido se perde justamente na comparação.
     var _pilha = function (icone, rotulo, valorHtml) {
-        return '<span style="font-size:' + _icon + ';flex-shrink:0;">' + icone + '</span>' +
-            '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
-              '<span style="' + _lblStyle + '">' + rotulo + '</span>' + valorHtml +
-            '</div>';
+        return '<span style="font-size:' + _icon + ';">' + icone + '</span>' +
+            '<span style="' + _lblStyle + 'min-width:0;">' + rotulo + '</span>' +
+            '<span style="text-align:right;white-space:nowrap;">' + valorHtml + '</span>';
     };
     if (_endTs && _endTs >= _since) {
         // ENCERRADA — relógio congelado na duração total (sem data-elapsed-since → não ticka).
@@ -1952,7 +1956,7 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
     if (_ce.kind === 'round-in-progress') {
         var _solo = _rowFn ? _rowFn(t, _fg) : '';
         if (!_solo) return ''; // nada a dizer — NUNCA cair no render genérico (era o "null null 0s")
-        return '<div style="margin-top:' + _mt + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
+        return '<div style="margin-top:' + _mt + ';display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
     }
     // Guarda dura: box com regressiva EXIGE alvo e rótulo. Sem isso não se desenha nada.
     var _ts = _ce.ts;
@@ -1970,7 +1974,7 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         var _row = _rowFn(t, _fg, _lg ? { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' }
                                       : { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
         if (_row) {
-            _line2 = '<div style="display:flex;align-items:center;gap:10px;margin-top:' + (_lg ? '12px;padding-top:12px' : '8px;padding-top:8px') + ';border-top:1px solid rgba(' + _rgb + ',0.3);">' + _row + '</div>';
+            _line2 = '<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin-top:' + (_lg ? '12px;padding-top:12px' : '8px;padding-top:8px') + ';border-top:1px solid rgba(' + _rgb + ',0.3);">' + _row + '</div>';
         }
     }
     var _box = _lg
@@ -1983,12 +1987,18 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         // fim da r... e o timer devem ficar em 2 linhas para nao truncar."
         // O ícone fica na coluna da esquerda (não empilha com o texto); rótulo em
         // cima, número embaixo — e o rótulo pode quebrar em quantas linhas quiser.
-        '<div style="display:flex;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
-          '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';flex-shrink:0;">' + _ce.icon + '</span>' +
-          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
-            '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;line-height:1.2;overflow-wrap:anywhere;">' + _label + '</span>' +
-            '<span data-countdown-target="' + _ts + '" style="font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;">' + _txt + '</span>' +
-          '</div>' +
+        // ── v1.8.98: contador à DIREITA, ícone e rótulo à esquerda ──────────────
+        // Ordem do dono: "vamos alinhar os contadores na direita e deixar o titulo e
+        // icone como estao na esquerda".
+        // ⚠️ NÃO é voltar ao layout de UMA linha da v1.7.85 — aquele TRUNCAVA o rótulo
+        // ("Fim da r…"), e foi o dono quem mandou empilhar por causa disso (v1.7.86).
+        // Aqui são duas COLUNAS: a da esquerda pode quebrar em quantas linhas precisar
+        // (nunca corta), e a da direita é só o relógio, com `white-space:nowrap` pra ele
+        // jamais partir no meio. É o alinhamento pedido sem reabrir o corte.
+        '<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
+          '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';">' + _ce.icon + '</span>' +
+          '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;line-height:1.2;overflow-wrap:anywhere;min-width:0;">' + _label + '</span>' +
+          '<span data-countdown-target="' + _ts + '" style="font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;">' + _txt + '</span>' +
         '</div>' + _line2 +
     '</div>';
 };

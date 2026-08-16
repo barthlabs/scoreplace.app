@@ -1537,14 +1537,33 @@ function renderDashboard(container) {
     // `inline=true` desenha o mesmo bloco DENTRO de um card (usado no caso avulso de
     // "Seus últimos resultados", onde o rótulo não se repete e portanto não precisa
     // — nem deve — roubar uma linha inteira da grade).
-    function _grupoHeadHtml(grupo, tName, cor, attr, inline) {
+    // v1.8.98: cada grupo ganha "Ir para o torneio" — ordem do dono: "tem que ter 1
+    // botao por grupo. na mesma linha do titulo/torneio, mas alinhado na direita.
+    // fazer a mesma coisa nos seus ultimos resultados".
+    // Como este cabeçalho é a FONTE ÚNICA das duas seções (Novidades e Seus últimos
+    // resultados), o botão nasce nas duas de uma vez — era exatamente o pedido.
+    // ⚠️ Leva pra `#bracket/<id>`: é ali que mora a CLASSIFICAÇÃO do grupo. A chave já
+    // rola sozinha até o jogo do próprio usuário, e como estes grupos são os DELE, o
+    // destino cai na classificação certa sem precisar de âncora por grupo (que não
+    // existe hoje na chave).
+    function _grupoHeadHtml(grupo, tName, cor, attr, inline, tId) {
+      var _btn = tId
+        ? '<a href="#bracket/' + String(tId).replace(/"/g, '&quot;') + '" ' +
+          'onclick="event.stopPropagation();" ' +
+          'style="flex-shrink:0;margin-left:auto;align-self:center;font-size:0.62rem;font-weight:700;' +
+          'text-decoration:none;color:#7dd3fc;background:rgba(125,211,252,0.14);' +
+          'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:3px 9px;line-height:1.2;' +
+          'text-transform:none;letter-spacing:0;white-space:nowrap;">Ir para o torneio ›</a>'
+        : '';
       return '<div ' + (attr || '') + ' style="' + (inline ? '' : 'grid-column:1/-1;') + 'margin:' + (inline ? '0 0 2px' : '6px 0 -2px') + ';min-width:0;">' +
-        '<div style="border-left:3px solid ' + cor + ';padding-left:8px;">' +
+        '<div style="border-left:3px solid ' + cor + ';padding-left:8px;display:flex;align-items:center;gap:8px;">' +
+          '<div style="min-width:0;flex:1;">' +
           '<div style="color:' + cor + ';font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;' +
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(grupo) + '</div>' +
           (tName ? '<div style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:uppercase;' +
             'letter-spacing:0.03em;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
             _sf(tName) + '</div>' : '') +
+          '</div>' + _btn +
         '</div></div>';
     }
 
@@ -2357,7 +2376,7 @@ function renderDashboard(container) {
               })() +
             '</div>' +
           '</div>';
-        _units.push({ group: _fp2.group, jogo: _fp2.jogo, tName: item.tName, color: faseColor2, faseStr2: faseStr2, body: _body });
+        _units.push({ group: _fp2.group, jogo: _fp2.jogo, tName: item.tName, color: faseColor2, faseStr2: faseStr2, body: _body, tId: item.tId });
       });
 
       // Agrupa por (grupo + torneio) preservando a ordem original.
@@ -2368,14 +2387,14 @@ function renderDashboard(container) {
         var key = (u.group || '').toLowerCase() + '||' + (u.tName || '').toLowerCase();
         if (canGroup && _resGIdx[key] != null) { _resGroups[_resGIdx[key]].units.push(u); return; }
         if (canGroup) _resGIdx[key] = _resGroups.length;
-        _resGroups.push({ group: u.group, tName: u.tName, color: u.color, grouped: canGroup, units: [u] });
+        _resGroups.push({ group: u.group, tName: u.tName, color: u.color, grouped: canGroup, units: [u], tId: u.tId });
       });
       _resGroups.forEach(function(g) {
         if (g.grouped && g.units.length >= 2) {
           // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
           // v1.8.78: grupo e torneio em DUAS LINHAS (antes lado a lado, e o torneio
           // sumia no `ellipsis` em tela estreita). Mesmo desenho das Novidades.
-          html += _grupoHeadHtml(g.group, g.tName, g.color, '');
+          html += _grupoHeadHtml(g.group, g.tName, g.color, '', false, g.tId);
           // v2.3.62: o rótulo "JOGO N" com a barra colorida acima de cada chave
           // foi removido — essa info já aparece no header de cada box
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
@@ -2394,7 +2413,7 @@ function renderDashboard(container) {
             html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               _grupoHeadHtml(
                 (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + u.faseStr2,
-                u.tName, u.color, '', true
+                u.tName, u.color, '', true, u.tId
               ) +
               u.body +
             '</div>';
@@ -2522,10 +2541,10 @@ function renderDashboard(container) {
         var _can = !!_fp.group;
         if (_can && _novGIdx[_key] != null) { _novGroups[_novGIdx[_key]].items.push({ it: it, jogo: _fp.jogo }); return; }
         if (_can) _novGIdx[_key] = _novGroups.length;
-        _novGroups.push({ grupo: _fp.group, tName: it.tName, items: [{ it: it, jogo: _fp.jogo }] });
+        _novGroups.push({ grupo: _fp.group, tName: it.tName, tId: it.tId, items: [{ it: it, jogo: _fp.jogo }] });
       });
       _novGroups.forEach(function(g) {
-        _novHtml += _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"');
+        _novHtml += _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"', false, g.tId);
         g.items.forEach(function(u) { _novHtml += _novCard(u.it); });
       });
       _novHtml += '</div>';

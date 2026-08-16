@@ -267,5 +267,76 @@ if (codPools && codCont) {
     'nenhum <details> monta grupo de cards direto — todos passam pelo lazy (achados: ' + diretos + ')');
 })();
 
+
+// ── TELA PRETA DEIXA DE SER UM DESFECHO POSSÍVEL (v1.8.98) ──────────────────
+// Relato do dono no app nativo: "mostra a dash e tela preta. volta, ok. entra nas
+// notificacoes ok, sai e volta pra dash tela preta."
+//
+// A CAUSA ESTRUTURAL não é o bug que lança — é o que acontece DEPOIS: o router
+// ESVAZIA o #view-container e SÓ ENTÃO chama o render. Render que lança deixa o
+// container vazio, e vazio no tema escuro É a tela preta. Pior: sem `catch`, o erro
+// morre ali e não vai pro Sentry — por isso a investigação não achava rastro nenhum.
+//
+// Esta é a QUARTA encarnação de tela preta/branca no projeto, e as três anteriores
+// foram consertadas cada uma no seu mecanismo. Esta trava o DESFECHO: qualquer falha
+// de render, de qualquer tela, vira um aviso legível com o erro no Sentry.
+(function () {
+  const router = fs.readFileSync(path.join(ROOT, 'js', 'router.js'), 'utf8');
+
+  // o esvaziamento continua (é ele que evita conteúdo velho vazando entre telas)...
+  ok(/viewContainer\.innerHTML = '';/.test(router), 'o router segue limpando o container ao navegar');
+  // ...mas agora o render inteiro está protegido
+  const iSwitch = router.indexOf('switch (view) {');
+  const iTry = router.lastIndexOf('try {', iSwitch);
+  ok(iTry > 0 && iSwitch - iTry < 1200,
+    'o switch de renderização está DENTRO de um try (o catch é o que impede a tela vazia)');
+  ok(/\} catch \(_erroRender\) \{/.test(router), 'existe o catch do render');
+
+  const iCatch = router.indexOf('} catch (_erroRender) {');
+  const bloco = router.slice(iCatch, iCatch + 2600);
+  ok(/_captureException\(_erroRender/.test(bloco),
+    'a falha é REPORTADA ao Sentry — antes era engolida, e foi por isso que não havia rastro');
+  ok(/tags: \{ view:/.test(bloco), 'o relatório diz QUAL tela falhou');
+  ok(/viewContainer\.innerHTML =/.test(bloco),
+    'o container é PREENCHIDO com um aviso — nunca fica vazio');
+  ok(/Não consegui desenhar esta tela/.test(bloco), 'o aviso diz o que aconteceu, em português');
+  ok(/window\.location\.reload\(\)/.test(bloco) && /#dashboard/.test(bloco),
+    'e oferece caminho de volta (tentar de novo / início)');
+  // a ordem importa: reportar ANTES de desenhar
+  ok(bloco.indexOf('_captureException') < bloco.indexOf('viewContainer.innerHTML ='),
+    'reporta ANTES de desenhar — se o próprio aviso falhar, o erro original já está no Sentry');
+  // e o desenho do aviso também é guardado, senão ele mesmo poderia deixar a tela vazia
+  const trechoDesenho = bloco.slice(bloco.indexOf('viewContainer.innerHTML ='));
+  ok(/catch \(_e3\)/.test(trechoDesenho), 'o desenho do aviso também é protegido');
+})();
+
+
+// ── "IR PARA O TORNEIO" — UM POR GRUPO, NAS DUAS SEÇÕES (v1.8.98) ───────────
+// Ordem do dono: "um botao ir para o torneio aqui em cada grupo... tem que ter 1 botao
+// por grupo. na mesma linha do titulo/torneio, mas alinhado na direita. fazer a mesma
+// coisa nos seus ultimos resultados".
+// Ele nasce em `_grupoHeadHtml`, que é a FONTE ÚNICA do cabeçalho das DUAS seções
+// (Novidades e Seus últimos resultados) — por isso o pedido "a mesma coisa nos últimos
+// resultados" saiu de graça, em vez de virar uma segunda montagem que divergiria.
+(function () {
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+  ok(/function _grupoHeadHtml\(grupo, tName, cor, attr, inline, tId\)/.test(dash),
+    'o cabeçalho compartilhado recebe o id do torneio');
+  ok(/href="#bracket\/' \+ String\(tId\)/.test(dash),
+    'o botão leva pra chave/classificação do torneio');
+  ok(/Ir para o torneio/.test(dash), 'o rótulo é "Ir para o torneio"');
+  ok(/margin-left:auto/.test(dash.slice(dash.indexOf('var _btn = tId'), dash.indexOf('var _btn = tId') + 700)),
+    'o botão é empurrado pra DIREITA na mesma linha');
+  ok(/var _btn = tId\s*\n?\s*\?/.test(dash),
+    'sem id do torneio NÃO desenha botão — link pra lugar nenhum é pior que nenhum link');
+  // os DOIS pontos de uso passam o id
+  ok(/_grupoHeadHtml\(g\.group, g\.tName, g\.color, '', false, g\.tId\)/.test(dash),
+    '"Seus últimos resultados" (agrupado) passa o id');
+  ok(/u\.tName, u\.color, '', true, u\.tId/.test(dash),
+    '"Seus últimos resultados" (avulso) passa o id');
+  ok(/_grupoHeadHtml\(g\.grupo, g\.tName, '#fbbf24', 'data-nov-head="1"', false, g\.tId\)/.test(dash),
+    '"Novidades no seu torneio" passa o id');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
