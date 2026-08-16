@@ -224,5 +224,48 @@ if (codPools && codCont) {
     'o modo lista usa o MESMO _vazioHtml (antes não tinha condição nenhuma)');
 })();
 
+
+// ── BLOCO FECHADO NÃO SE MONTA (v1.8.94) ────────────────────────────────────
+// Relato do dono no app NATIVO: "fica lenta, tudo demora a responder" — toques no
+// hambúrguer sem efeito, "depois de varios cliques abre". Não era travamento: era o
+// WebView ocupado derrubando toque.
+//
+// MEDIDO (harness isolado, mesma base): a dashboard montava 132 KB de HTML com 73 KB
+// DENTRO de `<details>` fechados — cards construídos, inseridos e nunca vistos. E os
+// MESMOS encerrados saíam duas vezes (a seção unificada da 1.8.93 colidiu com a seção
+// pública da descoberta). Depois: 59 KB, 0 KB em fechados, 1 ms.
+//
+// A pressão veio da 1.8.89, quando "Todos" passou a varrer a plataforma inteira: a
+// lista saiu de ~5 cards para 15+. A regra estava certa; o custo de desenhar tudo é que
+// não estava previsto. Por isso o gate é ESTRUTURAL — protege conforme a base cresce.
+(function () {
+  const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+
+  ok(/function _dashLazyBody\(gid, aberto, construir\)/.test(dash),
+    'existe o helper que adia a montagem de bloco recolhível');
+  ok(/window\._dashLazyOpen = function/.test(dash),
+    'existe o hidratador que monta no primeiro ABRIR');
+  ok(/data-lazy-slot/.test(dash), 'o slot vazio é marcado pra hidratação');
+
+  // o conteúdo tem que ser uma FUNÇÃO, não string pronta — senão adia só a inserção,
+  // que é a parte barata; foi o erro da primeira tentativa.
+  ok(/_dashLazyBody\('enc', _abertoEnc, _montaEnc\)/.test(dash),
+    'Encerrados passa uma FUNÇÃO construtora (adia a montagem, não só a inserção)');
+  ok(/var _montaEnc = function \(\) \{/.test(dash),
+    'a construção dos cards de Encerrados vive dentro do fechamento');
+  ok(/_dashLazyBody\('ocultos',[\s\S]{0,120}?_renderTGroup\(hiddenTournaments\)/.test(dash),
+    'Ocultados também só monta ao abrir');
+
+  // e os encerrados não podem sair DUAS vezes
+  ok(/_jaNaSecaoUnificada\[String\(t\.id\)\]/.test(dash),
+    'a seção pública de encerrados exclui quem já está na seção unificada (eram 2 cópias)');
+
+  // CATRACA: nenhum bloco recolhível novo pode nascer montando conteúdo pesado.
+  // Conta os `<details>` que recebem _renderTGroup DIRETO (sem passar pelo lazy).
+  const diretos = (dash.match(/<details[^']*'[^;]*?_renderTGroup\(/g) || []).length;
+  ok(diretos === 0,
+    'nenhum <details> monta grupo de cards direto — todos passam pelo lazy (achados: ' + diretos + ')');
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

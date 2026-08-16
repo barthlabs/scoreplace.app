@@ -219,11 +219,57 @@ window._dashEnroll = function(tId) {
 // (Encerrados, Ocultados, descoberta) — antes resetavam a cada re-render/filtro.
 // Devolve os atributos do <details>: ` open` (se ficou aberto) + ontoggle que grava
 // no localStorage. defaultOpen = estado quando o usuário nunca tocou.
-function _dashDetailsAttr(key, defaultOpen) {
+function _dashDetailsAttr(key, defaultOpen, lazyId) {
   var v = null; try { v = localStorage.getItem(key); } catch (e) {}
   var isOpen = (v === null) ? !!defaultOpen : (v === '1');
-  return (isOpen ? ' open' : '') + ' ontoggle="try{localStorage.setItem(\'' + key + '\', this.open?\'1\':\'0\')}catch(e){}"';
+  // v1.8.94: com `lazyId`, o conteúdo é montado no primeiro ABRIR (ver _dashLazyOpen).
+  // O ontoggle já existia pra lembrar o estado; agora ele também hidrata.
+  var lazy = lazyId ? 'window._dashLazyOpen(this,\'' + lazyId + '\');' : '';
+  return (isOpen ? ' open' : '') +
+    ' ontoggle="' + lazy + 'try{localStorage.setItem(\'' + key + '\', this.open?\'1\':\'0\')}catch(e){}"';
 }
+
+// Monta o corpo de um bloco recolhível SEM pagar por ele enquanto está fechado.
+// Aberto (estado lembrado do usuário) → monta agora, como sempre foi.
+// Fechado → devolve um slot vazio; `_dashLazyOpen` preenche no primeiro toque.
+function _dashLazyBody(gid, aberto, construir) {
+  if (aberto) return '<div data-lazy-slot="' + gid + '" data-filled="1">' + construir() + '</div>';
+  window._dashLazyGroups[gid] = construir;
+  return '<div data-lazy-slot="' + gid + '"></div>';
+}
+function _dashDetailsAberto(key, defaultOpen) {
+  var v = null; try { v = localStorage.getItem(key); } catch (e) {}
+  return (v === null) ? !!defaultOpen : (v === '1');
+}
+
+// ── v1.8.94: BLOCO FECHADO NÃO SE MONTA ─────────────────────────────────────
+// Relato do dono no app NATIVO (build 39): "fica lenta, tudo demora a responder" —
+// toque no hambúrguer sem efeito, e depois de vários cliques abre. Não era travamento:
+// era o WebView ocupado, derrubando os toques.
+//
+// MEDIDO na dashboard com a base real (16 torneios, 11 ocultos): **625 KB de HTML, e
+// 437 KB (70%) DENTRO de `<details>` fechados** — cards construídos, inseridos no DOM e
+// jamais vistos. O maior card sozinho tem 85 KB. Isso piorou muito na 1.8.89, quando
+// "Todos" passou a varrer a plataforma inteira: a lista saiu de ~5 cards para 15, mais
+// os 11 ocultos e os encerrados.
+//
+// Aqui o conteúdo do bloco só é montado quando ele ABRE (e uma vez só). Fechado, o
+// custo é o cabeçalho. Não é otimização especulativa: é deixar de pagar por pixel que
+// ninguém pediu — e protege o app conforme a plataforma cresce, que é justamente o
+// caminho que a 1.8.89 abriu.
+window._dashLazyGroups = window._dashLazyGroups || {};
+window._dashLazyOpen = function (el, gid) {
+  try {
+    if (!el || !el.open) return;
+    var alvo = el.querySelector('[data-lazy-slot="' + gid + '"]');
+    if (!alvo || alvo.getAttribute('data-filled') === '1') return;
+    var itens = window._dashLazyGroups[gid];
+    if (!itens) return;
+    alvo.setAttribute('data-filled', '1');
+    alvo.innerHTML = itens();          // função: só executa agora
+    if (typeof window._fitNames === 'function') window._fitNames(alvo);
+  } catch (e) { if (window._warn) window._warn('[dash lazy]', e); }
+};
 
 function _reRenderDashKeepScroll() {
   var c = document.getElementById('view-container');
@@ -2777,28 +2823,36 @@ function renderDashboard(container) {
     const finishedList = _encerradosExtraidos;
     if (finishedList.length > 0) {
       // Separate: user's finished tournaments first, then others
+      // v1.8.94: TUDO o que monta card fica dentro do fechamento — o custo só é
+      // pago se o bloco abrir. Antes o `finishedCards` já vinha pronto e o adiamento
+      // teria economizado só a inserção, que é a parte barata.
+      var _abertoEnc = _dashDetailsAberto('scoreplace_dash_finished_open', false);
+      var _montaEnc = function () {
       var _cu = window.AppStore.currentUser;
-      var myFinished = finishedList.filter(function(t) {
-        if (!_cu) return false;
-        if (_cu.uid && t.creatorUid && t.creatorUid === _cu.uid) return true;
-        if (t.organizerEmail && t.organizerEmail === _cu.email) return true;
-        // v3.0.x (Parte 10 uid sweep): inscrição via helper canônico uid-first + slot-aware
-        // (p1Uid/p2Uid). Antes checava só p.uid top-level → o p2 de uma dupla (uid em p2Uid,
-        // displayName = só o nome do p1) caía em "outros encerrados" em vez de "seus".
-        if (typeof window._isUserEnrolledInTournament === 'function') return window._isUserEnrolledInTournament(_cu, t);
-        return false;
-      });
-      var otherFinished = finishedList.filter(function(t) { return myFinished.indexOf(t) === -1; });
-      var finishedCards = '';
-      if (myFinished.length > 0) {
-        finishedCards += '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;opacity:0.85;">🏆 ' + _t('dashboard.yourFinished', {count: myFinished.length}) + '</div>';
-        finishedCards += '<div style="margin-bottom:1rem;">' + _renderTGroup(myFinished) + '</div>';
-      }
-      if (otherFinished.length > 0) {
-        if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
-        finishedCards += _renderTGroup(otherFinished);
-      }
-      finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + finishedCards + '</div></details></div>';
+        var myFinished = finishedList.filter(function(t) {
+          if (!_cu) return false;
+          if (_cu.uid && t.creatorUid && t.creatorUid === _cu.uid) return true;
+          if (t.organizerEmail && t.organizerEmail === _cu.email) return true;
+          // v3.0.x (Parte 10 uid sweep): inscrição via helper canônico uid-first + slot-aware
+          // (p1Uid/p2Uid). Antes checava só p.uid top-level → o p2 de uma dupla (uid em p2Uid,
+          // displayName = só o nome do p1) caía em "outros encerrados" em vez de "seus".
+          if (typeof window._isUserEnrolledInTournament === 'function') return window._isUserEnrolledInTournament(_cu, t);
+          return false;
+        });
+        var otherFinished = finishedList.filter(function(t) { return myFinished.indexOf(t) === -1; });
+        var finishedCards = '';
+        if (myFinished.length > 0) {
+          finishedCards += '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;opacity:0.85;">🏆 ' + _t('dashboard.yourFinished', {count: myFinished.length}) + '</div>';
+          finishedCards += '<div style="margin-bottom:1rem;">' + _renderTGroup(myFinished) + '</div>';
+        }
+        if (otherFinished.length > 0) {
+          if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
+          finishedCards += _renderTGroup(otherFinished);
+        }
+        var _abertoEnc = _dashDetailsAberto('scoreplace_dash_finished_open', false);
+        return finishedCards;
+      };
+      finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false, 'enc') + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + _dashLazyBody('enc', _abertoEnc, _montaEnc) + '</div></details></div>';
     }
   })();
 
@@ -3496,7 +3550,17 @@ function renderDashboard(container) {
       };
       var _inProgress = _filterByInterest(discoveryByCategory.inProgress);
       var _closedNoStart = _filterByInterest(discoveryByCategory.closedNoStart);
-      var _finishedDiscovery = _filterByInterest(discoveryByCategory.finished);
+      // ── v1.8.94: os encerrados NÃO podem sair DUAS vezes ────────────────────
+      // MEDIDO: a dashboard montava "Torneios Encerrados (3)" (204 KB) E
+      // "🏁 Encerrados (públicos) (3)" (204 KB) com OS MESMOS torneios — 408 KB do
+      // total de 625 KB eram a mesma coisa, duas vezes, dentro de blocos fechados.
+      // A colisão nasceu na 1.8.93, quando a seção unificada passou a valer para todo
+      // filtro e encostou nesta, que é da descoberta pública. Quem já está na seção
+      // unificada sai daqui: uma só lista, um só custo.
+      var _jaNaSecaoUnificada = {};
+      (_encerradosExtraidos || []).forEach(function (t) { if (t && t.id != null) _jaNaSecaoUnificada[String(t.id)] = 1; });
+      var _finishedDiscovery = _filterByInterest(discoveryByCategory.finished)
+        .filter(function (t) { return !(t && _jaNaSecaoUnificada[String(t.id)]); });
       // v0.16.73: removido o bloco de diag inline da v0.16.59-61 (renderer
       // version, FirestoreDB.db disponível, contagens por categoria, botões
       // "Forçar re-fetch" / "Diagnose banco"). Discovery feed estável desde
@@ -3532,7 +3596,7 @@ function renderDashboard(container) {
       // certo antes. A lista principal é que não os mostra — a separação é essa.
       var _ocultos = hiddenTournaments || [];
       if (!_ocultos.length) return '';
-      return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;">' + _renderTGroup(hiddenTournaments) + '</div></details></div>';
+      return '<div style="margin-top:1.5rem;"><details' + _dashDetailsAttr('scoreplace_dash_hidden_open', false, 'ocultos') + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:10px 0;user-select:none;">🙈 Torneios ocultados (' + hiddenTournaments.length + ')</summary><div style="margin-top:0.75rem;">' + _dashLazyBody('ocultos', _dashDetailsAberto('scoreplace_dash_hidden_open', false), function () { return _renderTGroup(hiddenTournaments); }) + '</div></details></div>';
     })()}
   `;
   container.innerHTML = html;
