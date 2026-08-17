@@ -131,8 +131,12 @@ ok(cat([{ categoria: '50 anos', tipo: 'torneio', wins: 3, losses: 1 }]) === null
 
   // ⚠️ a ficha usa o resultado E mostra o porquê — sinal sem motivo é caixa-preta
   ok(/_lzCategoriaDoImport\(imp\)/.test(perfil), 'a ficha chama a categoria com sinal');
-  ok(/esc\(_cs\.rotulo\)/.test(perfil), 'e exibe o rótulo com o sinal');
-  ok(/esc\(_cs\.porque\)/.test(perfil), 'e o motivo junto, na tela');
+  // ⭐ SÓ A CATEGORIA, INTEIRA — "É feminina C+ e acabou porra" (dono, 17/ago/2026).
+  ok(/esc\(_gen \+ _cs\.rotulo\)/.test(perfil), 'exibe o rótulo COM gênero: "Feminina C+"');
+  ok(/Feminina '/.test(perfil) && /Masculina '/.test(perfil), 'os dois gêneros viram prefixo');
+  ok(!/' <span style="font-size:10px;[^']*">' \+ esc\(_cs\.porque\)/.test(perfil),
+     'o motivo NÃO fica escrito na tela (só no título, pra quem passar o mouse)');
+  ok(!/>faixa</.test(perfil), 'e a "faixa" por pontos saiu da tela');
 }
 
 console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');

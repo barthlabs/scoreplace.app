@@ -182,20 +182,25 @@
     // disputado alguma vez na vida — e que trazia nome de torneio, "Rodada: N" e faixa
     // etária no lugar da categoria.
     var _cs = (typeof window._lzCategoriaDoImport === 'function') ? window._lzCategoriaDoImport(imp) : null;
+    // "Feminina C+" / "Masculina D" — o rótulo que o organizador usa pra inscrever.
+    var _g = String((imp && imp.gender) || '').toLowerCase();
+    var _gen = /fem/.test(_g) ? 'Feminina ' : (/mas/.test(_g) ? 'Masculina ' : '');
     var offHtml = cat
       ? '<span title="' + (cat.deMista ? 'faixa apurada em torneio misto — o gênero é do torneio, não do atleta' : 'categoria oficial disputada em torneio') +
         '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(cat.label) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
     return '' +
       '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:4px;">' +
-        (_cs
-          ? ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria</span><br>' +
-             '<span title="' + esc(_cs.porque) + '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;' +
-             'background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(_cs.rotulo) + '</span>' +
-             ' <span style="font-size:10px;color:var(--text-muted,#8b93a3);">' + esc(_cs.porque) + '</span></div>')
-          : ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>')) +
-        (_faixa ? ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">faixa</span><br>' +
-          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + esc(_faixa) + '</span></div>') : '') +
+        // ⭐ SÓ A CATEGORIA, INTEIRA. Ordem do dono (17/ago/2026): "que porra é essa de no
+        // lugar e faixa. É feminina C+ e acabou porra." O motivo do sinal e a faixa por
+        // pontos saíram da tela — quem precisa do porquê tem no título; a tela mostra o
+        // rótulo que o organizador usa pra inscrever, com gênero: "Feminina C+".
+        ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria</span><br>' +
+          (_cs
+            ? ('<span title="' + esc(_cs.porque) + '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;' +
+               'background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' +
+               esc(_gen + _cs.rotulo) + '</span>')
+            : offHtml) + '</div>') +
         // ⛔ A "FORMA" SAIU (17/ago/2026). Ordem do dono: "os outros tem essa merda de
         // forma que nao é porra nenhuma". Ela era a banda do rating — a MESMA informação
         // que a bolinha da régua logo abaixo já mostra, e em melhor forma: a régua situa
