@@ -175,13 +175,25 @@
     // A faixa vem da RÉGUA ÚNICA intercalada, derivada dos pontos (store.js) — não da
     // banda gravada pela extensão, que dependia de gênero. Ver window.SP_ESCADA.
     var _faixa = (typeof window._lzBanda === 'function') ? window._lzBanda(r.value) : null;
+    // ⭐ A CATEGORIA COM SINAL, LIGADA (17/ago/2026, ordem do dono). Vem de
+    // window._lzCategoriaComSinal: base = categoria de torneio, "+" para quem busca a de
+    // cima / domina a própria / está no topo, "-" para quem está na base.
+    // ⚠️ Ela SUBSTITUI a antiga "categoria oficial", que era o rótulo mais difícil já
+    // disputado alguma vez na vida — e que trazia nome de torneio, "Rodada: N" e faixa
+    // etária no lugar da categoria.
+    var _cs = (typeof window._lzCategoriaDoImport === 'function') ? window._lzCategoriaDoImport(imp) : null;
     var offHtml = cat
       ? '<span title="' + (cat.deMista ? 'faixa apurada em torneio misto — o gênero é do torneio, não do atleta' : 'categoria oficial disputada em torneio') +
         '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(cat.label) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
     return '' +
       '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:4px;">' +
-        '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
+        (_cs
+          ? ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria</span><br>' +
+             '<span title="' + esc(_cs.porque) + '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;' +
+             'background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(_cs.rotulo) + '</span>' +
+             ' <span style="font-size:10px;color:var(--text-muted,#8b93a3);">' + esc(_cs.porque) + '</span></div>')
+          : ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>')) +
         (_faixa ? ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">faixa</span><br>' +
           '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + esc(_faixa) + '</span></div>') : '') +
         // ⛔ A "FORMA" SAIU (17/ago/2026). Ordem do dono: "os outros tem essa merda de

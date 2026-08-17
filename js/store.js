@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.17';
+window.SCOREPLACE_VERSION = '1.9.18';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -563,6 +563,26 @@ window._lzCategoriaComSinal = function (disputas) {
            naPct: bj ? Math.round(100 * bw / bj) : null, posFrac: pos, campo: campo,
            porque: buscaAcima ? 'busca a de cima' : (domina ? 'domina a própria'
                  : (afunda ? 'base da categoria' : 'no lugar')) };
+};
+
+// Monta a lista de disputas de um import, no formato que `_lzCategoriaComSinal` espera.
+// Fonte: o footprint, que é onde o letzplay entrega uma linha por competição com a
+// categoria, o tipo (official = torneio) e o saldo de vitórias/derrotas.
+window._lzDisputasDoImport = function (imp) {
+  if (!imp || !Array.isArray(imp.footprint)) return [];
+  return imp.footprint.filter(function (f) { return f && f.categoryRaw; }).map(function (f) {
+    return { categoria: f.categoryRaw, tipo: f.official ? 'torneio' : 'ranking',
+             wins: f.wins || 0, losses: f.losses || 0,
+             pos: (f.position != null ? f.position : null),
+             // ⚠️ o footprint NÃO traz o tamanho do campo, então o sinal por POSIÇÃO na
+             // tabela fica inerte por ora. Medido nos 13: nenhum recebeu sinal por posição.
+             total: (f.fieldSize != null ? f.fieldSize : null) };
+  });
+};
+// Atalho: a categoria com sinal direto do import.
+window._lzCategoriaDoImport = function (imp) {
+  return (typeof window._lzCategoriaComSinal === 'function')
+    ? window._lzCategoriaComSinal(window._lzDisputasDoImport(imp)) : null;
 };
 
 // ── LEITURA FEITA POR MOTOR VELHO NÃO É LEITURA COMPLETA ─────────────────────

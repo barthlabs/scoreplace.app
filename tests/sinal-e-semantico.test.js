@@ -103,5 +103,37 @@ ok(cat([{ categoria: '50 anos', tipo: 'torneio', wins: 3, losses: 1 }]) === null
      '"' + t + '" continua sendo lida como categoria');
 });
 
+// ── LIGADA NA TELA (17/ago/2026) ─────────────────────────────────────────────────────
+{
+  const store = fs.readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8');
+  const perfil = fs.readFileSync(path.join(__dirname, '..', 'js/views/letzplay-profile.js'), 'utf8');
+  const i2 = store.indexOf('window._lzDisputasDoImport');
+  const f2 = store.indexOf('\n\n// ── LEITURA FEITA POR MOTOR VELHO');
+  ok(i2 > 0 && f2 > i2, 'existe o montador de disputas a partir do import');
+  new Function('window', store.slice(i2, f2))(w);
+
+  // o footprint é a fonte: uma linha por competição, com categoria, tipo e saldo
+  const disp = w._lzDisputasDoImport({ footprint: [
+    { categoryRaw: 'Fem C+', official: false, wins: 7, losses: 2 },
+    { categoryRaw: 'Feminina D', official: true, wins: 9, losses: 2, position: 2 },
+    { categoryRaw: '46 a 50 anos', official: true, wins: 0, losses: 0 },
+    { categoryRaw: null, official: true, wins: 1, losses: 1 },
+  ]});
+  ok(disp.length === 3, 'linha sem categoria é descartada na origem');
+  ok(disp[1].tipo === 'torneio' && disp[0].tipo === 'ranking',
+     'official vira torneio; o resto, ranking');
+  ok(w._lzCategoriaDoImport({ footprint: [
+    { categoryRaw: 'Fem C+', official: false, wins: 7, losses: 2 },
+    { categoryRaw: 'Feminina D', official: true, wins: 9, losses: 2 },
+  ]}).rotulo === 'D+', 'o atalho do import devolve a categoria com sinal');
+  ok(w._lzDisputasDoImport(null).length === 0 && w._lzDisputasDoImport({}).length === 0,
+     'import vazio não quebra');
+
+  // ⚠️ a ficha usa o resultado E mostra o porquê — sinal sem motivo é caixa-preta
+  ok(/_lzCategoriaDoImport\(imp\)/.test(perfil), 'a ficha chama a categoria com sinal');
+  ok(/esc\(_cs\.rotulo\)/.test(perfil), 'e exibe o rótulo com o sinal');
+  ok(/esc\(_cs\.porque\)/.test(perfil), 'e o motivo junto, na tela');
+}
+
 console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');
 process.exit(falhas ? 1 : 0);
