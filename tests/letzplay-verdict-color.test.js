@@ -91,6 +91,35 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   ok(r._lzSkill === 'D', 'exibe o nível apurado D (borda fraca de "Fem D+ / C-"), veio: ' + r._lzSkill);
 }
 
+// ── 1b. A COR DIZ A DISTÂNCIA ATÉ O NÍVEL REAL (caso Bruna Arilla, 17/ago/2026) ──
+// Ordem do dono, olhando a ficha dela: _"se ela estava na D sendo quase B (C+) deveria ser
+// vermelho na D, âmbar na C"_. Dado REAL do doc: officialCategory.skill = D (do NOME de um
+// torneio de 2022, "Iniciante D"), profileSkill = C, rankingCategory = "Fem C+",
+// rating = { band: 'B', value: 1672, played: 9 } — 66 jogos no histórico.
+// Antes, com categoria declarada e sem título, TUDO dava verde: o nível apurado só era
+// usado quando não havia declarada. Era por isso que ela aparecia coerente jogando na D.
+{
+  const impBruna = {
+    handle: 'bruarilla', officialCategory: { categoryRaw: '… Iniciante ""D""…', skill: 'D' },
+    rankingCategory: 'Fem C+', profileSkill: 'C', skill: 'C',
+    rating: { band: 'B', value: 1672, played: 9, ladder: 'beach-fem-2025' },
+    champions: [], footprint: [],
+    games: [{ lzId: '900001', date: 'Sábado, 09/08/26', myScore: 6, oppScore: 3, won: true }],
+    declaredGames: 67, gamesTotal: 67, indexTotal: 67, extVersion: MOTOR,
+    lzCursor: { complete: true, pagesTotal: 1, pagesRead: { 1: 1 } }, importedAt: AGORA,
+  };
+  const prof = { letzplayHandle: 'bruarilla', letzplayConsent: true, letzplayImport: impBruna };
+  const naD = run({ uid: 'b1', effectiveSkills: ['D'] }, { b1: prof }, {});
+  const naC = run({ uid: 'b2', effectiveSkills: ['C'] }, { b2: prof }, {});
+  const naB = run({ uid: 'b3', effectiveSkills: ['B'] }, { b3: prof }, {});
+  ok(naD._lzColor === COL.red,    'Bruna (nível B) inscrita na D → VERMELHO (veio: ' + naD._lzColor + ')');
+  ok(naC._lzColor === COL.yellow, 'Bruna (nível B) inscrita na C → ÂMBAR (veio: ' + naC._lzColor + ')');
+  ok(naB._lzColor === COL.green,  'Bruna (nível B) inscrita na B → VERDE (veio: ' + naB._lzColor + ')');
+  // ⚠️ e o contrário também: jogar ACIMA do próprio nível nunca é acusação.
+  const naA = run({ uid: 'b4', effectiveSkills: ['A'] }, { b4: prof }, {});
+  ok(naA._lzColor === COL.green, 'inscrita ACIMA do nível dela → VERDE (competir acima é permitido)');
+}
+
 // ── 2. A leitura NÃO pode depender do inscrito logar ──
 // Mesma pessoa, mesmo scan: com nível declarado (pós-login) e sem. A cor tem que ser igual.
 {

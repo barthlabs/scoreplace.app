@@ -1268,6 +1268,47 @@
       titleCount: titleRanks.length
     };
   }
+  // ── O NÍVEL REAL DA PESSOA É O MAIS FORTE QUE ELA MOSTRA ────────────────────────
+  // Ordem do dono (17/ago/2026), sobre a Bruna Arilla: _"deveria ter fem C+ como
+  // categoria (…) e se ela estava na D sendo quase B (C+) deveria ser vermelho na D,
+  // âmbar na C"_.
+  //
+  // MEDIDO no doc dela: officialCategory.skill = **D**, rankingCategory = **Fem C+**,
+  // rating.band = **B** (1672 pts, 66 jogos). A categoria "oficial" D veio do NOME de um
+  // torneio de 2022 ("Iniciante D") — é o mais forte que ela jogou em TORNEIO, e a regra
+  // antiga só olhava torneio ("ranking é recreativo"). Só que quem joga um ranking C+/B
+  // hoje não é jogadora D porque disputou um torneio de iniciante há quatro anos.
+  //
+  // Referência = o MAIS FORTE entre torneio, ranking e forma. Para a Bruna dá B, e é daí
+  // que saem exatamente as cores que o dono pediu: D fica a 2 níveis (vermelho), C a 1
+  // (âmbar), B no lugar (verde).
+  function _lzNivelApurado(fonte) {
+    if (!fonte) return null;
+    // ⭐ O RATING MANDA QUANDO EXISTE. Ele é força MEDIDA (pontos + jogos no ladder), e é o
+    // que a régua da ficha já mostra. Medido: Bruna Arilla, rating.band = B, 1672 pts, 66
+    // jogos — enquanto profileSkill dizia C e a categoria "oficial" dizia D (essa vinda do
+    // NOME de um torneio de 2022, "Iniciante D").
+    var rt = fonte.rating;
+    if (rt && rt.band) {
+      var rb = _declRankFrom([rt.band]);
+      if (rb != null) return rb;
+    }
+    // ⚠️ SEM RATING, NADA MUDA: continua a borda MAIS FRACA da banda (profileSkill), que é
+    // a régua conservadora de sempre. É o que mantém "Kelly declarada C com banda C+/B-"
+    // em verde — banda de fronteira não é banda cheia, e havia decisão registrada nisso.
+    // Não generalizar daqui: sem medida de força, absolver é mais seguro que acusar.
+    // ⚠️ E a ORDEM aqui não é estética: sem a categoria oficial no fim, o caminho do
+    // IMPORT (que não tem profileSkill) devolvia null, o veredito caía em "sem info" e
+    // quem estava verde virava violeta. Foram 12 asserções acusando isso.
+    var cons = _declRankFrom([fonte.profileSkill]);
+    if (cons == null) cons = _declRankFrom([fonte.skill]);
+    if (cons == null && fonte.officialCategory && fonte.officialCategory.skill) {
+      cons = _declRankFrom([fonte.officialCategory.skill]);
+    }
+    return (cons != null) ? cons : null;
+  }
+
+
   // 5 níveis: ⚪ sem info · 🟢 coerente · 🔵 rebaixar · 🟡 pode subir · 🔴 deve subir.
   // SÓ domínio (título/topo) empurra pra cima. Banda alta sem dominar = coerente.
   function _lzVerdict(declRank, ev, apuradoRank) {
@@ -1289,6 +1330,16 @@
     if (ev.titleRank != null) {
       var shouldT = Math.max(0, ev.titleRank - 1);
       if (shouldT < declRank) return { key: 'red', apurada: shouldT };
+    }
+    // ── A DISTÂNCIA ATÉ O NÍVEL APURADO É O QUE A COR DIZ ────────────────────────
+    // Antes, o apurado só era usado quando NÃO havia categoria declarada — com declarada,
+    // ele era ignorado e qualquer um sem título ficava verde. Era por isso que a Bruna,
+    // nível B jogando na D, aparecia coerente.
+    // Dois níveis abaixo ou mais é gato; um nível é folga aceitável, mas merece o aviso.
+    if (apuradoRank != null) {
+      var dist = declRank - apuradoRank;          // > 0 = inscrita ABAIXO do nível dela
+      if (dist >= 2) return { key: 'red', apurada: apuradoRank };
+      if (dist === 1) return { key: 'yellow', apurada: apuradoRank };
     }
     // Topo da tabela / vencendo muito na categoria declarada (ou mais fácil) → PODE subir.
     if (ev.standingRank != null) {
@@ -2542,7 +2593,7 @@
         var ev = _lzEvidence(champCats, _fpR, [oc ? oc.categoryRaw : '', band || '']);
         // apurado = o MESMO nível que exibimos em _lzSkill; serve de veredito quando a
         // pessoa não declarou nada (veio do letzplay → coerente por definição).
-        var apuLi = (oc && oc.skill) ? _declRankFrom([oc.skill]) : null;
+        var apuLi = _lzNivelApurado(li);   // torneio, ranking E forma — o mais forte
         var v = _lzVerdict(_declRankFrom(r.effectiveSkills), ev, apuLi);
         r._lzSrc = '🎾';
         r._lzSkill = (oc && oc.skill) ? oc.skill : (v.apurada != null ? _LTR[v.apurada] : null);
@@ -2567,7 +2618,7 @@
       } else if (sc) {
         var ev2 = _lzEvidence(sc.champions || [], sc.rankings || [], [sc.rankingCategory].concat(sc.allCategories || []));
         // profileSkill = borda MAIS FRACA da banda ativa (conservador, ver _spDeriveScan).
-        var apuSc = _declRankFrom([sc.profileSkill || sc.skill]);
+        var apuSc = _lzNivelApurado(sc);    // idem, pelo caminho do scan
         var v2 = _lzVerdict(_declRankFrom(r.effectiveSkills), ev2, apuSc);
         // VERDE EXIGE CAPTURA COMPLETA. O próprio scan sabe quanto FALTOU: o perfil do
         // letzplay declara os totais e nós contamos o que veio. Medido em produção:
