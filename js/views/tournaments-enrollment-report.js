@@ -4627,6 +4627,48 @@
   // Duas leituras da MESMA pessoa não competem: elas se somam. Jogo é identificado por id
   // (ou pelo conteúdo, quando o id falta), então a união não duplica nada; e o cursor é
   // progresso puro — página aberta continua aberta.
+  // ── O DOCUMENTO UNIDO TEM QUE CABER NO FIRESTORE ────────────────────────────────
+  // O limite é 1 MiB POR DOCUMENTO, e estourar não devolve erro parcial: o Firestore
+  // REJEITA a escrita inteira. O resultado é o pior possível — a leitura roda até o fim,
+  // não grava nada, e o doc continua com a versão velha. Foi o que aconteceu com a Camila
+  // (medido em 17/ago/2026: 11 pessoas releram com a 2.05 e fecharam; ela é a última
+  // tentativa e a única ainda em 2.01, com os MESMOS 479 jogos de antes).
+  //
+  // ⚠️ A extensão tem um corte por tamanho (shrinkImport), mas ele roda LÁ, sobre o que ela
+  // acabou de ler. A UNIÃO acontece AQUI, no app, e é justamente ela que faz o doc crescer:
+  // soma os jogos dos dois lados e junta footprint com as classificações de ambos. Medido:
+  // Camila 639 KB e Fabio Godoy 561 KB já sozinhos — os DOIS maiores, e os dois que travam.
+  // Unir dois desses passa de 1 MiB com folga.
+  var _LZ_TETO_DOC = 850000;   // bytes; folga pro overhead de campos do próprio Firestore
+  function _lzBytes(o) {
+    try {
+      var s = JSON.stringify(o);
+      return (typeof TextEncoder !== 'undefined') ? new TextEncoder().encode(s).length : s.length;
+    } catch (e) { return 0; }
+  }
+  // Corta na MESMA ordem da extensão (o que menos dói primeiro), e por último desiste da
+  // união: o import NOVO sozinho é completo e do motor certo — melhor ele inteiro do que
+  // um unido que não grava.
+  function _lzCaberNoDoc(unido, novo) {
+    if (_lzBytes(unido) <= _LZ_TETO_DOC) return unido;
+    (unido.footprint || []).forEach(function (f) {
+      if (f && Array.isArray(f.matches)) {
+        var k = f.matches.filter(function (m) { return !/grupo/i.test((m && m.phase) || ''); });
+        f.matches = k.length ? k : null;
+      }
+    });
+    if (_lzBytes(unido) <= _LZ_TETO_DOC) { unido.slimmed = 'group-matches'; return unido; }
+    (unido.footprint || []).forEach(function (f) { if (f && !f.official) { delete f.standings; } });
+    if (_lzBytes(unido) <= _LZ_TETO_DOC) { unido.slimmed = 'rank-standings'; return unido; }
+    (unido.footprint || []).forEach(function (f) { if (f) { delete f.standings; delete f.logo; delete f.matches; } });
+    if (_lzBytes(unido) <= _LZ_TETO_DOC) { unido.slimmed = 'all-standings'; return unido; }
+    window._warn && window._warn('[letzplay] união não coube em ' + _LZ_TETO_DOC +
+      ' bytes — gravando a leitura NOVA sozinha (completa e do motor atual).');
+    return novo;
+  }
+  window._lzCaberNoDoc = _lzCaberNoDoc;
+  window._lzBytesDoc = _lzBytes;
+
   function _lzUnirImports(antigo, novo) {
     if (!antigo) return novo;
     if (!novo) return antigo;
@@ -4807,7 +4849,7 @@
     // UNE em vez de descartar — ver _lzUnirImports.
     function barrar(antes, origem, guardado) {
       if (guardado) {
-        doc.fullImport = _lzUnirImports(guardado, doc.fullImport);
+        doc.fullImport = _lzCaberNoDoc(_lzUnirImports(guardado, doc.fullImport), doc.fullImport);
         _lzResumoDoHistorico(doc);
         window._warn && window._warn('[letzplay] leituras unidas (' + origem + '): ' + agora +
           ' + ' + antes + ' → ' + _lzTot(doc.fullImport) + ' jogos.');
