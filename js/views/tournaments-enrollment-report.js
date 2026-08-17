@@ -1208,6 +1208,15 @@
       // Solta a supressão — a mesma janela de 1200ms do _erCommitCats. Deixá-la ligada
       // congelaria o soft-refresh do app INTEIRO, não só desta tela.
       setTimeout(function () { window._suppressSoftRefresh = false; }, 1200);
+      // ── SALVAR RECARREGA A PÁGINA ────────────────────────────────────────────────
+      // Ordem do dono (17/ago/2026): "salvar deve recarregar a pagina para atualizar as
+      // cores". O re-render acima repinta as linhas, mas a cor do nome sai de
+      // _erApplyLzToRows, que compara a categoria da inscrição com o nível apurado — e ele
+      // trabalha sobre o perfil/scan carregados no boot, não sobre o que acabou de ser
+      // gravado. Resultado: mudava a categoria, salvava, e a cor continuava a de antes.
+      // Recarregar é o que garante que TUDO (inclusive o que veio da CF) seja relido.
+      // O atraso é só pra a confirmação ser lida antes da tela recarregar.
+      setTimeout(function () { try { window.location.reload(); } catch (e) {} }, 900);
     };
     // v1.7.1 — POR QUE O CACHE DE PERFIL PRECISA SER ATUALIZADO AQUI (bug do dono:
     // "realoco a pessoa, salvo, e ela volta pra sem gênero; tem que repetir pra fixar"):
