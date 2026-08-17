@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.14';
+window.SCOREPLACE_VERSION = '1.9.15';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -476,6 +476,53 @@ window._lzBanda = function (pontos) {
 window._lzBandaLetra = function (pontos) {
   var b = window._lzBanda(pontos);
   return b ? String(b).replace(/[+\-]/g, '') : null;
+};
+
+// ── O "+" É SEMÂNTICO: "é D, mas está buscando a C" ──────────────────────────
+// Definição do dono (17/ago/2026), sobre a Kelly: _"na verdade a Kelly seria D+ já que no
+// social disputa C e torneios em D"_. Ranking na C + torneio na D NÃO são duas categorias
+// — são UMA: **D+**. E o sinal não é de graça: _"se perde tudo na C, mas tambem na D seria
+// D. Se ganha muito na D e na C oscila ganhando umas e perdendo outras reforça o D+"_.
+//
+// ⚠️ Isto é DIFERENTE de `_lzBanda`, que fatia a faixa por PONTOS. Aqui o sinal sai da
+// relação entre onde a pessoa DISPUTA e onde ela SE SUSTENTA — que é o que o dono quer
+// dizer com "+". As duas convivem: a faixa por pontos situa na régua; esta diz a direção.
+//
+// BASE = a categoria em que ela joga TORNEIO (é lá que a elegibilidade morde). Disputar
+// ranking acima só vira "+" se houver resultado sustentando — senão qualquer um que se
+// inscrevesse acima ganhava o sinal sem jogar nada.
+window.SP_SINAL_MIN = 0.35;   // aproveitamento na categoria de cima que sustenta o "+"
+// `disputas` = [{ categoria: 'C', tipo: 'ranking'|'torneio', wins: n, losses: n }]
+window._lzCategoriaComSinal = function (disputas) {
+  var ORD = { FUN: 4, D: 3, C: 2, B: 1, A: 0 };
+  function letra(s) {
+    var m = String(s || '').toUpperCase().match(/\b(FUN|[A-D])\b/);
+    return m ? m[1] : null;
+  }
+  var lista = (disputas || []).map(function (d) {
+    return d && { l: letra(d.categoria), tipo: d.tipo, w: d.wins || 0, p: d.losses || 0 };
+  }).filter(function (d) { return d && d.l != null && ORD[d.l] != null; });
+  if (!lista.length) return null;
+
+  var tors = lista.filter(function (d) { return d.tipo === 'torneio'; });
+  // a MAIS FORTE de cada tipo (menor ORD = mais forte)
+  function maisForte(xs) {
+    return xs.length ? xs.reduce(function (a, b) { return ORD[b.l] < ORD[a.l] ? b : a; }) : null;
+  }
+  var baseD = maisForte(tors) || maisForte(lista);
+  var base = baseD.l;
+
+  // disputas ACIMA da base — é delas que sai o "+"
+  var acima = lista.filter(function (d) { return ORD[d.l] < ORD[base]; });
+  if (!acima.length) return { categoria: base, sinal: '', rotulo: base };
+  var w = 0, p = 0;
+  acima.forEach(function (d) { w += d.w; p += d.p; });
+  var jogos = w + p;
+  // ⚠️ sem volume não há prova: uma partida ganha lá em cima não sustenta nada.
+  var sustenta = jogos >= 4 && (w / jogos) >= window.SP_SINAL_MIN;
+  return { categoria: base, sinal: sustenta ? '+' : '',
+           rotulo: base + (sustenta ? '+' : ''),
+           acimaJogos: jogos, acimaPct: jogos ? Math.round(100 * w / jogos) : null };
 };
 
 // ── LEITURA FEITA POR MOTOR VELHO NÃO É LEITURA COMPLETA ─────────────────────

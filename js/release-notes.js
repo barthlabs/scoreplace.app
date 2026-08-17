@@ -45,6 +45,7 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>➕ O “+” da categoria ganhou significado:</b> quem joga torneio na D e ranking na C é <b>D+</b> — “é D, mas está buscando a C”. E o sinal só vale com resultado: sem ganhar nada na categoria de cima, continua D. (Cálculo pronto; a tela passa a usá-lo em seguida.)</li>' +
         '<li><b>📏 Uma régua só, com meia-categoria:</b> a faixa passa a ser <b>D-, D+, C-, C+, B-, B+</b> — a metade mostra se a pessoa acabou de chegar na categoria ou já está encostando na de cima. Antes a régua era escolhida pelo <b>gênero</b>, o que media homens e mulheres por escalas diferentes sem motivo.</li>' +
         '<li><b>🏷️ Nome de torneio não aparece mais como categoria:</b> o rótulo cru do letzplay às vezes é o nome inteiro do evento, e ele ocupava o lugar da categoria na ficha. Agora só rótulos curtos e de verdade entram ali.</li>' +
         '<li><b>🧹 Saiu o campo “forma”:</b> era a mesma informação que a régua abaixo já mostra, em formato pior.</li>' +

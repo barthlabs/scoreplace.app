@@ -211,6 +211,7 @@ const SUITES = [
   'tests/motor-velho-nao-e-leitura-completa.test.js',
   'tests/leitura-longa-conclui.test.js',
   'tests/regua-intercalada-unica.test.js',
+  'tests/sinal-e-semantico.test.js',
   'tests/letzplay-level-bar.test.js',
   'tests/org-gender-label.test.js',
   'tests/letzplay-game-cards.test.js',
