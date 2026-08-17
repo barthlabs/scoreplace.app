@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.20';
+window.SCOREPLACE_VERSION = '1.9.21';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2289,11 +2289,35 @@ window._tournamentDetailSig = function (t) {
   var _k = function (m) { return m ? Object.keys(m).sort().join(',') : ''; };
   var _all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t)
     : (Array.isArray(t.matches) ? t.matches : []);
+  // v1.9.21 — O PLACAR NUNCA ENTROU NESTA ASSINATURA, E A PROPOSTA TAMPOUCO.
+  // O campo lido era `m.score1`/`m.score2`, que NÃO EXISTE no modelo: o match
+  // guarda `scoreP1`/`scoreP2` (conferido no doc real da Confra e em
+  // `_matchResultFields`). Os dois lados da comparação eram sempre '' — ou seja,
+  // o "placar" que o comentário acima diz incluir nunca esteve aqui.
+  // O que isso causava, medido com o doc REAL: quando uma PROPOSTA de placar
+  // chegava pela rede, a assinatura não mudava → `_softRefreshView` concluía
+  // "nada mudou" → a tela de quem estava com o torneio ABERTO não re-renderizava
+  // → o adversário NUNCA via o ✅ Confirmar aparecer, e o placar editado seguia
+  // mostrando o valor velho. Some com o caso do organizador (v1.9.20) e vira o
+  // relato inteiro: "ninguém consegue confirmar".
+  // `score1/score2` fica no sinal porque dado legado ainda usa esse par
+  // (tournaments-analytics.js, tournaments-utils.js) — custa nada e não mente.
   var _mc = _all.map(function (m) {
     if (!m) return '';
+    var _s1 = m.scoreP1 != null ? m.scoreP1 : (m.score1 != null ? m.score1 : '');
+    var _s2 = m.scoreP2 != null ? m.scoreP2 : (m.score2 != null ? m.score2 : '');
+    // A proposta muda os BOTÕES do card (Confirmar/Editar/Contestar), então ela
+    // faz parte do que a tela mostra: quem propôs, qual placar, e a fase do
+    // consenso (contra-proposta / em disputa).
+    var _pr = m.pendingResult;
+    var _prc = _pr
+      ? ('P' + (_pr.proposedBy || _pr.proposedByEmail || '') + ':' +
+         (_pr.scoreP1 != null ? _pr.scoreP1 : '') + '-' + (_pr.scoreP2 != null ? _pr.scoreP2 : '') +
+         (_pr.isCounterProposal ? ':C' : '') + (_pr.disputed ? ':D' : ''))
+      : '';
     return (m.id || '') + ':' + (m.winner || '') + ':' +
-      (m.score1 != null ? m.score1 : '') + '-' + (m.score2 != null ? m.score2 : '') + ':' +
-      (m.p1 || '') + '/' + (m.p2 || '');
+      _s1 + '-' + _s2 + ':' +
+      (m.p1 || '') + '/' + (m.p2 || '') + ':' + _prc;
   }).join(',');
   // v1.3.97: inclui o lateEnrollment EFETIVO (fase corrente sobrepõe top-level) — o toggle de
   // "aceitar entradas tardias" muda o painel (lista ↔ pareamento) e o próprio estado do toggle, então

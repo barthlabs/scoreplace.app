@@ -891,6 +891,13 @@ const SUITES = [
   // FUSÃO não é exclusão (o cleanupAbandonedAuth apaga o doc do merge-ghost 7 dias
   // depois, e quem uniu contas não pode receber "sua conta foi excluída").
   'functions/test-account-deletion-email-core.js',
+  // O ✅ Confirmar tem que CHEGAR na tela de quem pode homologar. Incidente do "jogo 74"
+  // (Confra, 17/ago): no Rei/Rainha as duplas rodam, então quando as duas pessoas ativas
+  // do grupo caem no MESMO time não sobra ninguém do lado adversário pra aprovar — e o
+  // organizador não tinha botão, só "Editar". Junto disso, o gate de re-render lia
+  // `score1/score2` (campo inexistente) e ignorava `pendingResult`, então a proposta
+  // chegava pela rede sem acordar a tela de quem já estava olhando. v1.9.21.
+  'tests/confirmar-placar-chega-na-tela.test.js',
 ];
 
 let failed = [];
