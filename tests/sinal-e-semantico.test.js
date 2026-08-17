@@ -82,5 +82,26 @@ ok(cat([{ categoria: 'B', tipo: 'ranking', wins: 5, losses: 4 },
         { categoria: 'D', tipo: 'torneio', wins: 8, losses: 1 }]).rotulo === 'D+',
    'disputar DUAS acima também dá "+" (não existe "++")');
 
+// ── ⛔ O QUE NÃO É CATEGORIA (casos REAIS de produção, 17/ago/2026) ────────────────
+// O Fernando Bernacchi tem uma entrada "46 a 50 anos" no histórico — e o **"a"** de
+// "46 A 50" era lido como categoria **A**. Ele, que é D+, saía classificado como A.
+// A preposição virava nível. É o mesmo defeito de família do nome do torneio ocupando o
+// campo da categoria: o letzplay põe coisas nesse campo que não são categoria.
+ok(cat([{ categoria: '46 a 50 anos', tipo: 'torneio', wins: 0, losses: 0 },
+        { categoria: 'Masc D+', tipo: 'ranking', wins: 4, losses: 11 }]).categoria === 'D',
+   'faixa etária "46 a 50 anos" NÃO vira categoria A (caso real do Fernando)');
+ok(cat([{ categoria: '46 a 50 anos', tipo: 'torneio', wins: 5, losses: 1 }]) === null,
+   'sozinha, a faixa etária não classifica ninguém');
+ok(cat([{ categoria: 'Rodada: 131', tipo: 'ranking', wins: 4, losses: 46 },
+        { categoria: 'Masc D+', tipo: 'ranking', wins: 4, losses: 11 }]).categoria === 'D',
+   '"Rodada: 131" também não é categoria');
+ok(cat([{ categoria: '50 anos', tipo: 'torneio', wins: 3, losses: 1 }]) === null,
+   'e nenhuma variação de idade entra');
+// ⚠️ e o inverso: as categorias de verdade continuam passando
+['Masc D+', 'Fem C+', 'Feminina C', 'Masculina D', 'Mista D', 'FUN'].forEach(function (t) {
+  ok(cat([{ categoria: t, tipo: 'torneio', wins: 3, losses: 3 }]) !== null,
+     '"' + t + '" continua sendo lida como categoria');
+});
+
 console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');
 process.exit(falhas ? 1 : 0);

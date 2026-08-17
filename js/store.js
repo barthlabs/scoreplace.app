@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.16';
+window.SCOREPLACE_VERSION = '1.9.17';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -499,7 +499,15 @@ window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá 
 window._lzCategoriaComSinal = function (disputas) {
   var ORD = { FUN: 4, D: 3, C: 2, B: 1, A: 0 };
   function letra(s) {
-    var m = String(s || '').toUpperCase().match(/\b(FUN|[A-D])\b/);
+    var t = String(s || '').trim();
+    // ⛔ FAIXA ETÁRIA NÃO É CATEGORIA — e o estrago aqui é literal: "46 a 50 anos" casava
+    // o "a" de "46 A 50" como categoria **A**, e o Fernando Bernacchi (que é D+) saía
+    // classificado como A. Medido no doc dele em 17/ago/2026. A preposição virou nível.
+    if (/\d+\s*a\s*\d+/i.test(t) || /\banos?\b/i.test(t)) return null;
+    // ⛔ "Rodada: 13" também não é categoria — é a rodada do ranking. Mesmo defeito de
+    // família do nome do torneio ocupando o campo da categoria.
+    if (/^\s*rodada\b/i.test(t)) return null;
+    var m = t.toUpperCase().match(/\b(FUN|[A-D])\b/);
     return m ? m[1] : null;
   }
   var lista = (disputas || []).map(function (d) {
