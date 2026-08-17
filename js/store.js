@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.13';
+window.SCOREPLACE_VERSION = '1.9.14';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -441,6 +441,43 @@ window._formatDisplayName = function (fmt) {
 // pra home) e aparecia no app como "U · Feed", sem classificação e com 0 V/0 D.
 // Duas listas em dois arquivos divergem no primeiro ajuste; por isso a regra é UMA e os
 // dois consumidores (ficha do jogador e Análise de Inscritos) chamam esta função.
+// ── A RÉGUA INTERCALADA, E UMA SÓ PRA TODO MUNDO ─────────────────────────────
+// Decisão do dono (17/ago/2026): _"a regua intercalada me parece ser mais rica e dar o
+// vies da pessoa se ela esta mais perto da categoria de cima ou da de baixo. ela nao perde
+// em nada e poderia ser adotada geral C+, C-, D+, D- etc."_
+//
+// O QUE ESTAVA ERRADO: a escada era escolhida por GÊNERO — `beach-masc-2025` intercalada
+// (D+/C- · C+/B- · B+/A-) e `beach-fem-2025` fixa (D · C · B · A). Gênero servia de proxy
+// pra SÉRIE do ranking, e o proxy não vale: apurado nos 13 docs em 17/ago/2026 — 9 pessoas
+// jogam só SOCIAL, 1 só COMPETITIVO e 3 as DUAS. Todo homem era medido pela régua do
+// social e toda mulher pela do competitivo, independente de onde joga.
+//
+// A régua única resolve os dois: cada faixa se divide ao meio, e a metade diz o VIÉS —
+// "C-" é quem acabou de chegar na C, "C+" é quem está encostando na B. Não se perde
+// informação nenhuma (o rótulo cheio continua legível na letra), e ganha-se a direção.
+//
+// ⚠️ DERIVADA DOS PONTOS, no app — não gravada pela extensão. Assim vale pra TODO MUNDO
+// sem reler nada: o `rating.value` já está no doc de todos (medido: 12 dos 13 têm).
+window.SP_ESCADA = [
+  { nome: 'FUN', ate: 1380 },
+  { nome: 'D-',  ate: 1450 }, { nome: 'D+', ate: 1520 },
+  { nome: 'C-',  ate: 1590 }, { nome: 'C+', ate: 1660 },
+  { nome: 'B-',  ate: 1740 }, { nome: 'B+', ate: 1820 },
+  { nome: 'A',   ate: Infinity }
+];
+// Banda intercalada a partir dos pontos. Fonte única — quem precisar da faixa usa esta.
+window._lzBanda = function (pontos) {
+  if (typeof pontos !== 'number' || !isFinite(pontos)) return null;
+  var E = window.SP_ESCADA;
+  for (var i = 0; i < E.length; i++) if (pontos < E[i].ate) return E[i].nome;
+  return E[E.length - 1].nome;
+};
+// A letra sem o sinal — pra comparar com categoria de inscrição, que é sempre cheia.
+window._lzBandaLetra = function (pontos) {
+  var b = window._lzBanda(pontos);
+  return b ? String(b).replace(/[+\-]/g, '') : null;
+};
+
 // ── LEITURA FEITA POR MOTOR VELHO NÃO É LEITURA COMPLETA ─────────────────────
 // Ordem do dono (17/ago/2026): _"se mudou o motor, ainda que ja tenha lido tudo no motor
 // antigo, precisa sim ler de novo no motor novo"_. Está certo, e o critério de completude

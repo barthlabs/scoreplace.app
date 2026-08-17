@@ -172,6 +172,9 @@
       Math.max(10, pct - 12) + '%,#16a34a ' + Math.max(14, pct - 5) + '%,#16a34a ' +
       Math.min(88, pct + 5) + '%,#eab308 ' + Math.min(92, pct + 14) + '%,#ef7a2b ' +
       Math.min(97, pct + 26) + '%,#dc2626 100%)';
+    // A faixa vem da RÉGUA ÚNICA intercalada, derivada dos pontos (store.js) — não da
+    // banda gravada pela extensão, que dependia de gênero. Ver window.SP_ESCADA.
+    var _faixa = (typeof window._lzBanda === 'function') ? window._lzBanda(r.value) : null;
     var offHtml = cat
       ? '<span title="' + (cat.deMista ? 'faixa apurada em torneio misto — o gênero é do torneio, não do atleta' : 'categoria oficial disputada em torneio') +
         '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(cat.label) + '</span>'
@@ -179,6 +182,8 @@
     return '' +
       '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:4px;">' +
         '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
+        (_faixa ? ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">faixa</span><br>' +
+          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#2dd4a0;">' + esc(_faixa) + '</span></div>') : '') +
         // ⛔ A "FORMA" SAIU (17/ago/2026). Ordem do dono: "os outros tem essa merda de
         // forma que nao é porra nenhuma". Ela era a banda do rating — a MESMA informação
         // que a bolinha da régua logo abaixo já mostra, e em melhor forma: a régua situa
