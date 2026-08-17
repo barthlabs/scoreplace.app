@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.22';
+window.SCOREPLACE_VERSION = '1.9.23';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -494,7 +494,7 @@ window._lzBandaLetra = function (pontos) {
 window.SP_MIN_PRESENCA = 3;    // jogos numa categoria pra ela definir a letra
 window.SP_SINAL_MIN = 0.35;    // aproveitamento na categoria DE CIMA que sustenta o "+"
 window.SP_DOMINA_PCT = 0.75;   // ganhar quase tudo na PRÓPRIA categoria também dá "+"
-window.SP_AFUNDA_PCT = 0.30;   // perder quase tudo na própria dá "-"
+window.SP_AFUNDA_PCT = 0.35;   // nao se firmou onde joga: da o "-" (Camila faz 31% na C)
 window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá "-"
 // `disputas` = [{ categoria: 'C', tipo: 'ranking'|'torneio', wins: n, losses: n }]
 window._lzCategoriaComSinal = function (disputas) {

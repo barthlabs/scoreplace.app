@@ -198,5 +198,26 @@ ok(cat([{ categoria: '50 anos', tipo: 'torneio', wins: 3, losses: 1 }]) === null
      'mista não decide a letra (é outra modalidade)');
 }
 
+// ── ⭐ POUCOS JOGOS LÁ EM CIMA = AINDA BUSCANDO; MUITOS = JÁ É DE LÁ ───────────────
+// Regra do dono (17/ago/2026): _"precisa jogar algumas vezes na C para ser C ainda que C-
+// por estar na base"_ e _"com poucos jogos ainda fica como a kelly em D+"_.
+// É o que separa as duas: a Kelly aparece pouco na C (ainda buscando → D+); a Camila joga
+// C o tempo todo e faz 31% lá (já é C, mas no piso → C-).
+{
+  const poucos = cat([{ categoria: 'D', tipo: 'torneio', wins: 5, losses: 2 },
+                      { categoria: 'C', tipo: 'ranking', wins: 2, losses: 2 }]);
+  ok(poucos.rotulo === 'D+', 'poucos jogos na de cima → ainda D+ (veio: ' + poucos.rotulo + ')');
+  const muitos = cat([{ categoria: 'C', tipo: 'torneio', wins: 2, losses: 8 },
+                      { categoria: 'C', tipo: 'torneio', wins: 3, losses: 9 },
+                      { categoria: 'D', tipo: 'torneio', wins: 4, losses: 1 }]);
+  ok(muitos.rotulo === 'C-', 'muitos jogos na C, indo mal → C- (veio: ' + muitos.rotulo + ')');
+  // ⚠️ o limiar do "-" é 35%: a Camila faz 31% na C e por 1 ponto ficava SEM sinal.
+  // Trocar o número por um caso REAL é o que impede isso de virar chute.
+  ok(cat([{ categoria: 'C', tipo: 'torneio', wins: 3, losses: 7 }]).sinal === '-',
+     '30% na própria categoria dá "-"');
+  ok(cat([{ categoria: 'C', tipo: 'torneio', wins: 5, losses: 5 }]).sinal === '',
+     'mas 50% não é base — fica sem sinal');
+}
+
 console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');
 process.exit(falhas ? 1 : 0);
