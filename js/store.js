@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.2';
+window.SCOREPLACE_VERSION = '1.9.3';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,7 +105,7 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-window.SP_EXT_VERSION = '2.02';
+window.SP_EXT_VERSION = '2.03';
 
 // ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
 // A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",
@@ -441,6 +441,61 @@ window._formatDisplayName = function (fmt) {
 // pra home) e aparecia no app como "U · Feed", sem classificação e com 0 V/0 D.
 // Duas listas em dois arquivos divergem no primeiro ajuste; por isso a regra é UMA e os
 // dois consumidores (ficha do jogador e Análise de Inscritos) chamam esta função.
+// ── O TIEBREAK VINHA COLADO NO PLACAR — e invertia o vencedor ────────────────
+// O letzplay rende o placar como `5<sub>4</sub>`: 5 games, tiebreak 4. O leitor da
+// extensão pegava `textContent` do container, que ENGOLE o <sub>, e gravava `54`. Com
+// `54` contra `6`, a conta `meu > dele` dizia VITÓRIA num jogo que foi 5(4)–6, ou seja
+// DERROTA. Medido em 16/ago/2026: 228 jogos de 1.684 (13,5%), em 12 das 12 pessoas com
+// leitura — e os 228 com o resultado INVERTIDO, não só com o placar feio.
+//
+// Placar de SET no letzplay é um dígito (0–9); o tiebreak é o que vem depois. Então
+// número de 2+ dígitos = tiebreak colado, e o placar real é o PRIMEIRO dígito.
+// Conferido nos 1.684 jogos gravados: 228 casos, ZERO ambíguos (nenhum em que o
+// primeiro dígito empatasse e o vencedor ficasse indefinido).
+//
+// ⚠️ Isto é cura de LEITURA: não escreve no banco e desliga sozinha quando o dado chega
+// bom (extensão 2.03 em diante grava o placar já limpo).
+window._lzPlacarReal = function (n) {
+  if (typeof n !== 'number' || !isFinite(n) || n <= 9) return n;
+  var d = String(Math.abs(Math.trunc(n)))[0];
+  return +d;
+};
+// Um jogo do doc RESUMO (perspectiva "eu/adversário"). Recalcula `won`, que é derivado —
+// deixá-lo como está manteria o veredito invertido mesmo com o placar corrigido.
+window._lzCuraJogo = function (g) {
+  if (!g || typeof g !== 'object') return g;
+  var a = window._lzPlacarReal(g.myScore), b = window._lzPlacarReal(g.oppScore);
+  if (a === g.myScore && b === g.oppScore) return g;
+  var o = Object.assign({}, g);
+  o.myScore = a; o.oppScore = b;
+  o.won = (typeof a === 'number' && typeof b === 'number') ? (a > b) : null;
+  return o;
+};
+// Um jogo do doc CANÔNICO (neutro: dois times, dois placares). Mesma regra, e o
+// `vencedor` (índice do time) também é derivado.
+window._lzCuraMatchCanon = function (m) {
+  if (!m || !Array.isArray(m.teams) || m.teams.length < 2) return m;
+  var t = m.teams.map(function (x) {
+    if (!x || typeof x !== 'object') return x;
+    var s = window._lzPlacarReal(x.score);
+    return (s === x.score) ? x : Object.assign({}, x, { score: s });
+  });
+  if (t.every(function (x, i) { return x === m.teams[i]; })) return m;
+  var o = Object.assign({}, m, { teams: t });
+  var s0 = t[0] && t[0].score, s1 = t[1] && t[1].score;
+  o.vencedor = (typeof s0 === 'number' && typeof s1 === 'number' && s0 !== s1) ? (s0 > s1 ? 0 : 1) : null;
+  return o;
+};
+// O import inteiro, curado UMA vez na entrada — nunca em cada consumidor. São quatro
+// telas lendo `games` (histórico, ficha, pill da inicial, Análise); regra copiada em
+// quatro lugares diverge no primeiro ajuste. Ver [[feedback_unify_dual_entry_points]].
+window._lzCuraImport = function (imp) {
+  if (!imp || typeof imp !== 'object' || !Array.isArray(imp.games)) return imp;
+  var mexeu = false;
+  var gs = imp.games.map(function (g) { var o = window._lzCuraJogo(g); if (o !== g) mexeu = true; return o; });
+  return mexeu ? Object.assign({}, imp, { games: gs }) : imp;
+};
+
 window._LZ_CLUBE_RESERVADO = { u: 1, home: 1, login: 1, search: 1, api: 1, static: 1, assets: 1 };
 window._lzClubeValido = function (f) {
   if (!f) return false;
@@ -8475,7 +8530,7 @@ window.AppStore = {
         // toda vez que o app fechava. Fix: mergear no load como os demais.
         if (profile.letzplayHandle) this.currentUser.letzplayHandle = profile.letzplayHandle;
         if (profile.letzplayConsent !== undefined) this.currentUser.letzplayConsent = profile.letzplayConsent;
-        if (profile.letzplayImport) this.currentUser.letzplayImport = profile.letzplayImport;
+        if (profile.letzplayImport) this.currentUser.letzplayImport = window._lzCuraImport(profile.letzplayImport);
         // v0.17.86: bug crítico — acceptedTerms* não estavam na lista de merge.
         // Toda vez que simulateLoginSuccess re-rodava (ex: onAuthStateChanged
         // por token refresh), currentUser = user (4 campos) wipeava o

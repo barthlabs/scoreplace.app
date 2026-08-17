@@ -260,11 +260,34 @@
           .map(function (a) { return handleFromHref(a.getAttribute('href')); }).filter(Boolean);
         var uniq = [];
         hs.forEach(function (h) { if (uniq.indexOf(h) < 0) uniq.push(h); });
+        // ⚠️ O TIEBREAK NÃO ENTRA NO PLACAR. O letzplay rende `5<sub>4</sub>` (5 games,
+        // tiebreak 4) e `textContent` ENGOLE o <sub>: virava "54". Contra um `6` do outro
+        // lado, `meu > dele` dizia VITÓRIA num 5(4)–6, que é DERROTA — 228 jogos assim, em
+        // 12 das 12 pessoas com leitura (medido 16/ago/2026). O outro caminho de extração
+        // (extractTeamsFromBody) sempre esteve certo justamente por ler só nós de texto.
         var pe = tp.querySelector('.match-results-points');
-        var ptxt = pe ? (pe.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        var ptxt = '';
+        if (pe) {
+          var _lim = pe.cloneNode(true);
+          Array.prototype.slice.call(_lim.querySelectorAll('sub')).forEach(function (s) {
+            if (s.parentNode) s.parentNode.removeChild(s);
+          });
+          ptxt = (_lim.textContent || '').replace(/\s+/g, ' ').trim();
+        }
         var pm = ptxt.match(/(\d{1,3})/);
+        // ⭐ QUEM GANHOU, O LETZPLAY JÁ DIZ — não precisamos deduzir do placar. O time
+        // vencedor recebe `highlight` (o perdedor, `no-highlight`) e o número vai em
+        // <strong>. Ler isso é mais forte que comparar números: num 5(4)–6 o placar
+        // sozinho é ambíguo pra quem não conhece o formato, mas a marca não é. Medido na
+        // página real em 16/ago/2026.
+        var _mp = tp.querySelector('.match-points');
+        var _cls = _mp ? (' ' + (_mp.className || '') + ' ') : '';
+        var venceu = null;
+        if (/\sno-highlight\s/.test(_cls)) venceu = false;
+        else if (/\shighlight\s/.test(_cls)) venceu = true;
+        else if (_mp && _mp.querySelector('strong')) venceu = true;
         return { handles: uniq, names: uniq.map(function (h) { return nameByHandle[h] || ''; }),
-          score: pm ? +pm[1] : null };
+          score: pm ? +pm[1] : null, venceu: venceu };
       }).filter(function (t) { return t.handles.length; });
       if (teams.length < 2) {
         // sem os dois times não há jogo — cai no caminho antigo (dado/página fora do padrão)
@@ -304,7 +327,11 @@
         oppNames: (opp.handles || []).map(function (h, i) { return nameByHandle[h] || (opp.names || [])[i] || ''; }),
         myScore: (typeof mine.score === 'number') ? mine.score : null,
         oppScore: (typeof opp.score === 'number') ? opp.score : null,
-        won: (typeof mine.score === 'number' && typeof opp.score === 'number') ? (mine.score > opp.score) : null
+        // A MARCA DO LETZPLAY MANDA; a comparação de placar é só reserva (cards fora do
+        // padrão, e o caminho antigo extractTeamsFromBody, que não tem a marca).
+        won: (typeof mine.venceu === 'boolean') ? mine.venceu
+           : ((typeof opp.venceu === 'boolean') ? !opp.venceu
+           : ((typeof mine.score === 'number' && typeof opp.score === 'number') ? (mine.score > opp.score) : null))
       });
     });
     return out;

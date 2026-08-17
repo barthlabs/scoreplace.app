@@ -107,7 +107,12 @@
       .orderBy('dateNum', 'desc')
       .limit(limite || 500)
       .get();
-    var matches = snap.docs.map(function (d) { return d.data(); });
+    // Cura do tiebreak colado (ver window._lzPlacarReal): o doc canônico guarda
+    // teams[].score e o `vencedor` derivado — os dois saem errados no dado antigo.
+    var matches = snap.docs.map(function (d) {
+      var m = d.data();
+      return (typeof window._lzCuraMatchCanon === 'function') ? window._lzCuraMatchCanon(m) : m;
+    });
     var ids = {};
     matches.forEach(function (m) { if (m.comp) ids[m.comp] = 1; });
     var keys = Object.keys(ids);
