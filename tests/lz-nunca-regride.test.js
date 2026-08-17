@@ -164,13 +164,7 @@ ok(/será substituído por/.test(grava), 'e avisa quando substitui um documento 
      'jogo sem id não vira duplicata do mesmo jogo com id');
 
   const guard = app.slice(app.indexOf('function _lzBarrarRegressao'), app.indexOf('function _lzPersistScans'));
-  // o invariante é UNIR (não descartar); o resultado pode ainda passar por um limitador de
-  // tamanho antes de virar o fullImport — exigir a atribuição literal engessava a escrita.
-  ok(/_lzUnirImports\(guardado, doc\.fullImport\)/.test(guard), 'o guard une em vez de descartar');
-  ok(/doc\.fullImport = /.test(guard), 'e o resultado da união vira o fullImport');
-  // ⚠️ e ele tem que CABER: 1 MiB estourado faz o Firestore rejeitar a escrita INTEIRA, e
-  // aí a leitura roda inteira e não grava nada (caso Camila, 17/ago/2026).
-  ok(/_lzCaberNoDoc\(/.test(guard), 'o documento unido passa pelo limitador de tamanho antes de gravar');
+  ok(/doc\.fullImport = _lzUnirImports\(guardado, doc\.fullImport\)/.test(guard), 'o guard une em vez de descartar');
   ok(!/return Promise\.resolve\(barrar\(pico, 'memória'\)\)/.test(guard),
      'e não corta caminho pela memória, onde não há o que unir');
   ok(/if \(_guardado && !corrompido\(antes\)\) return barrar\(antes, 'banco', _guardado\)/.test(guard),

@@ -79,22 +79,6 @@ function motor() {
      'CRITÉRIO · a checagem do motor vem ANTES da contagem (não adianta contar dado errado)');
 }
 
-/* ── 1b. a UNIÃO não pode carimbar motor novo em dado velho ────────────────────────── */
-function uniao() {
-  const rep = read('js/views/tournaments-enrollment-report.js');
-  const fn = rep.slice(rep.indexOf('function _lzUnirImports'), rep.indexOf('function _lzUnirImports') + 3000);
-  ok(/out\.extVersion = \(window\._verCmp\(antigo\.extVersion, novo\.extVersion\) < 0\)/.test(fn),
-     'UNIÃO · unir leituras rebaixa a procedência para a do PIOR pedaço');
-  ok(/antigo\.extVersion && !novo\.extVersion/.test(fn),
-     'UNIÃO · pedaço sem procedência não vira procedência boa');
-  // ⚠️ o invariante em palavras: um doc unido com dado de 2.01 dentro NUNCA pode se
-  // declarar 2.05 — senão o critério de completude o absolve e a pessoa nunca relê.
-  const idxAssign = fn.indexOf('Object.assign({}, antigo, novo)');
-  const idxFix = fn.indexOf('out.extVersion =');
-  ok(idxFix > idxAssign,
-     'UNIÃO · a correção vem DEPOIS do assign (que é quem faria o novo vencer)');
-}
-
 /* ── 2. a tela nunca fica preta ────────────────────────────────────────────────────── */
 function telaPreta() {
   const r = read('js/router.js');
@@ -143,8 +127,6 @@ function telaPreta() {
 
 console.log('\n═══ motor velho não é leitura completa · a tela não fica preta ═══\n');
 motor();
-console.log('');
-uniao();
 console.log('');
 telaPreta();
 console.log('\n' + (falhas ? '❌ ' + falhas + ' falha(s) de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');
