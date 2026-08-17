@@ -15,7 +15,10 @@ const s = fs.readFileSync(path.join(__dirname, '..', 'js/store.js'), 'utf8');
 let falhas = 0, testes = 0;
 function ok(c, m) { testes++; if (c) console.log('  ✓ ' + m); else { falhas++; console.log('  ✗ ' + m); } }
 
-const i = s.indexOf('window.SP_SINAL_MIN');
+// ⚠️ começa na PRIMEIRA constante do bloco, não na SP_SINAL_MIN: uma constante nova
+// inserida acima dela ficava fora da janela e chegava `undefined` no teste — foi assim que
+// a Kelly "falhou" com o código certo.
+const i = s.indexOf('window.SP_MIN_PRESENCA');
 const f = s.indexOf('\n\n// ── LEITURA FEITA POR MOTOR VELHO');
 ok(i > 0 && f > i, 'a regra vive no store.js (fonte única)');
 const w = {}; new Function('window', s.slice(i, f))(w);
@@ -137,6 +140,62 @@ ok(cat([{ categoria: '50 anos', tipo: 'torneio', wins: 3, losses: 1 }]) === null
   ok(!/' <span style="font-size:10px;[^']*">' \+ esc\(_cs\.porque\)/.test(perfil),
      'o motivo NÃO fica escrito na tela (só no título, pra quem passar o mouse)');
   ok(!/>faixa</.test(perfil), 'e a "faixa" por pontos saiu da tela');
+}
+
+// ── ⭐ OS TRÊS CASOS REAIS DO DONO (17/ago/2026) ──────────────────────────────────
+// A regra que os resolve JUNTOS é a que ele deu no começo do dia e eu levei a tarde toda
+// pra aplicar: "a categoria de uma pessoa vem dos jogos recentes". A letra é onde a pessoa
+// jogou POR ÚLTIMO (com presença mínima) — não onde vai melhor, não a mais forte que já
+// disputou. Ponderar por desempenho acertava um caso e quebrava outro, sempre.
+{
+  // Kelly — torneio recente na D, torneio antigo na C, ranking na C
+  const kelly = cat([
+    { categoria: 'Feminina D', tipo: 'torneio', wins: 2, losses: 1 },
+    { categoria: 'Mista D', tipo: 'torneio', wins: 0, losses: 3 },
+    { categoria: 'Feminina C', tipo: 'torneio', wins: 2, losses: 3 },
+    { categoria: 'Feminina C', tipo: 'torneio', wins: 4, losses: 2 },
+    { categoria: 'Fem C+', tipo: 'ranking', wins: 10, losses: 16 },
+  ]);
+  ok(kelly.rotulo === 'D+', 'KELLY · joga D hoje e alcança a C → D+ (veio: ' + kelly.rotulo + ')');
+
+  // Camila — joga C hoje (e vai mal lá); os FUN são de 2022
+  const camila = cat([
+    { categoria: 'Feminina C', tipo: 'torneio', wins: 1, losses: 2 },
+    { categoria: 'Feminina C', tipo: 'torneio', wins: 1, losses: 2 },
+    { categoria: 'Feminina FUN', tipo: 'torneio', wins: 2, losses: 1 },
+    { categoria: 'Feminina C', tipo: 'torneio', wins: 0, losses: 3 },
+    { categoria: 'Feminina C', tipo: 'torneio', wins: 0, losses: 3 },
+  ]);
+  ok(camila.categoria === 'C',
+     'CAMILA · vai MELHOR na FUN e mesmo assim é C — é onde ela joga hoje (veio: ' + camila.rotulo + ')');
+  // ⚠️ e o sinal dela é "-": está na C e faz 8% lá. Isso ainda NÃO sai no dado real —
+  // ver o aviso no fim deste bloco.
+  ok(camila.sinal === '-', 'CAMILA · e faz 8% na C → C- (veio: "' + camila.sinal + '")');
+
+  // Bruna — só torneios na D, ranking na C com 78%
+  const bruna = cat([
+    { categoria: 'Categoria D', tipo: 'torneio', wins: 3, losses: 1 },
+    { categoria: 'Feminina P', tipo: 'torneio', wins: 1, losses: 2 },
+    { categoria: 'Fem C+', tipo: 'ranking', wins: 7, losses: 2 },
+  ]);
+  ok(bruna.rotulo === 'D+', 'BRUNA · joga D, ranking na C com 78% → D+ (veio: ' + bruna.rotulo + ')');
+
+  // ⚠️ ASSERÇÃO MINHA CORRIGIDA: eu tinha escrito que "entrar na C e perder não promove".
+  // Contradiz a regra — se o torneio MAIS RECENTE é na C, a pessoa é C, com "-". É
+  // exatamente o caso da Camila. O que a recência impede é o contrário: uma C ANTIGA
+  // continuar mandando depois de a pessoa ter migrado pra D.
+  const recenteNaC = cat([{ categoria: 'C', tipo: 'torneio', wins: 0, losses: 3 },
+                          { categoria: 'D', tipo: 'torneio', wins: 5, losses: 1 },
+                          { categoria: 'D', tipo: 'torneio', wins: 4, losses: 1 }]);
+  ok(recenteNaC.rotulo === 'C-', 'jogou C por último e perdeu → C- (veio: ' + recenteNaC.rotulo + ')');
+  ok(cat([{ categoria: 'D', tipo: 'torneio', wins: 5, losses: 1 },
+          { categoria: 'D', tipo: 'torneio', wins: 4, losses: 1 },
+          { categoria: 'C', tipo: 'torneio', wins: 0, losses: 3 }]).categoria === 'D',
+     'C ANTIGA não manda depois de a pessoa migrar pra D (é o que a recência resolve)');
+  // ⛔ nem mista entrar na conta da letra
+  ok(cat([{ categoria: 'Mista D', tipo: 'torneio', wins: 0, losses: 4 },
+          { categoria: 'Feminina C', tipo: 'torneio', wins: 3, losses: 1 }]).categoria === 'C',
+     'mista não decide a letra (é outra modalidade)');
 }
 
 console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');

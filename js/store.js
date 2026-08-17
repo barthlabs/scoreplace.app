@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.21';
+window.SCOREPLACE_VERSION = '1.9.22';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -491,77 +491,96 @@ window._lzBandaLetra = function (pontos) {
 // BASE = a categoria em que ela joga TORNEIO (é lá que a elegibilidade morde). Disputar
 // ranking acima só vira "+" se houver resultado sustentando — senão qualquer um que se
 // inscrevesse acima ganhava o sinal sem jogar nada.
+window.SP_MIN_PRESENCA = 3;    // jogos numa categoria pra ela definir a letra
 window.SP_SINAL_MIN = 0.35;    // aproveitamento na categoria DE CIMA que sustenta o "+"
 window.SP_DOMINA_PCT = 0.75;   // ganhar quase tudo na PRÓPRIA categoria também dá "+"
-window.SP_AFUNDA_PCT = 0.25;   // perder quase tudo na própria dá "-"
+window.SP_AFUNDA_PCT = 0.30;   // perder quase tudo na própria dá "-"
 window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá "-"
 // `disputas` = [{ categoria: 'C', tipo: 'ranking'|'torneio', wins: n, losses: n }]
 window._lzCategoriaComSinal = function (disputas) {
   var ORD = { FUN: 4, D: 3, C: 2, B: 1, A: 0 };
   function letra(s) {
     var t = String(s || '').trim();
-    // ⛔ FAIXA ETÁRIA NÃO É CATEGORIA — e o estrago aqui é literal: "46 a 50 anos" casava
-    // o "a" de "46 A 50" como categoria **A**, e o Fernando Bernacchi (que é D+) saía
-    // classificado como A. Medido no doc dele em 17/ago/2026. A preposição virou nível.
+    // ⛔ faixa etária não é categoria: "46 a 50 anos" casava o "a" como categoria A e
+    // rotulava o Fernando (D+) como A. E "Rodada: N" é a rodada do ranking.
     if (/\d+\s*a\s*\d+/i.test(t) || /\banos?\b/i.test(t)) return null;
-    // ⛔ "Rodada: 13" também não é categoria — é a rodada do ranking. Mesmo defeito de
-    // família do nome do torneio ocupando o campo da categoria.
     if (/^\s*rodada\b/i.test(t)) return null;
     var m = t.toUpperCase().match(/\b(FUN|[A-D])\b/);
     return m ? m[1] : null;
   }
+  // ⛔ MISTA É OUTRA MODALIDADE. Somada à individual, distorce: a `Mista D` (0-3) da Kelly
+  // derrubava a D dela de 57% pra 40% e a tirava do lugar certo.
+  function mista(s) { return /\bmist[ao]\b/i.test(String(s || '')); }
+
   var lista = (disputas || []).map(function (d) {
-    // ⚠️ preservar pos/total: são eles que dão o sinal por POSIÇÃO na tabela
-    return d && { l: letra(d.categoria), tipo: d.tipo, w: d.wins || 0, p: d.losses || 0,
+    return d && { l: letra(d.categoria), tipo: d.tipo, m: mista(d.categoria),
+                  w: d.wins || 0, p: d.losses || 0,
                   pos: (d.pos != null ? d.pos : null), total: (d.total != null ? d.total : null) };
   }).filter(function (d) { return d && d.l != null && ORD[d.l] != null; });
   if (!lista.length) return null;
 
-  var tors = lista.filter(function (d) { return d.tipo === 'torneio'; });
-  // a MAIS FORTE de cada tipo (menor ORD = mais forte)
-  function maisForte(xs) {
-    return xs.length ? xs.reduce(function (a, b) { return ORD[b.l] < ORD[a.l] ? b : a; }) : null;
+  // ── 1. A LETRA: ONDE ELA JOGOU POR ÚLTIMO ────────────────────────────────────────
+  // Regra do dono, e ela é literal: "a categoria de uma pessoa vem dos jogos recentes".
+  // A lista vem do letzplay com o MAIS RECENTE PRIMEIRO, então basta descer somando até
+  // uma categoria ter presença que a justifique. Ponderar tudo por desempenho é o que me
+  // fez errar a tarde inteira: a Camila vai melhor na FUN (58%) que na C (28%) e mesmo
+  // assim é C, porque é lá que ela joga HOJE; a Kelly vai melhor na D e é D, porque o
+  // torneio D dela é o mais recente. Uma regra, os dois casos.
+  var tors = lista.filter(function (d) { return d.tipo === 'torneio' && !d.m; });
+  var fonte = tors.length ? tors : lista.filter(function (d) { return !d.m; });
+  if (!fonte.length) fonte = lista;
+  var acum = {}, base = null;
+  for (var i = 0; i < fonte.length; i++) {
+    var d = fonte[i], k = d.l;
+    acum[k] = acum[k] || { w: 0, p: 0 };
+    acum[k].w += d.w; acum[k].p += d.p;
+    // ⚠️ presença mínima: um torneio solto no topo da lista não define a categoria de
+    // ninguém. Com 4 jogos ali, define.
+    if (acum[k].w + acum[k].p >= window.SP_MIN_PRESENCA) { base = k; break; }
   }
-  var baseD = maisForte(tors) || maisForte(lista);
-  var base = baseD.l;
+  if (base == null) {                      // ninguém atingiu o piso → onde ela mais aparece
+    var mp = null;
+    Object.keys(acum).forEach(function (k) {
+      if (!mp || (acum[k].w + acum[k].p) > (acum[mp].w + acum[mp].p)) mp = k;
+    });
+    base = mp;
+  }
+  if (base == null) return null;
 
-  // disputas ACIMA da base — é delas que sai o "+"
-  var acima = lista.filter(function (d) { return ORD[d.l] < ORD[base]; });
-  var w = 0, p = 0;
-  acima.forEach(function (d) { w += d.w; p += d.p; });
-  var jogos = w + p;
-  // ⚠️ sem volume não há prova: uma partida ganha lá em cima não sustenta nada.
-  var buscaAcima = jogos >= 4 && (w / jogos) >= window.SP_SINAL_MIN;
-
-  // ── DOMINAR A PRÓPRIA CATEGORIA TAMBÉM DÁ "+", E A BASE DÁ "-" ─────────────────
-  // Correção do dono (17/ago/2026): _"se ganhar tudo na D ganha o + sim. se estiver no
-  // topo da tabela ganha o + da mesma forma se estiver na base ganha o -"_.
-  // Isso desfaz a minha versão anterior, que só dava "+" a quem disputava acima — quem
-  // ganha tudo na própria categoria ficava sem sinal, e é justamente quem está de saída
-  // dela. O "-" fecha o outro lado: quem está na base é o mais fraco da categoria.
-  var naBase = lista.filter(function (d) { return d.l === base; });
-  var bw = 0, bp = 0, pos = null, campo = null;
-  naBase.forEach(function (d) {
-    bw += d.w; bp += d.p;
-    // posição na tabela, quando o ranking a publica (1 = topo)
-    if (d.pos != null && d.total != null && d.total > 1) {
-      var frac = (d.pos - 1) / (d.total - 1);
-      if (pos == null || frac < pos) { pos = frac; campo = d.total; }
+  // ── 2. O SINAL: como ela se sustenta ALI, e o que alcança FORA ───────────────────
+  // "+" = busca a de cima com resultado · domina a própria · topo da tabela
+  // "-" = não se firmou onde está (base da categoria) — a Camila joga C e faz 28% lá
+  var naBase = lista.filter(function (x) { return x.l === base; });
+  var bw = 0, bp = 0, pos = null;
+  naBase.forEach(function (x) {
+    bw += x.w; bp += x.p;
+    if (x.pos != null && x.total != null && x.total > 1) {
+      var frac = (x.pos - 1) / (x.total - 1);
+      if (pos == null || frac < pos) pos = frac;
     }
   });
   var bj = bw + bp, bpct = bj ? (bw / bj) : null;
-  var domina = (bj >= 4 && bpct != null && bpct >= window.SP_DOMINA_PCT) ||
+
+  // o que ela alcança ACIMA da base — daí sai o "+" de quem está subindo
+  var acima = lista.filter(function (x) { return ORD[x.l] < ORD[base]; });
+  var aw = 0, ap = 0;
+  acima.forEach(function (x) { aw += x.w; ap += x.p; });
+  var aj = aw + ap;
+
+  var busca  = aj >= window.SP_MIN_PRESENCA && (aw / aj) >= window.SP_SINAL_MIN;
+  // ⚠️ MESMO piso da presença: se 3 jogos bastam pra definir a LETRA, bastam pra dizer
+  // como a pessoa vai nela. Exigir 4 aqui deixava sem sinal justamente quem tem pouco jogo
+  // na categoria — que é quem mais precisa do "-".
+  var domina = (bj >= window.SP_MIN_PRESENCA && bpct != null && bpct >= window.SP_DOMINA_PCT) ||
                (pos != null && pos <= window.SP_TOPO_FRAC);
-  var afunda = (bj >= 4 && bpct != null && bpct <= window.SP_AFUNDA_PCT) ||
+  var afunda = (bj >= window.SP_MIN_PRESENCA && bpct != null && bpct <= window.SP_AFUNDA_PCT) ||
                (pos != null && pos >= (1 - window.SP_TOPO_FRAC));
 
-  // "+" vence "-": buscar a de cima ou dominar a própria são sinais de subida, e subida
-  // manda sobre um aproveitamento ruim pontual.
-  var sinal = (buscaAcima || domina) ? '+' : (afunda ? '-' : '');
+  var sinal = (busca || domina) ? '+' : (afunda ? '-' : '');
   return { categoria: base, sinal: sinal, rotulo: base + sinal,
-           acimaJogos: jogos, acimaPct: jogos ? Math.round(100 * w / jogos) : null,
-           naPct: bj ? Math.round(100 * bw / bj) : null, posFrac: pos, campo: campo,
-           porque: buscaAcima ? 'busca a de cima' : (domina ? 'domina a própria'
+           acimaJogos: aj, acimaPct: aj ? Math.round(100 * aw / aj) : null,
+           naPct: bj ? Math.round(100 * bw / bj) : null,
+           porque: busca ? 'busca a de cima' : (domina ? 'domina a própria'
                  : (afunda ? 'base da categoria' : 'no lugar')) };
 };
 
