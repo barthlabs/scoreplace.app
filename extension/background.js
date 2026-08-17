@@ -56,7 +56,19 @@
 // lento a ponto de o dono cancelar leitura sadia. Fica no meio, com o freio de sempre por
 // cima — e agora cada bloqueio APARECE na tela, então o próximo ajuste sai de número, não
 // de suposição minha.
+// ⚠️ O TETO CONTINUA EM 60 s DE PROPÓSITO — não baixar. Ele existe porque um teto curto
+// (10 s, na v1.36) NÃO dava conta de bloqueio sustentado: a fila seguia martelando e o
+// castigo do letzplay se prolongava. Travado em tests/letzplay-pace.test.js.
+//
+// Só que 60 s por operação × ~140 requisições ÷ 2 correntes = ~87 min, contra um teto de
+// RODADA de 30 min: a rodada estourava, encadeava outra, e a leitura nunca concluía — o
+// "demora demais nos perfis mais longos e não conclui". A saída NÃO é rajar mais durante o
+// castigo; é PARAR e dizer (ver _qNoTeto e o motivo `rate-limit-duro`). Continuar em
+// silêncio por uma hora e meia é o pior dos dois mundos.
 var _Q_DEFAULTS = { gap: 900, floor: 700, min: 600, max: 60000 };
+// Acima disto por operação, uma leitura longa não cabe mais na rodada — é a hora de parar
+// e voltar depois, não de insistir. (140 req ÷ 2 correntes × 12 s × 1,25 ≈ 17 min.)
+var _Q_INVIAVEL = 12000;
 // PARALELISMO: até 3 páginas ao mesmo tempo. Um navegador comum abre várias requisições
 // em paralelo numa única visita — 3 é menos do que carregar uma página com imagens. As 20
 // páginas da Kelly saem em ~3s em vez de ~60s.
@@ -108,7 +120,11 @@ function _qSave(now) {
 }
 function _qDump() { var o = {}; o[_Q_KEY] = { gap: _q.gap, floor: _q.floor, at: Date.now(), blockAt: _q.blockAt || 0 }; return o; }
 // Estado medido, pro app MOSTRAR (nunca mais "travado" sem explicação).
-function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy, slots: _Q_SLOTS }; }
+// TETO ENCOSTADO = o letzplay está limitando de verdade. Quem chama a leitura usa isto
+// pra PARAR com um motivo claro em vez de arrastar horas — ver `rate-limit-duro`.
+function _qNoTeto() { return _q.gap >= _Q_INVIAVEL && _q.blocks > 0; }
+function _qStats() { return { gap: _q.gap, floor: _q.floor, blocks: _q.blocks, busy: _q.busy,
+  slots: _Q_SLOTS, noTeto: _qNoTeto() }; }
 function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 // BLOQUEIO → alarga o passo E sobe o PISO: este ritmo comprovadamente não é seguro, então
 // não voltamos a ele nem depois de mil sucessos. É o "aumentando até não travar mais".
@@ -120,17 +136,23 @@ function _qSlower() {
 }
 // Só afrouxa depois de 12 sucessos SEGUIDOS, e só 10% de cada vez — e jamais abaixo do
 // piso aprendido. Descer rápido é o que recriava a rajada.
+// ⚠️ SUBIR E DESCER PRECISAM SER COMPARÁVEIS. O castigo DOBRA a cada bloqueio; a soltura
+// era de 10% a cada 12 sucessos — para voltar do teto ao passo de fábrica eram 40 reduções,
+// ou seja 480 requisições BEM-SUCEDIDAS SEGUIDAS. Um perfil grande tem ~140 no total: a
+// leitura NUNCA saía do castigo, e ele ainda ficava gravado por 6 h ("daí não puxa mais
+// nada"). Agora são 25% a cada 8 sucessos — 12 reduções, ~96 requisições. Continua
+// conservador (sobe ×2, desce ×0,75) e continua respeitando o piso de fábrica.
 function _qFaster() {
   _q.okStreak++;
-  if (_q.okStreak < 12) return;
+  if (_q.okStreak < 8) return;
   _q.okStreak = 0;
   // O PISO TAMBÉM DECAI. Antes ele só subia: um bloqueio numa tarde deixava o passo alto
   // PARA SEMPRE, mesmo com mil sucessos seguidos depois. Medido em 30/jul: o letzplay
   // respondendo em 0,3–2,2 s sem limitar nada, e a fila ainda esperando 10–25 s por
   // operação por causa de um piso aprendido meses antes — a leitura ficava lenta sem
   // motivo. Cada 12 sucessos seguidos derruba o piso 10%, nunca abaixo do piso de fábrica.
-  var floorNovo = Math.max(_Q_DEFAULTS.floor, Math.round(_q.floor * 0.9));
-  var next = Math.max(floorNovo, Math.round(_q.gap * 0.9));
+  var floorNovo = Math.max(_Q_DEFAULTS.floor, Math.round(_q.floor * 0.75));
+  var next = Math.max(floorNovo, Math.round(_q.gap * 0.75));
   if (floorNovo !== _q.floor || next !== _q.gap) { _q.floor = floorNovo; _q.gap = next; _qSave(); }
 }
 // Marca o resultado vindo de QUALQUER caminho — fetch, navegação, ou página de desafio

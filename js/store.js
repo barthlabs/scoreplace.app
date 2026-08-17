@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.5';
+window.SCOREPLACE_VERSION = '1.9.6';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -105,7 +105,7 @@ try {
 // nenhum, porque o resumo (que usa navegação de aba, não fetch) veio normal.
 // O commit a12d811a já tinha unificado isto uma vez em 1.25 e a divergência voltou;
 // por isso agora é UM valor + trava no deploy (scripts/check-ext-version.js).
-window.SP_EXT_VERSION = '2.04';
+window.SP_EXT_VERSION = '2.05';
 
 // ─── ONDE SE INSTALA A EXTENSÃO — fonte ÚNICA (v1.8.3) ───────────────────────
 // A extensão ESTÁ publicada na Chrome Web Store ("scoreplace — importar letzplay",

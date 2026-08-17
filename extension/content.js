@@ -6,7 +6,7 @@
  * Libs (_spExtract/_spImport/_spFlow) carregam antes deste arquivo (ver manifest).
  */
 (function () {
-  var EXT_VERSION = '2.04';
+  var EXT_VERSION = '2.05';
 
   function post(o) { try { window.postMessage(o, window.location.origin); } catch (e) {} }
   function announce() { post({ __sp_lp: 'extension-present', version: EXT_VERSION }); }
@@ -460,6 +460,19 @@
     if (parcial) imp.partialReason = String(parcial).slice(0, 120);
     var v = I.validate(imp);
     return (v && v.valid) ? imp : null;
+  }
+
+  // Espelho do ritmo da fila (o background é quem sabe). Atualizado sem custo: o
+  // bgFetchDoc já conversa com ele.
+  var _paceInviavel = false, _paceLidoEm = 0;
+  function _lerPace() {
+    if (Date.now() - _paceLidoEm < 10000) return;      // 1 pergunta a cada 10 s, não por operação
+    _paceLidoEm = Date.now();
+    try {
+      chrome.runtime.sendMessage({ type: 'lp-pace' }, function (st) {
+        if (st && typeof st.noTeto === 'boolean') _paceInviavel = st.noTeto;
+      });
+    } catch (e) {}
   }
 
   async function runDirectImport() {
@@ -1169,7 +1182,9 @@
       } catch (e) {}
     }
 
-    function ehPausa(e) { return !!(e && e.code === 'rate-budget'); }
+    // `rate-limit-duro` é PAUSA, não falha: o que já foi lido está checkpointado e a
+    // retomada continua de onde parou. Tratá-lo como erro jogaria fora a rodada inteira.
+    function ehPausa(e) { return !!(e && (e.code === 'rate-budget' || e.code === 'rate-limit-duro')); }
     function _medalha(p) { return p === 1 ? '🥇' : (p === 2 ? '🥈' : (p === 3 ? '🥉' : '🏅')); }
     // Separa a CATEGORIA do fim do nome, igual à lista do dialog — o nome do letzplay quase
     // sempre termina nela ("… Praia Brava Panamby - DUPLA FEMININA C"). Sem separar, ela vai
@@ -1201,9 +1216,26 @@
     // Teto de SEGURANÇA (não é prazo de trabalho): só existe pra uma rodada nunca ficar
     // pendurada pra sempre. Ao estourar, checkpointa e o app encadeia a seguinte.
     var limite = Date.now() + 1800000;
+    // ⚠️ INVIÁVEL NÃO É O MESMO QUE LENTO. O freio pode chegar a 60 s por operação — e deve,
+    // porque martelar durante bloqueio sustentado só prolonga o castigo (lição da v1.36).
+    // Mas nesse passo um perfil grande levaria ~87 min contra este teto de 30: a rodada
+    // estourava, encadeava outra, e a leitura NUNCA fechava. Era o "demora demais nos perfis
+    // mais longos e não conclui", e o pior é que ela ficava em silêncio.
+    // Passando do limite de viabilidade com bloqueio de verdade, a rodada PARA e diz. O que
+    // já foi lido está checkpointado; a pessoa volta depois e continua de onde parou.
+    var _inviavelDesde = 0;
     function conferirTeto() {
       if (abandonada()) { var a = new Error('abandonada'); a.code = 'abandonada'; throw a; }
       if (Date.now() > limite) { var e = new Error('teto da rodada'); e.code = 'rate-budget'; throw e; }
+      _lerPace();
+      if (_paceInviavel) {
+        // Tolera um sopro: só desiste se continuar inviável por 60 s seguidos, pra um pico
+        // isolado não abortar uma leitura que ia terminar.
+        if (!_inviavelDesde) _inviavelDesde = Date.now();
+        else if (Date.now() - _inviavelDesde > 60000) {
+          var d = new Error('o letzplay está limitando as leituras'); d.code = 'rate-limit-duro'; throw d;
+        }
+      } else _inviavelDesde = 0;
     }
 
     // Lê uma lista paginada de competições (/{handle}/tournaments ou /rankings).
