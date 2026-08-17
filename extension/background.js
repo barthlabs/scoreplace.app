@@ -100,7 +100,15 @@ try {
     // "abrindo o perfil…" por um minuto numa página que já estava aberta.
     // Sem bloqueio nas últimas 6 h, o passo volta ao de fábrica.
     var desde = (typeof s.blockAt === 'number') ? (Date.now() - s.blockAt) : Infinity;
-    if (desde > 6 * 3600000) return;                 // castigo vencido → fábrica
+    // ⚠️ 6 HORAS ERA TEMPO DEMAIS, e o dono sentiu na pele: depois de reler 12 perfis
+    // seguidos a fila apanhou, o passo subiu, e ficou gravado — "mais de 3m para puxar 20
+    // jogos da m delia e ainda nao acabou". São ~18 requisições: a 900ms sairiam em 15s;
+    // a 10s (um dos patamares do castigo) dão justamente os 3 min.
+    // Limitação do letzplay é por JANELA CURTA, não pela tarde inteira. 20 min sem
+    // bloqueio novo já é sinal de que passou — e se não passou, o freio sobe de novo na
+    // primeira resposta ruim, que é barato. Manter o castigo por 6h punia o trabalho
+    // seguinte por um bloqueio que já tinha acabado.
+    if (desde > 20 * 60000) return;                  // castigo vencido → fábrica
     if (typeof s.gap === 'number') _q.gap = Math.min(_q.max, Math.max(_q.min, s.gap));
     if (typeof s.floor === 'number') _q.floor = Math.min(_q.max, Math.max(_q.min, s.floor));
     if (typeof s.blockAt === 'number') _q.blockAt = s.blockAt;

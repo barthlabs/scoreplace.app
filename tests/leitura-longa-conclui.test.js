@@ -121,7 +121,15 @@ ok(/_q\.gap = Math\.min\(_q\.max, Math\.round\(_q\.gap \* 2\) \+ 400\)/.test(bg)
    'FREIO · o castigo continua dobrando a cada bloqueio');
 ok(GAP >= 600, 'FREIO · o passo de fábrica não virou rajada (' + GAP + 'ms)');
 ok(SLOTS <= 2, 'FREIO · o paralelismo continua baixo (' + SLOTS + ' correntes)');
-ok(/desde > 6 \* 3600000/.test(bg), 'FREIO · o castigo aprendido continua expirando em 6h');
+// ⚠️ o castigo TEM que expirar — e num prazo compatível com uma sessão de trabalho. Com
+// 6h, reler 12 perfis fazia a fila apanhar e as leituras seguintes herdavam o passo lento
+// pela tarde inteira: 20 jogos levaram mais de 3 min. Se o bloqueio não passou, o freio
+// sobe de novo na primeira resposta ruim, que é barato.
+const mExp = bg.match(/desde > (\d+) \* (\d+)/);
+ok(!!mExp, 'FREIO · o castigo aprendido continua expirando');
+const expMs = mExp ? (+mExp[1] * +mExp[2]) : 0;
+ok(expMs > 0 && expMs <= 30 * 60000,
+   'FREIO · a expiração cabe numa sessão de trabalho (' + Math.round(expMs / 60000) + 'min)');
 ok(/_qSave\(true\)/.test(bg), 'FREIO · frear ainda grava na hora (o service worker pode morrer)');
 
 console.log('\n' + (falhas ? '❌ ' + falhas + ' falha(s) de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');

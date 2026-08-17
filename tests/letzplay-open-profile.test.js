@@ -55,7 +55,15 @@ ok(/_Q_DEFAULTS\.floor/.test(faster), 'o piso nunca desce abaixo do piso de fáb
 {
   ok(/blockAt/.test(bg), 'a fila registra QUANDO apanhou');
   const carga = bg.slice(bg.indexOf('chrome.storage.local.get([_Q_KEY]'), bg.indexOf('var _qSaveT'));
-  ok(/6 \* 3600000/.test(carga), 'sem bloqueio nas últimas 6 h, o passo volta ao de fábrica');
+  // O PRAZO ENCURTOU (17/ago/2026): 6h punia o trabalho seguinte por um bloqueio já
+  // vencido — depois de reler 12 perfis, 20 jogos levaram mais de 3 min. Limitação do
+  // letzplay é por janela curta. O que o teste guarda é o INVARIANTE (o castigo expira, e
+  // num prazo que cabe numa sessão), não o número.
+  const mExp = carga.match(/desde > (\d+) \* (\d+)/);
+  ok(!!mExp, 'sem bloqueio recente, o passo volta ao de fábrica');
+  const expMs = mExp ? (+mExp[1] * +mExp[2]) : 0;
+  ok(expMs >= 5 * 60000 && expMs <= 30 * 60000,
+     'o prazo cabe numa sessão de trabalho (' + Math.round(expMs / 60000) + 'min) e não é imediato');
   ok(/return;/.test(carga), 'e o castigo vencido é simplesmente descartado');
   const dump = bg.slice(bg.indexOf('function _qDump'), bg.indexOf('function _qDump') + 220);
   ok(/blockAt/.test(dump), 'o instante do bloqueio é persistido junto com o passo');
