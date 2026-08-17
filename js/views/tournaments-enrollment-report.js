@@ -4631,6 +4631,19 @@
     if (!antigo) return novo;
     if (!novo) return antigo;
     var out = Object.assign({}, antigo, novo);
+    // ⚠️ A UNIÃO NÃO PODE MENTIR SOBRE A PROCEDÊNCIA DO DADO. `Object.assign` faz o
+    // extVersion do NOVO vencer — e aí um doc com metade dos jogos lidos pela 2.01 (placar
+    // com tiebreak colado, nome truncado) passa a se declarar 2.05 e é ABSOLVIDO pelo
+    // critério de completude. Isso é uma armadilha que a própria releitura obrigatória
+    // criou: exigir motor novo e depois deixar a união carimbar motor novo em dado velho
+    // seria pior que não exigir nada.
+    // Uniu? Então a procedência é a do PIOR pedaço, até alguém reler tudo de uma vez.
+    if (antigo.extVersion && novo.extVersion && typeof window._verCmp === 'function') {
+      out.extVersion = (window._verCmp(antigo.extVersion, novo.extVersion) < 0)
+        ? antigo.extVersion : novo.extVersion;
+    } else if (antigo.extVersion && !novo.extVersion) {
+      out.extVersion = antigo.extVersion;
+    }
     // jogos: união por identidade, com o que tem lzId vencendo
     var mapa = {}, ordem = [];
     function por(g) {
