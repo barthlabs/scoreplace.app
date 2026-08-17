@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.15';
+window.SCOREPLACE_VERSION = '1.9.16';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -491,7 +491,10 @@ window._lzBandaLetra = function (pontos) {
 // BASE = a categoria em que ela joga TORNEIO (é lá que a elegibilidade morde). Disputar
 // ranking acima só vira "+" se houver resultado sustentando — senão qualquer um que se
 // inscrevesse acima ganhava o sinal sem jogar nada.
-window.SP_SINAL_MIN = 0.35;   // aproveitamento na categoria de cima que sustenta o "+"
+window.SP_SINAL_MIN = 0.35;    // aproveitamento na categoria DE CIMA que sustenta o "+"
+window.SP_DOMINA_PCT = 0.75;   // ganhar quase tudo na PRÓPRIA categoria também dá "+"
+window.SP_AFUNDA_PCT = 0.25;   // perder quase tudo na própria dá "-"
+window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá "-"
 // `disputas` = [{ categoria: 'C', tipo: 'ranking'|'torneio', wins: n, losses: n }]
 window._lzCategoriaComSinal = function (disputas) {
   var ORD = { FUN: 4, D: 3, C: 2, B: 1, A: 0 };
@@ -500,7 +503,9 @@ window._lzCategoriaComSinal = function (disputas) {
     return m ? m[1] : null;
   }
   var lista = (disputas || []).map(function (d) {
-    return d && { l: letra(d.categoria), tipo: d.tipo, w: d.wins || 0, p: d.losses || 0 };
+    // ⚠️ preservar pos/total: são eles que dão o sinal por POSIÇÃO na tabela
+    return d && { l: letra(d.categoria), tipo: d.tipo, w: d.wins || 0, p: d.losses || 0,
+                  pos: (d.pos != null ? d.pos : null), total: (d.total != null ? d.total : null) };
   }).filter(function (d) { return d && d.l != null && ORD[d.l] != null; });
   if (!lista.length) return null;
 
@@ -514,15 +519,42 @@ window._lzCategoriaComSinal = function (disputas) {
 
   // disputas ACIMA da base — é delas que sai o "+"
   var acima = lista.filter(function (d) { return ORD[d.l] < ORD[base]; });
-  if (!acima.length) return { categoria: base, sinal: '', rotulo: base };
   var w = 0, p = 0;
   acima.forEach(function (d) { w += d.w; p += d.p; });
   var jogos = w + p;
   // ⚠️ sem volume não há prova: uma partida ganha lá em cima não sustenta nada.
-  var sustenta = jogos >= 4 && (w / jogos) >= window.SP_SINAL_MIN;
-  return { categoria: base, sinal: sustenta ? '+' : '',
-           rotulo: base + (sustenta ? '+' : ''),
-           acimaJogos: jogos, acimaPct: jogos ? Math.round(100 * w / jogos) : null };
+  var buscaAcima = jogos >= 4 && (w / jogos) >= window.SP_SINAL_MIN;
+
+  // ── DOMINAR A PRÓPRIA CATEGORIA TAMBÉM DÁ "+", E A BASE DÁ "-" ─────────────────
+  // Correção do dono (17/ago/2026): _"se ganhar tudo na D ganha o + sim. se estiver no
+  // topo da tabela ganha o + da mesma forma se estiver na base ganha o -"_.
+  // Isso desfaz a minha versão anterior, que só dava "+" a quem disputava acima — quem
+  // ganha tudo na própria categoria ficava sem sinal, e é justamente quem está de saída
+  // dela. O "-" fecha o outro lado: quem está na base é o mais fraco da categoria.
+  var naBase = lista.filter(function (d) { return d.l === base; });
+  var bw = 0, bp = 0, pos = null, campo = null;
+  naBase.forEach(function (d) {
+    bw += d.w; bp += d.p;
+    // posição na tabela, quando o ranking a publica (1 = topo)
+    if (d.pos != null && d.total != null && d.total > 1) {
+      var frac = (d.pos - 1) / (d.total - 1);
+      if (pos == null || frac < pos) { pos = frac; campo = d.total; }
+    }
+  });
+  var bj = bw + bp, bpct = bj ? (bw / bj) : null;
+  var domina = (bj >= 4 && bpct != null && bpct >= window.SP_DOMINA_PCT) ||
+               (pos != null && pos <= window.SP_TOPO_FRAC);
+  var afunda = (bj >= 4 && bpct != null && bpct <= window.SP_AFUNDA_PCT) ||
+               (pos != null && pos >= (1 - window.SP_TOPO_FRAC));
+
+  // "+" vence "-": buscar a de cima ou dominar a própria são sinais de subida, e subida
+  // manda sobre um aproveitamento ruim pontual.
+  var sinal = (buscaAcima || domina) ? '+' : (afunda ? '-' : '');
+  return { categoria: base, sinal: sinal, rotulo: base + sinal,
+           acimaJogos: jogos, acimaPct: jogos ? Math.round(100 * w / jogos) : null,
+           naPct: bj ? Math.round(100 * bw / bj) : null, posFrac: pos, campo: campo,
+           porque: buscaAcima ? 'busca a de cima' : (domina ? 'domina a própria'
+                 : (afunda ? 'base da categoria' : 'no lugar')) };
 };
 
 // ── LEITURA FEITA POR MOTOR VELHO NÃO É LEITURA COMPLETA ─────────────────────
