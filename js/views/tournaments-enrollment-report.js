@@ -2437,6 +2437,11 @@
 
   function _lzImportComplete(li) {
     if (!li) return false;
+    // ⭐ MOTOR VELHO NÃO CONTA — ver window.SP_EXT_DADO_MINIMO no store.js. Completude é
+    // quantidade E qualidade: um acervo inteiro lido por um extrator com defeito conhecido
+    // (placar com tiebreak colado, vencedor invertido, nome truncado) está completo e
+    // ERRADO. Sem isto o verde absolveria justamente quem precisa reler.
+    if (typeof window._lzMotorAtual === 'function' && !window._lzMotorAtual(li)) return false;
     var n = _lzTot(li);
     // O CURSOR COMPLETO É A PROVA MAIS FORTE: a última página do histórico foi lida.
     // Comparar com `declaredGames` não fecha nunca quando o contador do letzplay conta

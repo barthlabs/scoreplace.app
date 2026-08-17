@@ -601,6 +601,33 @@ function initRouter() {
           '</div>';
       } catch (_e3) {}
     }
+
+    // ── 4ª ENCARNAÇÃO DA TELA PRETA: A JANELA ENTRE ESVAZIAR E PINTAR ──────────
+    // Relato do dono (17/ago/2026): "abrir a dash e tela preta E VOLTA". O "e volta"
+    // é a assinatura do defeito: não há exceção (o Sentry ficou mudo, e a guarda
+    // acima só pega EXCEÇÃO), não há travamento — o container é esvaziado lá em cima
+    // e fica VAZIO até alguém escrever nele. Enquanto isso o que se vê é o fundo da
+    // página, ou seja, preto. Depois o dado chega, re-renderiza, e "volta".
+    //
+    // Cada encarnação anterior travou o seu próprio MECANISMO e o sintoma voltou por
+    // outro caminho. Esta guarda não olha mecanismo nenhum: ela olha o RESULTADO.
+    // Se depois de renderizar o container está vazio, isso já é a tela preta — e aí
+    // pinta o "Carregando", que é honesto (o dado não chegou) e nunca é preto.
+    // Um render posterior sobrescreve isto normalmente, porque toda view escreve o
+    // container inteiro.
+    try {
+      if (viewContainer && !viewContainer.firstChild) {
+        viewContainer.innerHTML =
+          '<div class="sp-view-vazia" style="display:flex;flex-direction:column;align-items:center;' +
+          'justify-content:center;gap:12px;min-height:50vh;color:var(--text-muted,#94a3b8);">' +
+            '<div style="width:26px;height:26px;border:3px solid var(--border-color,#333);' +
+            'border-top-color:var(--primary-color,#007aff);border-radius:50%;' +
+            'animation:sp-gira 0.8s linear infinite;"></div>' +
+            '<div style="font-size:0.9rem;font-weight:600;">Carregando…</div>' +
+          '</div>' +
+          '<style>@keyframes sp-gira{to{transform:rotate(360deg)}}</style>';
+      }
+    } catch (_e4) {}
   };
 
   if (window._routerHandler) {

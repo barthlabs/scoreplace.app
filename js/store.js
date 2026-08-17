@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.4';
+window.SCOREPLACE_VERSION = '1.9.5';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -441,6 +441,38 @@ window._formatDisplayName = function (fmt) {
 // pra home) e aparecia no app como "U · Feed", sem classificação e com 0 V/0 D.
 // Duas listas em dois arquivos divergem no primeiro ajuste; por isso a regra é UMA e os
 // dois consumidores (ficha do jogador e Análise de Inscritos) chamam esta função.
+// ── LEITURA FEITA POR MOTOR VELHO NÃO É LEITURA COMPLETA ─────────────────────
+// Ordem do dono (17/ago/2026): _"se mudou o motor, ainda que ja tenha lido tudo no motor
+// antigo, precisa sim ler de novo no motor novo"_. Está certo, e o critério de completude
+// ignorava isso: ele só perguntava "o acervo cobre o índice?" — quantidade. Mas os três
+// defeitos de 16–17/ago eram de QUALIDADE (placar com o tiebreak colado, vencedor
+// invertido, nome truncado, classificação com o nome de outra pessoa). Um acervo completo
+// lido pela 2.01 está inteiro e ERRADO, e passava por verificado.
+//
+// A partir daqui a versão do extrator faz parte do critério: leitura abaixo do mínimo não
+// é completa, o verde não vem, e o app pede releitura sozinho — que é o comportamento
+// certo, não um esquecimento.
+//
+// ⚠️ SUBIR ESTE NÚMERO OBRIGA TODO MUNDO A RELER. Só sobe quando a mudança do extrator
+// altera o DADO GRAVADO (não quando muda progresso, log ou desempenho). Medido em
+// 17/ago/2026: os 12 docs de leitura estavam em extVersion 2.01.
+window.SP_EXT_DADO_MINIMO = '2.04';
+window._verCmp = function (a, b) {
+  var A = String(a || '0').split('.').map(Number), B = String(b || '0').split('.').map(Number);
+  for (var i = 0; i < Math.max(A.length, B.length); i++) {
+    var x = A[i] || 0, y = B[i] || 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+};
+// A leitura foi feita por um motor que produz dado confiável?
+window._lzMotorAtual = function (imp) {
+  if (!imp) return false;
+  var v = imp.extVersion;
+  if (v == null) return false;            // leitura antiga demais pra sequer se identificar
+  return window._verCmp(v, window.SP_EXT_DADO_MINIMO) >= 0;
+};
+
 // ── O TIEBREAK VINHA COLADO NO PLACAR — e invertia o vencedor ────────────────
 // O letzplay rende o placar como `5<sub>4</sub>`: 5 games, tiebreak 4. O leitor da
 // extensão pegava `textContent` do container, que ENGOLE o <sub>, e gravava `54`. Com

@@ -208,6 +208,7 @@ const SUITES = [
   'tests/letzplay-verdict-color.test.js',
   'tests/classificacao-nome-por-linha.test.js',
   'tests/tiebreak-nao-entra-no-placar.test.js',
+  'tests/motor-velho-nao-e-leitura-completa.test.js',
   'tests/letzplay-level-bar.test.js',
   'tests/org-gender-label.test.js',
   'tests/letzplay-game-cards.test.js',

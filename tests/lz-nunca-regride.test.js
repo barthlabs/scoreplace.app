@@ -55,7 +55,10 @@ ok(!/\.set\(doc, \{ merge: true \}\)/.test(app.replace(/_lzBarrarRegressao[\s\S]
   'nenhuma escrita de fullImport escapa da trava');
 
 // ── 3. APP: "completo" tem que ser verificável ──
-const compl = app.slice(app.indexOf('function _lzImportComplete'), app.indexOf('function _lzImportComplete') + 2600);
+// ⚠️ Fatia até o INÍCIO DA PRÓXIMA FUNÇÃO, nunca por um número de caracteres. Com o
+// `+ 2600` de antes, acrescentar comentário à função empurrava o código real pra fora
+// da janela e o teste acusava um arquivo que estava intacto — aconteceu em 17/ago/2026.
+const compl = app.slice(app.indexOf('function _lzImportComplete'), app.indexOf('function _lzScanComplete'));
 // REVISADO em 03/ago/2026: a prova de cobertura passou a ser o ID, não a página.
 // Com índice, ele ENUMERA o que existe e o acervo tem todos — exigir a contagem de páginas
 // AINDA reprovava leitura completa (Kelly: 160 de 160 ids, `pagesTotal: 9` com 8 marcadas,
