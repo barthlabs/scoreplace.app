@@ -45,6 +45,8 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>🏷️ Nome de torneio não aparece mais como categoria:</b> o rótulo cru do letzplay às vezes é o nome inteiro do evento, e ele ocupava o lugar da categoria na ficha. Agora só rótulos curtos e de verdade entram ali.</li>' +
+        '<li><b>🧹 Saiu o campo “forma”:</b> era a mesma informação que a régua abaixo já mostra, em formato pior.</li>' +
         '<li><b>🏃 Leitura do letzplay volta ao ritmo normal muito mais rápido:</b> quando o letzplay limitava, o passo lento ficava guardado por <b>6 horas</b> — e as leituras seguintes herdavam a lentidão mesmo já liberadas (20 jogos levando mais de 3 minutos). Agora esse prazo é de 20 minutos.</li>' +
         '<li><b>↙️ Volta atrás nas duas últimas mudanças de gravação do histórico:</b> depois delas nenhuma leitura do letzplay conseguia salvar, nem as pequenas. O caminho de gravação voltou ao estado em que estava funcionando.</li>' +
         '<li><b>💾 Salvar alterações recarrega a tela:</b> ao mudar a categoria de um inscrito e salvar, as <b>cores</b> agora acompanham na hora — antes continuavam mostrando o veredito anterior.</li>' +

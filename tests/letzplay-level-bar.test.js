@@ -20,3 +20,20 @@ ok(/Torneio X/.test(card), 'o card lista as competições (é o que o diálogo p
 ok(window._lzLevelBar(null) === '', 'sem import não quebra — devolve vazio');
 console.log((fail?'✗':'✓')+' letzplay-level-bar: '+pass+' passaram, '+fail+' falharam');
 process.exit(fail?1:0);
+
+// ── CATEGORIA NÃO É NOME DE EVENTO (print do dono, 17/ago/2026) ──────────────────────
+// A M.delia apareceu com "Consolation D/C --6º Torneio Feminino – Ilha de Comandatuba –
+// Consolation---Categoria D/C" no lugar da categoria: `categoryRaw` guarda o rótulo CRU
+// do letzplay, e ele muitas vezes É o nome inteiro do evento. Categoria é rótulo CURTO.
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js/views/letzplay-profile.js'), 'utf8');
+  ok(/String\(oc\.categoryRaw\)\.trim\(\)\.length <= 24/.test(src),
+     'categoria vinda do letzplay só é aceita se for CURTA (nome de evento fica de fora)');
+  const longo = 'Consolation D/C --6º Torneio Feminino – Ilha de Comandatuba – Consolation---Categoria D/C';
+  ok(longo.trim().length > 24, 'o caso real do print seria barrado (' + longo.length + ' caracteres)');
+  ok('Fem C+'.length <= 24 && 'Feminina C'.length <= 24 && 'Masculina 50'.length <= 24,
+     'e as categorias de verdade continuam passando');
+  // ⛔ a "forma" saiu: era a mesma informação da régua, em pior formato
+  ok(!/>forma</.test(src), 'a "forma" não é mais exibida na ficha');
+  ok(/A "FORMA" SAIU/.test(src), 'e a remoção está explicada no código (pra não voltar sem querer)');
+}

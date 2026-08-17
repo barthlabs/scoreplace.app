@@ -115,8 +115,17 @@
     // @camilacalia).
     // ⚠️ Mas ele NUNCA é aceito cru: passa pelo mesmo filtro, então uma "Mista D" gravada
     // continua barrada — era exatamente esta a porta dos fundos que faltava fechar.
+    // ⛔ NUNCA ACEITAR O NOME DO TORNEIO COMO CATEGORIA. `categoryRaw` guarda o rótulo
+    // CRU do letzplay, e ele frequentemente é o nome inteiro do evento — a M.delia
+    // apareceu com "Consolation D/C --6º Torneio Feminino – Ilha de Comandatuba –
+    // Consolation---Categoria D/C" ocupando duas linhas no lugar da categoria
+    // (print do dono, 17/ago/2026: "isso nao é categoria porra").
+    // Categoria é rótulo CURTO. Qualquer coisa longa é nome de evento, e nome de evento
+    // não é categoria — mesmo que tenha um "D/C" dentro.
     var oc = imp.officialCategory;
-    if (oc && oc.categoryRaw) considera(oc.categoryRaw, null);
+    if (oc && oc.categoryRaw && String(oc.categoryRaw).trim().length <= 24) {
+      considera(oc.categoryRaw, null);
+    }
     (imp.footprint || []).forEach(function (f) { if (f && f.official) considera(f.categoryRaw, f.ageBand); });
     if (comGenero) return { label: comGenero.label, deMista: false };
     if (soSkill) return { label: soSkill.label, deMista: !!soSkill.deMista };
@@ -170,8 +179,12 @@
     return '' +
       '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:4px;">' +
         '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria oficial</span><br>' + offHtml + '</div>' +
-        '<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">forma</span><br>' +
-          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;">' + esc(r.band || '—') + '</span></div>' +
+        // ⛔ A "FORMA" SAIU (17/ago/2026). Ordem do dono: "os outros tem essa merda de
+        // forma que nao é porra nenhuma". Ela era a banda do rating — a MESMA informação
+        // que a bolinha da régua logo abaixo já mostra, e em melhor forma: a régua situa
+        // a pessoa entre FUN e A, a letra sozinha não situa nada. Duas leituras do mesmo
+        // número, uma delas pior, é ruído.
+        // Os PONTOS continuam, porque são o número que resume o atleta.
         // ── OS PONTOS ────────────────────────────────────────────────────────────
         // Ordem do dono (11/ago/2026): _"vamos dar mais destaque para os 14xx pontos do
         // atleta. para isso ser uma coisa a ser notada."_ Antes eram 11px em cinza-muted,
