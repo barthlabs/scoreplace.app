@@ -3867,8 +3867,23 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       // Proponente atual: só Editar para corrigir
       pendingActionBtns = _btnEdit;
     } else if (_isAuthorityInner && !_isProposerSelf) {
-      // Organizador que não é o proponente atual: pode editar/confirmar diretamente
-      pendingActionBtns = _btnEdit;
+      // Organizador que não é o proponente atual: ✏️ Editar + ✅ Confirmar.
+      // v1.9.20 — O CONFIRMAR DO ORGANIZADOR NÃO EXISTIA, e isso TRAVA QUADRA.
+      // Medido na Confra (17/ago, grupo 24 do Rei/Rainha, jogo 74): J1 propôs os
+      // três jogos da rodada e J3 aprovou dois deles em ~2min. No terceiro, J1 e
+      // J3 são PARCEIROS — o lado adversário (J2, J4) não estava com o app na mão
+      // (nenhum dos dois tem push), então NÃO HAVIA QUEM APROVAR. O jogo ficou 24
+      // minutos parado e só destravou quando o organizador entrou pelo ✏️ Editar
+      // e relançou o mesmo placar.
+      // Isto é ESTRUTURAL no Rei/Rainha, não azar: num grupo de 4 as duplas rodam,
+      // então se só duas pessoas do grupo usam o app existe SEMPRE exatamente um
+      // dos três jogos em que elas caem no MESMO time — e esse jogo trava sozinho.
+      // `_approveResult` já aceitava organizador/co-host desde sempre
+      // (bracket-ui.js: `_isUserOrgOrCoHost(t, cu) || _isOpposingProposer(...)`);
+      // o que faltava era só o botão. Editar continua ali pra corrigir o placar;
+      // Confirmar é o atalho de 1 clique pra homologar o que foi proposto.
+      // Ordem canônica: confirmar à direita ([[feedback_button_order_confirm_right]]).
+      pendingActionBtns = _btnEdit + _btnConfirm;
     }
     // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
     // Somente leitura vence QUALQUER papel: fora da chave não há ação possível.
