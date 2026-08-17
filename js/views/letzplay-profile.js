@@ -183,7 +183,15 @@
     // etária no lugar da categoria.
     var _cs = (typeof window._lzCategoriaDoImport === 'function') ? window._lzCategoriaDoImport(imp) : null;
     // "Feminina C+" / "Masculina D" — o rótulo que o organizador usa pra inscrever.
-    var _g = String((imp && imp.gender) || '').toLowerCase();
+    // ⚠️ O GÊNERO NÃO MORA NO IMPORT. `imp.gender` é undefined — ele vive no scan, e por
+    // isso a Bruna saía "D+" pelado, sem o "Feminina". Buscar nos dois, e em último caso
+    // deduzir da própria categoria ("Fem C+", "Feminina D").
+    var _cats = ((imp && imp.footprint) || []).map(function (f) { return (f && f.categoryRaw) || ''; }).join(' ');
+    var _g = String((imp && imp.gender) || (imp && imp.scan && imp.scan.gender) ||
+                    (window.AppStore && window.AppStore.currentUser && imp === window.AppStore.currentUser.letzplayImport
+                       ? window.AppStore.currentUser.gender : '') || '').toLowerCase();
+    if (!_g && /\bfem/i.test(_cats)) _g = 'feminino';
+    else if (!_g && /\bmasc/i.test(_cats)) _g = 'masculino';
     var _gen = /fem/.test(_g) ? 'Feminina ' : (/mas/.test(_g) ? 'Masculina ' : '');
     var offHtml = cat
       ? '<span title="' + (cat.deMista ? 'faixa apurada em torneio misto — o gênero é do torneio, não do atleta' : 'categoria oficial disputada em torneio') +
