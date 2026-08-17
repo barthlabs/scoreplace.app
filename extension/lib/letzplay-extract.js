@@ -156,6 +156,26 @@
       var handles = Array.prototype.slice.call(row.querySelectorAll('.match-player-info a[href^="/"]'))
         .map(function (a) { return handleFromHref(a.getAttribute('href')); }).filter(Boolean);
       var span = row.querySelector('.match-players-double, .match-players-single');
+
+      // ⭐ OS NOMES JÁ VÊM SEPARADOS — por <br>, na MESMA ORDEM dos handles:
+      //     `Marco Vasco <br> Ricardo Pettená`
+      // Usar `textContent` colava os dois ("Marco Vasco Ricardo Pettená") e obrigava a
+      // adivinhar onde cortar, casando palavra a palavra contra o handle. A adivinhação
+      // erra sempre que o handle não é Nome+Sobrenome consecutivos: `ArturDieguez` para
+      // um nome que é "Artur Luíz C Diegues" casa só "Artur" e o resto vaza pro parceiro.
+      // Medido em 16/ago/2026: 299 nomes truncados nos 12 docs de leitura.
+      if (span) {
+        var partes = (span.innerHTML || '').split(/<br\s*\/?>/i)
+          .map(function (s) { return s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); })
+          .filter(Boolean);
+        if (partes.length === handles.length) {
+          handles.forEach(function (h, i) { map[h] = partes[i]; });
+          return;                                  // ordem casada: nada a adivinhar
+        }
+      }
+
+      // Reserva: markup sem <br> (ou contagem que não bate) — corta por palavra usando o
+      // handle como guia. Imperfeito, e é justamente por isso que só roda aqui.
       var namesText = span ? (span.textContent || '').replace(/\s+/g, ' ').trim() : '';
       var words = namesText ? namesText.split(' ').filter(Boolean) : [];
       var wi = 0;

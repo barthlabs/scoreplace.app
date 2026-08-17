@@ -240,6 +240,56 @@ function fantasma() {
      'FANTASMA · o guard roda no colher() do lerLista, antes de virar competição');
 }
 
+/* ── O NOME DOS JOGADORES NO CARD DO JOGO ──────────────────────────────────────────── */
+/* Terceiro defeito da MESMA família: `textContent` engolindo a estrutura do HTML. No card
+ * os dois nomes vêm separados por <br>, na mesma ordem dos handles:
+ *     `Marco Vasco <br> Ricardo Pettená`
+ * O código colava tudo num texto só e tentava adivinhar onde cortar, casando palavra a
+ * palavra contra o handle. A adivinhação erra sempre que o handle não é Nome+Sobrenome
+ * consecutivos: `ArturDieguez` para "Artur Luíz C Diegues" casa só "Artur", e "Diegues"
+ * VAZA para o parceiro — foi assim que saiu "Diegues Ricardo Pettená".
+ * Medido: 299 nomes truncados nos 12 docs de leitura. */
+async function nomesNosJogos(browser) {
+  const src = read('extension/lib/letzplay-extract.js');
+  ok(/partes\.length === handles\.length/.test(src),
+     'JOGOS · os nomes são separados pelo <br>, casando com a ordem dos handles');
+  ok(/Reserva: markup sem <br>/.test(src),
+     'JOGOS · a adivinhação por palavra virou reserva, não o caminho principal');
+
+  const page = await browser.newPage();
+  await page.setContent('<!doctype html><html><body></body></html>');
+  await page.addScriptTag({ content: src });
+
+  // markup REAL do card (letzplay.me/paineiras-bt/rankings/33695/matches, 16/ago/2026)
+  const linha = (hs, nomes, venceu, games) =>
+    '<div class="row match-player">' +
+      '<div class="match-player-info">' + hs.map(h => '<a href="/' + h + '"><img src="x"></a>').join('') + '</div>' +
+      '<span class="match-players-double"> ' + nomes.join(' <br> ') + ' </span>' +
+      '<div class="match-results-points"><div class="col-xs-1 match-points ' +
+        (venceu ? 'highlight' : 'no-highlight') + '">' + games + '</div></div>' +
+    '</div>';
+  const card =
+    '<div class="row match"><div class="col-xs-12">' +
+      '<a href="/paineiras-bt/rankings/33695">BT SOCIAL</a>' +
+      '<div class="match-77-schedule">Terça, 30/09/25</div>' +
+      linha(['RodrigoBarth', 'ArturDieguez'], ['Rodrigo Barth', 'Artur Luíz C Diegues'], true, 6) +
+      linha(['RicardoPettena', 'JoaoScassa'], ['Ricardo Pettená', 'João Scassa'], false, 3) +
+    '</div></div>';
+
+  const g = await page.evaluate(([h]) => {
+    const doc = new DOMParser().parseFromString('<html><body>' + h + '</body></html>', 'text/html');
+    const r = window._spExtract.extractMatchesFromDoc(doc, 'RodrigoBarth');
+    return r && r[0] ? { parceiro: r[0].partnerName, adversarios: r[0].oppNames } : null;
+  }, [card]);
+
+  eq(g && g.parceiro, 'Artur Luíz C Diegues',
+     'JOGOS · nome com partícula do meio chega INTEIRO (era truncado em "Artur")');
+  eq(g && g.adversarios, ['Ricardo Pettená', 'João Scassa'],
+     'JOGOS · o resto do nome do parceiro não VAZA para o adversário');
+
+  await page.close();
+}
+
 (async () => {
   console.log('\n═══ classificação: cada linha com o seu nome ═══\n');
   const browser = await chromium.launch();
@@ -247,6 +297,8 @@ function fantasma() {
     await ladoEscrita(browser);
     console.log('');
     ladoLeitura();
+    console.log('');
+    await nomesNosJogos(browser);
     console.log('');
     fantasma();
   } finally { await browser.close(); }
