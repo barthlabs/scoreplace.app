@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.42';
+window.SCOREPLACE_VERSION = '1.9.43';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -277,6 +277,50 @@ window._preloadUserProfiles = function (uids) {
     toLoad.push(u);
   });
   if (!db) return Promise.resolve();
+  // ── LOTE, NÃO FILA DE UM EM UM (1.9.43) ──────────────────────────────────────
+  // MEDIDO na chave do Confra: a hidratação levava 860ms e era dominada por UMA
+  // LEITURA POR PESSOA — 143 `doc.get()`. No celular, isso é a mão travada que o dono
+  // relatou depois que a tela já desenhou. `documentId() in [...]` traz 10 perfis por
+  // consulta: 143 leituras viram ~15.
+  // ⚠️ O contrato NÃO muda: cada uid continua com sua promessa em `_userProfilePending`
+  // (é ela que impede a corrida do "nome em branco", v4.5.93) e o cache é preenchido uid
+  // a uid — quem não existe entra como perfil vazio, igual antes.
+  var _fb = (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldPath)
+    ? firebase.firestore.FieldPath.documentId() : null;
+  if (_fb && toLoad.length > 1) {
+    var _porLote = 10, _lotes = [];
+    for (var _i = 0; _i < toLoad.length; _i += _porLote) _lotes.push(toLoad.slice(_i, _i + _porLote));
+    _lotes.forEach(function (lote) {
+      var _resolvers = {};
+      lote.forEach(function (uid) {
+        window._userProfilePending[uid] = new Promise(function (res) { _resolvers[uid] = res; });
+        waitFor.push(window._userProfilePending[uid]);
+      });
+      db.collection('users').where(_fb, 'in', lote).get().then(function (snap) {
+        var vistos = {};
+        snap.forEach(function (doc) {
+          var d = doc.data() || {};
+          vistos[doc.id] = 1;
+          window._userProfileCache[doc.id] = {
+            displayName: d.displayName || d.name || '', email: d.email || '', phone: d.phone || '',
+            photoURL: d.photoURL || '', gender: d.gender || '',
+            skillBySport: (d.skillBySport && typeof d.skillBySport === 'object') ? d.skillBySport : null,
+            birthDate: d.birthDate || '', defaultCategory: d.defaultCategory || ''
+          };
+        });
+        // uid sem doc: entra vazio, senão ele seria pedido de novo a cada hidratação
+        lote.forEach(function (uid) {
+          if (!vistos[uid] && !window._userProfileCache[uid]) {
+            window._userProfileCache[uid] = { displayName: '', email: '', phone: '', photoURL: '',
+              gender: '', skillBySport: null, birthDate: '', defaultCategory: '' };
+          }
+        });
+      }).catch(function () {}).then(function () {
+        lote.forEach(function (uid) { delete window._userProfilePending[uid]; _resolvers[uid](); });
+      });
+    });
+    return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
+  }
   toLoad.forEach(function (uid) {
     var pr = db.collection('users').doc(uid).get().then(function (s) {
       var d = (s && s.exists) ? (s.data() || {}) : {};

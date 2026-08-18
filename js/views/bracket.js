@@ -3382,23 +3382,51 @@ async function _preloadPlayerPhotos(tournament) {
     [p.uid, p.p1Uid, p.p2Uid].forEach(function(u) { if (u) _uidsToLoad[u] = 1; });
     if (Array.isArray(p.participants)) p.participants.forEach(function(s) { if (s && s.uid) _uidsToLoad[s.uid] = 1; });
   }); });
-  Object.keys(_uidsToLoad).forEach(function(uid) {
-    promises.push(
-      window.FirestoreDB.db.collection('users').doc(uid).get()
-        .then(function(doc) { return window._userVivo(doc); })   // uid do inscrito pode ser LÁPIDE
-        .then(function(v) {
-          if (!v) return;
-          var data = v.data || {};
-          var nm = (data.displayName || '').trim();
-          _cacheName(uid, nm);            // o uid que o torneio guarda (pode ser a lápide)
-          if (v.uid !== uid) _cacheName(v.uid, nm);   // e o uid vivo, pra quem já migrou
-          if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && nm) {
-            window._playerPhotoCache[nm.toLowerCase()] = data.photoURL;
-          }
-        })
-        .catch(function() {})
-    );
-  });
+  // ── LOTE, NÃO UMA LEITURA POR PESSOA (1.9.43) ────────────────────────────────
+  // MEDIDO na chave do Confra: 143 uids = 143 `doc.get()`, e era isso que travava a mão
+  // DEPOIS que a tela já tinha desenhado (860ms no desktop; muito pior no celular).
+  // `documentId() in [...]` traz 10 perfis por consulta → ~15 idas em vez de 143.
+  // ⚠️ O que NÃO muda: cada doc segue passando pelo `_userVivo` (o uid do inscrito pode
+  // ser LÁPIDE e o nome tem que vir da conta viva) e o cache é preenchido igual.
+  var _todosUids = Object.keys(_uidsToLoad);
+  var _fpId = (typeof firebase !== 'undefined' && firebase.firestore && firebase.firestore.FieldPath)
+    ? firebase.firestore.FieldPath.documentId() : null;
+  var _guardaDoc = function (uid, v) {
+    if (!v) return;
+    var data = v.data || {};
+    var nm = (data.displayName || '').trim();
+    _cacheName(uid, nm);                          // o uid que o torneio guarda (pode ser a lápide)
+    if (v.uid !== uid) _cacheName(v.uid, nm);     // e o uid vivo, pra quem já migrou
+    if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && nm) {
+      window._playerPhotoCache[nm.toLowerCase()] = data.photoURL;
+    }
+  };
+  if (_fpId && _todosUids.length > 1) {
+    for (var _b = 0; _b < _todosUids.length; _b += 10) {
+      (function (lote) {
+        promises.push(
+          window.FirestoreDB.db.collection('users').where(_fpId, 'in', lote).get()
+            .then(function (snap) {
+              var pend = [];
+              snap.forEach(function (doc) {
+                pend.push(Promise.resolve(window._userVivo(doc)).then(function (v) { _guardaDoc(doc.id, v); }));
+              });
+              return Promise.all(pend);
+            })
+            .catch(function () {})
+        );
+      })(_todosUids.slice(_b, _b + 10));
+    }
+  } else {
+    _todosUids.forEach(function(uid) {
+      promises.push(
+        window.FirestoreDB.db.collection('users').doc(uid).get()
+          .then(function(doc) { return window._userVivo(doc); })
+          .then(function(v) { _guardaDoc(uid, v); })
+          .catch(function() {})
+      );
+    });
+  }
 
   // Fallback: buscar por email para participantes sem uid
   participants.forEach(function(p) {

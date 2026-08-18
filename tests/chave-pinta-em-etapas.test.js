@@ -48,11 +48,15 @@ ok(/return renderGroupStage\([^)]*\) \+ standbyHtml;/.test(src),
 // de dica se posiciona por `getBoundingClientRect()` do alvo — o dono mediu: a dica
 // simplesmente não aparece. Se alguém reintroduzir, este teste cai e obriga a ler isto.
 const cssComp = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
-// (a regra ANTIGA de `.cards-grid > .card` — v2.4.96, listas da dashboard/explorar —
-//  não é esta e continua onde estava; o que não pode voltar é na CHAVE.)
-ok(!/#view-container div\[id\^="card-"\][^}]*content-visibility/.test(cssComp) &&
-   !/#view-container \[data-group-box\][^}]*content-visibility/.test(cssComp),
-   'content-visibility segue FORA da CHAVE (ele apaga o balão de dica; ver comentário no CSS)');
+// 1.9.43: a regra ANTIGA de `.cards-grid > .card` (v2.4.96) também caiu — o dono mediu
+// nas listas os MESMOS dois sintomas: "quando scrolla vem cortado" e toque que precisa de
+// 2–3 cliques (subárvore pulada não atende o 1º toque). Nenhuma volta sem resolver isso.
+// tira os comentários antes de olhar: o CSS guarda a regra desligada + o porquê, e é
+// justamente isso que precisa continuar lá pra ninguém religar sem ler.
+const cssVivo = cssComp.replace(/\/\*[\s\S]*?\*\//g, '');
+const cvAtivo = (cssVivo.match(/content-visibility:\s*auto/g) || []);
+ok(cvAtivo.length === 0,
+   'nenhum content-visibility ATIVO no CSS (apaga o balão de dica, corta a lista no scroll e come o 1º toque) — achei ' + cvAtivo.length);
 
 console.log((fail ? '❌' : '✅') + ' chave-pinta-em-etapas: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail ? 1 : 0);

@@ -1092,11 +1092,18 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
    contain-intrinsic-size reserva uma altura estimada (e `auto` lembra a real já
    medida), evitando pulo de scroll. Zero mudança visual; só performance.
    Ignorado em silêncio por navegadores sem suporte. */
+/* ⛔ DESLIGADO EM 1.9.43 — pelos MESMOS dois sintomas que a versão da chave causou, agora
+   medidos pelo dono nas LISTAS: "quando scrolla vem cortado" (o card entra na tela antes
+   de o navegador ter desenhado o conteúdo dele) e o toque que precisa de 2–3 cliques (a
+   subárvore pulada não responde ao primeiro toque — ele serve só pra "acordar" o card).
+   `content-visibility` economiza desenho, mas o preço é a tela mentir sobre o que existe
+   e o dedo não ser atendido. Enquanto não houver uma margem de renderização confiável
+   (hoje quem decide isso é o navegador, não o CSS), a lista desenha inteira.
 .cards-grid > .card,
 .cards-grid > div > .card {
   content-visibility: auto;
   contain-intrinsic-size: auto 320px;
-}
+} */
 
 .card-header {
   border-bottom: 1px solid var(--border-color);
