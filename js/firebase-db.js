@@ -2273,7 +2273,6 @@ window.FirestoreDB = {
           type: 'friend_accepted',
           fromUid: fromUid,
           fromName: fromData.displayName || '',
-          fromPhoto: fromData.photoURL || '',
           fromEmail: fromData.email || '',
           message: (fromData.displayName || 'Alguém') + ' aceitou seu convite e agora é seu amigo(a)!',
           createdAt: new Date().toISOString(),
@@ -2299,7 +2298,6 @@ window.FirestoreDB = {
         type: 'friend_request',
         fromUid: fromUid,
         fromName: fromData.displayName || '',
-        fromPhoto: fromData.photoURL || '',
         fromEmail: fromData.email || '',
         message: (fromData.displayName || 'Alguém') + ' quer ser seu amigo(a)!',
         createdAt: new Date().toISOString(),
@@ -2396,9 +2394,33 @@ window.FirestoreDB = {
       var _raw  = [_type, _tId, _mId, _day, _msgHash, uid].join('|');
       // Converte para ID válido (só alfanumérico + _ + -)
       var _docId = _raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200);
+
+      // ── NOTIFICAÇÃO NÃO CARREGA FOTO (1.9.24) ───────────────────────────────
+      // Incidente REAL (17/ago/2026, relato do dono: _"demorou para caramba para
+      // carregar os dados. dash no ar mas sem dados, sem perfil, sem torneios"_).
+      // MEDIDO na base antes de mexer: a caixa dele tinha 476 notificações somando
+      // **1,2 MB**, e as 3 NÃO LIDAS daquele momento pesavam **95 KB cada**. O peso
+      // inteiro era `fromPhoto` — a `photoURL` de quem disparou, quando ela é
+      // `data:image/jpeg;base64,…` (21 das 234 contas guardam a foto assim; a maior
+      // tem 133 KB). Cada resultado proposto copiava a foto do proponente pra caixa
+      // de CADA destinatário: 25 notificações de placar = 618 KB.
+      // ⚠️ E `fromPhoto` **não é lido em lugar nenhum**: varredura no repo inteiro
+      // deu 5 pontos gravando e ZERO renderizando. Era peso morto — e ele caía no
+      // caminho de ABERTURA, porque o badge do sino baixava toda não lida pra contar
+      // (ver `getUnreadNotificationCount`, consertado na mesma leva).
+      // A limpeza mora AQUI, no ponto único por onde toda notificação passa: caller
+      // novo não tem como reintroduzir o campo. Quem um dia quiser a foto lê o doc
+      // de quem mandou por `fromUid` — a identidade já viaja no payload.
+      // Ver [[feedback_unify_dual_entry_points]].
+      var _limpo = {};
+      Object.keys(notifData).forEach(function (k) {
+        if (k === 'fromPhoto') return;
+        _limpo[k] = notifData[k];
+      });
+
       // .set() com merge:false sobrescreve silenciosamente doc existente.
       // Notificações não lidas preservam read:false (campo vem no notifData).
-      await this.db.collection('users').doc(uid).collection('notifications').doc(_docId).set(notifData);
+      await this.db.collection('users').doc(uid).collection('notifications').doc(_docId).set(_limpo);
     } catch (e) {
       window._error('Erro ao criar notificação:', e);
     }
@@ -2480,11 +2502,30 @@ window.FirestoreDB = {
     }
   },
 
+  // ── CONTAR NÃO É BAIXAR (1.9.24) ──────────────────────────────────────────
+  // Este é o primeiro pedido de dados que o app faz depois do login: o badge do
+  // sino (`_updateNotificationBadge`, chamado por auth.js no boot). Ele pedia
+  // `.get()` na consulta inteira e usava só o `snap.size` — ou seja, baixava o
+  // CORPO de toda notificação não lida pra devolver um número. Com as fotos em
+  // base64 que viajavam no `fromPhoto` (ver `addNotification`), isso eram **285 KB
+  // de JPEG na frente da fila** na noite de 17/ago; no 4G do celular, o dashboard
+  // ficava no ar sem dados enquanto elas desciam.
+  // A agregação `count()` resolve no SERVIDOR: uma resposta com um inteiro.
+  // ⚠️ O fallback não é enfeite: `count()` existe no SDK a partir da 9.11, e o app
+  // roda dentro de WebView nativa com SDK possivelmente mais velho — sem ele o
+  // badge zeraria em silêncio, que é pior que ser lento. Ver
+  // [[feedback_no_load_fallback]]: fallback de LEITURA é proibido, este é de
+  // CAPACIDADE do SDK — o dado é o mesmo, muda só quem conta.
   async getUnreadNotificationCount(uid) {
     if (!this.db || !uid) return 0;
     try {
-      var snap = await this.db.collection('users').doc(uid).collection('notifications')
-        .where('read', '==', false).get();
+      var q = this.db.collection('users').doc(uid).collection('notifications')
+        .where('read', '==', false);
+      if (typeof q.count === 'function') {
+        var agg = await q.count().get();
+        return (agg && typeof agg.data === 'function' && agg.data().count) || 0;
+      }
+      var snap = await q.get();
       return snap.size;
     } catch (e) {
       return 0;

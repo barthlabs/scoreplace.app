@@ -35,6 +35,12 @@ const SUITES = [
   // pra sempre; (b) o botão de baixar só existe quando LEVA a algum lugar — nunca no
   // nativo, e só onde a ficha da loja está publicada de verdade (Play em 404 = sem botão).
   'tests/notificacao-lida-e-botao-da-loja.test.js',
+  // A caixa de notificações não pode pesar megabytes, e CONTAR não pode ser BAIXAR.
+  // Medido em 17/ago/2026: 476 avisos = 1,2 MB, com 95 KB de foto base64 em CADA aviso de
+  // placar — e o badge do sino baixava toda não lida só pra escrever um número, na
+  // abertura. Guarda os dois invariantes (nenhum caminho grava foto; contagem é agregação
+  // no servidor, com fallback pra WebView de SDK velho).
+  'tests/notificacao-nao-carrega-foto.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.

@@ -2148,7 +2148,6 @@ function renderTournaments(container, tournamentId = null) {
                             type: 'tournament_invite',
                             fromUid: myUid,
                             fromName: cu.displayName || '',
-                            fromPhoto: cu.photoURL || '',
                             tournamentId: String(t.id),
                             tournamentName: t.name || '',
                             message: _t('tourn.friendInvitedMsg', {name: cu.displayName || _t('tourn.aFriend'), tournament: t.name || ''}),

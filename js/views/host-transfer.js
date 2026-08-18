@@ -444,7 +444,6 @@
       type: data.type || 'info',
       fromUid: data.fromUid || cu.uid || cu.email || '',
       fromName: data.fromName || cu.displayName || '',
-      fromPhoto: cu.photoURL || '',
       tournamentId: data.tournamentId || '',
       tournamentName: data.tournamentName || '',
       message: data.message || '',

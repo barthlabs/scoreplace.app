@@ -3662,7 +3662,6 @@ function _autoFriendOnInvite(inviterUid, currentUser) {
     type: 'friend_accepted',
     fromUid: myUid,
     fromName: currentUser.displayName || '',
-    fromPhoto: currentUser.photoURL || '',
     fromEmail: currentUser.email || '',
     message: _t('auth.friendAcceptedMsg', {name: currentUser.displayName || _t('auth.someone')}),
     createdAt: new Date().toISOString(),

@@ -224,8 +224,12 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             // ping sem ação possível. Agora copiamos TODOS os campos do payload
             // exceto `level` (só usado pra filtro local de notifyLevel) e
             // valores undefined (Firestore rejeita). Campos canônicos (type,
-            // fromUid, fromName, fromPhoto, createdAt, read) sobrescrevem
-            // qualquer override do caller pra evitar spoofing.
+            // fromUid, fromName, createdAt, read) sobrescrevem qualquer override
+            // do caller pra evitar spoofing.
+            // v1.9.24: `fromPhoto` saiu da lista — o campo era peso morto (ninguém
+            // renderiza) e, com foto em base64, cada notificação de placar levava
+            // ~95 KB pra caixa de cada destinatário. `addNotification` derruba o
+            // campo mesmo que alguém volte a mandá-lo.
             var _notifPayload = {};
             Object.keys(notifData).forEach(function(k) {
                 if (k === 'level' || k === '_allowSelf') return; // flags locais — não gravar
@@ -237,7 +241,6 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
             _notifPayload.type = notifData.type || 'info';
             _notifPayload.fromUid = cu.uid || cu.email || '';
             _notifPayload.fromName = cu.displayName || '';
-            _notifPayload.fromPhoto = cu.photoURL || '';
             _notifPayload.tournamentId = notifData.tournamentId || '';
             _notifPayload.tournamentName = notifData.tournamentName || '';
             _notifPayload.message = notifData.message || '';
