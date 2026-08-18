@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.26';
+window.SCOREPLACE_VERSION = '1.9.27';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -147,11 +147,15 @@ window._spExtZipUrl = function () { return '/scoreplace-letzplay-ext-' + window.
 //   loja >= mínimo  → botão principal = LOJA (auto-update, o caminho bom)
 //   loja <  mínimo  → botão principal = ZIP  (o único que resolve nessa janela)
 //
+// ⚠️ ESTE NÚMERO É MEDIÇÃO, NÃO PALPITE: `node scripts/check-ext-store-version.js` lê a
+// ficha pública e compara. Em 17/ago/2026 ele pegou o app declarando 1.98 com a loja
+// servindo 1.97 — declaração à frente da realidade prende o usuário num laço (o gate
+// exige a nova, a loja entrega a velha). Rode o script quando a revisão sair.
 // ⚠️ ATUALIZAR ESTE VALOR É PARTE DE PUBLICAR NA LOJA — quando a revisão aprovar a versão
 // nova, este número sobe junto. Enquanto ele estiver atrás, o app manda pro zip sozinho, e
 // isso é o comportamento CERTO, não um esquecimento. Há teste travando que ele nunca fique
 // à FRENTE de SP_EXT_VERSION (isso seria mentir que a loja tem algo que não existe).
-window.SP_EXT_STORE_VERSION = '1.98';
+window.SP_EXT_STORE_VERSION = '1.97';
 
 // ── A LEITURA DO LETZPLAY SÓ ACONTECE NO CHROME DESKTOP ──────────────────────
 // Bronca do dono (11/ago/2026, print do app no iPhone via TestFlight): _"não sendo no
