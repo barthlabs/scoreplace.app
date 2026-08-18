@@ -37,7 +37,7 @@ const handlerSrc = body.slice(h, body.lastIndexOf('}')) + '}';
 let deleted = [], tokens = [];
 const DB = (docs) => ({ collection: (c) => ({ doc: (d) => ({ get: async () => {
   const v = docs[c + '/' + d];
-  return { exists: !!v, data: () => v };
+  return { id: d, exists: !!v, data: () => v };
 } }) }) });
 const admin = { auth: () => ({
   getUser: async (u) => { if (u === 'MORTO') { const e = new Error('x'); e.code='auth/user-not-found'; throw e; } return { uid: u }; },
@@ -56,6 +56,11 @@ async function run(docs, auth) {
   return { r, deleted: deleted.slice(), tokens: tokens.slice() };
 }
 global.admin = admin; global.HttpsError = HttpsError; global.console = console;
+// A CF passou a seguir a corrente de lápides pela porta única (functions/user-vivo-core.js)
+// em vez do laço à mão que morava aqui — e o laço tinha um buraco: além do 5º salto ele saía
+// COM A LÁPIDE. Injetamos o módulo REAL, não um stub: assim este teste continua exercitando
+// a decisão de ponta a ponta, agora incluindo o desvio morto→vivo. v1.9.34.
+global._userVivo = require('../functions/user-vivo-core');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };

@@ -922,6 +922,14 @@ const SUITES = [
   // único (corrente, ciclo, órfã, colapso lápide+vivo) e o INVARIANTE de que nenhuma busca
   // nova escapa da porta. v1.9.33.
   'tests/lapide-nunca-vence-a-conta-viva.test.js',
+  // A MESMA regra, do lado do SERVIDOR — que a do cliente não alcança. Quem manda o
+  // comunicado do organizador, quem resolve o login por e-mail/telefone vinculado e quem
+  // escolhe o alvo da prova de fusão são Cloud Functions. 4 buscas agiam sobre o uid morto,
+  // e 2 caminhadores de corrente escritos à mão SAÍAM COM A LÁPIDE além do 5º salto (o
+  // resolveMergedLogin chegava a emitir custom token com ela). A varredura aqui é mais
+  // ampla que a do cliente de propósito: pega campo DINÂMICO (`where(t.f, ...)`), que no
+  // servidor é a forma comum e a regex de literais não veria.
+  'tests/user-vivo-no-servidor.test.js',
 ];
 
 let failed = [];

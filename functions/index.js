@@ -52,6 +52,8 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
       if (t.length === 1) aContar.add(t[0]);
     });
     await Promise.all(Array.from(aContar).map(async (tk) => {
+      // user-vivo:isento — CONTAGEM de raridade do token, não resolução de pessoa. Devolve
+      // um número (count()), nunca um uid, e ninguém age sobre conta nenhuma a partir dele.
       const c = await db.collection("users").where("displayName_tokens", "array-contains", tk).count().get();
       out[tk] = c.data().count;
     }));
@@ -70,6 +72,11 @@ const _rosterWatch = require("./roster-watch-core");
 const _rosterMirror = require("./roster-mirror-core");
 const _delGuard = require("./delete-account-guard-core");
 const _renameProp = require("./rename-propagate-core");
+// A PORTA DA CONTA VIVA. Toda busca ampla em users/ por campo de identidade (email /
+// email_lower / phone / displayName / letzplayHandle) que resolva UMA pessoa e AJA sobre ela
+// passa por aqui — a lápide de fusão fica com o MESMO contato do sobrevivente, então
+// `snap.docs[0]` pode ser o uid morto. Espelha window._userVivo do cliente (v1.9.33).
+const _userVivo = require("./user-vivo-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -1085,11 +1092,14 @@ exports.flushNotifEmailDigest = onSchedule(
       // lowercase); se não achar, fica no dark — sem regressão.
       let _theme = "dark";
       try {
-        let _uSnap = await db.collection("users").where("email", "==", email).limit(1).get();
+        // limit(8), não limit(1): o e-mail casa a lápide E o sobrevivente, e com limit(1) o
+        // Firestore pode entregar justamente a morta — cujo `theme` é o de antes da fusão.
+        let _uSnap = await db.collection("users").where("email", "==", email).limit(8).get();
         if (_uSnap.empty && email !== email.toLowerCase()) {
-          _uSnap = await db.collection("users").where("email", "==", email.toLowerCase()).limit(1).get();
+          _uSnap = await db.collection("users").where("email", "==", email.toLowerCase()).limit(8).get();
         }
-        if (!_uSnap.empty) { const _th = _uSnap.docs[0].data().theme; if (_th === "light") _theme = "light"; }
+        const _vivo = await _userVivo.userVivo(db, _uSnap);
+        if (_vivo && _vivo.data.theme === "light") _theme = "light";
       } catch (e) { /* default dark */ }
       try {
         const subject = items.length === 1
@@ -2428,6 +2438,12 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
     // Ver [[project_duplicate_detection_two_normalizations]].
     const nomeMeu = String(meu.displayName || "").trim();
     const nomeLower = nomeMeu.toLowerCase();
+    // user-vivo:isento (vale pro bloco de `consultas` abaixo) — isto LISTA candidatos pra um
+    // julgamento de duplicata, não resolve UMA pessoa pra agir sobre ela. Passar pela porta
+    // seria errado aqui, por dois motivos: a lápide precisa ser DESCARTADA e não seguida (uma
+    // conta já fundida não é uma duplicata a resolver), e colapsar lápide+sobrevivente
+    // esconderia justamente o par que o julgamento existe pra enxergar. O descarte é
+    // explícito logo abaixo (`if (x.mergedInto) return;`), junto com o do próprio caller.
     const telCanon = _dupPerson.normalizarTelefone(meu.phone);
     const consultas = [];
     if (nomeMeu && !_nameUnique.isUnfriendlyName(nomeLower)) {
@@ -3237,12 +3253,19 @@ exports.sendOrgCommunication = onCall(
     // v1.2.9: o canal WhatsApp saiu — ver project_whatsapp_meta_2fa_block.
     const recipientDetails = [];
 
-    // Resolve UID por email quando o inscrito não tem uid no objeto.
-    async function _resolveUid(r) {
-      if (r.uid) return r.uid;
-      if (!r.email) return "";
-      const snap = await db.collection("users").where("email", "==", r.email).limit(1).get();
-      return snap.empty ? "" : snap.docs[0].id;
+    // Resolve a PESSOA VIVA do inscrito → { uid, profile }, ou null.
+    //
+    // Passa pela porta nos DOIS caminhos, e o do uid não é zelo à toa: o inscrito guarda o
+    // uid do dia da inscrição, e se a conta dele foi fundida depois esse uid virou LÁPIDE —
+    // o doc ainda existe (`exists` é true), então o código antigo achava que tinha achado a
+    // pessoa e mandava o comunicado pra uma caixa que ninguém abre. Custo zero: a porta lê o
+    // mesmo `users/{uid}` que a linha seguinte já lia, e devolve o perfil junto.
+    async function _resolvePessoa(r) {
+      if (r.uid) return await _userVivo.userVivo(db, String(r.uid));
+      if (!r.email) return null;
+      // limit(8) porque o e-mail casa a lápide E o sobrevivente; a porta colapsa os dois.
+      const snap = await db.collection("users").where("email", "==", r.email).limit(8).get();
+      return await _userVivo.userVivo(db, snap);
     }
 
     // Concorrência limitada (chunks de 20) — rápido mesmo com centenas.
@@ -3251,11 +3274,16 @@ exports.sendOrgCommunication = onCall(
       const slice = recipients.slice(i, i + CHUNK);
       await Promise.all(slice.map(async (r) => {
         try {
-          const uid = await _resolveUid(r);
-          if (!uid) { skipped.push({ uid: "", email: r.email, reason: "no-uid" }); return; }
-          const profSnap = await db.collection("users").doc(uid).get();
-          if (!profSnap.exists) { skipped.push({ uid, reason: "no-user" }); return; }
-          const profile = profSnap.data() || {};
+          const _pessoa = await _resolvePessoa(r);
+          // Sem uid nem e-mail não havia por onde procurar; com um deles e sem resultado, o
+          // doc sumiu ou a corrente de lápide está quebrada — nos dois casos não há conta
+          // viva a quem entregar, e mandar pro uid morto seria pior que registrar o pulo.
+          if (!_pessoa) {
+            skipped.push({ uid: r.uid || "", email: r.email, reason: (r.uid || r.email) ? "no-user" : "no-uid" });
+            return;
+          }
+          const uid = _pessoa.uid;
+          const profile = _pessoa.data || {};
           const isOrganizer = r.isOrganizer === true || uid === callerUid;
           const userLevel = profile.notifyLevel || "todas";
           // Organizador recebe sempre o próprio comunicado (bypassa filtro de nível).
@@ -3867,8 +3895,15 @@ async function _uidByProfileEmail(db, raw) {
   ];
   for (const t of tries) {
     try {
-      const snap = await db.collection("users").where(t.f, t.op, t.v).limit(1).get();
-      if (!snap.empty) return snap.docs[0].id;
+      // ⚠️ limit(8) + porta, não limit(1) + docs[0]: a lápide guarda o MESMO e-mail do
+      // sobrevivente, e sem ordenação o Firestore pode entregar justamente a morta. O que
+      // acontecia então NÃO era mandar login pra conta errada — o Auth da absorvida foi
+      // apagado na fusão, então o `getUser` de quem chama aqui falhava e a resposta virava
+      // "conta não encontrada" pra uma pessoa que EXISTE. Um erro vira o outro, e o de
+      // agora é pior de diagnosticar.
+      const snap = await db.collection("users").where(t.f, t.op, t.v).limit(8).get();
+      const uid = await _userVivo.uidVivo(db, snap);
+      if (uid) return uid;   // sem conta viva nesta tentativa → tenta a próxima
     } catch (e) { /* índice ausente/erro → tenta próximo */ }
   }
   return null;
@@ -3885,8 +3920,12 @@ async function _uidByProfilePhone(db, phoneE164) {
   ];
   for (const t of tries) {
     try {
-      const snap = await db.collection("users").where(t.f, t.op, t.v).limit(1).get();
-      if (!snap.empty) return snap.docs[0].id;
+      // Mesma razão do _uidByProfileEmail: o telefone é o campo que MAIS repete entre lápide
+      // e sobrevivente (o caso da base — M. Delia Fernandez — são dois docs com o mesmo
+      // +5511996019191). Ver a nota lá.
+      const snap = await db.collection("users").where(t.f, t.op, t.v).limit(8).get();
+      const uid = await _userVivo.uidVivo(db, snap);
+      if (uid) return uid;   // sem conta viva nesta tentativa → tenta a próxima
     } catch (e) { /* índice ausente/erro → tenta próximo */ }
   }
   return null;
@@ -4212,15 +4251,16 @@ exports.resolveMergedLogin = onCall(
         " → tombstone não foi escrito pelo servidor. Token NEGADO.");
       return { merged: false };
     }
-    // Segue a cadeia (caso o sobrevivente também tenha sido mesclado depois).
-    let target = mergedInto; let guard = 0;
-    while (guard++ < 5) {
-      const ts = await db.collection("users").doc(target).get();
-      const next = ts.exists && ts.data().mergedInto;
-      if (next && typeof next === "string" && next !== target) { target = next; continue; }
-      if (!ts.exists) return { merged: false };
-      break;
-    }
+    // Segue a cadeia (caso o sobrevivente também tenha sido mesclado depois) pela PORTA.
+    // ⚠️ O laço à mão que morava aqui tinha um buraco provado: ele parava no 5º salto e
+    // seguia usando `target` — que numa corrente mais longa AINDA É LÁPIDE. Como
+    // createCustomToken não confere se o uid existe, o desfecho era emitir credencial de uma
+    // conta morta. Ciclo (A→B→A) dava no mesmo: girava até o guard e caía com lápide na mão.
+    // A porta recusa os dois casos, e recusar é o certo — sem conta viva não há a quem logar.
+    // `snap` entra direto (a porta aceita DocumentSnapshot), então não há releitura.
+    const _alvo = await _userVivo.uidVivo(db, snap);
+    if (!_alvo || _alvo === uid) return { merged: false };
+    const target = _alvo;
     let customToken;
     try {
       customToken = await admin.auth().createCustomToken(target, { source: "merged_login_redirect" });
@@ -4280,15 +4320,12 @@ exports.resolveLoginRedirect = onCall(
     }
     if (!target || target === uid) return { redirected: false, reason: "no_redirect" };
 
-    // 4) O dono também pode ter sido mesclado depois — segue a cadeia.
-    let guard = 0;
-    while (guard++ < 5) {
-      const ts = await db.collection("users").doc(target).get();
-      if (!ts.exists) return { redirected: false, reason: "owner_gone" };
-      const next = ts.data().mergedInto;
-      if (next && typeof next === "string" && next !== target) { target = next; continue; }
-      break;
-    }
+    // 4) O dono também pode ter sido mesclado depois — segue a cadeia pela PORTA (mesma
+    // regra do resolveMergedLogin; o laço à mão que morava aqui parava no 5º salto e podia
+    // sair com uma lápide na mão. Aqui o getUser do passo 5 mascarava o defeito, mas
+    // recusar por "conta viva não encontrada" é mais honesto que por "Auth sumiu").
+    target = await _userVivo.uidVivo(db, String(target));
+    if (!target) return { redirected: false, reason: "owner_gone" };
     if (target === uid) return { redirected: false, reason: "self" };
 
     // 5) A conta de destino tem que estar viva no Auth.
@@ -5077,6 +5114,8 @@ exports.deleteAccount = onCall(
 
     // 3) O uid dela no friends[] de OUTRAS pessoas.
     try {
+      // user-vivo:isento — busca REVERSA por uid (quem me tem como amigo), não por campo
+      // de identidade. Não há lápide a resolver: o uid consultado já é o da conta viva.
       const amigos = await db.collection("users").where("friends", "array-contains", uid).get();
       let b = db.batch(), n = 0;
       for (const d of amigos.docs) {
@@ -5242,10 +5281,20 @@ exports.requestEmailMerge = onCall(
     let targetUid = null;
     try { const tu = await admin.auth().getUserByEmail(email); targetUid = tu && tu.uid; } catch (e) { /* not-found */ }
     if (!targetUid) {
-      const s = await db.collection("users").where("email", "==", email).limit(1).get();
-      if (!s.empty) targetUid = s.docs[0].id;
+      // limit(8): o e-mail casa lápide + sobrevivente; a porta escolhe a viva e colapsa.
+      const s = await db.collection("users").where("email", "==", email).limit(8).get();
+      targetUid = await _userVivo.uidVivo(db, s);
+    } else {
+      // O uid veio do AUTH e mesmo assim passa pela porta: a fusão apaga o Auth do absorvido
+      // em best-effort (`deleteUser` dentro de try/catch, index.js:774) — quando essa deleção
+      // falha, o e-mail continua resolvendo no Auth pra um uid que no Firestore já é LÁPIDE.
+      targetUid = (await _userVivo.uidVivo(db, String(targetUid))) || targetUid;
     }
     if (!targetUid) return { ok: false, reason: "no-account" };   // não existe → caller só vincula o e-mail (verifyBeforeUpdateEmail no cliente)
+    // ⚠️ A comparação com o caller vem DEPOIS de resolver, de propósito — o oposto do que os
+    // outros caminhos de fusão fazem. Excluir o próprio uid ANTES economizaria uma leitura,
+    // mas apagaria a distinção que importa aqui: uma lápide de e-mail cujo sobrevivente sou
+    // EU resolve pra mim, e isso é "same-account" (mensagem acionável), não "no-account".
     if (targetUid === callerUid) return { ok: false, reason: "same-account" };
 
     await _sendMergeProofEmail(db, callerUid, targetUid, email);
@@ -5992,6 +6041,8 @@ exports.fixMergedParticipants = onRequest(
     }
 
     // ── Modo 2: varredura por mergedInto ──────────────────────────────────────
+    // user-vivo:isento — esta É a varredura de lápides; seguir a corrente aqui apagaria
+    // justamente o que ela precisa enxergar (o par morto→vivo a repontar).
     const mergedSnap = await db.collection("users").where("mergedInto", "!=", null).get();
     if (mergedSnap.empty) { res.json({ ok: true, message: "Nenhum usuário mesclado encontrado" }); return; }
 
@@ -6161,6 +6212,7 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
   await conta("tournaments.organizerUid", db.collection("tournaments").where("organizerUid", "==", uid));
   await conta("presences.uid", db.collection("presences").where("uid", "==", uid));
   await conta("casualMatches.playerUids", db.collection("casualMatches").where("playerUids", "array-contains", uid));
+  // user-vivo:isento — busca reversa por uid (contagem de vínculos de terceiros).
   await conta("users.friends[] de terceiros", db.collection("users").where("friends", "array-contains", uid));
   await conta("results.playerUids", db.collectionGroup("results").where("playerUids", "array-contains", uid));
   try { const d = await db.collection("letzplayScans").doc(uid).get(); if (d.exists) sobras.push("letzplayScans/" + uid); } catch (e) {}
@@ -6317,6 +6369,10 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
       if (!key || key.length < 5) continue;
 
       // Busca outros usuários com o mesmo valor no campo
+      // user-vivo:isento (vale pro bloco abaixo) — este é o PRÓPRIO caminho de fusão: ele
+      // precisa dos docs CRUS pra decidir quem funde com quem. Descarta lápide e o próprio
+      // uid na linha seguinte (`d.id !== uid && !d.data().mergedInto`), que é a semântica da
+      // porta aplicada na fonte — seguir a corrente aqui fundiria uma conta já fundida.
       const snap = await db.collection("users").where(field, "==", value).get();
       const others = snap.docs.filter(d => d.id !== uid && !d.data().mergedInto);
 
@@ -6425,6 +6481,12 @@ async function _detectarDuplicataNaBase(db, uid, meu) {
   try {
     if (!meu || meu.mergedInto) return null;
     const nome = String(meu.displayName || "").trim();
+    // user-vivo:isento (vale pro bloco de `consultas` abaixo) — isto LISTA candidatos pra um
+    // julgamento de duplicata, não resolve UMA pessoa pra agir sobre ela. Passar pela porta
+    // seria errado aqui, por dois motivos: a lápide precisa ser DESCARTADA e não seguida (uma
+    // conta já fundida não é uma duplicata a resolver), e colapsar lápide+sobrevivente
+    // esconderia justamente o par que o julgamento existe pra enxergar. O descarte é
+    // explícito logo abaixo (`if (x.mergedInto) return;`), junto com o do próprio caller.
     const telCanon = _dupPerson.normalizarTelefone(meu.phone);
     const consultas = [];
     if (nome && !_nameUnique.isUnfriendlyName(nome.toLowerCase())) {

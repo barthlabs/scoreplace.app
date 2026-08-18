@@ -99,6 +99,11 @@ async function findDisplayNameConflict(db, name, myUid) {
   const docs = [];
   for (const t of tries) {
     try {
+      // user-vivo:isento — colhe CANDIDATOS a homônimo pro pickConflict julgar; não resolve
+      // uma pessoa pra agir sobre ela. A lápide tem que ser DESCARTADA, não seguida: o nome
+      // dela é o mesmo do sobrevivente, e segui-la faria a pessoa colidir consigo mesma e
+      // ser renomeada à toa. O descarte está em pickConflict (`if (data.mergedInto) continue`),
+      // junto com o do próprio uid.
       const snap = await db.collection('users').where(t[0], '==', t[1]).limit(8).get();
       snap.forEach((doc) => {
         if (seen[doc.id]) return;
