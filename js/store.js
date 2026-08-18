@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.28';
+window.SCOREPLACE_VERSION = '1.9.29';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -504,6 +504,44 @@ window._lzBanda = function (pontos) {
   var E = window.SP_ESCADA;
   for (var i = 0; i < E.length; i++) if (pontos < E[i].ate) return E[i].nome;
   return E[E.length - 1].nome;
+};
+// ── A BOLINHA MORA ONDE O RÓTULO DIZ (1.9.29) ────────────────────────────────
+// Relato do dono (17/ago/2026, com print): _"a bruna tudo indica D mas a barra dela esta
+// em B muito alem do que deveria"_ e _"Fabio simao esta D- mas a bolinha um pouco acima do
+// D entao nao teria o -"_.
+//
+// MEDIDO nos dois docs reais, com o motor inteiro:
+//   Bruna Arilla  · rótulo D+ ("busca a de cima") · pontos 1672 → bolinha em B-
+//   Fábio Simão   · rótulo D- ("base da categoria") · pontos 1467 → bolinha em D+
+//
+// A tela mostrava DUAS respostas para a mesma pergunta: o rótulo saía do motor de
+// categoria (torneio manda na letra, ranking dá o sinal) e a bolinha saía dos PONTOS do
+// letzplay. Os pontos são outra régua — a da Bruna nasceu semeada em "Fem C+" com 9 jogos
+// e rd 173 — então as duas divergem com naturalidade, e quem lê acredita na bolinha, que
+// é o desenho. Ver [[project_categoria_ranking_vs_torneio]]: a categoria é CREDENCIAL, e
+// errar pra cima tira a pessoa de torneio que ela pode jogar.
+//
+// Aqui a bolinha passa a ser DERIVADA do rótulo, na MESMA escala em que os rótulos da
+// régua são desenhados: são 5 `flex:1` (FUN·D·C·B·A), ou seja centros em 10/30/50/70/90%.
+// Posicionar pelos PONTOS numa régua desenhada por igual era o erro de fundo — "B" pelos
+// pontos cai em 80% enquanto o "B" impresso está em 70%. O sinal desloca 1/3 do passo:
+// "D-" fica logo abaixo do D impresso, "D+" logo acima. Os pontos continuam aparecendo
+// como número ao lado; o que deixa de existir é a contradição entre rótulo e desenho.
+window.SP_REGUA_LETRAS = ['FUN', 'D', 'C', 'B', 'A'];
+window._lzPctDaCategoria = function (rotulo) {
+  var r = String(rotulo || '').trim().toUpperCase().replace(/\s+/g, '');
+  var m = r.match(/^([A-Z]+)([+\-]?)$/);
+  if (!m) return null;
+  var L = window.SP_REGUA_LETRAS || [];
+  var i = L.indexOf(m[1]);
+  if (i < 0) return null;
+  var passo = 100 / L.length;             // 20% por letra
+  var centro = passo * (i + 0.5);         // 10, 30, 50, 70, 90 — o centro do rótulo impresso
+  // O sinal desloca UM TERÇO do passo: fica claramente dentro da letra, sem encostar na
+  // vizinha. "D-" cai um pouco ABAIXO do D impresso; "D+", um pouco acima.
+  if (m[2] === '+') centro += passo / 3;
+  else if (m[2] === '-') centro -= passo / 3;
+  return Math.max(3, Math.min(97, centro));
 };
 // A letra sem o sinal — pra comparar com categoria de inscrição, que é sempre cheia.
 window._lzBandaLetra = function (pontos) {

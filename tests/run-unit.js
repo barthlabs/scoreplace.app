@@ -47,6 +47,11 @@ const SUITES = [
   // de assinatura do detalhe. Guarda o invariante: rótulo que depende de perfil declara o
   // uid e as duas formas, e se cura sozinho na hidratação — como o NOME sempre fez.
   'tests/rotulo-de-papel-se-cura.test.js',
+  // A bolinha da régua seguia os PONTOS do letzplay enquanto o rótulo ao lado saía do motor
+  // de categoria — duas respostas pra mesma pergunta, e quem lê acredita no desenho: a
+  // Bruna aparecia "D+" com a bolinha em B-. Guarda que a posição sai do RÓTULO, na mesma
+  // escala em que as letras da régua são desenhadas.
+  'tests/bolinha-no-ponto-do-rotulo.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.

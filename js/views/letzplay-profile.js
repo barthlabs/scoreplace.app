@@ -167,7 +167,15 @@
   root._lzLevelBar = function (imp) {
     if (!imp || typeof imp !== 'object') return '';
     var cat = root._lzCatAtleta(imp), r = imp.rating || {};
-    var pct = ratingPct(r.value);
+    // ⭐ A BOLINHA MORA ONDE O RÓTULO DIZ (1.9.29). Ela seguia `r.value` — outra régua —
+    // e contradizia o rótulo ao lado: a Bruna saía "D+" com a bolinha em B-, o Fábio
+    // "D-" com a bolinha acima do D. Agora sai de `_lzPctDaCategoria`, que fala a
+    // mesma língua dos rótulos impressos (FUN·D·C·B·A em 10/30/50/70/90%).
+    // ⚠️ O fallback pros pontos NÃO é decoração: quem ainda não tem torneio lido não tem
+    // rótulo, e aí a régua por pontos é a única coisa que situa a pessoa.
+    var _csPos = (typeof window._lzCategoriaDoImport === 'function') ? window._lzCategoriaDoImport(imp) : null;
+    var _pctCat = (_csPos && typeof window._lzPctDaCategoria === 'function') ? window._lzPctDaCategoria(_csPos.rotulo) : null;
+    var pct = (_pctCat != null) ? _pctCat : ratingPct(r.value);
     var gStops = 'linear-gradient(90deg,#dc2626 0%,#ef7a2b ' + Math.max(6, pct - 22) + '%,#eab308 ' +
       Math.max(10, pct - 12) + '%,#16a34a ' + Math.max(14, pct - 5) + '%,#16a34a ' +
       Math.min(88, pct + 5) + '%,#eab308 ' + Math.min(92, pct + 14) + '%,#ef7a2b ' +
@@ -181,7 +189,7 @@
     // ⚠️ Ela SUBSTITUI a antiga "categoria oficial", que era o rótulo mais difícil já
     // disputado alguma vez na vida — e que trazia nome de torneio, "Rodada: N" e faixa
     // etária no lugar da categoria.
-    var _cs = (typeof window._lzCategoriaDoImport === 'function') ? window._lzCategoriaDoImport(imp) : null;
+    var _cs = _csPos;   // mesma leitura que posicionou a bolinha — não pode divergir
     // "Feminina C+" / "Masculina D" — o rótulo que o organizador usa pra inscrever.
     // ⚠️ O GÊNERO NÃO MORA NO IMPORT. `imp.gender` é undefined — ele vive no scan, e por
     // isso a Bruna saía "D+" pelado, sem o "Feminina". Buscar nos dois, e em último caso
@@ -249,7 +257,11 @@
     var off = root._lzCatAtleta(imp);            // NUNCA "Mista" — ver _lzCatAtleta
     var r = imp.rating || {};
     var st = imp.stats || {};
-    var pct = ratingPct(r.value);
+    // Mesma regra do _lzLevelBar: a bolinha segue o RÓTULO; os pontos são o fallback de
+    // quem ainda não tem torneio lido. Duplicar o critério aqui seria garantir divergência.
+    var _csCard = (typeof window._lzCategoriaDoImport === 'function') ? window._lzCategoriaDoImport(imp) : null;
+    var _pctCard = (_csCard && typeof window._lzPctDaCategoria === 'function') ? window._lzPctDaCategoria(_csCard.rotulo) : null;
+    var pct = (_pctCard != null) ? _pctCard : ratingPct(r.value);
 
     // medidor: gradiente verde-no-centro (do rating) → vermelho nas pontas.
     var gStops = 'linear-gradient(90deg,#dc2626 0%,#ef7a2b ' + Math.max(6, pct - 22) + '%,#eab308 ' +
