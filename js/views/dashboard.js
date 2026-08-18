@@ -752,7 +752,10 @@ function renderDashboard(container) {
     let venuePhotoBg = '';
     if (t.coverPhotoData) {
       // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
-      venuePhotoBg = 'background-image: ' + overlayGrad + ', url(' + t.coverPhotoData + '); background-size: cover; background-position: center;';
+      // 1.9.50: a base64 NÃO entra mais na string (chegava a 194 KB num card só, e o
+      // parser mastigava isso na thread principal). Fica o gradiente; quem pinta a foto
+      // é `_hydrateTournamentPhotos`, do dado que JÁ está em memória — sem ida à rede.
+      venuePhotoBg = overlayGrad ? ('background-image: ' + overlayGrad + ';') : '';
       _cardTextColor = 'white';
     } else if (t.venuePlaceId) {
       // v1.7.53: NÃO pinta mais `url(t.venuePhotoUrl)` — aquela URL é do
@@ -766,6 +769,11 @@ function renderDashboard(container) {
     var vphotoAttrs = (!t.coverPhotoData && t.venuePlaceId)
       ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGrad + '"'
       : '';
+    // capa própria do torneio: marca o card pro hidratador (a imagem vem depois, do
+    // AppStore) em vez de carregar a base64 dentro do HTML.
+    if (t.coverPhotoData) {
+      vphotoAttrs += ' data-tcover-tid="' + window._safeHtml(String(t.id)) + '" data-tcover-overlay="' + overlayGrad + '"';
+    }
 
     // v3.0.x: usa a contagem CANÔNICA (mesma do detalhe) — antes a dashboard tinha
     // a própria lógica que EXCLUÍA os da lista de espera, dando números diferentes
@@ -3050,7 +3058,9 @@ function renderDashboard(container) {
       // A linha compacta é um <a> de verdade (o href navega sozinho); aqui só entra o
       // "Abrindo o torneio…" — a espera depois do toque é a MESMA do card grande.
       return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onclick="if(typeof window._showLoading===\'function\'){try{window._showLoading(\'Abrindo o torneio…\');}catch(e){}}" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
-        (t.logoData ? '<img src="' + t.logoData + '" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
+        // 1.9.50: `src` vazio + marca — o hidratador põe a base64 depois que a linha
+        // existe. Antes, cada linha carregava até 111 KB de texto dentro do HTML.
+        (t.logoData ? '<img data-tlogo-tid="' + window._safeHtml(String(t.id)) + '" alt="" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
         '<div class="compact-info" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">' +
           '<div class="compact-name-block" style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (isFav ? '❤️ ' : '') + window._safeHtml(t.name) + '</div>' +

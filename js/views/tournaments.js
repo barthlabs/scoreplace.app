@@ -2574,7 +2574,9 @@ function renderTournaments(container, tournamentId = null) {
         if (t.coverPhotoData) {
             // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
             // Já vem enquadrada (cropper), então só cover+center, sem hidratar Google.
-            venuePhotoBg = 'background-image: ' + overlayGradient + ', url(' + t.coverPhotoData + '); background-size: cover; background-position: center;';
+            // 1.9.50: a base64 saiu da string de HTML (ver a nota em
+            // `_hydrateTournamentPhotos`). Fica o gradiente; a foto é pintada depois.
+            venuePhotoBg = overlayGradient ? ('background-image: ' + overlayGradient + ';') : '';
         }
         // v1.7.53: saíram daqui o `url(t.venuePhotoUrl)` e o preload com `new Image()` —
         // aquela URL é do places.googleapis.com, então PINTAR já era pagar, e o preload
@@ -2584,6 +2586,9 @@ function renderTournaments(container, tournamentId = null) {
         var vphotoAttrs = (!t.coverPhotoData && t.venuePlaceId)
             ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '"'
             : '';
+        if (t.coverPhotoData) {
+            vphotoAttrs += ' data-tcover-tid="' + window._safeHtml(String(t.id)) + '" data-tcover-overlay="' + overlayGradient + '"';
+        }
 
         // v3.0.x: contagem canônica (deduplicada, equipe-aware) — estável antes E
         // depois do sorteio. Ver window._countCompetitors.

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.49';
+window.SCOREPLACE_VERSION = '1.9.50';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1160,9 +1160,67 @@ window._formatLabel = function (t) {
     });
   };
 
+  // ── A IMAGEM DO TORNEIO NÃO ENTRA NA STRING DE HTML (1.9.50) ─────────────────
+  // MEDIDO nos documentos de produção: `coverPhotoData`/`logoData` em base64 chegam a
+  // 111 KB e 194 KB num único torneio. O card os concatenava DENTRO do HTML
+  // (`background-image:url(<base64>)` e `<img src="<base64>">`), então montar a lista
+  // significava construir uma string com ~100 KB POR CARD e mandar o parser engolir
+  // tudo de uma vez, na thread principal. Não é o número de jogos que trava a abertura
+  // — é a imagem viajando como texto.
+  // Aqui a imagem sai do HTML e é pintada DEPOIS que o card já existe. Mesma imagem,
+  // mesmo visual, mesma fonte (o dado já está em AppStore — isto NÃO vai à rede);
+  // muda só que o parser não precisa mais mastigá-la.
+  // ⚠️ Espelha o hidratador da foto do local (logo acima) de propósito: mesmo gatilho,
+  // mesma marca de "já fiz" (`-done`), mesmo sinal de "pintou" (`data-vphoto-on`, que é
+  // quem o CSS lê pra calibrar texto sobre foto).
+  function _tourPorId(tid) {
+    try {
+      var ts = (window.AppStore && window.AppStore.tournaments) || [];
+      for (var i = 0; i < ts.length; i++) if (String(ts[i].id) === String(tid)) return ts[i];
+    } catch (e) {}
+    return null;
+  }
+  window._hydrateTournamentPhotos = function (root) {
+    root = root || document;
+    // capa (fundo do card)
+    var capas;
+    try { capas = root.querySelectorAll('[data-tcover-tid]:not([data-tcover-done])'); } catch (e) { capas = []; }
+    Array.prototype.forEach.call(capas, function (el) {
+      el.setAttribute('data-tcover-done', '1');
+      var t = _tourPorId(el.getAttribute('data-tcover-tid'));
+      if (!t || !t.coverPhotoData) return;
+      var overlay = el.getAttribute('data-tcover-overlay') || '';
+      el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + t.coverPhotoData + ')';
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.setAttribute('data-vphoto-on', '1');
+    });
+    // logo (miniatura da linha compacta)
+    var logos;
+    try { logos = root.querySelectorAll('img[data-tlogo-tid]:not([data-tlogo-done])'); } catch (e) { logos = []; }
+    Array.prototype.forEach.call(logos, function (el) {
+      el.setAttribute('data-tlogo-done', '1');
+      var t = _tourPorId(el.getAttribute('data-tlogo-tid'));
+      if (t && t.logoData) el.src = t.logoData;
+    });
+  };
+
   // Observer debounced — hidrata cards novos sem precisar chamar em cada render.
   var _deb = null;
-  function _kick() { if (_deb) return; _deb = setTimeout(function () { _deb = null; try { window._hydrateVenuePhotos(document); } catch (e) {} try { if (window._hydrateVenueLogos) window._hydrateVenueLogos(document); } catch (e) {} }, 250); }
+  function _kick() {
+    // ⚠️ A DO TORNEIO NÃO ESPERA OS 250ms. O dado já está em AppStore (zero rede), e é a
+    // imagem que o olho procura no card: atrasá-la trocaria "HTML pesado" por "card que
+    // pisca de cinza pra foto". Ela é barata — querySelector + busca em memória —, então
+    // roda no mesmo quadro da mutação. O debounce existe pras que vão à REDE (foto do
+    // local via CF), e essas continuam esperando.
+    try { window._hydrateTournamentPhotos(document); } catch (e) {}
+    if (_deb) return;
+    _deb = setTimeout(function () {
+      _deb = null;
+      try { window._hydrateVenuePhotos(document); } catch (e) {}
+      try { if (window._hydrateVenueLogos) window._hydrateVenueLogos(document); } catch (e) {}
+    }, 250);
+  }
   try {
     var _obs = new MutationObserver(_kick);
     var _start = function () { if (document.body) { _obs.observe(document.body, { childList: true, subtree: true }); _kick(); } };

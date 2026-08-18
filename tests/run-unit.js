@@ -966,6 +966,10 @@ const SUITES = [
   // viaja quando é ELA que mudou — e que `merge:true` continua, pois é ele que faz
   // omitir ≠ apagar.
   'tests/imagem-nao-viaja-com-placar.test.js',
+  // a mesma base64 que pesava na ESCRITA pesava no RENDER: o card a concatenava dentro
+  // do HTML (até ~100 KB por card), e o parser mastigava isso na thread principal.
+  // Trava que a imagem é pintada DEPOIS do card, do dado já em memória.
+  'tests/imagem-do-torneio-fora-do-html.test.js',
 ];
 
 let failed = [];
