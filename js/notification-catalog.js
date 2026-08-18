@@ -111,7 +111,12 @@ window.NOTIF_CATALOG = {
   casual_link_request:         { level: 'all',         icon: '🤝', color: '#fbbf24' },
   // Confirmação chega de volta pra quem solicitou.
   casual_link_accepted:        { level: 'all',         icon: '✅', color: 'var(--success-color)' },
-  casual_link_rejected:        { level: 'all',         icon: '❌', color: 'var(--text-muted)' }
+  casual_link_rejected:        { level: 'all',         icon: '❌', color: 'var(--text-muted)' },
+
+  // 🔴 1.9.36 — um placar ao vivo COMEÇOU num torneio em que a pessoa está inscrita
+  // (inclusive espera, desativado e W.O.). É convite pra ASSISTIR, não pedido de ação:
+  // quem não quiser desliga em Perfil → "Avisar quando um placar ao vivo começar".
+  live_score_started:          { level: 'all',         icon: '🔴', color: 'var(--danger-color, #ef4444)' }
 };
 
 // v1.2.9: NOTIF_WHATSAPP_POLICY + _waPolicy REMOVIDOS. A política de entrega por

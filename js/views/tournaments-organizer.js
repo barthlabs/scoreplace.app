@@ -206,6 +206,10 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
     try {
         var profile = await window.FirestoreDB.loadUserProfile(uid);
         if (!profile) return;
+        // 🔴 O DESLIGAMENTO DO "AO VIVO" É POR TIPO, e mora aqui — a porta única por onde
+        // TODA notificação passa. Pôr o teste em quem dispara (a vitrine) deixaria de
+        // fora qualquer caminho novo que avise sobre placar ao vivo. Ver live-now.js.
+        if ((notifData.type === 'live_score_started') && profile.liveAlerts === false) return;
         var userLevel = profile.notifyLevel || 'todas';
         var notifLevel = notifData.level || 'all';
         if (!window._notifLevelAllowed(userLevel, notifLevel)) return;
@@ -426,6 +430,7 @@ window._notifCta = function(type, td) {
   if ((t === 'presence_plan' || t === 'presence_checkin') && td.placeId) return { label: 'Ver local', url: base + '/#venues/' + td.placeId };
   if ((t === 'casual_invite' || t === 'casual_link_accepted' || t === 'casual_link_rejected' || t === 'casual_link_request') && td.roomCode) return { label: 'Ver partida', url: base + '/#casual/' + String(td.roomCode).toUpperCase() };
   if (t === 'wa_group' && td.waGroupLink) return { label: '💬 Entrar no grupo', url: String(td.waGroupLink) };
+  if (t === 'live_score_started' && td.liveId) return { label: '👀 Assistir ao vivo', url: base + '/#live/' + String(td.liveId) };
   if (t === 'friend_request') return { label: 'Responder', url: base + '/#notifications' };
   if (t === 'poll' && tUrl) return { label: '📊 Responder enquete', url: tUrl };
   if (t === 'schedule' && tId) return { label: '📅 Combinar jogo', url: base + '/#bracket/' + tId };

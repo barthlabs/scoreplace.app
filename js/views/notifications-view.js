@@ -260,6 +260,13 @@ function renderNotifications(container) {
         actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
           '<button class="btn btn-sm" style="background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 700;" onclick="event.stopPropagation(); window.location.hash=\'#casual/' + safeRoom + '\'; _markNotifRead(\'' + safeNotifId + '\')">⚡ Entrar na partida</button>' +
         '</div>';
+      } else if (n.type === 'live_score_started' && n.liveId) {
+        // 🔴 Convite pra assistir — vai direto pro placar ao vivo daquele jogo, em modo
+        // espectador (#live/<id>). Sem `liveId` não há botão: o aviso vira só texto.
+        var safeLive = String(n.liveId).replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+        actionHtml = '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
+          '<button class="btn btn-sm" style="background:linear-gradient(135deg,#ef4444,#b91c1c); color: #fff; border: none; padding: 4px 14px; font-size: 0.75rem; font-weight: 700;" onclick="event.stopPropagation(); window.location.hash=\'#live/' + safeLive + '\'; _markNotifRead(\'' + safeNotifId + '\')">👀 Assistir</button>' +
+        '</div>';
       } else if (n.type === 'casual_link_request' && isUnread && n.casualMatchDocId) {
         // v1.3.33-beta: amigo do usuário sugere que ele jogou esta partida
         // casual. 2 botões: "Sim, era eu" / "Não". Sim → atualiza match doc

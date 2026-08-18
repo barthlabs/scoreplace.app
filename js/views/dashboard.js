@@ -3512,6 +3512,11 @@ function renderDashboard(container) {
       </div>
     </div>
 
+    <!-- 🔴 Ao vivo agora (1.9.36) — a PRIMEIRA coisa abaixo da hero box, e só existe
+         enquanto existir placar ao vivo rodando. O slot nasce vazio de propósito: sem
+         partida ao vivo não há título órfão nem espaço em branco. Ver live-now.js. -->
+    <div id="dashboard-live-widget"></div>
+
     <!-- v3.1.25: Movimento nos seus locais — logo abaixo da hero box (pedido do dono) -->
     <div id="dashboard-presences-widget" style="margin-bottom:1.25rem;">${window._dashMovementCache || ''}</div>
 
@@ -3658,6 +3663,16 @@ function renderDashboard(container) {
   // PÓS-render (chained no preload de fotos). _preloadPlayerPhotos já popula
   // _profileNameByUid, que _nameForUid lê → nome vivo nos cards de Meus Resultados.
   function _dashHydrateNames() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
+  // 🔴 Ao vivo agora — assina os placares abertos e pinta/apaga o slot sozinho.
+  // A assinatura é trocada a cada render da dashboard (o render recria o slot), então
+  // desinscreve a anterior: sem isso cada re-render deixaria um listener vivo pendurado.
+  try {
+    if (window.__dashLiveUnsub) { window.__dashLiveUnsub(); window.__dashLiveUnsub = null; }
+    if (typeof window._renderLiveNowInto === 'function') {
+      window.__dashLiveUnsub = window._renderLiveNowInto('dashboard-live-widget', {});
+    }
+  } catch (_eLive) {}
+
   if (typeof _preloadPlayerPhotos === 'function' && typeof participacoes !== 'undefined' && Array.isArray(participacoes)) {
     var _phTournaments = participacoes.slice(0, 20);
     Promise.all(_phTournaments.map(function(t) {

@@ -4945,6 +4945,9 @@ async function simulateLoginSuccess(user) {
       // Sons: default OFF — só 'on' explícito liga (device-local).
       { id: 'profile-sound-enabled', val: (function () { try { return localStorage.getItem('scoreplace_sound') === 'on'; } catch (e) { return false; } })() },
       { id: 'profile-presence-auto-checkin', val: !!cu.presenceAutoCheckin },
+      // 🔴 Ao vivo: LIGADO por padrão — só o 'false' explícito desliga (quem nunca
+      // mexeu no perfil não fica de fora do convite pra assistir).
+      { id: 'profile-live-alerts', val: cu.liveAlerts !== false },
       // v2.4.3: privacidade — ocultar e-mail/telefone (default OFF).
       { id: 'profile-omit-email', val: cu.omitEmail === true },
       { id: 'profile-omit-phone', val: cu.omitPhone === true }
@@ -7022,6 +7025,11 @@ function setupProfileModal() {
               '</div>' +
               '<div style="margin-top:4px;margin-bottom:6px;">' +
                 (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-auto-checkin', label: 'Auto check-in ao chegar no local (usa GPS)', icon: '📡', checked: false, color: '#10b981', desc: 'Se você estiver em um local preferido, registra presença automaticamente. Senão, o app sugere.' }) : '') +
+                // 1.9.36 — o desligamento que o dono pediu pra função "Ao vivo agora":
+                // desligado aqui, a pessoa PARA de receber o convite pra assistir. A
+                // seção em si continua existindo pra quem quiser olhar — o que o toggle
+                // controla é o AVISO, que é o que incomoda quem não quer.
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-live-alerts', label: 'Avisar quando um placar ao vivo começar', icon: '🔴', checked: true, color: '#ef4444', desc: 'Você recebe um convite para assistir quando um jogo do seu torneio começa a ser marcado ao vivo.' }) : '') +
               '</div>' +
               '<div id="presence-mute-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;">' +
                 '<div style="flex:1 1 100%;">' +
@@ -9085,6 +9093,7 @@ window._profileHydrateNameConflict = function () {
       var notifyEmail = _chk('profile-notify-email', true);
       var notifyWhatsApp = _chk('profile-notify-whatsapp', false);
       var presenceAutoCheckin = _chk('profile-presence-auto-checkin', false);
+      var liveAlerts = _chk('profile-live-alerts', true);
       var hintsEnabled = _chk('profile-hints-enabled', true);
       // v2.4.3: privacidade de contato (default OFF).
       var omitEmail = _chk('profile-omit-email', false);
@@ -9364,6 +9373,7 @@ window._profileHydrateNameConflict = function () {
       payload.presenceMuteDays = muteDays;
       payload.presenceMuteUntil = muteUntil;
       payload.presenceAutoCheckin = presenceAutoCheckin;
+      payload.liveAlerts = liveAlerts;
       // v2.4.3: privacidade de contato (default OFF).
       payload.omitEmail = omitEmail;
       payload.omitPhone = omitPhone;

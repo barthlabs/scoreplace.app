@@ -944,6 +944,9 @@ const SUITES = [
   // no pódio do ranking da própria categoria — a regra por fração era inerte sem o
   // tamanho do campo, que o footprint não traz.
   'tests/categoria-letra-fontes.test.js',
+  // 🔴 "Ao vivo agora": quando a vitrine existe, em que ordem, quem é convidado a
+  // assistir — e a trava estrutural de que quem assiste NÃO escreve no placar alheio.
+  'tests/ao-vivo-agora.test.js',
 ];
 
 let failed = [];

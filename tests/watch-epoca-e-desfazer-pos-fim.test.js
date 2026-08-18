@@ -114,6 +114,11 @@ ok(!!undoSrc, 'função _liveScoreUndoLastPoint extraída do arquivo (casamento 
 function makeUndoScope(initial) {
   const toasts = [];
   const factory = new Function('window', 'state', 'showNotification', '_render', '_watchNotify', 'deps',
+    // 1.9.36: a função extraída passou a consultar `_spectate` (o modo de quem só
+    // ASSISTE o placar dos outros). O escopo fabricado aqui precisa declará-lo, senão
+    // o teste explode num ReferenceError que nada tem a ver com o que ele mede.
+    // Falso = o caso deste teste: quem está com o placar na mão, jogando.
+    'var _spectate = false;\n' +
     'var _resultSaved = deps.resultSaved;\n' +
     'var _liveRecId = deps.liveRecId;\n' +
     'var _matchStartTime = deps.mst, _matchEndTime = deps.met;\n' +

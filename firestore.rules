@@ -503,6 +503,23 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // ─── Placares AO VIVO (vitrine "Ao vivo agora") ──────────────────────────
+    // LEITURA ABERTA de propósito: a regra do dono é "qualquer um pode clicar e ver".
+    // O doc não guarda nada além do que já está na tela de quem assiste — nomes em
+    // quadra, placar e o ponto a ponto da partida.
+    // ESCRITA: só autenticado, e só quem ABRIU o placar continua escrevendo nele —
+    // sem isso, um espectador poderia sobrescrever o placar de quem está em quadra
+    // (que é justamente o que o modo espectador promete que não acontece).
+    match /liveScores/{liveId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.createdBy == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.createdBy == request.auth.uid;
+    }
+
     // ─── Friend requests ─────────────────────────────────────────────────────
     // TODO(security): scope read/write to the request's from/to uids once
     // the doc structure is cemented. Authed-only for now.

@@ -404,6 +404,26 @@ function renderBracket(container, tournamentId, isInline) {
 
   // Pre-load player photos from Firestore, then update bracket images
   _preloadPlayerPhotos(t).then(function() {
+    // ── 🔴 AO VIVO AGORA, NO TOPO DA CHAVE (1.9.36) ──────────────────────────
+    // A MESMA seção da dashboard, filtrada por este torneio (pedido do dono). Mora
+    // aqui, e não dentro do HTML da chave, porque a chave tem VÁRIOS caminhos de
+    // pintura (fase revelada, torneio não encontrado, multifase…) e emendar o slot em
+    // cada um deles é a receita de esquecer um. Este `.then` roda depois de qualquer
+    // um deles — é a porta única. [[feedback_sweep_all_render_sites]]
+    try {
+      if (window.__brLiveUnsub) { window.__brLiveUnsub(); window.__brLiveUnsub = null; }
+      var _slotLive = document.getElementById('bracket-live-widget');
+      if (!_slotLive) {
+        _slotLive = document.createElement('div');
+        _slotLive.id = 'bracket-live-widget';
+        if (container.firstChild) container.insertBefore(_slotLive, container.firstChild);
+        else container.appendChild(_slotLive);
+      }
+      if (typeof window._renderLiveNowInto === 'function') {
+        window.__brLiveUnsub = window._renderLiveNowInto('bracket-live-widget', { tournamentId: t.id });
+      }
+    } catch (_eLive) {}
+
     // ── 1.8.29: OS NOMES TAMBÉM SE ATUALIZAM AQUI ─────────────────────────────
     // Este `.then` trocava só FOTO. O nome era resolvido no render SÍNCRONO, antes de os
     // perfis chegarem, e nada mais o repintava — então a chave do "Duplas Mistas Sorteadas"

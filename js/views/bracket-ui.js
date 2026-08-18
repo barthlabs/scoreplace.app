@@ -3844,6 +3844,16 @@ window._resolveLiveScoring = function(rawSc, sportName) {
 
 window._openLiveScoring = function(tId, matchId, opts) {
   var isCasual = !!(opts && opts.casual);
+  // ── MODO ESPECTADOR (1.9.36) ──────────────────────────────────────────────────
+  // Ordem do dono: quem clica no jogo "ve o placar ao vivo sendo preenchido pelos
+  // participantes (mesma renderizacao do placar ao vivo)". Então NÃO existe uma segunda
+  // tela de "assistir": é ESTA, com o estado vindo do doc público (`liveScores`) em vez
+  // do toque na quadra. O que muda é só a direção do dado — aqui ele só ENTRA.
+  // ⚠️ A trava de escrita é em DOIS níveis, de propósito: (a) `_addPoint` sai na 1ª
+  // linha, que é a única porta de mutação do placar; (b) os handlers de janela viram
+  // no-op e o CSS esconde/desarma os controles. Nível (b) sozinho é aparência; nível
+  // (a) sozinho deixaria botão vivo que não faz nada.
+  var _spectate = !!(opts && opts.spectate);
   var t = null, m = null;
   if (!isCasual) {
     t = window._findTournamentById(tId);
@@ -4601,6 +4611,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Add point to player
   function _addPoint(player) {
+    if (_spectate) return;              // assistindo: o placar é dos participantes
     if (state.isFinished) return;
     // ⚠️ BLOQUEADO **E RENDERIZA** — sair calado aqui MATA a partida. Estes dois
     // estados só se resolvem numa TELA (o diálogo de empate e o seletor de sacador);
@@ -5112,6 +5123,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // opts.keepOpen  — don't remove the overlay (used by restart path)
   // opts.silent    — don't show the "Resultado salvo" toast
   function _saveResult(opts) {
+    // ⚠️ ESPECTADOR NÃO GRAVA NADA. Sem isto, o modo casual (que é como a tela de
+    // quem assiste abre) salvaria a partida dos OUTROS no histórico de quem só
+    // estava olhando — e ela contaria como jogo dele.
+    if (_spectate) return;
     opts = opts || {};
     if (_resultSaved) {
       if (!opts.keepOpen) {
@@ -8179,6 +8194,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Sync local state to Firestore (debounced 300ms)
   function _syncLiveState() {
+    // ⚠️ A vitrine vem ANTES do guard de sala: em TORNEIO não existe `_casualDocId`, e
+    // era exatamente por isso que nada de torneio aparecia ao vivo pra ninguém.
+    try { _lnSync(); } catch (e) {}
     if (!_casualDocId || !window.FirestoreDB || !window.FirestoreDB.db) return;
     if (_isRemoteUpdate) return; // Don't echo back remote updates
     clearTimeout(_syncTimer);
@@ -8463,6 +8481,115 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _startFirestoreListener();
   }
 
+  // ── AO VIVO AGORA — esta partida entra na vitrine de quem quer assistir ────────
+  // Pedido do dono (18/ago/2026). O casual já sincronizava (a sala tem `liveState`),
+  // mas SÓ o casual e SÓ pra quem está na sala. Aqui a partida — casual OU de torneio —
+  // publica um espelho em `liveScores`, que é o que a seção "Ao vivo agora" lista e o
+  // espectador acompanha. Ver js/views/live-now.js.
+  // ⚠️ Espelho é de MÃO ÚNICA: nada aqui LÊ de volta o doc público. Quem manda no placar
+  // é esta tela (e, no casual, a sala) — o espectador nunca escreve.
+  var _lnId = null, _lnPub = false, _lnTimer = null;
+  function _lnResolveId() {
+    if (_lnId) return _lnId;
+    if (typeof window._liveNowId !== 'function') return null;
+    if (isCasual) { _lnId = _casualDocId ? window._liveNowId('casual', _casualDocId) : null; }
+    else if (t && m) { _lnId = window._liveNowId('tournament', t.id, m.id); }
+    return _lnId;
+  }
+  function _lnInfo() {
+    // uids de quem está em quadra: é por eles que a seção põe "meu jogo"/"amigo" no topo
+    var _uids = [];
+    if (!isCasual && m) {
+      [].concat(m.team1Uids || [], m.team2Uids || [], [m.p1Uid, m.p2Uid])
+        .forEach(function (u) { if (u && _uids.indexOf(u) === -1) _uids.push(u); });
+    } else if (Array.isArray(_knownPlayerUids)) {
+      _knownPlayerUids.forEach(function (u) { if (u && _uids.indexOf(u) === -1) _uids.push(u); });
+    }
+    var _tit = isCasual ? casualTitle
+      : [m && m.groupName, m && m.roundName, (m && m.matchNumber != null) ? ('Jogo ' + m.matchNumber) : '']
+          .filter(Boolean).join(' · ');
+    return {
+      id: _lnResolveId(),
+      kind: isCasual ? 'casual' : 'tournament',
+      tournamentId: isCasual ? '' : String((t && t.id) || ''),
+      tournamentName: isCasual ? '' : ((t && t.name) || ''),
+      matchId: isCasual ? '' : String((m && m.id) || ''),
+      title: _tit,
+      sport: isCasual ? (opts && opts.sportName) || '' : ((t && t.sport) || ''),
+      p1Players: p1Players.slice(),
+      p2Players: p2Players.slice(),
+      playerUids: _uids,
+      scoring: { type: sc.type || '', gamesPerSet: sc.gamesPerSet || null, setsToWin: sc.setsToWin || null,
+                 countingType: sc.countingType || '' },
+      startedAt: _matchStartTime || Date.now(),
+      state: _serializeState()
+    };
+  }
+  function _lnSync() {
+    if (_spectate) return;              // espectador NÃO publica — ele só lê
+    if (typeof window._liveNowPublish !== 'function') return;
+    if (!_lnResolveId()) return;
+    // 1ª vez: publica o cabeçalho E convida os inscritos do torneio (uma vez só)
+    if (!_lnPub) {
+      _lnPub = true;
+      var info = _lnInfo();
+      window._liveNowPublish(info);
+      if (typeof window._liveNowHeartbeat === 'function') window._liveNowHeartbeat(info.id);
+      if (!isCasual && t && typeof window._liveNowNotifyEnrolled === 'function') {
+        try { window._liveNowNotifyEnrolled(t, info); } catch (e) {}
+      }
+      return;
+    }
+    clearTimeout(_lnTimer);
+    _lnTimer = setTimeout(function () {
+      var _id = _lnResolveId(); if (!_id) return;
+      if (state.isFinished) {
+        if (typeof window._liveNowStopHeartbeat === 'function') window._liveNowStopHeartbeat();
+        window._liveNowFinish(_id, _serializeState());
+      } else {
+        window._liveNowTouch(_id, _serializeState());
+      }
+    }, 600);
+  }
+  window._liveNowSyncCurrent = _lnSync;   // pro teardown do overlay alcançar
+
+  // ── ESPECTADOR: o estado ENTRA do doc público e a tela vira leitura ────────────
+  // Mesmo render, mesma placa, mesmas cores — o que muda é a direção do dado. E a
+  // trava visual é por SELETOR de ação, não por id de botão: id muda de nome, a
+  // intenção (`onclick` que chama um mutador) não.
+  if (_spectate) {
+    var _cssSpec = document.getElementById('sp-spectate-css');
+    if (!_cssSpec) {
+      _cssSpec = document.createElement('style');
+      _cssSpec.id = 'sp-spectate-css';
+      _cssSpec.textContent =
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreUndoLastPoint"],' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreGoToSetup"],' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreRestart"],' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreFinish"],' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreMinus"],' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreReset"],' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScoreUnpair"]' +
+        '{display:none !important;}' +
+        '#live-scoring-overlay[data-spectate="1"] [onclick*="_liveScorePoint"]{pointer-events:none !important;}';
+      document.head.appendChild(_cssSpec);
+    }
+    if (opts && opts.liveId && window.FirestoreDB && window.FirestoreDB.db) {
+      try {
+        window.__liveSpecUnsub = window.FirestoreDB.db.collection('liveScores').doc(opts.liveId)
+          .onSnapshot(function (doc) {
+            if (!doc.exists) return;
+            var _d = doc.data() || {};
+            if (_d.state) {
+              _isRemoteUpdate = true;
+              try { _applyRemoteState(_d.state); } catch (e) {} finally { _isRemoteUpdate = false; }
+            }
+            try { _render(); } catch (e) {}
+          }, function () {});
+      } catch (e) {}
+    }
+  }
+
   // ── Global handlers (attached to window for onclick access) ──
   window._liveScorePoint = function(player) { _addPoint(player); _watchNotify(); };
 
@@ -8705,6 +8832,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // próximo hello/ponto; no "jogar novamente" ficaria com o placar anterior.
   _watchNotify();
   window._liveScoreFinish = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     // For simple scoring: finish and set winner
     if (state.currentGameP1 === state.currentGameP2 && state.currentGameP1 === 0) {
       showNotification(_t('bui.emptyScore'), _t('bui.emptyScoreMsg'), 'warning');
@@ -8727,6 +8855,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Minus handler: subtract a point (correction)
   window._liveScoreMinus = function(player) {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     if (state.isFinished) return;
     if (state.tieRulePending) return;
     // Haptic distintivo do +ponto — padrão de 2 pulsos curtos para sinalizar
@@ -8772,6 +8901,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // atualmente não temos como corrigir". Agora basta clicar ↶ Desfazer no
   // header da tela de placar e o estado volta exatamente pra antes do tap.
   window._liveScoreUndoLastPoint = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     if (state.tieRulePending) {
       showNotification('Aguarde', 'Termine a transição de set antes de desfazer.', 'warning');
       return;
@@ -8839,6 +8969,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Reset handler: zero all points, restart from scratch — always available
   window._liveScoreReset = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     showConfirmDialog(
       'Reiniciar contagem?',
       'Deseja reiniciar a contagem? Todos os pontos marcados serão zerados.',
@@ -9353,6 +9484,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Restart handler: reset score and optionally re-shuffle teams
   window._liveScoreRestart = function(skipConfirm, shuffleOverride) {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     var shuffleChk = document.getElementById('chk-shuffle-teams');
     // Do relógio (skipConfirm) o "re-sortear" vem no override; senão lê o
     // checkbox do celular.
@@ -9462,6 +9594,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // re-parear manualmente ou re-sortear. Ideal para séries Rei/Rainha e
   // re-equilíbrio de forças entre partidas.
   window._liveScoreUnpair = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     showConfirmDialog(
       'Desparear jogadores?',
       'O resultado será salvo. As duplas serão desfeitas e você poderá montar novos times livremente.',
@@ -9563,6 +9696,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // status:'finished' no doc — essencial para o histórico de partidas.
   // Multi-device: outros clientes reagem a setupAt mudando (onSnapshot).
   window._liveScoreUnpairFromStats = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     if (state.isFinished && !_resultSaved) {
       try { _saveResult({ keepOpen: true, silent: true }); } catch(e) {}
     }
@@ -9779,6 +9913,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
 
   window._liveScoreGoToSetup = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     var cu = window.AppStore && window.AppStore.currentUser;
     var myUid = cu && cu.uid;
     // Conta UIDs reais na partida pra decidir solo vs multiplayer.
@@ -9892,6 +10027,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // bracket, close the overlay, and clean up listeners. The user lands on the
   // bracket view already anchored to the match card (see _rerenderBracket).
   window._liveScoreConfirmTournament = function() {
+    if (_spectate) return;   // assistindo: nada aqui muda a partida de ninguém
     if (isCasual) return;
     if (!state.isFinished) return;
     try { _saveResult({ keepOpen: true, silent: false }); } catch(e) {}
@@ -9931,6 +10067,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // bar never crops the pinned bottom action buttons.
   var overlay = document.createElement('div');
   overlay.id = 'live-scoring-overlay';
+  if (_spectate) overlay.setAttribute('data-spectate', '1');
   // v1.6.88 (dono): dica NUNCA aparece durante o placar ao vivo. hints.js já se
   // recusa a criar dica com este overlay no DOM; aqui matamos o balão que já
   // estivesse aberto no instante do clique que abriu o placar.

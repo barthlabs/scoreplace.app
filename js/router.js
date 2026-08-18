@@ -383,6 +383,17 @@ function initRouter() {
       case 'notifications':
         renderNotifications(viewContainer);
         break;
+      // 🔴 #live/<id> — assistir um placar ao vivo (modo espectador). Rota própria pra
+      // que o convite do sininho e o e-mail levem direto ao jogo, sem passar pela lista.
+      case 'live':
+        if (cleanParam && typeof window._openLiveSpectator === 'function') {
+          window.location.replace('#dashboard');
+          setTimeout(function () { window._openLiveSpectator(cleanParam); }, 60);
+          return;
+        }
+        window.location.replace('#dashboard');
+        return;
+
       case 'casual':
         if (cleanParam && typeof window._renderCasualJoin === 'function') {
           window._renderCasualJoin(viewContainer, cleanParam);
