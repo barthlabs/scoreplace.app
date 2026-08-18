@@ -1998,3 +1998,41 @@ html, body,
 .cards-grid {
   gap: clamp(0.5rem, 0.4rem + 0.5vw, 1rem);
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CHAVE: O QUE SE REPETE VIRA CLASSE, E O QUE ESTÁ FORA DA TELA NÃO É DESENHADO
+   (1.9.39 — bronca do dono: "atrasos absurdos", "tela preta")
+
+   MEDIDO no navegador, na chave real do Confra (102 jogos, ~6.000 nós):
+     • montar o HTML custa 70ms — o custo é DEPOIS: estilo + layout;
+     • o MESMO html sem os `style="…"` inline pinta em 766ms contra 2.351ms;
+       ou seja o estilo inline é ~2/3 do custo (905 KB → 403 KB de HTML);
+     • os 12 `style` mais repetidos somam 289 KB dos 453 KB de estilo inline.
+   Daí as duas medidas abaixo. Elas são independentes e somam.
+
+   1) As classes `sp-mc-*` / `sp-av` substituem os `style` ESTÁTICOS que se repetem
+      centenas de vezes no card de jogo. O que depende de ESTADO (cor de vencedor,
+      âmbar de proposta) continua inline — é ele que muda por jogo.
+   2) `content-visibility:auto` deixa o navegador PULAR o desenho do que está fora
+      da tela; `contain-intrinsic-size` reserva o espaço pra a barra de rolagem não
+      dançar. Nada sai do DOM: busca, filtro "só meus jogos", rolar-até-meu-jogo e a
+      hidratação de nomes continuam achando tudo — foi por isso que escolhi este
+      caminho em vez de virtualizar a lista.
+      ⚠️ Só em CARD DE JOGO e CAIXA DE GRUPO. Nos chips (spans pequenos) reservar
+      altura fixa faria a linha pular. Medido: 2.467ms → 1.564ms.
+   ───────────────────────────────────────────────────────────────────────────── */
+.sp-mc-nm{font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;}
+.sp-mc-side{display:flex;align-items:center;gap:5px;overflow:hidden;}
+.sp-mc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;}
+.sp-mc-col{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+.sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
+.sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
+.sp-mc-sc{display:flex;align-items:center;flex-shrink:0;}
+.sp-mc-inp{width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;}
+.sp-av{width:var(--sp-av,20px);height:var(--sp-av,20px);border-radius:50%;flex-shrink:0;object-fit:cover;}
+.sp-av-p{opacity:0.95;}
+.sp-mc-box{flex:1;min-width:0;height:var(--sp-box-h,1.05rem);overflow:hidden;display:flex;align-items:center;}
+
+#view-container div[id^="card-"] { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+#view-container [data-group-box] { content-visibility: auto; contain-intrinsic-size: auto 520px; }

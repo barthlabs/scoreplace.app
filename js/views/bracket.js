@@ -3465,7 +3465,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   // vazio de VERDADE: nem uid que resolva, nem rótulo. Aí sim o slot está aberto.
   if (members.length === 0) return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
 
-  let html = members.length > 1 ? '<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden;">' : '';
+  let html = members.length > 1 ? '<div class="sp-mc-col">' : '';
   members.forEach(function(_mb) {
     // `_mb` = { uid, nome }. `nome` pode vir VAZIO quando há uid e o perfil ainda não
     // chegou — o span leva `data-uid-name` e é preenchido pela hidratação (nunca por
@@ -3497,17 +3497,19 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // impede que o nome vire ilegível pra quem só está LENDO a chave).
     const _nomeMaxRem = members.length > 1 ? 0.78 : 0.85;
     const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
-    const _boxNome = `flex:1;min-width:0;height:${(_nomeMaxRem * 1.35).toFixed(2)}rem;overflow:hidden;display:flex;align-items:center;`;
+    // 1.9.39: o volume desta caixa virou CLASSE (`sp-mc-box`); só a ALTURA, que depende
+    // do teto de fonte do nome, continua inline — como variável, que é o mínimo possível.
+    const _boxNome = `--sp-box-h:${(_nomeMaxRem * 1.35).toFixed(2)}rem`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
-        `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(dispName)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;opacity:0.95;">` +
-        `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:#fbbf24;white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
+        `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
+        `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:#fbbf24;white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
     }
-    html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;">` +
-      `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(name)}" style="width:${size};height:${size};border-radius:50%;flex-shrink:0;object-fit:cover;">` +
+    html += `<div class="sp-mc-side">` +
+      `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
       // v1.6.98 (decisão do dono): o nome no CARD DA CHAVE não abre mais ficha —
       // "faça funcionar na classificação e não na chave". Na quadra o card é área de
       // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome
@@ -3518,7 +3520,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
       // o perfil chega — e com o nome ATUAL, não com o que foi gravado no sorteio.
       // A coroa fica FORA do span: a hidratação escreve `textContent` e apagaria qualquer
       // filho. Sem uid (fictício) segue o caminho antigo, onde o rótulo é a identidade.
-      `<div style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;">${
+      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" class="sp-mc-nm">${
         _slotUid
           ? `<span data-uid-name="${window._safeHtml(_slotUid)}">${window._safeHtml(name)}</span>` +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&
@@ -3686,7 +3688,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
-        style="width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;"
+        class="sp-mc-inp"
         oninput="window._highlightWinner('${_esc(m.id)}')">${p1TbInput}`
     : null;
   // v0.17.1: quando pending, lê scoreP1/scoreP2 (ou sets) do _pr em vez do m.
@@ -3725,7 +3727,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Score = showInputs
     ? `<input type="number" id="s2-${m.id}" min="0" placeholder="0"
-        style="width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;"
+        class="sp-mc-inp"
         oninput="window._highlightWinner('${_esc(m.id)}')">${p2TbInput}`
     : null;
   const _p2Display = hasPending
@@ -3756,7 +3758,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     <div style="${rowStyle(p1IsWinner, 'p1')}">
       ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
       ${_p1RepBadge}${_p1ByeBadge}
-      <div id="score-p1-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
+      <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${showInputs ? p1Score : (p1ScoreVal || '')}
       </div>
     </div>`;
@@ -3765,12 +3767,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     <div style="${rowStyle(p2IsWinner, 'p2')}">
       ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
       ${_p2RepBadge}${_p2ByeBadge}
-      <div id="score-p2-${m.id}" style="display:flex;align-items:center;flex-shrink:0;">
+      <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${showInputs ? p2Score : (p2ScoreVal || '')}
       </div>
     </div>`;
 
-  const vsRow = `<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>`;
+  const vsRow = `<div class="sp-mc-vs">VS</div>`;
 
   // Format set scores for winner badge
   const _isFixedSetMatch = m.fixedSet || useFixedSet;
@@ -4109,12 +4111,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       </div>`;
   } else {
     _headerHtml = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">
+      <div class="sp-mc-head">
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${readyBadge}
         </div>
-        <div id="header-btns-${m.id}" class="btn-row" style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;">${_headerActions}</div>
+        <div id="header-btns-${m.id}" class="btn-row" class="sp-mc-acts">${_headerActions}</div>
       </div>`;
   }
 
@@ -6179,7 +6181,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                  '<div style="width:28px;height:28px;border-radius:50%;background:rgba(148,163,184,0.12);border:1px dashed ' + _accent + ';display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.9rem;flex-shrink:0;">?</div>' +
                  '<div style="flex:1;color:var(--text-muted);font-weight:600;font-size:0.88rem;">' + _t('bracket.tbd') + '</div>' +
                '</div>';
-    var _vs = '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>';
+    var _vs = '<div class="sp-mc-vs">VS</div>';
     return '<div style="background:var(--bg-card);border:1px dashed ' + _accent + ';border-radius:12px;padding:10px;opacity:0.7;min-width:260px;max-width:320px;">' +
              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
                '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:700;">' + _t('bracket.matchNum', {n: matchNum}) + '</span>' +

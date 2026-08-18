@@ -92,13 +92,21 @@ console.log('\n3. A caixa tem dimensão própria (senão o fit não tem contra o
   const src = ler('js/views/bracket.js');
   // O pai do .sp-name-fit é quem define o espaço; sem altura/overflow o
   // _fitOne devolve "layout pendente" pra sempre e nada é ajustado.
-  ok(/_boxNome\s*=/.test(src), 'a chave declara o estilo da caixa num ponto único');
+  // 1.9.39: a caixa deixou de ser `style="…"` repetido 400× e virou a CLASSE
+  // `.sp-mc-box` (peso de HTML era 2/3 do custo de pintar a chave). O invariante não
+  // mudou de conteúdo, mudou de ENDEREÇO — então é lá que ele é cobrado. O que segue
+  // inline é só a ALTURA, como variável, porque ela depende do teto de fonte do nome.
+  ok(/_boxNome\s*=/.test(src), 'a chave declara a caixa num ponto único');
   const box = (src.match(/const _boxNome\s*=\s*`([^`]*)`/) || [])[1] || '';
-  ok(/overflow\s*:\s*hidden/.test(box), 'a caixa contém o conteúdo (overflow:hidden)');
-  ok(/height\s*:/.test(box) && /rem/.test(box),
+  ok(/--sp-box-h\s*:/.test(box) && /rem/.test(box),
      'a ALTURA da caixa é em rem — herda a escala por área, não px cravado');
-  ok(/min-width\s*:\s*0/.test(box),
+  ok(/class="sp-mc-box"/.test(src), 'quem desenha o nome usa a caixa (.sp-mc-box)');
+  const css = ler('css/components.css');
+  const regra = (css.match(/\.sp-mc-box\s*\{([^}]*)\}/) || [])[1] || '';
+  ok(/overflow\s*:\s*hidden/.test(regra), 'a caixa contém o conteúdo (overflow:hidden)');
+  ok(/min-width\s*:\s*0/.test(regra),
      'min-width:0 — sem isto o flex recusa encolher e a caixa estoura a linha');
+  ok(/height\s*:\s*var\(--sp-box-h/.test(regra), 'a classe consome a altura declarada pelo render');
 }
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') +
