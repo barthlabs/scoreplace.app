@@ -311,7 +311,11 @@ function renderDashboard(container) {
   // (cache→servidor no boot) traz os mesmos torneios.
   try {
     var _dtsR = (window.AppStore && window.AppStore.tournaments) || [];
-    window._dashDataSig = _dtsR.length + '|' + _dtsR.map(function(t){ return t && t.id; }).join(',');
+    // ⚠️ FÓRMULA ÚNICA (1.9.35): carimbar aqui à mão foi o que quebrou — este lado ficou
+    // em `ids` e o gate do _softRefreshView passou a comparar `ids+updatedAt` (v3.1.26).
+    // Formatos diferentes nunca batem: o gate via "mudou" a cada snapshot e a dashboard
+    // re-renderizava em loop (as piscadas pretas). Ver window._dashDataSigFor (store.js).
+    window._dashDataSig = window._dashDataSigFor(_dtsR);
   } catch (e) {}
 
   // Filtros Básicos

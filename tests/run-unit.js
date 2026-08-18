@@ -936,6 +936,14 @@ const SUITES = [
   // gate de assinatura do detalhe. Medido no doc real do Confra: 7 chips na tela + 142 de
   // 142 linhas da classificação geral.
   'tests/rotulo-orfao-nao-vence-o-nome.test.js',
+  // a dashboard piscando PRETO depois de carregada: o gate por assinatura estava sempre
+  // aberto porque o lado que CARIMBA e o lado que COMPARA usavam formatos diferentes —
+  // re-render a cada snapshot, sem nem passar pelo debounce.
+  'tests/dashboard-nao-repinta-sozinha.test.js',
+  // de onde sai a LETRA (medalha, nome da competição como reserva) e o "+" de quem está
+  // no pódio do ranking da própria categoria — a regra por fração era inerte sem o
+  // tamanho do campo, que o footprint não traz.
+  'tests/categoria-letra-fontes.test.js',
 ];
 
 let failed = [];

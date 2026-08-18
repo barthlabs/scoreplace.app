@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.34';
+window.SCOREPLACE_VERSION = '1.9.35';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -586,6 +586,14 @@ window.SP_SINAL_MIN = 0.35;    // aproveitamento na categoria DE CIMA que susten
 window.SP_DOMINA_PCT = 0.75;   // ganhar quase tudo na PRÓPRIA categoria também dá "+"
 window.SP_AFUNDA_PCT = 0.35;   // nao se firmou onde joga: da o "-" (Camila faz 31% na C)
 window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá "-"
+// ── TOPO DA TABELA, MESMO SEM SABER O TAMANHO DELA (1.9.35) ─────────────────────
+// Ordem do dono: _"estou no centro de D, mas estou no topo da tabela do ranking social D,
+// entao deveria deslocar um pouco para alem do D e ganhar o +"_. A regra por FRAÇÃO
+// (SP_TOPO_FRAC) precisa do tamanho do campo, que o footprint nunca traz — então ela
+// estava inerte e ninguém recebia sinal por posição. O pódio de um ranking não precisa
+// da fração: 1º, 2º ou 3º é topo em qualquer tabela que valha o nome.
+// ⚠️ Vale só pra RANKING (em torneio a posição lida é a do GRUPO) e só na categoria BASE.
+window.SP_TOPO_ABS = 3;
 // ── QUANDO A LETRA É SUSTENTADA, E QUANDO É PALPITE ─────────────────────────────
 // A letra é CREDENCIAL: com ela a pessoa se inscreve, e errar pra cima a exclui de torneio
 // que ela pode jogar. Então ela precisa de LASTRO — e "lastro" tem que ser um número, igual
@@ -593,17 +601,33 @@ window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá 
 window.SP_BASE_TORNEIOS = 2;   // torneios na categoria que fazem a letra deixar de ser palpite
 window.SP_BASE_JOGOS = 6;      // ou este tanto de jogos nela (2× a presença mínima)
 // `disputas` = [{ categoria: 'C', tipo: 'ranking'|'torneio', wins: n, losses: n }]
+// A LETRA DENTRO DE UM TEXTO — porta única (1.9.35). Era função interna daqui, e o
+// `_lzDisputasDoImport` passou a precisar da MESMA pergunta ("esse texto diz uma letra?")
+// pra decidir a reserva pelo nome da competição. Duas cópias da regra divergem no
+// primeiro ajuste. [[feedback_unify_dual_entry_points]]
+// MEDALHA É NOME DE CATEGORIA (1.9.35). Decisão do dono, sobre a série MÃES do Paineiras:
+// _"na serie que ela participou de maes as categorias eram bronze, prata e ouro. D, C e B"_.
+// Sem isto, "T&F Special Edition - torneio MÃES - Bronze" não dizia letra nenhuma e a
+// atleta ficava sem categoria na ficha. A escada é a mesma dos rótulos: Ouro=B, Prata=C,
+// Bronze=D. ⚠️ É uma CONVENÇÃO de quem nomeia o torneio, não uma lei — quando o nome for
+// desconhecido, o caminho que o dono definiu é olhar quem mais jogou aquela categoria
+// (adversários e parceiros com categoria conhecida) e concluir dali.
+window._LZ_MEDALHA_LETRA = { OURO: 'B', PRATA: 'C', BRONZE: 'D' };
+window._lzLetraDeTexto = function (s) {
+  var t = String(s || '').trim();
+  // ⛔ faixa etária não é categoria: "46 a 50 anos" casava o "a" como categoria A e
+  // rotulava o Fernando (D+) como A. E "Rodada: N" é a rodada do ranking.
+  if (/\d+\s*a\s*\d+/i.test(t) || /\banos?\b/i.test(t)) return null;
+  if (/^\s*rodada\b/i.test(t)) return null;
+  var T = t.toUpperCase();
+  var m = T.match(/\b(FUN|[A-D])\b/);
+  if (m) return m[1];
+  var med = T.match(/\b(OURO|PRATA|BRONZE)\b/);
+  return med ? window._LZ_MEDALHA_LETRA[med[1]] : null;
+};
 window._lzCategoriaComSinal = function (disputas) {
   var ORD = { FUN: 4, D: 3, C: 2, B: 1, A: 0 };
-  function letra(s) {
-    var t = String(s || '').trim();
-    // ⛔ faixa etária não é categoria: "46 a 50 anos" casava o "a" como categoria A e
-    // rotulava o Fernando (D+) como A. E "Rodada: N" é a rodada do ranking.
-    if (/\d+\s*a\s*\d+/i.test(t) || /\banos?\b/i.test(t)) return null;
-    if (/^\s*rodada\b/i.test(t)) return null;
-    var m = t.toUpperCase().match(/\b(FUN|[A-D])\b/);
-    return m ? m[1] : null;
-  }
+  var letra = window._lzLetraDeTexto;
   // ⛔ MISTA É OUTRA MODALIDADE. Somada à individual, distorce: a `Mista D` (0-3) da Kelly
   // derrubava a D dela de 57% pra 40% e a tirava do lugar certo.
   function mista(s) { return /\bmist[ao]\b/i.test(String(s || '')); }
@@ -660,9 +684,10 @@ window._lzCategoriaComSinal = function (disputas) {
   // RECALCULADO na base nova — carimbar o sinal da base velha era mentir duas vezes.
   function apura(base) {
   var naBase = lista.filter(function (x) { return x.l === base; });
-  var bw = 0, bp = 0, pos = null;
+  var bw = 0, bp = 0, pos = null, topoRanking = false;
   naBase.forEach(function (x) {
     bw += x.w; bp += x.p;
+    if (x.tipo === 'ranking' && x.pos != null && x.pos <= window.SP_TOPO_ABS) topoRanking = true;
     if (x.pos != null && x.total != null && x.total > 1) {
       var frac = (x.pos - 1) / (x.total - 1);
       if (pos == null || frac < pos) pos = frac;
@@ -681,7 +706,7 @@ window._lzCategoriaComSinal = function (disputas) {
   // como a pessoa vai nela. Exigir 4 aqui deixava sem sinal justamente quem tem pouco jogo
   // na categoria — que é quem mais precisa do "-".
   var domina = (bj >= window.SP_MIN_PRESENCA && bpct != null && bpct >= window.SP_DOMINA_PCT) ||
-               (pos != null && pos <= window.SP_TOPO_FRAC);
+               (pos != null && pos <= window.SP_TOPO_FRAC) || topoRanking;
   var afunda = (bj >= window.SP_MIN_PRESENCA && bpct != null && bpct <= window.SP_AFUNDA_PCT) ||
                (pos != null && pos >= (1 - window.SP_TOPO_FRAC));
 
@@ -692,8 +717,10 @@ window._lzCategoriaComSinal = function (disputas) {
   return { categoria: base, sinal: sinal, rotulo: base + sinal, afunda: afunda, basePre: base,
            acimaJogos: aj, acimaPct: aj ? Math.round(100 * aw / aj) : null,
            naPct: bj ? Math.round(100 * bw / bj) : null,
-           porque: busca ? 'busca a de cima' : (domina ? 'domina a própria'
-                 : (afunda ? 'base da categoria' : 'no lugar')) };
+           porque: busca ? 'busca a de cima'
+                 : (topoRanking ? 'topo da tabela do ranking'
+                 : (domina ? 'domina a própria'
+                 : (afunda ? 'base da categoria' : 'no lugar'))) };
   }
 
   // ── 3. NÃO SE FIRMOU **REBAIXA** — não basta carimbar (1.9.32) ──────────────────
@@ -758,14 +785,52 @@ window._lzCategoriaComSinal = function (disputas) {
 // categoria, o tipo (official = torneio) e o saldo de vitórias/derrotas.
 window._lzDisputasDoImport = function (imp) {
   if (!imp || !Array.isArray(imp.footprint)) return [];
-  return imp.footprint.filter(function (f) { return f && f.categoryRaw; }).map(function (f) {
-    return { categoria: f.categoryRaw, tipo: f.official ? 'torneio' : 'ranking',
+  var fps = imp.footprint.filter(function (f) { return f && (f.categoryRaw || f.name); });
+  // ── RESERVA: O NOME DA COMPETIÇÃO, E SÓ QUANDO NÃO SOBRA NADA (1.9.35) ──────────
+  // Tem gente cuja categoria NUNCA traz letra — medido: as 3 competições de uma atleta
+  // eram "Rodada: 10", "Fem I" e "T&F Special Edition - torneio MÃES - Bronze". Nenhuma
+  // diz A–D, então a ficha mostrava "—": sem categoria nenhuma. Mas o NOME às vezes diz
+  // ("Social Fem Iniciante / D- | 2026").
+  // ⚠️ A reserva SÓ entra pra quem ficaria sem letra alguma. Medido nos 14 com leitura:
+  // ligar o nome pra todo mundo mexia em quem JÁ tem letra (uma C- virava C+) — e subir
+  // a categoria de quem já tem uma é justamente o erro que tira a pessoa do torneio que
+  // ela pode jogar. A reserva responde "nada" → "alguma coisa", nunca reavalia ninguém.
+  // Ver [[project_categoria_ranking_vs_torneio]].
+  var _L = window._lzLetraDeTexto;
+  var temLetra = fps.some(function (f) { return _L(f.categoryRaw); });
+  // ── MINHA POSIÇÃO NA TABELA DO RANKING (1.9.35) ────────────────────────────────
+  // `f.position` vem null, mas a linha DA PESSOA está dentro de `standings[].rows[]`
+  // (a extensão captura o topo da tabela + a linha de quem foi lido) — é de lá que sai
+  // "estou no topo do ranking". Casa por HANDLE, nunca por nome.
+  // ⚠️ SÓ PARA RANKING. Em torneio, `pos` é a colocação DENTRO DO GRUPO (1..3 num grupo
+  // de 4) — ali "3º" não quer dizer topo de nada, e usar isso daria "+" a quase todo mundo.
+  var _meu = String((imp && imp.handle) || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  var _posDoStandings = function (f) {
+    if (f.position != null) return f.position;
+    if (f.official || !Array.isArray(f.standings) || !_meu) return null;
+    var achou = null;
+    f.standings.forEach(function (st) {
+      ((st && st.rows) || []).forEach(function (r) {
+        var hs = (r && r.handles) || [];
+        for (var i = 0; i < hs.length; i++) {
+          if (String(hs[i] || '').toLowerCase().replace(/[^a-z0-9]/g, '') === _meu) {
+            if (achou == null || (r.pos != null && r.pos < achou)) achou = r.pos;
+          }
+        }
+      });
+    });
+    return achou;
+  };
+  return fps.map(function (f) {
+    var _cat = f.categoryRaw;
+    if (!temLetra && !_L(_cat) && _L(f.name)) _cat = f.name;
+    return { categoria: _cat, tipo: f.official ? 'torneio' : 'ranking',
              wins: f.wins || 0, losses: f.losses || 0,
              // v1.9.32: o ANO viaja. Ele sempre esteve no footprint e o motor não o usava —
              // e sem ele "a categoria vem dos jogos recentes" era só uma frase. Ver
              // `_lzCategoriaComSinal`, que ordena por ele.
              ano: (f.year != null ? f.year : null),
-             pos: (f.position != null ? f.position : null),
+             pos: _posDoStandings(f),
              // ⚠️ o footprint NÃO traz o tamanho do campo, então o sinal por POSIÇÃO na
              // tabela fica inerte por ora. Medido nos 13: nenhum recebeu sinal por posição.
              total: (f.fieldSize != null ? f.fieldSize : null) };
@@ -2542,6 +2607,20 @@ window._getDrawDecisions = function (tId) {
   return (d && Object.keys(d).length) ? d : null;
 };
 window._clearDrawDecisions = function (tId) { try { delete window._drawDecisionsByTid[String(tId)]; } catch (e) {} };
+// ── ASSINATURA DA DASHBOARD — UMA FÓRMULA SÓ (1.9.35) ────────────────────────────
+// Quem CARIMBA (renderDashboard, ao pintar) e quem COMPARA (_softRefreshView, a cada
+// snapshot) precisam falar a mesma língua. Não falavam: a v3.1.26 acrescentou o
+// `updatedAt` aqui e não mexeu no carimbo do render, que seguia só `ids`. Como os dois
+// formatos NUNCA são iguais, o gate dizia "mudou" em TODO snapshot → a dashboard
+// re-renderizava sem parar, e cada rebuild do innerHTML pisca a tela (o dono viu piscadas
+// PRETAS logo depois de carregar). O gate existia justamente pra impedir isso.
+// Regra: ninguém monta essa string à mão — chama daqui. [[feedback_unify_dual_entry_points]]
+window._dashDataSigFor = function (list) {
+  var arr = Array.isArray(list) ? list : [];
+  return arr.length + '|' + arr.map(function (t) {
+    return (t && t.id) + ':' + ((t && t.updatedAt) || '');
+  }).join(',');
+};
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
   if (window._suppressSoftRefresh) return;
@@ -2567,11 +2646,7 @@ window._softRefreshView = function() {
   if (_currentView === '' || _currentView === 'dashboard') {
     try {
       var _dts = (window.AppStore && window.AppStore.tournaments) || [];
-      // v3.1.26: inclui updatedAt no sig — assim mudanças de CONTEÚDO (resultado
-      // lançado, chave avançada → próximo jogo / adversário definido) re-renderizam a
-      // dashboard (via _dashRerender, scroll preservado), não só mudanças no SET de
-      // torneios. Mantém o gate por assinatura → só re-renderiza quando algo mudou.
-      var _dsig = _dts.length + '|' + _dts.map(function(t){ return (t && t.id) + ':' + ((t && t.updatedAt) || ''); }).join(',');
+      var _dsig = window._dashDataSigFor(_dts);
       if (_dsig !== window._dashDataSig) {
         window._dashDataSig = _dsig;
         if (typeof window._dashRerender === 'function') window._dashRerender();
