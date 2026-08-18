@@ -951,6 +951,10 @@ const SUITES = [
   // técnica é entregar meia tela — este teste guarda a rede dupla de agendamento (rAF
   // NÃO dispara em aba de fundo), a ordem dos blocos e que o filtro só roda no fim.
   'tests/chave-pinta-em-etapas.test.js',
+  // as dicas voltaram a aparecer (1.9.41) e trouxeram junto dois defeitos que estavam
+  // escondidos: medir layout a cada evento de scroll (trava a rolagem) e o balão
+  // engolindo o toque mirado no card (o "triplo clique").
+  'tests/dica-nao-atrapalha.test.js',
 ];
 
 let failed = [];

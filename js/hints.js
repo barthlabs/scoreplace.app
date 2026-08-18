@@ -689,6 +689,12 @@
         '</div>' +
       '</div>';
 
+    // ⚠️ O BALÃO NÃO PODE COMER O TOQUE (1.9.44). Ele é `position:fixed` por cima da tela;
+    // um toque que caísse nele — mirando o card embaixo — era engolido, e a pessoa precisava
+    // tocar 2 ou 3 vezes ("triplo clique"). Só os BOTÕES do balão recebem toque; o resto é
+    // transparente pro dedo.
+    balloon.style.pointerEvents = 'none';
+    Array.prototype.forEach.call(balloon.querySelectorAll('button'), function (b) { b.style.pointerEvents = 'auto'; });
     document.body.appendChild(balloon);
 
     // Position balloon + arrow to point at element center
@@ -836,14 +842,22 @@
   }
 
   window.addEventListener('resize', _repositionActiveBalloon, { passive: true });
+  // ⚠️ NADA DE MEDIR LAYOUT A CADA EVENTO DE SCROLL (1.9.44). `_isElementVisible` chama
+  // `getBoundingClientRect`, que FORÇA layout — a cada evento de rolagem, num DOM de ~6.000
+  // nós (chave grande), isso é o "scroll travado" que o dono relatou. E ele só aparecia com
+  // dica ATIVA, por isso ficou escondido enquanto as dicas estavam quebradas.
+  // Agora a checagem inteira mora dentro do mesmo quadro da reposição: uma medida por
+  // quadro, não uma por evento.
+  var _scrollRAF = null;
   window.addEventListener('scroll', function() {
     if (!_activeHint || !_activeEl) return;
-    // If target scrolled out of viewport, dismiss immediately
-    if (!_isElementVisible(_activeEl)) {
-      _dismissHint(true);
-    } else {
-      _repositionActiveBalloon();
-    }
+    if (_scrollRAF) return;
+    _scrollRAF = requestAnimationFrame(function () {
+      _scrollRAF = null;
+      if (!_activeHint || !_activeEl) return;
+      if (!_isElementVisible(_activeEl)) _dismissHint(true);
+      else _repositionActiveBalloon();
+    });
   }, { passive: true });
 
   // Dismiss hint on page navigation (hash change)

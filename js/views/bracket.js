@@ -149,6 +149,41 @@ window._toggleMyMatches = function(checked) {
 // jogos", barra de rolagem fixa e a edição pendente leem o DOM inteiro; rodá-los entre
 // as tacadas é ver metade da chave — que é exatamente o defeito que essa mudança tenta
 // resolver, não criar. Por isso `depois` é parâmetro, e não código solto embaixo.
+// ── QUEM ENTREGA A PÁGINA É O "CARREGANDO" (1.9.44) ──────────────────────────
+// Ordem do dono, depois de três tentativas minhas de otimizar a pintura: _"usa a merda
+// do carregando para entregar a pagina pronto"_. Ele está certo e é o cânone da casa
+// ([[feedback_global_loading_always]]): tela em construção não se mostra pela metade —
+// mostra-se o carregando e entrega-se PRONTA.
+// Antes: a chave pintava e o usuário via o esqueleto, os nomes chegando, os nomes se
+// ajustando, a busca reordenando — cada passo um repuxo, e no escuro, piscada.
+// Agora: enquanto a chave é montada e hidratada, o CARREGANDO fica por cima; ele só sai
+// quando os nomes já estão nos lugares. Uma entrega, sem meio-caminho à vista.
+// ⚠️ Rede de segurança OBRIGATÓRIA: se qualquer passo falhar ou demorar demais, o
+// carregando sai assim mesmo (teto de 6s). Loader preso é pior que tela feia.
+function _entregarQuandoPronto(container, tarefa) {
+  var _saiu = false;
+  var _sair = function () {
+    if (_saiu) return; _saiu = true;
+    if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
+  };
+  if (typeof window._showLoading === 'function') { try { window._showLoading('Carregando o torneio…'); } catch (e) {} }
+  var _teto = setTimeout(_sair, 6000);
+  try { tarefa(); } catch (e) { if (window._error) window._error('[Bracket] montagem:', e); }
+  // sai quando a hidratação dos nomes terminar (é o último passo que mexe na tela),
+  // ou no próximo quadro se não houver o que hidratar.
+  var _fim = function () { clearTimeout(_teto); _sair(); };
+  var _p = null;
+  if (typeof window._hydrateUidNames === 'function') {
+    try { _p = window._hydrateUidNames(container); } catch (e) { _p = null; }
+  }
+  if (_p && typeof _p.then === 'function') {
+    _p.then(function () { requestAnimationFrame(_fim); }, _fim);
+  } else if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { requestAnimationFrame(_fim); });
+  } else { _fim(); }
+}
+window._entregarQuandoPronto = _entregarQuandoPronto;
+
 function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // ⛔ 1.9.42 — A PINTURA EM DOIS TEMPOS FOI DESLIGADA. Ela entregava o topo em 57ms, mas
   // o preço apareceu no aparelho do dono: entre a 1ª e a 2ª tacada existe um quadro com a
@@ -159,11 +194,13 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // em vez de só o cabeçalho. Enquanto não for assim, pinta de uma vez só.
   var _emUmaVez = true;
   if (_emUmaVez) {
-    var _tudo = '';
-    try { _tudo = geraPesado() || ''; }
-    catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
-    container.innerHTML = leve + _tudo;
-    if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
+    _entregarQuandoPronto(container, function () {
+      var _tudo = '';
+      try { _tudo = geraPesado() || ''; }
+      catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
+      container.innerHTML = leve + _tudo;
+      if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
+    });
     return;
   }
   container.innerHTML = leve;
