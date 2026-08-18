@@ -42,5 +42,17 @@ ok(nDepois === nEtapas,
 ok(/return renderGroupStage\([^)]*\) \+ standbyHtml;/.test(src),
    'lista de espera não pula pra cima dos grupos (ela vem DEPOIS do corpo, então viaja com ele)');
 
+
+// ⛔ REGRESSÃO CONHECIDA: `content-visibility:auto` não volta sem consertar as dicas.
+// Ele acelerava 35%, mas elemento dentro de subárvore pulada não tem layout, e o balão
+// de dica se posiciona por `getBoundingClientRect()` do alvo — o dono mediu: a dica
+// simplesmente não aparece. Se alguém reintroduzir, este teste cai e obriga a ler isto.
+const cssComp = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
+// (a regra ANTIGA de `.cards-grid > .card` — v2.4.96, listas da dashboard/explorar —
+//  não é esta e continua onde estava; o que não pode voltar é na CHAVE.)
+ok(!/#view-container div\[id\^="card-"\][^}]*content-visibility/.test(cssComp) &&
+   !/#view-container \[data-group-box\][^}]*content-visibility/.test(cssComp),
+   'content-visibility segue FORA da CHAVE (ele apaga o balão de dica; ver comentário no CSS)');
+
 console.log((fail ? '❌' : '✅') + ' chave-pinta-em-etapas: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail ? 1 : 0);

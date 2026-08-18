@@ -2034,5 +2034,10 @@ html, body,
 .sp-av-p{opacity:0.95;}
 .sp-mc-box{flex:1;min-width:0;height:var(--sp-box-h,1.05rem);overflow:hidden;display:flex;align-items:center;}
 
-#view-container div[id^="card-"] { content-visibility: auto; contain-intrinsic-size: auto 220px; }
-#view-container [data-group-box] { content-visibility: auto; contain-intrinsic-size: auto 520px; }
+/* ⛔ `content-visibility:auto` FOI RETIRADO (1.9.41) — e não deve voltar sem resolver isto.
+   Ele valia 35% do tempo de pintura, MAS quebrou os balõezinhos de dica: o balão é
+   posicionado pelo `getBoundingClientRect()` do elemento-alvo, e elemento dentro de um
+   subárvore "pulada" não tem layout — devolve retângulo zerado. Resultado medido pelo
+   dono: dica não aparece. O ganho de desenho não paga uma função que some.
+   Quem quiser trazer de volta precisa antes fazer o sistema de dicas (js/hints.js) forçar
+   o layout do alvo — `checkVisibility()` / rolar até ele — antes de medir. */

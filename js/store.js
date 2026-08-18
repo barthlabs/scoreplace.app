@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.40';
+window.SCOREPLACE_VERSION = '1.9.41';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2660,7 +2660,10 @@ window._softRefreshView = function() {
       var _dsig = window._dashDataSigFor(_dts);
       if (_dsig !== window._dashDataSig) {
         window._dashDataSig = _dsig;
-        if (typeof window._dashRerender === 'function') window._dashRerender();
+        // 1.9.41: pela porta que JUNTA os pedidos — no boot, a descoberta e o snapshot
+        // do servidor chegam quase juntos e a tela piscava duas vezes.
+        if (typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('snapshot');
+        else if (typeof window._dashRerender === 'function') window._dashRerender();
       }
     } catch (e) {}
     return;

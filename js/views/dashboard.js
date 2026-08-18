@@ -271,6 +271,31 @@ window._dashLazyOpen = function (el, gid) {
   } catch (e) { if (window._warn) window._warn('[dash lazy]', e); }
 };
 
+// ── PEDIDO DE REPINTURA DA DASHBOARD — UMA PORTA, E ELA JUNTA (1.9.41) ───────
+// Relato do dono: a dashboard "pisca 2x ao carregar". São dois pedidos legítimos que
+// chegam separados no boot e cada um repinta a tela inteira:
+//   1. a DESCOBERTA responde e o número de torneios públicos muda;
+//   2. o snapshot do servidor chega depois do cache e o conteúdo muda.
+// Cada um sozinho está certo; o que está errado é repintar duas vezes em cima da
+// pessoa. Aqui os pedidos são JUNTADOS numa janela curta: quem chegar primeiro agenda,
+// quem chegar depois entra na mesma repintura. Uma piscada, não duas.
+// ⚠️ Não é "não repintar": some o motivo do v2.8.60 (torneio que chegou async nunca
+// aparecia). É repintar UMA vez, um pouco depois — e o contador
+// `window._dashRepinturas` existe pra isso ser MEDIDO, não achado.
+window._dashRepinturas = 0;
+window._dashPedirRepintura = function (motivo) {
+  window._dashRepinturaMotivos = (window._dashRepinturaMotivos || []).concat(motivo || '?');
+  if (window._dashRepinturaTimer) return;                 // já tem uma agendada — entra nela
+  window._dashRepinturaTimer = setTimeout(function () {
+    window._dashRepinturaTimer = null;
+    var _hash = window.location.hash || '';
+    var _naDash = (_hash === '' || _hash === '#' || _hash.indexOf('#dashboard') === 0);
+    if (!_naDash) return;                                  // saiu da tela: não repinta nada
+    window._dashRepinturas++;
+    _reRenderDashKeepScroll();
+  }, 450);
+};
+
 function _reRenderDashKeepScroll() {
   var c = document.getElementById('view-container');
   if (!c || typeof renderDashboard !== 'function') return;
@@ -3798,7 +3823,7 @@ function renderDashboard(container) {
         // visível, mas SÓ quando o count muda (raro) e preservando scroll → sem trava.
         var _onDash = (window.location.hash === '' || window.location.hash === '#' || window.location.hash.indexOf('#dashboard') === 0);
         if (_onDash && newLen !== _curLen) {
-          _reRenderDashKeepScroll();
+          window._dashPedirRepintura('descoberta');
         }
         // v2.4.84: marco pro boot splash — a descoberta (e o re-render que ela
         // dispara) já assentou. Só então o boot revela a dashboard.
