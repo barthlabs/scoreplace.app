@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.31';
+window.SCOREPLACE_VERSION = '1.9.32';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -567,6 +567,12 @@ window.SP_SINAL_MIN = 0.35;    // aproveitamento na categoria DE CIMA que susten
 window.SP_DOMINA_PCT = 0.75;   // ganhar quase tudo na PRÓPRIA categoria também dá "+"
 window.SP_AFUNDA_PCT = 0.35;   // nao se firmou onde joga: da o "-" (Camila faz 31% na C)
 window.SP_TOPO_FRAC = 0.20;    // 20% do topo da tabela dá "+"; 20% do fim dá "-"
+// ── QUANDO A LETRA É SUSTENTADA, E QUANDO É PALPITE ─────────────────────────────
+// A letra é CREDENCIAL: com ela a pessoa se inscreve, e errar pra cima a exclui de torneio
+// que ela pode jogar. Então ela precisa de LASTRO — e "lastro" tem que ser um número, igual
+// aos de cima, não um caso especial pra fulano.
+window.SP_BASE_TORNEIOS = 2;   // torneios na categoria que fazem a letra deixar de ser palpite
+window.SP_BASE_JOGOS = 6;      // ou este tanto de jogos nela (2× a presença mínima)
 // `disputas` = [{ categoria: 'C', tipo: 'ranking'|'torneio', wins: n, losses: n }]
 window._lzCategoriaComSinal = function (disputas) {
   var ORD = { FUN: 4, D: 3, C: 2, B: 1, A: 0 };
@@ -585,6 +591,7 @@ window._lzCategoriaComSinal = function (disputas) {
 
   var lista = (disputas || []).map(function (d) {
     return d && { l: letra(d.categoria), tipo: d.tipo, m: mista(d.categoria),
+                  ano: (d.ano != null ? d.ano : null),
                   w: d.wins || 0, p: d.losses || 0,
                   pos: (d.pos != null ? d.pos : null), total: (d.total != null ? d.total : null) };
   }).filter(function (d) { return d && d.l != null && ORD[d.l] != null; });
@@ -600,6 +607,15 @@ window._lzCategoriaComSinal = function (disputas) {
   var tors = lista.filter(function (d) { return d.tipo === 'torneio' && !d.m; });
   var fonte = tors.length ? tors : lista.filter(function (d) { return !d.m; });
   if (!fonte.length) fonte = lista;
+  // ⛔ NÃO ORDENAR POR ANO — tentado e MEDIDO na 1.9.32, reprovado na varredura.
+  // A regra do dono é "a categoria vem dos jogos recentes", e o footprint traz `year`,
+  // então ordenar por ele parecia óbvio. O dado desmente: o ano vem em MINORIA das
+  // entradas — Kelly 2 de 15, Camila 8 de 60, M.Delia 3 de 8. Mandar as "sem ano" pro fim
+  // inverte a ordem original do letzplay, que é a única pista de recência que existe de
+  // fato: a Kelly virou C (um torneio "Feminina C" de 2025 pulou na frente dos "Feminina
+  // D" sem ano), contra a decisão dela ser D+. Enquanto o ano não vier em todas, ordenar
+  // por ele troca uma pista fraca por uma pior. O campo `ano` continua viajando no
+  // `_lzDisputasDoImport` — quando a extensão preencher sempre, esta decisão se revisita.
   var acum = {}, base = null;
   for (var i = 0; i < fonte.length; i++) {
     var d = fonte[i], k = d.l;
@@ -621,6 +637,9 @@ window._lzCategoriaComSinal = function (disputas) {
   // ── 2. O SINAL: como ela se sustenta ALI, e o que alcança FORA ───────────────────
   // "+" = busca a de cima com resultado · domina a própria · topo da tabela
   // "-" = não se firmou onde está (base da categoria) — a Camila joga C e faz 28% lá
+  // ⚠️ Virou função porque o rebaixamento (bloco 3) troca a base e o sinal precisa ser
+  // RECALCULADO na base nova — carimbar o sinal da base velha era mentir duas vezes.
+  function apura(base) {
   var naBase = lista.filter(function (x) { return x.l === base; });
   var bw = 0, bp = 0, pos = null;
   naBase.forEach(function (x) {
@@ -648,11 +667,71 @@ window._lzCategoriaComSinal = function (disputas) {
                (pos != null && pos >= (1 - window.SP_TOPO_FRAC));
 
   var sinal = (busca || domina) ? '+' : (afunda ? '-' : '');
-  return { categoria: base, sinal: sinal, rotulo: base + sinal,
+  // `basePre` = a letra ANTES do rebaixamento do bloco 3. Igual a `categoria` quando nada
+  // foi rebaixado. Existe pra que a regra seja COBRÁVEL: sem ela o teste tem que adivinhar
+  // qual seria a base, e foi assim que 36 "violações" apareceram medindo a coisa errada.
+  return { categoria: base, sinal: sinal, rotulo: base + sinal, afunda: afunda, basePre: base,
            acimaJogos: aj, acimaPct: aj ? Math.round(100 * aw / aj) : null,
            naPct: bj ? Math.round(100 * bw / bj) : null,
            porque: busca ? 'busca a de cima' : (domina ? 'domina a própria'
                  : (afunda ? 'base da categoria' : 'no lugar')) };
+  }
+
+  // ── 3. NÃO SE FIRMOU **REBAIXA** — não basta carimbar (1.9.32) ──────────────────
+  // Relato do dono sobre a M.Delia: _"vc ve que ela nao joga nada entre em D/C e nao passa
+  // da primeira fase. nao tem como ser C-"_.
+  // MEDIDO no doc dela: 1V/2D na C (33%), 0V/2D na D, ranking de 2026 em "Fem I"
+  // (Iniciante) e "Cat Feminina FUN", e ela mesma declara D no perfil. Saía **C-**.
+  // POR QUE SAÍA: a presença mínima (3 jogos) descartava só o lado FRACO — a C tinha
+  // exatamente 3 e virava base; a D tinha 2 e era jogada fora. A prova de que ela NÃO é C
+  // existia e foi descartada por ser pequena, e o "-" só carimbava a direção enquanto a
+  // LETRA — que é a credencial — continuava alta. Erro pra cima tira a pessoa de torneio
+  // que ela pode jogar: ver [[project_categoria_ranking_vs_torneio]].
+  // A REGRA: quem afunda na base (aproveitamento no piso) e TEM jogo na categoria de baixo
+  // cai UM degrau. Um só, e só com jogo de verdade lá embaixo — sem isso, seria rebaixar
+  // por ausência de dado, que é o erro oposto.
+  // ── 3. LETRA SEM LASTRO NÃO SE SUSTENTA — REGRA GERAL, PARA TODOS ───────────────
+  // Ordem do dono (18/ago/2026): _"a regra tem que ser geral a aplicada a todos e ter o
+  // efeito certo"_ · _"nao dá pra mudar pra um e aplicar diferente que depois isso nos
+  // pegara na esquina"_. Ele está certo: a 1ª versão disto tinha um gatilho que eu calibrei
+  // olhando as 14 pessoas da base — passava na amostra e falharia na 15ª.
+  //
+  // O PRINCÍPIO, e ele vale para qualquer um: a letra é credencial. Ela só fica ALTA se
+  // houver **lastro** (SP_BASE_TORNEIOS torneios ou SP_BASE_JOGOS jogos nela) OU se a
+  // pessoa se SUSTENTA lá. Sem lastro e sem sustentação, a letra é palpite — e palpite pra
+  // cima tira a pessoa de torneio que ela pode jogar, enquanto palpite pra baixo só a
+  // descreve com modéstia. Na dúvida, desce.
+  //
+  // ⚠️ UM CONTRAPESO, também geral: quem MANDA na categoria de baixo está SUBINDO, não
+  // afundando — e rebaixar essa pessoa apagaria justamente a informação de que ela subiu.
+  // Por isso a queda exige que ela também não se firme embaixo.
+  //
+  // O efeito nas pessoas reais da base (varredura completa, 18/ago): muda M.Delia
+  // (C- → D-: um torneio na C com 1V/2D, 0V/3D na D, e a vida dela em 2026 é 60+ e ranking
+  // Iniciante) e NÃO muda Camila (~20 torneios na C: tem lastro, é C mesmo perdendo),
+  // Kelly (D+), Bruna (D+), Fábio Simão (D-) nem os outros 9.
+  var r = apura(base);
+  if (r && r.afunda) {
+    var ordem = ['A', 'B', 'C', 'D', 'FUN'];
+    var abaixo = ordem[ordem.indexOf(base) + 1];
+    var naBaseL = lista.filter(function (x) { return x.l === base && (x.w + x.p) > 0; });
+    var torneiosNaBase = naBaseL.filter(function (x) { return x.tipo === 'torneio'; }).length;
+    var jogosNaBase = naBaseL.reduce(function (n, x) { return n + x.w + x.p; }, 0);
+    var temLastro = torneiosNaBase >= window.SP_BASE_TORNEIOS || jogosNaBase >= window.SP_BASE_JOGOS;
+    if (abaixo && !temLastro) {
+      var ab = lista.filter(function (x) { return x.l === abaixo; });
+      var abW = 0, abP = 0;
+      ab.forEach(function (x) { abW += x.w; abP += x.p; });
+      var abJ = abW + abP;
+      // Contrapeso: se ela vai BEM embaixo, está subindo — mantém a letra de cima com "-".
+      var afundaAbaixo = abJ > 0 && (abW / abJ) <= window.SP_AFUNDA_PCT;
+      if (afundaAbaixo) {
+        var r2 = apura(abaixo);
+        if (r2) { r2.basePre = base; r2.porque = base + ' sem lastro, e não se firmou em nenhuma'; return r2; }
+      }
+    }
+  }
+  return r;
 };
 
 // Monta a lista de disputas de um import, no formato que `_lzCategoriaComSinal` espera.
@@ -663,6 +742,10 @@ window._lzDisputasDoImport = function (imp) {
   return imp.footprint.filter(function (f) { return f && f.categoryRaw; }).map(function (f) {
     return { categoria: f.categoryRaw, tipo: f.official ? 'torneio' : 'ranking',
              wins: f.wins || 0, losses: f.losses || 0,
+             // v1.9.32: o ANO viaja. Ele sempre esteve no footprint e o motor não o usava —
+             // e sem ele "a categoria vem dos jogos recentes" era só uma frase. Ver
+             // `_lzCategoriaComSinal`, que ordena por ele.
+             ano: (f.year != null ? f.year : null),
              pos: (f.position != null ? f.position : null),
              // ⚠️ o footprint NÃO traz o tamanho do campo, então o sinal por POSIÇÃO na
              // tabela fica inerte por ora. Medido nos 13: nenhum recebeu sinal por posição.

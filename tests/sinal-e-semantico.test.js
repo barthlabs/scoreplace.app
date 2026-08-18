@@ -219,5 +219,93 @@ ok(cat([{ categoria: '50 anos', tipo: 'torneio', wins: 3, losses: 1 }]) === null
      'mas 50% não é base — fica sem sinal');
 }
 
+// ══ LETRA SEM LASTRO NÃO SE SUSTENTA — E A REGRA VALE PRA TODOS ═══════════════════
+// Ordem do dono (18/ago/2026): _"a regra tem que ser geral a aplicada a todos e ter o
+// efeito certo"_ · _"nao dá pra mudar pra um e aplicar diferente que depois isso nos pegara
+// na esquina"_. Ele disse isso vendo a 1ª versão desta regra, cujo gatilho eu tinha
+// calibrado olhando as 14 pessoas da base — passava na amostra e falharia na 15ª.
+// Por isso aqui não bastam os casos reais: tem VARREDURA do espaço, cobrando invariantes.
+(function () {
+  console.log('\n── letra sem lastro (regra geral) ──');
+
+  // ── os três casos reais, que são os extremos do espectro ──────────────────────
+  // M.Delia: 1 torneio na C (1V/2D) e 0V/3D na D. Não se firma em nenhuma → é D.
+  const delia = cat([{ categoria: 'Feminina C', tipo: 'torneio', wins: 1, losses: 2 },
+                     { categoria: 'Consolation D/C', tipo: 'torneio', wins: 0, losses: 1 },
+                     { categoria: 'Feminina D', tipo: 'torneio', wins: 0, losses: 2 },
+                     { categoria: 'Fem I', tipo: 'ranking', wins: 2, losses: 1 }]);
+  ok(delia.rotulo === 'D-', 'M.DELIA · 1 torneio na C perdendo + 0V/3D na D → D- (veio: ' + delia.rotulo + ')');
+
+  // Camila: MUITOS torneios na C, indo mal. Tem lastro → é C mesmo perdendo.
+  const camila = cat([{ categoria: 'C', tipo: 'torneio', wins: 0, losses: 4 },
+                      { categoria: 'C', tipo: 'torneio', wins: 2, losses: 4 },
+                      { categoria: 'C', tipo: 'torneio', wins: 0, losses: 6 },
+                      { categoria: 'C', tipo: 'torneio', wins: 2, losses: 4 },
+                      { categoria: 'D', tipo: 'torneio', wins: 0, losses: 2 }]);
+  ok(camila.rotulo === 'C-', 'CAMILA · muitos torneios na C, indo mal → C- (lastro segura a letra) (veio: ' + camila.rotulo + ')');
+
+  // Quem manda embaixo está SUBINDO — não rebaixa nem sem lastro em cima.
+  const subindo = cat([{ categoria: 'C', tipo: 'torneio', wins: 0, losses: 3 },
+                       { categoria: 'D', tipo: 'torneio', wins: 5, losses: 1 },
+                       { categoria: 'D', tipo: 'torneio', wins: 4, losses: 1 }]);
+  ok(subindo.rotulo === 'C-', 'SUBINDO · 1 torneio na C perdendo mas 9-2 na D → C- (veio: ' + subindo.rotulo + ')');
+
+  // ── VARREDURA: o espaço inteiro, cobrando invariantes ────────────────────────
+  const ORD = { A: 0, B: 1, C: 2, D: 3, FUN: 4 };
+  let casos = 0, subiu = 0, comLastroCaiu = 0, dominouEmbaixoCaiu = 0, semEvidencia = 0, degrauErrado = 0;
+  const LETRAS = ['B', 'C', 'D'];
+  [0, 1, 2, 3, 5].forEach(function (nTor) {          // torneios na base
+    [1, 3, 6].forEach(function (jogosPorTor) {        // volume por torneio
+      [0, 0.34, 0.5, 0.9].forEach(function (pctBase) {// desempenho na base
+        [0, 2, 6].forEach(function (jogosAbaixo) {    // volume na de baixo
+          [0, 0.34, 0.9].forEach(function (pctAbaixo) {
+            LETRAS.forEach(function (L) {
+              const abaixo = ['A', 'B', 'C', 'D', 'FUN'][ORD[L] + 1];
+              const d = [];
+              for (let k = 0; k < nTor; k++) {
+                const w = Math.round(jogosPorTor * pctBase);
+                d.push({ categoria: L, tipo: 'torneio', wins: w, losses: jogosPorTor - w });
+              }
+              if (jogosAbaixo) {
+                const w2 = Math.round(jogosAbaixo * pctAbaixo);
+                d.push({ categoria: abaixo, tipo: 'torneio', wins: w2, losses: jogosAbaixo - w2 });
+              }
+              const r = cat(d);
+              if (!r) return;
+              casos++;
+              // A regra a cobrar é o REBAIXAMENTO — e agora o motor diz quando ele agiu
+              // (`basePre` ≠ `categoria`). Medir contra a letra que EU montei no fixture
+              // media outra coisa: a escolha da base acontece antes, e às vezes a letra de
+              // cima nem chega a ser base (poucos jogos). Foi o que gerou 36 falsas violações.
+              const desceu = r.basePre !== r.categoria;
+              if (ORD[r.categoria] < ORD[r.basePre]) subiu++;          // 1. nunca sobe
+              if (desceu) {
+                const naPre = d.filter(function (x) { return x.categoria === r.basePre; });
+                const torPre = naPre.filter(function (x) { return x.tipo === 'torneio' && (x.wins + x.losses) > 0; }).length;
+                const jogPre = naPre.reduce(function (n, x) { return n + x.wins + x.losses; }, 0);
+                if (torPre >= 2 || jogPre >= 6) comLastroCaiu++;        // 2. lastro protege
+                const naNova = d.filter(function (x) { return x.categoria === r.categoria; });
+                const wN = naNova.reduce(function (n, x) { return n + x.wins; }, 0);
+                const jN = naNova.reduce(function (n, x) { return n + x.wins + x.losses; }, 0);
+                if (jN > 0 && (wN / jN) > 0.35) dominouEmbaixoCaiu++;   // 3. quem vai bem embaixo sobe, não desce
+                if (ORD[r.categoria] - ORD[r.basePre] !== 1) degrauErrado++;  // 5. um degrau, nunca dois
+              }
+              const jogosNaFinal = d.filter(function (x) { return x.categoria === r.categoria; })
+                                    .reduce(function (n, x) { return n + x.wins + x.losses; }, 0);
+              if (jogosNaFinal === 0) semEvidencia++;                   // 4. letra final tem jogo
+            });
+          });
+        });
+      });
+    });
+  });
+  ok(casos > 500, 'a varredura cobriu o espaço (' + casos + ' perfis)');
+  ok(subiu === 0, 'INVARIANTE: a regra nunca SOBE ninguém de categoria (violações: ' + subiu + ')');
+  ok(comLastroCaiu === 0, 'INVARIANTE: quem tem lastro na letra não é rebaixado (violações: ' + comLastroCaiu + ')');
+  ok(dominouEmbaixoCaiu === 0, 'INVARIANTE: quem manda na de baixo não é rebaixado — está subindo (violações: ' + dominouEmbaixoCaiu + ')');
+  ok(semEvidencia === 0, 'INVARIANTE: a letra final sempre tem jogo de verdade nela (violações: ' + semEvidencia + ')');
+  ok(degrauErrado === 0, 'INVARIANTE: quando rebaixa, desce UM degrau — nunca dois (violações: ' + degrauErrado + ')');
+})();
+
 console.log('\n' + (falhas ? '❌ ' + falhas + ' de ' + testes : '✅ ' + testes + ' asserções, 0 falhas') + '\n');
 process.exit(falhas ? 1 : 0);
