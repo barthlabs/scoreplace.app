@@ -136,6 +136,49 @@ window._toggleMyMatches = function(checked) {
   window._showOnlyMyMatches = !!checked;
   _applyMyMatchesFilter();
 };
+// ── PINTAR EM ETAPAS (1.9.40) ────────────────────────────────────────────────
+// A chave inteira ia pra tela numa tacada só. MEDIDO no navegador, no Confra real
+// (102 jogos, ~6.000 nós): a tela levava ~1,5s pra aparecer, e o dono via TELA PRETA
+// nesse tempo. Medido também: só o cabeçalho + o 1º grupo aparecem em **57ms**.
+// E medido o que NÃO adianta: com `content-visibility` ligado, remover TODO o estilo
+// inline que ainda sobra (291 KB) economiza 49ms. Ou seja o custo restante não é byte
+// nem estilo — é a quantidade de nós entrando de uma vez. A saída é entregar em duas
+// tacadas: o topo agora, o corpo no quadro seguinte.
+//
+// ⚠️ O QUE VEM DEPOIS DA PINTURA TEM QUE VIR DEPOIS DA SEGUNDA TACADA. Filtro "só meus
+// jogos", barra de rolagem fixa e a edição pendente leem o DOM inteiro; rodá-los entre
+// as tacadas é ver metade da chave — que é exatamente o defeito que essa mudança tenta
+// resolver, não criar. Por isso `depois` é parâmetro, e não código solto embaixo.
+function _pintarEmEtapas(container, leve, geraPesado, depois) {
+  container.innerHTML = leve;
+  var _segundaTacada = function () {
+    var pesado = '';
+    try { pesado = geraPesado() || ''; }
+    catch (e) { if (window._error) window._error('[Bracket] 2a etapa da pintura:', e); }
+    try { container.insertAdjacentHTML('beforeend', pesado); }
+    catch (e2) { container.innerHTML = leve + pesado; }
+    if (typeof depois === 'function') { try { depois(); } catch (e3) {} }
+  };
+  // ⚠️ NUNCA DEPENDER DE UM ÚNICO AGENDADOR PRA O CORPO DA TELA CHEGAR.
+  // `requestAnimationFrame` NÃO dispara em aba de fundo — abrir a chave numa aba que
+  // não está à frente deixaria a pessoa com só o cabeçalho, pra sempre. E ambiente de
+  // teste tem rAF/timeout de mentira. Então: rAF E timeout, o que vier primeiro pinta
+  // (a trava `feito` garante uma vez só), mais uma porta de descarga síncrona pra quem
+  // precisa do resultado agora (`_flushBracketPaint`).
+  var feito = false;
+  var _uma = function () { if (feito) return; feito = true; _pendentes.splice(_pendentes.indexOf(_uma) >>> 0, 1); _segundaTacada(); };
+  _pendentes.push(_uma);
+  try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { requestAnimationFrame(_uma); }); } catch (e) {}
+  try { if (typeof setTimeout === 'function') setTimeout(_uma, 80); } catch (e) {}
+}
+// Descarga síncrona: pinta AGORA o que estiver pendente. É o que o teste headless usa
+// (lá rAF e setTimeout são de mentira) e é a rede pra qualquer caminho que precise da
+// chave inteira no mesmo instante.
+var _pendentes = [];
+window._flushBracketPaint = function () {
+  while (_pendentes.length) { var f = _pendentes.shift(); try { f(); } catch (e) {} }
+};
+
 function _applyMyMatchesFilter() {
   // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
   // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
@@ -775,23 +818,26 @@ function renderBracket(container, tournamentId, isInline) {
     // usa. Sem ele, a fase classificatória fechava 100% mas o botão "Avançar" nunca aparecia
     // (banner era calculado na linha ~402 e descartado). Os outros ramos (Liga 428, grupos 436)
     // já o inseriam; só este esquecia.
-    container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + window._renderPhaseBracket(t, canEnterResult, standbyHtml);
-    _applyMyMatchesFilter();
+    _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml,
+      function () { return window._renderPhaseBracket(t, canEnterResult, standbyHtml); }, _applyMyMatchesFilter);
     return;
   }
 
   // ── Liga / Suíço (Liga inclui antigo Ranking) ──────────────────────────────
   if (isLiga || isSuico) {
-    container.innerHTML = headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner + renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml });
-    _applyMyMatchesFilter();
+    _pintarEmEtapas(container, headerHtml + _subChoiceBanner + _ligaInviteBanner + _phaseAdvanceBanner + startTournamentBanner,
+      function () { return renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarHtml, { standbyHtml: standbyHtml }); }, _applyMyMatchesFilter);
     return;
   }
 
   // ── Fase de Grupos ─────────────────────────────────────────────────────────
   if (isGrupos && t.groups && t.groups.length > 0) {
     if (t.currentStage === 'groups') {
-      container.innerHTML = headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml + renderGroupStage(t, isOrg, canEnterResult) + standbyHtml;
-      _applyMyMatchesFilter();
+      // ⚠️ A ORDEM É A DE ANTES: o `standbyHtml` (lista de espera) vem DEPOIS dos grupos,
+      // então ele viaja na 2ª tacada junto com eles — separar por "leve/pesado" sem olhar
+      // a ordem jogaria a espera pra cima dos grupos.
+      _pintarEmEtapas(container, headerHtml + _subChoiceBanner + startTournamentBanner + _phaseAdvanceBanner + progressBarHtml + readyBannerHtml,
+        function () { return renderGroupStage(t, isOrg, canEnterResult) + standbyHtml; }, _applyMyMatchesFilter);
       return;
     }
     // If stage is elimination, fall through to bracket rendering below

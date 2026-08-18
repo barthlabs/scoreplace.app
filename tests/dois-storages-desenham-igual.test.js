@@ -62,7 +62,11 @@ function desenha(t) {
   W.AppStore.tournaments = [t];
   W.AppStore.currentUser = { uid: 'uA', displayName: 'Ana' };
   const c = container();
-  try { W.renderBracket(c, t.id, false); } catch (e) { return 'ERRO: ' + e.message; }
+  try { W.renderBracket(c, t.id, false);
+  // 1.9.40: a chave pinta em DUAS tacadas (topo agora, corpo no quadro seguinte).
+  // No headless não há quadro nenhum — a descarga síncrona traz o corpo pra este teste
+  // medir a chave INTEIRA, que é o que ele existe pra medir.
+  if (typeof W._flushBracketPaint === "function") W._flushBracketPaint(); } catch (e) { return 'ERRO: ' + e.message; }
   return c.innerHTML || '';
 }
 

@@ -138,6 +138,10 @@ function renderComUsuario(tt, cu) {
     querySelector() { return null; }, querySelectorAll() { return []; }, scrollTo() {}, focus() {}
   };
   W.renderBracket(c, tt.id, false);
+  // 1.9.40: a chave pinta em DUAS tacadas (topo agora, corpo no quadro seguinte).
+  // No headless não há quadro nenhum — a descarga síncrona traz o corpo pra este teste
+  // medir a chave INTEIRA, que é o que ele existe pra medir.
+  if (typeof W._flushBracketPaint === "function") W._flushBracketPaint();
   return c.innerHTML || '';
 }
 // o participante do doc real NÃO tem nome (o save stripa) — só uid: é isso que

@@ -947,6 +947,10 @@ const SUITES = [
   // 🔴 "Ao vivo agora": quando a vitrine existe, em que ordem, quem é convidado a
   // assistir — e a trava estrutural de que quem assiste NÃO escreve no placar alheio.
   'tests/ao-vivo-agora.test.js',
+  // a chave pinta em DUAS tacadas (topo agora, corpo no quadro seguinte). O risco da
+  // técnica é entregar meia tela — este teste guarda a rede dupla de agendamento (rAF
+  // NÃO dispara em aba de fundo), a ordem dos blocos e que o filtro só roda no fim.
+  'tests/chave-pinta-em-etapas.test.js',
 ];
 
 let failed = [];
