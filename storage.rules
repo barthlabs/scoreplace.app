@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IMAGEM DO TORNEIO — ARQUIVO É ARQUIVO, REGISTRO QUENTE É REGISTRO QUENTE
+//
+// POR QUE ESTE BUCKET EXISTE (18/ago/2026, decisão do dono: "estrutura e arquitetura
+// certa sem atalhos"). MEDIDO nos documentos de produção: `logoData`+`coverPhotoData` em
+// base64 eram 62% do peso de TODOS os torneios; num doc, 305 KB de 311 KB (98%), com as
+// fases ocupando 1,3 KB. O doc do torneio servia ao mesmo tempo de ARQUIVO (imagem,
+// escrita uma vez) e de REGISTRO QUENTE (placar, escrito o tempo todo) — padrões de
+// acesso opostos, e pagava-se o peso do arquivo em toda leitura, escrita e snapshot.
+// Ver [[project_imagem_base64_no_doc_do_torneio]].
+// ─────────────────────────────────────────────────────────────────────────────
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Caminho: tournaments/{tournamentId}/{logo|cover}
+    match /tournaments/{tournamentId}/{arquivo} {
+
+      function torneio() {
+        return firestore.get(/databases/(default)/documents/tournaments/$(tournamentId)).data;
+      }
+
+      // LEITURA ABERTA, E ISSO É DELIBERADO. A URL de download carrega um token aleatório
+      // gerado no upload — quem não recebeu o link não adivinha o caminho. Exigir login
+      // aqui quebraria (a) o card de torneio público visto por visitante deslogado e
+      // (b) a imagem em e-mail/convite, que sai do app. É a mesma exposição que a imagem
+      // já tinha quando morava no doc de torneio público.
+      // ⚠️ Isto vale pra LOGO e CAPA, que são material de divulgação. Arquivo sensível
+      // NÃO entra neste prefixo — se algum dia entrar, precisa de match próprio.
+      allow read: if true;
+
+      // ESCRITA SÓ DE QUEM MANDA NO TORNEIO — mesma dupla que governa o doc no Firestore
+      // (dono + co-organizadores ativos), lida do PRÓPRIO Firestore pra não haver duas
+      // fontes de verdade sobre quem é admin. Ver [[project_cohost_same_power_as_organizer]].
+      // Os dois tetos (tamanho e tipo) não são decoração: sem eles, um authed qualquer
+      // que passasse no teste de admin poderia usar o bucket como depósito de arquivo
+      // arbitrário. 5 MB espelha o limite que o próprio seletor de imagem já aplica.
+      allow write: if request.auth != null
+        && request.resource != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*')
+        && (
+          request.auth.uid == torneio().get('creatorUid', '')
+          || (request.auth.uid in torneio().get('adminUids', []))
+        );
+
+      // Apagar segue a mesma regra de quem pode escrever (trocar a capa remove a antiga).
+      allow delete: if request.auth != null
+        && (
+          request.auth.uid == torneio().get('creatorUid', '')
+          || (request.auth.uid in torneio().get('adminUids', []))
+        );
+    }
+
+    // Nada mais é gravável neste bucket. Prefixo novo exige match novo, escrito à mão —
+    // um `match /{caminho=**}` genérico aqui viraria depósito aberto.
+    match /{caminho=**} {
+      allow read, write: if false;
+    }
+  }
+}
