@@ -36,7 +36,9 @@ window._editTournamentLogoFromDetail = function(tournamentId) {
           t.logoLocked = true;
           t.updatedAt = new Date().toISOString();
           if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
-            window.FirestoreDB.saveTournament(t).then(function() {
+            // `withImages`: aqui a imagem É a mudança — sem a marca o save a omitiria
+            // (ver a nota em firebase-db.saveTournament).
+            window.FirestoreDB.saveTournament(t, { withImages: true }).then(function() {
               if (window.showNotification) window.showNotification('Logo atualizado', '', 'success');
               if (typeof window._softRefreshView === 'function') window._softRefreshView();
             }).catch(function(err) {

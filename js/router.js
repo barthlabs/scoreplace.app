@@ -345,7 +345,44 @@ function initRouter() {
           // com cache; sem cache o render vinha depois do reset e não rolava). Soft-refresh
           // (onSnapshot → initRouter) NÃO seta → re-render não re-scrolla.
           if (!window._isSoftRefresh) window._navScrollTid = String(cleanParam);
-          renderTournaments(viewContainer, cleanParam);
+          // ── A TELA DO TORNEIO TAMBÉM É ENTREGUE PRONTA (1.9.49) ────────────────
+          // Até aqui esta rota era a ÚNICA sem loader: a dashboard (acima) segura o
+          // "Carregando" enquanto monta, e o torneio — que é a tela CARA — entrava
+          // direto no render síncrono. Daí o relato do dono: _"clica e fica parado
+          // sem feedback"_.
+          // ⚠️ DOIS QUADROS ANTES DO RENDER, e isto é o ponto: mostrar o loader e
+          // chamar o render no MESMO quadro não mostra nada — o navegador só pinta
+          // quando a thread devolve o controle, e o render pesado não devolve. O
+          // loader existia e nunca chegava à tela. Ceder 2 quadros custa ~32ms e é
+          // a diferença entre "travou" e "está abrindo".
+          // Só em NAVEGAÇÃO: soft-refresh (onSnapshot) segue síncrono, senão a tela
+          // de quem está lendo pisca a cada placar alheio.
+          if (!window._isSoftRefresh && typeof window._showLoading === 'function') {
+            try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
+            window._spLoadingOwnedByNav = false; // a rota assumiu; a marca já serviu
+            var _saiuTour = false;
+            var _fecharTour = function () {
+              if (_saiuTour) return; _saiuTour = true;
+              if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
+            };
+            // teto de segurança: loader preso é pior que abertura feia. O backstop
+            // global de 15s do _showLoading continua valendo por baixo deste.
+            setTimeout(_fecharTour, 6000);
+            var _pintaTorneio = function () {
+              try { renderTournaments(viewContainer, cleanParam); }
+              finally {
+                // sai só depois de a tela montada ter tido um quadro pra pintar
+                requestAnimationFrame(function () { requestAnimationFrame(_fecharTour); });
+              }
+            };
+            if (typeof requestAnimationFrame === 'function') {
+              requestAnimationFrame(function () { requestAnimationFrame(_pintaTorneio); });
+            } else {
+              setTimeout(_pintaTorneio, 32);
+            }
+          } else {
+            renderTournaments(viewContainer, cleanParam);
+          }
         } else {
           window.location.replace('#dashboard');
         }

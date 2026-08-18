@@ -233,6 +233,21 @@ window.FirestoreDB = {
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
     this._foldMonarchGroups(cleanData); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
+    // ── IMAGEM NÃO VIAJA JUNTO COM PLACAR (1.9.49) ──────────────────────────────
+    // MEDIDO nos documentos de produção: `logoData` + `coverPhotoData` são 62% do peso
+    // de todos os torneios (602 KB de 966 KB). Num doc o par chega a 305 KB de 311 KB —
+    // 98% —, com o torneio de verdade ocupando 1,3 KB.
+    // Como TODO save mandava o objeto inteiro, registrar um placar (mudança de ~50 bytes)
+    // reenviava os 211 KB do Confra, logo incluído — e devolvia esses 211 KB pra cada
+    // listener aberto. Era escrita, banda e re-render pagos por uma imagem que não mudou.
+    // `merge:true` PRESERVA no banco o campo que não vem: omitir aqui não apaga nada.
+    // Quem realmente TROCA a imagem passa `withImages` — hoje só a criação/edição
+    // (`AppStore.addTournament`) e o botão de trocar logo. Qualquer outro save carrega uma
+    // cópia lida do próprio banco, então omitir é no-op semântico.
+    if (!(options && options.withImages)) {
+      delete cleanData.logoData;
+      delete cleanData.coverPhotoData;
+    }
     // When skipParticipants is true, exclude participants array to prevent
     // overwriting enrollments made by other users via transactions.
     // This is critical: sync() and organizer edits should NOT touch participants.

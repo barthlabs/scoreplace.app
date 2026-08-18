@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.48';
+window.SCOREPLACE_VERSION = '1.9.49';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6469,7 +6469,18 @@ window._hideLoading = function () {
 };
 // Navegação real (hashchange) = chegou outra tela → esconde o loader. NÃO dispara no
 // soft-refresh (mesma hash), então o loader sobrevive ao "pensando" dos detalhes.
-try { window.addEventListener('hashchange', function () { if (window._hideLoading) window._hideLoading(); }); } catch (e) {}
+// ⚠️ EXCEÇÃO: loader que PERTENCE à navegação em curso (1.9.49). Quem toca no card
+// mostra o "Abrindo o torneio…" e LOGO troca a hash — então este mesmo handler apagava,
+// no quadro seguinte, o loader que acabara de nascer. Era por isso que a resposta ao
+// toque da 1.9.48 não aparecia: ela existia e era desligada antes de pintar.
+// Quem abre marca a posse; aqui a marca é CONSUMIDA (vale uma navegação só) e quem
+// assume o loader é a rota de destino, que o tira quando a tela está pronta.
+try {
+  window.addEventListener('hashchange', function () {
+    if (window._spLoadingOwnedByNav) { window._spLoadingOwnedByNav = false; return; }
+    if (window._hideLoading) window._hideLoading();
+  });
+} catch (e) {}
 
 // ─── PORTA ÚNICA: ABRIR TORNEIO A PARTIR DE UM CARD (1.9.48) ─────────────────
 // A resposta ao toque nasceu na 1.9.46 DENTRO do `_dashCardClick` (dashboard). A
@@ -6493,7 +6504,12 @@ window._openTournamentCard = function (event, tournamentId) {
     if (target.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
   }
   if (typeof window._showLoading === 'function') {
-    try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
+    try {
+      window._showLoading('Abrindo o torneio…');
+      // marca a posse: o `hashchange` logo abaixo NÃO pode apagar este loader —
+      // quem o tira é a rota do torneio, quando a tela estiver pronta.
+      window._spLoadingOwnedByNav = true;
+    } catch (e) {}
   }
   window.location.hash = '#tournaments/' + tournamentId;
 };
@@ -9725,7 +9741,11 @@ window.AppStore = {
     // Save to Firestore immediately (saveTournament captura o _allowConfigReset de forma
     // SÍNCRONA no cleanData antes de qualquer await, então pode remover da memória logo após).
     if (window.FirestoreDB && window.FirestoreDB.db) {
-      window.FirestoreDB.saveTournament(tourData).catch(function(err) {
+      // `withImages`: este é o caminho da CRIAÇÃO/EDIÇÃO pelo formulário — o único, com o
+      // botão de trocar logo, que traz imagem NOVA. Sem a marca, o save omitiria
+      // `logoData`/`coverPhotoData` (ver a nota em firebase-db.saveTournament) e a imagem
+      // escolhida agora não chegaria ao banco.
+      window.FirestoreDB.saveTournament(tourData, { withImages: true }).catch(function(err) {
         window._error('Erro ao salvar torneio:', err);
         // permission-denied = token expirado ou regra de auth — não é bug de código
         if (err && err.code === 'permission-denied') {
