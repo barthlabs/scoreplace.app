@@ -1288,19 +1288,36 @@
   // antiga só olhava torneio ("ranking é recreativo"). Só que quem joga um ranking C+/B
   // hoje não é jogadora D porque disputou um torneio de iniciante há quatro anos.
   //
-  // Referência = o MAIS FORTE entre torneio, ranking e forma. Para a Bruna dá B, e é daí
-  // que saem exatamente as cores que o dono pediu: D fica a 2 níveis (vermelho), C a 1
-  // (âmbar), B no lugar (verde).
+  // 🔄 SUPERADO na 1.9.30 (mesmo dia, à noite): "o mais forte entre torneio, ranking e
+  // forma" fazia a banda do rating mandar, e a Bruna ficava vermelha na D. Com o ladder
+  // dela medido (9 jogos, rd 173, semeado em "Fem C+"), a banda é ruído. Hoje a referência
+  // é o motor de categoria — o mesmo da ficha. Ver o bloco abaixo.
   function _lzNivelApurado(fonte) {
     if (!fonte) return null;
     // ⭐ O RATING MANDA QUANDO EXISTE. Ele é força MEDIDA (pontos + jogos no ladder), e é o
     // que a régua da ficha já mostra. Medido: Bruna Arilla, rating.band = B, 1672 pts, 66
     // jogos — enquanto profileSkill dizia C e a categoria "oficial" dizia D (essa vinda do
     // NOME de um torneio de 2022, "Iniciante D").
-    var rt = fonte.rating;
-    if (rt && rt.band) {
-      var rb = _declRankFrom([rt.band]);
-      if (rb != null) return rb;
+    // ⛔ O RATING DEIXOU DE SER JUIZ (1.9.30, decisão do dono revendo a de 17/ago de manhã).
+    // A regra anterior dizia "o rating manda quando existe", e por ela a Bruna — inscrita na
+    // D — ficava VERMELHA. O dono, vendo a tela à noite: _"bruna continua vermelha em D
+    // quando deveria estar verde"_.
+    // O QUE MUDOU foi a MEDIÇÃO, não o gosto: a banda B dela não é força medida. O ladder
+    // dela tem **9 jogos** com `rd 173`, semeado a partir de "Fem C+" — os 66 jogos do
+    // histórico não são jogos daquele ladder. Varrendo os 13 inscritos com import lido, só
+    // 3 divergiam, e os três com ladder minúsculo: 6, 9 e 15 jogos, rd 182/173/155. Nessa
+    // amostra a banda é RUÍDO, e ruído não pode reprovar a inscrição de ninguém.
+    // A referência passa a ser o MESMO motor que a ficha usa (`_lzCategoriaComSinal`:
+    // a letra vem do TORNEIO, o sinal vem do ranking) — a tela deixa de ter dois juízes.
+    // ⚠️ O `+`/`-` NÃO entra na conta da cor: ele é direção, não elegibilidade. "D+" é D
+    // pra efeito de inscrição — quem é D+ está no lugar certo na D.
+    // Ver [[project_categoria_ranking_vs_torneio]], [[feedback_unify_dual_entry_points]].
+    if (typeof window._lzCategoriaDoImport === 'function' && Array.isArray(fonte.footprint)) {
+      var _cs = window._lzCategoriaDoImport(fonte);
+      if (_cs && _cs.categoria) {
+        var _cr = _declRankFrom([_cs.categoria]);
+        if (_cr != null) return _cr;
+      }
     }
     // ⚠️ SEM RATING, NADA MUDA: continua a borda MAIS FRACA da banda (profileSkill), que é
     // a régua conservadora de sempre. É o que mantém "Kelly declarada C com banda C+/B-"
@@ -1350,8 +1367,18 @@
       if (dist >= 2) return { key: 'red', apurada: apuradoRank };
       if (dist === 1) return { key: 'yellow', apurada: apuradoRank };
     }
-    // Topo da tabela / vencendo muito na categoria declarada (ou mais fácil) → PODE subir.
-    if (ev.standingRank != null) {
+    // Topo da tabela / vencendo muito num ranking acima → PODE subir.
+    // ⚠️ SÓ QUANDO NÃO HÁ NÍVEL APURADO (1.9.30). Com o apurado vindo do motor de categoria,
+    // esta regra vira DUPLICIDADE: o motor já olhou os rankings e traduziu "vence muito na
+    // categoria de cima" no **sinal** — é exatamente o que o "+" significa ("é D, mas está
+    // buscando a C"). Deixar as duas ligadas fazia a Bruna, que é D+, ficar ÂMBAR na D
+    // apontando pra B, quando o dono já disse que ela está no lugar certo:
+    // _"bruna continua vermelha em D quando deveria estar verde"_.
+    // O que continua empurrando pra cima é o TÍTULO (bloco lá em cima, regra de federação):
+    // ganhar a categoria é prova; vencer num ranking social é direção. Ver
+    // [[project_categoria_ranking_vs_torneio]] — errar pra cima tira a pessoa de torneio
+    // que ela pode jogar, então o gatilho fraco não pode decidir cor.
+    if (apuradoRank == null && ev.standingRank != null) {
       var shouldS = Math.max(0, ev.standingRank - 1);
       if (shouldS < declRank) return { key: 'yellow', apurada: shouldS };
     }

@@ -45,6 +45,24 @@ window.SP_EXT_VERSION = (require('fs')
   .readFileSync(require('path').join(__dirname, '..', 'js', 'store.js'), 'utf8')
   .match(/SP_EXT_VERSION\s*=\s*'([^']+)'/) || [])[1];
 if (!window.SP_EXT_VERSION) throw new Error('SP_EXT_VERSION não encontrado no store.js');
+
+// ── O MOTOR DE CATEGORIA TAMBÉM MORA NO store.js ────────────────────────────────
+// Desde a 1.9.30 o veredito de cor usa `_lzCategoriaDoImport` (a MESMA leitura da ficha:
+// letra do torneio, sinal do ranking). Sem carregá-lo aqui, o guard `typeof … === 'function'`
+// do código de produção simplesmente pula o ramo e o teste mede o FALLBACK — foi o que
+// aconteceu: a Bruna dava âmbar no teste e verde no app. Carrega-se o trecho REAL do
+// arquivo (fonte única), nunca uma réplica: réplica passa quando o original quebra.
+(function carregaMotorDeCategoria() {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'store.js'), 'utf8');
+  const ini = src.indexOf('window.SP_MIN_PRESENCA');
+  const fim = src.indexOf('window._lzMotorAtual');
+  if (ini < 0 || fim < 0 || fim <= ini) throw new Error('não achei o motor de categoria no store.js');
+  require('vm').runInContext(src.slice(ini, fim), require('./headless.js').sandbox,
+    { filename: 'store.js:motor-de-categoria' });
+  if (typeof window._lzCategoriaDoImport !== 'function') {
+    throw new Error('_lzCategoriaDoImport não carregou — o teste mediria o fallback');
+  }
+})();
 const MOTOR = window.SP_EXT_VERSION;
 const DOIS_MESES = new Date(Date.now() - 60 * 86400000).toISOString(); // dentro dos 3 meses
 let pass = 0, fail = 0;
@@ -91,19 +109,44 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   ok(r._lzSkill === 'D', 'exibe o nível apurado D (borda fraca de "Fem D+ / C-"), veio: ' + r._lzSkill);
 }
 
-// ── 1b. A COR DIZ A DISTÂNCIA ATÉ O NÍVEL REAL (caso Bruna Arilla, 17/ago/2026) ──
-// Ordem do dono, olhando a ficha dela: _"se ela estava na D sendo quase B (C+) deveria ser
-// vermelho na D, âmbar na C"_. Dado REAL do doc: officialCategory.skill = D (do NOME de um
-// torneio de 2022, "Iniciante D"), profileSkill = C, rankingCategory = "Fem C+",
-// rating = { band: 'B', value: 1672, played: 9 } — 66 jogos no histórico.
-// Antes, com categoria declarada e sem título, TUDO dava verde: o nível apurado só era
-// usado quando não havia declarada. Era por isso que ela aparecia coerente jogando na D.
+// ── 1b. A COR SAI DO MESMO MOTOR DA FICHA (caso Bruna Arilla, 17/ago/2026) ──────
+// ⚠️ ESTE BLOCO JÁ TEVE A EXPECTATIVA INVERTIDA, no mesmo dia, e as duas ordens são do
+// dono. Guardar as duas é o ponto: a segunda não foi troca de gosto, foi MEDIÇÃO.
+//
+// DE MANHÃ, olhando a ficha: _"se ela estava na D sendo quase B (C+) deveria ser vermelho
+// na D, âmbar na C"_ → o veredito passou a seguir `rating.band` (= B), e ela ficou vermelha.
+//
+// À NOITE, olhando a tela: _"bruna continua vermelha em D quando deveria estar verde"_.
+// O QUE APARECEU NO MEIO: o `rating.band = B` dela NÃO é força medida. O ladder tem
+// **9 jogos** com `rd 173`, semeado a partir de "Fem C+" — os 66 jogos do histórico não são
+// jogos daquele ladder. Varredura dos 13 inscritos com import lido: só 3 divergiam, e os
+// três com ladder minúsculo (6, 9 e 15 jogos; rd 182/173/155). Nessa amostra a banda é
+// RUÍDO, e ruído não pode reprovar a inscrição de ninguém.
+//
+// Hoje o veredito usa o MESMO motor da ficha (`_lzCategoriaComSinal`): a letra vem do
+// TORNEIO, o sinal vem do ranking. Para ela dá **D+** — é D, buscando a C. Inscrita na D,
+// está no lugar: VERDE.
+//
+// ⚠️ O footprint aqui é o REAL do doc dela (10 entradas, com o lixo que o letzplay manda:
+// "Rodada: 6", "Feminina P" — que é Prata, não categoria — e nome de torneio inteiro no
+// lugar da categoria). Com `footprint: []`, como estava antes, o teste media outra coisa:
+// caía no `profileSkill` e nunca exercitava o motor.
 {
+  const fpBruna = [
+    { official: false, categoryRaw: 'Fem C+',     wins: 7,  losses: 2 },
+    { official: false, categoryRaw: 'Fem D+',     wins: 9,  losses: 2 },
+    { official: false, categoryRaw: 'Rodada: 6',  wins: 1,  losses: 5 },
+    { official: false, categoryRaw: 'Feminina C', wins: 17, losses: 10 },
+    { official: false, categoryRaw: 'Fem D',      wins: 1,  losses: 2 },
+    { official: true,  categoryRaw: 'Feminina P', wins: 2,  losses: 2 },
+    { official: true,  categoryRaw: '3ª Edição - BT Bellas by Nati Font - "Iniciante ""D"" - Seu negócio é se divertir e conhecer + o BT"', wins: 1, losses: 1 },
+    { official: true,  categoryRaw: 'ESPAÇOLASER apresenta BT Bellas by Nati Font - 6ª Edição - Nível 1 - Categoria D', wins: 3, losses: 1 },
+  ];
   const impBruna = {
     handle: 'bruarilla', officialCategory: { categoryRaw: '… Iniciante ""D""…', skill: 'D' },
     rankingCategory: 'Fem C+', profileSkill: 'C', skill: 'C',
-    rating: { band: 'B', value: 1672, played: 9, ladder: 'beach-fem-2025' },
-    champions: [], footprint: [],
+    rating: { band: 'B', value: 1672, played: 9, rd: 173, fromCategory: 'Fem C+', ladder: 'beach-fem-2025' },
+    champions: [], footprint: fpBruna,
     games: [{ lzId: '900001', date: 'Sábado, 09/08/26', myScore: 6, oppScore: 3, won: true }],
     declaredGames: 67, gamesTotal: 67, indexTotal: 67, extVersion: MOTOR,
     lzCursor: { complete: true, pagesTotal: 1, pagesRead: { 1: 1 } }, importedAt: AGORA,
@@ -112,12 +155,15 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   const naD = run({ uid: 'b1', effectiveSkills: ['D'] }, { b1: prof }, {});
   const naC = run({ uid: 'b2', effectiveSkills: ['C'] }, { b2: prof }, {});
   const naB = run({ uid: 'b3', effectiveSkills: ['B'] }, { b3: prof }, {});
-  ok(naD._lzColor === COL.red,    'Bruna (nível B) inscrita na D → VERMELHO (veio: ' + naD._lzColor + ')');
-  ok(naC._lzColor === COL.yellow, 'Bruna (nível B) inscrita na C → ÂMBAR (veio: ' + naC._lzColor + ')');
-  ok(naB._lzColor === COL.green,  'Bruna (nível B) inscrita na B → VERDE (veio: ' + naB._lzColor + ')');
+  ok(naD._lzColor === COL.green, 'Bruna (D+, torneio na D) inscrita na D → VERDE: está no lugar (veio: ' + naD._lzColor + ')');
+  ok(naC._lzColor === COL.green, 'Bruna inscrita na C → VERDE: competir acima é permitido (veio: ' + naC._lzColor + ')');
+  ok(naB._lzColor === COL.green, 'Bruna inscrita na B → VERDE, pelo mesmo motivo (veio: ' + naB._lzColor + ')');
   // ⚠️ e o contrário também: jogar ACIMA do próprio nível nunca é acusação.
   const naA = run({ uid: 'b4', effectiveSkills: ['A'] }, { b4: prof }, {});
   ok(naA._lzColor === COL.green, 'inscrita ACIMA do nível dela → VERDE (competir acima é permitido)');
+  // ⛔ O QUE NÃO PODE VOLTAR: a banda do rating mandando na cor. Se alguém religar isso,
+  // esta pessoa — com ladder de 9 jogos — volta a ser reprovada na própria categoria.
+  ok(naD._lzSkill !== 'B', 'a categoria apurada NÃO é a banda do rating (veio: ' + naD._lzSkill + ')');
 }
 
 // ── 2. A leitura NÃO pode depender do inscrito logar ──
