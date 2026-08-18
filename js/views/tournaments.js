@@ -3609,7 +3609,10 @@ function renderTournaments(container, tournamentId = null) {
         // pelo criador), o card vira ALVO DE SOLTAR — arrastar um inscrito até a
         // estrela do organizador "transforma" o card (pulsa + estrela brilha) e o
         // soltar abre o convite de co-organização (_handleCrownDrop).
-        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isTapPicker) {
+        // v1.9.26: `roleUid` + `roleM`/`roleF` — o rótulo declara de QUEM ele fala e
+        // quais são as duas formas, pra `_hydrateUidNames` corrigi-lo quando o perfil
+        // chegar (abertura fria). Sem uid, nada muda: fica o texto passado.
+        function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isTapPicker, roleUid, roleM, roleF) {
           var _oSeed = encodeURIComponent(name);
           var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
           var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[(name || '').toLowerCase()] && window._playerPhotoCache[(name || '').toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[(name || '').toLowerCase()] : _oFallback;
@@ -3647,7 +3650,13 @@ function renderTournaments(container, tournamentId = null) {
                 '<div style="flex:0 1 auto;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
                   '<span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' +
                 '</div>' + _starSpan + '</div>' +
-              '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;">' + role + '</div>' +
+              '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;"' +
+                (roleUid && roleM && roleF
+                  ? ' data-uid-role="' + window._safeHtml(String(roleUid)) + '"' +
+                    ' data-role-m="' + window._safeHtml(String(roleM)) + '"' +
+                    ' data-role-f="' + window._safeHtml(String(roleF)) + '"'
+                  : '') +
+              '>' + role + '</div>' +
             '</div>' +
             (canRemove ? '<button type="button" class="cancel-x-btn" style="--cx-size:20px;" title="Remover co-organizador" onclick="event.stopPropagation();window._removeCoHost(\'' + window._safeHtml(String(_t.id)) + '\',\'' + window._safeHtml(removeEmail) + '\')">✕</button>' : '') +
           '</div>';
@@ -3760,7 +3769,7 @@ function renderTournaments(container, tournamentId = null) {
         // v2.8.50/52: o card do organizador NÃO é o alvo de soltar (sem dashed em
         // volta); o alvo é a VAGA separada (_buildDropzone, só aparece no arraste). O
         // card do CRIADOR é tocável → abre o seletor (entrada por toque no mobile).
-        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow);
+        _orgCards += _buildOrgCard(_orgDisplayName, _orgRoleLabel, _orgBgPrimary, false, '', _isCreatorNow, _t.creatorUid || _t.organizerId, 'Organizador', 'Organizadora');
         if (Array.isArray(_t.coHosts)) {
           _t.coHosts.forEach(function(ch) {
             if (!ch) return;
@@ -3772,7 +3781,7 @@ function renderTournaments(container, tournamentId = null) {
             if (ch.status === 'active') {
               var _chGender = ch.gender || _resolveOrgGender(ch.email, ch.uid);
               var _chLabel = _gw(_chGender, 'Co-organizador', 'Co-organizadora');
-              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email);
+              _orgCards += _buildOrgCard(_chName, _chLabel, _orgBgCohost, _isCreatorNow, ch.uid || ch.email, false, ch.uid, 'Co-organizador', 'Co-organizadora');
             } else if (ch.status === 'pending') {
               // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
               // lado do organizador), não mais só na lista de inscritos.

@@ -41,6 +41,12 @@ const SUITES = [
   // abertura. Guarda os dois invariantes (nenhum caminho grava foto; contagem é agregação
   // no servidor, com fallback pra WebView de SDK velho).
   'tests/notificacao-nao-carrega-foto.test.js',
+  // "Co-organizador(a)" pra quem TEM gênero declarado — a regressão que já voltou 2x. A
+  // causa nunca foi a regra de português: o rótulo era texto CONGELADO no render, lido de
+  // um cache de perfil que só esquenta depois, e o re-render que corrigiria morre no gate
+  // de assinatura do detalhe. Guarda o invariante: rótulo que depende de perfil declara o
+  // uid e as duas formas, e se cura sozinho na hidratação — como o NOME sempre fez.
+  'tests/rotulo-de-papel-se-cura.test.js',
   // O cabeçalho não invade relógio/ilha em NENHUM dos 4 contextos (navegador, PWA
   // instalado, nativo iOS, nativo Android). Complementa o teste de chaves: aquele garante
   // que a regra é ALCANÇÁVEL, este que ela EXISTE pra cada contexto.

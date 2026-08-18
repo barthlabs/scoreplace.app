@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.25';
+window.SCOREPLACE_VERSION = '1.9.26';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -332,18 +332,47 @@ window._displayName = function (uid, guestName) {
   if (uid) return window._nameForUid(uid);
   return guestName || '';
 };
+// ── O RÓTULO DE PAPEL SE CURA SOZINHO, IGUAL AO NOME (1.9.26) ──────────────────
+// "Co-organizador(a)" para Kelly, Raquel e Fabiana — TODAS com `gender:'feminino'`
+// gravado — já foi consertado mais de uma vez e VOLTOU. A causa nunca foi a regra de
+// português: é TEMPO.
+//   1. os cards da ORGANIZAÇÃO são montados como STRING, síncronos, lendo
+//      `_genderForUid` no `_userProfileCache`;
+//   2. o cache só é preenchido DEPOIS, por `_preloadUserProfiles` (o próprio render
+//      dispara), então na abertura fria o gênero ainda não existe → forma neutra;
+//   3. o `_softRefreshView()` que corrigiria isso morre no gate de assinatura do
+//      detalhe (`_tournamentDetailSig`): o TORNEIO não mudou, só o cache esquentou.
+// Resultado: quem testa com cache quente (revisita) vê certo, e a tela do usuário
+// que abre do zero fica errada — o formato perfeito de regressão que "volta sozinha".
+// O NOME não sofria disso porque ele nunca dependeu do render: é hidratado no DOM
+// depois, por uid. Então o rótulo passa a usar EXATAMENTE o mesmo caminho — quem
+// desenha declara `data-uid-role` + as duas formas, e a correção acontece aqui.
+// ⚠️ Por isso mora DENTRO do hidratador de nomes, e não numa função nova: toda tela
+// que hidrata nome hidrata papel, sem precisar achar call site novo.
+// Ver [[feedback_unify_dual_entry_points]], [[project_detail_view_sig_no_updatedat]].
 window._hydrateUidNames = function (root) {
   root = root || (typeof document !== 'undefined' ? document : null);
   if (!root || !root.querySelectorAll) return Promise.resolve();
   var els = root.querySelectorAll('[data-uid-name]');
-  if (!els.length) return Promise.resolve();
+  var roleEls = root.querySelectorAll('[data-uid-role]');
+  if (!els.length && !roleEls.length) return Promise.resolve();
   var uids = [];
   els.forEach(function (e) { var u = e.getAttribute('data-uid-name'); if (u) uids.push(u); });
+  roleEls.forEach(function (e) { var u = e.getAttribute('data-uid-role'); if (u) uids.push(u); });
   return window._preloadUserProfiles(uids).then(function () {
     els.forEach(function (e) {
       var u = e.getAttribute('data-uid-name');
       var nm = window._nameForUid(u);
       if (nm) e.textContent = nm;
+    });
+    // Papel: com o perfil no cache, a forma neutra vira a forma da pessoa. Sem gênero
+    // conhecido, `_genderWord` devolve a neutra de novo — o texto simplesmente não muda.
+    roleEls.forEach(function (e) {
+      var u = e.getAttribute('data-uid-role');
+      var m = e.getAttribute('data-role-m') || '';
+      var f = e.getAttribute('data-role-f') || '';
+      if (!u || !m || !f) return;
+      e.textContent = window._genderWord(window._genderForUid(u), m, f);
     });
     // v1.3.45: atualiza o LABEL DE ARRASTE (data-participant-name) dos cards de inscrito com o
     // nome VIVO resolvido por uid. O CSS do modo compacto (body.sp-drag-compact
