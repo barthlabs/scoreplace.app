@@ -930,6 +930,12 @@ const SUITES = [
   // ampla que a do cliente de propósito: pega campo DINÂMICO (`where(t.f, ...)`), que no
   // servidor é a forma comum e a regex de literais não veria.
   'tests/user-vivo-no-servidor.test.js',
+  // "Jogador sem perfil (XXXX)" ocupando o lugar de gente que TEM perfil: o rótulo neutro é
+  // truthy e vencia fonte boa (folga com nome gravado) no cache frio, e ainda ia CONGELADO
+  // pro HTML — sem [data-uid-name] o hidratador não tinha o que curar e o repaint morre no
+  // gate de assinatura do detalhe. Medido no doc real do Confra: 7 chips na tela + 142 de
+  // 142 linhas da classificação geral.
+  'tests/rotulo-orfao-nao-vence-o-nome.test.js',
 ];
 
 let failed = [];

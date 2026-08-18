@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.33';
+window.SCOREPLACE_VERSION = '1.9.34';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -372,6 +372,22 @@ window._hydrateUidNames = function (root) {
       var nm = window._nameForUid(u);
       if (nm) e.textContent = nm;
     });
+    // A BUSCA também congela: `data-players` é o que o filtro varre, e ele foi escrito
+    // no render — com o cache frio, escrito como "Jogador sem perfil (XXXX)". Sem esta
+    // cura, procurar a pessoa pelo nome REAL não a encontrava (e, pior, escondia o box
+    // inteiro em que ela é a única — regra do dono da v1.6.93). O rótulo carrega o
+    // PREFIXO do uid, e os uids desta hidratação estão à mão: dá pra reescrever sem
+    // atributo novo em nenhum render.
+    try {
+      var _nmByPfx = {};
+      uids.forEach(function (u) { var nm = window._nameForUid(u); if (nm) _nmByPfx[String(u).slice(0, 4)] = nm; });
+      root.querySelectorAll('[data-players]').forEach(function (e) {
+        var v = e.getAttribute('data-players') || '';
+        if (!window._isOrphanLabel(v)) return;
+        var novo = v.replace(/jogador sem perfil \(([^)]{1,8})\)/ig, function (all, pfx) { return _nmByPfx[pfx] || all; });
+        if (novo !== v) e.setAttribute('data-players', novo);
+      });
+    } catch (_e) {}
     // Papel: com o perfil no cache, a forma neutra vira a forma da pessoa. Sem gênero
     // conhecido, `_genderWord` devolve a neutra de novo — o texto simplesmente não muda.
     roleEls.forEach(function (e) {
@@ -4822,7 +4838,17 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
         if (p.p1Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p1Name || '';
         if (p.p2Uid === u) return (typeof window._nameForUid === 'function' && window._nameForUid(u)) || p.p2Name || '';
         var _isPairEntry = !!(p.p1Uid || p.p2Uid || (p.p1Name && p.p2Name));
-        if (p.uid === u && !_isPairEntry) return (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
+        if (p.uid === u && !_isPairEntry) {
+          // ⚠️ O RESOLVEDOR TEM QUE PODER DIZER "NÃO SEI". `_pName` de uma entrada
+          // STRIPPADA (só uid, que é o formato de produção) devolve o RÓTULO NEUTRO
+          // quando o cache de perfis ainda está frio — e o rótulo é truthy, então ele
+          // voltava daqui e o `|| part` lá embaixo nunca via o nome GRAVADO no slot.
+          // Medido no Confra (tour_1780009816637): as 6 folgas tinham "Fernanda
+          // Martins"/"Denise Mamesso" em `m.p1`, os 143 uids do elenco resolvem em
+          // users/, e a tela mostrava "Jogador sem perfil (…)" nos 6 chips.
+          var _nPool = (typeof window._pName === 'function') ? window._pName(p) : (p.displayName || p.name || '');
+          return (window._isOrphanLabel && window._isOrphanLabel(_nPool)) ? '' : _nPool;
+        }
       }
     }
     return '';
@@ -7442,6 +7468,14 @@ window._profileNameByUid = window._profileNameByUid || {};
 // enfeite: o nome é chave no motor de sorteio, e dois "Jogador sem perfil" iguais colidiriam
 // (um sumiria do sorteio). Ver [[project_orphan_uid_entries]] / [[project_match_slot_uid_identity]].
 window._ORPHAN_UID_LABEL = 'Jogador sem perfil';
+// O RÓTULO NEUTRO NÃO É RESPOSTA — é o "não sei" com cara de nome. Ele é truthy, então
+// qualquer `x || y` o deixa GANHAR de uma fonte boa (v1.8.29 aprendeu isso no card da
+// chave; o Confra de 18/ago mostrou que o pool do _resolveSideLive tinha o mesmo buraco:
+// elenco strippado + cache frio ⇒ "Jogador sem perfil (Y38Z)" por cima de "Fernanda
+// Martins" gravado na folga). Quem resolve identidade testa AQUI antes de aceitar.
+window._isOrphanLabel = function (s) {
+  return /jogador sem perfil \(/i.test(String(s == null ? '' : s));
+};
 window._displayNameForUid = function (uid, storedName) {
   if (uid) {
     var live = (typeof window._nameForUid === 'function') ? window._nameForUid(uid) : (window._profileNameByUid[uid] || '');
@@ -7461,6 +7495,30 @@ window._displayNameForUid = function (uid, storedName) {
 // ⚠️ Isto é só EXIBIÇÃO: o rótulo guardado continua sendo a CHAVE de casamento com os jogos
 // (_computeStandings/_computeMonarchStandings) e o argumento do _openPlayerProfile. Trocar a
 // chave quebraria a contagem. Ver [[project_uid_identity_canon_locked]].
+// v1.9.34 — A LINHA DA CLASSIFICAÇÃO TAMBÉM SE CURA SOZINHA.
+// `_computeStandings` monta `s.name` a partir da ENTRADA do elenco, que em produção é
+// STRIPPADA (só uid) — com o cache de perfis frio ele devolve o RÓTULO NEUTRO, e o
+// render congelava esse rótulo na célula. Medido no doc real do Confra
+// (tour_1780009816637): 142 de 142 linhas da classificação geral saíam como "Jogador sem
+// perfil (XXXX)" na abertura fria, embora os 143 uids resolvam em users/. E o
+// `_softRefreshView` que consertaria isso morre no gate de assinatura do detalhe (o
+// torneio não mudou — quem mudou foi o cache), exatamente como no rótulo de PAPEL (1.9.26).
+// Então segue o MESMO caminho: quem desenha declara o uid e a cura acontece na hidratação.
+// Com nome resolvido devolve o HTML de hoje INTACTO (coroa, quebra de linha, tudo) — só o
+// caso "ainda não sei" vira o span vazio que o CSS pinta como "…".
+// Texto PURO do nome pra ir em ATRIBUTO (title): atributo não hidrata, então o rótulo
+// neutro ali fica pra sempre. Vazio = "ainda não sei" e o caller decide o que dizer.
+window._plainRowName = function (s) {
+  var nm = (typeof window._liveRowName === 'function') ? window._liveRowName(s) : ((s && s.name) || '');
+  return (window._isOrphanLabel && window._isOrphanLabel(nm)) ? '' : nm;
+};
+window._rowNameHtml = function (s, html) {
+  var uid = s && s.uid;
+  if (!uid || !window._isOrphanLabel) return html;
+  var nm = (typeof window._liveRowName === 'function') ? window._liveRowName(s) : (s && s.name) || '';
+  if (!window._isOrphanLabel(nm)) return html;
+  return '<span data-uid-name="' + window._safeHtml(uid) + '"></span>';
+};
 window._liveRowName = function (s) {
   if (!s) return '';
   var stored = s.name || s.displayName || '';

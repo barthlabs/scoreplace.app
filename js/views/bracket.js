@@ -4306,7 +4306,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s)))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + window._rowNameHtml(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -4536,7 +4536,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s)))}</td>
+        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${window._rowNameHtml(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s))))}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
@@ -4848,7 +4848,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
     })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="Ver ficha de ${window._safeHtml(s.name)}">${typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="${window._plainRowName(s) ? 'Ver ficha de ' + window._safeHtml(window._plainRowName(s)) : 'Ver ficha'}">${window._rowNameHtml(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name)))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
@@ -5075,7 +5075,19 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var _outTidJs = _outEsc(t.id);
         // Miolo do chip: nome (com ficha pra autoridade) + o 💬 do contato direto.
         var _outPersonHtml = function (nm, uid) {
-          var _nmH = window._safeHtml(nm);
+          // ⚠️ RÓTULO POR PERFIL NUNCA VAI CONGELADO NO HTML. Estes chips desenhavam o
+          // texto resolvido no instante do render; com o cache de perfis frio (o preload
+          // é assíncrono — 143 leituras no Confra) isso gravava "Jogador sem perfil
+          // (XXXX)" na tela PRA SEMPRE: `_hydrateUidNames` não tinha o que curar (sem
+          // [data-uid-name]) e o `_softRefreshView` que o preload dispara volta no gate
+          // de assinatura do detalhe (o documento não mudou — quem mudou foi o cache).
+          // Agora o chip DECLARA o uid e a cura acontece na hidratação, como no card da
+          // chave. [[feedback_rotulo_por_perfil_nunca_congelado_no_render]]
+          if (window._isOrphanLabel && window._isOrphanLabel(nm)) nm = '';
+          var _nmTxt = window._safeHtml(nm);   // texto puro — vai em atributo (title)
+          var _nmH = uid
+            ? ('<span data-uid-name="' + window._safeHtml(uid) + '">' + _nmTxt + '</span>')
+            : _nmTxt;
           // v1.7.20 (regra do dono): a FICHA é de TODOS pra TODOS — organizador e
           // participante, em todos os grupos e também aqui (lista de espera, desativados,
           // W.O.). Só o 💬 é restrito (participante ⇒ apenas o próprio grupo; organizador
@@ -5085,7 +5097,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _nameHtml = (uid && typeof window._openPlayerProfile === 'function')
             ? ('<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;"' +
                ' onclick="event.stopPropagation();window._openPlayerProfile(\'' + _outEsc(nm) + '\',{uid:\'' + _outEsc(uid) +
-               '\',tournamentId:\'' + _outTidJs + '\'})" title="Ver ficha de ' + _nmH + '">' + _nmH + '</span>')
+               '\',tournamentId:\'' + _outTidJs + '\'})" title="' + (_nmTxt ? ('Ver ficha de ' + _nmTxt) : 'Ver ficha') + '">' + _nmH + '</span>')
             : _nmH;
           return _nameHtml + (typeof window._contactPersonIconHtml === 'function'
             ? window._contactPersonIconHtml(t, uid, nm, { sameGroup: false }) : '');
@@ -5527,7 +5539,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 // Ver [[project_uid_identity_canon_locked]], [[project_uid_primary_identity]].
                 var _nomeVivo = (typeof window._liveRowName === 'function')
                   ? window._liveRowName(s) : s.name;
-                var _txt = window._safeHtml(_nomeVivo);
+                var _txt = window._rowNameHtml(s, window._safeHtml(_nomeVivo));
                 if (typeof window._openPlayerProfile !== 'function') return _txt;
                 // SEM UID NÃO ABRE FICHA (regra do dono: "sempre por uid, a menos que seja
                 // nome digitado"). Antes o nome saía clicável com `uid:''` e a ficha caía em
@@ -5536,7 +5548,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 if (!s.uid) return _txt;
                 return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
                   '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
-                  ' title="Ver ficha de ' + window._safeHtml(s.name) + '"' +
+                  ' title="' + (window._plainRowName(s) ? ('Ver ficha de ' + window._safeHtml(window._plainRowName(s))) : 'Ver ficha') + '"' +
                   ' style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
                   _txt + '</span>';
               };
@@ -6051,7 +6063,23 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         : { keys: [], keyName: {}, matrix: {} };
       var keys = h2hData.keys;
       var matrix = h2hData.matrix;
-      var _nameOf = function(k) { return h2hData.keyName[k]; };
+      // a chave é 'uid:<uid>' quando a pessoa tem conta — então o rótulo neutro que veio
+      // do `_computeStandings` (elenco strippado + cache frio) NÃO precisa virar texto:
+      // vazio aqui = "ainda não sei", e o `data-uid-name` abaixo é curado na hidratação.
+      var _uidOfKey = function (k) { return String(k || '').indexOf('uid:') === 0 ? String(k).slice(4) : ''; };
+      var _nameOf = function(k) {
+        var n = h2hData.keyName[k];
+        if (!window._isOrphanLabel || !window._isOrphanLabel(n)) return n;
+        var u = _uidOfKey(k);
+        return (u && typeof window._nameForUid === 'function' && window._nameForUid(u)) || '';
+      };
+      // rótulo de célula: com nome, o texto de hoje; sem nome, o span que hidrata.
+      var _cellName = function (k, txt) {
+        var u = _uidOfKey(k);
+        if (!u || _nameOf(k)) return (window._safeHtml ? window._safeHtml(txt) : txt);
+        return '<span data-uid-name="' + (window._safeHtml ? window._safeHtml(u) : u) + '"></span>';
+      };
+      var _cellTitle = function (k) { var n = _nameOf(k); return n ? (window._safeHtml ? window._safeHtml(n) : n) : ''; };
       if (keys.length < 2) return;
 
       // Build table
@@ -6062,7 +6090,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       keys.forEach(function(k, i) {
         var n = _nameOf(k);
         var shortName = n.length > 8 ? n.substring(0, 7) + '…' : n;
-        thCells += '<th style="padding:6px 4px;font-size:0.6rem;color:var(--text-muted);text-align:center;min-width:28px;writing-mode:vertical-lr;transform:rotate(180deg);height:60px;" title="' + (window._safeHtml ? window._safeHtml(n) : n) + '">' + (window._safeHtml ? window._safeHtml(shortName) : shortName) + '</th>';
+        thCells += '<th style="padding:6px 4px;font-size:0.6rem;color:var(--text-muted);text-align:center;min-width:28px;writing-mode:vertical-lr;transform:rotate(180deg);height:60px;" title="' + _cellTitle(k) + '">' + _cellName(k, shortName) + '</th>';
       });
 
       var rows = '';
@@ -6070,7 +6098,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var rowName = _nameOf(rowKey);
         var shortRow = rowName.length > 12 ? rowName.substring(0, 11) + '…' : rowName;
         rows += '<tr>';
-        rows += '<td style="padding:6px 8px;font-size:0.75rem;font-weight:600;color:var(--text-bright);white-space:nowrap;border-right:1px solid var(--border-color);" title="' + (window._safeHtml ? window._safeHtml(rowName) : rowName) + '">' + (window._safeHtml ? window._safeHtml(shortRow) : shortRow) + '</td>';
+        rows += '<td style="padding:6px 8px;font-size:0.75rem;font-weight:600;color:var(--text-bright);white-space:nowrap;border-right:1px solid var(--border-color);" title="' + _cellTitle(rowKey) + '">' + _cellName(rowKey, shortRow) + '</td>';
         keys.forEach(function(colKey, ci) {
           var colName = _nameOf(colKey);
           if (ri === ci) {
