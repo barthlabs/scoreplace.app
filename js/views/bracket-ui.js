@@ -8521,6 +8521,22 @@ window._openLiveScoring = function(tId, matchId, opts) {
       playerUids: _uids,
       scoring: { type: sc.type || '', gamesPerSet: sc.gamesPerSet || null, setsToWin: sc.setsToWin || null,
                  countingType: sc.countingType || '' },
+      // TORNEIO PRIVADO SÓ APARECE PRA QUEM ESTÁ NELE (1.9.37, ordem do dono). '*' = todo
+      // mundo (torneio público e partida casual). No privado a plateia é o elenco + a
+      // espera + a organização — as MESMAS pessoas que recebem o convite.
+      audience: (function () {
+        if (isCasual || !t || t.isPublic !== false) return ['*'];
+        var _aud = {}, _add = function (u) { if (u) _aud[u] = 1; };
+        var _uidsDe = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return p && p.uid ? [p.uid] : []; };
+        (Array.isArray(t.participants) ? t.participants : []).forEach(function (p) { _uidsDe(p).forEach(_add); });
+        if (typeof window._getWaitlist === 'function') {
+          (window._getWaitlist(t) || []).forEach(function (e) { if (e && typeof e === 'object') _uidsDe(e).forEach(_add); });
+        }
+        _add(t.creatorUid);
+        (Array.isArray(t.coHosts) ? t.coHosts : []).forEach(function (c) { if (c && c.status === 'active') _add(c.uid); });
+        var _lista = Object.keys(_aud);
+        return _lista.length ? _lista : ['*'];
+      })(),
       startedAt: _matchStartTime || Date.now(),
       state: _serializeState()
     };
@@ -8529,6 +8545,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (_spectate) return;              // espectador NÃO publica — ele só lê
     if (typeof window._liveNowPublish !== 'function') return;
     if (!_lnResolveId()) return;
+    // ── COMEÇA NO 1º PONTO, NÃO NA ABERTURA (1.9.37) ──────────────────────────
+    // Ordem do dono: _"sim apenas no primeiro ponto"_. Abrir o placar pra conferir a
+    // configuração (ou pra escolher o sacador) não é jogo começando — e avisava o
+    // torneio inteiro. Agora a partida só entra na vitrine, e o convite só sai, quando
+    // existe ponto marcado. Enquanto isso, nada é publicado: nem doc, nem aviso.
+    var _pontos = (state && Array.isArray(state.pointLog)) ? state.pointLog.length : 0;
+    if (!_lnPub && _pontos < 1) return;
     // 1ª vez: publica o cabeçalho E convida os inscritos do torneio (uma vez só)
     if (!_lnPub) {
       _lnPub = true;

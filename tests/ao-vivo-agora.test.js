@@ -40,6 +40,42 @@ ok(W._liveNowIsFresh({ status: 'live', lastActivityAt: agora - (4 * 60 * 1000) }
   'sem sinal há 4 min → sai da vitrine sozinho (fechou o app no meio)');
 ok(W._liveNowIsFresh({ status: 'finished', lastActivityAt: agora }, agora) === false, 'encerrada não é "ao vivo"');
 
+// ── 2b. A JANELA DE FRESCOR E O HEARTBEAT ANDAM JUNTOS (1.9.37) ──────────────
+// O dono cortou os 3 min ("tempo demais"). O piso é o heartbeat: janela menor que a
+// batida faria um jogo EM ANDAMENTO piscar pra fora da lista. Este teste existe pra
+// que encurtar um sem olhar o outro não passe batido.
+const lnSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'live-now.js'), 'utf8');
+const hbMatch = lnSrc.match(/HEARTBEAT_MS\s*=\s*(\d+)\s*\*\s*1000/);
+ok(!!hbMatch, 'heartbeat declarado no módulo');
+const hbMs = hbMatch ? Number(hbMatch[1]) * 1000 : 0;
+ok(W._LIVE_STALE_MS === 60 * 1000, 'sem sinal por 1 min → sai da vitrine (got ' + W._LIVE_STALE_MS + 'ms)');
+ok(W._LIVE_STALE_MS >= hbMs * 2, 'a janela tolera DUAS batidas perdidas (rede de quadra cai) — ' +
+  W._LIVE_STALE_MS + 'ms vs heartbeat ' + hbMs + 'ms');
+ok(W._liveNowIsFresh({ status: 'live', lastActivityAt: agora - 40000 }, agora) === true, '40s sem ponto ainda é ao vivo (o heartbeat segura)');
+ok(W._liveNowIsFresh({ status: 'live', lastActivityAt: agora - 70000 }, agora) === false, '70s sem sinal nenhum → sumiu');
+
+// ── 2c. PRIVADO SÓ PRA QUEM ESTÁ NELE ────────────────────────────────────────
+// A plateia mora no DOC (`audience`), porque é ela que a REGRA lê e é por ela que a
+// consulta filtra. Filtrar só na tela deixaria o doc legível por quem soubesse o id.
+const publicados = [];
+W.FirestoreDB = { db: { collection: function () { return { doc: function (id) { return {
+  set: function (payload) { publicados.push({ id: id, payload: payload }); return Promise.resolve(); }
+}; } }; } } };
+W._liveNowPublish({ id: 'x1', kind: 'casual', p1Players: ['A'], p2Players: ['B'] });
+ok(publicados.length === 1 && JSON.stringify(publicados[0].payload.audience) === '["*"]',
+  'casual/público → plateia "*" (qualquer um assiste)');
+W._liveNowPublish({ id: 'x2', kind: 'tournament', audience: ['u1', 'u2'], p1Players: ['A'], p2Players: ['B'] });
+ok(publicados.length === 2 && publicados[1].payload.audience.join(',') === 'u1,u2',
+  'torneio privado → plateia é a lista de quem está nele');
+const bui0 = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
+ok(/isCasual \|\| !t \|\| t\.isPublic !== false\) return \['\*'\]/.test(bui0),
+  'quem monta a plateia lê `t.isPublic` do torneio (privado = elenco + espera + organização)');
+ok(/audience', 'array-contains-any'/.test(lnSrc), 'a CONSULTA pede só o que a regra deixaria ler');
+
+// ── 2d. A VITRINE COMEÇA NO 1º PONTO, NÃO NA ABERTURA ────────────────────────
+ok(/_pontos\s*=\s*\(state && Array\.isArray\(state\.pointLog\)\)[\s\S]{0,120}if \(!_lnPub && _pontos < 1\) return;/.test(bui0),
+  'abrir o placar (conferir config, escolher sacador) não publica nem avisa ninguém');
+
 // ── 3. a ordem que o dono pediu ───────────────────────────────────────────────
 W.AppStore.tournaments = [{ id: 'meuTour', memberUids: ['eu', 'outro'] }];
 const ordenada = W._liveNowRank([

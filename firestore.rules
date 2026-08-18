@@ -511,7 +511,15 @@ service cloud.firestore {
     // sem isso, um espectador poderia sobrescrever o placar de quem está em quadra
     // (que é justamente o que o modo espectador promete que não acontece).
     match /liveScores/{liveId} {
-      allow read: if true;
+      // Leitura casada com a PLATEIA do doc (1.9.37): `'*'` = qualquer um (torneio
+      // público e casual); torneio PRIVADO lista os uids de quem está nele. A consulta
+      // do cliente pede exatamente isto (`audience array-contains-any ['*', meu uid]`) —
+      // em Firestore a regra não filtra, então consulta e regra têm que dizer a MESMA
+      // coisa, senão a lista inteira falha. Docs antigos (sem `audience`) seguem
+      // legíveis: a vitrine nasceu pública e ninguém fica preso a um doc invisível.
+      allow read: if !('audience' in resource.data)
+        || '*' in resource.data.audience
+        || (request.auth != null && request.auth.uid in resource.data.audience);
       allow create: if request.auth != null
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if request.auth != null

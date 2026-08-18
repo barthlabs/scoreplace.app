@@ -33,10 +33,14 @@
   'use strict';
 
   var COL = 'liveScores';
-  // 3 minutos sem sinal = não está mais ao vivo. O placar bate a cada ponto e o
-  // heartbeat renova a cada 45s, então 3 min é folga generosa pra rede ruim de quadra.
-  window._LIVE_STALE_MS = 3 * 60 * 1000;
-  var HEARTBEAT_MS = 45 * 1000;
+  // ── QUANTO TEMPO SEM SINAL AINDA É "AO VIVO" (1.9.37) ─────────────────────────
+  // Eram 3 min e o dono cortou: _"3min para sumir é tempo demais"_. O piso não é
+  // estético — é o HEARTBEAT: se a janela fosse menor que a batida, um jogo em
+  // andamento piscaria pra fora da lista entre uma batida e outra. Com batida de 20s,
+  // 60s tolera DUAS perdidas (rede de quadra cai) e ainda tira o jogo em ~1 min de quem
+  // fechou o app no meio. Mexer num sem mexer no outro quebra essa relação.
+  window._LIVE_STALE_MS = 60 * 1000;
+  var HEARTBEAT_MS = 20 * 1000;
 
   function _db() {
     return (window.FirestoreDB && window.FirestoreDB.db) || null;
@@ -73,6 +77,14 @@
       p1Players: Array.isArray(info.p1Players) ? info.p1Players.slice(0, 4) : [],
       p2Players: Array.isArray(info.p2Players) ? info.p2Players.slice(0, 4) : [],
       playerUids: Array.isArray(info.playerUids) ? info.playerUids.filter(Boolean).slice(0, 8) : [],
+      // ── QUEM PODE ASSISTIR (1.9.37) ──────────────────────────────────────────
+      // Ordem do dono: _"respeita os privados que mostram apenas para os
+      // participantes"_. `audience` é a LISTA de quem enxerga: `'*'` = qualquer um
+      // (torneio público e partida casual); torneio privado = os uids do torneio.
+      // ⚠️ Mora no DOC, não num `if` de tela: é ela que a REGRA do Firestore lê e é
+      // por ela que a consulta filtra — filtrar só no cliente deixaria o doc legível
+      // por quem soubesse o id, que é o oposto de privado.
+      audience: Array.isArray(info.audience) && info.audience.length ? info.audience.slice(0, 400) : ['*'],
       scoring: info.scoring || null,
       createdBy: _uid(),
       startedAt: info.startedAt || Date.now(),
@@ -162,7 +174,12 @@
     var db = _db();
     if (!db || typeof cb !== 'function') return function () {};
     opts = opts || {};
-    var q = db.collection(COL).where('status', '==', 'live').limit(30);
+    // A consulta pede SÓ o que a regra deixaria ler — em Firestore, regra não filtra:
+    // se um único doc da resposta fosse proibido, a consulta INTEIRA falharia.
+    var _eu = _uid();
+    var _plateia = _eu ? ['*', _eu] : ['*'];
+    var q = db.collection(COL).where('status', '==', 'live')
+      .where('audience', 'array-contains-any', _plateia).limit(30);
     try {
       return q.onSnapshot(function (snap) {
         var agora = Date.now(), out = [];
