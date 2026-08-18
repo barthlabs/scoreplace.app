@@ -201,15 +201,18 @@
     }
     // Looks like an email? Resolve to UID via users collection.
     if (String(uidOrEmail).indexOf('@') !== -1) {
-      db.collection('users').where('email', '==', uidOrEmail).limit(1).get().then(function(snap) {
-        if (!snap.empty) _doMark(snap.docs[0].id);
-      }).catch(function() {});
+      db.collection('users').where('email', '==', uidOrEmail).limit(1).get()
+        .then(function(snap) { return window._userVivo(snap); })
+        .then(function(v) { if (v) _doMark(v.uid); })
+        .catch(function() {});
       return;
     }
-    // Assume UID — verify the doc exists; if not, nothing to do.
-    db.collection('users').doc(uidOrEmail).get().then(function(doc) {
-      if (doc.exists) _doMark(uidOrEmail);
-    }).catch(function() { _doMark(uidOrEmail); });
+    // Assume UID — verify the doc exists; if not, nothing to do. O uid guardado no torneio
+    // pode ser LÁPIDE (a conta foi fundida depois) — _userVivo devolve quem está vivo.
+    db.collection('users').doc(uidOrEmail).get()
+      .then(function(doc) { return window._userVivo(doc); })
+      .then(function(v) { if (v) _doMark(v.uid); })
+      .catch(function() { _doMark(uidOrEmail); });
   }
 
   window._acceptHostInvite = function(tId, inviteType) {
@@ -485,13 +488,17 @@
 
     function _lookupByEmail(email, fallbackName) {
       if (!window.FirestoreDB || !window.FirestoreDB.db) return;
-      window.FirestoreDB.db.collection('users').where('email', '==', email).limit(1).get().then(function(snap) {
-        if (!snap.empty) {
-          _resolveAndSend(snap.docs[0].id);
+      window.FirestoreDB.db.collection('users').where('email', '==', email).limit(1).get()
+        .then(function(snap) { return window._userVivo(snap); })
+        .then(function(v) {
+        if (v) {
+          _resolveAndSend(v.uid);
         } else if (fallbackName) {
-          window.FirestoreDB.db.collection('users').where('displayName', '==', fallbackName).limit(1).get().then(function(snap2) {
-            if (!snap2.empty) {
-              _resolveAndSend(snap2.docs[0].id);
+          window.FirestoreDB.db.collection('users').where('displayName', '==', fallbackName).limit(1).get()
+            .then(function(snap2) { return window._userVivo(snap2); })
+            .then(function(v2) {
+            if (v2) {
+              _resolveAndSend(v2.uid);
             } else {
               window._warn('[host-transfer] No user found for email:', email, 'or name:', fallbackName);
             }
@@ -505,9 +512,11 @@
     // If it looks like a UID (no @), try direct send + verify the doc exists
     if (uidOrEmail.indexOf('@') === -1) {
       if (window.FirestoreDB && window.FirestoreDB.db) {
-        window.FirestoreDB.db.collection('users').doc(uidOrEmail).get().then(function(doc) {
-          if (doc.exists) {
-            _resolveAndSend(uidOrEmail);
+        window.FirestoreDB.db.collection('users').doc(uidOrEmail).get()
+          .then(function(doc) { return window._userVivo(doc); })
+          .then(function(v) {
+          if (v) {
+            _resolveAndSend(v.uid);   // uid guardado pode ser LÁPIDE — manda pra conta viva
           } else {
             window._warn('[host-transfer] UID doc not found:', uidOrEmail, '— trying email/name fallback');
             var fallbackEmail = data._fallbackEmail || '';

@@ -314,14 +314,13 @@ window._openPlayerProfile = function(playerName, opts) {
   if (!db) { _build(null, uid); return; }
   if (uid) {
     db.collection('users').doc(uid).get()
-      .then(function(doc) { _build(doc.exists ? doc.data() : null, uid); })
+      .then(function(doc) { return window._userVivo(doc); })   // uid guardado pode ser LÁPIDE
+      .then(function(v) { _build(v ? v.data : null, v ? v.uid : uid); })
       .catch(function() { _build(null, uid); });
   } else {
     db.collection('users').where('displayName', '==', playerName).limit(1).get()
-      .then(function(snap) {
-        var docId = !snap.empty ? snap.docs[0].id : '';
-        _build(!snap.empty ? snap.docs[0].data() : null, docId);
-      })
+      .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo nome
+      .then(function(v) { _build(v ? v.data : null, v ? v.uid : ''); })
       .catch(function() { _build(null, ''); });
   }
 };

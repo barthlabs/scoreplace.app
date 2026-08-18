@@ -288,24 +288,23 @@
           ? db.collection('users').where('email', '==', email).limit(2).get()
           : Promise.resolve(null);
 
-        return emailQ.then(function (snap) {
-          if (snap && snap.size === 1) {
-            var doc = snap.docs[0];
-            var uid = doc.id;
-            byUid[uid] = doc.data();
-            resolvedFor[idx] = { uid: uid, profile: doc.data(), via: 'email' };
+        return emailQ.then(function (snap) { return window._userVivo(snap); }).then(function (v) {
+          // `count` é depois do colapso lápide→sobrevivente: os DOIS docs da mesma pessoa
+          // casam pelo mesmo e-mail e davam size 2 — a pessoa ficava sem vínculo nenhum.
+          if (v && v.count === 1) {
+            byUid[v.uid] = v.data;
+            resolvedFor[idx] = { uid: v.uid, profile: v.data, via: 'email' };
             return null;
           }
           // Camada 3: displayName lookup (média confiança — só se 1 match)
           if (!name) return null;
           // Tenta displayName primeiro (campo comum em users).
           return db.collection('users').where('displayName', '==', name).limit(2).get()
-            .then(function (nameSnap) {
-              if (nameSnap && nameSnap.size === 1) {
-                var doc = nameSnap.docs[0];
-                var uid = doc.id;
-                byUid[uid] = doc.data();
-                resolvedFor[idx] = { uid: uid, profile: doc.data(), via: 'displayName' };
+            .then(function (nameSnap) { return window._userVivo(nameSnap); })
+            .then(function (vn) {
+              if (vn && vn.count === 1) {
+                byUid[vn.uid] = vn.data;
+                resolvedFor[idx] = { uid: vn.uid, profile: vn.data, via: 'displayName' };
               }
             })
             .catch(function () { /* swallow */ });

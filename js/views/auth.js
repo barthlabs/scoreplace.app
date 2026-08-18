@@ -2359,10 +2359,18 @@ function _completeEmailLinkSignIn() {
             var snap = await window.FirestoreDB.db.collection('users')
               .where('email_lower', '==', String(user.email).toLowerCase())
               .limit(5).get();
+            // A LÁPIDE carrega o MESMO e-mail do sobrevivente. Sem resolver, o "melhor match"
+            // podia ser a conta morta — e aí o merge automático nem era agendado (a guarda
+            // `mergedInto` abaixo o barrava), deixando a duplicata de pé.
+            // ⚠️ O PRÓPRIO doc sai ANTES de resolver: se a conta em que a pessoa está logada
+            // FOR a lápide, resolvê-la devolveria o sobrevivente — que passaria no teste
+            // `!== user.uid` e viraria "conta anterior a mesclar", fundindo a conta VIVA
+            // dentro da morta. Vale pros 4 cross-refs deste arquivo.
+            var _vivos = await window._userVivo(snap.docs.filter(function(d) { return d.id !== user.uid; }));
             var matches = [];
             var matchIds = [];
-            snap.forEach(function(doc) {
-              if (doc.id !== user.uid) { matches.push(doc.data()); matchIds.push(doc.id); }
+            ((_vivos && _vivos.docs) || []).forEach(function(e) {
+              if (e.uid !== user.uid) { matches.push(e.data); matchIds.push(e.uid); }
             });
             if (matches.length > 0) {
               var best = matches.find(function(m) {
@@ -2389,7 +2397,7 @@ function _completeEmailLinkSignIn() {
               // v1.7.9-beta: email magic link = ownership verificado → agendar merge automático
               var _bestMatchIdx = matches.indexOf(best);
               var _bestMatchId = matchIds[_bestMatchIdx >= 0 ? _bestMatchIdx : 0];
-              if (_bestMatchId && !best.mergedInto) {
+              if (_bestMatchId) {   // já é conta VIVA — _userVivo resolveu lápide acima
                 window._pendingCrossRefOldUid = _bestMatchId;
               }
               window._log('[email-link] cross-ref por email encontrado, herdando:',
@@ -2679,10 +2687,13 @@ function handlePhoneVerifyCode() {
             var snap = await window.FirestoreDB.db.collection('users')
               .where('phone', 'in', _crossRefPhones)
               .limit(5).get();
+            // Caso real (M. Delia Fernandez): doc vivo e lápide com o MESMO +5511996019191.
+            // Sem resolver, o match escolhido podia ser a lápide.
+            var _vivosPhone = await window._userVivo(snap.docs.filter(function(d) { return d.id !== user.uid; }));
             var matches = [];
             var matchIds = [];
-            snap.forEach(function(doc) {
-              if (doc.id !== user.uid) { matches.push(doc.data()); matchIds.push(doc.id); }
+            ((_vivosPhone && _vivosPhone.docs) || []).forEach(function(e) {
+              if (e.uid !== user.uid) { matches.push(e.data); matchIds.push(e.uid); }
             });
             if (matches.length > 0) {
               // Pega o match com mais info (preferência: tem displayName não-vazio
@@ -2713,7 +2724,7 @@ function handlePhoneVerifyCode() {
               // v1.7.9-beta: SMS = número verificado → agendar merge automático
               var _bestPhoneMatchIdx = matches.indexOf(best);
               var _bestPhoneMatchId = matchIds[_bestPhoneMatchIdx >= 0 ? _bestPhoneMatchIdx : 0];
-              if (_bestPhoneMatchId && !best.mergedInto) {
+              if (_bestPhoneMatchId) {   // já é conta VIVA — _userVivo resolveu lápide acima
                 window._pendingCrossRefOldUid = _bestPhoneMatchId;
               }
               window._log('[phone-login] cross-ref encontrado, herdando:',
@@ -4387,13 +4398,14 @@ async function simulateLoginSuccess(user) {
       window.FirestoreDB.db.collection('users')
         .where('email_lower', '==', _gCrossEmail)
         .limit(5).get()
-        .then(function(gSnap) {
-          gSnap.forEach(function(gDoc) {
-            if (gDoc.id !== _gCrossUid && !gDoc.data().mergedInto) {
+        .then(function(gSnap) { return window._userVivo(gSnap.docs.filter(function(d) { return d.id !== _gCrossUid; })); })   // lápide guarda o mesmo e-mail
+        .then(function(gVivos) {
+          ((gVivos && gVivos.docs) || []).forEach(function(e) {
+            if (e.uid !== _gCrossUid) {
               setTimeout(function() {
                 if (typeof window._executePhoneAccountMerge === 'function') {
-                  window._log('[google-login] auto-merge conta anterior por email:', gDoc.id);
-                  window._executePhoneAccountMerge(gDoc.id);
+                  window._log('[google-login] auto-merge conta anterior por email:', e.uid);
+                  window._executePhoneAccountMerge(e.uid);
                 }
               }, 3000);
             }
@@ -7796,15 +7808,14 @@ function setupProfileModal() {
         .where('phone', '==', phone)
         .limit(5)
         .get()
-        .then(function(snap) {
+        .then(function(snap) { return window._userVivo(snap.docs.filter(function(d) { return d.id !== currentUid; })); })   // lápide guarda o mesmo telefone
+        .then(function(vivos) {
           var oldDoc = null;
-          snap.forEach(function(doc) {
-            if (doc.id !== currentUid && !doc.data().mergedInto) {
-              oldDoc = doc;
-            }
+          ((vivos && vivos.docs) || []).forEach(function(e) {
+            if (e.uid !== currentUid) { oldDoc = { id: e.uid, data: e.data }; }
           });
           if (!oldDoc) return;
-          var oldData = oldDoc.data();
+          var oldData = oldDoc.data;
           var oldName = oldData.displayName || oldData.name || '';
           var label = oldName ? ' (nome: ' + oldName + ')' : '';
           var confirmMsg = 'Encontramos uma conta anterior vinculada a este celular' + label + '.\n\nDeseja mesclar? As inscrições em torneios e o histórico de partidas daquela conta serão transferidos para a sua conta atual.';
@@ -9177,6 +9188,8 @@ window._profileHydrateNameConflict = function () {
           && window.FirestoreDB && window.FirestoreDB.db) {
         try {
           var _nameLower = finalName.trim().toLowerCase();
+          // user-vivo:isento — mesma exclusão do isDisplayNameTaken: conflito de nome
+          // IGNORA lápide (conta morta não reserva nome), nunca segue pro sobrevivente.
           var _nameSnap = await window.FirestoreDB.db.collection('users')
             .where('displayName_lower', '==', _nameLower).limit(8).get();
           // Conflitos = outras contas VIVAS com o mesmo nome (exclui self e

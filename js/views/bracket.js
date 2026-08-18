@@ -3250,9 +3250,10 @@ async function _preloadPlayerPhotos(tournament) {
         .where('displayName', '==', name)
         .limit(1)
         .get()
-        .then(function(snap) {
-          if (!snap.empty) {
-            var data = snap.docs[0].data();
+        .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo nome
+        .then(function(v) {
+          if (v) {
+            var data = v.data;
             if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
               window._playerPhotoCache[name.toLowerCase()] = data.photoURL;
             }
@@ -3293,11 +3294,13 @@ async function _preloadPlayerPhotos(tournament) {
   Object.keys(_uidsToLoad).forEach(function(uid) {
     promises.push(
       window.FirestoreDB.db.collection('users').doc(uid).get()
-        .then(function(doc) {
-          if (!doc.exists) return;
-          var data = doc.data() || {};
+        .then(function(doc) { return window._userVivo(doc); })   // uid do inscrito pode ser LÁPIDE
+        .then(function(v) {
+          if (!v) return;
+          var data = v.data || {};
           var nm = (data.displayName || '').trim();
-          _cacheName(uid, nm);
+          _cacheName(uid, nm);            // o uid que o torneio guarda (pode ser a lápide)
+          if (v.uid !== uid) _cacheName(v.uid, nm);   // e o uid vivo, pra quem já migrou
           if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1 && nm) {
             window._playerPhotoCache[nm.toLowerCase()] = data.photoURL;
           }
@@ -3314,9 +3317,10 @@ async function _preloadPlayerPhotos(tournament) {
         .where('email', '==', p.email)
         .limit(1)
         .get()
-        .then(function(snap) {
-          if (!snap.empty) {
-            var data = snap.docs[0].data();
+        .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo e-mail
+        .then(function(v) {
+          if (v) {
+            var data = v.data;
             if (data.photoURL && data.photoURL.indexOf('dicebear.com') === -1) {
               // Cacheia sob o displayName real do Firestore — não sob o nome do participante
               var realName = (data.displayName || '').trim().toLowerCase();

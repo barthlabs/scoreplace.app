@@ -4299,13 +4299,13 @@ function _hydrateFriendsPresenceWidget() {
           }
           return snap;
         })
-        .then(function(snap) {
-          if (snap.empty) {
+        .then(function(snap) { return window._userVivo(snap); })   // lápide guarda o mesmo e-mail
+        .then(function(v) {
+          if (!v) {
             window._warn('[FriendsWidget] email não resolvido pra uid:', em);
             return null;
           }
-          var doc = snap.docs[0];
-          var resolvedUid = doc.id;
+          var resolvedUid = v.uid;
           window._log('[FriendsWidget] email resolvido:', em, '→', resolvedUid);
           // Persiste a migração no doc do usuário atual
           try {

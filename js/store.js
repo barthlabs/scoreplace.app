@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.32';
+window.SCOREPLACE_VERSION = '1.9.33';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -222,10 +222,13 @@ window._loadLetzplayNameCache = async function (handles) {
     var batch = want.slice(i, i + 10);
     try {
       var snap = await db.collection('users').where('letzplayHandle', 'in', batch).get();
-      snap.forEach(function (doc) {
-        var d = doc.data() || {};
+      // A lápide carrega o MESMO letzplayHandle do sobrevivente — resolver doc a doc pela
+      // porta única evita cachear o @ apontando pra conta morta.
+      var vivos = await window._userVivo(snap);
+      ((vivos && vivos.docs) || []).forEach(function (e) {
+        var d = e.data || {};
         if (d.letzplayHandle) {
-          cache[String(d.letzplayHandle).toLowerCase()] = { name: d.displayName || null, uid: doc.id, photoURL: d.photoURL || null };
+          cache[String(d.letzplayHandle).toLowerCase()] = { name: d.displayName || null, uid: e.uid, photoURL: d.photoURL || null };
         }
       });
     } catch (e) { /* índice/rede: só não resolve, cai no nome importado */ }
@@ -6679,9 +6682,11 @@ window._loadParticipantProfilesByName = function(list) {
     if (!pr.name) return;
     var lc = pr.name.toLowerCase();
     if (window._partProfileByName[lc]) return;
+    // uid guardado no torneio pode ser LÁPIDE, e o nome casa com a lápide também: as duas
+    // pontas passam pela porta única e devolvem o perfil da conta VIVA.
     var q = pr.uid
-      ? db.collection('users').doc(pr.uid).get().then(function(doc) { return doc.exists ? doc.data() : null; })
-      : db.collection('users').where('displayName', '==', pr.name).limit(1).get().then(function(snap) { return snap.empty ? null : snap.docs[0].data(); });
+      ? db.collection('users').doc(pr.uid).get().then(function(doc) { return window._userVivo(doc); }).then(function(v) { return v ? v.data : null; })
+      : db.collection('users').where('displayName', '==', pr.name).limit(1).get().then(function(snap) { return window._userVivo(snap); }).then(function(v) { return v ? v.data : null; });
     proms.push(q.then(function(d) { if (d) window._partProfileByName[lc] = d; }).catch(function() {}));
   });
   return Promise.all(proms);
@@ -9110,11 +9115,11 @@ window.AppStore = {
           // Fallback: campo legacy 'email' (não-lowercase)
           snap = await db.collection('users').where('email', '==', email).limit(1).get();
         }
-        if (!snap.empty) {
-          var docId = snap.docs[0].id;
-          // Se docId é também email (legacy doc keyed por email), preserva
+        var vivo = await window._userVivo(snap);   // lápide guarda o mesmo e-mail
+        if (vivo) {
+          // Se o id é também email (legacy doc keyed por email), preserva
           // como está — usuário ainda não migrou. Se não, é uid resolvido.
-          resolvedMap[email] = docId;
+          resolvedMap[email] = vivo.uid;
         } else {
           resolvedMap[email] = null; // órfão, dropar
         }

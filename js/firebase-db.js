@@ -2081,6 +2081,8 @@ window.FirestoreDB = {
     var q = String(name).trim().toLowerCase();
     if (!q) return null;
     try {
+      // user-vivo:isento — aqui não se RESOLVE uma pessoa, se procura CONFLITO de nome:
+      // a lápide tem de ser IGNORADA (nome de conta morta não bloqueia ninguém), não seguida.
       var snap = await this.db.collection('users').where('displayName_lower', '==', q).limit(8).get();
       var conflict = null;
       snap.forEach(function (doc) {
@@ -2110,6 +2112,8 @@ window.FirestoreDB = {
     if (!q || q.indexOf(' / ') !== -1) return { status: 'none' };
     if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(name)) return { status: 'none' };
     try {
+      // user-vivo:isento — candidatos pra ESCOLHA humana entre homônimos: lápide não entra
+      // na lista (seria oferecer uma conta morta), e o filtro abaixo já a descarta.
       var snap = await this.db.collection('users').where('displayName_lower', '==', q).limit(8).get();
       var cands = [];
       snap.forEach(function (doc) {
@@ -2195,6 +2199,10 @@ window.FirestoreDB = {
         if (results[doc.id]) return;
         var data = doc.data();
         data._docId = doc.id;
+        // LÁPIDE (conta já mesclada) não é gente pra convidar: fora da lista, na FONTE.
+        // Filtrar só lá na frente não funcionava — o `sanitize` abaixo apaga `mergedInto`,
+        // então o filtro do explore.js recebia o campo já sumido e deixava a conta morta passar.
+        if (data.mergedInto) return;
         // Default acceptFriendRequests to true (undefined means not set yet)
         if (data.acceptFriendRequests !== false) {
           results[doc.id] = sanitize(data);
@@ -2202,6 +2210,8 @@ window.FirestoreDB = {
       });
     };
     var end = q + '\uf8ff';
+    // user-vivo:isento — searchUsers devolve uma LISTA pra pessoa escolher: lápide é
+    // DESCARTADA no addFromSnap (nem aparece), nunca redirecionada pro sobrevivente.
     var queries = [
       this.db.collection('users')
         .where('displayName_lower', '>=', q)
@@ -2209,6 +2219,7 @@ window.FirestoreDB = {
         .limit(perQueryLimit).get().then(addFromSnap).catch(function(e) {
           window._warn('displayName search error:', e && e.message);
         }),
+      // user-vivo:isento — idem: lista pra escolha, lápide descartada no addFromSnap.
       this.db.collection('users')
         .where('email_lower', '>=', q)
         .where('email_lower', '<', end)
@@ -2246,6 +2257,7 @@ window.FirestoreDB = {
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'searchUsers-scan'); } catch (e) {}
       snap.forEach(function(doc) {
         var data = doc.data();
+        if (data.mergedInto) return;                     // lápide não é convidável (ver searchUsers)
         if (data.acceptFriendRequests === false) return; // respeita o toggle
         var o = { _docId: doc.id };
         for (var i = 0; i < PUBLIC_FIELDS.length; i++) {

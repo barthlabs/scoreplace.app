@@ -915,6 +915,13 @@ const SUITES = [
   // `score1/score2` (campo inexistente) e ignorava `pendingResult`, então a proposta
   // chegava pela rede sem acordar a tela de quem já estava olhando. v1.9.21.
   'tests/confirmar-placar-chega-na-tela.test.js',
+  // A fusão NÃO apaga a conta absorvida — deixa uma LÁPIDE (mergedInto) com o MESMO
+  // telefone/e-mail/nome do sobrevivente. Das 36 buscas amplas em users/, 30 pegavam
+  // `snap.docs[0]` sem olhar isso: transferir organização, convidar co-organizador, avisar e
+  // casar conta no login podiam AGIR SOBRE O UID MORTO. Guarda os dois lados: o resolvedor
+  // único (corrente, ciclo, órfã, colapso lápide+vivo) e o INVARIANTE de que nenhuma busca
+  // nova escapa da porta. v1.9.33.
+  'tests/lapide-nunca-vence-a-conta-viva.test.js',
 ];
 
 let failed = [];

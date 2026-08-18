@@ -499,6 +499,10 @@
   <!-- Cânone de identidade por uid (extraído do store.js). ANTES do store.js: é puro e
        o servidor (Cloud Function do sorteio) carrega o MESMO arquivo — ver identity-core.js -->
   <script src="js/views/identity-core.js?v=1.4.30" defer></script>
+  <!-- UMA porta pra "qual é a conta VIVA": a fusão deixa LÁPIDE (mergedInto) com os MESMOS
+       e-mail/telefone/nome do sobrevivente, e toda busca ampla em users/ podia devolver a
+       conta morta. Antes do store.js e das views, que consultam — ver user-vivo-core.js -->
+  <script src="js/views/user-vivo-core.js?v=1.9.33" defer></script>
   <!-- Normalizações do limite de persistência (extraídas do firebase-db.js). Puro, e o
        servidor carrega o MESMO arquivo antes de gravar — ver persist-core.js -->
   <script src="js/views/persist-core.js?v=1.6.86" defer></script>
@@ -512,10 +516,10 @@
   <!-- proporção de gênero do sorteio equilibrado (50/50 · 25/75 · 75/25) — PURO e
        vendorável: o mesmo módulo decide o sorteio inicial e a formação por lista de espera -->
   <script src="js/views/gender-ratio-core.js?v=1.8.45" defer></script>
-  <script src="js/store.js?v=1.9.32-x2.07" defer></script>
+  <script src="js/store.js?v=1.9.33-x2.07" defer></script>
   <!-- Fonte única das regras das modalidades (antes de create-tournament.js e bracket-ui.js, que derivam dela) -->
   <script src="js/views/sport-rules.js?v=4.0.50-beta" defer></script>
-  <script src="js/firebase-db.js?v=1.9.25" defer></script>
+  <script src="js/firebase-db.js?v=1.9.33" defer></script>
   <script src="js/presence-db.js?v=4.0.50-beta" defer></script>
   <script src="js/presence-geo.js?v=1.1.16" defer></script>
   <script src="js/venue-db.js?v=1.0.1" defer></script>
@@ -527,20 +531,20 @@
   <script src="js/views/terms.js?v=1.9.28" defer></script>
   <script src="js/views/delete-account.js?v=1.2.5" defer></script>
   <script src="js/views/terms-acceptance.js?v=2.4.0-beta" defer></script>
-  <script src="js/views/dashboard.js?v=1.8.99" defer></script>
+  <script src="js/views/dashboard.js?v=1.9.33" defer></script>
   <script src="js/views/presence.js?v=1.6.83" defer></script>
   <script src="js/views/venues.js?v=1.8.86" defer></script>
   <script src="js/views/tournaments-utils.js?v=1.8.98" defer></script>
   <script src="js/views/weather.js?v=1.8.87" defer></script>
   <script src="js/views/tournaments-sharing.js?v=1.8.91" defer></script>
-  <script src="js/views/tournaments-analytics.js?v=1.8.97" defer></script>
-  <script src="js/views/tournaments-organizer.js?v=1.9.24" defer></script>
-  <script src="js/views/host-transfer.js?v=1.9.24" defer></script>
-  <script src="js/views/tournaments-categories.js?v=1.7.13" defer></script>
+  <script src="js/views/tournaments-analytics.js?v=1.9.33" defer></script>
+  <script src="js/views/tournaments-organizer.js?v=1.9.33" defer></script>
+  <script src="js/views/host-transfer.js?v=1.9.33" defer></script>
+  <script src="js/views/tournaments-categories.js?v=1.9.33" defer></script>
   <script src="js/views/tournaments.js?v=1.9.26" defer></script>
   <script src="js/views/tournaments-enrollment.js?v=1.8.40" defer></script>
   <script src="js/views/tournaments-org-tools.js?v=1.3.21" defer></script>
-  <script src="js/views/tournaments-enrollment-report.js?v=1.9.31" defer></script>
+  <script src="js/views/tournaments-enrollment-report.js?v=1.9.33" defer></script>
   <script src="js/views/opinion-poll.js?v=1.3.112" defer></script>
   <script src="js/views/schedule-poll.js?v=1.8.65" defer></script>
   <script src="js/views/wa-group.js?v=1.8.31" defer></script>
@@ -557,7 +561,7 @@
   <script src="js/views/format2-ui.js?v=1.8.56" defer></script>
   <script src="js/views/bracket-logic.js?v=1.8.62" defer></script>
   <script src="js/views/bracket-model.js?v=1.8.84" defer></script>
-  <script src="js/views/bracket.js?v=1.9.20" defer></script>
+  <script src="js/views/bracket.js?v=1.9.33" defer></script>
   <script src="js/views/bracket-ui.js?v=1.8.92" defer></script>
   <script src="js/pwa-migrate-banner.js?v=1.1.0" defer></script>
   <!-- Ponte pro smartwatch (fase 4). Inerte na web; só liga no app nativo. -->
@@ -579,7 +583,7 @@
   <script src="js/views/explore.js?v=1.7.82" defer></script>
   <script src="js/views/notifications-view.js?v=1.8.92" defer></script>
   <script src="js/views/venue-owner.js?v=1.9.28" defer></script>
-  <script src="js/views/auth.js?v=1.9.28" defer></script>
+  <script src="js/views/auth.js?v=1.9.33" defer></script>
   <script src="js/views/letzplay-profile.js?v=1.9.29" defer></script>
   <!-- COLOCAÇÃO FINAL (window._lzPlacement). Nasceu na 1.8.6, provado por 37 asserções
        contra a chave real do T&F 449729 — e ficou dois dias SEM ESTA LINHA: o arquivo
