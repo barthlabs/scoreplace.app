@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.47';
+window.SCOREPLACE_VERSION = '1.9.48';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6470,6 +6470,39 @@ window._hideLoading = function () {
 // Navegação real (hashchange) = chegou outra tela → esconde o loader. NÃO dispara no
 // soft-refresh (mesma hash), então o loader sobrevive ao "pensando" dos detalhes.
 try { window.addEventListener('hashchange', function () { if (window._hideLoading) window._hideLoading(); }); } catch (e) {}
+
+// ─── PORTA ÚNICA: ABRIR TORNEIO A PARTIR DE UM CARD (1.9.48) ─────────────────
+// A resposta ao toque nasceu na 1.9.46 DENTRO do `_dashCardClick` (dashboard). A
+// LISTA de torneios (`tournaments.js`) navegava com `location.hash = …` cru — mesma
+// espera, feedback NENHUM. É o caso clássico de regra copiada em N lugares: a 1.9.46
+// consertou um lado e o outro seguiu com o bug. Agora existe UMA porta e todo card
+// entra por ela; quem for criar tela nova não precisa lembrar de nada.
+//
+// Duas camadas de resposta, de propósito:
+//   1. o realce de toque é do CSS (`.card:active`) — INSTANTÂNEO, sem passar por JS,
+//      e não tem como ficar presa na tela;
+//   2. o "Abrindo o torneio…" cobre a espera de ler o dado e montar a tela.
+window._openTournamentCard = function (event, tournamentId) {
+  if (!tournamentId) return;
+  var target = event && event.target;
+  // Toque que veio de um controle DENTRO do card não navega (toggle da Liga, botão de
+  // inscrever, link). Os botões já param a propagação no próprio onclick; isto aqui é
+  // a defesa em profundidade que o `_dashCardClick` já fazia — agora vale pra todos.
+  if (target && target.closest) {
+    if (target.closest('[data-liga-toggle-tid]')) return;
+    if (target.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
+  }
+  if (typeof window._showLoading === 'function') {
+    try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
+  }
+  window.location.hash = '#tournaments/' + tournamentId;
+};
+
+// ⚠️ SEM ISTO O REALCE DE TOQUE NÃO EXISTE NO IPHONE. O Safari/WKWebView só aplica
+// `:active` em elemento que NÃO é link se o documento tiver algum ouvinte de toque.
+// É um ouvinte VAZIO e `passive` de propósito: não lê, não decide, não cancela rolagem —
+// existe só pra destravar o realce do CSS. No desktop é inofensivo.
+try { document.addEventListener('touchstart', function () {}, { passive: true }); } catch (e) {}
 
 // v3.1.60: abre URL EXTERNA de forma confiável — especialmente no iOS PWA (standalone).
 // O `window.open(url, '_blank', 'noopener')` no iOS cria uma ABA INTERMEDIÁRIA EM BRANCO

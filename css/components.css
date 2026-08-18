@@ -1086,6 +1086,25 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   border-color: var(--bg-card-hover);
 }
 
+/* ── O DEDO É RESPONDIDO ANTES DE QUALQUER JS (1.9.48) ───────────────────────
+   Relato do dono: _"toco no torneio e não acontece nada"_. Entre o toque e a tela há
+   leitura + montagem; o "Abrindo o torneio…" cobre a ESPERA, mas ele ainda depende de
+   JS rodar. Este realce não depende: é o próprio navegador pintando no `:active`, no
+   mesmo quadro do toque — e, por não ser JS, não tem como ficar preso na tela.
+
+   ⚠️ POR QUE `outline`, e não transform/box-shadow/opacity:
+   • os cards de torneio cravam `transform` e `box-shadow` INLINE (gradiente, hover que
+     desloca 5px) — e estilo inline GANHA de folha, então o realce simplesmente não
+     apareceria. `outline` não é escrito inline em lugar nenhum;
+   • `opacity`/clarear/escurecer inverte de leitura entre os dois temas. `--primary-color`
+     é definido POR TEMA (azul no escuro e no claro), então o realce lê igual nos dois. */
+.card[onclick]:active,
+a.compact-row:active,
+.compact-row[onclick]:active {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
 /* v2.4.96: cards de listas longas (dashboard, explorar) pulam layout+paint
    quando estão FORA da tela (content-visibility:auto). O navegador só renderiza
    o que está perto da viewport — scroll bem mais leve quando há muitos cards.

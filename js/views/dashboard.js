@@ -6,24 +6,13 @@
 // Em vez de confiar em stopPropagation no toggle (que tem múltiplas camadas
 // e às vezes falha em CSS toggle-switch), o handler do card próprio checa
 // se event.target está dentro de um elemento "no-nav" via closest().
+// ⚠️ A REGRA MORA NUMA PORTA SÓ (1.9.48): guardas de "não navega" + resposta ao toque
+// vivem em `window._openTournamentCard` (store.js), porque a LISTA de torneios tinha
+// cópia própria — e ficou sem o feedback quando a 1.9.46 consertou só este lado.
+// Este nome continua existindo porque o HTML da dashboard já o chama.
 window._dashCardClick = function(event, tournamentId) {
   if (!event || !tournamentId) return;
-  var target = event.target;
-  // Se o click veio de dentro do toggle Liga, NÃO navega.
-  if (target && target.closest && target.closest('[data-liga-toggle-tid]')) return;
-  // Se o click veio de qualquer botão ou label/input dentro do card, NÃO navega.
-  // Botões já têm stopPropagation no próprio onclick mas defesa em profundidade.
-  if (target && target.closest && target.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
-  // ── RESPOSTA IMEDIATA AO TOQUE (1.9.46) ─────────────────────────────────────
-  // Relato do dono: _"o clique no torneio ainda demora um pouco sem nenhum feedback
-  // visual"_. Entre o toque e a tela do torneio há leitura de dado e montagem; sem
-  // sinal nenhum, a pessoa acha que o toque não pegou — e toca de novo.
-  // O "Carregando" entra AGORA, no mesmo gesto: quem entrega a tela pronta já é ele
-  // (a rota do torneio o mantém e o tira quando a página está pronta).
-  if (typeof window._showLoading === 'function') {
-    try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
-  }
-  window.location.hash = '#tournaments/' + tournamentId;
+  window._openTournamentCard(event, tournamentId);
 };
 
 // ─── Organizer Analytics Section ────────────────────────────────────────────
@@ -3058,7 +3047,9 @@ function renderDashboard(container) {
       var _rowBgH = _lt ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.07)';
       var _rowBd = _lt ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
       var statusBadgeBgRgb = statusColor === '#4ade80' ? '16,185,129' : statusColor === '#60a5fa' ? '96,165,250' : '148,163,184';
-      return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
+      // A linha compacta é um <a> de verdade (o href navega sozinho); aqui só entra o
+      // "Abrindo o torneio…" — a espera depois do toque é a MESMA do card grande.
+      return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onclick="if(typeof window._showLoading===\'function\'){try{window._showLoading(\'Abrindo o torneio…\');}catch(e){}}" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
         (t.logoData ? '<img src="' + t.logoData + '" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
         '<div class="compact-info" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;">' +
           '<div class="compact-name-block" style="flex:1;min-width:0;">' +

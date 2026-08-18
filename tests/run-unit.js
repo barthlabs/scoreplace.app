@@ -955,6 +955,11 @@ const SUITES = [
   // escondidos: medir layout a cada evento de scroll (trava a rolagem) e o balão
   // engolindo o toque mirado no card (o "triplo clique").
   'tests/dica-nao-atrapalha.test.js',
+  // a resposta ao toque no card de torneio nasceu na 1.9.46 DENTRO do handler da
+  // dashboard — e a LISTA de torneios, que tinha cópia própria da navegação, ficou sem
+  // feedback nenhum. Guarda a PORTA ÚNICA (todo card abre por `_openTournamentCard`) e
+  // o realce `:active`, que é o único que responde sem depender de JS rodar.
+  'tests/card-de-torneio-responde-ao-toque.test.js',
 ];
 
 let failed = [];
