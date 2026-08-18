@@ -1290,19 +1290,22 @@
   //
   // 🔄 SUPERADO na 1.9.30 (mesmo dia, à noite): "o mais forte entre torneio, ranking e
   // forma" fazia a banda do rating mandar, e a Bruna ficava vermelha na D. Com o ladder
-  // dela medido (9 jogos, rd 173, semeado em "Fem C+"), a banda é ruído. Hoje a referência
-  // é o motor de categoria — o mesmo da ficha. Ver o bloco abaixo.
+  // dela medido (9 jogos, rd 173, semeado em "Fem C+"), a banda é ruído — ou seja, o app
+  // estava AFIRMANDO um nível que não tinha como sustentar. A ordem de reprovar quem é B
+  // na D segue de pé; o que caiu foi a fonte que dizia quem é B. Ver o bloco abaixo.
   function _lzNivelApurado(fonte) {
     if (!fonte) return null;
     // ⭐ O RATING MANDA QUANDO EXISTE. Ele é força MEDIDA (pontos + jogos no ladder), e é o
     // que a régua da ficha já mostra. Medido: Bruna Arilla, rating.band = B, 1672 pts, 66
     // jogos — enquanto profileSkill dizia C e a categoria "oficial" dizia D (essa vinda do
     // NOME de um torneio de 2022, "Iniciante D").
-    // ⛔ O RATING DEIXOU DE SER JUIZ (1.9.30, decisão do dono revendo a de 17/ago de manhã).
-    // A regra anterior dizia "o rating manda quando existe", e por ela a Bruna — inscrita na
-    // D — ficava VERMELHA. O dono, vendo a tela à noite: _"bruna continua vermelha em D
-    // quando deveria estar verde"_.
-    // O QUE MUDOU foi a MEDIÇÃO, não o gosto: a banda B dela não é força medida. O ladder
+    // ⛔ O RATING DEIXOU DE SER JUIZ (1.9.30). ⚠️ E A REGRA DO DONO NÃO MUDOU — leia isto
+    // antes de "restaurar" qualquer coisa: de manhã ele mandou reprovar a Bruna na D
+    // _"sendo quase B (C+)"_, e à noite mandou deixá-la verde. Não é contradição, e ele
+    // mesmo explicou: _"quando dei essa ordem achava que ela era B"_. A REGRA — quem é B
+    // não se inscreve na D — continua valendo e está travada em teste logo abaixo. O que
+    // era falso era a PREMISSA: o app dizia B, e ela não é B.
+    // O QUE MUDOU foi a MEDIÇÃO: a banda B dela não é força medida. O ladder
     // dela tem **9 jogos** com `rd 173`, semeado a partir de "Fem C+" — os 66 jogos do
     // histórico não são jogos daquele ladder. Varrendo os 13 inscritos com import lido, só
     // 3 divergiam, e os três com ladder minúsculo: 6, 9 e 15 jogos, rd 182/173/155. Nessa

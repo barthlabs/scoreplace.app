@@ -111,12 +111,18 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
 
 // ── 1b. A COR SAI DO MESMO MOTOR DA FICHA (caso Bruna Arilla, 17/ago/2026) ──────
 // ⚠️ ESTE BLOCO JÁ TEVE A EXPECTATIVA INVERTIDA, no mesmo dia, e as duas ordens são do
-// dono. Guardar as duas é o ponto: a segunda não foi troca de gosto, foi MEDIÇÃO.
+// dono. Guardar as duas é o ponto — e guardar o MOTIVO, que não é "ele mudou de ideia":
 //
 // DE MANHÃ, olhando a ficha: _"se ela estava na D sendo quase B (C+) deveria ser vermelho
 // na D, âmbar na C"_ → o veredito passou a seguir `rating.band` (= B), e ela ficou vermelha.
 //
-// À NOITE, olhando a tela: _"bruna continua vermelha em D quando deveria estar verde"_.
+// À NOITE, olhando a tela: _"bruna continua vermelha em D quando deveria estar verde"_ —
+// e, perguntado sobre a inversão: _"quando dei essa ordem achava que ela era B"_.
+//
+// ⭐ ENTÃO A REGRA DELE NUNCA MUDOU: quem é B não se inscreve na D. O que caiu foi a FONTE
+// que dizia quem é B. A regra segue travada no cenário 1c, logo abaixo — se alguém
+// "restaurar" o rating como juiz, aquele cenário continua passando e ESTE aqui reprova,
+// que é exatamente a diferença entre a regra e a premissa.
 // O QUE APARECEU NO MEIO: o `rating.band = B` dela NÃO é força medida. O ladder tem
 // **9 jogos** com `rd 173`, semeado a partir de "Fem C+" — os 66 jogos do histórico não são
 // jogos daquele ladder. Varredura dos 13 inscritos com import lido: só 3 divergiam, e os
@@ -164,6 +170,34 @@ function run(row, profileMap, scanMap) { apply([row], profileMap, scanMap); retu
   // ⛔ O QUE NÃO PODE VOLTAR: a banda do rating mandando na cor. Se alguém religar isso,
   // esta pessoa — com ladder de 9 jogos — volta a ser reprovada na própria categoria.
   ok(naD._lzSkill !== 'B', 'a categoria apurada NÃO é a banda do rating (veio: ' + naD._lzSkill + ')');
+}
+
+// ── 1c. A REGRA DA MANHÃ CONTINUA DE PÉ: QUEM É B **DE VERDADE** NÃO JOGA A D ────
+// A ordem de 17/ago de manhã não foi revogada — ela só deixou de valer para a Bruna, que
+// não é B. Aqui está a MESMA pessoa hipotética que o dono descreveu: alguém que disputa
+// TORNEIO na B. Se um dia alguém religar o rating como juiz "pra fazer isto funcionar",
+// este cenário já está verde e o 1b acusa — o conserto não pode nascer daqui.
+{
+  const impB = {
+    handle: 'joga-na-b', officialCategory: { categoryRaw: 'Feminina B', skill: 'B' },
+    rankingCategory: 'Fem B', profileSkill: 'B', skill: 'B',
+    // Sem rating de propósito: a cor tem que sair da CATEGORIA, não da banda.
+    champions: [], footprint: [
+      { official: true,  categoryRaw: 'Feminina B', wins: 6, losses: 2 },
+      { official: true,  categoryRaw: 'Fem B',      wins: 4, losses: 3 },
+      { official: false, categoryRaw: 'Fem B',      wins: 9, losses: 7 },
+    ],
+    games: [{ lzId: '900002', date: 'Sábado, 09/08/26', myScore: 6, oppScore: 2, won: true }],
+    declaredGames: 31, gamesTotal: 31, indexTotal: 31, extVersion: MOTOR,
+    lzCursor: { complete: true, pagesTotal: 1, pagesRead: { 1: 1 } }, importedAt: AGORA,
+  };
+  const profB = { letzplayHandle: 'joga-na-b', letzplayConsent: true, letzplayImport: impB };
+  const bNaD = run({ uid: 'c1', effectiveSkills: ['D'] }, { c1: profB }, {});
+  const bNaC = run({ uid: 'c2', effectiveSkills: ['C'] }, { c2: profB }, {});
+  const bNaB = run({ uid: 'c3', effectiveSkills: ['B'] }, { c3: profB }, {});
+  ok(bNaD._lzColor === COL.red,    'quem joga torneio na B, inscrita na D → VERMELHO (dois níveis) (veio: ' + bNaD._lzColor + ')');
+  ok(bNaC._lzColor === COL.yellow, 'a MESMA pessoa na C → ÂMBAR (um nível) (veio: ' + bNaC._lzColor + ')');
+  ok(bNaB._lzColor === COL.green,  'e na B → VERDE, no lugar dela (veio: ' + bNaB._lzColor + ')');
 }
 
 // ── 2. A leitura NÃO pode depender do inscrito logar ──
