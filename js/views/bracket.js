@@ -150,6 +150,22 @@ window._toggleMyMatches = function(checked) {
 // as tacadas é ver metade da chave — que é exatamente o defeito que essa mudança tenta
 // resolver, não criar. Por isso `depois` é parâmetro, e não código solto embaixo.
 function _pintarEmEtapas(container, leve, geraPesado, depois) {
+  // ⛔ 1.9.42 — A PINTURA EM DOIS TEMPOS FOI DESLIGADA. Ela entregava o topo em 57ms, mas
+  // o preço apareceu no aparelho do dono: entre a 1ª e a 2ª tacada existe um quadro com a
+  // tela QUASE VAZIA, e no escuro isso é uma PISCADA PRETA — "pisca tela preta mais
+  // demorada no detalhe do torneio". Trocar espera por piscada não é melhorar.
+  // A função continua de pé (com a rede dupla de agendamento e o `depois`) porque a ideia
+  // presta; o que falta é ter o conteúdo do topo REAL (cabeçalho + 1º grupo) na 1ª tacada,
+  // em vez de só o cabeçalho. Enquanto não for assim, pinta de uma vez só.
+  var _emUmaVez = true;
+  if (_emUmaVez) {
+    var _tudo = '';
+    try { _tudo = geraPesado() || ''; }
+    catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
+    container.innerHTML = leve + _tudo;
+    if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
+    return;
+  }
   container.innerHTML = leve;
   var _segundaTacada = function () {
     var pesado = '';

@@ -64,20 +64,22 @@ W._dashRerender = function () {
 W._dashDataSig = carimboDoRender(tours);   // 1ª pintura (o router pinta, não passa pelo gate)
 W._softRefreshView(); W._softRefreshView(); W._softRefreshView();
 ok(repintou === 0, '3 snapshots sem mudança → 0 repinturas (got ' + repintou + ')');
-
-// 4. mudança de CONTEÚDO (placar lançado → updatedAt novo) repinta UMA vez, e só uma
+// ── 4. MUDANÇA DE CONTEÚDO NÃO REPINTA (1.9.42) ──────────────────────────────
+// Já foi assim (a v3.1.26 pôs `updatedAt` na assinatura) e o preço apareceu no aparelho
+// do dono: a dashboard se repintava a cada placar lançado por QUALQUER pessoa — piscada
+// preta ao entrar, e o card destruído entre o toque e o clique ("pra entrar no detalhe do
+// torneio tem que clicar 2x"). Repintar é trocar o DOM debaixo do dedo. Placar novo
+// aparece ao ENTRAR no torneio, que é onde ele é olhado.
 tours[0].updatedAt = '2026-08-18T02:00:00.000Z';
-W._softRefreshView();
-ok(repintou === 1, 'conteúdo mudou → repinta 1 vez (got ' + repintou + ')');
 W._softRefreshView(); W._softRefreshView();
-ok(repintou === 1, 'e para de repintar depois (got ' + repintou + ')');
+ok(repintou === 0, 'placar lançado num torneio da lista NÃO repinta a dashboard (got ' + repintou + ')');
 
-// 5. torneio novo chegando do listener também repinta uma vez (o caso da v2.8.60)
+// ── 5. torneio novo no CONJUNTO repinta uma vez (o caso que a v2.8.60 existe pra atender)
 tours.push({ id: 't3', updatedAt: '2026-08-18T03:00:00.000Z' });
 W._softRefreshView();
-ok(repintou === 2, 'torneio novo no conjunto → repinta 1 vez (got ' + repintou + ')');
+ok(repintou === 1, 'torneio novo no conjunto → repinta 1 vez (got ' + repintou + ')');
 W._softRefreshView();
-ok(repintou === 2, 'e para (got ' + repintou + ')');
+ok(repintou === 1, 'e para (got ' + repintou + ')');
 
 console.log((fail ? '❌' : '✅') + ' dashboard-nao-repinta-sozinha: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail ? 1 : 0);

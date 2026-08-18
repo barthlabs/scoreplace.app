@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.41';
+window.SCOREPLACE_VERSION = '1.9.42';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2625,11 +2625,17 @@ window._clearDrawDecisions = function (tId) { try { delete window._drawDecisions
 // re-renderizava sem parar, e cada rebuild do innerHTML pisca a tela (o dono viu piscadas
 // PRETAS logo depois de carregar). O gate existia justamente pra impedir isso.
 // Regra: ninguém monta essa string à mão — chama daqui. [[feedback_unify_dual_entry_points]]
+// ⛔ A ASSINATURA É DE CONJUNTO, NÃO DE CONTEÚDO (1.9.42). Ela já foi das duas formas:
+// com `updatedAt` (v3.1.26) a dashboard se repinta a cada placar lançado por qualquer
+// pessoa — e repintar é trocar o DOM inteiro debaixo do dedo de quem está tocando. O dono
+// mediu isso na pele: "pisca tela preta ao entrar na dashboard" e "pra entrar no detalhe
+// do torneio tem que clicar 2x" (o card sob o dedo é destruído entre o toque e o clique).
+// Volta a ser só o CONJUNTO (quantos + quais), que é o que o cânone v2.8.60 pediu: torneio
+// que chega async aparece, e nada mais repinta. Placar novo aparece ao entrar no torneio —
+// que é onde ele é olhado. Ver [[project_dashboard_no_rerender]].
 window._dashDataSigFor = function (list) {
   var arr = Array.isArray(list) ? list : [];
-  return arr.length + '|' + arr.map(function (t) {
-    return (t && t.id) + ':' + ((t && t.updatedAt) || '');
-  }).join(',');
+  return arr.length + '|' + arr.map(function (t) { return (t && t.id); }).join(',');
 };
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
