@@ -306,7 +306,34 @@ function initRouter() {
             localStorage.removeItem('scoreplace_collapse_myresults');
           } catch (e) {}
         }
-        renderDashboard(viewContainer);
+        // ── A DASHBOARD TAMBÉM É ENTREGUE PRONTA (1.9.45) ──────────────────────
+        // Ordem do dono: _"usa a merda do carregando para entregar a pagina pronto"_.
+        // A tela pinta e DEPOIS quatro blocos assíncronos caem por cima dela — movimento
+        // nos locais, banner de vínculo casual, presença ativa, "ao vivo agora" —, cada um
+        // empurrando a lista pra baixo. É isso que faz o toque errar o card (o dedo mira,
+        // a lista anda, o clique cai no vazio: o "triplo clique") e o que se vê como
+        // piscada na abertura. Enquanto isso assenta, o CARREGANDO fica por cima.
+        // ⚠️ TETO CURTO E DURO (1,2s): esta é a tela inicial do app; loader presa aqui é
+        // pior que qualquer piscada. Se os blocos demorarem, a tela aparece do mesmo jeito.
+        if (!window._isSoftRefresh && typeof window._showLoading === 'function') {
+          try { window._showLoading('Carregando…'); } catch (e) {}
+          var _saiuDash = false;
+          var _fecharDash = function () {
+            if (_saiuDash) return; _saiuDash = true;
+            if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
+          };
+          setTimeout(_fecharDash, 1200);
+          renderDashboard(viewContainer);
+          // sai quando o perfil chegou (é ele que destrava os blocos) + 2 quadros pra eles
+          // pintarem; ou no teto acima, o que vier primeiro.
+          var _apos = function () {
+            requestAnimationFrame(function () { requestAnimationFrame(_fecharDash); });
+          };
+          if (window._profileLoaded) _apos();
+          else document.addEventListener('scoreplace:profile-loaded', _apos, { once: true });
+        } else {
+          renderDashboard(viewContainer);
+        }
         break;
       case 'tournament':
       case 'tournaments':
