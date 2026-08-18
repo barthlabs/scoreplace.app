@@ -2,7 +2,7 @@
   "appId": "app.scoreplace",
   "appName": "scoreplace",
   "webDir": "www",
-  "zoomEnabled": true,
+  "zoomEnabled": false,
   "server": {
     "hostname": "scoreplace.app",
     "iosScheme": "https",
@@ -20,7 +20,10 @@
     },
     "FirebaseAuthentication": {
       "skipNativeAuth": true,
-      "providers": ["google.com", "phone"]
+      "providers": [
+        "google.com",
+        "phone"
+      ]
     },
     "FirebaseMessaging": {
       "presentationOptions": []
