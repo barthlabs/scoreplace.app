@@ -22,9 +22,13 @@
  *   1. NENHUM caminho de gravação pode pendurar uma foto na notificação. A garantia mora
  *      no ponto ÚNICO por onde toda notificação passa (`addNotification`), pra que call
  *      site novo não possa reintroduzir o campo. Ver [[feedback_unify_dual_entry_points]].
- *   2. Contar não lidas é agregação NO SERVIDOR — o badge nunca baixa documento. E o
- *      fallback existe (SDK velho da WebView nativa não tem `count()`): badge que zera em
- *      silêncio é pior que badge lento.
+ *   2. Pintar o sininho tem CUSTO COM TETO. O ideal é a agregação `count()` (zero doc
+ *      baixado) — e o código a usa quando existe. Mas MEDIDO na página servida: o
+ *      firebase-firestore-compat 10.14.1 que o app carrega **não tem count()** (só o
+ *      build modular tem). Então o caminho que roda em produção é o `.get()` LIMITADO a
+ *      10: o badge não sabe pintar além de "9+", logo a 11ª não lida não muda um pixel.
+ *      O que não pode, em nenhum dos dois caminhos, é o custo crescer com o tamanho da
+ *      caixa da pessoa — nem o badge zerar em silêncio.
  *
  * ⚠️ Forma nova de engordar a notificação entra NESTE arquivo.
  */
@@ -66,9 +70,11 @@ function fakeDb(opts) {
   const reg = { gravado: null, docsBaixados: 0, usouCount: false, usouGet: false };
   const query = {
     where() { return query; },
+    limit(n) { reg.limitePedido = n; return query; },
     get() {
       reg.usouGet = true;
-      const docs = (opts.naoLidas || []).map((d, i) => ({ id: 'n' + i, data: () => d }));
+      let docs = (opts.naoLidas || []).map((d, i) => ({ id: 'n' + i, data: () => d }));
+      if (reg.limitePedido) docs = docs.slice(0, reg.limitePedido);   // o servidor obedece o limit
       reg.docsBaixados += docs.length;
       return Promise.resolve({ size: docs.length, docs, forEach: f => docs.forEach(f) });
     }
@@ -120,7 +126,7 @@ function fakeDb(opts) {
   ok(reg.gravado.tournamentId === 'tour_1780009816637', 'tournamentId preservado');
 })();
 
-// ═══ 2) CONTAGEM: o badge não baixa documento ═══════════════════════════════════
+// ═══ 2) QUANDO O SDK TIVER count(): zero documento baixado ══════════════════════
 (async function () {
   const gordas = [1, 2, 3].map(() => ({ type: 'match-pending-approval', read: false, fromPhoto: FOTO_BASE64 }));
   const { db, reg } = fakeDb({ naoLidas: gordas });
@@ -132,15 +138,30 @@ function fakeDb(opts) {
   ok(reg.docsBaixados === 0, 'ZERO documentos baixados pra contar (eram 285 KB de JPEG na abertura)');
 })();
 
-// ═══ 3) FALLBACK: SDK sem count() (WebView nativa velha) não zera o sino ════════
+// ═══ 3) O CAMINHO QUE PRODUÇÃO REALMENTE RODA: compat 10.14.1 NÃO TEM count() ══
+// Medido na página servida em 17/ago: a Query do firebase-firestore-compat expõe
+// where/orderBy/limit/get/onSnapshot e NADA de count() (a agregação só existe no build
+// modular). Se este ramo baixasse a consulta inteira, o conserto seria decorativo.
 (async function () {
-  const gordas = [1, 2].map(() => ({ read: false }));
-  const { db, reg } = fakeDb({ naoLidas: gordas, semCount: true });
+  const { db, reg } = fakeDb({ naoLidas: [1, 2].map(() => ({ read: false })), semCount: true });
   DB.db = db;
 
   const n = await DB.getUnreadNotificationCount('uid-dono');
   ok(n === 2, 'sem count() no SDK, o badge ainda diz a verdade (2) — não zera em silêncio');
-  ok(reg.usouGet === true, 'e aí sim cai no .get(), que é o caminho antigo');
+  ok(reg.usouGet === true, 'cai no .get(), que é o caminho antigo');
+  ok(reg.limitePedido === 10, 'e ele vai LIMITADO (10) — o badge não sabe pintar além de "9+"');
+})();
+
+// ═══ 3b) CAIXA GRANDE: o custo da abertura tem TETO ═════════════════════════════
+// A caixa do dono tinha 476 avisos. Sem teto, o sininho puxava todas as não lidas.
+(async function () {
+  const muitas = Array.from({ length: 400 }, () => ({ read: false, fromPhoto: FOTO_BASE64 }));
+  const { db, reg } = fakeDb({ naoLidas: muitas, semCount: true });
+  DB.db = db;
+
+  const n = await DB.getUnreadNotificationCount('uid-dono');
+  ok(reg.docsBaixados <= 10, 'com 400 não lidas, a abertura baixa no MÁXIMO 10 docs (baixou ' + reg.docsBaixados + ')');
+  ok(n >= 10, 'e o badge recebe um número que ainda pinta "9+" (' + n + ')');
 })();
 
 // ═══ 4) VARREDURA: nenhum call site voltou a gravar a foto ══════════════════════

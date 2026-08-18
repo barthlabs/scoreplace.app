@@ -9,6 +9,11 @@ window.FirestoreDB = {
   db: null,
   lastInitError: null,
 
+  // Teto de leitura do sininho. O badge só pinta "9+" (notifications-view.js), então
+  // a 11ª não lida não muda a tela — e ler além disso é banda gasta na ABERTURA.
+  // Ver `getUnreadNotificationCount`.
+  NOTIF_BADGE_MAX: 10,
+
   init() {
     try {
       if (typeof firebase === 'undefined') {
@@ -2525,7 +2530,18 @@ window.FirestoreDB = {
         var agg = await q.count().get();
         return (agg && typeof agg.data === 'function' && agg.data().count) || 0;
       }
-      var snap = await q.get();
+      // ⚠️ MEDIDO NO AR (1.9.24, na página servida): o firebase-firestore-compat
+      // 10.14.1 que o app carrega **não tem `count()`** — a agregação só existe no
+      // build modular. `Object.getOwnPropertyNames` na Query devolve where/orderBy/
+      // limit/get/onSnapshot… e nada de count. Ou seja: em produção quem roda é ESTE
+      // ramo, e deixá-lo baixando a consulta inteira seria não ter consertado nada.
+      // O TETO resolve sem depender do SDK: o badge só sabe dizer "9+" (ver
+      // `_updateNotificationBadge`), então a 11ª não lida não muda um pixel na tela.
+      // Ler 10 é o suficiente para pintar certo — e o custo da abertura fica preso
+      // num teto, em vez de crescer com a caixa da pessoa.
+      // ⚠️ CONTRATO: o retorno é o número REAL até 10; acima disso devolve 10. Caller
+      // que precise do total exato tem que fazer a própria leitura (e assumir o custo).
+      var snap = await q.limit(this.NOTIF_BADGE_MAX).get();
       return snap.size;
     } catch (e) {
       return 0;
