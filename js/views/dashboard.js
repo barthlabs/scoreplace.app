@@ -14,6 +14,15 @@ window._dashCardClick = function(event, tournamentId) {
   // Se o click veio de qualquer botão ou label/input dentro do card, NÃO navega.
   // Botões já têm stopPropagation no próprio onclick mas defesa em profundidade.
   if (target && target.closest && target.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
+  // ── RESPOSTA IMEDIATA AO TOQUE (1.9.46) ─────────────────────────────────────
+  // Relato do dono: _"o clique no torneio ainda demora um pouco sem nenhum feedback
+  // visual"_. Entre o toque e a tela do torneio há leitura de dado e montagem; sem
+  // sinal nenhum, a pessoa acha que o toque não pegou — e toca de novo.
+  // O "Carregando" entra AGORA, no mesmo gesto: quem entrega a tela pronta já é ele
+  // (a rota do torneio o mantém e o tira quando a página está pronta).
+  if (typeof window._showLoading === 'function') {
+    try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
+  }
   window.location.hash = '#tournaments/' + tournamentId;
 };
 

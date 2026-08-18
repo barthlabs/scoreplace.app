@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.45';
+window.SCOREPLACE_VERSION = '1.9.46';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -2475,8 +2475,17 @@ window._devWhatsAppBtnHtml = function (opts) {
 
   // 2. Resume do PWA / volta de aba (iOS PWA dispara visibilitychange + pageshow
   //    ao voltar do app switcher). Aqui NÃO força — respeita ação em andamento.
+  // ⚠️ VOLTAR PRO APP NÃO PODE RECARREGAR A TELA (1.9.46). Relato do dono: _"ao deixar
+  // de lado e depois reabrir trava o scroll e dá uma piscada branca"_ — é o
+  // `_checkForUpdate` achando versão nova no resume e RECARREGANDO por baixo de quem
+  // estava lendo. Recarregar é legítimo, o MOMENTO é que não: fica pra quando a pessoa
+  // TROCAR de tela (o `hashchange` logo abaixo já faz isso, e é momento seguro).
+  // Aqui só checamos quando ela está na DASHBOARD, onde não há leitura/rolagem a perder.
   document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') window._checkForUpdate({});
+    if (document.visibilityState !== 'visible') return;
+    var _h = (window.location.hash || '');
+    var _naDash = (_h === '' || _h === '#' || _h.indexOf('#dashboard') === 0);
+    if (_naDash) window._checkForUpdate({});
   });
   window.addEventListener('pageshow', function() { window._checkForUpdate({}); });
   window.addEventListener('focus', function() { window._checkForUpdate({}); });
@@ -4450,14 +4459,45 @@ window._firstNameOnly = function(name) {
 
   // Varre `root` (default document) por `.sp-name-fit` ainda não ajustados.
   // Re-tenta por setTimeout enquanto algum box não tem dimensão.
+  // ── PRIMEIRO O QUE ESTÁ NA TELA — E UM POUCO ADIANTE (1.9.46) ────────────────
+  // Relato do dono: _"o scroll do torneio vem cortado por não renderizar um pouco
+  // adiante"_. O nome NASCE grande e só cabe na caixa depois que este ajuste roda; até
+  // lá ele aparece CORTADO. Antes: uma passada única sobre TODOS (408 nomes na chave do
+  // Confra), cada um num laço que lê `scrollWidth` — leitura que força layout. Isso é
+  // caro, e o que estava na tela esperava a fila inteira.
+  // Agora: quem está na tela (mais UMA TELA E MEIA adiante, que é o "um pouco adiante"
+  // pedido) é ajustado JÁ; o resto vai em fatias de 40, uma por quadro, pra a mão não
+  // travar. `data-fitted` continua sendo a marca de quem já foi.
+  var _FIT_ADIANTE = 1.5;   // telas de folga abaixo e acima do que se vê
   window._fitNames = function(root, retry) {
     try {
       var scope = (root && root.querySelectorAll) ? root : document;
-      var els = scope.querySelectorAll('.sp-name-fit:not([data-fitted])');
-      var pending = false;
-      Array.prototype.forEach.call(els, function(el) {
-        if (!_fitOne(el)) pending = true;
+      var els = Array.prototype.slice.call(scope.querySelectorAll('.sp-name-fit:not([data-fitted])'));
+      if (!els.length) return;
+      var alturaTela = (window.innerHeight || 800);
+      var margem = alturaTela * _FIT_ADIANTE;
+      var perto = [], longe = [];
+      els.forEach(function (el) {
+        var r;
+        try { r = el.getBoundingClientRect(); } catch (e) { r = null; }
+        if (!r || (r.top < alturaTela + margem && r.bottom > -margem)) perto.push(el);
+        else longe.push(el);
       });
+      var pending = false;
+      perto.forEach(function (el) { if (!_fitOne(el)) pending = true; });
+      var fatia = function () {
+        if (!longe.length) return;
+        var lote = longe.splice(0, 40);
+        lote.forEach(function (el) { if (!_fitOne(el)) pending = true; });
+        if (longe.length) {
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fatia);
+          else setTimeout(fatia, 16);
+        }
+      };
+      if (longe.length) {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fatia);
+        else setTimeout(fatia, 16);
+      }
       if (pending && (retry || 0) < 12) {
         setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 60);
       }
