@@ -454,6 +454,8 @@ window._translations['en'] = {
   'privacy.section4Body': 'You have the right to: (a) confirm the existence of data processing; (b) access your data; (c) correct incomplete or inaccurate data; (d) anonymize, block, or delete unnecessary or improperly processed data; (e) data portability; (f) deletion of personal data processed with your consent; (g) revoke consent at any time. The "Delete account" function in the profile modal permanently erases your personal data and history — you can exercise this right at any time without contacting us.',
   'privacy.section5Title': 'Security and retention',
   'privacy.section5Body': 'We adopt technical and organizational measures to protect your data — encryption in transit (HTTPS), Firestore security rules that isolate data per user, Google authentication. We retain your data while your account is active, or for the legally required period. After account deletion, personal data is erased within 30 days; anonymized logs may be retained longer for security purposes.',
+  'privacy.extTitle': 'Chrome extension for importing from letzplay',
+  'privacy.extBody': 'We offer a Chrome extension ("scoreplace — importar letzplay") that, <b>at your request and only when you trigger it</b>, reads your competitive history on letzplay.me within the session you already have open on that site — matches with scores, partners and opponents, tournaments, placement, category and ranking — and saves that history to your scoreplace.app account.<br><br>The extension: (a) does not read or store passwords, cookies or credentials; (b) does not access other sites — its manifest declares only letzplay.me and scoreplace.app; (c) does not change anything on letzplay.me, it only reads the content you already see on screen; (d) stores in your browser only the learned reading pace (the interval between requests), so as not to overload letzplay.me — no personal data; (e) does not send your data to third parties.<br><br>Names of partners and opponents that appear in your matches are imported along with them because they are part of the match record. Imported data is then handled like the rest of your profile data, under this Policy. You may remove the extension at any time through Chrome and request deletion of the imported data like any other data (see "Your rights").',
   'privacy.contactTitle': 'Contact',
   'privacy.contactBody': 'For privacy questions, data processing concerns, or to exercise your rights, write to',
 
@@ -1425,7 +1427,7 @@ window._translations['en'] = {
   'auth.emailNotFound': 'Email Not Found',
   'auth.emailNotFoundMsg': 'No account with this email exists. Create a new account.',
   'auth.tooManyReset': 'Wait a few minutes before requesting again.',
-  'auth.resetUnavailable': 'Email password reset is not enabled. Contact support: scoreplace.app@gmail.com',
+  'auth.resetUnavailable': 'Email password reset is not enabled. Contact support: contato@barthlabs.com',
   'auth.resetErrorMsg': 'Could not send the reset email.',
   'auth.enrollClosed': 'Enrollment Closed',
   'auth.enrollClosedMsg': 'Enrollment for this tournament has already closed.',

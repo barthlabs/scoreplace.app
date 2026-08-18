@@ -10,8 +10,8 @@
 
   function renderTermsPage(container) {
     var _t = window._t || function (k) { return k; };
-    var supportEmail = 'scoreplace.app@gmail.com';
-    var lastUpdated = '14 de Maio de 2026';
+    var supportEmail = 'contato@barthlabs.com';
+    var lastUpdated = '17 de Agosto de 2026';
 
     var html = '';
 

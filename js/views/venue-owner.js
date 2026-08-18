@@ -457,7 +457,7 @@
     var cu = window.AppStore && window.AppStore.currentUser;
     var otherOwner = existing && existing.ownerUid && (!cu || existing.ownerUid !== cu.uid);
     if (otherOwner) {
-      _renderForm(null, { warning: 'Este local já foi reivindicado por outro usuário. Se você é o verdadeiro dono, escreva para scoreplace.app@gmail.com.' });
+      _renderForm(null, { warning: 'Este local já foi reivindicado por outro usuário. Se você é o verdadeiro dono, escreva para contato@barthlabs.com.' });
       return;
     }
     var alreadyCommunity = existing && !existing.ownerUid && existing.createdByName;
@@ -642,7 +642,7 @@
       var otherOwner = existing && existing.ownerUid && (!cu || existing.ownerUid !== cu.uid);
       if (otherOwner) {
         _renderForm(null, {
-          warning: 'Este local já foi reivindicado por outro usuário. Se você é o verdadeiro dono, escreva para scoreplace.app@gmail.com.'
+          warning: 'Este local já foi reivindicado por outro usuário. Se você é o verdadeiro dono, escreva para contato@barthlabs.com.'
         });
         return;
       }
@@ -1273,7 +1273,7 @@
       window._loadMyVenuesList();
     } catch (e) {
       if (String(e.message).indexOf('venue-já-reivindicado') !== -1) {
-        if (window.showNotification) window.showNotification('Este local já tem um proprietário formal.', 'Escreva para scoreplace.app@gmail.com se você é o verdadeiro dono.', 'error');
+        if (window.showNotification) window.showNotification('Este local já tem um proprietário formal.', 'Escreva para contato@barthlabs.com se você é o verdadeiro dono.', 'error');
       } else {
         window._error(e);
         if (window.showNotification) window.showNotification('Erro ao salvar local.', String(e.message || e), 'error');

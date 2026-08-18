@@ -200,9 +200,15 @@ function enqueue(fn) {
   return run.then(dec, function (e) { dec(); throw e; });
 }
 
-// (scoreplace-staging.web.app saiu na 1.8.3: ambiente deletado em 19/jul/2026, o host
-// devolve 404 — padrão de match que nunca casa com aba nenhuma.)
-var CS_MATCHES = ['https://scoreplace.app/*', 'http://localhost/*'];
+// SÓ os hosts que o manifest cobre — e o pacote publicado NÃO CITA nenhum outro, nem em
+// comentário: a ficha da loja jura que a extensão só alcança letzplay.me e scoreplace.app,
+// e quem revisa varre o zip com busca de texto. Um padrão sem host_permission não injeta
+// coisa alguma; o que sobra dele é só uma string que contradiz a justificativa.
+// (staging saiu na 1.8.3, ambiente deletado em 19/jul/2026. O host de desenvolvimento saiu
+// do manifest na 1.97 e destes dois pontos de código vivo na 2.07, que a varredura de lá
+// deixou pra trás.) Testar na máquina = carregar cópia sem compactação com o host de
+// volta — a cópia local, nunca o que se publica.
+var CS_MATCHES = ['https://scoreplace.app/*'];
 var CS_FILES = ['lib/letzplay-api.js', 'lib/letzplay-rating.js', 'lib/letzplay-import.js', 'lib/letzplay-extract.js', 'lib/letzplay-flow.js', 'content.js'];
 function injectIntoOpenScoreplaceTabs() {
   if (!chrome.scripting || !chrome.tabs) return;

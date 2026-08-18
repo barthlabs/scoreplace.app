@@ -97,7 +97,7 @@ function setupHelpModal() {
         "+'Dispositivo: '+ua+'\\n'" +
         "+'Data: '+new Date().toLocaleString('pt-BR')+'\\n'" +
         ");" +
-        "window.open('mailto:scoreplace.app@gmail.com?subject='+subject+'&body='+body,'_blank');" +
+        "window.open('mailto:contato@barthlabs.com?subject='+subject+'&body='+body,'_blank');" +
         '})()">' +
         '<span style="font-size:1.1rem;">📩</span> Reportar Problema ou Sugestão</button>' +
         '</div>' +
@@ -782,7 +782,7 @@ function setupHelpModal() {
           '<p>• Versão atual do app<br>' +
             '• Seu nome/email<br>' +
             '• User-agent (browser + OS)</p>' +
-          '<p>Tudo já preenchido. Você só descreve o problema/sugestão e envia. E-mail direto pra <code>scoreplace.app@gmail.com</code>.</p>' +
+          '<p>Tudo já preenchido. Você só descreve o problema/sugestão e envia. E-mail direto pra <code>contato@barthlabs.com</code>.</p>' +
           '<p style="font-size:0.78rem;color:var(--text-muted);">Bugs com screenshot resolvem 10x mais rápido. Print do problema + descrição do que esperava acontecer = ouro.</p>' +
         '</div>' +
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;">' +

@@ -65,6 +65,49 @@ if (storeVer) {
   }
 }
 
+// 6) NENHUM host de desenvolvimento pode existir no pacote publicado — nem em comentário.
+//
+// POR QUE ISTO EXISTE (17/ago/2026, SEGUNDA recorrência): a 1.97 (commit 023b4875) tirou
+// os hosts de desenvolvimento do `host_permissions` e dos `content_scripts` justamente
+// porque é permissão pedida ao usuário final para endereço que ele nunca visita. A
+// varredura daquela vez parou no manifest: `background.js` (CS_MATCHES) e `popup.js`
+// (tabs.query) seguiram carregando 'http://' + 'localhost' até a 2.07. Sem
+// host_permission esses padrões não injetam NADA — o dano não é acesso, é a CONTRADIÇÃO:
+// a justificativa de permissão enviada à Chrome Web Store jura que a extensão só alcança
+// letzplay.me e scoreplace.app, e quem revisa varre o zip com busca de texto.
+// Ver [[feedback_sweep_all_render_sites]]: a regra tem que valer em TODO ponto, não no
+// primeiro que se acha. Por isso a varredura virou trava, e vale para o diretório inteiro
+// (build-ext-zip.sh empacota extension/ inteiro — o que está aqui é o que se publica).
+const HOSTS_DEV = [
+  /localhost/i,
+  /\b127\.0\.0\.1\b/,
+  /\b0\.0\.0\.0\b/,
+  /scoreplace-staging/i,
+  /\.web\.app/i,
+];
+(function varrerPacote(dir) {
+  for (const nome of fs.readdirSync(path.join(root, dir))) {
+    const rel = dir + '/' + nome;
+    const st = fs.statSync(path.join(root, rel));
+    if (st.isDirectory()) { varrerPacote(rel); continue; }
+    // Só texto: ícones e binários não têm string que um revisor leia.
+    if (!/\.(js|json|html|css|md|txt)$/i.test(nome)) continue;
+    const src = read(rel);
+    src.split('\n').forEach((linha, i) => {
+      for (const re of HOSTS_DEV) {
+        if (re.test(linha)) {
+          fail.push(rel + ':' + (i + 1) + ': host de desenvolvimento no pacote publicado —\n' +
+            '      ' + linha.trim().slice(0, 100) + '\n' +
+            '    A justificativa enviada à Web Store diz que a extensão só alcança letzplay.me\n' +
+            '    e scoreplace.app. Tire a string (inclusive de comentário). Testar na máquina =\n' +
+            '    carregar cópia sem compactação com o host de volta — a cópia local, nunca esta.');
+          break;
+        }
+      }
+    });
+  }
+})('extension');
+
 if (fail.length) {
   console.error('\n✗ check-ext-version FALHOU:\n');
   fail.forEach((f) => console.error('  • ' + f + '\n'));

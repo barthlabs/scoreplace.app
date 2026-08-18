@@ -1042,9 +1042,9 @@ function handleGoogleLogin() {
         } else if (code === 'auth/internal-error') {
           msg = 'Erro interno do Firebase. Tente novamente em instantes. Se persistir, entre com e-mail e senha acima.';
         } else if (code === 'auth/unauthorized-domain') {
-          msg = 'Domínio não autorizado no Firebase Auth. Reporte: scoreplace.app@gmail.com';
+          msg = 'Domínio não autorizado no Firebase Auth. Reporte: contato@barthlabs.com';
         } else if (code === 'auth/user-disabled') {
-          msg = 'Sua conta Google está desativada. Entre em contato: scoreplace.app@gmail.com';
+          msg = 'Sua conta Google está desativada. Entre em contato: contato@barthlabs.com';
         } else if (code === 'auth/operation-not-allowed') {
           msg = 'Login Google indisponível no momento. Entre com e-mail e senha acima.';
         } else {

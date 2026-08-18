@@ -54,8 +54,11 @@ var ERR_MSG = {
 };
 function sendToScoreplace(imp) {
   status('Enviando pro scoreplace…');
-  // (scoreplace-staging.web.app saiu na 1.8.3 — host deletado, devolve 404.)
-  chrome.tabs.query({ url: ['https://scoreplace.app/*', 'http://localhost/*'] }, function (tabs) {
+  // SÓ scoreplace.app — o único host que o manifest cobre (ver CS_MATCHES no background).
+  // Casar host sem content script era pior que inócuo: a aba de desenvolvimento podia vir
+  // em tabs[0] e o envio morria em "não falei com o scoreplace", com a aba certa logada
+  // ao lado. (staging saiu na 1.8.3; o host de desenvolvimento, na 2.07.)
+  chrome.tabs.query({ url: ['https://scoreplace.app/*'] }, function (tabs) {
     if (!tabs || !tabs.length) {
       status('⚠️ Abra o scoreplace.app numa aba (logado) e clique de novo.'); return;
     }

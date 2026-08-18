@@ -10,8 +10,8 @@
 
   function renderPrivacyPage(container) {
     var _t = window._t || function (k) { return k; };
-    var supportEmail = 'scoreplace.app@gmail.com';
-    var lastUpdated = '14 de Maio de 2026';
+    var supportEmail = 'contato@barthlabs.com';
+    var lastUpdated = '17 de Agosto de 2026';
 
     var html = '';
 
@@ -65,20 +65,33 @@
             _t('privacy.cookiesBody') +
           '</p>' +
 
+          // v1.9.28: a EXTENSÃO precisa estar declarada aqui. A Chrome Web Store aponta
+          // esta URL como a política DA EXTENSÃO, e o revisor abre procurando como ELA
+          // trata os dados — até 17/ago/2026 a política não citava nem a extensão nem o
+          // letzplay (zero ocorrências), o que é motivo de recusa por si só. Cada
+          // afirmação do texto foi conferida no pacote publicado: sem eval/código remoto,
+          // sem escrita no DOM do letzplay, `chrome.storage` com um único registro de 4
+          // números (gap/floor/at/blockAt) e só os dois hosts no manifest.
           '<h2 style="font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;">' +
-            '7. ' + _t('privacy.changesTitle') + '</h2>' +
+            '7. ' + _t('privacy.extTitle') + '</h2>' +
+          '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0 0 0.75rem;">' +
+            _t('privacy.extBody') +
+          '</p>' +
+
+          '<h2 style="font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;">' +
+            '8. ' + _t('privacy.changesTitle') + '</h2>' +
           '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0 0 0.75rem;">' +
             _t('privacy.changesBody') +
           '</p>' +
 
           '<h2 style="font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;">' +
-            '8. ' + _t('privacy.dpoTitle') + '</h2>' +
+            '9. ' + _t('privacy.dpoTitle') + '</h2>' +
           '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0 0 0.75rem;">' +
             _t('privacy.dpoBody', { email: supportEmail }) +
           '</p>' +
 
           '<h2 style="font-size:1.05rem;font-weight:700;color:var(--text-bright);margin:1.5rem 0 0.6rem;">' +
-            '9. ' + _t('privacy.contactTitle') + '</h2>' +
+            '10. ' + _t('privacy.contactTitle') + '</h2>' +
           '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0;">' +
             _t('privacy.contactBody') +
             ' <a href="mailto:' + supportEmail + '" style="color:var(--primary-color);">' +
