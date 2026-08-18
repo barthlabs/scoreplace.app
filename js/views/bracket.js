@@ -410,17 +410,26 @@ function renderBracket(container, tournamentId, isInline) {
     // pintura (fase revelada, torneio não encontrado, multifase…) e emendar o slot em
     // cada um deles é a receita de esquecer um. Este `.then` roda depois de qualquer
     // um deles — é a porta única. [[feedback_sweep_all_render_sites]]
+    // ⚠️ O SLOT NASCE SÓ QUANDO HÁ JOGO AO VIVO — e não a cada abertura de chave.
+    // A 1ª versão criava o `<div>` sempre e o inseria como PRIMEIRO filho do container.
+    // Medido no Confra real: a chave tem ~924 KB de HTML e 110 cards; enfiar um nó no
+    // TOPO disso invalida o layout do documento inteiro logo depois da pintura — e a
+    // chave já leva ~2,5s pra pintar no desktop. Ou seja: custo alto para, na quase
+    // totalidade das aberturas, mostrar NADA (nenhum placar ao vivo).
+    // Agora a assinatura roda primeiro e o nó só existe se houver o que mostrar.
     try {
       if (window.__brLiveUnsub) { window.__brLiveUnsub(); window.__brLiveUnsub = null; }
-      var _slotLive = document.getElementById('bracket-live-widget');
-      if (!_slotLive) {
-        _slotLive = document.createElement('div');
-        _slotLive.id = 'bracket-live-widget';
-        if (container.firstChild) container.insertBefore(_slotLive, container.firstChild);
-        else container.appendChild(_slotLive);
-      }
       if (typeof window._renderLiveNowInto === 'function') {
-        window.__brLiveUnsub = window._renderLiveNowInto('bracket-live-widget', { tournamentId: t.id });
+        window.__brLiveUnsub = window._renderLiveNowInto('bracket-live-widget', {
+          tournamentId: t.id,
+          criarSlot: function () {
+            var el = document.createElement('div');
+            el.id = 'bracket-live-widget';
+            if (container.firstChild) container.insertBefore(el, container.firstChild);
+            else container.appendChild(el);
+            return el;
+          }
+        });
       }
     } catch (_eLive) {}
 
@@ -4326,7 +4335,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         : '';
       var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
         '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + window._rowNameHtml(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
         (s.points != null
@@ -4556,7 +4565,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
         <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
-        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${window._rowNameHtml(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s))))}</td>
+        <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s))))}</td>
         <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
         <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
         ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
@@ -4868,7 +4877,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
     })()}
       <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
-      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="${window._plainRowName(s) ? 'Ver ficha de ' + window._safeHtml(window._plainRowName(s)) : 'Ver ficha'}">${window._rowNameHtml(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name)))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
+      <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="${(typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s) ? 'Ver ficha de ' + window._safeHtml((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s)) : 'Ver ficha'}">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name)))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
       <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
@@ -5559,7 +5568,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 // Ver [[project_uid_identity_canon_locked]], [[project_uid_primary_identity]].
                 var _nomeVivo = (typeof window._liveRowName === 'function')
                   ? window._liveRowName(s) : s.name;
-                var _txt = window._rowNameHtml(s, window._safeHtml(_nomeVivo));
+                var _txt = (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, window._safeHtml(_nomeVivo));
                 if (typeof window._openPlayerProfile !== 'function') return _txt;
                 // SEM UID NÃO ABRE FICHA (regra do dono: "sempre por uid, a menos que seja
                 // nome digitado"). Antes o nome saía clicável com `uid:''` e a ficha caía em
@@ -5568,7 +5577,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 if (!s.uid) return _txt;
                 return '<span onclick="event.stopPropagation();window._openPlayerProfile(\'' + _gstEsc(s.name) +
                   '\',{uid:\'' + _gstEsc(s.uid || '') + '\',tournamentId:\'' + _gstEsc(t.id) + '\'})"' +
-                  ' title="' + (window._plainRowName(s) ? ('Ver ficha de ' + window._safeHtml(window._plainRowName(s))) : 'Ver ficha') + '"' +
+                  ' title="' + ((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s) ? ('Ver ficha de ' + window._safeHtml((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s))) : 'Ver ficha') + '"' +
                   ' style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;">' +
                   _txt + '</span>';
               };

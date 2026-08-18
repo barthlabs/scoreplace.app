@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.37';
+window.SCOREPLACE_VERSION = '1.9.38';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -381,12 +381,22 @@ window._hydrateUidNames = function (root) {
     try {
       var _nmByPfx = {};
       uids.forEach(function (u) { var nm = window._nameForUid(u); if (nm) _nmByPfx[String(u).slice(0, 4)] = nm; });
-      root.querySelectorAll('[data-players]').forEach(function (e) {
-        var v = e.getAttribute('data-players') || '';
-        if (!window._isOrphanLabel(v)) return;
-        var novo = v.replace(/jogador sem perfil \(([^)]{1,8})\)/ig, function (all, pfx) { return _nmByPfx[pfx] || all; });
-        if (novo !== v) e.setAttribute('data-players', novo);
-      });
+      var _mexeu = false;
+      if (Object.keys(_nmByPfx).length) {
+        root.querySelectorAll('[data-players]').forEach(function (e) {
+          var v = e.getAttribute('data-players') || '';
+          if (typeof window._isOrphanLabel !== 'function' || !window._isOrphanLabel(v)) return;
+          var novo = v.replace(/jogador sem perfil \(([^)]{1,8})\)/ig, function (all, pfx) { return _nmByPfx[pfx] || all; });
+          if (novo !== v) { e.setAttribute('data-players', novo); _mexeu = true; }
+        });
+      }
+      // ⚠️ QUEM MEXE NO QUE O FILTRO LÊ TEM QUE REAPLICAR O FILTRO. `data-players` é o
+      // texto que a busca varre pra decidir o `display` de cada card; reescrevê-lo com a
+      // busca ATIVA deixaria cards escondidos por um valor que não existe mais — a tela
+      // "renderiza um pedaço e corta o resto". Reaplicar é barato e idempotente.
+      if (_mexeu && typeof window._bracketApplyFilter === 'function') {
+        try { window._bracketApplyFilter(); } catch (_ef) {}
+      }
     } catch (_e) {}
     // Papel: com o perfil no cache, a forma neutra vira a forma da pessoa. Sem gênero
     // conhecido, `_genderWord` devolve a neutra de novo — o texto simplesmente não muda.
@@ -2646,6 +2656,7 @@ window._softRefreshView = function() {
   if (_currentView === '' || _currentView === 'dashboard') {
     try {
       var _dts = (window.AppStore && window.AppStore.tournaments) || [];
+      if (typeof window._dashDataSigFor !== 'function') return;   // bundle misto: não arrisca laço de re-render
       var _dsig = window._dashDataSigFor(_dts);
       if (_dsig !== window._dashDataSig) {
         window._dashDataSig = _dsig;

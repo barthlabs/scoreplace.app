@@ -309,10 +309,14 @@
   // limita ao torneio. Sem jogo ao vivo o slot fica VAZIO — a seção não existe.
   window._renderLiveNowInto = function (slotId, opts) {
     opts = opts || {};
-    var slot = document.getElementById(slotId);
-    if (!slot) return function () {};
+    // `opts.criarSlot` = o slot ainda NÃO existe no DOM e só deve nascer se houver jogo ao
+    // vivo (é o caso da chave: inserir nó no topo de um container gigante custa layout
+    // inteiro, e quase sempre não haveria nada pra mostrar).
+    if (!document.getElementById(slotId) && typeof opts.criarSlot !== 'function') return function () {};
     var pinta = function (lista) {
       var el = document.getElementById(slotId);
+      if (!el && (!lista || !lista.length)) return;                 // nada ao vivo e nada no DOM → nem cria
+      if (!el) { try { el = opts.criarSlot(); } catch (e) { return; } }
       if (!el) return;
       if (!lista || !lista.length) { el.innerHTML = ''; return; }   // sem placar ao vivo → seção omitida
       var titulo = opts.tournamentId ? 'Ao vivo agora neste torneio' : 'Ao vivo agora';
