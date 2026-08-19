@@ -238,7 +238,18 @@
         '<div id="mr-conta" style="text-align:center;font-size:0.68rem;color:var(--text-muted);margin-top:6px;">&nbsp;</div>' +
         '<div id="mr-stats" style="margin-top:20px;"></div>' +
       '</div>';
-    document.body.appendChild(ov);
+    // ── O REPLAY PRECISA NASCER DENTRO DE QUEM ESTÁ EM TELA CHEIA (1.9.59) ─────
+    // Relato do dono: _"clicando no botão de replay, o replay passava atrás da tela em
+    // que estávamos e ficava não visível"_.
+    // NÃO era z-index: 100060 é o MAIOR valor do app inteiro (conferido). É escopo de
+    // RENDERIZAÇÃO. O placar ao vivo entra em tela cheia (`requestFullscreen`,
+    // bracket-ui.js:3211), e o navegador desenha SÓ a subárvore do elemento em tela
+    // cheia — qualquer coisa pendurada no `body` fica fora e não aparece, por maior que
+    // seja a camada. Por isso aumentar z-index aqui nunca resolveria.
+    // Pendurar no elemento em tela cheia (quando existe) põe o replay DENTRO do escopo
+    // desenhado. Sem tela cheia, `body` segue valendo.
+    var _hostReplay = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+    _hostReplay.appendChild(ov);
 
     var elPlacar = ov.querySelector('#mr-placar');
     var elBar = ov.querySelector('#mr-bar');

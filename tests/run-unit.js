@@ -984,6 +984,10 @@ const SUITES = [
   // de tamanho a cada troca de tela. O tamanho passa a ser imposto NA FONTE; o que varia
   // por tela e a CAIXA (minHeight). A versao inline e excecao (e uma linha, nao uma tela).
   'tests/carregando-tem-um-tamanho-so.test.js',
+  // replay 'passava atras da tela'. NAO era z-index (100060 e o maior do app): o placar
+  // ao vivo entra em tela cheia e o navegador desenha SO a subarvore dele — o replay,
+  // pendurado no body, ficava FORA do escopo desenhado.
+  'tests/replay-aparece-em-tela-cheia.test.js',
 ];
 
 let failed = [];
