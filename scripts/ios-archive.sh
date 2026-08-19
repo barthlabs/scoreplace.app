@@ -79,9 +79,29 @@ fi
 echo "▶ Tree nativo OK (branch: $BR)."
 # ────────────────────────────────────────────────────────────────────────────
 
-echo "▶ Sincronizando web assets (cap sync ios)…"
-( cd "$REPO_ROOT" && npx --no-install cap sync ios >/dev/null 2>&1 ) \
-  || echo "  ⚠ cap sync falhou/ausente — seguindo com o www já presente."
+# ── TRAVA: montar o www/ ANTES de copiar ────────────────────────────────
+# `npx cap sync` puro roda só a segunda metade: COPIA o www/ que já existir, seja
+# de quando for. Quem MONTA o www/ é o tools/build-www.js, dentro do `npm run cap:sync`.
+# 19/ago/2026: o www/ nem existia, o fallback silencioso engolia a falha e o archive
+# saía com o ios/App/App/public velho — sem o toggle .pf-switch da 1.9.69, exatamente
+# a reclamação que o dono já tinha feito na 1.9.68. Falhar aqui custa segundos;
+# subir bundle velho custa uma volta inteira na fila da Apple.
+echo "▶ Sincronizando web assets (npm run cap:sync)…"
+( cd "$REPO_ROOT" && npm run cap:sync )
+
+# O www/ e o ios/App/App/public são gitignored: `git status` limpo NÃO diz NADA sobre
+# o EMBARCADO. A conferência tem que ler o bundle. `version.txt` NÃO serve — ele é o
+# árbitro do auto-update (`_checkForUpdate` em store.js) e de propósito fica fora do
+# www/. O símbolo que viaja junto do JS é o SCOREPLACE_VERSION do próprio store.js.
+EMBEDDED_STORE="$REPO_ROOT/ios/App/App/public/js/store.js"
+EMBEDDED_VER="$(sed -n "s/.*SCOREPLACE_VERSION *= *'\([^']*\)'.*/\1/p" "$EMBEDDED_STORE" 2>/dev/null | head -1)"
+REPO_VER="$(cat "$REPO_ROOT/version.txt" 2>/dev/null | tr -d '[:space:]')"
+if [ -z "$EMBEDDED_VER" ] || [ "$EMBEDDED_VER" != "$REPO_VER" ]; then
+  echo "✖ EMBARCADO fora de sincronia: store.js embarcado='$EMBEDDED_VER' vs version.txt='$REPO_VER'." >&2
+  echo "  O www/ não foi montado. Abortando antes de arquivar bundle velho." >&2
+  exit 1
+fi
+echo "▶ Embarcado conferido: SCOREPLACE_VERSION=$EMBEDDED_VER."
 
 echo "▶ Arquivando esquema '$SCHEME'…  → $ARCHIVE"
 xcodebuild \
