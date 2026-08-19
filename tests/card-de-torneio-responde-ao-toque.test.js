@@ -69,6 +69,16 @@ const posHash = corpoPorta.indexOf('location.hash');
 ok(posLoader > -1, 'a porta mostra o "Abrindo o torneio…"');
 ok(posLoader > -1 && posHash > -1 && posLoader < posHash,
    'o loader entra ANTES de trocar a hash (invertido, o hashchange o apagaria)');
+// 1.9.55: não basta a ORDEM no código — o navegador só pinta quando a thread devolve o
+// controle, e os ouvintes de hashchange + o começo da rota rodam síncronos no meio. Sem
+// ceder quadro, o loader existe desde o 1º ms e só APARECE depois. Relato do dono:
+// _"demora um pouco, não é instantâneo"_.
+ok(/requestAnimationFrame[\s\S]{0,120}requestAnimationFrame/.test(corpoPorta),
+   'a navegação cede 2 quadros, pra o aviso PINTAR antes de a rota começar');
+// o invariante é ESTRUTURAL, não posicional: a troca de hash mora dentro de uma função
+// que o quadro chama — nunca solta no corpo, que voltaria a executar antes da pintura.
+ok(/=\s*function\s*\(\)\s*\{[^}]*location\.hash\s*=/.test(corpoPorta),
+   'a troca de hash mora numa função adiada, não solta no corpo da porta');
 
 // ── 4. GUARDA DE "NÃO NAVEGA" SOBREVIVEU À UNIFICAÇÃO ────────────────────────
 // Tocar no toggle da Liga ou num botão dentro do card não pode abrir o torneio.

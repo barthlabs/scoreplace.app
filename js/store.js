@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.54';
+window.SCOREPLACE_VERSION = '1.9.55';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -4674,6 +4674,44 @@ window._firstNameOnly = function(name) {
     } catch (e) {}
   };
 
+  // ── O QUE ENTRA NA TELA AO ROLAR TAMBÉM PRECISA CABER (1.9.55) ──────────────
+  // Relato do dono: _"scroll fluido, perfeito… mas lá pelo jogo 8 corta"_. O jogo 8 é
+  // mais ou menos onde acaba a margem de 1,5 tela do `_fitNames`: o que está dentro dela
+  // é ajustado JÁ, e o resto ia num passe de fundo em fatias de 40 por quadro — que a
+  // rolagem da pessoa ultrapassa. Nome ainda não ajustado NASCE grande, então aparece
+  // CORTADO até o ajuste chegar nele.
+  //
+  // ⚠️ POR QUE NÃO UM OUVINTE DE SCROLL: ajustar no evento de rolagem significa LER
+  // LAYOUT (`scrollWidth`) durante o scroll, que é exatamente o que travou a rolagem na
+  // 1.9.44 (guardado por `dica-nao-atrapalha.test.js`). Aqui quem avisa é o NAVEGADOR:
+  // o IntersectionObserver não custa nada enquanto nada se aproxima, e `rootMargin` É a
+  // margem de "um pouco adiante" — 150% = uma tela e meia acima e abaixo, o mesmo
+  // critério que o `_fitNames` já usava, agora aplicado ENQUANTO se rola e não só no
+  // render. Cada elemento é observado UMA vez e sai da lista assim que é ajustado.
+  var _fitIO = null;
+  function _observaParaAjuste(root) {
+    if (typeof IntersectionObserver !== 'function') return;   // sem suporte: o passe de fundo continua valendo
+    if (!_fitIO) {
+      _fitIO = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          try { _fitOne(e.target); } catch (err) {}
+          // ajustado (ou sem caixa ainda) → para de observar quem já tem a marca
+          if (e.target.hasAttribute('data-fitted')) _fitIO.unobserve(e.target);
+        });
+      }, { rootMargin: '150% 0px 150% 0px', threshold: 0 });
+    }
+    var alvo = (root && root.querySelectorAll) ? root : document;
+    var pend;
+    try { pend = alvo.querySelectorAll('.sp-name-fit:not([data-fitted])'); } catch (e) { return; }
+    Array.prototype.forEach.call(pend, function (el) {
+      if (el.__fitObservado) return;      // não re-observa o mesmo elemento a cada render
+      el.__fitObservado = true;
+      try { _fitIO.observe(el); } catch (e) {}
+    });
+  }
+  window._observaNomesParaAjuste = _observaParaAjuste;
+
   // ResizeObserver: box mudou de tamanho (rotação, re-layout, expandir/colapsar,
   // MUDANÇA DE ZOOM da escala por área) → re-ajusta. Só em mudança real (>2px)
   // pra não oscilar. Box é fixo por construção → sem loop de feedback.
@@ -6594,7 +6632,13 @@ window._showLoading = function (msg) {
     ov.id = 'sp-global-loading';
     ov.setAttribute('role', 'status');
     ov.setAttribute('aria-live', 'polite');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:100050;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.92);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+    // ⚠️ SEM `backdrop-filter` (1.9.55). O fundo aqui é 0.92 de opacidade — o blur atua
+    // sobre os 8% que sobram, ou seja é praticamente invisível — mas cobra um composite
+    // de TELA CHEIA, e este overlay nasce no momento mais sensível que existe: o toque
+    // que abre o torneio. Era ele atrasando o "Abrindo o torneio…" a aparecer.
+    // Não é regra nova: a v2.4.96 já tinha tirado o blur pelo MESMO motivo em
+    // `components.css` e `layout.css` — este overlay é que tinha ficado de fora.
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100050;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(15,23,42,0.96);';
     // O CORPO ÚNICO — logo + bola + mensagem + barra com %. Igual ao do router, ao das
     // ~12 telas do meio do app e ao splash. Uma tela só, como o dono mandou.
     ov.innerHTML = window._spLoaderBodyHtml(msg || 'Carregando…', { size: '4rem' });
@@ -6681,7 +6725,21 @@ window._openTournamentCard = function (event, tournamentId) {
       window._spLoadingOwnedByNav = true;
     } catch (e) {}
   }
-  window.location.hash = '#tournaments/' + tournamentId;
+  // ── O AVISO PINTA ANTES DE A NAVEGAÇÃO COMEÇAR (1.9.55) ─────────────────────
+  // Relato do dono: _"demora um pouco, não é instantâneo, mas aparece o abrindo o
+  // torneio"_. O loader era criado e a hash trocada no MESMO passo — e o navegador só
+  // pinta quando a thread devolve o controle. Entre uma coisa e outra ainda rodam TODOS
+  // os ouvintes de `hashchange` e o começo da rota, tudo síncrono: o loader existia
+  // desde o primeiro milissegundo e só APARECIA depois disso.
+  // Ceder 2 quadros (~32ms) antes de navegar troca "aviso atrasado" por "aviso na hora",
+  // e o tempo total não muda — a mesma espera acontece, agora com a pessoa vendo.
+  // É o mesmo remédio da rota do torneio (router.js); faltava aqui, no lado do toque.
+  var _irPro = function () { window.location.hash = '#tournaments/' + tournamentId; };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { requestAnimationFrame(_irPro); });
+  } else {
+    _irPro();
+  }
 };
 
 // ⚠️ SEM ISTO O REALCE DE TOQUE NÃO EXISTE NO IPHONE. O Safari/WKWebView só aplica
@@ -7196,6 +7254,9 @@ window._fitTwoLineNames = function(root) {
     pending = false;
     if (typeof window._fitTwoLineNames === 'function') window._fitTwoLineNames(document);
     if (typeof window._fitNames === 'function') window._fitNames(document, 0);
+    // e quem ficou FORA da margem imediata passa a ser vigiado pelo navegador, pra ser
+    // ajustado ANTES de entrar na tela quando a pessoa rolar (ver _observaParaAjuste).
+    if (typeof window._observaNomesParaAjuste === 'function') window._observaNomesParaAjuste(document);
   }
   function _schedule() { if (pending) return; pending = true; (window.requestAnimationFrame || function(f){ setTimeout(f, 16); })(_run); }
   try {
