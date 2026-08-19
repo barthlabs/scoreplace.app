@@ -68,19 +68,9 @@ cd "$ANDROID_DIR"
 echo "▶ Sincronizando web assets (npm run cap:sync)…"
 ( cd "$REPO_ROOT" && npm run cap:sync )
 
-# O assets/public é gerado: `git status` limpo NÃO diz nada sobre o EMBARCADO.
-# version.txt não serve de sonda — fica fora do www/ de propósito (é o árbitro do
-# auto-update, `fetch('/version.txt')` em js/store.js). O símbolo que viaja com o JS
-# é o SCOREPLACE_VERSION do próprio store.js.
-EMBEDDED_STORE="$REPO_ROOT/android/app/src/main/assets/public/js/store.js"
-EMBEDDED_VER="$(sed -n "s/.*SCOREPLACE_VERSION *= *'\([^']*\)'.*/\1/p" "$EMBEDDED_STORE" 2>/dev/null | head -1)"
-REPO_VER="$(cat "$REPO_ROOT/version.txt" 2>/dev/null | tr -d '[:space:]')"
-if [ -z "$EMBEDDED_VER" ] || [ "$EMBEDDED_VER" != "$REPO_VER" ]; then
-  echo "✖ EMBARCADO fora de sincronia: store.js embarcado='$EMBEDDED_VER' vs version.txt='$REPO_VER'." >&2
-  echo "  O www/ não foi montado. Abortando antes de gerar .aab com bundle velho." >&2
-  exit 1
-fi
-echo "▶ Embarcado conferido: SCOREPLACE_VERSION=$EMBEDDED_VER."
+# A regra do EMBARCADO mora em UM arquivo só — estava copiada aqui e no outro
+# script de release, e divergiu. Ver scripts/check-embedded-www.sh.
+"$REPO_ROOT/scripts/check-embedded-www.sh" android
 
 # Alerta de assinatura: sem keystore.properties o release sai unsigned (Play recusa).
 if [ ! -f "$ANDROID_DIR/keystore.properties" ]; then

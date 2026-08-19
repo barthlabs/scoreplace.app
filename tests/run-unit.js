@@ -1016,6 +1016,14 @@ const SUITES = [
   // resolve pra conta viva, a LEVA fica gravada (sem isso "quantos atenderam" é
   // incalculável — foi o buraco do envio manual de 18/ago) e a rotina NASCE em ensaio.
   'functions/test-phone-nudge-core.js',
+  // O bundle EMBARCADO nunca sai de uma leva anterior. `npx cap sync` puro só COPIA o
+  // www/ que já existir — quem MONTA é o build-www.js, dentro do `npm run cap:sync`. Os
+  // DOIS scripts de release chamavam o errado, com fallback que engolia a falha. Medido
+  // em 19/ago/2026: o www/ nem existia e o embarcado estava sem o toggle .pf-switch da
+  // 1.9.69 — o "ovo" voltaria pro TestFlight pela 2a vez, e `git status` limpo não
+  // denuncia (os embarcados são gerados). Roda a trava contra árvores de mentira e cobra
+  // que os dois scripts chamem a MESMA — a duplicação foi a causa, então é ela o alvo.
+  'tests/embarcado-nao-sai-velho.test.js',
 ];
 
 let failed = [];
