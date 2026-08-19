@@ -984,10 +984,20 @@ const SUITES = [
   // de tamanho a cada troca de tela. O tamanho passa a ser imposto NA FONTE; o que varia
   // por tela e a CAIXA (minHeight). A versao inline e excecao (e uma linha, nao uma tela).
   'tests/carregando-tem-um-tamanho-so.test.js',
-  // replay 'passava atras da tela'. NAO era z-index (100060 e o maior do app): o placar
-  // ao vivo entra em tela cheia e o navegador desenha SO a subarvore dele — o replay,
-  // pendurado no body, ficava FORA do escopo desenhado.
+  // replay 'passava atras da tela'. NAO era z-index (100060 e o maior do app): quem esta
+  // em tela cheia faz o navegador desenhar SO a subarvore dele — o replay, pendurado no
+  // body, ficava FORA do escopo desenhado. Desde a 1.9.60 o arquivo guarda o INVARIANTE
+  // (nao pode existir uma segunda tela de replay pendurada as cegas) e nao o mecanismo,
+  // porque a causa sumiu: o replay virou o proprio placar ao vivo.
   'tests/replay-aparece-em-tela-cheia.test.js',
+  // O REPLAY E O PLACAR AO VIVO — mesma tela, mesmo motor, pontos vindos do diario
+  // gravado em vez do dedo. Ate a 1.9.59 era uma tela PARALELA que redesenhava o placar
+  // e tinha que ADIVINHAR quando um game virava; foi essa duplicacao que produziu o bug
+  // daquela versao. Sobe o bracket-ui.js REAL num Chromium, JOGA uma partida, deixa o app
+  // gravar o registro e REPRODUZ: o placar tem que sair identico e nada pode ser gravado
+  // (`_saveResult` sai na 1a linha — e o que protege `_resultSaved`/`_liveRecId` do
+  // auto-save de fim de partida).
+  'tests/replay-e-o-placar-ao-vivo.test.js',
 ];
 
 let failed = [];

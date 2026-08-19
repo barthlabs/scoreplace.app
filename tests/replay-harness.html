@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<!--
+  Harness do PLACAR AO VIVO REAL pro teste do replay (1.9.60).
+
+  Carrega o bracket-ui.js INTEIRO — o motor e a TELA são os de produção, nunca
+  réplica; é isso que dá valor ao teste, porque o replay agora é literalmente esta
+  tela em modo reprodução. Também carrega o match-replay.js, que é o launcher.
+  Os stubs abaixo são só o CHROME em volta (i18n, toasts, sons, Firestore) —
+  nenhum deles participa da contagem de pontos.
+
+  Aberto pelo tests/replay-e-o-placar-ao-vivo.test.js (Playwright) via file://.
+  Espelha tests/watch-engine/harness.html de propósito: mesma montagem, mesma
+  ausência de Firestore.
+-->
+<meta charset="utf-8">
+<title>replay harness</title>
+<!-- O CSS do app entra pra a verificação MANUAL mostrar a apresentação de verdade
+     (placas, cores, tipografia). Sem ele o placar aparece sem estilo e a conferência
+     visual passa a ser sobre outra coisa. Não afeta o teste headless, que confere
+     DOM e estado, não pixel. -->
+<link rel="stylesheet" href="../css/style.css">
+<link rel="stylesheet" href="../css/components.css">
+<link rel="stylesheet" href="../css/layout.css">
+<link rel="stylesheet" href="../css/bracket.css">
+<link rel="stylesheet" href="../css/responsive.css">
+<body>
+<script>
+  window._t = function (k) { return k; };
+  window.showNotification = function () {};
+  window.showConfirmDialog = function () {};
+  window.showAlertDialog = function () {};
+  window._safeHtml = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+  window._avatarHtml = function () { return ''; };
+  window._profileAvatarUrl = function () { return ''; };
+  window._haptic = function () {};
+  window._sound = function () {};
+  window._log = function () {};
+  window._warn = function () {};
+  window._error = function () {};
+  window._captureException = function () {};
+  window._initStatsAnimation = function () {};
+  window.AppStore = {
+    currentUser: null,
+    tournaments: [],
+    logAction: function () {},
+    syncImmediate: function () {},
+    commitTournamentTx: function () {},
+    mutate: function () {}
+  };
+  // Firestore AUSENTE de propósito: o motor guarda cada acesso com
+  // `window.FirestoreDB &&`. O registro da partida cai no espelho em localStorage,
+  // que é de onde o teste lê o payload REAL de replay.
+  window.FirestoreDB = undefined;
+</script>
+<script>
+  // ⚠️ Carrega com carimbo de tempo. Sem isto o navegador serve o bracket-ui.js do
+  // CACHE numa verificação manual por http:// e a medição vira sobre código velho —
+  // que é o pior tipo de verificação: parece que o fix não funcionou. `document.write`
+  // porque ele PRESERVA A ORDEM de execução, que aqui é obrigatória (bracket-model e
+  // sport-rules antes do bracket-ui).
+  var _v = '?t=' + Date.now();
+  ['../js/views/bracket-model.js', '../js/views/sport-rules.js'].forEach(function (src) {
+    document.write('<script src="' + src + _v + '"><\/script>');
+  });
+</script>
+<script>
+  window._sportScoringDefaults = window._sportScoringDefaultsMap();
+</script>
+<script>
+  ['../js/views/bracket-ui.js', '../js/views/match-replay.js'].forEach(function (src) {
+    document.write('<script src="' + src + _v + '"><\/script>');
+  });
+</script>
+</body>

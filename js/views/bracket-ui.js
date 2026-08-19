@@ -3880,6 +3880,41 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // no-op e o CSS esconde/desarma os controles. Nível (b) sozinho é aparência; nível
   // (a) sozinho deixaria botão vivo que não faz nada.
   var _spectate = !!(opts && opts.spectate);
+  // ── MODO REPRODUÇÃO / REPLAY (1.9.60) ─────────────────────────────────────────
+  // Ordem do dono: _"tem que ser como o placar ao vivo, mesma apresentação, mesma
+  // mecânica, mas reproduzindo a ordem dos pontos da partida e apresentando as
+  // estatísticas da partida ao final"_.
+  //
+  // Então o replay NÃO é uma tela: é ESTE placar, com uma chave decidindo QUEM
+  // produz os pontos — o dedo na quadra ou o diário gravado. Tudo o mais é o mesmo
+  // código: o motor conta, a mesma placa desenha, e o fim cai na MESMA tela de
+  // estatísticas que a partida ao vivo já mostra. É o mesmo desenho do espectador
+  // (1.9.36), que também é esta tela com o dado entrando por outra porta.
+  //
+  // ⚠️ POR QUE REPRODUZIR PELO MOTOR, E NÃO REDESENHAR O GRAVADO: a tela paralela
+  // que existia até a 1.9.59 tinha que ADIVINHAR onde cada ponto caía (quando o game
+  // virou, quando o set virou) a partir do placar do ponto seguinte — e foi essa
+  // duplicação de apresentação que produziu o bug daquela versão. O motor não
+  // adivinha: ele conta. E é o MESMO motor que os vetores de paridade travam
+  // (tests/watch-engine/), então reproduzir a ordem de pontos é reproduzir a partida.
+  //
+  // ⚠️ O RISCO DE REPRODUZIR PELO MOTOR — e o que o segura: se o motor mudar, ele
+  // poderia reescrever o passado de uma partida já gravada. Por isso cada ponto é
+  // CONFERIDO contra o placar que o diário testemunhou (`_replayDrift`): divergiu, a
+  // tela para de afirmar que aquilo aconteceu, em vez de mentir com confiança.
+  //
+  // ⚠️ REPLAY NÃO GRAVA NADA. `_saveResult` sai na 1ª linha — e é isso que protege
+  // `_resultSaved`/`_liveRecId`: eles nunca são tocados aqui, então reproduzir uma
+  // partida não tem como sobrescrever o resultado real dela.
+  var _replay = (opts && opts.replay && Array.isArray(opts.replay.points) && opts.replay.points.length)
+    ? opts.replay : null;
+  var _replayIdx = 0;          // próximo ponto do diário a ser reproduzido
+  var _replayFeeding = false;  // ⚠️ só o diário abre esta porta — o dedo nunca
+  var _replayTs = null;        // carimbo GRAVADO do ponto em curso (nunca Date.now())
+  var _replayTimer = null;
+  var _replayPaused = false;
+  var _replaySpeed = 1;
+  var _replayDrift = 0;        // pontos em que o motor discordou da testemunha
   var t = null, m = null;
   if (!isCasual) {
     t = window._findTournamentById(tId);
@@ -4297,7 +4332,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Som: apito de árbitro ao ABRIR uma partida nova pra jogar ao vivo. Só numa
   // partida realmente nova — não em modo visualização, não retomando estado
   // salvo (initialLiveState/casualDocId), não já finalizada, sem pontos ainda.
-  if (window._sound && !(opts && opts.viewOnly) && !(opts && opts.initialLiveState)
+  // ⚠️ `!_replay`: reproduzir não é partida começando — o apito de árbitro anunciaria
+  // um jogo que já acabou.
+  if (window._sound && !_replay && !(opts && opts.viewOnly) && !(opts && opts.initialLiveState)
       && !(opts && opts.casualDocId) && !state.isFinished && !_matchStartTime) {
     window._sound('apito');
   }
@@ -4638,6 +4675,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Add point to player
   function _addPoint(player) {
     if (_spectate) return;              // assistindo: o placar é dos participantes
+    // ⚠️ A CHAVE DO REPLAY (1.9.60): esta é a única porta de mutação do placar, então
+    // é AQUI que se decide quem produz os pontos. Reproduzindo, o dedo não marca —
+    // quem marca é o diário, e só ele levanta `_replayFeeding`. Trocar isto por um
+    // guard visual (esconder os botões) deixaria a porta aberta pro toque na placa,
+    // que é a área de toque MAIOR da tela.
+    if (_replay && !_replayFeeding) return;
     if (state.isFinished) return;
     // ⚠️ BLOQUEADO **E RENDERIZA** — sair calado aqui MATA a partida. Estes dois
     // estados só se resolvem numa TELA (o diálogo de empate e o seletor de sacador);
@@ -4658,11 +4701,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
     // Haptic feedback — pulso curto a cada ponto. Confirma tap sem precisar
     // olhar a tela (útil com celular na trave). Android + iPhone (iOS 17.4+).
-    if (window._haptic) window._haptic('tap');
+    // ⚠️ Fora do replay: ali o ponto não é um toque a confirmar, e a cadência chega
+    // a ~10 pontos por segundo — o aparelho viraria uma vibração contínua.
+    if (window._haptic && !_replay) window._haptic('tap');
 
     // Track match start time on first point
     if (!_matchStartTime) {
-      _matchStartTime = Date.now();
+      // ⚠️ Reproduzindo, o relógio é o DA PARTIDA. Sem isto o fim mostraria "duração
+      // 12s · ponto médio 90ms" — a cadência do replay, não a do jogo —, e as
+      // estatísticas de tempo (que o dono pediu explicitamente no fim) seriam sobre
+      // a reprodução em vez de sobre a partida.
+      _matchStartTime = (_replay && _replayTs) ? _replayTs : Date.now();
       // v1.0.59-beta: GA4 — só pra partidas casuais (não polui com tournament matches)
       if (isCasual) {
         try {
@@ -4708,7 +4757,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // pra evitar contaminação inter-rally). Funciona pra N undos consecutivos
     // de um time, seguidos de N adds pro outro — intervalos preservados.
     var _pointTs = Date.now();
-    if (Array.isArray(state._recentUndoStack) && state._recentUndoStack.length > 0) {
+    // Reproduzindo: o carimbo é o GRAVADO. Vem antes da correção por undo abaixo
+    // porque no replay não existe undo — o diário já é a versão corrigida do jogo.
+    if (_replay && _replayTs) _pointTs = _replayTs;
+    if (!_replay && Array.isArray(state._recentUndoStack) && state._recentUndoStack.length > 0) {
       // Limpa entradas stale do topo (mais recente) — se o último undo foi
       // há mais de 15s, considera o stack inteiro stale e descarta.
       var lastEntry = state._recentUndoStack[state._recentUndoStack.length - 1];
@@ -4816,7 +4868,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // Som: ganhou um game e o set continua → toque curto "Game".
           // setResult === -1 = entrou em tiebreak (game foi ganho, toca);
           // setResult === -2 = aguardando diálogo de regra de empate (não toca).
-          if (setResult !== -2 && window._sound) window._sound('game');
+          // ⚠️ Mudo no replay: reproduzindo, um game vira a cada poucos décimos de
+          // segundo e os toques se atropelariam. O apito de vitória do FIM continua —
+          // é o único que cai num instante só, e é o que fecha a reprodução.
+          if (setResult !== -2 && window._sound && !_replay) window._sound('game');
         }
       }
     }
@@ -4838,7 +4893,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
       if (state.isFixedSet) matchWinner = setWinner;
       state.isFinished = true;
       state.winner = matchWinner;
-      _matchEndTime = Date.now();
+      // Reproduzindo, o fim é o carimbo do ÚLTIMO ponto gravado — é ele que fecha a
+      // duração real da partida na tela de estatísticas.
+      _matchEndTime = (_replay && _replayTs) ? _replayTs : Date.now();
       // Som: partida vencida no placar ao vivo → torcida (crescendo de gol).
       if (window._sound) window._sound('vitoria');
       // v2.1.39: TORNEIO — grava o resultado na chave AUTOMATICAMENTE no último
@@ -4880,8 +4937,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
     } else {
       // Start new set
       state.sets.push({ gamesP1: 0, gamesP2: 0, tiebreak: null });
-      // Som: set fechado e a partida continua → fanfarra "Set".
-      if (window._sound) window._sound('set');
+      // Som: set fechado e a partida continua → fanfarra "Set". Mudo no replay pelo
+      // mesmo motivo do "Game" acima.
+      if (window._sound && !_replay) window._sound('set');
     }
   }
 
@@ -5036,10 +5094,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }
 
     // v1.8.79 (REPLAY): monta o ponto a ponto que o replay reproduz depois.
-    // Guarda SÓ o que a tela do replay precisa — nada de estado de motor, porque
-    // replay é uma REPRODUÇÃO visual, não uma partida: ele não recalcula placar,
-    // apenas mostra o que cada ponto já registrou. Assim nenhuma mudança futura no
-    // motor de pontuação consegue reescrever o passado de uma partida gravada.
+    //
+    // ⚠️ O QUE ISTO É, DESDE A 1.9.60: um DIÁRIO DE EVENTOS, não um filme. O replay
+    // deixou de redesenhar quadro a quadro e passou a REPRODUZIR estes pontos pelo
+    // MOTOR — a mesma tela e o mesmo motor da partida ao vivo, alimentados pela
+    // ordem gravada em vez do dedo (`opts.replay` em `_openLiveScoring`).
+    // Por isso o que se grava aqui não é mais "o que desenhar" e sim o MÍNIMO que o
+    // motor precisa pra chegar sozinho no mesmo lugar: as CONDIÇÕES INICIAIS (regra
+    // de contagem, sacador) e a SEQUÊNCIA de quem marcou cada ponto.
+    //
+    // ⚠️ Os campos de PLACAR (a/b/g1/g2/si/tb) continuam gravados de propósito, e
+    // não são redundância: são a TESTEMUNHA do que o placar mostrava naquele ponto.
+    // O replay confere o que o motor produziu contra eles e, divergindo, para de
+    // afirmar que aquilo aconteceu (ver `_replayDrift`) — é o que impede uma mudança
+    // futura no motor de reescrever, calada, o passado de uma partida já jogada.
+    //
     // Campos curtos de propósito: são ~10 bytes por ponto × centenas de pontos, e
     // o registro é gravado no matchHistory de CADA jogador.
     function _buildReplayPayload() {
@@ -5051,12 +5120,44 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var corte = pts.length > MAX;
       var usados = corte ? pts.slice(pts.length - MAX) : pts;
       return {
-        v: 1,
+        // v2: acrescenta as CONDIÇÕES INICIAIS (`so`, `scoring`). Sem elas o motor
+        // não tem de onde partir e o replay teria que adivinhar o sacador — que é
+        // justamente o que decide a rotação de saque e, com ela, as estatísticas de
+        // saque/quebra do fim. Registro v:1 (1.8.79–1.9.59) segue reproduzindo: o
+        // replay cai no time que sacou o 1º ponto, e o declara.
+        v: 2,
         truncated: corte,
         totalPoints: pts.length,
         useSets: !!useSets,
         isFixedSet: !!state.isFixedSet,
         countingType: (state.countingType || (opts && opts.countingType) || null),
+        // A regra EFETIVA da partida — lida de `state`, NÃO de `sc`. É `state` que
+        // guarda o valor já resolvido pelos defaults do esporte e pelo fallback
+        // `'ask'` do casual; é a mesma razão pela qual o snapshot do relógio leva
+        // `scoring` de `state` (Caminho B, 1.8.68). Emitida no formato de CONFIG
+        // (`sc`), que é o que o inicializador do estado sabe ler ao reabrir.
+        scoring: {
+          type: useSets ? 'sets' : 'simple',
+          setsToWin: state.setsToWin, gamesPerSet: state.gamesPerSet,
+          tiebreakEnabled: !!state.tiebreakEnabled, tiebreakPoints: state.tiebreakPoints,
+          tiebreakMargin: state.tiebreakMargin,
+          superTiebreak: !!state.superTiebreak, superTiebreakPoints: state.superTiebreakPoints,
+          countingType: state.countingType,
+          deuceRule: !!state.deuceRule, twoPointAdvantage: !!state.twoPointAdvantage,
+          fixedSet: !!state.isFixedSet, fixedSetGames: state.fixedSetGames,
+          // ⚠️ Pode sair como `'ask'` — e sai mesmo: prorrogar NÃO fixa a regra, ela
+          // volta a ser perguntada no 6-6, 7-7… Quem responde no replay não é uma
+          // tela: é o próprio diário (o `tb` do ponto seguinte diz o que foi
+          // escolhido). Ver `_replayAnswerTie`.
+          tieRule: state.tieRule || null
+        },
+        // Ordem de saque como ela FICOU na partida — quem sacou cada slot. É a única
+        // condição inicial que o diário de pontos não carrega, e são 2–4 entradas no
+        // total (não por ponto). `serveSkipped` é estado válido: partida em que
+        // ninguém marcou sacador reproduz sem sacador, como foi.
+        so: (state.serveSkipped || !Array.isArray(state.serveOrder)) ? null
+          : state.serveOrder.map(function (s) { return { t: s.team, n: s.name || null }; }),
+        serveSkipped: !!state.serveSkipped,
         points: usados.map(function (p) {
           return {
             w: p.team,                                    // quem marcou
@@ -5153,6 +5254,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // quem assiste abre) salvaria a partida dos OUTROS no histórico de quem só
     // estava olhando — e ela contaria como jogo dele.
     if (_spectate) return;
+    // ⚠️ REPLAY NÃO GRAVA NADA — E ESTA LINHA É A QUE PROTEGE O RESULTADO REAL.
+    // O fim da partida AUTO-grava (`_saveResult` no último ponto, idempotente por
+    // `_resultSaved`). Reproduzir uma partida chega exatamente nesse ponto: o motor
+    // atinge `isFinished` e o mesmo caminho de gravação seria disparado — só que com
+    // `_resultSaved`/`_liveRecId` desta sessão, que são NOVOS. Ou seja, sem este
+    // return o replay REGRAVARIA o placar por cima do resultado verdadeiro (no
+    // torneio, na chave; no casual, duplicando no matchHistory de cada jogador).
+    // Saindo aqui, os dois flags nunca são tocados durante uma reprodução.
+    if (_replay) return;
     opts = opts || {};
     if (_resultSaved) {
       if (!opts.keepOpen) {
@@ -6651,7 +6761,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
             '</label>';
         };
         restartSection =
-          '<div style="display:flex;flex-direction:column;gap:6px;width:100%;">' +
+          // id estável: são os interruptores da PRÓXIMA partida, e numa REPRODUÇÃO não
+          // existe próxima partida — o CSS do replay os esconde por este id. Sem um id
+          // o único seletor possível seria `:has()`, que degrada em WebView antigo
+          // deixando um controle vivo que não faz nada.
+          '<div id="live-stats-next-toggles" style="display:flex;flex-direction:column;gap:6px;width:100%;">' +
             '<div style="display:flex;gap:6px;width:100%;">' +
               _tgl('🔀', 'Sortear Duplas', '251,191,36', 'chk-stats-shuffle', autoShuffle) +
               _tgl('👑', 'Rei/Rainha', '245,158,11', 'chk-stats-rr', false) +
@@ -8569,6 +8683,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
   function _lnSync() {
     if (_spectate) return;              // espectador NÃO publica — ele só lê
+    // ⚠️ Reproduzir uma partida antiga NÃO pode pôr ninguém na vitrine "ao vivo" nem
+    // disparar convite pro torneio inteiro ("fulano está jogando agora"). O jogo já
+    // aconteceu; anunciá-lo de novo seria avisar sobre um fato que não existe.
+    if (_replay) return;
     if (typeof window._liveNowPublish !== 'function') return;
     if (!_lnResolveId()) return;
     // ── COMEÇA NO 1º PONTO, NÃO NA ABERTURA (1.9.37) ──────────────────────────
@@ -8857,6 +8975,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
   // Empurra o estado atual pro relógio (no-op se a ponte não estiver ativa/web).
   function _watchNotify() {
+    // ⚠️ O relógio no pulso está na QUADRA. Empurrar pra ele o placar de uma partida
+    // que está sendo reproduzida no celular sequestraria o mostrador — e, pior, o
+    // motor nativo dele (Caminho B) trataria isso como partida em curso.
+    if (_replay) return;
     if (window.WatchBridge && window.WatchBridge._onEngineState) {
       try { window.WatchBridge._onEngineState(window._getLiveScoreState()); } catch (e) {}
     }
@@ -9263,11 +9385,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
 
   window._statsToggleShuffle = function(chk) {
+    if (_replay) return;   // reproduzindo: não existe próxima partida a configurar
     autoShuffle = !!chk.checked;
     _syncStatsConfig();
   };
 
   window._statsToggleMixed = function(chk) {
+    if (_replay) return;   // reproduzindo: não existe próxima partida a configurar
     _mixedDoublesEnabled = !!chk.checked;
     _syncStatsConfig();
   };
@@ -9276,6 +9400,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   // Ao ativar, chama _activateReiRainhaRetroactive() para retroativamente
   // reconhecer jogos anteriores da mesma sessão, desde que com pairings distintos.
   window._statsToggleReiRainha = function(chk) {
+    if (_replay) return;   // reproduzindo: não existe próxima partida a configurar
     if (chk.checked) {
       _reiRainhaMode = true;
       _activateReiRainhaRetroactive();
@@ -10169,8 +10294,17 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // já estava aqui não fazia nada sem permissão de encolher; o ellipsis do nome também
     // nunca disparava. Agora o nome trunca e os botões ficam sempre alcançáveis.
     '<div style="display:flex;align-items:center;gap:7px;flex:1 1 auto;min-width:0;">' +
-      '<span style="font-size:1rem;flex:0 0 auto;">📡</span>' +
-      '<span style="font-size:0.78rem;font-weight:800;color:#f87171;line-height:1;flex:0 0 auto;letter-spacing:0.02em;">AO VIVO</span>' +
+      // ⚠️ Reproduzindo, o selo NÃO pode dizer "AO VIVO": a partida já acabou, e um
+      // rótulo de tempo real em cima de um jogo antigo é a tela afirmando algo falso —
+      // ainda mais neste caso, em que a apresentação é idêntica à da partida de verdade.
+      // ⚠️ O âmbar vem da CLASSE `.stat-accent`, NUNCA de `style="color:#fbbf24"`.
+      // Este cabeçalho é SUPERFÍCIE INVERTIDA (gradiente escuro nos DOIS temas), e o
+      // remap de contraste do tema claro age só sobre `style` INLINE: escrito inline,
+      // o #fbbf24 virava #92400e e dava 2,96:1 de marrom sobre fundo escuro — medido
+      // no navegador. Vindo de classe ele fica fora do remap, que é o caminho canônico
+      // pra texto sobre tarja escura (components.css, v1.8.78).
+      '<span style="font-size:1rem;flex:0 0 auto;">' + (_replay ? '▶️' : '📡') + '</span>' +
+      '<span' + (_replay ? ' class="stat-accent"' : '') + ' style="font-size:0.78rem;font-weight:800;' + (_replay ? '' : 'color:#f87171;') + 'line-height:1;flex:0 0 auto;letter-spacing:0.02em;">' + (_replay ? 'REPLAY' : 'AO VIVO') + '</span>' +
       '<span style="color:rgba(255,255,255,0.28);line-height:1;flex:0 0 auto;font-size:0.7rem;">|</span>' +
       '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + window._safeHtml(_hdrCtx) + '</span>' +
     '</div>' +
@@ -10615,6 +10749,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // o relógio fica com o placar anterior "congelado". No-op na web (inerte).
       _watchTeardown();
     };
+    // ⚠️ Sair de uma REPRODUÇÃO é só fechar a tela — nada de "Abandonar partida?"
+    // nem de "o resultado será salvo": não há partida a abandonar (ela terminou há
+    // tempo) e não há nada a salvar (`_saveResult` sai na 1ª linha no replay).
+    // Perguntar aqui ofereceria desfechos que não existem.
+    if (_replay) { _cleanup(); return; }
     var cu = window.AppStore && window.AppStore.currentUser;
     var isOrganizer = isCasual && cu && cu.uid && _casualCreatedBy && cu.uid === _casualCreatedBy;
     var _title, _msg;
@@ -10794,6 +10933,253 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }, 150);
   };
   window.addEventListener('resize', _onResize);
+
+  // ══ REPRODUÇÃO (REPLAY) ═════════════════════════════════════════════════════
+  // Tudo o que é PRÓPRIO do replay mora aqui. Note o que NÃO existe neste bloco:
+  // desenho de placar, cálculo de game/set/tie-break, montagem de estatística.
+  // Nada disso é reimplementado — é o mesmo motor e a mesma tela acima. O que este
+  // bloco faz é só: pôr as condições iniciais, entregar os pontos na ordem gravada,
+  // e conferir o resultado contra a testemunha.
+  if (_replay) {
+    var _rPts = _replay.points;
+    var _rTotal = _replay.totalPoints || _rPts.length;
+
+    // ── condições iniciais ────────────────────────────────────────────────────
+    // Sacador. É a única condição inicial que o diário de pontos não carrega, e ela
+    // decide a rotação de saque — logo, decide as estatísticas de saque/quebra que
+    // aparecem no fim. Três origens, da melhor pra pior:
+    //   `so`  (v:2) — a ordem como ela FOI. Reproduz idêntico, jogador a jogador.
+    //   `sv`  (v:1) — só o TIME que sacou o 1º ponto. A rotação de times sai certa
+    //                 (os slots alternam times por construção); qual jogador da dupla
+    //                 ocupa cada slot é aproximação, e está declarado na barra.
+    //   nada        — partida jogada sem marcar sacador: reproduz sem sacador.
+    (function _seedServe() {
+      if (_replay.serveSkipped) { state.serveSkipped = true; return; }
+      var so = Array.isArray(_replay.so) ? _replay.so : null;
+      if (so && so.length) {
+        state.serveOrder = so.map(function (s) { return { team: s.t, name: s.n || null }; });
+      } else {
+        var t0 = _rPts[0] && _rPts[0].sv;
+        if (!t0) { state.serveSkipped = true; return; }
+        // Reconstrói a rotação a partir do time que abriu o saque: slots pares são
+        // dele, ímpares do outro — que é exatamente como `_proposedOrder` monta.
+        var A = t0 === 1 ? p1Players : p2Players;
+        var B = t0 === 1 ? p2Players : p1Players;
+        var tA = t0, tB = t0 === 1 ? 2 : 1;
+        var ord = [];
+        for (var i = 0; i < Math.max(A.length, B.length); i++) {
+          if (A[i]) ord.push({ team: tA, name: A[i] });
+          if (B[i]) ord.push({ team: tB, name: B[i] });
+        }
+        state.serveOrder = ord.slice(0, serveSlots);
+      }
+      // Sem isto o motor abriria o seletor de sacador entre o 1º e o 2º game
+      // (`_needsServePick`) e a reprodução ficaria parada esperando um toque.
+      state.secondServerPicked = true;
+    })();
+
+    // Partida LONGA cortada no registro (`truncated`): o diário só tem o fim. Rodar
+    // o motor do 0-0 com o fim de uma partida produziria um placar MENOR que o real
+    // — ou seja, uma partida que não existiu. Então o motor é SEMEADO no estado que
+    // a testemunha do 1º ponto sobrevivente descreve, e a barra declara o corte.
+    // (Sementear é seguro aqui, e não no relógio: ali o motor precisa concordar com
+    // outro motor ao vivo; aqui ele só precisa concordar com o que foi gravado.)
+    if (_replay.truncated && _rPts[0]) {
+      var _p0 = _rPts[0], _si0 = _p0.si || 0, _jogados = 0;
+      var _prev = Array.isArray(opts.recordSets) ? opts.recordSets : [];
+      state.sets = [];
+      for (var _s = 0; _s < _si0; _s++) {
+        var _ps = _prev[_s] || { gamesP1: 0, gamesP2: 0 };
+        state.sets.push({ gamesP1: _ps.gamesP1 || 0, gamesP2: _ps.gamesP2 || 0, tiebreak: _ps.tiebreak || null });
+        _jogados += (_ps.gamesP1 || 0) + (_ps.gamesP2 || 0);
+      }
+      state.sets.push({ gamesP1: _p0.g1 || 0, gamesP2: _p0.g2 || 0, tiebreak: null });
+      _jogados += (_p0.g1 || 0) + (_p0.g2 || 0);
+      state.currentGameP1 = _p0.a || 0;
+      state.currentGameP2 = _p0.b || 0;
+      state.isTiebreak = !!_p0.tb;
+      state.totalGamesPlayed = _jogados;
+    }
+
+    // ── quem responde o diálogo de empate é o DIÁRIO ──────────────────────────
+    // Em `tieRule:'ask'` (o padrão do casual) o motor PARA no 5-5 e pergunta. Numa
+    // reprodução não há ninguém pra responder — e a resposta já foi dada na quadra.
+    // O `tb` do próximo ponto gravado é a testemunha dela: se o ponto seguinte foi
+    // disputado em tie-break, escolheram tie-break; se não, prorrogaram.
+    function _replayAnswerTie() {
+      if (!state.tieRulePending) return false;
+      var prox = _rPts[_replayIdx];
+      var regra = (prox && prox.tb) ? 'tiebreak' : 'extend';
+      _replayFeeding = true;
+      try { window._liveResolveTie(regra); } finally { _replayFeeding = false; }
+      return true;
+    }
+
+    // ── a testemunha ──────────────────────────────────────────────────────────
+    // Antes de entregar o ponto, confere se o motor está onde o registro diz que a
+    // partida estava. É isto que impede uma mudança futura no motor de reescrever,
+    // calada, o passado: divergindo, a tela para de afirmar (o rótulo vira aviso)
+    // em vez de mostrar com confiança um placar que nunca existiu.
+    function _replayConfere(p) {
+      if (p.g1 == null || p.g2 == null) return true;   // registro v:1 antigo, sem games
+      var cs = _currentSet();
+      return state.currentGameP1 === p.a && state.currentGameP2 === p.b &&
+             cs.gamesP1 === p.g1 && cs.gamesP2 === p.g2 &&
+             (state.sets.length - 1) === (p.si || 0) &&
+             !!state.isTiebreak === !!p.tb;
+    }
+
+    function _replayStop() {
+      if (_replayTimer) { clearTimeout(_replayTimer); _replayTimer = null; }
+    }
+
+    // Entrega UM ponto ao motor. Toda a contagem — game, set, tie-break, rotação de
+    // saque, fim de partida — acontece dentro do motor, como numa partida de verdade.
+    function _replayStep() {
+      if (_replayAnswerTie()) return true;             // destrava e volta no próximo tick
+      if (_replayIdx >= _rPts.length) return false;
+      var p = _rPts[_replayIdx++];
+      if (!_replayConfere(p)) _replayDrift++;
+      _replayTs = p.t || null;
+      _replayFeeding = true;
+      try { _addPoint(p.w === 2 ? 2 : 1); } finally { _replayFeeding = false; _replayTs = null; }
+      return true;
+    }
+
+    // Cadência: o pedido original do dono era "ponto a ponto em 10 segs". O piso
+    // existe porque abaixo dele a tela vira borrão — e agora quem desenha é o placar
+    // inteiro (foto, quadra, placa), que custa mais que o desenho simplificado da
+    // tela paralela que existia antes.
+    var _RDUR = 10000, _RPISO = 120;
+    function _replayPasso() {
+      return Math.max(_RPISO, Math.floor(_RDUR / Math.max(1, _rPts.length))) / _replaySpeed;
+    }
+    function _replayTick() {
+      _replayTimer = null;
+      if (_replayPaused) return;
+      if (!_replayStep()) { _replayFim(); return; }
+      _replayPinta();
+      if (state.isFinished) { _replayFim(); return; }
+      _replayTimer = setTimeout(_replayTick, _replayPasso());
+    }
+    function _replayFim() {
+      _replayStop();
+      _replayPinta();
+    }
+
+    // ── barra de controle ─────────────────────────────────────────────────────
+    // Fica FORA do `#live-score-content` de propósito: aquele nó é reescrito inteiro
+    // a cada `_render()` (ou seja, a cada ponto), e a barra sumiria junto.
+    var _rBar = document.createElement('div');
+    _rBar.id = 'live-replay-bar';
+    // ⚠️ Item de FLEX, não `position:absolute`. O overlay é uma coluna flex, então a
+    // barra ocupando espaço de verdade faz o placar ENCOLHER pra caber — flutuando por
+    // cima ela cobria o pé da placa do time de baixo (medido no navegador a 375px).
+    // No replay o botão "Desfazer" some, então esta barra ocupa a faixa que era dele.
+    _rBar.style.cssText = 'flex:0 0 auto;z-index:20;' +
+      'display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;' +
+      'padding:8px max(10px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-right,0px));' +
+      'background:rgba(15,23,42,0.92);border-top:1px solid rgba(255,255,255,0.08);';
+    var _btnCss = 'border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.10);' +
+      'color:#fff;border-radius:9px;padding:6px 11px;font-size:0.72rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+    _rBar.innerHTML =
+      '<button id="lr-exit" style="' + _btnCss + '">← Voltar</button>' +
+      '<button id="lr-play" style="' + _btnCss + '">⏸ Pausar</button>' +
+      '<button id="lr-speed" style="' + _btnCss + '">1×</button>' +
+      '<button id="lr-skip" style="' + _btnCss + '">Pular ⏭</button>' +
+      '<div id="lr-label" style="flex:1 1 100%;text-align:center;font-size:0.66rem;color:rgba(255,255,255,0.62);font-variant-numeric:tabular-nums;"></div>';
+    overlay.appendChild(_rBar);
+
+    function _replayPinta() {
+      var lab = document.getElementById('lr-label');
+      if (!lab) return;
+      var pb = document.getElementById('lr-play');
+      var terminou = state.isFinished || _replayIdx >= _rPts.length;
+      if (pb) pb.style.display = terminou ? 'none' : '';
+      var sk = document.getElementById('lr-skip');
+      if (sk) sk.style.display = terminou ? 'none' : '';
+      var sp = document.getElementById('lr-speed');
+      if (sp) sp.style.display = terminou ? 'none' : '';
+      var txt;
+      if (terminou) {
+        txt = 'fim da reprodução · ' + _rPts.length + ' pontos';
+      } else {
+        txt = '▶️ reprodução · ponto ' + Math.min(_replayIdx, _rPts.length) + ' de ' + _rPts.length;
+      }
+      if (_replay.truncated) txt += ' (últimos ' + _rPts.length + ' de ' + _rTotal + ')';
+      if (!_replay.so && !_replay.serveSkipped) txt += ' · saque aproximado';
+      // Divergência é dito na tela, não escondido: um placar reproduzido que não bate
+      // com o gravado tem que parar de se apresentar como o que aconteceu.
+      if (_replayDrift) txt = '⚠️ reprodução divergiu do registro em ' + _replayDrift + ' ponto(s) — o placar acima pode não ser o da partida';
+      lab.textContent = txt;
+      lab.style.color = _replayDrift ? '#fca5a5' : 'rgba(255,255,255,0.62)';
+    }
+
+    window._liveScoreReplayToggle = function () {
+      _replayPaused = !_replayPaused;
+      var b = document.getElementById('lr-play');
+      if (b) b.textContent = _replayPaused ? '▶️ Continuar' : '⏸ Pausar';
+      if (!_replayPaused && !_replayTimer) _replayTick();
+    };
+    window._liveScoreReplaySpeed = function () {
+      _replaySpeed = _replaySpeed >= 4 ? 1 : _replaySpeed * 2;
+      var b = document.getElementById('lr-speed');
+      if (b) b.textContent = _replaySpeed + '×';
+    };
+    window._liveScoreReplaySkip = function () {
+      // Vai até o fim pelo MESMO caminho — ponto a ponto, pelo motor. Pular não é
+      // "mostrar o resultado gravado": é reproduzir o resto de uma vez, senão a tela
+      // de estatísticas sairia de um estado que o motor nunca produziu.
+      _replayStop();
+      _replayPaused = false;
+      var guarda = 0;
+      while (!state.isFinished && _replayIdx < _rPts.length && guarda++ < 5000) _replayStep();
+      _replayAnswerTie();
+      _replayFim();
+    };
+    window._liveScoreReplayExit = function () {
+      _replayStop();
+      if (typeof window._closeLiveScoring === 'function') window._closeLiveScoring();
+    };
+    _rBar.querySelector('#lr-exit').addEventListener('click', window._liveScoreReplayExit);
+    _rBar.querySelector('#lr-play').addEventListener('click', window._liveScoreReplayToggle);
+    _rBar.querySelector('#lr-speed').addEventListener('click', window._liveScoreReplaySpeed);
+    _rBar.querySelector('#lr-skip').addEventListener('click', window._liveScoreReplaySkip);
+
+    // Desarma os controles de PARTIDA. Mesma trava do espectador e pelo mesmo motivo:
+    // por SELETOR de ação (`onclick` que chama um mutador), não por id de botão — id
+    // muda de nome numa refatoração, a intenção não. Isto é a camada de APARÊNCIA; a
+    // trava de verdade é o return no `_addPoint`.
+    overlay.setAttribute('data-replay', '1');
+    if (!document.getElementById('sp-replay-css')) {
+      var _cssRep = document.createElement('style');
+      _cssRep.id = 'sp-replay-css';
+      _cssRep.textContent =
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreUndoLastPoint"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreGoToSetup"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreRestart"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreFinish"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreMinus"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreReset"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreUnpair"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreConfirmTournament"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreShareCasual"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScoreCloseStats"],' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveStatsClose"],' +
+        '#live-scoring-overlay[data-replay="1"] #live-score-header-actions,' +
+        // Interruptores da PRÓXIMA partida (🔀 duplas / 👑 Rei-Rainha / ⚥ mistas):
+        // reproduzir uma partida antiga não configura partida nenhuma.
+        '#live-scoring-overlay[data-replay="1"] #live-stats-next-toggles' +
+        '{display:none !important;}' +
+        '#live-scoring-overlay[data-replay="1"] [onclick*="_liveScorePoint"]{pointer-events:none !important;}';
+      document.head.appendChild(_cssRep);
+    }
+
+    _render();
+    _replayPinta();
+    _replayTimer = setTimeout(_replayTick, 420);   // respiro pra ler o 0-0 antes de começar
+    return;
+  }
 
   // Initial render
   _render();

@@ -267,5 +267,39 @@ console.log('\n== Contraste nos DOIS temas ==');
   }
 })();
 
+// ── ACENTO SOBRE SUPERFÍCIE INVERTIDA VEM DE CLASSE, NUNCA DE HEX INLINE (1.9.60) ──
+// Forma NOVA de quebrar contraste, e por isso entra AQUI e não num teste ao lado.
+//
+// O cabeçalho do placar ao vivo é superfície INVERTIDA: gradiente escuro nos DOIS
+// temas. O remap de contraste do tema claro age só sobre `style` INLINE — então um
+// `style="color:#fbbf24"` ali dentro é reescrito pra #92400e e vira marrom escuro
+// sobre fundo escuro. MEDIDO no navegador quando o selo "REPLAY" nasceu assim:
+// 2,96:1 no tema claro contra 12,58:1 no escuro. Vindo de CLASSE (`.stat-accent`) o
+// âmbar fica fora do remap e dá 10,69:1 nos dois.
+//
+// A regra é a mesma que components.css já documenta pra `.stat-box` (v1.8.78) —
+// aqui ela é COBRADA, pra não depender de alguém lembrar.
+(function () {
+  const bu = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
+  const i = bu.indexOf("(_replay ? 'REPLAY' : 'AO VIVO')");
+  ok(i > 0, 'o selo REPLAY/AO VIVO do cabeçalho existe');
+  if (i > 0) {
+    const trecho = bu.slice(Math.max(0, i - 700), i + 120);
+    ok(/class="stat-accent"/.test(trecho),
+      'o acento do selo vem da CLASSE .stat-accent (fica fora do remap do tema claro)');
+    ok(!/color:#(fbbf24|fde68a|fcd34d|f59e0b)/i.test(trecho),
+      'e NÃO de hex âmbar inline, que o remap escureceria sobre o cabeçalho escuro');
+  }
+  // A barra da reprodução é tarja escura nos dois temas: texto branco ali é correto,
+  // mas o FUNDO tem que ser opaco o bastante pra isso valer no tema claro também.
+  const j = bu.indexOf("_rBar.style.cssText");
+  ok(j > 0, 'a barra de controle da reprodução existe');
+  if (j > 0) {
+    const trecho = bu.slice(j, j + 600);
+    ok(/background:rgba\(15,23,42,0\.9\d?\)/.test(trecho),
+      'a barra é tarja escura OPACA (≥0.9) — texto branco lê nos dois temas');
+  }
+})();
+
 console.log('\n' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

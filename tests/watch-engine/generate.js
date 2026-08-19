@@ -19,8 +19,12 @@ const ROOT = path.join(__dirname, '..', '..');
 const VEC_DIR = path.join(__dirname, 'vectors');
 const scenarios = require('./scenarios.js');
 
-// Node não resolve @playwright/test a partir de /tmp — mas aqui estamos no repo.
-const { chromium } = require(path.join(ROOT, 'node_modules', '@playwright', 'test'));
+// ⚠️ `require` simples, NÃO `path.join(ROOT,'node_modules',…)`: numa WORKTREE do git
+// não existe `node_modules` próprio — os testes só passam nela porque o Node SOBE os
+// diretórios até achar o do repo pai. O caminho absoluto fixado na raiz da worktree
+// quebrava com MODULE_NOT_FOUND e derrubava este gate (o anti-drift dos 3 motores)
+// justamente em quem trabalha em worktree. Mesma armadilha que a 1.8.2 pagou no deploy.
+const { chromium } = require('@playwright/test');
 
 async function runScenario(page, sc) {
   await page.goto('file://' + path.join(__dirname, 'harness.html'));
