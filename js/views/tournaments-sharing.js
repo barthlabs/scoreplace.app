@@ -884,14 +884,35 @@ function _buildFlyerPrintHtml(o) {
     apple: { on: true,  nome: 'App Store',   glifo: '' },
     play:  { on: false, nome: 'Google Play', glifo: '▶' }
   };
+  // ── O SELO DA LOJA É IMAGEM OFICIAL, NÃO TEXTO IMITANDO A MARCA (1.9.63) ────
+  // Isto aqui desenhava "▶ Google Play" e " App Store" como TEXTO com glifo. O dono viu
+  // o convite impresso: _"foi colocado algo ridículo que não era isso que eu tinha
+  // pedido"_ — ele pediu os SELOS OFICIAIS das lojas, que existem exatamente pra isso.
+  // Marca imitada em papel parece amadora, e papel não se corrige depois.
+  //
+  // ⚠️ URL ABSOLUTA de propósito: o flyer é montado em `srcdoc`/janela de impressão, onde
+  // caminho relativo não resolve. O QR já vem de URL absoluta aqui — mesma natureza.
+  // ⚠️ `onerror` devolve o texto: enquanto o arquivo do selo não existir, o convite sai
+  // como saía hoje. NUNCA fica um buraco na folha (que é o defeito que a Raquel relatou
+  // na herobox, e não vou repetir aqui).
+  function _flyerSeloHtml(loja) {
+    var txt = esc((loja.glifo ? loja.glifo + ' ' : '') + loja.nome);
+    if (!loja.badge) return '<span class="loja">' + txt + '</span>';
+    var base = (window.SCOREPLACE_URL || 'https://scoreplace.app').replace(/\/$/, '');
+    return '<img class="loja-badge" src="' + esc(base + loja.badge) + '" alt="' + esc(loja.nome) + '" ' +
+      'onerror="this.outerHTML=\'<span class=&quot;loja&quot;>' + txt + '</span>\'" />';
+  }
   function _flyerLojasHtml() {
     var itens = [];
-    if (_LOJAS.apple.on) itens.push(_LOJAS.apple.glifo + ' ' + _LOJAS.apple.nome);
-    if (_LOJAS.play.on)  itens.push(_LOJAS.play.glifo + ' ' + _LOJAS.play.nome);
+    // ⚠️ Só entra loja com `on:true`. A Play está DESLIGADA porque a ficha dela responde
+    // 404 (teste fechado, reconferido em 19/ago/2026) — anunciar em papel manda quem lê
+    // pra uma página onde não dá pra instalar. Ligar quando a ficha abrir.
+    if (_LOJAS.apple.on) itens.push(_flyerSeloHtml(_LOJAS.apple));
+    if (_LOJAS.play.on)  itens.push(_flyerSeloHtml(_LOJAS.play));
     if (!itens.length) return '';
     return '<div class="lojas">' +
       '<span class="lojas-cta">Baixe o app</span>' +
-      itens.map(function (i) { return '<span class="loja">' + esc(i) + '</span>'; }).join('') +
+      itens.join('') +
       '</div>';
   }
 
@@ -982,6 +1003,10 @@ function _buildFlyerPrintHtml(o) {
       '.loja { font-size:' + cpx(7, 1.9, 11) + 'px; font-weight:700; color:#1e293b;' +
         ' border:1px solid #cbd5e1; border-radius:' + cpx(3, 0.8, 6) + 'px;' +
         ' padding:' + cpx(2, 0.5, 4) + 'px ' + cpx(4, 1.1, 8) + 'px; white-space:nowrap; }' +
+      // O selo oficial tem proporção fixa (~3,3:1): trava-se a ALTURA e a largura
+      // acompanha, senão o logo distorce — distorcer marca de loja é pior que não usá-la.
+      // Altura ~2,4x a linha de texto: menor que isso e o selo fica ilegível impresso.
+      '.loja-badge { height:' + cpx(17, 4.6, 26) + 'px; width:auto; display:block; }' +
     '</style>' +
     // size-style: separado pra ser atualizado IN-PLACE pelos sliders sem
     // recarregar o iframe (e portanto sem o QR piscar/desaparecer).

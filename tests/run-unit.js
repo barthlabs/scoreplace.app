@@ -1003,6 +1003,10 @@ const SUITES = [
   // (`_saveResult` sai na 1a linha — e o que protege `_resultSaved`/`_liveRecId` do
   // auto-save de fim de partida).
   'tests/replay-e-o-placar-ao-vivo.test.js',
+  // o convite IMPRESSO desenhava as lojas como TEXTO com glifo ('▶ Google Play'), imitando
+  // a marca — o dono viu impresso e chamou de ridiculo. Trava o selo OFICIAL (imagem, com
+  // fallback pro texto) e que a Play so entra quando a ficha dela sair do 404.
+  'tests/convite-usa-selo-oficial-da-loja.test.js',
 ];
 
 let failed = [];

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.62';
+window.SCOREPLACE_VERSION = '1.9.63';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1915,9 +1915,16 @@ window._isPartidaEmRajada = function (rec) {
   return ms < window.SP_RAJADA_MS;
 };
 
+// ⚠️ `badge` = o SELO OFICIAL da loja, em arquivo. O convite IMPRESSO desenhava as lojas
+// como TEXTO com um glifo ("▶ Google Play"), imitando a marca — o dono viu impresso e
+// chamou de ridículo, com razão: em papel, marca imitada parece amadora. Os selos são
+// fornecidos pelas próprias lojas (Apple Marketing Guidelines / Google Play brand assets)
+// e existem justamente pra isso.
+// ⚠️ Se o arquivo não existir, o flyer VOLTA pro texto sozinho (onerror) — nunca fica um
+// buraco na folha. Por isso pôr o caminho aqui é seguro mesmo antes de o arquivo chegar.
 window.SP_LOJAS = {
-  apple: { on: true,  nome: 'App Store',   glifo: '',  url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
-  play:  { on: false, nome: 'Google Play', glifo: '▶', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
+  apple: { on: true,  nome: 'App Store',   glifo: '',  badge: '/assets/badge-app-store.svg',   url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
+  play:  { on: false, nome: 'Google Play', glifo: '▶', badge: '/assets/badge-google-play.svg', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
 };
 
 // Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.
