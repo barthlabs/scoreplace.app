@@ -1024,6 +1024,18 @@ const SUITES = [
   // denuncia (os embarcados são gerados). Roda a trava contra árvores de mentira e cobra
   // que os dois scripts chamem a MESMA — a duplicação foi a causa, então é ela o alvo.
   'tests/embarcado-nao-sai-velho.test.js',
+  // O splash do index.html ainda divergia do corpo único em 3 medidas (logo 208×156 vs
+  // 152×114, wordmark 1.8 vs 1.2rem, texto 1.17rem/800 ABAIXO da barra vs 0.88rem/600
+  // entre a bola e a barra) — e a escala da raiz (--ui-scale 1.3) só entrava DEPOIS do
+  // splash nascer, então tudo que é rem pulava ~30% na abertura. Era o "mesmos elementos
+  // em tamanhos diferentes que se alternam". O teste LÊ as medidas do corpo único e da
+  // escala no store.js e cobra as MESMAS no index.html: mexeu num lado sem o outro, quebra.
+  'tests/carregando-geometria-canonica.test.js',
+  // "Você está aqui?" perguntava TODA abertura no local preferido: o único guard era
+  // sessionStorage, que morre quando o app nativo fecha. Agora "Agora não" grava um
+  // silêncio de 4h em localStorage (por uid+local). Roda o presence-geo.js real num
+  // sandbox e reproduz o ciclo abrir→não→fechar→reabrir.
+  'tests/geo-pergunta-silencia-4h.test.js',
 ];
 
 let failed = [];

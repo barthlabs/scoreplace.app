@@ -18,6 +18,14 @@
 (function() {
   var MATCH_RADIUS_M = 150;
   var SESSION_KEY = '_presenceGeoHandled';
+  // "Agora não" SILENCIA a pergunta por 4h (dono, 19/ago/2026): _"seria perfeito se ele
+  // fizesse isso quando abre e se a resposta for nao, silenciar essa funcao por 4h"_.
+  // O guard de sessionStorage NÃO cumpre isso: no nativo, fechar o app zera a sessão e a
+  // pergunta voltava a CADA abertura. O silêncio vive em localStorage (sobrevive ao
+  // fechar), por uid+local, e expira sozinho. Quem quiser marcar presença durante o
+  // silêncio usa o caminho manual (📍 no place) — o silêncio só cala a PERGUNTA.
+  var SNOOZE_MS = 4 * 60 * 60 * 1000;
+  var SNOOZE_PREFIX = 'scoreplace_geo_snooze_'; // + uid → { venueKey: até-quando (ms) }
   // v2.8.31 (#3): abrir o app perto de um venue REGISTRADO em N dias distintos
   // → sugerir adicioná-lo aos preferidos (se ainda não for).
   var FREQUENT_DAYS = 5;
@@ -73,6 +81,29 @@
       var key = new Date().toISOString().slice(0, 10) + '|' + placeId;
       var raw = sessionStorage.getItem(SESSION_KEY) || '';
       sessionStorage.setItem(SESSION_KEY, raw + ';' + key);
+    } catch (e) {}
+  }
+
+  // ─── Silêncio de 4h após "Agora não" ─────────────────────────────────────
+  function _snoozeMapKey(cu) { return SNOOZE_PREFIX + cu.uid; }
+  function _venueSnoozeKey(location) {
+    return window.PresenceDB.venueKey(location.placeId || '', location.name || '');
+  }
+  function _snoozedUntil(cu, location) {
+    try {
+      var map = JSON.parse(localStorage.getItem(_snoozeMapKey(cu)) || '{}') || {};
+      return Number(map[_venueSnoozeKey(location)] || 0);
+    } catch (e) { return 0; }
+  }
+  function _snooze(cu, location) {
+    try {
+      var key = _snoozeMapKey(cu);
+      var map = JSON.parse(localStorage.getItem(key) || '{}') || {};
+      var now = Date.now();
+      // Poda o que já expirou — o mapa nunca cresce além dos locais recém-negados.
+      Object.keys(map).forEach(function(k) { if (Number(map[k]) <= now) delete map[k]; });
+      map[_venueSnoozeKey(location)] = now + SNOOZE_MS;
+      localStorage.setItem(key, JSON.stringify(map));
     } catch (e) {}
   }
 
@@ -196,7 +227,7 @@
           } catch (e) {}
           window.location.hash = '#presence';
         },
-        null,
+        function() { _snooze(cu, location); }, // "Agora não" = 4h sem re-perguntar NESTE local
         { confirmText: 'Sim, estou aqui', cancelText: 'Agora não', type: 'info' }
       );
       return;
@@ -259,10 +290,19 @@
     }
   };
 
-  window._geoCheckinDismiss = function() {
+  // Fechar ≠ dizer "não": o confirm também fecha o overlay, e NÃO pode silenciar.
+  function _closeGeoOverlay() {
     var ov = document.getElementById('geo-checkin-overlay');
     if (ov) ov.remove();
+  }
+
+  // "Agora não" (botão OU toque fora do overlay) = a pessoa disse que não veio jogar →
+  // silencia a pergunta neste local por 4h. O check-in manual continua disponível.
+  window._geoCheckinDismiss = function() {
+    var st = _pendingGeoSuggest;
+    _closeGeoOverlay();
     _pendingGeoSuggest = null;
+    if (st) _snooze(st.cu, st.location);
   };
 
   window._geoCheckinConfirm = function() {
@@ -274,7 +314,8 @@
     }
     var sports = Array.prototype.slice.call(pills).map(function(p) { return p.getAttribute('data-sport'); });
     var st = _pendingGeoSuggest;
-    window._geoCheckinDismiss();
+    _closeGeoOverlay();          // fecha SEM silenciar — a resposta foi "sim"
+    _pendingGeoSuggest = null;
     autoRegister(st.cu, st.location, { sports: sports, windowMs: st.windowMs });
   };
 
@@ -466,6 +507,9 @@
       // #2 — está num local PREFERIDO?
       var match = withCoords.length ? findMatch(me, withCoords) : null;
       if (match) {
+        // "Agora não" há menos de 4h → não pergunta de novo (nem auto-registra):
+        // a pessoa JÁ disse que não veio jogar. O 📍 manual segue funcionando.
+        if (_snoozedUntil(cu, match.location) > Date.now()) return;
         if (alreadyHandled(match.location.placeId)) return;
         markHandled(match.location.placeId);
         var cfg = resolveCfg(cu); // últimas modalidades + horário de saída (ou preferidas)
