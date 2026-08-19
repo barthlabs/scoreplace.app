@@ -980,6 +980,10 @@ const SUITES = [
   // tinha time. Jogador com team undefined e filtrado pra fora dos DOIS times e some do
   // p1Name/p2Name — vira placar creditado errado. Agora: 2x2 ou nao formou.
   'tests/dupla-casual-nao-perde-jogador.test.js',
+  // a MESMA bola de 'Carregando' era pedida em 5 tamanhos (4.5/4/3/2.4/2.2rem) e pulava
+  // de tamanho a cada troca de tela. O tamanho passa a ser imposto NA FONTE; o que varia
+  // por tela e a CAIXA (minHeight). A versao inline e excecao (e uma linha, nao uma tela).
+  'tests/carregando-tem-um-tamanho-so.test.js',
 ];
 
 let failed = [];

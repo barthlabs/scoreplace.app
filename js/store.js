@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.57';
+window.SCOREPLACE_VERSION = '1.9.58';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -3791,10 +3791,28 @@ window._spLoaderLogoHtml = function () {
 // — ele roda ANTES de qualquer script existir — e há teste travando que continue igual.
 // Quem precisa de um indicador de UMA LINHA dentro de um card usa
 // `_renderBallLoaderInline`: ali não há bola grande nem barra, então não é "tela".
+// Tamanho ÚNICO da bola em toda tela de carregamento. 3rem era o default que já valia
+// na maioria das telas — os desvios (4rem, 2.4rem, 2.2rem) é que eram a exceção.
+window._SP_LOADER_BALL_SIZE = '3rem';
+
 window._spLoaderBodyHtml = function (label, opts) {
   opts = opts || {};
   window._spLoaderKeyframes();
-  var size = opts.size || '3rem';
+  // ── O TAMANHO DA BOLA É CANÔNICO — O CHAMADOR NÃO ESCOLHE (1.9.58) ──────────
+  // Relato do dono: _"tem mais de uma tela de carregamento com os mesmos elementos em
+  // tamanhos diferentes que ficam se alternando, revelando a precariedade do programa"_.
+  // MEDIDO: a MESMA bola era pedida em 5 tamanhos — 4rem (overlay global), 3rem (default),
+  // 2.4rem (locais, organizador), 2.2rem (stats, troféus, ferramentas) e 4.5rem no splash
+  // do index.html. Navegando entre telas, ela pulava de tamanho a cada passo.
+  //
+  // A identidade do carregamento é UMA. O que legitimamente varia é a CAIXA (quanto
+  // espaço vertical aquele bloco ocupa), e isso continua livre pelo `minHeight` do
+  // `_renderBallLoader`. Por isso `opts.size` é IGNORADO aqui em vez de removido dos ~8
+  // pontos de chamada: tirar de lá deixaria a porta aberta pro próximo achar que pode
+  // escolher. A regra vive na fonte.
+  // ⚠️ A versão INLINE (`_renderBallLoaderInline`, 1.4rem) é exceção legítima e continua
+  // com tamanho próprio: ela é uma LINHA dentro de texto, não uma tela de carregamento.
+  var size = window._SP_LOADER_BALL_SIZE;
   var safeLabel = label ? String(label).replace(/[<>]/g, '') : 'Carregando…';
   return '<div style="text-align:center;">' +
       window._spLoaderLogoHtml() +
