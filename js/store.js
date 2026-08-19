@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.61';
+window.SCOREPLACE_VERSION = '1.9.62';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6350,10 +6350,22 @@ window._sportBaseName = function (sport) {
 // Devolve {t1, t2} novos; se o usuário não estiver entre os 4 (ex.: modo técnico,
 // em que o dono do celular NÃO joga), devolve as listas como vieram — presumir
 // que ele joga seria pior do que não ancorar.
+// ⚠️ ACEITA NOME (string) OU JOGADOR (objeto com `name`/`uid`) — v1.9.62.
+// O chamador do RE-SORTEIO só tem nomes soltos e resolve o uid por um mapa
+// name→uid, que é ambíguo com homônimos. Já a MONTAGEM da partida tem a lista de
+// jogadores com o uid EM CADA ENTRADA — passando os objetos, a âncora casa por
+// identidade e não precisa perguntar "quem é o Kelly?". Manter as duas formas é o
+// que permite corrigir o caminho novo sem reescrever o antigo.
 window._anchorUserFirst = function (t1, t2, uidOf, cuUid, cuName) {
   var a = Array.isArray(t1) ? t1.slice() : [];
   var b = Array.isArray(t2) ? t2.slice() : [];
   var _uid = typeof uidOf === 'function' ? uidOf : function () { return null; };
+  // Rótulo de um elemento, seja ele string ou objeto. É só pra COMPARAR nome — a
+  // troca de posição sempre move o elemento original, nunca o rótulo.
+  function _rotulo(n) {
+    if (n && typeof n === 'object') return String(n.name || n.displayName || '');
+    return String(n == null ? '' : n);
+  }
   var nome = (cuName || '').trim().toLowerCase();
   // v1.8.83: a reserva por nome passou a aceitar o PRIMEIRO NOME.
   // ⚠️ MEDIDO com a função real e o caso do dono: no placar o slot dele mostrava
@@ -6365,9 +6377,17 @@ window._anchorUserFirst = function (t1, t2, uidOf, cuUid, cuName) {
   var primeiro = nome.split(' ')[0];
   function ehUsuario(n) {
     if (!n) return false;
-    if (cuUid && _uid(n) === cuUid) return true;          // uid manda
+    var u = cuUid ? _uid(n) : null;
+    if (cuUid && u === cuUid) return true;                // uid manda
+    // ⚠️ UID CONHECIDO E DIFERENTE ENCERRA A CONVERSA — v1.9.62. A reserva por nome
+    // existe pro slot que NÃO tem uid (convidado sem conta, nome digitado à mão).
+    // Deixá-la falar por cima de um uid já resolvido invertia a ordem das provas: com
+    // duas "Kelly" na quadra, a Kelly errada casava por nome e era ela que ia pro slot
+    // do usuário. Se o uid daquela entrada é conhecido e não é o meu, aquela pessoa
+    // não sou eu — não há nome que mude isso.
+    if (cuUid && u) return false;
     if (!nome) return false;
-    var v = String(n).trim().toLowerCase();               // nome só como reserva
+    var v = _rotulo(n).trim().toLowerCase();              // nome só como reserva
     return v === nome || (!!primeiro && v === primeiro);
   }
   var i = a.findIndex(ehUsuario);

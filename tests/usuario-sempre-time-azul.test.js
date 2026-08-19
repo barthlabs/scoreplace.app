@@ -59,6 +59,15 @@ let _mixedDoublesEnabled = false, _coachMode = false;
 let _sessionGameHistory = [];
 let _reiRainhaPlayers = null, _reiRainhaWins = [0, 0, 0, 0];
 const _playerMeta = {};
+// v1.9.62: `_ancorarUsuario` passou a consultar quais NOMES estão duplicados na
+// partida, pra recuar em vez de ancorar a pessoa errada quando há homônimo. Aqui
+// nenhum nome se repete, então o mapa é vazio e o comportamento travado abaixo é o
+// mesmo de sempre. O caso do homônimo é coberto em `formacao-de-duplas-casual`.
+// ⚠️ Este harness declara à mão o escopo de `_openLiveScoring` — foi exatamente
+// assim que ele ficou VERDE por semanas sobre um `_ancorarUsuario` que lançava
+// ReferenceError em produção (`_coachMode` nunca esteve declarado lá). A suíte nova
+// recorta a declaração de dentro da função real em vez de inventá-la.
+const _nomesAmbiguos = {};
 const _gmap = {};
 function _genderByNameLS() { return _gmap; }
 function _shuffleArrLS(a) {

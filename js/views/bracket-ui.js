@@ -3870,6 +3870,19 @@ window._resolveLiveScoring = function(rawSc, sportName) {
 
 window._openLiveScoring = function(tId, matchId, opts) {
   var isCasual = !!(opts && opts.casual);
+  // ⚠️ O TÉCNICO NÃO JOGA — e esta declaração é o que faz a âncora do time azul
+  // EXISTIR. `_ancorarUsuario` (mais abaixo) lê `_coachMode`, mas a única `var
+  // _coachMode` do arquivo mora em `_openCasualMatch`, que é um escopo IRMÃO deste:
+  // dentro de `_openLiveScoring` o identificador nunca esteve declarado. Resultado
+  // MEDIDO rodando a função real no escopo real: `ReferenceError: _coachMode is not
+  // defined` em TODA chamada — ou seja a âncora nasceu morta na 1.8.77, o commit que
+  // a introduziu, e seguia assim na 1.9.61 publicada. Como os dois chamadores são
+  // handlers de onclick sem try/catch (`_reiRainhaNextRound` e o "Jogar novamente"
+  // multiplayer via `_doRestartNow`), o erro subia e o botão simplesmente não fazia
+  // nada. O teste `usuario-sempre-time-azul` passava porque o harness declarava
+  // `_coachMode` por conta própria — verde em cima de código que nunca rodou
+  // ([[feedback_green_tests_still_broken]]).
+  var _coachMode = !!(opts && opts.coachMode);
   // ── MODO ESPECTADOR (1.9.36) ──────────────────────────────────────────────────
   // Ordem do dono: quem clica no jogo "ve o placar ao vivo sendo preenchido pelos
   // participantes (mesma renderizacao do placar ao vivo)". Então NÃO existe uma segunda
@@ -3958,9 +3971,42 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var existing = document.getElementById('live-scoring-overlay');
   if (existing) existing.remove();
 
-  // ── Parse player names (doubles: "Ana/Bruno" → ["Ana","Bruno"]) ──
-  var p1Players = p1Name.indexOf('/') > 0 ? p1Name.split('/').map(function(s){return s.trim();}).filter(Boolean) : (p1Name.trim() ? [p1Name.trim()] : []);
-  var p2Players = p2Name.indexOf('/') > 0 ? p2Name.split('/').map(function(s){return s.trim();}).filter(Boolean) : (p2Name.trim() ? [p2Name.trim()] : []);
+  // ── QUEM JOGA COM QUEM SAI DO ROSTER, NÃO DE FATIAR TEXTO ─────────────────
+  // `opts.players` é a lista canônica da partida casual — cada entrada tem `name`,
+  // `uid` e `team`, é ela que vai pro Firestore e é dela que `p1Name`/`p2Name` foram
+  // MONTADOS (`players.filter(team===1).map(name).join(' / ')`). Reconstruir os times
+  // quebrando essa string de volta no "/" desfaz a identidade que já estava pronta:
+  // basta um nome com "/" pra dupla nascer com 3 pessoas, e dois nomes iguais viram
+  // dois rótulos indistinguíveis. Pior, a tela de 1º sacador lê justamente daqui —
+  // foi assim que "o Toninho ficava no meu time em vez da Kelly" (18/ago), quando um
+  // jogador sem time sumia das duas listas e a fatia montava dupla com quem sobrou.
+  // O fatiamento CONTINUA como reserva: o torneio não passa `opts.players` (ali os
+  // nomes vêm de `m.p1`/`m.p2`, que são strings mesmo) e docs casuais antigos podem
+  // não ter `team` em todas as entradas.
+  function _timesDoRoster() {
+    var src = (opts && Array.isArray(opts.players)) ? opts.players : null;
+    if (!src || !src.length) return null;
+    var t1 = [], t2 = [];
+    for (var i = 0; i < src.length; i++) {
+      var p = src[i];
+      var nm = p && (p.name || p.displayName);
+      if (!nm || typeof nm !== 'string' || !nm.trim()) return null;  // entrada sem nome → não confio no roster
+      if (p.team === 1) t1.push(nm.trim());
+      else if (p.team === 2) t2.push(nm.trim());
+      else return null;                                              // sem time (o caso do print) → não adivinho
+    }
+    // MESMA régua do `_duplasFormadas`: 1×1 ou 2×2, nunca um meio-termo (3×1) que
+    // vira placar. Fora disso é "não formou" e o fatiamento assume.
+    if (t1.length === 1 && t2.length === 1) return { t1: t1, t2: t2 };
+    if (t1.length === 2 && t2.length === 2) return { t1: t1, t2: t2 };
+    return null;
+  }
+  function _fatiaNome(s) {
+    return s.indexOf('/') > 0 ? s.split('/').map(function(x){return x.trim();}).filter(Boolean) : (s.trim() ? [s.trim()] : []);
+  }
+  var _roster = _timesDoRoster();
+  var p1Players = _roster ? _roster.t1 : _fatiaNome(p1Name);
+  var p2Players = _roster ? _roster.t2 : _fatiaNome(p2Name);
   var isDoubles = p1Players.length > 1 || p2Players.length > 1 || !!(opts && opts.isDoubles);
 
   // NOME NO PLACAR = SÓ O PRIMEIRO NOME — regra do dono. O sobrenome só entra
@@ -4036,12 +4082,35 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
   _localizeRoleLabels();
 
+  // ⚠️ O RÓTULO DO LADO TEM QUE SEGUIR O LADO — senão o placar credita errado.
+  // `p1Name`/`p2Name` não são decoração: `_saveResult` faz
+  // `state.winner === 1 ? p1Name : p2Name` pra anunciar e gravar o vencedor, e o
+  // texto de compartilhar sai daí também. Tendo vindo do roster, `p1Players` é a
+  // verdade sobre quem é o time 1 — deixar `p1Name` com a string recebida abriria a
+  // chance de os dois discordarem e a partida ser anunciada para a dupla errada.
+  // Só re-deriva quando o roster mandou: no torneio `p1Name` é `m.p1`, que é o
+  // canônico, e reescrevê-lo só mudaria espaçamento.
+  if (_roster) {
+    p1Name = p1Players.join(' / ');
+    p2Name = p2Players.join(' / ');
+  }
+
   // Player metadata map (name → { uid, photoURL }) for avatar display
   var _playerMeta = {};
+  // ⚠️ NOME NÃO É IDENTIDADE — e este mapa é indexado por nome. Duas pessoas com o
+  // mesmo nome na mesma partida colapsam numa entrada só: a última escrita vence e o
+  // uid guardado passa a ser o da PESSOA ERRADA. Como a âncora do time azul resolve
+  // "quem é o usuário" perguntando o uid deste mapa, um homônimo a faria ancorar
+  // outra pessoa — e ancorar errado é pior que não ancorar. Por isso a colisão é
+  // REGISTRADA (`ambiguo`) em vez de silenciada; quem pergunta decide o que fazer.
+  var _nomesAmbiguos = {};
   if (opts && Array.isArray(opts.players)) {
     for (var pmi = 0; pmi < opts.players.length; pmi++) {
       var pm = opts.players[pmi];
-      if (pm.name) _playerMeta[pm.name] = { uid: pm.uid || null, photoURL: pm.photoURL || null };
+      if (!pm || !pm.name) continue;
+      var _ant = _playerMeta[pm.name];
+      if (_ant && _ant.uid && pm.uid && _ant.uid !== pm.uid) _nomesAmbiguos[pm.name] = true;
+      _playerMeta[pm.name] = { uid: pm.uid || null, photoURL: pm.photoURL || null };
     }
   }
   // Also add current user's info for self-matching.
@@ -8040,8 +8109,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
       });
     }
     var suggestions = [];
-    _casualPlayers.forEach(function(p, idx) {
+    _casualPlayers.forEach(function(p, ordem) {
       if (!p || p.uid) return; // já vinculado via lobby/login
+      // ⚠️ SLOT ≠ POSIÇÃO NA LISTA. `_slotLinkedUid` e os inputs do setup são
+      // indexados pelo SLOT em que a pessoa foi digitada; `_casualPlayers` é a lista
+      // da partida, cuja ordem segue os TIMES (e o sorteio já a embaralhava desde
+      // sempre). Usar a posição do laço fazia o vínculo de um slot silenciar a
+      // sugestão de OUTRA pessoa. Cada entrada carrega o próprio `slot` — é ele que
+      // vale; a posição só serve de reserva pra doc antigo que não o tenha.
+      var idx = (typeof p.slot === 'number') ? p.slot : ordem;
       // Slot autocompletado: vínculo já registrado e notificação disparada pelo
       // auto-trigger ao fim da partida — não exibir sugestão redundante.
       if (_slotLinkedUid && _slotLinkedUid[idx]) return;
@@ -9917,7 +9993,25 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (typeof window._anchorUserFirst !== 'function') return { t1: t1, t2: t2 };
     if (_coachMode) return { t1: t1, t2: t2 }; // técnico não joga
     var cu = window.AppStore && window.AppStore.currentUser;
+    // ⚠️ HOMÔNIMO: NÃO ANCORAR É MELHOR QUE ANCORAR A PESSOA ERRADA.
+    // Aqui os times são listas de NOMES (é o formato que o placar carrega), então o
+    // uid vem do `_playerMeta`, que é name→uid. Se duas pessoas da partida dividem o
+    // mesmo nome, esse mapa não sabe qual é qual — e a reserva por nome/primeiro nome
+    // do `_anchorUserFirst` casaria com a primeira que encontrasse. Trocar de lado
+    // por causa de um palpite é a falha silenciosa que este arquivo inteiro tenta
+    // evitar: melhor deixar como veio, que é a MESMA doutrina do "usuário não está em
+    // campo → não mexe". Só bloqueia quando o nome do próprio usuário é o ambíguo.
+    var _nmCu = ((cu && cu.displayName) || '').trim();
+    if (_nmCu) {
+      var _colide = _nomesAmbiguos[_nmCu] || _nomesAmbiguos[_nmCu.split(' ')[0]];
+      // O uid resolve a dúvida quando ele está gravado; sem isso, recuo.
+      var _temUidCerto = !!(cu && cu.uid) && Object.keys(_playerMeta).some(function (k) {
+        return _playerMeta[k] && _playerMeta[k].uid === cu.uid && !_nomesAmbiguos[k];
+      });
+      if (_colide && !_temUidCerto) return { t1: t1, t2: t2 };
+    }
     return window._anchorUserFirst(t1, t2, function (n) {
+      if (_nomesAmbiguos[n]) return null;      // mapa não sabe qual dos dois é
       var mm = _playerMeta[n];
       return mm ? (mm.uid || null) : null;
     }, cu && cu.uid, cu && cu.displayName);
@@ -13628,11 +13722,23 @@ window._openCasualMatch = function(restoreOpts) {
       // _teamAssignments e ler `undefined` nos outros — jogador com team undefined era
       // filtrado pra fora dos DOIS times e sumia do placar.
       var hasTeamDnD = _duplasFormadas();
+      // ⚠️ SEM DUPLA FORMADA, O LADO É SÓ UMA SEMENTE — NUNCA UMA ESCOLHA.
+      // `pi < 2 ? 1 : 2` divide as pessoas pela ordem das caixas do setup. Isso é
+      // legítimo como ponto de partida do sorteio (que embaralha tudo em seguida),
+      // mas NÃO é ninguém decidindo dupla — e o app chega aqui com o sorteio
+      // DESLIGADO também: desligar o "Re-sortear" sem arrastar ninguém deixa
+      // `_teamAssignments` incompleto, e aí a ordem em que os nomes foram digitados
+      // virava a dupla, calada. Continua sendo o comportamento (bloquear o Iniciar
+      // seria travar o fluxo), mas agora está declarado, e a âncora do time azul roda
+      // depois em TODOS os caminhos — então o usuário nunca fica no lado errado por
+      // causa da caixa em que digitou o nome. Índice serve pra semear; jamais pra
+      // creditar ([[project_usuario_sempre_time_azul]]).
+      var _SEMENTE_POR_ORDEM = function (i) { return i < 2 ? 1 : 2; };
       for (var pi = 0; pi < 4; pi++) {
         players.push({
           slot: pi,
           name: resolved[pi].name,
-          team: hasTeamDnD ? _teamAssignments[pi] : (pi < 2 ? 1 : 2),
+          team: hasTeamDnD ? _teamAssignments[pi] : _SEMENTE_POR_ORDEM(pi),
           uid: resolved[pi].uid,
           photoURL: resolved[pi].photoURL,
           gender: _resolveSlotGender(pi) || null
@@ -14234,16 +14340,10 @@ window._openCasualMatch = function(restoreOpts) {
         // Assign teams by position
         players[0].team = 1; players[1].team = 1;
         players[2].team = 2; players[3].team = 2;
-        // Ensure current user is in Team 1
-        if (cuUid) {
-          for (var si = 2; si < 4; si++) {
-            if (players[si].uid === cuUid) {
-              var swp = players[0]; players[0] = players[si]; players[si] = swp;
-              players[0].team = 1; players[si].team = 2;
-              break;
-            }
-          }
-        }
+        // O "garantir o usuário no time 1" que morava AQUI saiu de propósito: era a
+        // única das três divisões que respeitava a regra, e não valia nem pro ramo de
+        // duplas mistas logo acima nem pro arraste. Agora existe UM ponto só, depois
+        // dos dois ramos (`_ancorarTimeAzul`).
       }
       _renameRoles();
     }
@@ -14252,6 +14352,50 @@ window._openCasualMatch = function(restoreOpts) {
     if (isDoubles && !autoShuffle && players.length === 4) {
       _renameRoles();
     }
+
+    // ── O USUÁRIO É SEMPRE O TIME AZUL — TAMBÉM NA PRIMEIRA PARTIDA ───────────
+    // A regra do dono ("o usuário ocupa sempre o slot do jogador 1") era aplicada em
+    // UM dos três caminhos: o `_computeRestartTeams`, que é o RE-SORTEIO. Quem formava
+    // as duplas ARRASTANDO caía direto de `_teamAssignments` pro placar sem passar por
+    // âncora nenhuma — a primeira partida usava uma regra e as seguintes usavam outra,
+    // e o lado do usuário podia inverter do 1º pro 2º jogo. O ramo de duplas mistas
+    // também ficava de fora.
+    //
+    // AQUI é o lugar certo, e não dentro do `_openLiveScoring`: ancorar na hora de
+    // desenhar seria por ESPECTADOR, e `state.winner` é SINCRONIZADO entre os
+    // aparelhos — se cada cliente chamasse de "time 1" um lado diferente, o mesmo
+    // `winner: 1` creditaria duplas opostas em telas diferentes. Ancorando na
+    // montagem, a escolha vai pro Firestore em `players[]` e todo mundo lê a MESMA
+    // divisão. É exatamente o que o re-sorteio já fazia (grava o resultado no doc novo).
+    //
+    // ⚠️ A troca é segura porque NÃO muda a partição — só o rótulo do lado e a ordem
+    // dentro do time. Quem joga com quem continua idêntico, que é a única coisa que a
+    // série do Rei/Rainha precisa preservar. Por isso mesmo, crédito de vitória é
+    // sempre por NOME (`_rrCreditar`), nunca por índice de pairing.
+    function _ancorarTimeAzul() {
+      if (!isDoubles || players.length !== 4) return;
+      if (_coachMode) return;                       // técnico não joga: não há quem ancorar
+      if (typeof window._anchorUserFirst !== 'function') return;
+      var _cuA = window.AppStore && window.AppStore.currentUser;
+      if (!_cuA || !_cuA.uid) return;
+      var _a1 = players.filter(function(p) { return p.team === 1; });
+      var _a2 = players.filter(function(p) { return p.team === 2; });
+      if (_a1.length !== 2 || _a2.length !== 2) return;  // divisão inválida: não invento lado
+      // Passa os JOGADORES, não os nomes: cada entrada traz o próprio uid, então a
+      // âncora casa por identidade e nunca precisa perguntar "quem é o Kelly?" —
+      // dois homônimos não têm como confundi-la aqui.
+      var _anc = window._anchorUserFirst(_a1, _a2, function (p) { return p && p.uid; },
+                                         _cuA.uid, _cuA.displayName);
+      if (!_anc || !_anc.t1 || _anc.t1.length !== 2 || _anc.t2.length !== 2) return;
+      _anc.t1.forEach(function(p) { p.team = 1; });
+      _anc.t2.forEach(function(p) { p.team = 2; });
+      // A ORDEM da lista passa a ser a ancorada (azul primeiro, usuário na frente):
+      // é dela que saem `n1`/`n2` e o `players[]` gravado no doc, que é o que os
+      // outros aparelhos leem. `p.slot` de cada um fica intacto — quem depende do
+      // slot do setup (nomes digitados, vínculo de amigo, gênero) lê de lá.
+      players = _anc.t1.concat(_anc.t2);
+    }
+    _ancorarTimeAzul();
 
     var n1, n2;
     if (isDoubles) {
@@ -14360,8 +14504,13 @@ window._openCasualMatch = function(restoreOpts) {
     // Save typed player names before destroying setup DOM so that if the user
     // unlinks/re-pairs after this match, _casualReopenSetup → _renderSetup can
     // restore them via the existing _savedPlayerNames fallback (slot index 0-3).
+    // ⚠️ Volta pelo SLOT de cada jogador, não pela posição na lista: a ordem de
+    // `players` segue os times (o sorteio e a âncora do time azul a reordenam), e
+    // gravar por posição devolvia os nomes nas caixas trocadas ao reabrir o setup.
     for (var _saveIdx = 0; _saveIdx < players.length && _saveIdx < 4; _saveIdx++) {
-      _savedPlayerNames[_saveIdx] = players[_saveIdx].name || '';
+      var _pSv = players[_saveIdx];
+      var _slotSv = (typeof _pSv.slot === 'number' && _pSv.slot >= 0 && _pSv.slot < 4) ? _pSv.slot : _saveIdx;
+      _savedPlayerNames[_slotSv] = _pSv.name || '';
     }
 
     // Close setup overlay
