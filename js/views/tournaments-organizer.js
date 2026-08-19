@@ -209,7 +209,17 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // 🔴 O DESLIGAMENTO DO "AO VIVO" É POR TIPO, e mora aqui — a porta única por onde
         // TODA notificação passa. Pôr o teste em quem dispara (a vitrine) deixaria de
         // fora qualquer caminho novo que avise sobre placar ao vivo. Ver live-now.js.
-        if ((notifData.type === 'live_score_started') && profile.liveAlerts === false) return;
+        if (notifData.type === 'live_score_started') {
+            // 1.9.68 — três estados (liveAlertsWho): all | friends | none. Perfis antigos
+            // só têm o boolean: false = none, resto = all. 'friends' = o aviso só chega
+            // quando QUEM começou a marcar é amigo de quem recebe (lista do destinatário).
+            var _laWho = profile.liveAlertsWho || (profile.liveAlerts === false ? 'none' : 'all');
+            if (_laWho === 'none') return;
+            if (_laWho === 'friends') {
+                var _laFriends = Array.isArray(profile.friends) ? profile.friends : [];
+                if (!_cu || !_cu.uid || _laFriends.indexOf(_cu.uid) === -1) return;
+            }
+        }
         var userLevel = profile.notifyLevel || 'todas';
         var notifLevel = notifData.level || 'all';
         if (!window._notifLevelAllowed(userLevel, notifLevel)) return;

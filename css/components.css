@@ -2174,3 +2174,49 @@ html, body,
   line-height: 1;
   vertical-align: middle;
 }
+
+/* Mini-switch "Divulgar" (v1.9.68) — alinhado à direita da linha de cada contato.
+   Checkbox real por baixo (populate/save leem .checked); trilho em token que
+   adapta nos dois temas, ligado = verde sólido com bolinha branca. */
+.pf-switch {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.pf-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.pf-switch .tr {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-color);
+  transition: background 0.2s;
+  pointer-events: none;
+}
+.pf-switch input:checked + .tr {
+  background: var(--success-color);
+  border-color: var(--success-color);
+}
+.pf-switch .tr::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+}
+.pf-switch input:checked + .tr::after { left: 16px; }

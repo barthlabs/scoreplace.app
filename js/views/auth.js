@@ -4937,17 +4937,12 @@ async function simulateLoginSuccess(user) {
       { id: 'profile-accept-friends', val: cu.acceptFriendRequests !== false },
       { id: 'profile-notify-platform', val: cu.notifyPlatform !== false },
       { id: 'profile-notify-email', val: cu.notifyEmail !== false },
-      // v1.3.41-beta: default ON se já tem telefone cadastrado e não escolheu OFF explicitamente
-      { id: 'profile-notify-whatsapp', val: cu.notifyWhatsApp === true || (cu.notifyWhatsApp !== false && !!(cu.phone && String(cu.phone).replace(/\D/g,'').length >= 8)) },
       { id: 'profile-hints-enabled', val: _hintsEnabled },
       // Vibração: default ON — só 'off' explícito desliga (device-local).
       { id: 'profile-haptics-enabled', val: (function () { try { return localStorage.getItem('scoreplace_haptics') !== 'off'; } catch (e) { return true; } })() },
       // Sons: default OFF — só 'on' explícito liga (device-local).
       { id: 'profile-sound-enabled', val: (function () { try { return localStorage.getItem('scoreplace_sound') === 'on'; } catch (e) { return false; } })() },
       { id: 'profile-presence-auto-checkin', val: !!cu.presenceAutoCheckin },
-      // 🔴 Ao vivo: LIGADO por padrão — só o 'false' explícito desliga (quem nunca
-      // mexeu no perfil não fica de fora do convite pra assistir).
-      { id: 'profile-live-alerts', val: cu.liveAlerts !== false },
       // v1.9.67: "Divulgar" (invertido do omitX salvo) — ligado por padrão.
       { id: 'profile-share-email', val: cu.omitEmail !== true },
       { id: 'profile-share-phone', val: cu.omitPhone !== true }
@@ -4976,6 +4971,8 @@ async function simulateLoginSuccess(user) {
     // v1.7.51: ausente = 'public' — o MESMO default da regra do Firestore. Se os dois
     // discordassem, a tela mostraria uma escolha que o servidor não está aplicando.
     if (typeof window._applyStatsVisibilityUI === 'function') window._applyStatsVisibilityUI(cu.statsVisibility || 'public');
+    // 🔴 Ao vivo: 'all' por padrão; perfis antigos só têm o boolean (false = none).
+    if (typeof window._applyLiveAlertsWhoUI === 'function') window._applyLiveAlertsWhoUI(cu.liveAlertsWho || (cu.liveAlerts === false ? 'none' : 'all'));
     if (typeof window._applyPresenceMuteUI === 'function') window._applyPresenceMuteUI({ active: _active, days: _daysLeft });
     if (typeof window._applyNotifyFilterUI === 'function') window._applyNotifyFilterUI(cu.notifyLevel || 'todas');
     // v2.1.91: inicializa o slider de tamanho da interface com o valor salvo
@@ -6799,6 +6796,13 @@ function setupProfileModal() {
           // Contas phone-only mostram o campo de adição de e-mail por padrão
           // (via _populateProfileModalFields). Contas com e-mail mostram
           // display + botão "Alterar" que expõe o campo de edição.
+          // ── Coluna "Divulgar" à direita (pedido do dono, 19/ago): o toggle fica
+          // ALINHADO com cada contato, em vez de duas linhas soltas — economiza espaço.
+          '<div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin:0 0 4px;">' +
+            '<span style="font-size:0.68rem;color:var(--text-muted);font-weight:700;letter-spacing:0.3px;">Divulgar</span>' +
+            '<button type="button" onclick="window._toggleFieldHint(event,\'hint-share-contact\')" title="O que o Divulgar controla" aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 2px;line-height:1;">ⓘ</button>' +
+          '</div>' +
+          '<span id="hint-share-contact" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin:0 0 6px;">Ligado (padrão), o contato aparece pros parceiros de jogo. Desligando, ninguém (nem amigos) vê aquele contato no app — você continua recebendo os avisos normalmente, e o grupo de WhatsApp do torneio não expõe telefone de ninguém.</span>' +
           '<div id="profile-email-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
               '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
@@ -6807,6 +6811,7 @@ function setupProfileModal() {
                 '<span id="profile-email-check" title="E-mail verificado" class="pf-check" style="display:none;">✓</span>' +
               '</div>' +
               '<button type="button" onclick="window._profileShowEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
+              '<label class="pf-switch" title="Divulgar meu e-mail"><input type="checkbox" id="profile-share-email" checked><span class="tr"></span></label>' +
             '</div>' +
           '</div>' +
           '<div id="profile-email-edit-wrap" style="display:none;margin:0 0 1rem 0;">' +
@@ -6824,7 +6829,10 @@ function setupProfileModal() {
           '</div>' +
             // Telefone: País + Número
             '<div class="form-group" style="margin-bottom: 6px;">' +
-              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+                '<label class="form-label" style="font-size: 0.75rem;margin:0;">' + _t('profile.labelWhatsApp') + '</label>' +
+                '<label class="pf-switch" title="Divulgar meu celular"><input type="checkbox" id="profile-share-phone" checked><span class="tr"></span></label>' +
+              '</div>' +
               '<div style="display: flex; gap: 6px; align-items: center;">' +
                 '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 124px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.45rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
                   countryOpts +
@@ -6836,20 +6844,11 @@ function setupProfileModal() {
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
               // as duas (com confirmação). Sem isso, o número não vira válido.
               '<div style="margin-top:6px;">' +
-                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
+                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Verificar</button>' +
                 '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
-            '</div>' +
-            // ── Divulgar contato — pedido do dono (19/ago/2026): 1 toggle POR contato,
-            // "Divulgar" LIGADO por padrão (semântica invertida dos antigos omitPhone/
-            // omitEmail; populate/save fazem a inversão — o dado salvo continua omitX).
-            '<div style="margin-top:6px;">' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-share-phone', label: 'Divulgar meu celular <button type="button" onclick="window._toggleFieldHint(event,\'hint-share-phone\')" title="Desligando, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '📢', checked: true, color: '#30d158' }) : '') +
-              '<span id="hint-share-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Desligando, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail. (O grupo de WhatsApp do torneio não expõe telefone de ninguém — quem entra vai por link de convite.)</span>' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-share-email', label: 'Divulgar meu e-mail <button type="button" onclick="window._toggleFieldHint(event,\'hint-share-email\')" title="Desligando, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '📢', checked: true, color: '#30d158' }) : '') +
-              '<span id="hint-share-email" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Desligando, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
             '</div>' +
               '</div>' +
             '</div>' +
@@ -6867,7 +6866,6 @@ function setupProfileModal() {
           // vínculo mora dentro do próprio Auth: entrar pela Apple devolve o
           // MESMO uid — sem CF, sem loginRedirects, sem merge, sem apagar conta.
           '<div style="margin:0 0 10px 0;">' +
-            '<label class="form-label" style="font-size:0.75rem;">🔑 Formas de entrar</label>' +
             '<div id="profile-auth-providers" style="display:flex;flex-direction:column;gap:6px;"></div>' +
             '<div id="profile-link-provider-msg" style="display:none;margin-top:6px;font-size:0.78rem;"></div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Vincule Google e Apple na mesma conta pra entrar por qualquer um dos dois. Sem isso, entrar pelo outro cria uma conta separada — principalmente com o "Ocultar meu e-mail" da Apple, que dá um endereço novo que não temos como reconhecer.</span>' +
@@ -6905,7 +6903,7 @@ function setupProfileModal() {
                 '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
               '</div>' +
               '<div style="margin-top:6px;">' +
-                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#6ee7b7;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📲 Verificar e vincular</button>' +
+                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Verificar</button>' +
                 '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;display:block;margin-top:4px;">Confirme por SMS. O número vira mais um login da sua conta (com a sua senha).</span>' +
                 '<div id="profile-link-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-link-phone-recaptcha" style="display:none;"></div>' +
@@ -6948,21 +6946,13 @@ function setupProfileModal() {
                 (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-platform', label: _t('profile.notifPlatform'), icon: '🔔', checked: true }) : '') +
                 (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-email', label: _t('profile.notifEmail'), icon: '✉️', checked: true, color: '#3b82f6' }) : '') +
               '</div>' +
-              // v1.2.9: o WhatsApp deixou de ser CANAL DE NOTIFICAÇÃO (o número foi
-              // banido e o portfólio Meta morreu — nada é enviado por API). O que
-              // sobrou é o wa.me: alguém toca no botão e abre a conversa contigo.
-              // Por isso o toggle saiu de "Canais de notificação" e virou uma
-              // preferência de CONTATO — pra quem não quer ser chamado no WhatsApp.
-              '<div style="margin-top:10px;">' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.contactWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
-                '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">' + _t('profile.contactWhatsAppHint') + '</span>' +
-              '</div>' +
               '</div>' +
             '</div>' +
             '<div class="pf-card" style="--pf-accent:#bf5af2;">' +
               '<div class="pf-card-h" style="background:rgba(191,90,242,0.08);">' + '🛡️ ' + _t('profile.blockPrivacy') + '</div>' +
               '<div class="pf-card-bd">' +
               (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-accept-friends', label: _t('profile.acceptFriends'), icon: '🤝', checked: true, color: '#3b82f6' }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-auto-checkin', label: 'Auto check-in ao chegar no local (usa GPS)', icon: '📡', checked: false, color: '#10b981', desc: 'Se você estiver em um local preferido, registra presença automaticamente. Senão, o app sugere.' }) : '') +
             // ─── v1.7.51: quem vê MINHAS estatísticas ─────────────────────────────
             // Mesmo padrão de pills da presença acima (é a mesma pergunta: "quem me vê?").
             // Default 'public' — decisão do dono: não expõe nada novo (os jogos já são
@@ -6986,17 +6976,9 @@ function setupProfileModal() {
               '<div id="presence-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;margin-bottom:10px;">' +
                 // v1.0.5-beta: pills nascem com style "desativado" inline (idem #2 fix).
                 // _applyPresenceVisibilityUI sobrescreve o ativo com bg/cor preenchida.
-                '<button type="button" data-pv="friends" onclick="window._setPresenceVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
                 '<button type="button" data-pv="public" onclick="window._setPresenceVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-pv="friends" onclick="window._setPresenceVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
                 '<button type="button" data-pv="off" onclick="window._setPresenceVisibility(\'off\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
-              '</div>' +
-              '<div style="margin-top:4px;margin-bottom:6px;">' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-auto-checkin', label: 'Auto check-in ao chegar no local (usa GPS)', icon: '📡', checked: false, color: '#10b981', desc: 'Se você estiver em um local preferido, registra presença automaticamente. Senão, o app sugere.' }) : '') +
-                // 1.9.36 — o desligamento que o dono pediu pra função "Ao vivo agora":
-                // desligado aqui, a pessoa PARA de receber o convite pra assistir. A
-                // seção em si continua existindo pra quem quiser olhar — o que o toggle
-                // controla é o AVISO, que é o que incomoda quem não quer.
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-live-alerts', label: 'Avisar quando um placar ao vivo começar', icon: '🔴', checked: true, color: '#ef4444', desc: 'Você recebe um convite para assistir quando um jogo do seu torneio começa a ser marcado ao vivo.' }) : '') +
               '</div>' +
               '<div id="presence-mute-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;">' +
                 '<div style="flex:1 1 100%;">' +
@@ -7010,6 +6992,20 @@ function setupProfileModal() {
               '</div>' +
               '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
               '<input type="hidden" id="profile-presence-visibility" value="friends">' +
+            '</div>' +
+            // 1.9.68 — o AVISO do ao vivo vira grupo TRÊS-estados, no mesmo padrão das
+            // outras duas perguntas "quem me vê/avisa": Todos | Amigos | Ninguém.
+            // 'friends' = só quando um AMIGO começa a marcar; guardado em liveAlertsWho
+            // (liveAlerts boolean segue gravado pra compat com leitores antigos).
+            '<div style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">🔴 Avisar quando um placar ao vivo começar</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">De quem você recebe o convite para assistir quando um jogo do seu torneio começa a ser marcado ao vivo.</p>' +
+              '<div id="live-alerts-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+                '<button type="button" data-la="all" onclick="window._setLiveAlertsWho(\'all\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-la="friends" onclick="window._setLiveAlertsWho(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
+                '<button type="button" data-la="none" onclick="window._setLiveAlertsWho(\'none\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+              '</div>' +
+              '<input type="hidden" id="profile-live-alerts-who" value="all">' +
             '</div>' +
               '</div>' +
             '</div>' +
@@ -7209,21 +7205,6 @@ function setupProfileModal() {
           phoneInput.value = _formatPhoneDisplay(digits, this.value);
         });
       }
-      // v1.3.41-beta: auto-ativa WhatsApp toggle quando usuário digita um celular válido
-      phoneInput.addEventListener('input', function() {
-        var digits = (phoneInput.getAttribute('data-digits') || '').replace(/\D/g,'');
-        if (digits.length >= 8) {
-          var waToggle = document.getElementById('profile-notify-whatsapp');
-          // Só ativa automaticamente se ainda não foi explicitamente desativado
-          // (ou seja, se o toggle ainda está desligado). Não sobrescreve escolha manual.
-          if (waToggle && !waToggle.checked) {
-            var cu = window.AppStore && window.AppStore.currentUser;
-            if (!cu || cu.notifyWhatsApp !== false) {
-              waToggle.checked = true;
-            }
-          }
-        }
-      });
     }
 
     // Notification filter toggles: todas (green), importantes (yellow), fundamentais (red)
@@ -7359,6 +7340,30 @@ function setupProfileModal() {
         var v = btn.getAttribute('data-sv');
         var isActive = (v === val);
         var color = _statsVisColors[v] || '#6366f1';
+        btn.style.background = isActive ? color : 'transparent';
+        btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
+        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
+        btn.style.fontWeight = isActive ? '700' : '500';
+      });
+    };
+
+    // 1.9.68 — aviso de placar ao vivo em três estados (all/friends/none).
+    var _liveAlertsColors = { all: '#22c55e', friends: '#3b82f6', none: '#ef4444' };
+    window._setLiveAlertsWho = function(val) {
+      var hidden = document.getElementById('profile-live-alerts-who');
+      if (hidden) hidden.value = val;
+      window._applyLiveAlertsWhoUI(val);
+    };
+    window._applyLiveAlertsWhoUI = function(val) {
+      var hidden = document.getElementById('profile-live-alerts-who');
+      if (hidden) hidden.value = val;
+      var group = document.getElementById('live-alerts-group');
+      if (!group) return;
+      group.querySelectorAll('button[data-la]').forEach(function(btn) {
+        var v = btn.getAttribute('data-la');
+        var isActive = (v === val);
+        var color = _liveAlertsColors[v] || '#6366f1';
         btn.style.background = isActive ? color : 'transparent';
         btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
         btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
@@ -9149,21 +9154,20 @@ window._profileHydrateNameConflict = function () {
       var acceptFriends = _chk('profile-accept-friends', true);
       var notifyPlatform = _chk('profile-notify-platform', true);
       var notifyEmail = _chk('profile-notify-email', true);
-      var notifyWhatsApp = _chk('profile-notify-whatsapp', false);
+      // v1.9.68 — ordem do dono: com o wa.me-only, o toggle "aceito WhatsApp" sobrava.
+      // A regra virou: TEM celular no perfil = aceita contato; não quer, não põe o
+      // celular (ou desliga o Divulgar). Derivado adiante, do próprio telefone salvo.
+      var notifyWhatsApp = false;
       var presenceAutoCheckin = _chk('profile-presence-auto-checkin', false);
-      var liveAlerts = _chk('profile-live-alerts', true);
+      var liveAlertsWho = _v('profile-live-alerts-who') || 'all';
+      var liveAlerts = liveAlertsWho !== 'none'; // compat: leitores antigos leem o boolean
       var hintsEnabled = _chk('profile-hints-enabled', true);
       // v1.9.67: o toggle é "Divulgar" (default ON); o dado salvo segue omitX.
       var omitEmail = !_chk('profile-share-email', true);
       var omitPhone = !_chk('profile-share-phone', true);
 
-      // v1.7.9-beta: auto-enable notifyWhatsApp quando celular está sendo adicionado
-      // e auto-enable notifyEmail quando e-mail está sendo adicionado ao perfil.
       var _cuPhoneDigits = (cu.phone || '').replace(/\D/g, '');
-      if ((_cuPhoneDigits.length < 8) && (phoneDigits.length >= 8)) {
-        // Phone is being newly added — auto-enable WhatsApp notifications
-        notifyWhatsApp = true;
-      }
+      notifyWhatsApp = phoneDigits.length >= 8;
       var _savedEmailLower = (cu.email || '').toLowerCase();
       var _emailIsValid = emailIn.length >= 6 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailIn);
       var _emailChanged = _emailIsValid && emailIn !== _savedEmailLower;
@@ -9451,6 +9455,7 @@ window._profileHydrateNameConflict = function () {
       payload.presenceMuteUntil = muteUntil;
       payload.presenceAutoCheckin = presenceAutoCheckin;
       payload.liveAlerts = liveAlerts;
+      payload.liveAlertsWho = liveAlertsWho;
       // v2.4.3: privacidade de contato (default OFF).
       payload.omitEmail = omitEmail;
       payload.omitPhone = omitPhone;
@@ -9663,9 +9668,9 @@ window._profileHydrateNameConflict = function () {
           );
         } else if (_phoneChangedUnverified || _emailChangedUnverified) {
           var _pendMsg = (_phoneChangedUnverified && _emailChangedUnverified)
-            ? 'O novo celular e o novo e-mail ainda não foram salvos. Toque em "Verificar e vincular" em cada um pra confirmar.'
+            ? 'O novo celular e o novo e-mail ainda não foram salvos. Toque em "Verificar" em cada um pra confirmar.'
             : (_phoneChangedUnverified
-              ? 'O novo número ainda não foi salvo. Toque em "📱 Verificar e vincular" pra confirmar por SMS.'
+              ? 'O novo número ainda não foi salvo. Toque em "Verificar" pra confirmar por SMS.'
               : 'O novo e-mail ainda não foi salvo. Toque em "✉️ Verificar e vincular" pra confirmar pelo link.');
           showNotification('Perfil salvo — falta confirmar contato', _pendMsg, 'warning');
         } else {
