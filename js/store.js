@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.75';
+window.SCOREPLACE_VERSION = '1.9.76';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -6,6 +6,24 @@ window.SCOREPLACE_VERSION = '1.9.75';
 // das últimas 20 tarefas >50ms; quem consome é a telemetria do _openTournamentCard.
 // WKWebView pode não suportar 'longtask' — o try engole e o buffer fica vazio
 // (a telemetria reporta "nenhuma registrada", que também é informação).
+// ── RASTRO DE TRECHOS (1.9.76) — atribuição que funciona TAMBÉM no iOS ───────
+// O WKWebView não tem a API de longtask (medido: o relato do aparelho veio com
+// "longtasks: nenhuma registrada"). Então NÓS marcamos os trechos pesados:
+// `_medirTrecho(nome, fn)` roda fn e grava {nome, ini, dur} num anel de 30.
+// Quem consome é a telemetria do toque — ela lista os trechos que rodaram na
+// janela do bloqueio, com nome e duração, direto do aparelho do dono.
+window._trechos = [];
+window._medirTrecho = function (nome, fn) {
+  var t0 = (window.performance && performance.now) ? performance.now() : 0;
+  try { return fn(); }
+  finally {
+    if (t0) {
+      window._trechos.push({ nome: nome, ini: t0, dur: performance.now() - t0 });
+      if (window._trechos.length > 30) window._trechos.shift();
+    }
+  }
+};
+
 window._longTasks = [];
 try {
   if (typeof PerformanceObserver === 'function') {
@@ -6836,6 +6854,22 @@ window._navTorneioComAviso = function (tournamentId) {
   //   • TELEMETRIA: mede toque→pintura-do-aviso (2 rAF depois do show = pintou).
   //     Acima de 400ms manda UM aviso por sessão pro Sentry com as long tasks que
   //     estavam bloqueando — é o aparelho do dono dizendo QUEM segurou o quadro.
+  // 1.9.76 — MEDIDO NO APARELHO (Sentry 7681665661): "loader levou 1256ms ·
+  // longtasks: nenhuma registrada". Duas lições:
+  //   (a) o WKWebView NÃO tem a API de longtask (Safari não implementa) — a
+  //       atribuição agora vem do rastro de TRECHOS (_trechos, medido por nós);
+  //   (b) nem rAF nem timeout salvam quando tarefas JÁ ENFILEIRADAS da dash rodam
+  //       antes do quadro — a porta de repintura (450ms pós-snapshot) dispara no
+  //       meio da navegação (a hash só muda ~120ms depois do toque, então o
+  //       "saiu da tela" dela ainda vê #dashboard) e re-renderiza a dash INTEIRA
+  //       roubando o quadro do aviso. Navegação declarada = trabalho da dash
+  //       cancelado (o timer agendado) e soft-refresh suprimido por 2s.
+  try {
+    if (window._dashRepinturaTimer) { clearTimeout(window._dashRepinturaTimer); window._dashRepinturaTimer = null; }
+    window._suppressSoftRefresh = true;
+    clearTimeout(window._navSuppressTimer);
+    window._navSuppressTimer = setTimeout(function () { window._suppressSoftRefresh = false; }, 2000);
+  } catch (e) {}
   var _tapT0 = (window.performance && performance.now) ? performance.now() : 0;
   if (typeof requestAnimationFrame === 'function' && _tapT0) {
     requestAnimationFrame(function () { requestAnimationFrame(function () {
@@ -6844,10 +6878,12 @@ window._navTorneioComAviso = function (tournamentId) {
       if (ms > 400) {
         var tasks = (window._longTasks || []).filter(function (lt) { return lt.fim >= _tapT0; })
           .map(function (lt) { return Math.round(lt.dur) + 'ms ' + (lt.nome || ''); }).slice(-6);
-        if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms a pintar; longtasks:', tasks.join(' | '));
+        var trechos = (window._trechos || []).filter(function (tr) { return (tr.ini + tr.dur) >= _tapT0 - 100; })
+          .map(function (tr) { return tr.nome + '=' + Math.round(tr.dur) + 'ms'; }).slice(-8);
+        if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms; trechos:', trechos.join(' | '), '; longtasks:', tasks.join(' | '));
         if (!window._tapLentoReportado && typeof window._captureMessage === 'function') {
           window._tapLentoReportado = true;
-          try { window._captureMessage('tap-sem-feedback: loader levou ' + Math.round(ms) + 'ms · longtasks: ' + (tasks.join(' | ') || 'nenhuma registrada'), 'info'); } catch (e) {}
+          try { window._captureMessage('tap-sem-feedback: loader levou ' + Math.round(ms) + 'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') + ' · longtasks: ' + (tasks.join(' | ') || 'sem suporte'), 'info'); } catch (e) {}
         }
       }
     }); });

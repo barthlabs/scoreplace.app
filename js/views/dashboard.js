@@ -300,7 +300,10 @@ function _reRenderDashKeepScroll() {
   var _sy = window.scrollY || window.pageYOffset || 0;
   var _prevSR = window._isSoftRefresh;
   window._isSoftRefresh = true; // impede reset do guard _dashPendingScrolled
-  try { renderDashboard(c); } finally { window._isSoftRefresh = _prevSR; }
+  try {
+    if (window._medirTrecho) window._medirTrecho('dash-repintura', function () { renderDashboard(c); });
+    else renderDashboard(c);
+  } finally { window._isSoftRefresh = _prevSR; }
   // Só restaura se havia scroll E ele foi de fato perdido pelo novo innerHTML.
   // Evita chamar scrollTo à toa (que poderia cortar o momentum no mobile).
   if (_sy > 0) {

@@ -348,7 +348,7 @@ function initRouter() {
             if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
           };
           setTimeout(_fecharDash, 1200);
-          renderDashboard(viewContainer);
+          if (window._medirTrecho) window._medirTrecho('rota-dash', function () { renderDashboard(viewContainer); }); else renderDashboard(viewContainer);
           // sai quando o perfil chegou (é ele que destrava os blocos) + 2 quadros pra eles
           // pintarem; ou no teto acima, o que vier primeiro.
           var _apos = function () {
@@ -357,7 +357,7 @@ function initRouter() {
           if (window._profileLoaded) _apos();
           else document.addEventListener('scoreplace:profile-loaded', _apos, { once: true });
         } else {
-          renderDashboard(viewContainer);
+          if (window._medirTrecho) window._medirTrecho('rota-dash', function () { renderDashboard(viewContainer); }); else renderDashboard(viewContainer);
         }
         break;
       case 'tournament':
@@ -394,7 +394,10 @@ function initRouter() {
             // global de 15s do _showLoading continua valendo por baixo deste.
             setTimeout(_fecharTour, 6000);
             var _pintaTorneio = function () {
-              try { renderTournaments(viewContainer, cleanParam); }
+              try {
+                if (window._medirTrecho) window._medirTrecho('rota-torneio', function () { renderTournaments(viewContainer, cleanParam); });
+                else renderTournaments(viewContainer, cleanParam);
+              }
               finally {
                 // sai só depois de a tela montada ter tido um quadro pra pintar
                 requestAnimationFrame(function () { requestAnimationFrame(_fecharTour); });
