@@ -1105,6 +1105,40 @@ a.compact-row:active,
   outline-offset: -2px;
 }
 
+/* ── CARD QUE NAVEGA NÃO É TEXTO PRA SELECIONAR (1.9.54) ─────────────────────
+   Relato do dono, e ele fecha o caso: _"segurando 2 segs no card do torneio seleciona
+   texto. coisa que vem me incomodando faz tempo."_ Medido no card real: `user-select`
+   estava em `auto`.
+
+   POR QUE ISSO EXPLICA O TOQUE QUE "NÃO PEGA", e não só o incômodo da seleção: no iOS,
+   segurar sobre texto selecionável entrega o gesto ao reconhecedor de SELEÇÃO. Quando
+   ele assume, o `:active` não é aplicado (o navegador entendeu "selecionar", não
+   "tocar") e o toque pode não virar clique nenhum. Ou seja: o realce da 1.9.48 nunca
+   estava quebrado — ele não chegava a ser pedido.
+
+   Vale só para o que NAVEGA (`[onclick]` / linha compacta). Card de leitura continua
+   selecionável, e campo de digitação é devolvido explicitamente abaixo — sem isso,
+   `user-select:none` herdaria pra dentro do input e atrapalharia quem digita placar.
+   ⚠️ `-webkit-touch-callout` também sai: é ele que abre o menu "Copiar/Compartilhar"
+   no toque longo, que rouba o gesto do mesmo jeito. */
+.card[onclick],
+a.compact-row,
+.compact-row[onclick] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  /* remove o atraso de 300ms do duplo-toque: o toque vira clique na hora */
+  touch-action: manipulation;
+}
+.card[onclick] input,
+.card[onclick] textarea,
+.card[onclick] [contenteditable],
+.compact-row input,
+.compact-row textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* v2.4.96: cards de listas longas (dashboard, explorar) pulam layout+paint
    quando estão FORA da tela (content-visibility:auto). O navegador só renderiza
    o que está perto da viewport — scroll bem mais leve quando há muitos cards.

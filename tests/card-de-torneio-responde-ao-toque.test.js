@@ -92,6 +92,20 @@ ok(!/transform|box-shadow/.test(regraActive),
 ok(!/opacity/.test(regraActive),
    'o realce NÃO usa opacity (inverte de leitura entre tema claro e escuro)');
 
+// ── 5b. O CARD QUE NAVEGA NÃO PODE SER TEXTO SELECIONÁVEL ────────────────────
+// Relato do dono (1.9.54): _"segurando 2 segs no card do torneio seleciona texto"_ — e é
+// a causa do toque que "não pega". No iOS, segurar sobre texto selecionável entrega o
+// gesto ao reconhecedor de SELEÇÃO; quando ele assume, o `:active` nem é pedido e o
+// toque pode não virar clique. O realce do item 5 depende DISTO pra existir no aparelho.
+const regraSel = (cssSemComentario.match(/\.card\[onclick\][^{]*\{[^}]*user-select[^}]*\}/) || [''])[0];
+ok(regraSel.length > 0, 'card que navega declara user-select');
+ok(/user-select:\s*none/.test(regraSel), 'e o valor é `none` (o gesto é toque, não seleção)');
+ok(/-webkit-touch-callout:\s*none/.test(regraSel),
+   'o menu de toque longo também sai (ele rouba o gesto do mesmo jeito)');
+// campo de digitação PRECISA continuar selecionável — senão quebra digitar placar
+ok(/\.card\[onclick\]\s+input[\s\S]{0,200}user-select:\s*text/.test(cssSemComentario),
+   'input/textarea dentro do card continuam selecionáveis');
+
 // ── 6. O REALCE PRECISA EXISTIR NO IPHONE ────────────────────────────────────
 // WKWebView/Safari só aplicam `:active` em elemento que não é link se o documento
 // tiver algum ouvinte de toque. Sem isto a regra do item 5 é letra morta no aparelho.
