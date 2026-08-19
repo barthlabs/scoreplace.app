@@ -1,13 +1,30 @@
-/* A CHAVE PINTA EM DUAS TACADAS — e nenhuma delas pode ficar pelo caminho (1.9.40).
+/* A CHAVE PINTA EM FATIAS — conteúdo REAL na 1ª tacada, e nenhuma fica pelo caminho.
  *
- * Medido no navegador, na chave real do Confra (102 jogos, ~6.000 nós):
- *   • tela inteira de uma vez: ~1.500ms até aparecer QUALQUER coisa;
- *   • só o cabeçalho + o 1º grupo: 57ms;
- *   • e, com `content-visibility` ligado, remover TODO o estilo inline restante
- *     (291 KB) economiza 49ms — ou seja, o custo restante é a QUANTIDADE de nós.
- * Daí a pintura em etapas. O risco dela é entregar meia tela — que é exatamente o
- * defeito que o dono relatou hoje ("renderiza um pedaço e corta o resto"). Este teste
- * guarda as três coisas que impedem isso.
+ * HISTÓRIA (as três encarnações, cada uma paga):
+ *   • 1.9.40 — "duas tacadas": cabeçalho primeiro, corpo depois. Rápida, MAS entre as
+ *     tacadas havia um quadro quase vazio = piscada preta no escuro (dono mediu).
+ *   • 1.9.42 — DESLIGADA por isso; voltou a pintar de uma vez (~1.500ms até aparecer
+ *     qualquer coisa na chave do Confra, 102 jogos / ~6.000 nós).
+ *   • 1.9.74 — o desenho que a própria 1.9.42 encomendou: a 1ª tacada leva o cabeçalho
+ *     + as PRIMEIRAS caixas de grupo (conteúdo real, sem quadro vazio); o resto entra
+ *     em LOTES por quadro, ACRESCENTANDO (nunca reconstruindo). O HTML pesado é
+ *     parseado num <template> DESTACADO — paga parse, não paga layout.
+ *
+ * O que este teste trava (a INTENÇÃO, não a letra):
+ *   1. fatia só ACRESCENTA — e só com o container VAZIO (navegação); re-render pinta
+ *      de uma vez (os restauradores de details/placar-digitado/âncora leem o DOM
+ *      logo após o render e fatiar quebraria os três);
+ *   2. agendador DUPLO (rAF + timeout) com trava de uma-vez-só — rAF não dispara em
+ *      aba de fundo, e sozinho deixaria a pessoa com meia lista pra sempre;
+ *   3. se o anexo falhar, cai pro HTML INTEIRO — nunca meia tela;
+ *   4. render que assumiu a tela mata a pintura antiga (guard de isConnected);
+ *   5. existe descarga síncrona (_flushBracketPaint) que DRENA os passos em fila —
+ *      é o que o headless usa pra ver a chave inteira;
+ *   6. o "depois" (filtro/DnD/scroll) roda após a ÚLTIMA fatia, nunca entre elas;
+ *   7. a ordem na tela não muda (lista de espera segue DEPOIS dos grupos);
+ *   8. loader global só quando a tela está VAZIA — re-render com conteúdo é MUDO
+ *      (era o "mostra, volta a carregar, mostra de novo" do dono);
+ *   9. ⛔ content-visibility não volta (corta a lista no scroll e come o 1º toque).
  */
 const fs = require('fs');
 const path = require('path');
@@ -16,47 +33,63 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.j
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } }
 
-console.log('\n== a chave pinta em etapas ==');
+console.log('\n== a chave pinta em fatias ==');
 
-// 1. o corpo não pode depender de UM agendador só
-const fn = (src.match(/function _pintarEmEtapas[\s\S]*?\n}/) || [''])[0];
-ok(/requestAnimationFrame/.test(fn), 'agenda por quadro (rAF) — a tacada 2 não trava a primeira pintura');
-ok(/setTimeout\(/.test(fn), 'E por timeout: rAF NÃO dispara em aba de fundo — sem esta rede a pessoa ficaria só com o cabeçalho');
-ok(/feito\s*=\s*true/.test(fn) || /if \(feito\) return/.test(fn), 'trava de uma-vez-só: os dois agendadores não pintam o corpo duas vezes');
-ok(/insertAdjacentHTML/.test(fn), 'a 2ª tacada ANEXA (não reescreve o que já está na tela)');
-ok(/catch[\s\S]{0,80}innerHTML = leve \+ pesado/.test(fn), 'se o anexo falhar, cai pro HTML inteiro — nunca fica meia tela');
+// pega a função inteira (contando chaves não dá com regex simples; janela generosa)
+const iFn = src.indexOf('function _pintarEmEtapas');
+const fn = src.slice(iFn, src.indexOf('function _agendarPasso'));
+const agendador = src.slice(src.indexOf('function _agendarPasso'), src.indexOf('window._flushBracketPaint'));
 
-// 2. existe descarga síncrona (é o que o headless usa pra medir a chave inteira)
-ok(/window\._flushBracketPaint\s*=\s*function/.test(src), 'há uma porta síncrona pra pintar o corpo agora');
+// 1. fatia acrescenta, e só com container vazio
+ok(/appendChild\(tarde\[i\]\)/.test(fn), 'a fatia ACRESCENTA (appendChild), nunca reconstrói');
+ok(/_fatiar\s*=\s*_temTemplate\s*&&\s*!\(container && container\.firstElementChild\)/.test(fn),
+   'só fatia com o container VAZIO — re-render (details/placar digitado/âncora) pinta de uma vez');
+ok(/<?template/.test(fn) && /createElement\('template'\)/.test(fn),
+   'o HTML pesado parseia num <template> destacado (parse sem layout)');
 
-// 3. o que lê o DOM inteiro roda DEPOIS da 2ª tacada, nunca entre elas
-// (contagem simples em vez de casar o bloco inteiro: a chamada pesada tem parênteses
-// aninhados — `renderStandings(…)` — e qualquer regex "até o primeiro );" mede errado.)
-const nEtapas = (src.match(/(?<!function )_pintarEmEtapas\(container/g) || []).length;   // a definição não conta
+// 2. agendador duplo + trava de uma vez
+ok(/requestAnimationFrame/.test(agendador), 'agenda por quadro (rAF)');
+ok(/setTimeout\(/.test(agendador), 'E por timeout (rAF não dispara em aba de fundo)');
+ok(/if \(feito\) return; feito = true;/.test(agendador), 'trava de uma-vez-só nos dois agendadores');
+
+// 3. rede contra meia tela
+ok(/catch[\s\S]{0,200}innerHTML = leve \+ _tudo/.test(fn), 'anexo falhou → HTML inteiro, nunca meia tela');
+
+// 4. pintura antiga morre quando outro render assume
+ok(/if \(!bulk\.isConnected\) return;/.test(fn), 'render novo mata a pintura antiga (isConnected)');
+
+// 5. descarga síncrona drena a FILA (passos encadeados incluídos)
+ok(/window\._flushBracketPaint\s*=\s*function/.test(src), 'há porta síncrona pra pintar tudo agora');
+ok(/while \(_pendentes\.length\)/.test(src), 'e ela DRENA a fila (passos que agendam passos saem juntos)');
+
+// 6. o "depois" roda após a última fatia
+ok(/i < tarde\.length[\s\S]{0,60}return;[\s\S]{0,600}depois\(\)/.test(fn),
+   'o "depois" (filtro/DnD/scroll) roda depois da ÚLTIMA fatia');
+
+// os ramos pesados continuam passando pela pintura em etapas, com o filtro de "depois"
+const nEtapas = (src.match(/(?<!function )_pintarEmEtapas\(container/g) || []).length;
 const nDepois = (src.match(/,\s*_applyMyMatchesFilter\);/g) || []).length;
-ok(nEtapas >= 3, 'os ramos pesados da chave usam a pintura em etapas (achei ' + nEtapas + ')');
-ok(nDepois === nEtapas,
-   'todo ramo entrega o filtro como "depois" (' + nDepois + '/' + nEtapas + ') — rodá-lo entre as tacadas veria meia chave');
+ok(nEtapas >= 3, 'os ramos pesados usam a pintura em etapas (achei ' + nEtapas + ')');
+ok(nDepois === nEtapas, 'todo ramo entrega o filtro como "depois" (' + nDepois + '/' + nEtapas + ')');
 
-// 4. a ORDEM na tela não muda: quem vinha depois do corpo viaja com o corpo
+// 7. ordem preservada: a lista de espera viaja com o corpo, atrás dos grupos
 ok(/return renderGroupStage\([^)]*\) \+ standbyHtml;/.test(src),
-   'lista de espera não pula pra cima dos grupos (ela vem DEPOIS do corpo, então viaja com ele)');
+   'lista de espera não pula pra cima dos grupos');
 
+// 8. loader global só com a tela vazia (o "volta a carregar" morreu aqui)
+const iEQ = src.indexOf('function _entregarQuandoPronto');
+const eq = src.slice(iEQ, iFn);
+ok(/_mostraLoader\s*=\s*!\(container && container\.firstElementChild\)/.test(eq),
+   '"Carregando o torneio…" só sobe com a tela VAZIA — reconciliação é muda');
+ok(/_mostraLoader && typeof window\._showLoading/.test(eq),
+   'e o showLoading respeita o gate');
 
-// ⛔ REGRESSÃO CONHECIDA: `content-visibility:auto` não volta sem consertar as dicas.
-// Ele acelerava 35%, mas elemento dentro de subárvore pulada não tem layout, e o balão
-// de dica se posiciona por `getBoundingClientRect()` do alvo — o dono mediu: a dica
-// simplesmente não aparece. Se alguém reintroduzir, este teste cai e obriga a ler isto.
+// 9. ⛔ content-visibility não volta (regressões pagas: dica sem posição, lista cortada
+// no scroll, 1º toque engolido). O CSS guarda as regras DESLIGADAS + o porquê.
 const cssComp = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
-// 1.9.43: a regra ANTIGA de `.cards-grid > .card` (v2.4.96) também caiu — o dono mediu
-// nas listas os MESMOS dois sintomas: "quando scrolla vem cortado" e toque que precisa de
-// 2–3 cliques (subárvore pulada não atende o 1º toque). Nenhuma volta sem resolver isso.
-// tira os comentários antes de olhar: o CSS guarda a regra desligada + o porquê, e é
-// justamente isso que precisa continuar lá pra ninguém religar sem ler.
 const cssVivo = cssComp.replace(/\/\*[\s\S]*?\*\//g, '');
 const cvAtivo = (cssVivo.match(/content-visibility:\s*auto/g) || []);
-ok(cvAtivo.length === 0,
-   'nenhum content-visibility ATIVO no CSS (apaga o balão de dica, corta a lista no scroll e come o 1º toque) — achei ' + cvAtivo.length);
+ok(cvAtivo.length === 0, 'nenhum content-visibility ATIVO no CSS — achei ' + cvAtivo.length);
 
 console.log((fail ? '❌' : '✅') + ' chave-pinta-em-etapas: ' + pass + ' asserções, ' + fail + ' falha(s)');
 process.exit(fail ? 1 : 0);

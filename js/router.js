@@ -129,7 +129,27 @@ function initRouter() {
       window._warn('[router] view-container missing on handleRoute — aborting');
       return;
     }
-    if (!_shouldPreservePrerender) {
+    // ── RE-ENTRADA NA MESMA ROTA = SOFT-REFRESH (1.9.74) ─────────────────────
+    // Relato do dono: _"carrega, mostra uns instantes, volta a carregar, mostra de
+    // novo, volta a carregar. varias vezes. uma merda total."_
+    // MEDIDO: initRouter() é chamado de ~19 lugares — só o fluxo de auth re-chama
+    // ~10 vezes enquanto login/perfil/merge resolvem, e i18n mais uma. Cada chamada
+    // caía aqui com a MESMA hash e era tratada como NAVEGAÇÃO nova: o container era
+    // ESVAZIADO (flash preto), o overlay "Carregando…" subia POR CIMA da tela já
+    // pintada, e a view renderizava do zero com scroll no topo. Era essa a
+    // metralhadora de loading.
+    // A decisão mora AQUI, ANTES do esvaziamento (medido: decidir depois nunca via
+    // conteúdo — o próprio router já tinha apagado tudo). Se a rota (hash+uid+
+    // idioma) é a MESMA da última pintura e a tela TEM conteúdo: (1) NÃO esvazia —
+    // a view escreve o innerHTML inteiro por cima quando renderizar; (2) a passada
+    // vira _isSoftRefresh (setado logo antes do try, onde o finally garante
+    // restauração) e todos os gates "Só em NAVEGAÇÃO" que já existem passam a
+    // valer (sem loader, sem scroll-pro-topo, sem recolher seções).
+    // ⚠️ uid e idioma entram na chave de propósito: login/logout e troca de língua
+    // na mesma hash são navegações DE VERDADE (a tela muda de natureza).
+    var _rotaKey = hash + '|' + ((window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || '') + '|' + (window._lang || '');
+    var _reentrada = (window._ultimaRotaPintada === _rotaKey) && !!viewContainer.firstElementChild;
+    if (!_shouldPreservePrerender && !_reentrada) {
       viewContainer.innerHTML = '';
     }
     const fixedBar = document.getElementById('bracket-fixed-scrollbar');
@@ -268,6 +288,11 @@ function initRouter() {
       return;
     }
     _firstRoute = false;
+
+    // A re-entrada foi decidida LÁ EM CIMA (antes do esvaziamento do container);
+    // aqui — onde o finally do try garante a restauração — a passada vira soft.
+    var _prevSoftRefresh = window._isSoftRefresh;
+    if (_reentrada) window._isSoftRefresh = true;
 
     // v2.8.82: marca render via NAVEGAÇÃO. Render functions checam isso pra NÃO
     // auto-preservar scroll aqui (o router já fez scrollTo(0,0) em navegação ou
@@ -675,6 +700,12 @@ function initRouter() {
             '</div>' +
           '</div>';
       } catch (_e3) {}
+    } finally {
+      // Carimba a rota pintada e devolve o flag — inclusive nos `return` do meio do
+      // switch e no erro de render (a próxima re-entrada da MESMA rota reconcilia
+      // por cima, o que é exatamente o desejado).
+      window._ultimaRotaPintada = _rotaKey;
+      window._isSoftRefresh = _prevSoftRefresh;
     }
 
     // ── 4ª ENCARNAÇÃO DA TELA PRETA: A JANELA ENTRE ESVAZIAR E PINTAR ──────────
@@ -709,6 +740,17 @@ function initRouter() {
     window.removeEventListener('hashchange', window._routerHandler);
   }
   window._routerHandler = handleRoute;
+  // ── UM listener de hashchange, SEMPRE (1.9.74) ─────────────────────────────
+  // initRouter() é chamado de ~19 lugares (auth re-chama ~10x no login) e CADA
+  // chamada registrava MAIS UM listener — eles acumulavam, e toda navegação
+  // passava a rodar handleRoute N vezes (a tela do torneio leva ~2,5s pra pintar;
+  // ×N é o "demora e recarrega várias vezes" no aparelho). Registro único: o
+  // listener velho sai e entra o closure NOVO (que enxerga o viewContainer e o
+  // estado mais recentes).
+  if (window._spHashRouteListener) {
+    try { window.removeEventListener('hashchange', window._spHashRouteListener); } catch (e) {}
+  }
+  window._spHashRouteListener = handleRoute;
   window.addEventListener('hashchange', handleRoute);
   handleRoute();
 

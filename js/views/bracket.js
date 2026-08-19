@@ -162,11 +162,19 @@ window._toggleMyMatches = function(checked) {
 // carregando sai assim mesmo (teto de 6s). Loader preso é pior que tela feia.
 function _entregarQuandoPronto(container, tarefa) {
   var _saiu = false;
+  // ── LOADER SÓ QUANDO A TELA ESTÁ VAZIA (1.9.74) ────────────────────────────
+  // Relato do dono: _"carrega, mostra uns instantes, volta a carregar, mostra de
+  // novo… várias vezes"_. TODO re-render do detalhe (eco de snapshot, placar
+  // alheio, cura de rótulo) passava por aqui e subia o overlay "Carregando o
+  // torneio…" POR CIMA do conteúdo já visível. Loader é honesto quando não há
+  // nada na tela; com conteúdo, a reconciliação é MUDA — o innerHTML novo troca
+  // o velho num quadro e ninguém "volta a carregar".
+  var _mostraLoader = !(container && container.firstElementChild);
   var _sair = function () {
     if (_saiu) return; _saiu = true;
-    if (typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
+    if (_mostraLoader && typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
   };
-  if (typeof window._showLoading === 'function') { try { window._showLoading('Carregando o torneio…'); } catch (e) {} }
+  if (_mostraLoader && typeof window._showLoading === 'function') { try { window._showLoading('Carregando o torneio…'); } catch (e) {} }
   var _teto = setTimeout(_sair, 6000);
   try { tarefa(); } catch (e) { if (window._error) window._error('[Bracket] montagem:', e); }
   // sai quando a hidratação dos nomes terminar (é o último passo que mexe na tela),
@@ -185,44 +193,96 @@ function _entregarQuandoPronto(container, tarefa) {
 window._entregarQuandoPronto = _entregarQuandoPronto;
 
 function _pintarEmEtapas(container, leve, geraPesado, depois) {
-  // ⛔ 1.9.42 — A PINTURA EM DOIS TEMPOS FOI DESLIGADA. Ela entregava o topo em 57ms, mas
-  // o preço apareceu no aparelho do dono: entre a 1ª e a 2ª tacada existe um quadro com a
-  // tela QUASE VAZIA, e no escuro isso é uma PISCADA PRETA — "pisca tela preta mais
-  // demorada no detalhe do torneio". Trocar espera por piscada não é melhorar.
-  // A função continua de pé (com a rede dupla de agendamento e o `depois`) porque a ideia
-  // presta; o que falta é ter o conteúdo do topo REAL (cabeçalho + 1º grupo) na 1ª tacada,
-  // em vez de só o cabeçalho. Enquanto não for assim, pinta de uma vez só.
-  var _emUmaVez = true;
-  if (_emUmaVez) {
-    _entregarQuandoPronto(container, function () {
-      var _tudo = '';
-      try { _tudo = geraPesado() || ''; }
-      catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
+  // ── PINTURA EM FATIAS, DO JEITO QUE A 1.9.42 ENCOMENDOU (1.9.74) ────────────
+  // A "pintura em dois tempos" original foi desligada na 1.9.42 porque a 1ª tacada
+  // era SÓ o cabeçalho — entre ela e a 2ª havia um quadro quase vazio (piscada
+  // preta). O próprio comentário de lá dizia o que faltava: _"ter o conteúdo do
+  // topo REAL (cabeçalho + 1º grupo) na 1ª tacada"_. É isto aqui:
+  //   • o HTML pesado é gerado INTEIRO como sempre, mas parseado num <template>
+  //     DESTACADO — paga parse, não paga layout;
+  //   • acha-se o nó VOLUMOSO (o grid com dezenas de caixas de grupo/rodada);
+  //   • 1ª tacada = leve + tudo que não é volumoso + as PRIMEIRAS caixas do
+  //     volumoso — conteúdo real na tela, sem quadro vazio;
+  //   • o resto entra em LOTES por quadro (mesmo padrão da lista de inscritos:
+  //     fatia ACRESCENTA, nunca reconstrói — a altura só cresce).
+  // ⚠️ SÓ FATIA COM O CONTAINER VAZIO (navegação). Re-render (snapshot, placar,
+  // _rerenderBracket) pinta de uma vez: os mecanismos de restauração de lá
+  // (details abertos, placar digitado, âncora de scroll) leem o DOM logo após o
+  // render e fatiar quebraria os três. Com conteúdo na tela não há "carregando"
+  // pra esconder — a troca atômica é invisível.
+  var _temTemplate = false;
+  try { _temTemplate = typeof document.createElement === 'function' && 'content' in document.createElement('template'); } catch (e) {}
+  var _fatiar = _temTemplate && !(container && container.firstElementChild);
+
+  _entregarQuandoPronto(container, function () {
+    var _tudo = '';
+    try { _tudo = geraPesado() || ''; }
+    catch (e) { if (window._error) window._error('[Bracket] pintura:', e); }
+
+    if (!_fatiar) {
       container.innerHTML = leve + _tudo;
       if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
-    });
-    return;
-  }
-  container.innerHTML = leve;
-  var _segundaTacada = function () {
-    var pesado = '';
-    try { pesado = geraPesado() || ''; }
-    catch (e) { if (window._error) window._error('[Bracket] 2a etapa da pintura:', e); }
-    try { container.insertAdjacentHTML('beforeend', pesado); }
-    catch (e2) { container.innerHTML = leve + pesado; }
-    if (typeof depois === 'function') { try { depois(); } catch (e3) {} }
-  };
-  // ⚠️ NUNCA DEPENDER DE UM ÚNICO AGENDADOR PRA O CORPO DA TELA CHEGAR.
-  // `requestAnimationFrame` NÃO dispara em aba de fundo — abrir a chave numa aba que
-  // não está à frente deixaria a pessoa com só o cabeçalho, pra sempre. E ambiente de
-  // teste tem rAF/timeout de mentira. Então: rAF E timeout, o que vier primeiro pinta
-  // (a trava `feito` garante uma vez só), mais uma porta de descarga síncrona pra quem
-  // precisa do resultado agora (`_flushBracketPaint`).
+      return;
+    }
+
+    var tpl = document.createElement('template');
+    tpl.innerHTML = _tudo;
+    // O nó volumoso = filho de 1º nível com mais filhos (o grid dos grupos/rodadas).
+    var bulk = null, maxFilhos = 0;
+    for (var n = tpl.content.firstElementChild; n; n = n.nextElementSibling) {
+      var c = n.childElementCount || 0;
+      if (c > maxFilhos) { maxFilhos = c; bulk = n; }
+    }
+    var PRIMEIRAS = 3, LOTE = 3, MINIMO_PRA_FATIAR = 8;
+    if (!bulk || maxFilhos <= MINIMO_PRA_FATIAR) {
+      container.innerHTML = leve + _tudo;   // tela pequena: de uma vez, como sempre
+      if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
+      return;
+    }
+    // separa as caixas que ficam pra depois (a ORDEM é preservada)
+    var tarde = Array.prototype.slice.call(bulk.children, PRIMEIRAS);
+    for (var r = 0; r < tarde.length; r++) bulk.removeChild(tarde[r]);
+    container.innerHTML = leve;
+    container.appendChild(tpl.content);     // cabeçalho real + shell + primeiras caixas
+    var i = 0;
+    var passo = function () {
+      // outro render assumiu a tela (innerHTML novo) → esta pintura morreu
+      if (!bulk.isConnected) return;
+      var fim = Math.min(tarde.length, i + LOTE);
+      try {
+        for (; i < fim; i++) bulk.appendChild(tarde[i]);
+      } catch (eAnexo) {
+        // rede: anexo falhou → HTML inteiro de uma vez. NUNCA meia tela.
+        if (window._error) window._error('[Bracket] fatia falhou — pintando inteiro:', eAnexo);
+        try { container.innerHTML = leve + _tudo; } catch (e6) {}
+        if (typeof depois === 'function') { try { depois(); } catch (e7) {} }
+        return;
+      }
+      if (i < tarde.length) { _agendarPasso(passo); return; }
+      // última fatia: hidrata o que chegou tarde e roda o "depois" (filtro/DnD/scroll)
+      try { if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(container); } catch (e3) {}
+      try { if (typeof window._fitNames === 'function') window._fitNames(container); } catch (e4) {}
+      if (typeof depois === 'function') { try { depois(); } catch (e5) {} }
+    };
+    _agendarPasso(passo);
+  });
+}
+// ⚠️ NUNCA DEPENDER DE UM ÚNICO AGENDADOR PRA O CORPO DA TELA CHEGAR.
+// `requestAnimationFrame` NÃO dispara em aba de fundo — abrir a chave numa aba que
+// não está à frente deixaria a pessoa com meia lista, pra sempre. E ambiente de
+// teste tem rAF/timeout de mentira. Então: rAF E timeout, o que vier primeiro roda
+// (a trava `feito` garante uma vez só), mais a porta de descarga síncrona
+// `_flushBracketPaint` pra quem precisa da chave inteira AGORA (testes, export).
+function _agendarPasso(fn) {
   var feito = false;
-  var _uma = function () { if (feito) return; feito = true; _pendentes.splice(_pendentes.indexOf(_uma) >>> 0, 1); _segundaTacada(); };
+  var _uma = function () {
+    if (feito) return; feito = true;
+    var ix = _pendentes.indexOf(_uma); if (ix >= 0) _pendentes.splice(ix, 1);
+    fn();
+  };
   _pendentes.push(_uma);
-  try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { requestAnimationFrame(_uma); }); } catch (e) {}
-  try { if (typeof setTimeout === 'function') setTimeout(_uma, 80); } catch (e) {}
+  try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_uma); } catch (e) {}
+  try { if (typeof setTimeout === 'function') setTimeout(_uma, 48); } catch (e) {}
 }
 // Descarga síncrona: pinta AGORA o que estiver pendente. É o que o teste headless usa
 // (lá rAF e setTimeout são de mentira) e é a rede pra qualquer caminho que precise da
