@@ -4919,6 +4919,23 @@ async function simulateLoginSuccess(user) {
         phoneInput.value = digits;
       }
     }
+    // Linha de exibição do celular (espelho do e-mail): com celular → mostra a linha
+    // e esconde a edição; sem celular → edição aberta direto (não há o que exibir).
+    (function() {
+      var d = document.getElementById('profile-phone-display');
+      var w = document.getElementById('profile-phone-edit-wrap');
+      var t = document.getElementById('profile-phone-text');
+      var dig = (cu.phone || '').replace(/\D/g, '');
+      if (!d || !w) return;
+      if (dig.length >= 8) {
+        if (t) t.textContent = '+' + (phoneCountrySel ? phoneCountrySel.value : (cu.phoneCountry || '55')) + ' ' + (phoneInput ? phoneInput.value : dig);
+        d.style.display = '';
+        w.style.display = 'none';
+      } else {
+        d.style.display = 'none';
+        w.style.display = '';
+      }
+    })();
     // ✓ quando o celular está verificado = é o phoneNumber do Auth (já confirmado).
     (function() {
       var _fbU = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
@@ -6827,18 +6844,29 @@ function setupProfileModal() {
               '<div id="profile-email-otp" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
             '</div>' +
           '</div>' +
-            // Telefone: País + Número
+            // Telefone — ESPELHO do e-mail (pedido do dono, 19/ago): linha de exibição
+            // com logo + número + ✓ colado no fim do número + Alterar + toggle Divulgar
+            // alinhado à direita; a EDIÇÃO (DDI menor + número + Verificar) fica
+            // escondida atrás do Alterar (e aberta por padrão pra quem não tem celular).
             '<div class="form-group" style="margin-bottom: 6px;">' +
-              '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
-                '<label class="form-label" style="font-size: 0.75rem;margin:0;">' + _t('profile.labelWhatsApp') + '</label>' +
-                '<label class="pf-switch" title="Divulgar meu celular"><input type="checkbox" id="profile-share-phone" checked><span class="tr"></span></label>' +
+              '<div id="profile-phone-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+                  '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
+                    '<span class="pf-logo" style="background:#25d366;">' + window._platformLogoSvg('whatsapp') + '</span>' +
+                    '<span id="profile-phone-text" style="font-family:var(--font-body);color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+                    '<span id="profile-phone-check" title="Celular verificado" class="pf-check" style="display:none;">✓</span>' +
+                  '</div>' +
+                  '<button type="button" onclick="window._profileShowPhoneEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
+                  '<label class="pf-switch" title="Divulgar meu celular"><input type="checkbox" id="profile-share-phone" checked><span class="tr"></span></label>' +
+                '</div>' +
               '</div>' +
+              '<div id="profile-phone-edit-wrap" style="display:none;">' +
+              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
               '<div style="display: flex; gap: 6px; align-items: center;">' +
-                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 124px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.45rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
+                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 90px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.35rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
-                '<span id="profile-phone-check" title="Celular verificado" class="pf-check" style="display:none;">✓</span>' +
               '</div>' +
               // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
@@ -6848,6 +6876,7 @@ function setupProfileModal() {
                 '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
+              '</div>' +
               '</div>' +
             '</div>' +
               '</div>' +
@@ -6897,7 +6926,7 @@ function setupProfileModal() {
               // fonte, mesma altura) — antes o DDI era 110px/0.82rem e cortava "+55" pra
               // "+5", e o input era menor que o de cima.
               '<div style="display:flex;gap:6px;align-items:center;">' +
-                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:124px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;padding:0.75rem 0.45rem;">' +
+                '<select id="profile-link-phone-country" aria-label="DDI do celular vinculado" class="form-control" style="width:90px;flex-shrink:0;box-sizing:border-box;font-size:0.85rem;padding:0.75rem 0.35rem;">' +
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
@@ -7350,6 +7379,17 @@ function setupProfileModal() {
 
     // 1.9.68 — aviso de placar ao vivo em três estados (all/friends/none).
     var _liveAlertsColors = { all: '#22c55e', friends: '#3b82f6', none: '#ef4444' };
+    // 1.9.69 — Alterar do celular, espelho do e-mail: esconde a linha de exibição
+    // e abre a edição (DDI + número + Verificar).
+    window._profileShowPhoneEdit = function() {
+      var d = document.getElementById('profile-phone-display');
+      var w = document.getElementById('profile-phone-edit-wrap');
+      if (d) d.style.display = 'none';
+      if (w) w.style.display = '';
+      var inp = document.getElementById('profile-edit-phone');
+      if (inp) { try { inp.focus(); } catch (e) {} }
+    };
+
     window._setLiveAlertsWho = function(val) {
       var hidden = document.getElementById('profile-live-alerts-who');
       if (hidden) hidden.value = val;
