@@ -77,12 +77,25 @@ fi
 DEST="${TMPDIR:-/tmp}/sp-deploy-$$"
 rm -rf "$DEST"; mkdir -p "$DEST"
 git archive HEAD | tar -x -C "$DEST"
-ln -s "$RAIZ/node_modules" "$DEST/node_modules"
-if [[ ! -e "$DEST/node_modules/@playwright/test" ]]; then
-  echo "✗ node_modules não resolveu em $DEST (o predeploy roda testes com Chromium)."
-  echo "  rode 'npm ci' no repo e tente de novo."
+# ⚠️ Procura o node_modules SUBINDO os diretórios, como o Node faz. Publicar de uma
+# WORKTREE do git é caso normal aqui, e worktree NÃO tem node_modules próprio — os
+# testes só passam nela porque o Node sobe até o do repo pai. Fixar em "$RAIZ" fazia
+# o deploy abortar em toda worktree com "node_modules não resolveu", que é a MESMA
+# armadilha que a 1.8.2 pagou (lá o symlink apontava pra um caminho sem pai e o
+# predeploy morria com "Cannot find module '@playwright/test'" — parecendo regressão
+# do commit, quando era só o node_modules fora de alcance).
+NM=""
+DIR="$RAIZ"
+while [[ "$DIR" != "/" ]]; do
+  if [[ -e "$DIR/node_modules/@playwright/test" ]]; then NM="$DIR/node_modules"; break; fi
+  DIR="$(dirname "$DIR")"
+done
+if [[ -z "$NM" ]]; then
+  echo "✗ node_modules não resolveu a partir de $RAIZ (o predeploy roda testes com Chromium)."
+  echo "  rode 'npm ci' no repo (ou no repo PAI, se você está numa worktree) e tente de novo."
   exit 1
 fi
+ln -s "$NM" "$DEST/node_modules"
 # lixo que o Drive cria e que iria pro ar junto (hosting.public = ".")
 LIXO="$(find "$DEST" \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \) | head -5 || true)"
 if [[ -n "$LIXO" ]]; then echo "✗ lixo na extração:"; echo "$LIXO"; exit 1; fi
