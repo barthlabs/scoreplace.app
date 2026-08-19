@@ -42,8 +42,8 @@ const agendador = src.slice(src.indexOf('function _agendarPasso'), src.indexOf('
 
 // 1. fatia acrescenta, e só com container vazio
 ok(/appendChild\(tarde\[i\]\)/.test(fn), 'a fatia ACRESCENTA (appendChild), nunca reconstrói');
-ok(/_fatiar\s*=\s*_temTemplate\s*&&\s*!\(container && container\.firstElementChild\)/.test(fn),
-   'só fatia com o container VAZIO — re-render (details/placar digitado/âncora) pinta de uma vez');
+ok(/_fatiar\s*=\s*_temTemplate\s*&&\s*!window\._isSoftRefresh\s*&&\s*!\(container && container\.firstElementChild\)/.test(fn),
+   'só fatia em NAVEGAÇÃO com container vazio — soft-refresh e re-render pintam de uma vez (1.9.77: o inline renasce vazio no eco do snapshot, então "vazio" sozinho não basta)');
 ok(/<?template/.test(fn) && /createElement\('template'\)/.test(fn),
    'o HTML pesado parseia num <template> destacado (parse sem layout)');
 
@@ -79,8 +79,8 @@ ok(/return renderGroupStage\([^)]*\) \+ standbyHtml;/.test(src),
 // 8. loader global só com a tela vazia (o "volta a carregar" morreu aqui)
 const iEQ = src.indexOf('function _entregarQuandoPronto');
 const eq = src.slice(iEQ, iFn);
-ok(/_mostraLoader\s*=\s*!\(container && container\.firstElementChild\)/.test(eq),
-   '"Carregando o torneio…" só sobe com a tela VAZIA — reconciliação é muda');
+ok(/_mostraLoader\s*=\s*!window\._isSoftRefresh\s*&&\s*!\(container && container\.firstElementChild\)/.test(eq),
+   '"Carregando o torneio…" só sobe em NAVEGAÇÃO com tela vazia — soft-refresh é MUDO mesmo com o inline recriado vazio (1.9.77)');
 ok(/_mostraLoader && typeof window\._showLoading/.test(eq),
    'e o showLoading respeita o gate');
 

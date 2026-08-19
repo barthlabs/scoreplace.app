@@ -4363,6 +4363,22 @@ function renderTournaments(container, tournamentId = null) {
         }
     }
 
+    // ── CARIMBA A ASSINATURA DO DETALHE NA 1ª PINTURA (1.9.77) ───────────────
+    // O gate do _softRefreshView compara `_tournamentDetailSig` com `_tdetailSig`
+    // — mas SÓ ELE gravava a assinatura. A primeira pintura (rota) não gravava
+    // nada, então o PRIMEIRO eco do snapshot (cache→servidor, sempre chega
+    // segundos após abrir) NUNCA via "igual" e reconstruía a página inteira:
+    // era o "carrega os detalhes, volta a carregar e volta pros detalhes" que o
+    // dono via EM TODA abertura. Carimbando aqui, eco sem mudança real = silêncio.
+    if (tournamentId) {
+        try {
+            var _tSigDet = window._findTournamentById ? window._findTournamentById(tournamentId) : null;
+            if (_tSigDet && typeof window._tournamentDetailSig === 'function') {
+                window._tdetailSig = window._tournamentDetailSig(_tSigDet);
+            }
+        } catch (_eSigDet) {}
+    }
+
     // v2.0.8: veio de #bracket/:id (redirecionado) ou de "Ir para Torneio"?
     // Rola até a seção de chaveamento (ou o jogo específico) após o render inline.
     try {

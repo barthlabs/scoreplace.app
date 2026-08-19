@@ -169,7 +169,13 @@ function _entregarQuandoPronto(container, tarefa) {
   // torneio…" POR CIMA do conteúdo já visível. Loader é honesto quando não há
   // nada na tela; com conteúdo, a reconciliação é MUDA — o innerHTML novo troca
   // o velho num quadro e ninguém "volta a carregar".
-  var _mostraLoader = !(container && container.firstElementChild);
+  // 1.9.77: o gate "container vazio" NÃO basta — no re-render do DETALHE o
+  // renderTournaments reconstrói a página e o #inline-bracket-container renasce
+  // VAZIO, então todo eco de snapshot subia o overlay de novo ("carrega os
+  // detalhes, volta a carregar, volta pros detalhes" — relato do dono). O
+  // renderBracket roda SÍNCRONO dentro do renderTournaments, logo o
+  // _isSoftRefresh da passada de reconciliação ainda está de pé aqui: soft = mudo.
+  var _mostraLoader = !window._isSoftRefresh && !(container && container.firstElementChild);
   var _sair = function () {
     if (_saiu) return; _saiu = true;
     if (_mostraLoader && typeof window._hideLoading === 'function') { try { window._hideLoading(); } catch (e) {} }
@@ -212,7 +218,11 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // pra esconder — a troca atômica é invisível.
   var _temTemplate = false;
   try { _temTemplate = typeof document.createElement === 'function' && 'content' in document.createElement('template'); } catch (e) {}
-  var _fatiar = _temTemplate && !(container && container.firstElementChild);
+  // 1.9.77: re-render (soft) NUNCA fatia, nem com o container recém-recriado vazio
+  // (o renderTournaments reconstrói a página no eco do snapshot e o inline renasce
+  // vazio): fatiar ali encolhe o documento no meio da leitura e o navegador clampa
+  // o scroll — o "corte + volta" que o dono viu. Soft = pintura atômica.
+  var _fatiar = _temTemplate && !window._isSoftRefresh && !(container && container.firstElementChild);
 
   _entregarQuandoPronto(container, function () {
     var _tudo = '';
@@ -4157,12 +4167,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
   }
 
-  // "Ao Vivo": só para partidas sem placar (nem definitivo nem pendente)
+  // "Ao Vivo": só para partidas sem placar (nem definitivo nem pendente).
+  // ── QUEM VÊ (decisão do dono, 19/ago/2026): organizador, árbitro e os
+  // participantes DO jogo — "não pode aparecer para participantes que não estão
+  // no jogo". O furo era a cláusula de árbitro: `_resultEntryIncludes(t,'referee')`
+  // só diz que o MODO arbitragem está ligado — não diz QUEM é árbitro. Com o modo
+  // ligado, QUALQUER logado (inclusive inscrito de outro grupo) via o botão em
+  // todo jogo. Agora exige estar em `t.arbitros` com status 'confirmed'
+  // (shape em arbitros.js: [{uid, status: 'confirmed'|'invited', …}]).
   const _isOrgLocal = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+  const _souArbitroConfirmado = !!(_cu && _cu.uid && Array.isArray(t.arbitros) && t.arbitros.some(function (a) {
+    return a && a.uid === _cu.uid && a.status === 'confirmed';
+  }));
   const _canScoreLive = !isDecided && !hasPending && !isByeMatch && !hasTBD && (
     _isOrgLocal ||
     (_isMyMatch && window._resultEntryIncludes(t, 'players', m)) ||
-    (_cu && _cu.uid && window._resultEntryIncludes(t, 'referee', m))
+    (_souArbitroConfirmado && window._resultEntryIncludes(t, 'referee', m))
   );
   // v2.7.57: botões do header do card no PADRÃO do app (.btn + cor + .btn-micro,
   // sólido com volume) — não mais etiqueta flat com estilo inline.
