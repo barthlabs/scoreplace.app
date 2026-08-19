@@ -2169,11 +2169,29 @@ window._approveResult = function(tId, matchId) {
   var _ctx = window._applyApprovedResult(t, matchId, pr);
   if (!_ctx.ok) { showNotification('Sem proposta ativa', '', 'warning'); return; }
   var s1 = _ctx.s1, s2 = _ctx.s2;
-  // Toast por contexto
-  if (_ctx.kind === 'elim') showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
-  else showNotification('✅ Resultado aprovado', _ctx.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: _ctx.winner}), 'success');
-  // Som: resultado confirmado fora do placar ao vivo → fanfarra do "Set".
-  if (window._sound) window._sound('set');
+  // ⚠️ O AVISO DE SUCESSO NÃO SAI AQUI (1.9.56). Ele saía ANTES de qualquer gravação —
+  // aprovação otimista na tela + "✅ Resultado aprovado" imediato — e a persistência vinha
+  // depois, numa promessa SEM `.catch`. Se ela falhasse (regra, rede, contenção), a
+  // rejeição sumia e a pessoa ficava com a certeza de ter confirmado.
+  // Relato da Sônia (18/ago): confirmou pela notificação, o app disse confirmado, e no
+  // torneio os jogos seguiam PENDENTES. Aprovar dentro do torneio funcionou.
+  // Agora o aviso é consequência da gravação, não enfeite do clique.
+  // Ver [[feedback_try_catch_nao_pega_promessa]] e [[feedback_proof_lives_in_the_data_not_in_a_stamp]].
+  var _avisarOk = function () {
+    if (_ctx.kind === 'elim') showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
+    else showNotification('✅ Resultado aprovado', _ctx.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: _ctx.winner}), 'success');
+    // Som: resultado confirmado fora do placar ao vivo → fanfarra do "Set".
+    if (window._sound) window._sound('set');
+  };
+  // A tela local já mostra o resultado aplicado (otimista). Se a gravação falhar, a
+  // pessoa PRECISA saber que o jogo continua pendente — senão ela vai embora achando
+  // que resolveu, que foi exatamente o que aconteceu.
+  var _avisarFalha = function (err) {
+    showNotification('Não consegui confirmar', 'O jogo continua PENDENTE de aprovação. Tente de novo pela tela do torneio.', 'error');
+    if (typeof window._captureException === 'function') {
+      window._captureException(err, { area: 'approveResult', tournamentId: tId, matchId: matchId });
+    } else if (window._error) { window._error('[approveResult] falhou', err); }
+  };
 
   var _logMsg = 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner);
   window.AppStore.logAction(tId, _logMsg);
@@ -2186,16 +2204,23 @@ window._approveResult = function(tId, matchId) {
       isTiebreakEntry: !!pr.isTiebreakEntry, tbP1: pr.tbP1, tbP2: pr.tbP2
     } };
     setTimeout(function() {
-      if (typeof window._closeRound === 'function') window._closeRound(tId, _ctx.roundIdx, matchId, _approveResultCtx);
+      if (typeof window._closeRound !== 'function') { _avisarFalha(new Error('_closeRound indisponível')); return; }
+      // `_closeRound` pode ou não devolver promessa; `Promise.resolve` cobre os dois
+      // casos sem exigir que ele mude de contrato.
+      try {
+        Promise.resolve(window._closeRound(tId, _ctx.roundIdx, matchId, _approveResultCtx))
+          .then(_avisarOk).catch(_avisarFalha);
+      } catch (e) { _avisarFalha(e); }
     }, 0);
   } else {
     // BLINDAGEM (v4.0.121): persiste ATÔMICO pelo portão — re-aplica a aprovação
     // (via a mesma mutação pura, com o `pr` capturado) sobre o doc fresco.
-    window.AppStore.commitTournamentTx(tId, function (ft) {
+    // `commitTournamentTx` é async: sem `.catch` a rejeição vira unhandled e some.
+    Promise.resolve(window.AppStore.commitTournamentTx(tId, function (ft) {
       window._applyApprovedResult(ft, matchId, pr);
       if (!Array.isArray(ft.history)) ft.history = [];
       ft.history.push({ date: new Date().toISOString(), message: _logMsg });
-    });
+    })).then(_avisarOk).catch(_avisarFalha);
   }
   // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado aprovado
   // (já aplicado otimista no `m` local por _applyApprovedResult) no doc do jogo.

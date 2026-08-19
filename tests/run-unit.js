@@ -970,6 +970,11 @@ const SUITES = [
   // do HTML (até ~100 KB por card), e o parser mastigava isso na thread principal.
   // Trava que a imagem é pintada DEPOIS do card, do dado já em memória.
   'tests/imagem-do-torneio-fora-do-html.test.js',
+  // a Sônia confirmou placar pela notificação, o app disse confirmado e no torneio o jogo
+  // seguia PENDENTE: o toast de sucesso saía ANTES da gravação, e a persistência era uma
+  // promessa sem `.catch` — a rejeição virava unhandled e sumia. Trava que o aviso é
+  // CONSEQUÊNCIA da gravação, nos dois caminhos (commitTournamentTx e _closeRound).
+  'tests/aprovar-placar-nao-mente.test.js',
 ];
 
 let failed = [];
