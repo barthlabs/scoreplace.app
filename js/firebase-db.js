@@ -42,6 +42,10 @@ window.FirestoreDB = {
       // v1.3.27: FIX RAIZ — SDK subido 10.8.1 → 10.14.1 (as correções internas de
       // "Unexpected state" entraram em 10.12+). synchronizeTabs segue removido e o
       // auto-reload segue ativo como cinto-e-suspensório enquanto se confirma no Sentry.
+      // v1.9.73 (19/ago/2026): "Unexpected state" AINDA reincidia no 10.14.1 (Sentry
+      // WEB-69/65, 7 eventos desde junho) — SDK subido 10.14.1 → 12.17.1 (compat),
+      // ~2 anos de correções do Firestore. Mesma banda compat, mesmos URLs gstatic
+      // (index.html + storage lazy no store.js). synchronizeTabs SEGUE removido.
       try {
         this.db.enablePersistence().then(function () {
           if (window._log) window._log('[FirestoreDB] persistência offline ATIVA — saves sobrevivem a fechar o app');
@@ -2587,10 +2591,11 @@ window.FirestoreDB = {
         return (agg && typeof agg.data === 'function' && agg.data().count) || 0;
       }
       // ⚠️ MEDIDO NO AR (1.9.24, na página servida): o firebase-firestore-compat
-      // 10.14.1 que o app carrega **não tem `count()`** — a agregação só existe no
-      // build modular. `Object.getOwnPropertyNames` na Query devolve where/orderBy/
-      // limit/get/onSnapshot… e nada de count. Ou seja: em produção quem roda é ESTE
-      // ramo, e deixá-lo baixando a consulta inteira seria não ter consertado nada.
+      // 10.14.1 que o app carregava **não tinha `count()`** — em produção quem rodava
+      // era ESTE ramo, e deixá-lo baixando a consulta inteira seria não ter consertado
+      // nada. Desde a 1.9.73 o app carrega o compat 12.17.1; se ele expuser count(),
+      // o ramo de cima assume sozinho — este aqui fica de fallback e o TETO continua
+      // obrigatório de qualquer jeito.
       // O TETO resolve sem depender do SDK: o badge só sabe dizer "9+" (ver
       // `_updateNotificationBadge`), então a 11ª não lida não muda um pixel na tela.
       // Ler 10 é o suficiente para pintar certo — e o custo da abertura fica preso

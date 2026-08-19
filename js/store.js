@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.72';
+window.SCOREPLACE_VERSION = '1.9.73';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1215,7 +1215,7 @@ window._formatLabel = function (t) {
     _sdkStorage = new Promise(function (resolve, reject) {
       if (window.firebase && window.firebase.storage) { resolve(window.firebase.storage()); return; }
       var s = document.createElement('script');
-      s.src = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js';
+      s.src = 'https://www.gstatic.com/firebasejs/12.17.1/firebase-storage-compat.js';
       s.onload = function () {
         try { resolve(window.firebase.storage()); } catch (e) { reject(e); }
       };

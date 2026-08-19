@@ -70,6 +70,8 @@
   // v1.3.27: FIX RAIZ aplicado — SDK subido 10.8.1 → 10.14.1 (as correções de "Unexpected
   // state" entraram em 10.12+). Este auto-reload guardado + synchronizeTabs removido
   // (firebase-db.js) seguem como rede de segurança enquanto se confirma no Sentry.
+  // v1.9.73: o "Unexpected state" AINDA reincidia no 10.14.1 (WEB-69/65) → SDK subido
+  // pra 12.17.1. O detector é por FRASE do erro, não por versão — a rede continua.
   var _fsRecovering = false;
   // v1.7.65 — "Database deleted by request of the user" entra na MESMA rede.
   //
