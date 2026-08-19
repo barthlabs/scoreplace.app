@@ -233,7 +233,13 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
       var c = n.childElementCount || 0;
       if (c > maxFilhos) { maxFilhos = c; bulk = n; }
     }
-    var PRIMEIRAS = 3, LOTE = 3, MINIMO_PRA_FATIAR = 8;
+    // 1.9.75 (relato do TestFlight: "ao scrollar apareceu cortada 1x"): a 1ª tacada
+    // sobe de 3 pra 6 caixas (~2 telas de celular — quem rola de imediato ainda vê
+    // conteúdo), e o lote é ADAPTATIVO pela duração do QUADRO anterior (que inclui o
+    // layout/paint, o custo real — medir o appendChild seria medir o barato): quadro
+    // folgado → lote cresce; quadro >48ms → encolhe. Aparelho rápido fecha a lista em
+    // poucos quadros; lento continua respirando.
+    var PRIMEIRAS = 6, MINIMO_PRA_FATIAR = 8;
     if (!bulk || maxFilhos <= MINIMO_PRA_FATIAR) {
       container.innerHTML = leve + _tudo;   // tela pequena: de uma vez, como sempre
       if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
@@ -244,11 +250,18 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
     for (var r = 0; r < tarde.length; r++) bulk.removeChild(tarde[r]);
     container.innerHTML = leve;
     container.appendChild(tpl.content);     // cabeçalho real + shell + primeiras caixas
-    var i = 0;
+    var i = 0, lote = 4, _tPassoAnterior = 0;
     var passo = function () {
       // outro render assumiu a tela (innerHTML novo) → esta pintura morreu
       if (!bulk.isConnected) return;
-      var fim = Math.min(tarde.length, i + LOTE);
+      var _agora = (window.performance && performance.now) ? performance.now() : 0;
+      if (_tPassoAnterior && _agora) {
+        var _quadro = _agora - _tPassoAnterior;   // inclui o layout/paint do lote anterior
+        if (_quadro < 24) lote = Math.min(12, lote + 2);
+        else if (_quadro > 48) lote = Math.max(2, lote - 1);
+      }
+      _tPassoAnterior = _agora;
+      var fim = Math.min(tarde.length, i + lote);
       try {
         for (; i < fim; i++) bulk.appendChild(tarde[i]);
       } catch (eAnexo) {
@@ -529,7 +542,12 @@ function renderBracket(container, tournamentId, isInline) {
     // Logado mas torneio não carregado — tentar buscar do Firestore
     if (window.FirestoreDB && window.FirestoreDB.db && tId) {
       // Loader UNIFICADO (bola + barra) — nunca texto puro (feedback_global_loading_always).
-      container.innerHTML = (typeof window._renderBallLoader === 'function')
+      // ⚠️ SÓ COM A TELA VAZIA (1.9.75). Num re-render com a chave JÁ NA TELA, se o
+      // torneio estiver momentaneamente fora do AppStore (janela de troca do snapshot),
+      // este loader APAGAVA a chave visível — era um "voltou a carregar" do nada
+      // (relato do TestFlight: recarregou 1x durante o scroll). Com conteúdo, mantém
+      // a tela como está; o .get() abaixo re-renderiza quando o dado chegar.
+      if (!container.firstElementChild) container.innerHTML = (typeof window._renderBallLoader === 'function')
         ? window._renderBallLoader('Carregando chaveamento…', { minHeight: '40vh', bar: true })
         : '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Carregando chaveamento…</div>';
       window.FirestoreDB.db.collection('tournaments').doc(tId).get().then(function(doc) {

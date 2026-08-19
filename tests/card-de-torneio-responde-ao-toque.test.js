@@ -63,7 +63,15 @@ ok(/_openTournamentCard\(event, tournamentId\)/.test(dashboard),
    'o `_dashCardClick` da dashboard delega pra mesma porta (não tem cópia da regra)');
 
 // ── 3. O SINAL VEM ANTES DA NAVEGAÇÃO ────────────────────────────────────────
-const corpoPorta = (store.match(/window\._openTournamentCard\s*=\s*function[\s\S]*?\n};/) || [''])[0];
+// 1.9.75: o miolo (aviso + navegação adiada) saiu da _openTournamentCard pra
+// _navTorneioComAviso — a porta ficou com as GUARDAS e delega; a linha compacta da
+// dash (que era um <a> navegando no mesmo task, sem pintura do aviso) entra pela
+// MESMA função. O recorte cobre as duas: a regra continua morando num lugar só.
+const corpoPorta = (store.match(/window\._openTournamentCard\s*=\s*function[\s\S]*?window\._navTorneioComAviso\s*=\s*function[\s\S]*?\n};/) || [''])[0];
+ok(/_navTorneioComAviso\(tournamentId\)/.test(corpoPorta),
+   'a porta do card DELEGA pro miolo único (_navTorneioComAviso)');
+ok(/_navTorneioComAviso\(/.test(dashboard),
+   'a linha compacta da dash entra pelo MESMO miolo (era <a> navegando sem pintar o aviso)');
 const posLoader = corpoPorta.indexOf('_showLoading');
 const posHash = corpoPorta.indexOf('location.hash');
 ok(posLoader > -1, 'a porta mostra o "Abrindo o torneio…"');

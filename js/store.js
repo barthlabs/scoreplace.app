@@ -1,4 +1,24 @@
-window.SCOREPLACE_VERSION = '1.9.74';
+window.SCOREPLACE_VERSION = '1.9.75';
+
+// ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
+// O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
+// investiga sabendo O QUE segurava a thread no momento do toque. Buffer barato
+// das últimas 20 tarefas >50ms; quem consome é a telemetria do _openTournamentCard.
+// WKWebView pode não suportar 'longtask' — o try engole e o buffer fica vazio
+// (a telemetria reporta "nenhuma registrada", que também é informação).
+window._longTasks = [];
+try {
+  if (typeof PerformanceObserver === 'function') {
+    new PerformanceObserver(function (list) {
+      list.getEntries().forEach(function (e) {
+        var attr = (e.attribution && e.attribution[0]) || {};
+        window._longTasks.push({ fim: e.startTime + e.duration, dur: e.duration,
+          nome: (attr.containerType || '') + (attr.containerName ? ':' + attr.containerName : '') || e.name });
+        if (window._longTasks.length > 20) window._longTasks.shift();
+      });
+    }).observe({ entryTypes: ['longtask'] });
+  }
+} catch (e) {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -6784,6 +6804,16 @@ window._openTournamentCard = function (event, tournamentId) {
     if (target.closest('[data-liga-toggle-tid]')) return;
     if (target.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
   }
+  window._navTorneioComAviso(tournamentId);
+};
+
+// PORTA ÚNICA da navegação card→torneio COM aviso (1.9.75): o card da dash, a linha
+// compacta e qualquer tela nova entram por aqui. A linha compacta era um <a href> que
+// navegava NO MESMO task do toque — o aviso era criado e a rota rodava antes de
+// qualquer pintura, ou seja o "Abrindo o torneio…" podia nem aparecer (a MESMA
+// classe de bug da 1.9.55, viva no outro caminho — grep pela AÇÃO, não pelo handler).
+window._navTorneioComAviso = function (tournamentId) {
+  if (!tournamentId) return;
   if (typeof window._showLoading === 'function') {
     try {
       window._showLoading('Abrindo o torneio…');
@@ -6795,15 +6825,41 @@ window._openTournamentCard = function (event, tournamentId) {
   // ── O AVISO PINTA ANTES DE A NAVEGAÇÃO COMEÇAR (1.9.55) ─────────────────────
   // Relato do dono: _"demora um pouco, não é instantâneo, mas aparece o abrindo o
   // torneio"_. O loader era criado e a hash trocada no MESMO passo — e o navegador só
-  // pinta quando a thread devolve o controle. Entre uma coisa e outra ainda rodam TODOS
-  // os ouvintes de `hashchange` e o começo da rota, tudo síncrono: o loader existia
-  // desde o primeiro milissegundo e só APARECIA depois disso.
-  // Ceder 2 quadros (~32ms) antes de navegar troca "aviso atrasado" por "aviso na hora",
-  // e o tempo total não muda — a mesma espera acontece, agora com a pessoa vendo.
-  // É o mesmo remédio da rota do torneio (router.js); faltava aqui, no lado do toque.
-  var _irPro = function () { window.location.hash = '#tournaments/' + tournamentId; };
+  // pinta quando a thread devolve o controle. Ceder 2 quadros antes de navegar troca
+  // "aviso atrasado" por "aviso na hora". É o mesmo remédio da rota (router.js).
+  //
+  // 1.9.75 — DOIS reforços, do relato no TestFlight ("a tela carregando demora 2-3s
+  // pra aparecer e fica aquela dúvida"):
+  //   • CORRIDA rAF × timeout: se a thread/compositor está ocupado no momento do
+  //     toque, o rAF não dispara e a NAVEGAÇÃO inteira ficava refém dele. O timeout
+  //     garante que a espera pelo quadro nunca passa de ~120ms.
+  //   • TELEMETRIA: mede toque→pintura-do-aviso (2 rAF depois do show = pintou).
+  //     Acima de 400ms manda UM aviso por sessão pro Sentry com as long tasks que
+  //     estavam bloqueando — é o aparelho do dono dizendo QUEM segurou o quadro.
+  var _tapT0 = (window.performance && performance.now) ? performance.now() : 0;
+  if (typeof requestAnimationFrame === 'function' && _tapT0) {
+    requestAnimationFrame(function () { requestAnimationFrame(function () {
+      var ms = performance.now() - _tapT0;
+      window._ultimoTapLoaderMs = Math.round(ms);
+      if (ms > 400) {
+        var tasks = (window._longTasks || []).filter(function (lt) { return lt.fim >= _tapT0; })
+          .map(function (lt) { return Math.round(lt.dur) + 'ms ' + (lt.nome || ''); }).slice(-6);
+        if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms a pintar; longtasks:', tasks.join(' | '));
+        if (!window._tapLentoReportado && typeof window._captureMessage === 'function') {
+          window._tapLentoReportado = true;
+          try { window._captureMessage('tap-sem-feedback: loader levou ' + Math.round(ms) + 'ms · longtasks: ' + (tasks.join(' | ') || 'nenhuma registrada'), 'info'); } catch (e) {}
+        }
+      }
+    }); });
+  }
+  var _foiPro = false;
+  var _irPro = function () {
+    if (_foiPro) return; _foiPro = true;
+    window.location.hash = '#tournaments/' + tournamentId;
+  };
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(function () { requestAnimationFrame(_irPro); });
+    setTimeout(_irPro, 120);
   } else {
     _irPro();
   }

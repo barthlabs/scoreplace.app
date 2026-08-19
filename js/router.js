@@ -400,10 +400,19 @@ function initRouter() {
                 requestAnimationFrame(function () { requestAnimationFrame(_fecharTour); });
               }
             };
+            // 1.9.75 — CORRIDA rAF × timeout (com trava de uma vez): rAF não dispara em
+            // aba de fundo nem quando o compositor está ocupado — a tela ficava no
+            // loader até o teto de 6s. O timeout garante a pintura em ≤120ms.
+            var _pintouTorneio = false;
+            var _pintaUmaVez = function () {
+              if (_pintouTorneio) return; _pintouTorneio = true;
+              _pintaTorneio();
+            };
             if (typeof requestAnimationFrame === 'function') {
-              requestAnimationFrame(function () { requestAnimationFrame(_pintaTorneio); });
+              requestAnimationFrame(function () { requestAnimationFrame(_pintaUmaVez); });
+              setTimeout(_pintaUmaVez, 120);
             } else {
-              setTimeout(_pintaTorneio, 32);
+              setTimeout(_pintaUmaVez, 32);
             }
           } else {
             renderTournaments(viewContainer, cleanParam);
