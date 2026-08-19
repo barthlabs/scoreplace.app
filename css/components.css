@@ -2101,3 +2101,76 @@ html, body,
    dono: dica não aparece. O ganho de desenho não paga uma função que some.
    Quem quiser trazer de volta precisa antes fazer o sistema de dicas (js/hints.js) forçar
    o layout do alvo — `checkVisibility()` / rolar até ele — antes de medir. */
+
+/* ═══ Perfil em BLOCOS (v1.9.67, mock aprovado pelo dono 19/ago/2026) ═══
+   Cartões com acento de cor por tema (--pf-accent na borda esquerda), hero de
+   identidade sobre o gradiente do app, logos de plataforma e selo-bolinha de
+   verificado. As cores de TEXTO vêm sempre de token — a regra de contraste dos
+   dois temas vale aqui como em todo lugar. */
+.pf-hero {
+  border-radius: 18px;
+  padding: 16px 14px 12px;
+  margin: 0 0 12px;
+  background: var(--hero-bg);
+  color: var(--hero-text);
+}
+.pf-chip {
+  background: var(--hero-glass-bg);
+  color: var(--hero-text);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+}
+.pf-card {
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--pf-accent, var(--primary-color));
+  border-radius: 14px;
+  margin: 0 0 12px;
+  overflow: hidden;
+}
+.pf-card-h {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-bright);
+}
+.pf-card-tag {
+  margin-left: auto;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+}
+.pf-card-bd { padding: 12px 14px; }
+.pf-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+/* Selo "verificado": bolinha verde sólida com check branco — sólido é igual
+   nos dois temas (mesma regra do texto sobre botão de cor sólida). */
+.pf-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--success-color);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  flex-shrink: 0;
+  line-height: 1;
+  vertical-align: middle;
+}

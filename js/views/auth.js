@@ -4948,11 +4948,25 @@ async function simulateLoginSuccess(user) {
       // 🔴 Ao vivo: LIGADO por padrão — só o 'false' explícito desliga (quem nunca
       // mexeu no perfil não fica de fora do convite pra assistir).
       { id: 'profile-live-alerts', val: cu.liveAlerts !== false },
-      // v2.4.3: privacidade — ocultar e-mail/telefone (default OFF).
-      { id: 'profile-omit-email', val: cu.omitEmail === true },
-      { id: 'profile-omit-phone', val: cu.omitPhone === true }
+      // v1.9.67: "Divulgar" (invertido do omitX salvo) — ligado por padrão.
+      { id: 'profile-share-email', val: cu.omitEmail !== true },
+      { id: 'profile-share-phone', val: cu.omitPhone !== true }
     ].forEach(function(t) { var el = document.getElementById(t.id); if (el) el.checked = t.val; });
     window._profileLocations = Array.isArray(cu.preferredLocations) ? cu.preferredLocations.slice() : [];
+    // v1.9.67: chips informativos do hero (esportes, cidade, nascimento) — só exibição.
+    (function () {
+      var box = document.getElementById('profile-hero-chips');
+      if (!box) return;
+      var chips = [];
+      var em = { 'Beach Tennis': '🎾', 'Pickleball': '🏓', 'Tênis': '🎾', 'Tênis de Mesa': '🏓', 'Padel': '🎾', 'Vôlei de Praia': '🏐', 'Futevôlei': '⚽' };
+      var sp = Array.isArray(cu.preferredSports) ? cu.preferredSports
+        : (typeof cu.preferredSports === 'string' && cu.preferredSports.trim() ? cu.preferredSports.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean) : []);
+      sp.slice(0, 3).forEach(function (s) { chips.push((em[s] || '🏅') + ' ' + window._safeHtml(s)); });
+      if (cu.city) chips.push('📍 ' + window._safeHtml(cu.city));
+      var bd = (typeof window._isoToDisplayDate === 'function') ? window._isoToDisplayDate(cu.birthDate) : (cu.birthDate || '');
+      if (bd) chips.push('🎂 ' + window._safeHtml(bd));
+      box.innerHTML = chips.map(function (c) { return '<span class="pf-chip">' + c + '</span>'; }).join('');
+    })();
     var cepsEl = document.getElementById('profile-edit-ceps'); if (cepsEl) cepsEl.value = cu.preferredCeps || '';
     var _pv = cu.presenceVisibility || 'friends';
     var _until = Number(cu.presenceMuteUntil || 0);
@@ -6716,6 +6730,31 @@ function _propagatePhotoToTournaments(newPhotoURL) {
 
 // v0.17.87: exposto explicitamente em window pra _setLang poder rebuildar
 // o modal de perfil quando o usuário muda idioma com o perfil aberto.
+// ── Logos das plataformas (v1.9.67) — SVGs inline pros cards do perfil.
+// Aceita providerId do Firebase ('google.com', 'apple.com', 'password', 'phone')
+// e apelidos próprios ('email', 'whatsapp'). Sempre 14x14 branco (o fundo colorido
+// vem do .pf-logo que embrulha); o do Google é a marca multicolor sobre branco.
+window._platformLogoSvg = function (kind) {
+  var k = String(kind || '').toLowerCase();
+  if (k === 'google.com' || k === 'google') {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.2-2.2H12v4.1h6.5a5.6 5.6 0 0 1-2.4 3.7v3h3.9c2.3-2.1 3.5-5.2 3.5-8.6z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3a7.2 7.2 0 0 1-10.8-3.8H1.2v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6v-3H1.2a12 12 0 0 0 0 10.8l4.1-3.2z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8L20.1 3A12 12 0 0 0 1.2 6.6l4.1 3.2A7.2 7.2 0 0 1 12 4.8z"/></svg>';
+  }
+  if (k === 'apple.com' || k === 'apple') {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fff" aria-hidden="true"><path d="M16.7 12.9c0-2.4 2-3.6 2-3.7a4.5 4.5 0 0 0-3.5-1.9c-1.5-.2-2.9.9-3.6.9-.8 0-1.9-.9-3.2-.8A4.7 4.7 0 0 0 4.5 9.7c-1.7 2.9-.4 7.3 1.2 9.7.8 1.2 1.7 2.5 3 2.4 1.2 0 1.6-.8 3.1-.8s1.9.8 3.2.8 2.1-1.2 2.9-2.4c.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.5-1-2.5-3.8zM14.4 5.6c.7-.8 1.1-2 1-3.1-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.8-1.4z"/></svg>';
+  }
+  if (k === 'whatsapp') {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fff" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.7 14.9L2 22l5.3-1.4A10 10 0 1 0 12 2zm5 13.7c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1a13 13 0 0 1-5.8-5.1c-.7-1.1-1.1-2.3-.9-3 .1-.5.7-1.4 1.3-1.6.3-.1.7 0 .9.4l.9 1.9c.1.3 0 .6-.2.8l-.5.6c.6 1.2 1.8 2.4 3.1 3l.6-.6c.2-.2.5-.3.8-.2l1.9.9c.3.2.5.5.2.8z"/></svg>';
+  }
+  if (k === 'phone') {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fff" aria-hidden="true"><path d="M17 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-5 18.5a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zM17 17H7V5h10v12z"/></svg>';
+  }
+  if (k === 'password') {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fff" aria-hidden="true"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 1 0-4 0c0 1.1.9 2 2 2zm6-8h-1V7A5 5 0 0 0 7 7v2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 7a3 3 0 0 1 6 0v2H9V7z"/></svg>';
+  }
+  // 'email' e qualquer desconhecido: envelope
+  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="#fff" aria-hidden="true"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5z"/></svg>';
+};
+
 window.setupProfileModal = setupProfileModal;
 function setupProfileModal() {
   var _t = window._t || function(k) { return k; };
@@ -6731,25 +6770,30 @@ function setupProfileModal() {
     var modalHtml = '<div class="modal-overlay" id="modal-profile">' +
       '<div class="modal" style="overflow-y: auto; overflow-x: hidden; box-sizing: border-box;">' +
         '<div class="modal-body" style="padding: 1rem 1.25rem; overflow-x: hidden; max-width: 760px; margin: 0 auto; width: 100%; box-sizing: border-box;">' +
-          // Avatar row
-          // v1.0.23-beta: feedback do user — "esses ícones são ridículos.
-          // vamos usar as iniciais dos nomes invés dessa porcaria". Removido
-          // o picker de cartoons (notionists) e o overlay de pencil/edit. O
-          // avatar agora é sempre derivado do displayName (iniciais geradas
-          // automaticamente via dicebear /initials). Foto real do Google/
-          // Apple é preservada quando existe.
-          '<div style="display: flex; align-items: center; gap: 14px; margin-bottom: 0.5rem;">' +
-            '<div style="flex-shrink: 0; position: relative;" title="Clique para trocar a foto">' +
-              '<img id="profile-avatar" src="" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid var(--primary-color); object-fit: cover; display: none; cursor: pointer;" onclick="document.getElementById(\'profile-photo-input\').click()">' +
-              '<div id="profile-avatar-edit-icon" style="position:absolute;bottom:0;right:0;width:18px;height:18px;border-radius:50%;background:var(--primary-color);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.6rem;border:2px solid var(--bg-dark);" onclick="document.getElementById(\'profile-photo-input\').click()" title="Trocar foto">✏️</div>' +
-              '<input type="file" id="profile-photo-input" accept="image/*,.gif" style="display:none;" onchange="window._handleProfilePhotoUpload && window._handleProfilePhotoUpload(this)">' +
+          '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow:hidden;">' +
+          // ── HERO DE IDENTIDADE (v1.9.67) — avatar + nome sobre o gradiente do app.
+          // Mesmos ids/handlers de sempre (profile-avatar / profile-photo-input /
+          // profile-edit-name / profile-name-nudge); o rótulo QUEBRA linha (o antigo
+          // clipava "(que os outros usuários verão)"). Chips informativos são
+          // preenchidos por _populateProfileModalFields em #profile-hero-chips.
+          '<div class="pf-hero">' +
+            '<div style="display:flex;align-items:center;gap:14px;">' +
+              '<div style="flex-shrink:0;position:relative;" title="Clique para trocar a foto">' +
+                '<img id="profile-avatar" src="" style="width:64px;height:64px;border-radius:50%;border:3px solid var(--hero-glass-bg);object-fit:cover;display:none;cursor:pointer;" onclick="document.getElementById(\'profile-photo-input\').click()">' +
+                '<div id="profile-avatar-edit-icon" style="position:absolute;bottom:0;right:0;width:20px;height:20px;border-radius:50%;background:var(--primary-color);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.6rem;box-shadow:0 1px 4px rgba(0,0,0,0.4);" onclick="document.getElementById(\'profile-photo-input\').click()" title="Trocar foto">✏️</div>' +
+                '<input type="file" id="profile-photo-input" accept="image/*,.gif" style="display:none;" onchange="window._handleProfilePhotoUpload && window._handleProfilePhotoUpload(this)">' +
+              '</div>' +
+              '<div style="flex:1;min-width:0;">' +
+                '<label for="profile-edit-name" style="display:block;font-size:0.68rem;letter-spacing:0.4px;text-transform:uppercase;color:var(--hero-text-soft);font-weight:700;margin-bottom:3px;white-space:normal;">' + _t('profile.labelName') + '</label>' +
+                '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelName') + '" class="form-control" style="width:100%;box-sizing:border-box;background:var(--hero-glass-bg);border:1px solid var(--hero-glass-bg);color:var(--hero-text);font-weight:700;font-size:1.02rem;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
+                '<div id="profile-name-nudge" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;font-size:0.75rem;color:#fbbf24;line-height:1.4;"></div>' +
+              '</div>' +
             '</div>' +
-            '<div style="flex: 1; min-width: 0;">' +
-              '<label for="profile-edit-name" class="form-label" style="font-size: 0.75rem; margin-bottom: 2px;">' + _t('profile.labelName') + '</label>' +
-              '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelName') + '" class="form-control" style="width: 100%; box-sizing: border-box;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
-              '<div id="profile-name-nudge" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;font-size:0.75rem;color:#fbbf24;line-height:1.4;"></div>' +
-            '</div>' +
+            '<div id="profile-hero-chips" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;"></div>' +
           '</div>' +
+            '<div class="pf-card" style="--pf-accent:#30d158;">' +
+              '<div class="pf-card-h" style="background:rgba(48,209,88,0.08);">' + '💬 ' + _t('profile.blockContact') + '<span class="pf-card-tag">' + _t('profile.blockContactTag') + '</span>' + '</div>' +
+              '<div class="pf-card-bd">' +
           // v1.0.43-beta: display do email autenticado.
           // v1.7.9-beta: adicionado botão "Alterar" e campo de edição/adição.
           // Contas phone-only mostram o campo de adição de e-mail por padrão
@@ -6758,9 +6802,9 @@ function setupProfileModal() {
           '<div id="profile-email-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
               '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
-                '<span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;opacity:0.7;flex-shrink:0;">📧</span>' +
+                '<span class="pf-logo" style="background:#ea4335;">' + window._platformLogoSvg('email') + '</span>' +
                 '<span id="profile-email-text" style="font-family:var(--font-body);color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
-                '<span id="profile-email-check" title="E-mail verificado" style="display:none;color:#34d399;font-weight:800;flex-shrink:0;">✓</span>' +
+                '<span id="profile-email-check" title="E-mail verificado" class="pf-check" style="display:none;">✓</span>' +
               '</div>' +
               '<button type="button" onclick="window._profileShowEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
             '</div>' +
@@ -6778,6 +6822,40 @@ function setupProfileModal() {
               '<div id="profile-email-otp" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
             '</div>' +
           '</div>' +
+            // Telefone: País + Número
+            '<div class="form-group" style="margin-bottom: 6px;">' +
+              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
+              '<div style="display: flex; gap: 6px; align-items: center;">' +
+                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 124px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.45rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
+                  countryOpts +
+                '</select>' +
+                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
+                '<span id="profile-phone-check" title="Celular verificado" class="pf-check" style="display:none;">✓</span>' +
+              '</div>' +
+              // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
+              // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
+              // as duas (com confirmação). Sem isso, o número não vira válido.
+              '<div style="margin-top:6px;">' +
+                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
+                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
+                '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
+                '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
+              '</div>' +
+            '</div>' +
+            // ── Divulgar contato — pedido do dono (19/ago/2026): 1 toggle POR contato,
+            // "Divulgar" LIGADO por padrão (semântica invertida dos antigos omitPhone/
+            // omitEmail; populate/save fazem a inversão — o dado salvo continua omitX).
+            '<div style="margin-top:6px;">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-share-phone', label: 'Divulgar meu celular <button type="button" onclick="window._toggleFieldHint(event,\'hint-share-phone\')" title="Desligando, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '📢', checked: true, color: '#30d158' }) : '') +
+              '<span id="hint-share-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Desligando, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail. (O grupo de WhatsApp do torneio não expõe telefone de ninguém — quem entra vai por link de convite.)</span>' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-share-email', label: 'Divulgar meu e-mail <button type="button" onclick="window._toggleFieldHint(event,\'hint-share-email\')" title="Desligando, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '📢', checked: true, color: '#30d158' }) : '') +
+              '<span id="hint-share-email" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Desligando, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
+            '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pf-card" style="--pf-accent:#0a84ff;">' +
+              '<div class="pf-card-h" style="background:rgba(10,132,255,0.08);">' + '🔑 ' + _t('profile.blockAccess') + '<span class="pf-card-tag">' + _t('profile.blockAccessTag') + '</span>' + '</div>' +
+              '<div class="pf-card-bd">' +
           // ── Formas de entrar: provedores federados no MESMO uid ──
           // Firebase aceita N provedores federados por conta (providerData é array).
           // Vincular Google+Apple no mesmo uid é o que EVITA a conta duplicada —
@@ -6811,32 +6889,6 @@ function setupProfileModal() {
             '</div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Você receberá um link de verificação nesse e-mail. Clicando, ele será vinculado à sua conta.</span>' +
           '</div>' +
-          // v2.4.3: privacidade — ocultar e-mail(s) de outros usuários (default OFF).
-          '<div class="omit-toggle" style="margin:0 0 6px 0;">' +
-            (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-email', label: 'Ocultar seu(s) e-mail(s) <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-email\')" title="Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
-            '<span id="hint-omit-email" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém (nem amigos) vê seu e-mail dentro do app. Você e o sistema continuam usando normalmente.</span>' +
-          '</div>' +
-          '<form id="form-edit-profile" onsubmit="event.preventDefault(); saveUserProfile()" style="overflow: hidden;">' +
-            // Telefone: País + Número
-            '<div class="form-group" style="margin-bottom: 6px;">' +
-              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
-              '<div style="display: flex; gap: 6px; align-items: center;">' +
-                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 124px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.45rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
-                  countryOpts +
-                '</select>' +
-                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
-                '<span id="profile-phone-check" title="Celular verificado" style="display:none;color:#34d399;font-weight:800;flex-shrink:0;font-size:1.1rem;">✓</span>' +
-              '</div>' +
-              // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
-              // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
-              // as duas (com confirmação). Sem isso, o número não vira válido.
-              '<div style="margin-top:6px;">' +
-                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:#25d366;color:#0a1f12;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">📱 Verificar e vincular</button>' +
-                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
-                '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
-                '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
-              '</div>' +
-            '</div>' +
             // ── Celulares vinculados (linkedPhones[]) — espelha "E-mails vinculados".
             // Verifica posse por SMS/WhatsApp e grava em linkedPhones[]; o login por
             // qualquer um deles + senha cai nesta conta (server _uidByProfilePhone).
@@ -6859,14 +6911,6 @@ function setupProfileModal() {
                 '<div id="profile-link-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
             '</div>' +
-            // v2.4.3: privacidade — ocultar telefone de outros usuários (default OFF).
-            // Liga: também tira a pessoa do GRUPO automático de WhatsApp (grupo
-            // revela o número aos membros). Ela segue avisada por notificação 1:1
-            // do app + plataforma/e-mail — número fica privado.
-            '<div class="omit-toggle" style="margin:0 0 6px 0;">' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-omit-phone', label: 'Ocultar seu telefone <button type="button" onclick="window._toggleFieldHint(event,\'hint-omit-phone\')" title="Quando ligado, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail." aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;vertical-align:middle;">ⓘ</button>', icon: '🔒', checked: false, color: '#f59e0b' }) : '') +
-              '<span id="hint-omit-phone" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin-top:4px;">Quando ligado, ninguém vê seu telefone no app. Você continua sendo avisado por notificação no app e e-mail. (O grupo de WhatsApp do torneio não expõe telefone de ninguém — quem entra vai por link de convite.)</span>' +
-            '</div>' +
             // ── Senha (v2.6.x): link que expande os campos pra definir/trocar ──
             '<div style="margin:8px 0 12px;">' +
               '<button type="button" id="profile-change-pw-link" class="btn btn-ghost btn-micro" onclick="window._toggleChangePassword && window._toggleChangePassword()" style="text-decoration:underline;">🔒 Trocar senha</button>' +
@@ -6888,6 +6932,90 @@ function setupProfileModal() {
                 '<div id="profile-password-status" style="margin-top:8px;font-size:0.74rem;min-height:14px;"></div>' +
               '</div>' +
             '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pf-card" style="--pf-accent:#f59e0b;">' +
+              '<div class="pf-card-h" style="background:rgba(245,158,11,0.08);">' + '🔔 ' + _t('profile.blockNotif') + '</div>' +
+              '<div class="pf-card-bd">' +
+              '<div style="margin-top:6px;">' +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.receiveComms') + '</div>' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-todas', label: _t('profile.notifAll'), icon: '🟢', checked: true, color: '#22c55e', onchange: 'window._onNotifyToggle(\'todas\')' }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-importantes', label: _t('profile.notifImportant'), icon: '🟡', checked: true, color: '#f59e0b', onchange: 'window._onNotifyToggle(\'importantes\')' }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-fundamentais', label: _t('profile.notifFundamental'), icon: '🔴', checked: true, color: '#ef4444', onchange: 'window._onNotifyToggle(\'fundamentais\')' }) : '') +
+              '</div>' +
+              '<div style="margin-top:10px;">' +
+                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.notifChannels') + '</div>' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-platform', label: _t('profile.notifPlatform'), icon: '🔔', checked: true }) : '') +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-email', label: _t('profile.notifEmail'), icon: '✉️', checked: true, color: '#3b82f6' }) : '') +
+              '</div>' +
+              // v1.2.9: o WhatsApp deixou de ser CANAL DE NOTIFICAÇÃO (o número foi
+              // banido e o portfólio Meta morreu — nada é enviado por API). O que
+              // sobrou é o wa.me: alguém toca no botão e abre a conversa contigo.
+              // Por isso o toggle saiu de "Canais de notificação" e virou uma
+              // preferência de CONTATO — pra quem não quer ser chamado no WhatsApp.
+              '<div style="margin-top:10px;">' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.contactWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
+                '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">' + _t('profile.contactWhatsAppHint') + '</span>' +
+              '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pf-card" style="--pf-accent:#bf5af2;">' +
+              '<div class="pf-card-h" style="background:rgba(191,90,242,0.08);">' + '🛡️ ' + _t('profile.blockPrivacy') + '</div>' +
+              '<div class="pf-card-bd">' +
+              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-accept-friends', label: _t('profile.acceptFriends'), icon: '🤝', checked: true, color: '#3b82f6' }) : '') +
+            // ─── v1.7.51: quem vê MINHAS estatísticas ─────────────────────────────
+            // Mesmo padrão de pills da presença acima (é a mesma pergunta: "quem me vê?").
+            // Default 'public' — decisão do dono: não expõe nada novo (os jogos já são
+            // legíveis em results/casualMatches) e mantém a ficha funcionando pra quem
+            // nunca abrir esta tela. Quem fecha, aparece "Estatísticas privadas" na ficha.
+            '<div style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📊 Minhas estatísticas</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver seu desempenho (vitórias, sets, games) e suas conquistas na sua ficha de jogador.</p>' +
+              '<div id="stats-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+                '<button type="button" data-sv="public" onclick="window._setStatsVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-sv="friends" onclick="window._setStatsVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
+                '<button type="button" data-sv="private" onclick="window._setStatsVisibility(\'private\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+              '</div>' +
+              '<p style="font-size:0.68rem;color:var(--text-muted);margin:6px 0 0 0;">Os placares dos seus jogos continuam aparecendo na chave e na classificação do torneio — isso é do torneio, não seu. O que esta escolha fecha é a grade de desempenho da sua ficha.</p>' +
+              '<input type="hidden" id="profile-stats-visibility" value="public">' +
+            '</div>' +
+            // Presença — visibilidade + silenciar
+            '<div class="form-group" style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📍 Presença no local</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver quando você registra que está num local jogando.</p>' +
+              '<div id="presence-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;margin-bottom:10px;">' +
+                // v1.0.5-beta: pills nascem com style "desativado" inline (idem #2 fix).
+                // _applyPresenceVisibilityUI sobrescreve o ativo com bg/cor preenchida.
+                '<button type="button" data-pv="friends" onclick="window._setPresenceVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
+                '<button type="button" data-pv="public" onclick="window._setPresenceVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-pv="off" onclick="window._setPresenceVisibility(\'off\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+              '</div>' +
+              '<div style="margin-top:4px;margin-bottom:6px;">' +
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-auto-checkin', label: 'Auto check-in ao chegar no local (usa GPS)', icon: '📡', checked: false, color: '#10b981', desc: 'Se você estiver em um local preferido, registra presença automaticamente. Senão, o app sugere.' }) : '') +
+                // 1.9.36 — o desligamento que o dono pediu pra função "Ao vivo agora":
+                // desligado aqui, a pessoa PARA de receber o convite pra assistir. A
+                // seção em si continua existindo pra quem quiser olhar — o que o toggle
+                // controla é o AVISO, que é o que incomoda quem não quer.
+                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-live-alerts', label: 'Avisar quando um placar ao vivo começar', icon: '🔴', checked: true, color: '#ef4444', desc: 'Você recebe um convite para assistir quando um jogo do seu torneio começa a ser marcado ao vivo.' }) : '') +
+              '</div>' +
+              '<div id="presence-mute-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;">' +
+                '<div style="flex:1 1 100%;">' +
+                  (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-mute-toggle', label: 'Silenciar presença temporariamente', icon: '🔕', checked: false, color: '#f59e0b', onchange: 'window._onPresenceMuteToggle(this.checked)' }) : '') +
+                '</div>' +
+                '<div id="profile-presence-mute-days-wrap" style="display:none;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-muted);">' +
+                  '<span>por</span>' +
+                  '<input type="number" id="profile-presence-mute-days" min="1" max="365" value="7" style="width:64px;padding:6px 8px;border-radius:8px;background:var(--bg-darker);border:1px solid var(--border-color);color:var(--text-bright);font-size:0.82rem;text-align:center;">' +
+                  '<span>dias</span>' +
+                '</div>' +
+              '</div>' +
+              '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
+              '<input type="hidden" id="profile-presence-visibility" value="friends">' +
+            '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pf-card" style="--pf-accent:#14b8a6;">' +
+              '<div class="pf-card-h" style="background:rgba(20,184,166,0.08);">' + '🎾 ' + _t('profile.blockGame') + '<span class="pf-card-tag">' + _t('profile.blockGameTag') + '</span>' + '</div>' +
+              '<div class="pf-card-bd">' +
             // Row: Sexo + Nascimento (2 colunas)
             '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">' +
               '<div class="form-group" style="margin: 0;">' +
@@ -6926,6 +7054,30 @@ function setupProfileModal() {
               '<input type="text" inputmode="numeric" id="profile-edit-hrmax" class="form-control" maxlength="3" style="width: 100%; box-sizing: border-box;" placeholder="Ex: 185 — vazio usa 220 − idade" autocomplete="off">' +
               '<div style="font-size:0.62rem;color:var(--text-muted);margin-top:3px;">Calibra as faixas de batimento no relógio. Use o valor do seu app de treino ou de um teste de esforço.</div>' +
             '</div>' +
+            // v1.8: o card "Seu nível (letzplay)" saiu do perfil e passou pras
+            // Estatísticas do jogador (📊). Aqui só ficam @ + consentimento (config).
+            // Esportes Preferidos — pill buttons toggleáveis (v0.15.19).
+            // v1.3.6-beta: ao selecionar uma modalidade, abre mini-picker de
+            // habilidade (A/B/C/D/FUN) específico daquela modalidade.
+            // v1.3.7-beta: lista de 5 → 7 modalidades (alinhada com app
+            // canônico — venues.js SPORTS, _sportScoringDefaults). Layout
+            // compacto: cada modalidade ativa fica numa linha minimalista
+            // sem card de fundo, usando muito menos espaço vertical.
+            '<div class="form-group" style="margin-bottom: 10px;">' +
+              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelSports') + '</label>' +
+              '<div id="profile-sports-pills" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">' +
+                ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'].map(function(s) {
+                  var safeS = String(s).replace(/'/g, "\\'");
+                  return '<button type="button" data-sport="' + window._safeHtml(s) + '" onclick="window._toggleProfileSport(\'' + safeS + '\')" class="btn btn-sm" style="font-size:0.72rem;padding:6px 12px;border-radius:999px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + window._safeHtml(s) + '</button>';
+                }).join('') +
+              '</div>' +
+              '<input type="hidden" id="profile-edit-sports" value="">' +
+              '<span style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.6; margin-top: 4px; display: block;">Selecione as modalidades que você joga. Sua habilidade abrirá pra cada uma.</span>' +
+              // Skill por modalidade — renderizado dinamicamente conforme
+              // modalidades são selecionadas. Vazio quando não há modalidade ativa.
+              '<div id="profile-skill-by-sport" style="margin-top:8px;display:flex;flex-direction:column;gap:4px;"></div>' +
+              '<input type="hidden" id="profile-edit-skill-by-sport" value="">' +
+            '</div>' +
             // Conta letzplay: handle + consentimento (pré-requisito do import do
             // histórico). Campo aditivo/opcional; a LEITURA dos dados (extensão do
             // organizador) é fase à parte — aqui só coletamos handle + autorização.
@@ -6951,32 +7103,37 @@ function setupProfileModal() {
                 '💡 Você também importa pelas suas <b style="color:var(--text-bright,#fff);">📊 Estatísticas</b> na tela inicial.' +
               '</div>' +
             '</div>' +
-            // v1.8: o card "Seu nível (letzplay)" saiu do perfil e passou pras
-            // Estatísticas do jogador (📊). Aqui só ficam @ + consentimento (config).
-            // Esportes Preferidos — pill buttons toggleáveis (v0.15.19).
-            // v1.3.6-beta: ao selecionar uma modalidade, abre mini-picker de
-            // habilidade (A/B/C/D/FUN) específico daquela modalidade.
-            // v1.3.7-beta: lista de 5 → 7 modalidades (alinhada com app
-            // canônico — venues.js SPORTS, _sportScoringDefaults). Layout
-            // compacto: cada modalidade ativa fica numa linha minimalista
-            // sem card de fundo, usando muito menos espaço vertical.
-            '<div class="form-group" style="margin-bottom: 10px;">' +
-              '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelSports') + '</label>' +
-              '<div id="profile-sports-pills" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">' +
-                ['Beach Tennis', 'Pickleball', 'Tênis', 'Tênis de Mesa', 'Padel', 'Vôlei de Praia', 'Futevôlei'].map(function(s) {
-                  var safeS = String(s).replace(/'/g, "\\'");
-                  return '<button type="button" data-sport="' + window._safeHtml(s) + '" onclick="window._toggleProfileSport(\'' + safeS + '\')" class="btn btn-sm" style="font-size:0.72rem;padding:6px 12px;border-radius:999px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + window._safeHtml(s) + '</button>';
-                }).join('') +
+            // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
+            // de descoberta: cadastrar onde joga vem antes de configurar presença).
+            // Locais de preferência (mapa)
+            '<div class="form-group" style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelLocations') + '</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.locationsDesc') + '</p>' +
+              '<div style="position:relative;display:flex;gap:6px;margin-bottom:8px;">' +
+                '<input type="text" id="profile-location-search" class="form-control" placeholder="' + _t('profile.searchLocation') + '" style="flex:1;box-sizing:border-box;font-size:0.8rem;" autocomplete="off">' +
+                '<button type="button" id="profile-locate-btn" onclick="window._profileLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>' +
+                '<div id="profile-location-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:4px;"></div>' +
               '</div>' +
-              '<input type="hidden" id="profile-edit-sports" value="">' +
-              '<span style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.6; margin-top: 4px; display: block;">Selecione as modalidades que você joga. Sua habilidade abrirá pra cada uma.</span>' +
-              // Skill por modalidade — renderizado dinamicamente conforme
-              // modalidades são selecionadas. Vazio quando não há modalidade ativa.
-              '<div id="profile-skill-by-sport" style="margin-top:8px;display:flex;flex-direction:column;gap:4px;"></div>' +
-              '<input type="hidden" id="profile-edit-skill-by-sport" value="">' +
+              '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
+              '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
+              '<input type="hidden" id="profile-edit-ceps" value="">' +
+            '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pf-card" style="--pf-accent:#98989d;">' +
+              '<div class="pf-card-h" style="background:rgba(152,152,157,0.10);">' + '🎨 ' + _t('profile.blockLook') + '</div>' +
+              '<div class="pf-card-bd">' +
+            // Theme — exclusive buttons
+            '<div class="form-group" style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelAppearance') + '</label>' +
+              '<div id="theme-btn-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+                // v1.0.5-beta: idem fix #2 — pills nascem desativadas, _applyProfileThemeUI ativa o atual.
+                // v2.6.27: só 2 temas — Noturno e Claro.
+                '<button type="button" data-theme-val="dark" onclick="window._setProfileTheme(\'dark\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeNight') + '</button>' +
+                '<button type="button" data-theme-val="light" onclick="window._setProfileTheme(\'light\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeLight') + '</button>' +
+              '</div>' +
             '</div>' +
             // v2.1.91: Tamanho da interface (escala global, proporcional + ajustável)
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
             '<div class="form-group" style="margin-bottom: 1rem;">' +
               '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">🔎 Tamanho da interface</label>' +
               '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Ajusta textos e botões em todo o app. Ele já se adapta ao seu aparelho — aqui você afina do seu jeito. (O zoom do placar ao vivo continua separado.)</p>' +
@@ -6994,110 +7151,6 @@ function setupProfileModal() {
                 '<span id="profile-ui-scale-val" style="font-size:0.78rem;font-weight:800;color:var(--primary-color);min-width:44px;text-align:right;">100%</span>' +
               '</div>' +
               '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(window._UI_SCALE_BASE);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
-            '</div>' +
-            // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
-            // de descoberta: cadastrar onde joga vem antes de configurar presença).
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            // Locais de preferência (mapa)
-            '<div class="form-group" style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelLocations') + '</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.locationsDesc') + '</p>' +
-              '<div style="position:relative;display:flex;gap:6px;margin-bottom:8px;">' +
-                '<input type="text" id="profile-location-search" class="form-control" placeholder="' + _t('profile.searchLocation') + '" style="flex:1;box-sizing:border-box;font-size:0.8rem;" autocomplete="off">' +
-                '<button type="button" id="profile-locate-btn" onclick="window._profileLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>' +
-                '<div id="profile-location-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:4px;"></div>' +
-              '</div>' +
-              '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
-              '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
-              '<input type="hidden" id="profile-edit-ceps" value="">' +
-            '</div>' +
-            // Presença — visibilidade + silenciar
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            '<div class="form-group" style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📍 Presença no local</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver quando você registra que está num local jogando.</p>' +
-              '<div id="presence-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;margin-bottom:10px;">' +
-                // v1.0.5-beta: pills nascem com style "desativado" inline (idem #2 fix).
-                // _applyPresenceVisibilityUI sobrescreve o ativo com bg/cor preenchida.
-                '<button type="button" data-pv="friends" onclick="window._setPresenceVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
-                '<button type="button" data-pv="public" onclick="window._setPresenceVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
-                '<button type="button" data-pv="off" onclick="window._setPresenceVisibility(\'off\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
-              '</div>' +
-              '<div style="margin-top:4px;margin-bottom:6px;">' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-auto-checkin', label: 'Auto check-in ao chegar no local (usa GPS)', icon: '📡', checked: false, color: '#10b981', desc: 'Se você estiver em um local preferido, registra presença automaticamente. Senão, o app sugere.' }) : '') +
-                // 1.9.36 — o desligamento que o dono pediu pra função "Ao vivo agora":
-                // desligado aqui, a pessoa PARA de receber o convite pra assistir. A
-                // seção em si continua existindo pra quem quiser olhar — o que o toggle
-                // controla é o AVISO, que é o que incomoda quem não quer.
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-live-alerts', label: 'Avisar quando um placar ao vivo começar', icon: '🔴', checked: true, color: '#ef4444', desc: 'Você recebe um convite para assistir quando um jogo do seu torneio começa a ser marcado ao vivo.' }) : '') +
-              '</div>' +
-              '<div id="presence-mute-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;">' +
-                '<div style="flex:1 1 100%;">' +
-                  (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-presence-mute-toggle', label: 'Silenciar presença temporariamente', icon: '🔕', checked: false, color: '#f59e0b', onchange: 'window._onPresenceMuteToggle(this.checked)' }) : '') +
-                '</div>' +
-                '<div id="profile-presence-mute-days-wrap" style="display:none;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-muted);">' +
-                  '<span>por</span>' +
-                  '<input type="number" id="profile-presence-mute-days" min="1" max="365" value="7" style="width:64px;padding:6px 8px;border-radius:8px;background:var(--bg-darker);border:1px solid var(--border-color);color:var(--text-bright);font-size:0.82rem;text-align:center;">' +
-                  '<span>dias</span>' +
-                '</div>' +
-              '</div>' +
-              '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
-              '<input type="hidden" id="profile-presence-visibility" value="friends">' +
-            '</div>' +
-            // ─── v1.7.51: quem vê MINHAS estatísticas ─────────────────────────────
-            // Mesmo padrão de pills da presença acima (é a mesma pergunta: "quem me vê?").
-            // Default 'public' — decisão do dono: não expõe nada novo (os jogos já são
-            // legíveis em results/casualMatches) e mantém a ficha funcionando pra quem
-            // nunca abrir esta tela. Quem fecha, aparece "Estatísticas privadas" na ficha.
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            '<div style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📊 Minhas estatísticas</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem pode ver seu desempenho (vitórias, sets, games) e suas conquistas na sua ficha de jogador.</p>' +
-              '<div id="stats-visibility-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
-                '<button type="button" data-sv="public" onclick="window._setStatsVisibility(\'public\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
-                '<button type="button" data-sv="friends" onclick="window._setStatsVisibility(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
-                '<button type="button" data-sv="private" onclick="window._setStatsVisibility(\'private\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
-              '</div>' +
-              '<p style="font-size:0.68rem;color:var(--text-muted);margin:6px 0 0 0;">Os placares dos seus jogos continuam aparecendo na chave e na classificação do torneio — isso é do torneio, não seu. O que esta escolha fecha é a grade de desempenho da sua ficha.</p>' +
-              '<input type="hidden" id="profile-stats-visibility" value="public">' +
-            '</div>' +
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            // Social toggle + notification filters
-            '<div style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.8rem;">' + _t('profile.socialCommsTitle') + '</label>' +
-              '<p style="font-size: 0.75rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.socialCommsDesc') + '</p>' +
-              (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-accept-friends', label: _t('profile.acceptFriends'), icon: '🤝', checked: true, color: '#3b82f6' }) : '') +
-              '<div style="margin-top:6px;">' +
-                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.receiveComms') + '</div>' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-todas', label: _t('profile.notifAll'), icon: '🟢', checked: true, color: '#22c55e', onchange: 'window._onNotifyToggle(\'todas\')' }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-importantes', label: _t('profile.notifImportant'), icon: '🟡', checked: true, color: '#f59e0b', onchange: 'window._onNotifyToggle(\'importantes\')' }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-filter-fundamentais', label: _t('profile.notifFundamental'), icon: '🔴', checked: true, color: '#ef4444', onchange: 'window._onNotifyToggle(\'fundamentais\')' }) : '') +
-              '</div>' +
-              '<div style="margin-top:10px;">' +
-                '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + _t('profile.notifChannels') + '</div>' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-platform', label: _t('profile.notifPlatform'), icon: '🔔', checked: true }) : '') +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-email', label: _t('profile.notifEmail'), icon: '✉️', checked: true, color: '#3b82f6' }) : '') +
-              '</div>' +
-              // v1.2.9: o WhatsApp deixou de ser CANAL DE NOTIFICAÇÃO (o número foi
-              // banido e o portfólio Meta morreu — nada é enviado por API). O que
-              // sobrou é o wa.me: alguém toca no botão e abre a conversa contigo.
-              // Por isso o toggle saiu de "Canais de notificação" e virou uma
-              // preferência de CONTATO — pra quem não quer ser chamado no WhatsApp.
-              '<div style="margin-top:10px;">' +
-                (window._toggleSwitch ? window._toggleSwitch({ id: 'profile-notify-whatsapp', label: _t('profile.contactWhatsApp'), icon: '💬', checked: false, color: '#25d366' }) : '') +
-                '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:block;margin-top:4px;">' + _t('profile.contactWhatsAppHint') + '</span>' +
-              '</div>' +
-            '</div>' +
-            '<div style="height: 1px; background: var(--border-color); margin: 1rem 0;"></div>' +
-            // Theme — exclusive buttons
-            '<div class="form-group" style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelAppearance') + '</label>' +
-              '<div id="theme-btn-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
-                // v1.0.5-beta: idem fix #2 — pills nascem desativadas, _applyProfileThemeUI ativa o atual.
-                // v2.6.27: só 2 temas — Noturno e Claro.
-                '<button type="button" data-theme-val="dark" onclick="window._setProfileTheme(\'dark\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeNight') + '</button>' +
-                '<button type="button" data-theme-val="light" onclick="window._setProfileTheme(\'light\')" class="btn btn-sm" style="flex:1;font-size:0.78rem;padding:9px 4px;border-radius:10px;transition:all 0.2s;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">' + _t('profile.themeLight') + '</button>' +
-              '</div>' +
             '</div>' +
             // Vibração (haptic) — ligado por padrão. Fonte de verdade é o
             // localStorage 'scoreplace_haptics' (lido por window._hapticsMuted).
@@ -7130,12 +7183,14 @@ function setupProfileModal() {
                 '</div>' +
               '</div>' +
             '</div>' +
-            // Meus locais — conta separada do perfil de jogador. Acesso via
-            // CTA "Cadastrar meu local" em #place ou via hash #my-venues direto.
-            // Buttons
-            /* Salvar/Sair buttons moved to sticky header */ '' +
-            '<div style="text-align: center; padding: 0.5rem 0 0.5rem;">' +
-              '<button type="button" class="btn btn-ghost btn-micro" onclick="window._confirmDeleteAccount()" style="text-decoration:underline;">' + _t('profile.deleteAccountPerm') + '</button>' +
+              '</div>' +
+            '</div>' +
+            // ── Zona de risco — exclusão isolada no fim, em card vermelho ──
+            '<div class="pf-card" style="--pf-accent:var(--danger-color);">' +
+              '<div class="pf-card-h" style="background:rgba(255,69,58,0.08);">' + '⚠️ ' + _t('profile.blockDanger') + '</div>' +
+              '<div class="pf-card-bd" style="text-align:center;">' +
+                '<button type="button" class="btn btn-ghost btn-micro" onclick="window._confirmDeleteAccount()" style="text-decoration:underline;">' + _t('profile.deleteAccountPerm') + '</button>' +
+              '</div>' +
             '</div>' +
           '</form>' +
         '</div>' +
@@ -8598,10 +8653,13 @@ window._profileHydrateNameConflict = function () {
       var html = Object.keys(have).map(function (pid) {
         var m = _PROV_META[pid] || { label: pid, bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.15)', fg: 'var(--text-bright)' };
         var sub = have[pid].email || have[pid].phoneNumber || '';
+        // v1.9.67: logo oficial à esquerda + selo-bolinha verde à direita (mock aprovado).
+        var logoBg = pid === 'google.com' ? '#fff' : (pid === 'apple.com' ? '#000' : (pid === 'phone' ? '#30d158' : '#5856d6'));
         return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:' + m.bg + ';border:1px solid ' + m.bd + ';">' +
-          '<span style="color:#34d399;font-weight:800;flex-shrink:0;">✅</span>' +
+          '<span class="pf-logo" style="background:' + logoBg + ';">' + window._platformLogoSvg(pid) + '</span>' +
           '<span style="font-weight:700;font-size:0.82rem;color:' + m.fg + ';flex-shrink:0;">' + window._safeHtml(m.label) + '</span>' +
           (sub ? '<span style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">' + window._safeHtml(sub) + '</span>' : '') +
+          '<span class="pf-check" title="Vinculado" style="margin-left:auto;">✓</span>' +
         '</div>';
       }).join('');
 
@@ -9095,9 +9153,9 @@ window._profileHydrateNameConflict = function () {
       var presenceAutoCheckin = _chk('profile-presence-auto-checkin', false);
       var liveAlerts = _chk('profile-live-alerts', true);
       var hintsEnabled = _chk('profile-hints-enabled', true);
-      // v2.4.3: privacidade de contato (default OFF).
-      var omitEmail = _chk('profile-omit-email', false);
-      var omitPhone = _chk('profile-omit-phone', false);
+      // v1.9.67: o toggle é "Divulgar" (default ON); o dado salvo segue omitX.
+      var omitEmail = !_chk('profile-share-email', true);
+      var omitPhone = !_chk('profile-share-phone', true);
 
       // v1.7.9-beta: auto-enable notifyWhatsApp quando celular está sendo adicionado
       // e auto-enable notifyEmail quando e-mail está sendo adicionado ao perfil.
