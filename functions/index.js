@@ -1476,6 +1476,23 @@ exports.sweepAbandonedTournaments = onSchedule(
   async () => { await _runAbandonSweep(admin.firestore(), Date.now()); }
 );
 
+// ─── Cobrança DIÁRIA de celular no perfil (Confra) ───────────────────────────
+// Pedido do dono (19/ago/2026): reenviar o pedido de Whats no perfil todo dia a
+// quem AINDA não cadastrou; quem cadastrou nunca mais recebe; e o consolidado pro
+// dono mostra, POR LEVA, quem recebeu e quantos atenderam. A leva fica GRAVADA em
+// phoneNudgeWaves/{dia}__{torneio} — foi a ausência disso que tornou "quantos
+// atenderam?" incalculável no envio manual do dia 18. A regra mora em
+// phone-nudge-core.js (puro, testado); o I/O em phone-nudge-run.js.
+// ⚠️ NASCE EM ENSAIO: só o consolidado sai até appConfig/phoneNudge.enabled=true.
+// Ver [[project_cobranca_de_celular_no_perfil]].
+// Deploy:  firebase deploy --only functions:nudgeMissingPhones
+const { runPhoneNudge: _runPhoneNudge } = require("./phone-nudge-run");
+exports.nudgeMissingPhones = onSchedule(
+  { schedule: "every day 09:30", timeZone: "America/Sao_Paulo", region: "us-central1",
+    timeoutSeconds: 540, memory: "256MiB" },
+  async () => { await _runPhoneNudge(admin.firestore(), Date.now()); }
+);
+
 // ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
 // v1.0.20-beta: substituí firebase.auth().sendSignInLinkToEmail() (que envia
 // email feio do firebaseapp.com sem botão estilizado, parando no spam) por

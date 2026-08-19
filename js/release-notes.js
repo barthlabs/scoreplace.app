@@ -19,6 +19,10 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 1.9.66 NÃO ganhou item, e é DECISÃO. Ela é 100% servidor: a rotina diária que
+    // cobra o celular no perfil de quem está inscrito na Confra (CF nudgeMissingPhones,
+    // nasce em ensaio). Zero mudança de tela — nada a anunciar pra quem joga. A trava
+    // (check-release-notes) pega OMISSÃO e não sabe julgar isso; a justificativa fica aqui.
     // ⚠️ 1.8.27 NÃO ganhou item nesta nota, e isso é DECISÃO, não esquecimento. Conferido
     // no diff: em js/, css/ e index.html ela mexeu SÓ em cache-buster, no
     // `SCOREPLACE_VERSION` e no snapshot do prerender — zero comportamento novo (o commit

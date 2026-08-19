@@ -1012,6 +1012,10 @@ const SUITES = [
   // a marca — o dono viu impresso e chamou de ridiculo. Trava o selo OFICIAL (imagem, com
   // fallback pro texto) e que a Play so entra quando a ficha dela sair do 404.
   'tests/convite-usa-selo-oficial-da-loja.test.js',
+  // Cobrança DIÁRIA de celular no perfil (Confra): quem tem celular NUNCA recebe, lápide
+  // resolve pra conta viva, a LEVA fica gravada (sem isso "quantos atenderam" é
+  // incalculável — foi o buraco do envio manual de 18/ago) e a rotina NASCE em ensaio.
+  'functions/test-phone-nudge-core.js',
 ];
 
 let failed = [];
