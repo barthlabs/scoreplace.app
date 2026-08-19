@@ -330,11 +330,14 @@ if (codPools && codCont) {
   ok(/var _btn = tId\s*\n?\s*\?/.test(dash),
     'sem id do torneio NÃO desenha botão — link pra lugar nenhum é pior que nenhum link');
   // os DOIS pontos de uso passam o id
-  ok(/_grupoHeadHtml\(g\.group, g\.tName, g\.color, '', false, g\.tId\)/.test(dash),
+  // v1.9.64: o 4º argumento (atributos) deixou de ser literal — passou a carregar o
+  // `data-sp-extra` da prévia da linha fechada. O INVARIANTE aqui é o ÚLTIMO argumento:
+  // o id do torneio, sem o qual o botão "Ir para o torneio" não é desenhado.
+  ok(/_grupoHeadHtml\(g\.group, g\.tName, g\.color, [^,]+, false, g\.tId\)/.test(dash),
     '"Seus últimos resultados" (agrupado) passa o id');
   ok(/u\.tName, u\.color, '', true, u\.tId/.test(dash),
     '"Seus últimos resultados" (avulso) passa o id');
-  ok(/_grupoHeadHtml\(g\.grupo, g\.tName, '#fbbf24', 'data-nov-head="1"', false, g\.tId\)/.test(dash),
+  ok(/_grupoHeadHtml\(g\.grupo, g\.tName, '#fbbf24', 'data-nov-head="1"[^,]*, false, g\.tId\)/.test(dash),
     '"Novidades no seu torneio" passa o id');
 })();
 

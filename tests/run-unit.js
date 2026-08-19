@@ -338,6 +338,11 @@ const SUITES = [
   // à vista e os anteriores somem por CSS, igual às Novidades; havendo pendência, quem
   // aparece é ela (é a que pede ação).
   'tests/ultimos-resultados-mostra-o-ultimo.test.js',
+  // 📐 As duas seções FECHADAS preenchem a LINHA: a grade abre 2, 3 ou 4 colunas em tela
+  // larga e a prévia mostrava 1 card só, deixando o buraco do print do dono. A prévia agora
+  // vai até o nº de colunas MEDIDO (nada de breakpoint chutado) e o convite conta o que
+  // REALMENTE sobrou — botão que promete contagem errada é pior que o buraco.
+  'tests/previa-fechada-preenche-a-linha.test.js',
   'tests/round-display-no-r0.test.js',
   'tests/result-approval-uid.test.js',
   'tests/tiebreak-set-score.test.js',

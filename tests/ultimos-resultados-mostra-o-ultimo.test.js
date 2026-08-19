@@ -224,8 +224,13 @@ ok(contar(UM_SO, 'data-mr-card="1"') === 1,
 // ═══════════════════════════════════════════════════════════════════════════
 ok(SO_CONFIRMADOS.indexOf('#meus-resultados-body > *:not([data-mr-first]){display:none !important;}') !== -1,
   'E1 — fechada, todo bloco que não é o primeiro fica escondido');
-ok(SO_CONFIRMADOS.indexOf('[data-mr-first] [data-mr-card] ~ *{display:none !important;}') !== -1,
-  'E2 — dentro do bloco à vista, some tudo DEPOIS do primeiro card (inclusive cabeçalho de grupo órfão)');
+// v1.9.64: o corte deixou de ser POSICIONAL (`[data-mr-card] ~ *`) e virou o atributo
+// `data-sp-extra`. Motivo: quantos cards cabem na linha só se sabe MEDINDO a tela, e um
+// seletor posicional não tem como ser afrouxado depois. O INVARIANTE é o mesmo — fechada,
+// some tudo que não entra na prévia, cabeçalho de grupo órfão incluído (quem marca é
+// `_spCard`/`_spFull`, que só deixam passar o 1º card e o cabeçalho ANTES dele).
+ok(SO_CONFIRMADOS.indexOf('[data-mr-first] [data-sp-extra]{display:none !important;}') !== -1,
+  'E2 — dentro do bloco à vista, some tudo que não entra na prévia (marcado com data-sp-extra)');
 // ⚠️ E2b existe por um defeito MEDIDO no navegador, não por gosto: os cards dos resultados
 // confirmados trazem `display:flex` INLINE, que vence a folha de estilo. Sem `!important` o
 // seletor casava e os três cards continuavam à vista — este arquivo passava verde com a
@@ -287,8 +292,12 @@ ok(/id="mr-toggle-tag"[^>]*color:#7dd3fc/.test(ABERTA),
     'G2 — o alternador escreve o atributo data-mr-collapsed');
   ok(!/body\.style\.display/.test(corpo),
     'G3 — o alternador NUNCA volta a esconder o corpo inteiro (era o bug do relato)');
-  ok(corpo.indexOf('meus-resultados-hint') !== -1,
-    'G4 — o alternador atualiza o texto do convite');
+  // v1.9.64: o alternador não escreve mais a contagem à mão — delega pra
+  // `_spSyncCollapsePreview`, que primeiro MEDE quantos cards cabem na linha. Duas contas
+  // para o mesmo número era o caminho garantido pro botão prometer uma coisa e a tela
+  // mostrar outra (o pedido do dono era justamente "o botão ajustado de acordo").
+  ok(corpo.indexOf('_spSyncCollapsePreview()') !== -1,
+    'G4 — o alternador manda o convite ser reescrito pela FONTE ÚNICA (que mede a linha)');
 })();
 (function () {
   // O auto-expand da pendência (roda no load quando há ação pra mim) tem que falar a

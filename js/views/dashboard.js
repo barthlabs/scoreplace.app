@@ -1629,6 +1629,35 @@ function renderDashboard(container) {
         'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:4px 12px;line-height:1.2;">' +
         texto + '</span></p>';
     }
+    // v1.9.64 (pedido do dono, com print): "quando a largura da tela permitir, podemos
+    // colocar 2 cards de jogo ou ate 3 na sessao novidades e seus ultimos resultados, em
+    // vez de deixar o buraco ali. e o botao 'ver os X jogos...' ajustado de acordo."
+    // A contagem do convite passou a ser CALCULADA depois da medicao (o build nao sabe
+    // quantas colunas cabem), entao o texto virou funcao — e com singular de verdade: a
+    // contagem existe pra dizer a verdade, e "ver os 1 jogos anteriores" (o que saia com
+    // 2 cards) a quebrava. Exposta em window porque `_spSyncCollapsePreview` reescreve o
+    // mesmo texto em runtime e as duas nao podem divergir — FONTE UNICA.
+    function _spVerMaisTexto(n, comJogos) {
+      if (n === 1) return comJogos ? 'ver o jogo anterior' : 'ver o anterior';
+      return 'ver os ' + n + (comJogos ? ' jogos' : '') + ' anteriores';
+    }
+    window._spVerMaisTexto = _spVerMaisTexto;
+
+    // ── PREVIA DA LINHA FECHADA — quem NAO entra leva `data-sp-extra` ──────────
+    // Fechadas, as duas secoes mostravam UM card so, e numa tela larga (a grade e
+    // `auto-fill minmax(280px,1fr)`, que abre 2, 3 ou 4 colunas) sobrava o buraco do
+    // print. A regra agora e "preenche a linha": a previa vai ate o numero de COLUNAS
+    // que a tela abriu — medido em `_spSyncCollapsePreview`, que reabre os que couberem.
+    // O que nasce daqui e o estado de 1 COLUNA (identico ao de antes): e o 1o paint e o
+    // fallback se a medicao falhar — errar mostrando de menos, nunca de mais.
+    // ⚠️ `_spFull` e pros elementos de LINHA INTEIRA (cabecalho de grupo, `grid-column:1/-1`):
+    // antes do 1o card ele entra (contextualiza o card a vista); depois dele, nao — e ele
+    // que ENCERRA a linha, porque um cabecalho no meio quebraria a fileira em duas.
+    // Mesma semantica do seletor posicional `[data-mr-card] ~ *` que isto substituiu.
+    var _spCards = 0;
+    function _spReset() { _spCards = 0; }
+    function _spCard() { return (_spCards++ > 0) ? ' data-sp-extra="1"' : ''; }
+    function _spFull() { return (_spCards > 0) ? ' data-sp-extra="1"' : ''; }
 
     // v1.8.67: chave de deduplicação desta seção — `_collectAllMatches` NÃO deduplica, e
     // um jogo que exista em `t.matches` E dentro de uma rodada entraria duas vezes.
@@ -1883,8 +1912,13 @@ function renderDashboard(container) {
       // folha de estilo. Sem o `!important` o seletor casava (conferido com `.matches()`) e
       // mesmo assim os três cards apareciam — o teste estrutural passava verde e a tela
       // continuava errada. Novidades não precisou disto porque lá o card só traz `min-width`.
+      // v1.9.64: o corte deixou de ser POSICIONAL (`[data-mr-card] ~ *`, que sempre
+      // esconde do 2o card em diante) e virou o atributo `data-sp-extra`. Motivo: quantos
+      // cards cabem na linha so se sabe MEDINDO a tela, e um seletor posicional nao tem
+      // como ser afrouxado depois — `_spSyncCollapsePreview` tira o atributo dos que
+      // couberem. O que sai daqui e o mesmo de antes (1 coluna): o 1o paint e o fallback.
       html += '<style>#meus-resultados-section[data-mr-collapsed="1"] #meus-resultados-body > *:not([data-mr-first]){display:none !important;}' +
-        '#meus-resultados-section[data-mr-collapsed="1"] [data-mr-first] [data-mr-card] ~ *{display:none !important;}</style>';
+        '#meus-resultados-section[data-mr-collapsed="1"] [data-mr-first] [data-sp-extra]{display:none !important;}</style>';
       html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '🏅 Seus últimos resultados' +
         (_mrTotalCards > 1 ? _verMaisTag('mr-toggle-tag', _mrCollapsed) : '') +
@@ -2151,6 +2185,7 @@ function renderDashboard(container) {
     if (pendingForMe.length > 0) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
+      _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
       var _btnStyle = function(r,g,b) { return 'border:1px solid rgba('+r+','+g+','+b+',0.4);color:rgba('+r+','+g+','+b+',1);border-radius:6px;padding:2px 7px;font-size:0.65rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba('+r+','+g+','+b+',0.15);'; };
@@ -2169,7 +2204,7 @@ function renderDashboard(container) {
           btns += '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(99,102,241) + '">✏️ Editar</button>';
           btns += '<button data-pending-action="approve" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="' + _btnStyle(16,185,129) + '">✅ Confirmar</button>';
         }
-        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
           cardBorder: 'rgba(251,191,36,0.6)',
@@ -2184,6 +2219,7 @@ function renderDashboard(container) {
     if (pendingByMe.length > 0) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
+      _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingByMe.forEach(function(item) {
@@ -2192,7 +2228,7 @@ function renderDashboard(container) {
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
           '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
-        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
           cardBorder: 'rgba(148,163,184,0.4)',
@@ -2207,13 +2243,14 @@ function renderDashboard(container) {
     if (disputedMatches.length > 0) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
       html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
+      _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:#f87171;background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
       disputedMatches.forEach(function(item) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         // Sem botões de ação — o jogador não age mais, só o organizador (no bracket).
-        html += '<div data-mr-card="1" style="min-width:0;">' + _miniBracketCard(item, false, {
+        html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: _dispTag,
           cardBorder: 'rgba(239,68,68,0.5)',
@@ -2287,6 +2324,7 @@ function renderDashboard(container) {
     // ── Últimos resultados confirmados — estilo chave (não card flat) ──
     if (recentConfirmed.length > 0) {
       html += '<div' + _mrBlockAttrs() + '>';
+      _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
       // v2.3.52: agrupa resultados que compartilham GRUPO + TORNEIO. Quando
       // 2+ chaves repetem "R2 GRUPO A … TESTE DE LIGA", mostra esse rótulo uma
@@ -2435,13 +2473,13 @@ function renderDashboard(container) {
           // Cabeçalho compartilhado (linha inteira) + só "JOGO N" acima de cada chave.
           // v1.8.78: grupo e torneio em DUAS LINHAS (antes lado a lado, e o torneio
           // sumia no `ellipsis` em tela estreita). Mesmo desenho das Novidades.
-          html += _grupoHeadHtml(g.group, g.tName, g.color, '', false, g.tId);
+          html += _grupoHeadHtml(g.group, g.tName, g.color, _spFull(), false, g.tId);
           // v2.3.62: o rótulo "JOGO N" com a barra colorida acima de cada chave
           // foi removido — essa info já aparece no header de cada box
           // ("R2 GRUPO A • JOGO N"). Só o cabeçalho do grupo (grupo + torneio)
           // fica uma vez no topo. Pequena margem entre os boxes via margin.
           g.units.forEach(function(u) {
-            html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;margin-bottom:6px;">' +
+            html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;display:flex;flex-direction:column;margin-bottom:6px;">' +
               u.body +
             '</div>';
           });
@@ -2451,7 +2489,7 @@ function renderDashboard(container) {
             // v1.8.78: também em duas linhas — mas INLINE, dentro do card: sendo avulso,
             // o rótulo não se repete em ninguém e um cabeçalho de linha inteira deixaria
             // o resto da linha vazio.
-            html += '<div data-mr-card="1" style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
+            html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;display:flex;flex-direction:column;gap:0.6rem;">' +
               _grupoHeadHtml(
                 (String(u.faseStr2 || '').toLowerCase().indexOf('final') !== -1 ? '🏆 ' : '') + u.faseStr2,
                 u.tName, u.color, '', true, u.tId
@@ -2471,7 +2509,7 @@ function renderDashboard(container) {
       // com um só não há "anteriores" e a linha seria ruído.
       if (_mrTotalCards > 1) {
         html += _verMaisRodape('meus-resultados-hint', 'window._toggleMyResultsCollapse()',
-          (_mrCollapsed ? 'ver os ' + (_mrTotalCards - 1) + ' anteriores' : 'ver menos'));
+          (_mrCollapsed ? _spVerMaisTexto(_mrTotalCards - 1, false) : 'ver menos'));
       }
       html += '</div>'; // fecha #meus-resultados-section
     }
@@ -2539,7 +2577,7 @@ function renderDashboard(container) {
         var _card = (typeof window.renderMatchCard === 'function')
           ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true })
           : '';
-        return '<div data-nov-card="1" style="min-width:0;">' +
+        return '<div data-nov-card="1"' + _spCard() + ' style="min-width:0;">' +
           (_quando
             ? '<div data-nov-quando="1" style="display:flex;justify-content:flex-end;margin-bottom:5px;padding:0 2px;">' +
                 '<span style="font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' +
@@ -2564,12 +2602,13 @@ function renderDashboard(container) {
       // resultados" já usa. Com os cabeçalhos de grupo dentro da grade, contar por
       // posição deixaria de fora o cabeçalho do 2º grupo, que ficaria ÓRFÃO na tela
       // fechada (um título anunciando cards que estão escondidos).
-      _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-nov-card] ~ *{display:none;}' +
+      _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-sp-extra]{display:none !important;}' +
         '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}</style>';
       _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '📣 Novidades no seu torneio' +
         (_novList.length > 1 ? _verMaisTag('nov-toggle-tag', _novCollapsed) : '') +
         '</h3>';
+      _spReset();
       _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
       // v1.8.78: agrupa por (grupo + torneio) preservando a ordem de PRIMEIRA aparição —
       // a mesma regra de "Seus últimos resultados", pra as duas não divergirem. A promessa
@@ -2585,7 +2624,7 @@ function renderDashboard(container) {
         _novGroups.push({ grupo: _fp.group, tName: it.tName, tId: it.tId, items: [{ it: it, jogo: _fp.jogo }] });
       });
       _novGroups.forEach(function(g) {
-        _novHtml += _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"', false, g.tId);
+        _novHtml += _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"' + _spFull(), false, g.tId);
         g.items.forEach(function(u) { _novHtml += _novCard(u.it); });
       });
       _novHtml += '</div>';
@@ -2598,7 +2637,7 @@ function renderDashboard(container) {
         // v1.8.78: sem as setinhas (o dono achou o glifo discreto demais) e no mesmo
         // azul-céu da tag do cabeçalho — é o MESMO controle, em dois lugares.
         _novHtml += _verMaisRodape('novidades-hint', 'window._toggleNovidadesCollapse()',
-          (_novCollapsed ? 'ver os ' + (_novList.length - 1) + ' jogos anteriores' : 'ver menos'));
+          (_novCollapsed ? _spVerMaisTexto(_novList.length - 1, true) : 'ver menos'));
       }
       _novHtml += '</div>'; // fecha #novidades-section
     }
@@ -3681,6 +3720,10 @@ function renderDashboard(container) {
     })()}
   `;
   container.innerHTML = html;
+  // v1.9.64: a prévia das seções fechadas preenche a LINHA — mede quantas colunas a grade
+  // abriu e reabre os cards que couberem. Roda no MESMO task do innerHTML: assim o usuário
+  // nunca chega a ver o estado de 1 coluna que sai do builder.
+  try { window._spSyncCollapsePreview(); window._spWatchPreviewWidth(); } catch (_ePrev) {}
   // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo (saudação etc.).
   if (typeof window._fitNames === 'function') { try { window._fitNames(container); } catch (e) {} }
   // v2.8.46: re-aplica a busca in-place após qualquer re-render (ex.: trocar
@@ -3754,12 +3797,9 @@ function renderDashboard(container) {
       // mais por `display:none`). Fechada, a seção já mostra o card da pendência — mas
       // havendo MAIS de uma, abrir continua sendo o certo: nenhuma ação fica escondida.
       var _mrSec = document.getElementById('meus-resultados-section');
-      var _mrTag = document.getElementById('mr-toggle-tag');   // v1.8.78: era o chevron
-      var _mrHint = document.getElementById('meus-resultados-hint');
       if (_mrSec && _mrSec.getAttribute('data-mr-collapsed') === '1') {
         _mrSec.setAttribute('data-mr-collapsed', '0');
-        if (_mrTag) _mrTag.textContent = 'ver menos';
-        if (_mrHint) _mrHint.textContent = 'ver menos';
+        window._spSyncCollapsePreview();   // v1.9.64: a tag e o rodapé saem daqui (fonte única)
       }
       // v1.9.94: instantâneo (não 'smooth'). Com re-renders assíncronos na
       // entrada, a animação suave era interrompida no meio e parecia "pulo".
@@ -4007,6 +4047,175 @@ window._applyDashSearchInPlace = function() {
   try { if (window._stickyFilterKeepRoom) window._stickyFilterKeepRoom(keepY); } catch (e) {}
 };
 
+// ── PRÉVIA DAS SEÇÕES FECHADAS: PREENCHE A LINHA ──────────────────────────────
+// Pedido do dono (19/ago/2026, com print): "quando a largura da tela permitir, podemos
+// colocar 2 cards de jogo ou até 3 na sessão novidades e seus últimos resultados, em vez
+// de deixar o buraco ali. e o botão 'ver os X jogos...' ajustado de acordo."
+//
+// A grade das duas seções é `repeat(auto-fill, minmax(280px,1fr))` — em tela larga ela
+// abre 2, 3 ou 4 colunas. Fechada, a seção mostrava UM card e deixava o resto da linha
+// vazio. Agora a prévia vai até o número de COLUNAS que a tela abriu: é a MESMA régua da
+// seção aberta ("se cabe 1 jogo na largura da tela é 1 jogo, se cabem 3 são 3") e a mesma
+// canônica de escala por ÁREA — nada de breakpoint chutado, o número sai da largura REAL.
+//
+// ⚠️ Por que medir em vez de resolver no CSS: a contagem do convite ("ver os X jogos
+// anteriores") é TEXTO, e CSS não conta. Botão que promete contagem errada é pior que o
+// buraco — então quem decide quantos cards ficam à vista tem que ser quem escreve o texto.
+// ⚠️ Isto NÃO re-renderiza a dashboard ([[project_dashboard_no_rerender]]): mexe em UM
+// atributo por card e no texto de dois convites. Nenhum card é recriado, nenhum alvo de
+// toque muda de lugar. Nada de `content-visibility` aqui — o corte é `display:none`.
+
+// PURA (e por isso testável): recebe a sequência da grade — 'card' pra cada jogo, 'full'
+// pra cada elemento de linha inteira (cabeçalho de grupo) — e quantas colunas cabem.
+// Devolve quantos ELEMENTOS do começo entram na prévia e quantos deles são cards.
+// A linha termina no 1º de: (a) encheu as colunas; (b) apareceu um elemento de linha
+// inteira DEPOIS de já haver card — um cabeçalho no meio parte a fileira em duas, e o
+// jeito de não ter buraco é parar antes dele.
+window._spPreviewLen = function(kinds, cols) {
+  var n = Math.max(1, cols | 0), cards = 0, i = 0;
+  for (; i < kinds.length; i++) {
+    if (kinds[i] === 'card') { if (cards >= n) break; cards++; }
+    else if (cards > 0) break;
+  }
+  return { els: i, cards: cards };
+};
+
+// Quantas colunas a grade abriu AGORA. Lê o valor computado (que vem resolvido em px,
+// uma medida por trilha) — não há breakpoint escrito à mão em lugar nenhum.
+// Grade não diagramada (seção escondida) devolve a fórmula crua com parênteses: aí não
+// dá pra contar e o certo é assumir 1 — errar mostrando de menos, nunca de mais.
+function _spGridCols(grid) {
+  try {
+    var tpl = (window.getComputedStyle(grid).gridTemplateColumns || '').trim();
+    if (!tpl || tpl === 'none' || tpl.indexOf('(') !== -1) return 1;
+    return Math.max(1, tpl.split(/\s+/).length);
+  } catch (e) { return 1; }
+}
+
+// Teto da largura do card na prévia. A linha fechada tem N cards e a grade pode ter aberto
+// MAIS colunas que isso (um grupo de 3 jogos numa tela de 4 colunas) — aí sobraria de novo
+// um pedaço de linha vazio, que é exatamente a queixa do print. Os N cards passam a dividir
+// a linha inteira, mas até este teto: sem ele, um grupo de 1 jogo viraria um card de 1250px
+// com dois nomes e um placar dentro. Batendo no teto, a fileira fica CENTRADA — sobra igual
+// dos dois lados, que lê como escolha, não como buraco.
+var _SP_CARD_MAX = '460px';
+
+// Aplica a prévia numa grade: tira `data-sp-extra` de quem entra na linha, põe em quem
+// não entra, e faz os que entraram dividirem a linha. Devolve quantos ficaram à vista.
+function _spFitGrid(grid, colapsada) {
+  // ⚠️ Mede SEMPRE com a régua ORIGINAL da grade. Medindo com o `repeat(N,...)` da prévia,
+  // a resposta seria o próprio N de antes — a linha nunca voltaria a crescer quando a tela
+  // aumentasse. Guardar a régua é obrigatório porque ela mora no `style` INLINE da grade:
+  // um `style.gridTemplateColumns = ''` apagaria o auto-fill em vez de restaurá-lo.
+  if (grid.__spBase == null) grid.__spBase = grid.style.gridTemplateColumns || '';
+  grid.style.gridTemplateColumns = grid.__spBase;
+  grid.style.justifyContent = '';
+  var kids = grid.children || [], kinds = [], i;
+  for (i = 0; i < kids.length; i++) {
+    kinds.push((kids[i].hasAttribute('data-nov-card') || kids[i].hasAttribute('data-mr-card')) ? 'card' : 'full');
+  }
+  var r = window._spPreviewLen(kinds, _spGridCols(grid));
+  for (i = 0; i < kids.length; i++) {
+    if (i < r.els) kids[i].removeAttribute('data-sp-extra');
+    else kids[i].setAttribute('data-sp-extra', '1');
+  }
+  if (colapsada && r.cards > 0) {
+    // ⚠️ O piso é 0, NÃO 280px. Se a janela encolher e a re-medição não chegar (aba em
+    // segundo plano, evento perdido), `minmax(280px,…)` com N trilhas maiores que a tela
+    // ESTOURA a linha na horizontal — e barra de rolagem lateral é quebra visível. Com
+    // piso 0 o pior caso é card mais estreito por um instante, que ninguém percebe.
+    grid.style.gridTemplateColumns = 'repeat(' + r.cards + ',minmax(0,' + _SP_CARD_MAX + '))';
+    grid.style.justifyContent = 'center';
+  }
+  return r.cards;
+}
+
+// O convite (tag do cabeçalho + rodapé) tem que dizer o que REALMENTE sobrou. Sobrando
+// zero, ele some dos dois lugares: "ver mais" que não mostra mais nada é ruído — e o
+// título continua clicável pra quem quiser fechar.
+function _spSyncHint(sec, attrColapso, tagId, hintId, resto, comJogos) {
+  var colapsada = sec.getAttribute(attrColapso) === '1';
+  var tag = document.getElementById(tagId);
+  var hint = document.getElementById(hintId);
+  var texto = (typeof window._spVerMaisTexto === 'function')
+    ? window._spVerMaisTexto(resto, comJogos) : ('ver os ' + resto + ' anteriores');
+  if (tag) { tag.textContent = colapsada ? 'ver mais' : 'ver menos'; tag.style.display = resto > 0 ? '' : 'none'; }
+  if (hint) {
+    hint.textContent = colapsada ? texto : 'ver menos';
+    var p = hint.parentNode;   // o <p> centralizado do rodapé
+    if (p && p.style) p.style.display = resto > 0 ? '' : 'none';
+  }
+}
+
+// Ponto ÚNICO de sincronia das duas seções. Chamado: (a) logo depois do render, no MESMO
+// task do innerHTML (então o usuário nunca vê o estado de 1 coluna); (b) a cada
+// abre/fecha; (c) quando a largura da seção muda de verdade.
+window._spSyncCollapsePreview = function() {
+  try {
+    var novSec = document.getElementById('novidades-section');
+    var novGrid = document.getElementById('novidades-grid');
+    if (novSec && novGrid) {
+      var novTotal = novGrid.querySelectorAll('[data-nov-card]').length;
+      var novShown = _spFitGrid(novGrid, novSec.getAttribute('data-nov-collapsed') === '1');
+      _spSyncHint(novSec, 'data-nov-collapsed', 'nov-toggle-tag', 'novidades-hint',
+        Math.max(0, novTotal - novShown), true);
+    }
+  } catch (e) {}
+  try {
+    var mrSec = document.getElementById('meus-resultados-section');
+    var mrBody = document.getElementById('meus-resultados-body');
+    if (mrSec && mrBody) {
+      // A seção fechada mostra UM bloco (o `data-mr-first`, o mais urgente) — a prévia é
+      // da grade DELE. O total, porém, é de TODOS os blocos: é o que o convite promete.
+      var mrTotal = mrBody.querySelectorAll('[data-mr-card]').length;
+      var first = mrBody.querySelector('[data-mr-first]');
+      var firstCard = first && first.querySelector('[data-mr-card]');
+      var mrShown = firstCard
+        ? _spFitGrid(firstCard.parentNode, mrSec.getAttribute('data-mr-collapsed') === '1')
+        : 0;
+      _spSyncHint(mrSec, 'data-mr-collapsed', 'mr-toggle-tag', 'meus-resultados-hint',
+        Math.max(0, mrTotal - mrShown), false);
+    }
+  } catch (e) {}
+};
+
+// Reage à largura: girar o aparelho ou redimensionar a janela muda quantas colunas cabem.
+// ⚠️ Observa a SEÇÃO, não a grade, e só dispara quando a LARGURA muda: esconder/mostrar
+// card muda a ALTURA, e agir nisso seria laço (medir → esconder → medir de novo).
+window._spWatchPreviewWidth = function() {
+  try {
+    if (window.__spPreviewRO) { window.__spPreviewRO.disconnect(); window.__spPreviewRO = null; }
+    if (typeof window.ResizeObserver !== 'function') return;
+    window.__spPreviewRO = new window.ResizeObserver(function(entries) {
+      var mudou = false;
+      entries.forEach(function(en) {
+        var w = Math.round(en.contentRect.width);
+        if (en.target.__spW !== w) { en.target.__spW = w; mudou = true; }
+      });
+      if (mudou) window._spSyncCollapsePreview();
+    });
+    ['novidades-section', 'meus-resultados-section'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.__spW = Math.round(el.getBoundingClientRect().width); window.__spPreviewRO.observe(el); }
+    });
+  } catch (e) {}
+  // Cinto E suspensório: o `resize` da janela cobre o caso mais comum (girar o aparelho,
+  // redimensionar a janela) sem depender do ciclo de render que entrega o ResizeObserver.
+  // Registrado UMA vez — a dashboard re-renderiza, e um listener por render iria empilhar.
+  try {
+    if (!window.__spPreviewResizeOn) {
+      window.__spPreviewResizeOn = true;
+      window.addEventListener('resize', function() {
+        if (window.__spPreviewT) return;   // agrupa a rajada do arrasto num tique só
+        window.__spPreviewT = setTimeout(function() {
+          window.__spPreviewT = null;
+          window._spSyncCollapsePreview();
+        }, 120);
+      });
+    }
+  } catch (e2) {}
+};
+
 // 📣 Novidades no seu torneio — todos os cards vivem na MESMA grade responsiva (a de
 // "Seus últimos resultados"); o estado fechado esconde do 2º em diante por CSS, via o
 // atributo `data-nov-collapsed` da seção. v1.8.67: era um `<div>` separado com os
@@ -4014,19 +4223,13 @@ window._applyDashSearchInPlace = function() {
 // é COLAPSADA (só o lançamento mais recente à vista).
 window._toggleNovidadesCollapse = function() {
   var sec = document.getElementById('novidades-section');
-  var tag = document.getElementById('nov-toggle-tag');
-  var hint = document.getElementById('novidades-hint');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-nov-collapsed') !== '1';
   sec.setAttribute('data-nov-collapsed', willCollapse ? '1' : '0');
-  if (tag) tag.textContent = willCollapse ? 'ver mais' : 'ver menos';
-  if (hint) {
-    var grid = document.getElementById('novidades-grid');
-    var n = grid ? grid.querySelectorAll('[data-nov-card]').length : 0;
-    hint.textContent = willCollapse
-      ? ('ver os ' + Math.max(0, n - 1) + ' jogos anteriores')
-      : 'ver menos';
-  }
+  // v1.9.64: a contagem do convite saiu daqui — quem a escreve é `_spSyncCollapsePreview`,
+  // que primeiro MEDE quantos cards cabem na linha. Duas contas para o mesmo número era o
+  // caminho garantido pra o botão prometer uma coisa e a tela mostrar outra.
+  window._spSyncCollapsePreview();
   try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
 };
 
@@ -4035,19 +4238,10 @@ window._toggleNovidadesCollapse = function() {
 // NUNCA mais some inteiro, senão a seção fechada não mostra nada (era a queixa do dono).
 window._toggleMyResultsCollapse = function() {
   var sec = document.getElementById('meus-resultados-section');
-  var tag = document.getElementById('mr-toggle-tag');
-  var hint = document.getElementById('meus-resultados-hint');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-mr-collapsed') !== '1';
   sec.setAttribute('data-mr-collapsed', willCollapse ? '1' : '0');
-  if (tag) tag.textContent = willCollapse ? 'ver mais' : 'ver menos';
-  if (hint) {
-    var body = document.getElementById('meus-resultados-body');
-    var n = body ? body.querySelectorAll('[data-mr-card]').length : 0;
-    hint.textContent = willCollapse
-      ? ('ver os ' + Math.max(0, n - 1) + ' anteriores')
-      : 'ver menos';
-  }
+  window._spSyncCollapsePreview();   // v1.9.64: mede a linha e escreve o convite (fonte única)
   try { localStorage.setItem('scoreplace_collapse_myresults', willCollapse ? '1' : '0'); } catch (e) {}
 };
 
