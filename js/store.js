@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.52';
+window.SCOREPLACE_VERSION = '1.9.53';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1244,6 +1244,25 @@ window._formatLabel = function (t) {
     var ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5);
     var caminho = 'tournaments/' + String(tournamentId) + '/' + tipo + '-' + Date.now() + '.' + ext;
     var ref = storage.ref().child(caminho);
+    await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
+    return await ref.getDownloadURL();
+  };
+
+  // LOGO DO LOCAL — mesma história, escala menor (29,8 KB num doc), mas o `venues` é
+  // lido pra montar a lista de locais e o mapa. Mesmo acessor, mesmo motivo.
+  window._venueLogoSrc = function (v) {
+    if (!v) return '';
+    return v.logoUrl || v.logoData || '';
+  };
+  window._subirLogoLocal = async function (venueKey, valor) {
+    if (!venueKey || !valor) return '';
+    if (/^https?:\/\//i.test(valor)) return valor;
+    if (!/^data:/i.test(valor)) return '';
+    var blob = _dataUrlParaBlob(valor);
+    if (!blob) return '';
+    var storage = await window._carregaSdkStorage();
+    var ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5);
+    var ref = storage.ref().child('venues/' + String(venueKey) + '/logo-' + Date.now() + '.' + ext);
     await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
     return await ref.getDownloadURL();
   };

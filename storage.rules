@@ -73,6 +73,25 @@ service firebase.storage {
            ));
     }
 
+    // ─── LOGO DO LOCAL ────────────────────────────────────────────────────────
+    // Escrita só do DONO FORMAL do local (`ownerUid`), espelhando a regra de update de
+    // `venues/{venueId}` no Firestore. Local ainda SEM dono não aceita logo por aqui: no
+    // Firestore quem reivindica passa por `venueOwnershipOk()`, e duplicar aquela lógica
+    // aqui seria criar uma segunda fonte de verdade sobre posse — o logo entra depois de
+    // a posse existir. Leitura aberta: o card do local aparece pra visitante deslogado.
+    match /venues/{venueKey}/{arquivo} {
+      function local() {
+        return firestore.get(/databases/(default)/documents/venues/$(venueKey)).data;
+      }
+      allow read: if true;
+      allow write, delete: if request.auth != null
+        && request.auth.uid == local().get('ownerUid', '')
+        && (request.resource == null || (
+              request.resource.size < 5 * 1024 * 1024
+              && request.resource.contentType.matches('image/.*')
+           ));
+    }
+
     // Nada mais é gravável neste bucket. Prefixo novo exige match novo, escrito à mão —
     // um `match /{caminho=**}` genérico aqui viraria depósito aberto.
     match /{caminho=**} {

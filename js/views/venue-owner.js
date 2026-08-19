@@ -765,7 +765,7 @@
                 '<button type="button" class="cancel-x-btn" onclick="window._clearVenueLogo()" title="Remover logo" style="--cx-size:24px;">✕</button>' +
               '</div>' +
               '<input type="file" id="vlogo-file-input" accept="image/*" style="display:none;" onchange="window._handleVenueLogoUpload(event)">' +
-              '<input type="hidden" id="vlogo-data" value="' + _safe(ex.logoData || '') + '">' +
+              '<input type="hidden" id="vlogo-data" value="' + _safe(window._venueLogoSrc(ex) || '') + '">' +
               '<input type="hidden" id="vlogo-locked" value="' + (ex.logoLocked ? '1' : '') + '">' +
             '</div>' +
           '</div>' +
@@ -836,9 +836,10 @@
     setTimeout(function() {
       _setupHoursGridListeners();
       // Logo do local: se já existe (edição), renderiza o preview + estado do lock.
-      if (ex.logoData && typeof window._applyVenueLogo === 'function') {
+      var _exLg = window._venueLogoSrc(ex);
+      if (_exLg && typeof window._applyVenueLogo === 'function') {
         window._venueLogoLocked = !!ex.logoLocked;
-        window._applyVenueLogo(ex.logoData);
+        window._applyVenueLogo(_exLg);
         if (ex.logoLocked) { var _lb = document.getElementById('vlogo-lock-btn'); if (_lb) { _lb.textContent = '🔒'; _lb.style.background = 'rgba(251,191,36,0.12)'; _lb.style.color = '#fbbf24'; _lb.style.border = '1px solid rgba(251,191,36,0.4)'; } }
       }
       _focusOwnerMapOn(place);

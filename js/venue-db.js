@@ -62,6 +62,23 @@ window.VenueDB = {
   //   - Otherwise the doc stays "community": only createdByUid/Name set.
   async saveVenue(key, data) {
     if (!this.db || !key) throw new Error('key obrigatória');
+    // ── O LOGO DO LOCAL VAI PRO STORAGE (1.9.53) ────────────────────────────────
+    // Mesma classe de erro do torneio e da foto de perfil: arquivo (imagem, escrita uma
+    // vez) morando dentro de registro que a lista de locais lê o tempo todo.
+    // ⚠️ FORA da transação, de propósito: transação do Firestore precisa ser rápida e
+    // pode ser RE-EXECUTADA em caso de contenção — subir megabyte lá dentro seria upload
+    // repetido. Aqui a imagem já chega resolvida em URL.
+    // Valor que já é http(s) não sobe de novo. Ver [[project_imagem_base64_no_doc_do_torneio]].
+    if (data && data.logoData && typeof window._subirLogoLocal === 'function') {
+      try {
+        var _urlLogo = await window._subirLogoLocal(key, data.logoData);
+        if (_urlLogo) { data.logoUrl = _urlLogo; }
+      } catch (e) {
+        if (window._warn) window._warn('[saveVenue] upload do logo falhou; logo preservado', e);
+      }
+      // a base64 nunca entra no doc — é o peso que estamos tirando de lá
+      delete data.logoData;
+    }
     var self = this;
     var ref = this.db.collection('venues').doc(key);
     var cu = window.AppStore && window.AppStore.currentUser;

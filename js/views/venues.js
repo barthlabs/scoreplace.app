@@ -278,10 +278,11 @@
   // Miniatura do logo do local (quando cadastrado). Respeita a forma escolhida
   // (círculo/quadrado/raio). Sem logo → string vazia (o card mantém o 🏢).
   function _venueLogoThumb(v, size) {
-    if (!v || !v.logoData) return '';
+    var _lg = window._venueLogoSrc ? window._venueLogoSrc(v) : (v && (v.logoUrl || v.logoData));
+    if (!_lg) return '';
     size = size || 38;
     var radius = (v.logoShape === 'circle') ? '50%' : ((v.logoRadius != null ? v.logoRadius : 14) + '%');
-    return '<img src="' + _safe(v.logoData) + '" alt="" style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;border-radius:' + radius + ';flex-shrink:0;background:#0a0e1a;">';
+    return '<img src="' + _safe(_lg) + '" loading="lazy" alt="" style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;border-radius:' + radius + ';flex-shrink:0;background:#0a0e1a;">';
   }
 
   // v0.16.27: helpers portados de presence.js pras seções "Agora no local"
@@ -426,7 +427,7 @@
       _venueLogoThumb(v, 40) +
       '<div style="flex:1;min-width:0;">' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">' +
-          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;line-height:1.2;overflow-wrap:anywhere;word-break:normal;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</span>' +
+          '<span style="font-weight:700;color:var(--text-bright);font-size:0.92rem;line-height:1.2;overflow-wrap:anywhere;word-break:normal;">' + (window._venueLogoSrc(v) ? '' : '🏢 ') + _safe(v.name) + '</span>' +
           officialBadge +
         '</div>' +
         (v.address ? '<div style="font-size:0.72rem;color:var(--text-muted);overflow-wrap:anywhere;margin-bottom:4px;">' + _safe(v.address) + '</div>' : '') +
@@ -483,7 +484,7 @@
           // coração de preferido (cheio = já é preferido). Clicar remove. stopPropagation.
           '<button type="button" onclick="event.stopPropagation();window._venuesTogglePreferredFromList(this)" title="Remover dos locais preferidos" style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;flex-shrink:0;padding:0 2px;">❤️</button>' +
         '</div>' +
-        ((sportsHtml || v.logoData) ?
+        ((sportsHtml || window._venueLogoSrc(v)) ?
           '<div style="display:flex;align-items:center;gap:10px;">' +
             _venueLogoThumb(v, 40) +
             (sportsHtml ? '<div style="flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:3px;">' + sportsHtml + '</div>' : '<div style="flex:1;"></div>') +
@@ -3016,7 +3017,7 @@
         '<div style="display:flex;align-items:flex-start;gap:10px;">' +
           _venueLogoThumb(v, 52) +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-weight:800;color:var(--text-bright);font-size:1.05rem;line-height:1.3;word-break:break-word;">' + (v.logoData ? '' : '🏢 ') + _safe(v.name) + '</div>' +
+            '<div style="font-weight:800;color:var(--text-bright);font-size:1.05rem;line-height:1.3;word-break:break-word;">' + (window._venueLogoSrc(v) ? '' : '🏢 ') + _safe(v.name) + '</div>' +
             (v.address ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;line-height:1.4;word-break:break-word;">📍 ' + _safe(v.address) + '</div>' : '') +
           '</div>' +
           favBtn +
