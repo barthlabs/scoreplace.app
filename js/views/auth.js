@@ -9334,8 +9334,27 @@ window._profileHydrateNameConflict = function () {
 
       // v1.8.39-beta: foto de perfil — persiste quando usuário fez upload
       // (flag _pendingPhotoUpload setada em _handleProfilePhotoUpload).
+      // ⚠️ 1.9.52: A FOTO VAI PRO STORAGE, E O PERFIL GUARDA SÓ A URL.
+      // MEDIDO na base: `users.photoURL` guardava base64 e somava 1.735,6 KB em 22
+      // perfis (29% do peso da coleção `users`), com um deles em 133 KB. O campo se
+      // chama URL e estava sendo usado como depósito de arquivo — e `users` é a coleção
+      // mais lida do app (a hidratação de perfil em lote busca dezenas de uma vez, e
+      // cada doc arrastava a foto inteira junto).
+      // Ver [[project_imagem_base64_no_doc_do_torneio]], mesmo erro, instância maior.
+      // Quem LÊ não muda nada: `photoURL` já era consumido como `<img src>`, e src
+      // aceita dataURL e https igualmente.
       if (cu._pendingPhotoUpload) {
-        payload.photoURL = cu._pendingPhotoUpload;
+        try {
+          var _fotoUrl = await window._subirFotoPerfil(cu.uid, cu._pendingPhotoUpload);
+          if (_fotoUrl) { payload.photoURL = _fotoUrl; cu.photoURL = _fotoUrl; }
+        } catch (_eFoto) {
+          // upload falhou: NÃO grava base64 como consolo — seria reintroduzir o peso
+          // que acabamos de tirar. O perfil salva sem trocar a foto, e a pessoa é avisada.
+          if (window._warn) window._warn('[perfil] upload da foto falhou', _eFoto);
+          if (typeof showNotification === 'function') {
+            showNotification('Foto não enviada', 'O resto do perfil foi salvo. Tente a foto de novo.', 'warning');
+          }
+        }
       }
 
       // Arrays: só envia se tem pelo menos 1 item

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.51';
+window.SCOREPLACE_VERSION = '1.9.52';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1244,6 +1244,22 @@ window._formatLabel = function (t) {
     var ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5);
     var caminho = 'tournaments/' + String(tournamentId) + '/' + tipo + '-' + Date.now() + '.' + ext;
     var ref = storage.ref().child(caminho);
+    await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
+    return await ref.getDownloadURL();
+  };
+
+  // FOTO DE PERFIL — mesma história, instância MAIOR: `users.photoURL` guardava base64 e
+  // somava 1.735,6 KB em 22 perfis (29% do peso de `users`), a coleção mais lida do app.
+  // O campo já se chamava URL; passa a ser uma de verdade.
+  window._subirFotoPerfil = async function (uid, valor) {
+    if (!uid || !valor) return '';
+    if (/^https?:\/\//i.test(valor)) return valor;   // já é URL (inclusive a do Google)
+    if (!/^data:/i.test(valor)) return '';
+    var blob = _dataUrlParaBlob(valor);
+    if (!blob) return '';
+    var storage = await window._carregaSdkStorage();
+    var ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5);
+    var ref = storage.ref().child('users/' + String(uid) + '/photo-' + Date.now() + '.' + ext);
     await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
     return await ref.getDownloadURL();
   };

@@ -53,6 +53,26 @@ service firebase.storage {
         );
     }
 
+    // ─── FOTO DE PERFIL ───────────────────────────────────────────────────────
+    // MEDIDO: `users.photoURL` guardava base64 e somava 1.735,6 KB em 22 perfis (29% do
+    // peso de `users`) — e `users` é a coleção mais lida do app, porque a hidratação de
+    // perfil busca dezenas de docs por vez e cada um arrastava a foto inteira junto.
+    // Mesma classe de erro do torneio, instância maior.
+    //
+    // Leitura aberta pelo mesmo motivo da imagem do torneio: o avatar aparece em card de
+    // jogo, chave e classificação de torneio PÚBLICO, visto por quem não está logado.
+    // Escrita só do DONO do perfil — aqui não há co-organizador que valha: a pasta é a
+    // identidade da pessoa, e `uid` é a identidade canônica ([[project_uid_primary_identity]]).
+    match /users/{uid}/{arquivo} {
+      allow read: if true;
+      allow write, delete: if request.auth != null
+        && request.auth.uid == uid
+        && (request.resource == null || (
+              request.resource.size < 5 * 1024 * 1024
+              && request.resource.contentType.matches('image/.*')
+           ));
+    }
+
     // Nada mais é gravável neste bucket. Prefixo novo exige match novo, escrito à mão —
     // um `match /{caminho=**}` genérico aqui viraria depósito aberto.
     match /{caminho=**} {
