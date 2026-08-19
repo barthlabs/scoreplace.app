@@ -2110,7 +2110,9 @@ html, body,
 .pf-hero {
   border-radius: 18px;
   padding: 16px 14px 12px;
-  margin: 0 0 12px;
+  /* 8px de respiro no topo — sem isso o canto do hero nasce por baixo do
+     back-header sticky e aparece clipado (visto no iPhone, 1.9.69). */
+  margin: 8px 0 12px;
   background: var(--hero-bg);
   color: var(--hero-text);
 }

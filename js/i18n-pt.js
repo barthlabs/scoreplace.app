@@ -661,6 +661,7 @@ window._translations['pt'] = {
   'profile.myPerformance': 'Meu Desempenho',
   'profile.calculating': 'Calculando...',
   'profile.deleteAccountPerm': 'Excluir minha conta permanentemente',
+  'profile.labelNameShort': 'Nome de exibição',
   'profile.blockContact': 'Contato',
   'profile.blockContactTag': 'o que os parceiros de jogo usam',
   'profile.blockAccess': 'Acesso à conta',

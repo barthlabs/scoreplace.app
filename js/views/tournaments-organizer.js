@@ -210,14 +210,18 @@ window._sendUserNotification = async function(uid, notifData, _skipDispatch) {
         // TODA notificação passa. Pôr o teste em quem dispara (a vitrine) deixaria de
         // fora qualquer caminho novo que avise sobre placar ao vivo. Ver live-now.js.
         if (notifData.type === 'live_score_started') {
-            // 1.9.68 — três estados (liveAlertsWho): all | friends | none. Perfis antigos
-            // só têm o boolean: false = none, resto = all. 'friends' = o aviso só chega
-            // quando QUEM começou a marcar é amigo de quem recebe (lista do destinatário).
-            var _laWho = profile.liveAlertsWho || (profile.liveAlerts === false ? 'none' : 'all');
+            // 1.9.70 — o controle é de QUEM JOGA (correção do dono): liveAlertsWho do
+            // REMETENTE (quem começou a marcar) decide quem recebe o convite dos jogos
+            // DELE — all | friends (só amigos dele) | none (ninguém). O boolean antigo
+            // do DESTINATÁRIO segue respeitado como opt-out de receber (quem salvou
+            // 'não me avise' antes da mudança continua sem ser incomodado).
+            if (profile.liveAlerts === false && !profile.liveAlertsWho) return;
+            var _laSender = _cu || {};
+            var _laWho = _laSender.liveAlertsWho || (_laSender.liveAlerts === false ? 'none' : 'all');
             if (_laWho === 'none') return;
             if (_laWho === 'friends') {
-                var _laFriends = Array.isArray(profile.friends) ? profile.friends : [];
-                if (!_cu || !_cu.uid || _laFriends.indexOf(_cu.uid) === -1) return;
+                var _laFriends = Array.isArray(_laSender.friends) ? _laSender.friends : [];
+                if (_laFriends.indexOf(uid) === -1) return;
             }
         }
         var userLevel = profile.notifyLevel || 'todas';

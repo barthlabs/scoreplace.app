@@ -6426,7 +6426,11 @@ window._renderProfileSkillBySport = function() {
   var refMap = (window._profileCanRefereeBySport && typeof window._profileCanRefereeBySport === 'object')
     ? window._profileCanRefereeBySport : {};
 
-  var html = '';
+  // 1.9.70 — "Arbitrar" no padrão da coluna Divulgar (pedido do dono): o rótulo
+  // aparece UMA vez, no alto à direita; cada modalidade fica só com o switch
+  // alinhado na mesma coluna.
+  var html = '<div style="display:flex;justify-content:flex-end;margin:0 0 2px;">' +
+    '<span style="font-size:0.68rem;color:var(--text-muted);font-weight:700;letter-spacing:0.3px;">Arbitrar</span></div>';
   sports.forEach(function(sport) {
     var current = map[sport] || null;
     var safeS = String(sport).replace(/'/g, "\\'");
@@ -6435,7 +6439,6 @@ window._renderProfileSkillBySport = function() {
     var trackBg  = canRef ? 'rgba(20,184,166,0.45)' : 'rgba(255,255,255,0.12)';
     var knobLeft = canRef ? '14px' : '2px';
     var knobBg   = canRef ? '#2dd4bf' : 'rgba(255,255,255,0.4)';
-    var lblColor = canRef ? '#2dd4bf' : 'var(--text-muted)';
     html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:2px 0;">';
     html += '<span style="font-size:0.74rem;font-weight:600;color:#fbbf24;min-width:90px;flex:0 0 auto;opacity:0.9;">' + window._safeHtml(sport) + '</span>';
     html += '<div style="display:flex;gap:3px;flex-wrap:nowrap;">';
@@ -6447,9 +6450,8 @@ window._renderProfileSkillBySport = function() {
       html += '<button type="button" onclick="window._setProfileSkillForSport(\'' + safeS + '\',\'' + skill + '\')" style="' + style + '">' + skill + '</button>';
     });
     html += '</div>';
-    // Toggle switch "Arbitrar" — label + switch visual
-    html += '<span onclick="window._toggleProfileRefereeForSport(\'' + safeS + '\')" title="Posso arbitrar ' + window._safeHtml(sport) + '" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;user-select:none;">';
-    html +=   '<span style="font-size:0.68rem;font-weight:600;color:' + lblColor + ';transition:color 0.2s;">Arbitrar</span>';
+    // Switch "Arbitrar" NU, alinhado à direita — o rótulo vive no cabeçalho da coluna.
+    html += '<span onclick="window._toggleProfileRefereeForSport(\'' + safeS + '\')" title="Posso arbitrar ' + window._safeHtml(sport) + '" style="display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0;user-select:none;margin-left:auto;">';
     html +=   '<span style="position:relative;display:inline-block;width:28px;height:16px;flex-shrink:0;">';
     html +=     '<span style="position:absolute;inset:0;background:' + trackBg + ';border-radius:8px;transition:background 0.2s;"></span>';
     html +=     '<span style="position:absolute;top:2px;left:' + knobLeft + ';width:12px;height:12px;background:' + knobBg + ';border-radius:50%;transition:left 0.2s,background 0.2s;"></span>';
@@ -6798,27 +6800,26 @@ function setupProfileModal() {
                 '<input type="file" id="profile-photo-input" accept="image/*,.gif" style="display:none;" onchange="window._handleProfilePhotoUpload && window._handleProfilePhotoUpload(this)">' +
               '</div>' +
               '<div style="flex:1;min-width:0;">' +
-                '<label for="profile-edit-name" style="display:block;font-size:0.68rem;letter-spacing:0.4px;text-transform:uppercase;color:var(--hero-text-soft);font-weight:700;margin-bottom:3px;white-space:normal;">' + _t('profile.labelName') + '</label>' +
-                '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelName') + '" class="form-control" style="width:100%;box-sizing:border-box;background:var(--hero-glass-bg);border:1px solid var(--hero-glass-bg);color:var(--hero-text);font-weight:700;font-size:1.02rem;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
+                '<label for="profile-edit-name" style="display:block;font-size:0.72rem;color:var(--hero-text-soft);font-weight:500;margin-bottom:3px;white-space:normal;">' + _t('profile.labelNameShort') + '</label>' +
+                '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelNameShort') + '" class="form-control" style="width:100%;box-sizing:border-box;background:var(--hero-glass-bg);border:1px solid var(--hero-glass-bg);color:var(--hero-text);font-weight:700;font-size:1.02rem;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
                 '<div id="profile-name-nudge" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;font-size:0.75rem;color:#fbbf24;line-height:1.4;"></div>' +
               '</div>' +
             '</div>' +
             '<div id="profile-hero-chips" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;"></div>' +
           '</div>' +
             '<div class="pf-card" style="--pf-accent:#30d158;">' +
-              '<div class="pf-card-h" style="background:rgba(48,209,88,0.08);">' + '💬 ' + _t('profile.blockContact') + '<span class="pf-card-tag">' + _t('profile.blockContactTag') + '</span>' + '</div>' +
+              // A tag do cabeçalho virou a própria coluna "Divulgar" (pedido do dono,
+              // 19/ago: "economizamos 1 linha") — alinhada com os toggles das linhas.
+              '<div class="pf-card-h" style="background:rgba(48,209,88,0.08);">' + '💬 ' + _t('profile.blockContact') +
+                '<span class="pf-card-tag" style="display:inline-flex;align-items:center;gap:4px;">Divulgar' +
+                  '<button type="button" onclick="window._toggleFieldHint(event,\'hint-share-contact\')" title="O que o Divulgar controla" aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 2px;line-height:1;">ⓘ</button>' +
+                '</span>' + '</div>' +
               '<div class="pf-card-bd">' +
           // v1.0.43-beta: display do email autenticado.
           // v1.7.9-beta: adicionado botão "Alterar" e campo de edição/adição.
           // Contas phone-only mostram o campo de adição de e-mail por padrão
           // (via _populateProfileModalFields). Contas com e-mail mostram
           // display + botão "Alterar" que expõe o campo de edição.
-          // ── Coluna "Divulgar" à direita (pedido do dono, 19/ago): o toggle fica
-          // ALINHADO com cada contato, em vez de duas linhas soltas — economiza espaço.
-          '<div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin:0 0 4px;">' +
-            '<span style="font-size:0.68rem;color:var(--text-muted);font-weight:700;letter-spacing:0.3px;">Divulgar</span>' +
-            '<button type="button" onclick="window._toggleFieldHint(event,\'hint-share-contact\')" title="O que o Divulgar controla" aria-label="Saiba mais" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0 2px;line-height:1;">ⓘ</button>' +
-          '</div>' +
           '<span id="hint-share-contact" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin:0 0 6px;">Ligado (padrão), o contato aparece pros parceiros de jogo. Desligando, ninguém (nem amigos) vê aquele contato no app — você continua recebendo os avisos normalmente, e o grupo de WhatsApp do torneio não expõe telefone de ninguém.</span>' +
           '<div id="profile-email-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
@@ -6867,12 +6868,12 @@ function setupProfileModal() {
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
+                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
               '</div>' +
               // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
               // as duas (com confirmação). Sem isso, o número não vira válido.
               '<div style="margin-top:6px;">' +
-                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Verificar</button>' +
                 '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
@@ -6930,9 +6931,9 @@ function setupProfileModal() {
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
+                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
               '</div>' +
               '<div style="margin-top:6px;">' +
-                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">Verificar</button>' +
                 '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;display:block;margin-top:4px;">Confirme por SMS. O número vira mais um login da sua conta (com a sua senha).</span>' +
                 '<div id="profile-link-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-link-phone-recaptcha" style="display:none;"></div>' +
@@ -6998,6 +6999,20 @@ function setupProfileModal() {
               '<p style="font-size:0.68rem;color:var(--text-muted);margin:6px 0 0 0;">Os placares dos seus jogos continuam aparecendo na chave e na classificação do torneio — isso é do torneio, não seu. O que esta escolha fecha é a grade de desempenho da sua ficha.</p>' +
               '<input type="hidden" id="profile-stats-visibility" value="public">' +
             '</div>' +
+            // 1.9.70 — CORREÇÃO do dono: o grupo é sobre OS SEUS jogos — quem recebe o
+            // convite quando VOCÊ entra em quadra ao vivo (mesma pergunta das outras
+            // duas: "quem me vê"). 'friends' = só os seus amigos são avisados; guardado
+            // em liveAlertsWho (liveAlerts boolean segue como opt-out legado de RECEBER).
+            '<div style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">🔴 Avisar quando um placar ao vivo começar</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">Quem recebe o convite para assistir quando um jogo SEU começa a ser marcado ao vivo.</p>' +
+              '<div id="live-alerts-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
+                '<button type="button" data-la="all" onclick="window._setLiveAlertsWho(\'all\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
+                '<button type="button" data-la="friends" onclick="window._setLiveAlertsWho(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
+                '<button type="button" data-la="none" onclick="window._setLiveAlertsWho(\'none\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+              '</div>' +
+              '<input type="hidden" id="profile-live-alerts-who" value="all">' +
+            '</div>' +
             // Presença — visibilidade + silenciar
             '<div class="form-group" style="margin-bottom: 1rem;">' +
               '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">📍 Presença no local</label>' +
@@ -7022,19 +7037,20 @@ function setupProfileModal() {
               '<p style="font-size:0.68rem;color:var(--text-muted);margin:4px 0 0 0;">Enquanto silenciado, suas presenças não são criadas e você não aparece para amigos. Volta automático ao fim do prazo.</p>' +
               '<input type="hidden" id="profile-presence-visibility" value="friends">' +
             '</div>' +
-            // 1.9.68 — o AVISO do ao vivo vira grupo TRÊS-estados, no mesmo padrão das
-            // outras duas perguntas "quem me vê/avisa": Todos | Amigos | Ninguém.
-            // 'friends' = só quando um AMIGO começa a marcar; guardado em liveAlertsWho
-            // (liveAlerts boolean segue gravado pra compat com leitores antigos).
-            '<div style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">🔴 Avisar quando um placar ao vivo começar</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">De quem você recebe o convite para assistir quando um jogo do seu torneio começa a ser marcado ao vivo.</p>' +
-              '<div id="live-alerts-group" style="display:flex;gap:6px;flex-wrap:nowrap;">' +
-                '<button type="button" data-la="all" onclick="window._setLiveAlertsWho(\'all\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🌐 Todos</button>' +
-                '<button type="button" data-la="friends" onclick="window._setLiveAlertsWho(\'friends\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">👥 Amigos</button>' +
-                '<button type="button" data-la="none" onclick="window._setLiveAlertsWho(\'none\')" class="btn btn-sm" style="flex:1;font-size:0.72rem;padding:7px 4px;border-radius:10px;white-space:nowrap;background:transparent;color:var(--text-muted);border:1.5px solid var(--border-color);font-weight:500;">🚫 Ninguém</button>' +
+            // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
+            // de descoberta: cadastrar onde joga vem antes de configurar presença).
+            // Locais de preferência (mapa)
+            '<div class="form-group" style="margin-bottom: 1rem;">' +
+              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelLocations') + '</label>' +
+              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.locationsDesc') + '</p>' +
+              '<div style="position:relative;display:flex;gap:6px;margin-bottom:8px;">' +
+                '<input type="text" id="profile-location-search" class="form-control" placeholder="' + _t('profile.searchLocation') + '" style="flex:1;box-sizing:border-box;font-size:0.8rem;" autocomplete="off">' +
+                '<button type="button" id="profile-locate-btn" onclick="window._profileLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>' +
+                '<div id="profile-location-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:4px;"></div>' +
               '</div>' +
-              '<input type="hidden" id="profile-live-alerts-who" value="all">' +
+              '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
+              '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
+              '<input type="hidden" id="profile-edit-ceps" value="">' +
             '</div>' +
               '</div>' +
             '</div>' +
@@ -7127,21 +7143,6 @@ function setupProfileModal() {
               '<div onclick="(window._showPlayerStats&&window.AppStore&&window.AppStore.currentUser)&&window._showPlayerStats(window.AppStore.currentUser.displayName)" style="margin-top:8px;font-size:0.72rem;color:var(--text-muted,#94a3b8);line-height:1.4;cursor:pointer;">' +
                 '💡 Você também importa pelas suas <b style="color:var(--text-bright,#fff);">📊 Estatísticas</b> na tela inicial.' +
               '</div>' +
-            '</div>' +
-            // v2.3.24: Locais de preferência ANTES de Presença no local (jornada
-            // de descoberta: cadastrar onde joga vem antes de configurar presença).
-            // Locais de preferência (mapa)
-            '<div class="form-group" style="margin-bottom: 1rem;">' +
-              '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + _t('profile.labelLocations') + '</label>' +
-              '<p style="font-size: 0.7rem; color: var(--text-muted); margin: 0 0 8px 0;">' + _t('profile.locationsDesc') + '</p>' +
-              '<div style="position:relative;display:flex;gap:6px;margin-bottom:8px;">' +
-                '<input type="text" id="profile-location-search" class="form-control" placeholder="' + _t('profile.searchLocation') + '" style="flex:1;box-sizing:border-box;font-size:0.8rem;" autocomplete="off">' +
-                '<button type="button" id="profile-locate-btn" onclick="window._profileLocateMe()" class="btn btn-sm" style="background:var(--primary-color);color:#fff;border:none;white-space:nowrap;font-size:0.75rem;padding:6px 10px;" title="Usar minha localização">📍</button>' +
-                '<div id="profile-location-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:4px;"></div>' +
-              '</div>' +
-              '<div id="profile-map-container" style="width:100%;height:200px;border-radius:10px;overflow:hidden;border:1px solid var(--border-color);margin-bottom:8px;background:#1a1a2e;"></div>' +
-              '<div id="profile-locations-list" style="display:flex;flex-direction:column;gap:4px;"></div>' +
-              '<input type="hidden" id="profile-edit-ceps" value="">' +
             '</div>' +
               '</div>' +
             '</div>' +
