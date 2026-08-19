@@ -413,6 +413,10 @@ const SUITES = [
   // Mesmo veneno, porta dos INSCRITOS (store.js — o uid-poison só carrega js/views/*).
   // Identificar inscrito por nome/e-mail (era o caso do organizador) fica VERMELHO aqui.
   'tests/uid-poison-inscritos.test.js',
+  // A lista de inscritos chega em FATIAS (1ª pintura 34,5ms → 11,1ms no Confra). Guarda o
+  // invariante: pode chegar em pedaços, mas nunca falta card, nunca há branco onde a
+  // pessoa olha e a tela não pula. Sobe um Chromium com o app real + o Confra de 111.
+  'tests/inscritos-em-fatias.test.js',
   // Nº de inscrição é da PESSOA: formar/desfazer dupla NÃO mexe; só a saída renumera.
   'tests/enroll-number-canon.test.js',
   // Flexibilizar equilíbrio: forma duplas mesmo-gênero da sobra em vez de deixar gente de fora.

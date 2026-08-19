@@ -46,6 +46,23 @@ function _reRenderParticipantsStable() {
   window._suppressSoftRefresh = true;
   clearTimeout(window._presenceRefreshRelease);
   window._presenceRefreshRelease = setTimeout(function () { window._suppressSoftRefresh = false; }, 1600);
+  var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
+  var _solto = false;
+  // enquanto esta trava está posta, ELA é a dona da altura do container —
+  // `_autoKeepScroll` (store.js) não mexe. Ver o comentário lá.
+  window._travaAlturaExterna = true;
+  var _unlock = function () {
+    if (_solto) return; _solto = true;
+    window._travaAlturaExterna = false;
+    try { var c = document.getElementById('view-container'); if (c) c.style.minHeight = ''; } catch (_e) {}
+  };
+  // ⚠️ A LISTA PASSOU A CHEGAR EM FATIAS → a trava de altura só sai quando a ÚLTIMA
+  // entrar. Soltar nos 2 quadros de sempre encontraria o documento ainda CURTO (a lista
+  // do Confra mede 15.600px; a 1ª fatia, ~1.400px): ele encolheria, o navegador clamparia
+  // o scroll pra cima e o "sobe uma linha e desce rapidinho" voltaria — agora em tamanho
+  // grande, porque falta muita lista. O gancho é lido por `renderParticipants` e disparado
+  // quando a última fatia entra.
+  window._inscritosPinturaCompleta = function () { _restore(); _unlock(); };
   _reRenderParticipants();
   // v1.3.92: acabou de re-renderizar com o estado atual → adianta a assinatura pro eco tardio do
   // snapshot ver "igual" e NÃO re-renderizar de novo (o pulinho que sobrava no fallback).
@@ -53,14 +70,139 @@ function _reRenderParticipantsStable() {
     var _tSig = window._findTournamentById && window._findTournamentById((window.location.hash || '').split('/')[1]);
     if (_tSig && window._participantsViewSig) window._pdetailSig = window._participantsViewSig(_tSig);
   } catch (_eSig) {}
-  var _restore = function () { try { window.scrollTo(0, _y); } catch (_e) {} };
   _restore();
-  var _unlock = function () { try { var c = document.getElementById('view-container'); if (c) c.style.minHeight = ''; } catch (_e) {} };
+  // rede OBRIGATÓRIA: trava de altura presa é pior que pulinho. Se a pintura não
+  // completar (erro no meio, troca de tela, gancho engolido), solta assim mesmo.
+  setTimeout(function () { _restore(); _unlock(); }, 4000);
   if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(function () { _restore(); requestAnimationFrame(function () { _restore(); _unlock(); }); });
+    requestAnimationFrame(function () {
+      _restore();
+      requestAnimationFrame(function () {
+        _restore();
+        // ⚠️ PISO DE 2 QUADROS, como sempre foi. Só a espera pela última fatia é nova, e
+        // ela vale SÓ quando há fatia em voo: um render que sai pelo caminho curto
+        // (torneio não encontrado, lista vazia, seções de duplas) nunca chama o gancho —
+        // sem este piso a trava ficaria posta segurando o documento até a rede de 4s.
+        if (typeof window._inscritosPintandoEmFatias !== 'function' || !window._inscritosPintandoEmFatias()) _unlock();
+      });
+    });
   } else { _unlock(); }
 }
 window._reRenderParticipantsStable = _reRenderParticipantsStable;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A LISTA DE INSCRITOS CHEGA EM FATIAS — e a PRIMEIRA já preenche a tela
+//
+// Proposta do dono: _"renderizar em blocos — não precisa entregar os últimos jogos
+// que vai ter que scrollar até lá; fica aceitável um processamento enquanto se lê
+// ou digita"_.
+//
+// MEDIDO no Confra (111 inscritos, 390×844, Chromium):
+//   • `renderParticipants` inteiro: 34,5ms  • `_partApplyFilter`: 25ms
+//   • montar as strings dos cards ≈ 24ms; enfiar no DOM ≈ 10ms
+//   • cabem 4 cards na tela (118px cada) — os outros 107 são trabalho que ninguém vê
+// Fatiar leva a PRIMEIRA pintura de ~34,5ms pra ~4ms, porque tanto o montar quanto o
+// enfiar passam a ser só do que se vê. O trabalho TOTAL é o mesmo; o que muda é quando.
+//
+// ⚠️ AS TRÊS ARMADILHAS QUE ESTA FUNÇÃO EXISTE PRA NÃO CAIR:
+//
+// 1. ⛔ NADA DE `content-visibility`. Ele reserva ESPAÇO e não entrega conteúdo: a
+//    lista "vem cortada" ao rolar e o 1º toque é engolido (subárvore pulada não tem
+//    layout nem atende o dedo). Está proibido no app inteiro e há teste recusando a
+//    declaração ativa. A fatia entrega card REAL, nunca retângulo vazio.
+//
+// 2. ⛔ NUNCA DEPENDER DE UM AGENDADOR SÓ. `requestAnimationFrame` não dispara em aba
+//    de fundo — e no painel de navegador ele pode não disparar NUNCA. Sem rede dupla, a
+//    pessoa ficaria com 20 de 143 inscritos PRA SEMPRE, com a tela afirmando 143. Uma
+//    lista incompleta que se diz completa é pior que uma lista lenta. Por isso rAF E
+//    timeout, com trava `feito` (o que vier primeiro pinta, uma vez só) e a porta
+//    síncrona `_flushInscritosPaint` pra quem precisa da lista inteira agora.
+//
+// 3. ⚠️ A FATIA 1 ACOMPANHA O SCROLL. Quem re-renderiza no meio da lista (marcar
+//    presença com a tela em 8.000px) tem o scroll restaurado pra lá — entregar só os 20
+//    primeiros deixaria BRANCO exatamente onde a pessoa está olhando. Por isso o corte
+//    é medido a partir da posição ATUAL (+2,5 telas de folga): no topo dá ~20 cards, no
+//    meio da lista dá quase tudo, e no fim dá tudo. Uma regra só, sem ramo.
+//
+// A ordem NÃO muda por causa disto: medido, a ordem natural de montagem já é idêntica à
+// que `_partApplyFilter` produz (0 cards trocam de lugar), então anexar no fim é a mesma
+// lista — não há remexida enquanto se lê.
+// ─────────────────────────────────────────────────────────────────────────────
+var _inscritosPend = [];
+// ⚠️ CADA PINTURA TEM IDENTIDADE. Sem isto, as fatias ainda em voo de um render anterior
+// anexam no grid do render NOVO (mesmo id) e a lista sai DUPLICADA — medido: 178 cards
+// numa lista de 111, ao re-renderizar enquanto a pintura anterior não tinha terminado
+// (dois toques seguidos em Presente fazem exatamente isso). Quem não é da geração atual
+// desiste em silêncio: quem assumiu a tela cuida dela.
+var _fatiaGeracao = 0;
+window._inscritosNovaGeracao = function () { return ++_fatiaGeracao; };
+window._inscritosGeracaoAtual = function () { return _fatiaGeracao; };
+// Descarga síncrona: termina AGORA o que estiver pendente. É o que o teste headless usa
+// (lá rAF/timeout são de mentira) e a rede pra quem precisa da lista completa no mesmo
+// instante. Drena em laço porque cada fatia agenda a seguinte.
+window._inscritosPintandoEmFatias = function () { return _inscritosPend.length > 0; };
+window._flushInscritosPaint = function () {
+  var giros = 0;
+  while (_inscritosPend.length && giros++ < 500) {
+    var f = _inscritosPend.shift();
+    try { f(); } catch (e) {}
+  }
+};
+
+// Quantos cards a 1ª fatia precisa levar pra cobrir o que se VÊ agora + 2,5 telas.
+// Conservador de propósito: errar pra mais custa alguns ms; errar pra menos deixa
+// buraco branco na tela.
+function _inscritosPrimeiraFatia(total) {
+  var vh = 800, y = 0, larg = 0;
+  try { vh = window.innerHeight || 800; } catch (e) {}
+  try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+  try { var c = document.getElementById('view-container'); larg = c ? c.clientWidth : 0; } catch (e) {}
+  var colunas = Math.max(1, Math.floor((larg || 390) / 240));   // o grid é minmax(240px,1fr)
+  var ALTURA = 110;                                             // medido: 118px; 110 sobra a favor
+  var precisa = Math.ceil((y + vh * 2.5) / ALTURA) * colunas;
+  return Math.max(colunas * 6, Math.min(total, precisa));
+}
+
+// Anexa o RESTO da lista em lotes, um por quadro, dentro do grid que já está na tela.
+// `jaNaTela` = quantos a 1ª fatia levou. `aoCompletar` roda UMA vez, quando o último
+// card entrou — é lá que mora tudo que lê o DOM inteiro (filtro/ordenação, hidratação
+// de nomes, fotos) e a soltura da trava de altura.
+function _pintarInscritosEmFatias(gridId, itens, montaCard, jaNaTela, aoCompletar, geracao) {
+  var i = jaNaTela;
+  var LOTE = 24;
+  var encerrar = function () { if (typeof aoCompletar === 'function') { try { aoCompletar(); } catch (e) {} } };
+  if (!itens || i >= itens.length) { encerrar(); return; }
+  var agenda;
+  var passo = function () {
+    // outro render assumiu a tela → esta pintura não tem mais dono (e anexar agora
+    // duplicaria a lista dele)
+    if (geracao !== _fatiaGeracao) return;
+    var grid = document.getElementById(gridId);
+    // a tela trocou (outra rota) → nada a fazer
+    if (!grid) { encerrar(); return; }
+    var fim = Math.min(itens.length, i + LOTE);
+    var html = '';
+    for (var k = i; k < fim; k++) {
+      try { html += montaCard(itens[k], k); } catch (e) {}
+    }
+    try { grid.insertAdjacentHTML('beforeend', html); }
+    catch (e) { if (window._error) window._error('[Inscritos] fatia:', e); }
+    i = fim;
+    if (i < itens.length) agenda(); else encerrar();
+  };
+  agenda = function () {
+    var feito = false;
+    var uma = function () {
+      if (feito) return; feito = true;
+      var ix = _inscritosPend.indexOf(uma); if (ix >= 0) _inscritosPend.splice(ix, 1);
+      passo();
+    };
+    _inscritosPend.push(uma);
+    try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(uma); } catch (e) {}
+    try { if (typeof setTimeout === 'function') setTimeout(uma, 32); } catch (e) {}
+  };
+  agenda();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // v1.0.87-beta: REDE DE SEGURANÇA — _processWoSubstitutions
@@ -1255,6 +1397,13 @@ window._rollCallPresenceCtx = function (t, opts) {
 // Ordenar reordena os nós no container. window._partSearch persiste o texto entre renders.
 window._partSearch = window._partSearch || '';
 window._partApplyFilter = function () {
+  // ⚠️ FILTRAR EXIGE A LISTA INTEIRA. Com fatias ainda em voo, as que chegam DEPOIS
+  // nascem sem o `display` do filtro e aparecem mesmo sem casar com a busca — quem
+  // digitou "Kelly" veria estranhos pipocando por ~150ms. Então quem filtra primeiro
+  // termina a pintura: a primeira tecla paga o resto da lista (~50ms) e o que a tela
+  // mostra passa a ser verdade em todo instante. Sem recursão: no fim da descarga não
+  // resta fatia, e é por isso que a checagem vem antes de qualquer leitura de DOM.
+  try { if (window._inscritosPintandoEmFatias && window._inscritosPintandoEmFatias() && window._flushInscritosPaint) window._flushInscritosPaint(); } catch (e) {}
   var _docEl = document.scrollingElement || document.documentElement;
   var _keepY = _docEl.scrollTop;
   var inp = document.getElementById('part-search');
@@ -1761,7 +1910,7 @@ function renderParticipants(container, tournamentId) {
   function _hydrateNamesP() { if (typeof window._hydrateUidNames === 'function') { try { window._hydrateUidNames(container); } catch (e) {} } }
   // Pre-load player photos from Firestore (async update after render)
   if (typeof _preloadPlayerPhotos === 'function') {
-    _preloadPlayerPhotos(t).then(function() {
+    window._aplicarFotosInscritos = function() {
       var pImgs = container.querySelectorAll('img[data-player-name]');
       pImgs.forEach(function(img) {
         var nm = img.getAttribute('data-player-name');
@@ -1772,7 +1921,8 @@ function renderParticipants(container, tournamentId) {
           img.src = real;
         }
       });
-    }).catch(function() {}).then(_hydrateNamesP);
+    };
+    _preloadPlayerPhotos(t).then(window._aplicarFotosInscritos).catch(function() {}).then(_hydrateNamesP);
   } else { setTimeout(_hydrateNamesP, 0); }
 
   const isOrg = typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t);
@@ -1945,6 +2095,8 @@ function renderParticipants(container, tournamentId) {
 
   // ── Build cards ──
   let cardsStr = '';
+  // itens + construtor da lista fatiável (null = caminho que não fatia, ex.: seções de duplas)
+  let _fatiaItens = null, _fatiaMonta = null;
   let gridStyle = '';
 
   // v2.1.3: mapa nome→participante usado tanto no modo check-in quanto na GRADE
@@ -2555,7 +2707,7 @@ function renderParticipants(container, tournamentId) {
             </div>
         </div>`;
     };
-    cardsStr = _dedupedIndividuals.map(_panelCardBuild).join('');
+    _fatiaItens = _dedupedIndividuals; _fatiaMonta = function (ind) { return _panelCardBuild(ind); };
     // v1.3.83: stash do builder + lista → o toggle reconstrói SÓ o card tocado (in-place),
     // sem full re-render (fim do pulinho + foto→bola bege). Ver _updatePanelCardInPlace.
     try { window._lastPanelCardCtx = { tId: t.id, tRef: t, build: _panelCardBuild, list: _dedupedIndividuals.slice(), filter: (window._checkInFilter || 'all') }; } catch (_ePc) {}
@@ -2619,7 +2771,7 @@ function renderParticipants(container, tournamentId) {
     // v1.3.35: CARD ÚNICO — o #participants passa a renderizar o inscrito individual pela
     // MESMA função que o detalhe usa (window._inscritoIndividualCard). Zero código duplicado.
     var _icCtx = { isOrg: isOrg, drawDone: drawDone, canRollCall: canRollCall, postDrawPresence: postDrawPresence, enrollOrderMap: _enrollOrderMap, nameToParticipant: _nameToParticipant, waitSet: _gridWaitSet, cardPresence: _icPresCtx ? _icPresCtx.cardPresence : null };
-    cardsStr = _gridParts.map((p, idx) => window._inscritoIndividualCard(t, p, idx, _icCtx)).join('');
+    _fatiaItens = _gridParts; _fatiaMonta = function (p, idx) { return window._inscritoIndividualCard(t, p, idx, _icCtx); };
     }
   }
 
@@ -2694,6 +2846,17 @@ function renderParticipants(container, tournamentId) {
     ? window._inscritosBar(t, parts.length > 1)
     : '';
 
+  // 1ª FATIA: só o que a pessoa vê agora. O resto entra por `_pintarInscritosEmFatias`
+  // logo abaixo, sem nunca reconstruir o que já está na tela.
+  var _jaNaTela = 0;
+  if (_fatiaItens && _fatiaItens.length) {
+    _jaNaTela = _inscritosPrimeiraFatia(_fatiaItens.length);
+    cardsStr = '';
+    for (var _fi = 0; _fi < _jaNaTela; _fi++) {
+      try { cardsStr += _fatiaMonta(_fatiaItens[_fi], _fi); } catch (_eF) {}
+    }
+  }
+
   container.innerHTML = `
     ${(typeof window._renderBackHeader === 'function')
       ? window._renderBackHeader({
@@ -2718,7 +2881,7 @@ function renderParticipants(container, tournamentId) {
     ${readyBannerHtml}
     ${_filterBarCtrls}
     ${parts.length > 0 ? `
-      <div style="${gridStyle}">
+      <div id="inscritos-grid" style="${gridStyle}">
         ${cardsStr}
       </div>
     ` : `
@@ -2728,8 +2891,30 @@ function renderParticipants(container, tournamentId) {
     `}
     ${standbyPanelHtml}
   `;
-  // v2.6.101: reaplica busca + filtro ativo/inativo após o (re)render.
-  setTimeout(function () { try { if (window._partApplyFilter) window._partApplyFilter(); } catch (e) {} }, 0);
+  var _geracao = window._inscritosNovaGeracao();
+
+  // ── DEPOIS QUE A ÚLTIMA FATIA ENTROU ────────────────────────────────────────
+  // Tudo que lê a lista INTEIRA mora aqui: rodar no meio das fatias veria meia lista
+  // (o filtro esconderia gente que ainda não chegou e a ordenação remexeria o que a
+  // pessoa está lendo). `_inscritosPinturaCompleta` é o gancho da trava de altura —
+  // ver `_reRenderParticipantsStable`.
+  var _depoisDaLista = function () {
+    // pintura velha: quem assumiu a tela roda o seu próprio "depois" — inclusive a
+    // soltura da trava de altura, que soltada por uma geração vencida encontraria a
+    // lista NOVA ainda pela metade e derrubaria o documento.
+    if (_geracao !== window._inscritosGeracaoAtual()) return;
+    // v2.6.101: reaplica busca + filtro ativo/inativo após o (re)render.
+    try { if (window._partApplyFilter) window._partApplyFilter(); } catch (e) {}
+    try { if (window._aplicarFotosInscritos) window._aplicarFotosInscritos(); } catch (e) {}
+    _hydrateNamesP();
+    var _h = window._inscritosPinturaCompleta;
+    if (typeof _h === 'function') { window._inscritosPinturaCompleta = null; try { _h(); } catch (e) {} }
+  };
+  if (_fatiaItens && _jaNaTela < _fatiaItens.length) {
+    _pintarInscritosEmFatias('inscritos-grid', _fatiaItens, _fatiaMonta, _jaNaTela, _depoisDaLista, _geracao);
+  } else {
+    setTimeout(_depoisDaLista, 0);
+  }
 }
 
 // ── Skill category assignment from participant cards ──────────────────────────

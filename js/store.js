@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.60';
+window.SCOREPLACE_VERSION = '1.9.61';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -509,8 +509,16 @@ window._autoKeepScroll = function() {
   // Trava a altura do container durante o swap (documento não encurta → o browser
   // não clampa o scroll no meio do render). Solta no rAF/timeout.
   var vc = document.getElementById('view-container');
+  // ⚠️ TRAVA DE ALTURA TEM UM DONO SÓ. Quando outro mecanismo já segura o documento
+  // (a lista de inscritos o segura até a ÚLTIMA fatia entrar), esta função não pode
+  // mexer nela: ela lê `prevMin` no INÍCIO do render — quando a trava do outro ainda
+  // está posta — e o reescreve no rAF/timeout, ou seja RE-TRAVA depois de o dono ter
+  // soltado, e o container fica preso alto. Antes isso passava por sorte de ordem (o
+  // dono soltava em 2 quadros, depois desta restauração); com a lista em fatias o dono
+  // solta quando a lista termina, que pode ser antes. Sorte de ordem não é contrato.
+  var donoExterno = !!window._travaAlturaExterna;
   var prevMin = vc ? vc.style.minHeight : '';
-  try { if (vc && vc.offsetHeight > 0) vc.style.minHeight = vc.offsetHeight + 'px'; } catch (e) {}
+  try { if (!donoExterno && vc && vc.offsetHeight > 0) vc.style.minHeight = vc.offsetHeight + 'px'; } catch (e) {}
   var restore = function() {
     try { window.scrollTo({ top: y, left: 0, behavior: 'instant' }); }
     catch (e) { try { window.scrollTo(0, y); } catch (e2) {} }
@@ -519,8 +527,8 @@ window._autoKeepScroll = function() {
   // paint — nenhum frame pinta com o scroll errado ("pulinho" de 1 linha que o rAF
   // sozinho deixava). rAF + timeout repetem por segurança e soltam a trava.
   try { Promise.resolve().then(restore); } catch (e) {}
-  try { requestAnimationFrame(function () { restore(); if (vc) vc.style.minHeight = prevMin; }); } catch (e) {}
-  try { setTimeout(function () { restore(); if (vc) vc.style.minHeight = prevMin; }, 0); } catch (e) {}
+  try { requestAnimationFrame(function () { restore(); if (vc && !donoExterno) vc.style.minHeight = prevMin; }); } catch (e) {}
+  try { setTimeout(function () { restore(); if (vc && !donoExterno) vc.style.minHeight = prevMin; }, 0); } catch (e) {}
 };
 
 // Rótulo de EXIBIÇÃO do formato — mantém o valor canônico de t.format intocado
