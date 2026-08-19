@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.64';
+window.SCOREPLACE_VERSION = '1.9.65';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1921,10 +1921,22 @@ window._isPartidaEmRajada = function (rec) {
 // fornecidos pelas próprias lojas (Apple Marketing Guidelines / Google Play brand assets)
 // e existem justamente pra isso.
 // ⚠️ Se o arquivo não existir, o flyer VOLTA pro texto sozinho (onerror) — nunca fica um
-// buraco na folha. Por isso pôr o caminho aqui é seguro mesmo antes de o arquivo chegar.
+// buraco na folha.
+// ⚠️ Apple é SVG, Google é PNG: o Google NÃO publica o selo em vetor. Não converter à
+// mão — selo redesenhado foi o que produziu o resultado que o dono chamou de ridículo.
+// ⚠️ SÃO DOIS CAMPOS PORQUE SÃO DUAS PERGUNTAS DIFERENTES:
+//   `on`   = a loja está NO AR? Governa o botão "Baixar na loja" da tela inicial. Botão
+//            ligado com ficha em 404 manda o usuário pra "não encontrado" DENTRO do app.
+//   `selo` = mostrar o selo da loja no CONVITE IMPRESSO? Ali o selo comunica "vai estar
+//            nas duas lojas", e quem imprime é o organizador, que sabe o contexto.
+// Isto nasceu de um teste ficando vermelho (`notificacao-lida-e-botao-da-loja`): ligar a
+// Play pro convite ia ligar JUNTO o botão do app, efeito que o dono não pediu. Ele pediu
+// os dois SELOS no impresso (19/ago/2026); o botão continua esperando o 200.
+// ⚠️ `play.on` só vira true quando a ficha responder 200 — o pedido de produção está EM
+// ANÁLISE (enviado sábado, prazo ~7 dias). Conferir antes de ligar.
 window.SP_LOJAS = {
-  apple: { on: true,  nome: 'App Store',   glifo: '',  badge: '/assets/badge-app-store.svg',   url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
-  play:  { on: false, nome: 'Google Play', glifo: '▶', badge: '/assets/badge-google-play.svg', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
+  apple: { on: true,  selo: true, nome: 'App Store',   glifo: '',  badge: '/assets/badge-app-store.svg',   url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
+  play:  { on: false, selo: true, nome: 'Google Play', glifo: '▶', badge: '/assets/badge-google-play.png', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
 };
 
 // Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.

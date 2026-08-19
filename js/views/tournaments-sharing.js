@@ -907,8 +907,12 @@ function _buildFlyerPrintHtml(o) {
     // ⚠️ Só entra loja com `on:true`. A Play está DESLIGADA porque a ficha dela responde
     // 404 (teste fechado, reconferido em 19/ago/2026) — anunciar em papel manda quem lê
     // pra uma página onde não dá pra instalar. Ligar quando a ficha abrir.
-    if (_LOJAS.apple.on) itens.push(_flyerSeloHtml(_LOJAS.apple));
-    if (_LOJAS.play.on)  itens.push(_flyerSeloHtml(_LOJAS.play));
+    // usa `selo`, NÃO `on`: `on` governa o botão "Baixar na loja" DENTRO do app, que não
+    // pode apontar pra ficha em 404. No impresso o dono quis os dois (19/ago/2026).
+    // Fallback pra `on` cobre loja cadastrada sem o campo novo.
+    var _mostra = function (l) { return l && (l.selo !== undefined ? l.selo : l.on); };
+    if (_mostra(_LOJAS.apple)) itens.push(_flyerSeloHtml(_LOJAS.apple));
+    if (_mostra(_LOJAS.play))  itens.push(_flyerSeloHtml(_LOJAS.play));
     if (!itens.length) return '';
     return '<div class="lojas">' +
       '<span class="lojas-cta">Baixe o app</span>' +
