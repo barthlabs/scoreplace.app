@@ -68,7 +68,7 @@ ok(/_openTournamentCard\(event, tournamentId\)/.test(dashboard),
 // dash (que era um <a> navegando no mesmo task, sem pintura do aviso) entra pela
 // MESMA função. O recorte cobre as duas: a regra continua morando num lugar só.
 const corpoPorta = (store.match(/window\._openTournamentCard\s*=\s*function[\s\S]*?window\._navTorneioComAviso\s*=\s*function[\s\S]*?\n};/) || [''])[0];
-ok(/_navTorneioComAviso\(tournamentId\)/.test(corpoPorta),
+ok(/_navTorneioComAviso\(tournamentId, event\)/.test(corpoPorta),
    'a porta do card DELEGA pro miolo único (_navTorneioComAviso)');
 ok(/_navTorneioComAviso\(/.test(dashboard),
    'a linha compacta da dash entra pelo MESMO miolo (era <a> navegando sem pintar o aviso)');

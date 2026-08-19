@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.77';
+window.SCOREPLACE_VERSION = '1.9.78';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -23,6 +23,29 @@ window._medirTrecho = function (nome, fn) {
     }
   }
 };
+
+// ── SENTINELA DE TRAVADAS (1.9.78) — vê o que o iOS não deixa ver ────────────
+// O relato da 76 mostrou que o vácuo do toque acontece ANTES do handler rodar:
+// o evento espera uma tarefa longa que JÁ estava na thread. Nenhum código nosso
+// roda "durante" — mas um batimento de 150ms percebe: batida que chega atrasada
+// = a thread esteve presa pelo intervalo extra. Fica {dur, fim} num anel de 15;
+// o relato do toque cruza com os trechos nomeados.
+window._travadas = [];
+try {
+  (function () {
+    var _ultimaBatida = (window.performance && performance.now) ? performance.now() : 0;
+    if (!_ultimaBatida) return;
+    setInterval(function () {
+      var agora = performance.now();
+      var gap = agora - _ultimaBatida;
+      _ultimaBatida = agora;
+      if (gap > 450) {   // 150 do intervalo + 300 de tolerância
+        window._travadas.push({ dur: Math.round(gap - 150), fim: agora });
+        if (window._travadas.length > 15) window._travadas.shift();
+      }
+    }, 150);
+  })();
+} catch (e) {}
 
 window._longTasks = [];
 try {
@@ -6822,7 +6845,7 @@ window._openTournamentCard = function (event, tournamentId) {
     if (target.closest('[data-liga-toggle-tid]')) return;
     if (target.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
   }
-  window._navTorneioComAviso(tournamentId);
+  window._navTorneioComAviso(tournamentId, event);
 };
 
 // PORTA ÚNICA da navegação card→torneio COM aviso (1.9.75): o card da dash, a linha
@@ -6830,8 +6853,20 @@ window._openTournamentCard = function (event, tournamentId) {
 // navegava NO MESMO task do toque — o aviso era criado e a rota rodava antes de
 // qualquer pintura, ou seja o "Abrindo o torneio…" podia nem aparecer (a MESMA
 // classe de bug da 1.9.55, viva no outro caminho — grep pela AÇÃO, não pelo handler).
-window._navTorneioComAviso = function (tournamentId) {
+window._navTorneioComAviso = function (tournamentId, evento) {
   if (!tournamentId) return;
+  // 1.9.78 — ATRASO DE ENTRADA: event.timeStamp é a hora REAL do toque no
+  // hardware (mesma base do performance.now no WebKit moderno). A diferença até
+  // aqui é o tempo que o evento ESPEROU a thread — o vácuo que o cronômetro de
+  // dentro do handler (1.9.75) não enxergava, e que a 76 provou existir (o dono
+  // seguiu vendo 2-3s e NENHUM relato saiu: dentro do handler estava rápido).
+  var _inDelay = -1;
+  try {
+    if (evento && evento.timeStamp && window.performance && performance.now) {
+      var _d = performance.now() - evento.timeStamp;
+      if (_d >= 0 && _d < 60000) _inDelay = Math.round(_d);
+    }
+  } catch (eIn) {}
   if (typeof window._showLoading === 'function') {
     try {
       window._showLoading('Abrindo o torneio…');
@@ -6875,15 +6910,18 @@ window._navTorneioComAviso = function (tournamentId) {
     requestAnimationFrame(function () { requestAnimationFrame(function () {
       var ms = performance.now() - _tapT0;
       window._ultimoTapLoaderMs = Math.round(ms);
-      if (ms > 400) {
+      window._ultimoTapInputDelay = _inDelay;
+      if (ms > 400 || _inDelay > 300) {
         var tasks = (window._longTasks || []).filter(function (lt) { return lt.fim >= _tapT0; })
           .map(function (lt) { return Math.round(lt.dur) + 'ms ' + (lt.nome || ''); }).slice(-6);
         var trechos = (window._trechos || []).filter(function (tr) { return (tr.ini + tr.dur) >= _tapT0 - 100; })
           .map(function (tr) { return tr.nome + '=' + Math.round(tr.dur) + 'ms'; }).slice(-8);
         if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms; trechos:', trechos.join(' | '), '; longtasks:', tasks.join(' | '));
-        if (!window._tapLentoReportado && typeof window._captureMessage === 'function') {
-          window._tapLentoReportado = true;
-          try { window._captureMessage('tap-sem-feedback: loader levou ' + Math.round(ms) + 'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') + ' · longtasks: ' + (tasks.join(' | ') || 'sem suporte'), 'info'); } catch (e) {}
+        var travadas = (window._travadas || []).filter(function (tv) { return tv.fim >= _tapT0 - 4000; })
+          .map(function (tv) { return Math.round(tv.dur) + 'ms@' + Math.round((tv.fim - _tapT0) / 100) / 10 + 's'; }).slice(-5);
+        window._tapReportes = (window._tapReportes || 0) + 1;
+        if (window._tapReportes <= 3 && typeof window._captureMessage === 'function') {
+          try { window._captureMessage('tap-sem-feedback: entrada esperou ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso pintou +' + Math.round(ms) + 'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') + ' · travadas(4s): ' + (travadas.join(' | ') || 'nenhuma') + ' · longtasks: ' + (tasks.join(' | ') || 'sem suporte'), 'info'); } catch (e) {}
         }
       }
     }); });
