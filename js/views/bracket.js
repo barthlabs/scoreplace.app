@@ -3675,6 +3675,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // ids que só existem na tela da chave.
   var _readOnly = !!(opts && opts.readOnly);
 
+  // ⚠️ O `const t` tem que vir ANTES do branch de Folga: a 4.0.84 (nome ao vivo
+  // por uid) pôs `t ? _resolveSideLive(…)` dentro do card de Folga com esta
+  // declaração ainda lá embaixo — TDZ, e a tela da fase de grupos MORRIA em
+  // qualquer Folga renderizada por aqui (Sentry WEB-83). Teste trava a ordem:
+  // tests/card-de-folga-nao-derruba-a-tela.test.js.
+  const t = window.AppStore ? window._findTournamentById(tId) : null;
+
   // Sit-out (Folga): render compact info card instead of full match card
   if (m.isSitOut) {
     var _isInactiveSO = m.sitOutReason === 'inactive';
@@ -3706,7 +3713,6 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       </div>`;
   }
 
-  const t = window.AppStore ? window._findTournamentById(tId) : null;
   // v2.6.96: placar efetivo do match (fase pode ter GSM próprio — "Personalizado").
   const _msc = (t && typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : (t && t.scoring);
   const useSets = !!(t && window._scoringUsesSets(_msc));

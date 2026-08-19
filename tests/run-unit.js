@@ -1036,6 +1036,11 @@ const SUITES = [
   // silêncio de 4h em localStorage (por uid+local). Roda o presence-geo.js real num
   // sandbox e reproduz o ciclo abrir→não→fechar→reabrir.
   'tests/geo-pergunta-silencia-4h.test.js',
+  // Sentry WEB-83: card de Folga em renderMatchCard usava `t` ANTES do `const t`
+  // (TDZ desde a 4.0.84, 30/jun) e derrubava a tela da fase de grupos. Roda o
+  // bracket.js REAL no harness de render e trava também o padrão (nenhuma função
+  // pode usar `t` antes do próprio `const t =`).
+  'tests/card-de-folga-nao-derruba-a-tela.test.js',
 ];
 
 let failed = [];
