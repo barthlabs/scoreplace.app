@@ -72,7 +72,7 @@ window._cloneTournament = function(tournamentId) {
         venueAccess: t.venueAccess || '',
         courtCount: t.courtCount || '',
         courtNames: t.courtNames || '',
-        logoData: t.logoData || '',
+        logoData: window._tourLogoSrc(t) || '',
         logoLocked: t.logoLocked || false,
         logoShape: t.logoShape || 'square',
         logoRadius: (t.logoRadius != null ? t.logoRadius : 14),

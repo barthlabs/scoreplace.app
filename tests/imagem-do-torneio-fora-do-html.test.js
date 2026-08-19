@@ -58,8 +58,13 @@ const corpo = (store.match(/window\._hydrateTournamentPhotos\s*=\s*function[\s\S
 ok(corpo.length > 0, 'consegui isolar o corpo do hidratador');
 ok(/data-tcover-tid/.test(corpo) && /data-tlogo-tid/.test(corpo),
    'o hidratador atende capa E logo');
-ok(/coverPhotoData/.test(corpo) && /logoData/.test(corpo),
-   'ele pinta a partir do dado do torneio');
+// 1.9.51: a imagem foi pro Storage e o doc guarda a URL. Quem resolve "onde está a
+// imagem" é o acessor canônico — o hidratador NÃO pode voltar a ler o campo cru, senão
+// torneio migrado (que só tem `logoUrl`) aparece sem foto.
+ok(/_tourCoverSrc/.test(corpo) && /_tourLogoSrc/.test(corpo),
+   'ele pinta pelo acessor canônico (serve URL do Storage E base64 antiga)');
+ok(!/t\.coverPhotoData|t\.logoData/.test(corpo),
+   'e NÃO lê o campo cru direto (torneio migrado ficaria sem imagem)');
 // se for à rede, troca-se custo de parse por espera — o dado JÁ está em AppStore.
 ok(!/fetch\(|_callCF|\.get\(\)|onSnapshot/.test(corpo),
    'o hidratador NÃO vai à rede (o dado já está em AppStore)');

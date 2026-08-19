@@ -3086,10 +3086,10 @@ window._tvMode = function(tId) {
   // v1.7.53: o hero do Modo TV não pinta mais `url(t.venuePhotoUrl)` — essa URL é do
   // places.googleapis.com e o Modo TV RE-RENDERIZA sozinho a cada 30s, ou seja era uma
   // chamada COBRADA a cada meio minuto com a TV ligada no clube o dia inteiro.
-  var heroBg = t.coverPhotoData
-    ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + t.coverPhotoData + ');background-size:cover;background-position:center;'
+  var heroBg = window._tourCoverSrc(t)
+    ? 'background-image:linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95)),url(' + window._tourCoverSrc(t) + ');background-size:cover;background-position:center;'
     : 'background:linear-gradient(135deg,#1e293b 0%,#0f172a 50%,#1e1b4b 100%);';
-  var _heroVphoto = (!t.coverPhotoData && t.venuePlaceId)
+  var _heroVphoto = (!window._tourCoverSrc(t) && t.venuePlaceId)
     ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="linear-gradient(to bottom,rgba(10,14,26,0.3),rgba(10,14,26,0.95))"'
     : '';
   var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
@@ -3102,7 +3102,8 @@ window._tvMode = function(tId) {
   hero += '</div>';
   // Tournament info
   hero += '<div style="display:flex;align-items:center;gap:20px;">';
-  if (t.logoData) hero += '<img src="' + t.logoData + '" style="width:72px;height:72px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,0.4);">';
+  var _hl = window._tourLogoSrc(t);
+  if (_hl) hero += '<img src="' + _hl + '" style="width:72px;height:72px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,0.4);">';
   hero += '<div>';
   hero += '<h1 style="margin:0;color:white;font-size:2.2rem;font-weight:900;text-shadow:0 2px 10px rgba(0,0,0,0.5);">' + safeName + '</h1>';
   hero += '<div style="color:rgba(255,255,255,0.6);font-size:1rem;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap;">';

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.50';
+window.SCOREPLACE_VERSION = '1.9.51';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RASTRO DE SORTEIO (v1.3.42) — DIAGNÓSTICO VISÍVEL do caminho do sorteio.
@@ -1173,6 +1173,81 @@ window._formatLabel = function (t) {
   // ⚠️ Espelha o hidratador da foto do local (logo acima) de propósito: mesmo gatilho,
   // mesma marca de "já fiz" (`-done`), mesmo sinal de "pintou" (`data-vphoto-on`, que é
   // quem o CSS lê pra calibrar texto sobre foto).
+  // ─── ONDE ESTÁ A IMAGEM DO TORNEIO — UMA FONTE SÓ (1.9.51) ──────────────────
+  // A imagem saiu do doc do torneio e foi pro Storage: o doc agora guarda `logoUrl` /
+  // `coverUrl` (string curta) em vez de `logoData` / `coverPhotoData` (base64 de até
+  // 194 KB). Ver [[project_imagem_base64_no_doc_do_torneio]].
+  //
+  // ⚠️ POR QUE UM ACESSOR, e não trocar o nome do campo em cada tela: são 20+ pontos que
+  // pintam a imagem (card, detalhe, herói da chave, convite impresso, formulário). Regra
+  // repetida em 20 lugares diverge no primeiro ajuste — foi exatamente assim que a
+  // resposta ao toque nasceu só na dashboard ([[feedback_unify_dual_entry_points]]).
+  //
+  // O fallback pra base64 NÃO é decoração: torneio criado antes da migração, ou salvo por
+  // app em versão antiga, ainda traz o campo velho. `<img src>` e `url()` aceitam os dois
+  // formatos igualmente, então quem pinta não precisa saber de qual veio.
+  window._tourLogoSrc = function (t) {
+    if (!t) return '';
+    return t.logoUrl || t.logoData || '';
+  };
+  window._tourCoverSrc = function (t) {
+    if (!t) return '';
+    return t.coverUrl || t.coverPhotoData || '';
+  };
+
+  // ─── SUBIR IMAGEM PRO STORAGE ────────────────────────────────────────────────
+  // ⚠️ O SDK DE STORAGE É CARREGADO SOB DEMANDA, e isto é o ponto: só quem CRIA ou EDITA
+  // um torneio precisa dele. A LEITURA não precisa de SDK nenhum — a imagem vira
+  // `<img src="https://…">`, que o navegador busca sozinho, cacheia e ainda pode adiar
+  // com `loading="lazy"`. Pôr o SDK no index.html engordaria o caminho crítico de TODA
+  // abertura do app pra servir um punhado de organizadores.
+  var _sdkStorage = null;
+  window._carregaSdkStorage = function () {
+    if (_sdkStorage) return _sdkStorage;
+    _sdkStorage = new Promise(function (resolve, reject) {
+      if (window.firebase && window.firebase.storage) { resolve(window.firebase.storage()); return; }
+      var s = document.createElement('script');
+      s.src = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js';
+      s.onload = function () {
+        try { resolve(window.firebase.storage()); } catch (e) { reject(e); }
+      };
+      s.onerror = function () { reject(new Error('SDK de Storage não carregou')); };
+      document.head.appendChild(s);
+    });
+    return _sdkStorage;
+  };
+
+  // dataURL → Blob, sem passar por fetch() (que em WebView antiga engasga com data: longo)
+  function _dataUrlParaBlob(dataUrl) {
+    var m = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(dataUrl || '');
+    if (!m) return null;
+    var mime = m[1] || 'image/jpeg';
+    var bin = m[2] ? atob(m[3]) : decodeURIComponent(m[3]);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  // Sobe e devolve a URL. Recebe o valor do campo do formulário, que pode ser:
+  //   • uma URL http(s) → a imagem NÃO mudou; devolve como está (nada sobe);
+  //   • um dataURL      → imagem nova; sobe e devolve a URL do Storage;
+  //   • vazio           → sem imagem.
+  // ⚠️ O nome carrega um carimbo de tempo por isso: a URL precisa MUDAR quando a imagem
+  // muda, senão o cache de 1 ano (Cache-Control do bucket) serviria a capa antiga.
+  window._subirImagemTorneio = async function (tournamentId, tipo, valor) {
+    if (!valor) return '';
+    if (/^https?:\/\//i.test(valor)) return valor;      // não mudou — não sobe de novo
+    if (!/^data:/i.test(valor)) return '';
+    var blob = _dataUrlParaBlob(valor);
+    if (!blob) return '';
+    var storage = await window._carregaSdkStorage();
+    var ext = (blob.type.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5);
+    var caminho = 'tournaments/' + String(tournamentId) + '/' + tipo + '-' + Date.now() + '.' + ext;
+    var ref = storage.ref().child(caminho);
+    await ref.put(blob, { contentType: blob.type, cacheControl: 'public, max-age=31536000, immutable' });
+    return await ref.getDownloadURL();
+  };
+
   function _tourPorId(tid) {
     try {
       var ts = (window.AppStore && window.AppStore.tournaments) || [];
@@ -1188,9 +1263,10 @@ window._formatLabel = function (t) {
     Array.prototype.forEach.call(capas, function (el) {
       el.setAttribute('data-tcover-done', '1');
       var t = _tourPorId(el.getAttribute('data-tcover-tid'));
-      if (!t || !t.coverPhotoData) return;
+      var _capa = window._tourCoverSrc(t);
+      if (!_capa) return;
       var overlay = el.getAttribute('data-tcover-overlay') || '';
-      el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + t.coverPhotoData + ')';
+      el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + _capa + ')';
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
       el.setAttribute('data-vphoto-on', '1');
@@ -1201,7 +1277,8 @@ window._formatLabel = function (t) {
     Array.prototype.forEach.call(logos, function (el) {
       el.setAttribute('data-tlogo-done', '1');
       var t = _tourPorId(el.getAttribute('data-tlogo-tid'));
-      if (t && t.logoData) el.src = t.logoData;
+      var _lg = window._tourLogoSrc(t);
+      if (_lg) el.src = _lg;
     });
   };
 

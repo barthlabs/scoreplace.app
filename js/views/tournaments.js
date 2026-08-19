@@ -2571,7 +2571,7 @@ function renderTournaments(container, tournamentId = null) {
                 ? 'linear-gradient(135deg, rgba(15,118,110,0.5) 0%, rgba(20,184,166,0.42) 100%)'
                 : 'linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(15,23,42,0.42) 100%)';
         let venuePhotoBg = '';
-        if (t.coverPhotoData) {
+        if (window._tourCoverSrc(t)) {
             // v4.0.21: foto de fundo custom do organizador — substitui a do Google.
             // Já vem enquadrada (cropper), então só cover+center, sem hidratar Google.
             // 1.9.50: a base64 saiu da string de HTML (ver a nota em
@@ -2583,10 +2583,10 @@ function renderTournaments(container, tournamentId = null) {
         // pagava de novo a cada re-render do boot. O "pisca" que o preload combatia não
         // volta: a foto agora é dataURL de `venuePhotos/{placeId}` (nosso Firestore),
         // guardado em memória por sessão — re-render não vai à rede.
-        var vphotoAttrs = (!t.coverPhotoData && t.venuePlaceId)
+        var vphotoAttrs = (!window._tourCoverSrc(t) && t.venuePlaceId)
             ? ' data-vphoto-pid="' + window._safeHtml(t.venuePlaceId) + '" data-vphoto-overlay="' + overlayGradient + '"'
             : '';
-        if (t.coverPhotoData) {
+        if (window._tourCoverSrc(t)) {
             vphotoAttrs += ' data-tcover-tid="' + window._safeHtml(String(t.id)) + '" data-tcover-overlay="' + overlayGradient + '"';
         }
 
@@ -3199,10 +3199,10 @@ function renderTournaments(container, tournamentId = null) {
 
             <!-- Middle Left: Nome + Logo + Favorito -->
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
-            <div style="display: flex; align-items: ${t.logoData && tournamentId ? 'flex-start' : 'center'}; gap: ${t.logoData && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
-              ${t.logoData ? `
+            <div style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
+              ${window._tourLogoSrc(t) ? `
                 <div style="position:relative;width:33%;min-width:100px;flex-shrink:0;">
-                  <img src="${t.logoData}" alt="Logo"
+                  <img src="${window._tourLogoSrc(t)}" alt="Logo"
                     style="width:100%;aspect-ratio:1/1;border-radius:${window._tournamentLogoRadius(t)};object-fit:cover;display:block;box-shadow:0 4px 20px rgba(0,0,0,0.45);${tournamentId && isOrg ? 'cursor:pointer;' : ''}"
                     ${tournamentId && isOrg ? `onclick="event.stopPropagation(); window._editTournamentLogoFromDetail('${window._safeHtml(t.id)}')" title="Clique para editar o logo"` : ''}
                   >

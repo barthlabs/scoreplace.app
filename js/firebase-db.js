@@ -247,6 +247,35 @@ window.FirestoreDB = {
     if (!(options && options.withImages)) {
       delete cleanData.logoData;
       delete cleanData.coverPhotoData;
+    } else {
+      // ── A IMAGEM VAI PRO STORAGE, E O DOC GUARDA SÓ A URL (1.9.51) ────────────
+      // Este é o ÚNICO ponto por onde imagem de torneio é gravada — criar, editar e o
+      // botão de trocar logo passam todos por aqui. Concentrar em um lugar é o que
+      // impede a divergência de 20 telas ([[feedback_unify_dual_entry_points]]).
+      // `_subirImagemTorneio` devolve a própria URL quando o valor já é http(s), ou
+      // seja: salvar sem mexer na imagem NÃO sobe nada de novo.
+      var _pares = [['logoData', 'logoUrl', 'logo'], ['coverPhotoData', 'coverUrl', 'cover']];
+      for (var _i = 0; _i < _pares.length; _i++) {
+        var _campoVelho = _pares[_i][0], _campoNovo = _pares[_i][1], _tipo = _pares[_i][2];
+        var _val = cleanData[_campoVelho] || cleanData[_campoNovo];
+        if (!_val) { delete cleanData[_campoVelho]; continue; }
+        try {
+          var _url = await window._subirImagemTorneio(docId, _tipo, _val);
+          if (_url) {
+            cleanData[_campoNovo] = _url;
+            // a base64 NUNCA volta pro doc — é o peso que a migração acabou de tirar
+            delete cleanData[_campoVelho];
+          } else {
+            delete cleanData[_campoVelho];
+          }
+        } catch (e) {
+          // upload falhou: preserva o que já está no banco em vez de gravar meia-imagem.
+          // `merge:true` faz o campo ausente ser mantido — ver a nota acima.
+          if (window._warn) window._warn('[saveTournament] upload da imagem falhou; campo preservado', e);
+          delete cleanData[_campoVelho];
+          delete cleanData[_campoNovo];
+        }
+      }
     }
     // When skipParticipants is true, exclude participants array to prevent
     // overwriting enrollments made by other users via transactions.

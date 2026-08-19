@@ -502,7 +502,7 @@ window._openTournamentInvitePrint = function(tournamentId) {
   var dline = _tournamentDateText(t);
   if (dline) subParts.push('📅 ' + dline);
   if (t.venue) subParts.push('📍 ' + t.venue);
-  window._openInvitePrint({ kind: 'tournament', tournamentId: t.id, url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: t.logoData || '', logoRadius: window._tournamentLogoRadius(t) });
+  window._openInvitePrint({ kind: 'tournament', tournamentId: t.id, url: url, title: t.name || 'Torneio', subtitle: subParts.join('\n'), logo: window._tourLogoSrc(t) || '', logoRadius: window._tournamentLogoRadius(t) });
 };
 
 // Lê as preferências de impressão salvas no torneio (ou null). Só leitura —

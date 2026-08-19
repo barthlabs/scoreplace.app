@@ -4593,7 +4593,7 @@ function setupCreateTournamentModal() {
     }
     // v4.0.21: foto de fundo custom do torneio
     if (typeof window._applyCoverPhoto === 'function') {
-      setTimeout(function() { window._applyCoverPhoto(t.coverPhotoData || ''); }, 50);
+      setTimeout(function() { window._applyCoverPhoto(window._tourCoverSrc(t) || ''); }, 50);
     }
     // Show venue map if lat/lon available
     if (t.venueLat && t.venueLon) {
@@ -4604,9 +4604,10 @@ function setupCreateTournamentModal() {
     var _radVal = (t.logoRadius != null && t.logoRadius !== '') ? t.logoRadius : 14;
     if (typeof window._setLogoFormaFromRadius === 'function') window._setLogoFormaFromRadius(_radVal, _isCircle);
     // Restore logo
-    document.getElementById('tourn-logo-data').value = t.logoData || '';
-    if (t.logoData) {
-      window._applyTournamentLogo(t.logoData);
+    document.getElementById('tourn-logo-data').value = window._tourLogoSrc(t) || '';
+    var _lgEdit = window._tourLogoSrc(t);
+    if (_lgEdit) {
+      window._applyTournamentLogo(_lgEdit);
     } else {
       window._clearTournamentLogo();
     }
