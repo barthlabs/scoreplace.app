@@ -11632,6 +11632,32 @@ window._openCasualMatch = function(restoreOpts) {
   // When empty, no teams formed yet. When set, idx→1 = Team 1 (blue), idx→2 = Team 2 (red).
   var _teamAssignments = {};
 
+  // ── "DUPLAS FORMADAS" É UMA REGRA SÓ, E EXIGE 2×2 (1.9.57) ──────────────────
+  // Relato do dono, com print: Toninho aparecia BRANCO (= sem time) e mesmo assim na
+  // coluna da direita, como se fosse o time 2.
+  // Eram TRÊS definições discordando: a tela exigia os 4 índices definidos, o
+  // `_buildPlayers` se contentava com o índice 0, e a divisão em colunas mandava pra
+  // direita tudo que não fosse 1 — juntando "time 2" com "SEM TIME" no mesmo balde.
+  //
+  // 🔴 A CONSEQUÊNCIA NÃO ERA COSMÉTICA: toda composição de nome de time filtra por
+  // `p.team === 1` ou `=== 2`, então quem ficava com `undefined` NÃO ENTRAVA EM NENHUMA
+  // das listas — sumia do `p1Name`/`p2Name`. Como a tela de saque reconstrói os times
+  // FATIANDO essas strings, ela montava dupla com quem sobrou: era o "Toninho no meu
+  // time em vez da Kelly". Um jogador sem time viraria placar errado.
+  //
+  // Agora só existe dupla formada com os QUATRO atribuídos E a divisão 2×2 — qualquer
+  // outra coisa é "ainda não formou", e a tela mostra os quatro soltos.
+  function _duplasFormadas() {
+    var n1 = 0, n2 = 0;
+    for (var i = 0; i < 4; i++) {
+      var v = _teamAssignments[i];
+      if (v === 1) n1++;
+      else if (v === 2) n2++;
+      else return false;          // sem time = não formou (nunca "cai" pro time 2)
+    }
+    return n1 === 2 && n2 === 2;  // 3×1 é divisão inválida em duplas
+  }
+
   // Casual default config per sport (overrides _sportScoringDefaults for casual).
   // deuceRule: game-level 40-40 → AD rule (tennis/padel only).
   // DERIVADO da FONTE ÚNICA window.SPORT_RULES (js/views/sport-rules.js). Regra muda? Muda LÁ.
@@ -11920,7 +11946,7 @@ window._openCasualMatch = function(restoreOpts) {
       }
 
       // Check if teams are formed (drag-and-drop assigned all 4 slots)
-      var _teamsFormed = _teamAssignments[0] !== undefined && _teamAssignments[1] !== undefined && _teamAssignments[2] !== undefined && _teamAssignments[3] !== undefined;
+      var _teamsFormed = _duplasFormadas();
 
       var _inputStyle = 'flex:1;padding:0;border:none;background:transparent;font-size:0.82rem;font-weight:600;outline:none;min-width:0;width:100%;resize:none;font-family:inherit;overflow:hidden;line-height:1.3;word-break:break-word;white-space:pre-wrap;';
 
@@ -12044,8 +12070,11 @@ window._openCasualMatch = function(restoreOpts) {
         // chain icon between each pair. Clicking the chain breaks teams.
         var _t1Idxs = [], _t2Idxs = [];
         for (var _gi = 0; _gi < 4; _gi++) {
+          // explicito nos DOIS lados: `else` solto era o que mandava 'sem time' pra
+          // direita, fingindo time 2. Aqui so entra quem TEM time (garantido por
+          // _duplasFormadas, que ja barrou o resto antes deste ramo).
           if (_teamAssignments[_gi] === 1) _t1Idxs.push(_gi);
-          else _t2Idxs.push(_gi);
+          else if (_teamAssignments[_gi] === 2) _t2Idxs.push(_gi);
         }
         var _chainBtn = '<button type="button" onclick="window._casualResetTeams()" title="' + _t('casual.breakTeams') + '" aria-label="' + _t('casual.breakTeams') + '" ' +
           'style="margin:4px auto;display:flex;align-items:center;justify-content:center;width:40px;height:28px;' +
@@ -13209,7 +13238,10 @@ window._openCasualMatch = function(restoreOpts) {
           };
         }
       }
-      var hasTeamDnD = _teamAssignments[0] !== undefined;
+      // MESMA regra da tela: antes bastava o indice 0 existir pra ele confiar em
+      // _teamAssignments e ler `undefined` nos outros — jogador com team undefined era
+      // filtrado pra fora dos DOIS times e sumia do placar.
+      var hasTeamDnD = _duplasFormadas();
       for (var pi = 0; pi < 4; pi++) {
         players.push({
           slot: pi,

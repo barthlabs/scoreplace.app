@@ -975,6 +975,11 @@ const SUITES = [
   // promessa sem `.catch` — a rejeição virava unhandled e sumia. Trava que o aviso é
   // CONSEQUÊNCIA da gravação, nos dois caminhos (commitTournamentTx e _closeRound).
   'tests/aprovar-placar-nao-mente.test.js',
+  // print do dono: 'Toninho' BRANCO (= sem time) ocupando a coluna do time 2. Eram TRES
+  // definicoes de 'duplas formadas' discordando, e o `else` da divisao adotava quem nao
+  // tinha time. Jogador com team undefined e filtrado pra fora dos DOIS times e some do
+  // p1Name/p2Name — vira placar creditado errado. Agora: 2x2 ou nao formou.
+  'tests/dupla-casual-nao-perde-jogador.test.js',
 ];
 
 let failed = [];
