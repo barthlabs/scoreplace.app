@@ -150,5 +150,47 @@ ok(/tr\.dur >= 120/.test(store),
 ok(/\(tasks\.length \? ' · longtasks: ' \+ tasks\.join\(' \| '\) : ''\)/.test(store),
    'e "longtasks: sem suporte" não é mais enviado (o WKWebView nunca tem a API)');
 
+// ── 6. a barra do "Carregando" anda SEM a thread principal (1.9.93) ───────
+// Relato do dono na 1.9.92: _"o carregando chega em 100% com a barra travada em
+// 5% aprox."_ Duas causas somadas:
+//   (a) o creep vinha de `setInterval(140ms)` — que morre EXATAMENTE quando a
+//       thread trava, que é o único momento em que a pessoa encara a barra;
+//   (b) o preenchimento era `transition: width`, e `width` é LAYOUT: nem quando o
+//       valor final chegava havia quadro pra pintar antes de a tela sair. Já o `%`
+//       é textContent e salta na hora — daí 100% sobre barra parada.
+// Agora quem move é animação CSS em `transform:scaleX`, que o compositor roda sem
+// a thread. VERIFICADO no navegador: animação `sp-loader-creep` anexada e running
+// (9000ms), e o finish deixa `matrix(1,0,0,1,0,0)` com `animation-name: none`.
+const iKf = store.indexOf('window._spLoaderKeyframes = function');
+const kf = store.slice(iKf, store.indexOf('window._SP_LOADER_CREEP_MS', iKf) + 80);
+ok(/@keyframes sp-loader-creep\{from\{transform:scaleX\(0\.04\)\}to\{transform:scaleX\(0\.95\)\}\}/.test(kf),
+   'o creep é animação CSS em transform (composta na GPU), não JS');
+ok(/window\._SP_LOADER_CREEP_MS = 9000;/.test(store),
+   'a duração mora num lugar só — JS e CSS não podem discordar');
+
+const iBarra = store.indexOf("return '<div class=\"sp-loader-bar\"");
+const barra = store.slice(iBarra, store.indexOf('_spLoaderTick', iBarra));
+ok(/animation:sp-loader-creep 9s linear forwards/.test(barra),
+   'o preenchimento nasce com o creep ligado');
+ok(/transform-origin:left center;transform:scaleX\(0\.04\)/.test(barra),
+   'e cresce da esquerda por scaleX');
+ok(!/transition:width/.test(barra),
+   '⛔ nada de `transition: width` — é layout, e não pinta antes de a tela sair');
+
+const iTick = store.indexOf('window._spLoaderTick = function');
+const tick = store.slice(iTick, store.indexOf('window._spLoaderFinish', iTick));
+ok(!/sp-loader-fill/.test(tick),
+   'o tick NÃO toca mais na barra (quem move é o compositor)');
+ok(/var p = 4 \+ \(95 - 4\) \* frac;/.test(tick),
+   'o texto usa a MESMA fórmula linear do @keyframes — número e barra não divergem');
+ok(/\(agora - t0\) \/ \(window\._SP_LOADER_CREEP_MS/.test(tick),
+   'e é calculado por TEMPO DECORRIDO: depois de uma travada o texto pula pro valor real, sem acumular o que perdeu');
+
+const iFin = store.indexOf('window._spLoaderFinish = function');
+const fin = store.slice(iFin, store.indexOf('window._spLoaderLogoHtml', iFin));
+ok(/f\.style\.animation = 'none';/.test(fin),
+   'o finish MATA a animação — senão o `forwards` seguraria 95% sob um texto de 100%');
+ok(/f\.style\.transform = 'scaleX\(1\)';/.test(fin), 'e crava scaleX(1)');
+
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

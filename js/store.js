@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.92';
+window.SCOREPLACE_VERSION = '1.9.93';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -3917,16 +3917,33 @@ window._spLoaderKeyframes = function () {
   style.textContent =
     '@keyframes scoreplace-ball-spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }' +
     '@keyframes scoreplace-ball-pulse { 0%,100% { filter: drop-shadow(0 0 0 transparent);} 50% { filter: drop-shadow(0 0 12px rgba(212,244,60,0.6));} }' +
-    '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}';
+    '@keyframes sp-rich-bar{0%{left:-42%}100%{left:100%}}' +
+    // ── ⭐ A BARRA ANDA SOZINHA, NA GPU (1.9.93) ──────────────────────────────
+    // Relato do dono, na 1.9.92: _"o carregando chega em 100% com a barra travada
+    // em 5% aprox."_ Duas causas somadas, as duas reais:
+    //   (a) o creep vinha de um `setInterval(140ms)` — que MORRE exatamente quando
+    //       a thread trava, que é o único momento em que a pessoa fica encarando a
+    //       barra. Ela ficava parada no valor inicial (4%);
+    //   (b) o preenchimento era `transition: width .25s`, e `width` é LAYOUT: mesmo
+    //       quando o valor final chegava, a transição não tinha quadro pra pintar
+    //       antes de a tela sair. Já o `%` é textContent, que salta na hora — daí o
+    //       texto em 100% sobre a barra parada.
+    // Agora quem move é ANIMAÇÃO CSS em `transform:scaleX`, que o compositor roda
+    // SEM a thread principal: a barra continua andando enquanto o JS está preso.
+    // Linear de propósito: o texto usa a MESMA fórmula linear, então os dois nunca
+    // divergem. 4% → 95% em 9s; os 100% só vêm de _spLoaderFinish.
+    '@keyframes sp-loader-creep{from{transform:scaleX(0.04)}to{transform:scaleX(0.95)}}';
   document.head.appendChild(style);
 };
+// A duração do creep vive aqui pra JS e CSS nunca discordarem.
+window._SP_LOADER_CREEP_MS = 9000;
 
 // A BARRA canônica — a mesma pílula 3D laranja do boot loader, com o % por cima.
 // `largura` deixa a barra acompanhar telas pequenas (slot de card) sem virar outra barra.
 window._spLoaderBarHtml = function (largura) {
   var w = largura || '300px';
   return '<div class="sp-loader-bar" data-sp-prog="4" style="position:relative;width:' + w + ';max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
-      '<div class="sp-loader-fill" style="position:absolute;top:2px;bottom:2px;left:2px;width:4%;border-radius:999px;transition:width .25s ease-out;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
+      '<div class="sp-loader-fill" style="position:absolute;top:2px;bottom:2px;left:2px;right:2px;transform-origin:left center;transform:scaleX(0.04);animation:sp-loader-creep 9s linear forwards;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
       '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:#fbe6c4;text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;">4%</div>' +
     '</div>';
 };
@@ -3934,20 +3951,24 @@ window._spLoaderBarHtml = function (largura) {
 // UM relógio só anima TODA barra que estiver no DOM — assim os ~12 chamadores que montam
 // HTML por string (innerHTML) ganham o % sem precisar mudar nenhum deles. Liga sozinho
 // quando nasce a primeira barra e se desliga quando não há mais nenhuma (zero timer órfão).
+// ⚠️ QUEM MOVE A BARRA É O CSS, NÃO ISTO (1.9.93). Aqui só o TEXTO do %, calculado
+// pela MESMA fórmula linear da animação `sp-loader-creep` — assim o número nunca
+// discorda do preenchimento, nem depois de a thread ficar presa: quando ela volta,
+// o texto pula pro valor que a barra JÁ está mostrando, em vez de retomar de onde
+// parou. (Era o acúmulo do modelo antigo, que somava passos perdidos.)
 window._spLoaderTick = function () {
   if (window._spLoaderTimer) return;
+  var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
   window._spLoaderTimer = setInterval(function () {
     var barras = document.querySelectorAll('.sp-loader-bar');
     if (!barras.length) { clearInterval(window._spLoaderTimer); window._spLoaderTimer = null; return; }
+    var agora = (window.performance && performance.now) ? performance.now() : Date.now();
+    var frac = Math.min(1, (agora - t0) / (window._SP_LOADER_CREEP_MS || 9000));
+    var p = 4 + (95 - 4) * frac;      // idêntica ao @keyframes (0.04 → 0.95, linear)
     for (var i = 0; i < barras.length; i++) {
       var b = barras[i];
-      var p = parseFloat(b.getAttribute('data-sp-prog')) || 0;
-      // Creep desacelerando: sobe rápido no começo e vai encostando em 95 sem nunca chegar.
-      // Nunca crava 100 aqui — 100 é o FIM, e quem o declara é _spLoaderFinish.
-      if (p < 95) p += Math.max(0.35, (95 - p) * 0.055);
-      if (p > 95) p = 95;
+      // a barra JÁ está sendo movida pelo compositor; aqui não se toca nela.
       b.setAttribute('data-sp-prog', String(p));
-      var f = b.querySelector('.sp-loader-fill'); if (f) f.style.width = p.toFixed(1) + '%';
       var t = b.querySelector('.sp-loader-pct');  if (t) t.textContent = Math.round(p) + '%';
     }
   }, 140);
@@ -3960,7 +3981,15 @@ window._spLoaderFinish = function (raiz) {
     var barras = (raiz || document).querySelectorAll('.sp-loader-bar');
     for (var i = 0; i < barras.length; i++) {
       barras[i].setAttribute('data-sp-prog', '100');
-      var f = barras[i].querySelector('.sp-loader-fill'); if (f) f.style.width = '100%';
+      var f = barras[i].querySelector('.sp-loader-fill');
+      if (f) {
+        // ⚠️ MATA A ANIMAÇÃO ANTES DE CRAVAR. Sem isto o `forwards` do creep segura
+        // o scaleX(0.95) e o 100% do texto ficaria sobre uma barra em 95%.
+        // E `transform` é composto na GPU: pinta no mesmo quadro, sem depender de
+        // a thread devolver o controle — que é o que fazia o `width` não chegar.
+        f.style.animation = 'none';
+        f.style.transform = 'scaleX(1)';
+      }
       var t = barras[i].querySelector('.sp-loader-pct');  if (t) t.textContent = '100%';
     }
   } catch (e) {}
