@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.88';
+window.SCOREPLACE_VERSION = '1.9.89';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -7072,6 +7072,9 @@ window._openTournamentCard = function (event, tournamentId) {
 // classe de bug da 1.9.55, viva no outro caminho — grep pela AÇÃO, não pelo handler).
 window._navTorneioComAviso = function (tournamentId, evento) {
   if (!tournamentId) return;
+  // familiaridade: entrar no próprio torneio é EXATAMENTE o que o convite
+  // "encontre seu torneio" queria ensinar — 3 vezes e ele se cala (1.9.89).
+  try { if (window._marcarFamiliaridade) window._marcarFamiliaridade('torneio'); } catch (e) {}
   // 1.9.78 — ATRASO DE ENTRADA: event.timeStamp é a hora REAL do toque no
   // hardware (mesma base do performance.now no WebKit moderno). A diferença até
   // aqui é o tempo que o evento ESPEROU a thread — o vácuo que o cronômetro de
@@ -11644,13 +11647,65 @@ try {
 //  • ⚠️ `pointer-events` só na pílula — nunca numa faixa invisível sobre o
 //    conteúdo, que é como se engole o toque de quem quer usar a tela.
 window._CONVITES_MAX_MOSTRAS = 4;      // depois disso, este convite se aposenta
+// ── FAMILIARIDADE: O CONVITE É PRA QUEM AINDA NÃO DOMINA (1.9.89) ───────────
+// Ordem do dono: _"cada texto só aparece para quem ainda não domina. 'encontre
+// seu torneio' para quem, mesmo estando inscrito, não entrou umas 3 vezes no
+// próprio torneio ainda. Depois que a pessoa estiver familiarizada não precisa
+// mais mostrar."_
+// Ou seja: quem decide não é o convite ter sido clicado — é o COMPORTAMENTO da
+// pessoa no app. Cada ação de verdade (abrir um torneio, abrir as novidades,
+// olhar os resultados, marcar presença) conta um ponto; ao chegar no limiar,
+// aquele convite se cala para sempre, mesmo que nunca tenha sido tocado.
+window._FAMILIARIDADE_LIMIAR = 3;
+window._marcarFamiliaridade = function (chave) {
+  try {
+    if (!chave) return;
+    var e = window._convitesEstado();
+    if (!e.st.fam) e.st.fam = {};
+    var n = (e.st.fam[chave] || 0) + 1;
+    e.st.fam[chave] = n;
+    if (n >= window._FAMILIARIDADE_LIMIAR) e.st.vistos[chave] = 'ok';   // domina: não convida mais
+    window._convitesGravar(e.chave, e.st);
+  } catch (err) {}
+};
+window._jaDomina = function (chave) {
+  try {
+    var e = window._convitesEstado();
+    return !!(e.st.fam && e.st.fam[chave] >= window._FAMILIARIDADE_LIMIAR);
+  } catch (err) { return false; }
+};
+// TEXTO FINAL, na letra do dono (1.9.89): _"encontre seus torneios; novidades nos
+// seus torneios; confira seus ultimos resultados; veja quem esta em quadra
+// (presença); a seta de perfil tem que apontar para o hamburger e depois para o
+// acesso ao perfil"_.
+// ⚠️ O PERFIL NÃO É CONVITE DE ROLAGEM. Os outros quatro pedem pra DESCER até um
+// quadro; o perfil mora no menu, que fica em CIMA. Ele aponta pra cima, em duas
+// etapas (hambúrguer → o próprio perfil dentro do menu aberto) — por isso tem
+// `praCima` e um alvo de ELEGIBILIDADE (o nudge, que só existe com o perfil
+// incompleto) diferente do alvo que ele APONTA (a chrome do topo).
 window._CONVITES = [
-  { id: 'torneio',   texto: 'encontre seu torneio',      alvo: '[data-open-enrollment="1"]' },
-  { id: 'novidades', texto: 'veja as novidades',         alvo: '#novidades-section' },
-  { id: 'resultados',texto: 'veja seus resultados',      alvo: '#meus-resultados-section' },
-  { id: 'presenca',  texto: 'quem está nos seus locais', alvo: '#dashboard-presences-widget' },
-  { id: 'perfil',    texto: 'complete seu perfil',       alvo: '#dash-profile-nudge, #dash-profile-nudge-slot' }
+  { id: 'torneio',   texto: 'encontre seus torneios',          alvo: '[data-open-enrollment="1"]' },
+  { id: 'novidades', texto: 'novidades nos seus torneios',     alvo: '#novidades-section' },
+  { id: 'resultados',texto: 'confira seus últimos resultados', alvo: '#meus-resultados-section' },
+  { id: 'presenca',  texto: 'veja quem está em quadra',        alvo: '#dashboard-presences-widget' },
+  { id: 'perfil',    texto: 'complete seu perfil',             alvo: '#dash-profile-nudge', praCima: true }
 ];
+// PRA ONDE A SETA DO PERFIL APONTA, agora: o menu se ele estiver fechado, o
+// perfil se ele já estiver aberto. No desktop não existe hambúrguer — lá o
+// perfil está solto na topbar e a seta aponta direto pra ele.
+// ⚠️ `cloneNode(true)` do _toggleHamburger DUPLICA o id `btn-login` no dropdown;
+// por isso o de dentro é buscado COM ESCOPO no dropdown, nunca por getElementById
+// (que devolveria sempre o da topbar, que vem antes no documento).
+window._conviteAlvoPerfil = function () {
+  var dd = document.getElementById('hamburger-dropdown');
+  if (dd && dd.classList.contains('open')) {
+    var dentro = dd.querySelector('#btn-login') || dd.querySelector('.topbar-profile-group button');
+    if (dentro) return dentro;
+  }
+  var ham = document.querySelector('.hamburger-btn');
+  if (ham && ham.offsetParent !== null) return ham;      // visível = topbar encolhida
+  return document.getElementById('btn-login');
+};
 window._convitesEstado = function () {
   var cu = window.AppStore && window.AppStore.currentUser;
   var chave = 'scoreplace_convites_' + ((cu && cu.uid) || 'anon');
@@ -11696,12 +11751,21 @@ window._mostrarConviteDeRolagem = function () {
       var c = lista[(ini + n) % lista.length];
       var marca = e.st.vistos[c.id];
       if (marca === 'ok') continue;                                  // já entendeu
+      if (window._jaDomina(c.id)) continue;                          // já faz isso sozinho
       if (typeof marca === 'number' && marca >= window._CONVITES_MAX_MOSTRAS) continue;  // insistiu demais
       var el = document.querySelector(c.alvo);
       if (!el) continue;                                             // não há o que mostrar
       var r = el.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0)) continue;
-      if (r.top < alturaTela - 80) continue;                         // já está à vista
+      if (c.praCima) {
+        // O perfil aponta pra CHROME DO TOPO, que está sempre à vista — a regra
+        // "só convida o que está fora da vista" não se aplica. O que decide aqui
+        // é o alvo de elegibilidade existir (nudge na tela = perfil incompleto)
+        // e haver pra onde apontar.
+        if (!window._conviteAlvoPerfil()) continue;
+      } else if (r.top < alturaTela - 80) {
+        continue;                                                    // já está à vista
+      }
       escolhido = { cfg: c, el: el, vezes: (typeof marca === 'number' ? marca : 0) };
       break;
     }
@@ -11710,15 +11774,43 @@ window._mostrarConviteDeRolagem = function () {
     if (!document.getElementById('sp-convite-kf')) {
       var st = document.createElement('style');
       st.id = 'sp-convite-kf';
-      st.textContent = '@keyframes spConviteSobeDesce{0%,100%{transform:translateY(0);}50%{transform:translateY(6px);}}' +
-        '#' + ID + '{position:fixed;left:50%;bottom:18px;z-index:60;transform:translateX(-50%);' +
-        'display:flex;align-items:center;gap:8px;padding:9px 18px;border-radius:999px;' +
-        'background:rgba(15,23,42,0.82);border:1px solid rgba(255,255,255,0.16);color:#e2e8f0;' +
-        'font-size:0.8rem;font-weight:700;cursor:pointer;opacity:0;transition:opacity .35s ease;' +
-        'box-shadow:0 2px 10px rgba(0,0,0,0.35);}' +
-        '#' + ID + '.vis{opacity:0.88;}' +
-        '#' + ID + ' .seta{font-size:1.05rem;line-height:1;animation:spConviteSobeDesce 1.6s ease-in-out infinite;will-change:transform;}' +
-        '@media (prefers-reduced-motion: reduce){#' + ID + ' .seta{animation:none;}}';
+      // ── O DESENHO É DO DONO (1.9.89), homologado num mock da tela real ────
+      // Pedido, em três rodadas: _"amarela ocupando 50% da largura, texto acima
+      // dela"_ → _"fonte grande porra"_ → _"a seta e a base da seta podem ser
+      // mais largas"_ → _"a base da seta ficou parecendo uma casinha quando
+      // aponta pra cima. vamos estreitar um pouco"_.
+      //
+      // ⚠️ NADA DE CAIXA ESCURA ATRÁS DO TEXTO. A tarja preta larga cobria os
+      // contadores e ficava um adesivo colado na tela. O contraste vem de
+      // text-shadow no texto + um esmaecido do RODAPÉ (#sp-convite-scrim), que
+      // se dissolve conforme a seta sobe: ele existe pra dar chão à seta enquanto
+      // ela espera lá embaixo, não pra escurecer o que ela está indicando.
+      //
+      // ⚠️ pointer-events: NONE no container (ele tem 100% da largura — com
+      // `auto` viraria uma faixa invisível que engole o toque da tela inteira),
+      // AUTO só na tinta (texto e seta), que é onde o clique faz sentido.
+      //
+      // ⚠️ Posição vertical SEMPRE por `transform` — nunca `top`/`bottom`, que
+      // forçariam layout a cada quadro de rolagem. Sem animação infinita: foi
+      // uma delas (btnCtaShine) que derrubou a rolagem do app inteiro.
+      st.textContent =
+        '#' + ID + '{position:fixed;top:0;left:50%;z-index:1100;width:100%;' +
+        'transform:translate(-50%,0);display:flex;flex-direction:column;align-items:center;gap:10px;' +
+        'pointer-events:none;opacity:0;transition:opacity .35s ease;}' +
+        '#' + ID + '.vis{opacity:1;}' +
+        '#' + ID + ' .rotulo{font-size:1.45rem;font-weight:800;letter-spacing:0.3px;color:#fbbf24;' +
+        'line-height:1.15;white-space:nowrap;cursor:pointer;pointer-events:auto;' +
+        'text-shadow:0 1px 3px rgba(0,0,0,0.95),0 3px 16px rgba(0,0,0,0.85);}' +
+        '#' + ID + ' .seta{width:42%;max-width:160px;display:block;opacity:0.85;' +
+        'cursor:pointer;pointer-events:auto;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.55));}' +
+        // PERFIL: seta em cima, texto embaixo — a leitura segue o gesto (o menu
+        // está acima, então o olho tem que subir).
+        '#' + ID + '.pra-cima{flex-direction:column-reverse;width:auto;gap:4px;}' +
+        '#' + ID + '.pra-cima .seta{transform:rotate(180deg);width:72px;max-width:72px;}' +
+        '#' + ID + '.pra-cima .rotulo{font-size:1.2rem;}' +
+        '#sp-convite-scrim{position:fixed;left:0;right:0;bottom:0;height:260px;z-index:1099;' +
+        'pointer-events:none;opacity:0;background:linear-gradient(to top,' +
+        'rgba(6,8,18,0.96) 0%,rgba(6,8,18,0.90) 30%,rgba(6,8,18,0.55) 62%,rgba(6,8,18,0) 100%);}';
       document.head.appendChild(st);
     }
 
@@ -11726,25 +11818,164 @@ window._mostrarConviteDeRolagem = function () {
     pil.id = ID;
     pil.setAttribute('role', 'button');
     pil.setAttribute('aria-label', escolhido.cfg.texto);
-    pil.innerHTML = '<span>' + escolhido.cfg.texto + '</span><span class="seta" aria-hidden="true">⌄</span>';
+    if (escolhido.cfg.praCima) pil.classList.add('pra-cima');
+    // ⚠️ SETA DE VERDADE, não chevron: o dono mandou a referência (haste + ponta
+    // triangular, cantos suavizados). Um `path` só, preenchido — nada de stroke,
+    // que engorda a ponta e some com a haste em telas pequenas.
+    //
+    // A GEOMETRIA TEM UM PORQUÊ MEDIDO:
+    //   base do triângulo = 4,8 a 123,2 → 118,4 de largura
+    //   haste             = 27  a 101   →  74,0 de largura = 62,5% da base
+    //   asa               = 22,2 de cada lado
+    // A haste chegou a ter 81% da base ("mais larga", pedido do dono) e nessa
+    // proporção a seta VIRA CASINHA quando aponta pra cima: retângulo largo
+    // embaixo + triângulo em cima = telhado. Quem salva a leitura é a ASA — a
+    // parte do triângulo que sobra pra fora da haste. Com 12 de asa ela sumia;
+    // com 22,2 ela é a primeira coisa que o olho vê, nas duas direções.
+    // ⛔ Não engordar a haste sem olhar a seta ROTACIONADA (convite de perfil).
+    pil.innerHTML =
+      '<span class="rotulo">' + escolhido.cfg.texto + '</span>' +
+      '<svg class="seta" viewBox="0 0 128 92" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+        '<path fill="#fbbf24" d="M35 4h58a8 8 0 0 1 8 8v28h17a7 7 0 0 1 5.2 11.7l-51.2 34.3a10 8 0 0 1-16 0L4.8 51.7A7 7 0 0 1 10 40h17V12a8 8 0 0 1 8-8z"/>' +
+      '</svg>';
 
+    var scrim = document.getElementById('sp-convite-scrim');
+    if (!scrim) {
+      scrim = document.createElement('div');
+      scrim.id = 'sp-convite-scrim';
+      document.body.appendChild(scrim);
+    }
+
+    var observadorMenu = null;
     var fechar = function (aprendeu) {
       if (aprendeu) window._conviteAprendido(escolhido.cfg.id);
       pil.classList.remove('vis');
-      setTimeout(function () { if (pil.parentNode) pil.remove(); }, 350);
+      pil.style.transition = '';
+      pil.style.opacity = '';
+      scrim.style.opacity = 0;
+      setTimeout(function () {
+        if (pil.parentNode) pil.remove();
+        if (scrim.parentNode) scrim.remove();
+      }, 350);
       window.removeEventListener('scroll', aoRolar);
+      if (observadorMenu) { observadorMenu.disconnect(); observadorMenu = null; }
     };
-    // rolou até lá sozinho = entendeu que há conteúdo abaixo
-    var aoRolar = function () { if ((window.scrollY || 0) > 120) fechar(true); else if ((window.scrollY || 0) > 24) fechar(false); };
+
+    // ── O SEGUIMENTO ─────────────────────────────────────────────────────────
+    // A SETA NÃO PULA (ordem do dono: _"ela deve passar a subir fluida até
+    // chegar no topo e aí sumir esmaecendo"_). A versão anterior TROCAVA DE
+    // ÂNCORA no meio do caminho — de `fixed` no rodapé pra `absolute` presa ao
+    // documento — e teleportava a distância entre as duas posições. Não dava pra
+    // suavizar com transição: era preciso trocar a mecânica.
+    //
+    // Agora a posição é uma função CONTÍNUA da rolagem:
+    //     desejado = topo do quadro − altura do convite − folga
+    //     repouso  = rodapé da tela
+    //     y        = min(repouso, desejado)
+    // Longe, "desejado" é maior que "repouso" e ela fica parada no rodapé. Quando
+    // o quadro sobe, os dois se CRUZAM — e no cruzamento os valores são IGUAIS,
+    // então ela começa a subir sem degrau, colada no quadro. MEDIDO no mock com
+    // varredura de 12 em 12px: maior degrau em Y = 12px, exatamente o passo da
+    // rolagem, ou seja 1:1 com o dedo.
+    var FOLGA_ALVO = 12;    // respiro entre a ponta da seta e o quadro
+    var FOLGA_BAIXO = 22;   // respiro no rodapé
+    var FADE = 90;          // em quantos px ela esmaece ao encostar no topo
+    var pendente = false;
+
+    // a opacidade é da ROLAGEM, quadro a quadro; a transição do CSS só serve pra
+    // entrada. Enquanto está cheia, devolve o controle ao CSS; ao esmaecer,
+    // desliga a transição (senão a seta ficaria atrasada em relação ao dedo).
+    var opacidade = function (op) {
+      if (op >= 0.999) {
+        if (pil.style.opacity !== '') { pil.style.opacity = ''; pil.style.transition = ''; }
+      } else {
+        pil.style.transition = 'none';
+        pil.style.opacity = op;
+      }
+    };
+
+    var avaliarPerfil = function () {
+      var alvo = window._conviteAlvoPerfil();
+      if (!alvo) { fechar(false); return; }
+      var r = alvo.getBoundingClientRect();
+      var vw = document.documentElement.clientWidth || window.innerWidth || 360;
+      var largura = pil.offsetWidth;
+      // O TEXTO se afasta da borda pra não vazar; a SETA continua cravada no
+      // alvo. Clampar o bloco inteiro faria a seta apontar pro vazio ao lado do
+      // hambúrguer — o único lugar onde ela não pode apontar.
+      var meio = r.left + r.width / 2;
+      var meia = largura / 2;
+      var x = Math.min(Math.max(meio, meia + 8), vw - meia - 8);
+      pil.style.left = x + 'px';
+      pil.style.transform = 'translate(-50%,' + (r.bottom + 8) + 'px)';
+      var seta = pil.querySelector('.seta');
+      if (seta) seta.style.transform = 'translateX(' + (meio - x) + 'px) rotate(180deg)';
+      opacidade(1);
+      scrim.style.opacity = 0;
+    };
+
+    var avaliar = function () {
+      pendente = false;
+      if (!pil.parentNode) return;
+      if (escolhido.cfg.praCima) { avaliarPerfil(); return; }
+      // a dashboard re-renderiza: se o quadro foi trocado, reencontra pelo seletor
+      if (!escolhido.el.isConnected) {
+        var novo = document.querySelector(escolhido.cfg.alvo);
+        if (!novo) { fechar(false); return; }
+        escolhido.el = novo;
+      }
+      // TODAS as leituras de layout antes de qualquer escrita (um reflow só)
+      var r = escolhido.el.getBoundingClientRect();
+      var barra = document.querySelector('.topbar');
+      var limiteTopo = barra ? barra.getBoundingClientRect().bottom + 8 : 8;
+      var vh = window.innerHeight || 800;
+      var h = pil.offsetHeight;
+
+      var repouso = vh - h - FOLGA_BAIXO;
+      var desejado = r.top - h - FOLGA_ALVO;
+      var y = Math.min(repouso, desejado);
+      var op = Math.max(0, Math.min(1, (y - limiteTopo) / FADE));
+      y = Math.max(y, limiteTopo);
+
+      pil.style.transform = 'translate(-50%,' + y + 'px)';
+      opacidade(op);
+      // o esmaecido do rodapé se dissolve conforme ela sobe
+      scrim.style.opacity = op * Math.max(0, Math.min(1, 1 - (repouso - y) / 120));
+
+      // chegou no topo e sumiu: a pessoa rolou até o quadro por conta própria
+      if (op <= 0.001) fechar(true);
+    };
+    var aoRolar = function () {
+      if (pendente) return;
+      pendente = true;
+      requestAnimationFrame(avaliar);
+      setTimeout(function () { if (pendente) avaliar(); }, 120);   // rede: aba de fundo
+    };
+
     pil.addEventListener('click', function () {
+      if (escolhido.cfg.praCima) {
+        // não sequestra o toque: quem abre o menu é a pessoa, no hambúrguer.
+        // O convite só se dá por entendido.
+        fechar(true);
+        return;
+      }
       try { escolhido.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       catch (err) { try { window.scrollTo(0, (window.scrollY || 0) + escolhido.el.getBoundingClientRect().top - 60); } catch (e2) {} }
       fechar(true);
     });
     window.addEventListener('scroll', aoRolar, { passive: true });
     document.body.appendChild(pil);
-    requestAnimationFrame(function () { pil.classList.add('vis'); });
-    setTimeout(function () { pil.classList.add('vis'); }, 60);   // rede: aba de fundo
+    // ETAPA 2 do perfil: quando o menu abre, a seta pula do hambúrguer pro perfil.
+    // Quem avisa é a classe `.open` no dropdown (posta pelo _toggleHamburger).
+    if (escolhido.cfg.praCima && window.MutationObserver) {
+      var dd = document.getElementById('hamburger-dropdown');
+      if (dd) {
+        observadorMenu = new MutationObserver(aoRolar);
+        observadorMenu.observe(dd, { attributes: true, attributeFilter: ['class'] });
+      }
+    }
+    requestAnimationFrame(function () { pil.classList.add('vis'); avaliar(); });
+    setTimeout(function () { pil.classList.add('vis'); avaliar(); }, 60);   // rede: aba de fundo
 
     window._conviteMostradoNestaRodada = true;
     e.st.vistos[escolhido.cfg.id] = escolhido.vezes + 1;

@@ -4698,6 +4698,11 @@ async function simulateLoginSuccess(user) {
   // `onclick` attributes but NOT addEventListener listeners — hence inline wiring.
   window._onProfileBtnClick = function(e) {
     try {
+      // 1.9.89: abrir o perfil é a PROVA de que a pessoa já sabe chegar nele —
+      // depois de 3 vezes o convite "complete seu perfil" se cala sozinho.
+      // Fica ANTES do early-return de "já está no perfil" de propósito: quem
+      // clica estando lá também está demonstrando que domina o caminho.
+      try { if (window._marcarFamiliaridade) window._marcarFamiliaridade('perfil'); } catch (_e) {}
       // v2.3.38: logoff agora é botão separado (#btn-logoff). Este handler só
       // abre o perfil — sem risco de logoff acidental.
       // Clique na área do perfil (avatar/nome)

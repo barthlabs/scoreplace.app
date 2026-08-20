@@ -1051,6 +1051,12 @@ const SUITES = [
   // bracket.js REAL no harness de render e trava também o padrão (nenhuma função
   // pode usar `t` antes do próprio `const t =`).
   'tests/card-de-folga-nao-derruba-a-tela.test.js',
+  // 1.9.89 — o convite de rolagem (seta amarela) sobe COLADO no dedo e esmaece
+  // no topo. A versão anterior trocava de âncora no meio do caminho e pulava;
+  // o conserto não é transição, é a posição ser função contínua da rolagem.
+  // Trava também a geometria da seta (haste = 62,5% da base — a 81% ela vira
+  // CASINHA quando aponta pra cima) e as duas etapas do convite de perfil.
+  'tests/convite-de-rolagem-sobe-sem-pular.test.js',
 ];
 
 let failed = [];

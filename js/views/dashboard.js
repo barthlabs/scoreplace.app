@@ -3521,7 +3521,7 @@ function renderDashboard(container) {
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">🏆</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.newTournament')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-place" data-ensina title="Procure lugares para seus jogos e marque presença" style="background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
+          <button class="btn btn-cta hover-lift" id="btn-place" data-ensina title="Procure lugares para seus jogos e marque presença" style="background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(window._marcarFamiliaridade)window._marcarFamiliaridade('presenca'); window.location.hash='#place'">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">📍</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Presença</span>
           </button>
@@ -4238,6 +4238,7 @@ window._spWatchPreviewWidth = function() {
 // "anteriores", e um wrapper no meio quebrava a grade. A escolha é lembrada; o default
 // é COLAPSADA (só o lançamento mais recente à vista).
 window._toggleNovidadesCollapse = function() {
+  try { if (window._marcarFamiliaridade) window._marcarFamiliaridade('novidades'); } catch (e) {}
   var sec = document.getElementById('novidades-section');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-nov-collapsed') !== '1';
@@ -4253,6 +4254,7 @@ window._toggleNovidadesCollapse = function() {
 // O estado vive no atributo `data-mr-collapsed` da seção e quem esconde é o CSS; o corpo
 // NUNCA mais some inteiro, senão a seção fechada não mostra nada (era a queixa do dono).
 window._toggleMyResultsCollapse = function() {
+  try { if (window._marcarFamiliaridade) window._marcarFamiliaridade('resultados'); } catch (e) {}
   var sec = document.getElementById('meus-resultados-section');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-mr-collapsed') !== '1';
