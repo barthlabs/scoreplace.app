@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.78';
+window.SCOREPLACE_VERSION = '1.9.79';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -8429,6 +8429,30 @@ window.AppStore = {
     } catch(e) { /* quota exceeded or private browsing */ }
   },
 
+  // 1.9.79: agenda a gravação do cache pra DEPOIS da rajada de ecos (2s), e
+  // garante o flush quando o app sai da frente — o cache existe pro PRÓXIMO
+  // boot, então 2s de atraso não custam nada; o stringify síncrono no meio do
+  // eco custava ~metade da travada medida no aparelho.
+  _agendarSaveCache() {
+    var store = this;
+    if (!this._cacheFlushWired) {
+      this._cacheFlushWired = true;
+      var _flush = function () {
+        if (!store._saveCacheTimer) return;
+        clearTimeout(store._saveCacheTimer); store._saveCacheTimer = null;
+        try { store._saveToCache(); } catch (e) {}
+      };
+      try { window.addEventListener('pagehide', _flush); } catch (e) {}
+      try { document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') _flush(); }); } catch (e) {}
+    }
+    clearTimeout(this._saveCacheTimer);
+    this._saveCacheTimer = setTimeout(function () {
+      store._saveCacheTimer = null;
+      if (window._medirTrecho) window._medirTrecho('cache-torneios', function () { store._saveToCache(); });
+      else store._saveToCache();
+    }, 2000);
+  },
+
   _loadFromCache() {
     try {
       var raw = localStorage.getItem(this._cacheKey);
@@ -8973,8 +8997,12 @@ window.AppStore = {
     var _uid = _cuNow && _cuNow.uid ? _cuNow.uid : '';
     if (!_uid) { window._warn('[realtime] sem uid — listener não inicia (identidade é uid)'); return; }
     var query = coll.where('memberUids', 'array-contains', _uid);
-    this._realtimeUnsubscribe = query
-      .onSnapshot(function(snap) {
+    // 1.9.79: o corpo do listener vira função NOMEADA e MEDIDA ('snapshot-torneios')
+    // — o relato do aparelho (78) mostrou travadas de ~1,2s repetidas com 'trechos:
+    // nenhum': era exatamente este callback, sem nome, pagando doc.data() de TODOS os
+    // docs + JSON.stringify do cache inteiro a CADA eco (presença/placar de qualquer
+    // participante). Ver as três cirurgias marcadas 1.9.79 dentro dele.
+    function _aplicaSnapTorneios(snap) {
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
         // v1.9.81: IDs antes do rebuild — pra detectar torneios REMOVIDOS
         // (deletados pelo organizador, ou usuário removido do torneio). Se o
@@ -8989,13 +9017,36 @@ window.AppStore = {
         // AppStore.tournaments lembrar de filtrar — eram 2 de dezenas (dashboard de locais,
         // presença, venues, wo-claim, histórico…). Ver [[project_sandbox_tournament]].
         var _devSeesSb = !!(window._isTestIdentity && window._isTestIdentity());
+        // ── 1.9.79 · REUSO INCREMENTAL ───────────────────────────────────────
+        // doc.data() re-desserializa o doc INTEIRO (o do Confra passa de meio MB)
+        // e rodava pra TODOS os docs a CADA eco — presença/placar de qualquer
+        // participante = travada de ~1,2s (medida no aparelho do dono, 78).
+        // Agora só o doc que MUDOU paga o parse; os demais reusam o objeto da
+        // memória (que inclusive preserva mutações otimistas locais — o eco de
+        // OUTRO doc não as apaga mais). docChanges falhou? parse total (de antes).
+        var _mudou = null;
+        try {
+          _mudou = {};
+          snap.docChanges().forEach(function (c) { _mudou[c.doc.id] = true; });
+        } catch (eDc) { _mudou = null; }
+        var _prevParsed = store._parsedById || {};
+        var _novoParsed = {};
+        var _reparseados = [];
         snap.forEach(function(doc) {
-          var data = doc.data();
+          var data;
+          if (_mudou && !_mudou[doc.id] && _prevParsed[doc.id]) {
+            data = _prevParsed[doc.id];
+          } else {
+            data = doc.data();
+            _reparseados.push(data);
+          }
+          _novoParsed[doc.id] = data;
           if (data && data.isSandbox === true && !_devSeesSb) return;
           if (deletedIds.indexOf(String(data.id)) === -1) {
             tournaments.push(data);
           }
         });
+        store._parsedById = _novoParsed;
         store.tournaments = tournaments;
         // v1.3.82: reaplica a presença otimista pendente sobre os docs frescos ANTES de qualquer
         // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
@@ -9030,11 +9081,14 @@ window.AppStore = {
             }
           }
         } catch (e) {}
-        store._saveToCache(); // cache enxuto (matchIds) — foldado dentro do _saveToCache
+        // 1.9.79: o JSON.stringify de TODOS os torneios saiu do caminho quente —
+        // uma gravação por RAJADA (2s), com flush quando o app vai pro fundo.
+        store._agendarSaveCache();
         // v4.4.69 Rei/Rainha: reidrata group.matches como refs de round.matches (fonte
         // única) DEPOIS de cachear — todo consumidor em memória vê os grupos montados.
         if (typeof window._hydrateMonarchGroups === 'function') {
-          tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
+          // 1.9.79: só quem foi re-parseado precisa reidratar — os reusados já têm as refs.
+          (_reparseados.length ? _reparseados : tournaments).forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
         }
         store._loading = false;
 
@@ -9129,6 +9183,11 @@ window.AppStore = {
 
         // Subsequent snapshots = remote changes → soft refresh (preserve UX)
         window._softRefreshView();
+    }
+    this._realtimeUnsubscribe = query
+      .onSnapshot(function(snap) {
+        if (window._medirTrecho) return window._medirTrecho('snapshot-torneios', function () { _aplicaSnapTorneios(snap); });
+        return _aplicaSnapTorneios(snap);
       }, function(err) {
         window._warn('Real-time listener error:', err);
         // Fallback to one-time load

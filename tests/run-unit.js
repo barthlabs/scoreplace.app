@@ -1036,6 +1036,11 @@ const SUITES = [
   // silêncio de 4h em localStorage (por uid+local). Roda o presence-geo.js real num
   // sandbox e reproduz o ciclo abrir→não→fechar→reabrir.
   'tests/geo-pergunta-silencia-4h.test.js',
+  // Travadas de ~1,2s repetidas medidas no APARELHO (78): o listener de torneios
+  // pagava doc.data() de TODOS os docs + JSON.stringify do cache a CADA eco.
+  // Trava o reuso incremental (docChanges), o cache com debounce+flush e o nome
+  // do trecho na telemetria.
+  'tests/eco-de-snapshot-nao-trava-a-thread.test.js',
   // Sentry WEB-83: card de Folga em renderMatchCard usava `t` ANTES do `const t`
   // (TDZ desde a 4.0.84, 30/jun) e derrubava a tela da fase de grupos. Roda o
   // bracket.js REAL no harness de render e trava também o padrão (nenhuma função
