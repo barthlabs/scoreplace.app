@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.95';
+window.SCOREPLACE_VERSION = '1.9.96';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -7289,7 +7289,7 @@ window._navTorneioComAviso = function (tournamentId, evento) {
               (tv.anim != null ? '[anim=' + tv.anim + (tv.animTop ? ':' + tv.animTop : '') + ' nos=' + tv.nos + ' snaps=' + tv.snaps + ']' : '');
           }).slice(-5);
         window._tapReportes = (window._tapReportes || 0) + 1;
-        if (window._tapReportes <= 3 && typeof window._captureMessage === 'function') {
+        if (window._tapReportes <= 12 && typeof window._captureMessage === 'function') {
           try {
             var _linha = 'tap-sem-feedback: entrada ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso +' + Math.round(ms) +
               'ms · travadas: ' + (travadas.join(' | ') || 'nenhuma') +

@@ -541,7 +541,7 @@
   <!-- proporção de gênero do sorteio equilibrado (50/50 · 25/75 · 75/25) — PURO e
        vendorável: o mesmo módulo decide o sorteio inicial e a formação por lista de espera -->
   <script src="js/views/gender-ratio-core.js?v=1.8.45" defer></script>
-  <script src="js/store.js?v=1.9.95-x2.07" defer></script>
+  <script src="js/store.js?v=1.9.96-x2.07" defer></script>
   <!-- Fonte única das regras das modalidades (antes de create-tournament.js e bracket-ui.js, que derivam dela) -->
   <script src="js/views/sport-rules.js?v=4.0.50-beta" defer></script>
   <script src="js/firebase-db.js?v=1.9.87" defer></script>
@@ -638,7 +638,47 @@
   <!-- Deep linking nativo: Universal Links (iOS) / App Links (Android). Inerte na web. -->
   <script src="js/deep-link.js?v=1.1.4" defer></script>
   <script>
-    if ('serviceWorker' in navigator) {
+    // ── ⛔ NO APP NATIVO O SERVICE WORKER NÃO ENTRA (1.9.96) ────────────────────
+    // ISTO É O QUE FAZIA "BUILD NOVA, NADA MUDA" — quatro seguidas.
+    //
+    // O handler de navegação do sw.js, quando o request é `navigate`, cai em
+    // `caches.match('/index.html')`: o index CACHEADO da versão velha. Esse index
+    // pede os scripts com o `?v=` VELHO, que também estão no precache sob a URL
+    // exata → o app roda o código antigo INTEIRO, mesmo depois de instalar a build
+    // nova. Na WEB isso se resolve (o pipeline SW novo → skipWaiting →
+    // controllerchange → reload roda, e ainda dá pra recarregar à mão); no NATIVO
+    // esse pipeline não se aplica ([[project_pwa_auto_update]]) e o cache velho
+    // fica. Casa com o relato do dono: _"na web as coisas estão legais, é no nativo
+    // que fode tudo"_ + _"não mexeu em porra nenhuma"_ depois de quatro builds.
+    //
+    // E ele nunca teve razão de existir aqui: o SW existe pra evitar round-trip de
+    // REDE, e no Capacitor os arquivos são LOCAIS, servidos do bundle. Não acelera
+    // nada e ainda congela a versão.
+    // ⚠️ O push NÃO depende disto: no nativo quem entrega é o plugin
+    // FirebaseMessaging (ver _isNativeMessagingAvailable, notifications.js); o
+    // caminho com `navigator.serviceWorker.ready` é exclusivo da web.
+    var _spEhNativo = false;
+    try {
+      var _capNat = window.Capacitor;
+      _spEhNativo = !!(_capNat && typeof _capNat.isNativePlatform === 'function' && _capNat.isNativePlatform());
+    } catch (e) {}
+    if (_spEhNativo && 'serviceWorker' in navigator) {
+      // AUTOCURA — quem JÁ tem o SW instalado (o aparelho do dono tem) precisa que
+      // ele seja REMOVIDO e o cache apagado, senão a versão velha vive pra sempre.
+      try {
+        navigator.serviceWorker.getRegistrations().then(function (rs) {
+          rs.forEach(function (r) { try { r.unregister(); } catch (e) {} });
+        }).catch(function () {});
+      } catch (e) {}
+      try {
+        if ('caches' in window) {
+          caches.keys().then(function (ks) {
+            ks.forEach(function (k) { try { caches.delete(k); } catch (e) {} });
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    }
+    if (!_spEhNativo && 'serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         // Force update check on every page load by using updateViaCache: 'none'
         navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function(reg) {
