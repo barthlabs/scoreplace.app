@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.87';
+window.SCOREPLACE_VERSION = '1.9.88';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -11529,3 +11529,245 @@ window._nomeSoTemPrimeiroNome = function (nome) {
   if (!t) return false;
   return t.split(' ').filter(Boolean).length === 1;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O BRILHO QUE ENSINA — UM BOTÃO POR VEZ, SÓ O QUE A PESSOA NUNCA USOU (1.9.88)
+//
+// Ideia do dono: _"poderíamos usar os brilhos como as dicas: mostrar apenas em 1
+// botão por vez, para aqueles que não clicaram naquele botão e ainda não
+// dominaram seu funcionamento"_.
+//
+// POR QUE ISTO EXISTE ASSIM: o brilho contínuo em TODOS os botões era o trem de
+// travadas medido no iPhone do dono (1.9.84) — seis animações repintando sem
+// parar. Aqui ele deixa de ser enfeite e vira ENSINO: um único elemento animado,
+// escolhido entre os que a pessoa ainda não usou, e que some assim que ela usa.
+// Custo de um; valor de dica.
+//
+// REGRAS:
+//  • um por vez, e só o que está VISÍVEL na tela (brilhar fora de vista não
+//    ensina ninguém e ainda paga o custo);
+//  • "usado" é registrado no primeiro clique e vale para sempre (localStorage,
+//    por usuário — o aparelho é compartilhado em família);
+//  • depois de N aberturas mostrando o mesmo botão sem clique, ele é dado por
+//    "visto" e a vez passa ao próximo: dica que insiste vira ruído;
+//  • ⚠️ NÃO usa MutationObserver nem timer: engancha no render (chamada
+//    explícita) e num único listener de clique delegado no documento.
+window._SHINE_DICA_MAX_MOSTRAS = 6;
+window._shineDicaEstado = function () {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var chave = 'scoreplace_btn_dica_' + ((cu && cu.uid) || 'anon');
+  var st = {};
+  try { st = JSON.parse(localStorage.getItem(chave) || '{}') || {}; } catch (e) { st = {}; }
+  return { chave: chave, st: st };
+};
+window._shineDicaGravar = function (chave, st) {
+  try { localStorage.setItem(chave, JSON.stringify(st)); } catch (e) {}
+};
+// Marca um botão como dominado (clicou = aprendeu).
+window._shineDicaUsou = function (id) {
+  if (!id) return;
+  var e = window._shineDicaEstado();
+  if (e.st[id] === 'ok') return;
+  e.st[id] = 'ok';
+  window._shineDicaGravar(e.chave, e.st);
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('sp-shine-dica');
+  // a vez passa ao próximo, sem esperar o próximo render
+  setTimeout(function () { window._aplicarShineDica(); }, 400);
+};
+// Escolhe UM botão pra brilhar. Chamar depois de renderizar uma tela.
+window._aplicarShineDica = function () {
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var atuais = document.querySelectorAll('.sp-shine-dica');
+    for (var k = 0; k < atuais.length; k++) atuais[k].classList.remove('sp-shine-dica');
+
+    var e = window._shineDicaEstado();
+    var candidatos = document.querySelectorAll('[data-ensina]');
+    var alvo = null;
+    for (var i = 0; i < candidatos.length; i++) {
+      var el = candidatos[i];
+      var id = el.id || el.getAttribute('data-ensina');
+      if (!id || e.st[id] === 'ok') continue;
+      var r = el.getBoundingClientRect();
+      var visivel = r.width > 0 && r.height > 0 && r.top < (window.innerHeight || 800) && r.bottom > 0;
+      if (!visivel) continue;
+      var vezes = (typeof e.st[id] === 'number') ? e.st[id] : 0;
+      if (vezes >= window._SHINE_DICA_MAX_MOSTRAS) continue;   // já insistiu demais
+      alvo = { el: el, id: id, vezes: vezes };
+      break;
+    }
+    if (!alvo) return;
+    alvo.el.classList.add('sp-shine-dica');
+    e.st[alvo.id] = alvo.vezes + 1;
+    window._shineDicaGravar(e.chave, e.st);
+  } catch (err) { if (window._warn) window._warn('[shine-dica]', err); }
+};
+// UM listener delegado: qualquer clique num botão ensinável o marca como usado.
+try {
+  document.addEventListener('click', function (ev) {
+    var alvo = ev.target && ev.target.closest ? ev.target.closest('[data-ensina]') : null;
+    if (!alvo) return;
+    window._shineDicaUsou(alvo.id || alvo.getAttribute('data-ensina'));
+  }, true);
+} catch (e) {}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O CONVITE PARA ROLAR — UM DE CADA VEZ, NUNCA EM SUCESSÃO (1.9.88)
+//
+// Ideia do dono, em duas mensagens:
+//   1. _"se houver torneio com inscrições abertas, poderia aparecer uma seta pra
+//      baixo com alguma transparência convidando o usuário a rolar, com um texto
+//      'encontre seu torneio'"_;
+//   2. _"novidades no seu torneio, seus últimos resultados, presença nos seus
+//      locais e complete seu perfil também. 1 de cada vez. NUNCA em sucessão.
+//      Mostrou uma, não vai mostrar a outra. A ordem seria encontre torneio;
+//      novidades; resultados; presença; perfil. Já mostrou uma, mostra a
+//      seguinte na próxima rodada. Quando tiver certeza que a pessoa já
+//      entendeu, não mostra mais."_
+//
+// O problema que resolve: os botões de ação ocupam a primeira tela inteira, e
+// quem abre o app não vê que existe torneio aberto (ou novidade, ou resultado)
+// logo abaixo — justamente o que a pessoa veio procurar.
+//
+// AS REGRAS, na letra do pedido:
+//  • UM por abertura. Mostrou, acabou: o próximo espera a próxima rodada.
+//  • Ordem fixa; em cada rodada mostra o PRIMEIRO elegível DEPOIS do último que
+//    já foi mostrado (rodízio) — assim os cinco têm vez, sem enfileirar.
+//  • "Já entendeu" tem três provas, e qualquer uma basta: clicou no convite,
+//    rolou até a seção por conta própria, ou o convite já apareceu vezes demais
+//    sem virar ação (aí ele desiste — dica que insiste vira ruído).
+//  • Só convida o que EXISTE na tela e está FORA da vista. Sem conteúdo, sem
+//    convite.
+//  • ⚠️ Anima só `transform`/`opacity`. Depois da noite em que uma animação de
+//    sombra derrubou a rolagem do app inteiro, isso não é preferência.
+//  • ⚠️ `pointer-events` só na pílula — nunca numa faixa invisível sobre o
+//    conteúdo, que é como se engole o toque de quem quer usar a tela.
+window._CONVITES_MAX_MOSTRAS = 4;      // depois disso, este convite se aposenta
+window._CONVITES = [
+  { id: 'torneio',   texto: 'encontre seu torneio',      alvo: '[data-open-enrollment="1"]' },
+  { id: 'novidades', texto: 'veja as novidades',         alvo: '#novidades-section' },
+  { id: 'resultados',texto: 'veja seus resultados',      alvo: '#meus-resultados-section' },
+  { id: 'presenca',  texto: 'quem está nos seus locais', alvo: '#dashboard-presences-widget' },
+  { id: 'perfil',    texto: 'complete seu perfil',       alvo: '#dash-profile-nudge, #dash-profile-nudge-slot' }
+];
+window._convitesEstado = function () {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  var chave = 'scoreplace_convites_' + ((cu && cu.uid) || 'anon');
+  var st = { vistos: {}, ultimo: '' };
+  try { st = Object.assign(st, JSON.parse(localStorage.getItem(chave) || '{}') || {}); } catch (e) {}
+  if (!st.vistos) st.vistos = {};
+  return { chave: chave, st: st };
+};
+window._convitesGravar = function (chave, st) {
+  try { localStorage.setItem(chave, JSON.stringify(st)); } catch (e) {}
+};
+// "Entendeu": não mostra mais este convite.
+window._conviteAprendido = function (id) {
+  if (!id) return;
+  var e = window._convitesEstado();
+  e.st.vistos[id] = 'ok';
+  window._convitesGravar(e.chave, e.st);
+};
+window._mostrarConviteDeRolagem = function () {
+  try {
+    var ID = 'sp-convite-rolar';
+    // ⚠️ O GATE DA RODADA VEM ANTES DE REMOVER O QUE ESTÁ NA TELA. A dashboard
+    // re-renderiza várias vezes por sessão e chama isto em cada passada; se a
+    // remoção viesse antes, a 2ª chamada APAGAVA o convite que a pessoa ainda
+    // estava lendo (medido no preview: um convite vivo virava zero).
+    if (window._conviteMostradoNestaRodada) return;      // UM por rodada, sem sucessão
+    var antigo = document.getElementById(ID);
+    if (antigo) antigo.remove();
+
+    var hash = window.location.hash || '';
+    if (!(hash === '' || hash === '#' || hash.indexOf('#dashboard') === 0)) return;
+    if ((window.scrollY || 0) > 40) return;              // já rolou: não precisa de convite
+
+    var e = window._convitesEstado();
+    var lista = window._CONVITES;
+    // rodízio: começa DEPOIS do último mostrado
+    var ini = 0;
+    for (var k = 0; k < lista.length; k++) if (lista[k].id === e.st.ultimo) { ini = k + 1; break; }
+
+    var alturaTela = window.innerHeight || 800;
+    var escolhido = null;
+    for (var n = 0; n < lista.length; n++) {
+      var c = lista[(ini + n) % lista.length];
+      var marca = e.st.vistos[c.id];
+      if (marca === 'ok') continue;                                  // já entendeu
+      if (typeof marca === 'number' && marca >= window._CONVITES_MAX_MOSTRAS) continue;  // insistiu demais
+      var el = document.querySelector(c.alvo);
+      if (!el) continue;                                             // não há o que mostrar
+      var r = el.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) continue;
+      if (r.top < alturaTela - 80) continue;                         // já está à vista
+      escolhido = { cfg: c, el: el, vezes: (typeof marca === 'number' ? marca : 0) };
+      break;
+    }
+    if (!escolhido) return;
+
+    if (!document.getElementById('sp-convite-kf')) {
+      var st = document.createElement('style');
+      st.id = 'sp-convite-kf';
+      st.textContent = '@keyframes spConviteSobeDesce{0%,100%{transform:translateY(0);}50%{transform:translateY(6px);}}' +
+        '#' + ID + '{position:fixed;left:50%;bottom:18px;z-index:60;transform:translateX(-50%);' +
+        'display:flex;align-items:center;gap:8px;padding:9px 18px;border-radius:999px;' +
+        'background:rgba(15,23,42,0.82);border:1px solid rgba(255,255,255,0.16);color:#e2e8f0;' +
+        'font-size:0.8rem;font-weight:700;cursor:pointer;opacity:0;transition:opacity .35s ease;' +
+        'box-shadow:0 2px 10px rgba(0,0,0,0.35);}' +
+        '#' + ID + '.vis{opacity:0.88;}' +
+        '#' + ID + ' .seta{font-size:1.05rem;line-height:1;animation:spConviteSobeDesce 1.6s ease-in-out infinite;will-change:transform;}' +
+        '@media (prefers-reduced-motion: reduce){#' + ID + ' .seta{animation:none;}}';
+      document.head.appendChild(st);
+    }
+
+    var pil = document.createElement('div');
+    pil.id = ID;
+    pil.setAttribute('role', 'button');
+    pil.setAttribute('aria-label', escolhido.cfg.texto);
+    pil.innerHTML = '<span>' + escolhido.cfg.texto + '</span><span class="seta" aria-hidden="true">⌄</span>';
+
+    var fechar = function (aprendeu) {
+      if (aprendeu) window._conviteAprendido(escolhido.cfg.id);
+      pil.classList.remove('vis');
+      setTimeout(function () { if (pil.parentNode) pil.remove(); }, 350);
+      window.removeEventListener('scroll', aoRolar);
+    };
+    // rolou até lá sozinho = entendeu que há conteúdo abaixo
+    var aoRolar = function () { if ((window.scrollY || 0) > 120) fechar(true); else if ((window.scrollY || 0) > 24) fechar(false); };
+    pil.addEventListener('click', function () {
+      try { escolhido.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      catch (err) { try { window.scrollTo(0, (window.scrollY || 0) + escolhido.el.getBoundingClientRect().top - 60); } catch (e2) {} }
+      fechar(true);
+    });
+    window.addEventListener('scroll', aoRolar, { passive: true });
+    document.body.appendChild(pil);
+    requestAnimationFrame(function () { pil.classList.add('vis'); });
+    setTimeout(function () { pil.classList.add('vis'); }, 60);   // rede: aba de fundo
+
+    window._conviteMostradoNestaRodada = true;
+    e.st.vistos[escolhido.cfg.id] = escolhido.vezes + 1;
+    e.st.ultimo = escolhido.cfg.id;
+    window._convitesGravar(e.chave, e.st);
+  } catch (err) { if (window._warn) window._warn('[convite-rolar]', err); }
+};
+// compat: o nome antigo continua valendo (o render da dashboard chama por ele)
+window._setaEncontreSeuTorneio = function () { window._mostrarConviteDeRolagem(); };
+
+// ── O QUE É UMA "RODADA" ────────────────────────────────────────────────────
+// É a ABERTURA do app / a volta a ele — não cada re-render da dashboard (que
+// acontece várias vezes por sessão e faria o convite piscar de novo, virando
+// exatamente o assédio que a regra "um de cada vez" quer evitar).
+// A rodada reabre quando a pessoa volta ao app depois de um tempo fora: aí faz
+// sentido convidar de novo, e será o PRÓXIMO da ordem (o rodízio está gravado).
+window._conviteMostradoNestaRodada = false;
+try {
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    var agora = Date.now();
+    if (window._conviteUltimaVolta && (agora - window._conviteUltimaVolta) < 5 * 60 * 1000) return;
+    window._conviteUltimaVolta = agora;
+    window._conviteMostradoNestaRodada = false;    // nova rodada: a vez passa ao próximo
+  });
+} catch (e) {}

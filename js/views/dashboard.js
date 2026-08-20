@@ -824,7 +824,7 @@ function renderDashboard(container) {
     const _pReadFg = _rb ? _rb.fg : '#f1f5f9';
     const _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
     return `
-        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
+        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs}${_isOpenEnrollment(t) ? ' data-open-enrollment="1"' : ''} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" onmouseover="this.style.transform='translateX(5px)'" onmouseout="this.style.transform='none'">
           ${isOrg ? `
              <div style="position: absolute; bottom: 6px; right: 8px; opacity: 0.9; pointer-events: none;" title="${window._genderWord ? window._genderWord(window.AppStore && window.AppStore.currentUser, 'Organizador', 'Organizadora') : 'Organizador'}">
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -3513,15 +3513,15 @@ function renderDashboard(container) {
                Sem isso, o texto não quebrava E era cortado pelo overflow:hidden.
                Combinação completa: display:block; width:100%; white-space:normal
                + overflow:hidden no botão (defense-in-depth). -->
-          <button class="btn btn-cta hover-lift" id="btn-casual-match" style="--shine-delay:0s;background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
+          <button class="btn btn-cta hover-lift" id="btn-casual-match" data-ensina style="background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">⚡</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.casualMatch')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" style="--shine-delay:0.6s;background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
+          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" data-ensina style="background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">🏆</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.newTournament')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-place" title="Procure lugares para seus jogos e marque presença" style="--shine-delay:1.2s;background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
+          <button class="btn btn-cta hover-lift" id="btn-place" data-ensina title="Procure lugares para seus jogos e marque presença" style="background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="window.location.hash='#place'">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">📍</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Presença</span>
           </button>
@@ -3531,12 +3531,12 @@ function renderDashboard(container) {
              saiu por ora (volta quando reativarmos o plano Pro). -->
         <!-- Linha: Convidar + Pessoas -->
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center;">
-          <button id="btn-invite-app" class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="--shine-delay:1.5s;background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">✉️ ${_t('invite.inviteFriends')}</button>
-          <button id="btn-people" class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="--shine-delay:1.8s;background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
+          <button id="btn-invite-app" data-ensina class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">✉️ ${_t('invite.inviteFriends')}</button>
+          <button id="btn-people" data-ensina class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
         </div>
         <!-- Linha: Ler QR Code + Fale com o Desenvolvedor -->
         <div style="display:flex;justify-content:center;gap:10px;width:100%;flex-wrap:wrap;">
-          <button id="btn-scan-qr" class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="--shine-delay:2.1s;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.92rem;font-weight:700;height:58px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;gap:9px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
+          <button id="btn-scan-qr" data-ensina class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.92rem;font-weight:700;height:58px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;gap:9px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="3" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5.4" y="5.4" width="2.2" height="2.2" rx="0.4"/><rect x="14" y="3" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="16.4" y="5.4" width="2.2" height="2.2" rx="0.4"/><rect x="3" y="14" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5.4" y="16.4" width="2.2" height="2.2" rx="0.4"/><rect x="13.5" y="13.5" width="2" height="2" rx="0.3"/><rect x="17.5" y="13.5" width="2" height="2" rx="0.3"/><rect x="15.5" y="15.5" width="2" height="2" rx="0.3"/><rect x="19.5" y="15.6" width="1.5" height="1.5" rx="0.3"/><rect x="13.5" y="17.5" width="2" height="2" rx="0.3"/><rect x="17.5" y="17.5" width="2" height="2" rx="0.3"/><rect x="19.5" y="19.5" width="1.5" height="1.5" rx="0.3"/></svg>
             <span style="display:flex;flex-direction:column;line-height:1.08;text-align:left;white-space:nowrap;"><span>Ler</span><span>QR Code</span></span>
           </button>
@@ -3729,6 +3729,19 @@ function renderDashboard(container) {
   try { window._spSyncCollapsePreview(); window._spWatchPreviewWidth(); } catch (_ePrev) {}
   // CÂNONE fit-name-to-box: ajusta a fonte dos nomes ao box fixo (saudação etc.).
   if (typeof window._fitNames === 'function') { try { window._fitNames(container); } catch (e) {} }
+  // 1.9.88 — o brilho que ENSINA (um botão por vez) e a seta "encontre seu
+  // torneio". Ambos entram DEPOIS da pintura, no próximo quadro: precisam medir
+  // o que está visível, e medir antes de pintar dá retângulo zerado.
+  try {
+    requestAnimationFrame(function () {
+      if (typeof window._aplicarShineDica === 'function') window._aplicarShineDica();
+      if (typeof window._setaEncontreSeuTorneio === 'function') window._setaEncontreSeuTorneio();
+    });
+    setTimeout(function () {
+      if (typeof window._aplicarShineDica === 'function') window._aplicarShineDica();
+      if (typeof window._setaEncontreSeuTorneio === 'function') window._setaEncontreSeuTorneio();
+    }, 120);   // rede: rAF não dispara em aba de fundo
+  } catch (_eDica) {}
   // v2.8.46: re-aplica a busca in-place após qualquer re-render (ex.: trocar
   // modalidade com busca ativa) — sem isso a busca "sumiria" no re-render.
   if (window._dashSearch && typeof window._applyDashSearchInPlace === 'function') {
