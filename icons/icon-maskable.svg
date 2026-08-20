@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    1.9.86 — ÍCONE DO ATALHO/PWA, ENQUADRADO PRA MÁSCARA CIRCULAR.
+    Relato do dono (print do Android): _"ta pequeno e poderia encher esse circulo"_.
+    MEDIDO no icon-512.svg: o pódio ocupava x=117..395 e y=107..406 — 54% da largura
+    e 58% da altura. A zona segura de um ícone `maskable` é 80% do lado (o círculo
+    inscrito), então sobrava quase um quarto de margem inútil: o sistema recorta os
+    cantos E o desenho ainda estava encolhido no meio.
+    Aqui o MESMO desenho é ampliado 1,20× a partir do centro. ⚠️ O TETO É O CÍRCULO,
+    NÃO O QUADRADO: os cantos INFERIORES do pódio (prata e bronze) são os pontos mais
+    distantes do centro (raio 205 de 256). Em 1,25 eles encostam na borda do recorte e
+    em 1,37 são CORTADOS — medido, não estimado. 1,20 leva o raio a 245 e deixa 11px de
+    folga: o desenho fica ~20% maior sem perder um pixel na máscara.
+    ⚠️ O ícone das LOJAS (AppIcon) NÃO usa este arquivo — lá a margem generosa é
+    exigida pelo padrão de cada loja. Este vale para manifest/atalho/favicon.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a3e"/>
+      <stop offset="100%" stop-color="#0f0f23"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256,256) scale(1.20) translate(-256,-256)">
+    <!-- Pódio: prata (2º), ouro (1º), bronze (3º) -->
+    <rect x="117" y="267" width="85" height="139" rx="13" fill="#CBD5E1"/>
+    <rect x="213" y="181" width="86" height="225" rx="13" fill="#F59E0B"/>
+    <rect x="310" y="315" width="85" height="91" rx="13" fill="#FB923C"/>
+    <!-- Estrela sobre o 1º lugar -->
+    <path d="M 256 107 L 267 139 L 299 139 L 272 159 L 283 192 L 256 171 L 229 192 L 240 159 L 213 139 L 245 139 Z" fill="#F59E0B"/>
+  </g>
+</svg>

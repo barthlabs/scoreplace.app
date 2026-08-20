@@ -51,28 +51,48 @@ input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone 
 
 /* v2.1.64: brilho pulsante nos boxes do Modo de Inscrição quando o sorteio é
    barrado por falta de times montados — chama a atenção pra a regra. */
-@keyframes enrollGlowPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); border-color: rgba(167,139,250,0.45); }
-  50% { box-shadow: 0 0 16px 3px rgba(167,139,250,0.65); border-color: #a78bfa; }
+/* 1.9.86: anel composto no lugar da sombra animada (mesma troca do hint-glow).
+   São só 4 ciclos, mas eles caem justo quando a pessoa está lendo a regra. */
+@keyframes enrollGlowRing {
+  0%, 100% { transform: scale(1);    opacity: 0; }
+  50%      { transform: scale(1.04); opacity: 1; }
 }
 .enroll-glow {
-  animation: enrollGlowPulse 1.2s ease-in-out 4;
   border-color: #a78bfa !important;
+  position: relative;
+}
+.enroll-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid #a78bfa;
+  pointer-events: none;
+  animation: enrollGlowRing 1.2s ease-in-out 4;
+  will-change: transform, opacity;
 }
 
 /* Brilho de atenção em botões de ação do organizador (loop contínuo). */
-@keyframes spGlowAmber {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
-  50% { box-shadow: 0 0 16px 3px rgba(251,191,36,0.7); }
+/* 1.9.86 — idem `hint-glow`: sombra animada (repaint por quadro) vira anel
+   composto (transform+opacity). O brilho continua; o custo, não. */
+@keyframes spGlowRing {
+  0%, 100% { transform: scale(1);    opacity: 0; }
+  50%      { transform: scale(1.05); opacity: 1; }
 }
-@keyframes spGlowIndigo {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(129,140,248,0); }
-  50% { box-shadow: 0 0 16px 3px rgba(129,140,248,0.7); }
+.sp-glow-amber, .sp-glow-indigo { position: relative; }
+.sp-glow-amber::after, .sp-glow-indigo::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: spGlowRing 1.6s ease-in-out infinite;
+  will-change: transform, opacity;
 }
-.sp-glow-amber { animation: spGlowAmber 1.6s ease-in-out infinite; }
-.sp-glow-indigo { animation: spGlowIndigo 1.6s ease-in-out infinite; }
+.sp-glow-amber::after  { border: 2px solid rgba(251,191,36,0.75); }
+.sp-glow-indigo::after { border: 2px solid rgba(129,140,248,0.75); }
 @media (prefers-reduced-motion: reduce) {
-  .sp-glow-amber, .sp-glow-indigo { animation: none; }
+  .sp-glow-amber::after, .sp-glow-indigo::after { animation: none; }
 }
 
 /* ==== FIXED BACK HEADER ==== */
@@ -1096,6 +1116,19 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+  /* ── 1.9.86 · ISOLA A PINTURA DO CARTÃO ─────────────────────────────────
+     MEDIDO no aparelho do dono: a tela tem 4.234 elementos. Sem isto, mexer em
+     UM cartão obriga o navegador a reconsiderar a página inteira — é o
+     multiplicador que tornava caro cada enfeite que consertamos nesta noite.
+     `contain: paint` promete só uma coisa: nada do cartão vaza para fora dele.
+     ⛔ NÃO CONFUNDIR com `content-visibility`, que está PROIBIDO aqui
+     ([[feedback_otimizacao_que_muda_o_que_a_tela_promete]]): aquele PULA o
+     desenho e entrega retângulo vazio ao rolar, além de comer o primeiro toque.
+     Este NÃO esconde nada, não altera layout e não mexe em evento — só delimita
+     o escopo do repaint. Zero mudança visual.
+     ⚠️ Só `paint`: `contain: layout/size` mudaria a altura de cartão sem altura
+     fixa e quebraria as travas de scroll que já foram pagas. */
+  contain: paint;
 }
 
 .card:hover {
@@ -1724,17 +1757,38 @@ input[type="number"] {
 
 /* ==== HINT SYSTEM (Dicas Visuais) v2 ==== */
 
-/* --- Glow Effect on Target Element --- */
-@keyframes hint-pulse {
-  0% { box-shadow: 0 0 4px 2px rgba(251,191,36,0.3); }
-  50% { box-shadow: 0 0 16px 6px rgba(251,191,36,0.55); }
-  100% { box-shadow: 0 0 4px 2px rgba(251,191,36,0.3); }
+/* --- Realce do alvo da dica --- */
+/* ⛔ 1.9.86 — O PULSO NÃO ANIMA MAIS `box-shadow`. Ele estava DESLIGADO no app
+   (as dicas foram suspensas), mas é da MESMA classe que derrubou a rolagem no
+   iPhone do dono nesta noite: sombra animada REPINTA a região a cada quadro, e o
+   navegador não consegue jogar isso na GPU (só `transform` e `opacity` são
+   compostos). Estava esperando pra reaparecer junto com as dicas.
+   O mesmo pulso agora é um ANEL (pseudo-elemento) que cresce e some — mesma
+   leitura visual, custo de composição. `will-change` promove a camada.
+   ⚠️ O anel é `pointer-events:none`: ele NÃO pode roubar o toque do elemento que
+   está sendo ensinado (seria a repetição do bug do card que não respondia). */
+@keyframes hint-pulse-ring {
+  0%   { transform: scale(1);    opacity: 0.55; }
+  50%  { transform: scale(1.06); opacity: 0.25; }
+  100% { transform: scale(1);    opacity: 0.55; }
 }
 .hint-glow {
-  animation: hint-pulse 1.6s ease-in-out infinite !important;
   border-radius: 10px;
   position: relative;
   z-index: 99999;
+}
+.hint-glow::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid rgba(251,191,36,0.9);
+  pointer-events: none;
+  animation: hint-pulse-ring 1.6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hint-glow::after { animation: none; }
 }
 
 /* --- Tooltip Balloon (uses real div arrow, not pseudo-element) --- */
@@ -1825,12 +1879,10 @@ input[type="number"] {
 .hint-balloon-disable:hover { color: #94a3b8; }
 
 /* --- Theme-Aware Glow & Balloon Colors --- */
-[data-theme="light"] .hint-glow { animation-name: hint-pulse-light !important; }
-@keyframes hint-pulse-light {
-  0% { box-shadow: 0 0 4px 2px rgba(37,99,235,0.25); }
-  50% { box-shadow: 0 0 16px 6px rgba(37,99,235,0.45); }
-  100% { box-shadow: 0 0 4px 2px rgba(37,99,235,0.25); }
-}
+/* 1.9.86 — com o pulso virando ANEL (transform+opacity), o tema muda só a COR
+   da borda; a animação é a mesma nos dois. Antes cada tema tinha a sua keyframe
+   de `box-shadow` — três animações de repintura para o mesmo efeito. */
+[data-theme="light"] .hint-glow::after { border-color: rgba(37,99,235,0.9); }
 [data-theme="light"] .hint-balloon-body {
   background: linear-gradient(135deg, #f8faff 0%, #eef2fb 100%);
   border-color: rgba(37,99,235,0.35);
@@ -1847,12 +1899,6 @@ input[type="number"] {
 [data-theme="light"] .hint-balloon-disable { color: #6c6c70; }
 [data-theme="light"] .hint-balloon-disable:hover { color: #3a3a3c; }
 
-[data-theme="sunset"] .hint-glow { animation-name: hint-pulse-sunset !important; }
-@keyframes hint-pulse-sunset {
-  0% { box-shadow: 0 0 4px 2px rgba(245,158,11,0.3); }
-  50% { box-shadow: 0 0 16px 6px rgba(245,158,11,0.5); }
-  100% { box-shadow: 0 0 4px 2px rgba(245,158,11,0.3); }
-}
 [data-theme="sunset"] .hint-balloon-body {
   background: linear-gradient(135deg, #fffdf8 0%, #f5ede0 100%);
   border-color: rgba(180,83,9,0.35);
@@ -1869,12 +1915,6 @@ input[type="number"] {
 [data-theme="sunset"] .hint-balloon-disable { color: #78716c; }
 [data-theme="sunset"] .hint-balloon-disable:hover { color: #44403c; }
 
-[data-theme="ocean"] .hint-glow { animation-name: hint-pulse-ocean !important; }
-@keyframes hint-pulse-ocean {
-  0% { box-shadow: 0 0 4px 2px rgba(34,211,238,0.3); }
-  50% { box-shadow: 0 0 16px 6px rgba(34,211,238,0.5); }
-  100% { box-shadow: 0 0 4px 2px rgba(34,211,238,0.3); }
-}
 [data-theme="ocean"] .hint-balloon-body {
   background: linear-gradient(135deg, #1c3d5e 0%, #173352 100%);
   border-color: rgba(34,211,238,0.4);
@@ -1888,17 +1928,25 @@ input[type="number"] {
 [data-theme="ocean"] .hint-balloon-got-it:hover { background: rgba(34,211,238,0.30); }
 
 /* ─── Pending invite animations ─── */
+/* 1.9.86 — a SOMBRA saiu da animação (repintava a cada quadro); o pulso agora é
+   só a cor da borda, que é barata, e a sombra fica estática no elemento. */
 @keyframes invitePulse {
-  0%, 100% { border-color: rgba(251,191,36,0.5); box-shadow: 0 0 8px rgba(251,191,36,0.2); }
-  50% { border-color: rgba(251,191,36,0.9); box-shadow: 0 0 24px rgba(251,191,36,0.4); }
+  0%, 100% { border-color: rgba(251,191,36,0.5); }
+  50% { border-color: rgba(251,191,36,0.9); }
 }
+.pending-invite-banner { box-shadow: 0 0 16px rgba(251,191,36,0.3); }
+/* 1.9.86 — só `transform` na animação (composto na GPU). A sombra que pulsava
+   junto virou estática: ninguém percebe a diferença, e o quadro deixa de repintar. */
 @keyframes inviteBtnPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(251,191,36,0.3); }
-  50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(251,191,36,0.6); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
+/* 1.9.86 — idem: a escala fica, a sombra sai da animação. ⚠️ Esta roda em LOOP
+   INFINITO no botão de inscrição quando há convite (tournaments.js) — ou seja,
+   estava repintando sem parar exatamente na tela que o dono mais abre. */
 @keyframes enrollPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(16,185,129,0.3); }
-  50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(16,185,129,0.6); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 /* ─── Inline button spinner (for enroll/unenroll feedback) ─────────────── */
