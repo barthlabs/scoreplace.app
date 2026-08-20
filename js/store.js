@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.99';
+window.SCOREPLACE_VERSION = '1.9.100';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -7315,8 +7315,10 @@ window._navTorneioComAviso = function (tournamentId, evento) {
         // nada), e as TRAVADAS vêm primeiro, porque são o que mais explica.
         var tasks = (window._longTasks || []).filter(function (lt) { return lt.fim >= _tapT0; })
           .map(function (lt) { return Math.round(lt.dur) + 'ms ' + (lt.nome || ''); }).slice(-6);
+        // nome CURTO: o recorte de 60 chars enche o orcamento de 250 com um so
+        // trecho. 30 chars ja identificam a funcao, e cabem tres.
         var trechos = (window._trechos || []).filter(function (tr) { return (tr.ini + tr.dur) >= _tapT0 - 100 && tr.dur >= 120; })
-          .map(function (tr) { return tr.nome + '=' + Math.round(tr.dur) + 'ms'; }).slice(-4);
+          .map(function (tr) { return String(tr.nome).slice(0, 30) + '=' + Math.round(tr.dur) + 'ms'; }).slice(-3);
         if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms; trechos:', trechos.join(' | '), '; longtasks:', tasks.join(' | '));
         var travadas = (window._travadas || []).filter(function (tv) { return tv.fim >= _tapT0 - 4000; })
           .map(function (tv) {
@@ -7326,14 +7328,21 @@ window._navTorneioComAviso = function (tournamentId, evento) {
         window._tapReportes = (window._tapReportes || 0) + 1;
         if (window._tapReportes <= 12 && typeof window._captureMessage === 'function') {
           try {
-            // ⚠️ TRECHOS PRIMEIRO: eles têm os NOMES. As travadas descrevem o
-            // tamanho do estrago, os trechos dizem QUEM fez — e é o fim da linha
-            // que se perde quando algo trunca. (O truncamento em 250 do SDK está
-            // resolvido em sentry-init.js, mas a ordem certa é rede de segurança.)
-            var _linha = 'tap-sem-feedback: entrada ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso +' + Math.round(ms) +
-              'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') +
-              ' · travadas: ' + (travadas.join(' | ') || 'nenhuma') +
-              (tasks.length ? ' · longtasks: ' + tasks.join(' | ') : '');
+            // ── ⚠️ A MENSAGEM TEM QUE CABER EM 250 CARACTERES (1.9.100) ─────────
+            // O SDK do Sentry trunca `message` em 250 por padrão. A 1.9.98 tentou
+            // subir esse teto e os relatórios do dono PARARAM de chegar; o teto
+            // voltou (ver sentry-init.js) e agora quem se ajusta é a mensagem.
+            // PRIORIDADE, nesta ordem, porque o fim é o que se perde:
+            //   1. os números do toque (2 valores, ~40 chars);
+            //   2. os TRECHOS — são eles que têm o NOME de quem segurou a thread;
+            //   3. as travadas, só se sobrar espaço — elas descrevem o TAMANHO do
+            //      estrago, e tamanho sem nome nunca consertou nada.
+            var _cab = 'tap: ' + (_inDelay >= 0 ? _inDelay : '?') + '/' + Math.round(ms) + 'ms';
+            var _linha = _cab + ' · quem: ' + (trechos.join(' | ') || 'nenhum');
+            if (_linha.length < 200 && travadas.length) {
+              _linha += ' · trav: ' + travadas.join(' | ');
+            }
+            if (_linha.length > 240) _linha = _linha.slice(0, 240);
             window._captureMessage(_linha, 'info');
           } catch (e) {}
         }

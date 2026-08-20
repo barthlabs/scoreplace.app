@@ -152,12 +152,29 @@ ok(!/document\.documentElement\.style\.setProperty\('--(topbar-h|hamburger-dd-h|
 // ── 5. o relatório do aparelho não pode chegar cortado ────────────────────
 // O da 1.9.90 chegou truncado em 253 caracteres, e o corte caiu EXATAMENTE em
 // cima das travadas — a parte que diz quem segurou a tela.
-ok(/travadas: ' \+ \(travadas\.join/.test(store),
-   'as TRAVADAS vêm primeiro na mensagem (é o que mais explica, e o fim é o que se perde)');
+// ── ⚠️ A MENSAGEM CABE EM 250, EM VEZ DE NEGOCIAR COM O LIMITE (1.9.100) ───
+// A 1.9.98 tentou SUBIR o teto (`maxValueLength: 4000`) e os relatórios do dono
+// PARARAM de chegar — o último foi na 1.9.96, e ele testou a 98 sem que nada
+// aparecesse. Causalidade não provada, mas relatório é a única janela pro
+// aparelho dele: voltar ao que comprovadamente reportava vale mais que defender
+// a mudança. Então quem se ajusta é a mensagem.
+ok(/var _cab = 'tap: '/.test(store),
+   'o cabeçalho é curto (dois números, não uma frase)');
+ok(/_linha = _cab \+ ' · quem: ' \+ \(trechos\.join/.test(store),
+   'os TRECHOS (que têm o NOME) vêm logo depois do cabeçalho — o fim é o que se perde');
+ok(/if \(_linha\.length < 200 && travadas\.length\)/.test(store),
+   'as travadas só entram se sobrar espaço: tamanho do estrago sem nome nunca consertou nada');
+ok(/if \(_linha\.length > 240\) _linha = _linha\.slice\(0, 240\);/.test(store),
+   'e a linha é cortada por nós em 240, não pelo SDK em 250');
+ok(/String\(tr\.nome\)\.slice\(0, 30\)/.test(store),
+   'cada nome vai em 30 chars — a 60 um único trecho comia o orçamento inteiro');
 ok(/tr\.dur >= 120/.test(store),
    'trechos abaixo de 120ms ficam fora: não são bloqueio, só gastam caracteres');
-ok(/\(tasks\.length \? ' · longtasks: ' \+ tasks\.join\(' \| '\) : ''\)/.test(store),
-   'e "longtasks: sem suporte" não é mais enviado (o WKWebView nunca tem a API)');
+// comentários fora antes de olhar: a NOTA que explica por que ele não volta
+// cita o nome da opção, e acusar a própria documentação é ruído.
+const sentryVivo = R('js/sentry-init.js').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+ok(!/maxValueLength/.test(sentryVivo),
+   '⛔ `maxValueLength` não volta ao sentry-init sem prova de que o relatório sobrevive a ele');
 
 // ── 6. a barra do "Carregando" anda SEM a thread principal (1.9.93) ───────
 // Relato do dono na 1.9.92: _"o carregando chega em 100% com a barra travada em

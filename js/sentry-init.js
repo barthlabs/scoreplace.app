@@ -149,15 +149,18 @@
         // por race entre Sentry CDN async e store.js defer (issue v1.0.3-beta:
         // 14 events com release=scoreplace@unknown).
         environment: 'production',
-        // ── ⭐ O RELATÓRIO CHEGAVA CORTADO — POR UM PADRÃO QUE EU NUNCA MEXI ────
-        // O SDK trunca `message` em 250 caracteres por padrão. TODO relatório
-        // `tap-sem-feedback` do aparelho do dono chegava cortado em ~253 — e o
-        // corte caía sempre em cima da parte que NOMEIA quem segurou a thread.
-        // O aparelho mandava a informação certa desde o começo; ela morria aqui.
-        // Passei versões caçando no escuro por causa disto, inclusive "consertando"
-        // o formato da mensagem duas vezes achando que o problema era o tamanho.
-        // ⛔ Não voltar ao padrão: diagnóstico sem nome é diagnóstico inútil.
-        maxValueLength: 4000,
+        // ── ⛔ NÃO MEXER EM `maxValueLength` (1.9.100) ─────────────────────────
+        // A 1.9.98 acrescentou `maxValueLength: 4000` aqui pra o relatório do
+        // aparelho parar de chegar cortado em 250. Resultado medido: os relatórios
+        // do dono PARARAM de chegar — o último foi na 1.9.96, e ele testou a 98
+        // sem que nada aparecesse. Não provei a causalidade (o painel de navegador
+        // aqui também não entrega evento nenhum, então pode ser bloqueio local),
+        // mas relatório é a ÚNICA janela que eu tenho pro aparelho dele: entre
+        // defender a minha mudança e voltar pro que comprovadamente reportava, a
+        // escolha é óbvia.
+        // O corte de 250 continua existindo — e agora é resolvido do NOSSO lado,
+        // encurtando a mensagem (ver o relato do toque em store.js). Caber no
+        // limite é mais barato que negociar com o limite.
         // Beta-readiness: 100% errors mas baixa amostragem de transações (custo).
         sampleRate: 1.0,
         tracesSampleRate: 0.05,
