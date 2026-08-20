@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.90';
+window.SCOREPLACE_VERSION = '1.9.91';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -4347,8 +4347,13 @@ window._reflowChrome = function() {
   // topbar quebrando em 2 linhas em telas estreitas. Sem isso o conteúdo subiria
   // pra trás da topbar.
   // !important pra vencer a regra `.main-content { padding:0 !important }` (centralização em telas largas).
+  // (1.9.91) mesma regra do bloco de variáveis lá embaixo: escrever o MESMO valor
+  // de novo suja o layout de graça, e isto roda a cada render.
   var mc = document.querySelector('.main-content');
-  if (mc && topbarH > 0) mc.style.setProperty('padding-top', (topbarH + 16) + 'px', 'important'); // +16 = o respiro (1rem) que a topbar tinha em margin-bottom
+  if (mc && topbarH > 0) {
+    var _pt = (topbarH + 16) + 'px'; // +16 = o respiro (1rem) que a topbar tinha em margin-bottom
+    if (mc.style.paddingTop !== _pt) mc.style.setProperty('padding-top', _pt, 'important');
+  }
 
   var vc = document.getElementById('view-container');
   if (vc) {
@@ -4357,7 +4362,8 @@ window._reflowChrome = function() {
       // abaixo da topbar). Com o menu aberto, somar ddH cheio deixava ESSE respiro de
       // 16px como um gap escuro entre o menu e o conteúdo (ex.: barra de filtro/busca da
       // dashboard). Subtrai o respiro pra o conteúdo grudar no fundo do menu.
-      vc.style.paddingTop = ddH > 0 ? (Math.max(0, ddH - 16) + 'px') : '';
+      var _vpt = ddH > 0 ? (Math.max(0, ddH - 16) + 'px') : '';
+      if (vc.style.paddingTop !== _vpt) vc.style.paddingTop = _vpt;
     } else if (vc.style.paddingTop) {
       vc.style.paddingTop = '';
     }
@@ -4382,10 +4388,24 @@ window._reflowChrome = function() {
   } catch (e) {}
 
   try {
-    document.documentElement.style.setProperty('--topbar-h', topbarH + 'px');
-    document.documentElement.style.setProperty('--hamburger-dd-h', ((ddOpen ? ddH : 0)) + 'px');
-    document.documentElement.style.setProperty('--backheader-h', fixedBackHeaderH + 'px');
-    document.documentElement.style.setProperty('--stickybar-h', stickyBarH + 'px');
+    // ── ⚠️ SÓ ESCREVE O QUE MUDOU (1.9.91) ────────────────────────────────────
+    // Escrever uma custom property no `documentElement` INVALIDA O ESTILO DO
+    // DOCUMENTO INTEIRO — o navegador não sabe quem herda a variável, então
+    // marca tudo pra recalcular. Aqui são CINCO escritas, e o `_reflowChrome`
+    // roda a cada render. Na esmagadora maioria das vezes os números são os
+    // MESMOS de antes (a topbar não mudou de altura porque um card entrou na
+    // lista): era invalidação total de graça, num documento de 4238 nós.
+    // Comparar antes de escrever é barato e derruba quase todas.
+    var _vars = window._spChromeVars || (window._spChromeVars = {});
+    var _setVar = function (nome, valor) {
+      if (_vars[nome] === valor) return;
+      _vars[nome] = valor;
+      document.documentElement.style.setProperty(nome, valor);
+    };
+    _setVar('--topbar-h', topbarH + 'px');
+    _setVar('--hamburger-dd-h', ((ddOpen ? ddH : 0)) + 'px');
+    _setVar('--backheader-h', fixedBackHeaderH + 'px');
+    _setVar('--stickybar-h', stickyBarH + 'px');
     // ── ÂNCORA DE SCROLL (v1.5.22) ────────────────────────────────────────────────
     // Offset ÚNICO pra qualquer `scrollIntoView({block:'start'})` da app: é TUDO que
     // fica grudado no topo e taparia o alvo — topbar + dropdown do hamburger +
@@ -4400,7 +4420,7 @@ window._reflowChrome = function() {
     // Dinâmico de propósito: a topbar quebra em 2 linhas no mobile, o dropdown do
     // hamburger abre/fecha e a barra existe só em algumas telas. Número fixo erra em
     // todas essas. O fallback (120px) só vale antes do 1º reflow.
-    document.documentElement.style.setProperty('--scroll-anchor',
+    _setVar('--scroll-anchor',
       'calc(' + topbarH + 'px + ' + (ddOpen ? ddH : 0) + 'px + ' + fixedBackHeaderH + 'px + ' + stickyBarH + 'px + 12px)');
   } catch (e) {}
 };
@@ -4443,9 +4463,32 @@ window._hamburgerOutsideClick = function(e) {
   function initDomObserver() {
     var vc = document.getElementById('view-container');
     if (!vc) { setTimeout(initDomObserver, 100); return; }
-    var mo = new MutationObserver(function() {
+    // ── ⚠️ COALESCE OBRIGATÓRIO (1.9.91) ────────────────────────────────────
+    // MEDIDO no iPhone do dono (Sentry 7683086330, release 1.9.90):
+    //   `Mu:) { observeExistingHeaders(); window._reflowChrome(); }=172ms`
+    // Era ele quem mais segurava a thread com nome. Este observer escuta o
+    // `#view-container` INTEIRO (childList+subtree), ou seja dispara a cada
+    // lote de mutação de QUALQUER render — e chamava `_reflowChrome()` SÍNCRONO
+    // em cada lote. O `_reflowChrome` lê layout (offsetHeight, rect,
+    // getComputedStyle) e depois ESCREVE cinco variáveis CSS no
+    // `documentElement`, o que invalida o estilo do DOCUMENTO INTEIRO. Num
+    // render que adiciona milhares de nós (a dash do dono tem 4238) isso vira
+    // recálculo completo repetido — a MESMA família do `_fitNames`, que já
+    // custou a rolagem do app inteiro.
+    // Agora é UM por quadro. rAF × timeout porque rAF não dispara em aba de
+    // fundo, e sem a rede o cromo ficaria desalinhado até a pessoa voltar.
+    var _reflowPend = false;
+    var _reflowAgora = function () {
+      if (!_reflowPend) return;
+      _reflowPend = false;
       observeExistingHeaders();
       window._reflowChrome();
+    };
+    var mo = new MutationObserver(function() {
+      if (_reflowPend) return;
+      _reflowPend = true;
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_reflowAgora);
+      setTimeout(_reflowAgora, 100);
     });
     mo.observe(vc, { childList: true, subtree: true });
     observeExistingHeaders();
@@ -7143,10 +7186,17 @@ window._navTorneioComAviso = function (tournamentId, evento) {
       window._ultimoTapLoaderMs = Math.round(ms);
       window._ultimoTapInputDelay = _inDelay;
       if (ms > 400 || _inDelay > 300) {
+        // ── ⚠️ A MENSAGEM É CURTA PORQUE ELA É CORTADA (1.9.91) ────────────────
+        // O relatório da 1.9.90 chegou truncado em 253 caracteres, e o corte caiu
+        // EXATAMENTE em cima das travadas — a parte que diz quem segurou a tela.
+        // Relatório cortado no meio do dado é relatório inútil. Então: fora o
+        // ruído (trechos abaixo de 120ms não são bloqueio, e o WKWebView não tem
+        // a API de longtask — "sem suporte" gastava 25 caracteres pra não dizer
+        // nada), e as TRAVADAS vêm primeiro, porque são o que mais explica.
         var tasks = (window._longTasks || []).filter(function (lt) { return lt.fim >= _tapT0; })
           .map(function (lt) { return Math.round(lt.dur) + 'ms ' + (lt.nome || ''); }).slice(-6);
-        var trechos = (window._trechos || []).filter(function (tr) { return (tr.ini + tr.dur) >= _tapT0 - 100; })
-          .map(function (tr) { return tr.nome + '=' + Math.round(tr.dur) + 'ms'; }).slice(-8);
+        var trechos = (window._trechos || []).filter(function (tr) { return (tr.ini + tr.dur) >= _tapT0 - 100 && tr.dur >= 120; })
+          .map(function (tr) { return tr.nome + '=' + Math.round(tr.dur) + 'ms'; }).slice(-4);
         if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms; trechos:', trechos.join(' | '), '; longtasks:', tasks.join(' | '));
         var travadas = (window._travadas || []).filter(function (tv) { return tv.fim >= _tapT0 - 4000; })
           .map(function (tv) {
@@ -7155,7 +7205,13 @@ window._navTorneioComAviso = function (tournamentId, evento) {
           }).slice(-5);
         window._tapReportes = (window._tapReportes || 0) + 1;
         if (window._tapReportes <= 3 && typeof window._captureMessage === 'function') {
-          try { window._captureMessage('tap-sem-feedback: entrada esperou ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso pintou +' + Math.round(ms) + 'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') + ' · travadas(4s): ' + (travadas.join(' | ') || 'nenhuma') + ' · longtasks: ' + (tasks.join(' | ') || 'sem suporte'), 'info'); } catch (e) {}
+          try {
+            var _linha = 'tap-sem-feedback: entrada ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso +' + Math.round(ms) +
+              'ms · travadas: ' + (travadas.join(' | ') || 'nenhuma') +
+              ' · trechos: ' + (trechos.join(' | ') || 'nenhum') +
+              (tasks.length ? ' · longtasks: ' + tasks.join(' | ') : '');
+            window._captureMessage(_linha, 'info');
+          } catch (e) {}
         }
       }
     }); });

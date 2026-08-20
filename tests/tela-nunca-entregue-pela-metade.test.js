@@ -110,5 +110,45 @@ ok(/String\(cb\)\.replace\(\/\\s\+\/g, ' '\)\.slice\(9, 69\)/.test(obs),
 ok(/try \{ _quem = cb\.name/.test(obs),
    'e o recorte é protegido: um throw aqui viveria dentro de um `finally` e quebraria o próprio perfilador');
 
+// ── 4. o cromo não rediscute o documento inteiro a cada mutação (1.9.91) ───
+// MEDIDO no iPhone do dono (Sentry 7683086330, release 1.9.90):
+//   `Mu:) { observeExistingHeaders(); window._reflowChrome(); }=172ms`
+// O observer escuta o #view-container INTEIRO e chamava `_reflowChrome` SÍNCRONO
+// a cada lote. O `_reflowChrome` lê layout e depois escreve cinco custom
+// properties no `documentElement` — o que invalida o estilo do DOCUMENTO TODO.
+// Medido no navegador, 50 lotes de mutação: 50 reflows / 250 escritas ANTES;
+// 1 por quadro / ZERO escritas DEPOIS (os números quase nunca mudam — a topbar
+// não muda de altura porque entrou um card na lista).
+const iMo = store.indexOf('function initDomObserver()');
+ok(iMo > 0, 'o observer do cromo existe');
+const moBloco = store.slice(iMo, store.indexOf('observeExistingHeaders();\n    window._reflowChrome();', iMo) + 60);
+ok(/if \(_reflowPend\) return;\s*_reflowPend = true;/.test(moBloco),
+   'o observer COALESCE: um reflow por quadro, não um por lote de mutação');
+ok(/requestAnimationFrame\(_reflowAgora\)[\s\S]{0,80}setTimeout\(_reflowAgora, 100\)/.test(moBloco),
+   'e corre rAF × timeout (rAF não dispara em aba de fundo)');
+ok(!/new MutationObserver\(function\(\) \{\s*observeExistingHeaders\(\);\s*window\._reflowChrome\(\);\s*\}\)/.test(store),
+   '⛔ a versão síncrona (reflow por lote) não existe mais');
+
+const iVar = store.indexOf("var _vars = window._spChromeVars");
+ok(iVar > 0, 'existe o cache das variáveis do cromo');
+const varBloco = store.slice(iVar, store.indexOf('--scroll-anchor', iVar) + 400);
+ok(/if \(_vars\[nome\] === valor\) return;/.test(varBloco),
+   'variável CSS só é escrita quando o valor MUDOU (escrever igual invalida o documento de graça)');
+['--topbar-h', '--hamburger-dd-h', '--backheader-h', '--stickybar-h', '--scroll-anchor'].forEach(function (v) {
+  ok(new RegExp("_setVar\\('" + v + "'").test(store), 'a variável ' + v + ' passa pelo guarda');
+});
+ok(!/document\.documentElement\.style\.setProperty\('--(topbar-h|hamburger-dd-h|backheader-h|stickybar-h|scroll-anchor)'/.test(store),
+   '⛔ nenhuma das cinco escreve direto no documentElement, contornando o guarda');
+
+// ── 5. o relatório do aparelho não pode chegar cortado ────────────────────
+// O da 1.9.90 chegou truncado em 253 caracteres, e o corte caiu EXATAMENTE em
+// cima das travadas — a parte que diz quem segurou a tela.
+ok(/travadas: ' \+ \(travadas\.join/.test(store),
+   'as TRAVADAS vêm primeiro na mensagem (é o que mais explica, e o fim é o que se perde)');
+ok(/tr\.dur >= 120/.test(store),
+   'trechos abaixo de 120ms ficam fora: não são bloqueio, só gastam caracteres');
+ok(/\(tasks\.length \? ' · longtasks: ' \+ tasks\.join\(' \| '\) : ''\)/.test(store),
+   'e "longtasks: sem suporte" não é mais enviado (o WKWebView nunca tem a API)');
+
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);
