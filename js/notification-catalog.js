@@ -116,7 +116,13 @@ window.NOTIF_CATALOG = {
   // 🔴 1.9.36 — um placar ao vivo COMEÇOU num torneio em que a pessoa está inscrita
   // (inclusive espera, desativado e W.O.). É convite pra ASSISTIR, não pedido de ação:
   // quem não quiser desliga em Perfil → "Avisar quando um placar ao vivo começar".
-  live_score_started:          { level: 'all',         icon: '🔴', color: 'var(--danger-color, #ef4444)' }
+  live_score_started:          { level: 'all',         icon: '🔴', color: 'var(--danger-color, #ef4444)' },
+
+  // 📱 1.9.97 — CAMADA 3 do celular: o ORGANIZADOR registrou o contato da pessoa.
+  // É 'important' de propósito: alguém escreveu um telefone no perfil dela. A pessoa
+  // TEM que saber — é o que separa "registro com procedência" de "mexeram no meu
+  // cadastro sem avisar", e é a chance dela corrigir se o número estiver errado.
+  contact_phone_set:           { level: 'important',   icon: '📱', color: '#f59e0b' }
 };
 
 // v1.2.9: NOTIF_WHATSAPP_POLICY + _waPolicy REMOVIDOS. A política de entrega por

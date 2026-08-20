@@ -2569,6 +2569,30 @@ function renderParticipants(container, tournamentId) {
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
       // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
       const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}','${ind.uid || ''}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
+      // ── v1.9.97 · CAMADA 3: REGISTRAR O CONTATO DE QUEM O SMS NÃO ALCANÇA ────
+      // Caso Leila Arida (20/ago/2026): pediu o código, o Google entregou o SMS à
+      // operadora (HTTP 200) e nada chegou no aparelho — sem saída, ela ficava fora da
+      // campanha de celular pra sempre. Aqui o organizador, que já falou com ela,
+      // registra o contato — e o dado guarda QUEM registrou.
+      // ⛔ NÃO é "salvar sem verificar": o número entra como `phoneSource:'organizer'`,
+      // nunca vira identidade (login/recuperação/fusão) e a pessoa é NOTIFICADA.
+      // Só aparece pra quem tem uid — sem identidade não há perfil onde gravar.
+      var _profTel = (window._userProfileCache && ind.uid) ? window._userProfileCache[ind.uid] : null;
+      var _telJa = String((_profTel && _profTel.phone) || '').replace(/\D/g, '').length >= 8;
+      var _telOrg = _profTel && _profTel.phoneSource === 'organizer';
+      var _telTitulo = !_profTel ? 'Contato do participante'
+        : (_telJa ? (_telOrg ? 'Contato registrado por organizador — clique para corrigir'
+                             : 'Celular verificado pela própria pessoa')
+                  : 'Sem contato — clique para registrar o celular');
+      var _telCor = !_telJa ? 'rgba(245,158,11,0.12);color:#fbbf24;border:1px dashed rgba(245,158,11,0.45)'
+        : (_telOrg ? 'rgba(245,158,11,0.22);color:#fcd34d;border:1px solid rgba(245,158,11,0.5)'
+                   : 'rgba(16,185,129,0.14);color:#6ee7b7;border:1px solid rgba(16,185,129,0.35)');
+      const _telBtnC = (isOrg && ind.uid) ? ('<button type="button" class="btn btn-micro" ' +
+        'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
+        'title="' + window._safeHtml(_telTitulo) + '" ' +
+        'style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:' + _telCor + ';">' +
+        '📱' + (_telJa ? '' : ' contato') + '</button>') : '';
+
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
       // tira de participants E dos storages da espera, casando nome cru/formatado.
@@ -2700,7 +2724,7 @@ function renderParticipants(container, tournamentId) {
                 </div>
                 <!-- Meta: VIP + categorias + nível (à esquerda). O 🗑️ saiu daqui — -->
                 <!-- vai pra linha de ação canônica abaixo (junto da presença). -->
-                <div style="margin-top:6px;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
+                <div style="margin-top:6px;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtnC}${_telBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
                 <!-- CARD CANÔNICO: ação (Presente/Ausente · toggle · W.O. · 🗑️) à direita. -->
                 ${window._inscritoActionRow('', _presenceWord + (isAbsent ? _riWoBadge : _toggleSwitch) + woBtn, _delBtnC)}
                 ${_matchStrip}
@@ -2969,4 +2993,93 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
   }).catch(function(e) {
     window._warn('[Participants] skill save failed:', e);
   });
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v1.9.97 · CAMADA 3 — O ORGANIZADOR REGISTRA O CONTATO
+//
+// Caso Leila Arida (20/ago/2026): pediu o código de verificação, o Identity Toolkit
+// devolveu HTTP 200 (o SMS saiu pra operadora) e nada chegou no aparelho. Sem isto, ela
+// ficaria fora da campanha de celular da Confra pra sempre.
+//
+// ⛔ NÃO É "SALVAR SEM VERIFICAR". O dono derrubou essa ideia, com razão: _"e se a
+// pessoa colocar o numero de outro? sequestra o numero do outro para contatos. e se
+// errar a digitação, ninguem recebe nada e acha que esta tudo bem"_. O que muda aqui é a
+// PROCEDÊNCIA — quem registra é o organizador, que já falou com a pessoa, e o uid dele
+// fica gravado no dado (`phoneSource:'organizer'` + `phoneSetBy`). A pessoa é NOTIFICADA.
+//
+// Quem decide é o SERVIDOR (setParticipantContactPhone): esta tela só coleta o número.
+// As travas — ser organizador DESTE torneio, o alvo estar no elenco, nunca sobrescrever
+// celular verificado — moram em functions/contact-phone-core.js e valem mesmo que
+// alguém chame a função por fora.
+// ═══════════════════════════════════════════════════════════════════════════
+window._orgSetContactPhone = function (tId, uid, nome) {
+  var _fmtBR = function (d) {
+    var s = String(d || '').replace(/\D/g, '').slice(-11);
+    if (s.length === 11) return '(' + s.slice(0, 2) + ') ' + s.slice(2, 7) + '-' + s.slice(7);
+    if (s.length === 10) return '(' + s.slice(0, 2) + ') ' + s.slice(2, 6) + '-' + s.slice(6);
+    return s;
+  };
+  var prof = (window._userProfileCache && window._userProfileCache[uid]) || null;
+  var atual = String((prof && prof.phone) || '');
+  var verificado = atual.replace(/\D/g, '').length >= 8 && (!prof || prof.phoneSource !== 'organizer');
+
+  // Celular que a PRÓPRIA pessoa verificou por SMS não se toca. Só ela manda no número
+  // dela — o organizador registra contato de quem não tem, não corrige quem tem.
+  if (verificado) {
+    if (typeof showAlertDialog === 'function') {
+      showAlertDialog('Celular já verificado',
+        (nome || 'Essa pessoa') + ' já confirmou o celular por SMS: ' + _fmtBR(atual) + '.\n\n' +
+        'Só ela pode trocar esse número, no próprio perfil.', null, { type: 'info' });
+    }
+    return;
+  }
+
+  var jaRegistrado = atual.replace(/\D/g, '').length >= 8;
+  var corpo =
+    '<div style="font-size:0.86rem;line-height:1.5;color:var(--text-muted);">' +
+      (jaRegistrado
+        ? '<p style="margin:0 0 10px;">Hoje está registrado <b style="color:var(--text-bright);">' + window._safeHtml(_fmtBR(atual)) + '</b>, colocado por um organizador. Você pode corrigir.</p>'
+        : '<p style="margin:0 0 10px;">Use isto quando o SMS de verificação não chegar pra pessoa. Confirme o número <b>com ela</b> antes.</p>') +
+      '<div style="display:flex;gap:8px;align-items:center;margin:12px 0 10px;">' +
+        '<span style="font-weight:700;color:var(--text-bright);">+55</span>' +
+        '<input id="org-contact-phone-input" class="form-control" inputmode="numeric" ' +
+          'placeholder="(11) 99999-9999" value="' + window._safeHtml(_fmtBR(atual)) + '" ' +
+          'style="flex:1;min-width:0;font-size:1rem;letter-spacing:0.5px;">' +
+      '</div>' +
+      '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:9px 11px;font-size:0.76rem;color:#fbbf24;">' +
+        'Fica registrado que <b>você</b> colocou este número, e ' + window._safeHtml(nome || 'a pessoa') + ' recebe um aviso. ' +
+        'Ele vale só para <b>contato</b> — não serve para entrar no app nem para recuperar senha; para isso ela precisa confirmar por SMS.' +
+      '</div>' +
+    '</div>';
+
+  if (typeof showConfirmDialog !== 'function') return;
+  showConfirmDialog('📱 Registrar contato de ' + (nome || 'participante'), corpo, function () {
+    var el = document.getElementById('org-contact-phone-input');
+    var digits = el ? String(el.value || '').replace(/\D/g, '') : '';
+    if (digits.length < 10) {
+      if (typeof showNotification === 'function') showNotification('Número incompleto', 'Digite DDD + número do celular.', 'warning');
+      return;
+    }
+    if (typeof showNotification === 'function') showNotification('Registrando…', 'Salvando o contato de ' + (nome || '') + '.', 'info');
+    firebase.functions().httpsCallable('setParticipantContactPhone')({
+      tournamentId: String(tId), uid: String(uid), phone: digits, country: '55',
+    }).then(function (res) {
+      var r = (res && res.data) || {};
+      // O cache local acompanha na hora — senão o botão continua "sem contato" até o
+      // próximo carregamento e parece que não salvou.
+      if (window._userProfileCache && window._userProfileCache[uid]) {
+        window._userProfileCache[uid].phone = r.phone || ('+55' + digits);
+        window._userProfileCache[uid].phoneSource = 'organizer';
+      }
+      if (typeof showNotification === 'function') {
+        showNotification('Contato registrado', (nome || 'A pessoa') + ' foi avisada de que você registrou o celular dela.', 'success');
+      }
+      if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+    }).catch(function (err) {
+      var msg = (err && (err.message || err.code)) || 'erro';
+      if (typeof showAlertDialog === 'function') showAlertDialog('Não deu pra registrar', String(msg), null, { type: 'error' });
+      else if (typeof showNotification === 'function') showNotification('Não deu pra registrar', String(msg), 'error');
+    });
+  }, null, { confirmText: 'Registrar', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
 };

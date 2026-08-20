@@ -330,6 +330,8 @@ const SUITES = [
   'tests/novidades-grade-ordem-e-sem-repeticao.test.js',
   'tests/espera-legivel-sobre-foto.test.js',
   'tests/notificacao-lida-por-permanencia.test.js',
+  'tests/notificacao-lida-nao-desce-para-antigas.test.js',
+  'tests/celular-registrado-pelo-organizador.test.js',
   'tests/previsao-tempo-agora-hoje-proximos.test.js',
   'tests/x-da-busca-alvo-de-toque.test.js',
   'tests/azul-e-slots-fixos.test.js',

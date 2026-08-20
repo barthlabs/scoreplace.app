@@ -77,6 +77,10 @@ const _renameProp = require("./rename-propagate-core");
 // passa por aqui — a lápide de fusão fica com o MESMO contato do sobrevivente, então
 // `snap.docs[0]` pode ser o uid morto. Espelha window._userVivo do cliente (v1.9.33).
 const _userVivo = require("./user-vivo-core");
+// v1.9.97 — CAMADA 3 do celular: número registrado pelo ORGANIZADOR, com procedência.
+// `isIdentityPhone` é a porta que impede esse número de virar identidade (recuperação
+// de senha, dedup, fusão). Ver functions/contact-phone-core.js.
+const _contactPhone = require("./contact-phone-core");
 const fetch = require("node-fetch");
 
 admin.initializeApp();
@@ -2498,7 +2502,11 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
       }
       consultas.push(db.collection("users").where("displayName_lower", "==", nomeLower).limit(8).get());
     }
-    if (telCanon) {
+    // v1.9.97: telefone só é EVIDÊNCIA de duplicata quando é identidade. O número que o
+    // organizador registrou pode ser compartilhado de propósito (casal com um aparelho
+    // só) — perguntar "vocês são a mesma pessoa?" por causa disso é falso positivo
+    // fabricado por nós.
+    if (telCanon && _contactPhone.isIdentityPhone(meu)) {
       consultas.push(db.collection("users").where("phone", "==", meu.phone).limit(8).get());
     }
     if (!consultas.length) return null;
@@ -2514,7 +2522,9 @@ async function _detectarDuplicataNoTorneio(db, callerUid, tData) {
         if (x.mergedInto) return;
         vistos[d.id] = true;
         pessoas.push({
-          uid: d.id, nome: x.displayName || "", telefone: x.phone || "",
+          uid: d.id, nome: x.displayName || "",
+          // mesma regra do lado de cá: número do organizador não conta como evidência
+          telefone: _contactPhone.isIdentityPhone(x) ? (x.phone || "") : "",
           letzplayHandle: x.letzplayHandle || "", email: x.email || "",
         });
       });
@@ -3725,8 +3735,14 @@ async function _registeredPhoneFor(uid, userRecord) {
   try {
     const snap = await admin.firestore().collection("users").doc(uid).get();
     if (snap.exists) {
-      const p = snap.data() && snap.data().phone;
-      if (p) return p;
+      const p = snap.data() || {};
+      // ⛔ v1.9.97 — CELULAR REGISTRADO PELO ORGANIZADOR NÃO RECUPERA CONTA.
+      // Aqui o telefone é CREDENCIAL: quem prova posse dele define uma senha nova. Um
+      // número que a própria pessoa nunca confirmou por SMS pode ser de terceiro (erro
+      // de digitação do organizador) — e aí o SMS de recuperação cairia no celular de
+      // um estranho, que só precisaria saber o e-mail pra tomar a conta.
+      // O organizador registra CONTATO; identidade continua sendo prova de posse.
+      if (_contactPhone.isIdentityPhone(p)) return p.phone;
     }
   } catch (e) { /* ignore */ }
   return (userRecord && userRecord.phoneNumber) || null;
@@ -5497,7 +5513,16 @@ exports.mergePhoneAccount = onCall(
         try { await admin.auth().updateUser(callerUid, { phoneNumber: ghPhone }); }
         catch (e) { console.error("[mergePhoneAccount] set phone on caller failed:", (e && (e.code || e.message)) || e); }
         await db.collection("users").doc(callerUid).set(
-          { phone: ghPhone, phoneCountry: "55", updatedAt: new Date().toISOString() }, { merge: true }
+          {
+            phone: ghPhone, phoneCountry: "55", updatedAt: new Date().toISOString(),
+            // v1.9.97: o número acabou de ser PROVADO por SMS. Se antes havia um
+            // registrado pelo organizador, a procedência morre aqui — senão a conta
+            // ficaria com telefone verificado e carimbo de "posto por terceiro", e os
+            // guards de identidade continuariam recusando o que já foi provado.
+            phoneSource: admin.firestore.FieldValue.delete(),
+            phoneSetBy: admin.firestore.FieldValue.delete(),
+            phoneSetAt: admin.firestore.FieldValue.delete(),
+          }, { merge: true }
         ).catch(() => {});
       }
       console.log("[mergePhoneAccount] ghost claim — phone", ghPhone, "→ caller", callerUid);
@@ -5751,9 +5776,20 @@ exports.mergePhoneAccount = onCall(
     // v2.5.x: TELEFONE — se o sobrevivente não tem celular e o antigo tem, herda
     // (ex.: mescla conta-celular numa conta-e-mail → resultado fica com os dois).
     var _oldPhone = oldData.phone || (_oldAuth && _oldAuth.phoneNumber) || null;
-    if ((!newData.phone) && _oldPhone) {
+    // v1.9.97: celular VERIFICADO vence celular REGISTRADO PELO ORGANIZADOR. Sem esta
+    // condição, quem tinha o contato posto pelo organizador e depois confirmava o
+    // próprio número por SMS ficava com o número do organizador — o campo já estava
+    // "preenchido" e a herança nem tentava. Prova de posse não pode perder pra registro.
+    const _survSemIdentidade = !_contactPhone.isIdentityPhone(newData);
+    if (_survSemIdentidade && _oldPhone) {
       surv.phone = _oldPhone;
       surv.phoneCountry = oldData.phoneCountry || "55";
+      // o número passou a ser o VERIFICADO — a procedência de organizador morre aqui
+      if (newData.phoneSource === 'organizer') {
+        surv.phoneSource = admin.firestore.FieldValue.delete();
+        surv.phoneSetBy = admin.firestore.FieldValue.delete();
+        surv.phoneSetAt = admin.firestore.FieldValue.delete();
+      }
     }
     // PLANO/Pro — nunca rebaixar: Pro vence; mantém a validade mais longa.
     const _exp = (d) => { const v = d && d.planExpiresAt; const n = v ? Date.parse(v) : 0; return isNaN(n) ? 0 : n; };
@@ -7351,5 +7387,103 @@ exports.purgeTournamentCopies = onDocumentDeleted(
 
     const resumo = Object.keys(conta).map((k) => `${k}=${conta[k]}`).join(" · ") || "nada a apagar";
     console.log(`[purgeTournamentCopies] ${tid} → ${resumo}`);
+  }
+);
+
+// ─── setParticipantContactPhone (v1.9.97) ─────────────────────────────────────
+// CAMADA 3 da campanha de celular: o ORGANIZADOR registra o contato de um inscrito
+// que o SMS não alcança.
+//
+// ⭐ POR QUE ISTO EXISTE, e por que NÃO é "afrouxar a verificação":
+// Caso Leila Arida (20/ago/2026) — pediu o código, o Identity Toolkit devolveu 200
+// (SMS entregue à operadora) e nada chegou no aparelho. Sem saída, ela ficava fora da
+// campanha pra sempre. A alternativa óbvia (deixar salvar sem verificar) foi derrubada
+// pelo dono com dois argumentos certos: _"e se a pessoa colocar o numero de outro?
+// sequestra o numero do outro para contatos. e se errar a digitação, ninguem recebe
+// nada e acha que esta tudo bem"_.
+//
+// O que muda aqui é a PROCEDÊNCIA. Não é um número anônimo auto-declarado: é um número
+// que um organizador — que já falou com a pessoa — registrou, com o uid dele gravado no
+// dado e com a pessoa NOTIFICADA de que aconteceu.
+//
+// AS TRAVAS (a ordem é a do que dói errar):
+//   1. só organizador/co-organizador DESTE torneio (mesmo poder, cânone do projeto);
+//   2. só pra quem está no elenco DESTE torneio — senão organizar um torneio viraria
+//      licença pra escrever telefone no perfil de qualquer um da base;
+//   3. NUNCA por cima de celular VERIFICADO — quem provou posse manda no próprio número;
+//   4. nunca no PRÓPRIO perfil (burlaria a verificação pra si mesmo);
+//   5. grava `phoneSource:'organizer'`, e todo caminho que usa telefone como IDENTIDADE
+//      (recuperação de senha, dedup, fusão) ignora esse número — ver isIdentityPhone.
+//
+// Deploy: scripts/deploy-functions.sh (NUNCA firebase deploy na mão —
+// [[project_autodraw_deploy_footgun]])
+exports.setParticipantContactPhone = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const targetUid = String(data.uid || "").trim();
+    if (!tournamentId || !targetUid) {
+      throw new HttpsError("invalid-argument", "tournamentId e uid são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    const t = tSnap.exists ? (tSnap.data() || {}) : null;
+
+    // O perfil do ALVO é lido antes da decisão: é ele que diz se já existe um número
+    // verificado (que não pode ser sobrescrito).
+    const alvoSnap = await db.collection("users").doc(targetUid).get();
+    const alvo = alvoSnap.exists ? (alvoSnap.data() || {}) : null;
+    if (!alvo) throw new HttpsError("not-found", "Perfil não encontrado");
+    // Lápide não é pessoa: escrever telefone numa conta fundida é escrever no vazio.
+    if (alvo.mergedInto) throw new HttpsError("failed-precondition", "Essa conta foi unida a outra.");
+
+    const r = _contactPhone.computeSetContactPhone({
+      tournament: t, callerUid, targetUid,
+      phone: data.phone, country: data.country || "55",
+      targetProfile: alvo, nowIso: new Date().toISOString(),
+    });
+    if (!r.ok) {
+      const humano = _contactPhone.RECUSA_HUMANA[r.reason] || "Não foi possível registrar.";
+      // 'sem-mudanca' não é erro do chamador — é o botão apertado duas vezes.
+      if (r.reason === "sem-mudanca") return { ok: true, jaEra: true, phone: data.phone || "" };
+      const code = (r.reason === "nao-e-organizador") ? "permission-denied"
+        : (r.reason === "torneio-inexistente") ? "not-found" : "failed-precondition";
+      throw new HttpsError(code, humano);
+    }
+
+    await db.collection("users").doc(targetUid).set(r.update, { merge: true });
+
+    // A pessoa PRECISA saber. Sem este aviso, isto vira "mexeram no meu cadastro".
+    // O opt-out do sininho é respeitado; o registro no perfil, não — ele é o fato.
+    try {
+      if (alvo.notifyPlatform !== false) {
+        const orgSnap = await db.collection("users").doc(callerUid).get();
+        const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
+        const aviso = _contactPhone.buildContactPhoneNotice({
+          organizerName: orgNome, tournamentName: t.name || "", phone: r.phone,
+          nowIso: r.update.phoneSetAt,
+        });
+        // id determinístico por torneio+número: corrigir o mesmo número duas vezes não
+        // enche a caixa da pessoa de avisos iguais.
+        const notifId = ("contact_phone__" + tournamentId + "__" + String(r.phone).replace(/\D/g, ""))
+          .replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 200);
+        await db.collection("users").doc(targetUid).collection("notifications").doc(notifId).set(
+          Object.assign({ tournamentId, tournamentName: t.name || "" }, aviso), { merge: true }
+        );
+      }
+    } catch (e) {
+      // Aviso é consequência, não condição: o registro já valeu. Mas fica no log —
+      // silêncio aqui é o mesmo silêncio que criou o problema da Leila.
+      console.error("[setParticipantContactPhone] aviso falhou:", e && e.message);
+    }
+
+    console.log("[setParticipantContactPhone]", tournamentId, callerUid, "→", targetUid,
+      "(anterior:", r.anterior || "vazio", ")");
+    return { ok: true, phone: r.phone, anterior: r.anterior };
   }
 );

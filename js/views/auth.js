@@ -4953,6 +4953,21 @@ async function simulateLoginSuccess(user) {
       if (_chk) _chk.style.display = _verified ? '' : 'none';
       if (_btn) _btn.style.display = _verified ? 'none' : '';
       if (_hint) _hint.style.display = _verified ? 'none' : 'block';
+      // v1.9.97 — CAMADA 3: procedência à vista. Sem esta linha, a pessoa abre o perfil,
+      // encontra um telefone que ela não digitou e não tem como saber de onde veio —
+      // que é exatamente a diferença entre "registro com procedência" e "mexeram no meu
+      // cadastro". Ver functions/contact-phone-core.js.
+      var _orgNote = document.getElementById('profile-phone-org-note');
+      if (_orgNote) {
+        if (!_verified && cu.phoneSource === 'organizer' && (cu.phone || '').replace(/\D/g, '').length >= 8) {
+          _orgNote.innerHTML = '📱 Este número foi registrado pelo <b>organizador do seu torneio</b> para contato. ' +
+            'Ele <b>não</b> serve para entrar no app nem para recuperar sua senha. ' +
+            'Se não for seu, ou se quiser usá-lo no login, toque em <b>Alterar</b> e confirme por SMS.';
+          _orgNote.style.display = 'block';
+        } else {
+          _orgNote.style.display = 'none';
+        }
+      }
     })();
     var _hintsEnabled = !(window._hintSystem && window._hintSystem.isDisabled());
     [
@@ -6866,6 +6881,10 @@ function setupProfileModal() {
                   '<label class="pf-switch" title="Divulgar meu celular"><input type="checkbox" id="profile-share-phone" checked><span class="tr"></span></label>' +
                 '</div>' +
               '</div>' +
+              // v1.9.97 — CAMADA 3: número posto pelo ORGANIZADOR. A pessoa precisa
+              // saber por que existe um telefone aqui que ela não digitou — e que ele
+              // serve só pra contato até ela confirmar por SMS.
+              '<div id="profile-phone-org-note" style="display:none;margin-top:6px;font-size:0.7rem;line-height:1.45;color:#fbbf24;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.28);border-radius:8px;padding:7px 9px;"></div>' +
               '<div id="profile-phone-edit-wrap" style="display:none;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
               '<div style="display: flex; gap: 6px; align-items: center;">' +
@@ -8136,6 +8155,101 @@ function setupProfileModal() {
     // troca a sessão atual). Se o número já é de outra conta, o idToken dessa
     // conta vira a PROVA pra mesclar ela na conta atual (sobrevivente). Número
     // novo: o merge traz o telefone e o login por ele cai aqui (redirect).
+    // ── v1.9.97 · O SMS É A PROVA — mas a FALHA DELE TEM QUE APARECER ──────────
+    //
+    // Relato da Leila Arida (20/ago/2026): pediu o código, nunca chegou. A métrica do
+    // Identity Toolkit mostrou o disparo às 11:09 com HTTP 200 (o Google aceitou e
+    // entregou à operadora) e NENHUMA confirmação depois. Ou seja: falhou, e o fato
+    // de ter falhado não existia em lugar nenhum — nem pra ela, nem pro organizador,
+    // nem pro sistema. Só viramos a saber porque ela reclamou no WhatsApp do dono.
+    //
+    // A decisão do dono (20/ago/2026) foi NÃO afrouxar a verificação: número não
+    // verificado pode ser de terceiro (sequestro de contato) ou digitação errada
+    // (ninguém recebe nada e todo mundo acha que está tudo bem). Então a prova fica —
+    // o que muda é que a falha passa a deixar rastro e a ter saída.
+    //
+    // Ver [[project_phone_gate_and_sms_infra]] e [[feedback_proof_lives_in_the_data_not_in_a_stamp]].
+
+    // Painel do código: markup ÚNICO pros dois caminhos (web e nativo). Nasceu
+    // duplicado — o nativo copiou o web — e o "reenviar" teria que nascer duas vezes.
+    // Ver [[feedback_unify_dual_entry_points]].
+    window._profilePhoneOtpHtml = function (ctx) {
+      return '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b>:</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
+          '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
+        '</div>' +
+        '<div id="' + ctx.resendId + '" style="margin-top:8px;font-size:0.74rem;color:var(--text-muted);line-height:1.5;"></div>';
+    };
+
+    // Dica que acompanha QUALQUER falha de envio. O que mais acontece no Brasil é
+    // número certo digitado errado (o 9 a mais/a menos) e chip que está em outro
+    // aparelho — dizer isso vale mais que repetir o código de erro do Firebase.
+    window._profilePhoneHelpHtml = function () {
+      return '<div style="margin-top:8px;font-size:0.74rem;color:var(--text-muted);line-height:1.5;">' +
+        'Confira: o número tem <b>DDD + 9 dígitos</b>? O chip está <b>neste aparelho</b>? ' +
+        'Se estiver tudo certo e o SMS não chegar, fale com o organizador — ele consegue ' +
+        'registrar o seu contato.' +
+        '</div>';
+    };
+
+    // Códigos do Firebase traduzidos. Mensagem de erro em inglês, com "auth/" na
+    // frente, não informa ninguém — só assusta.
+    window._profilePhoneErrText = function (err) {
+      var code = String((err && (err.code || err.message)) || err || '');
+      if (/invalid-phone-number/.test(code)) return 'número inválido. Confira o DDD e os 9 dígitos.';
+      if (/too-many-requests/.test(code)) return 'muitas tentativas para este número. Espere alguns minutos.';
+      if (/quota-exceeded/.test(code)) return 'o limite de SMS de hoje foi atingido. Tente mais tarde.';
+      if (/network-request-failed/.test(code)) return 'sem conexão. Confira a internet e tente de novo.';
+      if (/captcha|internal-error/.test(code)) return 'não deu pra validar o navegador. Recarregue a página e tente de novo.';
+      return code || 'erro';
+    };
+
+    // Contagem regressiva do reenvio. Antes daqui, SMS que não chegava deixava a tela
+    // muda: nenhum botão, nenhuma saída, nenhuma explicação.
+    window._profilePhoneStartResend = function (ctx, secs) {
+      var left = (secs == null) ? 30 : secs;
+      if (window._profilePhoneResendTimer) { try { clearInterval(window._profilePhoneResendTimer); } catch (e) {} }
+      function paint() {
+        var el = document.getElementById(ctx.resendId);
+        if (!el) { try { clearInterval(window._profilePhoneResendTimer); } catch (e) {} return; }
+        if (left > 0) {
+          el.innerHTML = 'Não chegou? Você pode reenviar em <b>' + left + 's</b>.';
+        } else {
+          try { clearInterval(window._profilePhoneResendTimer); } catch (e) {}
+          el.innerHTML = '<span onclick="window._profileVerifyPhone(window._profilePhoneLastOpts || {})" ' +
+            'style="color:#a5b4fc;font-weight:700;cursor:pointer;text-decoration:underline;">🔄 Reenviar o código por SMS</span>' +
+            window._profilePhoneHelpHtml();
+        }
+        left--;
+      }
+      paint();
+      window._profilePhoneResendTimer = setInterval(paint, 1000);
+    };
+
+    // Rastro da tentativa — CAMADA 2. Grava em users/{uid}/phoneVerifyAttempts.
+    // É a única coisa que responde "quem tentou e não conseguiu?" sem garimpar
+    // métrica do Cloud Monitoring. Fail-open por definição: telemetria NUNCA pode
+    // derrubar o fluxo que ela observa.
+    window._profilePhoneLogAttempt = function (status, err) {
+      try {
+        var cu = window.AppStore && window.AppStore.currentUser;
+        var db = window.FirestoreDB && window.FirestoreDB.db;
+        if (!cu || !cu.uid || !db) return;
+        var ctx = window._profilePhoneCtx || {};
+        var rec = {
+          at: new Date().toISOString(),
+          phone: window._profilePhoneE164 || '',
+          status: status,
+          fluxo: ctx.conflict ? 'homonimo' : (ctx.linked ? 'vinculado' : 'principal'),
+          client: (typeof _isNativeAuthAvailable === 'function' && _isNativeAuthAvailable()) ? 'nativo' : 'web'
+        };
+        if (err) rec.err = String((err && (err.code || err.message)) || err).slice(0, 200);
+        db.collection('users').doc(cu.uid).collection('phoneVerifyAttempts').add(rec)
+          .catch(function () {});
+      } catch (e) { /* telemetria não quebra nada */ }
+    };
+
     window._profileVerifyPhone = function(opts) {
       opts = opts || {};
       var linked = !!opts.linked;
@@ -8154,8 +8268,14 @@ function setupProfileModal() {
         countryId: pref ? (pref + '-country') : 'profile-phone-country',
         otpId: pref ? (pref + '-otp') : 'profile-phone-otp',
         recaptchaId: pref ? (pref + '-recaptcha') : 'profile-phone-recaptcha',
-        codeId: pref ? (pref + '-code') : 'profile-phone-code'
+        codeId: pref ? (pref + '-code') : 'profile-phone-code',
+        // v1.9.97: o "reenviar" precisa de um lugar FIXO pra escrever a contagem.
+        resendId: pref ? (pref + '-resend') : 'profile-phone-resend'
       };
+      // v1.9.97: guarda o contexto do disparo pra que o botão "reenviar" repita
+      // EXATAMENTE a mesma chamada (primário / vinculado / homônimo) — sem isso o
+      // reenvio cairia sempre no fluxo primário e escreveria no campo errado.
+      window._profilePhoneLastOpts = opts;
       var cu = window.AppStore && window.AppStore.currentUser;
       if (!cu || !cu.uid) { showNotification('Sessão', 'Entre novamente.', 'warning'); return; }
       var inp = document.getElementById(ctx.inputId);
@@ -8191,12 +8311,23 @@ function setupProfileModal() {
         var _sappN = firebase.apps.find(function (a) { return a.name === 'profilephone'; })
           || firebase.initializeApp(firebase.app().options, 'profilephone');
         try { _sappN.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch (e) {}
+        // v1.9.97: locale pt-BR na instância SECUNDÁRIA. A linha 405 força pt-BR só
+        // no app PADRÃO — o SMS do perfil sai por 'profilephone' e vinha em INGLÊS
+        // ("123456 is your verification code for scoreplace"), porque o projeto tem
+        // defaultLocale "en". Código de verificação em outro idioma é exatamente o
+        // que faz a pessoa achar que é golpe e ignorar.
+        try { _sappN.auth().languageCode = 'pt-BR'; } catch (e) {}
         window._profilePhoneSurvivor = cu.uid;
         window._profilePhoneE164 = e164;
         if (otpEl) { otpEl.style.display = 'block'; otpEl.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);">Enviando código para ' + window._safeHtml(e164) + '…</div>'; }
         var FAp = window.Capacitor.Plugins.FirebaseAuthentication;
+        // v1.9.97: pt-BR também na camada NATIVA — o SDK nativo tem locale próprio,
+        // não herda o languageCode do JS. Best-effort: plugin antigo sem o método
+        // não pode derrubar o envio.
+        try { FAp.setLanguageCode({ languageCode: 'pt-BR' }); } catch (e) {}
         var _failN = function (msg) {
-          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(String(msg || 'erro')) + '</div>';
+          window._profilePhoneLogAttempt('send-failed', msg);
+          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(window._profilePhoneErrText(msg)) + '</div>' + window._profilePhoneHelpHtml();
         };
         FAp.removeAllListeners().then(function () {
           FAp.addListener('phoneCodeSent', function (ev) {
@@ -8210,12 +8341,9 @@ function setupProfileModal() {
                 return _sappN.auth().signInWithCredential(cred);
               }
             };
-            if (otpEl) otpEl.innerHTML =
-              '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b>:</div>' +
-              '<div style="display:flex;gap:8px;">' +
-                '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
-                '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
-              '</div>';
+            if (otpEl) otpEl.innerHTML = window._profilePhoneOtpHtml(ctx);
+            window._profilePhoneLogAttempt('sent');
+            window._profilePhoneStartResend(ctx);
             var c = document.getElementById(ctx.codeId); if (c) { try { c.focus(); } catch (e) {} }
           });
           FAp.addListener('phoneVerificationFailed', function (ev) {
@@ -8247,6 +8375,8 @@ function setupProfileModal() {
       var cfg = firebase.app().options;
       var sapp = firebase.apps.find(function(a){ return a.name === 'profilephone'; }) || firebase.initializeApp(cfg, 'profilephone');
       try { sapp.auth().setPersistence(firebase.auth.Auth.Persistence.NONE); } catch(e){}
+      // v1.9.97: mesmo conserto do ramo nativo — pt-BR na instância secundária.
+      try { sapp.auth().languageCode = 'pt-BR'; } catch(e){}
       window._profilePhoneSurvivor = cu.uid;
       window._profilePhoneRecaptcha = new firebase.auth.RecaptchaVerifier(recEl, { size: 'invisible' }, sapp);
       window._profilePhoneE164 = e164;
@@ -8257,15 +8387,13 @@ function setupProfileModal() {
         // v1.2.9: o disparo paralelo por WhatsApp saiu (canal morto — ver
         // project_whatsapp_meta_2fa_block). O SMS sempre foi o caminho primário aqui:
         // é ele que produz o proofIdToken do merge, então nada do merge se perde.
-        if (otpEl) otpEl.innerHTML =
-          '<div style="font-size:0.78rem;color:var(--text-bright);margin-bottom:6px;">📲 Digite o código que chegou por <b>SMS</b>:</div>' +
-          '<div style="display:flex;gap:8px;">' +
-            '<input id="' + ctx.codeId + '" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456" style="flex:1;min-width:0;letter-spacing:4px;text-align:center;">' +
-            '<button type="button" onclick="window._profileConfirmPhoneCode()" class="btn btn-success" style="white-space:nowrap;">Confirmar</button>' +
-          '</div>';
+        if (otpEl) otpEl.innerHTML = window._profilePhoneOtpHtml(ctx);
+        window._profilePhoneLogAttempt('sent');
+        window._profilePhoneStartResend(ctx);
         var c = document.getElementById(ctx.codeId); if (c) { try { c.focus(); } catch(e){} }
       }).catch(function(err) {
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(String((err && (err.code || err.message)) || 'erro')) + '</div>';
+        window._profilePhoneLogAttempt('send-failed', err);
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(window._profilePhoneErrText(err)) + '</div>' + window._profilePhoneHelpHtml();
       });
     };
 
@@ -8371,9 +8499,12 @@ function setupProfileModal() {
         return;
       }
       window._profilePhoneConfirmation.confirm(code).then(function(result) {
+        window._profilePhoneLogAttempt('confirmed');
         return window._profilePhoneMergeFromSecondary(result.user, otpEl);
-      }).catch(function() {
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>';
+      }).catch(function(err) {
+        window._profilePhoneLogAttempt('code-failed', err);
+        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>' +
+          '<div style="margin-top:8px;"><span onclick="window._profileVerifyPhone(window._profilePhoneLastOpts || {})" style="color:#a5b4fc;font-weight:700;cursor:pointer;text-decoration:underline;font-size:0.78rem;">🔄 Reenviar o código</span></div>';
       });
     };
 

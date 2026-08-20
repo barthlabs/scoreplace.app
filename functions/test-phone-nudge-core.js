@@ -151,5 +151,158 @@ ok('backfill da leva 1 existe com os 49 uids REAIS do envio manual',
 ok('backfill roda a cada execução e é create() (idempotente)',
   /ensureLeva1\(db\)/.test(run) && /manual-backfill/.test(run));
 
+// ── 7. CAMADA 2 (v1.9.97): QUEM TENTOU E NÃO CONSEGUIU ──────────────────────
+//
+// Caso Leila Arida (20/ago/2026): pediu o código às 11:09, o Identity Toolkit
+// devolveu HTTP 200 (SMS entregue à operadora) e nunca houve confirmação. A
+// campanha, cega pra isso, ia cobrá-la no dia seguinte com o MESMO texto de quem
+// nunca tentou. Estes testes travam a diferença.
+//
+// A decisão do dono que dá o formato: número NÃO verificado continua fora do
+// perfil (pode ser de terceiro, pode ser digitação errada) — o que muda é que a
+// falha deixa rastro e ganha saída.
+
+// nunca tentou = null (a esmagadora maioria; não pode virar objeto vazio, senão
+// todo mundo cairia na variante "tentou")
+ok('quem nunca tentou não tem resumo', core.summarizeAttempts([]) === null &&
+  core.summarizeAttempts(null) === null && core.summarizeAttempts(undefined) === null);
+
+const sSent = core.summarizeAttempts([
+  { at: '2026-08-20T14:09:00.000Z', status: 'sent', phone: '+5511999998888' },
+]);
+ok('1 envio sem confirmação = 1 tentativa, status sent',
+  sSent && sSent.tentativas === 1 && sSent.ultimoStatus === 'sent' && sSent.confirmou === false);
+
+const sMix = core.summarizeAttempts([
+  { at: '2026-08-20T10:00:00.000Z', status: 'sent', phone: '+5511999998888' },
+  { at: '2026-08-20T10:05:00.000Z', status: 'code-failed', phone: '+5511999998888' },
+  { at: '2026-08-20T09:00:00.000Z', status: 'send-failed', phone: '+5511999998888' },
+]);
+ok('a ÚLTIMA tentativa é a mais recente por data, não a última do array',
+  sMix && sMix.tentativas === 3 && sMix.ultimoStatus === 'code-failed');
+
+// confirmou o código E continua sem celular = bug NOSSO, não da operadora.
+// Precisa aparecer, não ser descartado como "já resolveu".
+const sBug = core.summarizeAttempts([
+  { at: '2026-08-20T10:00:00.000Z', status: 'sent', phone: '+5511999998888' },
+  { at: '2026-08-20T10:02:00.000Z', status: 'confirmed', phone: '+5511999998888' },
+]);
+ok('confirmou o código mas segue sem celular = sinalizado', sBug && sBug.confirmou === true);
+
+// attachAttempts: cola em quem tentou e devolve SÓ esses
+const alvos = [
+  { uid: 'u1', name: 'Leila', email: 'l@x.com' },
+  { uid: 'u2', name: 'Outro', email: 'o@x.com' },
+];
+const triedList = core.attachAttempts(alvos, {
+  u1: [{ at: '2026-08-20T14:09:00.000Z', status: 'sent', phone: '+5511988887777' }],
+});
+ok('attachAttempts marca só quem tentou',
+  triedList.length === 1 && triedList[0].uid === 'u1' && !!alvos[0].tentou && !alvos[1].tentou);
+
+// máscara: DDD visível (denuncia DDD errado), miolo escondido (número não
+// verificado não pode virar lista de contatos por tabela lateral)
+const mask = core.maskPhone('+5511988887777');
+ok('máscara mostra DDD e 4 últimos, esconde o miolo',
+  mask.indexOf('11') !== -1 && mask.indexOf('7777') !== -1 && mask.indexOf('98888') === -1);
+ok('máscara de lixo não explode', core.maskPhone('') === '' && core.maskPhone(null) === '');
+
+// ── O E-MAIL: duas variantes, e a do dono INTACTA ───────────────────────────
+const mailPrimeiro = core.buildNudgeEmail('Leila');
+const mailTentou = core.buildNudgeEmail('Leila', sSent);
+ok('quem nunca tentou recebe o texto ORIGINAL do dono, palavra por palavra',
+  mailPrimeiro.variante === 'primeiro' &&
+  mailPrimeiro.subject === 'Confra BT Alta da Clínica 2026 — coloca seu Whats no perfil?' &&
+  mailPrimeiro.html.indexOf('Se puder colocar seu Whats no seu perfil') !== -1);
+ok('quem tentou recebe OUTRO assunto e OUTRO texto',
+  mailTentou.variante === 'tentou' && mailTentou.subject !== mailPrimeiro.subject &&
+  /não chegou/.test(mailTentou.subject));
+ok('o texto de quem tentou reconhece a tentativa, aponta o reenviar e oferece o organizador',
+  /tentou cadastrar/i.test(mailTentou.html) && /Reenviar o código/.test(mailTentou.html) &&
+  /fale com o organizador/i.test(mailTentou.html));
+ok('as duas variantes têm versão texto (provedor que corta HTML ainda lê)',
+  !!mailPrimeiro.text && !!mailTentou.text && mailTentou.text.length > 100);
+
+// ── O CONSOLIDADO DO DONO ───────────────────────────────────────────────────
+const repTried = core.buildReportEmail({
+  tournamentId: 'tX', tournamentName: 'Confra', waveId: '2026-08-21', nowMs: Date.UTC(2026, 7, 21, 12, 30),
+  dryRun: false, stats: [],
+  today: {
+    roster: 146, withPhone: 101, withoutPhone: 45,
+    targets: [
+      { uid: 'u1', name: 'Leila Arida', email: 'l@x.com',
+        tentou: { tentativas: 2, ultimaAt: '2026-08-20T14:09:00.000Z', ultimoStatus: 'sent',
+          ultimoPhone: '+5511988887777', confirmou: false } },
+      { uid: 'u2', name: 'Nunca Tentou', email: 'n@x.com' },
+    ],
+    skipped: { noEmail: [], optOut: [], merged: [], missing: [] },
+  },
+});
+ok('o consolidado abre a seção de quem tentou e não conseguiu',
+  /Tentaram e não conseguiram/.test(repTried.html) &&
+  /Tentaram cadastrar o celular e não conseguiram/.test(repTried.html));
+ok('o consolidado nomeia quem tentou e traduz o status (sent NÃO é "enviado com sucesso")',
+  /Leila Arida/.test(repTried.html) && /nunca confirmado/.test(repTried.html));
+ok('o consolidado mostra o número tentado MASCARADO, nunca cheio',
+  /\*\*\*\*\*-7777/.test(repTried.html) && repTried.html.indexOf('988887777') === -1);
+ok('quem nunca tentou NÃO entra na seção de tentativas',
+  repTried.html.indexOf('Nunca Tentou —') === -1);
+
+const repBug = core.buildReportEmail({
+  tournamentId: 'tX', tournamentName: 'Confra', waveId: '2026-08-21', nowMs: Date.UTC(2026, 7, 21, 12, 30),
+  dryRun: false, stats: [],
+  today: { roster: 1, withPhone: 0, withoutPhone: 1,
+    targets: [{ uid: 'u1', name: 'Leila', email: 'l@x.com',
+      tentou: { tentativas: 1, ultimaAt: '2026-08-20T14:09:00.000Z', ultimoStatus: 'sent',
+        ultimoPhone: '+5511988887777', confirmou: true } }],
+    skipped: { noEmail: [], optOut: [], merged: [], missing: [] } },
+});
+ok('confirmou e continua sem celular vira ALERTA de bug nosso no consolidado',
+  /bug nosso/.test(repBug.html));
+
+// consolidado SEM ninguém que tentou não inventa a seção
+const repLimpo = core.buildReportEmail({
+  tournamentId: 'tX', tournamentName: 'Confra', waveId: '2026-08-21', nowMs: Date.UTC(2026, 7, 21, 12, 30),
+  dryRun: false, stats: [],
+  today: { roster: 1, withPhone: 0, withoutPhone: 1,
+    targets: [{ uid: 'u2', name: 'Nunca Tentou', email: 'n@x.com' }],
+    skipped: { noEmail: [], optOut: [], merged: [], missing: [] } },
+});
+ok('sem tentativas, a seção nem aparece', !/Tentaram e não conseguiram/.test(repLimpo.html));
+
+// ── FIAÇÃO: o runner precisa LER o rastro e PASSAR a variante ───────────────
+ok('o runner lê users/{uid}/phoneVerifyAttempts', /phoneVerifyAttempts/.test(run));
+ok('o rastro é lido SÓ pros alvos (não varre o elenco inteiro)',
+  /loadAttempts\(db, cls\.targets\.map/.test(run));
+ok('o runner passa a tentativa pro e-mail (senão a variante nunca sai)',
+  /buildNudgeEmail\(p\.name, p\.tentou\)/.test(run));
+ok('a leva grava quem tentou com o número MASCARADO',
+  /ultimoPhoneMascarado/.test(run) && /core\.maskPhone/.test(run));
+ok('leitura do rastro é fail-open (subcoleção ausente não derruba a rodada)',
+  /rastro ilegível/.test(run));
+
+// ── FIAÇÃO DO CLIENTE: sem isto a subcoleção nasce vazia pra sempre ─────────
+const authJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'auth.js'), 'utf8');
+ok('o cliente grava a tentativa em phoneVerifyAttempts',
+  /collection\('phoneVerifyAttempts'\)/.test(authJs));
+ok('grava nos TRÊS desfechos: enviado, falha no envio e código errado',
+  /_profilePhoneLogAttempt\('sent'\)/.test(authJs) &&
+  /_profilePhoneLogAttempt\('send-failed'/.test(authJs) &&
+  /_profilePhoneLogAttempt\('code-failed'/.test(authJs) &&
+  /_profilePhoneLogAttempt\('confirmed'\)/.test(authJs));
+ok('telemetria é fail-open — nunca derruba o fluxo que observa',
+  /telemetria não quebra nada/.test(authJs));
+
+// CAMADA 1: o SMS do perfil sai por uma instância SECUNDÁRIA ('profilephone'),
+// que NÃO herda o languageCode do app padrão — vinha em INGLÊS.
+ok('locale pt-BR forçado na instância secundária (web e nativo)',
+  /sapp\.auth\(\)\.languageCode = 'pt-BR'/.test(authJs) &&
+  /_sappN\.auth\(\)\.languageCode = 'pt-BR'/.test(authJs) &&
+  /setLanguageCode\(\{ languageCode: 'pt-BR' \}\)/.test(authJs));
+ok('existe saída quando o SMS não chega: reenviar com contagem',
+  /_profilePhoneStartResend/.test(authJs) && /Reenviar o código por SMS/.test(authJs));
+ok('erro do Firebase é traduzido, não jogado cru na tela',
+  /_profilePhoneErrText/.test(authJs) && /muitas tentativas para este número/i.test(authJs));
+
 console.log(pass + ' pass, ' + fail + ' fail');
 process.exit(fail ? 1 : 0);

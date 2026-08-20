@@ -167,7 +167,12 @@ const torneio = {
   // As que existem hoje e NÃO guardam cópia de torneio. `templates` são configurações
   // salvas (não apontam pra um tid); `trophies`/`milestones` são EMBLEMAS, chaveados por
   // id de conquista — não há doc por torneio pra apagar.
-  const semTorneio = ['templates', 'trophies', 'milestones'];
+  // v1.9.97: `phoneVerifyAttempts` é o rastro das tentativas de verificar o CELULAR
+  // (camada 2 da campanha, nascida do caso Leila). É dado de CONTA, não de torneio —
+  // não há doc por tid pra apagar quando um torneio é purgado. Some junto com a conta:
+  // a exclusão de conta enumera as subcoleções por `listCollections()` (index.js ~6275),
+  // então não precisa de lista.
+  const semTorneio = ['templates', 'trophies', 'milestones', 'phoneVerifyAttempts'];
   const conhecidas = USER_SUBCOLLECTIONS_BY_TOURNAMENT.concat(semTorneio);
   const novas = subs.filter((s) => !conhecidas.includes(s));
 

@@ -123,6 +123,26 @@ async function loadProfiles(db, uids) {
   return map;
 }
 
+/* ── CAMADA 2 · o rastro das tentativas (v1.9.97) ───────────────────────────
+ * Lido SÓ pros ALVOS, depois da classificação: quem já tem celular não interessa
+ * aqui, e varrer o elenco inteiro seria pagar 146 leituras pra usar 45.
+ * Fail-open por leitura: subcoleção ausente (a esmagadora maioria, que nunca
+ * tentou) é lista vazia, não erro. */
+async function loadAttempts(db, uids) {
+  const map = {};
+  for (const uid of uids) {
+    try {
+      const snap = await db.collection('users').doc(uid)
+        .collection('phoneVerifyAttempts').orderBy('at', 'desc').limit(20).get();
+      map[uid] = snap.docs.map((d) => d.data() || {});
+    } catch (e) {
+      console.warn('[phoneNudge] rastro ilegível de', uid, e && e.message);
+      map[uid] = [];
+    }
+  }
+  return map;
+}
+
 async function loadWaves(db, tournamentId) {
   const snap = await db.collection(WAVES).limit(500).get();
   return snap.docs
@@ -170,6 +190,11 @@ async function runOne(db, tournamentId, nowMs, cfg) {
   const profiles = await loadProfiles(db, uids.concat(doPassado));
   const cls = core.classifyRoster(uids, profiles);
 
+  // v1.9.97 — quem TENTOU e não conseguiu recebe outro texto e aparece destacado
+  // no consolidado. Ver [[project_cobranca_de_celular_no_perfil]].
+  const attempts = await loadAttempts(db, cls.targets.map((p) => p.uid));
+  const tried = core.attachAttempts(cls.targets, attempts);
+
   // Quem TEM celular hoje — é isso que transforma "recebeu" em "atendeu".
   const hasPhoneNow = {};
   Object.keys(profiles).forEach((u) => { hasPhoneNow[u] = core.hasPhone(profiles[u]); });
@@ -183,7 +208,18 @@ async function runOne(db, tournamentId, nowMs, cfg) {
     createdAt: new Date(), createdAtMs: nowMs, dryRun, source: 'cf',
     roster: cls.roster, withPhone: cls.withPhone, withoutPhone: cls.withoutPhone,
     recipientUids: cls.targets.map((p) => p.uid),
-    recipients: cls.targets.map((p) => ({ uid: p.uid, name: p.name, email: p.email })),
+    recipients: cls.targets.map((p) => ({
+      uid: p.uid, name: p.name, email: p.email,
+      variante: p.tentou ? 'tentou' : 'primeiro',
+    })),
+    // O número TENTADO entra MASCARADO: a leva é dado de campanha, e número não
+    // verificado não pode virar lista de contatos por tabela lateral.
+    tried: tried.map((p) => ({
+      uid: p.uid, name: p.name, tentativas: p.tentou.tentativas,
+      ultimoStatus: p.tentou.ultimoStatus, ultimaAt: p.tentou.ultimaAt,
+      ultimoPhoneMascarado: core.maskPhone(p.tentou.ultimoPhone),
+      confirmouSemGravar: p.tentou.confirmou === true,
+    })),
     skipped: {
       noEmail: cls.skipped.noEmail, optOut: cls.skipped.optOut,
       merged: cls.skipped.merged, missing: cls.skipped.missing,
@@ -194,7 +230,7 @@ async function runOne(db, tournamentId, nowMs, cfg) {
   let sent = 0;
   if (!dryRun) {
     for (const p of cls.targets) {
-      const mail = core.buildNudgeEmail(p.name);
+      const mail = core.buildNudgeEmail(p.name, p.tentou);
       const id = 'phone-nudge__' + waveId + '__' + p.uid;
       try {
         const novo = await putMail(db, id, {
@@ -229,10 +265,11 @@ async function runOne(db, tournamentId, nowMs, cfg) {
   console.log('[phoneNudge] ' + docId + (dryRun ? ' [ENSAIO]' : '') + ': elenco=' + cls.roster
     + ' com=' + cls.withPhone + ' sem=' + cls.withoutPhone + ' cobrados=' + cls.targets.length
     + ' enviados=' + sent + ' semEmail=' + cls.skipped.noEmail.length
-    + ' optOut=' + cls.skipped.optOut.length + ' lapides=' + cls.skipped.merged.length);
+    + ' optOut=' + cls.skipped.optOut.length + ' lapides=' + cls.skipped.merged.length
+    + ' tentaramSemConseguir=' + tried.length);
 
   return { tournamentId, waveId, dryRun, roster: cls.roster, withPhone: cls.withPhone,
-    withoutPhone: cls.withoutPhone, targets: cls.targets.length, sent, stats };
+    withoutPhone: cls.withoutPhone, targets: cls.targets.length, sent, tried: tried.length, stats };
 }
 
 async function runPhoneNudge(db, nowMs, overrides) {
@@ -248,4 +285,4 @@ async function runPhoneNudge(db, nowMs, overrides) {
   return out;
 }
 
-module.exports = { runPhoneNudge, runOne, loadProfiles, loadWaves, ensureLeva1, LEVA1, DEFAULTS, DEFAULT_TOURNAMENTS };
+module.exports = { runPhoneNudge, runOne, loadProfiles, loadWaves, loadAttempts, ensureLeva1, LEVA1, DEFAULTS, DEFAULT_TOURNAMENTS };

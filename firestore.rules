@@ -400,8 +400,19 @@ service cloud.firestore {
       //     contato inventado na tela de outra pessoa se um dia virar leitura cruzada.
       // Bloquear os dois é grátis: ZERO caminho do cliente os escreve (conferido em js/ —
       // 12 menções, todas de leitura), e o Admin SDK ignora rules por definição.
+      //   phoneSource/phoneSetBy/phoneSetAt → v1.9.97. PROCEDÊNCIA do celular. É o que o
+      //     servidor consulta pra decidir se um telefone vale como IDENTIDADE (recuperação
+      //     de senha, dedup, fusão) ou só como CONTATO (isIdentityPhone, em
+      //     functions/contact-phone-core.js). Escrevível pelo cliente, bastaria APAGAR
+      //     `phoneSource` pra promover a identidade um número que a pessoa nunca confirmou
+      //     por SMS — e um número desses pode ser de terceiro (erro de digitação de quem
+      //     registrou). Campo que o servidor TRATA COMO PROVA não se deixa na mão de quem
+      //     ele avalia — a mesma lição de `mergedInto` acima.
+      //     Bloquear é grátis: quem escreve é só a CF setParticipantContactPhone (Admin
+      //     SDK), e nenhum caminho do cliente os toca.
       function privilegedUserFields() {
-        return ['mergedInto', 'mergedAt', 'plan', 'planExpiresAt', 'dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict'];
+        return ['mergedInto', 'mergedAt', 'plan', 'planExpiresAt', 'dupDismissed', 'dupDismissedInfo', 'dupSuspect', 'nameConflict',
+                'phoneSource', 'phoneSetBy', 'phoneSetAt'];
       }
       function touchesPrivileged() {
         return request.resource.data.diff(resource.data).affectedKeys()
@@ -456,6 +467,21 @@ service cloud.firestore {
 
       // Templates — only owner.
       match /templates/{templateId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // v1.9.97 — CAMADA 2 do celular: rastro das tentativas de verificação por SMS.
+      //
+      // Nasceu do caso da Leila (20/ago/2026): o SMS foi disparado, o Google devolveu
+      // 200, e ninguém — nem ela, nem o organizador, nem o sistema — soube que não
+      // chegou. A resposta pra "quem tentou e não conseguiu?" só existia na métrica do
+      // Cloud Monitoring, o que na prática é não existir.
+      //
+      // Só o DONO escreve e lê o próprio rastro. Quem consolida pro organizador é a CF
+      // nudgeMissingPhones, que usa Admin SDK e ignora rules por definição. Forjar aqui
+      // não dá acesso a nada: o campo não é prova de posse de telefone (a prova é o
+      // idToken do SMS), só decide QUAL texto de cobrança a pessoa recebe.
+      match /phoneVerifyAttempts/{attemptId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 

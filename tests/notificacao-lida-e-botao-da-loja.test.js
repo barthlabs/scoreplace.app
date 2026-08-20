@@ -234,9 +234,23 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ok(/vistos\[n\._id\]/.test(notif), 'a fusão deduplica por id — a não lida que já está entre as recentes aparece uma vez só');
 
   // não lidas no topo (ordem do dono: "as nao lidas devem ficar no topo sempre")
-  const iU = notif.indexOf("_t('notif.unread')");
-  const iR = notif.indexOf("_t('notif.read')");
-  ok(iU > 0 && iR > 0 && iU < iR, 'a seção "Não lidas" é montada ANTES da de "Lidas" — não lida fica no topo');
+  //
+  // ⚠️ v1.9.97 — A ÂNCORA MUDOU, O INVARIANTE NÃO. Este teste olhava a ordem dos rótulos
+  // (`_t('notif.unread')` antes de `_t('notif.read')`) no ARQUIVO. Quando o agrupamento
+  // virou função própria (`_notifAgrupaPorVisita`, declarada depois do render), o rótulo
+  // de "não lidas" passou a aparecer mais ABAIXO no arquivo — e o teste acusou uma
+  // regressão que não existia: na tela o bloco de cima continua sendo montado primeiro.
+  // A âncora agora é o que de fato define a ordem — a montagem do HTML.
+  const iU = notif.indexOf('_unread.map(_renderNotifCard)');
+  const iR = notif.indexOf('_read.map(_renderNotifCard)');
+  ok(iU > 0 && iR > 0 && iU < iR, 'o bloco de cima é montado ANTES do de baixo — não lida fica no topo');
+  ok(notif.indexOf("_t('notif.unread')") > 0, 'o bloco de cima continua rotulado como "Não lidas"');
+  // v1.9.97: lida por permanência NESTA visita não desce pro bloco das antigas.
+  // Ordem do dono: "quando isso acontece, nao pode ir para as mais antigas. tem que
+  // ficar no topo na mais nova nao lida." Detalhe em
+  // tests/notificacao-lida-nao-desce-para-antigas.test.js.
+  ok(/_notifAgrupaPorVisita\(notifs, window\._notifSessionUnread/.test(notif),
+    'o agrupamento é por VISITA, não pelo `read` do instante');
 
   // "carregar mais" no fim, e o gate certo
   ok(/window\._notifLoadMore\(\)/.test(notif), 'existe o "Carregar mais" no fim da lista');

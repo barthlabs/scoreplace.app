@@ -42,8 +42,24 @@ function renderNotifications(container) {
   // deve pagar por isso (em leituras) em todas as seguintes. O sinalizador distingue
   // "re-render por causa do botão" de "entrei na tela".
   window._NOTIF_PAGE = 50;
+  // ── v1.9.97 · O BLOCO DE CIMA É DA VISITA, NÃO DO INSTANTE ────────────────
+  // Ordem do dono (20/ago/2026): _"as notificacoes que ficam na tela por 5s sao dadas
+  // como lidas esta bom, quando isso acontece, nao pode ir para as mais antigas. tem
+  // que ficar no topo na mais nova nao lida."_
+  //
+  // A leitura por permanência (5s) já evitava re-render pra não reordenar embaixo do
+  // dedo — mas QUALQUER re-render depois ("Carregar mais", voltar pra tela) reagrupava
+  // pelo `read` do instante e jogava lá pra baixo, junto das antigas, o aviso que a
+  // pessoa acabou de ler. Some da vista o que ela ainda estava olhando.
+  //
+  // O conserto é fixar o grupo pela VISITA: quem estava não lida quando esta visita
+  // começou continua no bloco de cima até a pessoa SAIR e VOLTAR. O cartão ainda
+  // esmaece e perde o ponto azul (a leitura é real e o sininho zera) — o que não muda
+  // é o LUGAR. Reabrir a tela é o gesto que reclassifica.
+  var _visitaNova = !window._notifKeepLimit;
   if (window._notifKeepLimit) { window._notifKeepLimit = false; }
   else { window._notifLimit = window._NOTIF_PAGE; }
+  if (_visitaNova) window._notifSessionUnread = {};
   window._notifLoadMore = function () {
     window._notifLimit = (window._notifLimit || window._NOTIF_PAGE) + window._NOTIF_PAGE;
     window._notifKeepLimit = true;
@@ -348,11 +364,18 @@ function renderNotifications(container) {
 
     // v2.1.17: não lidas EM CIMA, separadas das lidas. Dentro de cada grupo,
     // mantém a ordem do servidor (createdAt desc).
-    var _unread = notifs.filter(function(n){ return !n.read; });
-    var _read   = notifs.filter(function(n){ return n.read; });
+    //
+    // v1.9.97: o grupo de cima é o da VISITA (ver o bloco no topo de
+    // renderNotifications). Quem chegou aqui não lida FICA aqui mesmo depois de ser
+    // marcada como lida pelos 5s de tela — descer pro bloco das antigas o que a pessoa
+    // acabou de ler é fazer sumir justamente o que ela estava olhando.
+    if (!window._notifSessionUnread) window._notifSessionUnread = {};
+    var _g = window._notifAgrupaPorVisita(notifs, window._notifSessionUnread, _t);
+    var _unread = _g.topo;
+    var _read = _g.antigas;
     var html = '';
     if (_unread.length > 0) {
-      html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#60a5fa;margin:0 0 8px 2px;">🔵 ' + (_t('notif.unread') || 'Não lidas') + ' · ' + _unread.length + '</div>';
+      html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#60a5fa;margin:0 0 8px 2px;">' + _g.rotulo + '</div>';
       html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' + _unread.map(_renderNotifCard).join('') + '</div>';
     }
     if (_read.length > 0) {
@@ -425,6 +448,41 @@ function _AUTOREAD_TYPES_OK(tipo) {
 // Quanto tempo o cartão precisa ficar visível pra contar como lido, e o quanto dele
 // precisa estar à vista. Meia altura evita que um cartão só espiando na borda da tela
 // durante a rolagem já comece a contar.
+// ── v1.9.97 · O BLOCO DE CIMA É DA VISITA, NÃO DO INSTANTE ──────────────────
+//
+// Ordem do dono (20/ago/2026): _"as notificacoes que ficam na tela por 5s sao dadas
+// como lidas esta bom, quando isso acontece, nao pode ir para as mais antigas. tem
+// que ficar no topo na mais nova nao lida."_
+//
+// O observador de permanência já evitava re-render pra não reordenar embaixo do dedo.
+// Mas QUALQUER re-render depois ("Carregar mais", voltar pra tela) reagrupava pelo
+// `read` do instante e mandava lá pra baixo, junto das antigas, exatamente o aviso que
+// a pessoa acabou de ler — some da vista o que ela ainda estava olhando.
+//
+// `sess` é o conjunto de ids que estavam NÃO LIDOS quando esta visita começou (zerado
+// ao entrar na tela, preservado nos re-renders internos). Quem está nele fica no bloco
+// de cima até a pessoa SAIR e VOLTAR. O cartão ainda esmaece e perde o ponto azul — a
+// leitura é real e o sininho zera; o que não muda é o LUGAR.
+//
+// Função separada e pura porque é ela que o teste dirige: dentro do .then() do render
+// só dava pra testar via DOM inteiro, e a regra que o dono ditou é esta aqui.
+window._notifAgrupaPorVisita = function (notifs, sess, _t) {
+  _t = _t || function (k) { return k; };
+  sess = sess || {};
+  (notifs || []).forEach(function (n) { if (n && n._id && !n.read) sess[n._id] = 1; });
+  var topo = (notifs || []).filter(function (n) { return !n.read || sess[n._id]; });
+  var antigas = (notifs || []).filter(function (n) { return n.read && !sess[n._id]; });
+  // O rótulo conta o que É verdade agora. Dizer "Não lidas · 3" com duas já lidas
+  // dentro seria mentir no cabeçalho pra consertar a posição.
+  var vivas = topo.filter(function (n) { return !n.read; }).length;
+  var lidasAgora = topo.length - vivas;
+  var sufixo = lidasAgora ? (' · ' + lidasAgora + (lidasAgora === 1 ? ' lida agora' : ' lidas agora')) : '';
+  var rotulo = vivas > 0
+    ? ('🔵 ' + (_t('notif.unread') || 'Não lidas') + ' · ' + vivas + sufixo)
+    : ('🔵 ' + lidasAgora + (lidasAgora === 1 ? ' lida agora' : ' lidas agora'));
+  return { topo: topo, antigas: antigas, vivas: vivas, lidasAgora: lidasAgora, rotulo: rotulo };
+};
+
 window._NOTIF_DWELL_MS = 5000;
 var _NOTIF_DWELL_RATIO = 0.5;
 

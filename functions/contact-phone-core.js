@@ -1,0 +1,159 @@
+'use strict';
+/*
+ * contact-phone-core.js — CAMADA 3: O CELULAR REGISTRADO PELO ORGANIZADOR (puro).
+ *
+ * ─── POR QUE ISTO EXISTE ────────────────────────────────────────────────────
+ * 20/ago/2026, caso Leila Arida. Ela pediu o código de verificação, o Identity
+ * Toolkit devolveu 200 (SMS entregue à operadora) e o SMS nunca chegou no aparelho.
+ * Sem uma saída, ela ficava PRA SEMPRE fora da campanha de celular da Confra.
+ *
+ * A primeira ideia — deixar salvar o número sem verificar — foi DERRUBADA pelo dono,
+ * com dois argumentos que estão certos:
+ *   _"e se a pessoa colocar o numero de outro? sequestra o numero do outro para
+ *     contatos. e se errar a digitação, ninguem recebe nada e acha que esta tudo bem"_
+ * Número não verificado, auto-declarado e anônimo não vale nada: pode ser de terceiro
+ * e pode ser digitação errada — nos dois casos o campo preenchido é PIOR que o vazio,
+ * porque parece resolvido.
+ *
+ * ⭐ O QUE MUDA AQUI É A PROCEDÊNCIA, NÃO A EXIGÊNCIA. O organizador — que já falou com
+ * a pessoa, e cujo nome fica gravado no dado — registra o contato. A diferença entre um
+ * número anônimo auto-declarado e um número com o uid de quem o colocou é toda a
+ * diferença: existe alguém responsável, e a pessoa é NOTIFICADA de que aconteceu.
+ *
+ * ⛔ ESTE NÚMERO NUNCA É IDENTIDADE. `phoneSource: 'organizer'` é o discriminador único
+ * (não existe `phoneVerified`; inventá-lo criaria duas fontes de verdade e exigiria
+ * backfill nas 65 contas que já têm celular verificado). Quem consulta telefone pra
+ * DECIDIR identidade — recuperação de senha, dedup de conta, fusão — tem que passar por
+ * isIdentityPhone() e ignorar o que veio do organizador. Sem isso, um erro de digitação
+ * do organizador manda SMS de recuperação de conta pro celular de um estranho.
+ *
+ * Ver [[project_phone_gate_and_sms_infra]] e [[project_cobranca_de_celular_no_perfil]].
+ */
+
+const { computeAdminUids } = require('./cohost-core');
+const { computeMemberUids } = require('./enroll-core');
+
+/* Telefone que PROVA identidade: existe e NÃO veio do organizador. Ausência de
+ * `phoneSource` = verificado por SMS (é o estado de todas as contas anteriores a esta
+ * camada) — o default tem que ser o SEGURO pro dado velho, e aqui o seguro é "vale". */
+function isIdentityPhone(profile) {
+  const ph = String((profile && profile.phone) || '').replace(/\D/g, '');
+  if (ph.length < 8) return false;
+  return String((profile && profile.phoneSource) || '') !== 'organizer';
+}
+
+/* Telefone pra CONTATO: serve verificado ou registrado pelo organizador. É o que a
+ * campanha da Confra e o botão de wa.me querem. */
+function contactPhoneOf(profile) {
+  const ph = String((profile && profile.phone) || '');
+  return ph.replace(/\D/g, '').length >= 8 ? ph : '';
+}
+
+/* Normaliza pra E.164 COM '+' — o formato já gravado em users/{uid}.phone
+ * (ex.: "+5511999707047"). Devolve '' quando não dá pra afirmar que é número. */
+function toE164(raw, country) {
+  const d = String(raw == null ? '' : raw).replace(/\D/g, '');
+  const cc = String(country || '55').replace(/\D/g, '') || '55';
+  if (!d) return '';
+  if (d.length === 10 || d.length === 11) return '+' + cc + d;          // DDD + número
+  if (d.length === 12 || d.length === 13) return '+' + d;              // já com DDI
+  if (d.length > 13 || d.length < 10) return '';                       // não é telefone
+  return '+' + d;
+}
+
+/* ── A DECISÃO ──────────────────────────────────────────────────────────────
+ * Devolve { ok:false, reason } ou { ok:true, update, phone }. A ordem das recusas é a
+ * ordem do que dói errar. */
+function computeSetContactPhone(input) {
+  const inp = input || {};
+  const t = inp.tournament;
+  const callerUid = String(inp.callerUid || '');
+  const targetUid = String(inp.targetUid || '');
+  const nowIso = inp.nowIso || new Date().toISOString();
+
+  if (!t) return { ok: false, reason: 'torneio-inexistente' };
+  if (!callerUid) return { ok: false, reason: 'sem-login' };
+  if (!targetUid) return { ok: false, reason: 'sem-alvo' };
+
+  // Organizador OU co-organizador — mesmo poder, decisão já canônica do projeto.
+  if (computeAdminUids(t).indexOf(callerUid) === -1) {
+    return { ok: false, reason: 'nao-e-organizador' };
+  }
+  // Só quem está no elenco DESTE torneio. Sem isto, ser organizador de qualquer
+  // torneio viraria licença pra escrever telefone no perfil de qualquer pessoa.
+  if (computeMemberUids(t).indexOf(targetUid) === -1) {
+    return { ok: false, reason: 'nao-esta-no-elenco' };
+  }
+  // O organizador registrando o PRÓPRIO número burlaria a verificação pra si mesmo —
+  // e o próprio perfil dele tem o caminho certo, com SMS.
+  if (targetUid === callerUid) return { ok: false, reason: 'use-o-proprio-perfil' };
+
+  const phone = toE164(inp.phone, inp.country);
+  if (!phone) return { ok: false, reason: 'numero-invalido' };
+
+  // ⛔ NUNCA por cima de um número VERIFICADO. Quem provou posse do próprio número
+  // manda nele; organizador não sobrescreve pessoa. Corrigir o que o PRÓPRIO
+  // organizador registrou antes, sim — é conserto de digitação, não sequestro.
+  const alvo = inp.targetProfile || {};
+  if (isIdentityPhone(alvo)) return { ok: false, reason: 'ja-tem-verificado' };
+
+  if (contactPhoneOf(alvo) === phone) return { ok: false, reason: 'sem-mudanca' };
+
+  return {
+    ok: true,
+    phone: phone,
+    anterior: contactPhoneOf(alvo) || '',
+    update: {
+      phone: phone,
+      phoneCountry: String(inp.country || '55').replace(/\D/g, '') || '55',
+      phoneSource: 'organizer',
+      phoneSetBy: callerUid,
+      phoneSetAt: nowIso,
+      updatedAt: nowIso,
+    },
+  };
+}
+
+/* Texto da notificação pra pessoa. Ela PRECISA saber que alguém colocou um telefone no
+ * perfil dela — é o que separa "registro com procedência" de "escreveram no meu cadastro
+ * sem me avisar", e é a chance dela corrigir se estiver errado. */
+function buildContactPhoneNotice(input) {
+  const inp = input || {};
+  const orgNome = String(inp.organizerName || 'O organizador').trim();
+  const torneio = String(inp.tournamentName || '').trim();
+  const mascara = maskTail(inp.phone);
+  return {
+    type: 'contact_phone_set',
+    title: '📱 Seu celular foi registrado',
+    message: orgNome + ' registrou seu celular ' + mascara + ' no seu perfil'
+      + (torneio ? ' para o torneio "' + torneio + '"' : '') + '.\n'
+      + 'Ele serve só para CONTATO. Se não for seu, ou se quiser usá-lo para entrar no app, '
+      + 'abra seu perfil e confirme por SMS.',
+    createdAt: inp.nowIso || new Date().toISOString(),
+    read: false,
+  };
+}
+
+/* Últimos 4 dígitos. A notificação vai pra própria pessoa, mas notificação é lida em
+ * cima de mesa, no ônibus, com gente do lado — número inteiro ali não paga nada. */
+function maskTail(e164) {
+  const d = String(e164 || '').replace(/\D/g, '');
+  return d.length >= 4 ? '****-' + d.slice(-4) : '';
+}
+
+const RECUSA_HUMANA = {
+  'torneio-inexistente': 'Torneio não encontrado.',
+  'sem-login': 'Entre novamente.',
+  'sem-alvo': 'Participante não informado.',
+  'nao-e-organizador': 'Só o organizador ou um co-organizador pode registrar contato.',
+  'nao-esta-no-elenco': 'Essa pessoa não está inscrita neste torneio.',
+  'use-o-proprio-perfil': 'Para o seu próprio celular, use o seu perfil — lá o número é verificado por SMS.',
+  'numero-invalido': 'Número inválido. Use DDD + 9 dígitos.',
+  'ja-tem-verificado': 'Essa pessoa já verificou um celular por SMS. Só ela pode trocá-lo.',
+  'sem-mudanca': 'Esse já é o celular registrado.',
+};
+
+module.exports = {
+  isIdentityPhone, contactPhoneOf, toE164, computeSetContactPhone,
+  buildContactPhoneNotice, maskTail, RECUSA_HUMANA,
+};
