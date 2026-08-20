@@ -129,9 +129,14 @@ ok(/var x = Math\.min\(Math\.max\(meio, meia \+ 8\), vw - meia - 8\);/.test(bloc
 // ── 6. o toque e a pintura ─────────────────────────────────────────────────
 const iCss = src.indexOf("st.textContent =", i0);
 const css = src.slice(iCss, src.indexOf('document.head.appendChild(st);', iCss));
-// o CSS é montado por concatenação de literais; desfaz a emenda pra poder
-// casar regra por regra (senão um `[^']*` para na primeira aspa da junção)
-const cssPlano = css.replace(/'\s*\+\s*'/g, '').replace(/'\s*\+\s*\n\s*/g, '');
+// O CSS é montado por concatenação de literais. Pra casar regra por regra é
+// preciso desfazer a emenda — e ANTES tirar os comentários `//` que moram entre
+// os pedaços: eles falam SOBRE o CSS (inclusive citando o que é proibido), e ler
+// o comentário como se fosse declaração acusa a própria documentação.
+const cssPlano = css
+  .replace(/^\s*\/\/.*$/gm, '')
+  .replace(/'\s*\+\s*'/g, '')
+  .replace(/'\s*\+\s*\n\s*'?/g, '');
 ok(/pointer-events:none;opacity:0/.test(cssPlano), 'o container (100% da largura) NÃO recebe toque');
 ok(/\.rotulo\{[^}]*pointer-events:auto/.test(cssPlano) && /\.seta\{[^}]*pointer-events:auto/.test(cssPlano),
    'só a tinta (texto e seta) recebe o toque');
@@ -139,6 +144,17 @@ ok(!/@keyframes/.test(css), 'sem animação infinita (foi uma delas que derrubou
 ok(!/backdrop-filter/.test(css), 'sem backdrop-filter (mata a rolagem por GPU no WKWebView)');
 ok(/text-shadow:0 1px 3px rgba\(0,0,0,0\.95\)/.test(css),
    'o contraste do texto vem de sombra, não de tarja escura atrás');
+// ⛔ 1.9.90 — o aparelho do dono cortou "confira seus últimos resultados" nas DUAS
+// pontas: o rótulo estava com `white-space:nowrap` e o texto mais longo não cabe
+// em 402pt na escala dele. Palavra cortada não se lê.
+ok(!/\.rotulo\{[^}]*white-space:nowrap/.test(cssPlano),
+   'o rótulo NUNCA usa nowrap — texto longo quebra linha em vez de ser cortado');
+ok(/\.rotulo\{[^}]*max-width:min\(92vw,560px\)/.test(cssPlano) &&
+   /\.rotulo\{[^}]*text-align:center/.test(cssPlano),
+   'e tem teto de largura em vw (o container do perfil é width:auto) + centralizado');
+ok(/\.rotulo\{[^}]*overflow-wrap:anywhere/.test(cssPlano) &&
+   !/\.rotulo\{[^}]*break-word/.test(cssPlano),
+   'quebra com `anywhere` (que reduz a largura mínima), nunca com `break-word`');
 ok(/#sp-convite-scrim\{[^}]*opacity:0/.test(cssPlano), 'o esmaecido do rodapé nasce invisível');
 ok(/scrim\.style\.opacity = op \* Math\.max/.test(bloco),
    'e se dissolve conforme a seta sobe (não escurece o quadro que ela indica)');

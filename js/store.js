@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.89';
+window.SCOREPLACE_VERSION = '1.9.90';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -126,7 +126,18 @@ try {
           if (t0 && window._trechos) {
             var d = performance.now() - t0;
             if (d > 120) {
-              window._trechos.push({ nome: nome.slice(0, 2) + ':' + (cb.name || '?'), ini: t0, dur: d });
+              // 1.9.90 — ANTES ERA `cb.name || '?'` E O APARELHO DO DONO MANDOU
+              // `Mu:?=852ms`: um observer segurando a thread por quase 1s e SEM
+              // NOME, porque todo callback nosso é função anônima. Nome vazio é
+              // relatório inútil — sabe-se que dói, não onde. O `_snippet` (o
+              // mesmo que os timers já usavam desde a 1.9.81) recorta o começo do
+              // código do callback, que identifica sem ambiguidade.
+              // ⚠️ recorte inline: o `_snippet` dos timers mora DENTRO de outro
+              // IIFE e não alcança aqui — chamar por nome jogaria ReferenceError
+              // dentro de um `finally`, ou seja quebraria o próprio perfilador.
+              var _quem = '?';
+              try { _quem = cb.name || String(cb).replace(/\s+/g, ' ').slice(9, 69); } catch (eN) {}
+              window._trechos.push({ nome: nome.slice(0, 2) + ':' + _quem, ini: t0, dur: d });
               if (window._trechos.length > 30) window._trechos.shift();
             }
           }
@@ -11798,8 +11809,17 @@ window._mostrarConviteDeRolagem = function () {
         'transform:translate(-50%,0);display:flex;flex-direction:column;align-items:center;gap:10px;' +
         'pointer-events:none;opacity:0;transition:opacity .35s ease;}' +
         '#' + ID + '.vis{opacity:1;}' +
+        // ⛔ NUNCA `white-space:nowrap` AQUI. Foi assim até a 1.9.89 e o aparelho do
+        // dono cortou "confira seus últimos resultados" nas DUAS pontas — o texto
+        // mais longo não cabe em 402pt na escala dele. Palavra cortada não se lê:
+        // quebra linha e centraliza. O teto em vw (não em %) porque no modo perfil
+        // o container é width:auto e uma % resolveria contra caixa nenhuma.
         '#' + ID + ' .rotulo{font-size:1.45rem;font-weight:800;letter-spacing:0.3px;color:#fbbf24;' +
-        'line-height:1.15;white-space:nowrap;cursor:pointer;pointer-events:auto;' +
+        // `anywhere`, NUNCA `break-word`: só o primeiro reduz a largura MÍNIMA do
+        // item — é isso que o faz encolher dentro do flex em vez de vazar e cortar.
+        // (regra da casa, travada por tests/texto-nunca-corta.test.js)
+        'line-height:1.2;max-width:min(92vw,560px);text-align:center;min-width:0;overflow-wrap:anywhere;' +
+        'cursor:pointer;pointer-events:auto;' +
         'text-shadow:0 1px 3px rgba(0,0,0,0.95),0 3px 16px rgba(0,0,0,0.85);}' +
         '#' + ID + ' .seta{width:42%;max-width:160px;display:block;opacity:0.85;' +
         'cursor:pointer;pointer-events:auto;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.55));}' +
@@ -11807,7 +11827,7 @@ window._mostrarConviteDeRolagem = function () {
         // está acima, então o olho tem que subir).
         '#' + ID + '.pra-cima{flex-direction:column-reverse;width:auto;gap:4px;}' +
         '#' + ID + '.pra-cima .seta{transform:rotate(180deg);width:72px;max-width:72px;}' +
-        '#' + ID + '.pra-cima .rotulo{font-size:1.2rem;}' +
+        '#' + ID + '.pra-cima .rotulo{font-size:1.2rem;max-width:min(72vw,320px);}' +
         '#sp-convite-scrim{position:fixed;left:0;right:0;bottom:0;height:260px;z-index:1099;' +
         'pointer-events:none;opacity:0;background:linear-gradient(to top,' +
         'rgba(6,8,18,0.96) 0%,rgba(6,8,18,0.90) 30%,rgba(6,8,18,0.55) 62%,rgba(6,8,18,0) 100%);}';

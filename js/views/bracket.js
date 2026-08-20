@@ -216,13 +216,30 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
   // (details abertos, placar digitado, âncora de scroll) leem o DOM logo após o
   // render e fatiar quebraria os três. Com conteúdo na tela não há "carregando"
   // pra esconder — a troca atômica é invisível.
-  var _temTemplate = false;
-  try { _temTemplate = typeof document.createElement === 'function' && 'content' in document.createElement('template'); } catch (e) {}
-  // 1.9.77: re-render (soft) NUNCA fatia, nem com o container recém-recriado vazio
-  // (o renderTournaments reconstrói a página no eco do snapshot e o inline renasce
-  // vazio): fatiar ali encolhe o documento no meio da leitura e o navegador clampa
-  // o scroll — o "corte + volta" que o dono viu. Soft = pintura atômica.
-  var _fatiar = _temTemplate && !window._isSoftRefresh && !(container && container.firstElementChild);
+  // ── ⛔ A PINTURA EM FATIAS ACABOU (1.9.90) ───────────────────────────────────
+  // Relato do dono na 1.9.89, no iPhone: _"entra e scrollando corta"_. É a TERCEIRA
+  // vez que este mesmo sintoma volta (1.9.42 desligou a versão original, a 1.9.75
+  // remendou subindo a 1ª tacada de 3 pra 6 caixas) — e o remendo nunca podia ter
+  // funcionado, porque o defeito não é o TAMANHO da primeira tacada: é o fato de
+  // existir uma segunda.
+  //
+  // A conta que condena o desenho: `_entregarQuandoPronto` tira o "Carregando" logo
+  // depois da PRIMEIRA tacada + hidratação. As caixas 7..N continuam entrando quadro
+  // a quadro DEPOIS disso, já sem loader. Quem rola nesse intervalo rola pra dentro
+  // do que ainda não foi anexado — e vê a chave cortada. Nenhum ajuste de lote
+  // conserta: enquanto a tela for entregue incompleta, existe uma janela em que ela
+  // MENTE sobre o que existe.
+  //
+  // É a MESMA família do `content-visibility`, banido logo abaixo pelos mesmos dois
+  // sintomas ("quando scrolla vem cortado" + toque que não pega), e contraria o
+  // cânone que o próprio dono ditou: _"usa a merda do carregando para entregar a
+  // pagina pronto"_ ([[feedback_global_loading_always]]).
+  //
+  // Agora é sempre atômico: monta inteiro, entrega inteiro, com o carregando por
+  // cima o tempo todo. O custo é UM quadro longo — que ninguém vê, porque está
+  // atrás do loader. O que se via antes era a tela pela metade.
+  // ⛔ Não reintroduzir "otimização" que entrega a tela em pedaços.
+  var _fatiar = false;
 
   _entregarQuandoPronto(container, function () {
     var _tudo = '';

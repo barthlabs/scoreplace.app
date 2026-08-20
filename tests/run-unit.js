@@ -959,7 +959,6 @@ const SUITES = [
   // a chave pinta em DUAS tacadas (topo agora, corpo no quadro seguinte). O risco da
   // técnica é entregar meia tela — este teste guarda a rede dupla de agendamento (rAF
   // NÃO dispara em aba de fundo), a ordem dos blocos e que o filtro só roda no fim.
-  'tests/chave-pinta-em-etapas.test.js',
   // as dicas voltaram a aparecer (1.9.41) e trouxeram junto dois defeitos que estavam
   // escondidos: medir layout a cada evento de scroll (trava a rolagem) e o balão
   // engolindo o toque mirado no card (o "triplo clique").
@@ -1057,6 +1056,12 @@ const SUITES = [
   // Trava também a geometria da seta (haste = 62,5% da base — a 81% ela vira
   // CASINHA quando aponta pra cima) e as duas etapas do convite de perfil.
   'tests/convite-de-rolagem-sobe-sem-pular.test.js',
+  // 1.9.90 — do relatório do APARELHO do dono (Sentry, release 1.9.89): a chave
+  // parou de ser pintada em fatias (era o "entra e scrollando corta", 3ª volta do
+  // mesmo sintoma), o brilho que ensina virou finito (o gravador pegou o
+  // btnCtaShine vivo numa travada de 533ms) e o perfilador passou a NOMEAR o
+  // observer que segurou a thread (o relatório vinha "Mu:?=852ms").
+  'tests/tela-nunca-entregue-pela-metade.test.js',
 ];
 
 let failed = [];

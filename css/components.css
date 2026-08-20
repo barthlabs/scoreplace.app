@@ -602,8 +602,21 @@ button[style*="linear-gradient"]:not(.btn):active {
   background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%);
   transform: translateX(-220%) skewX(-18deg);
   pointer-events: none;
-  animation: btnCtaShine 4s ease-in-out infinite;
-  will-change: transform;
+  /* ── ⛔ FINITO, NUNCA `infinite` (1.9.90) ──────────────────────────────────
+     O gravador de voo do iPhone do dono, na 1.9.89, fotografou uma travada de
+     533ms com `anim=1:btnCtaShine×1` viva — e este é o ÚNICO btnCtaShine que
+     ainda roda dentro do app. É a MESMA animação que, em seis botões, derrubou a
+     rolagem inteira na 1.9.87 (`anim=6:btnCtaShine×6` com ZERO JS rodando).
+     Reintroduzi-la "só num elemento", mas PARA SEMPRE, é reintroduzir o veneno em
+     dose menor: o custo não é por elemento, é por QUADRO — e `infinite` quer dizer
+     todo quadro da sessão inteira.
+     Duas passadas bastam pro que ela existe: chamar o olho quando a tela abre.
+     `forwards` deixa o brilho parado FORA da caixa (translateX 360% dentro de um
+     overflow:hidden) — invisível, e sem mais nada pra compor. */
+  animation: btnCtaShine 4s ease-in-out 2 forwards;
+  /* ⛔ sem `will-change`: ele PROMOVE o elemento a camada própria e a camada FICA
+     depois que a animação acaba — custo permanente pra ganho de 8 segundos. O
+     WebKit promove sozinho enquanto um transform está animando. */
 }
 @media (prefers-reduced-motion: reduce) { .sp-shine-dica::after { animation: none; } }
 /* Desync padrão entre botões irmãos (quando não há --shine-delay explícito) */
