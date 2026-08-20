@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.80';
+window.SCOREPLACE_VERSION = '1.9.81';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -44,6 +44,47 @@ try {
         if (window._travadas.length > 15) window._travadas.shift();
       }
     }, 150);
+  })();
+} catch (e) {}
+
+// ── PERFILADOR GENÉRICO DE TIMERS (1.9.81) — nada mais se esconde ────────────
+// Builds 78-80 provaram um trem de travadas ~1s/1,2s que NENHUM trecho nomeado
+// explicava (progress-tick deu 1ms na 80 — inocente). Em vez de nomear suspeito
+// por suspeito, TODO callback de setInterval/setTimeout que passar de 180ms
+// entra no rastro com a própria cara (nome da função ou os primeiros chars do
+// corpo) — inclusive timers de SDK (Firebase). Custo: um wrapper por timer.
+try {
+  (function () {
+    var _origSI = window.setInterval, _origST = window.setTimeout;
+    var _snippet = function (fn) {
+      try { return fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69); } catch (e) { return '?'; }
+    };
+    var _embrulha = function (fn, rotulo) {
+      if (typeof fn !== 'function') return fn;
+      return function () {
+        var t0 = (window.performance && performance.now) ? performance.now() : 0;
+        try { return fn.apply(this, arguments); }
+        finally {
+          if (t0 && window._trechos) {
+            var d = performance.now() - t0;
+            if (d > 180) {
+              window._trechos.push({ nome: rotulo + ':' + _snippet(fn), ini: t0, dur: d });
+              if (window._trechos.length > 30) window._trechos.shift();
+            }
+          }
+        }
+      };
+    };
+    window.setInterval = function (fn, ms) {
+      var args = Array.prototype.slice.call(arguments);
+      args[0] = _embrulha(fn, 'intervalo' + (ms != null ? ms : ''));
+      return _origSI.apply(window, args);
+    };
+    window.setTimeout = function (fn, ms) {
+      var args = Array.prototype.slice.call(arguments);
+      args[0] = _embrulha(fn, 'timeout');
+      return _origST.apply(window, args);
+    };
   })();
 } catch (e) {}
 
@@ -2336,7 +2377,10 @@ window._flag = function (name) {
     var onSandboxRoute = function () {
       return !!(window._isSandboxRoute && window._isSandboxRoute());
     };
-    var refresh = function () { try { ensure().style.display = onSandboxRoute() ? 'block' : 'none'; } catch (e) {} };
+    var refresh = function () { try {
+      var el = ensure(); var alvo = onSandboxRoute() ? 'block' : 'none';
+      if (el.style.display !== alvo) el.style.display = alvo;   // 1.9.81: escreve só quando MUDA
+    } catch (e) {} };
     window._updateSandboxBanner = refresh;
     window.addEventListener('hashchange', function () {
       refresh();
@@ -2770,26 +2814,33 @@ window._formatCountdown = function(diff) {
   var h = Math.floor((diff % 86400000) / 3600000);
   var m = Math.floor((diff % 3600000) / 60000);
   var s = Math.floor((diff % 60000) / 1000);
-  if (d > 0) return d + 'd ' + h + 'h ' + m + 'm ' + s + 's';
-  if (h > 0) return h + 'h ' + m + 'm ' + s + 's';
-  if (m > 0) return m + 'm ' + s + 's';
+  // 1.9.81: SEGUNDOS só no último minuto. Acima disso, o texto muda no máximo
+  // 1x/min — e como o tique só escreve quando o texto MUDA (dirty-check), o
+  // relógio deixa de invalidar o layout da página inteira a cada segundo
+  // (era um dos vagões do trem de travadas medido no aparelho do dono).
+  if (d > 0) return d + 'd ' + h + 'h';
+  if (h > 0) return h + 'h ' + m + 'm';
+  if (m > 0) return m + 'm';
   return s + 's';
 };
 setInterval(function() {
+  var _tick = function () {
   var now = Date.now();
   var els = document.querySelectorAll('[data-countdown-target]');
   els.forEach(function(el) {
     var target = parseInt(el.getAttribute('data-countdown-target'));
     if (isNaN(target)) return;
     var diff = target - now;
-    el.textContent = diff > 0 ? window._formatCountdown(diff) : 'Agora!';
+    var txt = diff > 0 ? window._formatCountdown(diff) : 'Agora!';
+    if (el.textContent !== txt) el.textContent = txt;   // 1.9.81: DOM só quando MUDA
   });
   var els2 = document.querySelectorAll('[data-elapsed-since]');
   els2.forEach(function(el) {
     var since = parseInt(el.getAttribute('data-elapsed-since'));
     if (isNaN(since)) return;
     var diff = now - since;
-    el.textContent = diff > 0 ? window._formatCountdown(diff) : '0s';
+    var txt = diff > 0 ? window._formatCountdown(diff) : '0s';
+    if (el.textContent !== txt) el.textContent = txt;   // 1.9.81: DOM só quando MUDA
   });
   // v1.6.66-beta: auto-expirar prazo de inscrição no card do dashboard sem
   // precisar de refresh. Quando o prazo chega, atualiza o badge de status,
@@ -2831,6 +2882,8 @@ setInterval(function() {
       }
     }
   });
+  };
+  if (window._medirTrecho) window._medirTrecho('countdown-tick', _tick); else _tick();
 }, 1000);
 
 // ─── Soft refresh: re-render current view without disrupting UX ────────────
