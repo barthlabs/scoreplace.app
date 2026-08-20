@@ -65,8 +65,8 @@ self.addEventListener('push', function(event) {
       }
       return self.registration.showNotification(title, {
         body: body,
-        icon: '/icons/icon-192.svg',
-        badge: '/icons/icon-192.svg',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
         tag: tag,
         renotify: false,
         data: { url: link },
@@ -97,7 +97,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v1.9.84';
+var CACHE_NAME = 'scoreplace-v1.9.85';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -177,6 +177,10 @@ var STATIC_ASSETS = [
   '/js/views/trophies-view.js',
   '/js/views/arbitros.js',
 
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-180.png',
+  '/icons/icon-32.png',
   '/icons/icon-192.svg',
   '/icons/icon-512.svg',
   '/icons/logo-podium.svg',
