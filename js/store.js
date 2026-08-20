@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.97';
+window.SCOREPLACE_VERSION = '1.9.98';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -61,6 +61,21 @@ try {
         } catch (e) {}
         try { foto.nos = document.getElementsByTagName('*').length; } catch (e) {}
         try { foto.snaps = window._snapCount || 0; } catch (e) {}
+        // ── ⭐ QUEM SUJOU A TELA POR ÚLTIMO (1.9.98) ──────────────────────────
+        // O PONTO CEGO QUE SOBROU depois de timers, observers e rolagem entrarem
+        // no rastro: um callback pode ser BARATO e ainda assim custar caro. Ele
+        // escreve no DOM em 0ms e sai; o preço vem DEPOIS, no recálculo de estilo
+        // e layout que o navegador faz — fora de qualquer medição. É exatamente o
+        // que o aparelho do dono vinha mostrando: `countdown-tick=0ms` ao lado de
+        // travadas de ~1s, a cada ~1s.
+        // Então a foto registra o ÚLTIMO callback que rodou antes do buraco: não
+        // prova culpa, mas aponta o suspeito com nome, que é o que faltava.
+        try {
+          var _uc = window._ultimoCallback;
+          if (_uc && (agora - _uc.fim) < gap + 200) {
+            foto.ultimo = _uc.nome + '(+' + Math.round(agora - _uc.fim) + 'ms)';
+          }
+        } catch (e) {}
         window._travadas.push(foto);
         if (window._travadas.length > 15) window._travadas.shift();
       }
@@ -86,8 +101,14 @@ try {
         var t0 = (window.performance && performance.now) ? performance.now() : 0;
         try { return fn.apply(this, arguments); }
         finally {
-          if (t0 && window._trechos) {
+          if (t0) {
             var d = performance.now() - t0;
+            // ⭐ TODO callback vira "o ultimo que rodou" — inclusive os baratos.
+            // O caro nem sempre e quem gasta tempo DENTRO: quem escreve no DOM em
+            // 0ms deixa a conta pro navegador, fora da medicao. Ver a foto da travada.
+            try { window._ultimoCallback = { nome: rotulo + ':' + _snippet(fn), fim: performance.now() }; } catch (eU) {}
+          }
+          if (t0 && window._trechos) {
             if (d > 180) {
               window._trechos.push({ nome: rotulo + ':' + _snippet(fn), ini: t0, dur: d });
               if (window._trechos.length > 30) window._trechos.shift();
@@ -164,6 +185,11 @@ try {
         var t0 = (window.performance && performance.now) ? performance.now() : 0;
         try { return cb.apply(this, arguments); }
         finally {
+          if (t0) {
+            var _qn = '?';
+            try { _qn = cb.name || String(cb).replace(/\s+/g, ' ').slice(9, 69); } catch (eQn) {}
+            try { window._ultimoCallback = { nome: nome.slice(0, 2) + ':' + _qn, fim: performance.now() }; } catch (eU) {}
+          }
           if (t0 && window._trechos) {
             var d = performance.now() - t0;
             if (d > 120) {
@@ -7291,9 +7317,13 @@ window._navTorneioComAviso = function (tournamentId, evento) {
         window._tapReportes = (window._tapReportes || 0) + 1;
         if (window._tapReportes <= 12 && typeof window._captureMessage === 'function') {
           try {
+            // ⚠️ TRECHOS PRIMEIRO: eles têm os NOMES. As travadas descrevem o
+            // tamanho do estrago, os trechos dizem QUEM fez — e é o fim da linha
+            // que se perde quando algo trunca. (O truncamento em 250 do SDK está
+            // resolvido em sentry-init.js, mas a ordem certa é rede de segurança.)
             var _linha = 'tap-sem-feedback: entrada ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso +' + Math.round(ms) +
-              'ms · travadas: ' + (travadas.join(' | ') || 'nenhuma') +
-              ' · trechos: ' + (trechos.join(' | ') || 'nenhum') +
+              'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') +
+              ' · travadas: ' + (travadas.join(' | ') || 'nenhuma') +
               (tasks.length ? ' · longtasks: ' + tasks.join(' | ') : '');
             window._captureMessage(_linha, 'info');
           } catch (e) {}
