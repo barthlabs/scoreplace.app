@@ -107,8 +107,17 @@ ok(!/nome\.slice\(0, 2\) \+ ':' \+ \(cb\.name \|\| '\?'\)/.test(obs),
    'o observer não é mais registrado como "?" quando o callback é anônimo');
 ok(/String\(cb\)\.replace\(\/\\s\+\/g, ' '\)\.slice\(9, 69\)/.test(obs),
    'ele recorta o CÓDIGO do callback — que identifica sem ambiguidade');
-ok(/try \{ _quem = cb\.name/.test(obs),
-   'e o recorte é protegido: um throw aqui viveria dentro de um `finally` e quebraria o próprio perfilador');
+// 1.9.99 — o recorte saiu de DENTRO do callback e passou pro EMBRULHO. Motivo: a
+// 1.9.98 chamava `String(cb)` a cada disparo, e o MutationObserver da tela dispara
+// a cada lote de mutação. Medido: 3000 serializações custam ~1,9ms (ou seja NÃO era
+// o travamento que o dono viu — não vender isso como conserto), mas é desperdício
+// puro: a identidade da função é fixa no embrulho.
+ok(/var _nomeCb = '\?';\s*try \{ _nomeCb = nome\.slice\(0, 2\)/.test(obs),
+   'o nome do observer é calculado UMA VEZ, no embrulho — não a cada disparo');
+ok(/catch \(eN\) \{\}/.test(obs),
+   'e o recorte segue protegido por try/catch (um throw aqui derrubaria o wrapper)');
+ok(!/String\(cb\)[\s\S]{0,200}window\._trechos\.push/.test(obs),
+   '⛔ nenhuma serialização de função dentro do caminho quente do callback');
 
 // ── 4. o cromo não rediscute o documento inteiro a cada mutação (1.9.91) ───
 // MEDIDO no iPhone do dono (Sentry 7683086330, release 1.9.90):

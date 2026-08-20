@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.98';
+window.SCOREPLACE_VERSION = '1.9.99';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -97,6 +97,14 @@ try {
     };
     var _embrulha = function (fn, rotulo) {
       if (typeof fn !== 'function') return fn;
+      // ⛔ O NOME SE CALCULA UMA VEZ, NO EMBRULHO — NUNCA POR CHAMADA (1.9.99).
+      // A 1.9.98 chamava `_snippet(fn)` DENTRO do callback, e `_snippet` faz
+      // `String(fn)`: serializa o código-fonte da função inteira, a cada disparo.
+      // Em timer de 1s passa batido; no MutationObserver da tela, que dispara a
+      // cada lote de mutação, são MILHARES de serializações montando a chave —
+      // e foi o que travou o torneio a ponto de não voltar. A identidade da
+      // função é fixa no momento do embrulho; recalcular é puro desperdício.
+      var _nomeFixo = rotulo + ':' + _snippet(fn);
       return function () {
         var t0 = (window.performance && performance.now) ? performance.now() : 0;
         try { return fn.apply(this, arguments); }
@@ -106,11 +114,11 @@ try {
             // ⭐ TODO callback vira "o ultimo que rodou" — inclusive os baratos.
             // O caro nem sempre e quem gasta tempo DENTRO: quem escreve no DOM em
             // 0ms deixa a conta pro navegador, fora da medicao. Ver a foto da travada.
-            try { window._ultimoCallback = { nome: rotulo + ':' + _snippet(fn), fim: performance.now() }; } catch (eU) {}
+            window._ultimoCallback = { nome: _nomeFixo, fim: performance.now() };
           }
           if (t0 && window._trechos) {
             if (d > 180) {
-              window._trechos.push({ nome: rotulo + ':' + _snippet(fn), ini: t0, dur: d });
+              window._trechos.push({ nome: _nomeFixo, ini: t0, dur: d });
               if (window._trechos.length > 30) window._trechos.shift();
             }
           }
@@ -143,6 +151,9 @@ try {
   var _origAEL = EventTarget.prototype.addEventListener;
   EventTarget.prototype.addEventListener = function (tipo, fn, opts) {
     if ((tipo === 'scroll' || tipo === 'touchmove') && typeof fn === 'function' && !fn.__spEnvolto) {
+      // ⛔ UMA VEZ, no embrulho — rolagem dispara ate 60x/s.
+      var _nomeEvt = '?';
+      try { _nomeEvt = tipo.slice(0, 4) + ':' + (fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69)); } catch (eE) {}
       var envolto = function () {
         var t0 = (window.performance && performance.now) ? performance.now() : 0;
         try { return fn.apply(this, arguments); }
@@ -150,9 +161,7 @@ try {
           if (t0 && window._trechos) {
             var d = performance.now() - t0;
             if (d > 8) {
-              var _q = '?';
-              try { _q = fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69); } catch (eQ) {}
-              window._trechos.push({ nome: tipo.slice(0, 4) + ':' + _q, ini: t0, dur: d });
+              window._trechos.push({ nome: _nomeEvt, ini: t0, dur: d });
               if (window._trechos.length > 30) window._trechos.shift();
             }
           }
@@ -181,15 +190,17 @@ try {
     if (typeof Orig !== 'function') return;
     var Novo = function (cb) {
       var args = Array.prototype.slice.call(arguments, 1);
+      // ⛔ UMA VEZ, NO EMBRULHO. Ver a nota nos timers: a 1.9.98 fazia
+      // `String(cb)` a CADA disparo, e o MutationObserver do #view-container
+      // dispara a cada lote de mutacao — milhares de serializacoes montando a
+      // chave. Foi o que travou o torneio a ponto de nao voltar.
+      var _nomeCb = '?';
+      try { _nomeCb = nome.slice(0, 2) + ':' + (cb.name || String(cb).replace(/\s+/g, ' ').slice(9, 69)); } catch (eN) {}
       var envolto = function () {
         var t0 = (window.performance && performance.now) ? performance.now() : 0;
         try { return cb.apply(this, arguments); }
         finally {
-          if (t0) {
-            var _qn = '?';
-            try { _qn = cb.name || String(cb).replace(/\s+/g, ' ').slice(9, 69); } catch (eQn) {}
-            try { window._ultimoCallback = { nome: nome.slice(0, 2) + ':' + _qn, fim: performance.now() }; } catch (eU) {}
-          }
+          if (t0) { window._ultimoCallback = { nome: _nomeCb, fim: performance.now() }; }
           if (t0 && window._trechos) {
             var d = performance.now() - t0;
             if (d > 120) {
@@ -202,9 +213,7 @@ try {
               // ⚠️ recorte inline: o `_snippet` dos timers mora DENTRO de outro
               // IIFE e não alcança aqui — chamar por nome jogaria ReferenceError
               // dentro de um `finally`, ou seja quebraria o próprio perfilador.
-              var _quem = '?';
-              try { _quem = cb.name || String(cb).replace(/\s+/g, ' ').slice(9, 69); } catch (eN) {}
-              window._trechos.push({ nome: nome.slice(0, 2) + ':' + _quem, ini: t0, dur: d });
+              window._trechos.push({ nome: _nomeCb, ini: t0, dur: d });
               if (window._trechos.length > 30) window._trechos.shift();
             }
           }
@@ -11869,7 +11878,18 @@ window._CONVITES = [
   { id: 'torneio',   texto: 'encontre seus torneios',          alvo: '[data-open-enrollment="1"]' },
   { id: 'novidades', texto: 'novidades nos seus torneios',     alvo: '#novidades-section' },
   { id: 'resultados',texto: 'confira seus últimos resultados', alvo: '#meus-resultados-section' },
-  { id: 'presenca',  texto: 'veja quem está em quadra',        alvo: '#dashboard-presences-widget' },
+  // ⚠️ SÓ COM GENTE NA QUADRA. Veredito do dono: _"o veja quem está em quadra
+  // apenas se tiver alguma presença. sem presença isso é ridículo"_. O widget
+  // #dashboard-presences-widget EXISTE mesmo sem ninguém (às vezes só com o
+  // título), então "estar na tela" não basta como elegibilidade — tem que haver
+  // alguém DENTRO. Convite que aponta pro vazio queima a confiança nos cinco.
+  { id: 'presenca',  texto: 'veja quem está em quadra',        alvo: '#dashboard-presences-widget',
+    exige: function (el) {
+      if (!el) return false;
+      // conteúdo de verdade = card/linha clicável de alguém; título sozinho não conta
+      if (el.querySelector('.card, [onclick], [data-presence-item]')) return true;
+      return el.children.length > 1;
+    } },
   { id: 'perfil',    texto: 'complete seu perfil',             alvo: '#dash-profile-nudge', praCima: true }
 ];
 // PRA ONDE A SETA DO PERFIL APONTA, agora: o menu se ele estiver fechado, o
@@ -11939,6 +11959,8 @@ window._mostrarConviteDeRolagem = function () {
       if (!el) continue;                                             // não há o que mostrar
       var r = el.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0)) continue;
+      // exigência PRÓPRIA do convite (ex.: presença só com gente na quadra)
+      if (typeof c.exige === 'function') { try { if (!c.exige(el)) continue; } catch (eEx) { continue; } }
       if (c.praCima) {
         // O perfil aponta pra CHROME DO TOPO, que está sempre à vista — a regra
         // "só convida o que está fora da vista" não se aplica. O que decide aqui
