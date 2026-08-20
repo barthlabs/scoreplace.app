@@ -106,9 +106,20 @@ ok(/outline/.test(regraActive),
 // escrever uma regra que nunca pinta (estilo inline ganha de folha).
 ok(!/transform|box-shadow/.test(regraActive),
    'o realce NÃO depende de transform/box-shadow (o inline do card venceria)');
-// opacity/clarear/escurecer invertem de leitura entre os dois temas.
-ok(!/opacity/.test(regraActive),
-   'o realce NÃO usa opacity (inverte de leitura entre tema claro e escuro)');
+// ⭐ 1.9.84 — A PROIBIÇÃO DE `opacity` CAIU, POR ORDEM DO DONO (textual):
+// _"poderia clicar e ficar 50% opaco isso já daria a ideia de clicou"_ — depois de
+// descrever o realce por outline como _"mexe um pouco... sutil demais"_.
+// A regra anterior vinha de [[feedback_contraste_sempre_nos_dois_temas]] (clarear/
+// escurecer/opacity invertem de leitura entre os temas). Ela vale pra estado
+// PERMANENTE; aqui o esmaecimento é MOMENTÂNEO (só enquanto o dedo está no card) e
+// se comporta igual nos dois temas. O `outline` continua, somando ao efeito.
+// ⚠️ O QUE IMPORTA AQUI é que quem pinta é o NAVEGADOR, no próprio toque: não
+// depende do JS, então responde mesmo com a thread ocupada — que é exatamente o
+// quadro em que a falta de feedback incomodava.
+ok(/opacity:\s*0?\.5/.test(regraActive),
+   'o toque ESMAECE o card (opacity .5) — feedback instantâneo, pedido do dono');
+ok(/transition:\s*none/.test(regraActive),
+   'e sem transição: com ela, o esmaecimento atrasa e volta a ser "sutil demais"');
 
 // ── 5b. O CARD QUE NAVEGA NÃO PODE SER TEXTO SELECIONÁVEL ────────────────────
 // Relato do dono (1.9.54): _"segurando 2 segs no card do torneio seleciona texto"_ — e é

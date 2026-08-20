@@ -542,6 +542,18 @@ button[style*="linear-gradient"]:not(.btn):active {
    v2.0.6: DESSINCRONIZADO — cada botão pode ter seu próprio atraso via
    `--shine-delay` (inline) e, por padrão, botões irmãos do mesmo tipo recebem
    atrasos diferentes (nth-of-type) pra não brilharem todos juntos. */
+/* ⛔ 1.9.84 — O BRILHO SÓ VIVE NA LANDING. MEDIDO no iPhone do dono (Sentry, com
+   o gravador de travadas da 1.9.83): as travadas de ~1s vinham acompanhadas de
+   `anim=6: btnCtaShine×6` — SEIS botões com o brilho infinito rodando, sem
+   NENHUM JS em execução (timers, snapshots e renders já tinham sido nomeados e
+   inocentados nas builds 79-82). O comentário antigo dizia "anima só transform
+   (GPU, custo desprezível)" — a medição REFUTA no WKWebView: pseudo-elemento com
+   gradiente dentro de `overflow:hidden` não é promovido a camada, então cada
+   passagem do brilho REPINTA a região; com 6 botões dessincronizados (delays de
+   0,6s) há sempre um passando, e o resultado é o trem de travadas de ~1,1s que
+   matava a rolagem, cortava a chave e engolia o toque.
+   Fica na LANDING (onde o brilho vende e a tela é leve) e sai do app logado —
+   enfeite não paga fluidez. `will-change` promove a camada onde ele fica. */
 .btn-cta, .btn-shine { position: relative; overflow: hidden; }
 .btn-cta::after, .btn-shine::after {
   content: '';
@@ -549,16 +561,19 @@ button[style*="linear-gradient"]:not(.btn):active {
   top: 0; bottom: 0; left: 0; width: 38%;
   background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%);
   transform: translateX(-220%) skewX(-18deg);
-  animation: btnCtaShine 4s ease-in-out infinite;
-  animation-delay: var(--shine-delay, 0s);
   pointer-events: none;
 }
+.landing-page .btn-cta::after, .landing-page .btn-shine::after {
+  animation: btnCtaShine 4s ease-in-out infinite;
+  animation-delay: var(--shine-delay, 0s);
+  will-change: transform;
+}
 /* Desync padrão entre botões irmãos (quando não há --shine-delay explícito) */
-.btn-cta:nth-of-type(2)::after, .btn-shine:nth-of-type(2)::after { animation-delay: var(--shine-delay, 0.6s); }
-.btn-cta:nth-of-type(3)::after, .btn-shine:nth-of-type(3)::after { animation-delay: var(--shine-delay, 1.2s); }
-.btn-cta:nth-of-type(4)::after, .btn-shine:nth-of-type(4)::after { animation-delay: var(--shine-delay, 1.8s); }
-.btn-cta:nth-of-type(5)::after, .btn-shine:nth-of-type(5)::after { animation-delay: var(--shine-delay, 2.4s); }
-.btn-cta:nth-of-type(6)::after, .btn-shine:nth-of-type(6)::after { animation-delay: var(--shine-delay, 3s); }
+.landing-page .btn-cta:nth-of-type(2)::after, .landing-page .btn-shine:nth-of-type(2)::after { animation-delay: var(--shine-delay, 0.6s); }
+.landing-page .btn-cta:nth-of-type(3)::after, .landing-page .btn-shine:nth-of-type(3)::after { animation-delay: var(--shine-delay, 1.2s); }
+.landing-page .btn-cta:nth-of-type(4)::after, .landing-page .btn-shine:nth-of-type(4)::after { animation-delay: var(--shine-delay, 1.8s); }
+.landing-page .btn-cta:nth-of-type(5)::after, .landing-page .btn-shine:nth-of-type(5)::after { animation-delay: var(--shine-delay, 2.4s); }
+.landing-page .btn-cta:nth-of-type(6)::after, .landing-page .btn-shine:nth-of-type(6)::after { animation-delay: var(--shine-delay, 3s); }
 @keyframes btnCtaShine {
   0%   { transform: translateX(-220%) skewX(-18deg); }
   22%  { transform: translateX(360%) skewX(-18deg); }
@@ -1101,11 +1116,26 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
      apareceria. `outline` não é escrito inline em lugar nenhum;
    • `opacity`/clarear/escurecer inverte de leitura entre os dois temas. `--primary-color`
      é definido POR TEMA (azul no escuro e no claro), então o realce lê igual nos dois. */
+/* ── O TOQUE APAGA O CARD (1.9.84) — pedido do dono, textual ─────────────────
+   _"poderia clicar e ficar 50% opaco isso já daria a ideia de clicou"_. O realce
+   por `outline` que existia aqui ele descreveu como _"mexe um pouco... sutil
+   demais"_. A opacidade é o gesto que todo app nativo usa e, principalmente, é
+   aplicada pelo NAVEGADOR no próprio toque — não depende do JS, então continua
+   respondendo mesmo quando a thread está ocupada (que é justamente o quadro em
+   que a falta de resposta incomoda).
+   ⚠️ `transition: none` é obrigatório: sem isso a transição de opacidade do card
+   atrasa o efeito e volta a "sutil demais".
+   ⚠️ A regra antiga proibia `opacity` no realce por causa da inversão de leitura
+   entre os temas ([[feedback_contraste_sempre_nos_dois_temas]]). Aqui ela não se
+   aplica: esmaecer é MOMENTÂNEO e igual nos dois temas — o card volta ao normal
+   ao soltar o dedo. O `outline` FICA, somando (cor + esmaecimento). */
 .card[onclick]:active,
 a.compact-row:active,
 .compact-row[onclick]:active {
   outline: 2px solid var(--primary-color);
   outline-offset: -2px;
+  opacity: 0.5;
+  transition: none !important;
 }
 
 /* ── CARD QUE NAVEGA NÃO É TEXTO PRA SELECIONAR (1.9.54) ─────────────────────

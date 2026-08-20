@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.83';
+window.SCOREPLACE_VERSION = '1.9.84';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
