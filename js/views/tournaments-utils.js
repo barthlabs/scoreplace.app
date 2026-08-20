@@ -1414,21 +1414,39 @@ window._renderTournamentProgress = function(t) {
   var _scoped = _rb ? '<style>.tourn-progress-live[data-tid="' + _cssId + '"] *{color:' + _rb.fg + ' !important;}</style>' : '';
   return '<div class="info-box" style="' + _wrapStyle + '">' + _scoped + '<div class="tourn-progress-live" data-tid="' + _cssId + '">' + window._buildProgressInner(t) + '</div></div>';
 };
+// ── 1.9.80 · O TIQUE DO PROGRESSO ERA O TREM DE TRAVADAS ─────────────────────
+// MEDIDO no aparelho do dono (Sentry, builds 78/79): travadas de ~1s repetidas a
+// cada ~1,2s, SEM nome — scroll morto por 2s ("pode tentar o quanto for"), chave
+// cortada ao rolar, toque sem feedback. Era este ticker: `innerHTML` POR SEGUNDO
+// em TODAS as instâncias (vários cards da dash + o detalhe), e cada reescrita
+// invalida o layout da página inteira (o detalhe do Confra tem ~6.000 nós).
+// O conteúdo só muda em resolução de MINUTO (horas são HH:MM) ou quando um jogo
+// conclui — reescrever por segundo era 60× desperdício com preço de ~1s de
+// thread cada. Agora: (a) o DOM só é tocado se o HTML MUDOU (dirty-check por
+// string; no segundo típico = ZERO writes, zero layout); (b) cadência 1s → 5s
+// (imperceptível em resolução de minuto); (c) MEDIDO ('progress-tick') — se
+// voltar a pesar, o relato do toque o nomeia.
 window._progressTick = function() {
   var els = document.querySelectorAll('.tourn-progress-live');
   if (!els || !els.length) return;
-  var tours = (window.AppStore && window.AppStore.tournaments) || [];
-  Array.prototype.forEach.call(els, function(el) {
-    var tid = el.getAttribute('data-tid');
-    var t = tours.find(function(x) { return String(x.id) === String(tid); });
-    if (!t) return;
-    try { el.innerHTML = window._buildProgressInner(t); } catch (e) {}
-  });
+  var passo = function () {
+    var tours = (window.AppStore && window.AppStore.tournaments) || [];
+    Array.prototype.forEach.call(els, function(el) {
+      var tid = el.getAttribute('data-tid');
+      var t = tours.find(function(x) { return String(x.id) === String(tid); });
+      if (!t) return;
+      try {
+        var html = window._buildProgressInner(t);
+        if (html !== el._spProgHtml) { el._spProgHtml = html; el.innerHTML = html; }
+      } catch (e) {}
+    });
+  };
+  if (window._medirTrecho) window._medirTrecho('progress-tick', passo); else passo();
 };
 window._ensureProgressTicker = function() {
   if (window._progressTickerOn) return;
   window._progressTickerOn = true;
-  setInterval(window._progressTick, 1000);
+  setInterval(window._progressTick, 5000);
 };
 // v2.4.75: timestamp (ms) em que a temporada da Liga/Ranking encerra — ou null
 // se não há limite. Fonte ÚNICA da verdade pra "torneio acabou", espelhada na
