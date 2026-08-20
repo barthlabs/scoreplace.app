@@ -1403,7 +1403,7 @@ window._renderTournamentProgress = function(t) {
   var _hasPhoto = !!(t && (window._tourCoverSrc(t) || t.venuePhotoUrl));
   var _rb = (_hasPhoto && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
   var _wrapStyle = _rb
-    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + _rb.border + ';'
+    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + _rb.bg + ';border:1px solid ' + _rb.border + ';'
     : 'margin-top:1rem;';
   // Sobre foto: a CSS do tema claro INVERTE os hex claros de _buildProgressInner
   // (#60a5fa→#1d4ed8 etc.) pra escuro → ilegível na tarja escura. Em vez de caçar
@@ -1974,7 +1974,7 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
     if (_ce.kind === 'round-in-progress') {
         var _solo = _rowFn ? _rowFn(t, _fg) : '';
         if (!_solo) return ''; // nada a dizer — NUNCA cair no render genérico (era o "null null 0s")
-        return '<div style="margin-top:' + _mt + ';display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
+        return '<div style="margin-top:' + _mt + ';display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
     }
     // Guarda dura: box com regressiva EXIGE alvo e rótulo. Sem isso não se desenha nada.
     var _ts = _ce.ts;
@@ -1996,8 +1996,8 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         }
     }
     var _box = _lg
-        ? 'padding:14px 18px;background:' + _rb.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
-        : 'padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
+        ? 'padding:14px 18px;background:' + _rb.bg + ';border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
+        : 'padding:10px 14px;background:' + _rb.bg + ';border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
     return '<div style="margin-top:' + _mt + ';' + _box + '">' +
         // v1.7.86: rótulo e relógio EMPILHADOS. Antes dividiam UMA linha e, com a
         // escala grande, o rótulo virava "Fim da r…" — some justamente a palavra
@@ -2322,7 +2322,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     var _rbC = (opts.bg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
     // v4.x: sobre foto → tarja densa (_photoReadBox) + backdrop blur pra suavizar o fundo
     // agitado e garantir contraste do texto.
-    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);') : '';
+    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';') : '';
     // v4.4.x: SEMPRE colapsado por padrão — no DETALHE e na DASHBOARD (pedido do dono:
     // "sempre fechado no detalhe e na dashboard"). Abre só quando o usuário clica (estado
     // do <details> na sessão); sem persistência de "aberto" — todo render começa fechado.

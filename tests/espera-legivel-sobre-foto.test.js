@@ -77,8 +77,15 @@ const estiloFoto = W._waitlistStatBoxStyle(FOTO);
 const htmlFoto = W._waitlistStatBoxHtml(3, FOTO);
 ok(estiloFoto.indexOf('rgba(0,0,0,0.60)') !== -1,
   'B1. com foto, a caixa usa a tarja opaca de leitura');
-ok(estiloFoto.indexOf('backdrop-filter:blur(8px)') !== -1,
-  'B2. com foto, a caixa embaça o fundo (o mesmo tratamento das caixas vizinhas)');
+// 1.9.83 — A ASSERÇÃO VIROU O CONTRÁRIO, e o motivo é medição: `backdrop-filter`
+// no WKWebView re-desfoca a região a CADA QUADRO e tira a rolagem da GPU. No
+// iPhone do dono isso apareceu como travadas de ~1s por quadro com NENHUM JS
+// rodando (builds 78-82 já tinham eliminado timers, snapshots e renders pelo
+// rastro nomeado) — "scroll morto e travando no começo". O desfoque saiu de TODAS
+// as telas; quem garante a leitura sobre a foto é a TARJA (rgba(0,0,0,0.60)),
+// cuja cor NÃO muda (outros seletores do CSS casam por ela).
+ok(estiloFoto.indexOf('backdrop-filter') === -1,
+  'B2. com foto, a caixa NÃO usa backdrop-filter (mata o scroll no iOS) — a tarja basta');
 ok(estiloFoto.indexOf('rgba(251,191,36,0.12)') === -1,
   'B3. O BUG DO RELATO: com foto, o fundo quase transparente NÃO é usado');
 ok(htmlFoto.indexOf('#fcd34d') !== -1 && htmlFoto.indexOf('#fbbf24') === -1,

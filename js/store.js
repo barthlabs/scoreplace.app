@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.82';
+window.SCOREPLACE_VERSION = '1.9.83';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -40,7 +40,28 @@ try {
       var gap = agora - _ultimaBatida;
       _ultimaBatida = agora;
       if (gap > 450) {   // 150 do intervalo + 300 de tolerância
-        window._travadas.push({ dur: Math.round(gap - 150), fim: agora });
+        // 1.9.83 — FOTOGRAFA A CENA DA TRAVADA. Builds 78-82 provaram, por
+        // eliminação, que não é timer (perfilador), nem snapshot, nem render
+        // (ambos nomeados e medidos em 0-1ms). Sobram: animação CSS pesada
+        // (repaint por quadro), observers e o tamanho do próprio documento.
+        // Em vez de adivinhar mais uma vez, o app registra o que ESTAVA em cena.
+        var foto = { dur: Math.round(gap - 150), fim: agora };
+        try {
+          if (typeof document.getAnimations === 'function') {
+            var anims = document.getAnimations().filter(function (a) { return a.playState === 'running'; });
+            foto.anim = anims.length;
+            var nomes = {};
+            anims.forEach(function (a) {
+              var n = (a.animationName || (a.effect && a.effect.getKeyframes && 'css') || 'js');
+              nomes[n] = (nomes[n] || 0) + 1;
+            });
+            foto.animTop = Object.keys(nomes).sort(function (x, y) { return nomes[y] - nomes[x]; })
+              .slice(0, 3).map(function (n) { return n + '×' + nomes[n]; }).join(',');
+          }
+        } catch (e) {}
+        try { foto.nos = document.getElementsByTagName('*').length; } catch (e) {}
+        try { foto.snaps = window._snapCount || 0; } catch (e) {}
+        window._travadas.push(foto);
         if (window._travadas.length > 15) window._travadas.shift();
       }
     }, 150);
@@ -86,6 +107,36 @@ try {
       return _origST.apply(window, args);
     };
   })();
+} catch (e) {}
+
+// ── OBSERVERS TAMBÉM ENTRAM NO RASTRO (1.9.83) ──────────────────────────────
+// IntersectionObserver dispara DURANTE O SCROLL e MutationObserver a cada
+// alteração do DOM — os dois pontos cegos que sobraram depois de o perfilador
+// de timers (1.9.81) inocentar todos os setTimeout/setInterval.
+try {
+  ['IntersectionObserver', 'MutationObserver', 'ResizeObserver'].forEach(function (nome) {
+    var Orig = window[nome];
+    if (typeof Orig !== 'function') return;
+    var Novo = function (cb) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      var envolto = function () {
+        var t0 = (window.performance && performance.now) ? performance.now() : 0;
+        try { return cb.apply(this, arguments); }
+        finally {
+          if (t0 && window._trechos) {
+            var d = performance.now() - t0;
+            if (d > 120) {
+              window._trechos.push({ nome: nome.slice(0, 2) + ':' + (cb.name || '?'), ini: t0, dur: d });
+              if (window._trechos.length > 30) window._trechos.shift();
+            }
+          }
+        }
+      };
+      return new (Function.prototype.bind.apply(Orig, [null, envolto].concat(args)))();
+    };
+    Novo.prototype = Orig.prototype;
+    window[nome] = Novo;
+  });
 } catch (e) {}
 
 window._longTasks = [];
@@ -5920,6 +5971,17 @@ window._photoReadBox = function () {
     // agitada o scrim leve deixava a leitura prejudicada (pedido do dono). Os boxes que
     // usam esta tarja sobre foto devem também aplicar backdrop-filter:blur pra suavizar o
     // fundo (ex.: _buildTournamentConfigBox).
+    // 1.9.83 — tarja MAIS DENSA porque o `backdrop-filter:blur` saiu de todas as
+    // telas: no WKWebView ele re-desfoca a região a CADA QUADRO e tira a rolagem
+    // da GPU — era o "scroll morto e travando no começo" medido no iPhone do dono
+    // (travadas de ~1s por quadro SEM nenhum JS rodando, o que já tinha eliminado
+    // timers, snapshots e renders nas builds 78-82). O desfoque servia pra suavizar
+    // a foto atrás do texto; a TARJA faz o mesmo trabalho de leitura, de graça.
+    // ⚠️ AS CORES NÃO MUDAM: há seletores no CSS que casam pela STRING EXATA
+    // (`[style*="rgba(30,41,59,0.85)"]`) pra desligar o remap de texto do tema
+    // claro dentro da tarja. Mexer no alpha aqui apaga esse casamento em silêncio
+    // e produz texto escuro sobre tarja escura — regressão de contraste que já foi
+    // paga uma vez. Sai o desfoque, ficam as cores. (tests/contraste-nos-dois-temas)
     return light
         ? { bg: 'rgba(30,41,59,0.85)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.14)' }
         : { bg: 'rgba(0,0,0,0.60)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.12)' };
@@ -7073,7 +7135,10 @@ window._navTorneioComAviso = function (tournamentId, evento) {
           .map(function (tr) { return tr.nome + '=' + Math.round(tr.dur) + 'ms'; }).slice(-8);
         if (window._warn) window._warn('[tap] aviso demorou ' + Math.round(ms) + 'ms; trechos:', trechos.join(' | '), '; longtasks:', tasks.join(' | '));
         var travadas = (window._travadas || []).filter(function (tv) { return tv.fim >= _tapT0 - 4000; })
-          .map(function (tv) { return Math.round(tv.dur) + 'ms@' + Math.round((tv.fim - _tapT0) / 100) / 10 + 's'; }).slice(-5);
+          .map(function (tv) {
+            return Math.round(tv.dur) + 'ms@' + Math.round((tv.fim - _tapT0) / 100) / 10 + 's' +
+              (tv.anim != null ? '[anim=' + tv.anim + (tv.animTop ? ':' + tv.animTop : '') + ' nos=' + tv.nos + ' snaps=' + tv.snaps + ']' : '');
+          }).slice(-5);
         window._tapReportes = (window._tapReportes || 0) + 1;
         if (window._tapReportes <= 3 && typeof window._captureMessage === 'function') {
           try { window._captureMessage('tap-sem-feedback: entrada esperou ' + (_inDelay >= 0 ? _inDelay : '?') + 'ms, aviso pintou +' + Math.round(ms) + 'ms · trechos: ' + (trechos.join(' | ') || 'nenhum') + ' · travadas(4s): ' + (travadas.join(' | ') || 'nenhuma') + ' · longtasks: ' + (tasks.join(' | ') || 'sem suporte'), 'info'); } catch (e) {}
@@ -9341,6 +9406,7 @@ window.AppStore = {
     }
     this._realtimeUnsubscribe = query
       .onSnapshot(function(snap) {
+        window._snapCount = (window._snapCount || 0) + 1;
         if (window._medirTrecho) return window._medirTrecho('snapshot-torneios', function () { _aplicaSnapTorneios(snap); });
         return _aplicaSnapTorneios(snap);
       }, function(err) {

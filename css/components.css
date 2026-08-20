@@ -824,9 +824,13 @@ button[style*="linear-gradient"]:not(.btn):active {
    Sobre foto: tarja escura + desfoque, e o âmbar CLAREIA — #fbbf24 é calibrado pra
    fundo liso e some numa foto clara. */
 [data-vphoto-on] .stat-box {
+  /* 1.9.83 — SEM `backdrop-filter`. No WKWebView ele re-desfoca a região a CADA
+     QUADRO e tira a rolagem da GPU: era o "scroll morto e travando no começo"
+     medido no iPhone do dono (travadas de ~1s a cada quadro, sem NENHUM JS
+     rodando — o que eliminou timers, snapshots e renders nas builds 78-82).
+     A legibilidade sobre a foto vem da TARJA (rgba(0,0,0,0.60)), não do desfoque —
+     e a COR não muda: outros seletores casam por ela. */
   background: rgba(0,0,0,0.60) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255,255,255,0.18) !important;
   color: #e2e8f0 !important;
   text-shadow: 0 1px 3px rgba(0,0,0,0.85);
@@ -854,9 +858,8 @@ button[style*="linear-gradient"]:not(.btn):active {
    Escurece junto com o resto quando a foto é pintada; os cinzas de apoio (umidade, vento,
    descrição dos dias) clareiam, senão continuam sumindo mesmo com a tarja. */
 [data-vphoto-on] .weather-box {
+  /* 1.9.83: idem .stat-box — sai o desfoque, a tarja (cor inalterada) segue. */
   background: rgba(0,0,0,0.60) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border-color: rgba(255,255,255,0.20) !important;
 }
 [data-theme="light"] [data-vphoto-on] .weather-box {

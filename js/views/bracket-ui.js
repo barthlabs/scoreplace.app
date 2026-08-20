@@ -6372,7 +6372,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
 
         var modal = document.createElement('div');
         modal.id = 'player-match-stats-modal';
-        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(4px);z-index:100020;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:100020;display:flex;align-items:center;justify-content:center;padding:1rem;';
         var _boxStat = function(label, value, icon) {
           return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);">' +
             '<span style="font-size:1rem;">' + icon + '</span>' +
@@ -10527,7 +10527,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Outer: quase-transparente e pointer-events:none → toques fora fecham pelo botão
     // ou caem no placar (para ver mudanças em tempo real)
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:transparent;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;';
-    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
+    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
         /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
@@ -11505,7 +11505,7 @@ window._openScanQR = function() {
 
     // Bottom — botão pra entrada manual de código (link discreto)
     '<div style="position:absolute;bottom:0;left:0;right:0;padding:24px 16px env(safe-area-inset-bottom,24px);display:flex;flex-direction:column;align-items:center;gap:12px;background:linear-gradient(0deg,rgba(0,0,0,0.7),transparent);z-index:2;">' +
-      '<button id="scan-qr-manual-btn" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:22px;padding:10px 22px;font-size:0.88rem;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">⌨️ Digitar código</button>' +
+      '<button id="scan-qr-manual-btn" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:22px;padding:10px 22px;font-size:0.88rem;font-weight:600;cursor:pointer;">⌨️ Digitar código</button>' +
     '</div>' +
 
     // Manual code dialog (hidden inicialmente)
