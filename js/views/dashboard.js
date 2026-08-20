@@ -3542,18 +3542,18 @@ function renderDashboard(container) {
           </button>
           ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'height:58px;padding:0 18px;font-size:0.92rem;letter-spacing:0.01em;border:1px solid rgba(255,255,255,0.25);' }) : ''}
         </div>
-        <!-- Linha: Baixar na loja (só web, e só onde a ficha existe) + Apoie -->
-        <!-- v1.8.91: era "📲 Instalar app" (atalho PWA). Com o app publicado, esse botão
-             competia com a instalação de verdade. Agora leva DIRETO à ficha na loja e
-             some no app nativo — ordem do dono: "a menos que ele possa apontar e ir
-             direto para a loja com o scoreplace.app na tela da loja" + "só deve aparecer
-             entao na versao web". Quem decide se aparece é _storeButtonHtml (main.js),
-             lendo window.SP_LOJAS. O _installButtonHtml continua vivo, usado pela landing
-             e pelo manual — lá o atalho na tela inicial ainda faz sentido.
+        <!-- Linha: Apoie -->
+        <!-- 1.9.91 — o "Baixar na App Store" SAIU daqui. Ordem do dono: "na herobox
+             tira tambem esse botao", junto com a virada de estratégia "vamos buscar
+             sempre o nativo agora, nao mais o web".
+             O convite pra baixar passa a viver SÓ na landing, e como SELO OFICIAL da
+             loja (window._storeBadgesHtml). Aqui dentro ele nunca fez muito sentido:
+             quem está no app nativo nem via o botão (ele se esconde sozinho), e quem
+             está na web já entrou — o lugar de convidar pra baixar é a porta, não a
+             sala. Uma linha a menos na tela que o dono já disse ser cheia demais.
              (Sem crases neste comentário: ele mora DENTRO de um template literal, onde a
              crase fecha a string e o texto vira código — trava própria pega isso.) -->
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: -2px;">
-          ${(typeof window._storeButtonHtml === 'function') ? window._storeButtonHtml({ cls: 'btn hover-lift', style: 'background:#1e3a8a;color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.78rem;font-weight:600;padding:0 14px;height:34px;border-radius:9px;' }) : ''}
           <button id="btn-support-pix" class="btn hover-lift" title="${_t('common.support')}" style="background: #047857; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window.location.hash='#support'">💚 ${_t('common.support')}</button>
         </div>
       </div>

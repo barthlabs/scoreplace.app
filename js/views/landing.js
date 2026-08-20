@@ -49,11 +49,12 @@
           '<span class="landing-cta-l1">' + _ctaL1 + '</span>' +
           (_ctaL2 ? '<span class="landing-cta-l2">' + _ctaL2 + '</span>' : '') +
         '</button>' +
-        // v2.3.99: no Android/desktop o próprio "Entrar" instala (via _enterApp);
-        // o botão separado fica SÓ no iPhone (iosOnly), onde "Entrar" não consegue
-        // instalar (Apple) — e instalar antes de entrar evita re-login no app.
-        ((typeof window._installButtonHtml === 'function')
-          ? window._installButtonHtml({ iosOnly: true, cls: 'btn btn-outline', label: '📲 Instalar na tela inicial', style: 'margin-top:10px;font-size:0.92rem;font-weight:600;padding:10px 18px;border-radius:12px;' })
+        // 1.9.91 — SELOS DAS LOJAS no lugar do "Instalar na tela inicial".
+        // Ordem do dono: _"coloca os selos das lojas como link e tira esse instalar
+        // na tela inicial. vamos buscar sempre o nativo agora, nao mais o web."_
+        // O atalho PWA competia com o app de verdade na linha mais nobre da tela.
+        ((typeof window._storeBadgesHtml === 'function')
+          ? window._storeBadgesHtml({ margemTopo: '16px' })
           : '') +
         '<div class="landing-sports-row">' +
           _SPORTS_LANDING.map(function(s) {
@@ -153,8 +154,8 @@
       '<button class="btn btn-cta btn-success landing-cta-btn" data-landing-cta onclick="if(window._spEnterClick)window._spEnterClick(this);else if(window._enterApp)window._enterApp(this);else if(window.openModal)window.openModal(\'modal-login\');">' +
         t('landing.ctaBottom') +
       '</button>' +
-      ((typeof window._installButtonHtml === 'function')
-        ? window._installButtonHtml({ iosOnly: true, cls: 'btn btn-outline', label: '📲 Instalar na tela inicial', style: 'margin-top:10px;font-size:0.88rem;font-weight:600;padding:9px 16px;border-radius:12px;' })
+      ((typeof window._storeBadgesHtml === 'function')
+        ? window._storeBadgesHtml({ margemTopo: '14px', altura: 40 })
         : '') +
     '</section>';
   }

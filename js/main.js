@@ -1909,6 +1909,45 @@ window._installButtonHtml = function (opts) {
 //      Hoje isso significa iPhone/iPad; o Android entra sozinho quando `play.on` virar.
 //   3) Desktop fica de fora: não há app de loja pra rodar ali, e a ficha aberta no
 //      navegador do computador não instala nada — seria um beco.
+// ── OS SELOS OFICIAIS DAS LOJAS, COMO LINK (1.9.91) ─────────────────────────
+// Ordem do dono: _"coloca os selos das lojas como link e tira esse instalar na
+// tela inicial. vamos buscar sempre o nativo agora, nao mais o web."_ A virada é
+// de ESTRATÉGIA: o atalho PWA deixou de ser destino e virou CONCORRENTE do app de
+// verdade — ocupava a linha nobre da landing oferecendo o pior dos dois caminhos.
+//
+// ⚠️ CADA SELO SÓ APARECE COM A FICHA NO AR (`SP_LOJAS[x].on`). MEDIDO HOJE
+// (20/ago): Apple responde 200, Play responde 404 — a produção foi liberada mas a
+// ficha ainda não está publicada. Então hoje sai só o selo da Apple, e o da Play
+// entra SOZINHO no dia em que `play.on` virar. Selo levando pra 404 é pior que
+// selo nenhum.
+// ⚠️ NATIVO não mostra: quem já está dentro do app não tem o que baixar.
+// ⚠️ Aqui o DESKTOP entra (diferente do _storeButtonHtml logo abaixo): selo é
+// informação — "existe app pra isso" —, não um botão que promete instalar agora.
+// ⚠️ As artes são os SELOS OFICIAIS (assets/badge-*): as duas lojas proíbem
+// recortar, recolorir ou redesenhar.
+window._storeBadgesHtml = function (opts) {
+  opts = opts || {};
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return '';
+  var L = window.SP_LOJAS || {};
+  var lojas = [L.apple, L.play].filter(function (l) { return l && l.on && l.url && l.badge; });
+  if (!lojas.length) return '';
+  var alt = 'Baixar na ';
+  // altura igual nos dois: as artes têm proporções diferentes e alinhar pela
+  // ALTURA é o que a diretriz das duas lojas pede.
+  var h = opts.altura || 44;
+  return '<div data-store-badges style="display:flex;gap:12px;justify-content:center;align-items:center;' +
+    'flex-wrap:wrap;margin-top:' + (opts.margemTopo || '14px') + ';">' +
+    lojas.map(function (l) {
+      return '<a href="' + l.url + '" target="_blank" rel="noopener"' +
+        ' aria-label="' + alt + l.nome + '" title="' + alt + l.nome + '"' +
+        ' style="display:inline-block;line-height:0;text-decoration:none;">' +
+        '<img src="' + l.badge + '" alt="' + alt + l.nome + '"' +
+        ' style="height:' + h + 'px;width:auto;display:block;">' +
+        '</a>';
+    }).join('') +
+    '</div>';
+};
+
 window._storeButtonHtml = function (opts) {
   opts = opts || {};
   if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return '';

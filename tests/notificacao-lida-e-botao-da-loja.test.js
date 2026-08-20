@@ -167,14 +167,39 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ok(/var _LOJAS = window\.SP_LOJAS \|\|/.test(sharing),
     'o selo do convite IMPRESSO lê window.SP_LOJAS — duas listas divergiriam na primeira mudança');
 
-  // 7. a tela inicial usa o botão da LOJA, não o de atalho PWA
+  // ── 7. O CONVITE PRA BAIXAR MORA NA PORTA, NÃO NA SALA (1.9.91) ────────────
+  // ⚠️ ESTA REGRA INVERTEU. Até a 1.9.90 este teste EXIGIA o botão da loja dentro
+  // da hero box. Ordem do dono, revogando: _"coloca os selos das lojas como link e
+  // tira esse instalar na tela inicial. vamos buscar sempre o nativo agora, nao
+  // mais o web."_ + _"na herobox tira tambem esse botao"_.
+  // A virada é de ESTRATÉGIA: o atalho PWA deixou de ser destino e virou
+  // CONCORRENTE do app nativo. E o convite pra baixar foi pra LANDING, como SELO
+  // OFICIAL — dentro do app ele nunca fez sentido: quem está no nativo nem via o
+  // botão (ele se escondia sozinho) e quem está na web já entrou.
   const dash = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
-  ok(/window\._storeButtonHtml\(/.test(dash), 'a tela inicial chama _storeButtonHtml');
-  ok(!/_installButtonHtml\([^)]*Instalar app/.test(dash),
-    'o botão "📲 Instalar app" (atalho PWA) saiu da tela inicial');
-  // mas o atalho PWA continua existindo onde faz sentido (landing/manual)
-  ok(/window\._installButtonHtml = function/.test(main),
-    '_installButtonHtml continua vivo — a landing e o manual ainda oferecem o atalho');
+  const landing = fs.readFileSync(path.join(ROOT, 'js', 'views', 'landing.js'), 'utf8');
+  ok(!/window\._storeButtonHtml\(/.test(dash),
+    '⛔ a hero box NÃO chama mais _storeButtonHtml');
+  ok(!/_installButtonHtml\(/.test(dash),
+    'e nem o atalho PWA — nada de "instalar" dentro do app');
+  ok(/window\._storeBadgesHtml\(/.test(landing),
+    'quem convida pra baixar é a LANDING, com os selos oficiais');
+  ok(!/_installButtonHtml\(/.test(landing),
+    '⛔ o "Instalar na tela inicial" saiu da landing — competia com o app de verdade');
+
+  // ── 8. o selo só sai com a ficha NO AR, e a arte é a OFICIAL ───────────────
+  ok(/window\._storeBadgesHtml = function/.test(main), 'existe o construtor dos selos');
+  const iBadges = main.indexOf('window._storeBadgesHtml = function');
+  const badges = main.slice(iBadges, main.indexOf('window._storeButtonHtml = function', iBadges));
+  ok(/isNativePlatform\(\)\) return '';/.test(badges),
+    'no app NATIVO não aparece selo (não há o que baixar)');
+  ok(/l\.on && l\.url && l\.badge/.test(badges),
+    'cada selo depende de `on` — hoje isso mantém a Play fora, porque a ficha dá 404');
+  ok(/l\.badge/.test(badges) && !/<svg/.test(badges),
+    'usa o ARQUIVO oficial da loja, não desenho nosso (as duas lojas proíbem refazer a arte)');
+  ['assets/badge-app-store.svg', 'assets/badge-google-play.png'].forEach(function (f) {
+    ok(fs.existsSync(path.join(ROOT, f)), 'a arte oficial está no repo: ' + f);
+  });
 })();
 
 // ═══ C) NENHUMA NÃO LIDA PODE FICAR INALCANÇÁVEL ═════════════════════════════
