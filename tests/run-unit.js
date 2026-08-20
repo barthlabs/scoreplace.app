@@ -1041,6 +1041,11 @@ const SUITES = [
   // Trava o reuso incremental (docChanges), o cache com debounce+flush e o nome
   // do trecho na telemetria.
   'tests/eco-de-snapshot-nao-trava-a-thread.test.js',
+  // O "trem" das builds 78-81 (scroll morto, chave cortada, toque sem feedback):
+  // era LAYOUT THRASHING no ajuste de nome — escrever fontSize e ler scrollWidth
+  // por elemento, num laço de até 200 passos, a cada render e durante o scroll.
+  // Trava o lote em fases + busca binária (mesmo resultado visual, 75% menos).
+  'tests/ajuste-de-nome-nao-trava-a-thread.test.js',
   // Sentry WEB-83: card de Folga em renderMatchCard usava `t` ANTES do `const t`
   // (TDZ desde a 4.0.84, 30/jun) e derrubava a tela da fase de grupos. Roda o
   // bracket.js REAL no harness de render e trava também o padrão (nenhuma função

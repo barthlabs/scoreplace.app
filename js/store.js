@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.81';
+window.SCOREPLACE_VERSION = '1.9.82';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -4759,13 +4759,30 @@ window._firstNameOnly = function(name) {
     var maxR = parseFloat(el.getAttribute('data-maxrem')) || 1.5;
     var minR = parseFloat(el.getAttribute('data-minrem')) || 0.7;
     if (minR > maxR) minR = maxR;
+    // ── 1.9.82 · O AJUSTE DEIXA DE SER BUSCA LINEAR (era O TREM) ──────────────
+    // MEDIDO (preview, 400 nomes = a chave do Confra): 166-200ms por passada, ou
+    // seja 0,5-0,8s NO IPHONE — e isto roda a cada render, ATÉ 12× seguidas pelo
+    // retry de 60ms, e ainda DURANTE O SCROLL pelo IntersectionObserver. Era o
+    // trem de travadas de ~1s a cada ~1,2s que o dono mediu nas builds 78-81 e
+    // que nenhum conserto anterior pegou: não é timer, é LAYOUT THRASHING —
+    // escrever `fontSize` e ler `scrollWidth` alternadamente força um reflow
+    // SÍNCRONO por iteração, e o laço fazia até 200 delas POR NOME.
+    // Agora o tamanho é CALCULADO por proporção: mede uma vez na fonte máxima e
+    // aplica a escala que faz caber (o texto escala linearmente com a fonte).
+    // Um refinamento único cobre o arredondamento sub-pixel. De até 200 reflows
+    // por nome para 2 — mesmo resultado na tela.
     var fs = maxR;
-    el.style.fontSize = fs + 'rem';
-    var guard = 0;
-    // passo 0.03rem (~0.5px a 16px) com +1px de folga sub-pixel.
-    while (guard++ < 200 && (el.scrollWidth > bw + 1 || el.scrollHeight > bh + 1) && fs > minR) {
-      fs = Math.max(minR, fs - 0.03);
+    if (el.style.fontSize !== fs + 'rem') el.style.fontSize = fs + 'rem';
+    var sw = el.scrollWidth, sh = el.scrollHeight;
+    if (sw > bw + 1 || sh > bh + 1) {
+      var escala = Math.min((bw + 1) / Math.max(1, sw), (bh + 1) / Math.max(1, sh));
+      fs = Math.max(minR, Math.floor((maxR * escala) / 0.03) * 0.03);
       el.style.fontSize = fs + 'rem';
+      // refinamento único: sobrou 1 passo? desce mais um (não volta ao laço).
+      if (fs > minR && (el.scrollWidth > bw + 1 || el.scrollHeight > bh + 1)) {
+        fs = Math.max(minR, fs - 0.03);
+        el.style.fontSize = fs + 'rem';
+      }
     }
     // v1.7.77 — A SEGUNDA METADE DA REGRA: chegou no PISO e ainda não coube?
     // Então QUEBRA em vez de vazar. Sem isto o piso (que existe pra o nome nunca
@@ -4814,23 +4831,108 @@ window._firstNameOnly = function(name) {
         if (!r || (r.top < alturaTela + margem && r.bottom > -margem)) perto.push(el);
         else longe.push(el);
       });
+      // ── 1.9.82 · NEM OS "PERTO" SEGURAM A THREAD ─────────────────────────
+      // Antes: todos os visíveis de uma vez. Numa chave com 400 nomes isso é uma
+      // travada só (medida: 0,5-0,8s no iPhone). Agora vai em lotes com ORÇAMENTO
+      // de quadro: enquanto couber em ~8ms, segue; estourou, devolve a thread e
+      // continua no quadro seguinte. Quem está na tela continua sendo o primeiro.
       var pending = false;
-      perto.forEach(function (el) { if (!_fitOne(el)) pending = true; });
-      var fatia = function () {
-        if (!longe.length) return;
-        var lote = longe.splice(0, 40);
-        lote.forEach(function (el) { if (!_fitOne(el)) pending = true; });
-        if (longe.length) {
-          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fatia);
-          else setTimeout(fatia, 16);
+      // ── 1.9.82 · LER E ESCREVER EM FASES SEPARADAS (o conserto que vale) ──
+      // MEDIDO: o custo NÃO estava no laço de encolher — estava em ESCREVER
+      // `fontSize` e LER `clientWidth/scrollWidth` alternadamente, POR ELEMENTO:
+      // cada troca força um reflow SÍNCRONO, e são 2 por nome × 400 nomes = 800
+      // reflows = 166ms no desktop (0,5-0,8s no iPhone), a cada render, até 12×
+      // pelo retry, e durante o scroll pelo observer. É o trem inteiro.
+      // Agora o lote roda em TRÊS fases: escreve a fonte máxima em todos → LÊ
+      // todos (um único reflow para o lote) → escreve o tamanho calculado. Dois
+      // reflows por LOTE em vez de dois por elemento.
+      var _fitEmLote = function (els) {
+        // fase 1 — coleta e prepara (só ESCRITA)
+        var dados = [];
+        els.forEach(function (el) {
+          var box = el && el.parentElement;
+          if (!box) return;
+          var maxR = parseFloat(el.getAttribute('data-maxrem')) || 1.5;
+          var minR = parseFloat(el.getAttribute('data-minrem')) || 0.7;
+          if (minR > maxR) minR = maxR;
+          if (el.style.whiteSpace === 'normal') { el.style.whiteSpace = ''; el.style.wordBreak = ''; }
+          el.style.fontSize = maxR + 'rem';
+          dados.push({ el: el, box: box, maxR: maxR, minR: minR, lo: minR, hi: maxR, best: null });
+        });
+        if (!dados.length) return;
+        // fase 2 — mede as caixas e o texto na fonte MÁXIMA (um layout para o lote)
+        dados.forEach(function (d) { d.bw = d.box.clientWidth; d.bh = d.box.clientHeight; });
+        var vivos = [];
+        dados.forEach(function (d) {
+          if (!d.bw || !d.bh) { pending = true; return; }
+          if (d.el.scrollWidth <= d.bw + 1 && d.el.scrollHeight <= d.bh + 1) { d.best = d.maxR; return; }
+          vivos.push(d);
+        });
+        // fase 3 — BUSCA BINÁRIA EM LOTE: todos os candidatos avançam JUNTOS, então
+        // cada iteração custa UM par escrita+leitura para o lote inteiro (~7 pares no
+        // total) em vez de dois reflows POR NOME. Mesma precisão do passo de 0.03rem
+        // do algoritmo antigo — o resultado na tela é o mesmo.
+        for (var it = 0; it < 7 && vivos.length; it++) {
+          vivos.forEach(function (d) {
+            d.mid = Math.max(d.minR, Math.floor(((d.lo + d.hi) / 2) / 0.03) * 0.03);
+            d.el.style.fontSize = d.mid + 'rem';
+          });
+          var restam = [];
+          vivos.forEach(function (d) {
+            var cabe = (d.el.scrollWidth <= d.bw + 1 && d.el.scrollHeight <= d.bh + 1);
+            if (cabe) { d.best = d.mid; d.lo = d.mid; } else { d.hi = d.mid; }
+            if (d.hi - d.lo > 0.03 && d.mid > d.minR) restam.push(d);
+          });
+          vivos = restam;
         }
+        // fase 4 — aplica o resultado (só ESCRITA)
+        dados.forEach(function (d) {
+          if (!d.bw || !d.bh) return;
+          var fs = (d.best != null) ? d.best : d.minR;
+          d.el.style.fontSize = fs + 'rem';
+          d.fsFinal = fs;
+          d.el.setAttribute('data-fitted', '1');
+          d.el.setAttribute('data-fitw', d.bw);
+          d.el.setAttribute('data-fith', d.bh);
+          if (_ro) { try { _ro.observe(d.box); } catch (e) {} }
+        });
+        // fase 5 — no PISO e ainda estourando a LARGURA → quebra linha (regra da
+        // v1.7.77: encolher tem limite; vazar não pode). Uma leitura em lote.
+        dados.forEach(function (d) {
+          if (!d.bw || !d.bh) return;
+          if (d.fsFinal <= d.minR + 0.001 && d.el.scrollWidth > d.bw + 1) {
+            d.el.style.whiteSpace = 'normal';
+            d.el.style.wordBreak = 'break-word';
+          }
+        });
       };
-      if (longe.length) {
-        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fatia);
-        else setTimeout(fatia, 16);
-      }
-      if (pending && (retry || 0) < 12) {
-        setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 60);
+      window._fitNamesLote = _fitEmLote;   // exposto p/ medição e teste
+      var _lote = function (fila, aoFim) {
+        var t0 = (window.performance && performance.now) ? performance.now() : 0;
+        while (fila.length) {
+          _fitEmLote(fila.splice(0, 40));
+          if (t0 && (performance.now() - t0) > 8) break;   // devolve o quadro
+        }
+        if (fila.length) {
+          // ⚠️ CORRIDA rAF × timeout (cânone da casa): rAF NÃO dispara em aba de
+          // fundo — sozinho, ele deixaria metade dos nomes sem ajuste (= nome
+          // cortado) até a pessoa voltar. Quem chegar primeiro continua; a trava
+          // garante uma vez só.
+          var seguiu = false;
+          var _segue = function () { if (seguiu) return; seguiu = true; _lote(fila, aoFim); };
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_segue);
+          setTimeout(_segue, 16);
+          return;
+        }
+        if (typeof aoFim === 'function') aoFim();
+      };
+      _lote(perto, function () { if (longe.length) _lote(longe); });
+      // ⚠️ RETRY: 12 tentativas a 60ms era o outro vagão — 12 varreduras completas
+      // por render quando algum box ainda não tinha caixa (seção fechada, item fora
+      // do fluxo). Quem NASCE sem caixa hoje é coberto pelo IntersectionObserver e
+      // pelo ResizeObserver; o retry vira uma rede curta (3×, e mais espaçada).
+      if (pending && (retry || 0) < 3) {
+        setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 220);
       }
     } catch (e) {}
   };
