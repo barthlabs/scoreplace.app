@@ -130,13 +130,24 @@ const P = (uid, extra) => Object.assign({ uid: uid, addedAt: '2026-08-01T21:34:3
   ok(w.length === 1, 'sorteio que forma dupla dos mesmos uids NÃO restaura nada (1 entrada)');
 }
 
-// ── (6) fictício sem uid: limitação conhecida, declarada ──────────────────────
+// ── (6) fictício sem uid: A LIMITAÇÃO CAIU (v1.9.87) ─────────────────────────
+// Era declarada assim: "não há identidade estável pra casar". Verdade só pela
+// METADE — e o preço apareceu no emulador (tests/concurrency, ALVO 9), a partir
+// da pergunta do dono sobre a aba esquecida: um save de doc inteiro vindo de
+// cópia velha APAGAVA o jogador fictício da lista de espera. Gente sem conta é
+// gente do mesmo jeito: é o organizador que digita, e some sem rastro.
+// A saída é o próprio gate deste guard: remover DE PROPÓSITO já exige
+// `allowRosterRemoval`, então casar por NOME aqui dentro não desfaz ato nenhum
+// do organizador — só repõe o que um save atrasado deixou cair. Homônimo exato
+// continua sendo o limite conhecido, e é risco menor que apagar quem espera.
 {
   const banco = { id: 'T1', participants: [{ displayName: 'Jogador X' }, P('u-ana')] };
   const db = mkDb(banco); DB.db = db;
   await DB.saveTournament({ id: 'T1', participants: [P('u-ana')] });
   const w = db._gravado().participants;
-  ok(w.length === 1, 'entrada SEM uid não é protegida (não há identidade estável pra casar)');
+  ok(w.length === 2, 'entrada SEM uid (fictício) AGORA é protegida — casa por nome dentro do guard');
+  ok(w.some(function (x) { return x && x.displayName === 'Jogador X'; }),
+     'e é o fictício certo que voltou');
 }
 
 // ── (7) A FILA também não some ────────────────────────────────────────────────

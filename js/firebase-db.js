@@ -432,6 +432,32 @@ window.FirestoreDB = {
         var _rSnap = await this.db.collection('tournaments').doc(docId).get();
         var _banco = _rSnap.exists ? (_rSnap.data() || {}) : null;
         if (_banco) {
+          // ── v1.9.87 · O JOGADOR FICTÍCIO TAMBÉM PRECISA SER PROTEGIDO ─────────
+          // Pergunta do dono (20/ago/2026): _"se deixarem o app aberto e depois de muito
+          // tempo salvarem um placar, não corremos o risco de sobrescrever uma cópia
+          // antiga apagando o que outros lançaram nesse meio tempo?"_ — MEDIDO no
+          // emulador (tests/concurrency, ALVO 9): placar, elenco, presença, W.O. e
+          // suplentes sobrevivem, MAS quem estava na LISTA DE ESPERA sem uid sumia.
+          // A causa: os guards casavam SÓ por uid e ignoravam entrada string
+          // (`typeof p !== 'object'` → return), que é como o app guarda jogador
+          // FICTÍCIO — gente sem conta, que o organizador digita. A limitação estava
+          // declarada ("sem identidade estável pra casar"), mas era conservadora demais:
+          // dentro deste guard, remover de propósito JÁ exige `allowRosterRemoval`, então
+          // restaurar por NOME não desfaz ato nenhum do organizador. O risco de homônimo
+          // exato existe e é menor que o de apagar quem está esperando pra jogar.
+          var _chavesDe = function (p) {
+            if (!p) return [];
+            if (typeof p === 'string') {
+              var n = p.trim().toLowerCase();
+              return n ? ['nome:' + n] : [];
+            }
+            if (typeof p !== 'object') return [];
+            var us = _uidsOf(p).filter(Boolean);
+            if (us.length) return us;
+            var nm = String(p.displayName || p.name || '').trim().toLowerCase();
+            return nm ? ['nome:' + nm] : [];
+          };
+
           var _restored = [];
           // Quem está no elenco DEPOIS deste save (o incoming quando ele traz elenco; o do
           // banco quando não traz). É a régua que reconhece PROMOÇÃO logo abaixo.
@@ -439,7 +465,7 @@ window.FirestoreDB = {
           (Array.isArray(cleanData.participants) ? cleanData.participants
             : (Array.isArray(_banco.participants) ? _banco.participants : [])
           ).forEach(function (p) {
-            if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _noElenco[u] = 1; });
+            _chavesDe(p).forEach(function (u) { if (u) _noElenco[u] = 1; });
           });
 
           // Quem está na FILA depois deste save — mesma régua do elenco acima: o incoming
@@ -450,7 +476,7 @@ window.FirestoreDB = {
             (Array.isArray(cleanData[campo]) ? cleanData[campo]
               : (Array.isArray(_banco[campo]) ? _banco[campo] : [])
             ).forEach(function (p) {
-              if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _naFilaDepois[u] = 1; });
+              _chavesDe(p).forEach(function (u) { if (u) _naFilaDepois[u] = 1; });
             });
           });
 
@@ -473,9 +499,8 @@ window.FirestoreDB = {
           // move. Eram duas regras para o mesmo invariante — e a divergência era o bug.
           if (_tocaElenco && Array.isArray(_banco.participants)) {
             _banco.participants.forEach(function (p) {
-              if (!p || typeof p !== 'object') return;
-              var us = _uidsOf(p).filter(Boolean);
-              if (!us.length) return;                              // fictício: sem proteção
+              var us = _chavesDe(p);                               // uid, ou nome se fictício
+              if (!us.length) return;
               if (us.some(function (u) { return _noElenco[u]; })) return;
               if (us.some(function (u) { return _naFilaDepois[u]; })) return;   // MOVIDO pra fila
               cleanData.participants.push(p);                       // volta como está no banco
@@ -494,11 +519,10 @@ window.FirestoreDB = {
             if (!Array.isArray(cleanData[campo]) || !Array.isArray(_banco[campo]) || !_banco[campo].length) return;
             var _naFila = {};
             cleanData[campo].forEach(function (p) {
-              if (p && typeof p === 'object') _uidsOf(p).forEach(function (u) { if (u) _naFila[u] = 1; });
+              _chavesDe(p).forEach(function (u) { if (u) _naFila[u] = 1; });
             });
             _banco[campo].forEach(function (p) {
-              if (!p || typeof p !== 'object') return;
-              var us = _uidsOf(p).filter(Boolean);
+              var us = _chavesDe(p);                               // uid, ou nome se fictício
               if (!us.length) return;
               if (us.some(function (u) { return _naFila[u]; })) return;
               if (us.some(function (u) { return _noElenco[u]; })) return;   // PROMOVIDO

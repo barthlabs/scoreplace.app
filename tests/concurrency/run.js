@@ -376,6 +376,112 @@ async function test_alvo_faseB_isolatedReads() {
   ok(zed.length === 1 && zed[0].tournamentId === tA, 'FASE B: uZ só tem 1 jogo (A/m2) — filtro por uid correto');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ALVO 9 — A ABA ESQUECIDA (pergunta do dono, 20/ago/2026):
+//   _"se as pessoas deixarem o app aberto e depois de muito tempo abrirem a
+//   janela que já estava no torneio e salvarem um placar, não corremos o risco
+//   de sobrescrever uma cópia antiga apagando os placares que outros lançaram
+//   nesse meio tempo?"_
+// Este teste reproduz LITERALMENTE isso, contra o Firestore de verdade:
+//   1. a aba do Rodrigo carrega o torneio e fica PARADA (cópia velha em memória);
+//   2. enquanto isso, OUTRAS pessoas lançam DOIS placares e inscrevem gente;
+//   3. só então a aba velha lança o placar dela — usando o caminho REAL do app.
+// O que tem que sobreviver: os placares dos outros, as inscrições novas E o
+// placar da aba velha. Se algum sumir, o app perde dado de gente real.
+// ─────────────────────────────────────────────────────────────────────────────
+async function test_alvo_abaEsquecida_naoApagaOsOutros() {
+  const V = require('./emu-harness-views');
+  if (typeof V.applyResult !== 'function') { pending++; console.log('  ⏳ _applyResultToTournament não carregou'); return; }
+  const idT = 'aba-velha-' + Date.now();
+  await V.seedTournament(demoTournament(idT));
+
+  // 1. a aba fica com a cópia VELHA (é o que o navegador teria em memória)
+  const copiaVelhaDaAba = await V.readTournament(idT);
+  ok(!findMatch(copiaVelhaDaAba, 'sf2').winner, 'aba velha: sf2 ainda sem resultado quando a aba carregou');
+
+  // 2. o mundo anda: dois placares de OUTRAS pessoas + uma inscrição nova
+  await V.FirestoreDB.mutateTournament(idT, function (ft) { V.applyResult(ft, 'sf1', { s1: 6, s2: 2 }); });
+  await V.FirestoreDB.mutateTournament(idT, function (ft) {
+    ft.participants = (ft.participants || []).concat([{ uid: 'novato', displayName: 'Chegou Depois' }]);
+  });
+
+  // 3. AGORA a aba velha lança o placar dela. O caminho REAL do app não grava a
+  //    cópia velha: manda a MUTAÇÃO, que é re-aplicada sobre o doc fresco.
+  await V.FirestoreDB.mutateTournament(idT, function (ft) { V.applyResult(ft, 'sf2', { s1: 3, s2: 6 }); });
+
+  const fim = await V.readTournament(idT);
+  eq(findMatch(fim, 'sf1').winner, 'A', 'ABA ESQUECIDA: o placar lançado por OUTRA pessoa sobreviveu');
+  eq(findMatch(fim, 'sf2').winner, 'D', 'ABA ESQUECIDA: o placar da aba velha foi gravado');
+  ok((fim.participants || []).some(function (x) { return x && x.uid === 'novato'; }),
+     'ABA ESQUECIDA: a inscrição feita nesse meio-tempo NÃO foi apagada');
+  const fin = findMatch(fim, 'fin');
+  ok(fin.p1 === 'A' && fin.p2 === 'D',
+     'ABA ESQUECIDA: a final ficou coerente com os DOIS resultados (p1=' + fin.p1 + ', p2=' + fin.p2 + ')');
+}
+
+// ALVO 9b — O CONTRA-EXEMPLO: o mesmo cenário pelo caminho ANTIGO (gravar o doc
+// inteiro a partir da cópia velha) DESTRÓI o trabalho dos outros. Serve pra
+// provar que a proteção é o portão transacional, e não sorte — e pra que
+// ninguém volte a gravar doc inteiro achando que é equivalente.
+async function test_alvo_abaEsquecida_caminhoAntigoDestroi() {
+  const V = require('./emu-harness-views');
+  const idT = 'aba-velha-cru-' + Date.now();
+  // ⚠️ O TORNEIO JÁ TEM esses campos quando a aba carrega — é isso que torna o
+  // teste honesto: a cópia velha CARREGA valores antigos e pode regravá-los por
+  // cima dos novos. (Na primeira versão deste teste eu semeei sem eles, a cópia
+  // velha não os tinha, o merge preservou tudo e o resultado deu falso-alívio.)
+  const semente = demoTournament(idT);
+  semente.waitlist = ['Espera Antiga'];
+  semente.checkedIn = { A: 1 };
+  semente.standbyParticipants = [{ uid: 'sup1', displayName: 'Suplente Um' }];
+  await V.seedTournament(semente);
+  const copiaVelha = await V.readTournament(idT);
+
+  await V.FirestoreDB.mutateTournament(idT, function (ft) { V.applyResult(ft, 'sf1', { s1: 6, s2: 2 }); });
+
+  // ... e mais coisas que as pessoas fazem enquanto a aba dorme:
+  await V.FirestoreDB.mutateTournament(idT, function (ft) {
+    ft.participants = (ft.participants || []).concat([{ uid: 'novato', displayName: 'Chegou Depois' }]);
+    ft.checkedIn = Object.assign({}, ft.checkedIn, { novato: Date.now() });   // marcou presença
+    ft.waitlist = (ft.waitlist || []).concat(['Fulano da Espera']);           // entrou na espera
+    ft.absent = Object.assign({}, ft.absent, { C: Date.now() });              // levou W.O.
+    ft.standbyParticipants = (ft.standbyParticipants || []).concat([{ uid: 'sup2', displayName: 'Suplente Dois' }]);
+    ft.notes = 'aviso novo do organizador';                                   // config simples
+  });
+
+  // caminho ANTIGO: muta a cópia velha e grava o doc INTEIRO (saveTournament)
+  V.applyResult(copiaVelha, 'sf2', { s1: 3, s2: 6 });
+  await V.FirestoreDB.saveTournament(copiaVelha);
+
+  const fim = await V.readTournament(idT);
+  // O QUE AS DUAS CAMADAS DE GUARD SALVAM (v1.7.26 elenco / v1.7.30 placar):
+  ok(!!findMatch(fim, 'sf1').winner,
+     'GUARD DE PLACAR: o resultado lançado por outro SOBREVIVE mesmo a um save de doc inteiro vindo de cópia velha');
+  ok((fim.participants || []).some(function (x) { return x && x.uid === 'novato'; }),
+     'GUARD DO ELENCO: quem se inscreveu nesse meio-tempo NÃO é apagado');
+  // O QUE NÃO TEM GUARD — mapa honesto do risco restante (ver o relatório ao dono):
+  const perdeuPresenca = !(fim.checkedIn && fim.checkedIn.novato);
+  const perdeuEspera   = !((fim.waitlist || []).indexOf('Fulano da Espera') !== -1);
+  const perdeuWo       = !(fim.absent && fim.absent.C);
+  const perdeuNota     = fim.notes !== 'aviso novo do organizador';
+  const perdeuSuplente = !((fim.standbyParticipants || []).some(function (x) { return x && x.uid === 'sup2'; }));
+  console.log('    [mapa de risco do save cru] presença perdida: ' + perdeuPresenca +
+              ' | espera(ARRAY) perdida: ' + perdeuEspera +
+              ' | W.O. perdido: ' + perdeuWo +
+              ' | suplentes(ARRAY) perdidos: ' + perdeuSuplente +
+              ' | nota perdida: ' + perdeuNota);
+  // MAPAS (checkedIn/absent) sobrevivem: `merge:true` funde chave a chave.
+  ok(!perdeuPresenca, 'MAPA (presença): o merge funde chave a chave — a presença marcada por outro sobrevive');
+  ok(!perdeuWo, 'MAPA (W.O.): idem — sobrevive');
+  // ARRAYS são o risco que sobra: o merge troca o array INTEIRO pelo da cópia velha.
+  // v1.9.87 — o buraco que ESTE teste revelou (jogador FICTÍCIO, sem uid, some da
+  // fila quando um save de doc inteiro chega de cópia velha) foi FECHADO: os guards
+  // passaram a casar por uid OU por nome. A asserção agora cobra a proteção.
+  ok(!perdeuEspera,
+     'FILA (entrada sem uid): quem entrou na espera nesse meio-tempo NÃO é apagado por save de cópia velha');
+  ok(!perdeuSuplente, 'FILA (suplentes): idem');
+}
+
 (async function main() {
   // window global usado pelos mutators do teste de views (emu-harness-views seta global.window=global)
   const suites = [
@@ -390,6 +496,8 @@ async function test_alvo_faseB_isolatedReads() {
     ['alvo SAVE W.O. atômico sob corrida (_applyWO REAL)', test_alvo_wo_atomic_race],
     ['alvo PLACAR POR JOGO em doc próprio (isolamento + txn)', test_alvo_matchResult_perGameDocs],
     ['alvo FASE B leitura isolada (loadMatchResult + collectionGroup)', test_alvo_faseB_isolatedReads],
+    ['alvo ABA ESQUECIDA não apaga o trabalho dos outros', test_alvo_abaEsquecida_naoApagaOsOutros],
+    ['alvo ABA ESQUECIDA — contra-exemplo do caminho antigo', test_alvo_abaEsquecida_caminhoAntigoDestroi],
   ];
   for (const [name, fn] of suites) {
     console.log('──────────── ' + name + ' ────────────');
