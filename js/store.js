@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.93';
+window.SCOREPLACE_VERSION = '1.9.95';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -107,6 +107,47 @@ try {
       return _origST.apply(window, args);
     };
   })();
+} catch (e) {}
+
+// ── ⭐ OUVINTE DE ROLAGEM TAMBÉM ENTRA NO RASTRO (1.9.94) ────────────────────
+// O PONTO CEGO QUE CUSTOU QUATRO VERSÕES. O "scrolla e corta" era um ouvinte de
+// `scroll` chamando `_reflowChrome()` — 313,7ms de thread por segundo de rolagem,
+// MEDIDO. E ele nunca apareceu no relatório do aparelho: o perfilador embrulhava
+// timers (1.9.81) e observers (1.9.83), então as travadas chegavam com `anim=0` e
+// "nenhum JS", como se não houvesse culpado. Instrumento que não cobre o caminho
+// mais quente do app — a rolagem — não é neutro: ele manda procurar no lugar errado.
+// Só `scroll` e `touchmove`, que disparam em rajada; e o piso é 8ms (não 120), porque
+// aqui o que mata é o custo POR EVENTO multiplicado por 60/s.
+try {
+  var _origAEL = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function (tipo, fn, opts) {
+    if ((tipo === 'scroll' || tipo === 'touchmove') && typeof fn === 'function' && !fn.__spEnvolto) {
+      var envolto = function () {
+        var t0 = (window.performance && performance.now) ? performance.now() : 0;
+        try { return fn.apply(this, arguments); }
+        finally {
+          if (t0 && window._trechos) {
+            var d = performance.now() - t0;
+            if (d > 8) {
+              var _q = '?';
+              try { _q = fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69); } catch (eQ) {}
+              window._trechos.push({ nome: tipo.slice(0, 4) + ':' + _q, ini: t0, dur: d });
+              if (window._trechos.length > 30) window._trechos.shift();
+            }
+          }
+        }
+      };
+      envolto.__spEnvolto = true;
+      fn.__spEnvoltoRef = envolto;   // pro removeEventListener ainda achar o original
+      return _origAEL.call(this, tipo, envolto, opts);
+    }
+    return _origAEL.call(this, tipo, fn, opts);
+  };
+  var _origREL = EventTarget.prototype.removeEventListener;
+  EventTarget.prototype.removeEventListener = function (tipo, fn, opts) {
+    if (fn && fn.__spEnvoltoRef) return _origREL.call(this, tipo, fn.__spEnvoltoRef, opts);
+    return _origREL.call(this, tipo, fn, opts);
+  };
 } catch (e) {}
 
 // ── OBSERVERS TAMBÉM ENTRAM NO RASTRO (1.9.83) ──────────────────────────────
@@ -4533,12 +4574,27 @@ window._hamburgerOutsideClick = function(e) {
   window.addEventListener('resize', function() {
     window._reflowChrome();
   });
-  // Scroll: both dropdown and back-header are position:fixed so they don't
-  // move with scroll, but measured heights can change (e.g. dropdown opens
-  // mid-scroll and we need to update the back-header offset immediately).
-  window.addEventListener('scroll', function() {
-    window._reflowChrome();
-  }, { passive: true });
+  // ── ⛔ NÃO EXISTE MAIS OUVINTE DE ROLAGEM AQUI (1.9.94) ─────────────────────
+  // ESTE ERA O "SCROLLA E CORTA". O ouvinte chamava `_reflowChrome()` a CADA
+  // evento de rolagem — até 60 por segundo. E o `_reflowChrome` varre
+  // `[id^="fbwrap-"]` com `getComputedStyle` + `getBoundingClientRect`, ou seja
+  // força recálculo de estilo e LAYOUT do documento inteiro, no meio da rolagem.
+  //
+  // MEDIDO no navegador, 60 eventos (= 1 segundo de rolagem), documento de 3238
+  // nós: 313,7ms de thread — 5,23ms por evento. O aparelho do dono tem 4238 nós e
+  // é mais lento: dá perto de UM SEGUNDO DE THREAD BLOQUEADA POR SEGUNDO DE
+  // ROLAGEM. É por isso que a tela vinha cortada e "se consertava" ao parar: o
+  // WebKit não conseguia rasterizar os tiles enquanto isso.
+  // Casa com as travadas de ~1000ms do relatório dele, que apareciam com `anim=0`
+  // e NENHUM JS atribuído — meu perfilador cobre timers e observers, nunca
+  // ouvintes de rolagem. Ele estava cego justamente aqui.
+  //
+  // E o ouvinte nunca precisou existir: o comentário antigo já dizia que dropdown
+  // e back-header são `position:fixed`, "so they don't move with scroll". A única
+  // justificativa dada — "o dropdown pode abrir no meio da rolagem" — JÁ é coberta
+  // duas vezes: pelo ResizeObserver que observa o próprio dropdown e pelo
+  // MutationObserver do #view-container.
+  // ⛔ Nada de `_reflowChrome` em ouvinte de rolagem. Nunca.
 })();
 
 // ─── Constantes globais ─────────────────────────────────────────────────────

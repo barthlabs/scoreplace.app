@@ -192,5 +192,32 @@ ok(/f\.style\.animation = 'none';/.test(fin),
    'o finish MATA a animação — senão o `forwards` seguraria 95% sob um texto de 100%');
 ok(/f\.style\.transform = 'scaleX\(1\)';/.test(fin), 'e crava scaleX(1)');
 
+// ── 7. ⛔ NADA DE MEDIR LAYOUT DENTRO DE OUVINTE DE ROLAGEM (1.9.94) ───────
+// ERA ESTE O "SCROLLA E CORTA", e ele sobreviveu a QUATRO versões porque meu
+// perfilador é cego aqui: ele embrulha timers e observers, nunca listeners de
+// rolagem. Por isso as travadas do aparelho do dono chegavam com `anim=0` e
+// NENHUM JS atribuído — o culpado não passava por nenhum dos dois wrappers.
+//
+// O ouvinte chamava `_reflowChrome()` a cada evento de scroll (até 60/s), e o
+// `_reflowChrome` varre `[id^="fbwrap-"]` com getComputedStyle +
+// getBoundingClientRect: recálculo de estilo e LAYOUT do documento inteiro, no
+// meio da rolagem. MEDIDO no navegador, 60 eventos num documento de 3238 nós:
+// 313,7ms de thread (5,23ms por evento) → 0ms depois. O aparelho do dono tem
+// 4238 nós e é mais lento: perto de 1s de thread bloqueada por segundo de rolagem.
+// É por isso que a tela vinha cortada e se "consertava" ao parar de rolar.
+const iChrome = store.indexOf('window._backHeaderObserverInstalled = true;');
+ok(iChrome > 0, 'o instalador do cromo existe');
+const chrome = store.slice(iChrome, store.indexOf('// ─── Constantes globais', iChrome));
+ok(!/addEventListener\('scroll'[\s\S]{0,160}_reflowChrome/.test(chrome),
+   '⛔ NENHUM ouvinte de rolagem chama _reflowChrome');
+ok(/addEventListener\('resize'/.test(chrome),
+   'o de RESIZE continua (aí a altura muda de verdade, e é raro)');
+// varredura ampla: em NENHUM arquivo pode haver reflow do cromo preso ao scroll
+['js/store.js', 'js/ui.js', 'js/views/bracket.js', 'js/views/dashboard.js'].forEach(function (f) {
+  const src2 = R(f);
+  ok(!/addEventListener\(\s*['"]scroll['"][\s\S]{0,200}?_reflowChrome\s*\(/.test(src2),
+     'nenhum ouvinte de rolagem chama _reflowChrome em ' + f);
+});
+
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);
