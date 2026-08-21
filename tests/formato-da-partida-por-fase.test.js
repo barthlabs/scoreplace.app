@@ -166,8 +166,17 @@ function confraCfg() {
     'a seção só aparece quando a elim é fase POSTERIOR (na direta, o bloco do form vai pra lá)');
   ok(/_EXT_IDS = \[[^\]]*'gsm-section'[^\]]*\]/.test(ui),
     'o bloco do form (#gsm-section) é realocado pra dentro da FASE INICIAL');
-  ok(/window\._f2ElimScoringPreset/.test(ui) && /window\._f2ElimScoringOwn/.test(ui),
-    'handlers do preset e do toggle existem');
+  ok(/window\._f2ElimScoringPreset/.test(ui), 'handler do preset existe');
+  // v1.9.116 (dono): "quem pediu essa merda desse toggle? é só pra ter o formato como é o da
+  // fase anterior apenas com as cores". A grade dos 4 presets é SEMPRE visível — sem porta de
+  // entrada. Sem formato próprio ela acende o preset HERDADO da fase inicial.
+  ok(!/_f2ElimScoringOwn/.test(ui), 'NÃO há toggle "Formato próprio nesta fase" (o bloco espelha o do form)');
+  ok(/_elimEffScoring/.test(ui) && /_gsmReadHidden/.test(ui),
+    'sem formato próprio, o bloco acende o formato HERDADO da fase inicial (não fica vazio)');
+  ok(/_initPresetKey\(\) === key[\s\S]{0,80}_f2SetElimScoring\(null\)/.test(ui),
+    'escolher o MESMO formato da fase inicial volta a HERDAR (null), em vez de congelar uma cópia');
+  ok(/_gsmDetectPreset/.test(ui),
+    'e quem diz qual preset acende é a MESMA função do bloco do form (sem 2º critério)');
   ok(/window\._openGSMConfig\('elim'\)/.test(ui), '"Personalizado" abre o modal com alvo na eliminatória');
   const ct = fs.readFileSync(path.join(__dirname, '..', 'js/views/create-tournament.js'), 'utf8');
   ok(/window\._gsmConfigTarget === 'elim'/.test(ct),

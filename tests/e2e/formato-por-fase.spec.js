@@ -36,18 +36,27 @@ test.describe('Formato da partida por FASE (create/edit)', () => {
     expect(soltoNoForm).toBe(false);
   });
 
-  test('a fase eliminatória tem o SEU próprio bloco de formato', async ({ page }) => {
+  test('a fase eliminatória tem o SEU próprio bloco de formato — sem toggle', async ({ page }) => {
     await abrirFormDeTorneio(page);
-    await expect(page.locator('#f2-config-mount')).toContainText('Formato próprio nesta fase');
-    // Ligar o formato próprio + escolher "Melhor de 3" grava em cfg.eliminatoria.scoring —
-    // que é o que vira phases[elim].scoring e o que _effectiveScoring lê na hora do jogo.
+    const mount = page.locator('#f2-config-mount');
+    // v1.9.116: a grade é SEMPRE visível (espelho do bloco do form), sem porta de entrada.
+    await expect(mount).not.toContainText('Formato próprio nesta fase');
+    await expect(mount).toContainText('Formato da Partida');
+    // Escolher "Melhor de 3" grava em cfg.eliminatoria.scoring — que vira phases[elim].scoring
+    // e é o que _effectiveScoring lê na hora do jogo.
     const sc = await page.evaluate(() => {
-      window._f2ElimScoringOwn(true);
       window._f2ElimScoringPreset('best3');
       return window._f2GetConfig().eliminatoria.scoring;
     });
     expect(sc).toBeTruthy();
     expect(sc.type).toBe('sets');       // sem `type` o motor IGNORA a fase, em silêncio
     expect(sc.setsToWin).toBe(2);
+
+    // E voltar pro formato da fase inicial (1 set, default) volta a HERDAR: null, não cópia.
+    const herda = await page.evaluate(() => {
+      window._f2ElimScoringPreset('set1');
+      return window._f2GetConfig().eliminatoria.scoring;
+    });
+    expect(herda).toBeNull();
   });
 });

@@ -210,39 +210,65 @@
     }
     return 'custom';
   }
+  // Formato EFETIVO desta fase: o PRÓPRIO (cfg.eliminatoria.scoring) ou, na falta dele, o da
+  // fase inicial (campos ocultos do form = t.scoring, fonte única _gsmReadHidden). É o mesmo
+  // que window._effectiveScoring(t, match) resolve na hora do jogo.
+  function _elimEffScoring(e) {
+    if (e.scoring && e.scoring.type) return e.scoring;
+    return (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+  }
+  // Qual preset ACENDE. Com formato próprio, o critério é o do próprio objeto. HERDANDO, quem
+  // decide é a MESMA função que acende o bloco do form (_gsmDetectPreset) — dois critérios pro
+  // mesmo formato acenderiam botões diferentes nos dois blocos.
+  // ⚠️ NÃO filtrar por `type`: torneio novo nasce com `gsm-type = 'simple'` e valores de 1 set.
+  // Filtrar por type deixava a grade da eliminatória SEM NENHUM botão aceso e sem resumo.
+  function _elimSelKey(e) {
+    if (e.scoring && e.scoring.type) return _elimPresetKey(e.scoring);
+    try { return (typeof window._gsmDetectPreset === 'function') ? window._gsmDetectPreset() : null; } catch (x) { return null; }
+  }
+  // O preset que a FASE INICIAL está acendendo — usado pra decidir se a escolha da eliminatória
+  // é "seguir a fase anterior" (scoring null) ou um formato próprio.
+  function _initPresetKey() {
+    try { return (typeof window._gsmDetectPreset === 'function') ? window._gsmDetectPreset() : null; } catch (x) { return null; }
+  }
+  // ⚠️ v1.9.116 — SEM TOGGLE (ordem do dono: "quem pediu essa merda desse toggle? é só pra ter
+  // o formato como é o da fase anterior apenas com as cores"). O bloco é o ESPELHO do
+  // #gsm-section do form: mesma caixa, mesma grade de 4 presets, mesma tira de resumo — só a
+  // cor muda (âmbar aqui, roxo lá). Sem formato próprio, acende o preset HERDADO da fase
+  // inicial: a tela mostra o que a eliminatória VAI jogar, não um campo vazio.
   function _gsmElimBlock(e) {
     var P = window._gsmPresets;
     if (!P) return '';
-    var own = !!e.scoring;
-    var selKey = own ? _elimPresetKey(e.scoring) : null;
-    var inner = '<div style="font-size:0.72rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">' +
-      'Por padrão a eliminatória joga no <b>mesmo formato da classificatória</b>. Ative para dar a ela um formato próprio — ' +
-      'por exemplo, classificatória em <b>1 set</b> e eliminatória em <b>melhor de 3</b>.</div>' +
-      _toggleRight('Formato próprio nesta fase', own, 'window._f2ElimScoringOwn(this.checked)');
-    if (own) {
-      var grid = '';
-      ['set1', 'best3', 'best5', 'custom'].forEach(function (k) {
-        var p = P[k]; if (!p) return;
-        var active = (selKey === k);
-        var desc = (k === 'custom')
-          ? (selKey === 'custom' ? (_elimScoringDesc(e.scoring) || 'Configure manualmente') : 'Configure manualmente')
-          : (typeof window._gsmBuildDescFromValues === 'function'
-            ? window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints)
-            : '');
-        grid += '<button type="button" onclick="window._f2ElimScoringPreset(\'' + k + '\')" style="' +
-          'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
-          'border:2px solid ' + (active ? 'rgba(251,191,36,0.7)' : 'rgba(255,255,255,0.1)') + ';' +
-          'background:' + (active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)') + ';">' +
-          '<span style="font-size:1.3rem;">' + p.icon + '</span>' +
-          '<span style="font-size:0.78rem;font-weight:700;color:' + (active ? '#fbbf24' : 'var(--text-bright)') + ';">' + _safe(p.label) + '</span>' +
-          '<span style="font-size:0.65rem;color:var(--text-muted);text-align:center;line-height:1.3;">' + _safe(desc) + '</span>' +
-          '</button>';
-      });
-      inner += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;">' + grid + '</div>' +
-        '<div style="font-size:0.78rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:9px;padding:8px 11px;margin-top:10px;line-height:1.45;">' +
-        '🎾 Jogos da eliminatória: <b>' + _safe(_elimScoringDesc(e.scoring)) + '</b></div>';
-    }
-    return _sec('🎾 Formato da Partida', inner);
+    var eff = _elimEffScoring(e);
+    var selKey = _elimSelKey(e);
+    var grid = '';
+    ['set1', 'best3', 'best5', 'custom'].forEach(function (k) {
+      var p = P[k]; if (!p) return;
+      var active = (selKey === k);
+      var desc = (k === 'custom')
+        ? (active ? (_elimScoringDesc(eff) || 'Configure manualmente') : 'Configure manualmente')
+        : (typeof window._gsmBuildDescFromValues === 'function'
+          ? window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints)
+          : '');
+      grid += '<button type="button" onclick="window._f2ElimScoringPreset(\'' + k + '\')" style="' +
+        'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
+        'border:2px solid ' + (active ? 'rgba(251,191,36,0.7)' : 'rgba(255,255,255,0.1)') + ';' +
+        'background:' + (active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)') + ';' +
+        'box-shadow:' + (active ? '0 0 12px rgba(251,191,36,0.2)' : 'none') + ';">' +
+        '<span style="font-size:1.3rem;">' + p.icon + '</span>' +
+        '<span style="font-size:0.78rem;font-weight:700;color:' + (active ? '#fbbf24' : 'var(--text-bright)') + ';">' + _safe(p.label) + '</span>' +
+        '<span style="font-size:0.65rem;color:var(--text-muted);text-align:center;line-height:1.3;">' + _safe(desc) + '</span>' +
+        '</button>';
+    });
+    var resumo = _elimScoringDesc(eff);
+    return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
+      '<p style="margin:0 0 10px 0;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">\uD83C\uDFBE Formato da Partida</p>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
+      (resumo
+        ? ('<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;">' +
+           _safe(resumo) + (e.scoring ? '' : ' <span style="opacity:0.75;">\u00b7 mesmo formato da classificat\u00f3ria</span>') + '</div>')
+        : '') +
+      '</div>';
   }
 
   function _elimEndDateBlock(e) {
@@ -982,19 +1008,6 @@
     S.cfg.eliminatoria.scoring = sc || null;
     _norm(); _rerender();
   };
-  window._f2ElimScoringOwn = function (checked) {
-    if (!S) return;
-    if (!checked) { window._f2SetElimScoring(null); return; }
-    var base = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
-    // Formato do torneio ainda 'simple' (sem sets) não serve de base pra uma fase que vai
-    // escolher entre 1 set / melhor de 3 — nesse caso começa no preset de 1 set.
-    if (!base || (base.type !== 'sets' && base.type !== 'gsm')) {
-      var p = (window._gsmPresets || {}).set1;
-      base = p ? Object.assign({ type: 'sets' }, p) : { type: 'sets', setsToWin: 1, gamesPerSet: 6 };
-      delete base.label; delete base.icon;
-    }
-    window._f2SetElimScoring(base);
-  };
   window._f2ElimScoringPreset = function (key) {
     if (!S) return;
     if (key === 'custom') { if (typeof window._openGSMConfig === 'function') window._openGSMConfig('elim'); return; }
@@ -1004,6 +1017,10 @@
     delete sc.label; delete sc.icon;
     // Vantagem (deuce) é DERIVADA do esporte, nunca do preset — mesma regra do form.
     sc.advantageRule = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;
+    // Escolher o MESMO formato da fase inicial = voltar a HERDAR (scoring null), não congelar
+    // uma cópia: assim a eliminatória continua acompanhando se a classificatória mudar depois.
+    // É também o que o cânone pede — duas fontes pro mesmo jogo é o bug que este trabalho evita.
+    if (_initPresetKey() === key) { window._f2SetElimScoring(null); return; }
     window._f2SetElimScoring(sc);
   };
 
