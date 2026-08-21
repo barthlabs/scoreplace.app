@@ -7,7 +7,12 @@ summary::-webkit-details-marker { display: none; }
 .bracket-container {
   display: flex;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  /* ⛔ `-webkit-overflow-scrolling: touch` REMOVIDO (1.9.104): obsoleto desde o
+     iOS 13 (rolagem suave virou padrao) e o unico efeito que resta e FORCAR camada
+     de composicao propria — com orcamento de tiles proprio. Era o mecanismo do
+     "entra e scrollando corta": o WebKit re-rasteriza os tiles dessa camada ao
+     rolar, e ate terminar aparece o buraco. Ver a nota longa em
+     `.bracket-sticky-scroll-wrapper` (components.css). */
   gap: 3rem;
   padding: 2rem 0;
   min-height: 500px;
@@ -201,7 +206,12 @@ summary::-webkit-details-marker { display: none; }
    Esta classe garante scrollbar fina sempre visível. */
 .standings-scroll {
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  /* ⛔ `-webkit-overflow-scrolling: touch` REMOVIDO (1.9.104): obsoleto desde o
+     iOS 13 (rolagem suave virou padrao) e o unico efeito que resta e FORCAR camada
+     de composicao propria — com orcamento de tiles proprio. Era o mecanismo do
+     "entra e scrollando corta": o WebKit re-rasteriza os tiles dessa camada ao
+     rolar, e ate terminar aparece o buraco. Ver a nota longa em
+     `.bracket-sticky-scroll-wrapper` (components.css). */
   scrollbar-width: thin;
   scrollbar-color: rgba(150, 150, 150, 0.4) rgba(150, 150, 150, 0.08);
 }

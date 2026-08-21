@@ -76,5 +76,33 @@ ok(/\}, 3000\);/.test(store), 'e só começa a sair 3s DEPOIS de a seta sumir');
 ok(/if \(!escolhido\.cfg\.praCima\) \{[\s\S]{0,200}sp-alvo-do-convite/.test(store),
    'o convite de PERFIL não marca nada — o alvo dele é o menu, e moldura ali seria ruído');
 
+// ── D) A CHAVE NAO TEM CAMADA DE COMPOSICAO PROPRIA (1.9.104) ─────────────
+// Relato teimoso do dono desde a 1.9.89: "entra e scrollando corta" — e "depois
+// da primeira vez ele se conserta". Esse "se conserta" e a assinatura de
+// RASTERIZACAO DE TILES: o rolador tinha camada propria (com orcamento de tiles
+// proprio), o WebKit precisava re-rasterizar ao rolar, e ate terminar aparecia o
+// buraco. Duas causas no mesmo bloco:
+//   • `overflow-y: visible` ao lado de `overflow-x: auto` NAO e visivel — o CSS
+//     manda computar como AUTO, entao o wrapper virava rolador nos dois eixos,
+//     aninhado dentro do rolador da pagina;
+//   • `-webkit-overflow-scrolling: touch` forcava a camada. Obsoleto desde o
+//     iOS 13: nao entrega rolagem suave (virou padrao), so cobra a camada.
+// ⚠️ NAO consegui reproduzir o corte no simulador — ele roda na GPU do Mac, sem a
+// pressao de tiles do aparelho (medido la: 4% de quadros perdidos, 43ms). Entao
+// esta trava protege o MECANISMO, e quem confirma o efeito e o dono.
+const cssTodos = ['css/components.css', 'css/bracket.css', 'css/responsive.css', 'css/style.css', 'css/layout.css']
+  .map(function (f) { return { f: f, s: R(f).replace(/\/\*[\s\S]*?\*\//g, '') }; });
+cssTodos.forEach(function (o) {
+  ok(!/-webkit-overflow-scrolling/.test(o.s),
+     '⛔ nenhum `-webkit-overflow-scrolling` em ' + o.f + ' (obsoleto no iOS 13+, so forca camada)');
+});
+const comps2 = R('css/components.css').replace(/\/\*[\s\S]*?\*\//g, '');
+const iW = comps2.indexOf('.bracket-sticky-scroll-wrapper {');
+ok(iW > 0, 'o wrapper da chave existe');
+const wrap = comps2.slice(iW, comps2.indexOf('}', iW));
+ok(/overflow-y:\s*hidden/.test(wrap),
+   'o wrapper rola so na horizontal — `overflow-y: visible` era computado como AUTO e criava rolador aninhado');
+ok(!/overflow-y:\s*visible/.test(wrap), '⛔ e `visible` nao volta: ao lado de `auto` ele nao e visivel');
+
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

@@ -278,7 +278,12 @@
 
   .table-wrapper {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  /* ⛔ `-webkit-overflow-scrolling: touch` REMOVIDO (1.9.104): obsoleto desde o
+     iOS 13 (rolagem suave virou padrao) e o unico efeito que resta e FORCAR camada
+     de composicao propria — com orcamento de tiles proprio. Era o mecanismo do
+     "entra e scrollando corta": o WebKit re-rasteriza os tiles dessa camada ao
+     rolar, e ate terminar aparece o buraco. Ver a nota longa em
+     `.bracket-sticky-scroll-wrapper` (components.css). */
   }
 
   table th,

@@ -303,7 +303,12 @@ body.hamburger-open .topbar {
      inacessíveis. -60px = altura da topbar fixa acima. */
   max-height: calc(100% - 60px);
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  /* ⛔ `-webkit-overflow-scrolling: touch` REMOVIDO (1.9.104): obsoleto desde o
+     iOS 13 (rolagem suave virou padrao) e o unico efeito que resta e FORCAR camada
+     de composicao propria — com orcamento de tiles proprio. Era o mecanismo do
+     "entra e scrollando corta": o WebKit re-rasteriza os tiles dessa camada ao
+     rolar, e ate terminar aparece o buraco. Ver a nota longa em
+     `.bracket-sticky-scroll-wrapper` (components.css). */
 }
 /* Nav groups inside dropdown */
 .hamburger-dropdown .topbar-nav-group {
@@ -1436,7 +1441,12 @@ a.compact-row,
    pode parecer "preso" em alguns iPhones. body precisa NÃO ter height
    fixed pra scrollar naturalmente quando view-container vira tall. */
 html, body {
-  -webkit-overflow-scrolling: touch;
+  /* ⛔ `-webkit-overflow-scrolling: touch` REMOVIDO (1.9.104): obsoleto desde o
+     iOS 13 (rolagem suave virou padrao) e o unico efeito que resta e FORCAR camada
+     de composicao propria — com orcamento de tiles proprio. Era o mecanismo do
+     "entra e scrollando corta": o WebKit re-rasteriza os tiles dessa camada ao
+     rolar, e ate terminar aparece o buraco. Ver a nota longa em
+     `.bracket-sticky-scroll-wrapper` (components.css). */
 }
 body {
   /* Anti-clip: garantir que body NÃO tem altura fixa que impede scroll
@@ -1636,8 +1646,26 @@ input[type="date"].form-control::-webkit-calendar-picker-indicator:hover {
 /* ==== BRACKET SCROLL — scrollbar fixa no bottom da viewport ==== */
 .bracket-sticky-scroll-wrapper {
   overflow-x: auto !important;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
+  /* ── ⚠️ A CHAVE NAO PODE VIRAR UM ROLADOR COM CAMADA PROPRIA (1.9.104) ────
+     Relato do dono, teimoso desde a 1.9.89: _"entra e scrollando corta"_ — a
+     chave aparece cortada ao rolar e "se conserta" depois da primeira vez.
+     DOIS detalhes deste bloco explicam o mecanismo:
+     • `overflow-y: visible` ao lado de `overflow-x: auto` NAO e visivel: o CSS
+       manda o navegador computar como AUTO. O wrapper virava rolador nos DOIS
+       eixos — um rolador aninhado dentro do rolador da pagina;
+     • `-webkit-overflow-scrolling: touch` forcava esse rolador a ter CAMADA DE
+       COMPOSICAO PROPRIA, com o proprio orcamento de tiles. E ai o corte tem
+       nome: ao rolar a pagina, o WebKit precisa re-rasterizar os tiles dessa
+       camada, e ate terminar voce ve o buraco. Depois de rasterizado, some — que
+       e exatamente o "se conserta depois da primeira vez".
+       Essa propriedade e OBSOLETA desde o iOS 13 (a rolagem suave virou padrao):
+       hoje ela nao entrega nada e so cobra a camada.
+     ⚠️ `overflow-y: hidden` e o unico jeito de ter rolagem SO horizontal — mas
+     ele CORTA o que vaza pra fora verticalmente. Aqui nada vaza (os cartoes vivem
+     dentro das caixas de grupo), e a alternativa era manter um rolador vertical
+     que ninguem pediu.
+     ⛔ Nao reintroduzir `-webkit-overflow-scrolling`. */
+  overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.35) rgba(255,255,255,0.08);
   max-width: 100%;
