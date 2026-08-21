@@ -610,26 +610,66 @@ window._tProgFmtDur2L = function(ms) {
   return '<span style="white-space:nowrap;">' + cima + '</span><br>' +
          '<span style="white-space:nowrap;">' + baixo + '</span>';
 };
-// ── 1.9.101 · O RELÓGIO DO MEIO: REGRESSIVA QUANDO EXISTE PRAZO ──────────────
-// Ordem do dono (20/ago/2026): _"se a fase/torneio tem data e hora de fim programado
-// (FINAL PROGRAMADO / FIM PROGRAMADO), calcule o tempo restante a partir de agora até
-// esse fim e exiba contagem REGRESSIVA ao vivo (ex.: '14d 10h 17m 42s RESTANTE'
-// decrementando a cada segundo). Se não existe data de fim programado, mantém como
-// está: tempo decorrido desde o início."_
-// FONTE ÚNICA dos DOIS relógios do box (painel da RODADA e painel do TORNEIO COMPLETO):
-// consertar só um deixa metade do defeito de pé — foi exatamente o que a verificação da
-// 1.7.84 pegou quando o relógio ganhou duas linhas.
-// Regras que o helper carrega:
-//   • prazo JÁ VENCIDO ou relógio CONGELADO (rodada/torneio encerrado) → volta pro
-//     decorrido/durou. "0s restante" parado pra sempre não informa nada.
-//   • `data-sp-cd2l` é o que faz o número andar A CADA SEGUNDO: o tique global de 1s
-//     (js/store.js) reescreve SÓ este span. O `_progressTick` do painel roda a cada 5s
-//     (1.9.80, pra não invalidar o layout da página inteira) — segundos pulando de 5 em
-//     5 seriam um relógio visivelmente quebrado.
-window._tProgClock2L = function(deadlineMs, frozen, elapsedMs, elapsedLabel) {
-  var _rest = (!frozen && deadlineMs) ? (deadlineMs - Date.now()) : -1;
-  if (_rest > 0) return { attr: ' data-sp-cd2l="' + deadlineMs + '"', html: window._tProgFmtDur2L(_rest), label: 'restante' };
-  return { attr: '', html: window._tProgFmtDur2L(elapsedMs), label: elapsedLabel };
+// ── 1.9.101/102 · OS DOIS RELÓGIOS DO BOX MEDEM COISAS DIFERENTES ────────────
+// Ordem do dono (20-21/ago/2026, olhando o card do Confra):
+//   • RODADA ATUAL → _"sempre a regressiva de quanto tempo ainda tem para terminar a
+//     rodada (quando existe prazo para acabar)"_.
+//   • TORNEIO COMPLETO → _"o tempo decorrido desde o início até o fim. Como início
+//     vamos considerar o início programado ou o sorteio (quando os jogos podem começar
+//     a acontecer) e o fim vamos considerar o fim efetivo"_.
+// Faz sentido: a rodada é um PRAZO (dá pra perder), o torneio inteiro é uma TRAVESSIA
+// (dá pra medir). Na 1.9.101 os dois viraram regressiva e o de baixo ficou dizendo
+// "83d restante", que não é informação que alguém use.
+// Este helper é a FONTE ÚNICA dos dois — o mesmo motivo de sempre: são DOIS
+// renderizadores no mesmo `_buildProgressInner`, e a 1.7.84 já provou que consertar um
+// só deixa metade do defeito de pé.
+// Regras que ele carrega:
+//   • prazo JÁ VENCIDO ou relógio CONGELADO (rodada/torneio encerrado) → decorrido/durou.
+//     "0s restante" parado pra sempre não informa nada.
+//   • `data-sp-cd2l` (conta pra trás) e `data-sp-el2l` (conta pra cima) são o que fazem o
+//     número andar A CADA SEGUNDO: o tique global de 1s (js/store.js) reescreve SÓ este
+//     span. O `_progressTick` do painel roda a cada 5s (1.9.80, pra não invalidar o
+//     layout da página inteira) — segundos pulando de 5 em 5 seriam relógio quebrado.
+//   • congelado não ganha atributo nenhum: quem parou, parou.
+window._tProgClock2L = function(o) {
+  o = o || {};
+  var _rest = (!o.frozen && o.deadlineMs) ? (o.deadlineMs - Date.now()) : -1;
+  if (_rest > 0) {
+    return { attr: ' data-sp-cd2l="' + o.deadlineMs + '"', html: window._tProgFmtDur2L(_rest), label: 'restante' };
+  }
+  var _vivo = (!o.frozen && o.anchorMs) ? ' data-sp-el2l="' + o.anchorMs + '"' : '';
+  return { attr: _vivo, html: window._tProgFmtDur2L(Math.max(0, o.elapsedMs || 0)), label: o.elapsedLabel };
+};
+
+// ── 1.9.102 · DE QUANDO OS JOGOS PODEM COMEÇAR A ACONTECER ───────────────────
+// A âncora do relógio do TORNEIO COMPLETO, na definição do dono: "o início programado
+// ou o sorteio". Os dois são condição — antes do início programado o torneio não abriu,
+// e antes do sorteio não existe jogo pra jogar. Logo é o MAIS TARDE dos dois, não o
+// primeiro que aparecer: é esse instante que responde "a partir de quando dava pra jogar".
+// Sorteio: o REAL (rodada 1 sorteada) na frente do agendado — o que aconteceu vale mais
+// que o que estava marcado. Sem nenhum dos dois, quem chama cai no 1º placar lançado.
+window._tournamentPlayableFromTs = function (t) {
+  if (!t) return null;
+  var _cands = [];
+  var _win = (typeof window._tournamentScheduledWindow === 'function') ? window._tournamentScheduledWindow(t) : null;
+  if (_win && _win.startMs) _cands.push(_win.startMs);
+  var _sorteio = null;
+  var _r0 = (Array.isArray(t.rounds) && t.rounds.length) ? (t.rounds[0] || {}) : {};
+  var _rt = _r0.drawnAt || _r0.createdAt || _r0.at;
+  if (_rt) { var _rm = (typeof _rt === 'number') ? _rt : new Date(_rt).getTime(); if (!isNaN(_rm)) _sorteio = _rm; }
+  if (_sorteio == null) {
+    var _ph0 = (Array.isArray(t.phases) && t.phases[0]) || {};
+    var _dd = _ph0.drawFirstDate || t.drawFirstDate;
+    var _dt = (_ph0.drawFirstDate ? _ph0.drawFirstTime : t.drawFirstTime) || '19:00';
+    if (_dd) {
+      var _s = String(_dd);
+      var _dm = new Date(_s.indexOf('T') > -1 ? _s : (_s + 'T' + _dt)).getTime();
+      if (!isNaN(_dm)) _sorteio = _dm;
+    }
+  }
+  if (_sorteio != null) _cands.push(_sorteio);
+  if (!_cands.length) return null;
+  return Math.max.apply(null, _cands);
 };
 window._estimateTournamentMinutes = function(t) {
   var prog = window._getTournamentProgress(t);
@@ -1213,19 +1253,28 @@ window._buildProgressInner = function(t) {
       // 1s que repinta este bloco, então o número anda de verdade).
       // Sem janela programada (torneio de fase única) NADA muda: não há segundo relógio
       // pra duplicar, e a medida entre placares é a que faz sentido ali.
-      var _tStartMs = (_win && _win.startMs) ? _win.startMs : _firstPointMs;
+      // 1.9.102: a âncora é QUANDO OS JOGOS PODERIAM COMEÇAR — o mais tarde entre o início
+      // programado do torneio e o sorteio (window._tournamentPlayableFromTs). Só o início
+      // programado não bastava: num torneio cujo sorteio sai depois da abertura, o relógio
+      // já nascia contando dias em que ninguém tinha jogo pra jogar.
+      var _tStartMs = (typeof window._tournamentPlayableFromTs === 'function' ? window._tournamentPlayableFromTs(t) : null)
+        || (_win && _win.startMs) || _firstPointMs;
+      // FIM EFETIVO: encerrado → o último placar lançado (o fim que de fato aconteceu);
+      // correndo → AGORA. Fim = último placar enquanto o torneio corre foi o defeito da
+      // 1.8.80: entre um jogo e outro o número ficava parado, parecendo relógio quebrado.
       var _tEndMs = _tournDone ? _lastPointMs : Date.now();
       var _tDurMs = Math.max(0, _tEndMs - _tStartMs);
       var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
       var _tEndLabel = _tournDone ? 'final real' : 'último placar lançado';
       var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
-      // 1.9.101: com FIM PROGRAMADO do torneio inteiro (fim da ÚLTIMA fase, o mesmo
-      // 12/11 que aparece na linha azul de baixo) o relógio vira REGRESSIVA pra ele.
-      // Encerrado (`_tournDone`) congela em "durou"; sem fim programado, segue "decorrido".
-      var _tClk = window._tProgClock2L(_deadlineMs, _tournDone, _tDurMs, _tDurLabel);
-      var _tClkTitle = _tClk.label === 'restante'
-        ? ('Até o fim programado do torneio (' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) + ')')
-        : (_tStartMs === _firstPointMs ? 'Desde o primeiro placar lançado' : 'Desde o início programado do torneio (' + _date(_tStartMs) + ' ' + _time(_tStartMs) + ')');
+      // ⛔ 1.9.102 — AQUI NÃO ENTRA REGRESSIVA. Ordem do dono, com o card na frente: o
+      // torneio completo mede a TRAVESSIA (decorrido), a rodada é que mede o PRAZO. Na
+      // 1.9.101 os dois viraram regressiva e este ficou dizendo "83d restante" — número
+      // grande que ninguém usa pra nada. Por isso `deadlineMs` NÃO é passado.
+      var _tClk = window._tProgClock2L({ frozen: _tournDone, elapsedMs: _tDurMs, elapsedLabel: _tDurLabel, anchorMs: _tStartMs });
+      var _tClkTitle = (_tStartMs === _firstPointMs)
+        ? 'Desde o primeiro placar lançado'
+        : 'Desde quando já dava pra jogar — início programado ou sorteio, o que veio depois (' + _date(_tStartMs) + ' ' + _time(_tStartMs) + ')';
       var _tTimeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
       var _tLblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
       var _tCol = function(ms, label, align) {
@@ -1375,7 +1424,12 @@ window._buildProgressInner = function(t) {
   // 1.9.101: fase/rodada COM fim programado de verdade (`_schedEndReal` — a mesma data que
   // a coluna azul da direita mostra como "final programado"/"próximo sorteio") → o relógio
   // do meio conta pra TRÁS até lá. Rodada encerrada ou torneio finalizado congela em "durou".
-  var _clk = window._tProgClock2L(_schedEndReal ? plannedEnd : null, !!(_roundEndReal || isFinished), elapsedMs, _elapsedLabel);
+  var _clk = window._tProgClock2L({
+    deadlineMs: _schedEndReal ? plannedEnd : null,
+    frozen: !!(_roundEndReal || isFinished),
+    elapsedMs: elapsedMs, elapsedLabel: _elapsedLabel,
+    anchorMs: _notStarted ? null : actualStart
+  });
   // mostra DATA (dia) na linha REAL quando: (a) início e fim reais caem em dias diferentes, OU
   // (b) o dia REAL dos jogos difere do dia PROGRAMADO (ex.: jogado hoje, programado p/ 25/07) —
   // aí o horário sozinho engana. Pedido do dono.

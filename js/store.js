@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.101';
+window.SCOREPLACE_VERSION = '1.9.102';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2986,6 +2986,16 @@ setInterval(function() {
     if (isNaN(alvo) || typeof window._tProgFmtDur2L !== 'function') return;
     var html = window._tProgFmtDur2L(Math.max(0, alvo - now));
     if (el.innerHTML !== html) el.innerHTML = html;   // DOM só quando MUDA
+  });
+  // 1.9.102: o mesmo relógio contando PRA CIMA — é o "decorrido" do TORNEIO COMPLETO
+  // (desde quando já dava pra jogar) e o da rodada sem prazo. Antes só o `_progressTick`
+  // de 5s o repintava, então os segundos andavam de 5 em 5.
+  var elsEl = document.querySelectorAll('[data-sp-el2l]');
+  elsEl.forEach(function(el) {
+    var desde = parseInt(el.getAttribute('data-sp-el2l'));
+    if (isNaN(desde) || typeof window._tProgFmtDur2L !== 'function') return;
+    var html2 = window._tProgFmtDur2L(Math.max(0, now - desde));
+    if (el.innerHTML !== html2) el.innerHTML = html2;   // DOM só quando MUDA
   });
   var els2 = document.querySelectorAll('[data-elapsed-since]');
   els2.forEach(function(el) {
