@@ -1014,6 +1014,34 @@ window._phaseCurrentRoundProgress = function(t) {
 };
 
 // HTML interno (recomputado a cada tick).
+// ── 1.9.106 · O PERCENTUAL MORA DENTRO DA BARRA ──────────────────────────────
+// Pedido do dono: as três barras (vermelha = realizado, azul = previsto, roxa =
+// torneio completo) passam a CARREGAR o próprio percentual, colado na direita de
+// onde a cor chegou. A azul é a novidade que faltava: além de "quanto já foi
+// jogado" (vermelha), o card passa a dizer "quanto DEVERIA ter sido jogado" a
+// esta altura do tempo regulamentar — é a leitura que explica a cor do relógio.
+// Por isso as barras ficaram mais altas (era 8/11/7px): o número precisa de casa.
+// REGRA DO RÓTULO: dentro do preenchimento (branco, ponta direita) enquanto a cor
+// for larga o bastante pra caber "100%" com folga (>=16%); abaixo disso ele SAI
+// pra fora, logo depois da ponta, na cor da própria barra — senão o número ficaria
+// espremido/cortado no começo do torneio, que é justo quando o card mais aparece.
+// O `!important` do branco vence o <style> escopado da tarja de foto (que força
+// TODO o texto da seção pra cor de leitura) — sobre a cor cheia o branco é o que
+// lê. O rótulo de FORA usa hex que a CSS do tema claro já inverte (a78bfa/3b82f6/
+// ef4444 → escuros), então vale nos DOIS temas.
+window._progBarPct = function(pct, color, h, radius, trackBg, outColor) {
+  var p = Math.round(Number(pct) || 0);
+  if (p < 0) p = 0; if (p > 100) p = 100;
+  var fs = (h >= 17) ? '0.66rem' : '0.6rem';
+  var base = 'position:absolute;top:0;height:100%;display:flex;align-items:center;font-size:' + fs +
+    ';font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.2px;line-height:1;pointer-events:none;';
+  var lbl = (p >= 16)
+    ? '<span style="' + base + 'left:0;width:' + p + '%;justify-content:flex-end;padding-right:6px;box-sizing:border-box;color:#fff !important;text-shadow:0 1px 2px rgba(0,0,0,0.35);">' + p + '%</span>'
+    : '<span style="' + base + 'left:' + p + '%;padding-left:6px;color:' + (outColor || color) + ';">' + p + '%</span>';
+  return '<div style="position:relative;width:100%;height:' + h + 'px;background:' + trackBg + ';border-radius:' + radius + ';overflow:hidden;">' +
+    '<div style="width:' + p + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' + lbl +
+  '</div>';
+};
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
   // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
@@ -1338,9 +1366,8 @@ window._buildProgressInner = function(t) {
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
         '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>' +
       '</div>' +
-      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + _barPct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' + _durRow + (_schedRow || _limiteLine) +
+      window._progBarPct(_barPct, 'linear-gradient(90deg,#8b5cf6,#a78bfa)', 18, '7px', 'rgba(255,255,255,0.08)', '#a78bfa') +
+      _durRow + (_schedRow || _limiteLine) +
     '</div>';
   }
 
@@ -1379,9 +1406,7 @@ window._buildProgressInner = function(t) {
       ? '<div style="margin-top:7px;font-size:0.72rem;color:#93c5fd;font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
       : '';
     return head + _waitTop2 +
-      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' +
+      window._progBarPct(prog.pct, c, 18, '7px', 'rgba(255,255,255,0.1)', c) +
       (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + ((_isLiga || _phaseRoundActive) ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
       _estLine2 +
       _ligaBarHtml;
@@ -1473,12 +1498,10 @@ window._buildProgressInner = function(t) {
         '</div>' +
         _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
       '</div>';
-  var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
-    '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
-  '</div>';
-  var blueBar = '<div style="width:100%;height:7px;background:rgba(255,255,255,0.06);border-radius:0 0 6px 6px;overflow:hidden;">' +
-    '<div style="width:' + Math.round(expectedFrac * 100) + '%;height:100%;background:#3b82f6;transition:width 0.9s linear;"></div>' +
-  '</div>';
+  // realizado (cor do ritmo) em cima, previsto (azul) embaixo — coladas, com o
+  // percentual de cada uma dentro da própria cor.
+  var realBar = window._progBarPct(progFrac * 100, color, 18, '7px 7px 0 0', 'rgba(255,255,255,0.1)', color);
+  var blueBar = window._progBarPct(expectedFrac * 100, '#3b82f6', 16, '0 0 7px 7px', 'rgba(255,255,255,0.06)', '#3b82f6');
   var botRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;gap:8px;">' +
     _progCol(schedStart, _labelSchedStart, 'flex-start') +
     _progCol(plannedEnd, _labelSchedEnd, 'flex-end') +

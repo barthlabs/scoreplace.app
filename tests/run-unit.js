@@ -81,6 +81,7 @@ const SUITES = [
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado
   'tests/progresso-regressiva-fim-programado.test.js',
+  'tests/barras-de-progresso-mostram-o-percentual.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador
