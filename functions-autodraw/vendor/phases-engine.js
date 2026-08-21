@@ -94,6 +94,20 @@
   // sorte do dado, não garantia: com outro placar, ou com mais classificados, a divergência
   // sobe. A tabela dizer uma ordem e a chave usar outra não se defende.
   // Agora as duas perguntam ao MESMO comparador (bracket-logic._standingsCompare).
+  // Regra única de "quem venceu" (bracket-model.js). Este arquivo roda em DOIS contextos —
+  // browser/vendor da CF (window) e Node puro (harness headless, `require` direto) — e o
+  // padrão da casa é perguntar à MESMA regra nos dois, nunca manter uma cópia. Ver o
+  // _globalStandings logo acima, que faz igual com o comparador de classificação.
+  function _winnerSide(m) {
+    var f = (typeof window !== 'undefined' && typeof window._matchWinnerSide === 'function')
+      ? window._matchWinnerSide : null;
+    if (!f && typeof require === 'function') {
+      try { f = require('./bracket-model.js').matchWinnerSide; } catch (e) { f = null; }
+    }
+    if (!f) throw new Error('[quem venceu] bracket-model.js não carregado — a regra única sumiu');
+    return f(m);
+  }
+
   function _globalStandings(prevGroups, computeStandings) {
     var all = [];
     (prevGroups || []).forEach(function (g) { (computeStandings(g) || []).forEach(function (s) { all.push(s); }); });
@@ -1314,7 +1328,7 @@
     (matches || []).forEach(function (m) {
       if (!m.winner || !m.team1 || !m.team2) return;
       var s1 = parseInt(m.scoreP1, 10) || 0, s2 = parseInt(m.scoreP2, 10) || 0;
-      var t1win = (m.winner === m.p1);
+      var t1win = (_winnerSide(m) === 1);
       m.team1.forEach(function (n) { if (st[n]) { st[n].diff += (s1 - s2); if (t1win) st[n].wins++; } });
       m.team2.forEach(function (n) { if (st[n]) { st[n].diff += (s2 - s1); if (!t1win) st[n].wins++; } });
     });
@@ -1374,7 +1388,7 @@
         h2h[m.p1 + '|||' + m.p2 + '|||d'] = (h2h[m.p1 + '|||' + m.p2 + '|||d'] || 0) + 1;
         h2h[m.p2 + '|||' + m.p1 + '|||d'] = (h2h[m.p2 + '|||' + m.p1 + '|||d'] || 0) + 1;
       } else {
-        var loser = (m.winner === m.p1) ? m.p2 : m.p1;
+        var loser = (_winnerSide(m) === 1) ? m.p2 : m.p1;
         if (smap[m.winner]) { smap[m.winner].wins++; smap[m.winner].points += 3; }
         if (smap[loser]) smap[loser].losses++;
         h2h[m.winner + '|||' + loser] = (h2h[m.winner + '|||' + loser] || 0) + 1;
@@ -2131,7 +2145,7 @@
         if (!src.length || src.some(function (x) { return !x.winner; })) { keep.push(slot); return; }
         var losers = src.map(function (x, xi) {
           var s1 = parseFloat(x.scoreP1) || 0, s2 = parseFloat(x.scoreP2) || 0;
-          var lp1 = (x.winner !== x.p1);
+          var lp1 = (_winnerSide(x) !== 1);
           return {
             name: lp1 ? x.p1 : x.p2, obj: lp1 ? x.team1Obj : x.team2Obj,
             saldo: lp1 ? (s1 - s2) : (s2 - s1), score: lp1 ? s1 : s2,

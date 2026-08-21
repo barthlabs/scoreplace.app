@@ -4469,7 +4469,7 @@ window._repropagateDecided = function (t) {
   var changed = 0;
   all.slice().sort(function (a, b) { return ((a && a.round) || 0) - ((b && b.round) || 0); }).forEach(function (m) {
     if (!m || !m.winner) return;
-    var winSl = (m.winner === m.p1) ? 'p1' : 'p2';
+    var winSl = (window._matchWinnerSide(m) === 1) ? 'p1' : 'p2';
     var loseSl = (winSl === 'p1') ? 'p2' : 'p1';
     [[m.nextMatchId, m.nextSlot, winSl], [m.loserMatchId, m.loserSlot, loseSl]].forEach(function (trio) {
       var tid = trio[0], tslot = trio[1], srcSl = trio[2];
@@ -4979,7 +4979,7 @@ window._syncLowerBracket = function (t, opts) {
   if (todasDecididas) {
     var losers = reais.map(function (x, xi) {
       var s1 = parseFloat(x.scoreP1) || 0, s2 = parseFloat(x.scoreP2) || 0;
-      var lp1 = (x.winner !== x.p1);
+      var lp1 = (window._matchWinnerSide(x) !== 1);
       return {
         name: lp1 ? x.p1 : x.p2, obj: lp1 ? x.team1Obj : x.team2Obj,
         uids: (lp1 ? x.team1Uids : x.team2Uids) || [],
@@ -5097,7 +5097,7 @@ window._syncLowerBracket = function (t, opts) {
     if (!g || !g.winner || !g.loserMatchId) return;
     var tgt = lowFirst.filter(function (m) { return m.id === g.loserMatchId; })[0];
     if (!tgt || tgt.winner || !g.loserSlot || !_vazio(tgt[g.loserSlot])) return;
-    var loserSl = (g.winner === g.p1) ? 'p2' : 'p1';
+    var loserSl = (window._matchWinnerSide(g) === 1) ? 'p2' : 'p1';
     var nomeL = g[loserSl];
     if (!nomeL || _vazio(nomeL)) return;
     var keyL = _sideKey(g, loserSl);
@@ -5124,7 +5124,7 @@ window._syncLowerBracket = function (t, opts) {
   sup.forEach(function (g) {
     if (!g) return;
     if (!g.winner) { descem++; return; }
-    var loserSl = (g.winner === g.p1) ? 'p2' : 'p1';
+    var loserSl = (window._matchWinnerSide(g) === 1) ? 'p2' : 'p1';
     var key = _sideKey(g, loserSl);
     var promovido = key && sup.some(function (x) {
       return x && x !== g && x.isExtra && ['p1', 'p2'].some(function (sl) {
@@ -5664,7 +5664,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
               // o irmão que JÁ jogou levou o vencedor pro destino antigo: traz esse time pro jogo novo
               if (_comDestino.winner && _destAntigo && !_destAntigo.winner && _comDestinoSlotOrig &&
                   String(_destAntigo[_comDestinoSlotOrig] || '') === String(_comDestino.winner)) {
-                var _wSl = (_comDestino.winner === _comDestino.p1) ? 'p1' : 'p2';
+                var _wSl = (window._matchWinnerSide(_comDestino) === 1) ? 'p1' : 'p2';
                 _novoR.p1 = _comDestino.winner;
                 _novoR.team1Obj = (_wSl === 'p1') ? _comDestino.team1Obj : _comDestino.team2Obj;
                 _novoR.team1Uids = (((_wSl === 'p1') ? _comDestino.team1Uids : _comDestino.team2Uids) || []).slice();

@@ -202,14 +202,27 @@
 
   // Monta o mapa de CONFRONTO DIRETO a partir dos jogos, chaveado por uid (nome só pra quem
   // não tem conta). `h2h['X|||Y'] = n` → X venceu Y n vezes.
+  // Regra única de "quem venceu" (bracket-model.js). Este arquivo roda em browser, no vendor
+  // da CF e em Node puro — o padrão da casa é perguntar à MESMA regra nos três, nunca guardar
+  // uma cópia dela aqui.
+  function _winnerSide(m) {
+    var f = (typeof window !== 'undefined' && typeof window._matchWinnerSide === 'function')
+      ? window._matchWinnerSide : null;
+    if (!f && typeof require === 'function') {
+      try { f = require('./bracket-model.js').matchWinnerSide; } catch (e) { f = null; }
+    }
+    if (!f) throw new Error('[quem venceu] bracket-model.js nao carregado — a regra unica sumiu');
+    return f(m);
+  }
+
   function buildH2H(matches, slotKeys) {
     var h = {};
     (matches || []).forEach(function (m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
       var k1 = slotKeys ? slotKeys(m, 'p1') : [], k2 = slotKeys ? slotKeys(m, 'p2') : [];
       if (!k1.length || !k2.length) return;
-      var venceu1 = (m.winner === m.p1);
-      var venceu2 = (m.winner === m.p2);
+      var venceu1 = (_winnerSide(m) === 1);
+      var venceu2 = (_winnerSide(m) === 2);
       if (!venceu1 && !venceu2) return;                // empate ou vencedor irreconhecível
       var vencedores = venceu1 ? k1 : k2, perdedores = venceu1 ? k2 : k1;
       vencedores.forEach(function (v) {

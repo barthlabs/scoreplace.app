@@ -137,7 +137,7 @@ window._computeMonarchStandings = function(group, t, category) {
     if (!m.winner || !m.team1 || !m.team2) return;
     var s1 = parseInt(m.scoreP1) || 0;
     var s2 = parseInt(m.scoreP2) || 0;
-    var team1Won = m.winner === m.p1;
+    var team1Won = window._matchWinnerSide(m) === 1;
 
     // GSM breakdown (sets/games/tiebreaks) — if sets[] recorded, aggregate per side
     var sw1 = 0, sw2 = 0, gw1 = 0, gw2 = 0, tb1 = 0, tb2 = 0;
@@ -224,7 +224,7 @@ window._computeMonarchStandings = function(group, t, category) {
     (matches || []).forEach(function (m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
       var l1 = _ladoPares(m.team1, m.team1Uids), l2 = _ladoPares(m.team2, m.team2Uids);
-      var venceu1 = (m.winner === m.p1);
+      var venceu1 = (window._matchWinnerSide(m) === 1);
       [[l1, l2, venceu1], [l2, l1, !venceu1]].forEach(function (par) {
         par[0].forEach(function (p) {
           var k = _monKey(p.name, p.uid);
@@ -491,9 +491,9 @@ function _calcAdvancedPoints(t, playerName, category, matchesOverride, uidOverri
       if (isDraw) {
         won = false;
       } else if (isMonarch) {
-        won = (isInP1 && m.winner === m.p1) || (isInP2 && m.winner === m.p2);
+        won = (isInP1 && window._matchWinnerSide(m) === 1) || (isInP2 && window._matchWinnerSide(m) === 2);
       } else {
-        won = (isInP1 && m.winner === m.p1) || (isInP2 && m.winner === m.p2) || m.winner === playerName;
+        won = (isInP1 && window._matchWinnerSide(m) === 1) || (isInP2 && window._matchWinnerSide(m) === 2) || m.winner === playerName;
       }
 
       var mBreakdown = { round: m.round || m.roundNumber || 0, opponent: isInP1 ? (m.p2 || '') : (m.p1 || ''), won: won, draw: isDraw, items: [] };
@@ -829,8 +829,8 @@ function _computeStandings(t, category) {
         var ms1 = parseInt(m.scoreP1) || 0;
         var ms2 = parseInt(m.scoreP2) || 0;
         var isDraw = m.winner === 'draw' || m.draw;
-        var team1Won = !isDraw && m.winner === m.p1;
-        var team2Won = !isDraw && m.winner === m.p2;
+        var team1Won = !isDraw && window._matchWinnerSide(m) === 1;
+        var team2Won = !isDraw && window._matchWinnerSide(m) === 2;
         // v2.3.15: acumula GAMES p/ a coluna "% games". O bloco monarch não chama
         // _accumulateGSM, então some aqui: usa m.sets quando houver (soma games de
         // todos os sets), senão usa scoreP1/scoreP2 (ex.: 6×2).
@@ -901,7 +901,7 @@ function _computeStandings(t, category) {
         return;
       }
 
-      var winnerIsP1 = m.winner === m.p1;
+      var winnerIsP1 = window._matchWinnerSide(m) === 1;
       var kW = winnerIsP1 ? kP1 : kP2;
       var kL = winnerIsP1 ? kP2 : kP1;
 
@@ -956,7 +956,7 @@ function _computeStandings(t, category) {
         return;
       }
       // vencedor desta partida = s? (compara a chave do vencedor com s.key)
-      var kWin = m.winner === m.p1 ? mk1 : mk2;
+      var kWin = window._matchWinnerSide(m) === 1 ? mk1 : mk2;
       if (kWin === s.key) {
         var oppK2 = mk1 === s.key ? mk2 : mk1;
         if (scoreMap[oppK2]) s.sonnebornBerger += scoreMap[oppK2].points;
@@ -1031,8 +1031,8 @@ function _computeStandings(t, category) {
       const keyReverse = `${mk2}|||${mk1}|||d`;
       h2h[keyReverse] = (h2h[keyReverse] || 0) + 1;
     } else {
-      var kWin = m.winner === m.p1 ? mk1 : mk2;
-      var kLos = m.winner === m.p1 ? mk2 : mk1;
+      var kWin = window._matchWinnerSide(m) === 1 ? mk1 : mk2;
+      var kLos = window._matchWinnerSide(m) === 1 ? mk2 : mk1;
       const key = `${kWin}|||${kLos}`;
       h2h[key] = (h2h[key] || 0) + 1;
     }
@@ -1463,8 +1463,8 @@ function _rankByTiebreakers(t, playerNames) {
     if (!m.winner || m.isBye || m.isSitOut) return;
     var key = m.p1 + '|' + m.p2;
     if (!h2h[key]) h2h[key] = { w1: 0, w2: 0 };
-    if (m.winner === m.p1) h2h[key].w1++;
-    else if (m.winner === m.p2) h2h[key].w2++;
+    if (window._matchWinnerSide(m) === 1) h2h[key].w1++;
+    else if (window._matchWinnerSide(m) === 2) h2h[key].w2++;
   });
 
   // v0.17.40: alinhado com default principal — confronto direto + Buchholz
@@ -1706,7 +1706,7 @@ window._reassignBestLosersToRepechage = function (t) {
     fonte.slice().sort(function (a, b) { return _idCmp(a.id, b.id); })
       .forEach(function (m) {
         if (!m.winner) return;
-        var perd = (m.winner === m.p1) ? m.p2 : m.p1;
+        var perd = (window._matchWinnerSide(m) === 1) ? m.p2 : m.p1;
         if (perd && !_vazio(perd) && derrotados.indexOf(perd) === -1) derrotados.push(perd);
       });
     if (!derrotados.length) return;
@@ -1738,7 +1738,7 @@ window._reassignBestLosersToRepechage = function (t) {
     slots.forEach(function (s) {
       var e = edgeDe[String(s.m.id) + '|' + s.slot];
       if (e && e.winner) {
-        var pd = (e.winner === e.p1) ? e.p2 : e.p1;
+        var pd = (window._matchWinnerSide(e) === 1) ? e.p2 : e.p1;
         if (pd && !_vazio(pd)) desigDe[String(s.m.id) + '|' + s.slot] = String(pd);
       }
     });
@@ -1849,7 +1849,7 @@ window._reassignBestLosersToRepechage = function (t) {
     slots.forEach(function (s) { vagaIds[String(s.m.id)] = 1; });
     fonte.forEach(function (g) {
       if (!g || !g.winner) return;
-      var L = (g.winner === g.p1) ? g.p2 : g.p1;
+      var L = (window._matchWinnerSide(g) === 1) ? g.p2 : g.p1;
       if (!L || _vazio(L)) return;
       var vg = vagaDe[String(L)];
       if (vg) {
@@ -1882,7 +1882,7 @@ function _assignRepechageLosers(t) {
   // Collect loser names
   var loserNames = [];
   r1Matches.forEach(function(m) {
-    var loser = m.winner === m.p1 ? m.p2 : m.p1;
+    var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
     if (loser && loser !== 'TBD' && loser !== 'BYE') loserNames.push(loser);
   });
 
@@ -1958,7 +1958,7 @@ function _advanceBestLoser(t) {
   // Collect repechage losers
   var repLoserNames = [];
   repMatches.forEach(function(m) {
-    var loser = m.winner === m.p1 ? m.p2 : m.p1;
+    var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
     if (loser && loser !== 'TBD' && loser !== 'BYE') repLoserNames.push(loser);
   });
 
@@ -2045,7 +2045,7 @@ function _updateDuplaElimClassification(t) {
     var losersWithMatch = [];
     matchesInRound.forEach(function(m) {
       if (!m.winner || m.winner === 'draw') return;
-      var loser = m.winner === m.p1 ? m.p2 : m.p1;
+      var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
       // exclui BYE em qualquer rótulo ('BYE', 'BYE (Avança Direto)') — a estrutura nova usa byes
       // na inferior (a árvore-mínima antiga usava repescagem, nunca bye), então o rótulo do bye
       // vazava pra classificação. project_bye_rep_auto_resolution.
@@ -2055,10 +2055,10 @@ function _updateDuplaElimClassification(t) {
     });
     // Sort by score margin (close = melhor posição dentro do bloco)
     losersWithMatch.sort(function(a, b) {
-      var aLS = a.match.winner === a.match.p1 ? (parseInt(a.match.scoreP2) || 0) : (parseInt(a.match.scoreP1) || 0);
-      var aWS = a.match.winner === a.match.p1 ? (parseInt(a.match.scoreP1) || 0) : (parseInt(a.match.scoreP2) || 0);
-      var bLS = b.match.winner === b.match.p1 ? (parseInt(b.match.scoreP2) || 0) : (parseInt(b.match.scoreP1) || 0);
-      var bWS = b.match.winner === b.match.p1 ? (parseInt(b.match.scoreP1) || 0) : (parseInt(b.match.scoreP2) || 0);
+      var aLS = window._matchWinnerSide(a.match) === 1 ? (parseInt(a.match.scoreP2) || 0) : (parseInt(a.match.scoreP1) || 0);
+      var aWS = window._matchWinnerSide(a.match) === 1 ? (parseInt(a.match.scoreP1) || 0) : (parseInt(a.match.scoreP2) || 0);
+      var bLS = window._matchWinnerSide(b.match) === 1 ? (parseInt(b.match.scoreP2) || 0) : (parseInt(b.match.scoreP1) || 0);
+      var bWS = window._matchWinnerSide(b.match) === 1 ? (parseInt(b.match.scoreP1) || 0) : (parseInt(b.match.scoreP2) || 0);
       return (bLS - bWS) - (aLS - aWS); // diff menos negativo (mais próximo) primeiro
     });
     // Atribui posições no bloco
@@ -2138,20 +2138,20 @@ function _updateProgressiveClassification(t) {
 
   // Helper: get loser's score and winner's score from a match
   function _getLoserStats(m) {
-    var loser = m.winner === m.p1 ? m.p2 : m.p1;
-    var loserScore = m.winner === m.p1 ? (parseInt(m.scoreP2) || 0) : (parseInt(m.scoreP1) || 0);
-    var winnerScore = m.winner === m.p1 ? (parseInt(m.scoreP1) || 0) : (parseInt(m.scoreP2) || 0);
+    var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
+    var loserScore = window._matchWinnerSide(m) === 1 ? (parseInt(m.scoreP2) || 0) : (parseInt(m.scoreP1) || 0);
+    var winnerScore = window._matchWinnerSide(m) === 1 ? (parseInt(m.scoreP1) || 0) : (parseInt(m.scoreP2) || 0);
     // For GSM: use sets won as primary, then games diff
     var setsWon = 0, setsDiff = 0, gamesDiff = 0;
     if (m.sets && Array.isArray(m.sets)) {
-      var lIdx = m.winner === m.p1 ? 1 : 0; // loser index (0=p1, 1=p2)
+      var lIdx = window._matchWinnerSide(m) === 1 ? 1 : 0; // loser index (0=p1, 1=p2)
       m.sets.forEach(function(s) {
         var lg = lIdx === 0 ? (s.gamesP1 || 0) : (s.gamesP2 || 0);
         var wg = lIdx === 0 ? (s.gamesP2 || 0) : (s.gamesP1 || 0);
         if (lg > wg) setsWon++;
         gamesDiff += (lg - wg);
       });
-      setsDiff = (m.winner === m.p1 ? (m.setsWonP2 || 0) - (m.setsWonP1 || 0) : (m.setsWonP1 || 0) - (m.setsWonP2 || 0));
+      setsDiff = (window._matchWinnerSide(m) === 1 ? (m.setsWonP2 || 0) - (m.setsWonP1 || 0) : (m.setsWonP1 || 0) - (m.setsWonP2 || 0));
     }
     return {
       loser: loser,
@@ -2194,7 +2194,7 @@ function _updateProgressiveClassification(t) {
   // Record 3rd place match winner/loser up-front so semi/earlier rounds skip them.
   if (_thirdM && _thirdM.winner) {
     placed[_thirdM.winner] = true;
-    var _tp_loser = _thirdM.winner === _thirdM.p1 ? _thirdM.p2 : _thirdM.p1;
+    var _tp_loser = window._matchWinnerSide(_thirdM) === 1 ? _thirdM.p2 : _thirdM.p1;
     if (_tp_loser && _tp_loser !== 'TBD') placed[_tp_loser] = true;
   }
 
@@ -2234,7 +2234,7 @@ function _updateProgressiveClassification(t) {
       // Final: definitive 1st and 2nd
       matchesInRound.forEach(function(m) {
         if (!m.winner || m.winner === 'draw' || m.isBye) return;
-        var loser = m.winner === m.p1 ? m.p2 : m.p1;
+        var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
         if (!loser || loser === 'TBD' || loser === 'BYE') return;
         t.classification[m.winner] = 1;
         t.classification[loser] = 2;
@@ -2380,7 +2380,7 @@ function _updateProgressiveClassification(t) {
   // contradictory entry a pathological dataset could produce).
   if (_thirdM && _thirdM.winner) {
     t.classification[_thirdM.winner] = 3;
-    var tp_loser = _thirdM.winner === _thirdM.p1 ? _thirdM.p2 : _thirdM.p1;
+    var tp_loser = window._matchWinnerSide(_thirdM) === 1 ? _thirdM.p2 : _thirdM.p1;
     // v1.3.79: só há 4º lugar se o perdedor for OUTRA equipe. Em N pequeno (ex. N=3) o jogo de 3º
     // pode ser degenerado (mesma equipe repescada nos dois lados) → 4º não existe, não abrir buraco.
     if (tp_loser && tp_loser !== 'TBD' && tp_loser !== _thirdM.winner) t.classification[tp_loser] = 4;
@@ -2469,7 +2469,7 @@ function _updateProgressiveClassification(t) {
           smap[m.p1].draws++; smap[m.p1].points += 1;
           smap[m.p2].draws++; smap[m.p2].points += 1;
         } else {
-          var loser = m.winner === m.p1 ? m.p2 : m.p1;
+          var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
           if (smap[m.winner]) { smap[m.winner].wins++; smap[m.winner].points += 3; }
           if (smap[loser]) smap[loser].losses++;
         }
@@ -2533,7 +2533,7 @@ function _updateProgressiveClassification(t) {
           _h2hAllGroups[m.p1 + '|||' + m.p2 + '|||d'] = (_h2hAllGroups[m.p1 + '|||' + m.p2 + '|||d'] || 0) + 1;
           _h2hAllGroups[m.p2 + '|||' + m.p1 + '|||d'] = (_h2hAllGroups[m.p2 + '|||' + m.p1 + '|||d'] || 0) + 1;
         } else {
-          var loser = m.winner === m.p1 ? m.p2 : m.p1;
+          var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
           _h2hAllGroups[m.winner + '|||' + loser] = (_h2hAllGroups[m.winner + '|||' + loser] || 0) + 1;
         }
       });
@@ -2946,7 +2946,7 @@ function _maybeGenerate3rdPlace(t) {
   const losers = [];
   semis
     .filter(m => m.winner && m.winner !== 'draw' && !m.isBye)
-    .map(m => m.winner === m.p1 ? m.p2 : m.p1)
+    .map(m => window._matchWinnerSide(m) === 1 ? m.p2 : m.p1)
     .filter(name => name && name !== 'TBD' && name !== 'BYE' && !seguiuVivo[name])
     .forEach(name => { if (losers.indexOf(name) === -1) losers.push(name); });
 
@@ -3038,8 +3038,8 @@ window._autoApprovePendingResults = function(t) {
     // aprovação, converte pro lado e carimba a identidade — é o instante em que o resultado
     // vira definitivo, e é aqui que ele tem que parar de depender de string.
     if (pr.draw) { m.winner = pr.winner; m.draw = true; }
-    else if (pr.winner === m.p1) window._stampWinner(m, 1);
-    else if (pr.winner === m.p2) window._stampWinner(m, 2);
+    else if (window._pendingWinnerSide(m, pr) === 1) window._stampWinner(m, 1);
+    else if (window._pendingWinnerSide(m, pr) === 2) window._stampWinner(m, 2);
     else { m.winner = pr.winner; m.draw = !!pr.draw; }
     delete m.pendingResult;
     if (typeof window._propagateMatchUpdate === 'function') {
@@ -3686,8 +3686,8 @@ function _computeAvgPointsPerRound(t, playerName, category) {
           if (m.winner) {
             playedThisRound = true;
             var isDraw = m.winner === 'draw' || m.draw;
-            var team1Won = !isDraw && m.winner === m.p1;
-            var team2Won = !isDraw && m.winner === m.p2;
+            var team1Won = !isDraw && window._matchWinnerSide(m) === 1;
+            var team2Won = !isDraw && window._matchWinnerSide(m) === 2;
             var inTeam1 = m.team1.indexOf(playerName) !== -1;
             if (isDraw) totalPoints += 1;
             else if ((inTeam1 && team1Won) || (!inTeam1 && team2Won)) totalPoints += 3;
@@ -3815,7 +3815,7 @@ window._buildNameToUid = _buildNameToUid;
 // standings (s.key, já resolvido por _computeStandings) e a de cada lado do jogo é resolvida
 // pela MESMA regra do _idKey: slot uid explícito → nome→uid dos jogos → nome→uid do elenco →
 // nome puro (legado). O win/loss de cada jogo segue por nome DENTRO do jogo
-// (m.winner === m.p1) — consistente mesmo com nome trocado (winner/p1/p2 clobberados igual).
+// (window._matchWinnerSide(m) === 1) — consistente mesmo com nome trocado (winner/p1/p2 clobberados igual).
 // Retorna { keys:[chave...], keyName:{chave→nome de exibição}, matrix:{a:{b:{w,d,l}}} } na
 // ordem das linhas de `computedRows` (a classificação).
 function _buildHeadToHead(t, computedRows, rounds) {
@@ -3862,10 +3862,10 @@ function _buildHeadToHead(t, computedRows, rounds) {
       if (isDraw) {
         matrix[k1][k2].d++;
         matrix[k2][k1].d++;
-      } else if (m.winner === m.p1) {
+      } else if (window._matchWinnerSide(m) === 1) {
         matrix[k1][k2].w++;
         matrix[k2][k1].l++;
-      } else if (m.winner === m.p2) {
+      } else if (window._matchWinnerSide(m) === 2) {
         matrix[k2][k1].w++;
         matrix[k1][k2].l++;
       }

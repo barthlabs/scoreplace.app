@@ -42,6 +42,13 @@
 
 (function () {
   'use strict';
+  // 2.0.3: este arquivo também é carregado em Node puro (harness headless, `require` direto
+  // do phases-engine) pra alcançar a regra única de "quem venceu". Sem este shim o próprio
+  // `require` estourava em `window is not defined` e o chamador ficava sem a regra — que é o
+  // caminho de volta pra uma segunda cópia dela.
+  var window = (typeof globalThis !== 'undefined' && typeof globalThis.window !== 'undefined')
+    ? globalThis.window
+    : (typeof globalThis !== 'undefined' ? globalThis : this);
 
   var LABELS = {
     final: 'Final',
@@ -1096,6 +1103,35 @@
     if (uids && uids.length) m.winnerUids = uids.slice();
     else delete m.winnerUids;
   };
+
+  // ══ ⭐ QUEM VENCEU no placar PROPOSTO (2.0.3) ════════════════════════════════════
+  // Mesmo problema, um degrau antes: `pendingResult.winner` também é NOME. Um placar
+  // proposto antes de uma substituição ficava órfão do mesmo jeito, e o card do jogo
+  // pendente pintava dois perdedores. Resolve pela MESMA regra, montando o jogo hipotético
+  // com o placar proposto — o `winnerUids` do pendente, quando existe, manda em tudo.
+  window._pendingWinnerSide = function (m, pr) {
+    if (!m || !pr) return null;
+    return window._matchWinnerSide({
+      winner: pr.winner, draw: pr.draw,
+      p1: m.p1, p2: m.p2,
+      winnerUids: pr.winnerUids,
+      team1Uids: m.team1Uids, team2Uids: m.team2Uids,
+      p1Uid: m.p1Uid, p2Uid: m.p2Uid,
+      setsWonP1: pr.setsWonP1, setsWonP2: pr.setsWonP2,
+      scoreP1: pr.scoreP1, scoreP2: pr.scoreP2
+    });
+  };
+
+  // 2.0.3: Node também (harness headless / vendor da CF carregado direto). Sem isto, um
+  // arquivo que roda fora do browser não alcança a regra única e teria que reimplementá-la —
+  // que é exatamente o defeito que ela existe pra matar. Mesmo padrão do standings-core.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      matchWinnerSide: window._matchWinnerSide,
+      pendingWinnerSide: window._pendingWinnerSide,
+      stampWinner: window._stampWinner
+    };
+  }
 
   // Expose for manual invocation: window._bracketModelSanityChecks()
   window._bracketModelSanityChecks = _runSanityChecks;

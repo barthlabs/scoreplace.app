@@ -66,7 +66,8 @@ window._RELEASE_NOTES_HTML = (function () {
     // ⚠️ Histórico das builds desta leva, porque duas delas NÃO servem pra aprovar:
     //   200 (2.0)   — subiu ANTES do vencedor por uid, do texto do tie-break e do ✕ na linha.
     //   201 (2.0.1) — tem os três acima, mas NÃO tem prorrogar × tie-break nem o 7-7.
-    //   202 (2.0.2) — a leva completa. É esta que o dono aprova.
+    //   202 (2.0.2) — abortada antes de subir: faltava a classificação por uid.
+    //   203 (2.0.3) — a leva completa. É esta que o dono aprova.
     // Ordem do dono (21/ago/2026): "vamos alinhar web/apple versao 2.0". O bloco é CURTO de
     // propósito: o ciclo 2.0 começa agora, e repetir aqui os destaques da v1.9 (logo abaixo,
     // e que o usuário do site já leu) seria anunciar duas vezes a mesma entrega.
