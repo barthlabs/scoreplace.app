@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# pre-commit — o snapshot do prerender entra NO PRÓPRIO COMMIT.
+#
+# POR QUE EXISTE (21/ago/2026). O `index.html` (snapshot estático da landing) e o
+# `version.txt` são GERADOS a partir de `window.SCOREPLACE_VERSION` (store.js). Quem
+# roda o gerador hoje é o `hosting.predeploy` — mas ele roda dentro da CÓPIA extraída
+# em /tmp, então o resultado vai pro ar e NUNCA volta pro repo. Efeito medido na
+# 1.9.106: commit com `version.txt` = 1.9.105 e o ar em 1.9.106; o `main` deixou de
+# descrever o ar e foi preciso um commit extra "snapshot do prerender" na mão.
+#
+# A correção é gerar ANTES de fechar o commit: aqui o arquivo gerado é parte do commit
+# que muda a versão, e não um remendo depois dele.
+#
+# ⚠️ POR QUE NÃO NO `pre-push` COM `--amend` (que é como estava documentado): NÃO
+# FUNCIONA — e quebra calado. O git resolve o que vai ser empurrado ANTES de rodar o
+# pre-push; o amend cria um commit novo que o push ignora. MEDIDO em laboratório:
+# empurrado `10cf00a` (sem snapshot, `version.txt` velho) enquanto o HEAD local virou
+# `2d38c04` (com snapshot) — ou seja, além de não corrigir nada, o local passa a
+# DIVERGIR do remoto, que é o estado que faz `scripts/deploy-hosting.sh` abortar.
+# O `pre-push` deste repo é só GUARDA (confere e barra); quem gera é aqui.
+#
+# Instalação: scripts/install-hooks.sh          Pular uma vez: SP_SKIP_HOOKS=1 git commit …
+set -uo pipefail
+
+[[ "${SP_SKIP_HOOKS:-}" == "1" ]] && exit 0
+
+RAIZ="$(git rev-parse --show-toplevel)" || exit 0
+cd "$RAIZ" || exit 0
+
+aviso() {
+  echo "⚠️  pre-commit: $1" >&2
+  echo "   O commit SEGUE, mas o snapshot pode ficar velho. O pre-push confere de novo" >&2
+  echo "   e o scripts/deploy-hosting.sh gera antes de publicar — nada vai pro ar torto." >&2
+}
+
+# O prerender sobe um Chromium do @playwright/test. Sem node_modules alcançável não dá
+# pra gerar — e travar todo commit por isso seria pior que o problema.
+if ! node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
+  aviso "@playwright/test não resolveu (rode 'npm ci' no repo) — prerender pulado."
+  exit 0
+fi
+
+impressao() { shasum index.html version.txt 2>/dev/null | awk '{print $1}' | tr -d '\n'; }
+ANTES="$(impressao)"
+
+LOG="$(mktemp)"
+if ! npm run --silent prerender >"$LOG" 2>&1; then
+  aviso "o prerender falhou:"
+  sed 's/^/   │ /' "$LOG" >&2
+  rm -f "$LOG"
+  exit 0
+fi
+rm -f "$LOG"
+
+if [[ "$(impressao)" != "$ANTES" ]]; then
+  git add index.html version.txt
+  echo "▸ pre-commit: snapshot do prerender regerado e incluído no commit"
+  echo "  (index.html + version.txt = $(tr -d '[:space:]' < version.txt))"
+fi
+exit 0

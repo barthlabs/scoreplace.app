@@ -10,6 +10,11 @@
 #
 # O QUE ELE FAZ, nesta ordem (a ordem é o ponto):
 #   1. árvore limpa? (o que sobe tem que ser o que está no git)
+#   1.5 GERA o snapshot (index.html/version.txt) e commita se mudou — ANTES do push.
+#      Sem isso, quem gera é só o `hosting.predeploy`, dentro da cópia em /tmp: o
+#      arquivo gerado vai pro ar e nunca volta pro repo. Medido na 1.9.106 — commit com
+#      version.txt 1.9.105 e o ar em 1.9.106. Com o pre-commit instalado
+#      (scripts/install-hooks.sh) não há o que commitar aqui e o passo é um no-op.
 #   2. empurra HEAD pro `main` — fast-forward. Divergiu? ABORTA e diz o que fazer.
 #      ⚠️ É o main que passa a descrever o ar, então ele é atualizado ANTES do upload:
 #      falhar aqui é barato; falhar depois de publicar deixa exatamente o desalinhamento
@@ -47,6 +52,38 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+# ── 1.5 snapshot gerado, DENTRO do repo, antes de empurrar ───────────────────
+# index.html (snapshot da landing) e version.txt são DERIVADOS de
+# window.SCOREPLACE_VERSION (store.js). O hosting.predeploy também roda o prerender,
+# mas lá dentro da cópia em /tmp — o resultado publica e evapora. Rodando aqui, o
+# commit que vira `main` carrega exatamente o que foi pro ar.
+echo "▸ gerando o snapshot (prerender) no repo…"
+npm run --silent prerender
+if [[ -n "$(git status --porcelain)" ]]; then
+  INESPERADO="$(git status --porcelain | grep -v -E ' (index\.html|version\.txt)$' || true)"
+  if [[ -n "$INESPERADO" ]]; then
+    echo
+    echo "✗ o prerender mexeu em arquivo que não era esperado — não vou commitar às cegas:"
+    echo "$INESPERADO" | head -12
+    exit 1
+  fi
+  if [[ $DRY -eq 1 ]]; then
+    # --dry-run não commita nada; desfaz e só avisa.
+    echo "  ⚠️  o snapshot está VELHO (v$(tr -d '[:space:]' < version.txt)) — no deploy de"
+    echo "     verdade eu commitaria isso. (dry-run: desfiz, árvore intacta)"
+    git checkout -q -- index.html version.txt
+  else
+    VERSAO="$(tr -d '[:space:]' < version.txt)"
+    git add index.html version.txt
+    git commit -q -m "$VERSAO — snapshot do prerender que está no ar"
+    COMMIT="$(git rev-parse HEAD)"
+    echo "  ▸ snapshot estava velho — commitado em ${COMMIT:0:8} (v$VERSAO)"
+    echo "    (instale os hooks e isso vira no-op: scripts/install-hooks.sh)"
+  fi
+else
+  echo "  ✓ snapshot já em dia"
+fi
+
 # ── 2. alinhar o main ANTES de publicar ──────────────────────────────────────
 echo "▸ conferindo origin/main…"
 git fetch -q origin main || echo "  ⚠️  não deu pra atualizar origin/main (rede?) — seguindo com o local"
@@ -59,7 +96,10 @@ elif git merge-base --is-ancestor origin/main "$COMMIT" 2>/dev/null; then
   if [[ $DRY -eq 1 ]]; then
     echo "  (dry-run: não empurrei)"
   else
-    git push origin "HEAD:main"
+    # o pre-push roda `npm test` em push pro main; aqui seria a MESMA suíte que o
+    # hosting.predeploy roda logo em seguida (2×2min30 pelo mesmo gate). O que barra o
+    # upload é o predeploy — ele aborta antes de subir qualquer byte.
+    SP_HOOK_SKIP_TEST=1 git push origin "HEAD:main"
     echo "  ✓ main alinhado em ${COMMIT:0:8}"
   fi
 else
