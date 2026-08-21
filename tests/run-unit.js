@@ -1086,6 +1086,10 @@ const SUITES = [
   // (-webkit-tap-highlight-color, desenhado pelo SISTEMA). Mais a borda no
   // quadro que a seta aponta.
   'tests/resume-nao-recarrega-e-toque-tem-realce.test.js',
+  // 1.9.112 — a cor do placar na chave, ditada pelo dono: tarja responde "ja esta
+  // confirmado?" (verde/ambar/cinza) e o NUMERO responde "quem ganhou?"
+  // (verde/vermelho). Antes as duas perguntas dividiam a mesma cor.
+  'tests/cor-do-placar-na-chave.test.js',
 ];
 
 let failed = [];

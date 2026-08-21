@@ -3898,27 +3898,40 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const rowStyle = (isWinner, side) => {
     const base = 'padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;';
+    // ── ⭐ A REGRA DE COR, DITADA PELO DONO (1.9.112) ─────────────────────────
+    //   sem resultado ....... TUDO CINZA (tarja e numero)
+    //   com resultado ....... vencedor: tarja VERDE + numero VERDE
+    //                         perdedor: tarja CINZA + numero VERMELHO
+    //   resultado PENDENTE .. tarja AMBAR nos DOIS lados, numero VERDE no V e
+    //                         VERMELHO no D
+    // ⛔ A TARJA RESPONDE UMA PERGUNTA SO: "isto ja esta confirmado?" — verde
+    // confirmado, ambar proposto, cinza sem resultado. Quem ganhou e quem perdeu
+    // quem diz e o NUMERO. Antes as duas perguntas dividiam a mesma cor: num jogo
+    // SEM placar a tarja saia verde em cima e vermelha embaixo, por POSICAO, e o
+    // verde passava a significar duas coisas na mesma tela.
     if (isWinner) return base + 'background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
-    if (isDecided) return base + 'background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);opacity:0.55;';
-    if (hasPending) {
-      // v0.17.1: pending — accent âmbar; lado proposto vencedor com tom mais
-      // forte. _pendingP1Win/_pendingP2Win declarados acima do rowStyle.
-      var _isPropWin = (side === 'p1' && hasPending && _pr.winner === m.p1 && !_pr.draw)
-        || (side === 'p2' && hasPending && _pr.winner === m.p2 && !_pr.draw);
-      return base + (_isPropWin
-        ? 'background:rgba(251,191,36,0.18);border-left:3px solid #fbbf24;'
-        : 'background:rgba(0,0,0,0.2);border-left:3px solid rgba(251,191,36,0.35);opacity:0.85;');
-    }
-    return base + (side === 'p1'
-      ? 'background:rgba(0,0,0,0.25);border-left:3px solid rgba(16,185,129,0.4);'
-      : 'background:rgba(0,0,0,0.25);border-left:3px solid rgba(239,68,68,0.4);');
+    if (isDecided) return base + 'background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.18);';
+    if (hasPending) return base + 'background:rgba(251,191,36,0.10);border-left:3px solid #fbbf24;';
+    return base + 'background:rgba(0,0,0,0.25);border-left:3px solid rgba(255,255,255,0.14);';
   };
 
   // v1.8.95: sempre mostrar placar — 0 quando ainda não lançado (não TBD, não decidido)
   const scoreDisplay = (score, isWinner) => {
     const val = (score !== undefined && score !== null && score !== '') ? score : (!hasTBD && !isDecided ? 0 : '');
     if (val === '') return '';
-    return `<span style="font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:${isWinner ? '#4ade80' : (val === 0 && !isDecided ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)')};">${val}</span>`;
+    // ── ⭐ PERDEDOR EM VERMELHO (1.9.112) ─────────────────────────────────
+    // Ordem do dono, olhando a chave: _"por que os vencedores nao estao todos
+    // verdes (numero e tarja) e os perdedores nao estao com os numeros
+    // vermelhos?"_. O vencedor ja era verde; o perdedor caia em
+    // `var(--text-muted)` — cinza. Verde sozinho diz quem ganhou; verde CONTRA
+    // vermelho diz o placar inteiro num relance, que e como se le uma chave.
+    // ⚠️ O zero de "ainda nao lancado" NAO e derrota: segue apagado (branco 30%),
+    // senao um jogo que nem aconteceu apareceria como alguem tendo perdido.
+    // sem resultado = TUDO CINZA; com resultado = verde no V, vermelho no D.
+    var _corDoNumero = isWinner ? '#4ade80'
+      : isDecided ? '#f87171'
+      : (val === 0 ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)');
+    return `<span style="font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:${_corDoNumero};">${val}</span>`;
   };
 
   // Format set scores for display
@@ -4006,8 +4019,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ? (_woAbsent === 'p1' ? 'W.O.' : '')
       : (useSets && isDecided ? formatSetScores(m, 1) : m.scoreP1);
   const _pendingP1Win = hasPending && _pr.winner === m.p1 && !_pr.draw;
+  // 1.9.112 (dono): no PENDENTE o numero ja diz V/D — verde e vermelho, igual ao
+  // confirmado. Quem marca "ainda nao confirmado" e a TARJA AMBAR dos dois lados
+  // (mais o italico do numero). Antes o numero era ambar dos dois lados, e a
+  // pessoa via o placar sem saber quem tinha ganho.
   const _scorePendingStyle = function(isWin) {
-    return 'font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:' + (isWin ? '#fbbf24' : 'rgba(251,191,36,0.55)') + ';font-style:italic;';
+    return 'font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:' + (isWin ? '#4ade80' : '#f87171') + ';font-style:italic;';
   };
   const p1ScoreVal = (!showInputs)
     ? (hasPending
