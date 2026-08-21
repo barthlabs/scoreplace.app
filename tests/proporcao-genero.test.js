@@ -393,8 +393,13 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
   t('com as 3 opções + "Sem regra"', /data-ratio="50\/50"/.test(form) && /data-ratio="25\/75"/.test(form)
      && /data-ratio="75\/25"/.test(form) && /data-ratio=""/.test(form));
   t('e o mesmo toggle Travar proporção', /id="gender-ratio-lock"/.test(form));
+  // A asserção cobra a PERTINÊNCIA à lista, não a lista inteira em ordem: em 1.9.111 o
+  // bloco "🎾 Formato da Partida" (#gsm-section) entrou na mesma realocação (formato por
+  // fase) e derrubava este teste sem que nada da proporção tivesse mudado. O que importa
+  // aqui é que a caixa de gênero seja realocada junto com as Datas da fase.
   t('a caixa é REALOCADA pra dentro da fase (padrão das Datas da fase)',
-     /_EXT_IDS = \['phase-dates-box', 'late-enroll-box', 'gender-ratio-box'\]/.test(f2));
+     /_EXT_IDS = \[[^\]]*'gender-ratio-box'[^\]]*\]/.test(f2)
+     && /_EXT_IDS = \[[^\]]*'phase-dates-box'[^\]]*\]/.test(f2));
   t('o salvar grava a proporção', /tourData\.genderRatio =/.test(form));
   t('e "Sem regra" APAGA a regra (grava null, não omite)', /: null;/.test(form.split('tourData.genderRatio =')[1].split('\n')[0] + ';'));
   t('editar repopula com o que está gravado', /_ratioConfigured\(t, 0\)/.test(form));

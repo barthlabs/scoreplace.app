@@ -5321,21 +5321,9 @@ window._saveTournamentClickHandler = function() {
           callTime: callTimeVal,
           warmupTime: warmupTimeVal,
           gameDuration: gameDurationVal,
-          scoring: {
-            type: document.getElementById('gsm-type').value || 'simple',
-            setsToWin: parseInt(document.getElementById('gsm-setsToWin').value) || 1,
-            gamesPerSet: parseInt(document.getElementById('gsm-gamesPerSet').value) || 6,
-            tiebreakEnabled: document.getElementById('gsm-tiebreakEnabled').value === 'true',
-            tiebreakPoints: parseInt(document.getElementById('gsm-tiebreakPoints').value) || 7,
-            tiebreakMargin: parseInt(document.getElementById('gsm-tiebreakMargin').value) || 2,
-            superTiebreak: document.getElementById('gsm-superTiebreak').value === 'true',
-            superTiebreakPoints: parseInt(document.getElementById('gsm-superTiebreakPoints').value) || 10,
-            countingType: document.getElementById('gsm-countingType').value || 'numeric',
-            // Vantagem (deuce) = derivada do esporte (só Tênis), nunca escolha manual.
-            advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (document.getElementById('gsm-advantageRule').value === 'true'),
-            fixedSet: document.getElementById('gsm-fixedSet').value === 'true',
-            fixedSetGames: parseInt(document.getElementById('gsm-fixedSetGames').value) || 6
-          },
+          // Formato da partida da FASE INICIAL = t.scoring (fonte única _gsmReadHidden).
+          // A fase eliminatória tem o SEU (cfg.eliminatoria.scoring → phases[elim].scoring).
+          scoring: window._gsmReadHidden(),
           organizerEmail: window.AppStore.currentUser ? window.AppStore.currentUser.email : 'visitante@local',
           organizerName: window.AppStore.currentUser ? (window.AppStore.currentUser.displayName || window.AppStore.currentUser.email) : 'visitante',
           creatorEmail: window.AppStore.currentUser ? window.AppStore.currentUser.email : 'visitante@local',
@@ -5979,6 +5967,31 @@ window._backfillPreferredVenueIds = async function() {
 };
 
 // ── GSM Config Modal and Functions ──
+// FONTE ÚNICA de leitura dos campos ocultos #gsm-* → objeto `scoring` do torneio.
+// Usada pelo SAVE (tourData.scoring) e pela seção "Formato da Partida" da fase ELIMINATÓRIA
+// (que começa herdando exatamente o que a fase inicial tem). Antes o save montava esse objeto
+// inline; duas cópias da mesma leitura divergiriam na primeira mudança de campo.
+window._gsmReadHidden = function () {
+  var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+  var out = {
+    type: g('gsm-type') || 'simple',
+    setsToWin: parseInt(g('gsm-setsToWin')) || 1,
+    gamesPerSet: parseInt(g('gsm-gamesPerSet')) || 6,
+    tiebreakEnabled: g('gsm-tiebreakEnabled') === 'true',
+    tiebreakPoints: parseInt(g('gsm-tiebreakPoints')) || 7,
+    tiebreakMargin: parseInt(g('gsm-tiebreakMargin')) || 2,
+    superTiebreak: g('gsm-superTiebreak') === 'true',
+    superTiebreakPoints: parseInt(g('gsm-superTiebreakPoints')) || 10,
+    countingType: g('gsm-countingType') || 'numeric',
+    // Vantagem (deuce) = derivada do esporte (só Tênis), nunca escolha manual.
+    advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : (g('gsm-advantageRule') === 'true'),
+    fixedSet: g('gsm-fixedSet') === 'true',
+    fixedSetGames: parseInt(g('gsm-fixedSetGames')) || 6
+  };
+  if (g('gsm-tiebreakAt')) out.tiebreakAt = g('gsm-tiebreakAt');
+  return out;
+};
+
 // ─── Preset-based scoring format system ───────────────────────────────────
 // Presets define common match formats. Each preset maps to hidden field values.
 window._gsmPresets = {
@@ -6203,11 +6216,14 @@ window._gsmInitPresets = function() {
 
 // Legacy-compatible _openGSMConfig — now opens "Personalizado" overlay
 window._openGSMConfig = function(targetPhase) {
-  // v4.4.x (Camada 2): GSM por fase (construtor fase-2+) removido — o modal é sempre o
-  // "Personalizado" global (Fase 1/torneio). targetPhase mantido só por compat de assinatura.
   window._gsmConfigTargetPhase = null;
-  var _ps = null;
-  // Read current values — dos campos globais (Fase 1/torneio).
+  // v1.9.111: ALVO do modal. 'elim' = está sendo configurado o formato PRÓPRIO da fase
+  // ELIMINATÓRIA (cfg.eliminatoria.scoring, do format2) — os campos ocultos #gsm-* do form
+  // pertencem à fase INICIAL e NÃO podem ser tocados nesse caso. Sem alvo = torneio (padrão).
+  window._gsmConfigTarget = (targetPhase === 'elim') ? 'elim' : null;
+  var _ps = (window._gsmConfigTarget === 'elim' && typeof window._f2GetElimScoring === 'function')
+    ? window._f2GetElimScoring() : null;
+  // Read current values — dos campos globais (Fase 1/torneio), ou do scoring da elim.
   var setsToWin = _ps ? String(_ps.setsToWin) : document.getElementById('gsm-setsToWin').value;
   var gamesPerSet = _ps ? String(_ps.gamesPerSet) : document.getElementById('gsm-gamesPerSet').value;
   var tbEnabled = _ps ? !!_ps.tiebreakEnabled : document.getElementById('gsm-tiebreakEnabled').value === 'true';
@@ -6222,7 +6238,7 @@ window._openGSMConfig = function(targetPhase) {
   // Regra do tie-break (5-5 vs 6-6): valor gravado no torneio (gsm-tiebreakAt) OU default do esporte.
   var _hTbAt = document.getElementById('gsm-tiebreakAt');
   var _sport = (typeof window._currentSportName === 'function') ? window._currentSportName() : '';
-  var tbAt = (_hTbAt && _hTbAt.value) || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt(_sport) : 'g');
+  var tbAt = (_ps && _ps.tiebreakAt) || (!_ps && _hTbAt && _hTbAt.value) || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt(_sport) : 'g');
   var _gm1 = (parseInt(gamesPerSet) || 6) - 1, _gg = (parseInt(gamesPerSet) || 6);
 
   var existing = document.getElementById('gsm-config-overlay');
@@ -6236,7 +6252,7 @@ window._openGSMConfig = function(targetPhase) {
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
       '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button type="button" onclick="window._gsmConfigTargetPhase=null;document.getElementById(\'gsm-config-overlay\').remove();" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
+        '<button type="button" onclick="window._gsmCloseConfig()" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
         '<button type="button" onclick="window._gsmSaveConfig();" class="btn btn-sm" style="background:#fff;color:#6d28d9;font-weight:700;border:none;">Aplicar</button>' +
       '</div>' +
     '</div>' +
@@ -6489,38 +6505,72 @@ window._gsmUpdateSummary = function() {
   el.innerHTML = lines.join('<br>');
 };
 
+// Fecha o overlay do "Personalizado" e ZERA o alvo — senão o próximo "Personalizado" da fase
+// inicial gravaria na eliminatória (o alvo é estado global e sobrevive ao overlay).
+window._gsmCloseConfig = function () {
+  window._gsmConfigTargetPhase = null;
+  window._gsmConfigTarget = null;
+  var ov = document.getElementById('gsm-config-overlay');
+  if (ov) ov.remove();
+};
+
+// Lê o modal "Personalizado" → objeto scoring (mesmo shape de _gsmReadHidden).
+window._gsmReadConfigOverlay = function () {
+  var v = function (id, d) { var el = document.getElementById(id); return el ? el.value : d; };
+  var ck = function (id, d) { var el = document.getElementById(id); return el ? el.checked : d; };
+  var games = parseInt(v('gsm-cfg-gamesPerSet', '6')) || 6;
+  var fsOn = ck('gsm-cfg-fixedSet', false);
+  var _seg = document.getElementById('gsm-tbat-seg');
+  var out = {
+    type: 'sets', countingType: 'tennis',
+    setsToWin: parseInt(v('gsm-cfg-setsToWin', '1')) || 1,
+    gamesPerSet: games,
+    tiebreakEnabled: ck('gsm-cfg-tiebreak', true),
+    tiebreakPoints: parseInt(v('gsm-cfg-tbPoints', '7')) || 7,
+    tiebreakMargin: parseInt(v('gsm-cfg-tbMargin', '2')) || 2,
+    superTiebreak: ck('gsm-cfg-superTb', false),
+    superTiebreakPoints: parseInt(v('gsm-cfg-stbPoints', '10')) || 10,
+    advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false,
+    fixedSet: fsOn, fixedSetGames: fsOn ? games : 6
+  };
+  if (_seg && _seg.dataset.tbat) out.tiebreakAt = _seg.dataset.tbat;
+  return out;
+};
+
 window._gsmSaveConfig = function() {
-  // v4.4.x (Camada 2): GSM por fase removido — o modal grava sempre nos campos globais
-  // (Fase 1/torneio). Sem branch de _gsmConfigTargetPhase.
+  // v1.9.111: quando o modal foi aberto PELA fase eliminatória, o "Personalizado" é DELA —
+  // grava em cfg.eliminatoria.scoring e NÃO encosta nos campos ocultos do form (que são o
+  // formato da fase inicial) nem nas preferências do esporte.
+  if (window._gsmConfigTarget === 'elim') {
+    if (typeof window._f2SetElimScoring === 'function') window._f2SetElimScoring(window._gsmReadConfigOverlay());
+    window._gsmCloseConfig();
+    if (typeof showNotification !== 'undefined') {
+      showNotification('Formato da eliminatória', 'O formato próprio da fase eliminatória foi atualizado.', 'success');
+    }
+    return;
+  }
+  // Fase inicial (torneio): o modal grava nos campos globais.
   // Mark that user explicitly chose custom — preserved until a preset is clicked
   window._gsmForcedCustom = true;
   // Always save as type 'sets'
   document.getElementById('gsm-type').value = 'sets';
   document.getElementById('gsm-countingType').value = 'tennis';
 
-  var sets = document.getElementById('gsm-cfg-setsToWin') ? document.getElementById('gsm-cfg-setsToWin').value : '1';
-  var games = document.getElementById('gsm-cfg-gamesPerSet') ? document.getElementById('gsm-cfg-gamesPerSet').value : '6';
-  var tbOn = document.getElementById('gsm-cfg-tiebreak') ? document.getElementById('gsm-cfg-tiebreak').checked : true;
-  var tbPts = document.getElementById('gsm-cfg-tbPoints') ? document.getElementById('gsm-cfg-tbPoints').value : '7';
-  var tbMargin = document.getElementById('gsm-cfg-tbMargin') ? document.getElementById('gsm-cfg-tbMargin').value : '2';
-  var stbOn = document.getElementById('gsm-cfg-superTb') ? document.getElementById('gsm-cfg-superTb').checked : false;
-  var stbPts = document.getElementById('gsm-cfg-stbPoints') ? document.getElementById('gsm-cfg-stbPoints').value : '10';
-  var advantage = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;
-
-  document.getElementById('gsm-setsToWin').value = sets;
-  document.getElementById('gsm-gamesPerSet').value = games;
-  document.getElementById('gsm-tiebreakEnabled').value = tbOn ? 'true' : 'false';
-  document.getElementById('gsm-tiebreakPoints').value = tbPts;
-  document.getElementById('gsm-tiebreakMargin').value = tbMargin;
-  var _seg = document.getElementById('gsm-tbat-seg');
-  document.getElementById('gsm-tiebreakAt').value = (_seg && _seg.dataset.tbat) || '';
+  // MESMA leitura do modal usada pelo ramo da eliminatória (_gsmReadConfigOverlay) — uma
+  // fonte só; o que muda é apenas ONDE o resultado é gravado.
+  var _cfgOv = window._gsmReadConfigOverlay();
+  document.getElementById('gsm-setsToWin').value = String(_cfgOv.setsToWin);
+  document.getElementById('gsm-gamesPerSet').value = String(_cfgOv.gamesPerSet);
+  document.getElementById('gsm-tiebreakEnabled').value = _cfgOv.tiebreakEnabled ? 'true' : 'false';
+  document.getElementById('gsm-tiebreakPoints').value = String(_cfgOv.tiebreakPoints);
+  document.getElementById('gsm-tiebreakMargin').value = String(_cfgOv.tiebreakMargin);
+  document.getElementById('gsm-tiebreakAt').value = _cfgOv.tiebreakAt || '';
   if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
-  document.getElementById('gsm-superTiebreak').value = stbOn ? 'true' : 'false';
-  document.getElementById('gsm-superTiebreakPoints').value = stbPts;
-  document.getElementById('gsm-advantageRule').value = advantage ? 'true' : 'false';
-  var fsOn = document.getElementById('gsm-cfg-fixedSet') ? document.getElementById('gsm-cfg-fixedSet').checked : false;
-  document.getElementById('gsm-fixedSet').value = fsOn ? 'true' : 'false';
-  document.getElementById('gsm-fixedSetGames').value = fsOn ? games : '6';
+  document.getElementById('gsm-superTiebreak').value = _cfgOv.superTiebreak ? 'true' : 'false';
+  document.getElementById('gsm-superTiebreakPoints').value = String(_cfgOv.superTiebreakPoints);
+  document.getElementById('gsm-advantageRule').value = _cfgOv.advantageRule ? 'true' : 'false';
+  document.getElementById('gsm-fixedSet').value = _cfgOv.fixedSet ? 'true' : 'false';
+  document.getElementById('gsm-fixedSetGames').value = String(_cfgOv.fixedSetGames);
 
   // Update detailed summary in main form
   if (typeof window._updateGSMSummaryFromHidden === 'function') window._updateGSMSummaryFromHidden();
@@ -6550,8 +6600,7 @@ window._gsmSaveConfig = function() {
   }
 
   // Close overlay
-  var ov = document.getElementById('gsm-config-overlay');
-  if (ov) ov.remove();
+  window._gsmCloseConfig();
 
   // Refresh preset selection and summary
   window._gsmSelectedPreset = window._gsmDetectPreset ? window._gsmDetectPreset() : 'custom';

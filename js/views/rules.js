@@ -104,6 +104,45 @@ function renderRules(container, tournamentId) {
     return `<ul style="list-style:none;padding:0;margin:0;">${listHtml}</ul>${howToHtml}`;
   })();
 
+  // ── FASES COM FORMATO PRÓPRIO (v1.9.111) ────────────────────────────────────
+  // O bloco acima descreve t.scoring — o formato da fase INICIAL. Desde que cada fase pode
+  // ter o seu (cfg.eliminatoria.scoring → phases[i].scoring), esta tela mentiria sozinha:
+  // diria "1 set" enquanto a eliminatória joga melhor de 3. Quem manda no jogo é
+  // window._effectiveScoring(t, match); aqui só CONTAMOS isso a quem lê as regras.
+  const fasesFormatoHtml = (() => {
+    const fases = Array.isArray(t.phases) ? t.phases : [];
+    const proprias = fases.map((p, i) => ({ p: p || {}, i }))
+      .filter(x => x.p.scoring && x.p.scoring.type && x.p.scoring.type !== 'simple');
+    if (!proprias.length) return '';
+    const desc = (sc) => {
+      if (typeof window._gsmBuildDescFromValues === 'function') {
+        return window._gsmBuildDescFromValues(sc.setsToWin || 1, sc.gamesPerSet || 6, sc.tiebreakEnabled,
+          sc.tiebreakPoints || 7, sc.superTiebreak, sc.superTiebreakPoints || 10);
+      }
+      const s = sc.setsToWin || 1, g = sc.gamesPerSet || 6;
+      return (s === 1) ? (g + ' games') : ((s * 2 - 1) + ' sets de ' + g + ' games');
+    };
+    const nomeFase = (ph, i) => window._safeHtml(ph.name || ('Fase ' + (i + 1)));
+    const linhas = proprias.map(x => `
+      <li style="padding:0.6rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+        <span style="color:var(--text-muted);font-size:0.85rem;">${nomeFase(x.p, x.i)}</span>
+        <span style="font-weight:600;color:var(--text-bright);font-size:0.85rem;text-align:right;">${window._safeHtml(desc(x.p.scoring))}</span>
+      </li>`).join('');
+    // As demais fases seguem o formato do bloco de cima — dizer isso evita a leitura errada
+    // de que a tabela acima virou irrelevante.
+    const herdam = fases.map((p, i) => ({ p: p || {}, i }))
+      .filter(x => !(x.p.scoring && x.p.scoring.type && x.p.scoring.type !== 'simple'));
+    const notaHerda = herdam.length
+      ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;line-height:1.45;">As demais fases (${herdam.map(x => nomeFase(x.p, x.i)).join(', ')}) jogam no formato descrito acima.</div>`
+      : '';
+    return `
+      <div style="margin-top:1.25rem;padding:0.9rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;">
+        <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:6px;">🎾 Formato por fase</div>
+        <ul style="list-style:none;padding:0;margin:0;">${linhas}</ul>
+        ${notaHerda}
+      </div>`;
+  })();
+
   const historyHtml = (t.history && t.history.length)
     ? [...t.history].reverse().slice(0, 20).map((log, i) => {
         let date = '—';
@@ -195,6 +234,7 @@ function renderRules(container, tournamentId) {
         <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border-color);">
           <h4 style="margin:0 0 0.75rem;color:var(--text-bright);font-size:1rem;">🎾 ${_t('rules.scoringTitle')}</h4>
           ${scoringHtml}
+          ${fasesFormatoHtml}
         </div>
 
         ${isOrg ? `

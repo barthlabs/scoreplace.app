@@ -37,7 +37,12 @@
   // (#late-enroll-box) são DO FORM — relocadas pra dentro do box da Fase Classificatória
   // (slot #f2-classif-extra). Como o mount reescreve innerHTML a cada mudança, movo pra
   // fora (pro pai do mount) ANTES de reescrever e de volta DEPOIS — preserva valores/listeners.
-  var _EXT_IDS = ['phase-dates-box', 'late-enroll-box', 'gender-ratio-box'];
+  // v1.9.111: '#gsm-section' (🎾 Formato da Partida) entra nessa lista — ele deixou de ser
+  // "do torneio inteiro" e passou a ser o formato da FASE INICIAL (classificatória; ou a
+  // própria eliminatória, quando é eliminação direta). O slot #f2-classif-extra já muda de
+  // lugar conforme a fase inicial, então o bloco acompanha sozinho. A fase eliminatória
+  // POSTERIOR tem a sua própria seção (_gsmElimBlock), gravada em cfg.eliminatoria.scoring.
+  var _EXT_IDS = ['gsm-section', 'phase-dates-box', 'late-enroll-box', 'gender-ratio-box'];
   function _stashExt() {
     var mount = document.getElementById('f2-config-mount');
     var holder = mount && mount.parentNode;
@@ -173,6 +178,73 @@
   // (card de convite, dashboard, detalhe) era o fim da classificatória. Grava em
   // cfg.eliminatoria.endDate/endTime → phases[última].endDate/endTime.
   // Vazio = sem término próprio (o torneio termina com a classificatória, como antes).
+  // ── 🎾 FORMATO DA PARTIDA DA FASE ELIMINATÓRIA ───────────────────────────────
+  // A fase inicial usa o bloco #gsm-section do form (t.scoring). A eliminatória, quando é
+  // fase POSTERIOR, pode ter o SEU: cfg.eliminatoria.scoring → phases[elim].scoring, que é
+  // exatamente o que window._effectiveScoring(t, match) lê na hora do jogo.
+  // Pedido do dono: Rei/Rainha 1 set na classificatória e duplas fixas melhor-de-3 com super
+  // tie-break na eliminatória.
+  //
+  // Os presets são os MESMOS do form (window._gsmPresets) — uma fonte só de "1 Set / Melhor
+  // de 3 / Melhor de 5 / Personalizado". Se create-tournament.js ainda não montou (modo page),
+  // a seção simplesmente não aparece em vez de inventar uma segunda tabela de presets.
+  function _elimScoringDesc(sc) {
+    if (!sc) return '';
+    if (typeof window._gsmBuildDescFromValues !== 'function') return '';
+    return window._gsmBuildDescFromValues(sc.setsToWin, sc.gamesPerSet, sc.tiebreakEnabled,
+      sc.tiebreakPoints, sc.superTiebreak, sc.superTiebreakPoints);
+  }
+  // Qual preset o scoring atual representa (pra acender o botão certo). 'custom' quando não
+  // bate com nenhum — é o mesmo critério de igualdade que o form usa nos campos ocultos.
+  function _elimPresetKey(sc) {
+    var P = window._gsmPresets || {};
+    if (!sc) return null;
+    if (sc.fixedSet) return 'custom';
+    var keys = ['set1', 'best3', 'best5'];
+    for (var i = 0; i < keys.length; i++) {
+      var p = P[keys[i]];
+      if (!p) continue;
+      if (p.setsToWin === sc.setsToWin && p.gamesPerSet === sc.gamesPerSet &&
+        !!p.tiebreakEnabled === !!sc.tiebreakEnabled && p.tiebreakPoints === sc.tiebreakPoints &&
+        !!p.superTiebreak === !!sc.superTiebreak && p.superTiebreakPoints === sc.superTiebreakPoints) return keys[i];
+    }
+    return 'custom';
+  }
+  function _gsmElimBlock(e) {
+    var P = window._gsmPresets;
+    if (!P) return '';
+    var own = !!e.scoring;
+    var selKey = own ? _elimPresetKey(e.scoring) : null;
+    var inner = '<div style="font-size:0.72rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">' +
+      'Por padrão a eliminatória joga no <b>mesmo formato da classificatória</b>. Ative para dar a ela um formato próprio — ' +
+      'por exemplo, classificatória em <b>1 set</b> e eliminatória em <b>melhor de 3</b>.</div>' +
+      _toggleRight('Formato próprio nesta fase', own, 'window._f2ElimScoringOwn(this.checked)');
+    if (own) {
+      var grid = '';
+      ['set1', 'best3', 'best5', 'custom'].forEach(function (k) {
+        var p = P[k]; if (!p) return;
+        var active = (selKey === k);
+        var desc = (k === 'custom')
+          ? (selKey === 'custom' ? (_elimScoringDesc(e.scoring) || 'Configure manualmente') : 'Configure manualmente')
+          : (typeof window._gsmBuildDescFromValues === 'function'
+            ? window._gsmBuildDescFromValues(p.setsToWin, p.gamesPerSet, p.tiebreakEnabled, p.tiebreakPoints, p.superTiebreak, p.superTiebreakPoints)
+            : '');
+        grid += '<button type="button" onclick="window._f2ElimScoringPreset(\'' + k + '\')" style="' +
+          'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
+          'border:2px solid ' + (active ? 'rgba(251,191,36,0.7)' : 'rgba(255,255,255,0.1)') + ';' +
+          'background:' + (active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)') + ';">' +
+          '<span style="font-size:1.3rem;">' + p.icon + '</span>' +
+          '<span style="font-size:0.78rem;font-weight:700;color:' + (active ? '#fbbf24' : 'var(--text-bright)') + ';">' + _safe(p.label) + '</span>' +
+          '<span style="font-size:0.65rem;color:var(--text-muted);text-align:center;line-height:1.3;">' + _safe(desc) + '</span>' +
+          '</button>';
+      });
+      inner += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;">' + grid + '</div>' +
+        '<div style="font-size:0.78rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:9px;padding:8px 11px;margin-top:10px;line-height:1.45;">' +
+        '🎾 Jogos da eliminatória: <b>' + _safe(_elimScoringDesc(e.scoring)) + '</b></div>';
+    }
+    return _sec('🎾 Formato da Partida', inner);
+  }
+
   function _elimEndDateBlock(e) {
     var d = e.endDate || '', h = e.endTime || '';
     return '<div style="background:rgba(129,140,248,0.05);border:1px solid rgba(129,140,248,0.18);border-radius:12px;padding:1rem;margin-top:14px;">' +
@@ -597,6 +669,10 @@
               : 'Chaves <b>independentes</b> — cada chave tem seu próprio campeão, sem grande final unindo-as. Ative para cruzá-las numa grande final.') + '</div>';
         }
       }
+      // 🎾 FORMATO DA PARTIDA DESTA FASE — só quando a eliminatória é fase POSTERIOR. Na
+      // eliminação direta ela É a fase inicial e recebe o bloco #gsm-section do form pelo slot
+      // abaixo (_elimInitExtra) — um formato só, sem duas fontes pro mesmo jogo.
+      if (cfg.classifAtiva) eb += '<div style="margin-top:14px;">' + _gsmElimBlock(e) + '</div>';
       // "Inscrições durante a fase": cada fase tem a SUA. Sem classificatória, a eliminatória é a
       // fase inicial (onde há inscrição) e carrega o bloco do FORM (via slot #f2-classif-extra →
       // t.lateEnrollment). Com classificatória, ELA é a inicial (tem o bloco do form via slot);
@@ -895,6 +971,42 @@
   // v4.4.33: toggle da fase classificatória. Desligar → eliminação direta (elim obrigatória).
   window._f2ClassifAtiva = function (checked) { if (!S) return; S.cfg.classifAtiva = !!checked; if (!checked) S.cfg.eliminatoria.ativa = true; _norm(); _rerender(); };
   window._f2Linhas = function (n) { S.cfg.eliminatoria.linhas = n; _norm(); _rerender(); };
+  // ── Formato da partida da ELIMINATÓRIA (cfg.eliminatoria.scoring) ──
+  // Ligar o toggle NÃO muda o jogo: começa com uma cópia do formato da fase inicial, e a
+  // pessoa então escolhe outro. (Ligar e já mudar o placar por baixo seria surpresa.)
+  window._f2GetElimScoring = function () {
+    return (S && S.cfg && S.cfg.eliminatoria && S.cfg.eliminatoria.scoring) || null;
+  };
+  window._f2SetElimScoring = function (sc) {
+    if (!S) return;
+    S.cfg.eliminatoria.scoring = sc || null;
+    _norm(); _rerender();
+  };
+  window._f2ElimScoringOwn = function (checked) {
+    if (!S) return;
+    if (!checked) { window._f2SetElimScoring(null); return; }
+    var base = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+    // Formato do torneio ainda 'simple' (sem sets) não serve de base pra uma fase que vai
+    // escolher entre 1 set / melhor de 3 — nesse caso começa no preset de 1 set.
+    if (!base || (base.type !== 'sets' && base.type !== 'gsm')) {
+      var p = (window._gsmPresets || {}).set1;
+      base = p ? Object.assign({ type: 'sets' }, p) : { type: 'sets', setsToWin: 1, gamesPerSet: 6 };
+      delete base.label; delete base.icon;
+    }
+    window._f2SetElimScoring(base);
+  };
+  window._f2ElimScoringPreset = function (key) {
+    if (!S) return;
+    if (key === 'custom') { if (typeof window._openGSMConfig === 'function') window._openGSMConfig('elim'); return; }
+    var p = (window._gsmPresets || {})[key];
+    if (!p) return;
+    var sc = Object.assign({ type: 'sets' }, p);
+    delete sc.label; delete sc.icon;
+    // Vantagem (deuce) é DERIVADA do esporte, nunca do preset — mesma regra do form.
+    sc.advantageRule = (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false;
+    window._f2SetElimScoring(sc);
+  };
+
   window._f2GrandFinal = function (checked) { if (!S) return; S.cfg.eliminatoria.grandFinal = !!checked; _norm(); _rerender(); };
   // v4.4.58: Dupla Eliminatória (repescagem). ON força 1 linha (chave única) no normalize.
   window._f2ElimDupla = function (checked) { S.cfg.eliminatoria.dupla = !!checked; _norm(); _rerender(); };

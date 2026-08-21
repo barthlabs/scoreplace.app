@@ -332,6 +332,50 @@ window._flushBracketPaint = function () {
   while (_pendentes.length) { var f = _pendentes.shift(); try { f(); } catch (e) {} }
 };
 
+// ── ALVO DA ROLAGEM DE ENTRADA — UMA definição só ────────────────────────────
+// Usado pelo scroll (_goMine) E pelo laço que re-afirma a posição (_reafirmar). Eram DUAS
+// cópias da mesma escolha: toda regra nova precisava ser escrita nos dois lugares, e a que
+// ficasse pra trás desfazia a outra (foi assim que o passe fixo de 1400ms já desmanchou uma
+// rolagem certa). [[feedback_unify_dual_entry_points]]
+function _alvoDeEntrada() {
+  // 0) Fase concluída + organizador → o banner "🏆 Avançar" está no topo e é a próxima ação
+  //    dele. (Antes só o _goMine conhecia esta regra; o laço media outro elemento e brigava.)
+  var _adv = document.getElementById('phase-advance-banner');
+  if (_adv) return _adv;
+  // 1) GRUPO PEDIDO — quem chegou pelo "Ir para o torneio" de um grupo específico (dashboard)
+  //    quer AQUELE grupo, não o seu. Não encontrado (re-sorteio, fase avançada) → não insiste.
+  var _p = null;
+  try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
+  if (_p) {
+    var _g = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
+    if (_g) return _g;
+  }
+  // 2) O SEU GRUPO. Ordem do dono (21/ago/2026): _"quando a pessoa entra nos detalhes do
+  //    torneio ela precisa ir direto para o topo do seu grupo. o seu grupo e seu nome deve
+  //    estar na tela de cara."_ Vale mesmo SEM jogo pendente — grupo sorteado e ainda sem
+  //    confronto, rodada já jogada, W.O.: o grupo continua sendo o lugar dele na competição.
+  //    Antes o alvo era o JOGO dele; sem jogo pendente a tela não rolava nada e ele caía no
+  //    topo do torneio. Com várias rodadas (Rei/Rainha) ele aparece em VÁRIOS grupos: fica
+  //    com o primeiro que ainda tem jogo dele pendente; se não houver, o ÚLTIMO — a rodada
+  //    mais recente, que é onde a história dele está.
+  var _meus = document.querySelectorAll('[data-my-group="1"]');
+  if (_meus && _meus.length) {
+    for (var i = 0; i < _meus.length; i++) {
+      if (_meus[i].querySelector && _meus[i].querySelector('[data-my-pending="1"]')) return _meus[i];
+    }
+    return _meus[_meus.length - 1];
+  }
+  // 3) Sem grupo (eliminatória, chave): o próximo jogo dele — subindo pro box do grupo
+  //    quando o card mora dentro de um.
+  var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
+  if (!_mine) return null;
+  return (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
+}
+
+// Exposta pra ser COBRADA por teste (tests/entrar-no-torneio-cai-no-meu-grupo.test.js):
+// a ordem de prioridade é regra de produto do dono, não detalhe interno.
+window._bracketEntryTarget = _alvoDeEntrada;
+
 function _applyMyMatchesFilter() {
   // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
   // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
@@ -368,28 +412,8 @@ function _applyMyMatchesFilter() {
         // alvo pousava ATRÁS dela e o topo do card/grupo saía cortado (reportado pelo
         // dono: o cabeçalho do grupo, com as pills e os botões, ficava escondido).
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
-        // Fase concluída + organizador → o banner "🏆 Avançar" está no topo. O alvo do
-        // scroll passa a ser ELE (a próxima ação do org é avançar de fase), não o jogo/
-        // grupo do usuário. Só existe pro organizador quando a fase fecha (bracket.js).
-        var _adv = document.getElementById('phase-advance-banner');
-        if (_adv) { _adv.scrollIntoView({ behavior: behavior, block: 'start' }); return; }
-        // v1.8.99: GRUPO PEDIDO tem prioridade. Quem chegou pelo "Ir para o torneio"
-        // de um grupo específico (dashboard) quer AQUELE grupo no topo — não o seu
-        // próximo jogo, que pode estar em outro grupo. Sem pedido, segue a regra antiga.
-        var _pedido = null;
-        try { _pedido = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
-        if (_pedido) {
-          var _alvoGrp = document.querySelector('[data-group-label="' + String(_pedido).replace(/"/g, '') + '"]');
-          if (_alvoGrp) {
-            _alvoGrp.scrollIntoView({ behavior: behavior, block: 'start' });
-            return;
-          }
-          // grupo não encontrado (re-sorteio, fase avançada) → NÃO insiste: cai na
-          // regra normal, que é melhor que ficar no topo do torneio sem explicação.
-        }
-        var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
-        if (!_mine) return;
-        var _target = (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
+        var _target = _alvoDeEntrada();
+        if (!_target) return;
         _target.scrollIntoView({ behavior: behavior, block: 'start' });
       } catch (e) {}
     };
@@ -409,13 +433,7 @@ function _applyMyMatchesFilter() {
       var _ultimo = null, _estaveis = 0, _voltas = 0;
       var _tick = function () {
         _voltas++;
-        var _el = null;
-        try {
-          var _p = sessionStorage.getItem('sp_scrollToGroup');
-          if (_p) _el = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
-        } catch (e) {}
-        if (!_el) _el = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
-        if (_el && typeof _el.closest === 'function') _el = _el.closest('[data-group-box]') || _el;
+        var _el = _alvoDeEntrada();   // MESMO alvo do _goMine — senão um desfaz o outro
         if (!_el) return;
         var _topo = Math.round(_el.getBoundingClientRect().top);
         // ⚠️ A RÉGUA É A CORREÇÃO, NÃO A ESTABILIDADE. Minha 1ª versão só re-rolava
@@ -4738,10 +4756,18 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // Controle de PRESENÇA do grupo (entre Combinar e W.O.) — helper ÚNICO compartilhado
     // com o render de grupo Rei/Rainha da rota Liga (t.rounds[].monarchGroups).
     var _grpArrived = window._monGroupArrivedBtn(t, matches, groupDone);
-    html += '<div data-group-box="1" data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : '#fbbf24') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    // v1.9.111: `data-my-group="1"` — MARCA no DOM o grupo de quem está olhando. É por ela
+    // que a entrada no torneio rola direto pro TOPO DO SEU GRUPO (bracket.js/_goMine), em vez
+    // de depender de existir um jogo pendente dele. Aqui (Rei/Rainha) o grupo do usuário já ia
+    // pro topo da lista, mas não se ANUNCIAVA: sem badge, sem borda e sem marca pro scroll.
+    var _isMineMon = _sgHasMe(sg);
+    var _mineBadgeMon = _isMineMon
+      ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>'
+      : '';
+    html += '<div data-group-box="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')) + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
-        '<h3 style="margin:0;font-size:1.1rem;color:var(--text-bright);flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
-        (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
+        '<h3 style="margin:0;font-size:1.1rem;color:' + (_isMineMon ? '#22d3ee' : 'var(--text-bright)') + ';flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
+        _mineBadgeMon + (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
@@ -4945,7 +4971,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsPlayers = (sg.players && sg.players.length) ? sg.players : sorted.map(function (s) { return s.name; });
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     return `
-      <div class="card" id="group-section-${gi}" data-group-box="1" data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
+      <div class="card" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
         <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
@@ -6022,7 +6048,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
-          return '<div data-group-box="1" data-group-label="' + window._safeHtml(window._grpKey(g.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
+          return '<div data-group-box="1"' + (isMyGroup ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(g.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
             // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
             // dono); com botões, empilha à esquerda e deixa os controles à direita.

@@ -370,13 +370,23 @@ if (codPools && codCont) {
 
   ok(/sessionStorage\.setItem\(\\'sp_scrollToGroup/.test(dash) || /sp_scrollToGroup/.test(dash),
     'o botão da dashboard grava o grupo pedido');
-  ok(/_pedido = sessionStorage\.getItem\('sp_scrollToGroup'\)/.test(br),
+  // ⚠️ Estas três cobram a REGRA, não o nome da variável: em 1.9.111 a escolha do alvo
+  // virou UMA função (_alvoDeEntrada) usada pelo scroll e pelo laço que o re-afirma — eram
+  // duas cópias — e o `_pedido` local sumiu no caminho. A prioridade em si (grupo pedido >
+  // meu grupo > meu jogo) é cobrada de ponta a ponta, com DOM, em
+  // tests/entrar-no-torneio-cai-no-meu-grupo.test.js.
+  ok(/sessionStorage\.getItem\('sp_scrollToGroup'\)/.test(br),
     'a chave lê o grupo pedido');
-  ok(/querySelector\('\[data-group-label="' \+ String\(_pedido\)/.test(br),
+  ok(/querySelector\('\[data-group-label="'/.test(br),
     'e rola pro box daquele rótulo');
-  // ⚠️ grupo inexistente NÃO pode travar no topo — cai na regra antiga
-  ok(/\/\/ grupo não encontrado \(re-sorteio, fase avançada\)/.test(br),
+  // ⚠️ grupo inexistente NÃO pode travar no topo — cai nas regras seguintes
+  ok(/encontrado \(re-sorteio, fase avançada\)/i.test(br),
     'grupo não encontrado cai na regra antiga em vez de ficar no topo sem explicação');
+  // v1.9.111 (ordem do dono): entrar no torneio cai no TOPO DO SEU GRUPO, mesmo sem jogo
+  // pendente. Os três renders de box de grupo têm de MARCAR o grupo de quem está olhando.
+  ok((br.match(/data-my-group="1"/g) || []).length >= 3,
+    'os 3 renders marcam o grupo do usuário (data-my-group) pro scroll de entrada');
+  ok(/\[data-my-group="1"\]/.test(br), 'o alvo de entrada procura o grupo do usuário');
   // ── v1.9.0: a rolagem se CORRIGE até o alvo estar no lugar certo ──────────
   // Relato do dono: "na segunda vez vai certo, mas na primeira fica mais abaixo".
   // MEDIDO no harness: com o recuo (--scroll-anchor) medido pequeno no instante do

@@ -8,6 +8,17 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // Cada FASE pode ter o seu formato de partida (1 set na classificatória, melhor de 3 com
+  // super tie-break na eliminatória — pedido do dono com a Confra de exemplo). Guarda o
+  // caminho INTEIRO, não o desenho: cfg.eliminatoria.scoring → compileToPhases →
+  // phases[elim].scoring → window._effectiveScoring, que é quem o jogo consulta. O código
+  // antigo carimbava `scoring: null` em toda fase e nada escrevia por cima.
+  'tests/formato-da-partida-por-fase.test.js',
+  // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
+  // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
+  // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o
+  // alvo (window._bracketEntryTarget) PREFERE esse grupo, com a ordem de prioridade do dono.
+  'tests/entrar-no-torneio-cai-no-meu-grupo.test.js',
   // Bloco CSS sem `}` engole o RESTO do arquivo, sem erro nenhum. Aconteceu em
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
