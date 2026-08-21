@@ -111,6 +111,34 @@ ok(/_stampWinner\(m, 1\)/.test(ui) && /_stampWinner\(m, 2\)/.test(ui), 'os dois 
 ok(/_stampWinner\(m, 1\)/.test(lg) && /_stampWinner\(m, 2\)/.test(lg),
   'aprovar um placar pendente também carimba (é onde o resultado vira definitivo)');
 
+// ── 7. VARREDURA: nada por nome, em lugar NENHUM ─────────────────────────────
+// Ordem do dono (21/ago): "nada por nome porra" · "tudo uid". Eram 78 sítios comparando
+// `X.winner === X.p1` — na cor do card, na CLASSIFICAÇÃO (bracket-logic), no campeão/pódio
+// (store.js), no compartilhamento, no sorteio. Nos 3 jogos órfãos da Confra a comparação
+// dava falso nos DOIS lados: a vitória sumia da conta. Medido no golden depois da troca:
+// +6 vitórias contadas = 3 jogos × 2 pessoas da dupla vencedora — exatamente o que faltava.
+(function () {
+  const dir = path.join(__dirname, '..', 'js');
+  const pad = /\b([A-Za-z_][A-Za-z0-9_.]*)\.winner (===|!==) \1\.p[12]\b/;
+  const achados = [];
+  (function varre(d) {
+    fs.readdirSync(d, { withFileTypes: true }).forEach(function (e) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) return varre(full);
+      if (!e.name.endsWith('.js') || e.name === 'release-notes.js') return;
+      fs.readFileSync(full, 'utf8').split('\n').forEach(function (ln, i) {
+        if (!pad.test(ln)) return;
+        // O corpo do PRÓPRIO resolvedor é o único lugar onde o nome ainda é consultado —
+        // é o 1º degrau dele (nome → uid → placar).
+        if (e.name === 'bracket-model.js') return;
+        achados.push(full.replace(dir, 'js') + ':' + (i + 1));
+      });
+    });
+  })(dir);
+  if (achados.length) achados.slice(0, 6).forEach(function (a) { console.log('    ↳ ' + a); });
+  ok(achados.length === 0, 'NENHUM sítio do app decide vencedor comparando string de nome');
+})();
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ quem-venceu-e-uma-regra-so FALHOU'); process.exit(1); }
 console.log('✅ quem-venceu-e-uma-regra-so: OK');

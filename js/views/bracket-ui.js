@@ -904,8 +904,8 @@ function _persistInlineTournamentMatchRecord(t, m, s1, s2, tbP1, tbP2, isTiebrea
   var players = pl.players;
   var winnerTeam = 0;
   if (m.draw || m.winner === 'draw') winnerTeam = 0;
-  else if (m.winner === m.p1) winnerTeam = 1;
-  else if (m.winner === m.p2) winnerTeam = 2;
+  else if (window._matchWinnerSide(m) === 1) winnerTeam = 1;
+  else if (window._matchWinnerSide(m) === 2) winnerTeam = 2;
   var setsArr = [];
   if (useSets) {
     var setEntry = { gamesP1: s1, gamesP2: s2 };
@@ -953,8 +953,8 @@ function _persistGSMTournamentMatchRecord(t, m, sets, p1Sets, p2Sets, totalGames
   if (!pl) return;
   var winnerTeam = 0;
   if (m.draw || m.winner === 'draw') winnerTeam = 0;
-  else if (m.winner === m.p1) winnerTeam = 1;
-  else if (m.winner === m.p2) winnerTeam = 2;
+  else if (window._matchWinnerSide(m) === 1) winnerTeam = 1;
+  else if (window._matchWinnerSide(m) === 2) winnerTeam = 2;
   var setsArr = (sets || []).map(function(s) {
     var e = { gamesP1: s.gamesP1, gamesP2: s.gamesP2 };
     var _tbn = window._setTiebreak(s);
@@ -1376,8 +1376,12 @@ window._saveSetResult = function(tId, matchId) {
   if (_curUserGsm && _resultNeedsApproval(t, m, _curUserGsm)) {
     var _proposedWinnerGsm = '';
     var _proposedDrawGsm = false;
-    if (p1Sets > p2Sets) _proposedWinnerGsm = m.p1;
-    else if (p2Sets > p1Sets) _proposedWinnerGsm = m.p2;
+    // 2.0.3: o lado proposto também carrega os uids — o pendente é NOME desde sempre e
+    // envelhecia igual ao definitivo. `_proposedWinnerUids` entra no pendingResult abaixo.
+    var _proposedWinnerUids = null;
+    var _slot = (typeof window._slotUids === 'function') ? window._slotUids : function () { return null; };
+    if (p1Sets > p2Sets) { _proposedWinnerGsm = m.p1; _proposedWinnerUids = _slot(m, 1); }
+    else if (p2Sets > p1Sets) { _proposedWinnerGsm = m.p2; _proposedWinnerUids = _slot(m, 2); }
     else { _proposedWinnerGsm = 'draw'; _proposedDrawGsm = true; }
     var _scoreP1Gsm, _scoreP2Gsm;
     if (isFixedSet) {
@@ -1395,6 +1399,7 @@ window._saveSetResult = function(tId, matchId) {
       proposedByName: _curUserGsm.displayName || _curUserGsm.email || 'Jogador',
       proposedAt: Date.now(),
       winner: _proposedWinnerGsm,
+      winnerUids: (_proposedWinnerUids && _proposedWinnerUids.length) ? _proposedWinnerUids.slice() : null,
       draw: _proposedDrawGsm,
       sets: sets,
       setsWonP1: p1Sets,
@@ -2453,7 +2458,7 @@ window._revertWO = function(tId, matchId) {
     'O W.O. de "' + m.p1 + ' vs ' + m.p2 + '" será desfeito. O placar volta a 0×0, o avanço do vencedor é cancelado e os jogadores marcados como ausentes voltam a ficar disponíveis. A partida deverá ser jogada novamente. Confirma?',
     function() {
       var prevWinner = m.winner;
-      var oldLoser = m.winner === m.p1 ? m.p2 : m.p1;
+      var oldLoser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
 
       // 1. Desfaz avanço do vencedor (próximo jogo) — só se ainda não decidido.
       if (m.nextMatchId) {
@@ -2799,14 +2804,14 @@ window._editResult = function (tId, matchId) {
       if (m.loserMatchId) {
         const lm = _findMatch(t, m.loserMatchId);
         if (lm && !lm.winner) {
-          const oldLoser = m.winner === m.p1 ? m.p2 : m.p1;
+          const oldLoser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
           if (lm.p1 === oldLoser) lm.p1 = 'TBD';
           if (lm.p2 === oldLoser) lm.p2 = 'TBD';
         }
       }
       // Clear progressive classification entries
       if (t.classification) {
-        var oldLoser2 = m.winner === m.p1 ? m.p2 : m.p1;
+        var oldLoser2 = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
         delete t.classification[m.winner];
         delete t.classification[oldLoser2];
       }
@@ -3774,12 +3779,12 @@ window._advanceToElimination = function (tId) {
           scoreMap[m.p1].pointsDiff += (s1 - s2); scoreMap[m.p2].pointsDiff += (s2 - s1);
           return;
         }
-        const loser = m.winner === m.p1 ? m.p2 : m.p1;
+        const loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
         if (!scoreMap[m.winner]) scoreMap[m.winner] = { name: m.winner, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
         if (!scoreMap[loser]) scoreMap[loser] = { name: loser, points: 0, wins: 0, draws: 0, losses: 0, pointsDiff: 0, played: 0 };
         scoreMap[m.winner].wins++; scoreMap[m.winner].points += 3; scoreMap[m.winner].played++;
         scoreMap[loser].losses++; scoreMap[loser].played++;
-        if (m.winner === m.p1) { scoreMap[m.p1].pointsDiff += (s1 - s2); scoreMap[m.p2].pointsDiff += (s2 - s1); }
+        if (window._matchWinnerSide(m) === 1) { scoreMap[m.p1].pointsDiff += (s1 - s2); scoreMap[m.p2].pointsDiff += (s2 - s1); }
         else { scoreMap[m.p2].pointsDiff += (s2 - s1); scoreMap[m.p1].pointsDiff += (s1 - s2); }
       });
     });
@@ -3810,7 +3815,7 @@ window._advanceToElimination = function (tId) {
         }
         if (!scoreMap[m.winner]) scoreMap[m.winner] = { name: m.winner, points: 0, wins: 0, draws: 0, pointsDiff: 0 };
         scoreMap[m.winner].wins++; scoreMap[m.winner].points += 3;
-        if (m.winner === m.p1) scoreMap[m.p1].pointsDiff += (s1 - s2);
+        if (window._matchWinnerSide(m) === 1) scoreMap[m.p1].pointsDiff += (s1 - s2);
         else scoreMap[m.p2].pointsDiff += (s2 - s1);
       });
     });

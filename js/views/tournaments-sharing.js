@@ -1197,7 +1197,7 @@ function _resolveMatchRows(t) {
     var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
     var _u1 = (window._slotUids ? window._slotUids(m, 'p1') : (m.p1Uid || m.team1Uids));
     var _u2 = (window._slotUids ? window._slotUids(m, 'p2') : (m.p2Uid || m.team2Uids));
-    var _wUid = m.winnerUid || m.winnerUids || ((m.winner && m.winner === m.p1) ? _u1 : ((m.winner && m.winner === m.p2) ? _u2 : null));
+    var _wUid = m.winnerUid || m.winnerUids || ((m.winner && window._matchWinnerSide(m) === 1) ? _u1 : ((m.winner && window._matchWinnerSide(m) === 2) ? _u2 : null));
     rows.push({
       n: matchNum,
       p1: _rsl(t, m.p1 || 'TBD', _u1),

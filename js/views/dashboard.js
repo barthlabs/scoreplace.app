@@ -2379,8 +2379,8 @@ function renderDashboard(container) {
           : (m2.label || 'JOGO 1');
         var rowStyle2 = 'display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:4px;';
 
-        var p1IsWinner = !m2.draw && m2.winner === m2.p1;
-        var p2IsWinner = !m2.draw && m2.winner === m2.p2;
+        var p1IsWinner = !m2.draw && window._matchWinnerSide(m2) === 1;
+        var p2IsWinner = !m2.draw && window._matchWinnerSide(m2) === 2;
 
         // v1.9.99: posição final do usuário no torneio (quando a participação já
         // está definida em t.classification — ex.: vice = 2º). Mostrada abaixo do

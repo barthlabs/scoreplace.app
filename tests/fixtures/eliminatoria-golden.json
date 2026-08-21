@@ -382,6 +382,13 @@
           "d": 1,
           "pc": 8,
           "pf": 13,
+          "uid": "uid0052",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 8,
+          "pf": 13,
           "uid": "uid0049",
           "v": 2
         },
@@ -390,13 +397,6 @@
           "pc": 8,
           "pf": 13,
           "uid": "uid0050",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 8,
-          "pf": 13,
-          "uid": "uid0052",
           "v": 2
         },
         {
@@ -923,32 +923,32 @@
       "grupo": 27,
       "linhas": [
         {
-          "d": 1,
+          "d": 0,
           "pc": 10,
           "pf": 18,
           "uid": "uid0114",
-          "v": 2
+          "v": 3
         },
         {
-          "d": 1,
-          "pc": 15,
-          "pf": 13,
-          "uid": "uid0115",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 17,
-          "pf": 11,
-          "uid": "uid0116",
-          "v": 2
-        },
-        {
-          "d": 3,
+          "d": 2,
           "pc": 14,
           "pf": 14,
           "uid": "uid0051",
-          "v": 0
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 15,
+          "pf": 13,
+          "uid": "uid0115",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 11,
+          "uid": "uid0116",
+          "v": 1
         }
       ],
       "nome": "R1 Grupo B2"
@@ -1292,7 +1292,7 @@
       "label": null,
       "p1": "Pessoa 28 / Pessoa 29",
       "p1Uid": null,
-      "p2": "Pessoa 115 / Pessoa 116",
+      "p2": "Pessoa 115 / Pessoa 49",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
@@ -1302,7 +1302,7 @@
       ],
       "team2Uids": [
         "uid0114",
-        "uid0115"
+        "uid0051"
       ],
       "winner": null
     },
@@ -1394,15 +1394,15 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P12",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 51 / Pessoa 52",
+      "p1": "Pessoa 50 / Pessoa 51",
       "p1Uid": null,
       "p2": "Pessoa 93 / Pessoa 94",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0049",
-        "uid0050"
+        "uid0052",
+        "uid0049"
       ],
       "team2Uids": [
         "uid0094",
@@ -2126,7 +2126,7 @@
       "label": null,
       "p1": "Pessoa 149 / Pessoa 31",
       "p1Uid": "uid0030",
-      "p2": "Pessoa 117 / Pessoa 49",
+      "p2": "Pessoa 116 / Pessoa 117",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
@@ -2134,8 +2134,8 @@
         "uid0030"
       ],
       "team2Uids": [
-        "uid0116",
-        "uid0051"
+        "uid0115",
+        "uid0116"
       ],
       "winner": null
     },
@@ -2228,14 +2228,14 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P12",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 50 / Pessoa 49",
+      "p1": "Pessoa 52 / Pessoa 49",
       "p1Uid": null,
       "p2": "Pessoa 95 / Pessoa 96",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0052",
+        "uid0050",
         "uid0051"
       ],
       "team2Uids": [

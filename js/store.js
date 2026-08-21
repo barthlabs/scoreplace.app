@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.2';
+window.SCOREPLACE_VERSION = '2.0.3';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -11392,9 +11392,9 @@ window._classifUnifiedMap = function (t, fpMatches, tierKeys) {
   var cl = {}, nextPos = 1, placed = {};
   function place(n) { if (n && n !== 'TBD' && n !== 'BYE' && !placed[n]) { placed[n] = 1; cl[n] = nextPos++; } }
   var gf = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner; })[0];
-  if (gf) { place(gf.winner); place(gf.winner === gf.p1 ? gf.p2 : gf.p1); }
+  if (gf) { place(gf.winner); place(window._matchWinnerSide(gf) === 1 ? gf.p2 : gf.p1); }
   var tp = (fpMatches || []).filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
-  if (tp) { place(tp.winner); place(tp.winner === tp.p1 ? tp.p2 : tp.p1); }
+  if (tp) { place(tp.winner); place(window._matchWinnerSide(tp) === 1 ? tp.p2 : tp.p1); }
   var rest = [];
   (tierKeys || []).forEach(function (bk, li) {
     var lm = (fpMatches || []).filter(function (m) { return (m.bracket || 'main') === bk; });
@@ -11584,7 +11584,7 @@ window._linePodiumHtml = function (t, lineMatches, title, color) {
   var maxR = Math.max.apply(null, rs);
   var fin = nonThird.filter(function (m) { return (m.round == null ? 1 : m.round) === maxR && m.winner && !m.isBye; })[0];
   if (!fin) return '';
-  var p1 = fin.winner, p2 = (fin.winner === fin.p1) ? fin.p2 : fin.p1;
+  var p1 = fin.winner, p2 = (window._matchWinnerSide(fin) === 1) ? fin.p2 : fin.p1;
   if (p2 === 'TBD' || p2 === 'BYE') p2 = null;
   var tp = (lineMatches || []).filter(function (m) { return (m.isThirdPlace || (m.bracket || '') === 'thirdplace') && m.winner; })[0];
   var p3 = tp ? tp.winner : null;
@@ -11618,7 +11618,7 @@ window._renderPodiumsAndClassif = function (t) {
     var _deGF = fpMatches.filter(function (m) { return (m.bracket || '') === 'grand' && m.winner && m.winner !== 'draw' && !m.isBye; })[0];
     var _dePod = '';
     if (_deGF && typeof window._buildPodiumHtml === 'function') {
-      var _d1 = _deGF.winner, _d2 = (_deGF.winner === _deGF.p1) ? _deGF.p2 : _deGF.p1;
+      var _d1 = _deGF.winner, _d2 = (window._matchWinnerSide(_deGF) === 1) ? _deGF.p2 : _deGF.p1;
       if (_d2 === 'TBD' || _d2 === 'BYE') _d2 = null;
       var _d3 = Object.keys(_deMap).filter(function (n) { return _deMap[n] === 3; })[0] || null; // 3º = perdedor da Final Inferior
       _dePod = window._buildPodiumHtml(_d1, _d2, _d3);
@@ -11665,7 +11665,7 @@ window._renderPodiumsAndClassif = function (t) {
     classifMap = window._classifMapFromMatches(t, fpMatches);
   }
   if (finalMatch && typeof window._buildPodiumHtml === 'function') {
-    var w1 = finalMatch.winner, w2 = (finalMatch.winner === finalMatch.p1) ? finalMatch.p2 : finalMatch.p1;
+    var w1 = finalMatch.winner, w2 = (window._matchWinnerSide(finalMatch) === 1) ? finalMatch.p2 : finalMatch.p1;
     if (w2 === 'TBD' || w2 === 'BYE') w2 = null;
     podium = window._buildPodiumHtml(w1, w2, thirdPlace);
   }

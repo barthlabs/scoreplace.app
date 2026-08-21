@@ -2152,7 +2152,7 @@ function _ensureFutureRounds(t) {
     if (semiRound && currentRoundsMap[semiRound]) {
       const losers = currentRoundsMap[semiRound]
         .filter(m => m.winner && m.winner !== 'draw' && !m.isBye)
-        .map(m => m.winner === m.p1 ? m.p2 : m.p1)
+        .map(m => window._matchWinnerSide(m) === 1 ? m.p2 : m.p1)
         .filter(name => name && name !== 'TBD' && name !== 'BYE');
       t.thirdPlaceMatch.p1 = losers.length >= 1 ? losers[0] : 'TBD';
       t.thirdPlaceMatch.p2 = losers.length >= 2 ? losers[1] : 'TBD';
@@ -3912,14 +3912,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const matchPartial = !isDecided && !isByeMatch && !hasTBD && hasAnyCheckIn && !matchReady;
 
   // ⭐ 2.0.1: quem venceu sai da REGRA ÚNICA (window._matchWinnerSide, bracket-model.js) e não
-  // mais de `m.winner === m.p1`. Comparar a string de nomes falhava nos DOIS lados quando a
+  // mais de `window._matchWinnerSide(m) === 1`. Comparar a string de nomes falhava nos DOIS lados quando a
   // composição da dupla mudava depois do resultado — e aí a tela pintava os dois números de
   // vermelho, sem tarja verde nenhuma (relato do dono na dashboard, jogo 1 × 6). Medido: 3
   // jogos da Confra estão nesse estado hoje. O fallback resolve pelo placar do próprio
   // documento; sem `m.winner` nada muda (nunca inventa vencedor).
   const _ladoVencedor = (typeof window._matchWinnerSide === 'function')
     ? window._matchWinnerSide(m)
-    : (m.draw || m.winner === 'draw' ? 0 : (m.winner === m.p1 ? 1 : (m.winner === m.p2 ? 2 : null)));
+    : (m.draw || m.winner === 'draw' ? 0 : (window._matchWinnerSide(m) === 1 ? 1 : (window._matchWinnerSide(m) === 2 ? 2 : null)));
   const p1IsWinner = isDecided && _ladoVencedor === 1;
   const p2IsWinner = isDecided && _ladoVencedor === 2;
 
@@ -4045,7 +4045,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : _woAbsent
       ? (_woAbsent === 'p1' ? 'W.O.' : '')
       : (useSets && isDecided ? formatSetScores(m, 1) : m.scoreP1);
-  const _pendingP1Win = hasPending && _pr.winner === m.p1 && !_pr.draw;
+  const _pendingP1Win = hasPending && window._pendingWinnerSide(m, _pr) === 1 && !_pr.draw;
   // 1.9.112 (dono): no PENDENTE o numero ja diz V/D — verde e vermelho, igual ao
   // confirmado. Quem marca "ainda nao confirmado" e a TARJA AMBAR dos dois lados
   // (mais o italico do numero). Antes o numero era ambar dos dois lados, e a
@@ -4069,7 +4069,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     : _woAbsent
       ? (_woAbsent === 'p2' ? 'W.O.' : '')
       : (useSets && isDecided ? formatSetScores(m, 2) : m.scoreP2);
-  const _pendingP2Win = hasPending && _pr.winner === m.p2 && !_pr.draw;
+  const _pendingP2Win = hasPending && window._pendingWinnerSide(m, _pr) === 2 && !_pr.draw;
   const p2ScoreVal = (!showInputs)
     ? (hasPending
         ? '<span style="' + _scorePendingStyle(_pendingP2Win) + '">' + (_p2Display != null ? _p2Display : '') + '</span>'
@@ -4956,7 +4956,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
           scoreMap[m.p1].draws++; scoreMap[m.p1].points += 1;
           scoreMap[m.p2].draws++; scoreMap[m.p2].points += 1;
         } else {
-          const loser = m.winner === m.p1 ? m.p2 : m.p1;
+          const loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
           scoreMap[m.winner].wins++; scoreMap[m.winner].points += 3;
           scoreMap[loser].losses++;
         }

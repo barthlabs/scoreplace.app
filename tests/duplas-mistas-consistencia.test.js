@@ -39,9 +39,15 @@ const ok = (c, m, extra) => {
 };
 
 // ── o motor REAL de classificação ───────────────────────────────────────────
+// ⚠️ 2.0.3: bracket-MODEL antes de bracket-LOGIC, na MESMA ordem do index.html e do
+// draw-core da CF. É ele que traz `window._matchWinnerSide` — a regra única de "quem
+// venceu". Sem ele aqui, o sandbox do teste rodava um motor MUTILADO (a chamada estourava
+// e a classificação perdia 2 das 8 posições) e o teste acusava um defeito que só existia
+// no harness. É a armadilha de paridade sandbox × app de sempre.
 global.window = global; global._t = (k) => k;
-vm.runInThisContext(fs.readFileSync(path.join(raiz, 'js/views/bracket-logic.js'), 'utf8'),
-                    { filename: 'bracket-logic.js' });
+['js/views/bracket-model.js', 'js/views/bracket-logic.js'].forEach(function (rel) {
+  vm.runInThisContext(fs.readFileSync(path.join(raiz, rel), 'utf8'), { filename: rel.split('/').pop() });
+});
 
 const U = {
   ILI: 'ZD7WH7SCnVMMKwMHqgnTg9UVr1P2', FLA: 'inKQvoP7ASXaRpCdfpagKpqF8iS2',
