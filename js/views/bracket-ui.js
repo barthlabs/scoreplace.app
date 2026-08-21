@@ -644,7 +644,23 @@ function _rerenderBracket(tId, anchorMatchId) {
   // a partir da dashboard ou de qualquer view que não seja o bracket.
   var _hash = window.location.hash || '';
   if (_hash === '#dashboard' || _hash === '' || _hash === '#') {
-    if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    // ── 1.9.110 · CONFIRMOU NA DASHBOARD? A TELA TEM QUE MUDAR ───────────────────
+    // Relato do dono, com o Confirmar novo do feed: _"quando confirma os botões devem
+    // desaparecer e dar lugar ao editar e não continuar na tela"_. E ele estava certo:
+    // este ramo chamava `_softRefreshView`, que PARA A DASHBOARD é gated pela assinatura
+    // de CONJUNTO (`_dashDataSigFor` = quantos + quais torneios, store.js). Aprovar um
+    // placar não muda torneio nenhum de lugar → a assinatura fica igual → "nada mudou" →
+    // o card seguia com Confirmar/Contestar depois de confirmado.
+    // ⚠️ E a assinatura NÃO pode virar de conteúdo: já foi assim (v3.1.26) e repintava a
+    // dashboard a cada placar de qualquer pessoa — "pisca tela preta" e "pra entrar no
+    // torneio tem que clicar 2x", porque o card sob o dedo é destruído entre o toque e o
+    // clique ([[project_dashboard_no_rerender]]). O certo é distinguir a ORIGEM: snapshot
+    // da rede continua gated; AÇÃO DO DEDO nesta tela pede repintura direto. É o mesmo
+    // caminho (`_dashPedirRepintura`, com scroll preservado e debounce), só que sem o
+    // gate que existe pra proteger de repintura que ninguém pediu.
+    if (typeof window._dashPedirRepintura === 'function') window._dashPedirRepintura('acao-no-card');
+    else if (typeof window._dashRerender === 'function') window._dashRerender();
+    else if (typeof window._softRefreshView === 'function') window._softRefreshView();
     return;
   }
 
@@ -2274,14 +2290,28 @@ window._contestResult = function(tId, matchId) {
   if (!cu) { showNotification('Login necessário', '', 'warning'); return; }
 
   var pr = m.pendingResult;
-  if (!_isOpposingProposer(t, m, cu)) {
-    showNotification('Sem permissão', 'Só o time adversário pode contestar.', 'warning');
+  // ── 1.9.110 · QUEM ORGANIZA TAMBÉM PODE CONTESTAR ────────────────────────────
+  // Ordem do dono (21/ago/2026, sobre o consenso na tela inicial): _"tem que ter o
+  // contestar e confirmar (não só o confirmar)"_. O par só faz sentido se os DOIS
+  // botões funcionarem pra quem os vê — e o organizador via o card sem saída pro
+  // "esse placar não está certo": aqui a função recusava qualquer um que não fosse do
+  // time adversário, então mostrar o botão pra ele seria mentir na tela.
+  // Contestar, pra quem organiza, é o registro público de "não homologo, vou apurar":
+  // marca `disputed`, tira o jogo do limbo de "aguardando aprovação" e o joga no painel
+  // de disputa da chave, onde ele resolve (Confirmar / Editar / Refazer). Quem propôs
+  // segue sem contestar a própria proposta — pra isso existe o Editar.
+  var _souAutoridade = (typeof _isUserOrgOrCoHost === 'function') && _isUserOrgOrCoHost(t, cu);
+  var _souProponente = !!(pr && ((cu.uid && pr.proposedBy === cu.uid) || (cu.email && pr.proposedByEmail === cu.email)));
+  if (!_isOpposingProposer(t, m, cu) && !(_souAutoridade && !_souProponente)) {
+    showNotification('Sem permissão', 'Só o time adversário ou quem organiza pode contestar.', 'warning');
     return;
   }
 
   showConfirmDialog(
     '❌ Contestar resultado',
-    'O organizador será notificado para apurar e lançar o resultado definitivo. Confirma a contestação?',
+    _souAutoridade && !_isOpposingProposer(t, m, cu)
+      ? 'O jogo fica marcado EM DISPUTA e sai da fila de aprovação — você resolve pelo painel do torneio (confirmar, editar ou refazer). Confirma?'
+      : 'O organizador será notificado para apurar e lançar o resultado definitivo. Confirma a contestação?',
     function() {
       // Som: placar não aprovado (contestado) → "dois pra baixo".
       if (window._sound) window._sound('rejeicao');

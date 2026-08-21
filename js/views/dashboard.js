@@ -3846,6 +3846,13 @@ function renderDashboard(container) {
         } else {
           window.location.hash = '#bracket/' + tId;
         }
+      } else if (action === 'goedit') {
+        // 1.9.110: EDITAR do card já confirmado, no feed da tela inicial. Aqui NÃO se
+        // tenta editar in-place: `_editResultInline` troca o placar do card por inputs,
+        // e o card do feed tem os MESMOS ids do da chave — a edição abriria na tela
+        // inicial. Carimba e navega; a chave abre a edição sozinha ao carregar.
+        try { sessionStorage.setItem('sp_pendingEdit', JSON.stringify({tId: tId, matchId: mId})); } catch (e2) {}
+        window.location.hash = '#bracket/' + tId;
       } else if (action === 'contest' && typeof window._contestResult === 'function') {
         window._contestResult(tId, mId);
       } else if (action === 'approve' && typeof window._approveResult === 'function') {

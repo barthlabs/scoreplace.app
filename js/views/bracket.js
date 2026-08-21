@@ -1050,7 +1050,23 @@ function renderBracket(container, tournamentId, isInline) {
       if (_peData && String(_peData.tId) === String(tId)) {
         sessionStorage.removeItem('sp_pendingEdit'); // limpa ANTES de chamar
         setTimeout(function() {
-          if (typeof window._editPendingResult === 'function') {
+          // 1.9.110: são DOIS editores, e chamar o errado zera o placar na tela.
+          // `_editPendingResult` lê os números de `m.pendingResult` — num jogo JÁ
+          // CONFIRMADO esse objeto não existe e os inputs abririam em 0×0. O carimbo
+          // agora chega também do feed da tela inicial (card decidido, botão ✏️), então
+          // a escolha é pelo estado do jogo, não por quem carimbou.
+          var _tt = (typeof window._findTournamentById === 'function') ? window._findTournamentById(_peData.tId) : null;
+          var _mm = null;
+          if (_tt) {
+            var _todos = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(_tt) : (_tt.matches || []);
+            for (var _i = 0; _i < _todos.length; _i++) {
+              if (_todos[_i] && String(_todos[_i].id) === String(_peData.matchId)) { _mm = _todos[_i]; break; }
+            }
+          }
+          var _pende = !!(_mm && _mm.pendingResult);
+          if (!_pende && _mm && typeof window._editResultInline === 'function') {
+            window._editResultInline(_peData.tId, _peData.matchId);
+          } else if (typeof window._editPendingResult === 'function') {
             window._editPendingResult(_peData.tId, _peData.matchId);
           }
         }, 200);
@@ -4138,6 +4154,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _btnEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">✏️ Editar</button>`;
     var _btnConfirm = `<button class="btn btn-success btn-sm" onclick="window._approveResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">✅ Confirmar</button>`;
     var _btnContest = `<button class="btn btn-danger btn-sm" onclick="window._contestResult('${_esc(tId)}','${_esc(m.id)}')" style="${_pbBtn}">❌ Contestar</button>`;
+    // fora da chave o clique NÃO chama a função direto: sai por `data-pending-action`,
+    // o despachante que a dashboard já tem (ver o bloco do `_readOnly` logo abaixo).
+    var _dashPendBtn = function (acao, cls, txt) {
+      return '<button class="btn ' + cls + ' btn-sm" data-pending-action="' + acao + '"' +
+        ' data-tid="' + _esc(tId) + '" data-mid="' + _esc(m.id) + '" style="' + _pbBtn + '">' + txt + '</button>';
+    };
     // v1.9.77: Fase 4 (em disputa) — NINGUÉM tem botão no corpo do card. Os
     // jogadores veem só a tag PENDENTE; o organizador resolve exclusivamente
     // pelo painel do banner (Confirmar / Editar / Refazer). Sem isso, o
@@ -4181,21 +4203,28 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // …EXCETO o consenso, quando o chamador pede (dashboard). Aí valem os MESMOS
     // botões que a régua acima escolheu, só que despachados por atributo.
     if (_readOnly) {
-      // ⛔ O ✏️ EDITAR NÃO VAI JUNTO, e é decisão: ele abre a edição IN-PLACE trocando os
+      // ── 1.9.110 · O PAR COMPLETO, e o Editar só DEPOIS de confirmado ───────────
+      // Ordem do dono: _"tem que ter o contestar e confirmar (não só o confirmar). E o
+      // editar tem que vir depois de confirmado para quem tiver poder de editar apenas."_
+      // Enquanto o placar está PENDENTE, as duas saídas andam juntas: aceito ou não
+      // aceito. Corrigir o número é outra coisa — e só faz sentido depois que existe
+      // um resultado homologado pra corrigir (o botão do card decidido, mais abaixo).
+      // Ordem canônica: vermelho à esquerda, verde à direita.
+      // ⛔ NADA de `_editPendingResult` aqui: ele abre a edição IN-PLACE trocando os
       // spans `score-p1-<id>`/`score-p2-<id>` por inputs — e o card do feed é o MESMO
       // renderizador, então esses ids EXISTEM ali: a edição abriria dentro da tela
-      // inicial, num caminho que nunca foi feito pra ela (e com id duplicado quando o
-      // mesmo jogo aparece em duas seções). O pedido é aprovar/contestar; quem precisa
-      // corrigir o placar usa o "Ir para o torneio" que o cabeçalho do grupo já traz.
-      pendingActionBtns = _dashConsensus
-        ? pendingActionBtns
-            .replace(/<button[^>]*window\._editPendingResult[^>]*>[\s\S]*?<\/button>/g, '')
-            .replace(/onclick="window\._(approveResult|contestResult)\('([^']*)','([^']*)'\)"/g,
-              function (_all, fn, _tid, _mid) {
-                return 'data-pending-action="' + (fn === 'approveResult' ? 'approve' : 'contest') + '"' +
-                  ' data-tid="' + _tid + '" data-mid="' + _mid + '"';
-              })
-        : '';
+      // inicial, num caminho que nunca foi feito pra ela.
+      pendingActionBtns = '';
+      if (_dashConsensus && _pr && !_pr.disputed && !_isProposerSelf) {
+        // Confirmar: adversário (fase 1 e contra-proposta) ou quem organiza.
+        // Contestar: os mesmos — a permissão de verdade mora em `_contestResult`, que
+        // desde a 1.9.110 aceita autoridade além do time adversário.
+        var _podeAgir = _canApprove || _isOpposingMember || _isAuthorityInner;
+        if (_podeAgir) {
+          pendingActionBtns = _dashPendBtn('contest', 'btn-danger', '❌ Contestar') +
+                              _dashPendBtn('approve', 'btn-success', '✅ Confirmar');
+        }
+      }
     }
   }
   // CANÔNICO (dono, 18/jul): "é o meu jogo?" — SÓ pelo UID do slot (_userTeamInMatch →
@@ -4377,7 +4406,33 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   } catch (_re) {}
   // Cluster de ações do cabeçalho — vazio inteiro em somente leitura (cada botão tem
   // gate próprio; um `if` por botão deixaria o próximo passar despercebido).
-  var _headerActions = (_readOnly ? '' : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
+  // ── 1.9.110 · O ✏️ EDITAR DO CARD JÁ CONFIRMADO, na tela inicial ────────────
+  // Ordem do dono: _"o editar tem que vir depois de confirmado para quem tiver poder de
+  // editar apenas."_ Ou seja: enquanto pende, as saídas são confirmar/contestar; depois
+  // de homologado, quem tem poder pode corrigir o número.
+  // QUEM: autoridade (organizador / co-organizador / árbitro confirmado) ou quem JOGOU
+  // o jogo, e só quando o torneio deixa jogadores lançarem resultado. É um SUBCONJUNTO
+  // do que a chave já permite (lá o gate é `canEnterResult`, que não olha se a pessoa
+  // jogou aquele jogo) — este botão não abre nada novo, só encurta o caminho.
+  // ⛔ E ele NAVEGA (`goedit`): a edição de resultado confirmado é `_editResultInline`,
+  // que troca o placar do card por inputs. No feed isso abriria a edição dentro da tela
+  // inicial, com os mesmos ids do card da chave. O despachante da dashboard carimba
+  // `sp_pendingEdit` e leva pro torneio, que abre a edição sozinho ao carregar.
+  // W.O. fica de fora (não há placar pra editar — o caminho é "Reverter W.O.") e BYE
+  // também, exatamente como no cabeçalho da chave.
+  var _dashEditBtn = '';
+  if (_readOnly && _dashConsensus && isDecided && !isByeMatch && !m.wo && !hasPending) {
+    var _souAutoridadeCard = (typeof window._isUserAuthority === 'function')
+      ? window._isUserAuthority(t, _cu)
+      : ((typeof window._isUserOrgOrCoHost === 'function') ? window._isUserOrgOrCoHost(t, _cu) : isOrg);
+    var _jogadoresLancam = (typeof window._resultEntryIncludes === 'function') && window._resultEntryIncludes(t, 'players');
+    if (_souAutoridadeCard || (_isMyMatch && _jogadoresLancam)) {
+      _dashEditBtn = '<button class="btn btn-warning btn-micro" data-pending-action="goedit"' +
+        ' data-tid="' + _esc(tId) + '" data-mid="' + _esc(m.id) + '"' +
+        ' style="flex-shrink:0;font-size:0.72rem;" title="Editar no torneio">✏️ Editar</button>';
+    }
+  }
+  var _headerActions = (_readOnly ? _dashEditBtn : `${_woHeaderChip}${_arrivedBtn}${liveBtn}${headerConfirmBtn}${headerEditBtn}${headerWoRevertBtn}`) + _replayBtn;
 
   var _headerHtml;
   if (_showHeaderPending) {

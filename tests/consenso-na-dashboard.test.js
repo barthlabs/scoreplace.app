@@ -112,8 +112,8 @@ const ZE  = { uid: 'u-ze', displayName: 'Zé Ninguém', email: 'ze@x.com' };
 (function () {
   const NOV = secaoNovidades(render([confra()], ORG));
   ok(NOV.length > 0, '[pré] a seção Novidades existe pro organizador');
-  ok(contar(NOV, 'data-pending-action="approve"') === 1,
-     '[org] o jogo pendente traz UM ✅ Confirmar — got ' + contar(NOV, 'data-pending-action="approve"'));
+  ok(contar(NOV, 'data-pending-action="approve"') === 1 && contar(NOV, 'data-pending-action="contest"') === 1,
+     '[org] o jogo pendente traz o PAR ❌ Contestar + ✅ Confirmar — got approve=' + contar(NOV, 'data-pending-action="approve"') + ' contest=' + contar(NOV, 'data-pending-action="contest"'));
   ok(NOV.indexOf('data-tid="tour_confra"') > -1 && NOV.indexOf('data-mid="m-L36"') > -1,
      '[org] o botão carrega torneio + jogo (o despachante age por id, nunca por posição)');
   ok(NOV.indexOf('✅ Confirmar') > -1, '[org] com o rótulo do app');
@@ -131,8 +131,10 @@ const ZE  = { uid: 'u-ze', displayName: 'Zé Ninguém', email: 'ze@x.com' };
 // ─── 3) EM DISPUTA: ninguém age pelo feed ──────────────────────────────────────────────
 (function () {
   const NOV = secaoNovidades(render([confra({ disputado: true })], ORG));
-  ok(contar(NOV, 'data-pending-action') === 0,
-     '[disputa] jogo contestado não ganha botão no feed — o organizador resolve pelo painel da chave');
+  // conta só o consenso: o jogo CONFIRMADO do mesmo fixture traz o ✏️ Editar (goedit),
+  // que é outra coisa e tem teste próprio.
+  ok(contar(NOV, 'data-pending-action="approve"') + contar(NOV, 'data-pending-action="contest"') === 0,
+     '[disputa] jogo contestado não ganha Confirmar/Contestar no feed — quem organiza resolve pelo painel da chave');
 })();
 
 // ─── 4) O FEED SEGUE SOMENTE-LEITURA PRO RESTO ─────────────────────────────────────────
@@ -185,17 +187,94 @@ const ZE  = { uid: 'u-ze', displayName: 'Zé Ninguém', email: 'ze@x.com' };
     return (card.match(/data-pending-action="(\w+)"/g) || []).map(function (x) { return x.replace(/[^=]*="|"/g, ''); });
   }
   const j = function (a) { return a.join('+') || '(nenhum)'; };
-  ok(j(botoes('u-rb', base)) === 'approve', '[papel] ORGANIZADOR (jogo de outros) → só Confirmar — got ' + j(botoes('u-rb', base)));
-  ok(j(botoes('u-mar', base)) === 'approve', '[papel] ADVERSÁRIO → Confirmar (o Editar fica pro torneio) — got ' + j(botoes('u-mar', base)));
+  ok(j(botoes('u-rb', base)) === 'contest+approve', '[papel] ORGANIZADOR → Contestar + Confirmar — got ' + j(botoes('u-rb', base)));
+  ok(j(botoes('u-mar', base)) === 'contest+approve', '[papel] ADVERSÁRIO → Contestar + Confirmar — got ' + j(botoes('u-mar', base)));
   ok(j(botoes('u-cy', base)) === '(nenhum)', '[papel] PROPONENTE não homologa a própria proposta');
   ok(j(botoes('u-ze', base)) === '(nenhum)', '[papel] quem não é do jogo nem organiza não ganha botão');
   ok(j(botoes('u-rb', Object.assign({}, base, { disputed: true }))) === '(nenhum)', '[papel] EM DISPUTA: ninguém age pelo feed');
   const contra = Object.assign({}, base, { isCounterProposal: true, proposedBy: 'u-mar', proposedByName: 'Marjorie' });
   ok(j(botoes('u-cy', contra)) === 'contest+approve', '[papel] CONTRA-PROPOSTA → Contestar + Confirmar (vermelho à esquerda) — got ' + j(botoes('u-cy', contra)));
-  // e o Editar NUNCA aparece no feed, em papel nenhum
+  ok(botoes('u-rb', base)[0] === 'contest', '[ordem] vermelho à ESQUERDA, verde à direita ([[feedback_button_order_confirm_right]])');
+  // enquanto PENDE, editar não é opção pra ninguém — a ordem do dono é "o editar tem que
+  // vir depois de confirmado". As saídas do pendente são aceitar ou não aceitar.
   ['u-rb', 'u-mar', 'u-cy', 'u-ze'].forEach(function (u) {
-    ok(botoes(u, base).indexOf('edit') === -1, '[edit] o ✏️ Editar não vaza pro feed (uid ' + u + ')');
+    ok(botoes(u, base).join('+').indexOf('edit') === -1, '[edit] nada de editar no jogo PENDENTE (uid ' + u + ')');
   });
+
+  // ─── e DEPOIS de confirmado: o ✏️ Editar, só pra quem tem poder ────────────────────
+  function mkDecidido(resultEntry) {
+    const t = mk(base);
+    const m = t.rounds[0].matches[0];
+    delete m.pendingResult;
+    m.scoreP1 = 1; m.scoreP2 = 6; m.winner = 'Cynthia / Arnaldo Menezes'; m.resultAt = AG - 3600000;
+    if (resultEntry) t.resultEntry = resultEntry;
+    return t;
+  }
+  function botoesDecidido(uid, resultEntry) {
+    const t = mkDecidido(resultEntry);
+    W.AppStore.tournaments = [t];
+    W.AppStore.currentUser = { uid: uid };
+    W.AppStore.isOrganizer = function (x) { return !!(x && x.creatorUid === uid); };
+    const card = W.renderMatchCard(t.rounds[0].matches[0], false, t.id, 36, false, null, { readOnly: true, dashConsensus: true });
+    return (card.match(/data-pending-action="(\w+)"/g) || []).map(function (x) { return x.replace(/[^=]*="|"/g, ''); });
+  }
+  ok(j(botoesDecidido('u-rb')) === 'goedit', '[confirmado] ORGANIZADOR ganha o ✏️ Editar — got ' + j(botoesDecidido('u-rb')));
+  ok(j(botoesDecidido('u-mar')) === 'goedit', '[confirmado] quem JOGOU também, quando o torneio deixa jogadores lançarem');
+  ok(j(botoesDecidido('u-mar', 'organizer')) === '(nenhum)', '[confirmado] se só quem organiza lança, o jogador NÃO edita');
+  ok(j(botoesDecidido('u-ze')) === '(nenhum)', '[confirmado] quem não jogou nem organiza não edita');
+  // e o editar do feed NAVEGA — nunca abre a edição in-place na tela inicial
+  ok(/data-pending-action="goedit"/.test(SRC) === false, '[como] o `goedit` nasce no card, não no HTML da dashboard');
+  const iGo = SRC.indexOf("action === 'goedit'");
+  ok(iGo > -1 && SRC.slice(iGo, iGo + 1200).indexOf("window.location.hash = '#bracket/'") > -1,
+     '[como] e o despachante LEVA pro torneio (a edição in-place é da tela da chave)');
+})();
+
+// ─── 7) CONFIRMOU → A TELA MUDA (o defeito relatado pelo dono) ────────────────────────
+// _"quando confirma os botões devem desaparecer e dar lugar ao editar e não continuar na
+// tela"_. A aprovação termina em `_rerenderBracket`, que na dashboard chamava
+// `_softRefreshView` — e ele é GATED pela assinatura de CONJUNTO (`_dashDataSigFor` =
+// quantos + quais torneios). Aprovar placar não muda torneio de lugar → assinatura igual →
+// "nada mudou" → o card seguia com Confirmar/Contestar DEPOIS de confirmado.
+// ⚠️ A assinatura não pode virar de conteúdo (já foi, e repintava a dashboard a cada placar
+// de qualquer pessoa: "pisca tela preta", "clicar 2x") — o que muda é a ORIGEM: ação do
+// dedo nesta tela pede repintura direto. [[project_dashboard_no_rerender]]
+(function () {
+  const uiSrc = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
+  const i = uiSrc.indexOf('function _rerenderBracket');
+  const ramo = uiSrc.slice(i, i + 2200);
+  const corpo = ramo.split('\n').filter(function (l) { return l.trim().indexOf('//') !== 0; }).join('\n');
+  ok(/_dashPedirRepintura|_dashRerender/.test(corpo),
+     'na dashboard, a ação no card PEDE a repintura (não fica na mão do gate de assinatura)');
+  ok(corpo.indexOf('_dashPedirRepintura') < corpo.indexOf('_softRefreshView'),
+     'e ela vem ANTES do _softRefreshView — que só serviria se o CONJUNTO de torneios mudasse');
+  // o gate de conjunto continua de pé pro snapshot da rede (a proteção contra repintura
+  // que ninguém pediu): a assinatura NÃO pode ter virado de conteúdo.
+  const storeSrc = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
+  const j = storeSrc.indexOf('window._dashDataSigFor');
+  ok(/arr\.length \+ '\|'/.test(storeSrc.slice(j, j + 400)) && storeSrc.slice(j, j + 400).indexOf('updatedAt') === -1,
+     'a assinatura do snapshot segue de CONJUNTO (sem updatedAt/placar) — senão volta o "pisca tela preta"');
+  // e o card, depois de confirmado, entrega o Editar no lugar dos dois botões
+  const AG2 = Date.now();
+  const m = {
+    id: 'm-L36', label: 'R1 Grupo L • Jogo 36', isMonarch: true, round: 0,
+    p1: 'Marjorie CILONE / Mariana Ciocci', p2: 'Cynthia / Arnaldo Menezes',
+    team1: ['Marjorie CILONE', 'Mariana Ciocci'], team2: ['Cynthia', 'Arnaldo Menezes'],
+    team1Uids: ['u-mar', 'u-mci'], team2Uids: ['u-cy', 'u-ari'],
+    scoreP1: 1, scoreP2: 6, winner: 'Cynthia / Arnaldo Menezes', resultAt: AG2 - 1000
+  };
+  const t = {
+    id: 'tour_confra', name: 'Confra', format: 'Liga', ligaRoundFormat: 'rei_rainha',
+    status: 'active', sport: 'Beach Tennis', resultEntry: 'players', creatorUid: 'u-rb',
+    participants: [{ uid: 'u-rb' }, { uid: 'u-cy' }, { uid: 'u-mar' }, { uid: 'u-ari' }, { uid: 'u-mci' }],
+    rounds: [{ matches: [m] }]
+  };
+  W.AppStore.tournaments = [t];
+  W.AppStore.currentUser = { uid: 'u-rb' };
+  W.AppStore.isOrganizer = function (x) { return !!(x && x.creatorUid === 'u-rb'); };
+  const card = W.renderMatchCard(m, false, t.id, 36, false, null, { readOnly: true, dashConsensus: true });
+  ok(card.indexOf('data-pending-action="approve"') === -1 && card.indexOf('data-pending-action="contest"') === -1,
+     '[depois] confirmado: Confirmar e Contestar somem');
+  ok(card.indexOf('data-pending-action="goedit"') > -1, '[depois] e o ✏️ Editar toma o lugar');
 })();
 
 console.log('\n✅ consenso-na-dashboard: ' + pass + ' asserções, ' + fail + ' falha(s)');

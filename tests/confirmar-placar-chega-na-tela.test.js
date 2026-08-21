@@ -157,14 +157,21 @@ ok(/if \(_pr && _pr\.disputed\) \{\s*\n\s*pendingActionBtns = '';/.test(bracketS
 // saem por `data-pending-action`, nunca por onclick pras funções da chave: fora dela o
 // `_editPendingResult` mexe em ids (`score-p1-<id>`) que não existem, que foi o defeito
 // que criou o readOnly na v1.8.67.
-ok(/if \(_readOnly\) \{[\s\S]{0,700}?pendingActionBtns = _dashConsensus/.test(bracketSrc),
+// ⚠️ ESTAS TRÊS OLHAM O FONTE — e já quebraram duas vezes por REFORMATAÇÃO, não por
+// regressão. O comportamento fino (quem vê Confirmar/Contestar/Editar, em que estado)
+// tem teste próprio, que RENDERIZA: tests/consenso-na-dashboard.test.js. Aqui ficam só
+// os invariantes grosseiros, escritos para tolerar reescrita.
+// sem os comentários: eles CITAM `_editPendingResult` justamente pra explicar por que ele
+// não pode estar ali — e a citação fazia a asserção abaixo acusar o próprio comentário.
+const _blocoRO = bracketSrc
+  .slice(bracketSrc.indexOf('if (_readOnly) {'), bracketSrc.indexOf('if (_readOnly) {') + 2000)
+  .split('\n').filter(function (l) { return l.trim().indexOf('//') !== 0; }).join('\n');
+ok(/_dashConsensus/.test(_blocoRO),
    'somente-leitura vence qualquer papel — só o consenso pedido pelo chamador escapa');
-ok(/_editPendingResult\[\^>\]\*>\[\\s\\S\]\*\?<\\\/button>\/g, ''\)/.test(bracketSrc) || /replace\(\/<button\[\^>\]\*window\\\._editPendingResult/.test(bracketSrc),
-   'e o ✏️ Editar é removido do consenso fora da chave (a edição in-place é da tela da chave)');
-ok(/_dashConsensus\s*=\s*!!\(opts && opts\.dashConsensus\)/.test(bracketSrc),
-   'o consenso fora da chave é OPT-IN do chamador (não nasce ligado)');
-ok(/data-pending-action="' \+ \(fn === 'approveResult'/.test(bracketSrc),
-   'e ele troca o onclick por data-pending-action — o despachante da dashboard é quem age');
+ok(!/_editPendingResult/.test(_blocoRO),
+   'o consenso fora da chave NÃO chama a edição in-place (ela mexe em ids que só existem na chave)');
+ok(/data-pending-action/.test(_blocoRO) || /_dashPendBtn/.test(_blocoRO),
+   'e ele despacha por data-pending-action — quem age é o listener da dashboard');
 
 // ─── resultado ──────────────────────────────────────────────────────────────
 console.log('\n' + (falhas === 0 ? '✅' : '❌') +
