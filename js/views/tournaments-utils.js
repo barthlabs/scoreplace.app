@@ -610,6 +610,27 @@ window._tProgFmtDur2L = function(ms) {
   return '<span style="white-space:nowrap;">' + cima + '</span><br>' +
          '<span style="white-space:nowrap;">' + baixo + '</span>';
 };
+// ── 1.9.101 · O RELÓGIO DO MEIO: REGRESSIVA QUANDO EXISTE PRAZO ──────────────
+// Ordem do dono (20/ago/2026): _"se a fase/torneio tem data e hora de fim programado
+// (FINAL PROGRAMADO / FIM PROGRAMADO), calcule o tempo restante a partir de agora até
+// esse fim e exiba contagem REGRESSIVA ao vivo (ex.: '14d 10h 17m 42s RESTANTE'
+// decrementando a cada segundo). Se não existe data de fim programado, mantém como
+// está: tempo decorrido desde o início."_
+// FONTE ÚNICA dos DOIS relógios do box (painel da RODADA e painel do TORNEIO COMPLETO):
+// consertar só um deixa metade do defeito de pé — foi exatamente o que a verificação da
+// 1.7.84 pegou quando o relógio ganhou duas linhas.
+// Regras que o helper carrega:
+//   • prazo JÁ VENCIDO ou relógio CONGELADO (rodada/torneio encerrado) → volta pro
+//     decorrido/durou. "0s restante" parado pra sempre não informa nada.
+//   • `data-sp-cd2l` é o que faz o número andar A CADA SEGUNDO: o tique global de 1s
+//     (js/store.js) reescreve SÓ este span. O `_progressTick` do painel roda a cada 5s
+//     (1.9.80, pra não invalidar o layout da página inteira) — segundos pulando de 5 em
+//     5 seriam um relógio visivelmente quebrado.
+window._tProgClock2L = function(deadlineMs, frozen, elapsedMs, elapsedLabel) {
+  var _rest = (!frozen && deadlineMs) ? (deadlineMs - Date.now()) : -1;
+  if (_rest > 0) return { attr: ' data-sp-cd2l="' + deadlineMs + '"', html: window._tProgFmtDur2L(_rest), label: 'restante' };
+  return { attr: '', html: window._tProgFmtDur2L(elapsedMs), label: elapsedLabel };
+};
 window._estimateTournamentMinutes = function(t) {
   var prog = window._getTournamentProgress(t);
   var totalMatches = prog.total || 0;
@@ -986,6 +1007,14 @@ window._buildProgressInner = function(t) {
   var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : _earliestGameMs;
   var schedStart = window._tProgParseMs(t.startDate);
   var plannedEnd = window._tProgParseMs(t.endDate);
+  // ── 1.9.101 · O FIM PROGRAMADO É REAL OU É CHUTE? ────────────────────────────
+  // O relógio do meio vira REGRESSIVA ("restante") SÓ quando o fim programado é uma
+  // data/hora que ALGUÉM CONFIGUROU (fase ou torneio) ou um evento REALMENTE agendado
+  // (o próximo sorteio da Liga). Quando o fim é ESTIMADO por tempo de quadra
+  // (gameDuration × jogos ÷ quadras), continua "decorrido": contagem regressiva pra um
+  // prazo inventado é promessa que o app não tem como cumprir — o mesmo defeito que os
+  // testes de "MENTIRA" (tests/liga-countdown.test.js) travam pro sorteio.
+  var _schedEndReal = !!plannedEnd;
   if (!plannedEnd) {
     var estMin = window._estimateTournamentMinutes(t);
     var base = schedStart || actualStart;
@@ -1041,7 +1070,8 @@ window._buildProgressInner = function(t) {
     var _nextDraw = !isNaN(_firstDrawMs) ? _firstDrawMs + (_ri + 1) * _intvMs : null;
     if (_roundStart) actualStart = _roundStart; else if (_thisDraw) actualStart = _thisDraw;
     if (_thisDraw) schedStart = _thisDraw;
-    if (_nextDraw) plannedEnd = _nextDraw;
+    // próximo sorteio = evento REALMENTE agendado (não estimativa) → vale regressiva.
+    if (_nextDraw) { plannedEnd = _nextDraw; _schedEndReal = true; }
     _labelSchedStart = 'sorteio da rodada';
     _labelSchedEnd = 'próximo sorteio';
     // v4.x: "Rodada N de M" (mesmo estilo do "fase 1 de 2") — M = rodadas PLANEJADAS da fase
@@ -1061,11 +1091,12 @@ window._buildProgressInner = function(t) {
       var _cfgStartMs = window._tProgParseMs(_ph.startDate ? (_ph.startDate + (_ph.startTime ? ('T' + _ph.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEndMs = window._tProgParseMs(_ph.endDate ? (_ph.endDate + (_ph.endTime ? ('T' + _ph.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
       if (_cfgStartMs) schedStart = _cfgStartMs;
-      if (_cfgEndMs) { plannedEnd = _cfgEndMs; }
+      if (_cfgEndMs) { plannedEnd = _cfgEndMs; _schedEndReal = true; }
       else {
         var _gdMp = parseInt(t.gameDuration) || 30, _ctMp = parseInt(t.callTime) || 0, _wuMp = parseInt(t.warmupTime) || 0;
         var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
+        _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }
       // v2.8.8: multi-fase — "início real" é SÓ o 1º ponto da rodada (_roundStart).
       // Não herdar tournamentStarted (linha ~840) nem o fallback _thisDraw (linha ~890):
@@ -1111,11 +1142,12 @@ window._buildProgressInner = function(t) {
       var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
       if (_cfgSL) schedStart = _cfgSL;
-      if (_cfgEL) { plannedEnd = _cfgEL; }
+      if (_cfgEL) { plannedEnd = _cfgEL; _schedEndReal = true; }
       else {
         var _gdL = parseInt(t.gameDuration) || 30, _ctL = parseInt(t.callTime) || 0, _wuL = parseInt(t.warmupTime) || 0;
         var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = _gdL + _ctL + _wuL + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_pr.total / _crtL) * _slotL * 60000;
+        _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }
     }
   }
@@ -1187,6 +1219,13 @@ window._buildProgressInner = function(t) {
       var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
       var _tEndLabel = _tournDone ? 'final real' : 'último placar lançado';
       var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
+      // 1.9.101: com FIM PROGRAMADO do torneio inteiro (fim da ÚLTIMA fase, o mesmo
+      // 12/11 que aparece na linha azul de baixo) o relógio vira REGRESSIVA pra ele.
+      // Encerrado (`_tournDone`) congela em "durou"; sem fim programado, segue "decorrido".
+      var _tClk = window._tProgClock2L(_deadlineMs, _tournDone, _tDurMs, _tDurLabel);
+      var _tClkTitle = _tClk.label === 'restante'
+        ? ('Até o fim programado do torneio (' + _date(_deadlineMs) + ' ' + _time(_deadlineMs) + ')')
+        : (_tStartMs === _firstPointMs ? 'Desde o primeiro placar lançado' : 'Desde o início programado do torneio (' + _date(_tStartMs) + ' ' + _time(_tStartMs) + ')');
       var _tTimeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
       var _tLblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
       var _tCol = function(ms, label, align) {
@@ -1206,9 +1245,9 @@ window._buildProgressInner = function(t) {
         // O `title` diz de ONDE o número parte: a coluna à esquerda mostra o início REAL
         // (primeira bola jogada), mas a contagem ancora no PROGRAMADO — sem isso o leitor
         // não teria como saber por que os dois não fecham.
-        '<div title="' + (_tStartMs === _firstPointMs ? 'Desde o primeiro placar lançado' : 'Desde o início programado do torneio (' + _date(_tStartMs) + ' ' + _time(_tStartMs) + ')') + '" style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(_tDurMs) + '</span>' +
-          '<span style="' + _tLblS + '">' + _tDurLabel + '</span>' +
+        '<div title="' + _tClkTitle + '" style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+          '<span' + _tClk.attr + ' style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _tClk.html + '</span>' +
+          '<span style="' + _tLblS + '">' + _tClk.label + '</span>' +
         '</div>' +
         _rightCol +
       '</div>';
@@ -1333,6 +1372,10 @@ window._buildProgressInner = function(t) {
 
   var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
+  // 1.9.101: fase/rodada COM fim programado de verdade (`_schedEndReal` — a mesma data que
+  // a coluna azul da direita mostra como "final programado"/"próximo sorteio") → o relógio
+  // do meio conta pra TRÁS até lá. Rodada encerrada ou torneio finalizado congela em "durou".
+  var _clk = window._tProgClock2L(_schedEndReal ? plannedEnd : null, !!(_roundEndReal || isFinished), elapsedMs, _elapsedLabel);
   // mostra DATA (dia) na linha REAL quando: (a) início e fim reais caem em dias diferentes, OU
   // (b) o dia REAL dos jogos difere do dia PROGRAMADO (ex.: jogado hoje, programado p/ 25/07) —
   // aí o horário sozinho engana. Pedido do dono.
@@ -1371,8 +1414,8 @@ window._buildProgressInner = function(t) {
           // v1.7.83/84: 2 linhas — este é o SEGUNDO renderizador do relógio (o do
           // painel da rodada); o outro é o do TORNEIO COMPLETO. Consertar só um
           // deixava o defeito de pé, que foi exatamente o que a verificação pegou.
-          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(elapsedMs) + '</span>' +
-          '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
+          '<span' + _clk.attr + ' style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _clk.html + '</span>' +
+          '<span style="' + _lblS + '">' + _clk.label + '</span>' +
         '</div>' +
         _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
       '</div>';

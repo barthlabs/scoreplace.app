@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.100';
+window.SCOREPLACE_VERSION = '1.9.101';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2971,6 +2971,21 @@ setInterval(function() {
     var diff = target - now;
     var txt = diff > 0 ? window._formatCountdown(diff) : 'Agora!';
     if (el.textContent !== txt) el.textContent = txt;   // 1.9.81: DOM só quando MUDA
+  });
+  // ── 1.9.101 · A REGRESSIVA DO BOX DE PROGRESSO (2 linhas, COM segundos) ──────
+  // O relógio do meio dos cards de RODADA e de TORNEIO COMPLETO
+  // (window._tProgClock2L, js/views/tournaments-utils.js) mostra "14d 10h" em cima e
+  // "17m 42s" embaixo — precisão de SEGUNDO, ao contrário do `_formatCountdown` acima,
+  // que corta os segundos de propósito. Por isso ele tem tique próprio aqui: quem
+  // repinta o painel inteiro é o `_progressTick`, e ele roda a cada 5s (1.9.80, pra não
+  // invalidar o layout da página a cada segundo). Escrever SÓ este span é barato —
+  // subárvore de 2 nós, largura fixa (tabular-nums + nowrap), sem reflow do card.
+  var elsCd = document.querySelectorAll('[data-sp-cd2l]');
+  elsCd.forEach(function(el) {
+    var alvo = parseInt(el.getAttribute('data-sp-cd2l'));
+    if (isNaN(alvo) || typeof window._tProgFmtDur2L !== 'function') return;
+    var html = window._tProgFmtDur2L(Math.max(0, alvo - now));
+    if (el.innerHTML !== html) el.innerHTML = html;   // DOM só quando MUDA
   });
   var els2 = document.querySelectorAll('[data-elapsed-since]');
   els2.forEach(function(el) {
