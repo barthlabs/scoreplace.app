@@ -46,6 +46,15 @@ window._RELEASE_NOTES_HTML = (function () {
     // "unificamos uma varredura interna" seria ruído numa nota que o usuário lê pra saber
     // o que mudou pra ele. A trava pega OMISSÃO e não sabe julgar isso — o motivo fica aqui.
     // ── v1.9 ─────────────────────────────────────────────────────────────────
+    // ✓ CONFERIDA ATE A 1.9.111 (21/ago/2026), antes de cortar a build 111 pra
+    //   loja. Itens de 106→111 checados um a um contra os commits: formato de
+    //   partida POR FASE, abrir o torneio caindo no proprio grupo, confirmar o
+    //   placar na tela inicial, a foto do local no tema claro e a cor do relogio.
+    //   O unico commit depois da ultima escrita da nota era `17ba2c42 — snapshot
+    //   do prerender`, que e mecanico (index.html + version.txt regerados pelo
+    //   deploy) e nao carrega funcionalidade. A trava pegou ESSE commit, nao uma
+    //   omissao — e a conferencia fica registrada aqui em vez de virar um "toque"
+    //   vazio no arquivo so pra passar.
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
       '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
