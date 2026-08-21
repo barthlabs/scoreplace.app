@@ -176,6 +176,29 @@ function confraCfg() {
     'e o alvo é ZERADO ao fechar (senão o próximo Personalizado gravaria no lugar errado)');
 })();
 
+// ── 9. UMA PONTA SÓ posiciona o "🎾 Formato da Partida" ──────────────────────
+// 🔴 O BUG QUE A TELA MOSTRAVA (relato do dono, 21/ago): "o formato da partida está
+// unificado para todo o torneio" — apesar de tudo acima estar verde. Motivo: DUAS pontas
+// mexiam no MESMO nó.
+//   • format2-ui  → _EXT_IDS/_placeExt colocam #gsm-section DENTRO da fase (#f2-classif-extra);
+//   • create-tournament → _f2MountInEditForm o puxava pra FORA (insertBefore no pai do
+//     #fase1-box) e, quando o mount JÁ existia, retornava ali mesmo sem recolocar.
+// Como renderCreateTournamentPage chama _f2MountInEditForm no render E DE NOVO no setTimeout
+// logo depois, quem escrevia por último era sempre a 2ª chamada → o bloco terminava solto
+// acima das fases, com cara de formato único do torneio. Medido em DOM real (playwright):
+// gsmPaiDireto = 'form-create-tournament' antes, '#f2-classif-extra' depois.
+// Prova de tela: tests/e2e/formato-por-fase.spec.js.
+(function () {
+  const ct = fs.readFileSync(path.join(__dirname, '..', 'js/views/create-tournament.js'), 'utf8');
+  const i = ct.indexOf('window._f2MountInEditForm = function');
+  ok(i > 0, '_f2MountInEditForm existe');
+  const corpo = ct.slice(i, ct.indexOf('window._setPhaseField', i));
+  ok(!/insertBefore\(\s*_gsm\b/.test(corpo) && !/getElementById\('gsm-section'\)/.test(corpo),
+    'o mount NÃO reposiciona #gsm-section — quem posiciona é o format2-ui (_EXT_IDS)');
+  ok(/data-f2-editid'\) === editId\) \{[\s\S]{0,600}?_f2PlaceExtSections/.test(corpo),
+    'e o caminho de "mesmo contexto → mantém" REAFIRMA as seções dentro da fase antes de sair');
+})();
+
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ formato-da-partida-por-fase FALHOU'); process.exit(1); }
 console.log('✅ formato-da-partida-por-fase: OK');

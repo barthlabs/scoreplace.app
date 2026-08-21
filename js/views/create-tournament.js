@@ -1564,13 +1564,19 @@ function setupCreateTournamentModal() {
     // (os botões/desc já saíram no _F2_REMOVE); o format2 ("Formação das equipes") cobre isso.
     // Esconde a frase inteira.
     var _dmc = document.getElementById('draw-mode-container'); if (_dmc) _dmc.style.setProperty('display', 'none', 'important');
-    // v4.4.53: "Formato da Partida" (GSM) e "Categorias" saem de DENTRO do #fase1-box e vão
-    // pra ANTES dele — ficam entre "Máx. Participantes" (inscrição) e o Formato (fase
-    // classificatória). Idempotente: mover nó já reposicionado é no-op. Save lê por id (posição
-    // no DOM não importa).
+    // v4.4.53: "Categorias" sai de DENTRO do #fase1-box e vai pra ANTES dele — fica entre
+    // "Máx. Participantes" (inscrição) e o Formato (fase classificatória). Idempotente: mover
+    // nó já reposicionado é no-op. Save lê por id (posição no DOM não importa).
+    //
+    // ⚠️ v1.9.115: o "Formato da Partida" (#gsm-section) SAIU daqui. Desde a 1.9.111 ele não é
+    // mais do torneio inteiro: é o formato da FASE INICIAL, e quem o posiciona é o format2-ui
+    // (_EXT_IDS → slot #f2-classif-extra, dentro do box da fase). Havia DUAS pontas mexendo no
+    // mesmo nó: esta linha o puxava pra FORA da fase e, quando o mount já existia, a função
+    // retornava logo abaixo sem nunca recolocá-lo. Como o render chama _f2MountInEditForm() e
+    // o setTimeout logo depois chama DE NOVO, o resultado na tela era sempre o da 2ª chamada —
+    // o bloco solto acima das fases, com cara de "formato único do torneio inteiro".
     var _formParent = box.parentElement;
     if (_formParent) {
-      var _gsm = document.getElementById('gsm-section');
       // Bloco de categorias (sem id próprio): sobe de #gender-cat-buttons até o filho DIRETO
       // de #fase1-box (posição inicial) OU de #formParent (já realocado numa render anterior) —
       // assim o achamos de novo mesmo depois de movido (senão a ordem invertia entre re-renders).
@@ -1580,10 +1586,9 @@ function setupCreateTournamentModal() {
         while (_pp && _pp.parentElement && _pp.parentElement.id !== 'fase1-box' && _pp.parentElement !== _formParent) _pp = _pp.parentElement;
         if (_pp && _pp.parentElement && (_pp.parentElement.id === 'fase1-box' || _pp.parentElement === _formParent)) _catBlock = _pp;
       }
-      // Ordem final determinística (idempotente a cada render): … Máx. Participantes · GSM ·
-      // Categorias · #fase1-box. Insere Categorias antes do box, depois GSM antes de Categorias.
+      // Ordem final determinística (idempotente a cada render): … Máx. Participantes ·
+      // Categorias · #fase1-box (com o Formato da Partida DENTRO da fase inicial).
       if (_catBlock && _catBlock.parentElement) { try { _formParent.insertBefore(_catBlock, box); } catch (e) {} }
-      if (_gsm && _gsm.parentElement) { try { _formParent.insertBefore(_gsm, (_catBlock && _catBlock.parentElement === _formParent) ? _catBlock : box); } catch (e) {} }
       // v1.15.28: o Rigor da inscrição vive DENTRO do box de Categorias (no topo),
       // então acompanha a realocação do bloco de categorias — sem mover separado.
     }
@@ -1593,7 +1598,14 @@ function setupCreateTournamentModal() {
     var editId = (document.getElementById('edit-tournament-id') || {}).value || '';
     var _existing = document.getElementById('f2-config-mount');
     if (_existing) {
-      if (_existing.getAttribute('data-f2-editid') === editId) return; // mesmo contexto → mantém
+      if (_existing.getAttribute('data-f2-editid') === editId) {
+        // Mesmo contexto → mantém a config em andamento. Mas REAFIRMA a posição das seções do
+        // form que vivem DENTRO das fases (#gsm-section, datas, inscrições, proporção): esta
+        // função roda várias vezes por render e é o único caminho que passa por aqui sem
+        // re-montar. Idempotente — recolocar nó já no slot é no-op.
+        if (typeof window._f2PlaceExtSections === 'function') { try { window._f2PlaceExtSections(); } catch (e) {} }
+        return;
+      }
       try { _existing.remove(); } catch (e) {}
     }
     var mount = document.createElement('div');
