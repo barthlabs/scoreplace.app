@@ -2914,3 +2914,37 @@ body, .topbar, .card {
 [data-theme="light"] [style*="rgba(30,41,59,0.85)"] [style*="background: rgba(255, 255, 255, 0.25)"] {
   background-color: rgba(255,255,255,0.25) !important;
 }
+
+/* ── 1.9.107 · A COR DO RITMO DO CARD DE PROGRESSO ────────────────────────────
+ * ADIANTADO (verde) · NO PROGRAMADO (azul) · ATRASADO (vermelho) — pedido do dono:
+ * _"no plano, os contadores de tempo apareciam em cores de acordo com adiantado, no
+ * programado e atrasado (verde, azul, vermelho). isso não está na tela."_
+ *
+ * POR QUE CLASSE E NÃO HEX INLINE (que era como estava): cor semântica em hex inline
+ * não sobrevive aos dois temas. No tema claro os hex claros são invertidos pelo remap
+ * acima (senão sumiriam no fundo branco), e sobre foto de capa a tarja de leitura
+ * achata TODO o texto da seção numa cor só — foi assim que o verde/vermelho do relógio
+ * virou branco na tela do dono. Com classe, cada contexto tem o seu tom:
+ *   • escuro  → tons claros (leem sobre o card escuro)
+ *   • claro   → tons escuros (leem sobre o card branco)
+ *   • tarja de foto (ESCURA nos DOIS temas) → volta pros tons claros
+ * Os relógios saem do JS com `data-sp-fixa`, que é o que faz o <style> escopado da
+ * tarja poupá-los (js/views/tournaments-utils.js). Contraste conferido nos 2 temas.
+ */
+/* O número do relógio mora em spans FILHOS (o relógio quebra em 2 linhas), por isso
+ * cada regra pega o elemento E seus descendentes. E a classe é DUPLA (.sp-ritmo +
+ * .sp-ritmo-estado) de propósito: dá especificidade (0,3,0) contra o (0,2,0) do <style>
+ * escopado da tarja, que é o que apagava esta cor sobre foto de capa. */
+.sp-ritmo.sp-ritmo-adiantado, .sp-ritmo.sp-ritmo-adiantado * { color: #34d399; }
+.sp-ritmo.sp-ritmo-emdia,     .sp-ritmo.sp-ritmo-emdia *     { color: #60a5fa; }
+.sp-ritmo.sp-ritmo-atrasado,  .sp-ritmo.sp-ritmo-atrasado *  { color: #f87171; }
+[data-theme="light"] .sp-ritmo.sp-ritmo-adiantado, [data-theme="light"] .sp-ritmo.sp-ritmo-adiantado * { color: #047857; }
+[data-theme="light"] .sp-ritmo.sp-ritmo-emdia,     [data-theme="light"] .sp-ritmo.sp-ritmo-emdia *     { color: #1d4ed8; }
+[data-theme="light"] .sp-ritmo.sp-ritmo-atrasado,  [data-theme="light"] .sp-ritmo.sp-ritmo-atrasado *  { color: #b91c1c; }
+/* dentro da tarja de leitura sobre foto (ESCURA nos dois temas) volta pros tons claros */
+[style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-adiantado, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-adiantado *,
+[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-adiantado, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-adiantado * { color: #34d399 !important; }
+[style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-emdia, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-emdia *,
+[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-emdia, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-emdia * { color: #60a5fa !important; }
+[style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-atrasado, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-atrasado *,
+[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-atrasado, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-atrasado * { color: #f87171 !important; }

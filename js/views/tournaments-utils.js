@@ -1029,6 +1029,42 @@ window._phaseCurrentRoundProgress = function(t) {
 // TODO o texto da seção pra cor de leitura) — sobre a cor cheia o branco é o que
 // lê. O rótulo de FORA usa hex que a CSS do tema claro já inverte (a78bfa/3b82f6/
 // ef4444 → escuros), então vale nos DOIS temas.
+// ── 1.9.107 · A COR DO RITMO É UMA RÉGUA SÓ, E ELA TEM QUE SOBREVIVER À FOTO ──
+// Ordem do dono (21/ago/2026, com o card na frente): _"no plano, os contadores de tempo
+// apareciam em cores de acordo com adiantado, no programado e atrasado (verde, azul,
+// vermelho). isso não está na tela."_ Duas coisas faltavam:
+//   1) O AZUL não existia. A régua antiga era verde / âmbar / vermelho — "adiantado" e
+//      "em dia" caíam os dois no verde, e o âmbar era um degrau de atraso sem nome.
+//      Agora são três estados com nome: ADIANTADO (jogou mais do que o tempo pedia),
+//      NO PROGRAMADO (andando junto com o relógio, com a folga que era o âmbar) e
+//      ATRASADO. A antiga faixa âmbar (atraso até 12 pontos) virou "no programado":
+//      o previsto é linear no tempo e os jogos saem em rajada — 12 pontos de defasagem
+//      é ritmo normal, não alarme.
+//   2) SOBRE FOTO DE CAPA a cor sumia. A tarja de leitura força TODO o texto da seção
+//      pra uma cor só (senão os hex claros invertidos pelo tema claro ficam ilegíveis
+//      sobre ela) — e levava junto o relógio, que ficava branco. Por isso os relógios
+//      saem marcados com `data-sp-fixa` e o <style> escopado passou a poupá-los; a cor
+//      deles mora em CLASSE (css/style.css: .sp-ritmo-*), que tem tom próprio pro tema
+//      claro e pro escuro E dentro da tarja. Cor semântica em hex inline não sobrevive
+//      aos dois temas — a classe sobrevive.
+// A BARRA do realizado segue a MESMA régua (hex sólido); número e barra nunca podem
+// contar histórias diferentes no mesmo card.
+window._tProgRitmo = function(progFrac, expectedFrac, done) {
+  if (done) return 'adiantado';
+  if (!isFinite(progFrac) || !isFinite(expectedFrac)) return null;
+  if (progFrac >= expectedFrac + 0.02) return 'adiantado';
+  if (expectedFrac - progFrac <= 0.12) return 'emdia';
+  return 'atrasado';
+};
+window._tProgRitmoBarra = function(ritmo) {
+  return ritmo === 'atrasado' ? '#ef4444' : (ritmo === 'emdia' ? '#3b82f6' : '#10b981');
+};
+// atributos do span do relógio: classe do ritmo + o selo que a tarja de foto poupa
+window._tProgRitmoAttr = function(ritmo) {
+  // classe DUPLA (`sp-ritmo` + o estado): é ela que dá especificidade pra vencer o
+  // achatamento da tarja de foto. `data-sp-fixa` fica como gancho de leitura/teste.
+  return ritmo ? ' class="sp-ritmo sp-ritmo-' + ritmo + '" data-sp-fixa="1"' : ' data-sp-fixa="1"';
+};
 window._progBarPct = function(pct, color, h, radius, trackBg, outColor) {
   var p = Math.round(Number(pct) || 0);
   if (p < 0) p = 0; if (p > 100) p = 100;
@@ -1292,7 +1328,13 @@ window._buildProgressInner = function(t) {
       // 1.8.80: entre um jogo e outro o número ficava parado, parecendo relógio quebrado.
       var _tEndMs = _tournDone ? _lastPointMs : Date.now();
       var _tDurMs = Math.max(0, _tEndMs - _tStartMs);
-      var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
+      // 1.9.107: o DECORRIDO do torneio também ganha a cor do ritmo — a mesma régua da
+      // rodada, medida na travessia inteira: quanto do torneio já foi jogado (_barPct)
+      // contra quanto da janela programada já passou. SEM fim programado não há previsto
+      // com que comparar → fica neutro (cor de texto), porque cor sem medida é palpite.
+      var _tExpFrac = (_deadlineMs && _deadlineMs > _tStartMs) ? ((Date.now() - _tStartMs) / (_deadlineMs - _tStartMs)) : null;
+      if (_tExpFrac != null) _tExpFrac = Math.max(0, Math.min(1, _tExpFrac));
+      var _tRitmo = (_tExpFrac == null && !_tournDone) ? null : window._tProgRitmo((_barPct || 0) / 100, _tExpFrac == null ? 0 : _tExpFrac, _tournDone);
       var _tEndLabel = _tournDone ? 'final real' : 'último placar lançado';
       var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
       // ⛔ 1.9.102 — AQUI NÃO ENTRA REGRESSIVA. Ordem do dono, com o card na frente: o
@@ -1309,7 +1351,7 @@ window._buildProgressInner = function(t) {
         return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
           '<span style="' + _tTimeS + '">' + _time(ms) + '</span>' +
           '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-          '<span style="' + _tLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+          '<span style="' + _tLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
         '</div>';
       };
       // v4.x: no TORNEIO COMPLETO só mostramos "final real" QUANDO encerra — o "último
@@ -1323,7 +1365,7 @@ window._buildProgressInner = function(t) {
         // (primeira bola jogada), mas a contagem ancora no PROGRAMADO — sem isso o leitor
         // não teria como saber por que os dois não fecham.
         '<div title="' + _tClkTitle + '" style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span' + _tClk.attr + ' style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _tClk.html + '</span>' +
+          '<span' + _tClk.attr + window._tProgRitmoAttr(_tRitmo) + ' style="font-size:1rem;font-weight:800;' + (_tRitmo ? '' : 'color:var(--text-bright);') + 'font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _tClk.html + '</span>' +
           '<span style="' + _tLblS + '">' + _tClk.label + '</span>' +
         '</div>' +
         _rightCol +
@@ -1429,11 +1471,10 @@ window._buildProgressInner = function(t) {
   // terminou cedo. O bump só vale pro torneio inteiro finalizado.
   if (isFinished) expectedFrac = Math.max(expectedFrac, progFrac);
 
-  var diff = expectedFrac - progFrac;
-  var color;
-  if (isFinished || _roundComplete || diff <= 0.02) color = '#10b981';
-  else if (diff <= 0.12) color = '#f59e0b';
-  else color = '#ef4444';
+  // 1.9.107: ADIANTADO (verde) · NO PROGRAMADO (azul) · ATRASADO (vermelho) — régua
+  // única do card (window._tProgRitmo), a mesma que pinta o relógio e a barra.
+  var _ritmo = window._tProgRitmo(progFrac, expectedFrac, !!(isFinished || _roundComplete));
+  var color = window._tProgRitmoBarra(_ritmo);
 
   var estEndMs;
   if (_roundEndReal) estEndMs = _roundEndReal;
@@ -1467,11 +1508,14 @@ window._buildProgressInner = function(t) {
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
   // coluna REAL: horário (+ data quando multi-dia) + label
+  // 1.9.107: o rótulo lateral quebra em 2 linhas ("final<br>estimado", "início<br>real").
+  // Numa linha só ele é a coisa mais larga da coluna e EMPURRAVA o relógio pra esquerda do
+  // centro (relato do dono com o print). Mesma quebra que a linha azul do programado já usa.
   var _realCol = function(ms, label, align, withDate) {
     return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
       '<span style="' + _timeS + '">' + _time(ms) + '</span>' +
       (withDate ? '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' : '') +
-      '<span style="' + _lblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+      '<span style="' + _lblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
     '</div>';
   };
   // coluna PROGRAMADO: horário + data + label (3 linhas, azul)
@@ -1487,13 +1531,13 @@ window._buildProgressInner = function(t) {
   // selo "⏳ Aguardando início" (a janela programada vem na linha de baixo).
   var topRow = _notStarted
     ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
-    : '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
+    : '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
         _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
           // v1.7.83/84: 2 linhas — este é o SEGUNDO renderizador do relógio (o do
           // painel da rodada); o outro é o do TORNEIO COMPLETO. Consertar só um
           // deixava o defeito de pé, que foi exatamente o que a verificação pegou.
-          '<span' + _clk.attr + ' style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _clk.html + '</span>' +
+          '<span' + _clk.attr + window._tProgRitmoAttr(_ritmo) + ' style="font-size:1rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _clk.html + '</span>' +
           '<span style="' + _lblS + '">' + _clk.label + '</span>' +
         '</div>' +
         _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
@@ -1502,7 +1546,7 @@ window._buildProgressInner = function(t) {
   // percentual de cada uma dentro da própria cor.
   var realBar = window._progBarPct(progFrac * 100, color, 18, '7px 7px 0 0', 'rgba(255,255,255,0.1)', color);
   var blueBar = window._progBarPct(expectedFrac * 100, '#3b82f6', 16, '0 0 7px 7px', 'rgba(255,255,255,0.06)', '#3b82f6');
-  var botRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;gap:8px;">' +
+  var botRow = '<div style="display:grid;grid-template-columns:1fr 1fr;align-items:flex-start;margin-top:7px;gap:8px;">' +
     _progCol(schedStart, _labelSchedStart, 'flex-start') +
     _progCol(plannedEnd, _labelSchedEnd, 'flex-end') +
   '</div>';
@@ -1531,6 +1575,13 @@ window._renderTournamentProgress = function(t) {
   // <style> escopado (vence a inversão por ordem de origem). As BARRAS (background)
   // mantêm as cores semânticas (verde/azul/vermelho). Vale nos 2 temas.
   var _cssId = String((t && t.id) || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  // 1.9.107: o relógio do ritmo (verde/azul/vermelho) escapa deste achatamento pela
+  // CLASSE, não por um `:not()` aqui — MEDIDO: o número do relógio mora em spans FILHOS
+  // (_tProgFmtDur2L quebra em 2 linhas), então excluir só o pai deixava os filhos brancos,
+  // que é exatamente o defeito relatado. `.sp-ritmo.sp-ritmo-X` (+ descendentes) tem
+  // especificidade MAIOR que este seletor e leva !important — vence sem depender de
+  // `:not(a b)` (CSS4: se o WebView não entendesse, a regra inteira cairia e a tarja
+  // perderia o contraste de TODO o resto). Ver css/style.css · .sp-ritmo-*.
   var _scoped = _rb ? '<style>.tourn-progress-live[data-tid="' + _cssId + '"] *{color:' + _rb.fg + ' !important;}</style>' : '';
   return '<div class="info-box" style="' + _wrapStyle + '">' + _scoped + '<div class="tourn-progress-live" data-tid="' + _cssId + '">' + window._buildProgressInner(t) + '</div></div>';
 };
