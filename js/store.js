@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.104';
+window.SCOREPLACE_VERSION = '1.9.105';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2717,6 +2717,21 @@ window._devWhatsAppBtnHtml = function (opts) {
       if (document.getElementById('casual-match-overlay')) return false;
       var v = (window.location.hash || '').replace('#', '').split('/')[0];
       if (v === 'novo-torneio') return false;
+      // ── ⭐ SO RECARREGA NA TELA INICIAL (1.9.105) ────────────────────────────
+      // O CLARAO BRANCO, terceira volta. A 1.9.46 poe a regra "so na dashboard"
+      // no `visibilitychange`; a 1.9.103 estendeu pro `pageshow` e `focus`. E o
+      // dono relatou de novo — porque sobravam DOIS chamadores sem guarda: o
+      // `hashchange` (dispara ao ENTRAR no torneio) e um `setInterval` de 2
+      // MINUTOS, que dispara em qualquer tela, inclusive com a pessoa lendo a
+      // chave. Recarregar ali e o clarao.
+      // ⛔ O ERRO DAS DUAS VEZES FOI O LUGAR: eu guardei os CHAMADORES, e sempre
+      // sobrou um. Esta funcao e a PORTA UNICA — todo caminho de recarregamento
+      // passa por aqui (`_applyUpdate` a consulta antes de qualquer coisa).
+      // Regra em porta unica nao tem "o lugar esquecido".
+      // O update nao se perde: `_pendingUpdateReload` fica de pe e a pilula
+      // "Nova versao" aparece, entao quem quiser atualiza na hora com 1 toque.
+      var _naTelaInicial = (v === '' || v === 'dashboard');
+      if (!_naTelaInicial) return false;
       var a = document.activeElement;
       if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return false;
     } catch (e) {}
@@ -7408,6 +7423,48 @@ window._navTorneioComAviso = function (tournamentId, evento) {
 // É um ouvinte VAZIO e `passive` de propósito: não lê, não decide, não cancela rolagem —
 // existe só pra destravar o realce do CSS. No desktop é inofensivo.
 try { document.addEventListener('touchstart', function () {}, { passive: true }); } catch (e) {}
+
+// ── ⭐ O REALCE DO TOQUE, POSTO POR JS (1.9.105) ─────────────────────────────
+// OITO VERSOES MEXENDO NO `:active` NAO MUDARAM NADA, e o dono entregou o porque
+// sem saber: na 1.9.104 ele relatou _"da uma leve mexidinha no box, mas isso e
+// muito sutil"_. A mexidinha e o `onmouseover` do card (translateX 5px) — o iOS
+// simula hover no toque. Ela PROVA que a thread NAO esta presa (estilo inline de
+// JS pinta na hora) e que, ainda assim, o `:active` nao pinta.
+// A razao: no iOS o `:active` e ADIADO enquanto o WebKit decide se o toque vai
+// virar ROLAGEM. Num card dentro de pagina rolavel o dedo sai antes da decisao,
+// e o estado nem chega a ser aplicado. Nao havia CSS que consertasse isso.
+//
+// Aqui o realce entra no MESMO instante do toque, sem esperar decisao nenhuma.
+// DELEGADO no document: nao ha listener por card (a dash tem dezenas), e card
+// novo de re-render ja nasce coberto.
+// ⚠️ `passive: true` nos tres: este ouvinte NUNCA cancela rolagem.
+// ⚠️ Sai no `touchmove` tambem — se o dedo andou, aquilo virou ROLAGEM, e card
+//    aceso no meio de uma rolagem e pior que card sem realce.
+try {
+  (function () {
+    var _ALVO = '.card[onclick], a.compact-row, .compact-row[onclick]';
+    var _aceso = null;
+    var _apaga = function () {
+      if (!_aceso) return;
+      try { _aceso.classList.remove('sp-tocado'); } catch (e) {}
+      _aceso = null;
+    };
+    document.addEventListener('touchstart', function (ev) {
+      _apaga();
+      var t = ev && ev.target;
+      if (!t || !t.closest) return;
+      // controle DENTRO do card (botao, link, input) tem o proprio feedback
+      if (t.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
+      var card = t.closest(_ALVO);
+      if (!card) return;
+      card.classList.add('sp-tocado');
+      _aceso = card;
+    }, { passive: true });
+    document.addEventListener('touchend', _apaga, { passive: true });
+    document.addEventListener('touchcancel', _apaga, { passive: true });
+    document.addEventListener('touchmove', _apaga, { passive: true });
+  })();
+} catch (e) {}
 
 // v3.1.60: abre URL EXTERNA de forma confiável — especialmente no iOS PWA (standalone).
 // O `window.open(url, '_blank', 'noopener')` no iOS cria uma ABA INTERMEDIÁRIA EM BRANCO

@@ -104,5 +104,48 @@ ok(/overflow-y:\s*hidden/.test(wrap),
    'o wrapper rola so na horizontal — `overflow-y: visible` era computado como AUTO e criava rolador aninhado');
 ok(!/overflow-y:\s*visible/.test(wrap), '⛔ e `visible` nao volta: ao lado de `auto` ele nao e visivel');
 
+// ── E) A REGRA DO RELOAD MORA NA PORTA UNICA (1.9.105) ────────────────────
+// TERCEIRA volta do clarao branco. A 1.9.46 guardou o `visibilitychange`; a
+// 1.9.103 estendeu pro `pageshow`/`focus`; e o dono relatou DE NOVO — porque
+// sobravam dois chamadores: o `hashchange` (dispara ao ENTRAR no torneio) e um
+// `setInterval` de 2 MINUTOS, que dispara em qualquer tela.
+// ⛔ O ERRO, DUAS VEZES, FOI O LUGAR: guardar CHAMADORES sempre deixa um pra
+// tras. `_isSafeToReload` e a PORTA UNICA — `_applyUpdate` a consulta antes de
+// qualquer coisa, entao TODO caminho passa por ela.
+const iSafe = store.indexOf('window._isSafeToReload = function');
+ok(iSafe > 0, 'a porta unica do reload existe');
+const safe = store.slice(iSafe, store.indexOf('window._showUpdatePill', iSafe));
+ok(/var _naTelaInicial = \(v === '' \|\| v === 'dashboard'\);/.test(safe),
+   'a regra "so na tela inicial" mora DENTRO de _isSafeToReload');
+ok(/if \(!_naTelaInicial\) return false;/.test(safe),
+   'e ela BLOQUEIA o reload fora da tela inicial');
+ok(/_applyUpdate = function\(force\) \{\s*if \(!force && !window\._isSafeToReload\(\)\)/.test(store),
+   'e `_applyUpdate` consulta a porta antes de qualquer coisa');
+ok(/window\._pendingUpdateReload = true;/.test(store),
+   'o update nao se perde: fica pendente e a pilula da a opcao de atualizar na hora');
+
+// ── F) O REALCE DO TOQUE E POSTO POR JS, NAO PELO `:active` (1.9.105) ─────
+// O dono entregou o diagnostico sem saber, na 1.9.104: "da uma leve mexidinha no
+// box, mas isso e muito sutil". A mexidinha e o `onmouseover` (translateX 5px) —
+// o iOS simula hover no toque. Ela prova que a thread NAO esta presa (estilo
+// inline de JS pinta na hora) e que, ainda assim, o `:active` nao pinta: no iOS
+// ele e ADIADO enquanto o WebKit decide se o toque vira ROLAGEM, e num card
+// dentro de pagina rolavel o dedo sai antes da decisao.
+ok(/var _ALVO = '\.card\[onclick\], a\.compact-row, \.compact-row\[onclick\]';/.test(store),
+   'o ouvinte cobre card e linha compacta');
+ok(/document\.addEventListener\('touchstart', function \(ev\)[\s\S]{0,600}classList\.add\('sp-tocado'\)/.test(store),
+   'o realce entra no TOUCHSTART — sem esperar decisao de gesto');
+['touchend', 'touchcancel', 'touchmove'].forEach(function (ev) {
+  ok(new RegExp("addEventListener\\('" + ev + "', _apaga, \\{ passive: true \\}\\)").test(store),
+     'e sai no `' + ev + '`' + (ev === 'touchmove' ? ' — dedo que andou virou ROLAGEM, e card aceso rolando e pior que card sem realce' : ''));
+});
+ok(/closest\('button, input, label, select, textarea, a\[href\], \[data-no-card-nav\]'\)/.test(store),
+   'controle DENTRO do card nao acende o card (ele tem o proprio feedback)');
+const comps3 = R('css/components.css').replace(/\/\*[\s\S]*?\*\//g, '');
+ok(/\.card\[onclick\]\.sp-tocado[\s\S]{0,200}transform: scale\(0\.96\) !important/.test(comps3),
+   'o realce e visivel (encolhe 4%) e usa !important — o card cravou transform INLINE no onmouseover');
+ok(/\.sp-tocado[\s\S]{0,220}filter: brightness/.test(comps3),
+   'e clareia: transform+filter sao compositor, sem layout');
+
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

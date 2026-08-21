@@ -1198,6 +1198,32 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
    entre os temas ([[feedback_contraste_sempre_nos_dois_temas]]). Aqui ela não se
    aplica: esmaecer é MOMENTÂNEO e igual nos dois temas — o card volta ao normal
    ao soltar o dedo. O `outline` FICA, somando (cor + esmaecimento). */
+/* ── ⭐ O REALCE DO TOQUE E POSTO POR JS, NAO PELO `:active` (1.9.105) ────────
+   O QUE O DONO VIU na 1.9.104, e que resolveu o caso: _"da uma leve mexidinha no
+   box, mas isso e muito sutil"_. Aquela mexidinha e o `onmouseover` do card
+   (`transform: translateX(5px)`) — o iOS SIMULA hover no toque. E ela PROVA duas
+   coisas de uma vez:
+     • a thread NAO esta presa no instante do toque: estilo inline posto por JS
+       pinta na hora;
+     • e mesmo assim o `:active` NAO pinta.
+   Por que: no iOS o `:active` e ADIADO enquanto o WebKit decide se aquele toque
+   vai virar ROLAGEM. Num card dentro de pagina rolavel essa decisao quase nunca
+   chega a tempo — o dedo sai antes. Foi por isso que oito versoes mexendo no
+   `:active` (opacidade, contorno, tap-highlight) nao mudaram nada: o estado nem
+   chegava a ser aplicado.
+   Entao quem poe o realce e um ouvinte de `touchstart` (store.js), que roda no
+   MESMO instante do toque, sem esperar decisao de gesto. `.sp-tocado` anima so
+   `transform` e `filter` — compositor, sem layout.
+   ⚠️ `!important` e obrigatorio: o card cravou `transform` INLINE no onmouseover,
+   e estilo inline ganha de folha.
+   O bloco `:active` abaixo FICA: no desktop (mouse) ele e o caminho natural. */
+.card[onclick].sp-tocado,
+a.compact-row.sp-tocado,
+.compact-row[onclick].sp-tocado {
+  transform: scale(0.96) !important;
+  filter: brightness(1.45) saturate(1.1);
+  transition: none !important;
+}
 .card[onclick]:active,
 a.compact-row:active,
 .compact-row[onclick]:active {
