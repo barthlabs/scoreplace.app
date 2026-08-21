@@ -1090,6 +1090,10 @@ const SUITES = [
   // confirmado?" (verde/ambar/cinza) e o NUMERO responde "quem ganhou?"
   // (verde/vermelho). Antes as duas perguntas dividiam a mesma cor.
   'tests/cor-do-placar-na-chave.test.js',
+  // 1.9.113 — o icone do jogador saia como circulo mudo e igual pra todos: ele
+  // nasce do NOME, e quem tem uid com perfil nao resolvido nasce sem nome (1.7.79).
+  // A hidratacao trocava o texto e deixava o icone pra tras.
+  'tests/icone-do-jogador-hidrata-com-o-nome.test.js',
 ];
 
 let failed = [];

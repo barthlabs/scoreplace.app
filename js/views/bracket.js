@@ -3746,9 +3746,27 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // Check photo cache for real user photo
     const rawCached = window._playerPhotoCache[dispName.toLowerCase()] || '';
     const cachedPhoto = (rawCached && rawCached.indexOf('dicebear.com') === -1) ? rawCached : '';
-    const initialsUrl = 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
+    // ── ⭐ ICONE SEM NOME VIRA CIRCULO VAZIO, IGUAL PRA TODO MUNDO (1.9.113) ──
+    // Pergunta do dono, olhando a chave: _"o que aconteceu com as fotos/icones dos
+    // jogadores que virou tudo a mesma merda?"_ — todos os circulos iguais, bege e
+    // SEM inicial.
+    // CAUSA: o icone e gerado a partir do NOME (`seed`). Desde a 1.7.79 ("a lista
+    // nasce do UID, nao do rotulo"), quando o perfil ainda nao chegou o nome sai
+    // VAZIO de proposito, pra ser preenchido pela hidratacao. So que a hidratacao
+    // troca o TEXTO e nunca tocou no icone. Com seed vazia o servico devolve um
+    // circulo sem inicial nenhuma — e, sendo a mesma seed pra todos, a MESMA cor.
+    // Dai "tudo a mesma merda": nao e um icone generico, e a ausencia de nome.
+    // CONSERTO: sem nome resolvido, nao se pede icone nenhum agora — o `<img>`
+    // nasce marcado com o uid e a hidratacao (que ja resolve o nome) passa a
+    // definir o `src` junto. Ver `_hydrateUidNames` em store.js.
+    const _semNomeAinda = !dispName && !!_slotUid;
+    const initialsUrl = _semNomeAinda
+      ? ''
+      : 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
     const photoSrc = cachedPhoto || initialsUrl;
-    const onerror = cachedPhoto ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
+    const onerror = cachedPhoto && initialsUrl ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
+    // o uid viaja no proprio <img> — a hidratacao acha por ele
+    const _avatarUid = _semNomeAinda ? ` data-uid-avatar="${window._safeHtml(_slotUid)}"` : '';
     const size = members.length > 1 ? '20px' : '24px';
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
     // ── CAIXA INVISÍVEL DO NOME (cânone fit-name-to-box) ───────────────────
@@ -3768,14 +3786,14 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     const _boxNome = `--sp-box-h:${(_nomeMaxRem * 1.35).toFixed(2)}rem`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
-        `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
+        `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
         `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:#fbbf24;white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
         `<span style="font-size:0.52rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
     }
     html += `<div class="sp-mc-side">` +
-      `<img src="${photoSrc}" ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
+      `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(name)}" class="sp-av" style="--sp-av:${size}">` +
       // v1.6.98 (decisão do dono): o nome no CARD DA CHAVE não abre mais ficha —
       // "faça funcionar na classificação e não na chave". Na quadra o card é área de
       // toque pra placar/confirmar; abrir perfil ali atrapalhava. A ficha vive no nome

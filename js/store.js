@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.112';
+window.SCOREPLACE_VERSION = '1.9.113';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -646,15 +646,40 @@ window._hydrateUidNames = function (root) {
   if (!root || !root.querySelectorAll) return Promise.resolve();
   var els = root.querySelectorAll('[data-uid-name]');
   var roleEls = root.querySelectorAll('[data-uid-role]');
-  if (!els.length && !roleEls.length) return Promise.resolve();
+  // ── ⭐ O ICONE HIDRATA JUNTO COM O NOME (1.9.113) ──────────────────────────
+  // Relato do dono: _"o que aconteceu com as fotos/icones dos jogadores que virou
+  // tudo a mesma merda?"_ — na chave, todos os circulos iguais e sem inicial.
+  // O icone e desenhado a partir do NOME; quem tem uid e perfil ainda nao
+  // resolvido nasce SEM nome (de proposito, desde a 1.7.79) — e esta funcao
+  // preenchia o texto e deixava o icone pra tras. Agora os dois vem do mesmo
+  // lugar e no mesmo momento: se o nome resolveu, o icone resolve.
+  var avEls = root.querySelectorAll('[data-uid-avatar]');
+  if (!els.length && !roleEls.length && !avEls.length) return Promise.resolve();
   var uids = [];
   els.forEach(function (e) { var u = e.getAttribute('data-uid-name'); if (u) uids.push(u); });
   roleEls.forEach(function (e) { var u = e.getAttribute('data-uid-role'); if (u) uids.push(u); });
+  avEls.forEach(function (e) { var u = e.getAttribute('data-uid-avatar'); if (u) uids.push(u); });
   return window._preloadUserProfiles(uids).then(function () {
     els.forEach(function (e) {
       var u = e.getAttribute('data-uid-name');
       var nm = window._nameForUid(u);
       if (nm) e.textContent = nm;
+    });
+    // e o ICONE, pelo mesmo nome que acabou de resolver
+    avEls.forEach(function (e) {
+      var u = e.getAttribute('data-uid-avatar');
+      var nm = u ? window._nameForUid(u) : '';
+      if (!nm) return;                       // sem nome ainda: fica sem icone, nao com um errado
+      // a FOTO REAL vem do mesmo cache que o `_preloadUserProfiles` acabou de
+      // encher — sem isto quem tem foto no perfil cairia nas iniciais.
+      var perfil = window._userProfileCache && window._userProfileCache[u];
+      var foto = perfil && perfil.photoURL;
+      e.src = (typeof window._profileAvatarUrl === 'function')
+        ? window._profileAvatarUrl(nm, foto, 48)
+        : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) +
+           '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf');
+      e.setAttribute('data-player-name', nm);
+      e.removeAttribute('data-uid-avatar');  // resolvido: nao volta na proxima passada
     });
     // A BUSCA também congela: `data-players` é o que o filtro varre, e ele foi escrito
     // no render — com o cache frio, escrito como "Jogador sem perfil (XXXX)". Sem esta
