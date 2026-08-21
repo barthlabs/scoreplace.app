@@ -1090,6 +1090,11 @@ const SUITES = [
   // confirmado?" (verde/ambar/cinza) e o NUMERO responde "quem ganhou?"
   // (verde/vermelho). Antes as duas perguntas dividiam a mesma cor.
   'tests/cor-do-placar-na-chave.test.js',
+  // A 1.9.112 travou a REGRA de cor (tarja=estado, número=quem ganhou) e mesmo assim a
+  // dashboard mostrou 1 × 6 com os DOIS números vermelhos: faltava travar o degrau de
+  // baixo — DESCOBRIR quem venceu quando o `winner` gravado (string de nomes) não bate
+  // mais com o slot. Varre os torneios REAIS: 3 jogos da Confra estão assim.
+  'tests/quem-venceu-e-uma-regra-so.test.js',
   // 1.9.113 — o icone do jogador saia como circulo mudo e igual pra todos: ele
   // nasce do NOME, e quem tem uid com perfil nao resolvido nasce sem nome (1.7.79).
   // A hidratacao trocava o texto e deixava o icone pra tras.

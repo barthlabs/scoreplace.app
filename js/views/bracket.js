@@ -3911,8 +3911,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const matchReady = !isDecided && !isByeMatch && !hasTBD && p1ci === 'full' && p2ci === 'full';
   const matchPartial = !isDecided && !isByeMatch && !hasTBD && hasAnyCheckIn && !matchReady;
 
-  const p1IsWinner = isDecided && m.winner === m.p1;
-  const p2IsWinner = isDecided && m.winner === m.p2;
+  // ⭐ 2.0.1: quem venceu sai da REGRA ÚNICA (window._matchWinnerSide, bracket-model.js) e não
+  // mais de `m.winner === m.p1`. Comparar a string de nomes falhava nos DOIS lados quando a
+  // composição da dupla mudava depois do resultado — e aí a tela pintava os dois números de
+  // vermelho, sem tarja verde nenhuma (relato do dono na dashboard, jogo 1 × 6). Medido: 3
+  // jogos da Confra estão nesse estado hoje. O fallback resolve pelo placar do próprio
+  // documento; sem `m.winner` nada muda (nunca inventa vencedor).
+  const _ladoVencedor = (typeof window._matchWinnerSide === 'function')
+    ? window._matchWinnerSide(m)
+    : (m.draw || m.winner === 'draw' ? 0 : (m.winner === m.p1 ? 1 : (m.winner === m.p2 ? 2 : null)));
+  const p1IsWinner = isDecided && _ladoVencedor === 1;
+  const p2IsWinner = isDecided && _ladoVencedor === 2;
 
   const rowStyle = (isWinner, side) => {
     const base = 'padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;';

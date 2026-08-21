@@ -40,6 +40,44 @@ input[type="time"]::-webkit-calendar-picker-indicator {
    linha, é o CONTAINER que se adapta (flex-wrap / reduzir a data, não cortar a hora). */
 input[type="time"] { min-width: 5.75rem !important; }  /* "23:00" + ícone de relógio */
 input[type="date"] { min-width: 8.5rem !important; }   /* "dd/mm/aaaa" + ícone de calendário */
+/* ⭐ 2.0.1 — LINHA COMPACTA (data + hora + ✕ na MESMA linha). Ordem do dono, olhando o
+   "Término da fase": _"esse x deveria estar na mesma linha da data e hora (dá pra diminuir
+   um pouco os campos para ele caber ali)"_. Sem isto o ✕ descia sozinho pra linha de baixo
+   em tela de celular — virava um botão vermelho solto embaixo do campo.
+   ⚠️ O piso canônico acima existe pra o VALOR nunca truncar, e essa razão continua de pé:
+   aqui quem encolhe é o ÍCONE nativo e o PADDING, não o valor. Os pisos novos foram
+   MEDIDOS com o valor cheio ("12/11/2026" e "23:00") em pt-BR e en-US, conferindo
+   `scrollWidth <= clientWidth` no próprio input — é isso que prova que não cortou.
+   Escopo: só quem tem a classe .sp-dt-tight. */
+/* ⚠️ DOIS ERROS MEUS AQUI, os dois pegos MEDINDO — ficam registrados porque o próximo a
+   mexer cai neles de novo:
+   1. Baixei o piso da hora pra 4.4rem e ela saiu CORTADA ("11:00 P") em locale de 12h. A
+      minha primeira verificação não pegou: o <input> nativo corta por DENTRO, sem mudar o
+      scrollWidth. Prova de verdade = medir o TEXTO com a fonte do input e comparar com o
+      espaço útil (clientWidth − padding − ícone).
+   2. Os pisos são em `rem` e o app ESCALA o rem (--ui-scale): 6.2rem virou 117px no
+      aparelho, não os 99 que eu tinha calculado com 16px. Nunca conferir esta linha "na
+      régua do desktop" — medir no viewport estreito, que é onde ela aperta.
+   Por isso o que dá o espaço aqui é a FONTE MENOR (o texto encolhe junto), mais o ícone
+   nativo e o padding. Os pisos abaixo foram medidos com o valor cheio nas duas formas
+   ("12/11/2026" · "11:00 PM"/"23:00"). */
+.sp-dt-tight input[type="date"] { min-width: 5.4rem !important; }
+.sp-dt-tight input[type="time"] { min-width: 4.7rem !important; }
+.sp-dt-tight input[type="date"], .sp-dt-tight input[type="time"] {
+  font-size: 0.72rem !important;
+  padding-left: 5px !important;
+  padding-right: 2px !important;
+}
+/* Abaixo de ~340px (iPhone SE de 1ª geração) nem com tudo encolhido o ✕ cabe na linha —
+   MEDIDO: em 320px ele passa da borda. Aí a linha volta a quebrar, que é melhor do que
+   empurrar o botão pra fora da tela. De 360px pra cima (todo aparelho atual) cabe. */
+@media (max-width: 340px) { .sp-dt-tight { flex-wrap: wrap !important; } }
+.sp-dt-tight input[type="date"]::-webkit-calendar-picker-indicator,
+.sp-dt-tight input[type="time"]::-webkit-calendar-picker-indicator {
+  width: 13px !important;
+  height: 13px !important;
+  flex-shrink: 0;
+}
 /* "Repetir a cada [N] dias" (número) e a tag "≈ N rodadas" acompanham a mesma
    altura pra alinhar na linha do agendamento de sorteios. */
 #liga-draw-interval, #liga-rounds-tag {

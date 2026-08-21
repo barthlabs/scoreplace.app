@@ -1032,6 +1032,71 @@
     return String(pts);
   };
 
+  // ══ ⭐ QUEM VENCEU ESTE JOGO — REGRA ÚNICA (2.0.1) ═══════════════════════════════
+  // Devolve 1 (p1), 2 (p2), 0 (empate) ou null (sem resultado).
+  //
+  // 🔴 O QUE ISTO CONSERTA, medido nos documentos REAIS da Confra (21/ago/2026):
+  // o vencedor é gravado como uma STRING DE NOMES composta ("Fulano / Ciclano"), e ela deixa
+  // de bater com o slot quando a composição da dupla muda depois do resultado (substituição,
+  // troca de parceiro, nome editado). Três jogos do torneio estavam assim — exemplo real:
+  //     winner "Pessoa 53 / Pessoa 52"   p1 "Pessoa 49 / Pessoa 51"   p2 "Pessoa 50 / Pessoa 52"
+  //     scoreP1 1 · scoreP2 6
+  // Como `winner === p1` e `winner === p2` davam FALSO nos dois lados, a tela pintava os DOIS
+  // números de vermelho e nenhuma tarja verde — foi o que o dono viu na dashboard: um 1 e um 6
+  // ambos como perdedores. Comparar NOME é frágil por natureza; a identidade do slot é o uid
+  // (ver project_match_slot_uid_identity / project_uid_primary_identity).
+  //
+  // A ordem abaixo vai do mais forte pro mais fraco, e NUNCA inventa vencedor onde não há
+  // resultado (`m.winner` vazio → null, e ponto).
+  window._matchWinnerSide = function (m) {
+    if (!m) return null;
+    if (m.draw || m.winner === 'draw') return 0;
+    if (!m.winner) return null;
+    // 1. O caminho normal: a string bate com o slot.
+    if (m.winner === m.p1) return 1;
+    if (m.winner === m.p2) return 2;
+    // 2. Por UID — a identidade estrutural do slot. Cobre o nome trocado depois do resultado.
+    var wu = m.winnerUids || m.winnerUid;
+    if (wu) {
+      var lista = Array.isArray(wu) ? wu : [wu];
+      var t1 = m.team1Uids || (m.p1Uid ? [m.p1Uid] : []);
+      var t2 = m.team2Uids || (m.p2Uid ? [m.p2Uid] : []);
+      var bate = function (t) { return lista.length && lista.every(function (u) { return t.indexOf(u) !== -1; }); };
+      if (bate(t1)) return 1;
+      if (bate(t2)) return 2;
+    }
+    // 3. Pelo PLACAR, que está no mesmo documento e é inequívoco. Sets primeiro (é o placar
+    //    que decide a partida quando o formato usa sets), games/pontos depois.
+    var a = m.setsWonP1, b = m.setsWonP2;
+    if (!(a > 0 || b > 0)) { a = m.scoreP1; b = m.scoreP2; }
+    if (typeof a === 'number' && typeof b === 'number' && a !== b) return a > b ? 1 : 2;
+    // 4. Há `winner` mas nada o resolve: NÃO chutar. Quem chama decide o que mostrar.
+    return null;
+  };
+
+  // ══ ⭐ CARIMBAR O VENCEDOR — o lado de quem ESCREVE (2.0.1) ══════════════════════
+  // `m.winner` é uma STRING DE NOMES e isso é dívida conhecida: a campanha de identidade por
+  // uid (project_match_slot_uid_identity) parou no ITEM 3 · FASE 3 — a FASE 4, que migraria o
+  // storage do slot pra uid, nunca foi feita. Enquanto o slot for nome, TODA mudança legítima
+  // na composição (substituição, W.O., rename) ORFANIZA o vencedor gravado: o nome continua
+  // apontando pra dupla que venceu e o slot já é outro. Foi assim que 3 jogos da Confra
+  // ficaram com "dois perdedores" na tela.
+  //
+  // Aqui a sangria PARA na origem: quem decide o vencedor SEMPRE sabe o lado (1 ou 2), então
+  // grava junto a identidade ESTRUTURAL do lado. Daí em diante a leitura resolve por uid e
+  // nome nenhum pode envelhecer. Os jogos antigos (sem `winnerUids`) continuam resolvidos
+  // pelo placar, no `_matchWinnerSide` acima — é a ponte até a migração.
+  window._stampWinner = function (m, side) {
+    if (!m || (side !== 1 && side !== 2)) return;
+    m.winner = (side === 1) ? m.p1 : m.p2;
+    m.draw = false;
+    var uids = (typeof window._slotUids === 'function') ? window._slotUids(m, side) : null;
+    // Guest sem conta não tem uid, e a string É a identidade legítima dele — nesse caso não
+    // há o que carimbar (e um array vazio mentiria dizendo "resolvi por uid").
+    if (uids && uids.length) m.winnerUids = uids.slice();
+    else delete m.winnerUids;
+  };
+
   // Expose for manual invocation: window._bracketModelSanityChecks()
   window._bracketModelSanityChecks = _runSanityChecks;
 

@@ -6037,6 +6037,17 @@ window._gsmBuildPresetDesc = function(key, cfg) {
   return window._gsmBuildDescFromValues(cfg.setsToWin, cfg.gamesPerSet, cfg.tiebreakEnabled, cfg.tiebreakPoints, cfg.superTiebreak, cfg.superTiebreakPoints);
 };
 
+// ⭐ FONTE ÚNICA do texto do formato — o bloco da fase classificatória E o da eliminatória
+// leem daqui (format2-ui chama esta mesma função). Ordem do dono (21/ago): "isso do tie/super
+// deve funcionar sempre igual de forma canônica nas 2 fases".
+//
+// ⚠️ O TEXTO ANTIGO ESCONDIA UMA DAS DUAS REGRAS e foi por isso que pareceu contradição:
+// com super tie-break ligado ele dizia só "2 sets de 6 games + Super TB 10 no 3º set" e
+// NUNCA mencionava que os sets normais têm tie-break. O dono leu os dois controles ligados e
+// entendeu que brigavam pelo mesmo jogo — "é um ou outro, não pode ser os 2".
+// Não brigam, e agora o texto diz onde cada um vale:
+//   • tie-break ......... nos sets NORMAIS, quando o set empata (ex. 5-5)
+//   • super tie-break ... só quando os SETS empatam (1-1 no melhor de 3), no lugar do decisivo
 window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP) {
   var tie = g - 1;
   if (s === 1) {
@@ -6044,10 +6055,11 @@ window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP) {
   }
   var totalSets = s * 2 - 1;
   var normalSets = totalSets - (stb ? 1 : 0);
-  var parts = [normalSets + ' sets de ' + g + ' games'];
-  if (stb) parts.push('Super TB ' + stbP + ' no ' + totalSets + '\u00BA set');
-  else if (tb) parts.push('TB' + tbP + ' em ' + tie + '-' + tie);
-  return parts.join(' + ');
+  var base = normalSets + ' sets de ' + g + ' games' + (tb ? ' (TB' + tbP + ' em ' + tie + '-' + tie + ')' : '');
+  // "se ficar 1-1" diz QUANDO ele acontece; "no 3º set" dizia só ONDE, e ninguém lê um
+  // número de set como "empate". O empate é sempre (s-1)-(s-1): 1-1 no melhor de 3, 2-2 no de 5.
+  if (stb) return base + ' + Super TB ' + stbP + ' se ficar ' + (s - 1) + '-' + (s - 1);
+  return base;
 };
 
 // Which sports lock noAd (no advantage)
@@ -6294,7 +6306,8 @@ window._openGSMConfig = function(targetPhase) {
         // Tiebreak
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
           '<div class="toggle-row" style="padding:6px 0;margin-bottom:8px;">' +
-            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (tbAt === 'g-1' ? _gm1 : _gg) + '-' + (tbAt === 'g-1' ? _gm1 : _gg) + '</span></div>' +
+            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (tbAt === 'g-1' ? _gm1 : _gg) + '-' + (tbAt === 'g-1' ? _gm1 : _gg) + '</span>' +
+              '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">Decide o set quando os <b>games</b> empatam. Vale nos sets normais.</div></div>' +
             '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' onchange="window._gsmToggleTiebreak()"><span class="toggle-slider"></span></label>' +
           '</div>' +
           '<div id="gsm-tb-details" style="display:' + (tbEnabled ? 'flex' : 'none') + ';gap:12px;flex-wrap:wrap;padding-left:26px;">' +
@@ -6312,7 +6325,10 @@ window._openGSMConfig = function(targetPhase) {
         // Super tiebreak
         '<div id="gsm-super-tb-section" style="display:' + (parseInt(setsToWin) > 1 ? 'block' : 'none') + ';">' +
           '<div class="toggle-row" style="padding:6px 0;margin-bottom:8px;">' +
-            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Super tie-break no set decisivo</span></div>' +
+            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;">Super tie-break no set decisivo</span>' +
+              // Ordem do dono: a diferença mínima FICA em 2 (regra oficial de tênis/padel) — o que
+              // faltava era o texto avisar. Sem isto, "Super TB 10" dá a entender que 10-9 fecha.
+              '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">Só quando os <b>sets</b> empatam em ' + (parseInt(setsToWin) - 1) + '-' + (parseInt(setsToWin) - 1) + ' — joga no lugar do set decisivo. Usa a mesma <b>diferença mínima</b> acima (a ' + stbPoints + ' com ' + tbMargin + ' de vantagem: ' + stbPoints + '-' + (parseInt(stbPoints) - 1) + ' não fecha).</div></div>' +
             '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-superTb" ' + (stb ? 'checked' : '') + ' onchange="window._gsmToggleSuperTb()"><span class="toggle-slider"></span></label>' +
           '</div>' +
           '<div id="gsm-stb-details" style="display:' + (stb ? 'flex' : 'none') + ';gap:12px;padding-left:26px;">' +

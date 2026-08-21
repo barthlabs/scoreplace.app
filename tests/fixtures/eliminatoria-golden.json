@@ -8,28 +8,28 @@
           "d": 0,
           "pc": 10,
           "pf": 18,
-          "uid": "uid0010",
+          "uid": "uid0005",
           "v": 3
         },
         {
           "d": 2,
           "pc": 12,
           "pf": 16,
-          "uid": "uid0011",
+          "uid": "uid0006",
           "v": 1
         },
         {
           "d": 2,
           "pc": 17,
           "pf": 11,
-          "uid": "uid0012",
+          "uid": "uid0007",
           "v": 1
         },
         {
           "d": 2,
           "pc": 17,
           "pf": 11,
-          "uid": "uid0009",
+          "uid": "uid0008",
           "v": 1
         }
       ],
@@ -41,29 +41,29 @@
         {
           "d": 1,
           "pc": 10,
-          "pf": 17,
-          "uid": "uid0015",
+          "pf": 16,
+          "uid": "uid0011",
           "v": 2
         },
         {
           "d": 1,
           "pc": 11,
-          "pf": 16,
-          "uid": "uid0014",
+          "pf": 15,
+          "uid": "uid0009",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 15,
-          "pf": 12,
-          "uid": "uid0016",
+          "pc": 13,
+          "pf": 13,
+          "uid": "uid0012",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 9,
-          "uid": "uid0013",
+          "pf": 8,
+          "uid": "uid0010",
           "v": 0
         }
       ],
@@ -71,6 +71,40 @@
     },
     {
       "grupo": 2,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 10,
+          "pf": 17,
+          "uid": "uid0013",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 16,
+          "uid": "uid0016",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 15,
+          "pf": 12,
+          "uid": "uid0014",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 9,
+          "uid": "uid0015",
+          "v": 0
+        }
+      ],
+      "nome": "R1 Grupo C"
+    },
+    {
+      "grupo": 3,
       "linhas": [
         {
           "d": 1,
@@ -101,15 +135,15 @@
           "v": 0
         }
       ],
-      "nome": "R1 Grupo C"
+      "nome": "R1 Grupo D"
     },
     {
-      "grupo": 3,
+      "grupo": 4,
       "linhas": [
         {
           "d": 1,
-          "pc": 11,
-          "pf": 15,
+          "pc": 10,
+          "pf": 16,
           "uid": "uid0021",
           "v": 2
         },
@@ -122,50 +156,16 @@
         },
         {
           "d": 1,
-          "pc": 12,
-          "pf": 14,
-          "uid": "uid0023",
+          "pc": 13,
+          "pf": 13,
+          "uid": "uid0024",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
           "pf": 8,
-          "uid": "uid0024",
-          "v": 0
-        }
-      ],
-      "nome": "R1 Grupo D"
-    },
-    {
-      "grupo": 4,
-      "linhas": [
-        {
-          "d": 1,
-          "pc": 8,
-          "pf": 18,
-          "uid": "uid0025",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 12,
-          "pf": 14,
-          "uid": "uid0027",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 13,
-          "pf": 13,
-          "uid": "uid0026",
-          "v": 2
-        },
-        {
-          "d": 3,
-          "pc": 19,
-          "pf": 7,
-          "uid": "uid0028",
+          "uid": "uid0023",
           "v": 0
         }
       ],
@@ -176,30 +176,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 14,
-          "pf": 18,
-          "uid": "uid0029",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 14,
-          "pf": 18,
-          "uid": "uid0030",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 17,
+          "pc": 11,
           "pf": 15,
-          "uid": "uid0031",
+          "uid": "uid0027",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 15,
+          "uid": "uid0028",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 14,
+          "uid": "uid0025",
           "v": 2
         },
         {
           "d": 3,
-          "pc": 19,
-          "pf": 13,
-          "uid": "uid0032",
+          "pc": 18,
+          "pf": 8,
+          "uid": "uid0026",
           "v": 0
         }
       ],
@@ -209,32 +209,32 @@
       "grupo": 6,
       "linhas": [
         {
-          "d": 0,
-          "pc": 14,
-          "pf": 20,
-          "uid": "uid0034",
-          "v": 3
-        },
-        {
-          "d": 2,
-          "pc": 16,
+          "d": 1,
+          "pc": 8,
           "pf": 18,
-          "uid": "uid0035",
-          "v": 1
+          "uid": "uid0031",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 19,
-          "pf": 15,
-          "uid": "uid0033",
-          "v": 1
+          "d": 1,
+          "pc": 12,
+          "pf": 14,
+          "uid": "uid0029",
+          "v": 2
         },
         {
-          "d": 2,
+          "d": 1,
+          "pc": 13,
+          "pf": 13,
+          "uid": "uid0032",
+          "v": 2
+        },
+        {
+          "d": 3,
           "pc": 19,
-          "pf": 15,
-          "uid": "uid0036",
-          "v": 1
+          "pf": 7,
+          "uid": "uid0030",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo G"
@@ -243,32 +243,32 @@
       "grupo": 7,
       "linhas": [
         {
-          "d": 0,
-          "pc": 16,
-          "pf": 19,
-          "uid": "uid0039",
-          "v": 3
+          "d": 1,
+          "pc": 14,
+          "pf": 18,
+          "uid": "uid0035",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 18,
-          "pf": 17,
-          "uid": "uid0037",
-          "v": 1
+          "d": 1,
+          "pc": 14,
+          "pf": 18,
+          "uid": "uid0036",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 18,
-          "pf": 17,
-          "uid": "uid0038",
-          "v": 1
+          "d": 1,
+          "pc": 17,
+          "pf": 15,
+          "uid": "uid0033",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 18,
-          "pf": 17,
-          "uid": "uid0040",
-          "v": 1
+          "d": 3,
+          "pc": 19,
+          "pf": 13,
+          "uid": "uid0034",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo H"
@@ -277,32 +277,32 @@
       "grupo": 8,
       "linhas": [
         {
-          "d": 1,
-          "pc": 13,
-          "pf": 18,
-          "uid": "uid0044",
-          "v": 2
-        },
-        {
-          "d": 1,
+          "d": 0,
           "pc": 14,
-          "pf": 17,
-          "uid": "uid0042",
-          "v": 2
+          "pf": 20,
+          "uid": "uid0038",
+          "v": 3
         },
         {
-          "d": 1,
+          "d": 2,
           "pc": 16,
-          "pf": 15,
-          "uid": "uid0041",
-          "v": 2
+          "pf": 18,
+          "uid": "uid0039",
+          "v": 1
         },
         {
-          "d": 3,
+          "d": 2,
           "pc": 19,
-          "pf": 12,
-          "uid": "uid0043",
-          "v": 0
+          "pf": 15,
+          "uid": "uid0037",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 19,
+          "pf": 15,
+          "uid": "uid0040",
+          "v": 1
         }
       ],
       "nome": "R1 Grupo I"
@@ -312,30 +312,30 @@
       "linhas": [
         {
           "d": 0,
-          "pc": 9,
+          "pc": 16,
           "pf": 19,
-          "uid": "uid0045",
+          "uid": "uid0043",
           "v": 3
         },
         {
           "d": 2,
-          "pc": 14,
-          "pf": 14,
-          "uid": "uid0048",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 15,
-          "pf": 13,
-          "uid": "uid0047",
+          "pc": 18,
+          "pf": 17,
+          "uid": "uid0041",
           "v": 1
         },
         {
           "d": 2,
           "pc": 18,
-          "pf": 10,
-          "uid": "uid0046",
+          "pf": 17,
+          "uid": "uid0042",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 17,
+          "uid": "uid0044",
           "v": 1
         }
       ],
@@ -346,30 +346,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 14,
-          "pf": 19,
-          "uid": "uid0049",
+          "pc": 13,
+          "pf": 18,
+          "uid": "uid0046",
           "v": 2
         },
         {
           "d": 1,
           "pc": 14,
-          "pf": 19,
-          "uid": "uid0052",
+          "pf": 17,
+          "uid": "uid0048",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 18,
+          "pc": 16,
           "pf": 15,
-          "uid": "uid0050",
+          "uid": "uid0047",
           "v": 2
         },
         {
           "d": 3,
-          "pc": 20,
-          "pf": 13,
-          "uid": "uid0051",
+          "pc": 19,
+          "pf": 12,
+          "uid": "uid0045",
           "v": 0
         }
       ],
@@ -380,30 +380,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 11,
-          "pf": 17,
-          "uid": "uid0053",
+          "pc": 8,
+          "pf": 13,
+          "uid": "uid0049",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 13,
-          "pf": 15,
-          "uid": "uid0055",
+          "pc": 8,
+          "pf": 13,
+          "uid": "uid0050",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 14,
-          "pf": 14,
-          "uid": "uid0056",
+          "pc": 8,
+          "pf": 13,
+          "uid": "uid0052",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 10,
-          "uid": "uid0054",
+          "pf": 3,
+          "uid": "uid0051",
           "v": 0
         }
       ],
@@ -414,30 +414,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 9,
+          "pc": 10,
           "pf": 16,
-          "uid": "uid0058",
+          "uid": "uid0054",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 10,
+          "pc": 11,
           "pf": 15,
-          "uid": "uid0059",
+          "uid": "uid0053",
           "v": 2
         },
         {
           "d": 1,
           "pc": 13,
-          "pf": 12,
-          "uid": "uid0060",
+          "pf": 13,
+          "uid": "uid0056",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 7,
-          "uid": "uid0057",
+          "pf": 8,
+          "uid": "uid0055",
           "v": 0
         }
       ],
@@ -448,30 +448,30 @@
       "linhas": [
         {
           "d": 0,
-          "pc": 13,
-          "pf": 18,
-          "uid": "uid0061",
+          "pc": 9,
+          "pf": 19,
+          "uid": "uid0057",
           "v": 3
         },
         {
           "d": 2,
+          "pc": 14,
+          "pf": 14,
+          "uid": "uid0060",
+          "v": 1
+        },
+        {
+          "d": 2,
           "pc": 15,
-          "pf": 16,
-          "uid": "uid0062",
+          "pf": 13,
+          "uid": "uid0059",
           "v": 1
         },
         {
           "d": 2,
-          "pc": 17,
-          "pf": 14,
-          "uid": "uid0063",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 17,
-          "pf": 14,
-          "uid": "uid0064",
+          "pc": 18,
+          "pf": 10,
+          "uid": "uid0058",
           "v": 1
         }
       ],
@@ -482,30 +482,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 9,
-          "pf": 15,
-          "uid": "uid0065",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 10,
-          "pf": 14,
-          "uid": "uid0068",
-          "v": 2
-        },
-        {
-          "d": 1,
           "pc": 11,
-          "pf": 13,
-          "uid": "uid0067",
+          "pf": 16,
+          "uid": "uid0061",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 15,
+          "uid": "uid0064",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 14,
+          "uid": "uid0062",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 6,
-          "uid": "uid0066",
+          "pf": 9,
+          "uid": "uid0063",
           "v": 0
         }
       ],
@@ -515,32 +515,32 @@
       "grupo": 15,
       "linhas": [
         {
-          "d": 0,
-          "pc": 15,
+          "d": 1,
+          "pc": 14,
           "pf": 19,
-          "uid": "uid0069",
-          "v": 3
+          "uid": "uid0065",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 17,
-          "pf": 17,
-          "uid": "uid0072",
-          "v": 1
+          "d": 1,
+          "pc": 14,
+          "pf": 19,
+          "uid": "uid0068",
+          "v": 2
         },
         {
-          "d": 2,
+          "d": 1,
           "pc": 18,
-          "pf": 16,
-          "uid": "uid0070",
-          "v": 1
+          "pf": 15,
+          "uid": "uid0066",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 18,
-          "pf": 16,
-          "uid": "uid0071",
-          "v": 1
+          "d": 3,
+          "pc": 20,
+          "pf": 13,
+          "uid": "uid0067",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo P"
@@ -552,21 +552,21 @@
           "d": 0,
           "pc": 8,
           "pf": 13,
-          "uid": "uid0005",
+          "uid": "uid0069",
           "v": 3
         },
         {
           "d": 2,
           "pc": 10,
           "pf": 11,
-          "uid": "uid0008",
+          "uid": "uid0071",
           "v": 1
         },
         {
           "d": 2,
           "pc": 12,
           "pf": 9,
-          "uid": "uid0003",
+          "uid": "uid0070",
           "v": 1
         },
         {
@@ -583,32 +583,32 @@
       "grupo": 17,
       "linhas": [
         {
-          "d": 0,
-          "pc": 11,
-          "pf": 19,
-          "uid": "uid0075",
-          "v": 3
-        },
-        {
-          "d": 2,
-          "pc": 14,
+          "d": 1,
+          "pc": 9,
           "pf": 16,
-          "uid": "uid0073",
-          "v": 1
+          "uid": "uid0074",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 17,
-          "pf": 13,
-          "uid": "uid0077",
-          "v": 1
+          "d": 1,
+          "pc": 10,
+          "pf": 15,
+          "uid": "uid0075",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 18,
+          "d": 1,
+          "pc": 13,
           "pf": 12,
-          "uid": "uid0076",
-          "v": 1
+          "uid": "uid0072",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 7,
+          "uid": "uid0073",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo R"
@@ -620,28 +620,28 @@
           "d": 0,
           "pc": 10,
           "pf": 18,
-          "uid": "uid0004",
+          "uid": "uid0077",
           "v": 3
         },
         {
           "d": 2,
           "pc": 14,
           "pf": 14,
-          "uid": "uid0007",
+          "uid": "uid0078",
           "v": 1
         },
         {
           "d": 2,
           "pc": 15,
           "pf": 13,
-          "uid": "uid0002",
+          "uid": "uid0076",
           "v": 1
         },
         {
           "d": 2,
           "pc": 17,
           "pf": 11,
-          "uid": "uid0006",
+          "uid": "uid0079",
           "v": 1
         }
       ],
@@ -651,32 +651,32 @@
       "grupo": 19,
       "linhas": [
         {
-          "d": 0,
-          "pc": 8,
-          "pf": 18,
-          "uid": "uid0078",
-          "v": 3
-        },
-        {
-          "d": 2,
-          "pc": 14,
-          "pf": 12,
+          "d": 1,
+          "pc": 11,
+          "pf": 17,
           "uid": "uid0080",
-          "v": 1
+          "v": 2
         },
         {
-          "d": 2,
+          "d": 1,
+          "pc": 13,
+          "pf": 15,
+          "uid": "uid0082",
+          "v": 2
+        },
+        {
+          "d": 1,
           "pc": 14,
-          "pf": 12,
-          "uid": "uid0081",
-          "v": 1
+          "pf": 14,
+          "uid": "uid0083",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 16,
+          "d": 3,
+          "pc": 18,
           "pf": 10,
-          "uid": "uid0079",
-          "v": 1
+          "uid": "uid0081",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo T"
@@ -686,30 +686,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 7,
-          "pf": 13,
-          "uid": "uid0082",
+          "pc": 11,
+          "pf": 17,
+          "uid": "uid0086",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 7,
-          "pf": 13,
-          "uid": "uid0083",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 8,
-          "pf": 12,
+          "pc": 13,
+          "pf": 15,
           "uid": "uid0084",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 14,
+          "pf": 14,
+          "uid": "uid0085",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 2,
-          "uid": "uid0085",
+          "pf": 10,
+          "uid": "uid0087",
           "v": 0
         }
       ],
@@ -720,30 +720,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 11,
-          "pf": 17,
-          "uid": "uid0088",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 12,
+          "pc": 9,
           "pf": 16,
-          "uid": "uid0087",
+          "uid": "uid0089",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 15,
-          "pf": 13,
-          "uid": "uid0086",
+          "pc": 10,
+          "pf": 15,
+          "uid": "uid0090",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 12,
+          "uid": "uid0091",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 10,
-          "uid": "uid0089",
+          "pf": 7,
+          "uid": "uid0088",
           "v": 0
         }
       ],
@@ -754,30 +754,30 @@
       "linhas": [
         {
           "d": 0,
-          "pc": 7,
+          "pc": 13,
           "pf": 18,
-          "uid": "uid0093",
+          "uid": "uid0094",
           "v": 3
         },
         {
           "d": 2,
-          "pc": 13,
-          "pf": 12,
-          "uid": "uid0090",
+          "pc": 15,
+          "pf": 16,
+          "uid": "uid0095",
           "v": 1
         },
         {
           "d": 2,
-          "pc": 13,
-          "pf": 12,
+          "pc": 17,
+          "pf": 14,
           "uid": "uid0092",
           "v": 1
         },
         {
           "d": 2,
           "pc": 17,
-          "pf": 8,
-          "uid": "uid0091",
+          "pf": 14,
+          "uid": "uid0093",
           "v": 1
         }
       ],
@@ -787,32 +787,32 @@
       "grupo": 23,
       "linhas": [
         {
-          "d": 1,
-          "pc": 11,
+          "d": 0,
+          "pc": 10,
           "pf": 18,
-          "uid": "uid0094",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 13,
-          "pf": 16,
           "uid": "uid0097",
-          "v": 2
+          "v": 3
         },
         {
-          "d": 1,
-          "pc": 15,
+          "d": 2,
+          "pc": 14,
           "pf": 14,
-          "uid": "uid0095",
-          "v": 2
+          "uid": "uid0099",
+          "v": 1
         },
         {
-          "d": 3,
-          "pc": 19,
-          "pf": 10,
+          "d": 2,
+          "pc": 16,
+          "pf": 12,
+          "uid": "uid0098",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 12,
           "uid": "uid0096",
-          "v": 0
+          "v": 1
         }
       ],
       "nome": "R1 Grupo X"
@@ -821,32 +821,32 @@
       "grupo": 24,
       "linhas": [
         {
-          "d": 0,
-          "pc": 6,
-          "pf": 18,
-          "uid": "uid0099",
-          "v": 3
+          "d": 1,
+          "pc": 9,
+          "pf": 14,
+          "uid": "uid0102",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 12,
-          "pf": 12,
+          "d": 1,
+          "pc": 9,
+          "pf": 14,
           "uid": "uid0100",
-          "v": 1
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 13,
-          "pf": 11,
-          "uid": "uid0098",
-          "v": 1
+          "d": 1,
+          "pc": 10,
+          "pf": 13,
+          "uid": "uid0103",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 17,
-          "pf": 7,
+          "d": 3,
+          "pc": 18,
+          "pf": 5,
           "uid": "uid0101",
-          "v": 1
+          "v": 0
         }
       ],
       "nome": "R1 Grupo Y"
@@ -855,32 +855,32 @@
       "grupo": 25,
       "linhas": [
         {
-          "d": 0,
-          "pc": 14,
-          "pf": 19,
-          "uid": "uid0105",
-          "v": 3
-        },
-        {
-          "d": 2,
-          "pc": 17,
-          "pf": 16,
-          "uid": "uid0103",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 17,
-          "pf": 16,
-          "uid": "uid0104",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 18,
+          "d": 1,
+          "pc": 9,
           "pf": 15,
-          "uid": "uid0102",
-          "v": 1
+          "uid": "uid0105",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 10,
+          "pf": 14,
+          "uid": "uid0107",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 13,
+          "uid": "uid0104",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 6,
+          "uid": "uid0106",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo Z"
@@ -889,32 +889,32 @@
       "grupo": 26,
       "linhas": [
         {
-          "d": 1,
-          "pc": 13,
+          "d": 0,
+          "pc": 15,
           "pf": 19,
-          "uid": "uid0107",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 13,
-          "pf": 19,
-          "uid": "uid0110",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 18,
-          "pf": 14,
           "uid": "uid0108",
-          "v": 2
+          "v": 3
         },
         {
-          "d": 3,
-          "pc": 20,
-          "pf": 12,
+          "d": 2,
+          "pc": 17,
+          "pf": 17,
+          "uid": "uid0111",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 16,
           "uid": "uid0109",
-          "v": 0
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 16,
+          "uid": "uid0110",
+          "v": 1
         }
       ],
       "nome": "R1 Grupo A2"
@@ -923,32 +923,32 @@
       "grupo": 27,
       "linhas": [
         {
-          "d": 0,
-          "pc": 9,
+          "d": 1,
+          "pc": 10,
           "pf": 18,
-          "uid": "uid0113",
-          "v": 3
-        },
-        {
-          "d": 2,
-          "pc": 12,
-          "pf": 15,
-          "uid": "uid0112",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 16,
-          "pf": 11,
           "uid": "uid0114",
-          "v": 1
+          "v": 2
         },
         {
-          "d": 2,
+          "d": 1,
+          "pc": 15,
+          "pf": 13,
+          "uid": "uid0115",
+          "v": 2
+        },
+        {
+          "d": 1,
           "pc": 17,
-          "pf": 10,
-          "uid": "uid0111",
-          "v": 1
+          "pf": 11,
+          "uid": "uid0116",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 14,
+          "pf": 14,
+          "uid": "uid0051",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo B2"
@@ -957,32 +957,32 @@
       "grupo": 28,
       "linhas": [
         {
-          "d": 0,
-          "pc": 8,
-          "pf": 18,
-          "uid": "uid0115",
-          "v": 3
-        },
-        {
-          "d": 2,
-          "pc": 12,
-          "pf": 14,
-          "uid": "uid0118",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 16,
-          "pf": 10,
-          "uid": "uid0116",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 16,
-          "pf": 10,
+          "d": 1,
+          "pc": 10,
+          "pf": 16,
           "uid": "uid0117",
-          "v": 1
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 11,
+          "pf": 15,
+          "uid": "uid0120",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 13,
+          "pf": 13,
+          "uid": "uid0119",
+          "v": 2
+        },
+        {
+          "d": 3,
+          "pc": 18,
+          "pf": 8,
+          "uid": "uid0118",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo C2"
@@ -992,30 +992,30 @@
       "linhas": [
         {
           "d": 1,
-          "pc": 9,
-          "pf": 16,
+          "pc": 10,
+          "pf": 17,
+          "uid": "uid0124",
+          "v": 2
+        },
+        {
+          "d": 1,
+          "pc": 12,
+          "pf": 15,
           "uid": "uid0122",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 10,
-          "pf": 15,
-          "uid": "uid0119",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 13,
-          "pf": 12,
-          "uid": "uid0120",
+          "pc": 14,
+          "pf": 13,
+          "uid": "uid0125",
           "v": 2
         },
         {
           "d": 3,
           "pc": 18,
-          "pf": 7,
-          "uid": "uid0121",
+          "pf": 9,
+          "uid": "uid0123",
           "v": 0
         }
       ],
@@ -1025,32 +1025,32 @@
       "grupo": 30,
       "linhas": [
         {
-          "d": 1,
-          "pc": 9,
-          "pf": 18,
-          "uid": "uid0125",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 12,
-          "pf": 15,
-          "uid": "uid0124",
-          "v": 2
-        },
-        {
-          "d": 1,
-          "pc": 14,
-          "pf": 13,
+          "d": 0,
+          "pc": 11,
+          "pf": 19,
           "uid": "uid0126",
-          "v": 2
+          "v": 3
         },
         {
-          "d": 3,
-          "pc": 19,
-          "pf": 8,
-          "uid": "uid0123",
-          "v": 0
+          "d": 2,
+          "pc": 14,
+          "pf": 16,
+          "uid": "uid0129",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 17,
+          "pf": 13,
+          "uid": "uid0128",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 18,
+          "pf": 12,
+          "uid": "uid0127",
+          "v": 1
         }
       ],
       "nome": "R1 Grupo E2"
@@ -1059,32 +1059,32 @@
       "grupo": 31,
       "linhas": [
         {
-          "d": 0,
-          "pc": 13,
-          "pf": 19,
-          "uid": "uid0129",
-          "v": 3
+          "d": 1,
+          "pc": 10,
+          "pf": 16,
+          "uid": "uid0131",
+          "v": 2
         },
         {
-          "d": 2,
-          "pc": 15,
-          "pf": 17,
-          "uid": "uid0130",
-          "v": 1
+          "d": 1,
+          "pc": 10,
+          "pf": 16,
+          "uid": "uid0132",
+          "v": 2
         },
         {
-          "d": 2,
+          "d": 1,
+          "pc": 14,
+          "pf": 12,
+          "uid": "uid0133",
+          "v": 2
+        },
+        {
+          "d": 3,
           "pc": 18,
-          "pf": 14,
-          "uid": "uid0127",
-          "v": 1
-        },
-        {
-          "d": 2,
-          "pc": 18,
-          "pf": 14,
-          "uid": "uid0128",
-          "v": 1
+          "pf": 8,
+          "uid": "uid0134",
+          "v": 0
         }
       ],
       "nome": "R1 Grupo F2"
@@ -1093,35 +1093,69 @@
       "grupo": 32,
       "linhas": [
         {
-          "d": 1,
-          "pc": 16,
+          "d": 0,
+          "pc": 8,
           "pf": 18,
-          "uid": "uid0133",
+          "uid": "uid0137",
+          "v": 3
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 12,
+          "uid": "uid0135",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 14,
+          "pf": 12,
+          "uid": "uid0136",
+          "v": 1
+        },
+        {
+          "d": 2,
+          "pc": 16,
+          "pf": 10,
+          "uid": "uid0138",
+          "v": 1
+        }
+      ],
+      "nome": "R1 Grupo G2"
+    },
+    {
+      "grupo": 33,
+      "linhas": [
+        {
+          "d": 1,
+          "pc": 7,
+          "pf": 13,
+          "uid": "uid0141",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 16,
-          "pf": 18,
-          "uid": "uid0134",
+          "pc": 7,
+          "pf": 13,
+          "uid": "uid0142",
           "v": 2
         },
         {
           "d": 1,
-          "pc": 17,
-          "pf": 17,
-          "uid": "uid0131",
+          "pc": 8,
+          "pf": 12,
+          "uid": "uid0143",
           "v": 2
         },
         {
           "d": 3,
-          "pc": 19,
-          "pf": 15,
-          "uid": "uid0132",
+          "pc": 18,
+          "pf": 2,
+          "uid": "uid0144",
           "v": 0
         }
       ],
-      "nome": "R1 Grupo G2"
+      "nome": "R1 Grupo H2"
     }
   ],
   "eliminatoria": [
@@ -1130,19 +1164,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P1",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 9 / Pessoa 8",
+      "p1": "Pessoa 4 / Pessoa 5",
       "p1Uid": null,
-      "p2": "Pessoa 132 / Pessoa 133",
+      "p2": "Pessoa 142 / Pessoa 143",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0015",
-        "uid0014"
+        "uid0005",
+        "uid0006"
       ],
       "team2Uids": [
-        "uid0133",
-        "uid0134"
+        "uid0141",
+        "uid0142"
       ],
       "winner": null
     },
@@ -1151,7 +1185,49 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P2",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 12 / Pessoa 14",
+      "p1": "Pessoa 10 / Pessoa 8",
+      "p1Uid": null,
+      "p2": "Pessoa 136 / Pessoa 138",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [
+        "uid0011",
+        "uid0009"
+      ],
+      "team2Uids": [
+        "uid0137",
+        "uid0135"
+      ],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P3",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 14 / Pessoa 13",
+      "p1Uid": null,
+      "p2": "Pessoa 134 / Pessoa 135",
+      "p2Uid": null,
+      "phaseIndex": 1,
+      "round": 1,
+      "team1Uids": [
+        "uid0013",
+        "uid0016"
+      ],
+      "team2Uids": [
+        "uid0131",
+        "uid0132"
+      ],
+      "winner": null
+    },
+    {
+      "bracket": "gold",
+      "id": "ph-tour_1780009816637-1-gold-VC-R1-P4",
+      "isBye": false,
+      "label": null,
+      "p1": "Pessoa 17 / Pessoa 19",
       "p1Uid": null,
       "p2": "Pessoa 128 / Pessoa 129",
       "p2Uid": null,
@@ -1162,50 +1238,8 @@
         "uid0020"
       ],
       "team2Uids": [
-        "uid0129",
-        "uid0130"
-      ],
-      "winner": null
-    },
-    {
-      "bracket": "gold",
-      "id": "ph-tour_1780009816637-1-gold-VC-R1-P3",
-      "isBye": false,
-      "label": null,
-      "p1": "Pessoa 15 / Pessoa 16",
-      "p1Uid": null,
-      "p2": "Pessoa 124 / Pessoa 123",
-      "p2Uid": null,
-      "phaseIndex": 1,
-      "round": 1,
-      "team1Uids": [
-        "uid0021",
-        "uid0022"
-      ],
-      "team2Uids": [
-        "uid0125",
-        "uid0124"
-      ],
-      "winner": null
-    },
-    {
-      "bracket": "gold",
-      "id": "ph-tour_1780009816637-1-gold-VC-R1-P4",
-      "isBye": false,
-      "label": null,
-      "p1": "Pessoa 19 / Pessoa 21",
-      "p1Uid": null,
-      "p2": "Pessoa 121 / Pessoa 118",
-      "p2Uid": null,
-      "phaseIndex": 1,
-      "round": 1,
-      "team1Uids": [
-        "uid0025",
-        "uid0027"
-      ],
-      "team2Uids": [
-        "uid0122",
-        "uid0119"
+        "uid0126",
+        "uid0129"
       ],
       "winner": null
     },
@@ -1214,18 +1248,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P5",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 24 / Pessoa 23",
-      "p1Uid": "uid0030",
-      "p2": "Pessoa 114 / Pessoa 117",
+      "p1": "Pessoa 20 / Pessoa 21",
+      "p1Uid": null,
+      "p2": "Pessoa 124 / Pessoa 126",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0030"
+        "uid0021",
+        "uid0022"
       ],
       "team2Uids": [
-        "uid0115",
-        "uid0118"
+        "uid0124",
+        "uid0122"
       ],
       "winner": null
     },
@@ -1234,18 +1269,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P6",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 28 / Pessoa 29",
-      "p1Uid": "uid0034",
-      "p2": "Pessoa 112 / Pessoa 111",
+      "p1": "Pessoa 25 / Pessoa 26",
+      "p1Uid": null,
+      "p2": "Pessoa 119 / Pessoa 122",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0034"
+        "uid0028",
+        "uid0025"
       ],
       "team2Uids": [
-        "uid0113",
-        "uid0112"
+        "uid0117",
+        "uid0120"
       ],
       "winner": null
     },
@@ -1254,19 +1290,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P7",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 33 / Pessoa 31",
+      "p1": "Pessoa 28 / Pessoa 29",
       "p1Uid": null,
-      "p2": "Pessoa 106 / Pessoa 109",
+      "p2": "Pessoa 115 / Pessoa 116",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0039",
-        "uid0037"
+        "uid0031",
+        "uid0032"
       ],
       "team2Uids": [
-        "uid0107",
-        "uid0110"
+        "uid0114",
+        "uid0115"
       ],
       "winner": null
     },
@@ -1275,19 +1311,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P8",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 38 / Pessoa 36",
+      "p1": "Pessoa 32 / Pessoa 33",
       "p1Uid": null,
-      "p2": "Pessoa 105 / Pessoa 103",
+      "p2": "Pessoa 109 / Pessoa 112",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0044",
-        "uid0042"
+        "uid0035",
+        "uid0036"
       ],
       "team2Uids": [
-        "uid0105",
-        "uid0103"
+        "uid0108",
+        "uid0111"
       ],
       "winner": null
     },
@@ -1296,19 +1332,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P9",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 39 / Pessoa 42",
+      "p1": "Pessoa 37 / Pessoa 38",
       "p1Uid": null,
-      "p2": "Pessoa 99 / Pessoa 100",
+      "p2": "Pessoa 105 / Pessoa 108",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0045",
-        "uid0048"
+        "uid0038",
+        "uid0039"
       ],
       "team2Uids": [
-        "uid0099",
-        "uid0100"
+        "uid0105",
+        "uid0107"
       ],
       "winner": null
     },
@@ -1317,19 +1353,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P10",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 43 / Pessoa 46",
+      "p1": "Pessoa 42 / Pessoa 40",
       "p1Uid": null,
-      "p2": "Pessoa 94 / Pessoa 97",
+      "p2": "Pessoa 101 / Pessoa 104",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0049",
-        "uid0052"
+        "uid0043",
+        "uid0041"
       ],
       "team2Uids": [
-        "uid0094",
-        "uid0097"
+        "uid0102",
+        "uid0100"
       ],
       "winner": null
     },
@@ -1338,19 +1374,18 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P11",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 47 / Pessoa 49",
-      "p1Uid": null,
-      "p2": "Pessoa 93 / Pessoa 90",
+      "p1": "Pessoa 47 / Pessoa 45",
+      "p1Uid": "uid0046",
+      "p2": "Pessoa 100 / Pessoa 98",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0053",
-        "uid0055"
+        "uid0046"
       ],
       "team2Uids": [
-        "uid0093",
-        "uid0090"
+        "uid0097",
+        "uid0099"
       ],
       "winner": null
     },
@@ -1359,19 +1394,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P12",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 52 / Pessoa 53",
+      "p1": "Pessoa 51 / Pessoa 52",
       "p1Uid": null,
-      "p2": "Pessoa 88 / Pessoa 87",
+      "p2": "Pessoa 93 / Pessoa 94",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0058",
-        "uid0059"
+        "uid0049",
+        "uid0050"
       ],
       "team2Uids": [
-        "uid0088",
-        "uid0087"
+        "uid0094",
+        "uid0095"
       ],
       "winner": null
     },
@@ -1380,19 +1415,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P13",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 55 / Pessoa 56",
+      "p1": "Pessoa 57 / Pessoa 56",
       "p1Uid": null,
-      "p2": "Pessoa 82 / Pessoa 83",
+      "p2": "Pessoa 90 / Pessoa 91",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0061",
-        "uid0062"
+        "uid0054",
+        "uid0053"
       ],
       "team2Uids": [
-        "uid0082",
-        "uid0083"
+        "uid0089",
+        "uid0090"
       ],
       "winner": null
     },
@@ -1401,19 +1436,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P14",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 59 / Pessoa 62",
+      "p1": "Pessoa 58 / Pessoa 61",
       "p1Uid": null,
-      "p2": "Pessoa 78 / Pessoa 80",
+      "p2": "Pessoa 85 / Pessoa 87",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0065",
-        "uid0068"
+        "uid0057",
+        "uid0060"
       ],
       "team2Uids": [
-        "uid0078",
-        "uid0080"
+        "uid0086",
+        "uid0084"
       ],
       "winner": null
     },
@@ -1422,19 +1457,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P15",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 63 / Pessoa 66",
+      "p1": "Pessoa 64 / Pessoa 63",
       "p1Uid": null,
-      "p2": "Pessoa 75 / Pessoa 76",
+      "p2": "Pessoa 83 / Pessoa 82",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0069",
-        "uid0072"
+        "uid0061",
+        "uid0064"
       ],
       "team2Uids": [
-        "uid0004",
-        "uid0007"
+        "uid0080",
+        "uid0082"
       ],
       "winner": null
     },
@@ -1443,19 +1478,19 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P16",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 67 / Pessoa 69",
+      "p1": "Pessoa 66 / Pessoa 69",
       "p1Uid": null,
-      "p2": "Pessoa 71 / Pessoa 70",
+      "p2": "Pessoa 78 / Pessoa 79",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0005",
-        "uid0008"
+        "uid0065",
+        "uid0068"
       ],
       "team2Uids": [
-        "uid0075",
-        "uid0073"
+        "uid0077",
+        "uid0078"
       ],
       "winner": null
     },
@@ -1464,17 +1499,20 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P17",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 4 / Pessoa 5",
+      "p1": "Pessoa 70 / Pessoa 72",
       "p1Uid": null,
-      "p2": "TBD",
+      "p2": "Pessoa 74 / Pessoa 73",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0010",
-        "uid0011"
+        "uid0069",
+        "uid0071"
       ],
-      "team2Uids": null,
+      "team2Uids": [
+        "uid0074",
+        "uid0075"
+      ],
       "winner": null
     },
     {
@@ -1962,19 +2000,18 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P1",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 10 / Pessoa 7",
-      "p1Uid": null,
-      "p2": "Pessoa 130 / Pessoa 131",
+      "p1": "Pessoa 3 / Pessoa 6",
+      "p1Uid": "uid0007",
+      "p2": "Pessoa 144 / Pessoa 145",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0016",
-        "uid0013"
+        "uid0007"
       ],
       "team2Uids": [
-        "uid0131",
-        "uid0132"
+        "uid0143",
+        "uid0144"
       ],
       "winner": null
     },
@@ -1983,19 +2020,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P2",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 11 / Pessoa 13",
+      "p1": "Pessoa 11 / Pessoa 9",
       "p1Uid": null,
-      "p2": "Pessoa 126 / Pessoa 127",
+      "p2": "Pessoa 139 / Pessoa 137",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0017",
-        "uid0019"
+        "uid0012",
+        "uid0010"
       ],
       "team2Uids": [
-        "uid0127",
-        "uid0128"
+        "uid0136",
+        "uid0138"
       ],
       "winner": null
     },
@@ -2004,19 +2041,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P3",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 17 / Pessoa 18",
+      "p1": "Pessoa 15 / Pessoa 12",
       "p1Uid": null,
-      "p2": "Pessoa 125 / Pessoa 122",
+      "p2": "Pessoa 132 / Pessoa 133",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0023",
-        "uid0024"
+        "uid0014",
+        "uid0015"
       ],
       "team2Uids": [
-        "uid0126",
-        "uid0123"
+        "uid0133",
+        "uid0134"
       ],
       "winner": null
     },
@@ -2025,19 +2062,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P4",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 20 / Pessoa 22",
+      "p1": "Pessoa 16 / Pessoa 18",
       "p1Uid": null,
-      "p2": "Pessoa 119 / Pessoa 120",
+      "p2": "Pessoa 131 / Pessoa 130",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0026",
-        "uid0028"
+        "uid0017",
+        "uid0019"
       ],
       "team2Uids": [
-        "uid0120",
-        "uid0121"
+        "uid0128",
+        "uid0127"
       ],
       "winner": null
     },
@@ -2046,19 +2083,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P5",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 25 / Pessoa 26",
+      "p1": "Pessoa 23 / Pessoa 22",
       "p1Uid": null,
-      "p2": "Pessoa 115 / Pessoa 116",
+      "p2": "Pessoa 125 / Pessoa 127",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0031",
-        "uid0032"
+        "uid0024",
+        "uid0023"
       ],
       "team2Uids": [
-        "uid0116",
-        "uid0117"
+        "uid0125",
+        "uid0123"
       ],
       "winner": null
     },
@@ -2067,19 +2104,18 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P6",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 27 / Pessoa 30",
-      "p1Uid": null,
-      "p2": "Pessoa 113 / Pessoa 110",
+      "p1": "Pessoa 148 / Pessoa 27",
+      "p1Uid": "uid0026",
+      "p2": "Pessoa 121 / Pessoa 120",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0033",
-        "uid0036"
+        "uid0026"
       ],
       "team2Uids": [
-        "uid0114",
-        "uid0111"
+        "uid0119",
+        "uid0118"
       ],
       "winner": null
     },
@@ -2088,19 +2124,18 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P7",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 32 / Pessoa 34",
-      "p1Uid": null,
-      "p2": "Pessoa 107 / Pessoa 108",
+      "p1": "Pessoa 149 / Pessoa 31",
+      "p1Uid": "uid0030",
+      "p2": "Pessoa 117 / Pessoa 49",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0038",
-        "uid0040"
+        "uid0030"
       ],
       "team2Uids": [
-        "uid0108",
-        "uid0109"
+        "uid0116",
+        "uid0051"
       ],
       "winner": null
     },
@@ -2109,19 +2144,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P8",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 35 / Pessoa 37",
+      "p1": "Pessoa 34 / Pessoa 35",
       "p1Uid": null,
-      "p2": "Pessoa 104 / Pessoa 102",
+      "p2": "Pessoa 110 / Pessoa 111",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0041",
-        "uid0043"
+        "uid0033",
+        "uid0034"
       ],
       "team2Uids": [
-        "uid0104",
-        "uid0102"
+        "uid0109",
+        "uid0110"
       ],
       "winner": null
     },
@@ -2130,19 +2165,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P9",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 41 / Pessoa 40",
+      "p1": "Pessoa 36 / Pessoa 39",
       "p1Uid": null,
-      "p2": "Pessoa 98 / Pessoa 101",
+      "p2": "Pessoa 107 / Pessoa 106",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0047",
-        "uid0046"
+        "uid0037",
+        "uid0040"
       ],
       "team2Uids": [
-        "uid0098",
-        "uid0101"
+        "uid0104",
+        "uid0106"
       ],
       "winner": null
     },
@@ -2151,18 +2186,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P10",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 44 / Pessoa 45",
-      "p1Uid": "uid0051",
-      "p2": "Pessoa 95 / Pessoa 96",
+      "p1": "Pessoa 41 / Pessoa 43",
+      "p1Uid": null,
+      "p2": "Pessoa 102 / Pessoa 103",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0051"
+        "uid0042",
+        "uid0044"
       ],
       "team2Uids": [
-        "uid0095",
-        "uid0096"
+        "uid0103",
+        "uid0101"
       ],
       "winner": null
     },
@@ -2171,19 +2207,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P11",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 50 / Pessoa 48",
+      "p1": "Pessoa 44 / Pessoa 46",
       "p1Uid": null,
-      "p2": "Pessoa 92 / Pessoa 91",
+      "p2": "Pessoa 97 / Pessoa 99",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0056",
-        "uid0054"
+        "uid0047",
+        "uid0045"
       ],
       "team2Uids": [
-        "uid0092",
-        "uid0091"
+        "uid0098",
+        "uid0096"
       ],
       "winner": null
     },
@@ -2192,19 +2228,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P12",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 54 / Pessoa 51",
+      "p1": "Pessoa 50 / Pessoa 49",
       "p1Uid": null,
-      "p2": "Pessoa 86 / Pessoa 89",
+      "p2": "Pessoa 95 / Pessoa 96",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0060",
-        "uid0057"
+        "uid0052",
+        "uid0051"
       ],
       "team2Uids": [
-        "uid0086",
-        "uid0089"
+        "uid0092",
+        "uid0093"
       ],
       "winner": null
     },
@@ -2213,19 +2249,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P13",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 57 / Pessoa 58",
+      "p1": "Pessoa 55 / Pessoa 54",
       "p1Uid": null,
-      "p2": "Pessoa 84 / Pessoa 85",
+      "p2": "Pessoa 92 / Pessoa 89",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0063",
-        "uid0064"
+        "uid0056",
+        "uid0055"
       ],
       "team2Uids": [
-        "uid0084",
-        "uid0085"
+        "uid0091",
+        "uid0088"
       ],
       "winner": null
     },
@@ -2234,19 +2270,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P14",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 61 / Pessoa 60",
+      "p1": "Pessoa 60 / Pessoa 59",
       "p1Uid": null,
-      "p2": "Pessoa 81 / Pessoa 79",
+      "p2": "Pessoa 88 / Pessoa 86",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0067",
-        "uid0066"
+        "uid0059",
+        "uid0058"
       ],
       "team2Uids": [
-        "uid0081",
-        "uid0079"
+        "uid0085",
+        "uid0087"
       ],
       "winner": null
     },
@@ -2255,19 +2291,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P15",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 64 / Pessoa 65",
+      "p1": "Pessoa 65 / Pessoa 62",
       "p1Uid": null,
-      "p2": "Pessoa 74 / Pessoa 77",
+      "p2": "Pessoa 84 / Pessoa 81",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0070",
-        "uid0071"
+        "uid0062",
+        "uid0063"
       ],
       "team2Uids": [
-        "uid0002",
-        "uid0006"
+        "uid0083",
+        "uid0081"
       ],
       "winner": null
     },
@@ -2276,19 +2312,19 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P16",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 68 / Pessoa 2",
+      "p1": "Pessoa 67 / Pessoa 68",
       "p1Uid": null,
-      "p2": "pessoa11@exemplo.test / Pessoa 72",
+      "p2": "Pessoa 77 / Pessoa 80",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0003",
-        "uid0001"
+        "uid0066",
+        "uid0067"
       ],
       "team2Uids": [
-        "uid0077",
-        "uid0076"
+        "uid0076",
+        "uid0079"
       ],
       "winner": null
     },
@@ -2297,16 +2333,20 @@
       "id": "ph-tour_1780009816637-1-silver-VC-R1-P17",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 3 / Pessoa 6",
-      "p1Uid": "uid0012",
-      "p2": "TBD",
+      "p1": "Pessoa 71 / Pessoa 1",
+      "p1Uid": null,
+      "p2": "Pessoa 75 / pessoa11@exemplo.test",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0012"
+        "uid0070",
+        "uid0001"
       ],
-      "team2Uids": null,
+      "team2Uids": [
+        "uid0072",
+        "uid0073"
+      ],
       "winner": null
     },
     {
@@ -2793,7 +2833,7 @@
   "erro": null,
   "faseAntes": 0,
   "faseDepois": 1,
-  "jogosFechadosParaCompletar": 93,
+  "jogosFechadosParaCompletar": 57,
   "torneio": "tour_1780009816637",
   "totalJogosEliminatoria": 98
 }

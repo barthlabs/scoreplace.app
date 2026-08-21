@@ -1450,12 +1450,12 @@ window._saveSetResult = function(tId, matchId) {
   m.totalGamesP1 = totalGamesP1;
   m.totalGamesP2 = totalGamesP2;
 
+  // 2.0.1: carimba o vencedor COM a identidade do lado (window._stampWinner) — nome sozinho
+  // envelhece na primeira substituição/rename e o jogo fica sem vencedor reconhecível.
   if (p1Sets > p2Sets) {
-    m.winner = m.p1;
-    m.draw = false;
+    window._stampWinner(m, 1);
   } else if (p2Sets > p1Sets) {
-    m.winner = m.p2;
-    m.draw = false;
+    window._stampWinner(m, 2);
   }
   // v2.3.17: lançamento por sets — marca fim/início.
   m.resultAt = Date.now();
@@ -1619,8 +1619,8 @@ window._applyResultToTournament = function (t, matchId, payload) {
     var _gtg1 = 0, _gtg2 = 0;
     _gs.forEach(function (s) { _gtg1 += (s.gamesP1 || 0); _gtg2 += (s.gamesP2 || 0); });
     m.totalGamesP1 = _gtg1; m.totalGamesP2 = _gtg2;
-    if (payload.setsWonP1 > payload.setsWonP2) { m.winner = m.p1; m.draw = false; }
-    else if (payload.setsWonP2 > payload.setsWonP1) { m.winner = m.p2; m.draw = false; }
+    if (payload.setsWonP1 > payload.setsWonP2) { window._stampWinner(m, 1); }
+    else if (payload.setsWonP2 > payload.setsWonP1) { window._stampWinner(m, 2); }
   } else if (useSets) {
     var setData = { gamesP1: s1, gamesP2: s2 };
     if (isFixedSet) setData.fixedSet = true;
@@ -5573,8 +5573,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       m.scoreP2 = state.currentGameP2;
     }
 
-    if (state.winner === 1) m.winner = m.p1;
-    else if (state.winner === 2) m.winner = m.p2;
+    // 2.0.1: o placar AO VIVO é o terceiro escritor — a trava do teste foi quem apontou,
+    // depois de eu ter arrumado só os outros dois. Carimba o lado, igual aos demais.
+    if (state.winner === 1) window._stampWinner(m, 1);
+    else if (state.winner === 2) window._stampWinner(m, 2);
     else if (state.currentGameP1 === state.currentGameP2) {
       m.winner = 'draw';
       m.draw = true;

@@ -275,9 +275,14 @@
     var d = e.endDate || '', h = e.endTime || '';
     return '<div style="background:rgba(129,140,248,0.05);border:1px solid rgba(129,140,248,0.18);border-radius:12px;padding:1rem;margin-top:14px;">' +
       '<p style="margin:0 0 0.6rem;font-size:0.8rem;color:#a5b4fc;font-weight:600;text-transform:uppercase;letter-spacing:1px;">📅 Término da fase</p>' +
-      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-        '<input type="date" class="form-control" id="f2-elim-end-date" value="' + d + '" aria-label="Data de término da fase eliminatória" style="padding:6px 8px;font-size:0.8rem;flex:1 1 130px;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndDate(this.value)">' +
-        '<input type="time" class="form-control" id="f2-elim-end-time" value="' + h + '" aria-label="Hora de término da fase eliminatória" style="padding:6px 8px;font-size:0.8rem;width:88px;flex-shrink:0;box-sizing:border-box;" onchange="window._f2ElimEndTime(this.value)">' +
+      // ⭐ 2.0.1 (dono): o ✕ fica na MESMA LINHA da data e da hora — "dá pra diminuir um pouco
+      // os campos para ele caber ali". Com `flex-wrap:wrap` ele descia sozinho pra segunda
+      // linha em tela estreita, virando um botão vermelho solto embaixo do campo. Agora:
+      // `nowrap` (nunca desce), os dois campos com `min-width:0` (podem encolher de verdade)
+      // e o ✕ com `flex-shrink:0` (é o único que não encolhe — é alvo de toque).
+      '<div class="sp-dt-tight" style="display:flex;gap:4px;align-items:center;flex-wrap:nowrap;min-width:0;">' +
+        '<input type="date" class="form-control" id="f2-elim-end-date" value="' + d + '" aria-label="Data de término da fase eliminatória" style="padding:6px 6px;font-size:0.78rem;flex:1 1 0;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndDate(this.value)">' +
+        '<input type="time" class="form-control" id="f2-elim-end-time" value="' + h + '" aria-label="Hora de término da fase eliminatória" style="padding:6px 4px;font-size:0.78rem;flex:0 1 78px;min-width:0;box-sizing:border-box;" onchange="window._f2ElimEndTime(this.value)">' +
         // ✕ canônico (project_cancel_x_canonical) — nunca ✕ solto estilizado à mão.
         (d && typeof window._cancelXBtn === 'function'
           ? '<span style="flex-shrink:0;display:inline-flex;">' + window._cancelXBtn("window._f2ElimEndDate('')", 'Limpar término da eliminatória') + '</span>'
