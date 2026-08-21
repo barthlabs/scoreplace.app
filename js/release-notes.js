@@ -56,6 +56,12 @@ window._RELEASE_NOTES_HTML = (function () {
     //   omissao — e a conferencia fica registrada aqui em vez de virar um "toque"
     //   vazio no arquivo so pra passar.
     // ── v2.0 ─────────────────────────────────────────────────────────────────
+    // ⚠️ O commit `iOS 2.0 (build 200)` NÃO ganhou item, e é DECISÃO. Ele é só o número:
+    // MARKETING_VERSION 1.9.114→2.0 e CURRENT_PROJECT_VERSION 114→200 no pbxproj, mais o
+    // www/ regerado com o MESMO código que já está no ar na web. Zero mudança de tela — o
+    // que essa build entrega ao usuário é exatamente o que o bloco abaixo já descreve. A
+    // trava (check-release-notes) pega OMISSÃO e não sabe julgar isso; a justificativa
+    // fica aqui, e o toque na nota é este comentário.
     // Ordem do dono (21/ago/2026): "vamos alinhar web/apple versao 2.0". O bloco é CURTO de
     // propósito: o ciclo 2.0 começa agora, e repetir aqui os destaques da v1.9 (logo abaixo,
     // e que o usuário do site já leu) seria anunciar duas vezes a mesma entrega.
