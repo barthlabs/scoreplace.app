@@ -3,14 +3,16 @@
  *
  * RELATO DO DONO (21/ago/2026, com o print do card em andamento):
  *   1) _"no plano, os contadores de tempo apareciam em cores de acordo com adiantado, no
- *      programado e atrasado (verde, azul, vermelho). isso não está na tela."_
+ *      programado e atrasado. isso não está na tela."_ — e, na 2ª volta, a régua final:
+ *      _"vermelho quando atrasado. conforme estiver ficando próxima amarelo; quando
+ *      estiver junto ou adiantado verde."_ (a 1ª volta tinha proposto azul pro "no
+ *      programado"; o dono trocou pelo SEMÁFORO, que se lê sem legenda.)
  *   2) _"na rodada, o final estimado está em 1 linha deslocando o contador de tempo da
  *      rodada para a esquerda do centro. vamos quebrar essa linha (e também do início real,
  *      para acompanhar) permitindo que o contador fique centralizado."_
  *
  * (1) eram DOIS defeitos, não um:
- *   • O AZUL não existia: a régua era verde / âmbar / vermelho — "adiantado" e "em dia"
- *     caíam os dois no verde.
+ *   • A régua não tinha os três estados que se lê sem legenda (verde/amarelo/vermelho).
  *   • E a cor que existia SUMIA NA TELA: sobre foto de capa, a tarja de leitura força
  *     TODO o texto da seção pra uma cor só e levava o relógio junto (era o card do print).
  *     ⚠️ O número do relógio mora em spans FILHOS (o relógio quebra em 2 linhas), então
@@ -66,32 +68,34 @@ ok(typeof W._tProgRitmo === 'function', '_tProgRitmo existe (régua ÚNICA do ca
 
 // ─── 1) OS TRÊS ESTADOS, com nome ──────────────────────────────────────────────────────
 (function () {
-  ok(W._tProgRitmo(0.60, 0.20, false) === 'adiantado', 'jogou 60% com 20% do prazo → ADIANTADO');
-  ok(W._tProgRitmo(0.18, 0.20, false) === 'emdia', 'jogou 18% com 20% do prazo → NO PROGRAMADO');
-  ok(W._tProgRitmo(0.10, 0.60, false) === 'atrasado', 'jogou 10% com 60% do prazo → ATRASADO');
-  ok(W._tProgRitmo(0.10, 0.20, false) === 'emdia', 'defasagem de 10 pontos ainda é NO PROGRAMADO (jogo sai em rajada; o previsto é linear)');
-  ok(W._tProgRitmo(0.02, 0.20, false) === 'atrasado', 'defasagem de 18 pontos é ATRASADO');
-  ok(W._tProgRitmo(0.30, 0.90, true) === 'adiantado', 'rodada/torneio CONCLUÍDO nunca fica vermelho');
-  ok(W._tProgRitmoBarra('adiantado') === '#10b981' && W._tProgRitmoBarra('emdia') === '#3b82f6' && W._tProgRitmoBarra('atrasado') === '#ef4444',
-     'a BARRA usa a mesma régua (verde/azul/vermelho) — número e barra nunca contam histórias diferentes');
+  ok(W._tProgRitmo(0.60, 0.20, false) === 'emdia', 'jogou 60% com 20% do prazo → ADIANTADO, verde');
+  ok(W._tProgRitmo(0.18, 0.20, false) === 'emdia', 'jogou 18% com 20% do prazo → junto do programado, VERDE');
+  ok(W._tProgRitmo(0.10, 0.20, false) === 'apertando', 'defasagem de 10 pontos → AMARELO (está ficando perto)');
+  ok(W._tProgRitmo(0.10, 0.60, false) === 'atrasado', 'jogou 10% com 60% do prazo → VERMELHO');
+  ok(W._tProgRitmo(0.02, 0.20, false) === 'atrasado', 'defasagem de 18 pontos → VERMELHO');
+  ok(W._tProgRitmo(0.30, 0.90, true) === 'emdia', 'rodada/torneio CONCLUÍDO nunca fica vermelho');
+  ok(W._tProgRitmoBarra('emdia') === '#10b981' && W._tProgRitmoBarra('apertando') === '#f59e0b' && W._tProgRitmoBarra('atrasado') === '#ef4444',
+     'a BARRA usa a mesma régua (verde/amarelo/vermelho) — número e barra nunca contam histórias diferentes');
+  ok(W._tProgRitmo(0.18, 0.20, false) !== 'azul' && ['emdia','apertando','atrasado'].indexOf(W._tProgRitmo(0.18, 0.20, false)) > -1,
+     'o AZUL da 1ª volta saiu — a régua é o semáforo');
 })();
 
 // ─── 2) a cor CHEGA no HTML do relógio da rodada ───────────────────────────────────────
 (function () {
-  ok(ritmoDaRodada(W._buildProgressInner(confra(2, 8, 61, 102))) === 'adiantado', '[rodada] 60% jogado / 20% do prazo → relógio ADIANTADO');
-  ok(ritmoDaRodada(W._buildProgressInner(confra(2, 8, 18, 102))) === 'emdia', '[rodada] 18% jogado / 20% do prazo → relógio NO PROGRAMADO');
-  ok(ritmoDaRodada(W._buildProgressInner(confra(6, 4, 10, 102))) === 'atrasado', '[rodada] 10% jogado / 60% do prazo → relógio ATRASADO');
+  ok(ritmoDaRodada(W._buildProgressInner(confra(2, 8, 61, 102))) === 'emdia', '[rodada] 60% jogado / 20% do prazo → relógio VERDE');
+  ok(ritmoDaRodada(W._buildProgressInner(confra(2, 8, 11, 102))) === 'apertando', '[rodada] 11% jogado / 20% do prazo → relógio AMARELO');
+  ok(ritmoDaRodada(W._buildProgressInner(confra(6, 4, 10, 102))) === 'atrasado', '[rodada] 10% jogado / 60% do prazo → relógio VERMELHO');
 
   const html = W._buildProgressInner(confra(6, 4, 10, 102));
   ok((html.match(/class="sp-ritmo sp-ritmo-/g) || []).length === 2, '[dois relógios] rodada E torneio completo saem com cor (são 2 renderizadores)');
-  ok(html.indexOf('#f59e0b') === -1, '[âmbar] a 4ª cor saiu — a régua do dono tem TRÊS estados');
+  ok(html.indexOf('#3b82f6;font-variant') === -1, '[azul] o azul da 1ª volta não pinta mais relógio nenhum');
   ok(/<span[^>]*data-sp-fixa="1"/.test(html), 'o relógio sai marcado com data-sp-fixa (gancho da tarja de foto)');
 })();
 
 // ─── 3) A COR SOBREVIVE À TARJA DE FOTO — e alcança os FILHOS ──────────────────────────
 (function () {
   const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
-  ['adiantado', 'emdia', 'atrasado'].forEach(function (e) {
+  ['emdia', 'apertando', 'atrasado'].forEach(function (e) {
     ok(css.indexOf('.sp-ritmo.sp-ritmo-' + e + ' *') > -1,
        '[' + e + '] a regra alcança os DESCENDENTES (o número mora em spans filhos — pai colorido e filho branco foi o defeito medido)');
     ok(new RegExp('\\[style\\*="rgba\\(0,0,0,0\\.60\\)"\\] \\.sp-ritmo\\.sp-ritmo-' + e).test(css),

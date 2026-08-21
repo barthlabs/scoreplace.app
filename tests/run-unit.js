@@ -83,6 +83,7 @@ const SUITES = [
   'tests/progresso-regressiva-fim-programado.test.js',
   'tests/barras-de-progresso-mostram-o-percentual.test.js',
   'tests/relogio-cor-do-ritmo-e-centrado.test.js',
+  'tests/foto-do-card-aparece-nos-dois-temas.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

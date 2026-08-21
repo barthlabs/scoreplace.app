@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.107';
+window.SCOREPLACE_VERSION = '1.9.108';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -1375,6 +1375,30 @@ window._formatLabel = function (t) {
     return _mem[pid];
   };
 
+  // ── 1.9.108 · PINTAR A FOTO NO CARD (fonte única dos dois hidratadores) ──────
+  // Relato do dono: _"no tema claro não vejo a foto do local ou do torneio carregada no
+  // card como acontece no tema escuro."_ MEDIDO no navegador: o MESMO card entregava
+  // `background-image: none` no claro e a foto no escuro. A culpa era da regra
+  // `[data-theme="light"] .card { background: var(--bg-card) !important }` — a foto não
+  // vem no HTML (pintar a URL do Places era PAGAR, v1.7.53; a base64 saiu da string na
+  // 1.9.50), ela é pintada AQUI, e estilo inline sem `!important` perde pra folha com
+  // `!important`. O `style.css` passou a poupar `[data-vphoto-on]` (o marcador que estas
+  // funções ligam), e a pintura vai com `!important` inline pra não depender da ordem em
+  // que marcador e estilo chegam. A COR do texto NÃO é forçada aqui de propósito: com a
+  // regra do tema claro fora do caminho, o card volta pro `color` que o próprio render
+  // já pinta (branco, quando há foto) e os títulos voltam a herdar dele.
+  // ⚠️ ARMADILHA DE MEDIÇÃO (custou uma investigação inteira): `.card` tem
+  // `transition: background-color .3s, color .3s` (style.css). Ler `getComputedStyle`
+  // logo depois de trocar classe/atributo devolve o valor ANTIGO — a transição ainda
+  // está no meio. Parece "o motor não reavaliou o seletor"; não é. Medir depois de
+  // ~400ms, senão o teste mente.
+  function _pintarFotoNoCard(el, imagem) {
+    el.style.setProperty('background-image', imagem, 'important');
+    el.style.setProperty('background-size', 'cover', 'important');
+    el.style.setProperty('background-position', 'center', 'important');
+    el.setAttribute('data-vphoto-on', '1');
+  }
+
   window._hydrateVenuePhotos = function (root) {
     root = root || document;
     var els;
@@ -1389,9 +1413,7 @@ window._formatLabel = function (t) {
         // dataUrl não expira e não vai à rede — pinta direto, sem Image() de teste.
         // ⚠️ NÃO reintroduzir `onerror` que apaga cache e re-hidrata: era esse laço que
         // transformava token expirado em chamada paga a cada render.
-        el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + url + ')';
-        el.style.backgroundSize = 'cover';
-        el.style.backgroundPosition = 'center';
+        _pintarFotoNoCard(el, (overlay ? overlay + ', ' : '') + 'url(' + url + ')');
         // v1.8.31: A FOTO CHEGA DEPOIS — E QUEM DEPENDE DELA PRECISA SABER.
         // Até a 1.7.52 o `venuePhotoBg` já vinha PRONTO no render (com a URL paga do
         // Places), então tudo que depende de "tem foto atrás de mim" era decidido ali.
@@ -1403,7 +1425,7 @@ window._formatLabel = function (t) {
         // ⚠️ Atributo dedicado (e não a classe `card-has-photo`) de propósito: aquela
         // classe governa o tema claro do card INTEIRO (style.css) e ligá-la aqui mexeria
         // em toda a app de uma vez. Ver o achado registrado no CLAUDE.md.
-        el.setAttribute('data-vphoto-on', '1');
+        // 1.9.108: quem liga o marcador (e pinta) agora é `_pintarFotoNoCard`, acima.
       });
     });
   };
@@ -1549,10 +1571,7 @@ window._formatLabel = function (t) {
       var _capa = window._tourCoverSrc(t);
       if (!_capa) return;
       var overlay = el.getAttribute('data-tcover-overlay') || '';
-      el.style.backgroundImage = (overlay ? overlay + ', ' : '') + 'url(' + _capa + ')';
-      el.style.backgroundSize = 'cover';
-      el.style.backgroundPosition = 'center';
-      el.setAttribute('data-vphoto-on', '1');
+      _pintarFotoNoCard(el, (overlay ? overlay + ', ' : '') + 'url(' + _capa + ')');
     });
     // logo (miniatura da linha compacta)
     var logos;

@@ -1033,13 +1033,12 @@ window._phaseCurrentRoundProgress = function(t) {
 // Ordem do dono (21/ago/2026, com o card na frente): _"no plano, os contadores de tempo
 // apareciam em cores de acordo com adiantado, no programado e atrasado (verde, azul,
 // vermelho). isso não está na tela."_ Duas coisas faltavam:
-//   1) O AZUL não existia. A régua antiga era verde / âmbar / vermelho — "adiantado" e
-//      "em dia" caíam os dois no verde, e o âmbar era um degrau de atraso sem nome.
-//      Agora são três estados com nome: ADIANTADO (jogou mais do que o tempo pedia),
-//      NO PROGRAMADO (andando junto com o relógio, com a folga que era o âmbar) e
-//      ATRASADO. A antiga faixa âmbar (atraso até 12 pontos) virou "no programado":
-//      o previsto é linear no tempo e os jogos saem em rajada — 12 pontos de defasagem
-//      é ritmo normal, não alarme.
+//   1) A COR não existia como semáforo. Régua definida pelo dono (2ª volta, 21/ago):
+//      _"vermelho quando atrasado. conforme estiver ficando próxima amarelo; quando
+//      estiver junto ou adiantado verde."_ São três estados: VERDE (junto ou adiantado),
+//      AMARELO (a defasagem está crescendo — o aviso antes do vermelho) e VERMELHO
+//      (atrasado). A 1ª volta tinha proposto AZUL pro "no programado"; o dono trocou
+//      pelo semáforo, que é o que se lê sem legenda.
 //   2) SOBRE FOTO DE CAPA a cor sumia. A tarja de leitura força TODO o texto da seção
 //      pra uma cor só (senão os hex claros invertidos pelo tema claro ficam ilegíveis
 //      sobre ela) — e levava junto o relógio, que ficava branco. Por isso os relógios
@@ -1050,14 +1049,17 @@ window._phaseCurrentRoundProgress = function(t) {
 // A BARRA do realizado segue a MESMA régua (hex sólido); número e barra nunca podem
 // contar histórias diferentes no mesmo card.
 window._tProgRitmo = function(progFrac, expectedFrac, done) {
-  if (done) return 'adiantado';
+  if (done) return 'emdia';
   if (!isFinite(progFrac) || !isFinite(expectedFrac)) return null;
-  if (progFrac >= expectedFrac + 0.02) return 'adiantado';
-  if (expectedFrac - progFrac <= 0.12) return 'emdia';
+  // arredonda em pontos de mil antes de comparar: 0.20-0.18 dá 0.020000000000000018 em
+  // ponto flutuante, e a fronteira do verde cairia justo nesse fio de cabelo.
+  var atraso = Math.round((expectedFrac - progFrac) * 1000) / 1000;   // >0 = jogou menos do que o tempo pedia
+  if (atraso <= 0.02) return 'emdia';      // junto ou adiantado
+  if (atraso <= 0.12) return 'apertando';  // ficando perto — o aviso antes do vermelho
   return 'atrasado';
 };
 window._tProgRitmoBarra = function(ritmo) {
-  return ritmo === 'atrasado' ? '#ef4444' : (ritmo === 'emdia' ? '#3b82f6' : '#10b981');
+  return ritmo === 'atrasado' ? '#ef4444' : (ritmo === 'apertando' ? '#f59e0b' : '#10b981');
 };
 // atributos do span do relógio: classe do ritmo + o selo que a tarja de foto poupa
 window._tProgRitmoAttr = function(ritmo) {

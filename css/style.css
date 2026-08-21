@@ -368,17 +368,38 @@ a:hover {
 
 /* ── Light theme overrides for inline styles ────────────────────────────── */
 /* v2.6.28: cards COM foto de local (.card-has-photo) ficam de FORA — senão o
-   `background:!important` cobre a foto e o texto vira escuro no tema claro. */
-[data-theme="light"] .card:not(.card-has-photo) {
+   `background:!important` cobre a foto e o texto vira escuro no tema claro.
+   ── 1.9.108 · E `[data-vphoto-on]` TAMBÉM FICA DE FORA ─────────────────────────
+   Relato do dono: _"no tema claro não vejo a foto do local ou do torneio carregada no
+   card como acontece no tema escuro."_ MEDIDO no navegador (playwright): tema claro
+   entregava `background-image: none` no MESMO card que no escuro mostrava a foto.
+   A causa: a foto NÃO vem no HTML do card (desde a v1.7.53 pintar a URL do Places era
+   PAGAR, e desde a 1.9.50 a base64 saiu da string) — ela é pintada DEPOIS pelo
+   hidratador, em `element.style.backgroundImage`. E estilo inline SEM `!important`
+   perde para regra de folha COM `!important`: este `background:` shorthand zerava a
+   imagem recém-pintada. A classe `.card-has-photo` não salvava porque ela só existe
+   quando o card JÁ nasce com foto; o card de foto de LOCAL nasce sem. O sinal certo é
+   `data-vphoto-on`, que os dois hidratadores (foto do local e capa do torneio) ligam
+   SÓ quando a foto foi realmente pintada — o mesmo sinal que components.css já lê pra
+   calibrar texto sobre foto. Ver js/store.js · _hydrateVenuePhotos/_hydrateTournamentPhotos. */
+[data-theme="light"] .card:not(.card-has-photo):not([data-vphoto-on]) {
   background: var(--bg-card) !important;
   border-color: var(--border-color) !important;
   color: var(--text-main) !important;
 }
 
-[data-theme="light"] .card:not(.card-has-photo) h4,
-[data-theme="light"] .card:not(.card-has-photo) h3,
-[data-theme="light"] .card:not(.card-has-photo) h2 {
+[data-theme="light"] .card:not(.card-has-photo):not([data-vphoto-on]) h4,
+[data-theme="light"] .card:not(.card-has-photo):not([data-vphoto-on]) h3,
+[data-theme="light"] .card:not(.card-has-photo):not([data-vphoto-on]) h2 {
   color: var(--text-bright) !important;
+}
+/* 1.9.108: título SOBRE FOTO é claro nos DOIS temas. Sair da regra acima não bastava —
+   `h1..h6` têm cor PRÓPRIA (var(--text-bright), linha ~318), que no tema claro é quase
+   preta. Fora da foto nada muda; aqui o fundo é a imagem com o scrim escuro por cima. */
+[data-vphoto-on] h2,
+[data-vphoto-on] h3,
+[data-vphoto-on] h4 {
+  color: #fff;
 }
 
 /* v0.17.31: hero-box agora usa --hero-* tokens definidos por tema (linhas
@@ -2915,10 +2936,11 @@ body, .topbar, .card {
   background-color: rgba(255,255,255,0.25) !important;
 }
 
-/* ── 1.9.107 · A COR DO RITMO DO CARD DE PROGRESSO ────────────────────────────
- * ADIANTADO (verde) · NO PROGRAMADO (azul) · ATRASADO (vermelho) — pedido do dono:
- * _"no plano, os contadores de tempo apareciam em cores de acordo com adiantado, no
- * programado e atrasado (verde, azul, vermelho). isso não está na tela."_
+/* ── 1.9.108 · O SEMÁFORO DO RITMO DO CARD DE PROGRESSO ───────────────────────
+ * JUNTO OU ADIANTADO (verde) · FICANDO PERTO (amarelo) · ATRASADO (vermelho) — régua
+ * do dono: _"vermelho quando atrasado. conforme estiver ficando próxima amarelo;
+ * quando estiver junto ou adiantado verde."_ (a 1ª volta tinha proposto azul pro "no
+ * programado"; o dono trocou pelo semáforo, que se lê sem legenda.)
  *
  * POR QUE CLASSE E NÃO HEX INLINE (que era como estava): cor semântica em hex inline
  * não sobrevive aos dois temas. No tema claro os hex claros são invertidos pelo remap
@@ -2935,16 +2957,16 @@ body, .topbar, .card {
  * cada regra pega o elemento E seus descendentes. E a classe é DUPLA (.sp-ritmo +
  * .sp-ritmo-estado) de propósito: dá especificidade (0,3,0) contra o (0,2,0) do <style>
  * escopado da tarja, que é o que apagava esta cor sobre foto de capa. */
-.sp-ritmo.sp-ritmo-adiantado, .sp-ritmo.sp-ritmo-adiantado * { color: #34d399; }
-.sp-ritmo.sp-ritmo-emdia,     .sp-ritmo.sp-ritmo-emdia *     { color: #60a5fa; }
+.sp-ritmo.sp-ritmo-emdia, .sp-ritmo.sp-ritmo-emdia * { color: #34d399; }
+.sp-ritmo.sp-ritmo-apertando,     .sp-ritmo.sp-ritmo-apertando *     { color: #fbbf24; }
 .sp-ritmo.sp-ritmo-atrasado,  .sp-ritmo.sp-ritmo-atrasado *  { color: #f87171; }
-[data-theme="light"] .sp-ritmo.sp-ritmo-adiantado, [data-theme="light"] .sp-ritmo.sp-ritmo-adiantado * { color: #047857; }
-[data-theme="light"] .sp-ritmo.sp-ritmo-emdia,     [data-theme="light"] .sp-ritmo.sp-ritmo-emdia *     { color: #1d4ed8; }
+[data-theme="light"] .sp-ritmo.sp-ritmo-emdia, [data-theme="light"] .sp-ritmo.sp-ritmo-emdia * { color: #047857; }
+[data-theme="light"] .sp-ritmo.sp-ritmo-apertando,     [data-theme="light"] .sp-ritmo.sp-ritmo-apertando *     { color: #b45309; }
 [data-theme="light"] .sp-ritmo.sp-ritmo-atrasado,  [data-theme="light"] .sp-ritmo.sp-ritmo-atrasado *  { color: #b91c1c; }
 /* dentro da tarja de leitura sobre foto (ESCURA nos dois temas) volta pros tons claros */
-[style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-adiantado, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-adiantado *,
-[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-adiantado, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-adiantado * { color: #34d399 !important; }
 [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-emdia, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-emdia *,
-[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-emdia, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-emdia * { color: #60a5fa !important; }
+[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-emdia, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-emdia * { color: #34d399 !important; }
+[style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-apertando, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-apertando *,
+[style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-apertando, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-apertando * { color: #fbbf24 !important; }
 [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-atrasado, [style*="rgba(30,41,59,0.85)"] .sp-ritmo.sp-ritmo-atrasado *,
 [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-atrasado, [style*="rgba(0,0,0,0.60)"] .sp-ritmo.sp-ritmo-atrasado * { color: #f87171 !important; }
