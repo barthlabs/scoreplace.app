@@ -60,7 +60,12 @@ fi
 echo "▸ gerando o snapshot (prerender) no repo…"
 npm run --silent prerender
 if [[ -n "$(git status --porcelain)" ]]; then
-  INESPERADO="$(git status --porcelain | grep -v -E ' (index\.html|version\.txt)$' || true)"
+  # o prerender também carimba a versão da EXTENSÃO (extension/content.js, js/store.js,
+  # ext-version.txt e o cache-buster do store.js no index.html) — tudo isso é gerado e
+  # entra no mesmo commit. Qualquer OUTRA coisa aparecer aqui é sinal de que o gerador
+  # fez algo que eu não sei explicar: aí não commito às cegas.
+  DERIVADOS="index.html version.txt ext-version.txt extension/content.js js/store.js"
+  INESPERADO="$(git status --porcelain | grep -v -E ' (index\.html|version\.txt|ext-version\.txt|extension/content\.js|js/store\.js|scoreplace-letzplay-ext-[0-9.]+\.zip)$' || true)"
   if [[ -n "$INESPERADO" ]]; then
     echo
     echo "✗ o prerender mexeu em arquivo que não era esperado — não vou commitar às cegas:"
@@ -71,10 +76,11 @@ if [[ -n "$(git status --porcelain)" ]]; then
     # --dry-run não commita nada; desfaz e só avisa.
     echo "  ⚠️  o snapshot está VELHO (v$(tr -d '[:space:]' < version.txt)) — no deploy de"
     echo "     verdade eu commitaria isso. (dry-run: desfiz, árvore intacta)"
-    git checkout -q -- index.html version.txt
+    git checkout -q -- $DERIVADOS
+    git checkout -q -- 'scoreplace-letzplay-ext-*.zip' 2>/dev/null || true
   else
     VERSAO="$(tr -d '[:space:]' < version.txt)"
-    git add index.html version.txt
+    git add -A -- $DERIVADOS 'scoreplace-letzplay-ext-*.zip'
     git commit -q -m "$VERSAO — snapshot do prerender que está no ar"
     COMMIT="$(git rev-parse HEAD)"
     echo "  ▸ snapshot estava velho — commitado em ${COMMIT:0:8} (v$VERSAO)"

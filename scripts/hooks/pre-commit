@@ -40,7 +40,26 @@ if ! node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
   exit 0
 fi
 
-impressao() { shasum index.html version.txt 2>/dev/null | awk '{print $1}' | tr -d '\n'; }
+# Tudo que `npm run prerender` pode reescrever. NÃO é só o snapshot da landing: o
+# sync-ext-version.js (primeira metade do script) carimba a versão da extensão em
+# extension/content.js, em js/store.js (SP_EXT_VERSION) e no cache-buster do store.js
+# dentro do index.html. Listar de menos aqui deixa arquivo gerado fora do commit — que é
+# a falha original, só que num campo diferente.
+#
+# ⚠️ bash 3.2 (o /bin/bash do macOS): sem `mapfile`, e sob `set -u` expandir array vazio
+# é erro. Por isso tudo aqui é string separada por espaço/linha, não array.
+DERIVADOS="index.html version.txt ext-version.txt extension/content.js js/store.js"
+# … e o zip da extensão servido pelo site, que o sync ROTACIONA (apaga o da versão
+# anterior e gera o da nova). São um delete + um untracked que, se ficarem de fora,
+# quebram o download da extensão que o próprio app exige.
+ZIP_GLOB='scoreplace-letzplay-ext-*.zip'
+
+# O que já estava modificado e NÃO STAGED antes do gerador rodar é trabalho do usuário.
+# `git add` num desses varreria pro commit uma alteração que ele não escolheu incluir —
+# especialmente js/store.js, que é fonte editada à mão, não arquivo gerado.
+SUJOS_ANTES="$(git diff --name-only -- $DERIVADOS 2>/dev/null || true)"
+
+impressao() { { shasum $DERIVADOS 2>/dev/null | awk '{print $1}'; ls $ZIP_GLOB 2>/dev/null; } | tr -d '\n'; }
 ANTES="$(impressao)"
 
 LOG="$(mktemp)"
@@ -52,9 +71,33 @@ if ! npm run --silent prerender >"$LOG" 2>&1; then
 fi
 rm -f "$LOG"
 
-if [[ "$(impressao)" != "$ANTES" ]]; then
-  git add index.html version.txt
+[[ "$(impressao)" == "$ANTES" ]] && exit 0
+
+ADICIONADOS=""
+PULADOS=""
+for f in $DERIVADOS; do
+  [[ -e "$f" ]] || continue
+  git diff --quiet -- "$f" && continue          # o gerador não deixou nada solto aqui
+  if printf '%s\n' "$SUJOS_ANTES" | grep -qxF "$f"; then
+    PULADOS="$PULADOS $f"
+  else
+    git add -- "$f"
+    ADICIONADOS="$ADICIONADOS $f"
+  fi
+done
+
+if [[ -n "$(git status --porcelain -- "$ZIP_GLOB" 2>/dev/null)" ]]; then
+  git add -A -- "$ZIP_GLOB"
+  ADICIONADOS="$ADICIONADOS zip-da-extensão"
+fi
+
+if [[ -n "$ADICIONADOS" ]]; then
   echo "▸ pre-commit: snapshot do prerender regerado e incluído no commit"
-  echo "  (index.html + version.txt = $(tr -d '[:space:]' < version.txt))"
+  echo "  ($(echo $ADICIONADOS) · versão $(tr -d '[:space:]' < version.txt))"
+fi
+if [[ -n "$PULADOS" ]]; then
+  echo "⚠️  pre-commit: NÃO staguei$PULADOS — você já tinha alteração não-staged aí, e eu" >&2
+  echo "   não vou decidir por você o que entra no commit. Confira com 'git diff' e" >&2
+  echo "   inclua na mão se for o caso." >&2
 fi
 exit 0

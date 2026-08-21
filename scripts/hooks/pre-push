@@ -63,8 +63,11 @@ if ! node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
   fi
   echo "⚠️  pre-push: @playwright/test não resolveu — snapshot NÃO conferido (push não é pro main)."
 else
-  SUJO_ANTES="$(git status --porcelain -- index.html version.txt)"
-  impressao() { shasum index.html version.txt 2>/dev/null | awk '{print $1}' | tr -d '\n'; }
+  # mesma lista do pre-commit: o prerender também carimba a versão da EXTENSÃO em
+  # extension/content.js, js/store.js e no cache-buster do index.html.
+  DERIVADOS="index.html version.txt ext-version.txt extension/content.js js/store.js"
+  SUJO_ANTES="$(git status --porcelain -- $DERIVADOS)"
+  impressao() { shasum $DERIVADOS 2>/dev/null | awk '{print $1}' | tr -d '\n'; }
   ANTES="$(impressao)"
   LOG="$(mktemp)"
   if ! npm run --silent prerender >"$LOG" 2>&1; then
@@ -75,8 +78,9 @@ else
   else
     rm -f "$LOG"
     if [[ "$(impressao)" != "$ANTES" && -z "$SUJO_ANTES" ]]; then
-      barra "o snapshot do prerender está VELHO no commit que você está empurrando. Acabei de regerar index.html e version.txt (v$(tr -d '[:space:]' < version.txt)) — eles estão modificados na sua árvore agora." \
-            "    git add index.html version.txt && git commit --amend --no-edit
+      barra "o snapshot do prerender está VELHO no commit que você está empurrando. Acabei de regerar os arquivos derivados (v$(tr -d '[:space:]' < version.txt)) — eles estão modificados na sua árvore agora:
+$(git status --porcelain -- $DERIVADOS | sed 's/^/     /')" \
+            "    git add -- $(git diff --name-only -- $DERIVADOS | tr '\n' ' ' | sed 's/ *$//') && git commit --amend --no-edit
     git push …
 
   (com o pre-commit instalado isso não acontece — ele gera junto do commit.
