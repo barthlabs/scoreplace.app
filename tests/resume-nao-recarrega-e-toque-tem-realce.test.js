@@ -142,10 +142,45 @@ ok(/document\.addEventListener\('touchstart', function \(ev\)[\s\S]{0,600}classL
 ok(/closest\('button, input, label, select, textarea, a\[href\], \[data-no-card-nav\]'\)/.test(store),
    'controle DENTRO do card nao acende o card (ele tem o proprio feedback)');
 const comps3 = R('css/components.css').replace(/\/\*[\s\S]*?\*\//g, '');
-ok(/\.card\[onclick\]\.sp-tocado[\s\S]{0,200}transform: scale\(0\.96\) !important/.test(comps3),
-   'o realce e visivel (encolhe 4%) e usa !important — o card cravou transform INLINE no onmouseover');
-ok(/\.sp-tocado[\s\S]{0,220}filter: brightness/.test(comps3),
-   'e clareia: transform+filter sao compositor, sem layout');
+// ⚠️ SO `opacity`, e de proposito (1.9.114). O realce ja passou por
+// `filter: brightness()` e por `transform: scale()`, e os dois sairam pelo MESMO
+// motivo: ele entra no `touchstart`, ou seja TAMBEM no toque que comeca uma
+// rolagem. Mexer em transform/filter ali promove o card a camada nova e obriga o
+// WebKit a rasterizar de novo no primeiro quadro do gesto — o "scrolla e corta"
+// voltou justamente depois que este realce nasceu.
+// escopo = SO o corpo da regra: logo depois dela vem o bloco de hover, que tem
+// `transform` legitimamente (e so vale em tela com mouse).
+const iToc = comps3.indexOf('.card[onclick].sp-tocado');
+ok(iToc > 0, 'a regra do realce existe');
+const corpoToc = comps3.slice(iToc, comps3.indexOf('}', iToc));
+ok(!/transform:/.test(corpoToc),
+   '⛔ sem `transform` no realce: muda geometria no primeiro quadro do gesto');
+ok(!/filter:/.test(corpoToc),
+   '⛔ nem `filter`: cria contexto de composicao e forca re-rasterizacao');
+// 1.9.114: era `filter: brightness()`. Filtro cria contexto de composicao novo e
+// obriga o WebKit a re-rasterizar a area — caro justamente no toque, quando a
+// thread ja esta disputada. `opacity` faz o mesmo trabalho visual e o compositor
+// resolve sozinho.
+ok(/opacity: 0\.6 !important/.test(corpoToc),
+   'o realce e esmaecer forte (60%) — a mudanca mais barata que existe e se ve de longe');
+ok(/var _rolando = 0;/.test(store) && /if \(Date\.now\(\) - _rolando < 250\) return;/.test(store),
+   'ROLANDO NAO ACENDE: encostar o dedo pra parar a inercia nao e clique, e o realce cairia no pior quadro');
+ok(!/\.sp-tocado[\s\S]{0,320}filter:/.test(comps3),
+   '⛔ sem `filter` no realce: ele forca re-rasterizacao no pior momento');
+
+// ── G) EFEITO DE MOUSE NAO ENCOSTA EM TELA DE TOQUE (1.9.114) ─────────────
+// Relato do dono, testando o realce novo: "o clique deu 2x um pulo e nao da a
+// sensacao de clique". Causa exata: o card tinha
+// `onmouseover="this.style.transform='translateX(5px)'"` INLINE, e o iOS SIMULA
+// hover no toque — entao: touchstart encolhe · touchend deixa o transform do
+// hover (PULO pra direita) · mouseout devolve pra none (PULO de volta).
+// O realce de toque brigava com um efeito de mouse que nao devia existir ali.
+['js/views/dashboard.js', 'js/views/tournaments.js'].forEach(function (f) {
+  ok(!/onmouseover="this\.style\.transform='translateX\(5px\)'"/.test(R(f)),
+     '⛔ nenhum hover inline empurrando o card em ' + f);
+});
+ok(/@media \(hover: hover\) and \(pointer: fine\)[\s\S]{0,160}\.card\[onclick\]:hover \{ transform: translateX\(5px\); \}/.test(comps3),
+   'o efeito de hover vive atras de `@media (hover: hover)` — nao casa em tela de toque, e o desktop segue igual');
 
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

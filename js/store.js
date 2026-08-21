@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.113';
+window.SCOREPLACE_VERSION = '1.9.114';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -7493,8 +7493,15 @@ try {
       try { _aceso.classList.remove('sp-tocado'); } catch (e) {}
       _aceso = null;
     };
+    // ⚠️ ROLANDO NAO ACENDE. Encostar o dedo pra PARAR uma rolagem por inercia e
+    // um toque como qualquer outro pro navegador — e acender o card ali e errado
+    // duas vezes: a pessoa nao quis clicar em nada, e o realce cai no primeiro
+    // quadro do gesto, justo quando o WebKit esta rasterizando os tiles.
+    var _rolando = 0;
+    document.addEventListener('scroll', function () { _rolando = Date.now(); }, { passive: true, capture: true });
     document.addEventListener('touchstart', function (ev) {
       _apaga();
+      if (Date.now() - _rolando < 250) return;    // ainda rolando: nao e clique
       var t = ev && ev.target;
       if (!t || !t.closest) return;
       // controle DENTRO do card (botao, link, input) tem o proprio feedback

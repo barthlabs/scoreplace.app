@@ -1220,9 +1220,35 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
 .card[onclick].sp-tocado,
 a.compact-row.sp-tocado,
 .compact-row[onclick].sp-tocado {
-  transform: scale(0.96) !important;
-  filter: brightness(1.45) saturate(1.1);
+  /* ── ⚠️ SO `opacity` — E DE PROPOSITO (1.9.114) ──────────────────────────
+     Passou por `filter: brightness()` e por `transform: scale()`, e os dois
+     saíram pelo MESMO motivo: este realce entra no `touchstart`, ou seja tambem
+     no toque que COMECA UMA ROLAGEM. Mexer em transform/filter ali promove o
+     card a uma camada nova e obriga o WebKit a rasterizar de novo bem no
+     primeiro quadro do gesto — que e exatamente o "scrolla e corta" que o dono
+     relatou de volta depois que este realce nasceu.
+     `opacity` nao muda geometria nem cria contexto de filtro: e a mudanca mais
+     barata que existe e ainda assim se ve de longe (o card inteiro esmaece).
+     ⛔ Nao reintroduzir transform/filter aqui. */
+  opacity: 0.6 !important;
   transition: none !important;
+}
+
+/* ── ⛔ EFEITO DE MOUSE NAO ENCOSTA EM TELA DE TOQUE (1.9.114) ───────────────
+   Relato do dono, testando o realce novo: _"o clique deu 2x um pulo e nao da a
+   sensacao de clique"_. Os DOIS pulos tem causa exata: o card carregava
+   `onmouseover="this.style.transform='translateX(5px)'"` inline, e o iOS SIMULA
+   hover no toque. A sequencia era:
+     1. touchstart  → `.sp-tocado` encolhe o card
+     2. touchend    → a classe sai e sobra o transform do hover → PULO pra direita
+     3. mouseout    → volta pra none                            → PULO de volta
+   Ou seja o realce de toque brigava com um efeito de mouse que nunca deveria
+   existir num aparelho sem mouse — e o resultado nao lia como clique, lia como
+   tremor. Os handlers inline sairam do markup (dashboard.js e tournaments.js) e
+   o efeito virou CSS atras de `@media (hover: hover)`, que NAO casa em tela de
+   toque. No desktop nada muda. */
+@media (hover: hover) and (pointer: fine) {
+  .card[onclick]:hover { transform: translateX(5px); }
 }
 .card[onclick]:active,
 a.compact-row:active,
