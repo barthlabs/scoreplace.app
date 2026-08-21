@@ -3779,6 +3779,24 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // `_editPendingResult`, que mexe no DOM por `getElementById('score-p1-'+matchId)` —
   // ids que só existem na tela da chave.
   var _readOnly = !!(opts && opts.readOnly);
+  // ── 1.9.109 · O CONSENSO SAI DA CHAVE E VAI PRA DASHBOARD ────────────────────
+  // Pedido do dono (21/ago/2026, com o print de "📣 Novidades no seu torneio"):
+  // _"aqui nas novidades não temos os botões para os participantes aprovarem/
+  // contestarem os placares lançados. Elas têm que ir para o torneio para fazer isso.
+  // Alguns não entendem isso. Em vez de ficar explicando, melhor colocar os botões
+  // também aqui para que os participantes e organizadores possam fazer isso já na
+  // dashboard sem precisar ir ao torneio."_
+  // `dashConsensus` reabre APENAS a linha de consenso (Confirmar/Contestar/Editar) num
+  // card em somente-leitura — o resto (W.O., ao vivo, painel de disputa do organizador,
+  // editar in-place) continua calado, que é a razão de o `readOnly` existir.
+  // ⚠️ E os botões saem por `data-pending-action`, NÃO por `onclick`: fora da chave, o
+  // `_editPendingResult` do onclick mexe em ids que só existem lá (`score-p1-<id>`) —
+  // foi exatamente esse clique quebrado que criou o readOnly na v1.8.67. O atributo cai
+  // no despachante que a dashboard JÁ tem (dashboard.js, `[data-pending-action]`), que
+  // no Editar carimba `sp_pendingEdit` e navega pra chave, que abre a edição sozinha.
+  // Quem decide QUEM vê O QUÊ continua sendo a mesma régua de papel de baixo — e a
+  // permissão de verdade é a de `_approveResult`/`_contestResult`, no servidor do fluxo.
+  var _dashConsensus = !!(opts && opts.dashConsensus);
 
   // ⚠️ O `const t` tem que vir ANTES do branch de Folga: a 4.0.84 (nome ao vivo
   // por uid) pôs `t ? _resolveSideLive(…)` dentro do card de Folga com esta
@@ -4159,8 +4177,26 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       pendingActionBtns = _btnEdit + _btnConfirm;
     }
     // Se é o proponente atual (mesmo sendo org): aguardando — sem botões
-    // Somente leitura vence QUALQUER papel: fora da chave não há ação possível.
-    if (_readOnly) pendingActionBtns = '';
+    // Somente leitura vence QUALQUER papel: fora da chave não há ação possível…
+    // …EXCETO o consenso, quando o chamador pede (dashboard). Aí valem os MESMOS
+    // botões que a régua acima escolheu, só que despachados por atributo.
+    if (_readOnly) {
+      // ⛔ O ✏️ EDITAR NÃO VAI JUNTO, e é decisão: ele abre a edição IN-PLACE trocando os
+      // spans `score-p1-<id>`/`score-p2-<id>` por inputs — e o card do feed é o MESMO
+      // renderizador, então esses ids EXISTEM ali: a edição abriria dentro da tela
+      // inicial, num caminho que nunca foi feito pra ela (e com id duplicado quando o
+      // mesmo jogo aparece em duas seções). O pedido é aprovar/contestar; quem precisa
+      // corrigir o placar usa o "Ir para o torneio" que o cabeçalho do grupo já traz.
+      pendingActionBtns = _dashConsensus
+        ? pendingActionBtns
+            .replace(/<button[^>]*window\._editPendingResult[^>]*>[\s\S]*?<\/button>/g, '')
+            .replace(/onclick="window\._(approveResult|contestResult)\('([^']*)','([^']*)'\)"/g,
+              function (_all, fn, _tid, _mid) {
+                return 'data-pending-action="' + (fn === 'approveResult' ? 'approve' : 'contest') + '"' +
+                  ' data-tid="' + _tid + '" data-mid="' + _mid + '"';
+              })
+        : '';
+    }
   }
   // CANÔNICO (dono, 18/jul): "é o meu jogo?" — SÓ pelo UID do slot (_userTeamInMatch →
   // _slotUids). Sem fallback de nome/e-mail/substring: casar nome mostrava o input de placar

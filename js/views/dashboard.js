@@ -2577,8 +2577,13 @@ function renderDashboard(container) {
         // de pendência/disputa/W.O., que têm gate próprio por PAPEL: como organizador, o
         // dono via "✏️ Editar" num card fora da chave, e o clique cai num caminho que
         // procura ids que só existem lá.
+        // 1.9.109: `dashConsensus` reabre a linha de Confirmar/Contestar/Editar do jogo
+        // PENDENTE — pedido do dono: quem podia aprovar tinha que ir ao torneio, e
+        // "alguns não entendem isso". Quem vê o quê é a régua de papel do próprio card
+        // (adversário / organizador / proponente / em disputa); pra quem não pode agir,
+        // nada muda. O resto do card segue em somente-leitura.
         var _card = (typeof window.renderMatchCard === 'function')
-          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true })
+          ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true, dashConsensus: true })
           : '';
         return '<div data-nov-card="1"' + _spCard() + ' style="min-width:0;">' +
           (_quando

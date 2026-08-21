@@ -84,6 +84,7 @@ const SUITES = [
   'tests/barras-de-progresso-mostram-o-percentual.test.js',
   'tests/relogio-cor-do-ritmo-e-centrado.test.js',
   'tests/foto-do-card-aparece-nos-dois-temas.test.js',
+  'tests/consenso-na-dashboard.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

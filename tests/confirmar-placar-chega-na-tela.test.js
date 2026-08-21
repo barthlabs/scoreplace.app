@@ -152,8 +152,19 @@ ok(/else if \(_isProposerSelf && !_isAuthorityInner\) \{[\s\S]{0,300}?pendingAct
    'o proponente segue só com ✏️ Editar');
 ok(/if \(_pr && _pr\.disputed\) \{\s*\n\s*pendingActionBtns = '';/.test(bracketSrc),
    'jogo EM DISPUTA continua sem botões no corpo do card');
-ok(/if \(_readOnly\) pendingActionBtns = '';/.test(bracketSrc),
-   'somente-leitura vence qualquer papel');
+// 1.9.109: somente-leitura continua vencendo qualquer papel — a ÚNICA exceção é o
+// consenso pedido pelo chamador (`dashConsensus`, a dashboard), e mesmo aí os botões
+// saem por `data-pending-action`, nunca por onclick pras funções da chave: fora dela o
+// `_editPendingResult` mexe em ids (`score-p1-<id>`) que não existem, que foi o defeito
+// que criou o readOnly na v1.8.67.
+ok(/if \(_readOnly\) \{[\s\S]{0,700}?pendingActionBtns = _dashConsensus/.test(bracketSrc),
+   'somente-leitura vence qualquer papel — só o consenso pedido pelo chamador escapa');
+ok(/_editPendingResult\[\^>\]\*>\[\\s\\S\]\*\?<\\\/button>\/g, ''\)/.test(bracketSrc) || /replace\(\/<button\[\^>\]\*window\\\._editPendingResult/.test(bracketSrc),
+   'e o ✏️ Editar é removido do consenso fora da chave (a edição in-place é da tela da chave)');
+ok(/_dashConsensus\s*=\s*!!\(opts && opts\.dashConsensus\)/.test(bracketSrc),
+   'o consenso fora da chave é OPT-IN do chamador (não nasce ligado)');
+ok(/data-pending-action="' \+ \(fn === 'approveResult'/.test(bracketSrc),
+   'e ele troca o onclick por data-pending-action — o despachante da dashboard é quem age');
 
 // ─── resultado ──────────────────────────────────────────────────────────────
 console.log('\n' + (falhas === 0 ? '✅' : '❌') +

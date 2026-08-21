@@ -345,14 +345,27 @@ T4.status = 'finished';
 ok(secaoNovidades(render([T4])).length === 0, 'C9. torneio encerrado continua não populando as Novidades');
 
 // ═══════════════════════════════════════════════════════════════════════════
-// D. O FEED É SOMENTE LEITURA
+// D. O FEED É SOMENTE LEITURA — MENOS O CONSENSO (mudança de regra, 1.9.109)
 // ═══════════════════════════════════════════════════════════════════════════
 // O dono é o ORGANIZADOR do fixture — é justamente esse papel que soltava "✏️ Editar"
-// no card pendente. `canEnterResult=false` não alcançava esses botões.
-ok(contar(NOV, '<button') === 0, 'D1. nenhum <button> na seção Novidades — vi ' + contar(NOV, '<button'));
-ok(NOV.indexOf('_editPendingResult') === -1, 'D2. nenhum caminho de edição de pendência no feed');
-ok(NOV.indexOf('_approveResult') === -1, 'D3. nenhum caminho de aprovação no feed');
-ok(NOV.indexOf('_contestResult') === -1, 'D4. nenhum caminho de contestação no feed');
+// no card pendente, e o clique caía em ids que só existem na chave (v1.8.67).
+//
+// ⚠️ A REGRA MUDOU POR ORDEM DO DONO (21/ago/2026, com o print do feed): _"aqui nas
+// novidades não temos os botões para os participantes aprovarem/contestarem os placares
+// lançados. Elas têm que ir para o torneio para fazer isso. Alguns não entendem isso."_
+// O feed segue somente-leitura para TUDO — W.O., ao vivo, painel de disputa, edição
+// in-place — menos a linha de consenso, que agora aparece pra quem pode agir.
+// O que este bloco trava agora é o COMO: nada de `onclick` chamando as funções da chave
+// (era o clique quebrado); o despacho é por `data-pending-action`, o mesmo atributo que
+// a seção "Aguardando sua aprovação" já usa e que o listener da dashboard resolve —
+// inclusive o Editar, que carimba `sp_pendingEdit` e navega em vez de mexer no DOM.
+ok(NOV.indexOf('onclick="window._editPendingResult') === -1, 'D2. o feed NUNCA edita por onclick (o clique que procurava ids da chave)');
+ok(NOV.indexOf('onclick="window._approveResult') === -1, 'D3. nem aprova por onclick');
+ok(NOV.indexOf('onclick="window._contestResult') === -1, 'D4. nem contesta por onclick');
+ok(contar(NOV, 'data-pending-action="approve"') >= 1, 'D1. o jogo PENDENTE traz o Confirmar (despachado por atributo) — vi ' + contar(NOV, 'data-pending-action="approve"'));
+ok(NOV.indexOf('data-tid="') > -1 && NOV.indexOf('data-mid="') > -1, 'D1b. e o botão carrega torneio + jogo (o despachante age por id, não por posição)');
+// nada de W.O./ao vivo/replay voltar junto: o consenso é a ÚNICA exceção
+ok(NOV.indexOf('_woClaim') === -1 && NOV.indexOf('_liveScore') === -1, 'D1c. W.O. e placar ao vivo seguem fora do feed');
 
 // e o modo somente-leitura NÃO pode vazar pra chave: lá os botões continuam existindo.
 const _rmc = W.renderMatchCard;
