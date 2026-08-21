@@ -63,8 +63,10 @@ window._RELEASE_NOTES_HTML = (function () {
     // que essa build entrega ao usuário é exatamente o que o bloco abaixo já descreve. A
     // trava (check-release-notes) pega OMISSÃO e não sabe julgar isso; a justificativa
     // fica aqui, e o toque na nota é este comentário.
-    // ⚠️ A build 200 (2.0) subiu ANTES dos consertos da 2.0.1 — vencedor por uid, texto do
-    // tie-break e o ✕ na linha da data. Ela NÃO é a build a aprovar; a boa é a 201.
+    // ⚠️ Histórico das builds desta leva, porque duas delas NÃO servem pra aprovar:
+    //   200 (2.0)   — subiu ANTES do vencedor por uid, do texto do tie-break e do ✕ na linha.
+    //   201 (2.0.1) — tem os três acima, mas NÃO tem prorrogar × tie-break nem o 7-7.
+    //   202 (2.0.2) — a leva completa. É esta que o dono aprova.
     // Ordem do dono (21/ago/2026): "vamos alinhar web/apple versao 2.0". O bloco é CURTO de
     // propósito: o ciclo 2.0 começa agora, e repetir aqui os destaques da v1.9 (logo abaixo,
     // e que o usuário do site já leu) seria anunciar duas vezes a mesma entrega.
