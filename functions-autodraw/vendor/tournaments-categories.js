@@ -2875,14 +2875,15 @@ window._autoAssignCategoriesAsync = async function(tId) {
                 var emailQ = toLoadByEmail[j].email.toLowerCase();
                 var snap = await window.FirestoreDB.db.collection('users')
                     .where('email_lower', '==', emailQ).limit(1).get();
-                if (!snap.empty) {
-                    var pdata = snap.docs[0].data();
+                var vivo = await window._userVivo(snap);   // lápide guarda o mesmo e-mail
+                if (vivo) {
+                    var pdata = vivo.data;
                     if (pdata.birthDate && !toLoadByEmail[j].birthDate) toLoadByEmail[j].birthDate = pdata.birthDate;
                     // Overwrite skillBySport even if object exists — stale {sport: null} must be replaced with real data
                     if (pdata.skillBySport && !_hasMeaningfulSkill(toLoadByEmail[j])) toLoadByEmail[j].skillBySport = pdata.skillBySport;
                     if (pdata.defaultCategory && !toLoadByEmail[j].defaultCategory) toLoadByEmail[j].defaultCategory = pdata.defaultCategory;
                     if (pdata.gender && !toLoadByEmail[j].gender) toLoadByEmail[j].gender = pdata.gender;
-                    if (!toLoadByEmail[j].uid && snap.docs[0].id) toLoadByEmail[j].uid = snap.docs[0].id;
+                    if (!toLoadByEmail[j].uid && vivo.uid) toLoadByEmail[j].uid = vivo.uid;
                 }
             } catch (_e) {}
         }

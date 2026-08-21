@@ -610,6 +610,67 @@ window._tProgFmtDur2L = function(ms) {
   return '<span style="white-space:nowrap;">' + cima + '</span><br>' +
          '<span style="white-space:nowrap;">' + baixo + '</span>';
 };
+// ── 1.9.101/102 · OS DOIS RELÓGIOS DO BOX MEDEM COISAS DIFERENTES ────────────
+// Ordem do dono (20-21/ago/2026, olhando o card do Confra):
+//   • RODADA ATUAL → _"sempre a regressiva de quanto tempo ainda tem para terminar a
+//     rodada (quando existe prazo para acabar)"_.
+//   • TORNEIO COMPLETO → _"o tempo decorrido desde o início até o fim. Como início
+//     vamos considerar o início programado ou o sorteio (quando os jogos podem começar
+//     a acontecer) e o fim vamos considerar o fim efetivo"_.
+// Faz sentido: a rodada é um PRAZO (dá pra perder), o torneio inteiro é uma TRAVESSIA
+// (dá pra medir). Na 1.9.101 os dois viraram regressiva e o de baixo ficou dizendo
+// "83d restante", que não é informação que alguém use.
+// Este helper é a FONTE ÚNICA dos dois — o mesmo motivo de sempre: são DOIS
+// renderizadores no mesmo `_buildProgressInner`, e a 1.7.84 já provou que consertar um
+// só deixa metade do defeito de pé.
+// Regras que ele carrega:
+//   • prazo JÁ VENCIDO ou relógio CONGELADO (rodada/torneio encerrado) → decorrido/durou.
+//     "0s restante" parado pra sempre não informa nada.
+//   • `data-sp-cd2l` (conta pra trás) e `data-sp-el2l` (conta pra cima) são o que fazem o
+//     número andar A CADA SEGUNDO: o tique global de 1s (js/store.js) reescreve SÓ este
+//     span. O `_progressTick` do painel roda a cada 5s (1.9.80, pra não invalidar o
+//     layout da página inteira) — segundos pulando de 5 em 5 seriam relógio quebrado.
+//   • congelado não ganha atributo nenhum: quem parou, parou.
+window._tProgClock2L = function(o) {
+  o = o || {};
+  var _rest = (!o.frozen && o.deadlineMs) ? (o.deadlineMs - Date.now()) : -1;
+  if (_rest > 0) {
+    return { attr: ' data-sp-cd2l="' + o.deadlineMs + '"', html: window._tProgFmtDur2L(_rest), label: 'restante' };
+  }
+  var _vivo = (!o.frozen && o.anchorMs) ? ' data-sp-el2l="' + o.anchorMs + '"' : '';
+  return { attr: _vivo, html: window._tProgFmtDur2L(Math.max(0, o.elapsedMs || 0)), label: o.elapsedLabel };
+};
+
+// ── 1.9.102 · DE QUANDO OS JOGOS PODEM COMEÇAR A ACONTECER ───────────────────
+// A âncora do relógio do TORNEIO COMPLETO, na definição do dono: "o início programado
+// ou o sorteio". Os dois são condição — antes do início programado o torneio não abriu,
+// e antes do sorteio não existe jogo pra jogar. Logo é o MAIS TARDE dos dois, não o
+// primeiro que aparecer: é esse instante que responde "a partir de quando dava pra jogar".
+// Sorteio: o REAL (rodada 1 sorteada) na frente do agendado — o que aconteceu vale mais
+// que o que estava marcado. Sem nenhum dos dois, quem chama cai no 1º placar lançado.
+window._tournamentPlayableFromTs = function (t) {
+  if (!t) return null;
+  var _cands = [];
+  var _win = (typeof window._tournamentScheduledWindow === 'function') ? window._tournamentScheduledWindow(t) : null;
+  if (_win && _win.startMs) _cands.push(_win.startMs);
+  var _sorteio = null;
+  var _r0 = (Array.isArray(t.rounds) && t.rounds.length) ? (t.rounds[0] || {}) : {};
+  var _rt = _r0.drawnAt || _r0.createdAt || _r0.at;
+  if (_rt) { var _rm = (typeof _rt === 'number') ? _rt : new Date(_rt).getTime(); if (!isNaN(_rm)) _sorteio = _rm; }
+  if (_sorteio == null) {
+    var _ph0 = (Array.isArray(t.phases) && t.phases[0]) || {};
+    var _dd = _ph0.drawFirstDate || t.drawFirstDate;
+    var _dt = (_ph0.drawFirstDate ? _ph0.drawFirstTime : t.drawFirstTime) || '19:00';
+    if (_dd) {
+      var _s = String(_dd);
+      var _dm = new Date(_s.indexOf('T') > -1 ? _s : (_s + 'T' + _dt)).getTime();
+      if (!isNaN(_dm)) _sorteio = _dm;
+    }
+  }
+  if (_sorteio != null) _cands.push(_sorteio);
+  if (!_cands.length) return null;
+  return Math.max.apply(null, _cands);
+};
 window._estimateTournamentMinutes = function(t) {
   var prog = window._getTournamentProgress(t);
   var totalMatches = prog.total || 0;
@@ -953,6 +1014,72 @@ window._phaseCurrentRoundProgress = function(t) {
 };
 
 // HTML interno (recomputado a cada tick).
+// ── 1.9.106 · O PERCENTUAL MORA DENTRO DA BARRA ──────────────────────────────
+// Pedido do dono: as três barras (vermelha = realizado, azul = previsto, roxa =
+// torneio completo) passam a CARREGAR o próprio percentual, colado na direita de
+// onde a cor chegou. A azul é a novidade que faltava: além de "quanto já foi
+// jogado" (vermelha), o card passa a dizer "quanto DEVERIA ter sido jogado" a
+// esta altura do tempo regulamentar — é a leitura que explica a cor do relógio.
+// Por isso as barras ficaram mais altas (era 8/11/7px): o número precisa de casa.
+// REGRA DO RÓTULO: dentro do preenchimento (branco, ponta direita) enquanto a cor
+// for larga o bastante pra caber "100%" com folga (>=16%); abaixo disso ele SAI
+// pra fora, logo depois da ponta, na cor da própria barra — senão o número ficaria
+// espremido/cortado no começo do torneio, que é justo quando o card mais aparece.
+// O `!important` do branco vence o <style> escopado da tarja de foto (que força
+// TODO o texto da seção pra cor de leitura) — sobre a cor cheia o branco é o que
+// lê. O rótulo de FORA usa hex que a CSS do tema claro já inverte (a78bfa/3b82f6/
+// ef4444 → escuros), então vale nos DOIS temas.
+// ── 1.9.107 · A COR DO RITMO É UMA RÉGUA SÓ, E ELA TEM QUE SOBREVIVER À FOTO ──
+// Ordem do dono (21/ago/2026, com o card na frente): _"no plano, os contadores de tempo
+// apareciam em cores de acordo com adiantado, no programado e atrasado (verde, azul,
+// vermelho). isso não está na tela."_ Duas coisas faltavam:
+//   1) A COR não existia como semáforo. Régua definida pelo dono (2ª volta, 21/ago):
+//      _"vermelho quando atrasado. conforme estiver ficando próxima amarelo; quando
+//      estiver junto ou adiantado verde."_ São três estados: VERDE (junto ou adiantado),
+//      AMARELO (a defasagem está crescendo — o aviso antes do vermelho) e VERMELHO
+//      (atrasado). A 1ª volta tinha proposto AZUL pro "no programado"; o dono trocou
+//      pelo semáforo, que é o que se lê sem legenda.
+//   2) SOBRE FOTO DE CAPA a cor sumia. A tarja de leitura força TODO o texto da seção
+//      pra uma cor só (senão os hex claros invertidos pelo tema claro ficam ilegíveis
+//      sobre ela) — e levava junto o relógio, que ficava branco. Por isso os relógios
+//      saem marcados com `data-sp-fixa` e o <style> escopado passou a poupá-los; a cor
+//      deles mora em CLASSE (css/style.css: .sp-ritmo-*), que tem tom próprio pro tema
+//      claro e pro escuro E dentro da tarja. Cor semântica em hex inline não sobrevive
+//      aos dois temas — a classe sobrevive.
+// A BARRA do realizado segue a MESMA régua (hex sólido); número e barra nunca podem
+// contar histórias diferentes no mesmo card.
+window._tProgRitmo = function(progFrac, expectedFrac, done) {
+  if (done) return 'emdia';
+  if (!isFinite(progFrac) || !isFinite(expectedFrac)) return null;
+  // arredonda em pontos de mil antes de comparar: 0.20-0.18 dá 0.020000000000000018 em
+  // ponto flutuante, e a fronteira do verde cairia justo nesse fio de cabelo.
+  var atraso = Math.round((expectedFrac - progFrac) * 1000) / 1000;   // >0 = jogou menos do que o tempo pedia
+  if (atraso <= 0.02) return 'emdia';      // junto ou adiantado
+  if (atraso <= 0.12) return 'apertando';  // ficando perto — o aviso antes do vermelho
+  return 'atrasado';
+};
+window._tProgRitmoBarra = function(ritmo) {
+  return ritmo === 'atrasado' ? '#ef4444' : (ritmo === 'apertando' ? '#f59e0b' : '#10b981');
+};
+// atributos do span do relógio: classe do ritmo + o selo que a tarja de foto poupa
+window._tProgRitmoAttr = function(ritmo) {
+  // classe DUPLA (`sp-ritmo` + o estado): é ela que dá especificidade pra vencer o
+  // achatamento da tarja de foto. `data-sp-fixa` fica como gancho de leitura/teste.
+  return ritmo ? ' class="sp-ritmo sp-ritmo-' + ritmo + '" data-sp-fixa="1"' : ' data-sp-fixa="1"';
+};
+window._progBarPct = function(pct, color, h, radius, trackBg, outColor) {
+  var p = Math.round(Number(pct) || 0);
+  if (p < 0) p = 0; if (p > 100) p = 100;
+  var fs = (h >= 17) ? '0.66rem' : '0.6rem';
+  var base = 'position:absolute;top:0;height:100%;display:flex;align-items:center;font-size:' + fs +
+    ';font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.2px;line-height:1;pointer-events:none;';
+  var lbl = (p >= 16)
+    ? '<span style="' + base + 'left:0;width:' + p + '%;justify-content:flex-end;padding-right:6px;box-sizing:border-box;color:#fff !important;text-shadow:0 1px 2px rgba(0,0,0,0.35);">' + p + '%</span>'
+    : '<span style="' + base + 'left:' + p + '%;padding-left:6px;color:' + (outColor || color) + ';">' + p + '%</span>';
+  return '<div style="position:relative;width:100%;height:' + h + 'px;background:' + trackBg + ';border-radius:' + radius + ';overflow:hidden;">' +
+    '<div style="width:' + p + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' + lbl +
+  '</div>';
+};
 window._buildProgressInner = function(t) {
   var prog = window._getTournamentProgress(t);
   // v4.4.48: Multi-fase (ex.: Fase de Grupos → Eliminatória): a barra VERDE do topo reflete
@@ -986,6 +1113,14 @@ window._buildProgressInner = function(t) {
   var actualStart = t.tournamentStarted ? (+t.tournamentStarted) : _earliestGameMs;
   var schedStart = window._tProgParseMs(t.startDate);
   var plannedEnd = window._tProgParseMs(t.endDate);
+  // ── 1.9.101 · O FIM PROGRAMADO É REAL OU É CHUTE? ────────────────────────────
+  // O relógio do meio vira REGRESSIVA ("restante") SÓ quando o fim programado é uma
+  // data/hora que ALGUÉM CONFIGUROU (fase ou torneio) ou um evento REALMENTE agendado
+  // (o próximo sorteio da Liga). Quando o fim é ESTIMADO por tempo de quadra
+  // (gameDuration × jogos ÷ quadras), continua "decorrido": contagem regressiva pra um
+  // prazo inventado é promessa que o app não tem como cumprir — o mesmo defeito que os
+  // testes de "MENTIRA" (tests/liga-countdown.test.js) travam pro sorteio.
+  var _schedEndReal = !!plannedEnd;
   if (!plannedEnd) {
     var estMin = window._estimateTournamentMinutes(t);
     var base = schedStart || actualStart;
@@ -1041,7 +1176,8 @@ window._buildProgressInner = function(t) {
     var _nextDraw = !isNaN(_firstDrawMs) ? _firstDrawMs + (_ri + 1) * _intvMs : null;
     if (_roundStart) actualStart = _roundStart; else if (_thisDraw) actualStart = _thisDraw;
     if (_thisDraw) schedStart = _thisDraw;
-    if (_nextDraw) plannedEnd = _nextDraw;
+    // próximo sorteio = evento REALMENTE agendado (não estimativa) → vale regressiva.
+    if (_nextDraw) { plannedEnd = _nextDraw; _schedEndReal = true; }
     _labelSchedStart = 'sorteio da rodada';
     _labelSchedEnd = 'próximo sorteio';
     // v4.x: "Rodada N de M" (mesmo estilo do "fase 1 de 2") — M = rodadas PLANEJADAS da fase
@@ -1061,11 +1197,12 @@ window._buildProgressInner = function(t) {
       var _cfgStartMs = window._tProgParseMs(_ph.startDate ? (_ph.startDate + (_ph.startTime ? ('T' + _ph.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEndMs = window._tProgParseMs(_ph.endDate ? (_ph.endDate + (_ph.endTime ? ('T' + _ph.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
       if (_cfgStartMs) schedStart = _cfgStartMs;
-      if (_cfgEndMs) { plannedEnd = _cfgEndMs; }
+      if (_cfgEndMs) { plannedEnd = _cfgEndMs; _schedEndReal = true; }
       else {
         var _gdMp = parseInt(t.gameDuration) || 30, _ctMp = parseInt(t.callTime) || 0, _wuMp = parseInt(t.warmupTime) || 0;
         var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
+        _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }
       // v2.8.8: multi-fase — "início real" é SÓ o 1º ponto da rodada (_roundStart).
       // Não herdar tournamentStarted (linha ~840) nem o fallback _thisDraw (linha ~890):
@@ -1111,11 +1248,12 @@ window._buildProgressInner = function(t) {
       var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
       if (_cfgSL) schedStart = _cfgSL;
-      if (_cfgEL) { plannedEnd = _cfgEL; }
+      if (_cfgEL) { plannedEnd = _cfgEL; _schedEndReal = true; }
       else {
         var _gdL = parseInt(t.gameDuration) || 30, _ctL = parseInt(t.callTime) || 0, _wuL = parseInt(t.warmupTime) || 0;
         var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = _gdL + _ctL + _wuL + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_pr.total / _crtL) * _slotL * 60000;
+        _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }
     }
   }
@@ -1164,17 +1302,58 @@ window._buildProgressInner = function(t) {
     // Linha INÍCIO REAL / DUROU / FINAL REAL (só quando há 1º e último placar).
     var _durRow = '';
     if (_firstPointMs && _lastPointMs && _lastPointMs >= _firstPointMs) {
-      var _tDurMs = _lastPointMs - _firstPointMs;
-      var _tColor = _tournDone ? '#10b981' : 'var(--text-bright)';
+      // ── v1.8.80 · O RELÓGIO DO TORNEIO COMPLETO ────────────────────────────
+      // Relato do dono: _"o relógio do torneio completo está travado. vamos mudar a
+      // consideração aqui para contar a partir do início programado até o final real
+      // (assim não ficam 2 relógios com o mesmo valor durante toda a primeira fase)"_.
+      // Eram DOIS defeitos numa conta só, e a conta antiga era
+      // `último placar − primeiro placar`:
+      //   • TRAVADO — o fim era o ÚLTIMO PLACAR, que não anda sozinho. Entre um jogo e
+      //     outro o número ficava parado, parecendo relógio quebrado.
+      //   • DUPLICADO — durante a 1ª fase o primeiro e o último placar do TORNEIO são
+      //     os mesmos da FASE, então os dois painéis mostravam o mesmo valor o tempo
+      //     todo. Dois relógios idênticos não informam nada; um deles é ruído.
+      // Agora o torneio inteiro conta da sua PRÓPRIA âncora — o início PROGRAMADO
+      // (`_win.startMs`, o início da 1ª fase, que já aparece na linha de baixo) — até o
+      // final REAL quando encerra, ou até AGORA enquanto corre (é o `_progressTick` de
+      // 1s que repinta este bloco, então o número anda de verdade).
+      // Sem janela programada (torneio de fase única) NADA muda: não há segundo relógio
+      // pra duplicar, e a medida entre placares é a que faz sentido ali.
+      // 1.9.102: a âncora é QUANDO OS JOGOS PODERIAM COMEÇAR — o mais tarde entre o início
+      // programado do torneio e o sorteio (window._tournamentPlayableFromTs). Só o início
+      // programado não bastava: num torneio cujo sorteio sai depois da abertura, o relógio
+      // já nascia contando dias em que ninguém tinha jogo pra jogar.
+      var _tStartMs = (typeof window._tournamentPlayableFromTs === 'function' ? window._tournamentPlayableFromTs(t) : null)
+        || (_win && _win.startMs) || _firstPointMs;
+      // FIM EFETIVO: encerrado → o último placar lançado (o fim que de fato aconteceu);
+      // correndo → AGORA. Fim = último placar enquanto o torneio corre foi o defeito da
+      // 1.8.80: entre um jogo e outro o número ficava parado, parecendo relógio quebrado.
+      var _tEndMs = _tournDone ? _lastPointMs : Date.now();
+      var _tDurMs = Math.max(0, _tEndMs - _tStartMs);
+      // 1.9.107: o DECORRIDO do torneio também ganha a cor do ritmo — a mesma régua da
+      // rodada, medida na travessia inteira: quanto do torneio já foi jogado (_barPct)
+      // contra quanto da janela programada já passou. SEM fim programado não há previsto
+      // com que comparar → fica neutro (cor de texto), porque cor sem medida é palpite.
+      var _tExpFrac = (_deadlineMs && _deadlineMs > _tStartMs) ? ((Date.now() - _tStartMs) / (_deadlineMs - _tStartMs)) : null;
+      if (_tExpFrac != null) _tExpFrac = Math.max(0, Math.min(1, _tExpFrac));
+      var _tRitmo = (_tExpFrac == null && !_tournDone) ? null : window._tProgRitmo((_barPct || 0) / 100, _tExpFrac == null ? 0 : _tExpFrac, _tournDone);
       var _tEndLabel = _tournDone ? 'final real' : 'último placar lançado';
       var _tDurLabel = _tournDone ? 'durou' : 'decorrido';
+      // ⛔ 1.9.102 — AQUI NÃO ENTRA REGRESSIVA. Ordem do dono, com o card na frente: o
+      // torneio completo mede a TRAVESSIA (decorrido), a rodada é que mede o PRAZO. Na
+      // 1.9.101 os dois viraram regressiva e este ficou dizendo "83d restante" — número
+      // grande que ninguém usa pra nada. Por isso `deadlineMs` NÃO é passado.
+      var _tClk = window._tProgClock2L({ frozen: _tournDone, elapsedMs: _tDurMs, elapsedLabel: _tDurLabel, anchorMs: _tStartMs });
+      var _tClkTitle = (_tStartMs === _firstPointMs)
+        ? 'Desde o primeiro placar lançado'
+        : 'Desde quando já dava pra jogar — início programado ou sorteio, o que veio depois (' + _date(_tStartMs) + ' ' + _time(_tStartMs) + ')';
       var _tTimeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
       var _tLblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
       var _tCol = function(ms, label, align) {
         return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
           '<span style="' + _tTimeS + '">' + _time(ms) + '</span>' +
           '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-          '<span style="' + _tLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+          '<span style="' + _tLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
         '</div>';
       };
       // v4.x: no TORNEIO COMPLETO só mostramos "final real" QUANDO encerra — o "último
@@ -1184,9 +1363,12 @@ window._buildProgressInner = function(t) {
       var _rightCol = _tournDone ? _tCol(_lastPointMs, 'final real', 'flex-end') : '<div></div>';
       _durRow = '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-top:9px;gap:8px;">' +
         _tCol(_firstPointMs, 'início real', 'flex-start') +
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:' + _tColor + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(_tDurMs) + '</span>' +
-          '<span style="' + _tLblS + '">' + _tDurLabel + '</span>' +
+        // O `title` diz de ONDE o número parte: a coluna à esquerda mostra o início REAL
+        // (primeira bola jogada), mas a contagem ancora no PROGRAMADO — sem isso o leitor
+        // não teria como saber por que os dois não fecham.
+        '<div title="' + _tClkTitle + '" style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
+          '<span' + _tClk.attr + window._tProgRitmoAttr(_tRitmo) + ' style="font-size:1rem;font-weight:800;' + (_tRitmo ? '' : 'color:var(--text-bright);') + 'font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _tClk.html + '</span>' +
+          '<span style="' + _tLblS + '">' + _tClk.label + '</span>' +
         '</div>' +
         _rightCol +
       '</div>';
@@ -1228,9 +1410,8 @@ window._buildProgressInner = function(t) {
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
         '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>' +
       '</div>' +
-      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + _barPct + '%;height:100%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' + _durRow + (_schedRow || _limiteLine) +
+      window._progBarPct(_barPct, 'linear-gradient(90deg,#8b5cf6,#a78bfa)', 18, '7px', 'rgba(255,255,255,0.08)', '#a78bfa') +
+      _durRow + (_schedRow || _limiteLine) +
     '</div>';
   }
 
@@ -1269,9 +1450,7 @@ window._buildProgressInner = function(t) {
       ? '<div style="margin-top:7px;font-size:0.72rem;color:#93c5fd;font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
       : '';
     return head + _waitTop2 +
-      '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">' +
-        '<div style="width:' + prog.pct + '%;height:100%;background:' + c + ';border-radius:4px;transition:width 0.5s ease;"></div>' +
-      '</div>' +
+      window._progBarPct(prog.pct, c, 18, '7px', 'rgba(255,255,255,0.1)', c) +
       (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + ((_isLiga || _phaseRoundActive) ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
       _estLine2 +
       _ligaBarHtml;
@@ -1294,11 +1473,10 @@ window._buildProgressInner = function(t) {
   // terminou cedo. O bump só vale pro torneio inteiro finalizado.
   if (isFinished) expectedFrac = Math.max(expectedFrac, progFrac);
 
-  var diff = expectedFrac - progFrac;
-  var color;
-  if (isFinished || _roundComplete || diff <= 0.02) color = '#10b981';
-  else if (diff <= 0.12) color = '#f59e0b';
-  else color = '#ef4444';
+  // 1.9.107: ADIANTADO (verde) · NO PROGRAMADO (azul) · ATRASADO (vermelho) — régua
+  // única do card (window._tProgRitmo), a mesma que pinta o relógio e a barra.
+  var _ritmo = window._tProgRitmo(progFrac, expectedFrac, !!(isFinished || _roundComplete));
+  var color = window._tProgRitmoBarra(_ritmo);
 
   var estEndMs;
   if (_roundEndReal) estEndMs = _roundEndReal;
@@ -1311,6 +1489,15 @@ window._buildProgressInner = function(t) {
 
   var _endLabel = _roundEndReal ? 'final real' : (isFinished ? 'final real' : 'final estimado');
   var _elapsedLabel = (_roundEndReal || isFinished) ? 'durou' : 'decorrido';
+  // 1.9.101: fase/rodada COM fim programado de verdade (`_schedEndReal` — a mesma data que
+  // a coluna azul da direita mostra como "final programado"/"próximo sorteio") → o relógio
+  // do meio conta pra TRÁS até lá. Rodada encerrada ou torneio finalizado congela em "durou".
+  var _clk = window._tProgClock2L({
+    deadlineMs: _schedEndReal ? plannedEnd : null,
+    frozen: !!(_roundEndReal || isFinished),
+    elapsedMs: elapsedMs, elapsedLabel: _elapsedLabel,
+    anchorMs: _notStarted ? null : actualStart
+  });
   // mostra DATA (dia) na linha REAL quando: (a) início e fim reais caem em dias diferentes, OU
   // (b) o dia REAL dos jogos difere do dia PROGRAMADO (ex.: jogado hoje, programado p/ 25/07) —
   // aí o horário sozinho engana. Pedido do dono.
@@ -1323,11 +1510,14 @@ window._buildProgressInner = function(t) {
   var _timeS = 'font-size:1rem;font-weight:800;color:var(--text-bright);line-height:1.1;';
   var _lblS = 'font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
   // coluna REAL: horário (+ data quando multi-dia) + label
+  // 1.9.107: o rótulo lateral quebra em 2 linhas ("final<br>estimado", "início<br>real").
+  // Numa linha só ele é a coisa mais larga da coluna e EMPURRAVA o relógio pra esquerda do
+  // centro (relato do dono com o print). Mesma quebra que a linha azul do programado já usa.
   var _realCol = function(ms, label, align, withDate) {
     return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
       '<span style="' + _timeS + '">' + _time(ms) + '</span>' +
       (withDate ? '<span style="font-size:0.72rem;color:var(--text-muted);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' : '') +
-      '<span style="' + _lblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + label + '</span>' +
+      '<span style="' + _lblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
     '</div>';
   };
   // coluna PROGRAMADO: horário + data + label (3 linhas, azul)
@@ -1343,24 +1533,22 @@ window._buildProgressInner = function(t) {
   // selo "⏳ Aguardando início" (a janela programada vem na linha de baixo).
   var topRow = _notStarted
     ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
-    : '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
+    : '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
         _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
           // v1.7.83/84: 2 linhas — este é o SEGUNDO renderizador do relógio (o do
           // painel da rodada); o outro é o do TORNEIO COMPLETO. Consertar só um
           // deixava o defeito de pé, que foi exatamente o que a verificação pegou.
-          '<span style="font-size:1rem;font-weight:800;color:' + color + ';font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + window._tProgFmtDur2L(elapsedMs) + '</span>' +
-          '<span style="' + _lblS + '">' + _elapsedLabel + '</span>' +
+          '<span' + _clk.attr + window._tProgRitmoAttr(_ritmo) + ' style="font-size:1rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15;text-align:center;">' + _clk.html + '</span>' +
+          '<span style="' + _lblS + '">' + _clk.label + '</span>' +
         '</div>' +
         _realCol(estEndMs, _endLabel, 'flex-end', _multiDay || !!_roundEndReal) +
       '</div>';
-  var realBar = '<div style="width:100%;height:11px;background:rgba(255,255,255,0.1);border-radius:6px 6px 0 0;overflow:hidden;">' +
-    '<div style="width:' + Math.round(progFrac * 100) + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' +
-  '</div>';
-  var blueBar = '<div style="width:100%;height:7px;background:rgba(255,255,255,0.06);border-radius:0 0 6px 6px;overflow:hidden;">' +
-    '<div style="width:' + Math.round(expectedFrac * 100) + '%;height:100%;background:#3b82f6;transition:width 0.9s linear;"></div>' +
-  '</div>';
-  var botRow = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:7px;gap:8px;">' +
+  // realizado (cor do ritmo) em cima, previsto (azul) embaixo — coladas, com o
+  // percentual de cada uma dentro da própria cor.
+  var realBar = window._progBarPct(progFrac * 100, color, 18, '7px 7px 0 0', 'rgba(255,255,255,0.1)', color);
+  var blueBar = window._progBarPct(expectedFrac * 100, '#3b82f6', 16, '0 0 7px 7px', 'rgba(255,255,255,0.06)', '#3b82f6');
+  var botRow = '<div style="display:grid;grid-template-columns:1fr 1fr;align-items:flex-start;margin-top:7px;gap:8px;">' +
     _progCol(schedStart, _labelSchedStart, 'flex-start') +
     _progCol(plannedEnd, _labelSchedEnd, 'flex-end') +
   '</div>';
@@ -1378,10 +1566,10 @@ window._renderTournamentProgress = function(t) {
   // senão o header "Progresso"/contagens (que herdam a cor) somem sobre a foto.
   // Os textos coloridos (azul/roxo/verde/vermelho) já são legíveis sobre escuro.
   // !important vence a inversão de cor do tema claro (css/style.css).
-  var _hasPhoto = !!(t && (t.coverPhotoData || t.venuePhotoUrl));
+  var _hasPhoto = !!(t && (window._tourCoverSrc(t) || t.venuePhotoUrl));
   var _rb = (_hasPhoto && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
   var _wrapStyle = _rb
-    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + _rb.border + ';'
+    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + _rb.bg + ';border:1px solid ' + _rb.border + ';'
     : 'margin-top:1rem;';
   // Sobre foto: a CSS do tema claro INVERTE os hex claros de _buildProgressInner
   // (#60a5fa→#1d4ed8 etc.) pra escuro → ilegível na tarja escura. Em vez de caçar
@@ -1389,24 +1577,49 @@ window._renderTournamentProgress = function(t) {
   // <style> escopado (vence a inversão por ordem de origem). As BARRAS (background)
   // mantêm as cores semânticas (verde/azul/vermelho). Vale nos 2 temas.
   var _cssId = String((t && t.id) || '').replace(/[^a-zA-Z0-9_-]/g, '');
+  // 1.9.107: o relógio do ritmo (verde/azul/vermelho) escapa deste achatamento pela
+  // CLASSE, não por um `:not()` aqui — MEDIDO: o número do relógio mora em spans FILHOS
+  // (_tProgFmtDur2L quebra em 2 linhas), então excluir só o pai deixava os filhos brancos,
+  // que é exatamente o defeito relatado. `.sp-ritmo.sp-ritmo-X` (+ descendentes) tem
+  // especificidade MAIOR que este seletor e leva !important — vence sem depender de
+  // `:not(a b)` (CSS4: se o WebView não entendesse, a regra inteira cairia e a tarja
+  // perderia o contraste de TODO o resto). Ver css/style.css · .sp-ritmo-*.
   var _scoped = _rb ? '<style>.tourn-progress-live[data-tid="' + _cssId + '"] *{color:' + _rb.fg + ' !important;}</style>' : '';
   return '<div class="info-box" style="' + _wrapStyle + '">' + _scoped + '<div class="tourn-progress-live" data-tid="' + _cssId + '">' + window._buildProgressInner(t) + '</div></div>';
 };
+// ── 1.9.80 · O TIQUE DO PROGRESSO ERA O TREM DE TRAVADAS ─────────────────────
+// MEDIDO no aparelho do dono (Sentry, builds 78/79): travadas de ~1s repetidas a
+// cada ~1,2s, SEM nome — scroll morto por 2s ("pode tentar o quanto for"), chave
+// cortada ao rolar, toque sem feedback. Era este ticker: `innerHTML` POR SEGUNDO
+// em TODAS as instâncias (vários cards da dash + o detalhe), e cada reescrita
+// invalida o layout da página inteira (o detalhe do Confra tem ~6.000 nós).
+// O conteúdo só muda em resolução de MINUTO (horas são HH:MM) ou quando um jogo
+// conclui — reescrever por segundo era 60× desperdício com preço de ~1s de
+// thread cada. Agora: (a) o DOM só é tocado se o HTML MUDOU (dirty-check por
+// string; no segundo típico = ZERO writes, zero layout); (b) cadência 1s → 5s
+// (imperceptível em resolução de minuto); (c) MEDIDO ('progress-tick') — se
+// voltar a pesar, o relato do toque o nomeia.
 window._progressTick = function() {
   var els = document.querySelectorAll('.tourn-progress-live');
   if (!els || !els.length) return;
-  var tours = (window.AppStore && window.AppStore.tournaments) || [];
-  Array.prototype.forEach.call(els, function(el) {
-    var tid = el.getAttribute('data-tid');
-    var t = tours.find(function(x) { return String(x.id) === String(tid); });
-    if (!t) return;
-    try { el.innerHTML = window._buildProgressInner(t); } catch (e) {}
-  });
+  var passo = function () {
+    var tours = (window.AppStore && window.AppStore.tournaments) || [];
+    Array.prototype.forEach.call(els, function(el) {
+      var tid = el.getAttribute('data-tid');
+      var t = tours.find(function(x) { return String(x.id) === String(tid); });
+      if (!t) return;
+      try {
+        var html = window._buildProgressInner(t);
+        if (html !== el._spProgHtml) { el._spProgHtml = html; el.innerHTML = html; }
+      } catch (e) {}
+    });
+  };
+  if (window._medirTrecho) window._medirTrecho('progress-tick', passo); else passo();
 };
 window._ensureProgressTicker = function() {
   if (window._progressTickerOn) return;
   window._progressTickerOn = true;
-  setInterval(window._progressTick, 1000);
+  setInterval(window._progressTick, 5000);
 };
 // v2.4.75: timestamp (ms) em que a temporada da Liga/Ranking encerra — ou null
 // se não há limite. Fonte ÚNICA da verdade pra "torneio acabou", espelhada na
@@ -1812,11 +2025,15 @@ window._ligaRoundInProgressRow = function (t, color, opts) {
     // coisa logo abaixo." O ícone segue na coluna da esquerda.
     var _valStyle = 'font-size:' + _val + ';font-weight:800;color:' + color + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;';
     var _lblStyle = 'font-size:' + _lbl + ';font-weight:700;color:' + color + ' !important;line-height:1.2;overflow-wrap:anywhere;';
+    // v1.8.98: mesma grade da linha de cima — ícone, rótulo (pode quebrar) e o relógio
+    // à DIREITA. O nome `_pilha` ficou do layout empilhado anterior; o que ele monta
+    // agora são três colunas. Os dois relógios da caixa precisam alinhar entre si, então
+    // as duas linhas TÊM que usar a mesma grade — se divergirem, um fica fora do prumo
+    // do outro e o alinhamento pedido se perde justamente na comparação.
     var _pilha = function (icone, rotulo, valorHtml) {
-        return '<span style="font-size:' + _icon + ';flex-shrink:0;">' + icone + '</span>' +
-            '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
-              '<span style="' + _lblStyle + '">' + rotulo + '</span>' + valorHtml +
-            '</div>';
+        return '<span style="font-size:' + _icon + ';">' + icone + '</span>' +
+            '<span style="' + _lblStyle + 'min-width:0;">' + rotulo + '</span>' +
+            '<span style="text-align:right;white-space:nowrap;">' + valorHtml + '</span>';
     };
     if (_endTs && _endTs >= _since) {
         // ENCERRADA — relógio congelado na duração total (sem data-elapsed-since → não ticka).
@@ -1930,7 +2147,7 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
     if (_ce.kind === 'round-in-progress') {
         var _solo = _rowFn ? _rowFn(t, _fg) : '';
         if (!_solo) return ''; // nada a dizer — NUNCA cair no render genérico (era o "null null 0s")
-        return '<div style="margin-top:' + _mt + ';display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
+        return '<div style="margin-top:' + _mt + ';display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
     }
     // Guarda dura: box com regressiva EXIGE alvo e rótulo. Sem isso não se desenha nada.
     var _ts = _ce.ts;
@@ -1948,12 +2165,12 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         var _row = _rowFn(t, _fg, _lg ? { iconSize: '1.2rem', labelSize: '0.9rem', valueSize: '1.25rem' }
                                       : { iconSize: '1.1rem', labelSize: '0.8rem', valueSize: '1.05rem' });
         if (_row) {
-            _line2 = '<div style="display:flex;align-items:center;gap:10px;margin-top:' + (_lg ? '12px;padding-top:12px' : '8px;padding-top:8px') + ';border-top:1px solid rgba(' + _rgb + ',0.3);">' + _row + '</div>';
+            _line2 = '<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;margin-top:' + (_lg ? '12px;padding-top:12px' : '8px;padding-top:8px') + ';border-top:1px solid rgba(' + _rgb + ',0.3);">' + _row + '</div>';
         }
     }
     var _box = _lg
-        ? 'padding:14px 18px;background:' + _rb.bg + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
-        : 'padding:10px 14px;background:' + _rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
+        ? 'padding:14px 18px;background:' + _rb.bg + ';border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
+        : 'padding:10px 14px;background:' + _rb.bg + ';border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
     return '<div style="margin-top:' + _mt + ';' + _box + '">' +
         // v1.7.86: rótulo e relógio EMPILHADOS. Antes dividiam UMA linha e, com a
         // escala grande, o rótulo virava "Fim da r…" — some justamente a palavra
@@ -1961,12 +2178,18 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         // fim da r... e o timer devem ficar em 2 linhas para nao truncar."
         // O ícone fica na coluna da esquerda (não empilha com o texto); rótulo em
         // cima, número embaixo — e o rótulo pode quebrar em quantas linhas quiser.
-        '<div style="display:flex;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
-          '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';flex-shrink:0;">' + _ce.icon + '</span>' +
-          '<div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">' +
-            '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;line-height:1.2;overflow-wrap:anywhere;">' + _label + '</span>' +
-            '<span data-countdown-target="' + _ts + '" style="font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;line-height:1.15;overflow-wrap:anywhere;">' + _txt + '</span>' +
-          '</div>' +
+        // ── v1.8.98: contador à DIREITA, ícone e rótulo à esquerda ──────────────
+        // Ordem do dono: "vamos alinhar os contadores na direita e deixar o titulo e
+        // icone como estao na esquerda".
+        // ⚠️ NÃO é voltar ao layout de UMA linha da v1.7.85 — aquele TRUNCAVA o rótulo
+        // ("Fim da r…"), e foi o dono quem mandou empilhar por causa disso (v1.7.86).
+        // Aqui são duas COLUNAS: a da esquerda pode quebrar em quantas linhas precisar
+        // (nunca corta), e a da direita é só o relógio, com `white-space:nowrap` pra ele
+        // jamais partir no meio. É o alinhamento pedido sem reabrir o corte.
+        '<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:' + (_lg ? '12px' : '10px') + ';">' +
+          '<span style="font-size:' + (_lg ? '1.5rem' : '1.3rem') + ';">' + _ce.icon + '</span>' +
+          '<span style="font-size:' + (_lg ? '0.95rem' : '0.85rem') + ';font-weight:700;color:' + _fg + ' !important;line-height:1.2;overflow-wrap:anywhere;min-width:0;">' + _label + '</span>' +
+          '<span data-countdown-target="' + _ts + '" style="font-size:' + (_lg ? '1.35rem' : '1.1rem') + ';font-weight:900;color:' + _fg + ' !important;font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right;">' + _txt + '</span>' +
         '</div>' + _line2 +
     '</div>';
 };
@@ -2272,7 +2495,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     var _rbC = (opts.bg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
     // v4.x: sobre foto → tarja densa (_photoReadBox) + backdrop blur pra suavizar o fundo
     // agitado e garantir contraste do texto.
-    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);') : '';
+    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';') : '';
     // v4.4.x: SEMPRE colapsado por padrão — no DETALHE e na DASHBOARD (pedido do dono:
     // "sempre fechado no detalhe e na dashboard"). Abre só quando o usuário clica (estado
     // do <details> na sessão); sem persistência de "aberto" — todo render começa fechado.

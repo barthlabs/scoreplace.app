@@ -639,6 +639,9 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="gsm-tiebreakPoints" value="7">
                 <input type="hidden" id="gsm-tiebreakMargin" value="2">
                 <input type="hidden" id="gsm-tiebreakAt" value="">
+                <!-- 2.0.2: 'extend' (prorrogar até 2 games) | 'tiebreak'. Vazio = deriva do
+                     tiebreakEnabled, que é como todo torneio criado até aqui está gravado. -->
+                <input type="hidden" id="gsm-tieRule" value="">
                 <input type="hidden" id="gsm-superTiebreak" value="false">
                 <input type="hidden" id="gsm-superTiebreakPoints" value="10">
                 <input type="hidden" id="gsm-countingType" value="numeric">
@@ -4669,6 +4672,8 @@ function setupCreateTournamentModal() {
       document.getElementById('gsm-tiebreakPoints').value = t.scoring.tiebreakPoints || 7;
       document.getElementById('gsm-tiebreakMargin').value = t.scoring.tiebreakMargin || 2;
       document.getElementById('gsm-tiebreakAt').value = t.scoring.tiebreakAt || '';
+      var _trEl = document.getElementById('gsm-tieRule');
+      if (_trEl) _trEl.value = t.scoring.tieRule || '';
       if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
       document.getElementById('gsm-superTiebreak').value = t.scoring.superTiebreak || false;
       document.getElementById('gsm-superTiebreakPoints').value = t.scoring.superTiebreakPoints || 10;
@@ -4905,6 +4910,7 @@ function setupCreateTournamentModal() {
       tiebreakMargin: parseInt(g('gsm-tiebreakMargin')) || 2,
       // regra do TB: 'g-1' (5-5→6-5) ou 'g' (6-6→7-6); vazio = default do esporte (_sportTiebreakAt)
       tiebreakAt: g('gsm-tiebreakAt') || undefined,
+      tieRule: g('gsm-tieRule') || undefined,
       superTiebreak: g('gsm-superTiebreak') === 'true',
       superTiebreakPoints: parseInt(g('gsm-superTiebreakPoints')) || 10,
       countingType: g('gsm-countingType') || 'numeric',
@@ -4930,12 +4936,15 @@ function setupCreateTournamentModal() {
     set('gsm-fixedSet', s.fixedSet ? 'true' : 'false');
     set('gsm-fixedSetGames', s.fixedSetGames != null ? s.fixedSetGames : 6);
     set('gsm-tiebreakAt', s.tiebreakAt || '');
+    set('gsm-tieRule', s.tieRule || '');
     if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   };
 
   window._scoringMeaningfullyChanged = function(o, n) {
     o = o || {}; n = n || {};
-    var keys = ['type','setsToWin','gamesPerSet','tiebreakEnabled','tiebreakPoints','tiebreakMargin','superTiebreak','superTiebreakPoints','countingType','advantageRule','fixedSet','fixedSetGames'];
+    // 2.0.2: 'tiebreakAt' e 'tieRule' entram na lista — sem eles a escolha do empate
+    // (5-5/6-6/7-7 · prorrogar/tie-break) não viajava com o formato.
+    var keys = ['type','setsToWin','gamesPerSet','tiebreakEnabled','tiebreakPoints','tiebreakMargin','superTiebreak','superTiebreakPoints','countingType','advantageRule','fixedSet','fixedSetGames','tiebreakAt','tieRule'];
     return keys.some(function(k) { return String(o[k] == null ? '' : o[k]) !== String(n[k] == null ? '' : n[k]); });
   };
 
@@ -6001,6 +6010,7 @@ window._gsmReadHidden = function () {
     fixedSetGames: parseInt(g('gsm-fixedSetGames')) || 6
   };
   if (g('gsm-tiebreakAt')) out.tiebreakAt = g('gsm-tiebreakAt');
+  if (g('gsm-tieRule')) out.tieRule = g('gsm-tieRule');
   return out;
 };
 
@@ -6304,22 +6314,31 @@ window._openGSMConfig = function(targetPhase) {
         '</div>' +
         // Vantagem (deuce 40-40): NÃO é escolha manual — derivada do esporte (só Tênis). Sem toggle.
         // Tiebreak
+        // ⭐ 2.0.2 — UMA DECISÃO, DOIS PASSOS (ordem do dono: "pode prorrogar em 5-5 ou 6-6,
+        // 7-7... decisao do organizador. ou pode aplicar o tie-break em 5-5 ou 6-6 de novo
+        // decisao do organizador"). Antes havia um toggle liga/desliga do tie-break e, ESCONDIDO
+        // dentro dele, a escolha do empate — e "desligado" nunca dizia o que aconteceria no
+        // empate. Agora as duas perguntas ficam à vista, na ordem em que se pensa nelas:
+        //   1. em QUE empate a coisa acontece (5-5 · 6-6 · 7-7)
+        //   2. o QUE acontece ali (prorrogar até 2 games · tie-break)
+        // O toggle antigo (#gsm-cfg-tiebreak) continua no DOM, oculto, porque muito código lê
+        // `tiebreakEnabled` — ele passa a ser ESPELHO da escolha, nunca a fonte.
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
-          '<div class="toggle-row" style="padding:6px 0;margin-bottom:8px;">' +
-            '<div class="toggle-row-label"><span style="font-size:0.82rem;font-weight:600;" id="gsm-tb-label">Tie-break em ' + (tbAt === 'g-1' ? _gm1 : _gg) + '-' + (tbAt === 'g-1' ? _gm1 : _gg) + '</span>' +
-              '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">Decide o set quando os <b>games</b> empatam. Vale nos sets normais.</div></div>' +
-            '<label class="toggle-switch toggle-sm"><input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' onchange="window._gsmToggleTiebreak()"><span class="toggle-slider"></span></label>' +
+          '<input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' style="display:none;">' +
+          '<label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:5px;">No empate de games em</label>' +
+          '<div id="gsm-tbat-seg" data-tbat="' + tbAt + '" style="display:flex;gap:6px;margin-bottom:12px;">' +
+            _gsmTbAtBtn('g-1', tbAt, _gm1, 'set curto') +
+            _gsmTbAtBtn('g', tbAt, _gg, 'padrão') +
+            _gsmTbAtBtn('g+1', tbAt, _gg + 1, 'set longo') +
           '</div>' +
-          '<div id="gsm-tb-details" style="display:' + (tbEnabled ? 'flex' : 'none') + ';gap:12px;flex-wrap:wrap;padding-left:26px;">' +
+          '<label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:5px;">O que acontece nesse empate</label>' +
+          '<div id="gsm-tierule-seg" data-tierule="' + (tbEnabled ? 'tiebreak' : 'extend') + '" style="display:flex;gap:6px;">' +
+            _gsmTieRuleBtn('extend', tbEnabled, '\u23F1\uFE0F Prorrogar', 'segue at\u00e9 abrir 2 games') +
+            _gsmTieRuleBtn('tiebreak', tbEnabled, '\u26A1 Tie-break', 'de ' + tbPoints + ' pontos') +
+          '</div>' +
+          '<div id="gsm-tb-details" style="display:' + (tbEnabled ? 'flex' : 'none') + ';gap:12px;flex-wrap:wrap;margin-top:10px;padding-left:2px;">' +
             '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Pontos</label><input type="number" id="gsm-cfg-tbPoints" class="form-control" min="5" max="15" value="' + tbPoints + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
-            '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Diferenca min.</label><input type="number" id="gsm-cfg-tbMargin" class="form-control" min="1" max="5" value="' + tbMargin + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
-            // Quando o tie-break acontece: em (g-1)-(g-1) [set curto, ex. 6-5] ou em g-g [padrão, ex. 7-6].
-            '<div style="flex:1 1 100%;"><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:4px;">Tie-break no empate</label>' +
-              '<div id="gsm-tbat-seg" data-tbat="' + tbAt + '" style="display:flex;gap:6px;">' +
-                '<button type="button" id="gsm-tbat-g1" onclick="window._gsmSetTbAt(\'g-1\')" style="flex:1;padding:8px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;border:2px solid ' + (tbAt === 'g-1' ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (tbAt === 'g-1' ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' + _gm1 + '-' + _gm1 + ' <span style="font-size:0.66rem;color:var(--text-muted);">(set curto · ' + _gg + '-' + _gm1 + ')</span></button>' +
-                '<button type="button" id="gsm-tbat-g" onclick="window._gsmSetTbAt(\'g\')" style="flex:1;padding:8px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;border:2px solid ' + (tbAt === 'g' ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (tbAt === 'g' ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' + _gg + '-' + _gg + ' <span style="font-size:0.66rem;color:var(--text-muted);">(padrão · ' + (_gg + 1) + '-' + _gg + ')</span></button>' +
-              '</div>' +
-            '</div>' +
+            '<div><label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">Diferen\u00e7a m\u00edn.</label><input type="number" id="gsm-cfg-tbMargin" class="form-control" min="1" max="5" value="' + tbMargin + '" style="font-size:0.82rem;width:70px;" oninput="window._gsmUpdateSummary()"></div>' +
           '</div>' +
         '</div>' +
         // Super tiebreak
@@ -6381,16 +6400,47 @@ window._gsmToggleTiebreak = function() {
 
 // Regra do tie-break: 'g-1' (empate em (g-1)-(g-1) → set curto, ex. 6-5) ou 'g' (empate g-g,
 // ex. 7-6). Grava no segmento (data-tbat), atualiza pills + label. _gsmSaveConfig lê e persiste.
+// Botões dos dois segmentos do empate. Existem como função pra o MESMO estilo valer nos
+// dois (e pra o markup acima caber numa linha por opção).
+function _gsmSegBtn(ativo, onclick, titulo, sub) {
+  return '<button type="button" onclick="' + onclick + '" style="flex:1;padding:8px 6px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;' +
+    'border:2px solid ' + (ativo ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (ativo ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' +
+    titulo + '<span style="font-size:0.64rem;color:var(--text-muted);display:block;font-weight:600;margin-top:2px;">' + sub + '</span></button>';
+}
+function _gsmTbAtBtn(valor, atual, n, sub) {
+  return _gsmSegBtn(atual === valor, "window._gsmSetTbAt('" + valor + "')", n + '-' + n, sub);
+}
+function _gsmTieRuleBtn(valor, tbLigado, titulo, sub) {
+  var atual = tbLigado ? 'tiebreak' : 'extend';
+  return _gsmSegBtn(atual === valor, "window._gsmSetTieRule('" + valor + "')", titulo, sub);
+}
+// ⭐ 2.0.2 — PRORROGAR × TIE-BREAK. O motor (bracket-ui) já lia `scoring.tieRule` em torneio;
+// ninguém escrevia. Aqui é onde passa a ser escrito. `tiebreakEnabled` vira ESPELHO, porque
+// muito código ainda lê ele — mas a fonte da decisão é esta.
+window._gsmSetTieRule = function (v) {
+  var seg = document.getElementById('gsm-tierule-seg'); if (!seg) return;
+  seg.dataset.tierule = v;
+  var tb = (v === 'tiebreak');
+  var chk = document.getElementById('gsm-cfg-tiebreak'); if (chk) chk.checked = tb;
+  var det = document.getElementById('gsm-tb-details'); if (det) det.style.display = tb ? 'flex' : 'none';
+  var botoes = seg.querySelectorAll('button');
+  if (botoes[0]) { botoes[0].style.borderColor = tb ? 'rgba(255,255,255,0.12)' : '#a855f7'; botoes[0].style.background = tb ? 'transparent' : 'rgba(168,85,247,0.18)'; }
+  if (botoes[1]) { botoes[1].style.borderColor = tb ? '#a855f7' : 'rgba(255,255,255,0.12)'; botoes[1].style.background = tb ? 'rgba(168,85,247,0.18)' : 'transparent'; }
+  if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
+};
 window._gsmSetTbAt = function(v) {
   var seg = document.getElementById('gsm-tbat-seg'); if (!seg) return;
   seg.dataset.tbat = v;
-  var g1 = document.getElementById('gsm-tbat-g1'), gg = document.getElementById('gsm-tbat-g');
-  if (g1) { g1.style.borderColor = (v === 'g-1') ? '#a855f7' : 'rgba(255,255,255,0.12)'; g1.style.background = (v === 'g-1') ? 'rgba(168,85,247,0.18)' : 'transparent'; }
-  if (gg) { gg.style.borderColor = (v === 'g') ? '#a855f7' : 'rgba(255,255,255,0.12)'; gg.style.background = (v === 'g') ? 'rgba(168,85,247,0.18)' : 'transparent'; }
-  var _ge = document.getElementById('gsm-cfg-gamesPerSet') || document.getElementById('gsm-gamesPerSet');
-  var g = (parseInt(_ge && _ge.value) || 6);
-  var n = (v === 'g-1') ? (g - 1) : g;
-  var lbl = document.getElementById('gsm-tb-label'); if (lbl) lbl.textContent = 'Tie-break em ' + n + '-' + n;
+  // 2.0.2: são TRÊS opções agora (5-5 · 6-6 · 7-7) e o realce é por posição no segmento —
+  // antes eram dois ids fixos, e o terceiro botão ficaria mudo pra sempre.
+  var ordem = ['g-1', 'g', 'g+1'];
+  var botoes = seg.querySelectorAll('button');
+  ordem.forEach(function (valor, i) {
+    var b = botoes[i]; if (!b) return;
+    var on = (v === valor);
+    b.style.borderColor = on ? '#a855f7' : 'rgba(255,255,255,0.12)';
+    b.style.background = on ? 'rgba(168,85,247,0.18)' : 'transparent';
+  });
   if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
 };
@@ -6502,13 +6552,24 @@ window._gsmUpdateSummary = function() {
   } else {
     lines.push(_t('create.gsmSets', { s: sets, pl: sets > 1 ? 's' : '', g: games }));
     lines.push(advOn ? _t('create.gsmCountingAdv') : _t('create.gsmCounting'));
+    // O ponto do empate é o ESCOLHIDO (5-5 · 6-6 · 7-7), não mais `games - 1` cravado.
+    var _segAt = document.getElementById('gsm-tbat-seg');
+    var _at = (_segAt && _segAt.dataset.tbat) || 'g-1';
+    var _tbTie = (_at === 'g-1') ? (games - 1) : (_at === 'g+1') ? (games + 1) : games;
     if (tbOn) {
-      var _tbTie = games - 1;
-      var _tbDraw = tbPts - tbMargin;
+      // ⚠️ 2.0.2 — ERA `tbPts - tbMargin` (5, num tie-break de 7 com 2 de vantagem) e estava
+      // ERRADO: em 5-5 o tie-break AINDA FECHA, em 7-5. Quem não fecha mais em 7 é o 6-6.
+      // A conta certa é `pts - margin + 1`. Conferido ponto a ponto contra a regra de vitória
+      // (>= pts E >= margin de frente): 5-5 não fecha, 6-5 não fecha, 7-5 FECHA.
+      var _tbDraw = tbPts - tbMargin + 1;
       lines.push(_t('create.gsmTbDetail', { tie: _tbTie, pts: tbPts, draw: _tbDraw, margin: tbMargin }));
+    } else {
+      // "Prorrogar" nunca teve linha no resumo — desligar o tie-break deixava o resumo MUDO
+      // sobre o que acontece no empate, que é justamente a pergunta que o organizador faz.
+      lines.push(_t('create.gsmExtendDetail', { tie: _tbTie }));
     }
     if (stbOn && sets > 1) {
-      var _stbDraw = stbPts - tbMargin;
+      var _stbDraw = stbPts - tbMargin + 1;   // mesmo off-by-one: num super TB de 10, é 9-9
       lines.push(_t('create.gsmSuperTb', { pts: stbPts, draw: _stbDraw, margin: tbMargin }));
     }
   }
@@ -6562,6 +6623,13 @@ window._gsmReadConfigOverlay = function () {
     fixedSet: fsOn, fixedSetGames: fsOn ? games : 6
   };
   if (_seg && _seg.dataset.tbat) out.tiebreakAt = _seg.dataset.tbat;
+  // ⭐ 2.0.2: a decisão do empate (prorrogar × tie-break) passa a SER GRAVADA. O motor ao vivo
+  // já lia `scoring.tieRule` em torneio — ninguém escrevia, então a escolha do organizador
+  // morria na tela. `tiebreakEnabled` continua saindo junto, como espelho, porque muito código
+  // ainda lê ele; a fonte é o tieRule.
+  var _segR = document.getElementById('gsm-tierule-seg');
+  out.tieRule = (_segR && _segR.dataset.tierule) ? _segR.dataset.tierule : (out.tiebreakEnabled ? 'tiebreak' : 'extend');
+  out.tiebreakEnabled = (out.tieRule === 'tiebreak');
   return out;
 };
 

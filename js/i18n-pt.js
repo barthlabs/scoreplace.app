@@ -1534,8 +1534,9 @@ window._translations['pt'] = {
   'create.gsmSets': '<strong>{s} set{pl}</strong> de {g} games',
   'create.gsmCounting': 'Contagem: 15-30-40',
   'create.gsmCountingAdv': 'Contagem: 15-30-40 + vantagem',
-  'create.gsmTbDetail': 'Em caso de empate {tie}-{tie}, tie-break de {pts} pontos ({draw} a {draw}, prorroga até o vencedor ter {margin} pontos de vantagem).',
-  'create.gsmSuperTb': 'Super tie-break de {pts} pontos ({draw} a {draw}, prorroga até o vencedor ter {margin} pontos de vantagem).',
+  'create.gsmTbDetail': 'Set empatado em {tie}-{tie}: tie-break até {pts} pontos. Se chegar a {draw}-{draw}, segue até alguém abrir {margin} pontos.',
+  'create.gsmExtendDetail': 'Empatou {tie}-{tie} em games: prorroga — segue jogando at\u00e9 algu\u00e9m abrir 2 games de vantagem.',
+  'create.gsmSuperTb': 'Sets empatados: super tie-break até {pts} pontos, no lugar do set decisivo. Se chegar a {draw}-{draw}, segue até alguém abrir {margin} pontos.',
 
   // Create tournament result entry / access labels
   'create.resultOrganizers': 'Organizador e co-organizadores',

@@ -64,6 +64,12 @@
         // "Novos Confrontos" da ELIMINATÓRIA — INDEPENDENTE de "Abertas", igual à fase inicial
         // (cânone project_new_matchups_independent). 'inherit' = segue a fase inicial | true | false.
         newMatchups: 'inherit',
+        // FORMATO DA PARTIDA (GSM) PRÓPRIO da eliminatória — v1.9.111. null = joga com o MESMO
+        // formato da classificatória (t.scoring, o bloco "🎾 Formato da Partida" do form, que
+        // pertence à fase INICIAL). Objeto = a eliminatória tem o SEU formato e é ele que vale
+        // nos jogos dela (compila pra phases[elim].scoring, lido por window._effectiveScoring).
+        // Caso do dono: Rei/Rainha 1 set na classificatória, duplas fixas melhor-de-3 na elim.
+        scoring: null,
         // TÉRMINO da fase eliminatória (v1.6.80). O box "📅 Datas da fase" do form é da fase
         // INICIAL (grava t.startDate/t.endDate) — quando há classificatória, a eliminatória é
         // 2ª fase e NÃO tinha janela nenhuma, então o fim do TORNEIO era o fim da classificatória.
@@ -72,6 +78,41 @@
         endDate: '', endTime: ''
       }
     }, sport);
+  }
+
+  // ── FORMATO DA PARTIDA (GSM) DE UMA FASE ─────────────────────────────────────
+  // null = a fase HERDA o formato do torneio (t.scoring). Objeto = formato PRÓPRIO.
+  // ⚠️ `type` é obrigatório e não-vazio: é ele que window._effectiveScoring usa pra decidir
+  // que a fase tem formato próprio (`if (ph.scoring && ph.scoring.type)`). Um objeto sem
+  // type seria silenciosamente ignorado — por isso normalizamos pra 'sets' e nunca deixamos
+  // passar meio-objeto vindo de config antiga/template.
+  function normScoring(s) {
+    if (!s || typeof s !== 'object') return null;
+    var type = String(s.type || 'sets');
+    if (type === 'simple') return { type: 'simple' };
+    if (type !== 'sets' && type !== 'gsm') type = 'sets';
+    var g = parseInt(s.gamesPerSet, 10); if (!(g >= 1)) g = 6;
+    var sw = parseInt(s.setsToWin, 10); if (!(sw >= 1 && sw <= 3)) sw = 1;
+    var tbP = parseInt(s.tiebreakPoints, 10); if (!(tbP >= 1)) tbP = 7;
+    var tbM = parseInt(s.tiebreakMargin, 10); if (!(tbM >= 1)) tbM = 2;
+    var stbP = parseInt(s.superTiebreakPoints, 10); if (!(stbP >= 1)) stbP = 10;
+    var fsg = parseInt(s.fixedSetGames, 10); if (!(fsg >= 1)) fsg = g;
+    var out = {
+      type: type, setsToWin: sw, gamesPerSet: g,
+      tiebreakEnabled: s.tiebreakEnabled !== false,
+      tiebreakPoints: tbP, tiebreakMargin: tbM,
+      superTiebreak: s.superTiebreak === true, superTiebreakPoints: stbP,
+      countingType: (s.countingType === 'numeric') ? 'numeric' : 'tennis',
+      advantageRule: s.advantageRule === true,
+      fixedSet: s.fixedSet === true, fixedSetGames: fsg
+    };
+    if (s.tiebreakAt) out.tiebreakAt = String(s.tiebreakAt);
+    // ⭐ 2.0.2: `tieRule` ('extend' = prorrogar · 'tiebreak') TEM que atravessar a normalização.
+    // O `out` é uma lista FECHADA de campos — campo novo que não entre aqui é SILENCIOSAMENTE
+    // DESCARTADO na compilação das fases, e a fase acabaria jogando com a regra do torneio em
+    // vez da sua. Mesmo motivo pelo qual `tiebreakAt` já estava na linha de cima.
+    if (s.tieRule === 'extend' || s.tieRule === 'tiebreak') out.tieRule = s.tieRule;
+    return out;
   }
 
   function normalize(cfg, sport) {
@@ -191,6 +232,11 @@
     // eliminação DIRETA ela É a fase inicial e já usa as datas do form (t.startDate/t.endDate),
     // então aqui fica vazio pra não haver duas fontes pro mesmo fim. Só aceita 'AAAA-MM-DD';
     // hora sem data não vale nada.
+    // FORMATO DA PARTIDA PRÓPRIO da elim: só faz sentido quando ela é fase POSTERIOR.
+    // Na eliminação DIRETA a eliminatória É a fase inicial e joga com o formato do TORNEIO
+    // (o bloco "🎾 Formato da Partida" do form, que a UI reloca pra dentro dela) — um formato
+    // só, sem duas fontes pro mesmo jogo.
+    e.scoring = out.classifAtiva ? normScoring(e.scoring) : null;
     e.endDate = (out.classifAtiva && /^\d{4}-\d{2}-\d{2}$/.test(String(e.endDate || ''))) ? String(e.endDate) : '';
     e.endTime = (e.endDate && /^\d{2}:\d{2}$/.test(String(e.endTime || ''))) ? String(e.endTime) : '';
     out.eliminatoria = e;
@@ -312,6 +358,10 @@
       mapping: mapRR, grandFinal: elimDuplaRR || (e0.linhas > 1 && e0.grandFinal !== false),
       thirdPlace: e0.terceiro, lateEnrollment: _elimLE(e0.lateEnrollment, opts),
       newMatchups: _elimNM(e0.newMatchups, opts), drawManual: false,
+      // Formato da partida PRÓPRIO da eliminatória (null = herda t.scoring). A rodada de
+      // FORMAÇÃO (pRR, acima) fica com null de propósito: ela é uma rodada Rei/Rainha, irmã
+      // da classificatória — quem muda de formato é a disputa eliminatória em si.
+      scoring: e0.scoring || null,
       endDate: e0.endDate || '', endTime: e0.endTime || ''   // v1.6.80: término da ÚLTIMA fase
     });
     return [pRR, pElimRR];
@@ -523,6 +573,7 @@
         mapping: mapping, grandFinal: elimDupla || (nLines > 1 && e.grandFinal !== false), thirdPlace: e.terceiro,
         lateEnrollment: _elimLE(e.lateEnrollment, opts), // inscrições durante a elim: herda a fase inicial por padrão
         newMatchups: _elimNM(e.newMatchups, opts),       // ⊥ de "Abertas" — a elim tem a SUA regra
+        scoring: e.scoring || null,                      // formato da partida DESTA fase (null = herda t.scoring)
         drawManual: false,
         endDate: e.endDate || '', endTime: e.endTime || ''   // v1.6.80: término da ÚLTIMA fase
       });

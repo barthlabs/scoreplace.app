@@ -1521,8 +1521,9 @@ window._translations['en'] = {
   'create.gsmSets': '<strong>{s} set{pl}</strong> of {g} games',
   'create.gsmCounting': 'Counting: 15-30-40',
   'create.gsmCountingAdv': 'Counting: 15-30-40 + advantage',
-  'create.gsmTbDetail': 'On tie {tie}-{tie}, tiebreak of {pts} points ({draw} to {draw}, play until winner leads by {margin}).',
-  'create.gsmSuperTb': 'Super tiebreak of {pts} points ({draw} to {draw}, play until winner leads by {margin}).',
+  'create.gsmTbDetail': 'Set tied {tie}-{tie}: tiebreak to {pts} points. At {draw}-{draw}, play continues until someone leads by {margin}.',
+  'create.gsmExtendDetail': 'Games tied {tie}-{tie}: play on \u2014 the set continues until someone leads by 2 games.',
+  'create.gsmSuperTb': 'Sets tied: super tiebreak to {pts} points, replacing the deciding set. At {draw}-{draw}, play continues until someone leads by {margin}.',
 
   // Create tournament result entry / access labels
   'create.resultOrganizers': 'Organizer and co-organizers',

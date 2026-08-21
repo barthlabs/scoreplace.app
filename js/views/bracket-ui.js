@@ -1212,7 +1212,12 @@ window._sportTiebreakAt = function (sport) {
 window._tbLoserGames = function (scoring, sport) {
   var gp = parseInt(scoring && scoring.gamesPerSet) || 6;
   var at = (scoring && scoring.tiebreakAt) || window._sportTiebreakAt(sport);
-  return (at === 'g-1') ? Math.max(1, gp - 1) : gp;
+  // 2.0.2 (dono): "pode prorrogar em 5-5 ou 6-6, 7-7… decisão do organizador". O vocabulário
+  // era só 'g-1'/'g'; ganhou 'g+1' pra o empate mais tardio. Esta função é a FONTE ÚNICA do
+  // ponto de empate — o card, o lançamento manual e agora o motor ao vivo saem todos daqui.
+  if (at === 'g-1') return Math.max(1, gp - 1);
+  if (at === 'g+1') return gp + 1;
+  return gp;
 };
 
 // FONTE ÚNICA do SET gravado no lançamento manual (sempre 1 set): games + o tie-break quando
@@ -4350,12 +4355,24 @@ window._openLiveScoring = function(tId, matchId, opts) {
     twoPointAdvantage: useSets ? (sc.twoPointAdvantage !== false) : false,
     isFixedSet: useSets && sc.fixedSet === true,
     fixedSetGames: useSets && sc.fixedSet ? (sc.fixedSetGames || sc.gamesPerSet || 6) : 0,
-    // 'extend'|'tiebreak'|'ask'|null (null = 2 games de vantagem, padrão).
+    // 'extend'|'tiebreak'|'ask'.
     // ⚠️ PARTIDA CASUAL PERGUNTA SEMPRE (regra do dono): sem torneio não há regra
-    // escrita pra herdar, então em CADA empate a partir de (g-1)-(g-1) — 5-5, 6-6,
+    // escrita pra herdar, então em CADA empate a partir do ponto configurado — 5-5, 6-6,
     // 7-7, … — a tela deixa a quadra decidir entre prorrogar e ativar o tie-break.
-    // No TORNEIO nada muda: vale o que o organizador configurou em `sc.tieRule`.
-    tieRule: sc.tieRule || (isCasual ? 'ask' : null),
+    // No TORNEIO vale o que o organizador configurou em `sc.tieRule`.
+    // ⭐ 2.0.2: torneio SEM `tieRule` gravado (todos os de hoje) deriva do toggle antigo —
+    // tie-break ligado = 'tiebreak', desligado = 'extend'. É exatamente o que o toggle
+    // significava sem dizer, então nenhum torneio existente muda de comportamento.
+    tieRule: sc.tieRule || (isCasual ? 'ask' : ((sc.tiebreakEnabled === false) ? 'extend' : 'tiebreak')),
+    // Ponto do empate em que a decisão do set acontece (5-5 · 6-6 · 7-7). FONTE ÚNICA:
+    // window._tbLoserGames — a mesma que o card e o lançamento manual já usavam.
+    // 🔴 ATÉ AQUI O MOTOR AO VIVO IGNORAVA ESSA ESCOLHA: o gatilho era `g - 1` cravado no
+    // código, então quem configurava "Tie-break em 6-6" via o tie-break começar em 5-5.
+    tieAtGames: useSets
+      ? ((typeof window._tbLoserGames === 'function')
+          ? window._tbLoserGames(sc, isCasual ? (opts && opts.sportName) : (t && t.sport))
+          : ((sc.gamesPerSet || 6) - 1))
+      : 0,
     tieRulePending: false, // true when waiting for user choice at tie
     // Serve tracking — progressive: defined at each player's first serve
     serveOrder: [],      // [{team:1|2, name:'Ana'}, ...] rotation cycle (2 for singles, 4 for doubles)
@@ -4574,9 +4591,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
       return 0;
     }
 
-    // tieRule logic: at (g-1)-(g-1) and every subsequent tie, ask or apply rule
-    // e.g. at 5-5 in a 6-game set, 2-game lead is impossible with 1 more game
-    if (state.tieRule && cs.gamesP1 === cs.gamesP2 && cs.gamesP1 >= g - 1) {
+    // A decisão do set acontece no ponto de empate CONFIGURADO (5-5 · 6-6 · 7-7) e em todo
+    // empate seguinte. Antes era `g - 1` cravado, ignorando a escolha do organizador.
+    var _tieAt = state.tieAtGames || (g - 1);
+    if (state.tieRule && cs.gamesP1 === cs.gamesP2 && cs.gamesP1 >= _tieAt) {
       var rule = state.tieRule;
       if (rule === 'ask' && !state.tieRulePending) {
         // Pause and ask the user
@@ -4614,17 +4632,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     if (cs.gamesP1 >= g && cs.gamesP1 - cs.gamesP2 >= 2) return 1;
     if (cs.gamesP2 >= g && cs.gamesP2 - cs.gamesP1 >= 2) return 2;
 
-    // Standard tiebreak trigger at (g-1)-(g-1) — e.g. 5-5 in a 6-game set.
-    // Consistente com rules.js (exibe "TB em 5-5, final 6-5") e com o save
-    // path em _saveSetResult que detecta TB a (g-1)-(g-1). Vencedor do TB
-    // recebe +1 game → set termina 6-5.
-    if (state.tiebreakEnabled && cs.gamesP1 === g - 1 && cs.gamesP2 === g - 1) {
-      state.isTiebreak = true;
-      state.currentGameP1 = 0;
-      state.currentGameP2 = 0;
-      return -1;
-    }
-
+    // ⚰️ 2.0.2: o gatilho cravado em (g-1)-(g-1) SAIU. Ele era a segunda porta pro tie-break
+    // — a que ignorava a escolha 5-5/6-6 do organizador — e agora todo torneio entra pelo
+    // bloco de cima, que respeita `tieAtGames` e `tieRule`. Duas portas pro mesmo jogo era
+    // o que fazia a tela prometer 6-6 e a quadra jogar 5-5.
     return 0;
   }
 

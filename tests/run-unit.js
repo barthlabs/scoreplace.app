@@ -1095,6 +1095,9 @@ const SUITES = [
   // baixo — DESCOBRIR quem venceu quando o `winner` gravado (string de nomes) não bate
   // mais com o slot. Varre os torneios REAIS: 3 jogos da Confra estão assim.
   'tests/quem-venceu-e-uma-regra-so.test.js',
+  // O motor ao vivo IGNORAVA a escolha 5-5/6-6 (gatilho `g-1` cravado) e "prorrogar" nem
+  // existia no formato do torneio — o motor lia `scoring.tieRule` e ninguém escrevia.
+  'tests/empate-do-set-e-do-organizador.test.js',
   // 1.9.113 — o icone do jogador saia como circulo mudo e igual pra todos: ele
   // nasce do NOME, e quem tem uid com perfil nao resolvido nasce sem nome (1.7.79).
   // A hidratacao trocava o texto e deixava o icone pra tras.

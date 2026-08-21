@@ -107,6 +107,11 @@
       fixedSet: s.fixedSet === true, fixedSetGames: fsg
     };
     if (s.tiebreakAt) out.tiebreakAt = String(s.tiebreakAt);
+    // ⭐ 2.0.2: `tieRule` ('extend' = prorrogar · 'tiebreak') TEM que atravessar a normalização.
+    // O `out` é uma lista FECHADA de campos — campo novo que não entre aqui é SILENCIOSAMENTE
+    // DESCARTADO na compilação das fases, e a fase acabaria jogando com a regra do torneio em
+    // vez da sua. Mesmo motivo pelo qual `tiebreakAt` já estava na linha de cima.
+    if (s.tieRule === 'extend' || s.tieRule === 'tiebreak') out.tieRule = s.tieRule;
     return out;
   }
 

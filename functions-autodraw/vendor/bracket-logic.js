@@ -1165,11 +1165,11 @@ function _autoResolveBye(t, match) {
   var p2Bye = match.p2 === byeLabel;
   // One real player + one BYE → auto-resolve
   if (p1Real && p2Bye) {
-    match.winner = match.p1;
+    window._stampWinner(match, 1);
     match.isBye = true;
     _advanceWinner(t, match);
   } else if (p2Real && p1Bye) {
-    match.winner = match.p2;
+    window._stampWinner(match, 2);
     match.isBye = true;
     _advanceWinner(t, match);
   }
@@ -3034,8 +3034,13 @@ window._autoApprovePendingResults = function(t) {
     m.scoreP2 = s2;
     m.totalGamesP1 = pr.totalGamesP1 != null ? pr.totalGamesP1 : s1;
     m.totalGamesP2 = pr.totalGamesP2 != null ? pr.totalGamesP2 : s2;
-    m.winner = pr.winner;
-    m.draw = !!pr.draw;
+    // O placar PROPOSTO guarda o vencedor por nome (foi assim que ele foi lançado). Na
+    // aprovação, converte pro lado e carimba a identidade — é o instante em que o resultado
+    // vira definitivo, e é aqui que ele tem que parar de depender de string.
+    if (pr.draw) { m.winner = pr.winner; m.draw = true; }
+    else if (pr.winner === m.p1) window._stampWinner(m, 1);
+    else if (pr.winner === m.p2) window._stampWinner(m, 2);
+    else { m.winner = pr.winner; m.draw = !!pr.draw; }
     delete m.pendingResult;
     if (typeof window._propagateMatchUpdate === 'function') {
       window._propagateMatchUpdate(t, m);
