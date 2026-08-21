@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '1.9.102';
+window.SCOREPLACE_VERSION = '1.9.103';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2921,14 +2921,30 @@ window._devWhatsAppBtnHtml = function (opts) {
   // estava lendo. Recarregar é legítimo, o MOMENTO é que não: fica pra quando a pessoa
   // TROCAR de tela (o `hashchange` logo abaixo já faz isso, e é momento seguro).
   // Aqui só checamos quando ela está na DASHBOARD, onde não há leitura/rolagem a perder.
+  // ⚠️ A GUARDA E UMA SO, E VALE PROS TRES (1.9.103). A 1.9.46 poe o guard de
+  // "so na dashboard" no `visibilitychange` e DEIXOU `pageshow` e `focus` sem
+  // nada — e os dois disparam exatamente no mesmo momento: desbloquear o
+  // aparelho. Entao o conserto de 1.9.46 nunca valeu na pratica.
+  // Relato do dono (1.9.102): _"quando estamos no detalhe do torneio e deixamos a
+  // tela bloquear, quando desbloqueamos vem uma tela branca por um instante"_ —
+  // e o `_checkForUpdate` achando versao nova no resume e RECARREGANDO por baixo
+  // de quem estava lendo. Recarregar e legitimo; o MOMENTO nao.
+  // ⛔ Regra copiada em N lugares volta pelo lugar esquecido — por isso a
+  // condicao mora numa funcao so, e os tres a chamam.
+  var _momentoSeguroPraAtualizar = function () {
+    var _h = (window.location.hash || '');
+    return (_h === '' || _h === '#' || _h.indexOf('#dashboard') === 0);
+  };
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState !== 'visible') return;
-    var _h = (window.location.hash || '');
-    var _naDash = (_h === '' || _h === '#' || _h.indexOf('#dashboard') === 0);
-    if (_naDash) window._checkForUpdate({});
+    if (_momentoSeguroPraAtualizar()) window._checkForUpdate({});
   });
-  window.addEventListener('pageshow', function() { window._checkForUpdate({}); });
-  window.addEventListener('focus', function() { window._checkForUpdate({}); });
+  window.addEventListener('pageshow', function() {
+    if (_momentoSeguroPraAtualizar()) window._checkForUpdate({});
+  });
+  window.addEventListener('focus', function() {
+    if (_momentoSeguroPraAtualizar()) window._checkForUpdate({});
+  });
 
   // 3. NAVEGAÇÃO no app (hashchange) — v4.5.96: o ponto cego era o usuário que fica
   //    numa aba SÓ, sem trocar de janela/aba (visibilitychange nunca dispara), mas
@@ -12055,6 +12071,18 @@ window._mostrarConviteDeRolagem = function () {
         '#' + ID + '.pra-cima{flex-direction:column-reverse;width:auto;gap:4px;}' +
         '#' + ID + '.pra-cima .seta{transform:rotate(180deg);width:72px;max-width:72px;}' +
         '#' + ID + '.pra-cima .rotulo{font-size:1.2rem;max-width:min(72vw,320px);}' +
+        // ── ⭐ A BORDA NO QUADRO QUE A SETA APONTA (1.9.103) ──────────────────
+        // Ordem do dono: _"colocar uma borda na cor da seta no box alvo dela que
+        // persiste 3s depois dela desaparecer"_. A seta diz PRA ONDE ir; a borda
+        // diz CHEGOU — e sobreviver 3s ao sumico da seta e o que fecha o gesto:
+        // quem rolou ate la encontra o quadro ainda marcado, em vez de uma tela
+        // igual a todas as outras e a duvida de ter achado a coisa certa.
+        // `outline` (nao `border`): nao entra no layout, entao nao empurra nem
+        // muda a altura de nada — e o quadro nao "pula" quando ela aparece/sai.
+        // So opacidade anima: o custo e de compositor.
+        '.sp-alvo-do-convite{outline:3px solid #fbbf24;outline-offset:2px;border-radius:14px;' +
+        'transition:outline-color .45s ease;}' +
+        '.sp-alvo-do-convite.sp-alvo-saindo{outline-color:rgba(251,191,36,0);}' +
         '#sp-convite-scrim{position:fixed;left:0;right:0;bottom:0;height:260px;z-index:1099;' +
         'pointer-events:none;opacity:0;background:linear-gradient(to top,' +
         'rgba(6,8,18,0.96) 0%,rgba(6,8,18,0.90) 30%,rgba(6,8,18,0.55) 62%,rgba(6,8,18,0) 100%);}';
@@ -12086,6 +12114,14 @@ window._mostrarConviteDeRolagem = function () {
         '<path fill="#fbbf24" d="M35 4h58a8 8 0 0 1 8 8v28h17a7 7 0 0 1 5.2 11.7l-51.2 34.3a10 8 0 0 1-16 0L4.8 51.7A7 7 0 0 1 10 40h17V12a8 8 0 0 1 8-8z"/>' +
       '</svg>';
 
+    // A BORDA no quadro-alvo nasce junto com a seta (1.9.103). No modo perfil o
+    // alvo e a chrome do topo — marcar o menu com uma moldura amarela seria ruido,
+    // entao so os quatro convites de rolagem ganham borda.
+    var _alvoMarcado = null;
+    if (!escolhido.cfg.praCima) {
+      try { escolhido.el.classList.add('sp-alvo-do-convite'); _alvoMarcado = escolhido.el; } catch (eB) {}
+    }
+
     var scrim = document.getElementById('sp-convite-scrim');
     if (!scrim) {
       scrim = document.createElement('div');
@@ -12104,6 +12140,20 @@ window._mostrarConviteDeRolagem = function () {
         if (pil.parentNode) pil.remove();
         if (scrim.parentNode) scrim.remove();
       }, 350);
+      // ⚠️ A BORDA FICA 3s DEPOIS DE A SETA SUMIR — ordem do dono. Ela e o
+      // "chegou": some sozinha, com um esmaecimento de 0,45s pra nao piscar.
+      // O elemento pode ter sido trocado por um re-render nesse meio tempo; por
+      // isso a limpeza tolera o no ja ter saido do documento.
+      if (_alvoMarcado) {
+        var _oAlvo = _alvoMarcado;
+        _alvoMarcado = null;
+        setTimeout(function () {
+          try { _oAlvo.classList.add('sp-alvo-saindo'); } catch (e1) {}
+          setTimeout(function () {
+            try { _oAlvo.classList.remove('sp-alvo-do-convite', 'sp-alvo-saindo'); } catch (e2) {}
+          }, 500);
+        }, 3000);
+      }
       window.removeEventListener('scroll', aoRolar);
       if (observadorMenu) { observadorMenu.disconnect(); observadorMenu = null; }
     };

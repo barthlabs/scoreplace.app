@@ -1226,6 +1226,21 @@ a.compact-row,
   -webkit-touch-callout: none;
   /* remove o atraso de 300ms do duplo-toque: o toque vira clique na hora */
   touch-action: manipulation;
+  /* ── ⭐ O REALCE QUE NAO DEPENDE DA THREAD (1.9.103) ──────────────────────
+     Relato do dono, depois de 8 versoes: _"a merda de nao ter feedback imediato
+     no clique do card do torneio e o que incomoda todo clique"_.
+     O realce que existia ate aqui e o `:active` (esmaecer + contorno). MEDIDO no
+     WKWebView com o CSS real: com a thread LIVRE ele pinta (opacidade 0.5); com a
+     thread OCUPADA 1,2s ele NAO pinta nada — porque `:active` e recalculo de
+     estilo, e recalculo precisa da thread principal, que e exatamente o que falta
+     no momento em que o toque incomoda.
+     `-webkit-tap-highlight-color` e outra coisa: quem desenha e o SISTEMA, na
+     camada do UIKit, no toque, SEM passar pelo renderer. E o unico feedback que
+     sobrevive a thread travada. O padrao do iOS e um cinza claro quase invisivel
+     sobre o gradiente escuro do card — por isso parecia que nao havia nada.
+     ⚠️ Isto NAO substitui o `:active`: os dois convivem. Com a thread livre a
+     pessoa ve os dois; com a thread presa, ve pelo menos este. */
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.30);
 }
 .card[onclick] input,
 .card[onclick] textarea,

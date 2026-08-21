@@ -1066,6 +1066,11 @@ const SUITES = [
   // btnCtaShine vivo numa travada de 533ms) e o perfilador passou a NOMEAR o
   // observer que segurou a thread (o relatório vinha "Mu:?=852ms").
   'tests/tela-nunca-entregue-pela-metade.test.js',
+  // 1.9.103 — a tela branca ao desbloquear (guarda de update que faltava no
+  // pageshow/focus) e o realce do toque que sobrevive a thread presa
+  // (-webkit-tap-highlight-color, desenhado pelo SISTEMA). Mais a borda no
+  // quadro que a seta aponta.
+  'tests/resume-nao-recarrega-e-toque-tem-realce.test.js',
 ];
 
 let failed = [];
