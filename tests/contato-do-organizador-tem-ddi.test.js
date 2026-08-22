@@ -68,13 +68,26 @@ ok(!/_fmtBR/.test(P), '⛔ o terceiro formatador só-BR (_fmtBR) saiu de cena');
 ok(/_minimo = \(_ddi === '55'\) \? 10 : 6/.test(P),
    'a validação da tela respeita o país (senão o seletor de DDI seria enfeite)');
 
-// ── 5. O CHIP 📱 — posição e desenho estáveis ───────────────────────────────
-ok(/\$\{_telBtnC\}\$\{_vipBtnC\}/.test(P), 'o 📱 fica à ESQUERDA do 💎 VIP (ordem do dono)');
-const chip = P.slice(P.indexOf('const _telBtnC'), P.indexOf('const _telBtnC') + 900);
-ok(/width:30px/.test(chip), 'e tem largura fixa — antes mudava de tamanho conforme o estado');
-ok(!/' contato'/.test(chip), 'sem texto variável: cada card tinha um desenho diferente');
-ok(/_telCor/.test(chip) && /_telTitulo/.test(chip),
-   'o ESTADO continua dito — pela cor e pelo title, não pelo tamanho');
+// ── 5. O CHIP — DUAS COISAS DIFERENTES, não dois estados do mesmo botão ─────
+// Ordem do dono (22/ago/2026): "essa merda de ícone ninguém vai ver. muito melhor era o
+// escrito contato. apenas para quem NÃO tem o celular. para quem tem, o balãozinho pra
+// entrar em contato direto pelo whats."
+// Quem falta contato é PENDÊNCIA (tem que gritar: palavra escrita). Quem já tem não é
+// pendência — ali o que serve é AÇÃO.
+ok(/\$\{_telBtnC\}\$\{_vipBtnC\}/.test(P), 'o chip fica à ESQUERDA do 💎 VIP');
+const chip = P.slice(P.indexOf('var _telBtnC ='), P.indexOf('var _telBtnC =') + 2600);
+ok(/contato<\/button>/.test(chip), 'SEM celular: o chip é ESCRITO "contato" (ninguém vê ícone mudo)');
+ok(/_orgSetContactPhone/.test(chip), 'e clicar nele leva ao registro do celular');
+ok(/dashed rgba\(245,158,11/.test(chip), 'com a borda pontilhada de pendência');
+ok(/wa\.me\//.test(chip), 'COM celular: vira balãozinho que abre o WhatsApp');
+ok(/\\uD83D\\uDCAC/.test(chip), 'e o balãozinho é 💬, não 📱');
+ok(/target="_blank"/.test(chip) && /rel="noopener"/.test(chip), 'abrindo fora, com noopener');
+ok(/omitPhone !== true/.test(chip),
+   '⛔ quem escondeu o número no perfil NÃO vira botão de conversa — nem pro organizador');
+ok(/_telOrg/.test(chip),
+   'a cor separa número digitado pela organização de número confirmado por SMS');
+// e o balão nunca aparece com número vazio
+ok(/_telJa/.test(chip), 'o balão só existe quando há número de verdade (>= 8 dígitos)');
 
 // ── 6. A MÁSCARA RODANDO — o organizador digita só números e a pontuação aparece ──
 (function () {

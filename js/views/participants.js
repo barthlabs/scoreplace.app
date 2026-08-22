@@ -2580,20 +2580,46 @@ function renderParticipants(container, tournamentId) {
       var _profTel = (window._userProfileCache && ind.uid) ? window._userProfileCache[ind.uid] : null;
       var _telJa = String((_profTel && _profTel.phone) || '').replace(/\D/g, '').length >= 8;
       var _telOrg = _profTel && _profTel.phoneSource === 'organizer';
-      var _telTitulo = !_profTel ? 'Contato do participante'
-        : (_telJa ? (_telOrg ? 'Contato registrado por organizador — clique para corrigir'
-                             : 'Celular verificado pela própria pessoa')
-                  : 'Sem contato — clique para registrar o celular');
-      var _telCor = !_telJa ? 'rgba(245,158,11,0.12);color:#fbbf24;border:1px dashed rgba(245,158,11,0.45)'
-        : (_telOrg ? 'rgba(245,158,11,0.22);color:#fcd34d;border:1px solid rgba(245,158,11,0.5)'
-                   : 'rgba(16,185,129,0.14);color:#6ee7b7;border:1px solid rgba(16,185,129,0.35)');
-      const _telBtnC = (isOrg && ind.uid) ? ('<button type="button" class="btn btn-micro" ' +
-        'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
-        'title="' + window._safeHtml(_telTitulo) + '" ' +
-        'style="min-height:0;height:24px;width:30px;line-height:1;padding:0;font-size:0.72rem;' +
-        'display:inline-flex;align-items:center;justify-content:center;' +
-        'border-radius:7px;flex-shrink:0;background:' + _telCor + ';">' +
-        '📱</button>') : '';
+      // ⭐ 2.0.11 — DUAS COISAS DIFERENTES, não dois estados do mesmo botão.
+      // Ordem do dono (22/ago/2026): _"essa merda de ícone que vc colocou na esquerda do vip
+      // ninguém vai ver. muito melhor era o escrito contato. apenas para quem não tem o
+      // celular no perfil. para quem tem poderia ser o balãozinho para entrar em contato
+      // direto pelo whats."_
+      //
+      // Ele está certo, e o erro foi meu: eu tinha reduzido tudo a um 📱 mudo, de largura
+      // fixa, pra "ficar igual em todo card" — e igualei ao custo de o que IMPORTA sumir.
+      // Quem falta contato é uma PENDÊNCIA e precisa gritar (palavra escrita). Quem já tem
+      // não é pendência nenhuma: ali o que serve é uma AÇÃO — abrir a conversa.
+      var _telBtnC = '';
+      if (isOrg && ind.uid) {
+        if (!_telJa) {
+          // PENDÊNCIA — escrita, âmbar pontilhado. É clicável e leva ao registro.
+          _telBtnC = '<button type="button" class="btn btn-micro" ' +
+            'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
+            'title="Sem contato — clique para registrar o celular" ' +
+            'style="min-height:0;height:24px;line-height:1;padding:0 10px;font-size:0.66rem;font-weight:800;' +
+            'border-radius:7px;flex-shrink:0;background:rgba(245,158,11,0.12);color:#fbbf24;' +
+            'border:1px dashed rgba(245,158,11,0.45);">\uD83D\uDCF1 contato</button>';
+        } else if (!_profTel || _profTel.omitPhone !== true) {
+          // AÇÃO — o balãozinho abre a conversa no WhatsApp. wa.me é o único caminho:
+          // automatizar a Meta é proibido e já custou dois ativos. [[project_whatsapp_is_wame_only]]
+          // ⛔ respeita `omitPhone`: quem escondeu o número no perfil não vira botão de
+          // conversa pra ninguém — nem pro organizador.
+          var _waNum = String((_profTel && _profTel.phone) || '').replace(/\D/g, '');
+          // Âmbar quando o número foi digitado por um organizador (ninguém confirmou por SMS),
+          // verde quando a própria pessoa confirmou. A cor é a única diferença — o gesto é o mesmo.
+          var _waCor = _telOrg
+            ? 'rgba(245,158,11,0.16);color:#fcd34d;border:1px solid rgba(245,158,11,0.45)'
+            : 'rgba(37,211,102,0.14);color:#4ade80;border:1px solid rgba(37,211,102,0.40)';
+          _telBtnC = '<a href="https://wa.me/' + _waNum + '" target="_blank" rel="noopener" ' +
+            'onclick="event.stopPropagation();" ' +
+            'title="' + window._safeHtml('Falar com ' + (ind.name || 'este jogador') + ' no WhatsApp' +
+              (_telOrg ? ' (número registrado pela organização, não confirmado por SMS)' : '')) + '" ' +
+            'style="min-height:0;height:24px;width:30px;line-height:1;padding:0;font-size:0.8rem;' +
+            'display:inline-flex;align-items:center;justify-content:center;text-decoration:none;' +
+            'border-radius:7px;flex-shrink:0;background:' + _waCor + ';">\uD83D\uDCAC</a>';
+        }
+      }
 
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
