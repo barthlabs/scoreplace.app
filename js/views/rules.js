@@ -117,7 +117,7 @@ function renderRules(container, tournamentId) {
     const desc = (sc) => {
       if (typeof window._gsmBuildDescFromValues === 'function') {
         return window._gsmBuildDescFromValues(sc.setsToWin || 1, sc.gamesPerSet || 6, sc.tiebreakEnabled,
-          sc.tiebreakPoints || 7, sc.superTiebreak, sc.superTiebreakPoints || 10);
+          sc.tiebreakPoints || 7, sc.superTiebreak, sc.superTiebreakPoints || 10, sc.tiebreakAt);
       }
       const s = sc.setsToWin || 1, g = sc.gamesPerSet || 6;
       return (s === 1) ? (g + ' games') : ((s * 2 - 1) + ' sets de ' + g + ' games');

@@ -98,6 +98,11 @@ console.log('── menos de 4 na espera: não forma, e ninguém é movido ─�
 console.log('── entrada COM uid entra pelo uid, não pelo nome ──');
 (function () {
   const t = mkT(0);
+  // ⭐ 2.1: a proporção agora é DITA em voz alta. Esta cena sempre dependeu do default do app
+  // ser 25/75 ("no máximo 1 homem em 4") — o default virou 50/50 (ordem do dono, 22/ago), e
+  // 1H+3M deixaria de formar grupo, derrubando uma asserção que nem é sobre gênero. Gravar a
+  // proporção mantém a cena idêntica e deixa explícito de qual regra ela depende.
+  t.genderRatio = '25/75';
   // v1.7.16: gênero DECLARADO nas 4 entradas. Esta cena mede MECÂNICA DE ROSTER (entrada
   // com uid vira inscrito) e o gênero é incidental — mas desde que "sem gênero determinado
   // não entra em grupo" (regra do dono, ago/2026), 4 pessoas reais sem o campo preenchido

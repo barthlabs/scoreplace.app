@@ -171,13 +171,18 @@ console.log('\n──── leitura da configuração: fase manda, topo é fallb
   t('fase 1 (sem própria) cai no topo', win._ratioForPhase(base, 1) === '25/75', win._ratioForPhase(base, 1));
   t('sorteio LIVRE não tem proporção',
     win._ratioForPhase({ _drawBalanceMode: 'livre', genderRatio: '25/75' }, 0) === '');
-  // DEFAULT 25/75 quando o equilibrado não tem proporção escolhida: era exatamente a regra
-  // que já vigorava ("no máximo 1 homem em 4"), então cair em "sem proporção" afrouxaria
-  // calado todos os torneios em andamento.
-  t('equilibrado sem proporção escolhida cai no default 25/75',
-    win._ratioForPhase({ _drawBalanceMode: 'equilibrado' }, 0) === '25/75');
+  // ⭐ 2.1 — O DEFAULT VIROU 50/50. Ordem do dono (22/ago): _"o default 50-50 para o app. na
+  // confra é setado para 25-75, nenhuma divergência."_ O 25/75 era herança de quando a única
+  // regra existente era "no máximo 1 homem em 4" na lista de espera; a Confra segue com ele
+  // GRAVADO, então nada muda lá — muda o torneio que nunca escolheu.
+  // Consequência aceita explicitamente pelo dono ("50/50 travado mesmo"): pool de 1 homem +
+  // 3 mulheres deixa de fechar grupo, porque 50/50 exige 2+2.
+  t('equilibrado sem proporção escolhida cai no default 50/50',
+    win._ratioForPhase({ _drawBalanceMode: 'equilibrado' }, 0) === '50/50');
   t('proporção inválida gravada cai no default',
-    win._ratioForPhase({ _drawBalanceMode: 'equilibrado', genderRatio: '10/90' }, 0) === '25/75');
+    win._ratioForPhase({ _drawBalanceMode: 'equilibrado', genderRatio: '10/90' }, 0) === '50/50');
+  t('e a proporção GRAVADA sempre vence o default (a Confra é 25/75)',
+    win._ratioForPhase({ _drawBalanceMode: 'equilibrado', genderRatio: '25/75' }, 0) === '25/75');
   t('livre continua sem proporção nenhuma',
     win._ratioForPhase({ _drawBalanceMode: 'livre' }, 0) === '');
 }
@@ -226,7 +231,7 @@ console.log('\n──── proporção só em torneio TODO MISTURADO ───�
 {
   const misturado = { genderCategories: [], _drawBalanceMode: 'equilibrado' };
   t('sem categoria de gênero → aplica', win._ratioAppliesTo(misturado) === true);
-  t('e a proporção sai normalmente', win._ratioForPhase(misturado) === '25/75');
+  t('e a proporção sai no default novo', win._ratioForPhase(misturado) === '50/50');
 
   const fem = { genderCategories: ['Feminino', 'Masculino'], _drawBalanceMode: 'equilibrado' };
   t('Fem/Masc separados → NÃO aplica', win._ratioAppliesTo(fem) === false);
@@ -240,7 +245,7 @@ console.log('\n──── proporção só em torneio TODO MISTURADO ───�
   // habilidade/idade NÃO separam gênero — segue misturado, segue com proporção
   const skill = { genderCategories: [], combinedCategories: ['A', 'B', 'C'], _drawBalanceMode: 'equilibrado' };
   t('categoria de HABILIDADE não desliga a proporção', win._ratioAppliesTo(skill) === true);
-  t('e a proporção continua valendo', win._ratioForPhase(skill) === '25/75');
+  t('e a proporção continua valendo', win._ratioForPhase(skill) === '50/50');
 
   // a categoria SENDO SORTEADA também desliga, mesmo sem config no topo
   t('categoria "Fem B" sendo sorteada desliga', win._ratioAppliesTo(misturado, 'Fem B') === false);
@@ -252,7 +257,12 @@ console.log('\n──── proporção só em torneio TODO MISTURADO ───�
 
 console.log('\n──── o CONFRA continua com proporção (é todo misturado) ────');
 {
-  const confra = { genderCategories: [], combinedCategories: [], _drawBalanceMode: 'equilibrado' };
+  // ⭐ 2.1: a Confra tem 25/75 GRAVADO — foi o dono que setou. É de onde vem o "no máximo 1
+  // homem em 4" de agosto: não é regra à parte, é a 25/75 travada sendo aplicada (palavras
+  // dele, 22/ago: _"essa ordem é a proporção 25/75 com travado ligado, é só aplicação da
+  // regra"_). Por isso o fixture agora GRAVA a proporção, em vez de depender do default —
+  // que mudou pra 50/50 e não representa mais a Confra.
+  const confra = { genderCategories: [], combinedCategories: [], _drawBalanceMode: 'equilibrado', genderRatio: '25/75' };
   t('aplica', win._ratioAppliesTo(confra) === true);
   t('25/75 travada', win._ratioForPhase(confra) === '25/75' && win._ratioIsLocked(confra) === true);
 }
@@ -265,8 +275,12 @@ console.log('\n──── a UI some quando não se aplica ────');
   t('diálogo do sorteio esconde a caixa', /ratioApplies/.test(draw6) &&
      /mode === 'equilibrado' && window\._gdCtx\.ratioApplies/.test(draw6));
   t('e não grava proporção quando não se aplica', /_ratioAppliesTo\(t\)\)\) \{/.test(draw6));
+  // ⭐ 2.1: quem decide o sumiço é o NÚCLEO (_ratioVisivel), não uma regra escrita na tela —
+  // a lista de espera precisa da mesma resposta. E some AVISANDO por quê (_ratioMotivoAusencia):
+  // controle que some calado manda a pessoa procurar, e foi assim que este caso apareceu.
   t('formulário esconde a caixa com categoria de gênero',
-     /tourn-gender-categories/.test(form6) && /_box\.style\.display = _temCatGenero \? 'none'/.test(form6));
+     /tourn-gender-categories/.test(form6) && /_ratioVisivel\(/.test(form6)
+     && /visivel: false/.test(form6) && /_ratioMotivoAusencia/.test(form6));
   t('caixa da espera esconde o toggle sem proporção', /\(!_wlOrg \|\| !_wlRatio\) \? ''/.test(brk6));
 }
 
@@ -377,8 +391,12 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
         f2 = R('format2-ui.js'), brk = R('bracket.js'), bui = R('bracket-ui.js');
 
   t('tela do sorteio tem a caixa da proporção', /id="gd-ratio-box"/.test(draw));
-  t('e as 3 pills saem das proporções canônicas', /window\._GENDER_RATIOS/.test(draw));
-  t('e o toggle "Travar proporção"', /id="gd-ratio-lock"/.test(draw) && /_gdToggleLock/.test(draw));
+  // ⭐ 2.1: as pílulas próprias SAÍRAM das duas telas. O desenho (slider + trava + textos) é
+  // um só, no núcleo, e as duas telas o chamam — ordem do dono (22/ago): "mudou aqui muda lá
+  // na lista de espera o texto e a proporção. mesma coisa o toggle que trava a proporção."
+  t('e o controle vem do NÚCLEO, não desenhado aqui', /_ratioSliderHtml\(/.test(draw));
+  t('e a trava também (mesmo texto das duas telas)', /onLock: 'window\._gdSetLock'/.test(draw));
+  t('⛔ a tela do sorteio não desenha pílula própria', !/id="gd-ratio-' \+ r\.replace/.test(draw));
   // v1.7.19: a condição ganhou o gate de categoria — a caixa aparece no EQUILIBRADO **e**
   // quando a proporção se aplica (torneio todo misturado). O invariante "no LIVRE não
   // aparece" segue travado.
@@ -390,9 +408,15 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
   t('e no LIVRE não grava proporção', /mode === 'equilibrado' && opts\.ratio/.test(draw));
 
   t('criar/editar tem a caixa da proporção', /id="gender-ratio-box"/.test(form));
-  t('com as 3 opções + "Sem regra"', /data-ratio="50\/50"/.test(form) && /data-ratio="25\/75"/.test(form)
-     && /data-ratio="75\/25"/.test(form) && /data-ratio=""/.test(form));
-  t('e o mesmo toggle Travar proporção', /id="gender-ratio-lock"/.test(form));
+  // ⭐ 2.1: "Sem regra" MORREU. O dono fechou que o default do app é 50/50 e que o slider tem
+  // 3 paradas — o vazio existia e o equilíbrio acontecia mesmo assim, por outro motor, que é
+  // o que ele flagrou ("estava em sem regra e funcionava, o que indica outra razão").
+  t('a configuração monta o MESMO controle do núcleo', /_ratioSliderHtml\(/.test(form)
+     && /id="gender-ratio-mount"/.test(form));
+  t('⛔ sem "Sem regra": não há mais opção de vazio', !/data-ratio=""/.test(form));
+  t('e o mesmo toggle Travar proporção (campo que o save lê)', /id="gender-ratio-lock"/.test(form));
+  t('vazio de torneio antigo é RESOLVIDO pro default, não deixado em branco',
+     /cur = window\._GENDER_RATIO_DEFAULT/.test(form));
   // A asserção cobra a PERTINÊNCIA à lista, não a lista inteira em ordem: em 1.9.111 o
   // bloco "🎾 Formato da Partida" (#gsm-section) entrou na mesma realocação (formato por
   // fase) e derrubava este teste sem que nada da proporção tivesse mudado. O que importa
@@ -410,6 +434,75 @@ console.log('\n──── a proporção está nas duas telas, com o mesmo togg
      /wlGroupBalance = _eraEquil \? 'livre' : 'equilibrado'/.test(bui));
   t('e o aviso do toggle diz QUAL é a proporção', /_ratioLabel/.test(bui));
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⭐ 2.1 — O CONTROLE RODANDO DE VERDADE (não só o arquivo lido)
+// O dono flagrou a proporção "funcionando por outra razão". Ler o fonte não pega isso;
+// rodar, pega. Aqui o controle é montado num DOM falso e a gente confere o que ele DEIXA
+// GRAVADO — a prova mora no dado. [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
+// ═══════════════════════════════════════════════════════════════════════════
+(function () {
+  const fsX = require('fs'), pathX = require('path'), vmX = require('vm');
+  const raiz = pathX.join(__dirname, '..');
+  const nucleo = fsX.readFileSync(pathX.join(raiz, 'js/views/gender-ratio-core.js'), 'utf8');
+  const ctX = fsX.readFileSync(pathX.join(raiz, 'js/views/create-tournament.js'), 'utf8');
+  function corpo(nome) {
+    const i = ctX.indexOf('window.' + nome + ' = function');
+    if (i < 0) return '';
+    return ctX.slice(i, ctX.indexOf('\n};', i) + 3);
+  }
+
+  function palco(catGenero, generos) {
+    const nos = {
+      'tourn-gender-categories': { value: catGenero || '' },
+      'gender-ratio': { value: '' },
+      'gender-ratio-lock': { checked: true },
+      'gender-ratio-mount': { innerHTML: '' }
+    };
+    const win = { document: { getElementById: (id) => nos[id] || null } };
+    win.window = win;
+    vmX.createContext(win);
+    vmX.runInContext(nucleo, win);
+    vmX.runInContext([corpo('_ctSetRatio'), corpo('_ctSetRatioLock'), corpo('_ctPaintRatio')].join('\n'), win);
+    win._ctRatioGeneros = generos;
+    win._ctPaintRatio();
+    return { html: nos['gender-ratio-mount'].innerHTML, gravado: nos['gender-ratio'].value, win: win };
+  }
+
+  console.log('\n  ── o controle rodando ──');
+  const criando = palco('', null);
+  t('criação (ninguém inscrito): o slider APARECE', /id="grct-slider"/.test(criando.html));
+  t('e o vazio vira 50/50 GRAVADO, não fica em branco', criando.gravado === '50/50');
+  t('e a leitura mostra a composição E o percentual', /2H \/ 2M/.test(criando.html) && /grct-pct/.test(criando.html));
+  t('com a trava ligada por padrão', /id="grct-lock" checked/.test(criando.html));
+
+  const misto = palco('', ['masculino', 'feminino', 'feminino']);
+  t('torneio misto: o slider aparece', /id="grct-slider"/.test(misto.html));
+
+  const soElas = palco('', ['feminino', 'feminino', 'feminino']);
+  t('só mulheres: a seção some', !/id="grct-slider"/.test(soElas.html));
+  t('e diz POR QUÊ (não some calada)', /só há mulheres/.test(soElas.html));
+  t('e não deixa proporção gravada', soElas.gravado === '');
+
+  const semGenero = palco('', ['feminino', '', 'feminino']);
+  t('com alguém SEM gênero declarado, a seção fica (ainda pode virar misto)',
+     /id="grct-slider"/.test(semGenero.html));
+
+  const porCategoria = palco('fem', ['masculino', 'feminino']);
+  t('com categoria de gênero: a seção some', !/id="grct-slider"/.test(porCategoria.html));
+  t('e o motivo é a categoria, não o pool', /categorias já separam/.test(porCategoria.html));
+
+  // o slider mexe: 3 paradas, e o valor que sai é o que o motor entende
+  const w = criando.win;
+  t('parada 0 = 25/75, 1 = 50/50, 2 = 75/25',
+     w._ratioSliderValue(0) === '25/75' && w._ratioSliderValue(1) === '50/50' && w._ratioSliderValue(2) === '75/25');
+  t('e as 3 são proporções que o motor conhece',
+     [0, 1, 2].every((i) => !!w._GENDER_RATIOS[w._ratioSliderValue(i)]));
+  t('o texto da trava é UM só (as duas telas chamam a mesma função)',
+     typeof w._ratioLockDesc === 'function' && w._ratioLockDesc(true) !== w._ratioLockDesc(false));
+})();
+
 
 console.log('\n' + ok + ' asserts OK, ' + fail + ' falha(s)');
 if (fail) { console.log('❌ proporcao-genero: FALHOU'); process.exit(1); }

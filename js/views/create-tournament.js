@@ -15,6 +15,9 @@ window._allowSelfDeactEl = function () {
 
 
 function setupCreateTournamentModal() {
+  // Abriu o formulário: esquece a escalação do torneio anterior. Sem isto, abrir "criar" logo
+  // depois de editar um torneio só de mulheres esconderia a proporção num torneio sem ninguém.
+  window._ctRatioGeneros = null;
   // ═══ RENDER CANÔNICA DE CONFIG DE FASE (v2.6.61) — definida ANTES do template ═══
   // v4.4.x (Camada 2): SÓ existe a Fase 1 (idx 0). O ramo idx>=1 (construtor de fases 2+ /
   // _extraPhases) foi REMOVIDO. Gravam no hidden da Fase 1 (save/load do topo intocados).
@@ -395,21 +398,14 @@ function setupCreateTournamentModal() {
                    REALOCADA pra dentro da fase pelo format2-ui (_EXT_IDS → #f2-classif-extra),
                    igual às Datas da fase — foi o pedido do dono: "dentro da fase a que se
                    refere o sorteio". Só vale no sorteio EQUILIBRADO; no livre não há regra. -->
-              <div id="gender-ratio-box" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.20); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #22c55e; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚖️ Proporção do sorteio</p>
-                <p style="margin:0 0 0.7rem; font-size:0.74rem; color:var(--text-muted,#94a3b8); line-height:1.4;">Homens / mulheres em cada 4 pessoas sorteadas (grupo Rei/Rainha ou jogo). Vale no sorteio equilibrado.</p>
+              <div id="gender-ratio-box">
                 <input type="hidden" id="gender-ratio" value="">
-                <div style="display:flex;gap:6px;margin-bottom:10px;" id="gender-ratio-buttons">
-                  <button type="button" data-ratio="" onclick="window._ctSetRatio('')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:700;font-size:0.78rem;">Sem regra</button>
-                  <button type="button" data-ratio="50/50" onclick="window._ctSetRatio('50/50')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:800;font-size:0.8rem;">50/50</button>
-                  <button type="button" data-ratio="25/75" onclick="window._ctSetRatio('25/75')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:800;font-size:0.8rem;">25/75</button>
-                  <button type="button" data-ratio="75/25" onclick="window._ctSetRatio('75/25')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-color);cursor:pointer;font-weight:800;font-size:0.8rem;">75/25</button>
-                </div>
-                <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.07);">
-                  <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🔒</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Travar proporção</span><div class="toggle-desc" id="gender-ratio-lock-desc" style="font-size:0.72rem;margin-top:2px;">Travada, só forma grupo na proporção exata. Destravada, busca a proporção e depois flexibiliza para incluir mais gente.</div></div></div>
-                  <label class="toggle-switch"><input type="checkbox" id="gender-ratio-lock" checked onchange="window._ctPaintRatio()"><span class="toggle-slider"></span></label>
-                </div>
-              </div>
+                <!-- ⭐ 2.1: a trava continua como campo OCULTO porque o save lê por id; quem
+                     desenha o toggle é o controle único (gender-ratio-core), e ele espelha
+                     aqui. Antes havia 4 pílulas e um toggle DESENHADOS AQUI, e outra cópia
+                     na tela de sorteio — as duas podiam divergir, que é o que o dono viu. -->
+                <input type="checkbox" id="gender-ratio-lock" checked style="display:none;">
+                <div id="gender-ratio-mount"></div>
               <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
@@ -622,6 +618,9 @@ function setupCreateTournamentModal() {
               <div id="gsm-section" style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ${_t('create.matchFormat')}</p>
                 <div id="gsm-presets" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px;"></div>
+                <!-- ⭐ 2.1: o empate do set vive AQUI, na seção do formato, à parte dos botões —
+                     e é por FASE (a eliminatória tem o seu, em âmbar). -->
+                <div id="gsm-tieat-inline"></div>
                 <!-- Advantage toggle (auto-hidden for beach tennis/padel) -->
                 <div id="gsm-advantage-section" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(168,85,247,0.04);border-radius:10px;border:1px solid rgba(168,85,247,0.1);">
                   <div class="toggle-row" style="padding:0;">
@@ -767,16 +766,15 @@ function setupCreateTournamentModal() {
                 <input type="hidden" id="select-result-entry" value="organizer">
               </div>
 
-              <!-- Tie-break do set (5-5 vs 6-6) — atalho visível; escreve no mesmo gsm-tiebreakAt do
-                   painel de pontuação. Visível só em esportes com set/tie-break (via #re-tiebreak-at-block). -->
-              <div id="re-tiebreak-at-block" style="display:none; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 Tie-break do set</p>
-                <p style="margin: 0 0 0.7rem; font-size: 0.78rem; color: var(--text-muted);">Em que placar o set vai pro tie-break.</p>
-                <div id="re-tbat-seg" data-tbat="" style="display:flex; gap:8px;">
-                  <button type="button" id="re-tbat-g1" onclick="window._reSetTbAt('g-1')" style="flex:1; padding:12px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid rgba(255,255,255,0.12); background:transparent; color:var(--text-bright,#f1f5f9);">Em 5-5 <span style="font-size:0.7rem; color:var(--text-muted); display:block; font-weight:600;">set curto · 6-5</span></button>
-                  <button type="button" id="re-tbat-g" onclick="window._reSetTbAt('g')" style="flex:1; padding:12px; border-radius:10px; font-size:0.85rem; font-weight:700; cursor:pointer; border:2px solid rgba(255,255,255,0.12); background:transparent; color:var(--text-bright,#f1f5f9);">Em 6-6 <span style="font-size:0.7rem; color:var(--text-muted); display:block; font-weight:600;">padrão · 7-6</span></button>
-                </div>
-              </div>
+              <!-- ⛔ 2.1: a seção solta "🎾 Tie-break do set" SAIU DAQUI.
+                   Ordem do dono (22/ago/2026): _"essa sessão tie break do set não tem mais
+                   sentido. temos a sessão formato da partida que já define isso por fase. não
+                   pode ter em 2 lugares na mesma fase."_
+                   Ela era phase-agnostic: escrevia no gsm-tiebreakAt da fase INICIAL, então
+                   numa fase 2 com formato próprio a tela mostrava um gatilho e o jogo usava
+                   outro. Hoje quem decide "em que placar o set empata" e "o que acontece nesse
+                   empate" é o bloco FORMATO DA PARTIDA, por fase — fonte única.
+                   [[project_formato_da_partida_por_fase]] · [[feedback_unify_dual_entry_points]] -->
 
               <!-- Classificação (Personalizada × Em blocos) — logo após o Lançamento de
                    Resultados (v3.1.34). Render CANÔNICA _classifModeHtml(0), a MESMA das fases
@@ -2894,6 +2892,10 @@ function setupCreateTournamentModal() {
   };
 
   window._updateCategoryPreview = function() {
+    // ⭐ 2.1: a seção de proporção depende das categorias de gênero — ligar "Fem" faz o sorteio
+    // rodar homogêneo e a seção sai de cena. Repintar aqui é o que casa as duas coisas, e é o
+    // mesmo gancho que serve pra abertura do form e pra edição.
+    if (typeof window._ctPaintRatio === 'function') { try { window._ctPaintRatio(); } catch (e) {} }
     // v2.1.80: chips de categorias personalizadas re-renderizam junto do preview
     // (cobre abertura do form, edição e mudança de game type — todos chamam aqui).
     if (typeof window._renderCustomCatChips === 'function') window._renderCustomCatChips();
@@ -4674,7 +4676,6 @@ function setupCreateTournamentModal() {
       document.getElementById('gsm-tiebreakAt').value = t.scoring.tiebreakAt || '';
       var _trEl = document.getElementById('gsm-tieRule');
       if (_trEl) _trEl.value = t.scoring.tieRule || '';
-      if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
       document.getElementById('gsm-superTiebreak').value = t.scoring.superTiebreak || false;
       document.getElementById('gsm-superTiebreakPoints').value = t.scoring.superTiebreakPoints || 10;
       document.getElementById('gsm-countingType').value = t.scoring.countingType || 'numeric';
@@ -4727,7 +4728,8 @@ function setupCreateTournamentModal() {
       var _clusterLoad = document.getElementById('liga-cluster-size');
       if (_clusterLoad) _clusterLoad.value = t.clusterSize;
     }
-    // v1.7.16: proporção da FASE (fallback no topo). Sem nada gravado = "Sem regra".
+    // Proporção da FASE (fallback no topo). Torneio antigo sem nada gravado é RESOLVIDO pro
+    // default 50/50 na pintura — não existe mais estado "sem regra". Ver _ctPaintRatio.
     (function () {
       var _rEl = document.getElementById('gender-ratio');
       if (!_rEl) return;
@@ -4735,6 +4737,10 @@ function setupCreateTournamentModal() {
       _rEl.value = _cur || '';
       var _lk = document.getElementById('gender-ratio-lock');
       if (_lk) _lk.checked = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
+      // Editando: dá pra saber os gêneros de quem já entrou — é o que faz a seção sumir num
+      // torneio só de mulheres. Na criação isto fica `null` e a seção aparece.
+      window._ctRatioGeneros = (typeof window._ratioGenerosDoTorneio === 'function')
+        ? window._ratioGenerosDoTorneio(t) : null;
       if (typeof window._ctPaintRatio === 'function') window._ctPaintRatio();
     })();
     if (t.balanceBy) {
@@ -4937,7 +4943,6 @@ function setupCreateTournamentModal() {
     set('gsm-fixedSetGames', s.fixedSetGames != null ? s.fixedSetGames : 6);
     set('gsm-tiebreakAt', s.tiebreakAt || '');
     set('gsm-tieRule', s.tieRule || '');
-    if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   };
 
   window._scoringMeaningfullyChanged = function(o, n) {
@@ -5099,44 +5104,57 @@ function setupCreateTournamentModal() {
     } else { _rows(); }
   }
 
-  // v1.7.16: PROPORÇÃO DE GÊNERO no formulário (caixa realocada pra dentro da fase).
-// "Sem regra" = nada gravado: o sorteio inicial segue como sempre (espalha a minoria o
-// mais possível) e só a formação de grupo NOVO da espera usa o default. Escolhida uma
-// proporção, ela passa a valer nos dois — é o "trava tudo" pedido pelo dono.
+  // PROPORÇÃO DE GÊNERO no formulário (caixa dentro da fase).
+// ⭐ 2.1: "Sem regra" DEIXOU DE EXISTIR. O dono flagrou que, com o campo vazio, o sorteio
+// equilibrava mesmo assim — "estava em sem regra antes de eu mudar e funcionava, o que indica
+// que funcionava por outra razão quando essa deveria ser a única razão". A outra razão era o
+// _spreadMinorityGender, um segundo motor rodando por fora da proporção. Agora: o default do
+// app é 50/50, o slider tem 3 paradas, e o espalhamento só roda no modo DESTRAVADO — a
+// proporção passou a ser a única razão. [[project_group_identity_structural_anchor]]
 window._ctSetRatio = function (r) {
   var h = document.getElementById('gender-ratio');
   if (h) h.value = r || '';
-  window._ctPaintRatio();
+  // ⛔ NÃO repinta: repintar remontaria o HTML e o slider voltaria pro lugar no meio do arrasto.
+  // Quem acompanha o dedo é _ratioSliderMove, no núcleo.
 };
+window._ctSetRatioLock = function (travada) {
+  var c = document.getElementById('gender-ratio-lock');
+  if (c) c.checked = !!travada;
+};
+// Guarda os gêneros de quem JÁ está inscrito (só existe no editar). `null` = criação, ainda
+// não dá pra saber — e não saber não faz a seção sumir.
+window._ctRatioGeneros = null;
 window._ctPaintRatio = function () {
-  // v1.7.19: proporção SÓ existe em torneio todo misturado. Com categoria de gênero
-  // (Fem/Masc, ou mesmo Misto separado) o sorteio já roda por categoria e o pool é
-  // homogêneo — a caixa inteira sai de cena.
+  var mount = document.getElementById('gender-ratio-mount');
+  if (!mount) return;
+  // A regra de VISIBILIDADE é do núcleo, não daqui: a tela de sorteio precisa da mesma.
   var _gcEl = document.getElementById('tourn-gender-categories');
-  var _temCatGenero = !!(_gcEl && String(_gcEl.value || '').trim());
-  var _box = document.getElementById('gender-ratio-box');
-  if (_box) _box.style.display = _temCatGenero ? 'none' : '';
-  if (_temCatGenero) { var _hz = document.getElementById('gender-ratio'); if (_hz) _hz.value = ''; return; }
-  var h = document.getElementById('gender-ratio');
-  var cur = h ? String(h.value || '') : '';
-  var btns = document.querySelectorAll('#gender-ratio-buttons [data-ratio]');
-  Array.prototype.forEach.call(btns, function (b) {
-    var on = (b.getAttribute('data-ratio') === cur);
-    b.style.borderColor = on ? '#22c55e' : 'rgba(255,255,255,0.12)';
-    b.style.background = on ? 'rgba(34,197,94,0.18)' : 'var(--bg-dark,#0f172a)';
-  });
-  // Sem proporção escolhida, travar não tem o que travar.
-  var lockWrap = document.getElementById('gender-ratio-lock');
-  var desc = document.getElementById('gender-ratio-lock-desc');
-  if (lockWrap) {
-    lockWrap.disabled = !cur;
-    var row = lockWrap.closest ? lockWrap.closest('.toggle-row') : null;
-    if (row) { row.style.opacity = cur ? '1' : '0.45'; }
-  }
-  if (desc && !cur) desc.textContent = 'Escolha uma proporção acima para poder travá-la.';
-  else if (desc) desc.textContent = 'Travada, só forma grupo na proporção exata. Destravada, busca a proporção e depois flexibiliza para incluir mais gente.';
-};
+  var _fake = { genderCategories: String((_gcEl && _gcEl.value) || '').trim() ? [String(_gcEl.value).trim()] : [] };
+  var _gen = window._ctRatioGeneros;
+  var _ver = (typeof window._ratioVisivel === 'function') ? window._ratioVisivel(_fake, null, _gen) : true;
 
+  var h = document.getElementById('gender-ratio');
+  if (!_ver) {
+    // Categoria de gênero (ou pool de um gênero só) → o sorteio já roda homogêneo: não há
+    // proporção a fazer, e gravar uma seria promessa que ninguém cumpre.
+    if (h) h.value = '';
+    mount.innerHTML = (typeof window._ratioSliderHtml === 'function')
+      ? window._ratioSliderHtml({ idp: 'grct', visivel: false,
+          motivo: (typeof window._ratioMotivoAusencia === 'function') ? window._ratioMotivoAusencia(_fake, null, _gen) : '' })
+      : '';
+    return;
+  }
+  // ⭐ Sem "Sem regra": o dono fechou que o default do app é 50/50 e o slider tem 3 paradas.
+  // O valor vazio de torneio antigo é RESOLVIDO aqui e gravado — antes ele ficava vazio e o
+  // equilíbrio acontecia por outro motor, que foi justamente o que ele flagrou.
+  var cur = h ? String(h.value || '') : '';
+  if (!cur) { cur = window._GENDER_RATIO_DEFAULT; if (h) h.value = cur; }
+  var lk = document.getElementById('gender-ratio-lock');
+  mount.innerHTML = window._ratioSliderHtml({
+    idp: 'grct', ratio: cur, locked: !lk || lk.checked !== false,
+    onRatio: 'window._ctSetRatio', onLock: 'window._ctSetRatioLock'
+  });
+};
 window._saveTournamentClickHandler = function() {
       try {
         const editId = document.getElementById('edit-tournament-id').value;
@@ -5372,8 +5390,10 @@ window._saveTournamentClickHandler = function() {
           tourData.clusterSize = _clusterEl ? (parseInt(_clusterEl.value) || 8) : 8;
           var _balByEl = document.getElementById('liga-balance-by');
           tourData.balanceBy = (_balByEl && _balByEl.value) ? _balByEl.value : 'individual';
-          // v1.7.16: PROPORÇÃO — grava só quando escolhida. Vazio APAGA a regra (o
-          // organizador voltou pra "Sem regra"), então é escrita explícita dos dois lados.
+          // PROPORÇÃO — escrita explícita dos dois lados. Hoje o vazio só acontece quando a
+          // SEÇÃO INTEIRA some (categoria de gênero, ou disputa de um gênero só): aí gravar
+          // `null` é o certo, porque prometer uma proporção que o sorteio não vai aplicar é
+          // pior que não ter nenhuma. Escolha do organizador nunca chega aqui vazia.
           var _rEl2 = document.getElementById('gender-ratio');
           var _rVal = _rEl2 ? String(_rEl2.value || '') : '';
           tourData.genderRatio = (window._GENDER_RATIOS && window._GENDER_RATIOS[_rVal]) ? _rVal : null;
@@ -6009,7 +6029,16 @@ window._gsmReadHidden = function () {
     fixedSet: g('gsm-fixedSet') === 'true',
     fixedSetGames: parseInt(g('gsm-fixedSetGames')) || 6
   };
+  // ⭐ 2.1: o gatilho do empate é GRAVADO mesmo se o organizador nunca abriu o painel de
+  // formato. Isto era efeito colateral da seção solta que saiu; virou regra do SAVE, que é
+  // onde deveria estar desde sempre. Sem ele o campo fica vazio e passa a ser re-derivado do
+  // esporte a cada leitura: trocar o esporte do torneio (ou o default) vira o gatilho por
+  // baixo de quem já viu "6-6" na tela. [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
   if (g('gsm-tiebreakAt')) out.tiebreakAt = g('gsm-tiebreakAt');
+  else if (out.tiebreakEnabled && typeof window._sportTiebreakAt === 'function') {
+    out.tiebreakAt = window._sportTiebreakAt(
+      (typeof window._currentSportName === 'function') ? window._currentSportName() : '');
+  }
   if (g('gsm-tieRule')) out.tieRule = g('gsm-tieRule');
   return out;
 };
@@ -6039,12 +6068,13 @@ window._gsmBuildPresetDesc = function(key, cfg) {
       var cstb = hStb && hStb.value === 'true', cstbP = parseInt(hStbP ? hStbP.value : 10) || 10;
       // Only show dynamic desc if selected
       if (window._gsmSelectedPreset === 'custom') {
-        return window._gsmBuildDescFromValues(cs, cg, ctb, ctbP, cstb, cstbP);
+        return window._gsmBuildDescFromValues(cs, cg, ctb, ctbP, cstb, cstbP, window._gsmTieAtAtual());
       }
     }
     return 'Configure manualmente';
   }
-  return window._gsmBuildDescFromValues(cfg.setsToWin, cfg.gamesPerSet, cfg.tiebreakEnabled, cfg.tiebreakPoints, cfg.superTiebreak, cfg.superTiebreakPoints);
+  // O preset diz quantos sets/games; o GATILHO do empate é escolha à parte, e vale pros dois.
+  return window._gsmBuildDescFromValues(cfg.setsToWin, cfg.gamesPerSet, cfg.tiebreakEnabled, cfg.tiebreakPoints, cfg.superTiebreak, cfg.superTiebreakPoints, window._gsmTieAtAtual());
 };
 
 // ⭐ FONTE ÚNICA do texto do formato — o bloco da fase classificatória E o da eliminatória
@@ -6058,8 +6088,15 @@ window._gsmBuildPresetDesc = function(key, cfg) {
 // Não brigam, e agora o texto diz onde cada um vale:
 //   • tie-break ......... nos sets NORMAIS, quando o set empata (ex. 5-5)
 //   • super tie-break ... só quando os SETS empatam (1-1 no melhor de 3), no lugar do decisivo
-window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP) {
-  var tie = g - 1;
+window._gsmBuildDescFromValues = function(s, g, tb, tbP, stb, stbP, at) {
+  // ⭐ 2.1: o gatilho do tie-break vem da CONFIG, não de `g-1` cravado. O dono pediu que o
+  // controle de 5-5 / 6-6 viva na seção do formato e "reflita nos botões e nas regras" — este
+  // texto É o botão. Quem resolve o gatilho é _tbLoserGames, o MESMO que o lançamento de
+  // placar usa; ler diferente aqui seria a tela prometer um set que o jogo não joga.
+  var tie = (typeof window._tbLoserGames === 'function')
+    ? window._tbLoserGames({ gamesPerSet: g, tiebreakEnabled: tb, tiebreakAt: at || '' },
+        (typeof window._currentSportName === 'function') ? window._currentSportName() : '')
+    : (g - 1);
   if (s === 1) {
     return g + ' games' + (tb ? ' + TB' + tbP + ' em ' + tie + '-' + tie : '');
   }
@@ -6103,6 +6140,8 @@ window._gsmRenderPresets = function() {
     '</button>';
   });
   container.innerHTML = html;
+  // O bloco do empate acompanha: mudar o preset muda os games, e o rótulo "5-5" vira "3-3".
+  if (typeof window._gsmRenderTieAt === 'function') window._gsmRenderTieAt();
 };
 
 // Select a preset — apply its values to hidden fields
@@ -6325,12 +6364,11 @@ window._openGSMConfig = function(targetPhase) {
         // `tiebreakEnabled` — ele passa a ser ESPELHO da escolha, nunca a fonte.
         '<div id="gsm-tb-section" style="border-top:1px solid var(--border-color);padding-top:1rem;">' +
           '<input type="checkbox" id="gsm-cfg-tiebreak" ' + (tbEnabled ? 'checked' : '') + ' style="display:none;">' +
-          '<label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:5px;">No empate de games em</label>' +
-          '<div id="gsm-tbat-seg" data-tbat="' + tbAt + '" style="display:flex;gap:6px;margin-bottom:12px;">' +
-            _gsmTbAtBtn('g-1', tbAt, _gm1, 'set curto') +
-            _gsmTbAtBtn('g', tbAt, _gg, 'padrão') +
-            _gsmTbAtBtn('g+1', tbAt, _gg + 1, 'set longo') +
-          '</div>' +
+          // ⛔ 2.1: o "em que placar o set empata" SAIU daqui. Ele é o toggle "Set curto" da
+          // própria seção de Formato da Partida — e cada fase tem o seu. Ordem do dono: "não
+          // pode ter em 2 lugares na mesma fase". O overlay guarda o valor vigente e devolve
+          // intacto no Aplicar (ver _gsmReadConfigOverlay), então abrir o Personalizado nunca
+          // apaga a escolha feita no toggle.
           '<label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:5px;">O que acontece nesse empate</label>' +
           '<div id="gsm-tierule-seg" data-tierule="' + (tbEnabled ? 'tiebreak' : 'extend') + '" style="display:flex;gap:6px;">' +
             _gsmTieRuleBtn('extend', tbEnabled, '\u23F1\uFE0F Prorrogar', 'segue at\u00e9 abrir 2 games') +
@@ -6402,13 +6440,94 @@ window._gsmToggleTiebreak = function() {
 // ex. 7-6). Grava no segmento (data-tbat), atualiza pills + label. _gsmSaveConfig lê e persiste.
 // Botões dos dois segmentos do empate. Existem como função pra o MESMO estilo valer nos
 // dois (e pra o markup acima caber numa linha por opção).
+/* ⭐ 2.1 — ONDE O SET EMPATA: UM TOGGLE SÓ, USADO PELAS DUAS FASES.
+ *
+ * Ordem do dono (22/ago/2026), em três passos até chegar aqui: primeiro _"vamos colocar esse
+ * controle de tie-break em 5-5 ou 6-6 na sessão do formato da partida, mas podendo ser
+ * configurado fora dos botões (reflete nos botões e nas regras) ... isso nas duas fases
+ * possíveis do torneio"_, depois _"na verdade um toggle 5-5/6-6 que ativado faz virar 5-5 por
+ * default. isso resolve. e fica claro visualmente."_
+ *
+ * O gatilho é À PARTE do preset de propósito: 1 set de 6 games com tie em 5-5 OU em 6-6;
+ * melhor de 3 com tie em 5-5 OU 6-6 e super tie-break no 3º. O preset diz quantos sets e
+ * quantos games; onde o set empata é a outra pergunta, e trocar uma não apaga a outra.
+ *
+ * DESLIGADO = padrão do tênis (empata em g-g, set fecha g+1 × g).
+ * LIGADO    = set curto (empata em (g-1)-(g-1), set fecha g × g-1).
+ *
+ * `cor` = a cor da fase (roxo na inicial, âmbar na eliminatória — é como o dono separa as duas).
+ * `pfx` = prefixo dos ids, pras duas fases coexistirem na mesma tela.
+ */
+window._tieAtToggleHtml = function (o) {
+  o = o || {};
+  var g = parseInt(o.games, 10) || 6;
+  var curto = (o.at === 'g-1');
+  var cor = o.cor || '168,85,247';
+  var pfx = o.pfx || 'gsm';
+  return '<div id="' + pfx + '-tieat-box" class="toggle-row" data-tbat="' + (curto ? 'g-1' : 'g') + '" ' +
+    'style="margin-top:10px;padding:9px 12px;border-radius:10px;border:1px solid rgba(' + cor + ',0.28);background:rgba(' + cor + ',0.07);">' +
+    '<div class="toggle-row-label"><div>' +
+      '<span style="font-size:0.84rem;font-weight:600;color:var(--text-color);">Set curto — tie-break em ' + (g - 1) + '-' + (g - 1) + '</span>' +
+      '<div class="toggle-desc" id="' + pfx + '-tieat-desc" style="font-size:0.7rem;margin-top:2px;line-height:1.4;">' +
+        window._tieAtDesc(g, curto) + '</div>' +
+    '</div></div>' +
+    '<label class="toggle-switch"><input type="checkbox" id="' + pfx + '-tieat-toggle"' + (curto ? ' checked' : '') +
+      ' onchange="' + o.onToggle + '(this.checked)"><span class="toggle-slider"></span></label>' +
+  '</div>';
+};
+// O texto também é um só — é ele que deixa "claro visualmente" o que muda no placar.
+window._tieAtDesc = function (g, curto) {
+  return curto
+    ? ('Empata em ' + (g - 1) + '-' + (g - 1) + ' e o set fecha em ' + g + '-' + (g - 1) + '.')
+    : ('Padrão: empata em ' + g + '-' + g + ' e o set fecha em ' + (g + 1) + '-' + g + '.');
+};
+
+// O gatilho do ALVO aberto no ⚙️ Personalizado: a eliminatória tem o seu; sem formato próprio,
+// ela HERDA o da fase inicial — que é exatamente o que o jogo vai usar.
+window._gsmTieAtDoAlvo = function () {
+  if (window._gsmConfigTarget === 'elim' && typeof window._f2GetElimScoring === 'function') {
+    var e = window._f2GetElimScoring();
+    if (e && e.tiebreakAt) return e.tiebreakAt;
+  }
+  return window._gsmTieAtAtual();
+};
+// O gatilho VIGENTE da fase inicial: o gravado, ou o padrão do esporte (nunca "vazio").
+window._gsmTieAtAtual = function () {
+  var h = document.getElementById('gsm-tiebreakAt');
+  if (h && h.value) return h.value;
+  return (typeof window._sportTiebreakAt === 'function')
+    ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '')
+    : 'g';
+};
+// Desenha o toggle DENTRO da seção de formato da fase inicial.
+window._gsmRenderTieAt = function () {
+  var box = document.getElementById('gsm-tieat-inline');
+  if (!box) return;
+  var g = parseInt((document.getElementById('gsm-gamesPerSet') || {}).value, 10) || 6;
+  var _cfg = { type: (document.getElementById('gsm-type') || {}).value || '',
+               tiebreakEnabled: (document.getElementById('gsm-tiebreakEnabled') || {}).value === 'true',
+               gamesPerSet: g };
+  // Só existe onde existe SET com tie-break. A pergunta vem da fonte canônica, a mesma do placar.
+  var usaSets = (typeof window._scoringUsesSets === 'function')
+    ? window._scoringUsesSets(_cfg) : (!_cfg.type || _cfg.type === 'sets');
+  if (!usaSets || !_cfg.tiebreakEnabled) { box.innerHTML = ''; return; }
+  box.innerHTML = window._tieAtToggleHtml({
+    games: g, at: window._gsmTieAtAtual(), cor: '168,85,247', pfx: 'gsm',
+    onToggle: 'window._gsmSetTieAtInline'
+  });
+};
+window._gsmSetTieAtInline = function (curto) {
+  var h = document.getElementById('gsm-tiebreakAt');
+  if (h) h.value = curto ? 'g-1' : 'g';
+  // "reflete nos botões e nas regras": os presets se redesenham com o gatilho novo.
+  if (typeof window._gsmRenderPresets === 'function') window._gsmRenderPresets();
+  if (typeof window._gsmUpdateMainSummary === 'function') window._gsmUpdateMainSummary();
+};
+
 function _gsmSegBtn(ativo, onclick, titulo, sub) {
   return '<button type="button" onclick="' + onclick + '" style="flex:1;padding:8px 6px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;' +
     'border:2px solid ' + (ativo ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (ativo ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' +
     titulo + '<span style="font-size:0.64rem;color:var(--text-muted);display:block;font-weight:600;margin-top:2px;">' + sub + '</span></button>';
-}
-function _gsmTbAtBtn(valor, atual, n, sub) {
-  return _gsmSegBtn(atual === valor, "window._gsmSetTbAt('" + valor + "')", n + '-' + n, sub);
 }
 function _gsmTieRuleBtn(valor, tbLigado, titulo, sub) {
   var atual = tbLigado ? 'tiebreak' : 'extend';
@@ -6427,73 +6546,6 @@ window._gsmSetTieRule = function (v) {
   if (botoes[0]) { botoes[0].style.borderColor = tb ? 'rgba(255,255,255,0.12)' : '#a855f7'; botoes[0].style.background = tb ? 'transparent' : 'rgba(168,85,247,0.18)'; }
   if (botoes[1]) { botoes[1].style.borderColor = tb ? '#a855f7' : 'rgba(255,255,255,0.12)'; botoes[1].style.background = tb ? 'rgba(168,85,247,0.18)' : 'transparent'; }
   if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
-};
-window._gsmSetTbAt = function(v) {
-  var seg = document.getElementById('gsm-tbat-seg'); if (!seg) return;
-  seg.dataset.tbat = v;
-  // 2.0.2: são TRÊS opções agora (5-5 · 6-6 · 7-7) e o realce é por posição no segmento —
-  // antes eram dois ids fixos, e o terceiro botão ficaria mudo pra sempre.
-  var ordem = ['g-1', 'g', 'g+1'];
-  var botoes = seg.querySelectorAll('button');
-  ordem.forEach(function (valor, i) {
-    var b = botoes[i]; if (!b) return;
-    var on = (v === valor);
-    b.style.borderColor = on ? '#a855f7' : 'rgba(255,255,255,0.12)';
-    b.style.background = on ? 'rgba(168,85,247,0.18)' : 'transparent';
-  });
-  if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
-  if (typeof window._gsmUpdateSummary === 'function') window._gsmUpdateSummary();
-};
-
-// Selector de tie-break 5-5/6-6 no bloco de Lançamento de Resultados (atalho visível). Escreve no
-// MESMO hidden gsm-tiebreakAt do painel GSM → flui pro scoring no save.
-window._reHighlightTbAt = function(v) {
-  var seg = document.getElementById('re-tbat-seg'); if (seg) seg.dataset.tbat = v;
-  var g1 = document.getElementById('re-tbat-g1'), gg = document.getElementById('re-tbat-g');
-  if (g1) { g1.style.borderColor = (v === 'g-1') ? '#3b82f6' : 'rgba(255,255,255,0.12)'; g1.style.background = (v === 'g-1') ? 'rgba(59,130,246,0.18)' : 'transparent'; }
-  if (gg) { gg.style.borderColor = (v === 'g') ? '#3b82f6' : 'rgba(255,255,255,0.12)'; gg.style.background = (v === 'g') ? 'rgba(59,130,246,0.18)' : 'transparent'; }
-};
-window._reSetTbAt = function(v) {
-  var h = document.getElementById('gsm-tiebreakAt'); if (h) h.value = v;
-  window._reHighlightTbAt(v);
-};
-// Mostra o bloco só quando o esporte usa SET + TIE-BREAK; destaca a opção atual (gsm-tiebreakAt OU
-// default do esporte). Chamado no load, na troca de esporte e ao aplicar a config GSM.
-window._reSyncTbAt = function() {
-  var blk = document.getElementById('re-tiebreak-at-block'); if (!blk) return;
-  var tbEnabled = ((document.getElementById('gsm-tiebreakEnabled') || {}).value) === 'true';
-  // v1.3.151 (dono: "onde esta o tie break 5-5/6-6? regressao"): "usa SETS" tem de vir da FONTE
-  // CANÔNICA window._scoringUsesSets — a mesma que o PLACAR usa. Aqui havia lógica própria
-  // (`gsm-type === 'sets'`), e torneios reais gravam `type:'simple'` COM `gamesPerSet`+`tiebreakEnabled`
-  // (o caso do SB: Beach Tennis, type simple, 6 games, TB ligado). Resultado: o placar revelava os
-  // campos de tie-break (tbReveal hit:true) mas a CONFIG escondia o seletor 5-5/6-6 — duas verdades
-  // diferentes pro mesmo torneio. Ver [[project_sport_rules_canonical]].
-  var _scCfg = {
-    type: (document.getElementById('gsm-type') || {}).value || '',
-    tiebreakEnabled: tbEnabled,
-    gamesPerSet: parseInt((document.getElementById('gsm-gamesPerSet') || {}).value) || 0
-  };
-  var isSets = (typeof window._scoringUsesSets === 'function')
-    ? window._scoringUsesSets(_scCfg)
-    : (!_scCfg.type || _scCfg.type === 'sets');
-  blk.style.display = (tbEnabled && isSets) ? 'block' : 'none';
-  if (blk.style.display === 'none') return;
-  var stored = (document.getElementById('gsm-tiebreakAt') || {}).value;
-  var at = stored || ((typeof window._sportTiebreakAt === 'function') ? window._sportTiebreakAt((typeof window._currentSportName === 'function') ? window._currentSportName() : '') : 'g');
-  window._reHighlightTbAt(at);
-  // ⚠️ GRAVA o que a tela está MOSTRANDO. Antes isto só DESTACAVA a pill: quem abria a
-  // config, via "5-5" destacado e salvava sem clicar deixava `tiebreakAt` VAZIO — o gatilho
-  // passava a ser re-derivado do esporte a cada leitura. Medido: dos 8 torneios em produção,
-  // ZERO têm o campo. Enquanto o default do esporte não muda dá no mesmo, mas é promessa não
-  // registrada: editar o esporte do torneio (ou mudar o default) vira o gatilho por baixo de
-  // um organizador que viu "5-5" na tela e nunca escolheu outra coisa — a MESMA classe do bug
-  // do 6-5 (config prometia uma coisa, lançamento fazia outra). Também alinha os DOIS caminhos
-  // de config: o modal "Personalizado" já persiste o default resolvido (gsm-tbat-seg →
-  // _gsmSaveConfig) e só o atalho do form principal não persistia. [[feedback_unify_dual_entry_points]]
-  // O fallback em _tbLoserGames CONTINUA — é ele que mantém os torneios já gravados (sem o
-  // campo) funcionando sem tocar no banco.
-  var _h = document.getElementById('gsm-tiebreakAt');
-  if (_h && !_h.value) _h.value = at;
 };
 
 window._gsmToggleSuperTb = function() {
@@ -6553,8 +6605,7 @@ window._gsmUpdateSummary = function() {
     lines.push(_t('create.gsmSets', { s: sets, pl: sets > 1 ? 's' : '', g: games }));
     lines.push(advOn ? _t('create.gsmCountingAdv') : _t('create.gsmCounting'));
     // O ponto do empate é o ESCOLHIDO (5-5 · 6-6 · 7-7), não mais `games - 1` cravado.
-    var _segAt = document.getElementById('gsm-tbat-seg');
-    var _at = (_segAt && _segAt.dataset.tbat) || 'g-1';
+    var _at = (typeof window._gsmTieAtDoAlvo === 'function') ? window._gsmTieAtDoAlvo() : 'g';
     var _tbTie = (_at === 'g-1') ? (games - 1) : (_at === 'g+1') ? (games + 1) : games;
     if (tbOn) {
       // ⚠️ 2.0.2 — ERA `tbPts - tbMargin` (5, num tie-break de 7 com 2 de vantagem) e estava
@@ -6609,7 +6660,11 @@ window._gsmReadConfigOverlay = function () {
   var ck = function (id, d) { var el = document.getElementById(id); return el ? el.checked : d; };
   var games = parseInt(v('gsm-cfg-gamesPerSet', '6')) || 6;
   var fsOn = ck('gsm-cfg-fixedSet', false);
-  var _seg = document.getElementById('gsm-tbat-seg');
+  var _alvoElim = (window._gsmConfigTarget === 'elim' && typeof window._f2GetElimScoring === 'function')
+    ? (window._f2GetElimScoring() || null) : null;
+  var _tbAtVigente = _alvoElim
+    ? (_alvoElim.tiebreakAt || '')
+    : ((typeof window._gsmTieAtAtual === 'function') ? window._gsmTieAtAtual() : '');
   var out = {
     type: 'sets', countingType: 'tennis',
     setsToWin: parseInt(v('gsm-cfg-setsToWin', '1')) || 1,
@@ -6622,7 +6677,9 @@ window._gsmReadConfigOverlay = function () {
     advantageRule: (typeof window._gsmGetAdvantageForSport === 'function') ? window._gsmGetAdvantageForSport() : false,
     fixedSet: fsOn, fixedSetGames: fsOn ? games : 6
   };
-  if (_seg && _seg.dataset.tbat) out.tiebreakAt = _seg.dataset.tbat;
+  // 2.1: PRESERVA o gatilho do alvo (fase inicial ou eliminatória) — o overlay não o edita
+  // mais, e devolvê-lo vazio faria o Aplicar apagar a escolha do toggle da seção.
+  if (_tbAtVigente) out.tiebreakAt = _tbAtVigente;
   // ⭐ 2.0.2: a decisão do empate (prorrogar × tie-break) passa a SER GRAVADA. O motor ao vivo
   // já lia `scoring.tieRule` em torneio — ninguém escrevia, então a escolha do organizador
   // morria na tela. `tiebreakEnabled` continua saindo junto, como espelho, porque muito código
@@ -6661,7 +6718,6 @@ window._gsmSaveConfig = function() {
   document.getElementById('gsm-tiebreakPoints').value = String(_cfgOv.tiebreakPoints);
   document.getElementById('gsm-tiebreakMargin').value = String(_cfgOv.tiebreakMargin);
   document.getElementById('gsm-tiebreakAt').value = _cfgOv.tiebreakAt || '';
-  if (typeof window._reSyncTbAt === 'function') window._reSyncTbAt();
   document.getElementById('gsm-superTiebreak').value = _cfgOv.superTiebreak ? 'true' : 'false';
   document.getElementById('gsm-superTiebreakPoints').value = String(_cfgOv.superTiebreakPoints);
   document.getElementById('gsm-advantageRule').value = _cfgOv.advantageRule ? 'true' : 'false';

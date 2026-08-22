@@ -48,7 +48,14 @@ ok(/out\.tieRule = /.test(ct), 'o "Personalizado" grava tieRule (antes o motor l
 ok(/window\._gsmSetTieRule = function/.test(ct), 'existe o controle prorrogar × tie-break');
 ok(/'tiebreakAt','tieRule'\]/.test(ct), 'os dois viajam junto com o formato entre as fases');
 ok(/id="gsm-tieRule"/.test(ct), 'e têm campo próprio no formulário (senão não salva no torneio)');
-ok(/_gsmTbAtBtn\('g\+1'/.test(ct), 'a tela oferece o 7-7');
+// ⭐ 2.1 — a tela oferece 5-5 × 6-6 num TOGGLE, não três botões. Decisão do dono (22/ago):
+// "na verdade um toggle 5-5/6-6 que ativado faz virar 5-5 por default. isso resolve. e fica
+// claro visualmente." O 'g+1' continua LEGÍVEL pelo motor (torneio já gravado assim segue
+// jogando 7-7), só deixou de ser oferecido — não é a mesma coisa que deixar de existir.
+ok(/window\._tieAtToggleHtml = function/.test(ct), 'o gatilho do empate é um toggle, um desenho só');
+ok(/curto \? 'g-1' : 'g'/.test(ct), 'ligado = 5-5 (set curto), desligado = 6-6 (padrão)');
+ok(/'g\+1'/.test(ui), 'o motor continua entendendo o 7-7 já gravado (não some do lançamento)');
+ok(!/gsm-tbat-seg/.test(ct), '⛔ o segmento antigo não sobrou em lugar nenhum do formulário');
 
 // ── 5. O RESUMO conta as duas saídas, com a conta certa ─────────────────────
 ok(/gsmExtendDetail/.test(ct), 'o resumo diz o que acontece quando é PRORROGAR (antes ficava mudo)');

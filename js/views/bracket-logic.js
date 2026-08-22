@@ -4621,7 +4621,23 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // pra espalhar a minoria, e paramos quando não dá mais — "o mais possível" é literal,
   // nunca uma falha.
   var numGroups = Math.floor(playingPlayers.length / 4);
-  if (t.equilibrado !== false && numGroups > 1) {
+  // ⭐ 2.1 — O ESPALHAMENTO VIROU O MODO **DESTRAVADO**, e deixou de rodar sozinho.
+  //
+  // Relato do dono, olhando a tela em "Sem regra": _"estava em sem regra antes de eu mudar e
+  // funcionava, o que indica que funcionava por outra razão quando essa deveria ser a única
+  // razão."_ Ele estava certo: eram DOIS motores no mesmo sorteio —
+  //   • este `_spreadMinorityGender` ("o mais possível"), que rodava SEMPRE que o sorteio
+  //     fosse equilibrado, olhasse ou não a proporção configurada;
+  //   • o `_planGroupsByRatio` logo abaixo, que só entra quando há proporção.
+  // Com os dois, a tela podia dizer "sem regra" e o grupo sair equilibrado assim mesmo — a
+  // configuração não explicava o resultado, que é o defeito de fundo.
+  //
+  // Agora há UMA explicação por comportamento, e é a trava que escolhe entre elas:
+  //   TRAVADA   → regra dura: `_planGroupsByRatio` monta só grupo que atende a proporção.
+  //   DESTRAVADA→ este espalhamento: busca a proporção e flexibiliza pra incluir mais gente.
+  // É literalmente o que o texto do toggle já prometia ao organizador.
+  var _travadaAqui = (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true;
+  if (t.equilibrado !== false && numGroups > 1 && !_travadaAqui) {
     playingPlayers = _spreadMinorityGender(t, playingPlayers, numGroups);
   }
   var groups = [];

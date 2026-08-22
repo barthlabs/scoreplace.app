@@ -6414,6 +6414,18 @@ function _formatPhoneDisplay(digits, countryCode) {
   return result;
 }
 
+// A MÁSCARA por DDI, exposta — a lista de países e os formatos já moram aqui, e escrever
+// uma segunda máscara em outra tela era como as duas acabariam divergindo.
+// [[feedback_unify_dual_entry_points]]
+window._phoneMaskFor = function (digitos, ddi) {
+  return _formatPhoneDisplay(String(digitos || '').replace(/\D/g, ''), String(ddi || '55'));
+};
+// Quantos dígitos o formato daquele país pede (pra saber quando o número está completo).
+window._phoneDigitsFor = function (ddi) {
+  var c = _phoneCountries.find(function (x) { return x.code === String(ddi || '55'); });
+  return c ? (c.mask.match(/#/g) || []).length : 0;
+};
+
 function _setupPhoneMask(inputEl, countryCode) {
   inputEl.addEventListener('input', function() {
     var raw = this.value.replace(/\D/g, '');

@@ -52,14 +52,27 @@ function contactPhoneOf(profile) {
 /* Normaliza pra E.164 COM '+' — o formato já gravado em users/{uid}.phone
  * (ex.: "+5511999707047"). Devolve '' quando não dá pra afirmar que é número. */
 function toE164(raw, country) {
-  const d = String(raw == null ? '' : raw).replace(/\D/g, '');
+  const bruto = String(raw == null ? '' : raw).trim();
+  const temMais = bruto.charAt(0) === '+';
+  const d = bruto.replace(/\D/g, '');
   const cc = String(country || '55').replace(/\D/g, '') || '55';
   if (!d) return '';
-  if (d.length === 10 || d.length === 11) return '+' + cc + d;          // DDD + número
-  if (d.length === 12 || d.length === 13) return '+' + d;              // já com DDI
-  if (d.length > 13 || d.length < 10) return '';                       // não é telefone
-  return '+' + d;
+  // ⭐ 2.1: o DDI passou a ser ESCOLHIDO na tela (ordem do dono, 22/ago: "tem que poder
+  // escolher o DDI como em qualquer outra situação de telefone"). Antes esta função exigia
+  // 10 ou 11 dígitos — BR-shaped — e Portugal (9), Chile (9) ou Espanha (9) voltavam
+  // 'numero-invalido' por mais certos que estivessem.
+  //
+  // ⚠️ O SINAL de "já tem DDI" é o '+'. Deduzir por prefixo seria uma armadilha: o DDD 55
+  // existe (Santa Maria/RS), então 55987654321 é um celular NACIONAL de 11 dígitos, não um
+  // número já com o DDI 55 colado. Só a regra legada de 12/13 dígitos em BR fica, porque é
+  // como o dado antigo chegava aqui.
+  if (temMais) return (d.length >= 8 && d.length <= 15) ? '+' + d : '';
+  if (cc === '55' && (d.length === 12 || d.length === 13) && d.indexOf('55') === 0) return '+' + d;
+  if (d.length < 6 || d.length > 14) return '';
+  const cheio = cc + d;
+  return cheio.length <= 15 ? '+' + cheio : '';
 }
+
 
 /* ── A DECISÃO ──────────────────────────────────────────────────────────────
  * Devolve { ok:false, reason } ou { ok:true, update, phone }. A ordem das recusas é a

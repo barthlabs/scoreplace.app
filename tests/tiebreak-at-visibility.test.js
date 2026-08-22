@@ -2,10 +2,14 @@
 // No SB (Beach Tennis) o placar REVELAVA os campos de tie-break (tbReveal hit:true) mas a tela de
 // CONFIG escondia o seletor 5-5/6-6 — duas verdades diferentes pro MESMO torneio.
 //
-// CAUSA: _reSyncTbAt (create-tournament.js) tinha lógica PRÓPRIA de "usa sets" (`gsm-type==='sets'`),
+// CAUSA: a sincronia da config (create-tournament.js) tinha lógica PRÓPRIA de "usa sets"
+// (`gsm-type==='sets'`),
 // enquanto o placar usa a FONTE CANÔNICA window._scoringUsesSets. Torneios reais gravam
 // `type:'simple'` COM gamesPerSet + tiebreakEnabled (o doc do dono: type simple, 6 games, TB on) →
 // canônica diz SETS, a pirata dizia SIMPLES → seletor sumia.
+//
+// (2.1: a seção solta que hospedava essa lógica saiu do formulário — quem decide o gatilho é o
+//  bloco Formato da partida, por fase. A regra abaixo continua valendo pra quem sobrou.)
 //
 // REGRA TRAVADA: "usa sets" é decidido SEMPRE por _scoringUsesSets. [[project_sport_rules_canonical]]
 const H = require('./render-harness');

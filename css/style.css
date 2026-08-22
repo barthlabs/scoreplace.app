@@ -42,6 +42,11 @@
   --placar-linha-bg: rgba(0,0,0,0.25);
   --placar-tarja-neutra: rgba(255,255,255,0.16);
 
+  /* Verde do controle de PROPORÇÃO. No escuro o #22c55e brilha; no claro ele desbota sobre
+     fundo quase branco (fica em ~2,3:1) e o "2H / 2M" — que é a leitura principal — some.
+     Contraste é regra dos DOIS temas. Ver feedback_contraste_sempre_nos_dois_temas. */
+  --ratio-verde: #22c55e;
+
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -171,6 +176,7 @@
   /* No claro o contraste se faz com PRETO — o mesmo papel, a cor oposta. */
   --placar-linha-bg: rgba(0,0,0,0.055);
   --placar-tarja-neutra: rgba(0,0,0,0.22);
+  --ratio-verde: #15803d;
 
 }
 
@@ -230,6 +236,7 @@
   /* No claro o contraste se faz com PRETO — o mesmo papel, a cor oposta. */
   --placar-linha-bg: rgba(0,0,0,0.055);
   --placar-tarja-neutra: rgba(0,0,0,0.22);
+  --ratio-verde: #15803d;
 
 }
 

@@ -2590,8 +2590,10 @@ function renderParticipants(container, tournamentId) {
       const _telBtnC = (isOrg && ind.uid) ? ('<button type="button" class="btn btn-micro" ' +
         'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
         'title="' + window._safeHtml(_telTitulo) + '" ' +
-        'style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:' + _telCor + ';">' +
-        '📱' + (_telJa ? '' : ' contato') + '</button>') : '';
+        'style="min-height:0;height:24px;width:30px;line-height:1;padding:0;font-size:0.72rem;' +
+        'display:inline-flex;align-items:center;justify-content:center;' +
+        'border-radius:7px;flex-shrink:0;background:' + _telCor + ';">' +
+        '📱</button>') : '';
 
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
       // jogador do card, inclusive os da lista de espera. A remoção (tournaments.js)
@@ -2724,7 +2726,7 @@ function renderParticipants(container, tournamentId) {
                 </div>
                 <!-- Meta: VIP + categorias + nível (à esquerda). O 🗑️ saiu daqui — -->
                 <!-- vai pra linha de ação canônica abaixo (junto da presença). -->
-                <div style="margin-top:6px;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_vipBtnC}${_telBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
+                <div style="margin-top:6px;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;" onclick="event.stopPropagation();">${_telBtnC}${_vipBtnC}${_metaSlotsFor(_nameToParticipant[ind.name], ind.name, false, {inline:true})}${_ciSkillHtml}</div>
                 <!-- CARD CANÔNICO: ação (Presente/Ausente · toggle · W.O. · 🗑️) à direita. -->
                 ${window._inscritoActionRow('', _presenceWord + (isAbsent ? _riWoBadge : _toggleSwitch) + woBtn, _delBtnC)}
                 ${_matchStrip}
@@ -3014,22 +3016,35 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
 // alguém chame a função por fora.
 // ═══════════════════════════════════════════════════════════════════════════
 window._orgSetContactPhone = function (tId, uid, nome) {
-  var _fmtBR = function (d) {
-    var s = String(d || '').replace(/\D/g, '').slice(-11);
-    if (s.length === 11) return '(' + s.slice(0, 2) + ') ' + s.slice(2, 7) + '-' + s.slice(7);
-    if (s.length === 10) return '(' + s.slice(0, 2) + ') ' + s.slice(2, 6) + '-' + s.slice(6);
-    return s;
-  };
   var prof = (window._userProfileCache && window._userProfileCache[uid]) || null;
   var atual = String((prof && prof.phone) || '');
   var verificado = atual.replace(/\D/g, '').length >= 8 && (!prof || prof.phoneSource !== 'organizer');
+
+  // DDI e número separados a partir do que já está gravado (E.164 com '+'). Sem isto o
+  // organizador via o DDI colado dentro do campo do número e apagava metade sem perceber.
+  var _ddiAtual = String((prof && prof.phoneCountry) || '');
+  var _soDigitos = String(atual).replace(/\D/g, '');
+  if (!_ddiAtual && String(atual).charAt(0) === '+') {
+    var _cands = ['351', '598', '595', '55', '54', '56', '57', '34', '44', '1'];
+    for (var _i = 0; _i < _cands.length; _i++) {
+      if (_soDigitos.indexOf(_cands[_i]) === 0) { _ddiAtual = _cands[_i]; break; }
+    }
+  }
+  if (!_ddiAtual) _ddiAtual = '55';
+  var _nacional = (_soDigitos.indexOf(_ddiAtual) === 0 && _soDigitos.length > _ddiAtual.length + 5)
+    ? _soDigitos.slice(_ddiAtual.length) : _soDigitos;
+  var _valorInicial = (typeof window._phoneMaskFor === 'function')
+    ? window._phoneMaskFor(_nacional, _ddiAtual) : _nacional;
+  var _placeholder = (typeof window._phoneMaskFor === 'function')
+    ? window._phoneMaskFor('99999999999'.slice(0, (typeof window._phoneDigitsFor === 'function' ? window._phoneDigitsFor(_ddiAtual) : 11) || 11), _ddiAtual)
+    : '(11) 99999-9999';
 
   // Celular que a PRÓPRIA pessoa verificou por SMS não se toca. Só ela manda no número
   // dela — o organizador registra contato de quem não tem, não corrige quem tem.
   if (verificado) {
     if (typeof showAlertDialog === 'function') {
       showAlertDialog('Celular já verificado',
-        (nome || 'Essa pessoa') + ' já confirmou o celular por SMS: ' + _fmtBR(atual) + '.\n\n' +
+        (nome || 'Essa pessoa') + ' já confirmou o celular por SMS: +' + _ddiAtual + ' ' + _valorInicial + '.\n\n' +
         'Só ela pode trocar esse número, no próprio perfil.', null, { type: 'info' });
     }
     return;
@@ -3039,12 +3054,23 @@ window._orgSetContactPhone = function (tId, uid, nome) {
   var corpo =
     '<div style="font-size:0.86rem;line-height:1.5;color:var(--text-muted);">' +
       (jaRegistrado
-        ? '<p style="margin:0 0 10px;">Hoje está registrado <b style="color:var(--text-bright);">' + window._safeHtml(_fmtBR(atual)) + '</b>, colocado por um organizador. Você pode corrigir.</p>'
+        ? '<p style="margin:0 0 10px;">Hoje está registrado <b style="color:var(--text-bright);">' + window._safeHtml('+' + _ddiAtual + ' ' + _valorInicial) + '</b>, colocado por um organizador. Você pode corrigir.</p>'
         : '<p style="margin:0 0 10px;">Use isto quando o SMS de verificação não chegar pra pessoa. Confirme o número <b>com ela</b> antes.</p>') +
+      // ⭐ 2.1 (dono): "tem que poder escolher o DDI como em qualquer outra situação de
+      // telefone" + "a máscara do número deve ser preenchida automaticamente e o organizador
+      // digita apenas números". O seletor sai da MESMA lista do login/perfil
+      // (_phoneCountryOptionsHtml) — segunda cópia de países era divergência garantida.
       '<div style="display:flex;gap:8px;align-items:center;margin:12px 0 10px;">' +
-        '<span style="font-weight:700;color:var(--text-bright);">+55</span>' +
+        '<select id="org-contact-phone-ddi" class="form-control" aria-label="DDI do telefone" ' +
+          'onchange="window._orgContactPhoneMask()" ' +
+          'style="width:auto;min-width:0;flex:0 0 auto;font-size:0.9rem;padding:11px 6px;">' +
+          ((typeof window._phoneCountryOptionsHtml === 'function')
+            ? window._phoneCountryOptionsHtml(_ddiAtual)
+            : '<option value="55">\uD83C\uDDE7\uD83C\uDDF7 +55</option>') +
+        '</select>' +
         '<input id="org-contact-phone-input" class="form-control" inputmode="numeric" ' +
-          'placeholder="(11) 99999-9999" value="' + window._safeHtml(_fmtBR(atual)) + '" ' +
+          'autocomplete="off" oninput="window._orgContactPhoneMask()" ' +
+          'placeholder="' + window._safeHtml(_placeholder) + '" value="' + window._safeHtml(_valorInicial) + '" ' +
           'style="flex:1;min-width:0;font-size:1rem;letter-spacing:0.5px;">' +
       '</div>' +
       '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:9px 11px;font-size:0.76rem;color:#fbbf24;">' +
@@ -3056,20 +3082,29 @@ window._orgSetContactPhone = function (tId, uid, nome) {
   if (typeof showConfirmDialog !== 'function') return;
   showConfirmDialog('📱 Registrar contato de ' + (nome || 'participante'), corpo, function () {
     var el = document.getElementById('org-contact-phone-input');
+    var _ddiEl = document.getElementById('org-contact-phone-ddi');
+    var _ddi = (_ddiEl && _ddiEl.value) || '55';
     var digits = el ? String(el.value || '').replace(/\D/g, '') : '';
-    if (digits.length < 10) {
-      if (typeof showNotification === 'function') showNotification('Número incompleto', 'Digite DDD + número do celular.', 'warning');
+    // O mínimo não é mais 10 cravado: Portugal e Chile têm 9, e recusar aqui deixaria o
+    // seletor de DDI de enfeite. Quem diz a última palavra é o servidor (toE164).
+    var _minimo = (_ddi === '55') ? 10 : 6;
+    if (digits.length < _minimo) {
+      if (typeof showNotification === 'function') {
+        showNotification('Número incompleto',
+          (_ddi === '55') ? 'Digite DDD + número do celular.' : 'Digite o número completo do país escolhido.', 'warning');
+      }
       return;
     }
     if (typeof showNotification === 'function') showNotification('Registrando…', 'Salvando o contato de ' + (nome || '') + '.', 'info');
     firebase.functions().httpsCallable('setParticipantContactPhone')({
-      tournamentId: String(tId), uid: String(uid), phone: digits, country: '55',
+      tournamentId: String(tId), uid: String(uid), phone: digits, country: String(_ddi),
     }).then(function (res) {
       var r = (res && res.data) || {};
       // O cache local acompanha na hora — senão o botão continua "sem contato" até o
       // próximo carregamento e parece que não salvou.
       if (window._userProfileCache && window._userProfileCache[uid]) {
-        window._userProfileCache[uid].phone = r.phone || ('+55' + digits);
+        window._userProfileCache[uid].phone = r.phone || ('+' + _ddi + digits);
+        window._userProfileCache[uid].phoneCountry = String(_ddi);
         window._userProfileCache[uid].phoneSource = 'organizer';
       }
       if (typeof showNotification === 'function') {
@@ -3082,4 +3117,28 @@ window._orgSetContactPhone = function (tId, uid, nome) {
       else if (typeof showNotification === 'function') showNotification('Não deu pra registrar', String(msg), 'error');
     });
   }, null, { confirmText: 'Registrar', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
+};
+
+// Máscara ao vivo do campo de contato: o organizador digita SÓ NÚMEROS e a pontuação
+// aparece sozinha, no formato do país escolhido. Ordem do dono (22/ago): "a máscara do
+// número deve ser preenchida automaticamente e o organizador digita apenas números".
+// O formato vem de window._phoneMaskFor (auth.js) — a mesma lista de países do login.
+window._orgContactPhoneMask = function () {
+  var inp = document.getElementById('org-contact-phone-input');
+  var sel = document.getElementById('org-contact-phone-ddi');
+  if (!inp) return;
+  var ddi = (sel && sel.value) || '55';
+  var max = (typeof window._phoneDigitsFor === 'function') ? window._phoneDigitsFor(ddi) : 11;
+  var d = String(inp.value || '').replace(/\D/g, '');
+  if (max > 0 && d.length > max) d = d.slice(0, max);
+  var novo = (typeof window._phoneMaskFor === 'function') ? window._phoneMaskFor(d, ddi) : d;
+  if (inp.value !== novo) {
+    inp.value = novo;
+    // Digitação é sempre no fim do campo; sem isto o cursor pulava pro começo a cada
+    // caractere que a máscara insere.
+    try { inp.setSelectionRange(novo.length, novo.length); } catch (e) {}
+  }
+  if (typeof window._phoneMaskFor === 'function' && max > 0) {
+    inp.placeholder = window._phoneMaskFor('99999999999999'.slice(0, max), ddi);
+  }
 };

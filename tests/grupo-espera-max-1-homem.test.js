@@ -49,7 +49,14 @@ const NOME = u => PERFIS[u].displayName;
 
 // Torneio Rei/Rainha com a rodada 1 já sorteada (é o pré-requisito da função) e a fila
 // de espera povoada. As entradas da espera vão SEM gender — igual produção.
-function mkT(uidsNaEspera) {
+// ⭐ 2.1: a proporção agora é EXPLÍCITA em cada cenário. Antes todos herdavam o default do
+// app — que era 25/75 — e por isso o arquivo inteiro parecia falar de "no máximo 1 homem"
+// quando na verdade falava do DEFAULT. Com o default virando 50/50 (ordem do dono, 22/ago),
+// separar as duas coisas é o que mantém honesto o que cada caso prova:
+//   • '25/75' → a regra de agosto ("não fechar grupo novo com mais de 1 homem"), que é o que
+//     a Confra tem gravado. Ela continua valendo onde foi pedida.
+//   • sem ratio → o default do app, hoje 50/50.
+function mkT(uidsNaEspera, ratio) {
   const t = {
     id: 'tour_wl', name: 'WL', format: 'Liga', ligaRoundFormat: 'rei_rainha',
     creatorUid: 'uOrg', participants: [], status: 'active',
@@ -66,6 +73,7 @@ function mkT(uidsNaEspera) {
   // em participants, então o mapa nascia vazio e a regra de equilíbrio ficava cega — foi
   // assim que o "R1 Grupo B2" do Confra fechou com 3 homens e `playersUids` todos nulos.
   // Modelar isso errado era o que deixava o gate verde com o bug vivo.
+  if (ratio) t.genderRatio = ratio;
   t.monarchWaitlist['_default_'] = uidsNaEspera.map(NOME);
   uidsNaEspera.forEach(u => t.standbyParticipants.push({
     uid: u, addedAt: '2026-08-04T10:00:00.000Z', selfEnrolled: true, ligaActive: true
@@ -91,9 +99,34 @@ function homensNo(grupo) {
   return (grupo.players || []).filter(n => (PERFIS[uidPorNome[n]] || {}).gender === 'masculino').length;
 }
 
-console.log('\n──── 4 HOMENS na fila: o grupo NÃO fecha ────');
+// ── O DEFAULT DO APP: 50/50 TRAVADO (ordem do dono, 22/ago/2026) ─────────────────────
+// _"o default 50-50 para o app. na confra é setado para 25-75."_ E, perguntado sobre a
+// consequência de 1 homem + 3 mulheres deixar de fechar: _"50/50 travado mesmo"_.
+// O caso extremo que a regra de agosto existia pra impedir — 4 homens atrasados fechando um
+// grupo forte — continua impedido: 50/50 exige 2+2, então 4H e 3H+1M também não fecham.
+console.log('\n──── DEFAULT do app (50/50 travado) ────');
+{
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3']);       // sem ratio → default
+  t2('1 homem + 3 mulheres NÃO fecha (precisa de 2+2)',
+     win._tryFormMonarchWaitlistGroups(t, null, 1) === 0);
+}
+{
+  const t = mkT(['uH1', 'uH2', 'uM1', 'uM2']);
+  const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
+  const gs = gruposFormados(t);
+  t2('2 homens + 2 mulheres fecha', n === 1, 'formados=' + n);
+  t2('e o grupo é 2+2', gs.length === 1 && homensNo(gs[0]) === 2,
+     gs.length ? JSON.stringify(gs[0].players) : 'sem grupo');
+}
 {
   const t = mkT(['uH1', 'uH2', 'uH3', 'uH4']);
+  t2('4 homens continuam sem fechar grupo (o medo de agosto segue coberto)',
+     win._tryFormMonarchWaitlistGroups(t, null, 1) === 0);
+}
+
+console.log('\n──── 4 HOMENS na fila: o grupo NÃO fecha ────');
+{
+  const t = mkT(['uH1', 'uH2', 'uH3', 'uH4'], '25/75');
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('nenhum grupo formado', n === 0, 'formados=' + n);
   t2('a fila continua intacta', (win._getWaitlist(t) || []).length === 4);
@@ -101,7 +134,7 @@ console.log('\n──── 4 HOMENS na fila: o grupo NÃO fecha ────');
 
 console.log('\n──── 1 homem + 3 mulheres: fecha normalmente ────');
 {
-  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3'], '25/75');
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('formou 1 grupo', n === 1, 'formados=' + n);
   const gs = gruposFormados(t);
@@ -111,7 +144,7 @@ console.log('\n──── 1 homem + 3 mulheres: fecha normalmente ────
 
 console.log('\n──── 2 homens + 6 mulheres: forma 2 grupos, 1 homem em cada ────');
 {
-  const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uM5', 'uM6']);
+  const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uM5', 'uM6'], '25/75');
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('formou 2 grupos', n === 2, 'formados=' + n);
   const gs = gruposFormados(t);
@@ -133,7 +166,7 @@ console.log('\n──── 2 homens + 6 mulheres NUNCA perde grupo (qualquer em
   for (let seed = 1; seed <= 120; seed++) {
     let s = seed;
     Math.random = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
-    const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uM5', 'uM6']);
+    const t = mkT(['uH1', 'uH2', 'uM1', 'uM2', 'uM3', 'uM4', 'uM5', 'uM6'], '25/75');
     const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
     const maxH = gruposFormados(t).reduce((a, g) => Math.max(a, homensNo(g)), 0);
     if (n !== 2 || maxH > 1) { perdidos++; if (!pior) pior = 'seed=' + seed + ' grupos=' + n + ' maxHomens=' + maxH; }
@@ -160,7 +193,7 @@ console.log('\n──── sem gênero determinado NÃO entra em grupo (revoga 
 
 console.log('\n──── conhecidos fecham; o desconhecido espera (não bloqueia os outros) ────');
 {
-  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3', 'uX1']);
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3', 'uX1'], '25/75');
   const n = win._tryFormMonarchWaitlistGroups(t, null, 1);
   t2('formou 1 grupo com os 4 de gênero declarado', n === 1, 'formados=' + n);
   const gs = gruposFormados(t);
@@ -200,7 +233,7 @@ console.log('\n──── a fila do Confra (4 homens + 1 mulher, 2 sem gênero
 
 console.log('\n──── o grupo formado carrega uid REAL nos slots (nunca null) ────');
 {
-  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3'], '25/75');
   win._tryFormMonarchWaitlistGroups(t, null, 1);
   const gs = gruposFormados(t);
   t2('playersUids sem nenhum null', gs.length === 1 && (gs[0].playersUids || []).length === 4
@@ -214,7 +247,7 @@ console.log('\n──── o grupo formado carrega uid REAL nos slots (nunca nu
 console.log('\n──── uid vem da ENTRADA da espera quando o nome não está no elenco ────');
 {
   // Produção: standbyParticipants guarda a entrada com uid e SEM nome (strippada).
-  const t = mkT([]);
+  const t = mkT([], '25/75');
   t.monarchWaitlist['_default_'] = ['uH1', 'uM1', 'uM2', 'uM3'].map(NOME);
   ['uH1', 'uM1', 'uM2', 'uM3'].forEach(u => {
     t.standbyParticipants.push({ uid: u, addedAt: '2026-08-04T10:00:00.000Z' });
@@ -229,7 +262,7 @@ console.log('\n──── uid vem da ENTRADA da espera quando o nome não est�
 
 console.log('\n──── a entrada da espera NÃO carrega gender (como em produção) ────');
 {
-  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  const t = mkT(['uH1', 'uM1', 'uM2', 'uM3'], '25/75');
   const entradas = win._getWaitlist(t) || [];
   t2('nenhuma entrada da fila tem gender gravado',
      entradas.every(e => !e || typeof e !== 'object' || !e.gender));
@@ -305,7 +338,7 @@ console.log('\n──── grupo torto NÃO NASCE, mesmo se o planejador falhar
 }
 {
   // e o caminho bom continua passando pela porta sem ser barrado
-  const t1 = mkT(['uH1', 'uM1', 'uM2', 'uM3']);
+  const t1 = mkT(['uH1', 'uM1', 'uM2', 'uM3'], '25/75');
   t2('grupo válido (1H+3M) NÃO é barrado pela porta',
      win._tryFormMonarchWaitlistGroups(t1, null, 1) === 1);
 }

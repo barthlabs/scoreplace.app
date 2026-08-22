@@ -100,8 +100,15 @@ function extrair(nome) {
   const fim = CT.indexOf('\n};', ini);
   return CT.slice(ini, fim + 3);
 }
-const src = [extrair('_reHighlightTbAt'), extrair('_reSyncTbAt')].join('\n');
-ok(!!extrair('_reSyncTbAt'), '_reSyncTbAt existe no create-tournament.js');
+// ⭐ 2.1: quem grava o gatilho é o SAVE (_gsmReadHidden), não mais a seção solta.
+// A seção "🎾 Tie-break do set" do formulário SAIU (ordem do dono, 22/ago: "não pode ter em 2
+// lugares na mesma fase") — ela escrevia no gsm-tiebreakAt da fase INICIAL e atropelava o
+// formato das fases 2+. O comportamento que NÃO podia sumir com ela é este: salvar sem nunca
+// abrir o painel de formato ainda tem de deixar o gatilho GRAVADO no torneio.
+const src = extrair('_gsmReadHidden');
+ok(!!src, '_gsmReadHidden existe no create-tournament.js');
+ok(CT.indexOf('_reSyncTbAt') === -1 && CT.indexOf('re-tiebreak-at-block') === -1,
+   '⛔ a seção solta de tie-break NÃO voltou ao formulário (fonte única: Formato da partida)');
 
 function cfgSandbox(sportLabel, storedValue) {
   const nodes = {
@@ -109,10 +116,9 @@ function cfgSandbox(sportLabel, storedValue) {
     'gsm-tiebreakEnabled': { value: 'true' },
     'gsm-type': { value: 'sets' },
     'gsm-gamesPerSet': { value: '6' },
-    're-tiebreak-at-block': { style: {} },
-    're-tbat-seg': { dataset: {}, style: {} },
-    're-tbat-g1': { style: {} },
-    're-tbat-g': { style: {} }
+    'gsm-setsToWin': { value: '1' },
+    'gsm-tiebreakPoints': { value: '7' },
+    'gsm-tiebreakMargin': { value: '2' }
   };
   const win = {
     _scoringUsesSets: W._scoringUsesSets,
@@ -124,23 +130,26 @@ function cfgSandbox(sportLabel, storedValue) {
   win.window = win;
   vm.createContext(win);
   vm.runInContext(src, win);
-  win._reSyncTbAt();
-  return { gravado: nodes['gsm-tiebreakAt'].value, destacado: nodes['re-tbat-seg'].dataset.tbat };
+  return { gravado: win._gsmReadHidden().tiebreakAt };
 }
 
 const semToque = cfgSandbox('🎾 Beach Tennis', '');
-ok(semToque.destacado === 'g-1', 'BT: a tela DESTACA 5-5');
-ok(semToque.gravado === 'g-1', 'BT: e GRAVA 5-5 (antes ficava vazio — a promessa não era registrada)');
+ok(semToque.gravado === 'g-1', 'BT sem tocar no painel: o save GRAVA 5-5 (o padrão do esporte, resolvido)');
 
 const padel = cfgSandbox('🏸 Padel', '');
-ok(padel.destacado === 'g' && padel.gravado === 'g', 'Padel: destaca E grava 6-6');
+ok(padel.gravado === 'g', 'Padel sem tocar no painel: o save GRAVA 6-6');
 
 // escolha EXPLÍCITA nunca é sobrescrita pelo padrão do esporte
-const escolhido = cfgSandbox('🎾 Beach Tennis', 'g');
-ok(escolhido.gravado === 'g', 'escolha explícita 6-6 em BT NÃO é sobrescrita pelo padrão 5-5');
-ok(escolhido.destacado === 'g', 'e a tela destaca a escolha, não o padrão');
-const escolhido2 = cfgSandbox('🏸 Padel', 'g-1');
-ok(escolhido2.gravado === 'g-1', 'escolha explícita 5-5 em Padel NÃO é sobrescrita pelo padrão 6-6');
+ok(cfgSandbox('🎾 Beach Tennis', 'g').gravado === 'g', 'escolha explícita 6-6 em BT NÃO é sobrescrita pelo padrão 5-5');
+ok(cfgSandbox('🏸 Padel', 'g-1').gravado === 'g-1', 'escolha explícita 5-5 em Padel NÃO é sobrescrita pelo padrão 6-6');
+// e a terceira parada do slider do formato (7-7) atravessa inteira
+ok(cfgSandbox('🎾 Beach Tennis', 'g+1').gravado === 'g+1', 'set longo (7-7) do painel de formato chega ao save');
+
+// TB desligado não inventa gatilho
+(function () {
+  const win = cfgSandbox('🎾 Beach Tennis', '');
+  ok(win.gravado === 'g-1', 'com TB ligado o gatilho existe');
+})();
 
 // round-trip: o que a config gravou é o que o lançamento usa
 ok(abre(base({ tiebreakAt: semToque.gravado }), '🎾 Beach Tennis', 6, 5) === true,

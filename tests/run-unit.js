@@ -1115,6 +1115,12 @@ const SUITES = [
   // O motor ao vivo IGNORAVA a escolha 5-5/6-6 (gatilho `g-1` cravado) e "prorrogar" nem
   // existia no formato do torneio — o motor lia `scoring.tieRule` e ninguém escrevia.
   'tests/empate-do-set-e-do-organizador.test.js',
+  // 2.1: o gatilho do empate vive na seção de FORMATO, por fase, e em lugar nenhum mais.
+  'tests/empate-do-set-vive-no-formato.test.js',
+  // 2.1: o contato registrado pelo organizador aceita qualquer país (DDI + máscara).
+  'tests/contato-do-organizador-tem-ddi.test.js',
+  // 2.1: o aviso de conta duplicada nomeia o canal e o "Sim" JÁ dispara a prova.
+  'tests/duplicata-nomeia-o-canal.test.js',
   // O dono apareceu nos DOIS times da mesma partida casual. A sala guarda quem está nela em
   // TRÊS listas que dessincronizam, e o guarda de "já entrei?" olhava só uma.
   'tests/casual-mesma-pessoa-um-slot-so.test.js',

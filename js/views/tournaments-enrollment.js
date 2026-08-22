@@ -13,20 +13,79 @@
 window._askDuplicatePerson = function (tId, dup) {
   if (!dup || typeof showConfirmDialog !== 'function') return;
   var contato = dup.maskedEmail || dup.maskedPhone || '';
+  // ⭐ 2.1 — DIZER QUAL CANAL, não "e-mail ou celular" no genérico.
+  // Caso Fabiana Ferré (22/ago/2026): a outra conta dela NÃO TINHA celular
+  // (`maskedPhone: null`), mas o texto oferecia "e-mail ou celular". Ela foi pro perfil,
+  // tentou verificar o PRÓPRIO celular — que não prova posse de conta nenhuma — o SMS não
+  // chegou, e ela passou a tarde achando que o app estava quebrado. O caminho que
+  // funcionava (link no fa***@gmail.com) nunca foi nomeado.
+  // A prova de posse só pode vir de um contato QUE AQUELA CONTA TEM. Se ela só tem e-mail,
+  // é só o e-mail que se oferece.
+  var _canais = [];
+  if (dup.maskedEmail) _canais.push('link no e-mail <b>' + window._safeHtml(dup.maskedEmail) + '</b>');
+  if (dup.maskedPhone) _canais.push('código no celular <b>' + window._safeHtml(dup.maskedPhone) + '</b>');
+  var _comoProvar = _canais.length
+    ? ('Unir só acontece depois que você confirmar que aquela conta é sua, pelo ' + _canais.join(' ou pelo ') + '. ')
+    : 'Unir só acontece depois que você confirmar a posse daquela conta. ';
   var corpo = window._safeHtml(dup.texto || '') +
     (contato ? ('<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);">Conta encontrada: <strong>' +
       window._safeHtml(contato) + '</strong></div>') : '') +
     '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);line-height:1.45;">' +
-      'Unir só acontece depois que você confirmar a posse daquela conta — por link no e-mail ou código no celular. ' +
+      _comoProvar +
       'Nada é unido só porque os nomes são iguais.' +
     '</div>';
 
   showConfirmDialog('👥 Essa conta é sua?', corpo, function () {
-    // SIM — a prova de posse mora no perfil, onde os dois canais já existem.
+    // ⭐ 2.1 — UMA ÚNICA POSSIBILIDADE. Ordem do dono (22/ago/2026): _"tem que abrir uma
+    // única possibilidade quando ela diz que é ela e não o perfil porra. assim ela não sabe
+    // o que fazer."_
+    //
+    // O que este ramo fazia: mandava a pessoa pro #profile com um toast genérico ("confirme
+    // pelo e-mail ou pelo celular"). O perfil é uma tela cheia de campos — e o botão mais
+    // visível lá é o "Verificar" do celular DELA, que não prova posse de conta nenhuma.
+    // Foi exatamente onde a Fabiana Ferré se perdeu: clicou "Sim", caiu no perfil, tentou o
+    // próprio celular 6 vezes e passou a tarde achando que o app estava quebrado. A fusão
+    // nunca chegou nem a começar (zero mergeTokens no banco).
+    //
+    // Agora o "Sim" JÁ DISPARA a prova: o servidor resolve a outra conta, manda o link pra
+    // caixa dela e a gente diz pra onde foi. Nada pra procurar.
+    var _fns = (window.firebase && firebase.functions) ? firebase.functions() : null;
+    if (!_fns) { window.location.hash = '#profile'; return; }
     if (typeof showNotification !== 'undefined') {
-      showNotification('Confirme a posse', 'Abrimos seu perfil: confirme pelo e-mail ou pelo celular da outra conta pra unir as duas.', 'info');
+      showNotification('Enviando…', 'Preparando a confirmação da sua outra conta.', 'info');
     }
-    window.location.hash = '#profile';
+    _fns.httpsCallable('requestNameMergeProof')({ channel: 'email' }).then(function (r) {
+      var d = (r && r.data) || {};
+      if (d.ok && d.sent) {
+        // O ÚNICO passo que sobra pra ela: abrir a caixa e clicar.
+        if (typeof showAlertDialog === 'function') {
+          showAlertDialog('📬 Link enviado',
+            'Mandamos um link para ' + (d.masked || 'o e-mail da outra conta') + '.\n\n' +
+            'Abra esse e-mail e clique em "Unir minhas contas". Pronto — seus torneios e seu ' +
+            'histórico ficam todos numa conta só, e você entra por qualquer um dos dois logins.\n\n' +
+            'O link vale por 1 hora.', null, { type: 'success' });
+        } else if (typeof showNotification !== 'undefined') {
+          showNotification('Link enviado', 'Abra ' + (d.masked || 'seu e-mail') + ' e clique em "Unir minhas contas".', 'success');
+        }
+        return;
+      }
+      // Sem e-mail na outra conta (ou o conflito não é por nome): aí sim o perfil, mas
+      // dizendo o que fazer lá — nunca largando a pessoa numa tela cheia de campos.
+      if (typeof showAlertDialog === 'function') {
+        showAlertDialog('Confirme pelo celular',
+          'A outra conta não tem e-mail pra receber o link.\n\n' +
+          'Abrimos seu perfil: em Contato, digite o CELULAR DAQUELA conta (não o desta) e confirme o código.',
+          function () { window.location.hash = '#profile'; }, { type: 'info' });
+      } else { window.location.hash = '#profile'; }
+    }).catch(function (e) {
+      var cod = (e && (e.code || e.message)) || '';
+      var muito = /resource-exhausted/.test(String(cod));
+      if (typeof showAlertDialog === 'function') {
+        showAlertDialog(muito ? 'Muitas tentativas' : 'Não deu pra enviar agora',
+          muito ? 'Você já pediu esse link algumas vezes na última hora. Procure o e-mail que já chegou — ou tente de novo mais tarde.'
+                : 'Tente de novo em instantes. Se continuar, fale com a organização.', null, { type: muito ? 'info' : 'error' });
+      }
+    });
   }, function () {
     // NÃO — registra pros dois lados e nunca mais pergunta sobre esta pessoa.
     try {
