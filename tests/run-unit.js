@@ -691,8 +691,8 @@ const SUITES = [
   'functions/test-merge-winner.js',
   // FUNDIR EXIGE CREDENCIAL AUTENTICADA — E NOS DOIS CAMINHOS. A regra existia desde
   // 11/ago mas só dentro do trigger; a varredura diária (a outra porta) seguia fundindo
-  // pelo `phone` DIGITADO no perfil e, em 19/ago às 04:45, fundiu mãe e filha que dividem
-  // o celular (Confra): apagou a conta da filha do Auth e deixou a mãe em DOIS grupos.
+  // pelo `phone` DIGITADO no perfil e, em 19/ago às 04:45, fundiu duas pessoas diferentes
+  // (Confra) porque um dos perfis carregava, digitado, o celular da outra.
   // A decisão da varredura virou módulo puro (merge-sweep-core) só pra este teste poder
   // exercitá-la de verdade — antes só dava pra checar o texto do index.js, que é teatro.
   'functions/test-merge-proof.js',

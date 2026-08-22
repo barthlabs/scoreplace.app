@@ -832,7 +832,7 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
  * E ninguém tendo dispensado o outro. Os DOIS caminhos automáticos — o trigger
  * `autoMergeOnProfileUpdate` e a varredura diária `_scanAndMergeByField` — passam por aqui.
  * Foi a SEGUNDA porta, sem gate, que fundiu duas pessoas diferentes em 19/ago/2026 — e
- * fundiu 5h44 DEPOIS de uma delas ter respondido "não somos a mesma pessoa" na tela.
+ * fundiu 8h43 DEPOIS de uma delas ter respondido "não somos a mesma pessoa" na tela.
  * Auth ausente (conta já apagada) → não autoriza, que é o lado seguro.
  */
 async function _mayAutoMerge(docA, docB) {

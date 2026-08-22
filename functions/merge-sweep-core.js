@@ -9,7 +9,8 @@
 // de 11/ago — "fundir exige credencial AUTENTICADA dos dois lados" — foi escrito SÓ dentro
 // do trigger `autoMergeOnProfileUpdate`. A varredura diária seguia fundindo pelo campo
 // `phone` DIGITADO no perfil, e às 04:45 fundiu Marjorie Cilone (nasc. 1954) com Ana Carolina
-// Cilone (nasc. 1981) — mãe e filha, e-mails diferentes, mesmo celular no perfil. Enquanto a
+// Cilone (nasc. 1981) — pessoas diferentes, e-mails diferentes, cujos celulares REAIS nem são
+// iguais (…2450 × …2440): o perfil da mãe é que carregava o número da filha. Enquanto a
 // decisão morava dentro do index.js, nenhum teste conseguia exercitá-la: só dava pra checar
 // o TEXTO do arquivo, que é teatro. Agora ela é uma função pura, injetável e testável.
 //

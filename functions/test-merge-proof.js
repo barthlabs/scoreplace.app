@@ -2,7 +2,8 @@
  *
  * REPRODUZ A FALHA REAL (19/ago/2026, Confra BT Alta da Clínica):
  * Marjorie Cilone (nasc. 1954, marjoriecilone@gmail.com) e Ana Carolina Cilone (nasc. 1981,
- * accilone@gmail.com) — mãe e filha — cadastraram o MESMO celular no PERFIL. Às 04:45 a
+ * accilone@gmail.com) são pessoas DIFERENTES, e os celulares delas nem são iguais (…2450 e
+ * …2440). O perfil da Marjorie é que carregava, digitado, o número da outra. Às 04:45 a
  * varredura diária (`scheduledAutoMergeCleanup` → `_scanAndMergeByField`) fundiu as duas.
  * A conta da filha foi apagada do Auth, o e-mail dela virou `loginRedirects` pra conta da
  * mãe, e o uid-sweep deixou a mãe em DOIS grupos do torneio (34×4=136 vagas, 135 pessoas).
@@ -34,7 +35,7 @@ const AUTH = {
   O5NYjV: { uid: 'O5NYjV', email: 'accilone@gmail.com', emailVerified: true, phoneNumber: '+5511981812440' },
 };
 // O "não somos a mesma pessoa" REAL, gravado nos dois perfis em 18/ago às 20:01 BRT —
-// 5h44 antes de a varredura fundir as duas assim mesmo.
+// 8h43 antes de a varredura fundir as duas assim mesmo.
 const DISMISSED = {
   bp7Vvo: { dupDismissedInfo: [{ uid: 'O5NYjV', motivo: 'celular', forca: 9, at: '2026-08-18T23:01:51.642Z' }] },
   O5NYjV: { dupDismissedInfo: [{ uid: 'bp7Vvo', motivo: 'celular', forca: 9, at: '2026-08-18T23:01:51.645Z' }] },

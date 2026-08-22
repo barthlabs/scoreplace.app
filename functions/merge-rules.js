@@ -256,9 +256,14 @@ module.exports = {
  * entrou SÓ no `autoMergeOnProfileUpdate`. A varredura diária `scheduledAutoMergeCleanup`
  * (`_scanAndMergeByField`) continuou fundindo pelo campo digitado — e às 04:45 de 19/ago
  * fundiu DUAS PESSOAS DIFERENTES: Marjorie Cilone (nasc. 1954) e Ana Carolina Cilone
- * (nasc. 1981), e-mails distintos, que tinham cadastrado o MESMO celular no perfil (mãe e
- * filha dividem o número). A conta da filha foi apagada do Auth, o e-mail dela virou
- * `loginRedirects` pra conta da mãe, e o uid-sweep colocou a mãe em DOIS grupos do torneio.
+ * (nasc. 1981), e-mails distintos.
+ *
+ * ⚠️ E O NÚMERO NEM ERA O MESMO NA VIDA REAL: os celulares delas diferem (…2450 e …2440),
+ * e `normalizarTelefone` não trunca — jamais colidiriam. O que colidiu foi DADO ERRADO
+ * digitado no perfil da mãe: ele carregava o número da filha. É a prova mais limpa de por
+ * que o campo do perfil não pode decidir identidade — ele é palpite de quem digitou.
+ * Consequência: o login da filha passou a ser desviado (`loginRedirects` + lápide) pra
+ * conta da mãe, e o uid-sweep colocou a mãe em DOIS grupos do torneio.
  * Duas portas pra mesma ação, uma trancada e a outra não: o defeito é a duplicação, então a
  * regra passa a morar aqui e os dois chamadores passam por ela.
  *
@@ -289,8 +294,8 @@ module.exports.credentialsProveSamePerson = credentialsProveSamePerson;
  * INCIDENTE (Confra, ago/2026): o app detectou a suspeita, PERGUNTOU, e em 18/ago às 20:01
  * (BRT) alguém respondeu que não eram a mesma pessoa — ficou gravado nos DOIS perfis:
  *   dupDismissedInfo: [{ uid: <a outra>, motivo: 'celular', forca: 9, at: … }]
- * Cinco horas e quarenta e quatro minutos depois, às 04:45, a varredura diária fundiu as
- * duas assim mesmo. O `dupDismissed`/`dupDismissedInfo` era lido SÓ pela DETECÇÃO (pra não
+ * Oito horas e quarenta e três minutos depois, às 04:45, a varredura diária fundiu as duas
+ * assim mesmo. O `dupDismissed`/`dupDismissedInfo` era lido SÓ pela DETECÇÃO (pra não
  * repetir a pergunta) — nenhum caminho de fusão o consultava.
  *
  * Por que bloqueia mesmo quando há credencial: automático nunca passa por cima de um "não"
