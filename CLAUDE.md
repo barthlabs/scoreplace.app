@@ -463,6 +463,41 @@ store.js). Números queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1
 
 ## Deploy
 
+### ⚠️ PRIMEIRA COISA NUM CLONE NOVO: ligar os hooks
+
+```bash
+scripts/install-hooks.sh
+```
+
+**Hook não viaja no git.** Ele vive em `.git/hooks/`, que não é versionado — então o
+`pre-push` que existia sumiu no reclone de 16/ago/2026 e ninguém notou até a **1.9.106 ir
+pro ar com o `version.txt` do commit em 1.9.105**. Por isso o código dos hooks mora em
+`scripts/hooks/` (versionado) e o instalador só os LIGA. Confira com
+`scripts/install-hooks.sh --check`; uma instalação vale pra todas as worktrees (elas
+compartilham o `.git/hooks` do repo pai).
+
+**O que cada um faz:**
+- **`pre-commit`** — roda o prerender (2,3s, idempotente) e põe `index.html` + `version.txt`
+  DENTRO do commit. Eles são DERIVADOS de `window.SCOREPLACE_VERSION` (store.js); sem isso
+  quem os gera é só o `hosting.predeploy`, que roda dentro da cópia em /tmp — o gerado vai
+  pro ar e nunca volta pro repo, e o `main` para de descrever o ar.
+- **`pre-push`** — só GUARDA: barra o push se o snapshot estiver velho e roda `npm test`
+  quando o destino é `main`. Escapes: `SP_SKIP_HOOKS=1` (tudo) e `SP_HOOK_SKIP_TEST=1`
+  (só a suíte — é o que o `deploy-hosting.sh` usa, porque o `hosting.predeploy` roda a
+  MESMA suíte logo depois e aborta o upload sozinho).
+
+⛔ **NUNCA gerar o snapshot no `pre-push` com `git commit --amend`** — foi como o hook
+antigo estava documentado e **NÃO FUNCIONA**. O git congela o que vai ser empurrado ANTES
+de chamar o pre-push, então o amend nasce fora do push. MEDIDO em laboratório (21/ago/2026):
+foi pro remoto o commit PRÉ-amend (com `version.txt` velho) e o HEAD local ficou no
+PÓS-amend — ou seja, além de não corrigir nada, deixa **local e remoto divergentes**, que é
+exatamente o estado que faz o `deploy-hosting.sh` abortar na leva seguinte.
+
+E mesmo sem hook nenhum instalado o ar não sai torto: o `deploy-hosting.sh` gera e commita
+o snapshot no **passo 1.5**, antes de empurrar. Com o `pre-commit` ligado esse passo é
+no-op; sem ele, vira o commit "`<versão> — snapshot do prerender que está no ar`"
+automático, em vez do remendo manual.
+
 ⚠️ **PROD É FIREBASE HOSTING desde ago/2026 — NÃO é mais GitHub Pages.** Publicar é **UM comando**:
 
 ```bash
@@ -561,6 +596,8 @@ GitHub Actions/Pages ficou em **major outage** e o site seguiu servindo normal.
 - CNAME www â rstbarth.github.io
 
 ### Pre-requisitos
+- **Hooks ligados**: `scripts/install-hooks.sh` (ver o topo desta seção — sem isso o
+  snapshot do prerender não entra nos commits)
 - Git inicializado na pasta local com remote `origin` apontando para `https://github.com/barthlabs/scoreplace.app.git` (⚠️ **não** `rstbarth/…` — ver o aviso lá em cima)
 - `gh auth setup-git` executado para autenticacao via GitHub CLI
 - `.gitignore` configurado (`.DS_Store`, `.claude/`, `*.backup`, `*.bak`, `outputs/`, `extensions/`, `functions/node_modules/`)
@@ -571,7 +608,7 @@ GitHub Actions/Pages ficou em **major outage** e o site seguiu servindo normal.
 
 1. Validar sintaxe de todos os JS modificados: `for f in $(find js/ -name '*.js' ! -name '*.backup'); do node --check "$f" 2>&1 || echo "SYNTAX ERROR in $f"; done`
 2. Atualizar cache-busters em `index.html` para arquivos modificados
-3. **OBRIGATÓRIO em todo bump de versão**: rodar `npm run prerender` pra atualizar o snapshot estático da landing em `index.html`. O prerender baked-in inclui `window.SCOREPLACE_VERSION` — se você não rodar, a landing mostra a versão antiga até o JS hidratar (e pra usuário sem JS habilitado fica eternamente errada). Bug reportado: v0.17.87 deployado mas landing mostrava v0.17.72 (prerender não foi regenerado desde a v0.17.72 introduzido em v0.17.69).
+3. **O snapshot da landing é AUTOMÁTICO desde 21/ago/2026** — o `pre-commit` roda `npm run prerender` e põe `index.html` + `version.txt` dentro do commit (e o `deploy-hosting.sh` refaz isso no passo 1.5 como rede). Ligue os hooks uma vez: `scripts/install-hooks.sh`. **Por que isso importa:** o prerender baked-in inclui `window.SCOREPLACE_VERSION` — sem regerar, a landing mostra a versão antiga até o JS hidratar (e pra usuário sem JS habilitado, eternamente). Bugs pagos: v0.17.87 no ar com a landing em v0.17.72; e a 1.9.106, publicada com o `version.txt` do commit em 1.9.105.
 4. **OBRIGATÓRIO antes de declarar "fixed" e pedir validação ao usuário**: validar o fix via Chrome MCP no site deployado. Mínimo: navigate + fetch HTML + DOM inspection (botões existem, handlers attached, modais render OK). Se o fluxo exige login real / GPS / múltiplas contas e não consigo simular, **avisar explicitamente "não testei, pode quebrar"** antes de pedir teste manual. Pattern proibido: empilhar hotfix em cima de hotfix sem auditar relacionados — quando bug X aparece, listar TODOS os call paths do fluxo afetado, ler arquivos relevantes por completo, identificar bugs latentes do mesmo tipo, fazer UM fix consolidado. Bug reportado: 9 hotfixes em sequência (v0.17.83-91) onde cada fix expunha outro bug latente. Causa: declarar "fixed" sem validação prévia.
 5. `git add` dos arquivos alterados (evitar `git add .` — adicionar arquivos especificos)
 6. `git commit` com mensagem descritiva

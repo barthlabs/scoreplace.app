@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# pre-push — GUARDA. Confere e barra; nunca mexe no que está sendo empurrado.
+#
+# ⚠️ LEIA ANTES DE "MELHORAR" ESTE HOOK. A versão antiga (perdida no reclone de
+# 16/ago/2026) rodava o prerender aqui e dava `git commit --amend`. Isso NÃO FUNCIONA:
+# o git congela o que vai ser empurrado ANTES de chamar o pre-push, então o amend nasce
+# fora do push. MEDIDO em laboratório (21/ago/2026):
+#
+#     ANTES do push, HEAD = 10cf00a…            ← sem snapshot
+#     [hook] amend feito: 2d38c04
+#     To ../remote.git   0315a24..10cf00a  HEAD -> main
+#     git show origin/main:version.txt → 1.0.0  ← o VELHO foi pro remoto
+#     HEAD local = 2d38c04…                     ← e o local ficou DIVERGENTE
+#
+# Ou seja: não corrigia o snapshot E ainda deixava local/remoto divergentes — o estado
+# que faz `scripts/deploy-hosting.sh` abortar na leva seguinte. Quem GERA o snapshot é
+# o `pre-commit` (dentro do commit) e o `deploy-hosting.sh` (antes de empurrar).
+#
+# O que este guarda faz:
+#   1. o snapshot (index.html/version.txt) está em dia com o store.js? senão, BARRA.
+#   2. empurrando pra `main`? então roda `npm test` e BARRA se reprovar.
+#      (`main` é o que descreve o ar — ver CLAUDE.md, seção Deploy.)
+#
+# Instalação: scripts/install-hooks.sh
+# Escapes:    SP_SKIP_HOOKS=1        pula tudo (emergência declarada)
+#             SP_HOOK_SKIP_TEST=1    pula só a suíte (o deploy-hosting.sh usa: o
+#                                    hosting.predeploy roda `npm test` e aborta o
+#                                    upload sozinho, então seriam 2×2min30 iguais)
+set -uo pipefail
+
+[[ "${SP_SKIP_HOOKS:-}" == "1" ]] && { echo "⚠️  pre-push PULADO por SP_SKIP_HOOKS=1."; exit 0; }
+
+RAIZ="$(git rev-parse --show-toplevel)" || exit 0
+cd "$RAIZ" || exit 0
+
+ZERO='0000000000000000000000000000000000000000'
+PRA_MAIN=0
+TEM_COMMIT=0
+while read -r _localref localsha remoteref _remotesha; do
+  [[ -z "${localsha:-}" ]] && continue
+  [[ "$localsha" == "$ZERO" ]] && continue          # deleção de branch — nada a conferir
+  TEM_COMMIT=1
+  [[ "${remoteref:-}" == "refs/heads/main" ]] && PRA_MAIN=1
+done
+[[ $TEM_COMMIT -eq 0 ]] && exit 0
+
+barra() {
+  echo >&2
+  echo "✗ PUSH BARRADO — $1" >&2
+  echo >&2
+  [[ -n "${2:-}" ]] && { echo "  O QUE FAZER:" >&2; echo "$2" >&2; echo >&2; }
+  exit 1
+}
+
+# ── 1. o snapshot gerado está em dia? ────────────────────────────────────────
+# index.html e version.txt são DERIVADOS de window.SCOREPLACE_VERSION (store.js).
+# Se o prerender muda alguma coisa agora, o commit que está indo pro remoto carrega
+# snapshot velho — foi assim que o main parou de descrever o ar na 1.9.106.
+if ! node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
+  if [[ $PRA_MAIN -eq 1 ]]; then
+    barra "não consigo conferir o snapshot do prerender (@playwright/test não resolveu) e este push vai pro \`main\`, que é o que descreve o ar." \
+          "    npm ci        # no repo (ou no repo PAI, se você está numa worktree)"
+  fi
+  echo "⚠️  pre-push: @playwright/test não resolveu — snapshot NÃO conferido (push não é pro main)."
+else
+  # mesma lista do pre-commit: o prerender também carimba a versão da EXTENSÃO em
+  # extension/content.js, js/store.js e no cache-buster do index.html.
+  DERIVADOS="index.html version.txt ext-version.txt extension/content.js js/store.js"
+  SUJO_ANTES="$(git status --porcelain -- $DERIVADOS)"
+  impressao() { shasum $DERIVADOS 2>/dev/null | awk '{print $1}' | tr -d '\n'; }
+  ANTES="$(impressao)"
+  LOG="$(mktemp)"
+  if ! npm run --silent prerender >"$LOG" 2>&1; then
+    echo "⚠️  pre-push: prerender falhou — snapshot NÃO conferido:" >&2
+    sed 's/^/   │ /' "$LOG" >&2
+    rm -f "$LOG"
+    [[ $PRA_MAIN -eq 1 ]] && barra "o push é pro \`main\` e o prerender não rodou." "    conserte o prerender (npm run prerender) e empurre de novo."
+  else
+    rm -f "$LOG"
+    if [[ "$(impressao)" != "$ANTES" && -z "$SUJO_ANTES" ]]; then
+      barra "o snapshot do prerender está VELHO no commit que você está empurrando. Acabei de regerar os arquivos derivados (v$(tr -d '[:space:]' < version.txt)) — eles estão modificados na sua árvore agora:
+$(git status --porcelain -- $DERIVADOS | sed 's/^/     /')" \
+            "    git add -- $(git diff --name-only -- $DERIVADOS | tr '\n' ' ' | sed 's/ *$//') && git commit --amend --no-edit
+    git push …
+
+  (com o pre-commit instalado isso não acontece — ele gera junto do commit.
+   Instale com: scripts/install-hooks.sh)"
+    fi
+  fi
+fi
+
+# ── 2. pro main, a suíte é gate ──────────────────────────────────────────────
+if [[ $PRA_MAIN -eq 1 ]]; then
+  if [[ "${SP_HOOK_SKIP_TEST:-}" == "1" ]]; then
+    echo "▸ pre-push: npm test pulado (SP_HOOK_SKIP_TEST=1 — o hosting.predeploy roda a suíte e aborta o upload)."
+  else
+    echo "▸ pre-push: push pro \`main\` — rodando a suíte (~2min30)…"
+    LOG="$(mktemp)"
+    if ! npm test >"$LOG" 2>&1; then
+      tail -30 "$LOG" >&2
+      rm -f "$LOG"
+      barra "\`npm test\` reprovou (saída acima)." "    conserte a suíte e empurre de novo — o \`main\` descreve o que está no ar."
+    fi
+    rm -f "$LOG"
+    echo "  ✓ suíte verde"
+  fi
+fi
+exit 0

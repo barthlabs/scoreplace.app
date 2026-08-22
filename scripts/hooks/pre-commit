@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# pre-commit — o snapshot do prerender entra NO PRÓPRIO COMMIT.
+#
+# POR QUE EXISTE (21/ago/2026). O `index.html` (snapshot estático da landing) e o
+# `version.txt` são GERADOS a partir de `window.SCOREPLACE_VERSION` (store.js). Quem
+# roda o gerador hoje é o `hosting.predeploy` — mas ele roda dentro da CÓPIA extraída
+# em /tmp, então o resultado vai pro ar e NUNCA volta pro repo. Efeito medido na
+# 1.9.106: commit com `version.txt` = 1.9.105 e o ar em 1.9.106; o `main` deixou de
+# descrever o ar e foi preciso um commit extra "snapshot do prerender" na mão.
+#
+# A correção é gerar ANTES de fechar o commit: aqui o arquivo gerado é parte do commit
+# que muda a versão, e não um remendo depois dele.
+#
+# ⚠️ POR QUE NÃO NO `pre-push` COM `--amend` (que é como estava documentado): NÃO
+# FUNCIONA — e quebra calado. O git resolve o que vai ser empurrado ANTES de rodar o
+# pre-push; o amend cria um commit novo que o push ignora. MEDIDO em laboratório:
+# empurrado `10cf00a` (sem snapshot, `version.txt` velho) enquanto o HEAD local virou
+# `2d38c04` (com snapshot) — ou seja, além de não corrigir nada, o local passa a
+# DIVERGIR do remoto, que é o estado que faz `scripts/deploy-hosting.sh` abortar.
+# O `pre-push` deste repo é só GUARDA (confere e barra); quem gera é aqui.
+#
+# Instalação: scripts/install-hooks.sh          Pular uma vez: SP_SKIP_HOOKS=1 git commit …
+set -uo pipefail
+
+[[ "${SP_SKIP_HOOKS:-}" == "1" ]] && exit 0
+
+RAIZ="$(git rev-parse --show-toplevel)" || exit 0
+cd "$RAIZ" || exit 0
+
+aviso() {
+  echo "⚠️  pre-commit: $1" >&2
+  echo "   O commit SEGUE, mas o snapshot pode ficar velho. O pre-push confere de novo" >&2
+  echo "   e o scripts/deploy-hosting.sh gera antes de publicar — nada vai pro ar torto." >&2
+}
+
+# O prerender sobe um Chromium do @playwright/test. Sem node_modules alcançável não dá
+# pra gerar — e travar todo commit por isso seria pior que o problema.
+if ! node -e "require.resolve('@playwright/test')" >/dev/null 2>&1; then
+  aviso "@playwright/test não resolveu (rode 'npm ci' no repo) — prerender pulado."
+  exit 0
+fi
+
+# Tudo que `npm run prerender` pode reescrever. NÃO é só o snapshot da landing: o
+# sync-ext-version.js (primeira metade do script) carimba a versão da extensão em
+# extension/content.js, em js/store.js (SP_EXT_VERSION) e no cache-buster do store.js
+# dentro do index.html. Listar de menos aqui deixa arquivo gerado fora do commit — que é
+# a falha original, só que num campo diferente.
+#
+# ⚠️ bash 3.2 (o /bin/bash do macOS): sem `mapfile`, e sob `set -u` expandir array vazio
+# é erro. Por isso tudo aqui é string separada por espaço/linha, não array.
+DERIVADOS="index.html version.txt ext-version.txt extension/content.js js/store.js"
+# … e o zip da extensão servido pelo site, que o sync ROTACIONA (apaga o da versão
+# anterior e gera o da nova). São um delete + um untracked que, se ficarem de fora,
+# quebram o download da extensão que o próprio app exige.
+ZIP_GLOB='scoreplace-letzplay-ext-*.zip'
+
+# O que já estava modificado e NÃO STAGED antes do gerador rodar é trabalho do usuário.
+# `git add` num desses varreria pro commit uma alteração que ele não escolheu incluir —
+# especialmente js/store.js, que é fonte editada à mão, não arquivo gerado.
+SUJOS_ANTES="$(git diff --name-only -- $DERIVADOS 2>/dev/null || true)"
+
+impressao() { { shasum $DERIVADOS 2>/dev/null | awk '{print $1}'; ls $ZIP_GLOB 2>/dev/null; } | tr -d '\n'; }
+ANTES="$(impressao)"
+
+LOG="$(mktemp)"
+if ! npm run --silent prerender >"$LOG" 2>&1; then
+  aviso "o prerender falhou:"
+  sed 's/^/   │ /' "$LOG" >&2
+  rm -f "$LOG"
+  exit 0
+fi
+rm -f "$LOG"
+
+[[ "$(impressao)" == "$ANTES" ]] && exit 0
+
+ADICIONADOS=""
+PULADOS=""
+for f in $DERIVADOS; do
+  [[ -e "$f" ]] || continue
+  git diff --quiet -- "$f" && continue          # o gerador não deixou nada solto aqui
+  if printf '%s\n' "$SUJOS_ANTES" | grep -qxF "$f"; then
+    PULADOS="$PULADOS $f"
+  else
+    git add -- "$f"
+    ADICIONADOS="$ADICIONADOS $f"
+  fi
+done
+
+if [[ -n "$(git status --porcelain -- "$ZIP_GLOB" 2>/dev/null)" ]]; then
+  git add -A -- "$ZIP_GLOB"
+  ADICIONADOS="$ADICIONADOS zip-da-extensão"
+fi
+
+if [[ -n "$ADICIONADOS" ]]; then
+  echo "▸ pre-commit: snapshot do prerender regerado e incluído no commit"
+  echo "  ($(echo $ADICIONADOS) · versão $(tr -d '[:space:]' < version.txt))"
+fi
+if [[ -n "$PULADOS" ]]; then
+  echo "⚠️  pre-commit: NÃO staguei$PULADOS — você já tinha alteração não-staged aí, e eu" >&2
+  echo "   não vou decidir por você o que entra no commit. Confira com 'git diff' e" >&2
+  echo "   inclua na mão se for o caso." >&2
+fi
+exit 0
