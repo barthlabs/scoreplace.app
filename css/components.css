@@ -2474,3 +2474,31 @@ html, body,
   transition: left 0.2s;
 }
 .pf-switch input:checked + .tr::after { left: 20px; }
+
+/* ── 2.0.7 · Realce de "é AQUI o seu celular" ──────────────────────────────
+   Aceso por window._profileFocusPhone quando a pessoa chega vinda do empurrão
+   do login. Sem ele a pessoa cai na tela certa e não sabe onde olhar — o perfil
+   é comprido e o campo do celular fica no meio.
+   Dura 2,6s e sai sozinho: realce que fica vira decoração e a pessoa para de ver.
+   CONTRASTE NOS DOIS TEMAS: no escuro o halo clareia; no claro, um índigo mais
+   fechado, senão o brilho some no fundo branco. */
+.sp-phone-alvo {
+  border-radius: 10px;
+  animation: sp-phone-pulso 1.3s ease-out 2;
+}
+@keyframes sp-phone-pulso {
+  0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-phone-alvo { animation: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }
+}
+[data-theme="light"] .sp-phone-alvo {
+  animation-name: sp-phone-pulso-claro;
+}
+@keyframes sp-phone-pulso-claro {
+  0%   { box-shadow: 0 0 0 0 rgba(67, 56, 202, 0.60); }
+  70%  { box-shadow: 0 0 0 10px rgba(67, 56, 202, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(67, 56, 202, 0); }
+}
