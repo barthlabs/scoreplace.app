@@ -220,7 +220,15 @@ ok(mres3.ok === false && mres3.error === 'already-materialized', 'guard _phaseMa
   // per_group (default): pareia dentro do grupo → A1/A2 · B1/B2
   var perGroup = eng.buildEntrantsByDest([gA, gB], mp, true, cs, 'top')
     .main.map(function (t) { return t.displayName; });
-  eq(perGroup, ['A1 / A2', 'B1 / B2'], 'per_group pareia dentro do grupo');
+  // ⭐ A ORDEM É POR MÉRITO, não pela ordem dos grupos. O pareamento continua DENTRO do
+  // grupo (A1+A2, B1+B2) — isso é o que esta asserção guarda —, mas a linha sai semeada:
+  // B1 tem 4 vitórias e A1 tem 3, então a dupla do B é a cabeça de chave. Antes a ordem era
+  // a do laço (A, B, C…), que é ordem de SORTEIO, e a "cabeça de chave" acabava sendo quem
+  // calhou de cair no grupo A. Pedido do dono (22/ago/2026): _"esse sorteio deve semear por
+  // cabeças de chave"_. Ver tests/ouro-prata-sai-dos-seletores.test.js.
+  eq(perGroup, ['B1 / B2', 'A1 / A2'], 'per_group pareia dentro do grupo, e a linha vem por mérito');
+  ok(perGroup.every(function (d) { return d[0] === d[5]; }),
+    'e cada dupla continua sendo do MESMO grupo (a letra dos dois é a mesma)');
   // overall: ranking global B1>A1>A2>B2 → top 1+2 / 3+4 = B1/A1 · A2/B2
   var overall = eng.buildEntrantsByDest([gA, gB], mp, true, cs, 'top', { scope: 'overall' })
     .main.map(function (t) { return t.displayName; });

@@ -14,6 +14,13 @@ const SUITES = [
   // phases[elim].scoring → window._effectiveScoring, que é quem o jogo consulta. O código
   // antigo carimbava `scoring: null` em toda fase e nada escrevia por cima.
   'tests/formato-da-partida-por-fase.test.js',
+  // A fase 2 do Rei/Rainha forma Ouro/Prata DENTRO do grupo (1º+2º e 3º+4º), e isso tem de
+  // sair dos SELETORES. O escopo por-grupo era `cfg.grupos > 1`, mas no R/R esse slider é
+  // da Fase de GRUPOS e não fala do R/R — ele monta grupos de 4 sozinho. A Confra tem
+  // `grupos:1` e 34 grupos na quadra, então o motor pareava o ranking GERAL plano (1º+2º
+  // do TORNEIO) em vez de 1º+2º de cada grupo. Cobre as duas metades — o que os seletores
+  // viram config, e o que o motor faz com ela — mais a semeadura por cabeça de chave.
+  'tests/ouro-prata-sai-dos-seletores.test.js',
   // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
   // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
   // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o

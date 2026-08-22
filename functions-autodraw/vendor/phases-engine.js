@@ -164,6 +164,46 @@
     return ks.length ? ks[0] : null;
   }
 
+  // Comparador CANÔNICO de classificação — a MESMA regra do ranking geral, resolvida do
+  // mesmo jeito que o _globalStandings faz (window no navegador / require no Node). Sem
+  // ele não há como ordenar por mérito SEM inventar uma segunda régua, que é o defeito
+  // que este projeto já pagou caro. Ausente → devolve null e quem chama preserva a ordem.
+  function _cmpCanonico() {
+    var cmp = (typeof window !== 'undefined' && typeof window._standingsCompare === 'function')
+      ? window._standingsCompare : null;
+    if (!cmp && typeof require === 'function') {
+      try { cmp = require('./standings-core.js').standingsCompare; } catch (e) { cmp = null; }
+    }
+    return cmp || null;
+  }
+
+  // Ordena cada linha (Ouro, Prata…) por mérito do MELHOR integrante. Estável e sem
+  // efeito quando o comparador não está disponível — nunca desempata por conta própria.
+  function _ordenaLinhasPorMerito(byDest) {
+    var cmp = _cmpCanonico();
+    if (!cmp) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[phases] _standingsCompare ausente — linhas mantidas na ordem dos grupos');
+      }
+      return;
+    }
+    // O 1º participante é o melhor da dupla: 'top' pareia adjacente na classificação
+    // (1º+2º), então participants[0] é sempre o de cima.
+    var melhor = function (tm) {
+      return (tm && Array.isArray(tm.participants) && tm.participants[0]) || tm || {};
+    };
+    Object.keys(byDest).forEach(function (k) {
+      if (!Array.isArray(byDest[k])) return;
+      byDest[k] = byDest[k]
+        .map(function (tm, i) { return { tm: tm, i: i }; })
+        .sort(function (a, b) {
+          var d = cmp(melhor(a.tm), melhor(b.tm), false);
+          return d || (a.i - b.i);            // empate → ordem de chegada (estável)
+        })
+        .map(function (x) { return x.tm; });
+    });
+  }
+
   function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
     opts = opts || {};
     var scope = opts.scope || 'per_group';
@@ -302,6 +342,14 @@
           for (var _k = 0; _k < _members.length; _k += _step) byDest[_lo].push(mkTeam(_members.slice(_k, _k + _step)));
         }
       }
+      // ⭐ CABEÇAS DE CHAVE: a linha sai daqui na ordem dos GRUPOS (A, B, C…), que é ordem
+      // de sorteio, não de mérito. A chave semeia 1×N, 2×(N-1)… pela ordem do array, então
+      // sem isto a "cabeça de chave" seria só quem calhou de estar no grupo A.
+      // Ordena cada linha pelo MELHOR integrante da dupla, com o comparador CANÔNICO — o
+      // mesmo do ranking geral, pra não existir uma segunda régua de mérito no app.
+      // Só na estratégia Performance ('top'): em Equilíbrio a ordem carrega o pareamento
+      // forte+fraco, e em Sorteio a ordem É o sorteio — reordenar destruiria os dois.
+      if (pairingStrategy === 'top') _ordenaLinhasPorMerito(byDest);
     }
     // v4.4.111: PROMOVER LINHA — sobe os N MELHORES da pior linha pra melhor, rebalanceando
     // o resto (cima +N, baixo −N). O promovido é o melhor de baixo → entra como PIOR semente

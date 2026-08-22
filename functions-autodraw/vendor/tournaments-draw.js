@@ -1659,7 +1659,7 @@ window._showDrawBalanceOverlay = function (opts) {
   // v1.7.16: a tela do sorteio equilibrado passa a mostrar a PROPORÇÃO e o toggle
   // "Travar proporção" (no livre não existe nem um nem outro).
   window._gdCtx = { rows: rows, mode: (opts.mode === 'equilibrado' ? 'equilibrado' : 'livre'),
-    ratio: (opts.ratio || (window._GENDER_RATIO_DEFAULT || '25/75')),
+    ratio: (opts.ratio || window._GENDER_RATIO_DEFAULT || '50/50'),
     locked: (opts.locked !== false),
     // v1.7.19: com categorias por gênero (Fem/Masc/Misto separados) NÃO há proporção — o
     // sorteio já roda por categoria e o pool é homogêneo. A caixa nem aparece.
@@ -1679,13 +1679,14 @@ window._showDrawBalanceOverlay = function (opts) {
     '</div>';
   }).join('');
 
-  var _RS = window._GENDER_RATIOS || { '50/50': 0, '25/75': 0, '75/25': 0 };
-  var _ratioPills = Object.keys(_RS).map(function (r) {
-    return '<button id="gd-ratio-' + r.replace('/', '-') + '" onclick="window._gdSetRatio(\'' + r + '\')" ' +
-      'style="flex:1;padding:9px 6px;border-radius:10px;border:2px solid rgba(255,255,255,0.12);' +
-      'background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;font-weight:800;font-size:0.82rem;">' +
-      r + '</button>';
-  }).join('');
+  // ⭐ 2.1: o controle de proporção é o MESMO da tela de configuração (gender-ratio-core).
+  // Ordem do dono (22/ago/2026): "mudou aqui muda lá na lista de espera o texto e a proporção.
+  // mesma coisa o toggle que trava a proporção." Antes havia pílulas desenhadas aqui, com texto
+  // de trava próprio — duas telas contando histórias diferentes da mesma regra.
+  var _ratioCtrl = (typeof window._ratioSliderHtml === 'function')
+    ? window._ratioSliderHtml({ idp: 'gd', ratio: window._gdCtx.ratio, locked: !!window._gdCtx.locked,
+                                onRatio: 'window._gdSetRatio', onLock: 'window._gdSetLock' })
+    : '';
 
   ov.innerHTML =
     '<div style="background:var(--bg-card,#1e293b);border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;overflow:hidden;">' +
@@ -1708,14 +1709,9 @@ window._showDrawBalanceOverlay = function (opts) {
             '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Espalha a minoria conforme a proporção escolhida abaixo. Se não der pra todos, faz o melhor possível.</div></button>' +
         '</div>' +
         // PROPORÇÃO + TRAVA — só aparecem no equilibrado (_gdSetMode mostra/esconde).
-        '<div id="gd-ratio-box" style="display:none;margin:-10px 0 18px;padding:12px 14px;border-radius:12px;border:1px solid rgba(34,197,94,0.28);background:rgba(34,197,94,0.06);">' +
-          '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Proporção (homens / mulheres) em cada 4</div>' +
-          '<div style="display:flex;gap:6px;margin-bottom:11px;">' + _ratioPills + '</div>' +
-          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">' +
-            '<input type="checkbox" id="gd-ratio-lock" onchange="window._gdToggleLock()" style="width:17px;height:17px;cursor:pointer;flex-shrink:0;">' +
-            '<span style="font-size:0.8rem;font-weight:700;color:var(--text-bright,#f1f5f9);">Travar proporção</span>' +
-          '</label>' +
-          '<div id="gd-ratio-hint" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:7px;line-height:1.35;"></div>' +
+        // A caixa só existe no EQUILIBRADO (_gdSetMode mostra/esconde). O conteúdo é do núcleo.
+        '<div id="gd-ratio-box" style="display:none;margin:-10px 0 18px;">' + _ratioCtrl +
+          '<div id="gd-ratio-hint" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);margin-top:-8px;margin-bottom:4px;line-height:1.35;"></div>' +
         '</div>' +
         (rows.length > 0
           ? '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Inscritos sem gênero (' + rows.length + ')</div>' +
@@ -1819,7 +1815,11 @@ window._maybeShowGenderDrawDialog = function(tId, onProceed) {
       ratio: (typeof window._ratioConfigured === 'function' && window._ratioConfigured(t)) ||
              (window._GENDER_RATIO_DEFAULT || '25/75'),
       locked: (typeof window._ratioIsLocked === 'function') ? window._ratioIsLocked(t) : true,
-      ratioApplies: (typeof window._ratioAppliesTo === 'function') ? window._ratioAppliesTo(t) : true,
+      // ⭐ 2.1: mesma regra da tela de configuração — some com categoria de gênero E some
+      // quando a disputa toda é de um gênero só (aí não há proporção a fazer).
+      ratioApplies: (typeof window._ratioVisivel === 'function')
+        ? window._ratioVisivel(t, null, (typeof window._ratioGenerosDoTorneio === 'function') ? window._ratioGenerosDoTorneio(t) : null)
+        : ((typeof window._ratioAppliesTo === 'function') ? window._ratioAppliesTo(t) : true),
       onConfirm: function (mode, assigned, ratioOpts) {
         window._applyDrawBalanceChoice(t, mode, assigned,
           { persist: true, ratio: (ratioOpts && ratioOpts.ratio), locked: (ratioOpts && ratioOpts.locked) });
@@ -1849,37 +1849,32 @@ window._gdSetMode = function(mode){
   window._gdPaintRatio();
 };
 
-// Pinta a pill escolhida, o checkbox e a frase que explica o efeito da combinação.
+// A frase que explica o efeito da combinação (o resto do desenho é do núcleo, e ele se
+// repinta sozinho ao arrastar). Aqui fica só o que é DESTA tela: para onde vai quem sobra.
 window._gdPaintRatio = function(){
   var ctx = window._gdCtx; if (!ctx) return;
-  Object.keys(window._GENDER_RATIOS || {}).forEach(function (r) {
-    var b = document.getElementById('gd-ratio-' + r.replace('/', '-'));
-    if (!b) return;
-    var on = (r === ctx.ratio);
-    b.style.borderColor = on ? '#22c55e' : 'rgba(255,255,255,0.12)';
-    b.style.background = on ? 'rgba(34,197,94,0.18)' : 'var(--bg-dark,#0f172a)';
-  });
-  var cb = document.getElementById('gd-ratio-lock');
-  if (cb) cb.checked = !!ctx.locked;
   var hint = document.getElementById('gd-ratio-hint');
-  if (hint) {
-    var lbl = (typeof window._ratioLabel === 'function') ? window._ratioLabel(ctx.ratio) : ctx.ratio;
-    hint.textContent = ctx.locked
-      ? ('Travada: só forma grupo em ' + lbl + '. Quem não couber vai para a lista de espera.')
-      : ('Destravada: busca ' + lbl + ' enquanto der e depois flexibiliza para incluir o máximo de gente. '
-         + 'Quem está sem gênero declarado entra por último.');
-  }
+  if (!hint) return;
+  var lbl = (typeof window._ratioLabel === 'function') ? window._ratioLabel(ctx.ratio) : ctx.ratio;
+  hint.textContent = ctx.locked
+    ? ('Quem não couber em ' + lbl + ' vai para a lista de espera.')
+    : ('Quem está sem gênero declarado entra por último.');
 };
 window._gdSetRatio = function(r){
   if (!window._gdCtx || !window._GENDER_RATIOS || !window._GENDER_RATIOS[r]) return;
   window._gdCtx.ratio = r;
   window._gdPaintRatio();
 };
+window._gdSetLock = function(travada){
+  if (!window._gdCtx) return;
+  window._gdCtx.locked = !!travada;
+  window._gdPaintRatio();
+};
+// Nome antigo mantido: havia chamador fora daqui.
 window._gdToggleLock = function(){
   if (!window._gdCtx) return;
-  var cb = document.getElementById('gd-ratio-lock');
-  window._gdCtx.locked = cb ? !!cb.checked : !window._gdCtx.locked;
-  window._gdPaintRatio();
+  var cb = document.getElementById('gd-lock');
+  window._gdSetLock(cb ? !!cb.checked : !window._gdCtx.locked);
 };
 window._gdCancel = function(){
   var ctx = window._gdCtx; window._gdCtx = null;

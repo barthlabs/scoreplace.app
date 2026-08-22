@@ -431,7 +431,7 @@
         "reiRainha": false,
         "rounds": 1,
         "source": {
-          "byGroupRank": false,
+          "byGroupRank": true,
           "fromPhaseOffset": 1,
           "mapping": [
             {
@@ -441,7 +441,7 @@
               "rankTo": 2
             }
           ],
-          "scope": "overall",
+          "scope": "per_group",
           "type": "previous_phase"
         }
       }

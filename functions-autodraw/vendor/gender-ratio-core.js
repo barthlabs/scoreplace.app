@@ -32,7 +32,10 @@
     '75/25': { m: 3, f: 1 }
   };
   window._GENDER_RATIOS = RATIOS;
-  window._GENDER_RATIO_DEFAULT = '25/75';
+  // ⭐ 2.1 (dono): o padrão é 50/50. Era '25/75' — herança de quando a única regra existente
+  // era "no máximo 1 homem em 4" na lista de espera. Com a seção só aparecendo quando os DOIS
+  // gêneros estão misturados na mesma categoria, o padrão honesto é a divisão igual.
+  window._GENDER_RATIO_DEFAULT = '50/50';
 
   // Rótulo humano da proporção (UI e notificação falam a mesma língua).
   window._ratioLabel = function (r) {
@@ -79,6 +82,151 @@
   // Sem nada configurado o equilibrado cai no DEFAULT (25/75). Isso é deliberado: a regra
   // que já vigorava antes desta versão era "no máximo 1 homem em 4", que É o 25/75 — cair
   // em "sem proporção" afrouxaria, calado, todos os torneios em andamento.
+  /* A PROPORÇÃO SÓ EXISTE QUANDO HÁ OS DOIS GÊNEROS PRA PROPORCIONAR.
+   *
+   * Ordem do dono (22/ago/2026): _"essa proporção só deve aparecer quando existem os 2 gêneros
+   * misturados em mesma categoria e daí considera por padrão 50/50… se houverem categorias que
+   * separam os gêneros ou os inscritos forem de 1 gênero apenas a seção inteira deve sumir."_
+   *
+   * `_ratioAppliesTo` já cobria a metade das CATEGORIAS (Fem/Masc separam, misto não). Faltava
+   * a metade dos INSCRITOS: num torneio misto em que só se inscreveram mulheres, oferecer
+   * "25/75" é oferecer uma regra que nenhum grupo pode cumprir — e travada, ela não sorteia
+   * grupo nenhum.
+   *
+   * `generos` = array de 'masculino' | 'feminino' | '' (quem não preencheu). Quem não
+   * preencheu NÃO conta como gênero presente: um torneio com 8 mulheres e 3 sem preencher não
+   * tem "dois gêneros", tem um e três incógnitas.
+   */
+  window._ratioTemOsDoisGeneros = function (generos) {
+    // ⚠️ NÃO SABER não é o mesmo que ser de um gênero só — e essa diferença decide se a seção
+    // some. Dois casos de "não sabe": a CRIAÇÃO do torneio (ninguém inscrito ainda, quem chama
+    // passa `null`) e o inscrito SEM gênero declarado (é justamente quem o diálogo de sorteio
+    // está prestes a definir). Nos dois a seção FICA. Ela só sai quando todo mundo tem gênero
+    // e é o mesmo pra todo mundo — aí não há o que proporcionar.
+    if (generos == null) return true;
+    if (!Array.isArray(generos)) return false;
+    var m = false, f = false, desconhecido = false;
+    for (var i = 0; i < generos.length; i++) {
+      var g = String(generos[i] || '').toLowerCase();
+      if (g === 'masculino') m = true;
+      else if (g === 'feminino') f = true;
+      else desconhecido = true;
+      if (m && f) return true;
+    }
+    if (!m && !f) return true;      // ninguém declarou nada — ainda pode virar misto
+    return desconhecido;            // um gênero só, mas há indefinidos: ainda pode virar misto
+  };
+
+  window._ratioVisivel = function (t, category, generos) {
+    if (!window._ratioAppliesTo(t, category)) return false;
+    return window._ratioTemOsDoisGeneros(generos);
+  };
+
+  /* ⭐ O CONTROLE É UM SÓ, e mora aqui (2.1).
+   *
+   * Ordem do dono (22/ago/2026): _"mudou aqui muda lá na lista de espera o texto e a
+   * proporção. mesma coisa o toggle que trava a proporção."_ Havia DUAS cópias do controle —
+   * uma no formulário do torneio, outra na tela de sorteio — e por isso as duas podiam contar
+   * histórias diferentes. Agora as duas chamam esta função: um desenho, um texto, uma regra.
+   *
+   * `idp` = prefixo dos ids (as duas telas coexistem no DOM sem colidir).
+   * `onRatio`/`onLock` = nomes de função global chamados no evento; quem usa decide o que
+   * fazer com o valor (gravar no form, gravar no torneio…), mas o DESENHO não se duplica.
+   */
+  var ORDEM = ['25/75', '50/50', '75/25'];
+  /* A lista de gêneros da disputa — uma leitura só, pras duas telas.
+   * `_pGender` é o leitor canônico (uid-first, [[feedback_uid_controls_everything_name_only_ficticio]]).
+   * Devolve `null` quando ainda não há ninguém inscrito: não saber ≠ ser de um gênero só,
+   * e é o caso da CRIAÇÃO do torneio. */
+  window._ratioGenerosDoTorneio = function (t) {
+    var ps = (t && Array.isArray(t.participants)) ? t.participants : null;
+    if (!ps || !ps.length) return null;
+    var ler = (typeof window._pGender === 'function')
+      ? window._pGender
+      : function (p) { return (p && p.gender) || ''; };
+    var out = [];
+    for (var i = 0; i < ps.length; i++) out.push(ler(ps[i]));
+    return out;
+  };
+
+  // O PORQUÊ também é regra, não texto de tela: quem some tem que saber dizer por quê.
+  window._ratioMotivoAusencia = function (t, category, generos) {
+    if (!window._ratioAppliesTo(t, category)) return 'as categorias já separam os gêneros, cada sorteio roda dentro da sua';
+    if (!window._ratioTemOsDoisGeneros(generos)) {
+      var so = '';
+      if (Array.isArray(generos)) {
+        for (var i = 0; i < generos.length; i++) {
+          var g = String(generos[i] || '').toLowerCase();
+          if (g === 'masculino' || g === 'feminino') { so = g; break; }
+        }
+      }
+      return so ? ('só há ' + (so === 'masculino' ? 'homens' : 'mulheres') + ' na disputa') : 'ainda não há os dois gêneros na disputa';
+    }
+    return '';
+  };
+
+  window._ratioSliderHtml = function (o) {
+    o = o || {};
+    var idp = o.idp || 'gr';
+    // ── SEÇÃO INTEIRA SOME quando não há os dois gêneros pra proporcionar ──────────────
+    // O dono pediu que sumisse — e pediu também que diga por quê: foi justamente ele
+    // procurando "por que a proporção funcionava" que abriu este caso. Controle que some
+    // calado manda a pessoa procurar.
+    if (o.visivel === false) {
+      return '<div id="' + idp + '-box" style="font-size:0.74rem;color:var(--text-muted,#94a3b8);' +
+        'line-height:1.45;padding:10px 12px;border-radius:10px;border:1px dashed rgba(255,255,255,0.14);margin-bottom:1rem;">' +
+        '<span style="margin-right:5px;">⚖️</span><b>Sem proporção de gênero</b> — ' + (o.motivo || 'não há os dois gêneros para proporcionar') + '.</div>';
+    }
+    var r = window._isValidRatio(o.ratio) ? String(o.ratio) : window._GENDER_RATIO_DEFAULT;
+    var i = ORDEM.indexOf(r); if (i < 0) i = 1;
+    var cfg = RATIOS[r];
+    var travada = (o.locked !== false);
+    return '<div id="' + idp + '-box" style="background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.20);border-radius:12px;padding:1rem;margin-bottom:1rem;">' +
+      '<p style="margin:0 0 0.35rem;font-size:0.8rem;color:var(--ratio-verde,#22c55e);font-weight:600;text-transform:uppercase;letter-spacing:1px;"><span style="margin-right:5px;">⚖️</span>Proporção do sorteio</p>' +
+      '<p style="margin:0 0 0.9rem;font-size:0.74rem;color:var(--text-muted,#94a3b8);line-height:1.4;">Homens / mulheres em cada 4 pessoas sorteadas (grupo Rei/Rainha ou jogo). Vale no sorteio equilibrado.</p>' +
+      // A LEITURA em cima do slider: composição grande (é o que se vê na quadra) e o
+      // percentual embaixo, menor (é como o valor está gravado). Pedido do dono: os dois.
+      '<div style="text-align:center;margin-bottom:6px;">' +
+        '<div id="' + idp + '-face" style="font-size:1.35rem;font-weight:900;color:var(--ratio-verde,#22c55e);font-variant-numeric:tabular-nums;line-height:1.15;">' + cfg.m + 'H / ' + cfg.f + 'M</div>' +
+        '<div id="' + idp + '-pct" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + r + '</div>' +
+      '</div>' +
+      '<input type="range" id="' + idp + '-slider" min="0" max="2" step="1" value="' + i + '" ' +
+        'aria-label="Proporção de gênero no sorteio" ' +
+        'oninput="window._ratioSliderMove(\'' + idp + '\', this.value)" ' +
+        'onchange="' + (o.onRatio || 'window._ratioSliderNoop') + '(window._ratioSliderValue(this.value))" ' +
+        'style="width:100%;accent-color:var(--ratio-verde,#22c55e);">' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.66rem;color:var(--text-muted,#94a3b8);font-weight:700;margin-top:-2px;">' +
+        '<span>1H / 3M</span><span>2H / 2M</span><span>3H / 1M</span></div>' +
+      '<div class="toggle-row" style="margin-top:12px;padding:8px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.07);">' +
+        '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🔒</span><div>' +
+          '<span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Travar proporção</span>' +
+          '<div class="toggle-desc" id="' + idp + '-lockdesc" style="font-size:0.72rem;margin-top:2px;">' + window._ratioLockDesc(travada) + '</div>' +
+        '</div></div>' +
+        '<label class="toggle-switch"><input type="checkbox" id="' + idp + '-lock"' + (travada ? ' checked' : '') +
+          ' onchange="window._ratioSliderLock(\'' + idp + '\', this.checked); ' + (o.onLock || 'window._ratioSliderNoop') + '(this.checked)">' +
+          '<span class="toggle-slider"></span></label>' +
+      '</div>' +
+    '</div>';
+  };
+  // O texto da trava também é um só — era outra coisa que divergia entre as duas telas.
+  window._ratioLockDesc = function (travada) {
+    return travada
+      ? 'Travada, só forma grupo na proporção exata. Quem não couber espera a próxima pessoa do gênero que falta.'
+      : 'Destravada, busca a proporção e depois flexibiliza para incluir mais gente.';
+  };
+  window._ratioSliderValue = function (i) { return ORDEM[parseInt(i, 10)] || window._GENDER_RATIO_DEFAULT; };
+  window._ratioSliderNoop = function () {};
+  // Pintura ao arrastar: a leitura acompanha o dedo, sem esperar o `change`.
+  window._ratioSliderMove = function (idp, i) {
+    var r = window._ratioSliderValue(i), cfg = RATIOS[r];
+    var f = document.getElementById(idp + '-face'); if (f && cfg) f.textContent = cfg.m + 'H / ' + cfg.f + 'M';
+    var p = document.getElementById(idp + '-pct'); if (p) p.textContent = r;
+  };
+  window._ratioSliderLock = function (idp, travada) {
+    var d = document.getElementById(idp + '-lockdesc');
+    if (d) d.textContent = window._ratioLockDesc(!!travada);
+  };
+
   window._ratioForPhase = function (t, phaseIdx, category) {
     if (!t) return '';
     if (window._drawModeIsLivre && window._drawModeIsLivre(t)) return '';

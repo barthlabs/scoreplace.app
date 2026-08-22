@@ -529,7 +529,23 @@
       var e = cfg.eliminatoria;
       // Escopo vem do TOGGLE (classifScope), não do nº de grupos: com 2+ grupos o org escolhe
       // por-grupo (melhores de cada) OU geral (tabela única). 1 grupo é sempre geral.
-      var perGroup = cfg.grupos > 1 && cfg.classifScope === 'per_group';
+      //
+      // ⭐ EXCEÇÃO REI/RAINHA DE RODADA ÚNICA — os grupos DE VERDADE são os do R/R.
+      // `cfg.grupos` é o slider da Fase de Grupos e NÃO fala do Rei/Rainha: ele monta
+      // grupos de 4 sozinho (a Confra tem `grupos:1` e 34 grupos na quadra). Como o
+      // normalize ainda força `classifScope='overall'` quando `grupos===1`, a condição
+      // acima dava SEMPRE falso no R/R — e a colocação dentro do grupo, que é a única
+      // que existe ali, nunca era usada. Efeito medido na Confra: o motor pareava o
+      // ranking GERAL plano (1º+2º do torneio) em vez de 1º+2º DE CADA GRUPO.
+      //
+      // Com UMA rodada o grupo é ESTÁVEL: a pessoa jogou os 3 jogos dela naquele grupo,
+      // então "1º a 4º do grupo" é um fato, e Ouro = 1º+2º / Prata = 3º+4º sai direto dos
+      // seletores que o organizador vê (Todos avançam + estratégia Performance + 2 linhas).
+      // Com VÁRIAS rodadas os grupos rotacionam a cada sorteio e a colocação "dentro do
+      // grupo" não significa nada — aí continua valendo o ranking geral plano.
+      // [[project_formato_da_partida_por_fase]] · [[feedback_behavior_is_pure_function_of_config]]
+      var _rrRodadaUnica = (cfg.parceria === 'rei_rainha') && (((cfg.rodadas || {}).n || 1) === 1);
+      var perGroup = _rrRodadaUnica || (cfg.grupos > 1 && cfg.classifScope === 'per_group');
       var nLines = e.linhas;
       var dests = _LINE_DESTS[nLines] || ['main'];
       var topN = cfg.classificados;            // quantos classificam = valor do SLIDER

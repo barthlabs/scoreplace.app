@@ -10,8 +10,13 @@
  *   · R1 Grupo R: Betsy, Glauce, Julia, Fabi2401@ — 4 mulheres (gênero no PERFIL).
  *   · Fila: Fabiana Ferre (F, 15:06) → Nathalya Calil (F, 15:51) → Rodrigo Godinho
  *     (M, 16:04). O homem é o TERCEIRO da fila.
- *   · O doc NÃO tem `genderRatio` nem `wlGenderRatio` — a proporção do Confra é o
- *     DEFAULT 25/75 de `_ratioForPhase` (_drawBalanceMode: 'equilibrado').
+ *   · ⚠️ ATUALIZADO 22/ago/2026: a premissa "o doc não tem genderRatio, então vale o
+ *     DEFAULT 25/75" morreu por DOIS motivos, e os dois foram MEDIDOS:
+ *       1. o doc REAL do Confra em produção tem `genderRatio: "25/75"` gravado — ele nunca
+ *          dependeu de default nenhum;
+ *       2. o `_GENDER_RATIO_DEFAULT` passou de '25/75' para '50/50' por ordem do dono.
+ *     Então a proporção entra EXPLÍCITA aqui, como está no doc de verdade. O que este teste
+ *     guarda continua sendo o mesmo: o substituto de W.O. respeita a proporção da fase.
  *
  * CONTRA A 1.8.44 ESTE ARQUIVO FICA VERMELHO (rodado com o código anterior: 18 falhas):
  *   (a) `_ligaNextSuplente` era "primeiro da fila que atende a categoria" — colocaria a
@@ -140,7 +145,8 @@ function novoT(opts) {
   return {
     id: 'tour_1780009816637', name: 'Confra BT', format: 'Liga', status: 'active',
     ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha', woScope: 'individual',
-    // como no doc real: SEM genderRatio/wlGenderRatio — a proporção é o DEFAULT 25/75
+    // como no doc real: a proporção vem GRAVADA, não de default (ver cabeçalho)
+    genderRatio: '25/75',
     _drawBalanceMode: 'equilibrado', wlGroupBalance: 'equilibrado', balanceBy: 'individual',
     combinedCategories: [], genderCategories: [], skillCategories: [], ageCategories: [],
     creatorUid: 'uid_organizador', allowSelfDeactivation: true,
