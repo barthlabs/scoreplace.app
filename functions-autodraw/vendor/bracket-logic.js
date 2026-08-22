@@ -1403,6 +1403,7 @@ function _advanceWinner(t, completedMatch) {
 function _rankByTiebreakers(t, playerNames) {
   var allMatches = t.matches || [];
   var players = playerNames.map(function(name) {
+    var uidDoSlot = null;
     var totalScored = 0, totalConceded = 0, matchesWon = 0, matchesPlayed = 0;
     var setsWon = 0, setsLost = 0, gamesWon = 0, gamesLost = 0, tiebreaksWon = 0;
     var lastScoreDiff = 0, lastPointsScored = 0;
@@ -1411,6 +1412,11 @@ function _rankByTiebreakers(t, playerNames) {
       if (!m.winner || m.isBye || m.isSitOut) return;
       if (m.p1 !== name && m.p2 !== name) return;
       var isP1 = m.p1 === name;
+      // ⚠️ IDENTIDADE POR UID nas DUAS pontas. O comparador canônico chaveia o confronto
+      // direto por `uid || name`; se a linha do jogador vier só com nome e o mapa h2h vier
+      // com uid, as chaves nunca casam e o critério vira NEUTRO em silêncio — o mesmo jeito
+      // de um critério deixar de valer sem ninguém notar. [[project_uid_identity_canon_locked]]
+      if (uidDoSlot == null) uidDoSlot = (isP1 ? m.p1Uid : m.p2Uid) || null;
       var scored = parseInt(isP1 ? m.scoreP1 : m.scoreP2) || 0;
       var conceded = parseInt(isP1 ? m.scoreP2 : m.scoreP1) || 0;
       totalScored += scored;
@@ -1440,6 +1446,7 @@ function _rankByTiebreakers(t, playerNames) {
 
     return {
       name: name,
+      uid: uidDoSlot,
       wins: matchesWon,
       played: matchesPlayed,
       scored: totalScored,
@@ -1457,14 +1464,24 @@ function _rankByTiebreakers(t, playerNames) {
     };
   });
 
-  // Build head-to-head map
+  // Confronto direto no FORMATO CANÔNICO que `standingsCompareConfig` lê:
+  // chave "vencedor|||perdedor" contada, e a identidade é o uid quando existe.
+  // ⚠️ O formato antigo daqui era `{p1|p2: {w1,w2}}` — o comparador canônico nunca
+  // acharia essas chaves, e o critério viraria silenciosamente NEUTRO. Duas formas para o
+  // mesmo fato é como o critério deixa de valer sem ninguém perceber.
+  var _idk = function (nome, uid) { return uid || nome || ''; };
   var h2h = {};
-  allMatches.forEach(function(m) {
+  allMatches.forEach(function (m) {
     if (!m.winner || m.isBye || m.isSitOut) return;
-    var key = m.p1 + '|' + m.p2;
-    if (!h2h[key]) h2h[key] = { w1: 0, w2: 0 };
-    if (window._matchWinnerSide(m) === 1) h2h[key].w1++;
-    else if (window._matchWinnerSide(m) === 2) h2h[key].w2++;
+    var k1 = _idk(m.p1, m.p1Uid), k2 = _idk(m.p2, m.p2Uid);
+    if (m.winner === 'draw' || m.draw) {
+      h2h[k1 + '|||' + k2 + '|||d'] = (h2h[k1 + '|||' + k2 + '|||d'] || 0) + 1;
+      h2h[k2 + '|||' + k1 + '|||d'] = (h2h[k2 + '|||' + k1 + '|||d'] || 0) + 1;
+      return;
+    }
+    var venc = window._matchWinnerSide(m) === 1 ? k1 : k2;
+    var perd = window._matchWinnerSide(m) === 1 ? k2 : k1;
+    h2h[venc + '|||' + perd] = (h2h[venc + '|||' + perd] || 0) + 1;
   });
 
   // v0.17.40: alinhado com default principal — confronto direto + Buchholz
@@ -1477,73 +1494,72 @@ function _rankByTiebreakers(t, playerNames) {
   var tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
-  players.sort(function(a, b) {
-    // Primary: last match score diff (closer game = better = higher diff)
-    if (a.lastScoreDiff !== b.lastScoreDiff) return b.lastScoreDiff - a.lastScoreDiff;
-    // Then: configured tiebreakers
-    for (var ti = 0; ti < tiebreakers.length; ti++) {
-      var tb = tiebreakers[ti];
-      var diff = 0;
-      switch (tb) {
-        case 'antiguidade': {
-          var aoB = birthByName[a.name], boB = birthByName[b.name];
-          if (aoB != null && boB != null && aoB !== boB) return aoB - boB; // mais velho primeiro
-          break;
-        }
-        case 'juventude': {
-          var ayB = birthByName[a.name], byB = birthByName[b.name];
-          if (ayB != null && byB != null && ayB !== byB) return byB - ayB; // mais novo primeiro
-          break;
-        }
-        case 'confronto_direto':
-          var k1 = a.name + '|' + b.name;
-          var k2 = b.name + '|' + a.name;
-          var h1 = h2h[k1] || { w1: 0, w2: 0 };
-          var h2 = h2h[k2] || { w1: 0, w2: 0 };
-          var aWins = h1.w1 + h2.w2;
-          var bWins = h1.w2 + h2.w1;
-          diff = bWins - aWins; // more h2h wins = better
-          break;
-        case 'saldo_pontos':
-          diff = b.diff - a.diff;
-          break;
-        case 'vitorias':
-          diff = b.wins - a.wins;
-          break;
-        case 'buchholz':
-          // Skip for elimination — not applicable with few matches
-          break;
-        case 'sonneborn_berger':
-          break;
-        case 'saldo_sets':
-          diff = b.setsDiff - a.setsDiff;
-          break;
-        case 'saldo_games':
-          diff = b.gamesDiff - a.gamesDiff;
-          break;
-        case 'sets_vencidos':
-          diff = b.setsWon - a.setsWon;
-          break;
-        case 'games_vencidos':
-          diff = b.gamesWon - a.gamesWon;
-          break;
-        case 'tiebreaks_vencidos':
-          diff = b.tiebreaksWon - a.tiebreaksWon;
-          break;
-        case 'sorteio':
-          // ⚠️ NUNCA Math.random AQUI. Sorteio é a ORDEM DA CHAVE (regra do dono) e ela é
-          // aplicada pelo comparador único; nesta lista não há mapa de ordem montado, então
-          // o critério é NEUTRO. Aleatório em comparador fazia a ordem mudar a cada render
-          // e ainda viola a consistência que o `sort` exige.
-          diff = 0;
-          break;
-      }
-      if (diff !== 0) return diff;
+  // ── DESEMPATE: O MESMO COMPARADOR DO RESTO DO APP ────────────────────────────
+  // ⚠️ ESTE ERA O QUARTO SWITCH DE CRITÉRIOS DO PROJETO. Os outros três (tabela do
+  // Rei/Rainha, Fase de Grupos e classificação da chave) já foram unificados em
+  // `standingsCompareConfig`; este caminho — o RANKING DOS DERROTADOS que decide a
+  // repescagem — ficou para trás e foi divergindo em silêncio.
+  //
+  // O que ele fazia de errado, medido no Confra (22/ago/2026):
+  //   1. um critério FANTASMA rodava ANTES da lista do organizador:
+  //        if (a.lastScoreDiff !== b.lastScoreDiff) return b.lastScoreDiff - a.lastScoreDiff;
+  //      a diferença do último jogo decidia primeiro, e não estava na tela, não podia ser
+  //      reordenada nem excluída;
+  //   2. `pontos_avancados` NÃO EXISTIA no switch — o primeiro critério configurado pelo
+  //      dono caía no default e era ignorado sem aviso;
+  //   3. `buchholz` e `sonneborn_berger` eram `case` VAZIOS ("skip for elimination");
+  //   4. `sorteio` era neutro por não ter mapa de ordem.
+  // Ou seja: de 8 critérios configurados, 4 não faziam nada e um quinto rodava por fora.
+  //
+  // Ordem do dono: _"os critérios devem ser considerados na ordem deixada pelo organizador
+  // SEMPRE, senão é perfumaria a tela dos critérios; se ele muda ordem, exclui critério ou
+  // inclui e nada muda, não serve pra nada a configuração"_.
+  //
+  // O desempenho do jogo da eliminatória NÃO se perdeu ao matar o fantasma: as estatísticas
+  // acima são acumuladas sobre TODAS as partidas da pessoa (a derrota da eliminatória
+  // inclusive), então ela entra por `saldo_pontos`/`saldo_sets`/`saldo_games` — dentro da
+  // ordem que o organizador escolheu, e não antes dela.
+  // [[feedback_unify_dual_entry_points]]
+  var _cmpStd = (typeof window !== 'undefined' && typeof window._standingsCompareConfig === 'function')
+    ? window._standingsCompareConfig : null;
+  if (!_cmpStd && typeof require === 'function') {
+    try { _cmpStd = require('./standings-core.js').standingsCompareConfig; } catch (e) { _cmpStd = null; }
+  }
+  var _advOn = !!(t.advancedScoring && t.advancedScoring.enabled);
+  // campos com os NOMES que o comparador canônico lê (o builder acima usa nomes próprios)
+  players.forEach(function (p, _i) {
+    p._ord = _i;                                   // ordem de entrada = desempate ESTÁVEL final
+    p.pointsFor = p.scored; p.pointsAgainst = p.conceded; p.pointsDiff = p.diff;
+    // ⛔ NÃO INVENTAR CAMPO PRIMÁRIO. `standingsCompareConfig` aplica `primaryField` ANTES
+    // da lista do organizador — mapear `points = wins` aqui recriava o critério fantasma que
+    // este conserto veio matar (vitórias voltavam a decidir antes de tudo, e reordenar a
+    // configuração não mudava nada). Derrotado de eliminatória não tem coluna de pontos:
+    // sem pontuação avançada, `points` fica AUSENTE e quem decide é a lista, do primeiro ao
+    // último. Pego pelo teste criterios-do-organizador-mandam.
+    if (_advOn && typeof window._calcAdvancedPoints === 'function') {
+      try { p.advancedPoints = window._calcAdvancedPoints(t, p.name, null, allMatches).total; } catch (e) {}
     }
-    // Ultimate: more points scored, then alphabetical
-    if (a.scored !== b.scored) return b.scored - a.scored;
-    return a.name.localeCompare(b.name);
+    if (p.tiebreaksLost == null) p.tiebreaksLost = 0;
   });
+  if (_cmpStd) {
+    var _opts = {
+      tiebreakers: tiebreakers,
+      primaryField: _advOn ? 'advancedPoints' : 'points',
+      h2h: h2h, birth: birthByName
+    };
+    players.sort(function (a, b) {
+      var d = _cmpStd(a, b, _opts);
+      if (d) return d;
+      // último recurso ESTÁVEL (nunca aleatório): ordem de entrada da lista
+      return (a._ord || 0) - (b._ord || 0);
+    });
+  } else {
+    // Sem o comparador canônico não há como ordenar por mérito SEM inventar uma segunda
+    // régua — que é exatamente o defeito que este bloco existe pra matar.
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[repescagem] _standingsCompareConfig ausente — ordem de entrada preservada');
+    }
+  }
 
   return players;
 }
@@ -2528,13 +2544,20 @@ function _updateProgressiveClassification(t) {
       });
       allM.forEach(function(m) {
         if (!m.winner || m.isBye || m.isSitOut) return;
+        // ⭐ SEMPRE UID (ordem do dono, 22/ago/2026). O comparador canônico chaveia o
+        // confronto direto por `uid || name`; se o mapa vier por NOME e a linha do jogador
+        // tiver uid, as chaves não casam e o critério vira NEUTRO em silêncio. Nome também
+        // envelhece (a pessoa se renomeia) e repete (homônimos viram um só).
+        // [[project_uid_identity_canon_locked]]
+        var _k1 = m.p1Uid || m.p1, _k2 = m.p2Uid || m.p2;
         var isDraw = m.draw || m.winner === 'draw';
         if (isDraw) {
-          _h2hAllGroups[m.p1 + '|||' + m.p2 + '|||d'] = (_h2hAllGroups[m.p1 + '|||' + m.p2 + '|||d'] || 0) + 1;
-          _h2hAllGroups[m.p2 + '|||' + m.p1 + '|||d'] = (_h2hAllGroups[m.p2 + '|||' + m.p1 + '|||d'] || 0) + 1;
+          _h2hAllGroups[_k1 + '|||' + _k2 + '|||d'] = (_h2hAllGroups[_k1 + '|||' + _k2 + '|||d'] || 0) + 1;
+          _h2hAllGroups[_k2 + '|||' + _k1 + '|||d'] = (_h2hAllGroups[_k2 + '|||' + _k1 + '|||d'] || 0) + 1;
         } else {
-          var loser = window._matchWinnerSide(m) === 1 ? m.p2 : m.p1;
-          _h2hAllGroups[m.winner + '|||' + loser] = (_h2hAllGroups[m.winner + '|||' + loser] || 0) + 1;
+          var _lado = window._matchWinnerSide(m);
+          var _kv = _lado === 1 ? _k1 : _k2, _kp = _lado === 1 ? _k2 : _k1;
+          _h2hAllGroups[_kv + '|||' + _kp] = (_h2hAllGroups[_kv + '|||' + _kp] || 0) + 1;
         }
       });
     });
@@ -2553,74 +2576,30 @@ function _updateProgressiveClassification(t) {
     var _birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
 
     // ─── Sort comparator: same logic as _computeStandings sort ───
-    var _applyTb = function(a, b) {
-      if (b.points !== a.points) return b.points - a.points;
-      for (var i = 0; i < _userTb.length; i++) {
-        var tb = _userTb[i];
-        var diff = 0;
-        switch (tb) {
-          case 'confronto_direto':
-            var aBeatsB = _h2hAllGroups[a.name + '|||' + b.name] || 0;
-            var bBeatsA = _h2hAllGroups[b.name + '|||' + a.name] || 0;
-            diff = bBeatsA - aBeatsB;
-            if (diff !== 0) return diff < 0 ? -1 : 1;
-            break;
-          case 'saldo_pontos':
-            diff = b.pointsDiff - a.pointsDiff;
-            if (diff !== 0) return diff;
-            break;
-          case 'vitorias':
-            diff = b.wins - a.wins;
-            if (diff !== 0) return diff;
-            break;
-          case 'buchholz':
-            diff = (b.buchholz || 0) - (a.buchholz || 0);
-            if (diff !== 0) return diff;
-            break;
-          case 'sonneborn_berger':
-            diff = (b.sonnebornBerger || 0) - (a.sonnebornBerger || 0);
-            if (diff !== 0) return diff;
-            break;
-          case 'saldo_sets':
-            diff = ((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0));
-            if (diff !== 0) return diff;
-            break;
-          case 'saldo_games':
-            diff = ((b.gamesWon || 0) - (b.gamesLost || 0)) - ((a.gamesWon || 0) - (a.gamesLost || 0));
-            if (diff !== 0) return diff;
-            break;
-          case 'sets_vencidos':
-            diff = (b.setsWon || 0) - (a.setsWon || 0);
-            if (diff !== 0) return diff;
-            break;
-          case 'games_vencidos':
-            diff = (b.gamesWon || 0) - (a.gamesWon || 0);
-            if (diff !== 0) return diff;
-            break;
-          case 'tiebreaks_vencidos':
-            diff = (b.tiebreaksWon || 0) - (a.tiebreaksWon || 0);
-            if (diff !== 0) return diff;
-            break;
-          case 'pontos_avancados':
-            diff = (b.advancedPoints || 0) - (a.advancedPoints || 0);
-            if (diff !== 0) return diff;
-            break;
-          case 'antiguidade': {
-            var _aoB = _birthByName[a.name], _boB = _birthByName[b.name];
-            if (_aoB != null && _boB != null && _aoB !== _boB) return _aoB - _boB;
-            break;
-          }
-          case 'juventude': {
-            var _ayB = _birthByName[a.name], _byB = _birthByName[b.name];
-            if (_ayB != null && _byB != null && _ayB !== _byB) return _byB - _ayB;
-            break;
-          }
-          case 'sorteio':
-            // ⚠️ idem: sorteio é ORDEM DA CHAVE, nunca número aleatório na hora.
-            return 0;
-        }
-      }
-      return 0;
+    // ── DESEMPATE: O MESMO COMPARADOR DO RESTO DO APP ────────────────────────────
+    // ⚠️ Esta era a QUINTA cópia da lista de critérios no projeto (a do ranking de
+    // derrotados, logo acima, era a quarta). Cada cópia envelhece sozinha: na quarta,
+    // `buchholz` e `sonneborn_berger` eram `case` VAZIOS e `pontos_avancados` nem existia —
+    // de 8 critérios configurados, 4 não faziam nada.
+    //
+    // Ordem do dono (22/ago/2026): _"os critérios de desempate e ordem escolhida pelo
+    // organizador"_ têm de ser canônicos e _"aplicados sempre dessa forma"_ — senão a tela
+    // de critérios é perfumaria. E: _"sempre uid"_ — a identidade das duas pontas (linha e
+    // mapa de confronto direto) é o uid quando existe.
+    // [[feedback_unify_dual_entry_points]] · [[project_uid_identity_canon_locked]]
+    var _cmpTb = (typeof window !== 'undefined' && typeof window._standingsCompareConfig === 'function')
+      ? window._standingsCompareConfig : null;
+    if (!_cmpTb && typeof require === 'function') {
+      try { _cmpTb = require('./standings-core.js').standingsCompareConfig; } catch (e) { _cmpTb = null; }
+    }
+    var _advTb = !!(t.advancedScoring && t.advancedScoring.enabled);
+    var _applyTb = function (a, b) {
+      if (!_cmpTb) return 0;                       // sem o canônico, ordem preservada — nunca 2ª régua
+      return _cmpTb(a, b, {
+        tiebreakers: _userTb,
+        primaryField: _advTb ? 'advancedPoints' : 'points',
+        h2h: _h2hAllGroups, birth: _birthByName
+      });
     };
 
     // ─── Identify non-classified pool ───

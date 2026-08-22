@@ -108,6 +108,14 @@ const SUITES = [
   // que provou que ali havia resultado. Regra do dono: quem sai mantém o que fez, quem
   // entra herda a POSIÇÃO. Passado é de quem jogou; futuro é de quem entra.
   'tests/placar-lancado-nunca-e-reescrito.test.js',
+  // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.
+  // O ranking de derrotados que decide a REPESCAGEM era a QUARTA cópia da lista de critérios
+  // e a classificação dos não-classificados a QUINTA. Na quarta: um critério FANTASMA
+  // (lastScoreDiff) decidia antes da lista, `pontos_avancados` nem existia no switch, e
+  // `buchholz`/`sonneborn_berger` eram case VAZIOS — de 8 critérios configurados, 4 não
+  // faziam nada. Reordenar ou excluir na tela não mudava nada. O teste prova o contrário:
+  // trocar a ordem TEM de trocar o resultado, e nenhuma régua paralela pode existir.
+  'tests/criterios-do-organizador-mandam.test.js',
   // Buscar quem levou W.O. tem de achar o GRUPO dele. Quem leva W.O. sai dos jogos (o
   // substituto ocupa o slot), então o nome some do data-players dos cards e o filtro
   // escondia o box inteiro — sobrava só o chip solto na caixa "W.O.", que não diz de qual
