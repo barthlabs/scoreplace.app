@@ -75,6 +75,8 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.16 ─────────────────────────────────────────────────────
+        '<li><b>🔎 Procurar por quem levou W.O. agora mostra o grupo dele:</b> ao buscar o nome de alguém que levou W.O., aparecia só o chip solto na caixa de W.O. — sem dizer de que grupo a pessoa era nem quem entrou no lugar dela. Acontecia porque quem leva W.O. sai dos jogos (o substituto assume a vaga), e a busca só enxergava os nomes dentro dos jogos. Agora o <b>grupo inteiro aparece</b>, com a linha “🔁 Fulana W.O. → Beltrana” e a classificação — e a busca funciona tanto pelo nome de <b>quem saiu</b> quanto pelo de <b>quem entrou</b>.</li>' +
         // ── ciclo 2.0.15 ─────────────────────────────────────────────────────
         // Escrito na voz do que o USUÁRIO vê. A causa (o _rewriteSlot com clearResults)
         // está no commit; aqui o que importa é a garantia: placar lançado não se mexe.

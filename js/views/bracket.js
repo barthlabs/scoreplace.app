@@ -6010,7 +6010,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
                 var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
-                return '<tr style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
+                // ⭐ A LINHA DE QUEM LEVOU W.O. ENTRA NO FILTRO. A pílula "🔁 Fulana W.O.
+                // → Beltrana" já se declara (liga-substitution), mas ela só existe enquanto
+                // o torneio está EM ANDAMENTO — com o torneio encerrado ela não é
+                // renderizada, e a busca pelo nome de quem saiu voltaria a esconder o box
+                // do grupo inteiro. A linha da classificação sobrevive sempre, então é ela
+                // que garante a regra em qualquer estado. `data-my-match="1"` porque linha
+                // de tabela não é JOGO — o "Só meus jogos" não pode apagá-la.
+                var _woBuscaLinha = (_isRed || _isAmb)
+                  ? ' data-players="' + window._safeHtml(String(s.name || '')) + '" data-my-match="1"'
+                  : '';
+                return '<tr' + _woBuscaLinha + ' style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
                   '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +

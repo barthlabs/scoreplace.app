@@ -108,6 +108,13 @@ const SUITES = [
   // que provou que ali havia resultado. Regra do dono: quem sai mantém o que fez, quem
   // entra herda a POSIÇÃO. Passado é de quem jogou; futuro é de quem entra.
   'tests/placar-lancado-nunca-e-reescrito.test.js',
+  // Buscar quem levou W.O. tem de achar o GRUPO dele. Quem leva W.O. sai dos jogos (o
+  // substituto ocupa o slot), então o nome some do data-players dos cards e o filtro
+  // escondia o box inteiro — sobrava só o chip solto na caixa "W.O.", que não diz de qual
+  // grupo era nem quem entrou. A pílula "🔁 Fulana W.O. → Beltrana" e a linha da
+  // classificação passam a se declarar; a linha cobre o torneio já encerrado, em que a
+  // pílula não é renderizada.
+  'tests/busca-acha-o-grupo-de-quem-tomou-wo.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado

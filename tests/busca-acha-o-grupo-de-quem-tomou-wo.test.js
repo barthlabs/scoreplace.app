@@ -1,0 +1,80 @@
+/* BUSCAR QUEM LEVOU W.O. TEM DE ACHAR O GRUPO DELE
+ *
+ * Relato do dono (22/ago/2026): _"quando usamos a barra de filtro/buscas e coloco por
+ * exemplo nina, está aparecendo apenas ela no W.O., mas quero que apareça também o grupo
+ * onde ela estava e consta lá que ela estava naquele grupo e tomou o W.O. e foi substituída
+ * por não sei quem. quero que isso apareça. o nome dela está no grupo com W.O., deveria
+ * aparecer."_
+ *
+ * POR QUE SUMIA: o filtro (`_bracketApplyFilter`) só enxerga `[data-players]` e esconde
+ * TODO container que ficou sem nenhum casando — foi a decisão da v1.6.86, e é a certa.
+ * Só que quem leva W.O. SAI dos jogos do grupo: o substituto ocupa o slot, e o nome dela
+ * some de `team1`/`team2`, que é de onde o card monta o `data-players`. Buscar "nina"
+ * escondia o box inteiro do R1 Grupo X. Sobrava o chip solto na caixa "W.O.", que não diz
+ * de qual grupo ela era nem quem entrou no lugar.
+ *
+ * Medido no Confra: no R1 Grupo X os 3 jogos são "ELIANE / Priscila", "ELIANE / Michelle",
+ * "ELIANE / Fabio" — nenhum menciona a Nina. O nome dela vive em `g.woAbsent` e no marcador.
+ *
+ * DOIS PONTOS declaram, e são complementares de propósito:
+ *   1. a PÍLULA "🔁 Nina W.O. → Priscila" — é o único lugar com os DOIS nomes juntos;
+ *   2. a LINHA da classificação — a pílula só existe com o torneio EM ANDAMENTO
+ *      (`_ligaGroupControlsHtml` retorna cedo quando `status === 'finished'`), e a busca
+ *      tem de continuar achando o grupo depois que o torneio acaba.
+ */
+const fs = require('fs');
+const path = require('path');
+
+let falhas = 0;
+const ok = (nome, cond, extra) => {
+  if (cond) { console.log('  ✓ ' + nome); return; }
+  console.log('  ✗ ' + nome + (extra ? '\n      ' + extra : '')); falhas++;
+};
+
+console.log('──── buscar quem levou W.O. acha o grupo dele ────');
+
+const ROOT = path.join(__dirname, '..');
+const liga = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.js'), 'utf8');
+const bracket = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
+
+// ── 1. a pílula do W.O. ──────────────────────────────────────────────────────────────
+ok('a pílula "W.O. → substituto" declara data-players',
+  /var s2 = '<span data-players="' \+ _woBusca/.test(liga),
+  'sem isso o box do grupo some quando se busca quem saiu');
+ok('  → e carrega os DOIS nomes (quem saiu E quem entrou)',
+  /_woBusca = window\._safeHtml\(String\(group\.woAbsent \|\| ''\) \+ ' ' \+ String\(group\.subName \|\| ''\)\)/.test(liga),
+  'o dono quer achar o grupo tanto pelo nome de quem saiu quanto pelo de quem entrou');
+ok('  → e é marcada como não-jogo, pro "Só meus jogos" não apagá-la',
+  /var s2 = '<span data-players="[\s\S]{0,60}data-my-match="1"/.test(liga));
+
+// ── 2. a linha da classificação (o caso do torneio encerrado) ────────────────────────
+ok('a linha de quem levou W.O. na classificação declara data-players',
+  /_woBuscaLinha = \(_isRed \|\| _isAmb\)[\s\S]{0,200}data-players="/.test(bracket));
+ok('  → só para quem está em W.O./apontado (não para a tabela inteira)',
+  /_woBuscaLinha = \(_isRed \|\| _isAmb\)\s*\n\s*\?/.test(bracket),
+  'declarar todas as linhas faria qualquer busca manter todos os 34 grupos de pé');
+ok('  → e entra no <tr>, que é quem sobrevive em qualquer estado do torneio',
+  /return '<tr' \+ _woBuscaLinha \+ ' style=/.test(bracket));
+ok('  → também marcada como não-jogo',
+  /_woBuscaLinha = \(_isRed \|\| _isAmb\)[\s\S]{0,200}data-my-match="1"/.test(bracket));
+
+// ── 3. o filtro continua sendo UM só ─────────────────────────────────────────────────
+// Se alguém criar um segundo mecanismo de visibilidade, as duas decisões brigam e a
+// segunda a rodar desfaz a primeira — foi o que já aconteceu com busca × "só meus jogos".
+ok('quem decide visibilidade continua sendo _bracketApplyFilter, por [data-players]',
+  /window\._bracketApplyFilter = function[\s\S]{0,600}querySelectorAll\('\[data-players\]'\)/.test(bracket));
+
+// ── 4. a regra vale para o caso REAL do Confra ───────────────────────────────────────
+// Simula o que o filtro faz: normaliza e procura o trecho no data-players declarado.
+const norm = (s) => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const declaradoNaPilula = norm('Nina Pereira Lima' + ' ' + 'Priscila Cassandre');
+ok('buscar "nina" casa a pílula do R1 Grupo X', declaradoNaPilula.indexOf(norm('nina')) !== -1);
+ok('buscar "priscila" (quem entrou) também casa', declaradoNaPilula.indexOf(norm('priscila')) !== -1);
+ok('buscar acento-insensitive continua valendo ("assuncao" acha "Assunção")',
+  norm('Glauce Assunção').indexOf(norm('assuncao')) !== -1);
+ok('quem não tem nada a ver não casa', declaradoNaPilula.indexOf(norm('marilia')) === -1);
+
+console.log(falhas === 0
+  ? '\n✅ busca-acha-o-grupo-de-quem-tomou-wo: OK'
+  : '\n❌ busca-acha-o-grupo-de-quem-tomou-wo: ' + falhas + ' falha(s)');
+process.exit(falhas === 0 ? 0 : 1);

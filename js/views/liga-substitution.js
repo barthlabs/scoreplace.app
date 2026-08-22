@@ -1412,7 +1412,28 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   // Estado: preenchido (W.O. ativo)
   if (group.subStatus === 'filled' && group.woAbsent) {
     var lbl = group.subIsGuest ? (_safe(group.subName) + ' (Jogador X)') : _safe(group.subName);
-    var s2 = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O.<br>→ ' + lbl + '</span>';
+    // ⭐ A PÍLULA DO W.O. ENTRA NO FILTRO DA BUSCA — com os DOIS nomes.
+    //
+    // Relato do dono (22/ago/2026): _"coloco por exemplo nina, está aparecendo apenas ela
+    // no W.O., mas quero que apareça também o grupo onde ela estava e consta lá que ela
+    // estava naquele grupo e tomou o W.O. e foi substituída por não sei quem"_.
+    //
+    // POR QUE ELA SUMIA: o filtro (`_bracketApplyFilter`) só conhece `[data-players]`, e
+    // esconde todo container que ficou sem nenhum casando. Quem levou W.O. NÃO está mais
+    // nos jogos do grupo — o substituto ocupou o slot —, então o box inteiro sumia numa
+    // busca pelo nome dela. Só sobrava o chip solto na caixa "W.O.", que não diz de qual
+    // grupo ela era nem quem entrou no lugar.
+    //
+    // Esta pílula é justamente onde essa informação vive ("🔁 Nina W.O. → Priscila"), e é
+    // o único ponto da tela que carrega os dois nomes juntos. Declará-la faz o box do
+    // grupo sobreviver à busca por QUALQUER um dos dois — e o que o dono quer ver (de que
+    // grupo, que levou W.O., quem substituiu) já está renderizado ali e na classificação.
+    //
+    // `data-my-match="1"`: pílula de estado não é JOGO, então o toggle "Só meus jogos" não
+    // pode apagá-la — mesma decisão dos cards de organização e dos chips de quem ficou de
+    // fora. [[feedback_unify_dual_entry_points]]
+    var _woBusca = window._safeHtml(String(group.woAbsent || '') + ' ' + String(group.subName || ''));
+    var s2 = '<span data-players="' + _woBusca + '" data-my-match="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O.<br>→ ' + lbl + '</span>';
     // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
     var _woPlayed = (typeof window._matchHasRealPlay === 'function')
       && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
