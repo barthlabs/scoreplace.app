@@ -204,6 +204,80 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ['assets/badge-app-store.svg', 'assets/badge-google-play.png'].forEach(function (f) {
     ok(fs.existsSync(path.join(ROOT, f)), 'a arte oficial está no repo: ' + f);
   });
+
+  // ── 9. O BANNER DO PWA LÊ A MESMA LISTA (v2.0.9) ───────────────────────────
+  // ⚠️ ESTE É O QUARTO CONSUMIDOR, e era o único fora da lista. Ele tinha as duas
+  // URLs escritas à mão — uma SEGUNDA verdade, com a divergência já marcada: na
+  // v2.0.8 a ficha da Play saiu da análise e virar `play.on` acendeu o selo da
+  // landing, o botão da tela inicial e o selo do impresso DE UMA VEZ. Só o banner
+  // ficaria pra trás, apontando pra uma URL que ninguém mais mantinha. E o erro
+  // que uma lista à mão produz não é o link errado — é o link que continua
+  // apontando depois que o outro lado mudou.
+  //
+  // INVARIANTE (o mesmo do _storeButtonHtml, e é de propósito): sem ficha no ar
+  // pro aparelho, NADA. Aqui é mais forte que lá — some o banner INTEIRO, não só
+  // o botão, porque o texto manda REMOVER o atalho: mandar remover e levar a um
+  // 404 tira o app da pessoa.
+  const banner = fs.readFileSync(path.join(ROOT, 'js', 'pwa-migrate-banner.js'), 'utf8');
+  ok(/var L = window\.SP_LOJAS \|\|/.test(banner),
+    'o banner do PWA lê window.SP_LOJAS — com a MESMA rede defensiva do convite impresso');
+  ok(!/'https:\/\/apps\.apple\.com[^']*';/.test(banner.replace(/var L = window\.SP_LOJAS \|\|[\s\S]*?\n    \};/, '')),
+    '⛔ não sobrou constante de URL da loja fora do literal de rede');
+
+  // e a ESCOLHA da loja, extraída do arquivo e executada
+  const mEscolha = banner.match(/var L = window\.SP_LOJAS \|\|[\s\S]*?var storeName = loja\.nome \|\| 'loja';/);
+  ok(!!mEscolha, 'o bloco que escolhe a loja existe no arquivo');
+  if (mEscolha) {
+    // O trecho extraído carrega TAMBÉM as três guardas anteriores (nativo, standalone,
+    // dispensa), então elas rodam de verdade aqui — não é só o `if` da loja.
+    // `localStorage` não existe no Node: o `try` do próprio arquivo engole, que é
+    // exatamente o que ele faz no navegador com o storage bloqueado.
+    function escolhe(amb) {
+      const win = {};
+      eval(mLojas[0].replace('window.', 'win.'));
+      if (amb.lojas) win.SP_LOJAS = amb.lojas;
+      const nav = {
+        userAgent: amb.ua || '', platform: amb.platform || '', maxTouchPoints: amb.touch || 0,
+        standalone: amb.standalone !== false
+      };
+      const navigator = nav;
+      win.navigator = nav;
+      win.SCOREPLACE_PLATFORM = amb.nativo ? 'ios' : undefined;
+      win.Capacitor = amb.nativo ? { isNativePlatform: () => true } : undefined;
+      win.matchMedia = () => ({ matches: amb.standalone !== false });
+      return eval('(function(){' + mEscolha[0].replace(/\bwindow\./g, 'win.') + '\nreturn loja;})()') || null;
+    }
+
+    ok((escolhe({ ua: UA_IOS }) || {}).url === 'https://apps.apple.com/br/app/scoreplace/id6789757489',
+      'no iPhone o banner aponta pra ficha da App Store que está em SP_LOJAS');
+    ok((escolhe({ ua: UA_ANDROID }) || {}).url === 'https://play.google.com/store/apps/details?id=app.scoreplace',
+      'no Android aponta pra ficha da Google Play — antes ele caía SEMPRE na Apple');
+    ok((escolhe({ ua: UA_DESKTOP, platform: 'MacIntel', touch: 5 }) || {}).nome === 'App Store',
+      'iPad (que se declara MacIntel) é reconhecido pelo toque, igual ao _storeButtonHtml');
+
+    // o beco que a linha antiga produzia: `isIOS ? IOS : (isAndroid ? ANDROID : IOS)`
+    ok(escolhe({ ua: UA_DESKTOP }) === null,
+      '⛔ COMPUTADOR não recebe banner — a ficha no navegador do PC não instala nada, e não há app nativo de PC pra migrar');
+
+    // e o mecanismo do `on`, sintético de propósito (se a medida do dia mudar, este NÃO muda)
+    const semPlay = { apple: { on: true,  nome: 'App Store',   url: 'https://apps.apple.com/x' },
+                      play:  { on: false, nome: 'Google Play', url: 'https://play.google.com/y' } };
+    ok(escolhe({ ua: UA_ANDROID, lojas: semPlay }) === null,
+      'desligando play.on o banner some no Android — mandar remover o atalho e cair num 404 tira o app da pessoa');
+    ok((escolhe({ ua: UA_IOS, lojas: semPlay }) || {}).nome === 'App Store',
+      'e a loja que continua no ar segue funcionando (a chave é por loja, não geral)');
+    ok(escolhe({ ua: UA_IOS, lojas: { apple: { on: false }, play: { on: false } } }) === null,
+      'nenhuma ficha no ar = nenhum banner');
+
+    // as duas travas que são a razão de o banner existir, executadas no mesmo bloco
+    ok(escolhe({ ua: UA_IOS, nativo: true }) === null,
+      'no app NATIVO o banner não aparece (é o próprio app da loja — não há o que migrar)');
+    ok(escolhe({ ua: UA_IOS, standalone: false }) === null,
+      'em aba NORMAL do navegador não aparece — não há atalho instalado a remover');
+  }
+
+  ok(/localStorage\.getItem\(DISMISS_KEY\) === '1'\) return;/.test(banner),
+    'quem já dispensou o banner não vê de novo');
 })();
 
 // ═══ C) NENHUMA NÃO LIDA PODE FICAR INALCANÇÁVEL ═════════════════════════════

@@ -1,4 +1,4 @@
-// Banner "migre pro app da loja" (v1.1) — some a confusão dos DOIS ícones.
+// Banner "migre pro app da loja" (v1.2) — some a confusão dos DOIS ícones.
 //
 // Contexto: com o lançamento nas lojas, quem tinha o PWA (atalho instalado pelo
 // navegador) passa a ter TAMBÉM o app da loja → dois ícones iguais na tela de
@@ -6,14 +6,25 @@
 // a saída é avisar dentro do próprio PWA e ensinar a remover o atalho.
 //
 // Aparece SÓ quando: rodando como PWA instalado (display-mode standalone / iOS
-// navigator.standalone) E NÃO dentro do app nativo (Capacitor). No navegador
-// comum (aba normal) e no app da loja fica inerte. Funciona pra QUALQUER um que
-// abra o PWA — tendo instalado a loja antes, depois, ou nem tendo instalado.
+// navigator.standalone) E NÃO dentro do app nativo (Capacitor) E existe ficha
+// PUBLICADA na loja daquele aparelho. No navegador comum (aba normal), no app da
+// loja e no computador fica inerte.
 (function () {
   'use strict';
   try {
-    var IOS_URL = 'https://apps.apple.com/br/app/scoreplace/id6789757489';
-    var ANDROID_URL = 'https://play.google.com/store/apps/details?id=app.scoreplace';
+    // ── A LISTA DAS LOJAS É UMA SÓ (v2.0.9) ──────────────────────────────────
+    // Aqui viviam duas constantes com as URLs escritas à mão — uma SEGUNDA verdade,
+    // e a divergência já tinha data marcada: na v2.0.8 a ficha da Play saiu da
+    // análise e virar `SP_LOJAS.play.on` acendeu de uma vez o selo da landing, o
+    // botão da tela inicial e o selo do convite impresso. Este banner teria ficado
+    // pra trás, apontando pra uma URL que ninguém mais mantinha.
+    // O literal abaixo é a MESMA rede do convite impresso (tournaments-sharing.js):
+    // existe só pro caso de o banner rodar sem o store.js carregado — não é uma
+    // segunda verdade. Hoje os dois são `defer` e o store.js vem antes (index.html).
+    var L = window.SP_LOJAS || {
+      apple: { on: true, nome: 'App Store',   url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
+      play:  { on: true, nome: 'Google Play', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
+    };
     var DISMISS_KEY = 'scoreplace_pwa_migrate_dismissed';
 
     // 1) Não mostrar dentro do app nativo (é o próprio app da loja).
@@ -30,17 +41,31 @@
     // 3) Respeitar dispensa anterior.
     try { if (localStorage.getItem(DISMISS_KEY) === '1') return; } catch (e) {}
 
+    // 4) Só existe migração pra onde há ficha PUBLICADA — a mesma escolha (e a mesma
+    //    ordem de precedência) do `_storeButtonHtml` em main.js.
+    //    ⚠️ COMPUTADOR FICA DE FORA, e é decisão: a ficha aberta no navegador do
+    //    computador não instala nada, então mandar pra lá é beco — era o que a linha
+    //    `isIOS ? IOS : (isAndroid ? ANDROID : IOS)` fazia, despejando o desktop na
+    //    App Store. E não há app nativo de computador: o PWA ali não é o atalho
+    //    velho competindo com o app de verdade, é o único caminho que existe. Pedir
+    //    pra remover deixaria a pessoa sem nada.
+    //    ⚠️ `on` é MEDIÇÃO. Ficha fora do ar = banner inteiro sai, não só o botão:
+    //    um aviso que manda remover o atalho e leva a um 404 tira o app da pessoa.
     var ua = navigator.userAgent || '';
-    var isIOS = /iPad|iPhone|iPod/.test(ua) || window.navigator.standalone !== undefined;
+    // iPad moderno se declara Mac — o toque é o que o denuncia (mesma checagem do
+    // _storeButtonHtml, mantida idêntica de propósito pros dois concordarem).
+    var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     var isAndroid = /Android/.test(ua);
-    var storeUrl = isIOS ? IOS_URL : (isAndroid ? ANDROID_URL : IOS_URL);
-    var storeName = isIOS ? 'App Store' : (isAndroid ? 'Google Play' : 'loja');
+    var loja = (isIOS && L.apple && L.apple.on) ? L.apple
+             : (isAndroid && L.play && L.play.on) ? L.play
+             : null;
+    if (!loja || !loja.url) return;
+    var storeUrl = loja.url;
+    var storeName = loja.nome || 'loja';
     // Instrução de remoção por plataforma.
     var removeHow = isIOS
       ? 'Pra tirar este atalho: segure o ícone do scoreplace na tela de início → Remover App → Excluir da Tela de Início.'
-      : (isAndroid
-        ? 'Pra tirar este atalho: segure o ícone do scoreplace na tela de início → arraste pra Remover (ou toque em Desinstalar/Remover atalho).'
-        : 'Pra tirar este atalho: abra as configurações de apps do navegador e remova o atalho do scoreplace.');
+      : 'Pra tirar este atalho: segure o ícone do scoreplace na tela de início → arraste pra Remover (ou toque em Desinstalar/Remover atalho).';
 
     function show() {
       if (document.getElementById('sp-pwa-migrate-banner')) return;
