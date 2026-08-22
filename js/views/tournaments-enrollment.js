@@ -2083,16 +2083,16 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
     }).filter(function(p){ return p && p.name && (!q || p.name.toLowerCase().includes(q)) && !_isEnrolled(p.uid, p.name); });
 
     function _item(p, badge) {
-      var seed = encodeURIComponent(p.name);
-      var fb = 'https://api.dicebear.com/9.x/initials/svg?seed='+seed+'&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=32';
-      var src = (p.photo && p.photo.indexOf('dicebear.com')===-1) ? p.photo : fb;
+      // ⭐ ponto único: p.uid está aqui e o perfil pode chegar depois do render
+      var _av = window._personAvatarHtml(p.uid, p.name,
+        'width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;');
       var uidJs = (p.uid||'').replace(/'/g,"\\'");
       var nameJs = (p.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       var photoJs = (p.photo||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       return '<div onclick="event.stopPropagation();window._apSelect(\''+nameJs+'\',\''+uidJs+'\',\''+photoJs+'\')" '+
         'style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;transition:background 0.1s;" '+
         'onmouseover="this.style.background=\'rgba(99,102,241,0.1)\'" onmouseout="this.style.background=\'none\'">' +
-        '<img src="'+_sh(src)+'" onerror="this.src=\''+fb+'\'" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;">' +
+        _av +
         '<div><div style="font-size:0.88rem;font-weight:600;color:var(--text-bright,#f1f5f9);">'+_sh(p.name)+'</div>' +
         '<div style="font-size:0.68rem;color:var(--text-muted,#94a3b8);">'+badge+'</div></div></div>';
     }

@@ -504,17 +504,18 @@
   function _userName(t, u) { return (typeof window._opVoterName === 'function') ? window._opVoterName(t, u) : 'Jogador'; }
   function _avatarImg(t, u, size) {
     var nm = _userName(t, u); var sz = size || 24;
-    var src = (typeof window._profileAvatarUrl === 'function') ? window._profileAvatarUrl(nm, '', sz)
-      : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm));
-    return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);flex-shrink:0;">';
+    // ⭐ ponto único — `u` é o uid, então o ícone hidrata quando o perfil chegar
+    return window._personAvatarHtml(u, nm,
+      'width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card);',
+      ' title="' + _esc(nm) + '" alt="' + _esc(nm) + '"');
   }
   function _avatarsFor(t, uids) {
     if (!uids || !uids.length) return '';
     return uids.map(function (u) {
       var nm = _userName(t, u);
-      var src = (typeof window._profileAvatarUrl === 'function') ? window._profileAvatarUrl(nm, '', 26)
-        : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm));
-      return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);margin-left:-6px;flex-shrink:0;">';
+      return window._personAvatarHtml(u, nm,
+        'width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card);margin-left:-6px;',
+        ' title="' + _esc(nm) + '" alt="' + _esc(nm) + '"');
     }).join('');
   }
 

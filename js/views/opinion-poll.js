@@ -168,10 +168,11 @@
     var av = uids.map(function (u) {
       var i = info[u] || { name: '', photo: '' };
       var nm = i.name || 'Inscrito';
-      var lc = nm.toLowerCase();
-      var cached = (window._playerPhotoCache && window._playerPhotoCache[lc] && window._playerPhotoCache[lc].indexOf('dicebear') === -1) ? window._playerPhotoCache[lc] : '';
-      var src = cached || (typeof window._profileAvatarUrl === 'function' ? window._profileAvatarUrl(nm, i.photo, 32) : ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(nm) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf'));
-      return '<img src="' + _esc(src) + '" title="' + _esc(nm) + '" alt="' + _esc(nm) + '" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);margin-left:-7px;box-sizing:border-box;flex-shrink:0;">';
+      // ⭐ ponto único: o nome REAL vai pro avatar (vazio = sem ícone, e a hidratação cura
+      // pelo uid). O 'Inscrito' fica só no title, que é apoio — nunca identidade desenhada.
+      return window._personAvatarHtml(u, i.name || '',
+        'width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid var(--bg-card,#0f172a);margin-left:-7px;box-sizing:border-box;flex-shrink:0;',
+        ' title="' + _esc(nm) + '" alt="' + _esc(nm) + '"');
     }).join('');
     return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color);">' +
       '<div style="font-size:0.74rem;color:var(--text-muted);font-weight:600;margin-bottom:8px;">✅ Já responderam (' + uids.length + ')</div>' +

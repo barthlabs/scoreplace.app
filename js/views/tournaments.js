@@ -51,10 +51,6 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var nm = typeof p === 'string' ? p : (p.displayName || p.name || '');
     var uid = typeof p === 'object' ? (p.uid || '') : '';
     var email = typeof p === 'object' ? (p.email || '') : '';
-    var _seed = encodeURIComponent(nm);
-    var _fb = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-    var _photo = (window._playerPhotoCache && window._playerPhotoCache[nm.toLowerCase()] && window._playerPhotoCache[nm.toLowerCase()].indexOf('dicebear.com') === -1)
-      ? window._playerPhotoCache[nm.toLowerCase()] : _fb;
     var _isOrgP = uid ? !!_orgUidsShared[uid] : (email && !!_orgEmailsShared[email]);
     var _crown = _isOrgP ? ' <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(251,191,36,0.9)" style="flex-shrink:0;margin-left:2px;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' : '';
     // v4.5.86: dupla = uid OU nome (ESPELHA _isPairEntry). A migração ITEM 3/Fase 4 apaga
@@ -74,7 +70,10 @@ window._duplaCard = function (t, p, draggable, ctx) {
     } else {
       var _soloDisp = window._displayName(uid, nm);
       var _soloUidAttr = uid ? (' data-uid-name="' + window._safeHtml(uid) + '"') : '';
-      nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="' + window._safeHtml(_photo) + '" onerror="this.onerror=null;this.src=\'' + _fb + '\'" data-player-name="' + window._safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>' + _crown + '</div>';
+      // ⭐ PONTO ÚNICO: o `uid` está em escopo (linha do topo desta função) e o nome já
+      // hidratava pelo span (_soloUidAttr) — faltava o ÍCONE, que nascia mudo sem perfil.
+      nameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
+        window._personAvatarHtml(uid, nm, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _soloUidAttr + ' style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);text-overflow:ellipsis;white-space:nowrap;overflow:hidden;">' + window._safeHtml(_soloDisp) + '</span>' + _crown + '</div>';
     }
     var bgStyle = draggable
       ? 'background:linear-gradient(135deg,rgba(67,56,202,0.6),rgba(99,102,241,0.6));border:1px solid rgba(99,102,241,0.5);'

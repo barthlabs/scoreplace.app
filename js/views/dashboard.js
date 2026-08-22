@@ -2053,12 +2053,10 @@ function renderDashboard(container) {
       // Um jogador (linha): avatar + nome
       function _playerRow(name, uid) {
         var isMe = _isMe(name);
-        var photo = _photoForPlayer(name);
-        // Usa _profileAvatarUrl (dicebear initials como fallback) — mesmo pipeline do bracket
-        var avatarSrc = (typeof window._profileAvatarUrl === 'function')
-          ? window._profileAvatarUrl(name, photo, 28)
-          : (photo || ('https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28'));
-        var avatarEl = '<img src="' + avatarSrc + '" data-player-name="' + _sf(name) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src=\'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(name) + '&backgroundColor=6366f1&textColor=ffffff&fontSize=42&size=28\'">';
+        // ⭐ PONTO ÚNICO. O nome já hidratava por uid (span interno, logo abaixo) — o ÍCONE
+        // não, e era ele que nascia mudo quando o perfil ainda não tinha chegado.
+        var avatarEl = window._personAvatarHtml(uid || '', name,
+          'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;');
         // v4.5.67: nome resolve VIVO por uid. data-uid-name fica no span INTERNO só do
         // nome (não no externo, senão a hidratação — textContent — apagaria o "(você)").
         var _disp = (uid && typeof window._displayName === 'function') ? window._displayName(uid, name) : name;

@@ -50,22 +50,25 @@ const INVENTARIO = {
   // ── o ponto único e o construtor de URL que ele usa ──────────────────────────
   'js/store.js': { n: 2, nota: 'o construtor canônico (_avatarUrl) e o ponto único que o consome' },
 
-  // ── já convertidos: emitem [data-uid-avatar] e hidratam ──────────────────────
+  // ── CONVERTIDOS: emitem [data-uid-avatar] e hidratam ─────────────────────────
   'js/views/bracket.js': { n: 3, nota: 'CONVERTIDO 1.9.113 — a chave hidrata ícone junto com o nome' },
-  'js/views/host-transfer.js': { n: 0, nota: 'CONVERTIDO — o seletor de organizador usa o ponto único' },
+  'js/views/host-transfer.js': { n: 0, nota: 'CONVERTIDO — seletor de organizador' },
+  'js/views/schedule-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de horário (avatar e pilha de avatares)' },
+  'js/views/opinion-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de opinião' },
+  'js/views/tournaments-enrollment.js': { n: 0, nota: 'CONVERTIDO — lista do diálogo de inscrição' },
 
-  // ── não é pessoa-com-uid: o nome SEMPRE existe aqui ──────────────────────────
+  // ── NÃO é pessoa com perfil por resolver — MEDIDO, não presumido ─────────────
+  // auth: perfil do PRÓPRIO usuário logado. explore: os cards recebem o DOC INTEIRO do
+  // perfil (`u`), com displayName/photoURL em mãos — não existe o caso "uid sem nome
+  // ainda", que é o que produz o círculo mudo. Converter ali seria churn sem ganho.
   'js/views/auth.js': { n: 4, nota: 'perfil do PRÓPRIO usuário logado — o nome nunca está por resolver' },
+  'js/views/explore.js': { n: 5, nota: 'recebe o DOC do perfil inteiro (u.displayName/u.photoURL) — sem caso de nome por resolver' },
   'js/views/tournaments-analytics.js': { n: 1, nota: 'helper de avatar da própria tela de números' },
+  'js/views/participants.js': { n: 1, nota: 'passe de REPARO por nome já conhecido (não é render)' },
 
-  // ── PENDENTES: gente com uid, ainda semeando pelo nome ───────────────────────
-  'js/views/tournaments.js': { n: 6, nota: 'PENDENTE — sobraram os cards fora da ORGANIZAÇÃO (os 2 de organizador já foram)' },
-  'js/views/participants.js': { n: 4, nota: 'PENDENTE — cards de inscrito; o uid está em escopo (_mUid)' },
-  'js/views/explore.js': { n: 5, nota: 'PENDENTE — perfis da descoberta; o uid está em escopo (u._docId)' },
-  'js/views/dashboard.js': { n: 5, nota: 'PENDENTE — cards do painel' },
-  'js/views/schedule-poll.js': { n: 2, nota: 'PENDENTE — enquete de horário' },
-  'js/views/opinion-poll.js': { n: 1, nota: 'PENDENTE — enquete de opinião' },
-  'js/views/tournaments-enrollment.js': { n: 1, nota: 'PENDENTE — lista do diálogo de inscrição' },
+  // ── PENDENTES de verdade: gente com uid, ainda semeando pelo nome ────────────
+  'js/views/tournaments.js': { n: 5, nota: 'PENDENTE — renders por NOME (membros de dupla, convite pendente, pilha de avatares) sem uid em escopo + 1 passe de reparo' },
+  'js/views/dashboard.js': { n: 3, nota: 'PENDENTE — 1 render por NOME sem uid em escopo + 2 passes de reparo' },
 };
 
 const achados = {};

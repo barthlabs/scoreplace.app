@@ -1746,11 +1746,6 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     pNameHtml = pName.split('/').map(function (n) {
       var _nm = n.trim();
       var _nmSafe = _nm.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      var _mSeed = encodeURIComponent(_nm);
-      var _mCached = (window._playerPhotoCache && window._playerPhotoCache[_nm.toLowerCase()] && window._playerPhotoCache[_nm.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_nm.toLowerCase()] : '';
-      var _mInitials = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _mSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-      var _mPhoto = _mCached || _mInitials;
-      var _mErr = 'onerror="this.onerror=null;this.src=\'' + _mInitials + '\'"';
       var _nmH = window._safeHtml(_nm);
       var _mPart = _nameToParticipant && _nameToParticipant[_nm];
       var _mUid = '';
@@ -1763,15 +1758,13 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
       var _mDisp = _mUid ? window._safeHtml(window._displayName(_mUid, _nm)) : _nmH;
       var _mUidAttr = _mUid ? ' data-uid-name="' + window._safeHtml(_mUid) + '"' : '';
       var _editAttr = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _nmSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _nmSafe + '\'' + _mUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _nmSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _nmH + '"';
-      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;"><img src="' + _mPhoto + '" ' + _mErr + ' data-player-name="' + _nmH + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span></div>';
+      // ⭐ ponto único: o nome já hidratava (_mUidAttr), o ÍCONE não — e era ele que
+      // nascia mudo quando o perfil ainda não tinha chegado.
+      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;overflow:hidden;">' +
+        window._personAvatarHtml(_mUid, _nm, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _mUidAttr + ' ' + _editAttr + '>' + _mDisp + '</span></div>';
     }).join('') + (_orgStar ? '<div style="margin-top:2px;">' + _orgStar + '</div>' : '');
   } else {
     var _pSafe = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    var _pSeedN = encodeURIComponent(pName);
-    var _pCachedN = (window._playerPhotoCache && window._playerPhotoCache[pName.toLowerCase()] && window._playerPhotoCache[pName.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[pName.toLowerCase()] : '';
-    var _pInitialsN = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeedN + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-    var _pPhotoN = _pCachedN || _pInitialsN;
-    var _pErrN = 'onerror="this.onerror=null;this.src=\'' + _pInitialsN + '\'"';
     var _pNameH = window._safeHtml(pName);
     // v1.3.38: uid vem DIRETO de p (fonte da verdade). Antes buscava _nameToParticipant[pName],
     // mas com displayName/name stripados (contas com uid) pName cai pro EMAIL e o mapa é chaveado
@@ -1783,7 +1776,8 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';
     var _editAttrN = isOrg ? 'onclick="event.stopPropagation();window._editParticipantName(\'' + t.id + '\',\'' + _pSafe + '\')" title="Clique para editar" style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:text;"' : 'style="font-weight:700;font-size:' + _FONT + 'px;color:var(--text-bright);white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;cursor:pointer;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile===\'function\')window._openPlayerProfile(\'' + _pSafe + '\'' + _pUidJs + ');else if(typeof window._showPlayerStats===\'function\')window._showPlayerStats(\'' + _pSafe + '\')" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'" title="Ver perfil de ' + _pNameH + '"';
-    pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;"><img src="' + _pPhotoN + '" ' + _pErrN + ' data-player-name="' + _pNameH + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _orgStar + '</div>';
+    pNameHtml = '<div style="display:flex;align-items:center;gap:8px;overflow:hidden;">' +
+      window._personAvatarHtml(_pUid, pName, 'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;') + '<span' + _pUidAttr + ' ' + _editAttrN + '>' + _pDisp + '</span>' + _orgStar + '</div>';
   }
 
   var safeP = pName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -2629,11 +2623,6 @@ function renderParticipants(container, tournamentId) {
       const _delBtnC = isOrg ? `<button type="button" class="cancel-x-btn" onclick="event.stopPropagation();window.removeParticipantFunction('${tId}','${safeName}','${window._safeHtml(ind.uid || '')}')" title="Remover inscrito" style="--cx-size:22px;">✕</button>` : '';
 
       const _safeName = (ind.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-      const _pSeed = encodeURIComponent(ind.name);
-      const _pCached = (window._playerPhotoCache && window._playerPhotoCache[ind.name.toLowerCase()] && window._playerPhotoCache[ind.name.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[ind.name.toLowerCase()] : '';
-      const _pInitials = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _pSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-      const _pAvatar = _pCached || _pInitials;
-      const _pAvatarErr = `onerror="this.onerror=null;this.src='${_pInitials}'"` ;
 
       // "Jogo N" color reflects match-level attendance: green when all players present, amber when partial, muted when none.
       let _jogoColor = 'var(--text-muted)';
@@ -2747,7 +2736,7 @@ function renderParticipants(container, tournamentId) {
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
                 <div style="display:flex;align-items:center;gap:8px;">
-                    <img src="${_pAvatar}" ${_pAvatarErr} data-player-name="${_safeName}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(59,130,246,0.45)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}" />
+                    ${window._personAvatarHtml(ind.uid || '', ind.name || '', `width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${mc ? 'rgba(16,185,129,0.5)' : isAbsent ? 'rgba(59,130,246,0.45)' : 'rgba(255,255,255,0.18)'};${isWOOrphan ? 'filter:grayscale(0.5);' : ''}`)}
                     <div style="flex:1;min-width:0;">${standbyHeader}${_nameRow}</div>
                 </div>
                 <!-- Meta: VIP + categorias + nível (à esquerda). O 🗑️ saiu daqui — -->
