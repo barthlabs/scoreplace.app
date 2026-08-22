@@ -1357,6 +1357,11 @@ function handleAppleLogin() {
       var provider = new firebase.auth.OAuthProvider('apple.com');
       var credential = provider.credential({ idToken: idToken, rawNonce: rawNonce });
       var fullName = [r && r.givenName, r && r.familyName].filter(Boolean).join(' ').trim();
+      // GUARDA O NOME ANTES DE AUTENTICAR. A Apple só o manda no PRIMEIRO
+      // consentimento; o `updateProfile` abaixo é assíncrono e o
+      // `onAuthStateChanged` dispara antes dele — quem gravar o perfil no meio
+      // desse intervalo não veria nome nenhum. Ver _providerDisplayName.
+      if (fullName) window._applePendingName = fullName;
       return firebase.auth().signInWithCredential(credential).then(function(result) {
         // Apple só envia o nome no PRIMEIRO login; grava se ainda não houver.
         var u = result.user;
@@ -1380,6 +1385,7 @@ function handleAppleLogin() {
   firebase.auth().signInWithPopup(webProvider)
     .then(function(result) {
       var name = result.user && (result.user.displayName || '');
+      if (name) window._applePendingName = name;
       _onAppleAuthSuccess(result.user, result, name);
     })
     .catch(function(error) {
@@ -1448,6 +1454,134 @@ function _patchProfileIfExists(uid, fields) {
     window.FirestoreDB.db.collection('users').doc(uid).update(fields).catch(function () {});
   } catch (e) {}
 }
+
+// ─── CONTA ÓRFÃ: o perfil NÃO pode depender do cliente sobreviver ────────────
+// MEDIDO em produção (22/ago/2026): 236 contas no Firebase Auth × 248 docs em
+// `users/` → 2 contas SEM perfil, ambas Apple com e-mail oculto (@privaterelay),
+// ambas com `lastSignInTime == creationTime` (nunca voltaram). Sem doc de perfil
+// a pessoa NÃO EXISTE pro app: não aparece na busca, não entra em lista de
+// espera, não se inscreve — e o organizador vê "Jogador sem perfil (XXXX)".
+//
+// A CAUSA NÃO É UM `if` ERRADO, É A FORMA: o doc só nascia no auto-save lá no
+// meio do `simulateLoginSuccess`, DEPOIS de 4 idas à rede sem prazo (o `.get()`
+// do mergedInto, o `.get()` do perfil, a callable `resolveLoginRedirect`, o
+// `loadUserProfile` com retries) — e a única escrita que o criava era
+// fire-and-forget com `.catch(function(){})`. Reproduzido em
+// tests/apple-nao-deixa-conta-orfa.test.js dirigindo a função REAL: qualquer uma
+// das quatro pendurar, ou a escrita falhar, produz EXATAMENTE a conta órfã
+// observada — e NADA vai pro Sentry. Uma falha invisível por construção.
+//
+// ⚠️ O DESENHO DE v1.8.40 CONTINUA VALENDO e não foi tocado: NÃO criar o doc
+// antes do resgate de conta (`resolveLoginRedirect` só age quando o doc NÃO
+// existe). O que muda é QUANDO e COMO: assim que o resgate RESPONDE "não há
+// redirect", o doc nasce ali mesmo — não 200 linhas e 5 awaits depois — com
+// espera, uma repetição e Sentry se falhar. Se o resgate não responder, o
+// cliente NÃO cria o doc (o resgate segue possível) e quem fecha o buraco é a
+// varredura do servidor (functions/orphan-profile-*.js), que consulta o
+// `loginRedirects` com o Admin SDK e não tem essa ambiguidade.
+
+// Prazo pra qualquer ida à rede no caminho do login. Sem isto, uma callable ou
+// um `.get()` pendurado (IndexedDB morto, ITP, 3G ruim logo depois do OAuth)
+// congela o login inteiro — e o perfil nunca nasce.
+window._authRace = function (promise, ms, label) {
+  var to;
+  return Promise.race([
+    Promise.resolve(promise).then(function (v) { clearTimeout(to); return { ok: true, value: v }; },
+                                  function (e) { clearTimeout(to); return { ok: false, error: e }; }),
+    new Promise(function (resolve) {
+      to = setTimeout(function () {
+        window._warn('[auth-race] ' + (label || 'chamada') + ' estourou ' + ms + 'ms');
+        resolve({ ok: false, timedOut: true });
+      }, ms);
+    })
+  ]);
+};
+
+// O MELHOR NOME QUE O PROVEDOR TEM AGORA — não o do instantâneo que chamou.
+// A Apple nativa só devolve o nome no PRIMEIRO consentimento e o grava com
+// `updateProfile()` DEPOIS do `signInWithCredential`; o `onAuthStateChanged` já
+// disparou com `displayName: null` e corre na frente. Quem lê só o `user` que
+// recebeu perde o nome — foi assim que uma conta Apple ficou gravada com o
+// E-MAIL no lugar do nome ("brupoti@gmail.com" na lista de espera do
+// organizador) enquanto o Auth tinha "Bruna Verga Sá".
+window._providerDisplayName = function (user) {
+  var live = '';
+  try {
+    var fb = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+    if (fb && (!user || !user.uid || fb.uid === user.uid)) live = fb.displayName || '';
+  } catch (e) {}
+  var name = String(live || (user && user.displayName) || '').trim();
+  // Rede do caso Apple: o nome chegou do provedor mas ainda não está no Auth
+  // (o `updateProfile` não landou, ou falhou). Só vale enquanto o Auth de fato
+  // não tem nome — nunca sobrepõe um nome já estabelecido.
+  if (!name && window._applePendingName) name = String(window._applePendingName).trim();
+  if (!name) return '';
+  if (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(name)) return '';
+  return name;
+};
+
+// E-MAIL NÃO É NOME quando a pessoa não escolheu entrar por ele.
+// Em conta de e-mail/senha ou magic link o endereço É o identificador que ela
+// digitou e reconhece — ali continua valendo. Já num login social ela nunca
+// pediu pra publicar o endereço: no melhor caso o organizador vê um e-mail em
+// vez de um nome; no caso da Apple com e-mail oculto vê "7hsc6fn77d@
+// privaterelay.appleid.com", que não identifica ninguém.
+window._SOCIAL_PROVIDERS = ['apple.com', 'google.com', 'facebook.com'];
+window._isSocialProvider = function (pid) {
+  return window._SOCIAL_PROVIDERS.indexOf(String(pid || '').toLowerCase()) !== -1;
+};
+window._loginProviderId = function (user) {
+  try {
+    var fb = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+    var pd = (fb && fb.providerData) || (user && user.providerData) || [];
+    for (var i = 0; i < pd.length; i++) {
+      if (pd[i] && window._isSocialProvider(pd[i].providerId)) return pd[i].providerId;
+    }
+    if (pd[0] && pd[0].providerId) return pd[0].providerId;
+  } catch (e) {}
+  return '';
+};
+
+// O QUE UMA CONTA NOVA PRECISA TER PRA EXISTIR PRO APP. Só o que vem do
+// provedor — nada de default de produto (esses seguem no auto-save adiante), e
+// nada que o gate de termos leia como "uso passado" (`friends`, `plan`,
+// `preferredSports`…): conta nova TEM que ver os termos.
+window._seedProfileFromAuth = function (user) {
+  var pid = window._loginProviderId(user);
+  var seed = { authProvider: pid || 'unknown', createdAt: new Date().toISOString() };
+  seed.updatedAt = seed.createdAt;
+  var email = (typeof window._realEmailOrEmpty === 'function') ? window._realEmailOrEmpty(user && user.email) : (user && user.email) || '';
+  if (email) seed.email = email;
+  if (user && user.photoURL) seed.photoURL = user.photoURL;
+  var nome = window._providerDisplayName(user);
+  if (!nome && email && !window._isSocialProvider(pid)) {
+    // e-mail/senha e magic link: o endereço É o identificador que a pessoa
+    // digitou e reconhece. Login social não — ver _isSocialProvider.
+    nome = email;
+  }
+  if (nome) seed.displayName = nome;
+  return seed;
+};
+
+// Cria/garante o doc de perfil. ESPERA, REPETE UMA VEZ e AVISA — ao contrário do
+// `.catch(function(){})` que engolia a única escrita que fazia a conta existir.
+window._ensureProfileDoc = async function (uid, seed) {
+  if (!(window.FirestoreDB && window.FirestoreDB.saveUserProfile && uid)) return false;
+  for (var tentativa = 0; tentativa < 2; tentativa++) {
+    try {
+      await window.FirestoreDB.saveUserProfile(uid, seed);
+      return true;
+    } catch (e) {
+      window._warn('[perfil] gravação do perfil falhou (tentativa ' + (tentativa + 1) + '):', e && e.message);
+      if (tentativa === 0) { await new Promise(function (r) { setTimeout(r, 900); }); continue; }
+      // Segunda falha: a conta VAI ficar órfã se ninguém souber. Avisa.
+      if (typeof window._captureException === 'function') {
+        window._captureException(e, { area: 'ensureProfileDoc', uid: uid, provider: (seed && seed.authProvider) || '' });
+      }
+    }
+  }
+  return false;
+};
 
 // ─── Account linking helper ─────────────────────────────────────────────────
 // When user tries to sign in with a provider but already has an account with
@@ -4115,7 +4249,12 @@ async function simulateLoginSuccess(user) {
   // devolve o token pra quem provou ser dono desta conta, i.e. está logado nela).
   try {
     if (newUid && window.FirestoreDB && window.FirestoreDB.db && !window._mergedRedirectInProgress) {
-      var _mdoc = await window.FirestoreDB.db.collection('users').doc(newUid).get();
+      // Com prazo: um `.get()` pendurado (IndexedDB apagado, offline) congelava o
+      // login inteiro AQUI e o perfil nunca chegava a nascer — ver _authRace.
+      var _mres = await window._authRace(
+        window.FirestoreDB.db.collection('users').doc(newUid).get(), 8000, 'get(users/uid) mergedInto');
+      if (!_mres.ok) throw (_mres.error || new Error('timeout na leitura do perfil'));
+      var _mdoc = _mres.value;
       var _mergedInto = _mdoc.exists && _mdoc.data().mergedInto;
       if (_mergedInto && _mergedInto !== newUid) {
         window._mergedRedirectInProgress = true;
@@ -4147,14 +4286,22 @@ async function simulateLoginSuccess(user) {
   // dono em loginRedirects, que só o Admin SDK escreve). Pedido do dono (jul/2026): "as duas
   // são aceitas" — a pessoa não precisa lembrar com qual e-mail se cadastrou.
   // Ver [[project_privileged_fields_never_client_writable]].
+  var _contaNova = false;      // doc não existia no início desta entrada
+  var _perfilSemeado = false;  // o doc nasceu AGORA, nesta função
   try {
     if (newUid && window.FirestoreDB && window.FirestoreDB.db && !window._mergedRedirectInProgress) {
-      var _pdoc = await window.FirestoreDB.db.collection('users').doc(newUid).get();
+      var _pres = await window._authRace(
+        window.FirestoreDB.db.collection('users').doc(newUid).get(), 8000, 'get(users/uid) loginRedirect');
+      if (!_pres.ok) throw (_pres.error || new Error('timeout na leitura do perfil'));
+      var _pdoc = _pres.value;
       if (!_pdoc.exists) {   // sem perfil = conta possivelmente recém-criada pelo provedor
+        _contaNova = true;
         window._mergedRedirectInProgress = true;
+        var _lrRes = { ok: false };
         try {
           var _lrFn = firebase.functions().httpsCallable('resolveLoginRedirect');
-          var _lr = await _lrFn({});
+          _lrRes = await window._authRace(_lrFn({}), 12000, 'resolveLoginRedirect');
+          var _lr = _lrRes.ok ? _lrRes.value : null;
           if (_lr && _lr.data && _lr.data.redirected && _lr.data.customToken) {
             window._log('[login-redirect] credencial de conta absorvida — entrando na conta certa');
             window._simulateLoginInProgress = false;
@@ -4166,6 +4313,27 @@ async function simulateLoginSuccess(user) {
           }
         } catch (_lre) { window._warn('[login-redirect] resolveLoginRedirect falhou:', _lre); }
         window._mergedRedirectInProgress = false;
+
+        // ── O PERFIL NASCE AQUI, e não 200 linhas adiante ────────────────────
+        // O resgate JÁ FALOU ("não há redirect pra esta credencial"), então o
+        // motivo de v1.8.40 pra adiar o doc acabou — e adiar mais é o que produz
+        // a conta órfã. Se o resgate NÃO respondeu (pendurou/estourou), a SEMENTE
+        // não é gravada aqui e o caso vai pro Sentry.
+        // ⚠️ Honestidade sobre o alcance: o auto-save lá adiante continua gravando
+        // o doc mesmo assim — é o comportamento que já existia e NÃO foi mexido
+        // nesta leva. Ou seja, resgate que falha ainda pode cegar o resgate da
+        // próxima entrada; o que muda é que agora isso aparece no Sentry em vez
+        // de acontecer no escuro.
+        if (_lrRes.ok) {
+          _perfilSemeado = await window._ensureProfileDoc(newUid, window._seedProfileFromAuth(user));
+          if (!_perfilSemeado) window._warn('[perfil] conta nova ficou SEM doc — a varredura do servidor cobre');
+        } else {
+          window._warn('[perfil] resgate sem resposta — doc adiado de propósito (varredura do servidor cobre)');
+          if (typeof window._captureException === 'function') {
+            window._captureException(new Error('resolveLoginRedirect sem resposta em conta nova'),
+              { area: 'ensureProfileDoc', uid: newUid, provider: window._loginProviderId(user) });
+          }
+        }
       }
     }
   } catch (e) { window._warn('[login-redirect] checagem falhou:', e); window._mergedRedirectInProgress = false; }
@@ -4291,7 +4459,11 @@ async function simulateLoginSuccess(user) {
         await new Promise(function(r) { setTimeout(r, 500 * _attempt); });
       }
       try {
-        existingProfile = await window.AppStore.loadUserProfile(uid);
+        // Com prazo: pendurado aqui, nada do que vem depois roda (defaults,
+        // auto-save, ouvintes, gate de termos) e a pessoa fica no spinner.
+        var _lpRes = await window._authRace(window.AppStore.loadUserProfile(uid), 8000, 'loadUserProfile');
+        if (!_lpRes.ok && _lpRes.error) throw _lpRes.error;
+        existingProfile = _lpRes.ok ? _lpRes.value : null;
         if (existingProfile && Object.keys(existingProfile).length > 0) {
           if (_attempt > 0) {
             window._log('[scoreplace-auth v' + window.SCOREPLACE_VERSION + '] profile loaded on retry attempt #' + _attempt);
@@ -4333,7 +4505,9 @@ async function simulateLoginSuccess(user) {
         login_method: _method
       });
     }
-    var _isFirstTime = !existingProfile;
+    // A semente gravada há segundos NÃO transforma cadastro em re-login: sem
+    // isto o GA4 contaria signup como login em toda conta nova.
+    var _isFirstTime = !existingProfile || _perfilSemeado;
     if (_isFirstTime && typeof window._trackSignup === 'function') {
       window._trackSignup(_method);
     } else if (typeof window._trackLogin === 'function') {
@@ -4445,7 +4619,10 @@ async function simulateLoginSuccess(user) {
   // Migrate legacy doc: if user has a doc keyed by email, merge it into the UID doc
   if (window.FirestoreDB && window.FirestoreDB.db && uid && user.email && uid !== user.email) {
     try {
-      var legacyDoc = await window.FirestoreDB.db.collection('users').doc(user.email).get();
+      var _lgRes = await window._authRace(
+        window.FirestoreDB.db.collection('users').doc(user.email).get(), 8000, 'get(users/email) legado');
+      if (!_lgRes.ok) throw (_lgRes.error || new Error('timeout na leitura do doc legado'));
+      var legacyDoc = _lgRes.value;
       if (legacyDoc.exists) {
         var legacyData = legacyDoc.data();
         // Merge legacy data into UID doc (friends, requests, etc.)
@@ -4509,17 +4686,36 @@ async function simulateLoginSuccess(user) {
     var basicData = {};
     // Set / fix displayName: covers (1) no name yet, (2) generic placeholder
     // "Usuário" saved by old app versions or i18n default.
-    var _storedDN = (existingProfile && existingProfile.displayName) || user.displayName || '';
-    var _needsBetterDN = !_storedDN || (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(_storedDN));
+    //
+    // ⚠️ O NOME VEM DO PROVEDOR AO VIVO, não do instantâneo que chamou esta função.
+    // A Apple nativa grava o nome com `updateProfile()` DEPOIS do
+    // `signInWithCredential`, e o `onAuthStateChanged` já disparou com
+    // `displayName: null` — quem lê só o `user` recebido perde o nome. Foi assim
+    // que uma conta Apple ficou gravada com o E-MAIL no lugar do nome
+    // ("brupoti@gmail.com" na lista de espera) enquanto o Auth tinha
+    // "Bruna Verga Sá". Ver _providerDisplayName.
+    var _liveDN = window._providerDisplayName(user);
+    var _pidLogin = window._loginProviderId(user);
+    var _profEmail = (existingProfile && existingProfile.email) || user.email || '';
+    var _storedDN = (existingProfile && existingProfile.displayName) || _liveDN || '';
+    // 3) e-mail GRAVADO COMO NOME num login social é dado ruim, não nome — se o
+    //    provedor agora tem um nome de verdade, ele ganha (conserta os perfis já
+    //    salvos assim, sem migração).
+    var _dnEhOEmail = !!(_storedDN && _profEmail && String(_storedDN).trim().toLowerCase() === String(_profEmail).trim().toLowerCase());
+    var _needsBetterDN = !_storedDN
+      || (typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(_storedDN))
+      || (_dnEhOEmail && !!_liveDN && window._isSocialProvider(_pidLogin));
     if (_needsBetterDN) {
       var _betterDN = null;
-      var _profEmail = (existingProfile && existingProfile.email) || user.email || '';
       var _profPhone = (existingProfile && existingProfile.phone) || '';
-      if (user.displayName && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(user.displayName))) {
-        // Firebase Auth has a real name (e.g. Google account) — use it
-        _betterDN = user.displayName;
-      } else if (_profEmail) {
-        // Use full email — clearest identifier for magic-link users
+      if (_liveDN) {
+        // O provedor tem um nome de verdade (Google, Apple no 1º consentimento)
+        _betterDN = _liveDN;
+      } else if (_profEmail && !window._isSocialProvider(_pidLogin)) {
+        // E-mail/senha e magic link: o endereço É o identificador que a pessoa
+        // digitou e reconhece. LOGIN SOCIAL NÃO — ela nunca pediu pra publicar o
+        // endereço, e com o e-mail oculto da Apple ele não identifica ninguém.
+        // Sem nome aqui, o app PERGUNTA (_askMissingName) em vez de inventar.
         _betterDN = _profEmail;
       } else if (_profPhone) {
         _betterDN = _profPhone;
@@ -4528,9 +4724,9 @@ async function simulateLoginSuccess(user) {
       }
       if (_betterDN) { basicData.displayName = _betterDN; needsSave = true; }
     }
-    // Persist displayName from Google auth if Firestore doc doesn't have it yet
-    if ((!existingProfile || !existingProfile.displayName) && user.displayName) {
-      basicData.displayName = user.displayName; needsSave = true;
+    // Persist displayName from the provider if Firestore doc doesn't have it yet
+    if ((!existingProfile || !existingProfile.displayName) && _liveDN) {
+      basicData.displayName = _liveDN; needsSave = true;
     }
     if (!existingProfile || !existingProfile.email) {
       if (window._realEmailOrEmpty(user.email)) { basicData.email = user.email; needsSave = true; }
@@ -4584,9 +4780,10 @@ async function simulateLoginSuccess(user) {
     // O nome entra como veio do provedor — entrar nunca é bloqueado (v1.1.3).
     if (needsSave) {
       basicData.updatedAt = new Date().toISOString();
-      window.FirestoreDB.saveUserProfile(uid, basicData).catch(function(err) {
-        window._warn('Erro ao salvar dados básicos do perfil:', err);
-      });
+      // Espera, repete e AVISA. Era `.catch()` mudo — e numa conta nova esta era
+      // a única escrita que fazia a pessoa existir pro app: falhar aqui em
+      // silêncio é exatamente como nascem as contas órfãs.
+      await window._ensureProfileDoc(uid, basicData);
     }
   }
 
@@ -4615,6 +4812,11 @@ async function simulateLoginSuccess(user) {
   }
   // v1.7.41: o trigger sinaliza o conflito de nome em `nameConflict`; aqui é quem PERGUNTA.
   // Atrasado: o perfil chega pelo listener e `nameConflict` só existe depois dele.
+  // Sem nome nenhum (login social que não devolveu nome) a pessoa aparece
+  // "Jogador sem perfil (XXXX)" pra TODO MUNDO já na primeira inscrição — por isso
+  // esta pergunta vem antes das outras. O app não inventa um nome nem publica o
+  // e-mail: pergunta. Ver _seedProfileFromAuth.
+  setTimeout(function () { if (typeof window._askMissingName === 'function') window._askMissingName(); }, 2500);
   setTimeout(function () { if (typeof window._askNameConflict === 'function') window._askNameConflict(); }, 4000);
   // A pergunta de SEGUNDA CONTA vem depois da de nome — duas caixas ao mesmo tempo é o
   // jeito mais rápido de a pessoa fechar as duas no automático (que é justamente o que o
@@ -5984,6 +6186,9 @@ function setupLoginModal() {
 }
 
 function handleLogout() {
+  // O nome que a Apple mandou é de QUEM ESTÁ SAINDO — não pode sobrar pra próxima conta.
+  window._applePendingName = null;
+  window._missingNameAsked = false;
   // Flag this as a manual logout so onAuthStateChanged(null) commits immediately
   // rather than waiting for the grace period (that grace period exists to absorb
   // Safari's transient null auth events, not intentional user logouts).
@@ -8553,6 +8758,38 @@ function setupProfileModal() {
 // prioridade); (2) cooldown de 7 dias por uid; (3) some pra sempre quando o
 // celular existir. E-mail oculto da Apple (@privaterelay) ganha texto próprio:
 // é a conta MAIS exposta a virar duplicata (não temos como reconhecer o e-mail).
+// ── SEM NOME: PERGUNTA, não inventa ─────────────────────────────────────────
+// A Apple só devolve o nome no PRIMEIRO consentimento; em re-login vem vazio, e
+// com e-mail oculto (@privaterelay) não há nem um endereço legível pra cair
+// atrás. O app já se recusa a gravar o e-mail como nome num login social
+// (_seedProfileFromAuth) — a contrapartida é PERGUNTAR, senão a pessoa fica
+// "Jogador sem perfil (XXXX)" na lista de espera do organizador.
+// Mesma doutrina do _askNameConflict: quem decide o nome é a pessoa.
+window._askMissingName = function () {
+  try {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    if (!cu || !cu.uid) return;
+    var dn = String(cu.displayName || '').trim();
+    if (dn && !(typeof window._isUnfriendlyName === 'function' && window._isUnfriendlyName(dn))) return;
+    if (window._missingNameAsked) return;      // uma vez por sessão
+    window._missingNameAsked = true;
+    if (typeof showConfirmDialog !== 'function') return;
+    var isRelay = /@privaterelay\.appleid\.com$/i.test(String(cu.email || ''));
+    var corpo =
+      '<div style="font-size:0.86rem;line-height:1.5;">' +
+        'Ainda não sabemos <strong>seu nome</strong>' +
+        (isRelay ? ' — você entrou com a Apple usando e-mail oculto, e ela só envia o nome no primeiro acesso.' : '.') +
+      '</div>' +
+      '<div style="margin-top:10px;font-size:0.8rem;color:var(--text-muted);line-height:1.45;">' +
+        'Sem ele, os organizadores não conseguem te reconhecer nas inscrições e listas de espera. ' +
+        'Leva dez segundos no seu perfil.' +
+      '</div>';
+    showConfirmDialog('👋 Como podemos te chamar?', corpo, function () {
+      window.location.hash = '#profile';
+    }, null, { confirmText: 'Colocar meu nome', cancelText: 'Agora não', type: 'info' });
+  } catch (e) { if (window._warn) window._warn('[missingName] pergunta falhou:', e); }
+};
+
 window._askSecureContact = function () {
   try {
     var cu = window.AppStore && window.AppStore.currentUser;

@@ -851,6 +851,15 @@ const SUITES = [
   // celular+senha porque a regra só existia no cliente. Conflito = already-exists
   // com e-mail mascarado — NUNCA auto-sufixo silencioso.
   'functions/test-name-unique-core.js',
+  // CONTA NO AUTH SEM PERFIL NO FIRESTORE. Medido em 22/ago/2026: 236 contas no Auth ×
+  // 248 docs em users/ → 2 órfãs, ambas Apple com e-mail oculto, ambas com
+  // lastSignIn == creation. Sem doc a pessoa não existe pro app (busca, lista de espera,
+  // inscrição) e o organizador vê "Jogador sem perfil". O teste do cliente dirige o
+  // simulateLoginSuccess REAL e injeta as 4 falhas de rede que produziam a órfã em
+  // silêncio; o do servidor trava a regra da varredura — em especial NÃO criar perfil de
+  // quem tem loginRedirects (isso prenderia a pessoa numa conta vazia).
+  'tests/apple-nao-deixa-conta-orfa.test.js',
+  'functions/test-orphan-profile-core.js',
   'functions/test-roster-watch.js',
   // A DICA NUNCA aparece com o placar em quadra aberto. A trava vivia só no
   // hints.js; quem ESCURECE a tela é o coachmarks.js, que nasceu depois e não

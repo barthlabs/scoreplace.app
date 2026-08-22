@@ -1529,6 +1529,33 @@ exports.nudgeMissingPhones = onSchedule(
   async () => { await _runPhoneNudge(admin.firestore(), Date.now()); }
 );
 
+// ─── Conta no Auth SEM perfil no Firestore (conta órfã) ──────────────────────
+// MEDIDO em 22/ago/2026: 236 contas no Auth × 248 docs em `users/` → 2 órfãs,
+// ambas Apple com e-mail oculto, ambas com lastSignIn == creation (entraram uma
+// vez e nunca voltaram). Sem doc de perfil a pessoa não existe pro app: não
+// aparece na busca, não entra em lista de espera, não se inscreve — e o
+// organizador vê "Jogador sem perfil (XXXX)".
+//
+// O cliente já foi endurecido (prazo nas idas à rede, escrita com espera/retry/
+// Sentry, semente gravada assim que o resgate responde — js/views/auth.js), mas
+// se o Firestore RECUSAR a escrita, ou a aba morrer no meio, não sobra ninguém
+// pra tentar de novo: essas pessoas não voltam. Esta varredura é esse "alguém".
+//
+// ⚠️ E TEM PRAZO: a cleanupAbandonedAuth (04:15) APAGA do Auth conta sem doc com
+// mais de 30 dias. Sem esta cura, órfã vira conta deletada em silêncio.
+//
+// ⛔ NÃO cria perfil de quem tem entrada em `loginRedirects` — é o doc inexistente
+// que faz o resgate de conta absorvida funcionar (v1.2.9). A regra mora em
+// orphan-profile-core.js (puro, testado); o I/O em orphan-profile-run.js.
+// ⚠️ NASCE EM ENSAIO: só mede até appConfig/orphanProfiles.enabled = true.
+// Deploy:  scripts/deploy-functions.sh main
+const { run: _runOrphanProfiles } = require("./orphan-profile-run");
+exports.healOrphanProfiles = onSchedule(
+  { schedule: "every day 05:10", timeZone: "America/Sao_Paulo", region: "us-central1",
+    timeoutSeconds: 540, memory: "256MiB" },
+  async () => { await _runOrphanProfiles(admin.auth(), admin.firestore(), Date.now()); }
+);
+
 // ─── Magic Link via Custom Email (firestore-send-email extension) ────────────
 // v1.0.20-beta: substituí firebase.auth().sendSignInLinkToEmail() (que envia
 // email feio do firebaseapp.com sem botão estilizado, parando no spam) por
