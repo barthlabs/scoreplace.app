@@ -242,8 +242,75 @@ function pairPartnerSolo(entry, n) {
 // _userMatchesParticipant ainda o vê inscrito e "Inscrever-se" vira no-op. Iterar
 // (não filtrar por 1º match) também limpa DUPLICATAS: o uid é removido de todas as
 // entradas em que aparece. Time >2 (participants[]) segue removendo a entrada inteira.
+
+// A pessoa JÁ ESTÁ COLOCADA no sorteio? (grupo do Rei/Rainha, grupo comum ou jogo)
+//
+// Não basta "o sorteio saiu": quem se inscreveu DEPOIS e está na lista de espera ainda pode
+// sair limpo, porque não ocupa vaga nenhuma. O que não pode sair é quem já tem lugar na
+// estrutura — tirá-lo de `participants` deixa a vaga ocupada por um fantasma.
+function isPlacedInDraw(data, uid) {
+  if (!data || !uid) return false;
+  var achou = false;
+  var olhaLista = function (arr) {
+    if (achou || !Array.isArray(arr)) return;
+    if (arr.indexOf(uid) !== -1) achou = true;
+  };
+  (Array.isArray(data.rounds) ? data.rounds : []).forEach(function (r) {
+    if (!r) return;
+    (Array.isArray(r.monarchGroups) ? r.monarchGroups : []).forEach(function (g) {
+      if (g) olhaLista(g.playersUids);
+    });
+    (Array.isArray(r.matches) ? r.matches : []).forEach(function (m) {
+      if (!m) return; olhaLista(m.team1Uids); olhaLista(m.team2Uids);
+    });
+  });
+  (Array.isArray(data.groups) ? data.groups : []).forEach(function (g) {
+    if (g) { olhaLista(g.playersUids); olhaLista(g.playerUids); }
+  });
+  (Array.isArray(data.matches) ? data.matches : []).forEach(function (m) {
+    if (!m) return; olhaLista(m.team1Uids); olhaLista(m.team2Uids);
+  });
+  return achou;
+}
+
 function computeDeenroll(data, userUid) {
   var participants = asParticipantsArray(data);
+
+  // ⛔ DEPOIS DE COLOCADA NO SORTEIO, SAIR NÃO É REMOVER — É DESATIVAR.
+  //
+  // Ordem do dono (22/ago/2026), depois de a Juliana Reis sumir de `participants` deixando
+  // a vaga dela ocupada no R1 Grupo M: _"o melhor seria a pessoa não poder se desinscrever
+  // silenciosamente. e deixar coisas quebradas."_
+  //
+  // O estrago medido: 34 grupos × 4 = 136 vagas, mas só 135 inscritos — um lugar que não é
+  // de ninguém, contagem ÍMPAR, e a fase 2 (que forma dupla dentro do grupo) sem como
+  // fechar aquele grupo. Os jogos dela já tinham placar; o histórico continuava lá.
+  //
+  // A peça certa já existe no app e é a MESMA do W.O.: `ligaActive: false` — a pessoa para
+  // de jogar, a estrutura mantém a vaga e o histórico. É exatamente o que o dono já queria
+  // pra ela (W.O. no início da fase 2, depois de a dupla passar no sorteio).
+  //
+  // A regra é ESTRUTURAL, não sobre quem clicou: vale pra pessoa e pro organizador. Quem
+  // precisa mesmo tirar alguém da estrutura usa W.O./substituição, que sabe recompor o
+  // grupo. [[project_wo_always_deactivates]] · [[project_roster_guard_single_rule]]
+  if (isPlacedInDraw(data, userUid)) {
+    var mexeu = false;
+    var comInativo = participants.map(function (p) {
+      if (!p || typeof p !== 'object') return p;
+      if (participantUids(p).indexOf(userUid) === -1) return p;
+      if (p.ligaActive === false) return p;                 // já estava fora: nada a fazer
+      mexeu = true;
+      return Object.assign({}, p, { ligaActive: false, selfDeactivatedAt: new Date().toISOString() });
+    });
+    if (!mexeu) return { outcome: 'notFound', participants: participants, updateData: null };
+    return {
+      outcome: 'deactivated',
+      placed: true,
+      participants: comInativo,
+      updateData: { participants: comInativo }             // memberUids NÃO muda: ela segue no torneio
+    };
+  }
+
   var changed = false;
   var newParticipants = [];
   participants.forEach(function (p) {
@@ -270,6 +337,6 @@ function computeDeenroll(data, userUid) {
 }
 
 module.exports = {
-  participantUids, computeMemberUids, cleanUndefined, phaseDrawDone,
+  participantUids, computeMemberUids, cleanUndefined, phaseDrawDone, isPlacedInDraw,
   enrollmentOpen, isAlreadyEnrolled, computeEnroll, computeDeenroll
 };

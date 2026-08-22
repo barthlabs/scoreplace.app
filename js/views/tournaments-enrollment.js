@@ -1341,6 +1341,19 @@ window.deenrollCurrentUser = function (tId) {
                 // senão o otimista some e o onSnapshot traz de volta). DUPLA: quem sai a DESFAZ
                 // e o parceiro fica SOLO ("sem dupla"). Iterar limpa duplicatas e não deixa slot
                 // com o uid de quem saiu — senão re-inscrever vira no-op.
+                // ⛔ JÁ COLOCADA NO SORTEIO → não remove, DESATIVA (mesmo critério da CF).
+                // Sair de `participants` quem ocupa vaga deixa a vaga sem dono e a contagem
+                // ímpar — foi o caso da Juliana Reis no Confra. Ver `_isPlacedInDraw`.
+                var _colocada = (typeof window._isPlacedInDraw === 'function')
+                    && window._isPlacedInDraw(t, user.uid);
+                if (_colocada) {
+                    t.participants = _savedParticipants.map(function (p) {
+                        if (!p || typeof p !== 'object') return p;
+                        if (window._participantUids(p).indexOf(user.uid) === -1) return p;
+                        if (p.ligaActive === false) return p;
+                        return Object.assign({}, p, { ligaActive: false, selfDeactivatedAt: new Date().toISOString() });
+                    });
+                } else
                 t.participants = _savedParticipants.reduce(function(acc, p) {
                     if (!p || typeof p !== 'object') { acc.push(p); return acc; } // string guest
                     var isPair = !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
@@ -1374,6 +1387,10 @@ window.deenrollCurrentUser = function (tId) {
                                 if (orgUid) {
                                     window._sendUserNotification(orgUid, {
                                         type: 'enrollment_cancelled',
+                                        // com sorteio feito ela NÃO sai do elenco: fica inativa,
+                                        // a vaga continua dela, e o organizador precisa saber
+                                        // disso pra decidir (W.O., substituição…).
+                                        placed: !!(result && result.placed),
                                         // v3.1.59: nome com fallback e-mail→telefone (nunca "Um participante").
                                         message: _t('enroll.orgUnenrollMsg', {name: (window._enrollDisplayName && window._enrollDisplayName(user)) || user.displayName || _t('enroll.anonParticipant'), tourn: window._safeHtml(t.name)}),
                                         tournamentId: String(t.id),

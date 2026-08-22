@@ -307,6 +307,12 @@ const SUITES = [
   // a espera formava ZERO grupo com 3 homens + 3 mulheres e a proporção 25/75 travada,
   // porque a fila se partia pela categoria da INSCRIÇÃO e não pela da rodada.
   'tests/espera-forma-grupo-por-ordem.test.js',
+  // Depois de COLOCADA no sorteio, sair não é remover — é desativar. A Juliana Reis saiu de
+  // `participants` e continuou no R1 Grupo M com 3 jogos pontuados: 136 vagas pra 135
+  // inscritos, contagem ímpar, e a fase 2 (dupla dentro do grupo) sem como fechar o grupo.
+  // Trava também a PARIDADE cliente × CF por matriz: se as duas pontas divergirem, o cliente
+  // remove, o onSnapshot traz de volta e a pessoa pisca saindo e voltando na tela.
+  'tests/nao-se-desinscreve-do-sorteio.test.js',
   // a busca da Análise existia no código e nunca chegava à tela (função órfã).
   'tests/analise-barra-de-busca.test.js',
   'tests/jogo-so-com-placar.test.js',

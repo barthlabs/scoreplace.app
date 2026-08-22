@@ -530,3 +530,29 @@ window._removeFromWaitlistByKey = function (t, key) {
   }
   return removed;
 };
+
+// ⛔ ESPELHO CLIENTE de `isPlacedInDraw` (functions/enroll-core.js) — a pessoa JÁ ESTÁ
+// COLOCADA no sorteio?
+//
+// POR QUE ESPELHO E NÃO CÓPIA SOLTA: o caminho otimista da desinscrição tem que decidir
+// IGUAL à CF, senão o cliente remove, o `onSnapshot` traz de volta, e a tela pisca a pessoa
+// saindo e voltando. O comentário do próprio caminho otimista já diz isso ("MESMO critério
+// da CF/transação deenrollParticipant — têm que casar"). A paridade é travada por matriz em
+// tests/nao-se-desinscreve-do-sorteio.test.js: mexeu em um lado sem o outro, o gate acusa.
+//
+// A REGRA (ordem do dono, 22/ago/2026): depois de colocada no sorteio, sair não é remover —
+// é desativar. Tirar de `participants` quem ocupa vaga deixa a vaga sem dono, a contagem
+// ímpar e a fase seguinte sem como fechar o grupo. Foi o caso da Juliana Reis no Confra.
+window._isPlacedInDraw = function (t, uid) {
+  if (!t || !uid) return false;
+  var achou = false;
+  var olha = function (arr) { if (!achou && Array.isArray(arr) && arr.indexOf(uid) !== -1) achou = true; };
+  (Array.isArray(t.rounds) ? t.rounds : []).forEach(function (r) {
+    if (!r) return;
+    (Array.isArray(r.monarchGroups) ? r.monarchGroups : []).forEach(function (g) { if (g) olha(g.playersUids); });
+    (Array.isArray(r.matches) ? r.matches : []).forEach(function (m) { if (m) { olha(m.team1Uids); olha(m.team2Uids); } });
+  });
+  (Array.isArray(t.groups) ? t.groups : []).forEach(function (g) { if (g) { olha(g.playersUids); olha(g.playerUids); } });
+  (Array.isArray(t.matches) ? t.matches : []).forEach(function (m) { if (m) { olha(m.team1Uids); olha(m.team2Uids); } });
+  return achou;
+};
