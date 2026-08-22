@@ -5155,6 +5155,9 @@ async function simulateLoginSuccess(user) {
       if (_chk) _chk.style.display = _verified ? '' : 'none';
       if (_btn) _btn.style.display = _verified ? 'none' : '';
       if (_hint) _hint.style.display = _verified ? 'none' : 'block';
+      // 2.0.7 — nasce no estado certo: sem isso o botão só acenderia depois da
+      // primeira tecla, e quem chega com número preenchido o veria apagado.
+      if (typeof window._profilePhoneSyncVerifyBtn === 'function') window._profilePhoneSyncVerifyBtn();
       // v1.9.97 — CAMADA 3: procedência à vista. Sem esta linha, a pessoa abre o perfil,
       // encontra um telefone que ela não digitou e não tem como saber de onde veio —
       // que é exatamente a diferença entre "registro com procedência" e "mexeram no meu
@@ -7097,13 +7100,13 @@ function setupProfileModal() {
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
-                '<button type="button" id="profile-phone-verify-btn" onclick="window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
+                '<button type="button" id="profile-phone-verify-btn" onclick="if(this.disabled)return; window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
               '</div>' +
               // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
               // as duas (com confirmação). Sem isso, o número não vira válido.
               '<div style="margin-top:6px;">' +
-                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Confirme por SMS. Se o número já for de outra conta, as duas serão unidas (com sua confirmação).</span>' +
+                '<span id="profile-phone-verify-hint" style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;"><b>Por que confirmar?</b> Por segurança e autenticidade: é o que impede alguém de cadastrar o celular de outra pessoa &mdash; e o que faz um erro de digita&ccedil;&atilde;o aparecer na hora, em vez de o n&uacute;mero ficar errado sem ningu&eacute;m notar. Se o n&uacute;mero j&aacute; for de outra conta, as duas ser&atilde;o unidas (com sua confirma&ccedil;&atilde;o).</span>' +
                 '<div id="profile-phone-otp" style="display:none;margin-top:8px;"></div>' +
                 '<div id="profile-phone-recaptcha" style="display:none;"></div>' +
               '</div>' +
@@ -7462,8 +7465,19 @@ function setupProfileModal() {
         countrySelect.addEventListener('change', function() {
           var digits = phoneInput.getAttribute('data-digits') || '';
           phoneInput.value = _formatPhoneDisplay(digits, this.value);
+          if (typeof window._profilePhoneSyncVerifyBtn === 'function') window._profilePhoneSyncVerifyBtn();
         });
       }
+      // 2.0.7 — o botão "Verificar" acompanha o que está digitado. `input` cobre
+      // digitação, colar e autopreenchimento; o setTimeout(0) deixa a máscara
+      // gravar o data-digits ANTES de a gente ler (senão lê o valor de trás).
+      ['input', 'change', 'paste'].forEach(function (ev) {
+        phoneInput.addEventListener(ev, function () {
+          setTimeout(function () {
+            if (typeof window._profilePhoneSyncVerifyBtn === 'function') window._profilePhoneSyncVerifyBtn();
+          }, 0);
+        });
+      });
     }
 
     // Notification filter toggles: todas (green), importantes (yellow), fundamentais (red)
@@ -7611,6 +7625,99 @@ function setupProfileModal() {
     var _liveAlertsColors = { all: '#22c55e', friends: '#3b82f6', none: '#ef4444' };
     // 1.9.69 — Alterar do celular, espelho do e-mail: esconde a linha de exibição
     // e abre a edição (DDI + número + Verificar).
+    // ── 2.0.7 — A PORTA ÚNICA do "vai colocar teu celular" ──────────────────
+    // Todo caminho que queira levar alguém ao celular (empurrão do login, aviso,
+    // notificação) chama ESTA função. Alvo de scroll duplicado diverge: um lugar
+    // aprende a esperar o render e o outro não, e o convite passa a rolar pro
+    // topo em metade dos casos. Ver [[project_entrar_no_torneio_cai_no_meu_grupo]].
+    //
+    // Ela tolera ser chamada de FORA da rota: navega, espera o campo existir e só
+    // então rola. O polling é curto e desiste — travar num setInterval eterno é
+    // pior que não rolar.
+    // ── 2.0.7 — O BOTÃO "Verificar" ACENDE quando o número está completo ────
+    // ANTES ele era estático: só aparecia/sumia conforme o celular já estar
+    // verificado. Nada na tela dizia que o caminho era ali — e ao lado havia o
+    // botão SALVAR, grande e verde. A pessoa digitava, salvava, e o número NÃO
+    // entrava (o cânone exige verificação: v2.5.x, `_phoneChangedUnverified`).
+    // Ela saía achando que tinha resolvido. É o "parece resolvido e não é" de
+    // [[project_celular_contato_vs_identidade]], só que pelo lado da UI.
+    //
+    // Válido = quantidade de dígitos que o país comporta. BR (55) exige 10 ou 11
+    // (fixo/celular com 9); os demais ficam no piso de 8 — chutar regra de país
+    // que não conhecemos barraria gente de fora sem motivo.
+    window._profilePhoneDigitsOk = function (digits, ddi) {
+      var d = String(digits || '').replace(/\D/g, '');
+      if (String(ddi || '55') === '55') return d.length === 10 || d.length === 11;
+      return d.length >= 8;
+    };
+
+    // Reavalia o botão. Chamada no input, na troca de DDI e no render.
+    window._profilePhoneSyncVerifyBtn = function () {
+      var btn = document.getElementById('profile-phone-verify-btn');
+      var inp = document.getElementById('profile-edit-phone');
+      if (!btn || !inp) return;
+      var ddi = (document.getElementById('profile-phone-country') || {}).value || '55';
+      var dig = (inp.getAttribute('data-digits') || inp.value || '').replace(/\D/g, '');
+      var ok = window._profilePhoneDigitsOk(dig, ddi);
+      btn.disabled = !ok;
+      btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+      if (ok) {
+        // ACESO: mesma família de cor do botão primário, com brilho — é o convite.
+        btn.style.background = 'rgba(99,102,241,0.92)';
+        btn.style.borderColor = '#818cf8';
+        btn.style.color = '#fff';
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.22)';
+        btn.title = 'Confirmar este número por SMS';
+      } else {
+        // APAGADO: continua visível (sumir esconderia o caminho), mas sem convite.
+        btn.style.background = 'rgba(99,102,241,0.10)';
+        btn.style.borderColor = 'rgba(99,102,241,0.22)';
+        btn.style.color = 'rgba(165,180,252,0.55)';
+        btn.style.opacity = '0.75';
+        btn.style.cursor = 'not-allowed';
+        btn.style.boxShadow = 'none';
+        btn.title = 'Digite o número completo para verificar';
+      }
+    };
+
+    window._profileFocusPhone = function (opts) {
+      opts = opts || {};
+      var _tentativas = 0;
+      var _achar = function () {
+        var inp = document.getElementById('profile-edit-phone');
+        var wrap = document.getElementById('profile-phone-edit-wrap');
+        if (!inp || !wrap) {
+          if (++_tentativas > 40) return;            // ~8s e desiste
+          return setTimeout(_achar, 200);
+        }
+        // Quem já tem número vê a linha de exibição; abrir a edição é o que põe
+        // o campo na frente da pessoa.
+        if (typeof window._profileShowPhoneEdit === 'function') window._profileShowPhoneEdit();
+        try {
+          var alvo = document.getElementById('profile-phone-display');
+          if (!alvo || alvo.style.display === 'none') alvo = wrap;
+          alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) { try { wrap.scrollIntoView(); } catch (_e) {} }
+        try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (_e) {} }
+        // Realce curto: sem ele a pessoa chega na tela certa e não sabe onde olhar.
+        try {
+          wrap.classList.add('sp-phone-alvo');
+          setTimeout(function () { wrap.classList.remove('sp-phone-alvo'); }, 2600);
+        } catch (e) {}
+        if (opts.motivo && typeof window.showNotification === 'function') {
+          window.showNotification('📱 Seu celular', opts.motivo, 'info');
+        }
+      };
+      if (window.location.hash !== '#profile') {
+        window.location.hash = '#profile';
+        setTimeout(_achar, 260);
+      } else {
+        _achar();
+      }
+    };
+
     window._profileShowPhoneEdit = function() {
       var d = document.getElementById('profile-phone-display');
       var w = document.getElementById('profile-phone-edit-wrap');
@@ -8797,20 +8904,46 @@ window._askSecureContact = function () {
     if (cu.phone) return;                                   // já tem celular — nada a pedir
     if (cu.dupSuspect || cu.nameConflict) return;           // outra pergunta em aberto tem prioridade
     if (typeof showConfirmDialog !== 'function') return;
+    // 2.0.7 — 1× POR DIA (era 7 dias). Pedido do dono: insistir até a pessoa
+    // colocar. NÃO trava nada: ela fecha e usa o app inteiro; o que muda é o
+    // convite voltar amanhã em vez de na semana que vem. A chave carrega o DIA,
+    // não o timestamp — assim "uma vez por dia" é dia de calendário, e abrir o
+    // app às 23h55 e de novo às 00h05 não gasta a cota das duas.
     var key = 'scoreplace_phone_nudge_' + cu.uid;
     try {
-      var last = parseInt(localStorage.getItem(key) || '0', 10);
-      if (last && (Date.now() - last) < 7 * 24 * 3600000) return;   // cooldown 7 dias
-      localStorage.setItem(key, String(Date.now()));
+      var hoje = new Date();
+      var diaHoje = hoje.getFullYear() + '-' + (hoje.getMonth() + 1) + '-' + hoje.getDate();
+      if (localStorage.getItem(key) === diaHoje) return;
+      localStorage.setItem(key, diaHoje);
     } catch (_e) {}
     var isRelay = /@privaterelay\.appleid\.com$/i.test(String(cu.email || ''));
-    var corpo = isRelay
-      ? 'Você entrou com a Apple usando <b>e-mail oculto</b> — nós não temos como reconhecer esse endereço se você entrar por outro caminho um dia. ' +
-        'Cadastre seu <b>celular</b> no perfil: ele garante que sua conta é encontrada e recuperada, e evita que uma conta duplicada seja criada sem querer.'
-      : 'Cadastre seu <b>celular</b> no perfil: ele é a forma mais segura de recuperar seu acesso se você esquecer como entrou — e evita que uma conta duplicada seja criada sem querer.';
-    showConfirmDialog('🔒 Garanta sua conta', corpo, function () {
-      window.location.hash = '#profile';
-    }, null, { confirmText: '📱 Cadastrar celular', cancelText: 'Agora não', type: 'info' });
+    // O argumento é UTILIDADE PRA PESSOA — é por WhatsApp que jogo se marca —,
+    // não obrigação com o app. E o porquê da verificação vem junto, porque sem
+    // ele "confirmar por SMS" parece burocracia nossa: é o que impede número de
+    // terceiro e o que faz erro de digitação aparecer na hora.
+    var _porque =
+      '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);line-height:1.5;">' +
+        'Confirmamos por SMS <b>por segurança e autenticidade</b>: é o que impede alguém de ' +
+        'cadastrar o celular de outra pessoa — e o que faz um erro de digitação aparecer na ' +
+        'hora, em vez de o número ficar errado sem ninguém notar.' +
+      '</div>';
+    var corpo =
+      '<div style="font-size:0.86rem;line-height:1.5;">' +
+        'Cadastre seu <b>celular</b> — é o seu <b>WhatsApp</b>, e é por ali que os jogos são ' +
+        'combinados. Sem ele, quem for jogar com você não tem como te chamar.' +
+        (isRelay
+          ? ' Você entrou com a Apple usando <b>e-mail oculto</b>, então hoje não temos nenhum ' +
+            'jeito de te encontrar nem de devolver seu acesso se você trocar de aparelho.'
+          : '') +
+      '</div>' + _porque;
+    showConfirmDialog('📱 Seu celular é seu WhatsApp', corpo, function () {
+      // porta única — ver window._profileFocusPhone
+      if (typeof window._profileFocusPhone === 'function') {
+        window._profileFocusPhone({ motivo: 'Digite seu número e toque em Verificar — o botão acende quando o número estiver completo.' });
+      } else {
+        window.location.hash = '#profile';
+      }
+    }, null, { confirmText: '📱 Cadastrar agora', cancelText: 'Agora não', type: 'info' });
   } catch (e) {}
 };
 
