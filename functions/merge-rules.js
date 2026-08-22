@@ -243,3 +243,42 @@ module.exports = {
   planProviderTransfer,
   ACTIVITY_STEPS, activitySignals, pickSurvivorByActivity,
 };
+
+/**
+ * PROVA DE QUE SÃO A MESMA PESSOA — porta ÚNICA de toda fusão AUTOMÁTICA.
+ *
+ * Regra do dono (11/ago/2026): _"tem que autenticar email ou celular. sempre autenticado.
+ * nada disso de ser frouxo."_ Só o AUTH prova: `phoneNumber` só existe depois de SMS
+ * conferido e o e-mail precisa de `emailVerified`. Campo `phone`/`email` do PERFIL é texto
+ * DIGITADO — não prova nada.
+ *
+ * POR QUE ISTO VIROU MÓDULO (incidente 19/ago/2026, Confra): o endurecimento de 11/ago
+ * entrou SÓ no `autoMergeOnProfileUpdate`. A varredura diária `scheduledAutoMergeCleanup`
+ * (`_scanAndMergeByField`) continuou fundindo pelo campo digitado — e às 04:45 de 19/ago
+ * fundiu DUAS PESSOAS DIFERENTES: Marjorie Cilone (nasc. 1954) e Ana Carolina Cilone
+ * (nasc. 1981), e-mails distintos, que tinham cadastrado o MESMO celular no perfil (mãe e
+ * filha dividem o número). A conta da filha foi apagada do Auth, o e-mail dela virou
+ * `loginRedirects` pra conta da mãe, e o uid-sweep colocou a mãe em DOIS grupos do torneio.
+ * Duas portas pra mesma ação, uma trancada e a outra não: o defeito é a duplicação, então a
+ * regra passa a morar aqui e os dois chamadores passam por ela.
+ *
+ * O erro é ASSIMÉTRICO e é o que define o default: duplicata não fundida é incômodo
+ * reversível (o fluxo interativo pergunta e resolve); fusão errada apaga uma conta do Auth
+ * e não tem volta. Na dúvida, NÃO funde.
+ *
+ * @param {object|null} authA/authB — UserRecord do Admin SDK (null quando o Auth já sumiu)
+ * @returns {{ proven: boolean, by: 'phone'|'email'|null }}
+ */
+function credentialsProveSamePerson(authA, authB) {
+  const _dup = require("./duplicate-person-core");
+  const t1 = authA && authA.phoneNumber, t2 = authB && authB.phoneNumber;
+  if (t1 && t2 && _dup.normalizarTelefone(t1) === _dup.normalizarTelefone(t2)) {
+    return { proven: true, by: "phone" };
+  }
+  const m1 = authA && authA.emailVerified && _dup.normalizarEmail(authA.email);
+  const m2 = authB && authB.emailVerified && _dup.normalizarEmail(authB.email);
+  if (m1 && m2 && m1 === m2) return { proven: true, by: "email" };
+  return { proven: false, by: null };
+}
+
+module.exports.credentialsProveSamePerson = credentialsProveSamePerson;

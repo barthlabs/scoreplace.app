@@ -30,6 +30,7 @@ const { onDocumentCreated, onDocumentWritten, onDocumentDeleted } = require("fir
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const _mergeRules = require("./merge-rules");
+const _mergeSweep = require("./merge-sweep-core");
 const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _mergeCols = require("./merge-collections-core");
@@ -825,6 +826,22 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
  * For each duplicate group, merge every less-complete account into the
  * most-complete one.  Returns an array of merge result objects.
  */
+/**
+ * PORTA ÚNICA das fusões automáticas: busca os dois UserRecords e delega a decisão pra
+ * `credentialsProveSamePerson` (merge-rules.js, pura e testada). Os DOIS caminhos
+ * automáticos — o trigger `autoMergeOnProfileUpdate` e a varredura diária
+ * `_scanAndMergeByField` — passam por aqui. Ver o bloco de comentário da regra: foi a
+ * SEGUNDA porta, sem gate, que fundiu duas pessoas diferentes em 19/ago/2026.
+ * Auth ausente (conta já apagada) → `proven:false`, que é o lado seguro.
+ */
+async function _provenSamePerson(uidA, uidB) {
+  const [a, b] = await Promise.all([
+    admin.auth().getUser(uidA).catch(() => null),
+    admin.auth().getUser(uidB).catch(() => null),
+  ]);
+  return _mergeRules.credentialsProveSamePerson(a, b);
+}
+
 async function _scanAndMergeByField(db, field) {
   const allSnap = await db.collection("users").get();
   const byKey = {};
@@ -843,25 +860,37 @@ async function _scanAndMergeByField(db, field) {
   for (const [key, docs] of Object.entries(byKey)) {
     if (docs.length < 2) continue;
 
-    // Find the best keeper across all docs in this group
-    let keepDoc = docs[0];
-    for (let i = 1; i < docs.length; i++) {
-      keepDoc = (await _determineMergeWinner(keepDoc, docs[i])).keepDoc;
-    }
+    // ⚠️ QUEM DECIDE É O `merge-sweep-core` — MESMA PORTA DO TRIGGER (`_provenSamePerson`).
+    // Sem credencial AUTENTICADA batendo dos dois lados o par fica de pé: quem resolve é o
+    // fluxo interativo de duplicata, que sabe pedir prova de posse. Duplicata não fundida é
+    // incômodo reversível; fusão errada apaga uma conta do Auth e não tem volta. A decisão
+    // mora num módulo puro porque enquanto morava AQUI nenhum teste alcançava ela — e foi
+    // assim que a varredura fundiu duas pessoas diferentes em 19/ago/2026.
+    const plano = await _mergeSweep.planSweepMerges(docs, {
+      pickKeep: async (a, b) => (await _determineMergeWinner(a, b)).keepDoc,
+      proof: _provenSamePerson,
+    });
+    if (!plano.keepUid) continue;
 
-    // Merge all non-keepers sequentially (re-fetch each time for freshness)
-    for (const dropDoc of docs) {
-      if (dropDoc.id === keepDoc.id) continue;
+    plano.refused.forEach((r) => {
+      console.log(`[scanAndMergeByField] RECUSADO ${plano.keepUid} × ${r.dropUid}: ` +
+        `"${field}" bate no PERFIL mas não há credencial AUTENTICADA nos dois lados — ` +
+        `fundir por texto digitado apagaria conta de terceiro.`);
+      results.push({ field, key, keepUid: plano.keepUid, dropUid: r.dropUid, refused: r.reason });
+    });
+
+    // Executa o plano (re-fetch a cada par, pra pegar estado fresco)
+    for (const m of plano.merges) {
       const [freshKeep, freshDrop] = await Promise.all([
-        db.collection("users").doc(keepDoc.id).get(),
-        db.collection("users").doc(dropDoc.id).get(),
+        db.collection("users").doc(plano.keepUid).get(),
+        db.collection("users").doc(m.dropUid).get(),
       ]);
       if (!freshDrop.exists || freshDrop.data().mergedInto) continue;
       try {
         const r = await _executeMerge(db, freshKeep, freshDrop);
-        results.push({ field, key, keepUid: keepDoc.id, dropUid: dropDoc.id, ...r });
+        results.push({ field, key, keepUid: plano.keepUid, dropUid: m.dropUid, by: m.by, ...r });
       } catch (err) {
-        results.push({ field, key, keepUid: keepDoc.id, dropUid: dropDoc.id,
+        results.push({ field, key, keepUid: plano.keepUid, dropUid: m.dropUid,
                        error: String(err.message) });
       }
     }
@@ -6463,15 +6492,11 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
         // precisa de `emailVerified`. Os DOIS lados têm que provar — um só não diz nada
         // sobre o outro. Sem prova, NÃO funde (e não pergunta aqui: quem pergunta é o
         // fluxo de duplicata, que sabe mascarar o contato).
-        const _autA = await admin.auth().getUser(uid).catch(() => null);
-        const _autB = await admin.auth().getUser(other.id).catch(() => null);
-        const _t1 = _autA && _autA.phoneNumber, _t2 = _autB && _autB.phoneNumber;
-        const _m1 = _autA && _autA.emailVerified && _dupPerson.normalizarEmail(_autA.email);
-        const _m2 = _autB && _autB.emailVerified && _dupPerson.normalizarEmail(_autB.email);
-        const _telOk = !!(_t1 && _t2 &&
-          _dupPerson.normalizarTelefone(_t1) === _dupPerson.normalizarTelefone(_t2));
-        const _mailOk = !!(_m1 && _m2 && _m1 === _m2);
-        if (!_telOk && !_mailOk) {
+        // v2.0.5: a regra saiu daqui pra `_provenSamePerson` → merge-rules. Estava escrita
+        // SÓ neste caminho, e a varredura diária (a outra porta) fundiu duas pessoas
+        // diferentes por não ter a cópia. Uma regra, dois chamadores.
+        const _prova = await _provenSamePerson(uid, other.id);
+        if (!_prova.proven) {
           console.log(`[autoMergeOnProfileUpdate] RECUSADO ${uid} × ${other.id}: ` +
             `"${field}" bate no PERFIL mas não há credencial AUTENTICADA nos dois lados — ` +
             `fundir por texto digitado apagaria conta de terceiro.`);

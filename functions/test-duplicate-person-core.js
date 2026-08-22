@@ -180,14 +180,36 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   // ── "SEMPRE AUTENTICADO" — em TODOS os caminhos que fundem sozinhos ──
   ok('auto-merge por perfil RECUSA sem credencial autenticada nos dois lados',
     /autoMergeOnProfileUpdate[\s\S]{0,4000}RECUSADO[\s\S]{0,200}credencial AUTENTICADA/.test(idx));
-  ok('  → e a prova ali é o AUTH (phoneNumber / emailVerified), não o campo do perfil',
-    /_autA\.emailVerified/.test(idx) && /_autA && _autA\.phoneNumber/.test(idx));
+  // v2.0.5: a prova saiu do corpo do trigger pra `credentialsProveSamePerson` (merge-rules),
+  // atrás da porta única `_provenSamePerson`. O invariante é o MESMO — quem prova é o AUTH,
+  // não o campo do perfil —, mudou o lugar onde ele mora. Ver test-merge-proof.js.
+  const mrules = require('fs').readFileSync(require('path').join(__dirname, 'merge-rules.js'), 'utf8');
+  ok('  → e a prova é o AUTH (phoneNumber / emailVerified), não o campo do perfil',
+    /function credentialsProveSamePerson[\s\S]{0,900}phoneNumber[\s\S]{0,600}emailVerified/.test(mrules));
+  ok('  → e a porta única delega pra essa regra (nada de gate escrito à mão)',
+    /async function _provenSamePerson[\s\S]{0,700}credentialsProveSamePerson/.test(idx));
   ok('  → o detector da BASE também só funde com credencial do AUTH',
     /_detectarDuplicataNaBase[\s\S]{0,6000}a1\.emailVerified/.test(idx));
-  // Nenhum caminho pode voltar a fundir por texto digitado.
-  ok('nenhuma fusão automática dispara só com o campo do PERFIL',
-    !/_executeMerge\(db, keepDoc, dropDoc\)/.test(idx.slice(0, idx.indexOf('RECUSADO'))) ||
-    /credencial AUTENTICADA/.test(idx));
+
+  // ⚠️ NENHUM caminho automático pode voltar a fundir por texto digitado — e agora a
+  // asserção é POR CAMINHO. A versão anterior terminava em `|| /credencial AUTENTICADA/
+  // .test(idx)`, ou seja: bastava a FRASE existir em qualquer lugar do arquivo pra passar.
+  // Foi por esse buraco que a varredura diária ficou meses sem gate e, em 19/ago/2026,
+  // fundiu mãe e filha que dividem o celular. Cada porta que chama _executeMerge tem que
+  // passar pela prova ANTES de chamar.
+  const _ateOMerge = (marcador) => {
+    const i = idx.indexOf(marcador);
+    if (i < 0) return null;
+    const j = idx.indexOf('_executeMerge(', i);
+    return (j < 0) ? null : idx.slice(i, j);
+  };
+  const _trigger = _ateOMerge('exports.autoMergeOnProfileUpdate');
+  const _varredura = _ateOMerge('async function _scanAndMergeByField');
+  ok('trigger: passa pela prova ANTES de fundir',
+    !!_trigger && _trigger.indexOf('_provenSamePerson') >= 0);
+  ok('varredura diária: passa pela prova ANTES de fundir (era o caminho sem gate)',
+    !!_varredura && _varredura.indexOf('planSweepMerges') >= 0 &&
+    /for\s*\(\s*const\s+\w+\s+of\s+plano\.merges\s*\)/.test(_varredura));
 
   // ── O sinal é PRIVILEGIADO e CHEGA na tela ──
   ok('dupSuspect é privilegiado nas firestore.rules',

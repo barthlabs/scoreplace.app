@@ -689,6 +689,13 @@ const SUITES = [
   // createdAt no doc PERDIA pra perfil de julho com createdAt — o Auth sempre soube a idade).
   // Reproduz o caso real e trava o await nos dois call sites do index.js.
   'functions/test-merge-winner.js',
+  // FUNDIR EXIGE CREDENCIAL AUTENTICADA — E NOS DOIS CAMINHOS. A regra existia desde
+  // 11/ago mas só dentro do trigger; a varredura diária (a outra porta) seguia fundindo
+  // pelo `phone` DIGITADO no perfil e, em 19/ago às 04:45, fundiu mãe e filha que dividem
+  // o celular (Confra): apagou a conta da filha do Auth e deixou a mãe em DOIS grupos.
+  // A decisão da varredura virou módulo puro (merge-sweep-core) só pra este teste poder
+  // exercitá-la de verdade — antes só dava pra checar o texto do index.js, que é teatro.
+  'functions/test-merge-proof.js',
   // NADA SE PERDE: o merge passou a absorver o PERFIL do drop (antes copiava ZERO campos —
   // a Silvia perderia 44 campos pra uma conta de 17). Varredura genérica com lista de
   // exclusão: campo novo no perfil é preservado sem ninguém lembrar de atualizar lista.

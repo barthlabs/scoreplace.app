@@ -131,8 +131,12 @@ ok('index.js: _determineMergeWinner é async e busca o Auth (getUser) antes de d
 // e ele segue travado — mudou a função vigente, não o princípio.
 ok('index.js: _determineMergeWinner delega pro módulo (regra num lugar só)',
   src.includes('_mergeRules.pickSurvivorByActivity('));
-ok('index.js: _scanAndMergeByField AGUARDA a decisão (await) — senão keepDoc vira Promise',
-  src.includes('(await _determineMergeWinner(keepDoc, docs[i])).keepDoc'));
+// v2.0.5: a varredura passou a delegar a decisão pro merge-sweep-core (módulo puro), e o
+// `_determineMergeWinner` entra lá INJETADO como `pickKeep`. O invariante é o mesmo — sem
+// o await, keepDoc vira Promise e a escolha do sobrevivente passa a ser lixo —, só mudou
+// onde ele mora. Ver functions/test-merge-proof.js.
+ok('index.js: a varredura AGUARDA a decisão (await) — senão keepDoc vira Promise',
+  /pickKeep:\s*async\s*\([^)]*\)\s*=>\s*\(await _determineMergeWinner\([^)]*\)\)\.keepDoc/.test(src));
 ok('index.js: autoMergeOnProfileUpdate AGUARDA a decisão (await)',
   src.includes('await _determineMergeWinner(currentDoc, freshOther)'));
 ok('index.js: a réplica local da regra saiu (sem _profileScore duplicado)',
