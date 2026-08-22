@@ -128,6 +128,17 @@ function _nameUidMap(t) {
 }
 
 // ── Mutações de baixo nível ─────────────────────────────────────────────────
+// Este jogo é PASSADO? Qualquer uma das marcas basta — e `resultAt` entra de propósito:
+// foi a única que sobreviveu quando o `clearResults` zerou o resto, e é ela que denuncia um
+// jogo que JÁ foi lançado mesmo com placar apagado por engano.
+function _jogoJaTemPlacar(m) {
+  if (!m) return false;
+  if (m.isSitOut) return false;                       // folga/W.O. não é jogo disputado
+  return !!(m.winner || m.scoreP1 != null || m.scoreP2 != null ||
+            m.resultAt || (Array.isArray(m.sets) && m.sets.length));
+}
+window._jogoJaTemPlacar = _jogoJaTemPlacar;
+
 function _rewriteSlot(group, fromName, toName, clearResults, t) {
   // v4.4.117: além do NOME, reescreve o UID do slot (identidade por uid). O substituto é
   // outra pessoa — o jogo/elenco tem que apontar pro uid DELE (ou null se convidado sem
@@ -143,6 +154,27 @@ function _rewriteSlot(group, fromName, toName, clearResults, t) {
     });
   }
   (group.matches || []).forEach(function (m) {
+    // ⛔ JOGO COM PLACAR NÃO SE TOCA — nem o nome, nem o resultado.
+    //
+    // Ordem do dono (22/ago/2026, depois de eu quebrar o R1 Grupo M do Confra):
+    // _"a pessoa que sai mantém o que fez e a que entra herda a posição. nenhum placar
+    //  alterado ou apagado. SEMPRE."_
+    //
+    // O QUE ACONTECEU: apliquei W.O. num grupo com os 3 jogos JÁ LANÇADOS. Este laço
+    // trocou "Juliana Reis" por "Erika Muller" DENTRO dos jogos e o `clearResults` zerou
+    // scoreP1/scoreP2/winner/sets. Sobrou só o `resultAt` — foi ele que provou que ali
+    // havia resultado. Os três tiveram de ser restaurados do backup.
+    //
+    // A SEPARAÇÃO É DE DOIS EIXOS, e este guard é a fronteira:
+    //   · PASSADO (jogo com placar) → é de quem JOGOU. Imutável.
+    //   · FUTURO (vaga no grupo, posição na classificação) → é de quem ENTRA. Segue
+    //     valendo logo abaixo, em `group.players`, que é o que faz o suplente herdar a
+    //     colocação — no Grupo M a Juliana era 4ª, a Erika virou 4ª, e é isso que a põe
+    //     como parceira do Marco na linha Prata.
+    //
+    // O W.O. foi desenhado pro caso normal (falta ANTES de jogar, o suplente joga no
+    // lugar). Aplicado num grupo já encerrado, a troca RETROAGE. Não é hipótese.
+    if (_jogoJaTemPlacar(m)) return;
     if (Array.isArray(m.team1)) m.team1 = _rw(m.team1, m.team1Uids);
     if (Array.isArray(m.team2)) m.team2 = _rw(m.team2, m.team2Uids);
     if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }

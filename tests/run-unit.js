@@ -102,6 +102,12 @@ const SUITES = [
   // o suplente do W.O. respeita a proporção de gênero (o homem fura a fila de um grupo
   // 0/100 em 25/75 — ordem do dono, W.O. da Glauce no R1 Grupo R)
   'tests/wo-substituto-respeita-proporcao.test.js',
+  // ⛔ PLACAR LANÇADO NUNCA É REESCRITO. Apliquei W.O. num grupo com os 3 jogos JÁ
+  // lançados: o _rewriteSlot trocou o nome de quem jogou pelo do suplente DENTRO dos
+  // jogos e o clearResults zerou placar e vencedor. Só o resultAt sobreviveu — foi ele
+  // que provou que ali havia resultado. Regra do dono: quem sai mantém o que fez, quem
+  // entra herda a POSIÇÃO. Passado é de quem jogou; futuro é de quem entra.
+  'tests/placar-lancado-nunca-e-reescrito.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado
