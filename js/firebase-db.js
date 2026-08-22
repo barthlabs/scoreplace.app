@@ -2892,8 +2892,41 @@ window.FirestoreDB = {
         var data = doc.data();
         var participants = Array.isArray(data.participants) ? data.participants.slice() : [];
         var playerUids = Array.isArray(data.playerUids) ? data.playerUids.slice() : [];
-        // Already joined?
-        if (playerUids.indexOf(uid) !== -1) return true;
+        var players = Array.isArray(data.players) ? data.players : [];
+
+        // ⭐ 2.0.5 — A MESMA PESSOA NÃO ENTRA DUAS VEZES. Relato do dono, com print: ele
+        // aparecia nos DOIS times da partida casual (slot 1 e slot 3), e os pares vazios
+        // viravam "Jogador 2"/"Jogador 4". Os slots da tela saem de `participants`.
+        //
+        // 🔴 A CAUSA: o guarda de "já entrei?" olhava SÓ `playerUids`. Mas a sala guarda a
+        // mesma informação em TRÊS lugares — `participants`, `playerUids` e `players` — e o
+        // próprio arquivo já documenta que elas dessincronizam (ver leaveCasualMatch: "docs
+        // legados podem ter uid só em players; claim-slot não populava playerUids"). Numa
+        // sala assim o guarda passava batido e empurrava a pessoa em `participants` de novo.
+        // Identidade é uid, e a pergunta tem que ser feita nas três listas — não em uma.
+        var _souEu = function (x) { return x && x.uid === uid; };
+        var jaEstou = playerUids.indexOf(uid) !== -1 || participants.some(_souEu) || players.some(_souEu);
+
+        // Toda gravação passa por aqui: DEDUPLICA por uid e CURA a divergência. Sala que já
+        // nasceu com a pessoa repetida (é o caso do print) se conserta sozinha na próxima
+        // entrada, sem migração — e sem apagar quem não tem conta, cujo slot é o nome.
+        var _vistos = {};
+        participants = participants.filter(function (x) {
+          if (!x || !x.uid) return true;
+          if (_vistos[x.uid]) return false;
+          _vistos[x.uid] = true;
+          return true;
+        });
+
+        if (jaEstou) {
+          if (playerUids.indexOf(uid) === -1) playerUids.push(uid);
+          if (!participants.some(_souEu)) {
+            participants.push({ uid: uid, displayName: displayName || '', photoURL: photoURL || '', joinedAt: new Date().toISOString() });
+          }
+          transaction.update(docRef, { participants: participants, playerUids: playerUids });
+          return true;
+        }
+
         participants.push({ uid: uid, displayName: displayName || '', photoURL: photoURL || '', joinedAt: new Date().toISOString() });
         playerUids.push(uid);
         transaction.update(docRef, { participants: participants, playerUids: playerUids });

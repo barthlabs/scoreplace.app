@@ -56,9 +56,15 @@ function renderNotifications(container) {
   // começou continua no bloco de cima até a pessoa SAIR e VOLTAR. O cartão ainda
   // esmaece e perde o ponto azul (a leitura é real e o sininho zera) — o que não muda
   // é o LUGAR. Reabrir a tela é o gesto que reclassifica.
-  var _visitaNova = !window._notifKeepLimit;
+  // 2.0.5 — quem decide "é uma visita nova?" é o ROTEADOR (window._notifNovaVisita), porque
+  // só ele sabe que a pessoa ENTROU na tela. O critério antigo (`!window._notifKeepLimit`)
+  // dava visita nova em TODO render que não fosse "Carregar mais" — e o ouvinte em tempo real
+  // re-renderiza a cada mudança de documento, inclusive a que os próprios 5s de permanência
+  // provocam ao marcar como lida. Era isso que fazia o aviso recém-lido pular pro fim.
+  var _visitaNova = window._notifNovaVisita === true;
+  window._notifNovaVisita = false;
   if (window._notifKeepLimit) { window._notifKeepLimit = false; }
-  else { window._notifLimit = window._NOTIF_PAGE; }
+  else if (_visitaNova) { window._notifLimit = window._NOTIF_PAGE; }
   if (_visitaNova) window._notifSessionUnread = {};
   window._notifLoadMore = function () {
     window._notifLimit = (window._notifLimit || window._NOTIF_PAGE) + window._NOTIF_PAGE;

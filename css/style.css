@@ -31,6 +31,17 @@
   --z-hamburger-dropdown: 1002;  /* ABOVE back-header so menu shows on top          */
   --z-toast:             9999;
   --z-hint:            100000;
+  /* ⭐ 2.0.5 — A LINHA DO PLACAR E A TARJA NEUTRA, com valor POR TEMA.
+     Relato do dono no tema CLARO: "não vemos o box do campo dos placares".
+     Eram DOIS hábitos do escuro invertendo de uma vez, no card de jogo SEM resultado:
+       • o fundo `rgba(0,0,0,0.25)` — que uma regra global do claro rebaixa pra
+         `rgba(0,0,0,0.045)`, quase invisível sobre o card branco;
+       • a tarja `border-left: 3px solid rgba(255,255,255,0.14)` — BRANCA, some no claro.
+     Somados, o box do placar desaparecia. Agora o valor vem do tema, e não de um literal
+     escrito pensando só no escuro. Ver feedback_contraste_sempre_nos_dois_temas. */
+  --placar-linha-bg: rgba(0,0,0,0.25);
+  --placar-tarja-neutra: rgba(255,255,255,0.16);
+
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -157,6 +168,10 @@
   --hero-pill-inactive-bg: rgba(0,0,0,0.04);
   --hero-pill-inactive-border: rgba(0,0,0,0.10);
   --hero-pill-glow: rgba(0,0,0,0.08);
+  /* No claro o contraste se faz com PRETO — o mesmo papel, a cor oposta. */
+  --placar-linha-bg: rgba(0,0,0,0.055);
+  --placar-tarja-neutra: rgba(0,0,0,0.22);
+
 }
 
 [data-theme="sunset"] {
@@ -212,6 +227,10 @@
   --hero-pill-inactive-bg: rgba(0,0,0,0.04);
   --hero-pill-inactive-border: rgba(0,0,0,0.10);
   --hero-pill-glow: rgba(0,0,0,0.08);
+  /* No claro o contraste se faz com PRETO — o mesmo papel, a cor oposta. */
+  --placar-linha-bg: rgba(0,0,0,0.055);
+  --placar-tarja-neutra: rgba(0,0,0,0.22);
+
 }
 
 [data-theme="ocean"] {

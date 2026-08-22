@@ -3937,9 +3937,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // SEM placar a tarja saia verde em cima e vermelha embaixo, por POSICAO, e o
     // verde passava a significar duas coisas na mesma tela.
     if (isWinner) return base + 'background:rgba(16,185,129,0.18);border-left:3px solid #10b981;';
-    if (isDecided) return base + 'background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.18);';
+    // 2.0.5: fundo e tarja neutra saem de TOKEN, não de literal — no claro o branco sumia e
+    // a regra global rebaixava o preto, deixando o box do placar invisível (relato do dono).
+    if (isDecided) return base + 'background:var(--placar-linha-bg);border-left:3px solid var(--placar-tarja-neutra);';
     if (hasPending) return base + 'background:rgba(251,191,36,0.10);border-left:3px solid #fbbf24;';
-    return base + 'background:rgba(0,0,0,0.25);border-left:3px solid rgba(255,255,255,0.14);';
+    return base + 'background:var(--placar-linha-bg);border-left:3px solid var(--placar-tarja-neutra);';
   };
 
   // v1.8.95: sempre mostrar placar — 0 quando ainda não lançado (não TBD, não decidido)

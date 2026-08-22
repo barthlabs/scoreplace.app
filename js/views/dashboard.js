@@ -2381,6 +2381,18 @@ function renderDashboard(container) {
 
         var p1IsWinner = !m2.draw && window._matchWinnerSide(m2) === 1;
         var p2IsWinner = !m2.draw && window._matchWinnerSide(m2) === 2;
+        // ⭐ 2.0.5 — A COR DO NÚMERO AQUI É A MESMA DA CHAVE. Relato do dono, olhando "Seus
+        // últimos resultados": _"quando eu disse como os placares devem aparecer cobrimos todas
+        // as situações. por que nos seus últimos resultados está diferente? sem número perdedor
+        // vermelho?"_. Ele está certo: a regra da 1.9.112 (tarja diz o ESTADO, número diz QUEM
+        // GANHOU) foi aplicada no card da CHAVE (renderMatchCard) e este bloco da dashboard é
+        // OUTRO renderizador — ficou com o perdedor em CINZA. É a mesma doença das duas pontas.
+        // Cânone, na letra do dono: sem resultado = tudo cinza; com resultado = vencedor VERDE,
+        // perdedor VERMELHO. O cinza só sobra pra jogo sem vencedor resolvido (ou empate).
+        var _temVencedor2 = !m2.draw && window._matchWinnerSide(m2) != null;
+        var _corPlacar2 = function (venceu) {
+          return venceu ? '#4ade80' : (_temVencedor2 ? '#f87171' : '#94a3b8');
+        };
 
         // v1.9.99: posição final do usuário no torneio (quando a participação já
         // está definida em t.classification — ex.: vice = 2º). Mostrada abaixo do
@@ -2436,7 +2448,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p1IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(1)+'</div>' : '';
+                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+_corPlacar2(p1IsWinner)+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(1)+'</div>' : '';
                 return ph+sc3;
               })() +
             '</div>' +
@@ -2453,7 +2465,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+(p2IsWinner?'#4ade80':'#94a3b8')+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(2)+'</div>' : '';
+                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+_corPlacar2(p2IsWinner)+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(2)+'</div>' : '';
                 return ph+sc4;
               })() +
             '</div>' +

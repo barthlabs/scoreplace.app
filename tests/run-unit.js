@@ -1098,6 +1098,9 @@ const SUITES = [
   // O motor ao vivo IGNORAVA a escolha 5-5/6-6 (gatilho `g-1` cravado) e "prorrogar" nem
   // existia no formato do torneio — o motor lia `scoring.tieRule` e ninguém escrevia.
   'tests/empate-do-set-e-do-organizador.test.js',
+  // O dono apareceu nos DOIS times da mesma partida casual. A sala guarda quem está nela em
+  // TRÊS listas que dessincronizam, e o guarda de "já entrei?" olhava só uma.
+  'tests/casual-mesma-pessoa-um-slot-so.test.js',
   // 1.9.113 — o icone do jogador saia como circulo mudo e igual pra todos: ele
   // nasce do NOME, e quem tem uid com perfil nao resolvido nasce sem nome (1.7.79).
   // A hidratacao trocava o texto e deixava o icone pra tras.

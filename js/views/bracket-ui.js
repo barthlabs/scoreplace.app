@@ -12078,6 +12078,24 @@ window._openCasualMatch = function(restoreOpts) {
     return !!(lp && lp.uid && _participantGenders[lp.uid]);
   }
   // Restore participants from the existing Firestore doc when re-entering after reload
+  // ⭐ 2.0.5 — A MESMA PESSOA NUNCA OCUPA DOIS SLOTS. O dono apareceu nos DOIS times da
+  // partida casual (print de 21/ago): slot 1 e slot 3 eram ele, e as vagas restantes viraram
+  // "Jogador 2"/"Jogador 4". Os slots saem desta lista.
+  // A origem foi consertada no joinCasualMatch (o guarda de "já entrei?" olhava só
+  // `playerUids`, e a sala guarda a mesma informação em TRÊS listas que dessincronizam).
+  // Aqui é a outra ponta: a sala que JÁ está com a pessoa repetida precisa mostrar certo
+  // AGORA, sem esperar uma nova entrada. Quem não tem conta (sem uid) nunca é filtrado — ali
+  // a identidade é o nome, e dois convidados homônimos são duas pessoas.
+  function _dedupPorUid(lista) {
+    if (!Array.isArray(lista)) return lista;
+    var vistos = {};
+    return lista.map(function (p) {
+      if (!p || !p.uid) return p;
+      if (vistos[p.uid]) return null;       // null = slot livre, igual a quem saiu
+      vistos[p.uid] = true;
+      return p;
+    });
+  }
   var _lobbyParticipants = (restoreOpts && Array.isArray(restoreOpts.participants) && restoreOpts.participants.length > 0)
     ? restoreOpts.participants
     : (cu ? [{ uid: cu.uid, displayName: cu.displayName || '', photoURL: cu.photoURL || '', joinedAt: new Date().toISOString() }] : []);
@@ -14868,9 +14886,9 @@ window._openCasualMatch = function(restoreOpts) {
               var _op = _lobbyParticipants[_psi];
               _preserved[_psi] = (_op && _op.uid && _newByUid[_op.uid]) ? _op : null;
             }
-            _lobbyParticipants = _preserved;
+            _lobbyParticipants = _dedupPorUid(_preserved);
           } else {
-            _lobbyParticipants = newParts;
+            _lobbyParticipants = _dedupPorUid(newParts);
           }
           _loadMissingGenders();
           if (countDecreased) {

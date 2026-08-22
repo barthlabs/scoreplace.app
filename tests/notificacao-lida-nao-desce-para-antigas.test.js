@@ -102,6 +102,37 @@ ok(!/var _unread = notifs\.filter\(function\(n\)\{ return !n\.read; \}\)/.test(S
   'G3. o agrupamento pelo `read` do instante não voltou');
 
 console.log('\n🔔 NOTIFICAÇÃO — lida na tela não desce pro bloco das antigas');
+// ── 2.0.5 · QUEM DIZ "É VISITA NOVA" É O ROTEADOR ───────────────────────────
+// A função pura acima continuou certa o tempo todo — e mesmo assim o defeito VOLTOU na tela.
+// Relato do dono: _"quando deixamos notificacoes na tela por 5s e elas sao consideradas
+// lidas, esta de novo pulando para o final"_.
+// A causa não era o agrupamento: era o critério de RESET da sessão. "Visita nova" vinha da
+// AUSÊNCIA da bandeira de "Carregar mais" — então todo render que não fosse paginação zerava
+// a sessão. E o ouvinte em tempo real (store.js) re-renderiza a tela a cada mudança de
+// documento, INCLUSIVE a gravação que os 5s de permanência fazem ao marcar como lida.
+// Ou seja: marcar como lida disparava o render que apagava a memória de "estava não lida".
+(function () {
+  const fs2 = require('fs'), path2 = require('path');
+  const view = fs2.readFileSync(path2.join(__dirname, '..', 'js/views/notifications-view.js'), 'utf8');
+  const router = fs2.readFileSync(path2.join(__dirname, '..', 'js/router.js'), 'utf8');
+  const store = fs2.readFileSync(path2.join(__dirname, '..', 'js/store.js'), 'utf8');
+
+  ok(/var _visitaNova = window\._notifNovaVisita === true;/.test(view),
+    'a tela lê a visita do ROTEADOR, não deduz da ausência de bandeira');
+  ok(!/var _visitaNova = !window\._notifKeepLimit;/.test(view),
+    'e o critério antigo (qualquer render = visita nova) não voltou');
+  ok(/window\._notifNovaVisita = true;\s*\n\s*renderNotifications\(viewContainer\);/.test(router),
+    'só a ENTRADA pela rota marca visita nova');
+  ok(/window\._notifNovaVisita = false;/.test(view), 'e a marca é consumida uma vez só');
+
+  // O ouvinte em tempo real re-renderiza — e NÃO pode marcar visita nova.
+  const trecho = store.slice(Math.max(0, store.indexOf("hash === '#notifications'") - 200),
+                             store.indexOf("hash === '#notifications'") + 400);
+  ok(/renderNotifications\(vc\)/.test(trecho) && !/_notifNovaVisita/.test(trecho),
+    'o refresh do ouvinte re-renderiza SEM marcar visita nova — é a mesma visita');
+})();
+
 console.log('   ' + pass + ' ok, ' + fail + ' falhas');
 if (fail) { fails.forEach(f => console.log('   ✗ ' + f)); process.exit(1); }
+
 console.log('   ✅ tudo verde');

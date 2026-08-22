@@ -482,6 +482,13 @@ function initRouter() {
         renderExplore(viewContainer);
         break;
       case 'notifications':
+        // ⭐ 2.0.5: ENTRAR na tela é o único gesto que reclassifica as notificações lidas.
+        // Antes, "visita nova" era deduzida da AUSÊNCIA da bandeira de "Carregar mais" — e o
+        // ouvinte em tempo real re-renderiza a tela a cada mudança de documento, INCLUSIVE a
+        // que os 5s de permanência fazem ao marcar como lida. Aquele re-render passava por
+        // visita nova, zerava a sessão e derrubava pro fim justamente o aviso que a pessoa
+        // acabava de ler. Ver project_notificacao_lida_fica_no_topo.
+        window._notifNovaVisita = true;
         renderNotifications(viewContainer);
         break;
       // 🔴 #live/<id> — assistir um placar ao vivo (modo espectador). Rota própria pra
