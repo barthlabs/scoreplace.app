@@ -1,0 +1,89 @@
+/* PESSOA NA TELA HIDRATA — nome e foto saem do PONTO ÚNICO, nunca congelados no render.
+ *
+ * Relato do dono (22/ago/2026), vendo os co-organizadores como círculos vazios e sem nome:
+ *   _"agora a merda do ícone/foto nos organizadores. pode corrigir em todos os lugares de
+ *    uma vez caralho. já é o terceiro lugar que temos que parar e corrigir"_
+ *   _"e nem nome dos organizadores aqui porra"_
+ *
+ * Ele está certo sobre o padrão: a CURA já existia e o defeito voltava porque cada tela
+ * precisava LEMBRAR de emitir os marcadores. Foram três: a chave (1.9.113), o rótulo de
+ * papel ("Co-organizador(a)"), e agora o card de organização inteiro.
+ *
+ * A DOENÇA: desde a 1.7.79 a lista nasce do UID, e quem tem perfil ainda não resolvido nasce
+ * com o nome VAZIO de propósito. Duas consequências, e as duas apareceram na tela:
+ *   · o NOME escrito no HTML congela vazio — a tela não se redesenha só porque um perfil
+ *     chegou depois;
+ *   · o ÍCONE é semeado pelo NOME, e seed vazia devolve o MESMO círculo mudo pra todo mundo.
+ *     Não é um ícone genérico: é a ausência de nome virando desenho.
+ *
+ * A CURA (`_hydrateUidNames`, store.js) preenche `[data-uid-name]`, `[data-uid-role]` e
+ * `[data-uid-avatar]` quando o perfil chega. Este teste guarda o PONTO ÚNICO que emite
+ * esses marcadores e cobra que os cards de pessoa passem por ele — pra não existir um
+ * quarto lugar.
+ */
+const fs = require('fs');
+const path = require('path');
+
+let falhas = 0;
+const ok = (nome, cond, extra) => {
+  if (cond) { console.log('  ✓ ' + nome); return; }
+  console.log('  ✗ ' + nome + (extra ? '\n      ' + extra : '')); falhas++;
+};
+const ler = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+
+console.log('──── pessoa na tela hidrata (nome + foto pelo ponto único) ────');
+
+const store = ler('js/store.js');
+const tourn = ler('js/views/tournaments.js');
+
+// ── O PONTO ÚNICO existe e tem a regra dentro ────────────────────────────────────────
+ok('existe o ponto único do avatar de pessoa (_personAvatarHtml)',
+  /window\._personAvatarHtml = function/.test(store));
+ok('existe o ponto único do nome de pessoa (_personNameHtml)',
+  /window\._personNameHtml = function/.test(store));
+ok('⛔ com uid e nome ainda não resolvido NÃO se pede ícone (seed vazia = círculo mudo)',
+  /var semNomeAinda = !nm && !!uid;[\s\S]{0,900}var src = semNomeAinda \? '' :/.test(store));
+ok('o uid viaja no próprio <img>, pra hidratação achá-lo',
+  /_personAvatarHtml[\s\S]{0,1200}data-uid-avatar="/.test(store));
+ok('e no <span> do nome',
+  /_personNameHtml[\s\S]{0,700}data-uid-name="/.test(store));
+// O encolhedor de nome lê data-maxrem/minrem do próprio span: um helper que os perdesse
+// trocaria um defeito por outro (nome vazando da caixa).
+ok('o helper do nome repassa atributos extras (o .sp-name-fit precisa dos seus)',
+  /window\._personNameHtml = function \(uid, name, css, cls, extraAttrs\)/.test(store) &&
+  /\(extraAttrs \|\| ''\) \+/.test(store));
+
+// ── A HIDRATAÇÃO cobre os três marcadores ────────────────────────────────────────────
+['data-uid-name', 'data-uid-role', 'data-uid-avatar'].forEach((attr) => {
+  ok('_hydrateUidNames varre [' + attr + ']',
+    new RegExp('_hydrateUidNames[\\s\\S]{0,2000}querySelectorAll\\(\'\\[' + attr + '\\]\'\\)').test(store));
+});
+
+// ── OS CARDS DE ORGANIZAÇÃO passam pelo ponto único ──────────────────────────────────
+// Foi exatamente aqui que a doença reapareceu pela terceira vez.
+function corpoDaFuncao(src, nome) {
+  const i = src.indexOf('function ' + nome + '(');
+  if (i < 0) return null;
+  const j = src.indexOf('\n        }', i);          // fim do bloco no nível de indentação
+  return j > i ? src.slice(i, j) : src.slice(i, i + 6000);
+}
+['_buildOrgCard', '_buildPendingOrgCard'].forEach((fn) => {
+  const corpo = corpoDaFuncao(tourn, fn);
+  ok(fn + ' existe', !!corpo);
+  ok('  → ' + fn + ' desenha o avatar pelo ponto único',
+    !!corpo && /window\._personAvatarHtml\(/.test(corpo),
+    'sem isso o círculo nasce mudo e nada o cura depois');
+  ok('  → ' + fn + ' desenha o nome pelo ponto único',
+    !!corpo && /window\._personNameHtml\(/.test(corpo),
+    'sem isso o nome congela vazio no render');
+  // ⛔ E não pode sobrar o caminho velho dentro da MESMA função: um <img> semeado por nome
+  // convive com o novo sem dar erro, e a tela volta a mostrar círculo mudo em silêncio.
+  ok('  → ' + fn + ' não tem mais <img> semeado pelo NOME',
+    !!corpo && !/<img src="' \+ _oPhoto/.test(corpo),
+    'sobrou o avatar antigo (seed pelo nome) — é o que produzia o círculo igual pra todos');
+});
+
+console.log(falhas === 0
+  ? '\n✅ pessoa-na-tela-hidrata: OK'
+  : '\n❌ pessoa-na-tela-hidrata: ' + falhas + ' falha(s)');
+process.exit(falhas === 0 ? 0 : 1);

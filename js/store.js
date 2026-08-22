@@ -4841,6 +4841,57 @@ window._avatarUrl = function(name, size) {
 // invés dessa porcaria". Detecta qualquer URL dicebear.com como fallback,
 // porque mesmo as variações de iniciais antigas precisam re-derivar do nome
 // atual (caso usuário tenha mudado nome desde o save).
+// ⭐ O <img> DE UMA PESSOA — PONTO ÚNICO. Toda tela que desenha gente usa isto.
+//
+// POR QUE EXISTE (relato do dono, 22/ago/2026, ao ver os co-organizadores como
+// círculos vazios e sem nome): _"pode corrigir em todos os lugares de uma vez
+// caralho. já é o terceiro lugar que temos que parar e corrigir"_. E ele tem razão:
+// a cura já existia — `_hydrateUidNames` preenche `[data-uid-name]`,
+// `[data-uid-role]` e `[data-uid-avatar]` quando o perfil chega —, mas cada tela
+// precisava LEMBRAR de emitir os marcadores. Quem esquecia herdava a mesma doença.
+//
+// A DOENÇA, em uma frase: desde a 1.7.79 a lista nasce do UID, e quem tem perfil
+// ainda não resolvido nasce com nome VAZIO de propósito. Um avatar semeado por nome
+// vazio devolve o MESMO círculo mudo pra todo mundo — não é ícone genérico, é a
+// ausência de nome virando desenho. E o nome, escrito direto no HTML, congela vazio
+// pra sempre, porque a tela não se redesenha só por isso.
+//
+// A REGRA: com uid e nome ainda não resolvido, NÃO se pede ícone nenhum — melhor sem
+// ícone do que com um errado. O marcador viaja no próprio <img> e a hidratação cura.
+// [[feedback_rotulo_por_perfil_nunca_congelado_no_render]] · [[feedback_unify_dual_entry_points]]
+window._personAvatarHtml = function (uid, name, css, extraAttrs) {
+    var nm = String(name || '');
+    var semNomeAinda = !nm && !!uid;
+    var foto = null;
+    try {
+        var perfil = uid && window._userProfileCache && window._userProfileCache[uid];
+        if (perfil && perfil.photoURL) foto = perfil.photoURL;
+        if (!foto && nm && window._playerPhotoCache) {
+            var c = window._playerPhotoCache[nm.toLowerCase()];
+            if (c && String(c).indexOf('dicebear.com') === -1) foto = c;
+        }
+    } catch (e) { foto = null; }
+    // sem nome AINDA → src vazio (sem círculo mudo); a hidratação preenche pelo uid
+    var src = semNomeAinda ? '' : window._profileAvatarUrl(nm, foto, 48);
+    var marcador = uid ? (' data-uid-avatar="' + window._safeHtml(String(uid)) + '"') : '';
+    return '<img src="' + window._safeHtml(src) + '"' + marcador +
+        ' data-player-name="' + window._safeHtml(nm) + '"' +
+        (extraAttrs || '') + ' style="' + (css || '') + '" />';
+};
+
+// O <span> do NOME de uma pessoa, com o marcador que a hidratação cura. Mesmo motivo
+// do avatar acima: nome escrito no render congela vazio quando o perfil não chegou.
+window._personNameHtml = function (uid, name, css, cls, extraAttrs) {
+    var nm = String(name || '');
+    // ⚠️ `extraAttrs` existe por causa do `.sp-name-fit`: o encolhedor de nome lê
+    // `data-maxrem`/`data-minrem` do PRÓPRIO span. Um helper que os perdesse trocaria um
+    // defeito por outro — o nome voltaria a vazar da caixa. [[project_name_fit_box_canonical]]
+    return '<span' + (cls ? ' class="' + cls + '"' : '') +
+        (uid ? ' data-uid-name="' + window._safeHtml(String(uid)) + '"' : '') +
+        (extraAttrs || '') +
+        ' style="' + (css || '') + '">' + window._safeHtml(nm) + '</span>';
+};
+
 window._profileAvatarUrl = function(name, photoURL, size) {
     if (photoURL && typeof photoURL === 'string' && photoURL.indexOf('dicebear.com') === -1) {
         return photoURL;

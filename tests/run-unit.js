@@ -1142,6 +1142,13 @@ const SUITES = [
   // nasce do NOME, e quem tem uid com perfil nao resolvido nasce sem nome (1.7.79).
   // A hidratacao trocava o texto e deixava o icone pra tras.
   'tests/icone-do-jogador-hidrata-com-o-nome.test.js',
+  // O MESMO defeito, terceira encarnação: os cards de ORGANIZAÇÃO desenhavam nome e foto
+  // congelados no render. Com o perfil ainda não resolvido o nome nasce vazio, o avatar
+  // semeado por nome vazio vira o MESMO círculo mudo pra todo mundo, e nada cura depois.
+  // A cura já existia (_hydrateUidNames); faltava cada tela LEMBRAR de emitir o marcador.
+  // Agora há um PONTO ÚNICO (_personAvatarHtml/_personNameHtml) e este teste cobra que os
+  // cards de pessoa passem por ele — pra não existir um quarto lugar.
+  'tests/pessoa-na-tela-hidrata.test.js',
 ];
 
 let failed = [];

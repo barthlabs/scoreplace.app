@@ -3642,7 +3642,13 @@ function renderTournaments(container, tournamentId = null) {
           // não pode apagá-lo — mesma decisão dos chips de quem ficou de fora (1.6.93).
           var _orgFiltro = ' data-players="' + window._safeHtml(String(name || '') + ' ' + String(role || '')) + '" data-my-match="1"';
           return '<div class="sp-org-card"' + _tapAttrs + _orgFiltro + ' style="box-sizing:border-box;position:relative;' + (isTapPicker ? 'cursor:pointer;' : '') + 'display:flex;align-items:center;gap:8px;padding:8px 12px;' + bgStyle + 'border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
-            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);" />' +
+            // ⭐ AVATAR PELO PONTO ÚNICO (_personAvatarHtml). Antes o ícone era semeado
+            // pelo NOME e a foto vinha de `_playerPhotoCache[name]` — com o perfil ainda
+            // não resolvido o nome é VAZIO, a seed vazia devolvia o MESMO círculo mudo
+            // pra todas as co-organizadoras, e nada curava depois. Agora o uid viaja no
+            // <img> e `_hydrateUidNames` preenche foto e nome quando o perfil chega.
+            window._personAvatarHtml(roleUid, name,
+              'width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);') +
             '<div style="flex:1;min-width:0;">' +
               // v1.8.79: a coroa fica COLADA à direita do nome (pedido do dono). O box do
               // nome tinha `flex:1` e engolia toda a sobra da linha, então a coroa era
@@ -3653,7 +3659,11 @@ function renderTournaments(container, tournamentId = null) {
               // mede pra encolher a fonte); só mudou como ele reparte a linha.
               '<div style="display:flex;align-items:center;gap:4px;">' +
                 '<div style="flex:0 1 auto;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
-                  '<span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' +
+                  // e o NOME pelo mesmo caminho: escrito no render, ele CONGELAVA vazio
+                  // (a tela não se redesenha só porque um perfil chegou depois).
+                  window._personNameHtml(roleUid, name,
+                    'font-weight:700;color:var(--text-bright);white-space:nowrap;',
+                    'sp-name-fit', ' data-maxrem="0.82" data-minrem="0.55"') +
                 '</div>' + _starSpan + '</div>' +
               '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;"' +
                 (roleUid && roleM && roleF
@@ -3670,7 +3680,7 @@ function renderTournaments(container, tournamentId = null) {
         // do organizador (onde a pessoa ficará se aceitar), já com a tag "Pendente de
         // aceite". Substitui o antigo "só na lista de inscritos". canRemove (criador)
         // mostra ✕ pra cancelar o convite.
-        function _buildPendingOrgCard(name, removeKey, canRemove) {
+        function _buildPendingOrgCard(name, removeKey, canRemove, uidOrEmail) {
           var _oSeed = encodeURIComponent(name || '?');
           var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=ffe7b3,ffd5dc,ffdfbf';
           var _lc = (name || '').toLowerCase();
@@ -3681,9 +3691,14 @@ function renderTournaments(container, tournamentId = null) {
           // mesmo jeito (ver _buildOrgCard).
           var _pendFiltro = ' data-players="' + window._safeHtml(String(name || '') + ' co-organizador pendente') + '" data-my-match="1"';
           return '<div class="sp-org-card sp-org-pending"' + _pendFiltro + ' style="box-sizing:border-box;position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(251,191,36,0.08);border:2px dashed rgba(251,191,36,0.6);border-radius:10px;flex:1 1 13.5rem;max-width:100%;height:58px;overflow:hidden;">' +
-            '<img src="' + _oPhoto + '" onerror="this.onerror=null;this.src=\'' + _oFallback + '\'" data-player-name="' + window._safeHtml(name) + '" style="width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;" />' +
+            // mesmo ponto único do card ativo — o convidado pendente também é uid+perfil
+            window._personAvatarHtml(uidOrEmail, name,
+              'width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(251,191,36,0.5);opacity:0.85;') +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="height:1.15rem;overflow:hidden;display:flex;align-items:center;"><span class="sp-name-fit" data-maxrem="0.82" data-minrem="0.55" style="font-weight:700;color:var(--text-bright);white-space:nowrap;">' + window._safeHtml(name) + '</span>' + '</div>' +
+              '<div style="height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
+                window._personNameHtml(uidOrEmail, name,
+                  'font-weight:700;color:var(--text-bright);white-space:nowrap;',
+                  'sp-name-fit', ' data-maxrem="0.82" data-minrem="0.55"') + '</div>' +
               '<div style="font-size:0.6rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.3px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⭐ Pendente de aceite</div>' +
             '</div>' +
             _rmBtn +
@@ -3790,7 +3805,7 @@ function renderTournaments(container, tournamentId = null) {
             } else if (ch.status === 'pending') {
               // v2.8.48: convidado pendente aparece AQUI (box âmbar pontilhado, ao
               // lado do organizador), não mais só na lista de inscritos.
-              _orgCards += _buildPendingOrgCard(_chName, ch.uid || ch.email || '', _isCreatorNow);
+              _orgCards += _buildPendingOrgCard(_chName, ch.uid || ch.email || '', _isCreatorNow, ch.uid || '');
             }
           });
         }

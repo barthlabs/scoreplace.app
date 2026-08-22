@@ -90,6 +90,13 @@ console.log('\n== Texto nunca corta ==');
     // pega a tag inteira que contém a classe
     const re = /<[a-zA-Z][^>]*sp-name-fit[^>]*>/g;
     let m; while ((m = re.exec(src))) usos.push({ arq: path.relative(ROOT, f), tag: m[0] });
+    // ⭐ E o uso pelo PONTO ÚNICO. Desde que nome e foto de pessoa passaram a sair de
+    // `_personNameHtml` (22/ago/2026, pra o card de organização parar de congelar nome
+    // vazio), a classe não aparece mais como literal nessas telas — ela vai no argumento.
+    // Contar só a marcação literal fazia o piso CAIR sem que nenhum uso tivesse sumido.
+    // Os limites continuam sendo cobrados: eles viajam em `extraAttrs`, no mesmo trecho.
+    const reHelper = /_personNameHtml\([\s\S]{0,400}?'sp-name-fit'[\s\S]{0,200}?\)/g;
+    let h; while ((h = reHelper.exec(src))) usos.push({ arq: path.relative(ROOT, f), tag: h[0] });
   });
   // CATRACA: o número só pode CRESCER. O helper foi construído na v1.2.30 e ficou em
   // 2 usos porque nada cobrava; o piso aqui impede que alguém o remova em silêncio, e
