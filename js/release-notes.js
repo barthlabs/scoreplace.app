@@ -67,7 +67,8 @@ window._RELEASE_NOTES_HTML = (function () {
     //   200 (2.0)   — subiu ANTES do vencedor por uid, do texto do tie-break e do ✕ na linha.
     //   201 (2.0.1) — tem os três acima, mas NÃO tem prorrogar × tie-break nem o 7-7.
     //   202 (2.0.2) — abortada antes de subir: faltava a classificação por uid.
-    //   203 (2.0.3) — a leva completa. É esta que o dono aprova.
+    //   203 (2.0.3) — placar + classificação por uid; versão 2.0.3 criada e anexada na Apple.
+    //   204 (2.0.4) — + a casual que parou de prender e a cor dos times. É esta que vale.
     // Ordem do dono (21/ago/2026): "vamos alinhar web/apple versao 2.0". O bloco é CURTO de
     // propósito: o ciclo 2.0 começa agora, e repetir aqui os destaques da v1.9 (logo abaixo,
     // e que o usuário do site já leu) seria anunciar duas vezes a mesma entrega.
