@@ -556,3 +556,27 @@ window._isPlacedInDraw = function (t, uid) {
   (Array.isArray(t.matches) ? t.matches : []).forEach(function (m) { if (m) { olha(m.team1Uids); olha(m.team2Uids); } });
   return achou;
 };
+
+// Onde a pessoa está COLOCADA no sorteio — rodada, grupo e o NOME como está gravado no
+// slot. O fluxo de W.O. (`_ligaApplyWo`) trabalha por (roundIndex, groupName, absentName),
+// então quem sai depois do sorteio precisa traduzir o uid pra essas três coisas.
+//
+// O nome sai do SLOT, não do perfil: é ele que `_ligaApplyWo` casa contra `group.players`
+// pra achar a vaga. Perfil renomeado depois do sorteio não pode desalinhar os dois.
+window._acharVagaNoSorteio = function (t, uid) {
+  if (!t || !uid) return null;
+  var rounds = Array.isArray(t.rounds) ? t.rounds : [];
+  for (var ri = 0; ri < rounds.length; ri++) {
+    var gs = (rounds[ri] && Array.isArray(rounds[ri].monarchGroups)) ? rounds[ri].monarchGroups : [];
+    for (var gi = 0; gi < gs.length; gi++) {
+      var g = gs[gi];
+      if (!g || !Array.isArray(g.playersUids)) continue;
+      var k = g.playersUids.indexOf(uid);
+      if (k === -1) continue;
+      var nome = (Array.isArray(g.players) && g.players[k]) ? String(g.players[k]) : '';
+      if (!nome) return null;                 // sem nome no slot o W.O. não acha a vaga
+      return { roundIndex: ri, groupName: g.name, nome: nome, indice: k };
+    }
+  }
+  return null;
+};

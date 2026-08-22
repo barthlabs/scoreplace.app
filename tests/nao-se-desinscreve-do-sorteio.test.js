@@ -131,6 +131,34 @@ ok('o caminho otimista da desinscrição consulta _isPlacedInDraw',
 ok('  → e DESATIVA em vez de remover quando ela está colocada',
   /_colocada[\s\S]{0,400}ligaActive: false/.test(cliente));
 
+// ── E A VAGA NÃO FICA ABERTA: o suplente entra pela PROPORÇÃO ────────────────────────
+// Ordem do dono (22/ago/2026): _"a próxima pessoa da lista de espera que mantenha a
+// proporção travada deve automaticamente ocupar o lugar deixado pela Juliana Reis"_.
+// Sair depois do sorteio É W.O. — e o W.O. já escolhe o suplente por distância da
+// proporção, põe no elenco e no slot, tira da espera e notifica. Aqui se trava que o
+// caminho da desinscrição CHEGA nesse fluxo, em vez de reimplementar a régua.
+ok('a desinscrição pós-sorteio roteia pro fluxo de W.O. (que chama o suplente)',
+  /_ligaApplyWo\(t\.id, _vaga\.roundIndex, _vaga\.groupName, _vaga\.nome\)/.test(cliente));
+ok('  → e traduz o uid em (rodada, grupo, nome do slot) antes de chamar',
+  /_acharVagaNoSorteio\(t, user\.uid\)/.test(cliente));
+
+// O tradutor de vaga: acha a colocação e devolve o nome COMO ESTÁ NO SLOT (é ele que o
+// W.O. casa contra group.players; perfil renomeado depois não pode desalinhar os dois).
+const CONFRA_M = {
+  rounds: [{ monarchGroups: [
+    { name: 'R1 Grupo A', playersUids: ['x1', 'x2'], players: ['X Um', 'X Dois'] },
+    { name: 'R1 Grupo M', playersUids: ['a', JU, 'c', 'd'], players: ['Marco', 'Juliana Reis', 'Kelly Barth', 'Marilia Melhem'] }
+  ] }]
+};
+const vaga = window._acharVagaNoSorteio(CONFRA_M, JU);
+ok('acha a vaga: rodada, grupo e índice', !!vaga && vaga.roundIndex === 0 &&
+  vaga.groupName === 'R1 Grupo M' && vaga.indice === 1, JSON.stringify(vaga));
+ok('  → e o nome vem do SLOT, não do perfil', !!vaga && vaga.nome === 'Juliana Reis');
+ok('quem não está em grupo nenhum não tem vaga',
+  window._acharVagaNoSorteio(CONFRA_M, 'nao-existe') === null);
+ok('slot sem nome não vira vaga (o W.O. não teria como achá-la)',
+  window._acharVagaNoSorteio({ rounds: [{ monarchGroups: [{ name: 'G', playersUids: [JU], players: [''] }] }] }, JU) === null);
+
 console.log(falhas === 0
   ? '\n✅ nao-se-desinscreve-do-sorteio: OK'
   : '\n❌ nao-se-desinscreve-do-sorteio: ' + falhas + ' falha(s)');

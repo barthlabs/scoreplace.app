@@ -1341,11 +1341,27 @@ window.deenrollCurrentUser = function (tId) {
                 // senão o otimista some e o onSnapshot traz de volta). DUPLA: quem sai a DESFAZ
                 // e o parceiro fica SOLO ("sem dupla"). Iterar limpa duplicatas e não deixa slot
                 // com o uid de quem saiu — senão re-inscrever vira no-op.
-                // ⛔ JÁ COLOCADA NO SORTEIO → não remove, DESATIVA (mesmo critério da CF).
-                // Sair de `participants` quem ocupa vaga deixa a vaga sem dono e a contagem
-                // ímpar — foi o caso da Juliana Reis no Confra. Ver `_isPlacedInDraw`.
+                // ⛔ JÁ COLOCADA NO SORTEIO → sair É W.O., e o W.O. chama o suplente.
+                //
+                // Ordem do dono (22/ago/2026): _"a próxima pessoa da lista de espera que
+                // mantenha a proporção travada deve automaticamente ocupar o lugar deixado
+                // pela Juliana Reis"_ — e isso o fluxo de W.O. JÁ faz inteiro: marca 0 pts
+                // na rodada, desativa quem saiu, escolhe o suplente por `_ligaNextSuplente`
+                // (que ordena pela DISTÂNCIA da proporção, não pela fila crua), põe o
+                // suplente no elenco E no slot do grupo, tira da espera e notifica todo
+                // mundo. Reimplementar aqui seria a segunda régua de sempre.
+                //
+                // Sair de `participants` quem ocupa vaga deixava a vaga sem dono e a
+                // contagem ímpar — foi o caso da Juliana no Confra.
+                // [[project_wo_substituicao]] · [[feedback_unify_dual_entry_points]]
                 var _colocada = (typeof window._isPlacedInDraw === 'function')
                     && window._isPlacedInDraw(t, user.uid);
+                var _vaga = (_colocada && typeof window._acharVagaNoSorteio === 'function')
+                    ? window._acharVagaNoSorteio(t, user.uid) : null;
+                if (_vaga && typeof window._ligaApplyWo === 'function') {
+                    window._ligaApplyWo(t.id, _vaga.roundIndex, _vaga.groupName, _vaga.nome);
+                    return;   // o fluxo de W.O. commita, notifica e re-renderiza sozinho
+                }
                 if (_colocada) {
                     t.participants = _savedParticipants.map(function (p) {
                         if (!p || typeof p !== 'object') return p;
