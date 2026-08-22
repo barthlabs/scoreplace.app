@@ -24,8 +24,10 @@
  * aparecer entao na versao web" → "nas versoes nativas o botao nao deve sequer aparecer".
  *
  * INVARIANTE: nativo nunca mostra; e só aparece quando existe ficha PUBLICADA pro
- * aparelho. `on` é MEDIÇÃO (Apple 200, Play 404 em 16/ago) — mandar pra 404 é pior que
- * não oferecer nada, e no convite IMPRESSO não há correção depois.
+ * aparelho. `on` é MEDIÇÃO — mandar pra 404 é pior que não oferecer nada, e no convite
+ * IMPRESSO não há correção depois. As DUAS lojas estão no ar desde 22/ago/2026, então
+ * hoje iPhone e Android recebem o botão; o que este teste guarda é o MECANISMO, não a
+ * medida do dia: a loja desligada tem que continuar sumindo (caso sintético abaixo).
  */
 const fs = require('fs');
 const path = require('path');
@@ -144,23 +146,25 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ok(chama({ ua: UA_DESKTOP, platform: 'MacIntel', touch: 5 }).indexOf('apps.apple.com') !== -1,
     'iPad (que se declara MacIntel) é reconhecido pelo toque');
 
-  // 3. Android com a Play em 404 NÃO mostra — mandar pra página inexistente é pior
-  ok(chama({ ua: UA_ANDROID }) === '', 'web no Android NÃO mostra enquanto a Play estiver desligada (404)');
-  // e volta sozinho quando a ficha sair — é a "uma linha"
-  const comPlay = chama({
+  // 3. web no Android: a ficha da Play saiu em 22/ago/2026 → aparece, apontando pra ela
+  const androidHtml = chama({ ua: UA_ANDROID });
+  ok(androidHtml.indexOf('play.google.com') !== -1, 'web no Android aponta pra ficha da Google Play');
+  ok(/Google Play/.test(androidHtml), 'o rótulo nomeia a loja de destino');
+  // e SOME sozinho se a ficha cair — é o mecanismo, e é ele que este teste protege.
+  // Sintético de propósito: se amanhã a medida mudar, o caso acima muda e este NÃO.
+  const semPlay = chama({
     ua: UA_ANDROID,
-    lojas: { apple: { on: true, nome: 'App Store', url: 'https://apps.apple.com/x' },
-             play: { on: true, nome: 'Google Play', url: 'https://play.google.com/y' } }
+    lojas: { apple: { on: true,  nome: 'App Store',   url: 'https://apps.apple.com/x' },
+             play:  { on: false, nome: 'Google Play', url: 'https://play.google.com/y' } }
   });
-  ok(comPlay.indexOf('play.google.com') !== -1,
-    'ligando play.on o Android passa a apontar pra Play — sem tocar em mais nada');
+  ok(semPlay === '',
+    'desligando play.on o Android para de mostrar o botão — nada de mandar pra 404');
 
   // 4. desktop fica de fora: não há app de loja pra rodar ali
   ok(chama({ ua: UA_DESKTOP }) === '', 'desktop não mostra (a ficha no navegador do computador não instala nada)');
 
-  // 5. a medição de hoje, travada: Play desligada
-  ok(/play:\s*\{\s*on:\s*false/.test(mLojas[0]),
-    'a Play está DESLIGADA em SP_LOJAS (medido: 404 em 16/ago). Ligar exige conferir o 200 antes');
+  // 5. a medição de hoje, travada: as DUAS no ar (22/ago/2026)
+  ok(/play:\s*\{\s*on:\s*true/.test(mLojas[0]), 'a Play está LIGADA em SP_LOJAS (ficha aberta no Brasil, 22/ago)');
   ok(/apple:\s*\{\s*on:\s*true/.test(mLojas[0]), 'a Apple está ligada (medido: 200)');
 
   // 6. fonte ÚNICA: o convite impresso lê a MESMA lista
@@ -194,7 +198,7 @@ console.log('\n== Notificação lida por permanência + botão da loja ==');
   ok(/isNativePlatform\(\)\) return '';/.test(badges),
     'no app NATIVO não aparece selo (não há o que baixar)');
   ok(/l\.on && l\.url && l\.badge/.test(badges),
-    'cada selo depende de `on` — hoje isso mantém a Play fora, porque a ficha dá 404');
+    'cada selo depende de `on` — é o filtro que tira da tela a loja cuja ficha caiu');
   ok(/l\.badge/.test(badges) && !/<svg/.test(badges),
     'usa o ARQUIVO oficial da loja, não desenho nosso (as duas lojas proíbem refazer a arte)');
   ['assets/badge-app-store.svg', 'assets/badge-google-play.png'].forEach(function (f) {

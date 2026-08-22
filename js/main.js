@@ -1915,11 +1915,11 @@ window._installButtonHtml = function (opts) {
 // de ESTRATÉGIA: o atalho PWA deixou de ser destino e virou CONCORRENTE do app de
 // verdade — ocupava a linha nobre da landing oferecendo o pior dos dois caminhos.
 //
-// ⚠️ CADA SELO SÓ APARECE COM A FICHA NO AR (`SP_LOJAS[x].on`). MEDIDO HOJE
-// (20/ago): Apple responde 200, Play responde 404 — a produção foi liberada mas a
-// ficha ainda não está publicada. Então hoje sai só o selo da Apple, e o da Play
-// entra SOZINHO no dia em que `play.on` virar. Selo levando pra 404 é pior que
-// selo nenhum.
+// ⚠️ CADA SELO SÓ APARECE COM A FICHA NO AR (`SP_LOJAS[x].on`). Desde 22/ago/2026 as
+// DUAS estão no ar, então saem os dois, lado a lado. A regra continua valendo pra
+// frente e é o motivo de isto ser um filtro e não uma lista fixa: se uma ficha cair,
+// desliga o `on` dela em store.js e o selo some daqui sozinho. Selo levando pra 404 é
+// pior que selo nenhum.
 // ⚠️ NATIVO não mostra: quem já está dentro do app não tem o que baixar.
 // ⚠️ Aqui o DESKTOP entra (diferente do _storeButtonHtml logo abaixo): selo é
 // informação — "existe app pra isso" —, não um botão que promete instalar agora.

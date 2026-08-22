@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.7';
+window.SCOREPLACE_VERSION = '2.0.8';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2085,11 +2085,19 @@ window.SCOREPLACE_PLATFORM = window.SCOREPLACE_PLATFORM || 'web';
 // mudança — e a mudança aqui é justamente a que vai acontecer (a Play sai do teste
 // fechado). Ligando `on: true` num lugar só, o selo e o botão aparecem juntos.
 //
-// ⚠️ `on` É MEDIÇÃO, NÃO PALPITE. Conferido em 16/ago/2026: a ficha da Apple responde
-// HTTP 200 (pública) e `play.google.com/store/apps/details?id=app.scoreplace` responde
-// **404** — o app segue em teste fechado (o Play exige mais testadores pra liberar
-// produção). Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
-// impresso não tem correção depois. Antes de virar `play.on` pra true, conferir o 200.
+// ⚠️ `on` É MEDIÇÃO, NÃO PALPITE. AS DUAS ESTÃO NO AR desde 22/ago/2026: a ficha da
+// Apple responde HTTP 200, e a da Play o DONO abriu no celular dele, no Brasil, e viu a
+// ficha normal. Mandar alguém pra uma página 404 é pior que não oferecer nada, e no papel
+// impresso não tem correção depois — a régua continua sendo essa pra frente.
+//
+// ⚠️ ARMADILHA DE REGIÃO — ela quase segurou a virada, e vai reaparecer em quem tentar
+// reconferir isto daqui a seis meses. `curl` a partir de um IP FORA do Brasil recebe
+// **404** na ficha da Play mesmo com `&gl=BR&hl=pt_BR`: o Play 404a por país e NÃO
+// distingue "não existe" de "não está disponível aqui". A ficha da Apple não faz isso
+// (responde 200 de qualquer lugar), então o contraste entre as duas engana. Prova de que
+// o método funcionava e mesmo assim dava 404: `com.whatsapp` respondeu 200 no mesmo
+// comando, no mesmo minuto. Conclusão prática: curl de fora serve pra CONFIRMAR um 200,
+// nunca pra concluir um 404. A medida que vale é a ficha aberta de dentro do país.
 // ── SEQUÊNCIA ATUAL: TODO JOGO CONTA, NÃO SÓ O LETZPLAY (v1.8.97) ───────────
 // Relato do dono: "minha ultima sequencia é 1V e esta marcando 2".
 // MEDIDO no histórico dele: 13/08 vitória, e as DUAS antes derrotas → 1V. O card
@@ -2216,11 +2224,13 @@ window._isPartidaEmRajada = function (rec) {
 // Isto nasceu de um teste ficando vermelho (`notificacao-lida-e-botao-da-loja`): ligar a
 // Play pro convite ia ligar JUNTO o botão do app, efeito que o dono não pediu. Ele pediu
 // os dois SELOS no impresso (19/ago/2026); o botão continua esperando o 200.
-// ⚠️ `play.on` só vira true quando a ficha responder 200 — o pedido de produção está EM
-// ANÁLISE (enviado sábado, prazo ~7 dias). Conferir antes de ligar.
+// ✅ 22/ago/2026: a produção da Play SAIU e `play.on` virou. Com as duas ligadas, as três
+// bocas passam a mostrar as duas lojas de uma vez — o selo da landing, o botão "Baixar na
+// loja" (que no Android para de sumir) e o selo do convite impresso. Era o objetivo do
+// desenho: uma chave, três lugares.
 window.SP_LOJAS = {
   apple: { on: true,  selo: true, nome: 'App Store',   glifo: '',  badge: '/assets/badge-app-store.svg',   url: 'https://apps.apple.com/br/app/scoreplace/id6789757489' },
-  play:  { on: false, selo: true, nome: 'Google Play', glifo: '▶', badge: '/assets/badge-google-play.png', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
+  play:  { on: true,  selo: true, nome: 'Google Play', glifo: '▶', badge: '/assets/badge-google-play.png', url: 'https://play.google.com/store/apps/details?id=app.scoreplace' }
 };
 
 // Identidades de teste/dev — recebem flags `test:true` antes de todo mundo.

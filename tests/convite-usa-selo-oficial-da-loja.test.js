@@ -33,10 +33,13 @@ ok(/play:[^\n]*badge:/.test(bloco), 'SP_LOJAS.play tem `badge`');
 // ⚠️ `on` e `selo` são perguntas DIFERENTES e não podem voltar a ser uma só:
 //   `on`   = loja no ar → governa o botão "Baixar na loja" DENTRO do app;
 //   `selo` = mostrar o selo no CONVITE IMPRESSO.
-// Ligar `play.on` pro convite ligaria junto o botão do app apontando pra ficha em 404 —
-// foi o teste `notificacao-lida-e-botao-da-loja` que pegou isso.
-ok(/play:\s*\{\s*on:\s*false,\s*selo:\s*true/.test(bloco),
-   'Play: selo SIM no impresso, botão do app NÃO (ficha em 404, produção em análise)');
+// Enquanto a ficha da Play esteve em 404, `selo:true` + `on:false` foi exatamente o que
+// deixou o impresso anunciar as duas lojas SEM ligar o botão pra uma página inexistente —
+// foi o teste `notificacao-lida-e-botao-da-loja` que pegou a tentativa de usar um campo só.
+// Em 22/ago/2026 a Play saiu e o `on` virou; o que este teste guarda é que o impresso
+// continua decidindo pelo SELO, e não carona no `on`.
+ok(/play:\s*\{[^\n]*selo:\s*true/.test(bloco),
+   'Play: selo ligado no impresso');
 ok(/apple:[^\n]*selo:\s*true/.test(bloco), 'Apple: selo ligado');
 const sharing2 = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-sharing.js'), 'utf8');
 ok(/l\.selo !== undefined \? l\.selo : l\.on/.test(sharing2),

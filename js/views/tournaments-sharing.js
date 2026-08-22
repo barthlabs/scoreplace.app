@@ -868,12 +868,10 @@ function _buildFlyerPrintHtml(o) {
   // Fica aqui, no flyer COMPARTILHADO, então vale de uma vez pro convite do app e
   // pro do torneio — que era exatamente o "por que não dos torneios também".
   //
-  // ⚠️ A PLAY ESTÁ DESLIGADA, E ISSO É MEDIÇÃO, NÃO ESQUECIMENTO. Conferido em
-  // 16/ago/2026: a ficha da Apple responde HTTP 200 (pública), e
-  // play.google.com/store/apps/details?id=app.scoreplace responde **404** — o app
-  // segue em teste fechado (o Play exige mais testadores antes de liberar produção).
-  // Papel impresso não se corrige depois: anunciar a Play mandaria quem lê para uma
-  // página inexistente. No dia em que sair, é UMA linha e o selo aparece de uma vez.
+  // ⚠️ AS DUAS LOJAS ESTÃO NO AR (22/ago/2026) — e o impresso já saía com os dois selos
+  // antes disso, porque aqui quem manda é `selo`, não `on` (ver adiante). O que mudou em
+  // 22/ago foi o `on` da Play, que governa o BOTÃO dentro do app. Papel impresso não se
+  // corrige depois: se uma ficha cair, é aqui que a conta chega primeiro.
   //
   // v1.8.91: essa "uma linha" saiu daqui e virou `window.SP_LOJAS` (store.js), porque o
   // botão "Baixar na loja" da tela inicial passou a precisar da MESMA informação. Duas
@@ -882,7 +880,7 @@ function _buildFlyerPrintHtml(o) {
   // montado sem o store.js carregado; ele NÃO é uma segunda verdade.
   var _LOJAS = window.SP_LOJAS || {
     apple: { on: true,  nome: 'App Store',   glifo: '' },
-    play:  { on: false, nome: 'Google Play', glifo: '▶' }
+    play:  { on: true,  nome: 'Google Play', glifo: '▶' }
   };
   // ── O SELO DA LOJA É IMAGEM OFICIAL, NÃO TEXTO IMITANDO A MARCA (1.9.63) ────
   // Isto aqui desenhava "▶ Google Play" e " App Store" como TEXTO com glifo. O dono viu
@@ -904,9 +902,8 @@ function _buildFlyerPrintHtml(o) {
   }
   function _flyerLojasHtml() {
     var itens = [];
-    // ⚠️ Só entra loja com `on:true`. A Play está DESLIGADA porque a ficha dela responde
-    // 404 (teste fechado, reconferido em 19/ago/2026) — anunciar em papel manda quem lê
-    // pra uma página onde não dá pra instalar. Ligar quando a ficha abrir.
+    // ⚠️ Só entra loja com o selo ligado — anunciar em papel uma loja onde não dá pra
+    // instalar manda quem lê pra lugar nenhum, e papel não se corrige depois.
     // usa `selo`, NÃO `on`: `on` governa o botão "Baixar na loja" DENTRO do app, que não
     // pode apontar pra ficha em 404. No impresso o dono quis os dois (19/ago/2026).
     // Fallback pra `on` cobre loja cadastrada sem o campo novo.
