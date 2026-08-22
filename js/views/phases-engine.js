@@ -2048,6 +2048,37 @@
       }
     }
 
+    // ⛔ CONGELA A CLASSIFICAÇÃO DO GRUPO NO AVANÇO — ela vira FATO PUBLICADO.
+    //
+    // Ordem do dono (22/ago/2026): _"essas duplas que já foram publicadas na classificação
+    // não podem mudar. as pessoas já sabem suas duplas. mesmo que seja porque agora o
+    // sistema é melhor. azar. essas duplas que já jogaram ficam como estão."_
+    //
+    // O RISCO, medido no sandbox do Confra: a chave GRAVA as duplas nos jogos (`p1`/`p2`),
+    // então ela é imutável — mas a classificação do grupo NÃO era gravada em lugar nenhum
+    // (o grupo só tinha matchIds/rosterAt/players/name/playersUids) e era RECALCULADA a
+    // cada render. Bastava a régua de desempate melhorar — e ela melhorou hoje, na 2.0.18 —
+    // pra a tela reordenar e passar a discordar da dupla que a pessoa já tinha visto e da
+    // que está na chave.
+    //
+    // Aqui o retrato é gravado UMA vez, com a ordem que de fato formou as duplas. É a mesma
+    // regra do placar: o que já foi jogado e publicado não se reescreve.
+    // [[project_criterios_desempate_canone]] · [[project_wo_substituicao]]
+    try {
+      var _gsCong = (t.rounds || []).reduce(function (a, r) {
+        return a.concat((r && Array.isArray(r.monarchGroups)) ? r.monarchGroups : []);
+      }, []);
+      _gsCong.forEach(function (g) {
+        if (!g || Array.isArray(g.classifCongelada)) return;   // idempotente: nunca regrava
+        var _ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat((r && r.matches) || []); }, []));
+        var _st = cs({ players: g.players || [], playersUids: g.playersUids || [], matches: _ms, standings: g.standings, category: g.category, name: g.name }) || [];
+        if (!_st.length) return;
+        // nome E uid: o nome envelhece (a pessoa se renomeia), o uid é a identidade.
+        g.classifCongelada = _st.map(function (x) { return { name: (x && x.name) || '', uid: (x && x.uid) || null }; });
+        g.classifCongeladaAt = new Date().toISOString();
+      });
+    } catch (e) { /* congelar nunca pode impedir o avanço */ }
+
     var res = materializeNextPhase(t, cs, 'ph-' + tId + '-' + ((t.currentPhaseIndex || 0) + 1));
     if (!res.ok) {
       if (window.showAlertDialog) window.showAlertDialog('Não foi possível avançar', 'Motivo: ' + res.error, null, { type: 'warning' });

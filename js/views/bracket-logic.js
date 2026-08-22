@@ -278,6 +278,40 @@ window._computeMonarchStandings = function(group, t, category) {
     })
       : null
   };
+  // ⛔ CLASSIFICAÇÃO JÁ PUBLICADA NÃO SE REORDENA.
+  //
+  // Ordem do dono (22/ago/2026): _"essas duplas que já foram publicadas na classificação não
+  // podem mudar. as pessoas já sabem suas duplas. mesmo que seja porque agora o sistema é
+  // melhor. azar."_
+  //
+  // Quando a fase avançou, a ordem do grupo virou FATO: foi ela que formou as duplas Ouro
+  // (1º+2º) e Prata (3º+4º) que estão gravadas na chave e que as pessoas já viram. O avanço
+  // grava esse retrato em `group.classifCongelada`; daqui pra frente a tela LÊ o retrato em
+  // vez de recalcular. Sem isto, melhorar a régua de desempate — e ela melhorou na 2.0.18 —
+  // reordenava a tela e ela passava a discordar da chave.
+  //
+  // As ESTATÍSTICAS continuam vivas (V/D/saldo seguem refletindo os jogos); o que congela é
+  // a ORDEM. Quem não está no retrato (entrou depois) vai pro fim, sem furar a ordem antiga.
+  var _cong = group && Array.isArray(group.classifCongelada) ? group.classifCongelada : null;
+  if (_cong && _cong.length) {
+    var _posCong = {};
+    _cong.forEach(function (x, i) {
+      if (x && x.uid) _posCong['uid:' + x.uid] = i;
+      if (x && x.name) _posCong['nome:' + x.name] = i;
+    });
+    var _ordCong = function (l) {
+      var byUid = (l && l.uid != null) ? _posCong['uid:' + l.uid] : undefined;
+      if (byUid !== undefined) return byUid;
+      var byName = (l && l.name) ? _posCong['nome:' + l.name] : undefined;
+      return (byName !== undefined) ? byName : 9999;      // fora do retrato → fim
+    };
+    return _linhas.slice().sort(function (a, b) {
+      var d = _ordCong(a) - _ordCong(b);
+      if (d) return d;
+      return window._standingsCompareConfig(a, b, _opts);   // só entre os que o retrato não cobre
+    });
+  }
+
   return _linhas.sort(function (a, b) { return window._standingsCompareConfig(a, b, _opts); });
 };
 
@@ -1232,6 +1266,47 @@ function _setSlot(m, side, uids, obj) {
   }
 }
 window._slotUids = _slotUids;
+
+// ⛔ GRUPO QUE TERMINOU TEM A CLASSIFICAÇÃO CONGELADA NA HORA.
+//
+// Ordem do dono (22/ago/2026): _"é importante congelar agora os que foram jogados na Confra
+// real. os que não têm resultado ainda podem ser recalculados sem problemas."_ — e antes:
+// _"essas duplas que já foram publicadas na classificação não podem mudar. as pessoas já
+// sabem suas duplas. mesmo que seja porque agora o sistema é melhor. azar."_
+//
+// A granularidade é o GRUPO, não o torneio: assim que os 3 jogos de um grupo fecham, aquela
+// classificação virou fato — as pessoas do grupo já a viram e já sabem com quem vão jogar na
+// fase 2. Grupo com jogo pendente segue sendo recalculado, porque ainda não há o que
+// desmentir. É a mesma regra do placar lançado, um degrau acima.
+//
+// Congelar aqui (e não só no avanço) importa porque a Confra real está PELA METADE: 54 de
+// 102 jogos. Os grupos já encerrados precisam do retrato AGORA, antes de qualquer melhoria
+// futura na régua de desempate reordená-los.
+// O gancho é o `_applyResultToTournament` (bracket-ui), porta ÚNICA de todo placar lançado —
+// NÃO o `_advanceWinner`, que jogo de grupo nem chama (bracket-ui:1659 desvia grupo pro
+// `_checkGroupRoundComplete`).
+// [[project_criterios_desempate_canone]]
+function _congelaGruposEncerrados(t) {
+  if (!t) return;
+  var gs = (t.rounds || []).reduce(function (a, r) {
+    return a.concat((r && Array.isArray(r.monarchGroups)) ? r.monarchGroups : []);
+  }, []);
+  gs.forEach(function (g) {
+    if (!g || Array.isArray(g.classifCongelada)) return;       // idempotente: nunca regrava
+    var ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat((r && r.matches) || []); }, []));
+    var reais = ms.filter(function (m) { return m && !m.isSitOut && !m.isBye; });
+    if (!reais.length) return;
+    // TODO jogo real do grupo precisa estar decidido — senão ainda não há o que congelar.
+    if (!reais.every(function (m) { return !!(m.winner || m.scoreP1 != null); })) return;
+    try {
+      var st = window._computeMonarchStandings({ players: g.players || [], playersUids: g.playersUids || [], matches: ms }, t, g.category || null) || [];
+      if (!st.length) return;
+      g.classifCongelada = st.map(function (x) { return { name: (x && x.name) || '', uid: (x && x.uid) || null }; });
+      g.classifCongeladaAt = new Date().toISOString();
+    } catch (e) { /* congelar nunca pode derrubar o lançamento de um placar */ }
+  });
+}
+window._congelaGruposEncerrados = _congelaGruposEncerrados;
 
 function _advanceWinner(t, completedMatch) {
   const winner = completedMatch.winner;

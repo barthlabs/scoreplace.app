@@ -40,6 +40,18 @@
  * ("sorteios que ainda serão feitos ok"); o que não podia mudar — grupos montados, jogos e
  * placares da R1 — segue IDÊNTICO no motor-golden.
  *
+ * ⚠️ REGRAVADO NA 2.0.18/2.0.19 — e o diff MEDIDO é a prova do conserto, não um teste calado.
+ *   · `eliminatoria` (98 jogos, com uid): BYTE A BYTE IDÊNTICA ao retrato anterior. Nenhum
+ *     confronto mudou.
+ *   · `classificacaoPorGrupo`: 3 dos 34 grupos mudaram de ORDEM — F, G e K.
+ * Os dois lados do retrato ESTAVAM SE CONTRADIZENDO. As duplas da chave já saíam da régua
+ * do organizador; a CLASSIFICAÇÃO da tela ainda saía do switch paralelo do
+ * `_computeMonarchStandings`. No Grupo F a tela mostrava 27>28>25>26 e a chave montava a
+ * dupla Ouro com 28+25 — é exatamente o relato do dono ("me explica porque avancei de fase
+ * e Catia/Roberta não estão na lista Ouro, mas aparecem no jogo 103?"). Unificado tudo em
+ * `standingsCompareConfig`, os dois lados passaram a dizer a mesma coisa; quem se moveu foi
+ * a TELA, que estava errada, e não a chave.
+ *
  * Uso:
  *   node tests/eliminatoria-golden-master.js --gravar   → grava a fixture
  *   node tests/eliminatoria-golden-master.js            → compara (exit 1 se mudou)

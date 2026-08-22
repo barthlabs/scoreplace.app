@@ -116,6 +116,12 @@ const SUITES = [
   // faziam nada. Reordenar ou excluir na tela não mudava nada. O teste prova o contrário:
   // trocar a ordem TEM de trocar o resultado, e nenhuma régua paralela pode existir.
   'tests/criterios-do-organizador-mandam.test.js',
+  // ⛔ CLASSIFICAÇÃO JÁ PUBLICADA NÃO MUDA, nem quando a régua melhora. A chave grava as
+  // duplas dentro do jogo, então é imutável — mas a classificação do grupo NÃO era gravada
+  // e era recalculada a cada render. Melhorar o desempate (como na 2.0.18) reordenava a
+  // tela e ela passava a discordar da dupla que a pessoa já tinha visto. O avanço passa a
+  // congelar a ordem no grupo; a tela lê o retrato. Congela a ORDEM, não as estatísticas.
+  'tests/classificacao-publicada-nao-muda.test.js',
   // Buscar quem levou W.O. tem de achar o GRUPO dele. Quem leva W.O. sai dos jogos (o
   // substituto ocupa o slot), então o nome some do data-players dos cards e o filtro
   // escondia o box inteiro — sobrava só o chip solto na caixa "W.O.", que não diz de qual

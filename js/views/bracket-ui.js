@@ -1680,6 +1680,12 @@ window._applyResultToTournament = function (t, matchId, payload) {
   });
   if (!t.tournamentStarted) t.tournamentStarted = Date.now();
 
+  // GRUPO QUE FECHOU TEM A CLASSIFICAÇÃO CONGELADA NA HORA (ver _congelaGruposEncerrados,
+  // bracket-logic). Aqui é a porta única: todo placar lançado passa por este ponto.
+  if (typeof window._congelaGruposEncerrados === 'function') {
+    try { window._congelaGruposEncerrados(t); } catch (e) {}
+  }
+
   if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
   return m;
 };
