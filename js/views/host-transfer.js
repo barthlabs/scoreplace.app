@@ -411,13 +411,15 @@
         var safeEmail = email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeUid = pUid.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeName = window._safeHtml(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        var avatarSeed = encodeURIComponent(name);
-        var avatarUrl = 'https://api.dicebear.com/9.x/initials/svg?seed=' + avatarSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
         listHtml += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:' + (isPending ? 'default' : 'pointer') + ';background:' + (isPending ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)') + ';border:1px solid ' + (isPending ? 'rgba(251,191,36,0.3)' : 'var(--border-color)') + ';transition:background 0.2s;" ' +
           (isPending ? '' : 'onmouseover="this.style.background=\'rgba(251,191,36,0.1)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.03)\'" onclick="document.getElementById(\'org-picker-overlay\').remove(); window._openHostTransferDialog({email:\'' + safeEmail + '\',uid:\'' + safeUid + '\',displayName:\'' + safeName + '\'},\'' + String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')"') + '>' +
-          '<img src="' + avatarUrl + '" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;">' +
+          // ⭐ PONTO ÚNICO: o uid está aqui (pUid) e o perfil pode não ter resolvido ainda.
+          // Semear o avatar pelo NOME devolvia círculo mudo, e o nome escrito no HTML
+          // congelava vazio. Ver `_personAvatarHtml` em store.js.
+          window._personAvatarHtml(pUid, name, 'width:36px;height:36px;border-radius:50%;flex-shrink:0;') +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(name) + '</div>' +
+            '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+              window._personNameHtml(pUid, name, '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(email) + '</div>' +
           '</div>' +
           (isPending ? '<span style="font-size:0.65rem;color:#fbbf24;font-weight:600;white-space:nowrap;">' + _tH('org.pendingInvite') + '</span>' : '<span style="font-size:1rem;color:var(--text-muted);">›</span>') +

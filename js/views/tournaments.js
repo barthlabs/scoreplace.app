@@ -3618,9 +3618,6 @@ function renderTournaments(container, tournamentId = null) {
         // quais são as duas formas, pra `_hydrateUidNames` corrigi-lo quando o perfil
         // chegar (abertura fria). Sem uid, nada muda: fica o texto passado.
         function _buildOrgCard(name, role, bgStyle, canRemove, removeEmail, isTapPicker, roleUid, roleM, roleF) {
-          var _oSeed = encodeURIComponent(name);
-          var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-          var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[(name || '').toLowerCase()] && window._playerPhotoCache[(name || '').toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[(name || '').toLowerCase()] : _oFallback;
           var _safeTId = window._safeHtml(String(_t.id));
           // v2.8.52: card do organizador principal (criador) é TOCÁVEL → abre o seletor
           // de quem promover (entrada por toque, mobile). O ALVO de soltar é a VAGA
@@ -3681,10 +3678,6 @@ function renderTournaments(container, tournamentId = null) {
         // aceite". Substitui o antigo "só na lista de inscritos". canRemove (criador)
         // mostra ✕ pra cancelar o convite.
         function _buildPendingOrgCard(name, removeKey, canRemove, uidOrEmail) {
-          var _oSeed = encodeURIComponent(name || '?');
-          var _oFallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + _oSeed + '&backgroundColor=ffe7b3,ffd5dc,ffdfbf';
-          var _lc = (name || '').toLowerCase();
-          var _oPhoto = (window._playerPhotoCache && window._playerPhotoCache[_lc] && window._playerPhotoCache[_lc].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_lc] : _oFallback;
           var _safeTId = window._safeHtml(String(_t.id));
           var _rmBtn = canRemove ? '<button type="button" class="cancel-x-btn" style="--cx-size:20px;" title="Cancelar convite" onclick="event.stopPropagation();window._removeCoHost(\'' + _safeTId + '\',\'' + window._safeHtml(removeKey) + '\')">✕</button>' : '';
           // Convite pendente é gente com nome igual aos demais — entra no filtro do
