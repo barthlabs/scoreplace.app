@@ -29,7 +29,9 @@
  * @param {Array<{id:string}>} docs — docs do grupo (snapshots do Firestore ou objetos {id})
  * @param {object} deps
  *   @param {(a,b)=>Promise<object>} deps.pickKeep — devolve o doc que SOBREVIVE entre dois
- *   @param {(uidA,uidB)=>Promise<{proven:boolean,by:string|null}>} deps.proof — a prova de posse
+ *   @param {(a,b)=>Promise<{allowed:boolean,by:string|null,reason:string|null}>} deps.proof
+ *          — pode fundir? Recebe os DOCS (não só uids): a decisão precisa do perfil, porque
+ *            um "não somos a mesma pessoa" dispensado pela pessoa bloqueia a fusão.
  * @returns {Promise<{keepUid:string|null, merges:Array<{dropUid,by}>, refused:Array<{dropUid,reason}>}>}
  */
 async function planSweepMerges(docs, deps) {
@@ -52,9 +54,9 @@ async function planSweepMerges(docs, deps) {
   for (const d of lista) {
     if (!d || d.id === keep.id) continue;
     let p = null;
-    try { p = await deps.proof(keep.id, d.id); } catch (e) { p = null; }
-    if (p && p.proven) merges.push({ dropUid: d.id, by: p.by || null });
-    else refused.push({ dropUid: d.id, reason: 'sem-credencial-autenticada' });
+    try { p = await deps.proof(keep, d); } catch (e) { p = null; }
+    if (p && p.allowed) merges.push({ dropUid: d.id, by: p.by || null });
+    else refused.push({ dropUid: d.id, reason: (p && p.reason) || 'sem-credencial-autenticada' });
   }
   return { keepUid: keep.id, merges: merges, refused: refused };
 }

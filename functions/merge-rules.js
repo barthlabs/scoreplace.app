@@ -282,3 +282,54 @@ function credentialsProveSamePerson(authA, authB) {
 }
 
 module.exports.credentialsProveSamePerson = credentialsProveSamePerson;
+
+/**
+ * "NÃO SOMOS A MESMA PESSOA" — o dispensado BLOQUEIA fusão AUTOMÁTICA.
+ *
+ * INCIDENTE (Confra, ago/2026): o app detectou a suspeita, PERGUNTOU, e em 18/ago às 20:01
+ * (BRT) alguém respondeu que não eram a mesma pessoa — ficou gravado nos DOIS perfis:
+ *   dupDismissedInfo: [{ uid: <a outra>, motivo: 'celular', forca: 9, at: … }]
+ * Cinco horas e quarenta e quatro minutos depois, às 04:45, a varredura diária fundiu as
+ * duas assim mesmo. O `dupDismissed`/`dupDismissedInfo` era lido SÓ pela DETECÇÃO (pra não
+ * repetir a pergunta) — nenhum caminho de fusão o consultava.
+ *
+ * Por que bloqueia mesmo quando há credencial: automático nunca passa por cima de um "não"
+ * explícito de gente. Quem pode fundir um par dispensado é o fluxo INTERATIVO, onde a pessoa
+ * prova posse e decide na hora — lá é ação deliberada, aqui é um cron às 4 da manhã.
+ *
+ * Basta UM dos lados ter dispensado o outro: o "não" de qualquer um vale pelos dois.
+ *
+ * @param {object} dataA/dataB — docs de perfil (users/{uid})
+ * @param {string} uidA/uidB
+ * @returns {{ dismissed: boolean, by: string|null }}
+ */
+function dismissalBlocksMerge(dataA, dataB, uidA, uidB) {
+  const dispensou = (data, outroUid) => {
+    if (!data || !outroUid) return false;
+    const lista = [].concat(
+      Array.isArray(data.dupDismissedInfo) ? data.dupDismissedInfo : [],
+      Array.isArray(data.dupDismissed) ? data.dupDismissed : []);
+    return Object.prototype.hasOwnProperty.call(
+      require("./duplicate-person-core").mapaDeDispensados(lista), outroUid);
+  };
+  if (dispensou(dataA, uidB)) return { dismissed: true, by: uidA || 'a' };
+  if (dispensou(dataB, uidA)) return { dismissed: true, by: uidB || 'b' };
+  return { dismissed: false, by: null };
+}
+
+/**
+ * PORTA ÚNICA, decisão completa: este par pode ser fundido AUTOMATICAMENTE?
+ * Duas condições, e as duas nasceram de incidente real:
+ *   1. credencial AUTENTICADA dos dois lados (senão funde por texto digitado);
+ *   2. ninguém dispensou o outro (senão o cron passa por cima do "não" de uma pessoa).
+ */
+function mayAutoMerge(a, b) {
+  const dis = dismissalBlocksMerge(a && a.data, b && b.data, a && a.uid, b && b.uid);
+  if (dis.dismissed) return { allowed: false, by: null, reason: 'dispensado' };
+  const prova = credentialsProveSamePerson(a && a.auth, b && b.auth);
+  if (!prova.proven) return { allowed: false, by: null, reason: 'sem-credencial-autenticada' };
+  return { allowed: true, by: prova.by, reason: null };
+}
+
+module.exports.dismissalBlocksMerge = dismissalBlocksMerge;
+module.exports.mayAutoMerge = mayAutoMerge;

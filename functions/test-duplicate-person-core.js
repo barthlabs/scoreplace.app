@@ -187,7 +187,11 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   ok('  → e a prova é o AUTH (phoneNumber / emailVerified), não o campo do perfil',
     /function credentialsProveSamePerson[\s\S]{0,900}phoneNumber[\s\S]{0,600}emailVerified/.test(mrules));
   ok('  → e a porta única delega pra essa regra (nada de gate escrito à mão)',
-    /async function _provenSamePerson[\s\S]{0,700}credentialsProveSamePerson/.test(idx));
+    /async function _mayAutoMerge[\s\S]{0,700}_mergeRules\.mayAutoMerge/.test(idx));
+  // O "não somos a mesma pessoa" da tela vale contra o cron: era lido só pela DETECÇÃO.
+  ok('  → e o DISPENSADO bloqueia fusão automática (era lido só pela detecção)',
+    /function dismissalBlocksMerge/.test(mrules) &&
+    /function mayAutoMerge[\s\S]{0,400}dismissalBlocksMerge/.test(mrules));
   ok('  → o detector da BASE também só funde com credencial do AUTH',
     /_detectarDuplicataNaBase[\s\S]{0,6000}a1\.emailVerified/.test(idx));
 
@@ -206,7 +210,7 @@ const achou = (c, p) => D.detectarMesmaPessoa(c, p).suspeito;
   const _trigger = _ateOMerge('exports.autoMergeOnProfileUpdate');
   const _varredura = _ateOMerge('async function _scanAndMergeByField');
   ok('trigger: passa pela prova ANTES de fundir',
-    !!_trigger && _trigger.indexOf('_provenSamePerson') >= 0);
+    !!_trigger && _trigger.indexOf('_mayAutoMerge') >= 0);
   ok('varredura diária: passa pela prova ANTES de fundir (era o caminho sem gate)',
     !!_varredura && _varredura.indexOf('planSweepMerges') >= 0 &&
     /for\s*\(\s*const\s+\w+\s+of\s+plano\.merges\s*\)/.test(_varredura));

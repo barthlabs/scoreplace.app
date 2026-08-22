@@ -828,18 +828,21 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
  */
 /**
  * PORTA ÚNICA das fusões automáticas: busca os dois UserRecords e delega a decisão pra
- * `credentialsProveSamePerson` (merge-rules.js, pura e testada). Os DOIS caminhos
- * automáticos — o trigger `autoMergeOnProfileUpdate` e a varredura diária
- * `_scanAndMergeByField` — passam por aqui. Ver o bloco de comentário da regra: foi a
- * SEGUNDA porta, sem gate, que fundiu duas pessoas diferentes em 19/ago/2026.
- * Auth ausente (conta já apagada) → `proven:false`, que é o lado seguro.
+ * `mayAutoMerge` (merge-rules.js, pura e testada) — credencial AUTENTICADA dos dois lados
+ * E ninguém tendo dispensado o outro. Os DOIS caminhos automáticos — o trigger
+ * `autoMergeOnProfileUpdate` e a varredura diária `_scanAndMergeByField` — passam por aqui.
+ * Foi a SEGUNDA porta, sem gate, que fundiu duas pessoas diferentes em 19/ago/2026 — e
+ * fundiu 5h44 DEPOIS de uma delas ter respondido "não somos a mesma pessoa" na tela.
+ * Auth ausente (conta já apagada) → não autoriza, que é o lado seguro.
  */
-async function _provenSamePerson(uidA, uidB) {
-  const [a, b] = await Promise.all([
-    admin.auth().getUser(uidA).catch(() => null),
-    admin.auth().getUser(uidB).catch(() => null),
+async function _mayAutoMerge(docA, docB) {
+  const [autA, autB] = await Promise.all([
+    admin.auth().getUser(docA.id).catch(() => null),
+    admin.auth().getUser(docB.id).catch(() => null),
   ]);
-  return _mergeRules.credentialsProveSamePerson(a, b);
+  return _mergeRules.mayAutoMerge(
+    { uid: docA.id, auth: autA, data: (docA.data && docA.data()) || {} },
+    { uid: docB.id, auth: autB, data: (docB.data && docB.data()) || {} });
 }
 
 async function _scanAndMergeByField(db, field) {
@@ -860,7 +863,7 @@ async function _scanAndMergeByField(db, field) {
   for (const [key, docs] of Object.entries(byKey)) {
     if (docs.length < 2) continue;
 
-    // ⚠️ QUEM DECIDE É O `merge-sweep-core` — MESMA PORTA DO TRIGGER (`_provenSamePerson`).
+    // ⚠️ QUEM DECIDE É O `merge-sweep-core` — MESMA PORTA DO TRIGGER (`_mayAutoMerge`).
     // Sem credencial AUTENTICADA batendo dos dois lados o par fica de pé: quem resolve é o
     // fluxo interativo de duplicata, que sabe pedir prova de posse. Duplicata não fundida é
     // incômodo reversível; fusão errada apaga uma conta do Auth e não tem volta. A decisão
@@ -868,7 +871,7 @@ async function _scanAndMergeByField(db, field) {
     // assim que a varredura fundiu duas pessoas diferentes em 19/ago/2026.
     const plano = await _mergeSweep.planSweepMerges(docs, {
       pickKeep: async (a, b) => (await _determineMergeWinner(a, b)).keepDoc,
-      proof: _provenSamePerson,
+      proof: _mayAutoMerge,
     });
     if (!plano.keepUid) continue;
 
@@ -6492,11 +6495,11 @@ exports.autoMergeOnProfileUpdate = onDocumentWritten(
         // precisa de `emailVerified`. Os DOIS lados têm que provar — um só não diz nada
         // sobre o outro. Sem prova, NÃO funde (e não pergunta aqui: quem pergunta é o
         // fluxo de duplicata, que sabe mascarar o contato).
-        // v2.0.5: a regra saiu daqui pra `_provenSamePerson` → merge-rules. Estava escrita
+        // v2.0.5: a regra saiu daqui pra `_mayAutoMerge` → merge-rules. Estava escrita
         // SÓ neste caminho, e a varredura diária (a outra porta) fundiu duas pessoas
         // diferentes por não ter a cópia. Uma regra, dois chamadores.
-        const _prova = await _provenSamePerson(uid, other.id);
-        if (!_prova.proven) {
+        const _prova = await _mayAutoMerge(currentDoc, freshOther);
+        if (!_prova.allowed) {
           console.log(`[autoMergeOnProfileUpdate] RECUSADO ${uid} × ${other.id}: ` +
             `"${field}" bate no PERFIL mas não há credencial AUTENTICADA nos dois lados — ` +
             `fundir por texto digitado apagaria conta de terceiro.`);
