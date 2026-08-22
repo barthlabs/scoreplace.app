@@ -50,25 +50,27 @@ const INVENTARIO = {
   // ── o ponto único e o construtor de URL que ele usa ──────────────────────────
   'js/store.js': { n: 2, nota: 'o construtor canônico (_avatarUrl) e o ponto único que o consome' },
 
-  // ── CONVERTIDOS: emitem [data-uid-avatar] e hidratam ─────────────────────────
+  // ── CONVERTIDOS: gente com uid, emitindo [data-uid-avatar] e hidratando ──────
   'js/views/bracket.js': { n: 3, nota: 'CONVERTIDO 1.9.113 — a chave hidrata ícone junto com o nome' },
   'js/views/host-transfer.js': { n: 0, nota: 'CONVERTIDO — seletor de organizador' },
-  'js/views/schedule-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de horário (avatar e pilha de avatares)' },
+  'js/views/schedule-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de horário' },
   'js/views/opinion-poll.js': { n: 0, nota: 'CONVERTIDO — enquete de opinião' },
-  'js/views/tournaments-enrollment.js': { n: 0, nota: 'CONVERTIDO — lista do diálogo de inscrição' },
+  'js/views/tournaments-enrollment.js': { n: 0, nota: 'CONVERTIDO — diálogo de inscrição' },
+
+  // ── ONDE O UID FOI PLUMBADO ATÉ O RENDER (2.0.17) ────────────────────────────
+  // Estes NÃO eram "esqueceram o helper": o uid existia perto e se perdia no caminho.
+  //   · membros de dupla → `_pairMembers[i].uid`, que o `.map` descartava;
+  //   · convite pendente → `r.inviterUid`/`r.inviteeUid`, já lidos pra montar _pendUids;
+  //   · linhas de jogador do painel → `m2.team1Uids`/`team2Uids`, por ÍNDICE.
+  // Sobrou em cada arquivo só o que não é render de pessoa-com-uid (abaixo).
+  'js/views/tournaments.js': { n: 2, nota: 'pódio 🥇🥈🥉 (string de resultado, sem uid) + passe de reparo' },
+  'js/views/dashboard.js': { n: 1, nota: 'passe de REPARO por nome já conhecido (não é render)' },
+  'js/views/participants.js': { n: 1, nota: 'passe de REPARO por nome já conhecido (não é render)' },
 
   // ── NÃO é pessoa com perfil por resolver — MEDIDO, não presumido ─────────────
-  // auth: perfil do PRÓPRIO usuário logado. explore: os cards recebem o DOC INTEIRO do
-  // perfil (`u`), com displayName/photoURL em mãos — não existe o caso "uid sem nome
-  // ainda", que é o que produz o círculo mudo. Converter ali seria churn sem ganho.
   'js/views/auth.js': { n: 4, nota: 'perfil do PRÓPRIO usuário logado — o nome nunca está por resolver' },
   'js/views/explore.js': { n: 5, nota: 'recebe o DOC do perfil inteiro (u.displayName/u.photoURL) — sem caso de nome por resolver' },
   'js/views/tournaments-analytics.js': { n: 1, nota: 'helper de avatar da própria tela de números' },
-  'js/views/participants.js': { n: 1, nota: 'passe de REPARO por nome já conhecido (não é render)' },
-
-  // ── PENDENTES de verdade: gente com uid, ainda semeando pelo nome ────────────
-  'js/views/tournaments.js': { n: 5, nota: 'PENDENTE — renders por NOME (membros de dupla, convite pendente, pilha de avatares) sem uid em escopo + 1 passe de reparo' },
-  'js/views/dashboard.js': { n: 3, nota: 'PENDENTE — 1 render por NOME sem uid em escopo + 2 passes de reparo' },
 };
 
 const achados = {};

@@ -62,10 +62,16 @@ window._duplaCard = function (t, p, draggable, ctx) {
     var members = _pairMembers ? _pairMembers.map(function (m) { return window._displayName(m.uid, m.guest); }) : null;
     var nameHtml;
     if (members) {
-      nameHtml = members.map(function (n) {
-        var ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-        var mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : ms;
-        return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;"><img src="' + window._safeHtml(mp) + '" onerror="this.onerror=null;this.src=\'' + ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(n) + '</span></div>';
+      // ⭐ O UID DO MEMBRO CHEGA AQUI. `members` era só a lista de NOMES resolvidos, mas
+      // `_pairMembers` (logo acima) tem `{uid, guest}` de cada lado da dupla — o uid
+      // existia e se perdia no `.map`. Com o índice ele volta, e o ícone passa a hidratar
+      // em vez de nascer mudo quando o perfil ainda não resolveu.
+      nameHtml = members.map(function (n, _mi) {
+        var _mUid = (_pairMembers && _pairMembers[_mi] && _pairMembers[_mi].uid) || '';
+        return '<div style="display:flex;align-items:center;gap:6px;overflow:hidden;margin-bottom:2px;">' +
+          window._personAvatarHtml(_mUid, n, 'width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0;') +
+          window._personNameHtml(_mUid, n, 'font-weight:700;font-size:' + (window._INSCRITO_NAME_FONT_PX || 17) + 'px;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;') +
+          '</div>';
       }).join('');
     } else {
       var _soloDisp = window._displayName(uid, nm);
@@ -115,11 +121,9 @@ window._duplaCard = function (t, p, draggable, ctx) {
         var _mm = _pairMembers[idxM] || { uid: '', guest: '' };
         var _disp = window._displayName(_mm.uid, _mm.guest);
         var _metaName = _disp || _mm.guest;
-        var _seed = _metaName || '?';
-        var _pk = (_metaName || '').toLowerCase();
-        var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(_seed) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-        var _mp = (window._playerPhotoCache && window._playerPhotoCache[_pk] && window._playerPhotoCache[_pk].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[_pk] : _ms;
-        var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(_metaName) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+        // ⭐ o uid do membro está em `_mm` — o ícone hidrata em vez de nascer mudo
+        var _img = window._personAvatarHtml(_mm.uid || '', _metaName,
+          'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;');
         var _nmFs = (window._INSCRITO_NAME_FONT_PX || 17);
         var _uidAttr = _mm.uid ? (' data-uid-name="' + window._safeHtml(_mm.uid) + '"') : '';
         var _nmSpan = '<span class="sp-fit-name"' + _uidAttr + ' title="' + window._safeHtml(_disp) + '" data-fit-h="44" data-fit-max="' + _nmFs + '" style="font-weight:700;font-size:' + _nmFs + 'px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(_disp) + '</span>';
@@ -250,10 +254,12 @@ window._buildDoublesInscritosSection = function (t, ctx) {
   var _pendUids = {};
   _reqs.forEach(function (r) { if (r && r.inviterUid) _pendUids[r.inviterUid] = 1; if (r && r.inviteeUid) _pendUids[r.inviteeUid] = 1; });
   var _soloAvailable = _soloParticipants.filter(function (p) { var u = typeof p === 'object' ? (p.uid || '') : ''; return !(u && _pendUids[u]); });
-  var _pendMemBlock = function (n, right) {
-    var _ms = 'https://api.dicebear.com/9.x/initials/svg?seed=' + encodeURIComponent(n) + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
-    var _mp = (window._playerPhotoCache && window._playerPhotoCache[n.toLowerCase()] && window._playerPhotoCache[n.toLowerCase()].indexOf('dicebear.com') === -1) ? window._playerPhotoCache[n.toLowerCase()] : _ms;
-    var _img = '<img src="' + window._safeHtml(_mp) + '" onerror="this.onerror=null;this.src=\'' + _ms + '\'" data-player-name="' + window._safeHtml(n) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+  // ⭐ O UID DO CONVITE CHEGA AQUI. `r.inviterUid`/`r.inviteeUid` já eram lidos logo acima
+  // (pra montar `_pendUids`) e se perdiam na hora de desenhar — o ícone nascia mudo e o
+  // nome congelava quando o perfil ainda não tinha resolvido.
+  var _pendMemBlock = function (n, right, uid) {
+    var _img = window._personAvatarHtml(uid || '', n,
+      'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;');
     var _nmSpan = '<span class="sp-fit-name" title="' + window._safeHtml(n) + '" data-fit-h="44" data-fit-max="17" style="font-weight:700;font-size:17px;color:var(--text-bright);line-height:1.18;max-height:44px;overflow:hidden;word-break:break-word;min-width:0;">' + window._safeHtml(n) + '</span>';
     var _av = right
       ? '<div style="display:flex;align-items:center;gap:7px;max-width:100%;min-width:0;justify-content:flex-end;">' + _nmSpan + _img + '</div>'
@@ -274,7 +280,7 @@ window._buildDoublesInscritosSection = function (t, ctx) {
     var _status = amInvitee ? ('⏳ ' + window._safeHtml(r.inviterName || 'Alguém') + ' te convidou — aceite ou recuse')
       : amInviter ? ('⏳ Você convidou ' + window._safeHtml(r.inviteeName || '') + ' — aguardando aceite')
         : '⏳ Dupla pendente — aguardando aceite';
-    var _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _pendMemBlock(r.inviterName || '', false) + _pendMemBlock(r.inviteeName || '', true) + '</div>';
+    var _body = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">' + _pendMemBlock(r.inviterName || '', false, r.inviterUid || '') + _pendMemBlock(r.inviteeName || '', true, r.inviteeUid || '') + '</div>';
     var _ps1 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviterUid || '', displayName: r.inviterName || '', name: r.inviterName || '' }) : '';
     var _ps2 = window._enrollNumber ? window._enrollNumber(_enrollOrderMapD, { uid: r.inviteeUid || '', displayName: r.inviteeName || '', name: r.inviteeName || '' }) : '';
     var _pwmL = (window._enrollNumberBadge && _ps1) ? window._enrollNumberBadge(_ps1, 'left') : '';

@@ -2439,10 +2439,13 @@ function renderDashboard(container) {
               (function(){
                 var parts3 = String(m2.p1||'').split(/\s*\/\s*/).filter(Boolean);
                 var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
-                parts3.forEach(function(n){
-                  var isMe3=_isMe(n); var _pc3=(window._playerPhotoCache&&window._playerPhotoCache[(n||'').toLowerCase()]); var ph2=(_pc3&&_pc3.indexOf('dicebear.com')===-1)?_pc3:((isMe3&&cu&&cu.photoURL&&cu.photoURL.indexOf('dicebear.com')===-1)?cu.photoURL:null);
-                  var _ini3url='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n||'?')+'&backgroundColor='+(isMe3?'6366f1':'94a3b8')+'&textColor=ffffff&fontSize=42&size=26';
-                  var av3='<img src="'+(ph2||_ini3url)+'" data-player-name="'+_sf(n)+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src=\''+_ini3url+'\'">';
+                parts3.forEach(function(n, _pi){
+                  // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team1Uids` casa com a ordem
+                  // de `p1` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
+                  // perfil ainda não resolvido, virava o mesmo círculo mudo pra todo mundo.
+                  var isMe3=_isMe(n);
+                  var _u3=(Array.isArray(m2.team1Uids)&&m2.team1Uids[_pi])||'';
+                  var av3=window._personAvatarHtml(_u3, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
@@ -2456,10 +2459,13 @@ function renderDashboard(container) {
               (function(){
                 var parts4 = String(m2.p2||'').split(/\s*\/\s*/).filter(Boolean);
                 var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
-                parts4.forEach(function(n){
-                  var isMe4=_isMe(n); var _pc4=(window._playerPhotoCache&&window._playerPhotoCache[(n||'').toLowerCase()]); var ph2=(_pc4&&_pc4.indexOf('dicebear.com')===-1)?_pc4:((isMe4&&cu&&cu.photoURL&&cu.photoURL.indexOf('dicebear.com')===-1)?cu.photoURL:null);
-                  var _ini4url='https://api.dicebear.com/9.x/initials/svg?seed='+encodeURIComponent(n||'?')+'&backgroundColor='+(isMe4?'6366f1':'94a3b8')+'&textColor=ffffff&fontSize=42&size=26';
-                  var av4='<img src="'+(ph2||_ini4url)+'" data-player-name="'+_sf(n)+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src=\''+_ini4url+'\'">';
+                parts4.forEach(function(n, _pi){
+                  // ⭐ O UID DO JOGO CHEGA AQUI, por índice: `m2.team2Uids` casa com a ordem
+                  // de `p2` partida em ' / '. Antes o ícone era semeado só pelo NOME e, com o
+                  // perfil ainda não resolvido, virava o mesmo círculo mudo pra todo mundo.
+                  var isMe4=_isMe(n);
+                  var _u4=(Array.isArray(m2.team2Uids)&&m2.team2Uids[_pi])||'';
+                  var av4=window._personAvatarHtml(_u4, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
