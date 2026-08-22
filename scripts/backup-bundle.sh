@@ -32,9 +32,29 @@ for a in "$@"; do
 done
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"
-HEAD_MAIN="$(git rev-parse main 2>/dev/null || true)"
+
+# ⚠️ O ALVO É O MAIN PUBLICADO, NÃO O REF LOCAL (22/ago/2026, na 2.0.9).
+# Isto lia só `git rev-parse main` — e o deploy-hosting.sh empurra `HEAD:main` pro
+# REMOTO, então quem anda é `origin/main`; o ref LOCAL `refs/heads/main` fica parado
+# sempre que se publica de um branch/worktree, que é o fluxo normal do repo. Medido:
+# o ar e o origin/main em 635db2ce, o local em dd7873a1, e este script imprimindo
+# "✓ backup já empatado" — a MESMA falha que ele existe pra impedir, só que agora
+# mentindo em VERDE, que é pior que o silêncio do LEIA-ME à mão.
+# A régua passa a ser o mais ADIANTADO dos dois: assim funciona tanto publicando de
+# um worktree (origin/main na frente) quanto trabalhando direto no main sem rede.
+_mais_adiantado() {           # ecoa o commit que contém o outro; vazio se divergem
+  local a="$1" b="$2"
+  [[ -z "$a" ]] && { echo "$b"; return; }
+  [[ -z "$b" ]] && { echo "$a"; return; }
+  if   git merge-base --is-ancestor "$a" "$b" 2>/dev/null; then echo "$b"
+  elif git merge-base --is-ancestor "$b" "$a" 2>/dev/null; then echo "$a"
+  else echo "$a"; fi          # divergiram: o deploy já aborta nesse caso
+}
+LOCAL_MAIN="$(git rev-parse --verify -q main || true)"
+REMOTO_MAIN="$(git rev-parse --verify -q origin/main || true)"
+HEAD_MAIN="$(_mais_adiantado "$LOCAL_MAIN" "$REMOTO_MAIN")"
 if [[ -z "$HEAD_MAIN" ]]; then
-  echo "⚠ backup: não achei o branch 'main' — pulando." >&2
+  echo "⚠ backup: não achei o branch 'main' (nem local, nem origin) — pulando." >&2
   exit 0
 fi
 
@@ -47,9 +67,17 @@ if [[ ! -d "$DRIVE" ]]; then
 fi
 
 # quanto o backup atual está atrás?
+# ⚠️ Pelo mesmo motivo, o bundle carrega os DOIS refs (`git bundle create --all`) e o
+# `refs/heads/main` dele nasce tão parado quanto o local. Vale o mais adiantado.
 ATUAL=""
 if [[ -f "$ALVO" ]]; then
-  ATUAL="$(git bundle list-heads "$ALVO" 2>/dev/null | awk '$2=="refs/heads/main"{print $1}' || true)"
+  _heads="$(git bundle list-heads "$ALVO" 2>/dev/null || true)"
+  _bl="$(awk '$2=="refs/heads/main"{print $1}'          <<<"$_heads")"
+  _br="$(awk '$2=="refs/remotes/origin/main"{print $1}' <<<"$_heads")"
+  # só conta o que existe AQUI: commit que o repo local não tem não dá pra comparar
+  git cat-file -e "${_bl}^{commit}" 2>/dev/null || _bl=""
+  git cat-file -e "${_br}^{commit}" 2>/dev/null || _br=""
+  ATUAL="$(_mais_adiantado "$_bl" "$_br")"
 fi
 
 if [[ "$ATUAL" == "$HEAD_MAIN" && $FORCE -eq 0 ]]; then
@@ -59,7 +87,8 @@ fi
 
 ATRAS="?"
 if [[ -n "$ATUAL" ]]; then
-  ATRAS="$(git rev-list --count "$ATUAL..main" 2>/dev/null || echo '?')"
+  # ⚠️ contra $HEAD_MAIN, não contra `main`: o ref local é justamente o que está parado
+  ATRAS="$(git rev-list --count "$ATUAL..$HEAD_MAIN" 2>/dev/null || echo '?')"
 fi
 
 if [[ $CHECK -eq 1 ]]; then
