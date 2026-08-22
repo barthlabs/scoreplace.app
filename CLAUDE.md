@@ -155,7 +155,9 @@ Os dois números precisam ser iguais. Tag `<script>` sem fechamento consome sile
 ## Regras de Seguranca de Codigo
 
 ### CRITICO: Nunca deixar build/cache/node_modules/worktrees dentro da arvore sincronizada pelo Google Drive
-O projeto inteiro (`scoreplace.app-main`) vive dentro do Google Drive (`~/Library/CloudStorage/GoogleDrive-.../Meu Drive/`). Isso ja corrompeu o `.git` uma vez, renomeando objetos (ver `project_git_repo_lives_in_google_drive`), e trava o Finder/`fileproviderd` do macOS de forma recorrente: builds do Gradle (`android/build`, `android/app/build`, `android/wear/build`, `android/.gradle`) e instalacoes de `npm` (`node_modules` na raiz, em `functions/`, `functions-autodraw/`, `functions-stripe/`) geram dezenas de milhares de arquivos pequenos que o Drive tenta sincronizar um a um. Quando esses arquivos sao apagados/recriados (rebuild, `npm install`) antes do Drive terminar de processar, o Finder trava tentando mover pra Lixeira e o `fileproviderd` entra em loop consumindo 100%+ de CPU por horas — so resolve matando o Google Drive (Sair, nao so fechar a janela) e, se persistir, forcando o Finder a reiniciar via Monitor de Atividade. Aconteceu de novo em 15/ago/2026 com mais de 78 mil itens acumulados na Lixeira.
+⚠️ **JÁ CORRIGIDO (16/ago/2026) — o repo SAIU do Drive.** O repositório de trabalho é **`~/dev/scoreplace.app`**, em disco local comum. A pasta do Drive (`~/Library/CloudStorage/GoogleDrive-.../Meu Drive/scoreplace.app-main`) continua existindo, mas hoje é **só cofre de backup** — sem `.git` e sem código: guarda o bundle do repo, a **keystore do Android** (insubstituível) e os segredos locais. Tem um `LEIA-ME.txt` lá dentro explicando. O resto deste parágrafo é o **histórico do porquê**, e segue valendo como regra: **nunca clonar, criar worktree, `npm install` ou `./gradlew` dentro do Drive de novo.**
+
+Enquanto o projeto viveu lá, isso ja corrompeu o `.git` uma vez, renomeando objetos (ver `project_git_repo_lives_in_google_drive`), e trava o Finder/`fileproviderd` do macOS de forma recorrente: builds do Gradle (`android/build`, `android/app/build`, `android/wear/build`, `android/.gradle`) e instalacoes de `npm` (`node_modules` na raiz, em `functions/`, `functions-autodraw/`, `functions-stripe/`) geram dezenas de milhares de arquivos pequenos que o Drive tenta sincronizar um a um. Quando esses arquivos sao apagados/recriados (rebuild, `npm install`) antes do Drive terminar de processar, o Finder trava tentando mover pra Lixeira e o `fileproviderd` entra em loop consumindo 100%+ de CPU por horas — so resolve matando o Google Drive (Sair, nao so fechar a janela) e, se persistir, forcando o Finder a reiniciar via Monitor de Atividade. Aconteceu de novo em 15/ago/2026 com mais de 78 mil itens acumulados na Lixeira.
 
 **Git worktrees (`.claude/worktrees/*`) sao o maior agravante**: cada worktree e um checkout completo do repo: se `npm install`/`./gradlew` rodar dentro dela, o problema se multiplica por N worktrees. Em 15/ago/2026 as 3 worktrees ativas somavam mais de 600MB de `node_modules`/build cache duplicado, tudo dentro do Drive — foi limpo manualmente nessa data, mas volta a acontecer a cada novo build/install se ninguem limpar.
 
@@ -163,7 +165,7 @@ O projeto inteiro (`scoreplace.app-main`) vive dentro do Google Drive (`~/Librar
 1. Ao terminar uma sessao de build/teste/install (nesta pasta OU numa worktree), limpar os diretorios gerados: `rm -rf android/build android/app/build android/wear/build android/.gradle node_modules functions/node_modules functions-autodraw/node_modules functions-stripe/node_modules .firebase outputs playwright-report test-results www firestore-debug.log` (caminhos relativos a raiz de cada worktree/checkout).
 2. Antes de rodar uma bateria pesada de build/teste (`./gradlew assembleDebug`, `npm run test:e2e`, etc.), considerar fechar o Google Drive primeiro (icone na barra de menu -> engrenagem -> Sair) e reabrir depois — evita a corrida entre o build e o sync.
 3. NAO "resolver" isso symlinkando `node_modules` (ou `build/`) pra fora do Drive sem tambem garantir que o `.gitignore` ignora o link em si e nao so o diretorio — foi exatamente isso que quebrou o GitHub Pages em 02/ago/2026 (`upload-pages-artifact` faz `tar --dereference`, o link aponta pra maquina local, o tar falha). Ver comentario nas linhas finais do `.gitignore` antes de mexer nisso de novo.
-4. Se for iniciar um projeto novo (ou tiver a chance de reestruturar este), a correcao definitiva e nao ter o repo dentro de uma pasta sincronizada por nuvem — Google Drive/iCloud nao substituem o GitHub como fonte de verdade/backup, e ativamente atrapalham build tools. Preferir clonar em `~/dev/` ou equivalente fora de qualquer sync.
+4. ✅ **FEITO em 16/ago/2026** (era "se tiver a chance de reestruturar"; foi reestruturado — o repo está em `~/dev/scoreplace.app`). A correcao definitiva e nao ter o repo dentro de uma pasta sincronizada por nuvem — Google Drive/iCloud nao substituem o GitHub como fonte de verdade/backup, e ativamente atrapalham build tools. Preferir clonar em `~/dev/` ou equivalente fora de qualquer sync.
 
 ### OBRIGATORIO: Validacao Sintatica Apos Qualquer Edicao
 **CRITICO:** Apos QUALQUER edicao de codigo (especialmente auditorias de seguranca, escaping de XSS, ou operacoes de busca-e-troca em massa), DEVE-SE validar que todo arquivo JS modificado faz parse sem erros de sintaxe. Executar antes de fazer deploy:
@@ -519,8 +521,8 @@ Escape hatch só pra emergência declarada: `SP_SKIP_ALIGNMENT=1` (avisa no cons
 ```bash
 rm -rf /tmp/sp-deploy && mkdir -p /tmp/sp-deploy
 git archive HEAD | tar -x -C /tmp/sp-deploy          # árvore COMMITADA, do repo LOCAL
-# ⚠️ node_modules: apontar pro do REPO PAI, não pro "$PWD" — ver a armadilha abaixo
-ln -s "/Users/rtb/Library/CloudStorage/GoogleDrive-rstbarth@gmail.com/Meu Drive/scoreplace.app-main/node_modules" /tmp/sp-deploy/node_modules
+# ⚠️ node_modules: apontar pro do REPO DE TRABALHO, não pro "$PWD" — ver a armadilha abaixo
+ln -s "/Users/rtb/dev/scoreplace.app/node_modules" /tmp/sp-deploy/node_modules
 ls /tmp/sp-deploy/node_modules/@playwright/test >/dev/null || echo "SYMLINK QUEBRADO — pare aqui"
 cd /tmp/sp-deploy && firebase deploy --only hosting --project scoreplace-app
 ```
@@ -559,6 +561,26 @@ publica é o Firebase) e verde parecia deploy feito (também não era). E o buil
 atrasado — se o DNS voltasse pra lá, o ar viraria a versão velha. Removidos: o site do Pages
 (via API), o `CNAME`, o `.nojekyll` e o `pages.yml`. O que sobreviveu do workflow foi o que
 valia: virou `.github/workflows/ci.yml`, que **só roda a suíte** e não publica nada.
+
+**A REDE DE BAIXO É AUTOMÁTICA (22/ago/2026).** Além do GitHub, o repo inteiro é
+guardado num `.bundle` único dentro do Drive — a rede pra quando o GitHub cai (já caiu no
+meio de uma publicação, em 06/ago/2026). Isso **não depende mais de ninguém lembrar**: o
+`deploy-hosting.sh` chama `scripts/backup-bundle.sh` no passo 8, então **o ar, o `main` e o
+backup saem juntos**. O script gera em `/tmp`, roda `git bundle verify` e **só então** troca
+o arquivo (bundle corrompido que substitui um bom é pior que backup nenhum), e pula sozinho
+se já estiver empatado. Drive desmontado **não derruba** um deploy já publicado: avisa e sai 0.
+
+```bash
+scripts/backup-bundle.sh --check   # sai 1 se o backup estiver atrás do main
+```
+
+**POR QUE VIROU SCRIPT:** em 22/ago/2026 o bundle estava em **1.8.93 com o ar em 2.0.6 —
+225 commits atrás**. Ninguém errou comando: o procedimento estava escrito à mão no
+`LEIA-ME.txt` do Drive, e procedimento à mão não é executado. Segunda rede 225 commits
+atrás não é rede. Mesma lição do `check-deploy-alignment.js`: o que não é gate, não acontece.
+
+⚠️ A pasta do Drive guarda também a **keystore do Android** (`android-signing/`) e os
+segredos locais — coisas que **nunca** entram no git. Ela não é lixo a ser apagado; é cofre.
 
 **BACKUP:** o backup do código é o **GitHub**, e ele não foi tocado — desativar o Pages
 removeu só o papel de publicar. Como `hosting.public` é `"."`, o site é a raiz do repo

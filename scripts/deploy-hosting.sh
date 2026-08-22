@@ -182,3 +182,10 @@ if [[ "${AR:-}" != "$VERSAO" ]]; then
   exit 1
 fi
 echo "✓ NO AR: $VERSAO  ·  main alinhado em ${COMMIT:0:8}"
+
+# ── 8. empatar o backup ──────────────────────────────────────────────────────
+# "tem que sempre atualizar tudo para tudo ficar junto" (dono, 22/ago/2026).
+# O ar, o main e a rede de baixo (o bundle no Drive) saem daqui juntos. Isso é
+# best-effort DE PROPÓSITO: o deploy já foi publicado e conferido acima — Drive
+# desmontado não pode transformar uma publicação boa em erro. Ele grita e sai 0.
+"$RAIZ/scripts/backup-bundle.sh" || true
