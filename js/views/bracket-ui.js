@@ -8549,14 +8549,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
           var _cuCP = window.AppStore && window.AppStore.currentUser;
           var _myUidCP = _cuCP && _cuCP.uid;
           if (_cp && _myUidCP && !_casualCancelled) {
-            var _amInitiator = _cp.by === _myUidCP;
-            var _confirmed = Array.isArray(_cp.confirmedBy) && _cp.confirmedBy.indexOf(_myUidCP) !== -1;
-            var _existingBanner = document.getElementById('close-pending-banner');
-            if (!_existingBanner) {
-              _showClosePendingBanner(_amInitiator, _cp.byName || '');
-            } else if (!_amInitiator && !_confirmed) {
-              // banner já existe e eu ainda não confirmei — nada a fazer
+            // 2.0.4: ninguém mais ESCREVE closePending, mas uma sala aberta antes desta versão
+            // pode carregar um. Nesse caso ele é LIMPO, não exibido — senão a tela que o dono
+            // mandou tirar voltaria a prender justamente nas salas antigas.
+            var _dbCPL = window.FirestoreDB && window.FirestoreDB.db;
+            if (_dbCPL && _casualDocId) {
+              try { _dbCPL.collection('casualMatches').doc(_casualDocId).update({ closePending: null }).catch(function () {}); } catch (e) {}
             }
+            var _bannerVelho = document.getElementById('close-pending-banner');
+            if (_bannerVelho) _bannerVelho.remove();
+            _myCloseClicked = false;
           } else {
             // closePending foi removido (Recusar/Cancelar) — remove o banner e
             // reseta o flag local pra TODOS resumirem o placar e poderem
@@ -10852,26 +10854,21 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // veem o banner via onSnapshot e podem Confirmar ou Recusar.
     var _cuCL = window.AppStore && window.AppStore.currentUser;
     var _myUidCL = _cuCL && _cuCL.uid;
-    if (isCasual && _casualDocId && _myUidCL && _knownPlayerUids.length > 1 && !_myCloseClicked) {
-      _myCloseClicked = true;
-      var _dbCL = window.FirestoreDB && window.FirestoreDB.db;
-      if (_dbCL) {
-        _dbCL.collection('casualMatches').doc(_casualDocId).update({
-          closePending: {
-            by: _myUidCL,
-            byName: (_cuCL.displayName || _cuCL.email || 'Alguém'),
-            at: Date.now(),
-            confirmedBy: []
-          }
-        }).catch(function(e) {
-          _myCloseClicked = false;
-          window._warn('[closeConsensus] update failed', e);
-          showNotification('Erro', 'Não foi possível solicitar encerramento. Tente novamente.', 'error');
-        });
-      }
-      _showClosePendingBanner(true, '');
-      return;
-    }
+    // ⚰️ 2.0.4 — O CONSENSO DE ENCERRAMENTO SAIU. Ordem do dono, depois de ficar preso:
+    // _"essa tela que nos prende numa partida casual esta irritando"_ · _"o certo é pedir uma
+    // confirmacao e sair de uma vez"_.
+    //
+    // O que havia: quem clicava no ✕ escrevia `closePending` no doc e levava um banner de
+    // TELA CHEIA ("Aguardando confirmação") com um único botão, Cancelar. O escape "Fechar
+    // agora" só nascia 12 segundos depois.
+    // 🔴 POR QUE ISSO PRENDIA DE VERDADE: a condição era `_knownPlayerUids.length > 1`, mas
+    // quem precisa confirmar é gente com CONTA. Numa partida contra vagas ("Jogador 2",
+    // "Jogador 4") não existe ninguém do outro lado — a confirmação NUNCA chegaria, e o
+    // dono ficava olhando um modal esperando um fantasma responder.
+    //
+    // Agora o ✕ cai no diálogo que SEMPRE existiu logo abaixo (_confirmarFechamento), que já
+    // diz o que vai acontecer com o resultado e com os outros jogadores, e encerra na hora.
+    // Uma pergunta, uma resposta, e sai.
     var _cleanup = function() {
       if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
       window.removeEventListener('resize', _onResize);
@@ -12556,7 +12553,16 @@ window._openCasualMatch = function(restoreOpts) {
             gender: _slotGenders[ci] || ''
           };
         }
-        if (_isLinkedCard) { bg = 'rgba(99,102,241,0.10)'; bdr = 'rgba(99,102,241,0.40)'; textClr = 'var(--text-bright)'; }
+        // 🔵🔴 2.0.4 — A COR DO CARD É DO TIME, e o vínculo NÃO a sobrescreve.
+        // Relato do dono: _"aquela coisa de todos os jogadores ficarem com a mesma cor na tela
+        // de configuração quando forma os times manualmente"_. Era esta linha: qualquer slot
+        // com amigo VINCULADO virava índigo — e formar os times à mão é justamente vincular
+        // gente de verdade, então os quatro ficavam da mesma cor e a divisão dos times sumia
+        // da tela. O vínculo já se anuncia sozinho, pelo AVATAR da pessoa com o ✕ de
+        // desvincular; ele não precisa (nem deve) roubar a cor que diz de que lado se joga.
+        // Sem time definido ainda, o índigo continua marcando "esta vaga tem gente de conta".
+        var _temTime = _teamsFormed && (team === 1 || team === 2);
+        if (_isLinkedCard && !_temTime) { bg = 'rgba(99,102,241,0.10)'; bdr = 'rgba(99,102,241,0.40)'; textClr = 'var(--text-bright)'; }
         var _readonlyAttr = (_isRegCard || _isLinkedCard) ? 'readonly ' : '';
         var _regExtraStyle = (_isRegCard || _isLinkedCard) ? 'pointer-events:none;cursor:inherit;' : '';
         // Em modo técnico sem vínculo: handle ⠿ para arrastar (único ponto de

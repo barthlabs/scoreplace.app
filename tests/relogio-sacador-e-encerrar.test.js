@@ -65,13 +65,22 @@ check('há UMA rotina de fechamento, usada pelos dois gatilhos',
   /showConfirmDialog\(_title, _msg, _confirmarFechamento\)/.test(BRACKET) &&
   (BRACKET.match(/_confirmarFechamento\s*=\s*function/g) || []).length === 1);
 
-// ⚠️ O consenso do casual multiplayer NÃO pode ser pulado: ali quem decide são os
-// outros jogadores, não quem está com o relógio no pulso. Ele roda antes e devolve
-// cedo — o modo sem diálogo entra depois dele, nunca antes.
-const idxConsenso = BRACKET.indexOf('closePending: {');
-const idxSemDialogo = BRACKET.indexOf('if (opts && opts.semDialogo)');
-check('o consenso multiplayer continua na frente do fechamento direto',
-  idxConsenso > 0 && idxSemDialogo > idxConsenso);
+// ⛔ 2.0.4 — ESTA REGRA FOI REVOGADA PELO DONO, e a asserção virou o contrário.
+// Antes: o consenso do casual multiplayer rodava ANTES do fechamento direto, porque "quem
+// decide são os outros jogadores". Na prática ele PRENDIA: banner de tela cheia com um
+// único botão (Cancelar), escape só após 12s, e a condição era `_knownPlayerUids.length > 1`
+// — que dispara até quando os adversários são VAGAS sem conta ("Jogador 2", "Jogador 4"),
+// gente que nunca poderá confirmar. O dono, preso na tela: _"essa tela que nos prende numa
+// partida casual esta irritando"_ · _"o certo é pedir uma confirmacao e sair de uma vez"_.
+// Agora o ✕ cai direto no diálogo único (_confirmarFechamento) e encerra.
+check('NÃO existe mais consenso de encerramento que prenda a partida casual',
+  BRACKET.indexOf('closePending: {') === -1);
+check('e o ✕ do celular cai no diálogo ÚNICO, que encerra na hora',
+  /showConfirmDialog\(_title, _msg, _confirmarFechamento\)/.test(BRACKET));
+// Sala aberta ANTES desta versão pode carregar um closePending pendurado: ele tem que ser
+// LIMPO, não exibido — senão a tela removida voltaria a prender justamente nas salas antigas.
+check('closePending herdado de sala antiga é limpo, não exibido',
+  /closePending: null/.test(BRACKET));
 
 // ── 3 · os DOIS relógios mandam a ordem ────────────────────────────────────
 check('watchOS: existe sendClose',
