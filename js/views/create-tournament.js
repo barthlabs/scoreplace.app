@@ -406,6 +406,7 @@ function setupCreateTournamentModal() {
                      na tela de sorteio — as duas podiam divergir, que é o que o dono viu. -->
                 <input type="checkbox" id="gender-ratio-lock" checked style="display:none;">
                 <div id="gender-ratio-mount"></div>
+              </div>
               <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">

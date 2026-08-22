@@ -23,6 +23,13 @@ const SUITES = [
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
   'tests/css-nao-perde-regra.test.js',
+  // Mesma classe, no HTML: uma <div> sem fechar não dá erro de sintaxe — ANINHA o resto
+  // dentro dela. Na 2.0.10 o </div> do #gender-ratio-box foi apagado, #tiebreaker-section
+  // foi parar dentro do #fase1-box, e o reorder do setup passou a tentar enfiar o pai
+  // dentro do filho: HierarchyRequestError derrubou setupCreateTournamentModal NO MEIO.
+  // Tudo que ela define depois sumiu (openEditTournamentModal, openCreateTournament,
+  // _ctSetRatio…) e CRIAR e EDITAR torneio pararam — em silêncio, sem erro no console.
+  'tests/form-nao-perde-div.test.js',
   // O app foi escrito olhando o tema ESCURO: caixa se destaca CLAREANDO o fundo, recua
   // ESCURECENDO, e texto de destaque é pastel. Os três hábitos INVERTEM no tema claro —
   // por isso o dono via "fonte preta em box escuro" e placar da mesma cor do card.
