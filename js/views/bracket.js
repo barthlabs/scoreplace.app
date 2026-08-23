@@ -3783,7 +3783,17 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
     // 1.9.39: o volume desta caixa virou CLASSE (`sp-mc-box`); só a ALTURA, que depende
     // do teto de fonte do nome, continua inline — como variável, que é o mínimo possível.
-    const _boxNome = `--sp-box-h:${(_nomeMaxRem * 1.35).toFixed(2)}rem`;
+    // ── 2.0.30 · A CAIXA PASSA A TER ALTURA DE DUAS LINHAS, PRA TODO MUNDO ─────────
+    // Era `× 1.35`: UMA linha. Com uma linha de altura, "quebrar em duas" é geometria
+    // impossível — pra duas linhas caberem, a fonte tem que descer ABAIXO do que uma linha
+    // já dava, então o ajuste (corretamente) escolhia uma linha e o nome longo virava o fio
+    // que o dono viu no print, minúsculo ao lado do nome curto do parceiro.
+    // Ordem do dono (23/ago/2026): _"diminui a fonte e quebra linhas sempre mantendo o box
+    // do mesmo tamanho para cada participante"_ — o box igual é ENTRE PARTICIPANTES, não
+    // igual ao de ontem. Com `× 2.2` (duas linhas de `line-height:1.1`) o nome longo cabe
+    // em duas linhas equilibradas com fonte legível, o nome curto fica centrado numa linha
+    // só, e a caixa continua exatamente do mesmo tamanho pros dois — que é o cânone.
+    const _boxNome = `--sp-box-h:${(_nomeMaxRem * 2.2).toFixed(2)}rem`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +

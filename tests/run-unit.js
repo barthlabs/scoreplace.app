@@ -139,6 +139,7 @@ const SUITES = [
   'tests/consenso-na-dashboard.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
+  'tests/nome-longo-quebra-em-duas-linhas.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador
   'tests/repechage-best-loser.test.js',
   // MOTOR DE CHAVES determinístico (js/views/chaves.js): a chave é função pura de

@@ -75,6 +75,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.30 ─────────────────────────────
+        // Substitui o item do ciclo 2.0.29 (que descrevia a MESMA entrega pela metade: lá o
+        // nome parava de ser cortado, mas continuava encolhendo numa linha só). Item único,
+        // porque pro usuário é uma coisa só — como o nome dele aparece no card do jogo.
+        '<li><b>\uD83D\uDCDB Nome comprido no card do jogo agora ocupa duas linhas, em tamanho normal:</b> quem tem quatro ou cinco sobrenomes via o nome <b>encolher at\u00e9 virar um fio</b> ao lado do placar \u2014 e, nos casos piores, terminar no meio. Agora o nome longo <b>quebra em duas linhas equilibradas</b>, com a letra no tamanho de sempre e sem partir palavra ao meio. O espa\u00e7o do nome \u00e9 <b>igual para todos os participantes</b>, ent\u00e3o ningu\u00e9m fica com mais destaque por ter nome maior \u2014 e o nome nunca mais encosta na pontua\u00e7\u00e3o.</li>' +
         // ── ciclo 2.0.27 ─── (os 5 acertos do melhor de 3/5 vistos no sandbox pelo dono;
         //     o item do ciclo 2.0.26 abaixo descreve a entrega, este descreve o que mudou nela)
         '<li><b>🎾 O placar por set ficou no lugar em tela estreita — e o box do próximo set nasce zerado:</b> com a fonte grande, o card passava da borda e o <b>✓ Confirmar</b> aparecia cortado; agora o card para na largura da tela. E confirmar um set não copia mais o placar dele para o box seguinte — o Set 2 (e o super tie-break, na melhor de 3 ou de 5) começa em branco, como tem que ser. O box do super tie-break passou a ser rotulado <b>STB</b>, já que a linha de cima escreve o nome inteiro, e essa linha ganhou <b>cor de destaque</b>. Quando o jogo termina, ela some: fica só o placar dos sets.</li>' +

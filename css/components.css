@@ -2345,7 +2345,12 @@ html, body,
 .sp-mc-col{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
-.sp-mc-sc{display:flex;align-items:center;flex-shrink:0;}
+.sp-mc-sc{display:flex;align-items:center;flex-shrink:0;margin-left:8px;}
+/* O `margin-left` acima é o que impede o nome de ENCOSTAR no placar. A linha é
+   `justify-content:space-between`, o que dá folga só quando o nome é curto; com o nome
+   longo a caixa (`flex:1;min-width:0`) cresce até colar no número — foi o que o dono viu
+   no print de 23/ago/2026, o nome terminando rente ao "4". Folga fixa resolve dos dois
+   lados: o nome nunca invade a pontuação e o ajuste de fonte já enxerga a largura real. */
 /* ─── ⭐ MELHOR DE 3 / MELHOR DE 5 no card do jogo (2.0.26) ────────────────────────
    Uma COLUNA por set: os já confirmados à esquerda, o em disputa na ponta direita, e
    os rótulos ("Set 1", "Super Tie-Break (10)") na linha de cima, cada um em cima do
@@ -2387,7 +2392,27 @@ html, body,
 .sp-mc-inp{width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;}
 .sp-av{width:var(--sp-av,20px);height:var(--sp-av,20px);border-radius:50%;flex-shrink:0;object-fit:cover;}
 .sp-av-p{opacity:0.95;}
-.sp-mc-box{flex:1;min-width:0;height:var(--sp-box-h,1.05rem);overflow:hidden;display:flex;align-items:center;}
+.sp-mc-box{flex:1;min-width:0;height:var(--sp-box-h,1.05rem);overflow:hidden;display:flex;align-items:center;line-height:1.1;}
+/* ⚠️ O `line-height:1.1` acima NÃO é cosmético: esta caixa tem ALTURA FIXA, e quando
+   o nome é longo demais o motor do fit (store.js, `_quebraNaCaixaEmLote`) o quebra em
+   DUAS linhas DENTRO deste mesmo espaço — cânone do dono, 23/ago/2026: a caixa é igual
+   pra todo mundo, quem tem nome longo paga em legibilidade, não em destaque. O quanto a
+   fonte precisa encolher pra as duas linhas caberem sai direto daqui: com o `normal` do
+   navegador (~1.2) o motor descia até 0.36rem; com 1.1 a quebra típica para em 0.54rem
+   (individual) / 0.48rem (dupla) e o pior caso da varredura em 0.42rem — MEDIDO em 174
+   slots (0-8 sobrenomes × coroa × dupla × 2 temas × 390/768/1280), zero cortes. Repare
+   que 0.54 encosta no piso de 0.58 que o nome JÁ atingia antes de ser cortado: o preço
+   da 2ª linha é quase nada. Afrouxar este valor ENCOLHE o nome; apertar mais começa a
+   comer acento e perna de 'g'. */
+/* A COROA TEM QUE ENCOLHER JUNTO COM O NOME. O `_CROWN_MINI` sai do render com
+   `width="14" height="14"` CRAVADO em px (bracket.js) — e px não sabe que o nome ao lado
+   encolheu. MEDIDO: com o nome quebrado em 2 linhas numa caixa de 17px (390px de tela), a
+   coroa de 14px sozinha faz cada linha valer ≥14px, ou seja 28px de conteúdo em 17px de
+   caixa: cortava por causa do ícone, não do texto, e nenhuma fonte menor resolvia. Em
+   `1em` ela vira tamanho ~idêntico ao de hoje no nome inteiro (13,8px de fonte × 1em) e
+   acompanha a descida quando o nome é longo. Atributo de apresentação perde pra CSS, então
+   isto vale sem tocar no render. */
+.sp-mc-box svg{width:1em;height:1em;flex-shrink:0;}
 
 /* ⛔ `content-visibility:auto` FOI RETIRADO (1.9.41) — e não deve voltar sem resolver isto.
    Ele valia 35% do tempo de pintura, MAS quebrou os balõezinhos de dica: o balão é

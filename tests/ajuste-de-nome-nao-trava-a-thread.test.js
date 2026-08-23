@@ -27,9 +27,16 @@
  *      por IntersectionObserver/ResizeObserver, que já existiam);
  *   4. as fatias correm rAF × timeout (rAF não dispara em aba de fundo — sozinho,
  *      deixaria metade dos nomes CORTADOS até a pessoa voltar ao app);
- *   5. a regra visual da v1.7.77 continua: no piso e ainda estourando a LARGURA,
- *      quebra linha (nunca vaza). Altura estourada NÃO quebra (quebrar aumentaria
- *      a altura).
+ *   5. a regra visual da v1.7.77 continua: no piso e ainda estourando, quebra linha
+ *      (nunca vaza).
+ *
+ * ⚠️ ATUALIZADO EM 2.0.30 — este cabeçalho dizia "Altura estourada NÃO quebra (quebrar
+ * aumentaria a altura)". A quebra deixou de ser último recurso: hoje TODO nome que não
+ * cabe inteiro no TETO da fonte em uma linha vai para duas linhas equilibradas
+ * (`_tentaDuasLinhasEmLote`), e a fonte só encolhe depois que duas linhas se esgotam.
+ * A regra e o porquê estão em tests/nome-longo-quebra-em-duas-linhas.test.js.
+ * O que ESTE teste guarda é o CUSTO: a forma nova também roda em lote, com leitura e
+ * escrita em fases e busca binária com teto — senão volta o trem de travadas das 78-81.
  */
 const fs = require('fs');
 const path = require('path');
@@ -76,11 +83,27 @@ ok(/requestAnimationFrame\(_segue\);[\s\S]{0,60}setTimeout\(_segue, 16\)/.test(l
    'e corre rAF × timeout (rAF não dispara em aba de fundo)');
 ok(/> 8\)/.test(lo), 'o lote respeita orçamento de quadro (~8ms)');
 
-// 5. regra visual preservada
-ok(/d\.fsFinal <= d\.minR \+ 0\.001 && d\.el\.scrollWidth > d\.bw \+ 1/.test(lote),
-   'no piso e estourando a LARGURA → quebra linha (v1.7.77 preservada)');
-ok(/d\.el\.style\.whiteSpace = 'normal';\s*d\.el\.style\.wordBreak = 'break-word';/.test(lote),
-   'e a quebra é whiteSpace:normal + wordBreak (como antes)');
+// 5. regra visual preservada — a quebra existe, e é DELEGADA a quem sabe medi-la
+ok(/d\.fsFinal < d\.maxR - 0\.001/.test(lote),
+   'quem não coube no TETO da fonte em uma linha vai pra quebra (a regra da v1.7.77, ampliada)');
+ok(/_tentaDuasLinhasEmLote\(_pQuebrar\)/.test(lote),
+   'e a quebra é delegada ao helper que mede as duas linhas');
+
+// 5b. o helper paga o MESMO pedágio: leitura e escrita em fases, busca binária com teto.
+// Sem isto ele reintroduz o layout thrashing por outro caminho.
+const iQ = src.indexOf('function _tentaDuasLinhasEmLote(itens) {');
+ok(iQ > 0, 'existe o helper das duas linhas (_tentaDuasLinhasEmLote)');
+const q = src.slice(iQ, src.indexOf('\n  }', iQ) + 4);
+ok(/\(a\) só ESCRITA[\s\S]{0,600}\(b\) só LEITURA/.test(q),
+   'escrita e leitura em fases separadas (um reflow por LOTE, não por elemento)');
+ok(/d\.bw2 = d\.box\.clientWidth; d\.bh2 = d\.box\.clientHeight;/.test(q),
+   'mede as caixas numa varredura só');
+ok(/for \(var it = 0; it < 7 && vivos\.length; it\+\+\)/.test(q),
+   'e converge por busca binária em lote, com o mesmo teto de 7 passos');
+// ⛔ e a peneira de entrada tem que continuar existindo: sem ela TODO nome pagaria a
+// busca extra, e medir layout é exatamente o que custou caro nas builds 78-81.
+ok(/var temEspaco = \/\\s\/\.test/.test(lote),
+   'nome sem espaço nem tenta duas linhas (não há onde quebrar — seria busca jogada fora)');
 
 console.log(`\n  ${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

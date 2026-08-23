@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.27';
+window.SCOREPLACE_VERSION = '2.0.30';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -5154,6 +5154,118 @@ window._firstNameOnly = function(name) {
 (function() {
   var _ro = null;
 
+  // ── NOME LONGO VIRA BLOCO DE DUAS LINHAS, NÃO UM FIO (2.0.30) ───────────────
+  // Duas ordens do dono, no mesmo dia (23/ago/2026), a segunda corrigindo a leitura que
+  // eu fiz da primeira:
+  //   (1) _"mantendo o tamanho da caixa para todos e reduzindo o tamanho da fonte dos
+  //   nomes maiores… se precisar pode quebrar em 2 linhas mas mantendo o mesmo espaço da
+  //   caixa. assim a pessoa vai perceber que um nome longo fica mais difícil de ler e não
+  //   com mais destaque."_
+  //   (2) olhando o card pronto · _"nomes longos não podem invadir a área da pontuação ou
+  //   truncar. devem quebrar em 2 linhas… tentar quebrar sempre para as 2 linhas tenham o
+  //   mesmo número de caracteres sem quebrar palavras no meio."_
+  //
+  // A REGRA É LITERAL: coube inteiro no TETO da fonte em uma linha? uma linha. Não coube?
+  // DUAS linhas equilibradas, encolhendo o quanto for preciso dentro da MESMA caixa. Ou
+  // seja, a fonte só encolhe DEPOIS que duas linhas se esgotam — nunca mais existe
+  // "encolher pra continuar numa linha só", que era o fio do print.
+  //
+  // ⛔ NÃO É "a forma que dá a fonte maior". Eu tentei essa régua e ela é uma armadilha de
+  // GEOMETRIA: numa caixa com altura de UMA linha ela escolhe sempre a linha única, porque
+  // pra caber duas linhas a fonte tem de descer abaixo do que uma linha já dava. Enquanto
+  // a caixa tiver uma linha de altura, "quebre em duas" é impossível, não difícil. Por isso
+  // a caixa (bracket.js, `--sp-box-h`) passou a valer DUAS linhas pra todo mundo — o "box
+  // do mesmo tamanho" do dono é igual ENTRE PARTICIPANTES, não igual ao de ontem.
+  //
+  // ⚠️ O EQUILÍBRIO É `text-wrap:balance`, NÃO um `<br>` calculado aqui. O nome do card
+  // vive num `[data-uid-name]` que `_hydrateUidNames` reescreve por `textContent` quando o
+  // perfil chega: qualquer quebra INJETADA no texto seria apagada na hidratação e voltaria
+  // diferente no passe seguinte. `balance` iguala as linhas sem tocar no conteúdo e, por
+  // definição, só quebra em espaço — é literalmente "mesmo número de caracteres sem quebrar
+  // palavras no meio", feito por quem já sabe medir a fonte. Por isso `word-break:break-word`
+  // saiu do caminho normal e só volta como último recurso, pra palavra única maior que a caixa.
+  //
+  // ⚠️ E O RE-MEDIR É O QUE MANTÉM ISTO GENÉRICO: em caixa que PODE CRESCER o `clientHeight`
+  // cresce junto com a quebra, então nada é encolhido e nenhum teto de linhas é imposto — a
+  // v1.7.77 segue idêntica na classificação, na dashboard e no explore. Só a caixa de altura
+  // fixa paga. Nenhum `if` de classe aqui, de propósito.
+  var _PISO_QUEBRA = 0.34;   // piso ABSOLUTO da quebra: abaixo disto o nome não é mais
+                             // texto, é textura. O laço precisa de fundo.
+
+  // "coube" na forma de duas linhas: dentro da caixa E, em caixa de altura fixa, em no
+  // máximo DUAS linhas. Duas linhas são DUAS: com a fonte lá embaixo, três e até onze
+  // linhas CABEM numa caixa de 20px, e "cabe" não é o pedido. O número de linhas sai de
+  // scrollHeight ÷ line-height do próprio elemento, lido na MESMA fase de leitura em que
+  // já se mede scrollWidth — então não custa um reflow a mais.
+  function _cabe(d) {
+    if (d.el.scrollWidth > d.bw2 + 1 || d.el.scrollHeight > d.bh2 + 1) return false;
+    if (!d.fixa) return true;
+    var lh = parseFloat(getComputedStyle(d.el).lineHeight) || 0;
+    if (!lh) return true;
+    return Math.round(d.el.scrollHeight / lh) <= 2;
+  }
+
+  // Recebe [{el, box, maxR, fs, coube, bh0}] — `fs`/`coube` são o resultado de UMA linha
+  // e `bh0` a altura da caixa ANTES da quebra (é ela que diz se a caixa é fixa ou cresce).
+  // Em LOTE (leitura e escrita em fases separadas) pelo mesmo motivo da 1.9.82: alternar
+  // escrita e leitura por elemento força um reflow síncrono por vez, e foi o "trem" de
+  // travadas de ~1s que o dono mediu nas builds 78-81.
+  function _tentaDuasLinhasEmLote(itens) {
+    if (!itens.length) return;
+    // (a) só ESCRITA — veste a forma de duas linhas e volta ao TETO da fonte: duas linhas
+    //     podem sustentar uma fonte MAIOR que a linha única, então a busca recomeça do alto.
+    itens.forEach(function (d) {
+      d.el.style.whiteSpace = 'normal';
+      d.el.style.wordBreak = '';
+      d.el.style.textWrap = 'balance';
+      d.el.style.fontSize = d.maxR + 'rem';
+    });
+    // (b) só LEITURA — mede a caixa (que pode ter crescido) e o texto (um layout p/ o lote)
+    var vivos = [];
+    itens.forEach(function (d) {
+      d.bw2 = d.box.clientWidth; d.bh2 = d.box.clientHeight;
+      if (!d.bw2 || !d.bh2) { d.best2 = null; return; }
+      d.fixa = !(d.bh2 > d.bh0 + 1);
+      if (_cabe(d)) { d.best2 = d.maxR; return; }
+      d.lo = _PISO_QUEBRA; d.hi = d.maxR; d.best2 = null;
+      vivos.push(d);
+    });
+    // (c) busca binária EM LOTE, igual à fase 3: um par escrita+leitura por iteração para
+    //     o lote inteiro. O alvo é caber nas DUAS dimensões, já quebrado.
+    for (var it = 0; it < 7 && vivos.length; it++) {
+      vivos.forEach(function (d) {
+        d.mid = Math.max(_PISO_QUEBRA, Math.floor(((d.lo + d.hi) / 2) / 0.03) * 0.03);
+        d.el.style.fontSize = d.mid + 'rem';
+      });
+      var restam = [];
+      vivos.forEach(function (d) {
+        if (_cabe(d)) { d.best2 = d.mid; d.lo = d.mid; } else { d.hi = d.mid; }
+        if (d.hi - d.lo > 0.03 && d.mid > _PISO_QUEBRA) restam.push(d);
+      });
+      vivos = restam;
+    }
+    // (d) só ESCRITA — A DECISÃO. Duas linhas ficam sempre que CABEM em duas (todo mundo
+    //     aqui já falhou em uma linha no teto). Não cabendo nem em duas, ainda assim ficam
+    //     as duas quando a linha única TRUNCAVA — mostrar mais nome é melhor que mostrar
+    //     menos —, com `break-word` de último recurso pra palavra maior que a caixa. Só
+    //     volta pra uma linha quem não tem duas viáveis E cabia inteiro numa.
+    itens.forEach(function (d) {
+      if (d.best2 != null) {
+        d.el.style.fontSize = d.best2 + 'rem';
+        return;
+      }
+      if (!d.coube) {
+        d.el.style.fontSize = _PISO_QUEBRA + 'rem';
+        d.el.style.wordBreak = 'break-word';
+        return;
+      }
+      d.el.style.whiteSpace = '';        // devolve o nowrap original
+      d.el.style.wordBreak = '';
+      d.el.style.textWrap = '';
+      d.el.style.fontSize = d.fs + 'rem';
+    });
+  }
+
   // Ajusta UM elemento `.sp-name-fit` ao box pai. false = box sem dimensão.
   function _fitOne(el) {
     if (!el) return true;
@@ -5190,17 +5302,18 @@ window._firstNameOnly = function(name) {
       }
     }
     // v1.7.77 — A SEGUNDA METADE DA REGRA: chegou no PISO e ainda não coube?
-    // Então QUEBRA em vez de vazar. Sem isto o piso (que existe pra o nome nunca
-    // virar ilegível) fazia o texto estourar a caixa — foi o que aconteceu com
-    // "Bem-vindo, Rodrigo!" no slider em 1,7: encolheu até 1.1rem, parou, e
-    // transbordou. Encolher tem limite; quebrar linha não tem custo de leitura.
-    // Só mexe em quem PEDIU nowrap — quem já quebra não precisa de nada.
-    if (fs <= minR + 0.001 && el.scrollWidth > bw + 1) {
-      el.style.whiteSpace = 'normal';
-      el.style.wordBreak = 'break-word';
+    // Então QUEBRA em vez de vazar. Encolher tem limite; quebrar linha não tem.
+    // 2.0.30: a quebra deixou de ser ÚLTIMO RECURSO — ver `_tentaDuasLinhasEmLote`.
+    // Entra TODO nome que não coube inteiro no TETO da fonte em uma linha; lá dentro
+    // ele sai em duas linhas equilibradas, e só volta pro nowrap se duas linhas não
+    // forem viáveis (palavra única, ou caixa que não comporta nem duas).
+    var _coube1 = (el.scrollWidth <= bw + 1 && el.scrollHeight <= bh + 1);
+    if (!_coube1 || fs < maxR - 0.001) {
+      _tentaDuasLinhasEmLote([{ el: el, box: box, maxR: maxR, fs: fs, coube: _coube1, bh0: bh }]);
     } else if (el.style.whiteSpace === 'normal') {
       el.style.whiteSpace = '';      // coube encolhendo → devolve o nowrap original
       el.style.wordBreak = '';
+      el.style.textWrap = '';
     }
     el.setAttribute('data-fitted', '1');
     el.setAttribute('data-fitw', bw);
@@ -5301,15 +5414,23 @@ window._firstNameOnly = function(name) {
           d.el.setAttribute('data-fith', d.bh);
           if (_ro) { try { _ro.observe(d.box); } catch (e) {} }
         });
-        // fase 5 — no PISO e ainda estourando a LARGURA → quebra linha (regra da
-        // v1.7.77: encolher tem limite; vazar não pode). Uma leitura em lote.
+        // fase 5 — QUEM NÃO COUBE NO TETO EM UMA LINHA VAI PRA DUAS (2.0.30, ver
+        // `_tentaDuasLinhasEmLote`). Era aqui que morava a regra da v1.7.77 (quebrar só
+        // depois do piso); ela virou um caso particular desta. Uma leitura em lote decide
+        // quem entra — e quem entra sai de lá com a forma final já aplicada.
+        var _pQuebrar = [];
         dados.forEach(function (d) {
           if (!d.bw || !d.bh) return;
-          if (d.fsFinal <= d.minR + 0.001 && d.el.scrollWidth > d.bw + 1) {
-            d.el.style.whiteSpace = 'normal';
-            d.el.style.wordBreak = 'break-word';
+          var coube = (d.el.scrollWidth <= d.bw + 1 && d.el.scrollHeight <= d.bh + 1);
+          // ⛔ sem espaço no texto não há onde quebrar: medir duas linhas seria pagar uma
+          // busca binária inteira pra chegar exatamente no mesmo lugar.
+          var temEspaco = /\s/.test(d.el.textContent || '');
+          if (!temEspaco) return;
+          if (!coube || d.fsFinal < d.maxR - 0.001) {
+            _pQuebrar.push({ el: d.el, box: d.box, maxR: d.maxR, fs: d.fsFinal, coube: coube, bh0: d.bh });
           }
         });
+        _tentaDuasLinhasEmLote(_pQuebrar);
       };
       window._fitNamesLote = _fitEmLote;   // exposto p/ medição e teste
       var _lote = function (fila, aoFim) {
