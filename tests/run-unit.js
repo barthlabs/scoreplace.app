@@ -1214,6 +1214,15 @@ const SUITES = [
   // _buildNameToUid lia só os inscritos (que o save stripa) — daí linha 'name:', uid null no
   // slot e nome congelado no card pra sempre. Cura nos dois lados, na leitura.
   'tests/uid-do-slot-nao-some.test.js',
+  // O DEGRAU DE BAIXO do mesmo problema: e quando não há uid nenhum a recuperar? Medido
+  // nos 28 torneios reais — 267 slots de gente, 39 (14,6%) sem uid completo. A leitura
+  // intuitiva ("doc legado, de antes de o sorteio gravar uid") está ERRADA: os 86 nomes
+  // desses slots são gente SEM CONTA (inscrição com `uid: ""` gravado), 0 recuperáveis —
+  // backfill nome→uid escreveria zero, e casar por nome é o que o cânone proíbe. Então o
+  // que se guarda NÃO é a contagem (sobe legitimamente com todo torneio de jogador
+  // fictício) e sim o invariante: slot sem uid ⇒ todo nome nele é de alguém sem conta.
+  // Alguém COM conta ali = nome congelado que nunca mais atualiza.
+  'tests/slot-sem-uid-e-gente-sem-conta.test.js',
   // A MESMA armadilha do `class=` duplicado, um card acima: o span do NOME no card da
   // chave nascia `class="sp-name-fit" … class="sp-mc-nm"` e o parser jogava o segundo
   // fora — `.sp-mc-nm` (peso 600, nowrap, inline-flex) NUNCA valeu ali. Juntar as duas
