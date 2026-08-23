@@ -84,6 +84,17 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.33 ───────────────────────────────────────────
+        // Cinco pedidos do dono no mesmo dia, olhando o SB da Confra. Viram TRÊS itens
+        // porque pro usuário são três coisas: (a) a chave parar de pular, (b) o placar de
+        // melhor de 3/5 se explicar e cobrar a margem do tie-break, (c) o card ficar legível.
+        // O "Simular fase (dev)" NÃO vira item: é botão de teste, só aparece no Sandbox e só
+        // pra identidade de teste — anunciar ferramenta interna é ruído pra quem joga.
+        // O cabeçalho do card pendente (4 linhas → 2) entra no item (c), que é onde o
+        // usuário vê a diferença: sobra card na tela.
+        '<li><b>\uD83D\uDCCD A chave n\u00e3o pula mais de lugar quando voc\u00ea lan\u00e7a um placar:</b> em chave larga, bastava rolar at\u00e9 a rodada que voc\u00ea estava lan\u00e7ando e confirmar um placar \u2014 a chave <b>voltava sozinha para a Rodada 1</b> e voc\u00ea tinha que procurar o jogo de novo a cada resultado. Agora ela fica exatamente onde estava, em qualquer formato de chave.</li>' +
+        '<li><b>\uD83C\uDFBE Tie-break e super tie-break avisam a diferen\u00e7a de 2 pontos ANTES:</b> empatou os sets, a linha do card j\u00e1 diz <b>\u201cSuper Tie-Break (dif 2 pts)\u201d</b> \u2014 antes de voc\u00ea entrar na quadra. No tie-break de um set, o aviso aparece junto com os campinhos de ponto. E o aplicativo passou a <b>cobrar</b> o que avisa: 10-9 no super tie-break n\u00e3o \u00e9 mais aceito. O placar que espera aprova\u00e7\u00e3o tamb\u00e9m ganhou o <b>nome de cada set em cima do n\u00famero</b> \u2014 quem vai confirmar precisa saber qual coluna \u00e9 o Set 2 e qual \u00e9 o super tie-break.</li>' +
+        '<li><b>\uD83D\uDD0D Nome e placar maiores no card do jogo:</b> a caixa do nome tinha crescido para caber nome comprido em duas linhas, mas a letra n\u00e3o \u2014 quem tem nome curto ficava pequeno no meio do espa\u00e7o vazio. Agora <b>nome curto usa letra grande</b>, nome comprido continua cabendo em duas linhas com letra menor, e os dois ocupam <b>o mesmo espa\u00e7o</b>. A <b>foto de cada jogador</b> e os <b>n\u00fameros do placar</b> cresceram junto, at\u00e9 o limite em que nada encavala. No card que espera aprova\u00e7\u00e3o, o cabe\u00e7alho passou de quatro linhas para duas.</li>' +
         // ── ciclos 2.0.30 + 2.0.31 ───────────────────
         // Substitui o item do ciclo 2.0.29 (que descrevia a MESMA entrega pela metade: lá o
         // nome parava de ser cortado, mas continuava encolhendo numa linha só). Item único,

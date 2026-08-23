@@ -638,6 +638,40 @@ window._isUserAtTournamentVenue = function(t) {
 // element, re-renders, then scrolls so the same element is at the same offset.
 // Uses anchor-based approach: saves the viewport-relative offset of a reference
 // element, re-renders, then scrolls so the same element is at the same offset.
+// ── Rolagem horizontal da chave: ler e reaplicar ────────────────────────────────
+// Dois desenhos de chave rolam na horizontal e AMBOS têm que sobreviver ao re-render:
+// `.bracket-sticky-scroll-wrapper` (chave única) e `.bracket-scroll-container` (um por
+// tier/categoria e por chave superior/inferior/grande final). O `data-hscroll` é escrito
+// no render (bracket.js) e é a chave estável de cada um. Sem `data-hscroll` (render
+// antigo em cache) cai no seletor de classe, na ordem do DOM — melhor que perder tudo.
+function _lerRolagensDaChave() {
+  var mapa = {};
+  try {
+    document.querySelectorAll('[data-hscroll]').forEach(function (el) {
+      mapa[el.getAttribute('data-hscroll')] = el.scrollLeft;
+    });
+    if (!Object.keys(mapa).length) {
+      document.querySelectorAll('.bracket-sticky-scroll-wrapper, .bracket-scroll-container')
+        .forEach(function (el, i) { mapa['@' + i] = el.scrollLeft; });
+    }
+  } catch (e) {}
+  return mapa;
+}
+function _aplicarRolagensDaChave(mapa) {
+  if (!mapa) return;
+  try {
+    document.querySelectorAll('[data-hscroll]').forEach(function (el) {
+      var k = el.getAttribute('data-hscroll');
+      if (mapa[k] != null) el.scrollLeft = mapa[k];
+    });
+    document.querySelectorAll('.bracket-sticky-scroll-wrapper, .bracket-scroll-container')
+      .forEach(function (el, i) {
+        if (el.hasAttribute && el.hasAttribute('data-hscroll')) return;   // já tratado acima
+        if (mapa['@' + i] != null) el.scrollLeft = mapa['@' + i];
+      });
+  } catch (e) {}
+}
+
 function _rerenderBracket(tId, anchorMatchId) {
   // Se o usuário está no dashboard, re-renderizar o dashboard — não o bracket.
   // Evita substituir a view atual por um bracket quando o resultado foi lançado
@@ -714,8 +748,20 @@ function _rerenderBracket(tId, anchorMatchId) {
   // 2. Save horizontal scrolls
   var _sx = window.scrollX || window.pageXOffset || 0;
   var _sy = window.scrollY || window.pageYOffset || 0;
-  var bracketWrapper = document.querySelector('.bracket-sticky-scroll-wrapper');
-  var _bsx = bracketWrapper ? bracketWrapper.scrollLeft : 0;
+  // ⛔ A CHAVE NÃO PODE VOLTAR PRA RODADA 1 QUANDO SE LANÇA UM PLACAR.
+  // Relato do dono (23/ago/2026), lançando na R2 da eliminatória do SB: _"lançando o
+  // placar pula para outro lugar na chave. sempre que lançarmos um valor numa chave,
+  // qualquer que seja ela, não pode pular para outro lugar. nunca."_
+  // MEDIDO: chave de 32 a 430px, rolada 750px pra direita pra ver a R2 → confirmar o set
+  // devolvia `scrollLeft` a 0 e o card andava 750px pro lado.
+  // A CAUSA: aqui só se guardava `.bracket-sticky-scroll-wrapper`, que é UM dos dois
+  // desenhos. A tela de detalhe do torneio (onde o dono lança) usa o OUTRO —
+  // `.bracket-scroll-container`, um POR CHAVE (tier/categoria, superior/inferior/grande
+  // final). Nenhum deles era preservado, então o DOM novo nascia em 0.
+  // FONTE ÚNICA: todo rolador horizontal da chave carrega `data-hscroll` com uma chave
+  // ESTÁVEL (bracketKey / título da seção), e este par salva-restaura o mapa inteiro.
+  // Por chave, não por índice: uma chave que aparece ou some não pode embaralhar as outras.
+  var _hscroll = _lerRolagensDaChave();
 
   // v0.16.96: captura valores typed-but-unsaved de TODOS os inputs de placar
   // antes do re-render. Pedido do usuário: "quando o usuário está lançando
@@ -838,8 +884,7 @@ function _rerenderBracket(tId, anchorMatchId) {
     } else {
       window.scrollTo(_sx, _sy);
     }
-    var newWrapper = document.querySelector('.bracket-sticky-scroll-wrapper');
-    if (newWrapper) newWrapper.scrollLeft = _bsx;
+    _aplicarRolagensDaChave(_hscroll);
   }
 
   _restore();
@@ -1302,6 +1347,11 @@ window._highlightWinner = function (matchId) {
       tb2El.style.display = 'inline-block';
       tb1El.setAttribute('data-tb-shown', '1');
       tb2El.setAttribute('data-tb-shown', '1');
+      // ⭐ O aviso "dif 2 pts" aparece NO MESMO instante que os campos — mesmo gatilho, uma
+      // decisão só. Ele nasce escondido no card (bracket.js, `tbhint-<id>`) e só existe
+      // quando a margem é 2+. [[project_placar_por_sets_no_card]]
+      var _hint = document.getElementById('tbhint-' + matchId);
+      if (_hint) _hint.style.display = 'block';
     }
     // NÃO esconde — uma vez visível, persiste. User pode deixar vazio se
     // não foi TB de fato. Save logic ignora valores vazios.
@@ -1706,6 +1756,18 @@ window._confirmSetFromCard = function (tId, matchId, o) {
       _tt('bracket.stbShortDetail', 'O super tie-break vai até {n} pontos.', { n: col.points }), null, { type: 'warning' });
     return;
   }
+  // ⛔ AVISAR A MARGEM E NÃO COBRÁ-LA SERIA MENTIR. A linha de cima anuncia "Super
+  // Tie-Break (dif 2 pts)" desde que os sets empatam; se o 10-9 passasse mesmo assim, a tela
+  // prometeria uma regra e o jogo jogaria outra — que é exatamente o buraco que o dono já
+  // pegou uma vez no empate do set. A margem é a MESMA do plano, lida uma vez.
+  // [[feedback_behavior_is_pure_function_of_config]] · [[project_empate_do_set_vive_no_formato]]
+  var _margem = plan.tiebreakMargin || 2;
+  if (col.kind === 'stb' && _margem >= 2 && Math.abs(s1 - s2) < _margem) {
+    showAlertDialog(_tt('bracket.stbMargin', 'Super tie-break sem a diferença'),
+      _tt('bracket.stbMarginDetail', 'O super tie-break só termina com {n} pontos de diferença.', { n: _margem }),
+      null, { type: 'warning' });
+    return;
+  }
   // FONTE ÚNICA do set gravado (games + subplacar do tie-break): _buildManualSet.
   var novo = window._buildManualSet(s1, s2, {
     isTiebreakEntry: !!o.isTiebreakEntry, tbP1: o.tbP1, tbP2: o.tbP2
@@ -1993,6 +2055,13 @@ window._saveResultInline = function (tId, matchId) {
     var setWinnerIsP1 = s1 > s2;
     if ((setWinnerIsP1 && tbP1 <= tbP2) || (!setWinnerIsP1 && tbP2 <= tbP1)) {
       showAlertDialog(_t('result.tbWinnerMismatch'), _t('result.tbWinnerMismatchDetail'), null, { type: 'warning' });
+      return;
+    }
+    // Mesma regra do super tie-break, um degrau abaixo: o card avisa "dif 2 pts" junto com os
+    // campos, então o placar tem que respeitar a margem. Margem 1 (morte súbita) não cobra.
+    var _tbMargem = window._tbMargem(_isc);
+    if (_tbMargem >= 2 && Math.abs(tbP1 - tbP2) < _tbMargem) {
+      showAlertDialog(_t('result.tbMargin'), _t('result.tbMarginDetail', { n: _tbMargem }), null, { type: 'warning' });
       return;
     }
     isTiebreakEntry = true;

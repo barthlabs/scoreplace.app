@@ -1206,6 +1206,13 @@ const SUITES = [
   // setsToWin — e set parcial NÃO grava vencedor, senão a classificação passa a contar um
   // jogo em andamento. Mede a régua, a decisão, o que o parcial grava e a TELA.
   'tests/placar-por-sets-no-card.test.js',
+  // O placar lançado na chave NÃO move a chave de lugar (a rolagem horizontal sobrevive ao
+  // re-render, nos DOIS desenhos de chave), o Simular fase (dev) joga o formato da FASE
+  // (melhor de 3/5 e super tie-break, não um set solto), a aprovação roda igual à de 1 set —
+  // com os rótulos das colunas no placar pendente — e o tie-break/STB avisa "dif 2 pts"
+  // ANTES, cobrando a margem que anunciou.
+  'tests/placar-na-chave-nao-pula.test.js',
+
   // Presença é sinal POSITIVO e PERECÍVEL: caduca em 24h, em todo o programa. A validade
   // mora na LEITURA (_idMapGet + _presencaViva), nunca numa varredura que apaga — varredura
   // que não rodou mente. `absent` NÃO caduca: é W.O., não presença.

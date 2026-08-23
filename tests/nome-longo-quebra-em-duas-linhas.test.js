@@ -94,11 +94,23 @@ function estatico() {
   const t = MOTOR.slice(iT, MOTOR.indexOf('\n  }', iT) + 4);
   ok(/d\.el\.style\.fontSize = d\.maxR \+ 'rem'/.test(t),
     'a busca de duas linhas recomeça do TETO da fonte (duas linhas podem sustentar mais que uma)');
-  ok(/if \(d\.best2 != null\) \{\s*d\.el\.style\.fontSize = d\.best2 \+ 'rem';/.test(t),
-    'duas linhas ganham SEMPRE que cabem em duas — não é comparação de fonte');
-  // ⛔ a comparação "fica a fonte maior" NÃO pode voltar: numa caixa de uma linha ela
-  // escolhe sempre a linha única (ver o cabeçalho), e foi assim que o fio sobreviveu.
-  ok(!/d\.best2 > d\.fs/.test(t), 'e a régua de "fonte maior" não voltou');
+  // ⭐ 2.0.33 · A REGRA GANHOU UMA EXCEÇÃO ESTREITA, E SÓ UMA. Com o teto dobrado, a busca
+  // das duas linhas (degraus de 0,03rem) às vezes parava um degrau abaixo do que a linha
+  // única já tinha alcançado — MEDIDO: 5 slots saindo 1,62 → 1,59 com UMA linha nas duas
+  // formas, ou seja a forma nova não trazia linha nenhuma e ainda cobrava fonte.
+  // A exceção é: a linha única fica QUANDO JÁ MOSTRAVA O NOME INTEIRO (`d.coube`) E era
+  // maior. É o único caso em que quebrar não entrega nada.
+  // ⛔ E ela NÃO é a régua de "fica a fonte maior" que a 2.0.30 recusou: aquela comparava
+  // sempre, e numa caixa de uma linha escolhia a linha única SEMPRE — inclusive pro nome que
+  // TRUNCAVA, que é como o fio do print sobreviveu. Aqui, se a linha única truncava
+  // (`!d.coube`), as duas linhas ficam mesmo sendo menores. Este par de asserts é que
+  // segura a diferença.
+  ok(/if \(d\.coube && d\.best2 < d\.fs - 0\.001\)/.test(t),
+    'a linha única só vence quando já mostrava o nome INTEIRO e era maior');
+  ok(/if \(!d\.coube\)/.test(t) && !/if \(d\.best2 < d\.fs[^&]*\) \{/.test(t),
+    '⛔ e nunca vence sobre um nome que TRUNCAVA — aí as duas linhas ficam, menores mesmo');
+  ok(/d\.el\.style\.fontSize = d\.best2 \+ 'rem';\s*return;\s*\}/.test(t),
+    'fora dessa exceção, duas linhas ganham sempre que cabem em duas');
   ok(/d\.el\.style\.textWrap = 'balance'/.test(t), 'o equilíbrio é text-wrap:balance (não um <br> injetado)');
   ok((t.match(/wordBreak = 'break-word'/g) || []).length === 1,
     'break-word aparece UMA vez só — saiu do caminho normal (o dono pediu para NÃO quebrar palavra no meio)');
@@ -131,8 +143,14 @@ function estatico() {
   // ⛔ A ALTURA DE DUAS LINHAS É O QUE TORNA A REGRA POSSÍVEL. Voltar isto pra `* 1.35`
   // (uma linha) não "aperta o layout": DESLIGA a quebra, porque duas linhas passam a
   // custar mais fonte do que uma — e o nome longo vira o fio do print de novo.
-  ok(/--sp-box-h:\$\{\(_nomeMaxRem \* 2\.2\)\.toFixed\(2\)\}rem/.test(read('js/views/bracket.js')),
-    'a caixa do nome tem altura de DUAS linhas (teto × 2.2), igual pra todo participante');
+  ok(/--sp-box-h:\$\{\(_nomeBaseRem \* 2\.2\)\.toFixed\(2\)\}rem/.test(read('js/views/bracket.js')),
+    'a caixa do nome tem altura de DUAS linhas (BASE × 2.2), igual pra todo participante');
+  // ⭐ 2.0.33: a altura sai da BASE, e o TETO da fonte é `base × 2` — uma linha que enche a
+  // caixa inteira (line-height 1.1 × 2 = 2.2). Se a altura voltasse a sair do TETO, subir a
+  // fonte esticaria a caixa, que esticaria o teto: a conta se perseguiria e a linha do card
+  // cresceria a cada leva. São coisas diferentes de propósito.
+  ok(/const _nomeMaxRem = _nomeBaseRem \* 2;/.test(read('js/views/bracket.js')),
+    'e o TETO da fonte é o DOBRO da base — é ele que faz o nome curto encher a caixa');
   ok(/\.sp-mc-box svg\{[^}]*width:1em[^}]*height:1em/.test(comp),
     'a coroa dentro da caixa é dimensionada em em (encolhe junto com o nome)');
 }
@@ -143,29 +161,46 @@ const ROW = 'padding:8px 10px;border-radius:8px;display:flex;justify-content:spa
 
 /* A altura da caixa sai do PRÓPRIO render (bracket.js), não de um número copiado aqui —
  * se alguém mexer lá, esta medição acompanha em vez de medir um card que não existe. */
-const ALT_CAIXA = parseFloat((read('js/views/bracket.js')
-  .match(/--sp-box-h:\$\{\(_nomeMaxRem \* ([\d.]+)\)/) || [])[1] || '0');
+const SRC_BRACKET = read('js/views/bracket.js');
+const ALT_CAIXA = parseFloat((SRC_BRACKET.match(/--sp-box-h:\$\{\(_nomeBaseRem \* ([\d.]+)\)/) || [])[1] || '0');
+/* ⭐ E o mesmo vale pro TETO da fonte e pro tamanho da FOTO: os três saem do render, nunca de
+ * números copiados aqui. Copiar é medir um card que só existe neste arquivo — foi exatamente
+ * o que aconteceu quando a 2.0.33 mexeu na conta e o teste seguiu medindo a geometria de
+ * ontem, acusando 72 truncamentos que a tela não tinha. [[project_name_fit_box_canonical]] */
+const FATOR_TETO = parseFloat((SRC_BRACKET.match(/const _nomeMaxRem = _nomeBaseRem \* ([\d.]+);/) || [])[1] || '0');
+const FATOR_FOTO = parseFloat((SRC_BRACKET.match(/const size = \(_nomeBaseRem \* ([\d.]+)\)/) || [])[1] || '0');
+const BASE_REM = (function () {
+  const m = SRC_BRACKET.match(/const _nomeBaseRem = members\.length > 1 \? ([\d.]+) : ([\d.]+);/);
+  return m ? { dupla: parseFloat(m[1]), individual: parseFloat(m[2]) } : { dupla: 0, individual: 0 };
+})();
 
 /* As TRÊS áreas de placar reais do card (bracket.js `_setGridHtml` + `.sp-set-col`,
  * larguras de window._SET_COL_W: set=34, super tie-break=38). É a parte do pedido (2)
  * que diz "considere os placares em melhor de 3 ou 5". */
 const PLACARES = { um: null, b3: [34, 34, 38], b5: [34, 34, 34, 34, 38] };
 function sc(kind) {
+  /* ⭐ 2.0.33: os números saem das CLASSES reais (`.sp-mc-num`, `.sp-set-num`), não de um
+     `font-size` copiado aqui. Enquanto eram literais, este teste media um placar que só
+     existia neste arquivo — e o tamanho do número é justamente o que disputa largura com o
+     nome. Quem mede a disputa tem que medir os dois lados de verdade. */
   if (!PLACARES[kind]) {
-    return '<div class="sp-mc-sc"><span style="font-weight:800;font-size:1rem;min-width:24px;text-align:center;">6</span></div>';
+    return '<div class="sp-mc-sc"><span class="sp-mc-num">6</span></div>';
   }
-  return '<div class="sp-mc-sc"><div class="sp-set-grid">' + PLACARES[kind].map(function (w) {
-    return '<div class="sp-set-col" style="--w:' + w + 'px;"><span style="font-weight:800;font-size:0.9rem;">6</span></div>';
+  return '<div class="sp-mc-sc"><div class="sp-set-grid">' + PLACARES[kind].map(function (w, i) {
+    return '<div class="sp-set-col" style="--w:' + w + 'px;"><span class="sp-set-num">' +
+      (i === PLACARES[kind].length - 1 ? '10' : '6') + '</span></div>';
   }).join('') + '</div></div>';
 }
 function slot(nomes) {
   const multi = nomes.length > 1;
-  const maxR = multi ? 0.78 : 0.85, minR = multi ? 0.52 : 0.58, av = multi ? '20px' : '24px';
+  const base = multi ? BASE_REM.dupla : BASE_REM.individual;
+  const maxR = +(base * FATOR_TETO).toFixed(2), minR = multi ? 0.52 : 0.58;
+  const av = (base * FATOR_FOTO).toFixed(2) + 'rem';
   let h = multi ? '<div class="sp-mc-col">' : '';
   nomes.forEach(function (n, i) {
     h += '<div class="sp-mc-side">' +
       '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" class="sp-av" style="--sp-av:' + av + '">' +
-      '<div class="sp-mc-box" style="--sp-box-h:' + (maxR * ALT_CAIXA).toFixed(2) + 'rem">' +
+      '<div class="sp-mc-box" style="--sp-box-h:' + (base * ALT_CAIXA).toFixed(2) + 'rem">' +
         '<span class="sp-name-fit sp-mc-nm" data-maxrem="' + maxR + '" data-minrem="' + minR + '">' +
         '<span data-uid-name="u' + i + '">' + n + '</span></span></div></div>';
   });

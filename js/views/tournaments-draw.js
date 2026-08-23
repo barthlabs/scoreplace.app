@@ -309,13 +309,34 @@ window._devSimulateCurrentPhase = function (tId) {
     var byId = {};
     todo.forEach(function (m, i) {
       var p1ok = realTeam(m.p1), p2ok = realTeam(m.p2);
+      // ⭐ SIMULAR JOGA O FORMATO DA FASE, não um set solto. Ordem do dono (23/ago/2026):
+      // _"o simular fase (dev) está simulando 1 set e entregando o ganhador do jogo com
+      // apenas 1 set. O certo seria simular o melhor de 3 ou de 5 quando for o caso."_
+      // A régua é a MESMA do card e do Confirmar (`_matchSetPlan`, via `_simularPartida`);
+      // aqui não existe segunda ideia de quantos sets a partida tem. Em 1 set (e em Beach
+      // Tennis de set fixo) `_simularPartida` devolve null e o caminho antigo segue igual.
+      // [[project_placar_por_sets_no_card]] · [[project_formato_da_partida_por_fase]]
+      var _simSc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+      var _sim = (p1ok && p2ok && typeof window._simularPartida === 'function')
+        ? window._simularPartida(_simSc, { sport: t.sport }) : null;
+      if (_sim) {
+        m.sets = _sim.sets;
+        m.setsWonP1 = _sim.setsWonP1; m.setsWonP2 = _sim.setsWonP2;
+        m.scoreP1 = _sim.scoreP1; m.scoreP2 = _sim.scoreP2;
+        m.totalGamesP1 = _sim.totalGamesP1; m.totalGamesP2 = _sim.totalGamesP2;
+        if (typeof window._stampWinner === 'function') window._stampWinner(m, _sim.p1Venceu ? 1 : 2);
+        else m.winner = _sim.p1Venceu ? m.p1 : m.p2;
+        m.draw = false;
+      } else {
       var s1, s2;
       if (p1ok && p2ok) {
         if (Math.random() < 0.5) { s1 = 6; s2 = Math.floor(Math.random() * 5); } else { s2 = 6; s1 = Math.floor(Math.random() * 5); }
       } else if (p1ok) { s1 = 6; s2 = 0; } else { s1 = 0; s2 = 6; } // BYE → time real vence
       m.scoreP1 = s1; m.scoreP2 = s2;
-      m.winner = (s1 > s2) ? m.p1 : m.p2;
+      if (typeof window._stampWinner === 'function') window._stampWinner(m, (s1 > s2) ? 1 : 2);
+      else m.winner = (s1 > s2) ? m.p1 : m.p2;
       m.draw = false;
+      }
       m.startedAt = startMs;
       m.resultAt = Math.round(startMs + ((i + 1) / todo.length) * span); // último = agora
       if (m.id != null) byId[String(m.id)] = m;

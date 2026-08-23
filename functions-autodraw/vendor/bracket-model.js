@@ -1066,6 +1066,24 @@
   // Medido a 430px: set=34 + stb=56 deixa ~150px pro nome no pior caso (2-2 na de 5), que
   // é onde o `.sp-name-fit` ainda encolhe a fonte sem cortar. Mexer aqui é mexer no nome.
   window._SET_COL_W = { set: 34, stb: 38 };
+  // O AVISO DA MARGEM, escrito UMA vez. Margem 1 (morte súbita) não avisa nada — anunciar
+  // "dif 1 pt" seria ruído sobre a regra que a pessoa já espera.
+  // A MARGEM EFETIVA, resolvida num lugar só. Nasceu porque eu tinha deixado DOIS defaults
+  // pra ela — a régua caía em 2 quando o campo não vinha gravado (que é o caso de todo
+  // torneio de hoje) e o card caía em "sem margem". Resultado MEDIDO: a linha de cima
+  // anunciava "(dif 2 pts)" no super tie-break e o aviso do tie-break de SET não aparecia
+  // nunca. Dois defaults pra mesma regra é a mesma doença de duas regras.
+  // [[feedback_resolution_one_logic]]
+  window._tbMargem = function (sc) {
+    var n = parseInt(sc && sc.tiebreakMargin, 10);
+    return (n >= 1) ? n : 2;
+  };
+  window._difPtsAviso = function (margem) {
+    var n = parseInt(margem, 10); if (!(n >= 2)) return '';
+    var _tr = null;
+    try { var v = (typeof window._t === 'function') ? window._t('bracket.difPts') : null; if (v && v !== 'bracket.difPts') _tr = v; } catch (e) {}
+    return _tr ? _tr.replace('{n}', n) : ('dif ' + n + ' pts');
+  };
   window._matchSetPlan = function (sc, m, opts) {
     opts = opts || {};
     var _tr = function (k, fb) {
@@ -1079,6 +1097,12 @@
     var bestOf = setsToWin * 2 - 1;
     var stbOn = multi && !!(sc && sc.superTiebreak);
     var stbPts = parseInt(sc && sc.superTiebreakPoints, 10); if (!(stbPts >= 1)) stbPts = 10;
+    // ⭐ A MARGEM DE 2 PONTOS SE ANUNCIA ANTES. Ordem do dono (23/ago/2026): _"quando for
+    // tie-break ou STB que tenha diferença de 2 pontos para vencer, vamos indicar isso antes
+    // (dif 2 pts)."_ Quem entra pra jogar um tie-break precisa saber que 10-9 não acaba —
+    // saber depois, na hora de lançar o placar, é tarde. A margem sai daqui (régua única) e
+    // vai pros TRÊS leitores: a linha que anuncia, o campo do tie-break e a validação.
+    var margem = window._tbMargem(sc);
 
     var played = Array.isArray(opts.sets) ? opts.sets.slice()
       : (m && Array.isArray(m.sets) ? m.sets.slice() : []);
@@ -1127,16 +1151,87 @@
     // box, na mesma linha, já os mostra — e é o que faz o texto caber. Quando não cabe, a
     // linha QUEBRA em duas (nunca reticências): perder metade do aviso é perder o aviso.
     var head = _tr('bracket.bestOf', 'Melhor de') + ' ' + bestOf;
+    var _avisoDif = window._difPtsAviso(margem);
     var atual = live
-      ? (live.kind === 'stb' ? _tr('bracket.superTiebreak', 'Super Tie-Break')
-                             : (_tr('bracket.setN', 'Set') + ' ' + (live.i + 1)))
+      ? (live.kind === 'stb'
+          ? (_tr('bracket.superTiebreak', 'Super Tie-Break') + (_avisoDif ? ' (' + _avisoDif + ')' : ''))
+          : (_tr('bracket.setN', 'Set') + ' ' + (live.i + 1)))
       : (wonP1 + ' × ' + wonP2);
     return {
       multi: multi, setsToWin: setsToWin, bestOf: bestOf,
-      superTiebreak: stbOn, superTiebreakPoints: stbPts,
+      superTiebreak: stbOn, superTiebreakPoints: stbPts, tiebreakMargin: margem,
+      difPtsAviso: _avisoDif,
       played: played, setsWonP1: wonP1, setsWonP2: wonP2,
       done: done, columns: cols, live: live,
       headline: head + ' · ' + atual
+    };
+  };
+
+  // ── SIMULAR UMA PARTIDA INTEIRA (dev) — pela MESMA régua que desenha o card ──────
+  // Ordem do dono (23/ago/2026): _"o simular fase (dev) está simulando 1 set e entregando o
+  // ganhador do jogo com apenas 1 set. O certo seria simular o melhor de 3 ou de 5 quando
+  // for o caso."_ E estava: o simulador cravava `6 × aleatório` direto em scoreP1/scoreP2,
+  // sem nunca olhar o formato da fase — melhor de 3, melhor de 5 e super tie-break passavam
+  // batido, e um jogo fechava com um set só.
+  //
+  // ⛔ NÃO EXISTE UMA SEGUNDA REGRA DE FORMATO AQUI. Quem diz quantos sets a partida tem, e
+  // qual set é super tie-break, é `_matchSetPlan` — a mesma régua das colunas, do Confirmar e
+  // da validação. O simulador só SORTEIA dentro do que ela permite.
+  // [[project_placar_por_sets_no_card]] · [[feedback_resolution_one_logic]]
+  //
+  // `rnd` é injetável pra o teste poder cravar a sequência (sem ela, Math.random).
+  // Devolve null quando a partida NÃO é melhor de N — aí o chamador segue com o caminho de
+  // 1 set que ele já tinha, intocado.
+  window._simularPartida = function (sc, opts) {
+    opts = opts || {};
+    var rnd = (typeof opts.rnd === 'function') ? opts.rnd : Math.random;
+    var plan = window._matchSetPlan(sc, null, {});
+    if (!plan || !plan.multi) return null;
+
+    var g = parseInt(sc && sc.gamesPerSet, 10); if (!(g >= 1)) g = 6;
+    var tbLigado = !(sc && sc.tiebreakEnabled === false);
+    var perdedorNoTB = (typeof window._tbLoserGames === 'function')
+      ? window._tbLoserGames(sc, opts.sport) : g;
+    var margem = parseInt(sc && sc.tiebreakMargin, 10); if (!(margem >= 1)) margem = 2;
+    var ptsTB = parseInt(sc && sc.tiebreakPoints, 10); if (!(ptsTB >= 1)) ptsTB = 7;
+
+    var sets = [], v1 = 0, v2 = 0, i = 0;
+    while (v1 < plan.setsToWin && v2 < plan.setsToWin && i < plan.bestOf) {
+      var ehSTB = plan.superTiebreak && i === plan.bestOf - 1;
+      var p1Venceu = rnd() < 0.5;
+      var set;
+      if (ehSTB) {
+        // Super tie-break: o vencedor chega aos pontos configurados e abre a margem.
+        var alvo = plan.superTiebreakPoints;
+        var perdeu = Math.floor(rnd() * Math.max(1, alvo - margem + 1));   // 0 .. alvo-margem
+        set = p1Venceu ? { gamesP1: alvo, gamesP2: perdeu } : { gamesP1: perdeu, gamesP2: alvo };
+        set.superTiebreak = true;
+      } else if (tbLigado && rnd() < 0.22) {
+        // Set decidido no tie-break: o placar de GAMES é (perdedorNoTB+1) × perdedorNoTB e o
+        // subplacar de PONTOS vai junto — é o que o card desenha como 7⁽⁵⁾.
+        var pv = ptsTB + Math.floor(rnd() * 3);                            // 7, 8 ou 9
+        var pp = (pv > ptsTB) ? pv - margem : Math.floor(rnd() * Math.max(1, ptsTB - margem + 1));
+        set = p1Venceu ? { gamesP1: perdedorNoTB + 1, gamesP2: perdedorNoTB }
+                       : { gamesP1: perdedorNoTB, gamesP2: perdedorNoTB + 1 };
+        var tb = (typeof window._tbPoints === 'function')
+          ? window._tbPoints(p1Venceu ? pv : pp, p1Venceu ? pp : pv) : null;
+        if (tb) set.tiebreak = tb;
+      } else {
+        var perdeuG = Math.floor(rnd() * Math.max(1, g - 1));              // 0 .. g-2
+        set = p1Venceu ? { gamesP1: g, gamesP2: perdeuG } : { gamesP1: perdeuG, gamesP2: g };
+      }
+      sets.push(set);
+      if (p1Venceu) v1++; else v2++;
+      i++;
+    }
+
+    var tg1 = 0, tg2 = 0;
+    sets.forEach(function (x) { tg1 += Number(x.gamesP1) || 0; tg2 += Number(x.gamesP2) || 0; });
+    return {
+      sets: sets, setsWonP1: v1, setsWonP2: v2,
+      scoreP1: v1, scoreP2: v2,                 // no melhor de N o PLACAR do jogo é em sets
+      totalGamesP1: tg1, totalGamesP2: tg2,
+      p1Venceu: v1 > v2
     };
   };
 

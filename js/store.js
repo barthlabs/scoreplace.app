@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.32';
+window.SCOREPLACE_VERSION = '2.0.33';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -5244,6 +5244,19 @@ window._firstNameOnly = function(name) {
       });
       vivos = restam;
     }
+    // (c2) só o ÚLTIMO PASSO DE VOLTA. A binária para quando `hi - lo <= 0.03`, e nesse
+    //      instante `best2` pode estar UM passo (0,03rem) abaixo do que ainda caberia — o
+    //      laço nunca chegou a experimentar o degrau de cima. Com o teto antigo isso não
+    //      aparecia; com o teto da 2.0.33 (o dobro) apareceu MEDIDO: 5 slots em que a forma
+    //      de duas linhas saía 0,03 MENOR que a de uma linha, e a regra da casa é que quebrar
+    //      linha nunca custe fonte. Um par escrita+leitura pro lote inteiro resolve.
+    //      ⛔ Não é afrouxar o `_cabe` — o degrau só é aceito se COUBER de verdade.
+    var _subir = [];
+    itens.forEach(function (d) { if (d.best2 != null && d.best2 + 0.03 <= d.maxR + 0.001) _subir.push(d); });
+    if (_subir.length) {
+      _subir.forEach(function (d) { d.el.style.fontSize = (d.best2 + 0.03).toFixed(2) + 'rem'; });
+      _subir.forEach(function (d) { if (_cabe(d)) d.best2 = +(d.best2 + 0.03).toFixed(2); });
+    }
     // (d) só ESCRITA — A DECISÃO. Duas linhas ficam sempre que CABEM em duas (todo mundo
     //     aqui já falhou em uma linha no teto). Não cabendo nem em duas, ainda assim ficam
     //     as duas quando a linha única TRUNCAVA — mostrar mais nome é melhor que mostrar
@@ -5251,6 +5264,21 @@ window._firstNameOnly = function(name) {
     //     volta pra uma linha quem não tem duas viáveis E cabia inteiro numa.
     itens.forEach(function (d) {
       if (d.best2 != null) {
+        // ⛔ QUEBRAR LINHA NUNCA PODE CUSTAR FONTE. A busca das duas linhas anda em degraus
+        // de 0,03rem e pode parar UM degrau abaixo do que a linha única já tinha alcançado —
+        // MEDIDO na 2.0.33 (teto dobrado): 5 slots saíam 1,62 → 1,59, os dois em UMA linha,
+        // ou seja a forma nova não trouxe linha nenhuma e ainda cobrou fonte.
+        // Quando a linha única já mostrava o nome INTEIRO (`coube`) e era MAIOR, ela fica.
+        // ⛔ Se a linha única TRUNCAVA, as duas linhas ficam de qualquer jeito: mostrar o
+        // nome todo menor vale mais que mostrar metade dele maior — é a decisão da 2.0.30 e
+        // ela não muda aqui.
+        if (d.coube && d.best2 < d.fs - 0.001) {
+          d.el.style.whiteSpace = '';
+          d.el.style.wordBreak = '';
+          d.el.style.textWrap = '';
+          d.el.style.fontSize = d.fs + 'rem';
+          return;
+        }
         d.el.style.fontSize = d.best2 + 'rem';
         return;
       }

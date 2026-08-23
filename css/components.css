@@ -2373,13 +2373,38 @@ html, body,
    azul de "JOGO 154", que no card já significa "informação do jogo". Ela só existe
    enquanto a partida está aberta, então destacar não polui o card decidido. */
 .sp-set-head-ttl{font-size:0.6rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#38bdf8;line-height:1.15;min-width:0;}
+/* ⭐ "dif 2 pts" do tie-break DE SET: nasce escondido e aparece junto com os campos `tb`
+   (bracket-ui, _highlightWinner). Âmbar porque é AVISO de regra, não placar — e âmbar é o
+   que o card já usa pra "atenção" (tarja do pendente, tag BYE). Contraste conferido nos
+   DOIS temas: no claro o âmbar puro lava, então lá ele escurece.
+   [[feedback_contraste_sempre_nos_dois_temas]] */
+.sp-tb-hint{margin-top:6px;font-size:0.58rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:6px;padding:3px 8px;text-align:center;}
+[data-theme="light"] .sp-tb-hint{color:#92400e;background:rgba(251,191,36,0.18);border-color:rgba(146,64,14,0.35);}
 .sp-set-grid{display:flex;align-items:flex-end;gap:3px;flex-shrink:0;}
 .sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:center;}
 .sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
 .sp-set-lbl--live{color:#38bdf8;}
 /* o rótulo do set já CONFIRMADO recua — quem tem que saltar é a coluna em disputa */
 .sp-set-col:not(.sp-set-col--fix) .sp-set-lbl{opacity:1;}
-.sp-set-num{display:block;font-weight:800;font-size:1rem;line-height:1.2;}
+/* ── ⭐ O NÚMERO DO PLACAR TEM O MESMO DIREITO QUE O NOME (2.0.33) ──────────────────
+   Ordem do dono (23/ago/2026): _"os números no placar também podem ser maiores… a ideia é
+   que tanto nomes quanto números do placar ocupem o maior espaço ali sem encavalar,
+   deixando uma margem elegante nos lados."_
+   A linha do card tem a altura da caixa do nome (duas linhas, `--sp-box-h`). O número
+   ocupava 1rem dentro de ~1,7rem de altura — sobrava espaço em cima e embaixo pra nada.
+   `--sp-num-fs` é a FONTE ÚNICA desse tamanho: leem daqui o número simples (`.sp-mc-num`)
+   e o número de cada set (`.sp-set-num`). Antes eram três literais `1rem` espalhados — dois
+   inline no bracket.js e um aqui.
+   ⛔ O TETO É MEDIDO, não escolhido: o número rouba largura da caixa do nome, e a régua é o
+   teste de nome (nenhum truncado, nenhum invadindo a área do placar) rodando em 3 viewports
+   × 2 temas × 3 placares. Varrido até achar o maior que passa em todos.
+   ⛔ E a "margem elegante" NÃO é padding novo: a linha já tem `padding:8px 10px` e o número
+   já tem `margin-left:8px` separando do nome. Somei 2px de padding aqui e o slot de 6 nomes
+   com grade de melhor de 3 no desktop passou a precisar de TRÊS linhas — a folga real ali
+   era menor que 2px. Margem que estoura o vizinho não é elegante. */
+:root{--sp-num-fs:1.45rem;--sp-num-fs-set:1.20rem;}
+.sp-mc-num{font-weight:800;font-size:var(--sp-num-fs);min-width:1.5rem;text-align:center;line-height:1.15;}
+.sp-set-num{display:block;font-weight:800;font-size:var(--sp-num-fs-set);line-height:1.15;}
 /* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */
 .sp-set-zero{display:block;font-weight:800;font-size:1rem;line-height:1.2;color:rgba(255,255,255,0.3);}
 .sp-set-inp{width:100%;box-sizing:border-box;text-align:center;font-size:0.9rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 2px;}

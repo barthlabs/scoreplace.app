@@ -483,6 +483,17 @@ function _applyMyMatchesFilter() {
 // jogo) mas nenhum RÓTULO, então não havia como escolher um grupo específico.
 // Chave de comparação normalizada (sem acento, sem caixa, espaços colapsados) porque o
 // mesmo grupo aparece como "R1 Grupo B" na chave e "R1 GRUPO B" na dashboard.
+// Chave ESTÁVEL do rolador horizontal da chave (`data-hscroll`), lida por
+// _rerenderBracket pra devolver a rolagem depois do re-render. Estável = derivada do que
+// IDENTIFICA a chave (bracketKey / título da seção), nunca do índice no DOM: uma chave que
+// aparece ou some não pode fazer as outras trocarem de posição. Sai limpa pro atributo.
+// [[project_placar_por_sets_no_card]] · o defeito que ela conserta: a chave voltava pra
+// Rodada 1 a cada placar lançado.
+window._hsKey = function (s) {
+  return String(s == null ? '' : s).replace(/["'<>&\\]/g, '').replace(/\s+/g, '-').slice(0, 60);
+};
+function _hsKey(s) { return window._hsKey(s); }
+
 window._grpKey = function (s) {
   return String(s == null ? '' : s)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -2583,7 +2594,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   return `
     ${championHtml}
     ${toolbarHtml}
-    <div class="bracket-sticky-scroll-wrapper" style="overflow-x:scroll!important;overflow-y:visible;display:block;width:100%;max-width:100%;">
+    <div class="bracket-sticky-scroll-wrapper" data-hscroll="main" style="overflow-x:scroll!important;overflow-y:visible;display:block;width:100%;max-width:100%;">
       <div class="bracket-scroll-content" style="display:inline-flex;gap:32px;align-items:flex-start;padding:1rem 0;min-width:max-content;${zoomTransform}">
         ${roundsHtml}
         <div style="min-width:200px;flex-shrink:0;">&nbsp;</div>
@@ -2715,7 +2726,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
     return `
       <div style="margin-bottom:2rem;">
         <h4 style="color:var(--text-bright);font-size:0.8rem;text-transform:uppercase;letter-spacing:2px;border-left:3px solid ${color};padding-left:10px;margin-bottom:1rem;">${title}</h4>
-        <div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">${colsHtml}${trailingColHtml || ''}<div style="min-width:200px;flex-shrink:0;">&nbsp;</div></div></div>
+        <div class="bracket-scroll-container" data-hscroll="sec:${_hsKey(title)}" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;"><div style="display:flex;gap:32px;min-width:max-content;">${colsHtml}${trailingColHtml || ''}<div style="min-width:200px;flex-shrink:0;">&nbsp;</div></div></div>
       </div>`;
   };
 
@@ -3096,7 +3107,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
       '<div style="display:flex;align-items:flex-start;gap:10px;">' +
         showHiddenBtn +
-        '<div class="bracket-scroll-container" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
+        '<div class="bracket-scroll-container" data-hscroll="tier:' + _hsKey(bracketKey) + '" style="display:flex;gap:32px;overflow-x:auto;padding-bottom:8px;flex:1;min-width:0;"><div style="display:flex;gap:32px;min-width:max-content;">' + colsHtml + '<div style="min-width:120px;flex-shrink:0;">&nbsp;</div></div></div>' +
       '</div>' +
       '</div>';
   }
@@ -3767,7 +3778,20 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     const onerror = cachedPhoto && initialsUrl ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
     // o uid viaja no proprio <img> — a hidratacao acha por ele
     const _avatarUid = _semNomeAinda ? ` data-uid-avatar="${window._safeHtml(_slotUid)}"` : '';
-    const size = members.length > 1 ? '20px' : '24px';
+    // ⭐ 2.0.33 · A FOTO CRESCE PORQUE A CAIXA JÁ CRESCEU. Ordem do dono (23/ago/2026):
+    // _"com isso podemos aumentar um pouco o ícone/foto de cada jogador"_. A linha é
+    // `align-items:center`, então a altura dela é o MAIOR entre a foto e a caixa do nome —
+    // e desde a 2.0.30 a caixa mede duas linhas (≈27px na raiz de 16px) contra 20px de foto.
+    // Ou seja: esses 7px já estavam pagos e sobrando. A foto passa a sair da MESMA base da
+    // caixa (× 1.85 ≈ 84% da altura dela), então cresce sem esticar linha nenhuma.
+    // ⛔ 1.85 É TETO MEDIDO, não gosto: a foto rouba largura da caixa do nome, e a 1.90 o slot
+    // de 6 nomes com grade de melhor de 3 no desktop passava a precisar de TRÊS linhas — a
+    // terceira fica escondida pelo `overflow:hidden`. Varrido 1.80/1.85/1.90/1.98; 1.85 é o
+    // maior que ainda cabe em duas linhas em todos os contextos medidos.
+    // ⛔ E em rem, não px: o cânone da escala por área proíbe px em coisa que escala — a foto
+    // era a exceção que sobrou aqui. [[project_name_fit_box_canonical]] [[project_web_area_scaling_canon]]
+    const _nomeBaseRem = members.length > 1 ? 0.78 : 0.85;
+    const size = (_nomeBaseRem * 1.85).toFixed(2) + 'rem';
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
     // ── CAIXA INVISÍVEL DO NOME (cânone fit-name-to-box) ───────────────────
     // Regra do dono: nome NUNCA é cortado. A caixa é do MESMO tamanho pra todo
@@ -3779,7 +3803,23 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // `flex:1;min-width:0` faz a caixa ocupar a largura que sobra do avatar;
     // a ALTURA é fixa em rem pra herdar a escala por área (e o piso do fit
     // impede que o nome vire ilegível pra quem só está LENDO a chave).
-    const _nomeMaxRem = members.length > 1 ? 0.78 : 0.85;
+    // ⭐ 2.0.33 · O TETO DOBRA — É ELE QUE FAZ O NOME CURTO ENCHER A CAIXA.
+    // Ordem do dono (23/ago/2026), olhando a chave depois da 2.0.30: _"faltou apenas aumentar
+    // a fonte dos nomes para encherem o espaço onde cabem os nomes de 2 linhas com fonte
+    // menor… assim os nomes menores ficam maiores e mais visíveis, e os nomes maiores ocupam
+    // realmente o mesmo espaço com fontes menores — a ideia é fazer as pessoas escolherem
+    // nomes menores intuitivamente para usar fontes maiores."_
+    // A caixa passou a ter DUAS linhas de altura na 2.0.30, mas o teto continuou o de UMA:
+    // nome curto ficava pequeno no meio de um espaço vazio, e o incentivo não existia.
+    // A CONTA: a caixa mede `base × 2.2` e o `line-height` dela é 1.1 → uma linha só enche a
+    // caixa quando a fonte vale `2.2 ÷ 1.1 = 2` vezes a base. Por isso o teto é `base × 2`, e
+    // nem um passo além: acima disso a linha única passaria da caixa.
+    // ⛔ A ALTURA DA CAIXA NÃO MUDA — ela continua saindo da BASE, não do teto. Se saísse do
+    // teto, subir a fonte esticaria a linha do card e a conta se perseguiria pra sempre.
+    // Quem for longo demais pro teto cai em duas linhas equilibradas, como já caía — só que
+    // agora a busca das duas linhas começa de um teto mais alto, então ele também ganha
+    // tamanho. O piso não muda: ele existe pra quem só está LENDO a chave.
+    const _nomeMaxRem = _nomeBaseRem * 2;
     const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
     // 1.9.39: o volume desta caixa virou CLASSE (`sp-mc-box`); só a ALTURA, que depende
     // do teto de fonte do nome, continua inline — como variável, que é o mínimo possível.
@@ -3793,7 +3833,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // igual ao de ontem. Com `× 2.2` (duas linhas de `line-height:1.1`) o nome longo cabe
     // em duas linhas equilibradas com fonte legível, o nome curto fica centrado numa linha
     // só, e a caixa continua exatamente do mesmo tamanho pros dois — que é o cânone.
-    const _boxNome = `--sp-box-h:${(_nomeMaxRem * 2.2).toFixed(2)}rem`;
+    const _boxNome = `--sp-box-h:${(_nomeBaseRem * 2.2).toFixed(2)}rem`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
@@ -4010,7 +4050,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _corDoNumero = isWinner ? '#4ade80'
       : isDecided ? '#f87171'
       : (val === 0 ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)');
-    return `<span style="font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:${_corDoNumero};">${val}</span>`;
+    return `<span class="sp-mc-num" style="color:${_corDoNumero};">${val}</span>`;
   };
 
   // Format set scores for display
@@ -4119,7 +4159,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // termina, pode eliminar a linha do melhor de 3/5 e deixar apenas os placares dos sets"_.
   // Ela existe pra dizer o que está EM DISPUTA agora; com o jogo fechado vira ruído em cima
   // de um placar que já se explica sozinho, e o card decidido volta a ser enxuto.
-  const _mostraCabecaSet = _multiSet && !!_plan.live;
+  // ⭐ MAS O PLACAR PENDENTE PRECISA DELA. Ordem do dono (23/ago/2026): _"o sistema de
+  // aprovar placar que já funciona para 1 set deve rodar para melhor de 3 ou 5 também da
+  // mesma forma."_ MEDIDO: quem aprovava via `6 6` e `4 3` — dois números nus, sem saber
+  // qual coluna era o Set 2 e qual era o SUPER TIE-BREAK. Em 1 set isso nunca apareceu
+  // porque há um número só e ele se explica. Aprovar é DECIDIR sobre o placar; decidir sem
+  // saber o que cada número é não é aprovar. Aqui a linha volta, e com ela a headline
+  // ("Melhor de 3 · 2 × 0") e os rótulos coluna a coluna.
+  // ⛔ Jogo FECHADO segue sem a linha — ali ela é ruído, como o dono pediu.
+  const _mostraCabecaSet = _multiSet && (!!_plan.live || hasPending);
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
@@ -4163,11 +4211,11 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // (mais o italico do numero). Antes o numero era ambar dos dois lados, e a
   // pessoa via o placar sem saber quem tinha ganho.
   const _scorePendingStyle = function(isWin) {
-    return 'font-weight:800;font-size:1rem;min-width:24px;text-align:center;color:' + (isWin ? '#4ade80' : '#f87171') + ';font-style:italic;';
+    return 'color:' + (isWin ? '#4ade80' : '#f87171') + ';font-style:italic;';
   };
   const p1ScoreVal = (!showInputs)
     ? (hasPending
-        ? '<span style="' + _scorePendingStyle(_pendingP1Win) + '">' + (_p1Display != null ? _p1Display : '') + '</span>'
+        ? '<span class="sp-mc-num" style="' + _scorePendingStyle(_pendingP1Win) + '">' + (_p1Display != null ? _p1Display : '') + '</span>'
         : scoreDisplay(_p1Display, p1IsWinner))
     : null;
 
@@ -4184,7 +4232,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const _pendingP2Win = hasPending && window._pendingWinnerSide(m, _pr) === 2 && !_pr.draw;
   const p2ScoreVal = (!showInputs)
     ? (hasPending
-        ? '<span style="' + _scorePendingStyle(_pendingP2Win) + '">' + (_p2Display != null ? _p2Display : '') + '</span>'
+        ? '<span class="sp-mc-num" style="' + _scorePendingStyle(_pendingP2Win) + '">' + (_p2Display != null ? _p2Display : '') + '</span>'
         : scoreDisplay(_p2Display, p2IsWinner))
     : null;
 
@@ -4219,6 +4267,23 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     </div>`;
 
   const vsRow = `<div class="sp-mc-vs">VS</div>`;
+
+  // ── ⭐ "dif 2 pts": o TIE-BREAK DE SET também avisa ANTES ────────────────────────────
+  // Ordem do dono (23/ago/2026): _"quando for tie-break ou STB que tenha diferença de 2
+  // pontos para vencer, vamos indicar isso antes (dif 2 pts)."_ No super tie-break o aviso
+  // vive na linha de cima (`_matchSetPlan`, que anuncia "Super Tie-Break (dif 2 pts)" assim
+  // que os sets empatam). Já o tie-break DENTRO de um set não tem linha de cima nenhuma —
+  // nem no card de 1 set — e é onde a pessoa digita `tb`. Então o aviso nasce aqui, escondido,
+  // e aparece JUNTO com os campos de tie-break: quem revela é o mesmo `_highlightWinner`,
+  // no mesmo instante, pelo mesmo gatilho (o placar de empate configurado pelo organizador).
+  // ⛔ Um segundo gatilho aqui divergiria do primeiro; por isso ele não existe.
+  // Margem 1 (morte súbita) não escreve nada — ver window._difPtsAviso.
+  const _difAviso = (typeof window._difPtsAviso === 'function' && typeof window._tbMargem === 'function')
+    ? window._difPtsAviso(window._tbMargem(_msc)) : '';
+  const _tbHintHtml = (showInputs && _tbEnabled && _difAviso)
+    ? '<div id="tbhint-' + m.id + '" class="sp-tb-hint" style="display:none;">' +
+        window._safeHtml('🎾 ' + _t('bracket.tiebreak') + ' · ' + _difAviso) + '</div>'
+    : '';
 
   // Format set scores for winner badge
   const _isFixedSetMatch = m.fixedSet || useFixedSet;
@@ -4537,8 +4602,15 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // LINHA pra preservar a largura do card (antes o conteúdo esticava a coluna
   // do bracket porque o scroll-content é min-width:max-content). Layout:
   //  - Esquerda: JOGO N + "proposto por X · agora" (empilhados).
-  //  - Direita: tag PENDENTE + "⏳ Aguardando aprovação" empilhados (a frase
-  //    quebra em 2 linhas → 3 linhas no total: tag / Aguardando / aprovação).
+  //  - Direita: tag PENDENTE, a ampulheta e "Aguardando aprovação" no MESMO fluxo,
+  //    alinhados à direita e quebrando naturalmente — 2 linhas, do jeito que o dono
+  //    desenhou: `PENDENTE ⏳ AGUARDANDO` em cima, `APROVAÇÃO` embaixo.
+  //    ⛔ ANTES eram QUATRO linhas (tag / ⏳ / AGUARDANDO / APROVAÇÃO), e a culpa era de um
+  //    `max-width:104px` na frase: com o teto, "⏳ Aguardando" não cabia e a ampulheta caía
+  //    sozinha numa linha só pra ela. Ordem do dono (23/ago/2026): _"aqui dá pra economizar
+  //    espaço em linhas… em 2 linhas fica fechado o cabeçalho"_. O teto saiu; quem limita
+  //    agora é a COLUNA (`max-width:62%`), que é o que deixa a esquerda respirar.
+  //    A ampulheta gruda em "Aguardando" com `&nbsp;` — separar as duas foi o defeito.
   //  - Abaixo: linha própria com os botões (Contestar vermelho à esquerda,
   //    Confirmar verde à direita), com flex:1 pra dividir a largura e quebrar.
   // ⚰️ REMOVIDO (1.8.46) o `max-width:280px` que o card ganhava SÓ quando pendente.
@@ -4626,10 +4698,10 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           <span style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;">proposto por <b style="color:#fbbf24;">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
-        <div id="header-btns-${m.id}" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
+        <div id="header-btns-${m.id}" style="display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:1;min-width:0;max-width:62%;text-align:right;">
           ${readyBadge}
           ${_presenceTag}
-          <span style="font-size:0.56rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;max-width:104px;">⏳ Aguardando aprovação</span>
+          <span style="font-size:0.56rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;">⏳&nbsp;Aguardando aprovação</span>
         </div>
       </div>`;
   } else {
@@ -4700,6 +4772,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${p1Row}
       ${vsRow}
       ${p2Row}
+      ${_tbHintHtml}
       ${winnerBadge}
       ${_cardFooterChips(t, m)}
     </div>`;

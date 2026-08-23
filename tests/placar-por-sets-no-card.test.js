@@ -116,10 +116,17 @@ function regua() {
   ok(temStb(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(6, 1)]) === false, 'melhor de 5, 3×1: NÃO existe');
   ok(temStb(MELHOR5, [S(6, 4), S(3, 6), S(6, 2)]) === false, 'melhor de 5, 2×1: ainda não — o Set 4 pode fechar');
   ok(temStb(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(4, 6)]) === true, 'melhor de 5, 2-2: aí sim');
-  eq(plano(MELHOR3, [S(6, 4), S(3, 6)]).headline, 'Melhor de 3 · Super Tie-Break',
-    'e a linha de cima ANUNCIA o STB no instante em que empata');
-  eq(plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(4, 6)]).headline, 'Melhor de 5 · Super Tie-Break',
+  // ⭐ 2.0.33: o anúncio passou a levar a MARGEM junto. Ordem do dono (23/ago/2026):
+  // _"quando for tie-break ou STB que tenha diferença de 2 pontos para vencer vamos indicar
+  // isso antes (dif 2 pts)"_. O aviso tem que chegar antes de a pessoa entrar na quadra, e o
+  // lugar onde ela já lê "vem super tie-break" é esta linha.
+  eq(plano(MELHOR3, [S(6, 4), S(3, 6)]).headline, 'Melhor de 3 · Super Tie-Break (dif 2 pts)',
+    'e a linha de cima ANUNCIA o STB — e a margem — no instante em que empata');
+  eq(plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(4, 6)]).headline, 'Melhor de 5 · Super Tie-Break (dif 2 pts)',
     'idem na melhor de 5');
+  eq(plano(Object.assign({}, MELHOR3, { tiebreakMargin: 1 }), [S(6, 4), S(3, 6)]).headline,
+    'Melhor de 3 · Super Tie-Break',
+    'morte súbita (margem 1) NÃO escreve margem nenhuma — seria ruído sobre o esperado');
 
   // LARGURA POR TIPO, nunca por estado — é o que mantém o rótulo em cima do box
   const antes = plano(MELHOR3, []).columns[0].w;
@@ -309,7 +316,7 @@ async function tela() {
     ok(g.transbordo <= 0, c.nome + ': o card não transborda na horizontal (' + g.transbordo + 'px)');
   });
   ok(/Set 1$/.test(r.casos[0].headline), 'a linha nova aparece: "' + r.casos[0].headline + '"');
-  ok(/Super Tie-Break$/.test(r.casos[2].headline),
+  ok(/Super Tie-Break \(dif 2 pts\)$/.test(r.casos[2].headline),
     'assim que empata, a linha JÁ anuncia o super tie-break: "' + r.casos[2].headline + '"');
   ok(r.casos.every(function (g) { return !g.tituloCortado; }),
     'e o aviso nunca sai cortado — quebra em duas linhas em vez de reticências');
