@@ -3742,6 +3742,16 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
   // vazio de VERDADE: nem uid que resolva, nem rótulo. Aí sim o slot está aberto.
   if (members.length === 0) return `<span style="font-weight:600;font-size:0.85rem;opacity:0.4;font-style:italic;">A definir</span>`;
 
+  // ⭐ 2.0.35 · OS DOIS NOMES DA DUPLA QUEBRAM JUNTOS. Relato do dono no melhor de 5:
+  // _"por que Raquel Unger quebrou em 2 linhas e Monica Rossi não? Quebra para as duas nesses
+  // casos."_ E ele está certo: o ajuste é POR NOME, então numa mesma dupla um nome que não
+  // cabia virava duas linhas e o parceiro, que cabia por um fio, ficava numa — as duas
+  // metades do mesmo time saíam com formas diferentes, e o olho lê isso como defeito.
+  // `data-fit-group` marca os nomes que são do MESMO lado; o motor (store.js) iguala o grupo
+  // no fim do ajuste. É um contador por render, não o nome do time: o mesmo time aparece em
+  // vários cards da chave e cada card decide a sua largura.
+  window._fitGroupSeq = (window._fitGroupSeq || 0) + 1;
+  const _grupoNome = 'g' + window._fitGroupSeq;
   let html = members.length > 1 ? '<div class="sp-mc-col">' : '';
   members.forEach(function(_mb) {
     // `_mb` = { uid, nome }. `nome` pode vir VAZIO quando há uid e o perfil ainda não
@@ -3784,7 +3794,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // maior e a foto maior saem juntas, e o card volta ao tamanho que ele tinha ontem.
     // ⛔ NÃO reintroduzir nenhum dos três sem o dono pedir: ele viu os quatro tetos lado a
     // lado (×1.35, ×1.5, ×1.65, ×2) e recusou a leva inteira, não um valor.
-    const size = members.length > 1 ? '20px' : '24px';
+    const _geo = window._cardNomeGeo(members.length);
+    const size = _geo.avatar;
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
     // ── CAIXA INVISÍVEL DO NOME (cânone fit-name-to-box) ───────────────────
     // Regra do dono: nome NUNCA é cortado. A caixa é do MESMO tamanho pra todo
@@ -3796,8 +3807,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // `flex:1;min-width:0` faz a caixa ocupar a largura que sobra do avatar;
     // a ALTURA é fixa em rem pra herdar a escala por área (e o piso do fit
     // impede que o nome vire ilegível pra quem só está LENDO a chave).
-    const _nomeMaxRem = members.length > 1 ? 0.78 : 0.85;
-    const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
+    const _nomeMaxRem = _geo.maxRem;
+    const _nomeMinRem = _geo.minRem;
     // 1.9.39: o volume desta caixa virou CLASSE (`sp-mc-box`); só a ALTURA, que depende
     // do teto de fonte do nome, continua inline — como variável, que é o mínimo possível.
     // ── 2.0.30 · A CAIXA PASSA A TER ALTURA DE DUAS LINHAS, PRA TODO MUNDO ─────────
@@ -3810,7 +3821,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // igual ao de ontem. Com `× 2.2` (duas linhas de `line-height:1.1`) o nome longo cabe
     // em duas linhas equilibradas com fonte legível, o nome curto fica centrado numa linha
     // só, e a caixa continua exatamente do mesmo tamanho pros dois — que é o cânone.
-    const _boxNome = `--sp-box-h:${(_nomeMaxRem * 1.35).toFixed(2)}rem`;
+    const _boxNome = `--sp-box-h:${_geo.boxH}rem`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
@@ -3839,7 +3850,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
       // `_fitEmLote` devolve `whiteSpace=''` contando com ele. MEDIDO antes de juntar
       // (0 a 9 sobrenomes, com/sem coroa, claro/escuro, 390/768/1280): a fronteira do
       // corte não se move. Trava: tests/nome-do-card-da-chave-nao-perde-a-classe.test.js.
-      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}">${
+      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-fit-group="${_grupoNome}" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}">${
         _slotUid
           ? `<span data-uid-name="${window._safeHtml(_slotUid)}">${window._safeHtml(name)}</span>` +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&
@@ -4144,14 +4155,21 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // saber o que cada número é não é aprovar. Aqui a linha volta, e com ela a headline
   // ("Melhor de 3 · 2 × 0") e os rótulos coluna a coluna.
   // ⛔ Jogo FECHADO segue sem a linha — ali ela é ruído, como o dono pediu.
+  // A grade carrega o tamanho do número do SEU degrau (window._setColEscala): com poucas
+  // colunas o número é maior, com cinco ele encolhe. Vai como variável no elemento pra o
+  // rótulo, o box e o número lerem a MESMA fonte sem um segundo lugar decidindo.
+  const _numFsVar = (_plan && _plan.numFs) ? ('--sp-num-fs-set:' + _plan.numFs + 'rem;') : '';
   const _mostraCabecaSet = _multiSet && (!!_plan.live || hasPending);
   const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
-        '<div class="sp-set-grid">' + _setLabelsHtml() + '</div>' +
+        '<div class="sp-set-head-linha2">' +
+          '<span class="sp-set-head-sets">' + window._safeHtml(_t('bracket.setsLabel')) + '</span>' +
+          '<div class="sp-set-grid" style="' + _numFsVar + '">' + _setLabelsHtml() + '</div>' +
+        '</div>' +
       '</div>'
     : '';
-  const _setGridHtml = (side) => '<div class="sp-set-grid">' + _setCellsHtml(side) + '</div>';
+  const _setGridHtml = (side) => '<div class="sp-set-grid" style="' + _numFsVar + '">' + _setCellsHtml(side) + '</div>';
 
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"

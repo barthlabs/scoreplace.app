@@ -67,28 +67,34 @@ function regua() {
   // MELHOR DE 3 — a progressão que o dono descreveu
   let p = plano(MELHOR3, []);
   ok(p.multi === true && p.bestOf === 3, 'melhor de 3: multi=true, bestOf=3');
-  eq(rotulos(p), ['Set 1'], 'sem set jogado: só a coluna do Set 1');
+  eq(rotulos(p), ['1'], 'sem set jogado: só a coluna do Set 1 — rotulada só com o NÚMERO (2.0.35)');
   eq(estados(p), ['live'], 'e ela está EM DISPUTA');
   eq(p.headline, 'Melhor de 3 · Set 1', 'a linha nova diz "Melhor de 3 · Set 1"');
 
   p = plano(MELHOR3, [S(6, 4)]);
-  eq(rotulos(p), ['Set 1', 'Set 2'], 'set 1 confirmado: ele à esquerda, box do Set 2 à direita');
+  eq(rotulos(p), ['1', '2'], 'set 1 confirmado: ele à esquerda, box do Set 2 à direita');
   eq(estados(p), ['done', 'live'], 'set 1 confirmado, set 2 em disputa');
   eq([p.setsWonP1, p.setsWonP2], [1, 0], 'sets ganhos 1×0');
   eq(p.headline, 'Melhor de 3 · Set 2', 'a linha nova acompanha o set em disputa');
 
   p = plano(MELHOR3, [S(6, 4), S(3, 6)]);
-  eq(rotulos(p), ['Set 1', 'Set 2', 'STB (10)'], 'empatou 1-1: entra a coluna do super tie-break, rotulada STB (o nome inteiro já está na linha de cima)');
+  eq(rotulos(p), ['1', '2', 'STB'], 'empatou 1-1: entra a coluna do super tie-break — e SÓ ela mantém palavra, porque não é "o set 3"');
+  // ⭐ 2.0.35: os PONTOS saíram do rótulo e foram pro título. "STB (10)" queria 34px e a
+  // coluna do degrau apertado tem 27 — ele quebrava em duas linhas e deixava o card COM
+  // super tie-break mais alto que o card sem. Agora o rótulo cabe sempre em uma linha e os
+  // cabeçalhos medem igual; o título, que ganhou a linha inteira, carrega o "· STB 10".
+  ok(/· STB 10$/.test(plano(MELHOR3, [S(6, 4), S(3, 6)]).headline) === false,
+    'e enquanto o STB está EM DISPUTA o título anuncia o nome inteiro, não o resumo');
   eq(estados(p), ['done', 'done', 'live'], 'os dois sets à esquerda, o super tie-break em disputa');
   ok(p.columns[2].kind === 'stb' && p.columns[2].points === 10, 'a 3ª coluna é super tie-break de 10 pontos');
 
   p = plano(MELHOR3_SEM_STB, [S(6, 4), S(3, 6)]);
-  eq(rotulos(p), ['Set 1', 'Set 2', 'Set 3'], 'sem super tie-break configurado, o decisivo é o Set 3');
+  eq(rotulos(p), ['1', '2', '3'], 'sem super tie-break configurado, o decisivo é o Set 3');
   ok(p.columns[2].kind === 'set', 'e ele é um SET, não um tie-break');
 
   p = plano(MELHOR3, [S(6, 4), S(6, 3)]);
   ok(p.done === true && p.live === null, '2×0 fecha: não há mais coluna em disputa');
-  eq(rotulos(p), ['Set 1', 'Set 2'], 'e sobram só os 2 sets jogados — nada de coluna fantasma');
+  eq(rotulos(p), ['1', '2'], 'e sobram só os 2 sets jogados — nada de coluna fantasma');
   eq(p.headline, 'Melhor de 3 · 2 × 0', 'fechado, a linha mostra o placar de sets');
 
   // MELHOR DE 5 — mesma conta, sem caso especial
@@ -96,10 +102,10 @@ function regua() {
   ok(p.multi === true && p.bestOf === 5 && p.setsToWin === 3, 'melhor de 5: bestOf=5, setsToWin=3');
   eq(p.headline, 'Melhor de 5 · Set 1', 'a linha nova diz "Melhor de 5 · Set 1"');
   p = plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2)]);
-  eq(rotulos(p), ['Set 1', 'Set 2', 'Set 3', 'Set 4'], '2×1 na de 5: quatro colunas, a 4ª em disputa');
+  eq(rotulos(p), ['1', '2', '3', '4'], '2×1 na de 5: quatro colunas, a 4ª em disputa');
   ok(p.columns[3].kind === 'set', 'o Set 4 ainda é um set comum');
   p = plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(4, 6)]);
-  eq(rotulos(p), ['Set 1', 'Set 2', 'Set 3', 'Set 4', 'STB (10)'],
+  eq(rotulos(p), ['1', '2', '3', '4', 'STB'],
     '2×2 na de 5: o 5º é que vira o super tie-break');
   p = plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(6, 1)]);
   ok(p.done === true, '3×1 fecha a melhor de 5');
@@ -321,7 +327,7 @@ async function tela() {
   ok(r.casos.every(function (g) { return !g.tituloCortado; }),
     'e o aviso nunca sai cortado — quebra em duas linhas em vez de reticências');
   eq(r.casos[1].inputs.sort(), ['s1-M1', 's2-M1'], 'só a coluna EM DISPUTA tem campo (ids de sempre)');
-  eq(r.casos[2].rotulos.map(function (x) { return x.txt; }), ['Set 1', 'Set 2', 'STB (10)'],
+  eq(r.casos[2].rotulos.map(function (x) { return x.txt; }), ['1', '2', 'STB'],
     'os rótulos são os que o dono pediu (o CAIXA ALTA é do CSS, não do texto)');
 
   ok(!r.umSet.temHead && !r.umSet.temGrid, '1 SET: nenhuma linha nova, nenhuma coluna — o card antigo intacto');
@@ -395,7 +401,7 @@ async function correcoesDoSandbox() {
     const cor = st ? getComputedStyle(st).color : '';
     return { rot: rot, cor: cor, mudo: getComputedStyle(document.body).getPropertyValue('--text-muted') };
   });
-  ok(res.rot[res.rot.length - 1] === 'STB (10)',
+  ok(res.rot[res.rot.length - 1] === 'STB',
     '(c) o box do super tie-break é rotulado "STB" — o nome inteiro já está na linha de cima');
   ok(res.cor && res.cor !== 'rgb(148, 163, 184)' && res.cor !== res.mudo,
     '(d) a linha de cima tem cor de DESTAQUE, não a cinza de texto secundário (' + res.cor + ')');

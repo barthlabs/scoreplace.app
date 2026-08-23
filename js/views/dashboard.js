@@ -2050,18 +2050,47 @@ function renderDashboard(container) {
         // defasado — a regra é sempre a foto do perfil real).
         return null;
       }
+      // ⭐ 2.0.35 · A GEOMETRIA DO NOME É A MESMA DA CHAVE. Ordem do dono: _"implemente em
+      // todos os cards de forma canônica — não só no Novidades, ou nos Últimos Resultados,
+      // ou nas chaves"_. Este card desenhava o jogador por conta própria: foto de 28px e
+      // fonte de 0,8rem CRAVADAS, e — o pior — `text-overflow:ellipsis`, ou seja ele
+      // CORTAVA o nome. O cânone da caixa invisível diz o contrário: o nome nunca é
+      // cortado, a caixa é igual pra todo mundo e a FONTE é que cede.
+      // O markup continua sendo daqui (este card tem "(você)", que a chave não tem); o que
+      // passou a vir de fora são os NÚMEROS. [[project_name_fit_box_canonical]]
+      var _geoMini = (typeof window._cardNomeGeo === 'function') ? window._cardNomeGeo(2) : null;
+      // ⛔ O GRUPO É POR LADO, NUNCA POR CARD. Se fosse por card, os dois TIMES entrariam no
+      // mesmo grupo e a quebra de um nome do time A forçaria a quebra no time B — que não
+      // tem nada com isso. O que se iguala é a dupla, não o confronto. Por isso o contador
+      // anda dentro de `_teamHtml`, uma vez por lado.
+      var _grupoMini = '';
       // Um jogador (linha): avatar + nome
       function _playerRow(name, uid) {
         var isMe = _isMe(name);
         // ⭐ PONTO ÚNICO. O nome já hidratava por uid (span interno, logo abaixo) — o ÍCONE
         // não, e era ele que nascia mudo quando o perfil ainda não tinha chegado.
+        var _av = _geoMini ? _geoMini.avatar : '28px';
         var avatarEl = window._personAvatarHtml(uid || '', name,
-          'width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;');
+          'width:' + _av + ';height:' + _av + ';border-radius:50%;object-fit:cover;flex-shrink:0;');
         // v4.5.67: nome resolve VIVO por uid. data-uid-name fica no span INTERNO só do
         // nome (não no externo, senão a hidratação — textContent — apagaria o "(você)").
         var _disp = (uid && typeof window._displayName === 'function') ? window._displayName(uid, name) : name;
         var _uidAttr = uid ? (' data-uid-name="' + _sf(uid) + '"') : '';
-        var nameEl = '<span style="font-size:0.8rem;font-weight:' + (isMe ? '700' : '500') + ';color:' + (isMe ? '#f1f5f9' : '#94a3b8') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span' + _uidAttr + '>' + _sf(_disp) + '</span>' + (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '') + '</span>';
+        // ⛔ SEM `text-overflow:ellipsis` e sem `nowrap` no estilo: quem decide o tamanho é o
+        // motor de ajuste (`.sp-name-fit` dentro de `.sp-mc-box`), e o `nowrap` vem do CSS
+        // da classe — o motor conta com isso pra devolver a linha única.
+        var _cor = isMe ? '#f1f5f9' : '#94a3b8';
+        var _peso = isMe ? '700' : '500';
+        var _interno = '<span' + _uidAttr + '>' + _sf(_disp) + '</span>' +
+          (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '');
+        if (!_geoMini) {
+          return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl +
+            '<span style="font-size:0.8rem;font-weight:' + _peso + ';color:' + _cor + ';">' + _interno + '</span></div>';
+        }
+        var nameEl = '<div class="sp-mc-box" style="--sp-box-h:' + _geoMini.boxH + 'rem">' +
+          '<span class="sp-name-fit sp-mc-nm" data-fit-group="' + _grupoMini + '"' +
+          ' data-maxrem="' + _geoMini.maxRem + '" data-minrem="' + _geoMini.minRem + '"' +
+          ' style="font-weight:' + _peso + ';color:' + _cor + ';">' + _interno + '</span></div>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
       // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
@@ -2073,6 +2102,8 @@ function renderDashboard(container) {
             '<span>a definir</span></div>';
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
+        window._fitGroupSeq = (window._fitGroupSeq || 0) + 1;
+        _grupoMini = 'd' + window._fitGroupSeq;      // um grupo por LADO
         return '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">' +
           parts.map(function(n, i) { return _playerRow(n, uids && uids[i]); }).join('') +
         '</div>';
@@ -2095,7 +2126,9 @@ function renderDashboard(container) {
       var cardBgStr = opts.cardBg || 'rgba(99,102,241,0.06)';
       var cardShadow = opts.cardShadow || '0 0 20px rgba(99,102,241,0.25),0 4px 12px rgba(0,0,0,0.15)';
 
-      var pendingScoreStyle = 'font-weight:800;font-size:1rem;min-width:28px;text-align:center;color:#fbbf24;font-style:italic;flex-shrink:0;';
+      // ⭐ 2.0.35: o TAMANHO do número sai da classe canônica (.sp-mc-num → --sp-num-fs), a
+      // mesma do card da chave. Aqui sobra só o que é DESTE estado: âmbar e itálico.
+      var pendingScoreStyle = 'color:#fbbf24;font-style:italic;flex-shrink:0;';
 
       // ⚠️ CAMPOS DO TIE-BREAK também aqui. Este card já chamava _highlightWinner no oninput,
       // mas NUNCA renderizava `tb1-`/`tb2-` — e a função começa com `if (tb1El && tb2El)`, ou
@@ -2121,12 +2154,12 @@ function renderDashboard(container) {
       };
 
       var p1ScoreHtml = pendingScores
-        ? '<span style="' + pendingScoreStyle + '">' + (pendingScores.p1 != null ? pendingScores.p1 : '?') + '</span>'
+        ? '<span class="sp-mc-num" style="' + pendingScoreStyle + '">' + (pendingScores.p1 != null ? pendingScores.p1 : '?') + '</span>'
         : canLaunch
           ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(1)
           : scorePlaceholder;
       var p2ScoreHtml = pendingScores
-        ? '<span style="' + pendingScoreStyle + '">' + (pendingScores.p2 != null ? pendingScores.p2 : '?') + '</span>'
+        ? '<span class="sp-mc-num" style="' + pendingScoreStyle + '">' + (pendingScores.p2 != null ? pendingScores.p2 : '?') + '</span>'
         : canLaunch
           ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(2)
           : scorePlaceholder;
@@ -2449,7 +2482,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc3 = m2.scoreP1 != null ? '<div style="font-size:1rem;font-weight:800;color:'+_corPlacar2(p1IsWinner)+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(1)+'</div>' : '';
+                var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:'+_corPlacar2(p1IsWinner)+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
                 return ph+sc3;
               })() +
             '</div>' +
@@ -2469,7 +2502,7 @@ function renderDashboard(container) {
                   ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc4 = m2.scoreP2 != null ? '<div style="font-size:1rem;font-weight:800;color:'+_corPlacar2(p2IsWinner)+';flex-shrink:0;min-width:28px;text-align:right;">'+_placarLado(2)+'</div>' : '';
+                var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:'+_corPlacar2(p2IsWinner)+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';
                 return ph+sc4;
               })() +
             '</div>' +

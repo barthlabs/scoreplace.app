@@ -1211,6 +1211,12 @@ const SUITES = [
   // com os rótulos das colunas no placar pendente — e o tie-break/STB avisa "dif 2 pts"
   // ANTES, cobrando a margem que anunciou.
   'tests/placar-na-chave-nao-pula.test.js',
+  // O card de jogo é canônico em TODO lugar (chave, Novidades, Seus Últimos Resultados):
+  // os dois desenhos legítimos leem a MESMA régua de números (_cardNomeGeo) e a mesma caixa
+  // invisível do nome. Trava a violação mais grave que existia: a dashboard CORTAVA o nome
+  // com reticências, com foto e fonte cravadas no próprio arquivo.
+  'tests/card-de-jogo-e-canonico-em-todo-lugar.test.js',
+
 
   // Presença é sinal POSITIVO e PERECÍVEL: caduca em 24h, em todo o programa. A validade
   // mora na LEITURA (_idMapGet + _presencaViva), nunca numa varredura que apaga — varredura

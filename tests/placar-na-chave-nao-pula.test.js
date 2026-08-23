@@ -228,7 +228,7 @@ async function aprovacao(browser) {
              linha: head ? head.querySelector('.sp-set-head-ttl').textContent.trim() : null };
   }, alvo.id);
   ok(outro.temBotao, 'o adversário recebe o botão de confirmar');
-  ok(outro.rotulos && outro.rotulos.join('|') === 'Set 1|Set 2',
+  ok(outro.rotulos && outro.rotulos.join('|') === '1|2',
     'e o placar PENDENTE mostra o rótulo de cada coluna — obtido ' + JSON.stringify(outro.rotulos));
   ok(/Melhor de 3/.test(outro.linha || ''), 'com a linha do formato por cima: "' + outro.linha + '"');
 
@@ -266,8 +266,12 @@ async function difDoisPontos(browser) {
   }, alvo.id);
   ok(/Super Tie-Break \(dif 2 pts\)$/.test(anuncio.linha || ''),
     'empatou em 1-1 → a linha já anuncia: "' + anuncio.linha + '"');
-  ok((anuncio.rotulos||[]).join('|') === 'Set 1|Set 2|STB (10)',
-    'e a coluna do STB continua com o rótulo curto (a largura é do nome da dupla)');
+  // ⭐ 2.0.35: a coluna leva só o NÚMERO (a palavra "set" não se repete), e o STB mantém a
+  // palavra porque não é "o set 3". Os PONTOS saíram daqui e foram pro título: "STB (10)"
+  // queria 34px, a coluna do degrau apertado tem 27, ele quebrava em duas linhas e deixava o
+  // card COM super tie-break mais alto que o card sem.
+  ok((anuncio.rotulos||[]).join('|') === '1|2|STB',
+    'e a coluna leva só o número; o STB mantém a palavra, sem os pontos');
 
   const noSet = await page.evaluate((id) => {
     const vis = e => !!e && getComputedStyle(e).display !== 'none';
@@ -411,6 +415,7 @@ async function numeroDoPlacar(browser) {
         alturaDoNumero: rNum ? Math.round(rNum.height) : 0,
         alturaDaCaixaDoNome: caixa ? Math.round(caixa.getBoundingClientRect().height) : 0,
         alturaDaLinha: linha ? Math.round(linha.getBoundingClientRect().height) : 0,
+        alturaDaLinha: linha ? Math.round(linha.getBoundingClientRect().height) : 0,
         folgaAteABorda: rNum ? Math.round(rCard.right - rNum.right) : 0,
         estouraColuna: estouraColuna, colunas: cols.length,
         transbordo: Math.round(cardS.scrollWidth - cardS.clientWidth)
@@ -423,9 +428,13 @@ async function numeroDoPlacar(browser) {
     // passar da altura da caixa do nome (é ela que define a altura da linha) nem da largura
     // da coluna de set, e tem que sobrar margem até a borda. São as PAREDES — elas seguram
     // qualquer tamanho futuro, sem cravar qual é o tamanho de hoje.
-    ok(r.alturaDoNumero <= r.alturaDaCaixaDoNome + 1,
-      'raiz ' + raiz + 'px: e não passa da altura da caixa do nome (' + r.alturaDoNumero +
-      ' ≤ ' + r.alturaDaCaixaDoNome + ') — é ela que define a altura da linha');
+    // ⭐ 2.0.35: a régua certa é a LINHA, não a caixa do nome. Depois que a caixa voltou a ter
+    // UMA linha (2.0.34), quem dita a altura da linha passou a ser a FOTO — e o número
+    // grande, medido contra a caixa, parecia estourar quando na verdade a pergunta é outra:
+    // ele faz a LINHA crescer? Se não faz, o card não cresce, que é o que o dono cobra.
+    ok(r.alturaDoNumero <= r.alturaDaLinha + 1,
+      'raiz ' + raiz + 'px: o número não estica a linha do card (' + r.alturaDoNumero +
+      ' ≤ ' + r.alturaDaLinha + ')');
     ok(r.colunas === 3 && r.estouraColuna === 0,
       'raiz ' + raiz + 'px: nenhum número de set estoura a largura da sua coluna (3 colunas, STB incluído)');
     ok(r.folgaAteABorda >= 8,

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.34';
+window.SCOREPLACE_VERSION = '2.0.35';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -5294,6 +5294,107 @@ window._firstNameOnly = function(name) {
     });
   }
 
+  // ── ⭐ NOMES DO MESMO GRUPO SAEM IGUAIS (2.0.35) ─────────────────────────────────
+  // Relato do dono, no card de dupla: _"por que Raquel Unger quebrou em 2 linhas e Monica
+  // Rossi não? Quebra para as duas nesses casos."_ O ajuste é POR NOME e por caixa, então
+  // dois nomes de tamanhos parecidos caem em formas diferentes por um fio de diferença — e
+  // as duas metades do MESMO time aparecem desalinhadas.
+  // A regra: dentro de um `data-fit-group`, todos ficam com a MENOR fonte do grupo; e se
+  // algum precisou de duas linhas, todos quebram. Menor fonte porque é a única que
+  // comprovadamente cabe em todas as caixas do grupo — subir alguém ao tamanho do vizinho
+  // poderia estourar a caixa dele.
+  // ⛔ NÃO decide por classe: quem quer ser igualado se declara no MARKUP com o atributo.
+  // Sem `data-fit-group` (dashboard, explore, classificação) nada aqui roda.
+  // Em duas fases (ler tudo, depois escrever tudo) pelo mesmo motivo do resto do motor:
+  // alternar leitura e escrita força um reflow por elemento. [[project_name_fit_box_canonical]]
+  function _igualaGrupos(root) {
+    var alvos;
+    try { alvos = (root || document).querySelectorAll('.sp-name-fit[data-fit-group]'); }
+    catch (e) { return; }
+    if (!alvos || !alvos.length) return;
+    var grupos = {};
+    // (a) só LEITURA
+    for (var i = 0; i < alvos.length; i++) {
+      var el = alvos[i], k = el.getAttribute('data-fit-group');
+      if (!k) continue;
+      var fs = parseFloat(el.style.fontSize);
+      if (!(fs > 0)) continue;
+      var lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
+      var linhas = lh ? Math.round(el.scrollHeight / lh) : 1;
+      var g = grupos[k] || (grupos[k] = { itens: [], quebrou: false });
+      g.itens.push(el);
+      if (linhas > 1) g.quebrou = true;
+    }
+    // (b) só ESCRITA
+    // ⛔ O GRUPO COMPARTILHA A QUEBRA, NUNCA O TAMANHO. Minha 1ª versão puxava todo mundo pra
+    // MENOR fonte do grupo — e o dono cortou na hora: _"o nome longo sofre com fonte menor,
+    // tão menor quanto necessário; e o nome curto não. Você está usando o mesmo tamanho nos
+    // dois casos e fazendo o nome curto sofrer sem motivo."_ Ele está certo: quem escolheu
+    // cinco sobrenomes paga em legibilidade, o parceiro dele não tem nada com isso.
+    // O que precisa casar entre os dois é a FORMA (uma linha ou duas), porque é ela que faz
+    // as metades do mesmo time parecerem desalinhadas. O tamanho continua sendo de cada um.
+    Object.keys(grupos).forEach(function (k) {
+      var g = grupos[k];
+      if (g.itens.length < 2) return;              // sozinho não tem com quem se igualar
+      g.itens.forEach(function (el) {
+        if (g.quebrou) { el.style.whiteSpace = 'normal'; el.style.textWrap = 'balance'; }
+      });
+      // ⛔ `white-space:normal` NÃO BASTA pra quem CABE. Foi o que eu media primeiro e o
+      // dono viu na tela: "Nei Almeida" continuava numa linha ao lado da parceira quebrada,
+      // porque ele cabia — e texto que cabe não quebra. Pra quebrar de verdade, a caixa dele
+      // tem que ficar mais estreita que a linha inteira.
+      // O teto é a MAIOR PALAVRA: estreitar além disso não quebraria em espaço nenhum, ia
+      // cortar a palavra no meio — que é justamente o que o dono proibiu.
+      if (!g.quebrou) return;
+      g.itens.forEach(function (el) {
+        _forcaQuebra(el);
+      });
+    });
+  }
+
+  // Estreita UM nome até ele quebrar em duas linhas, sem nunca cortar palavra.
+  // A medição da maior palavra é feita num CLONE fora da tela: mexer no texto do próprio
+  // elemento brigaria com `_hydrateUidNames`, que reescreve `textContent` quando o perfil
+  // chega. Só roda pros poucos que sobraram numa linha dentro de um grupo já quebrado.
+  function _forcaQuebra(el) {
+    var txt = (el.textContent || '').trim();
+    if (txt.indexOf(' ') === -1) return;                 // uma palavra só: não há onde quebrar
+    var lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
+    if (lh && Math.round(el.scrollHeight / lh) > 1) return;   // já quebrou
+    var clone = el.cloneNode(false);
+    clone.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:nowrap;visibility:hidden;' +
+      'font-size:' + el.style.fontSize + ';font-weight:' + getComputedStyle(el).fontWeight + ';';
+    (el.ownerDocument.body || el.parentNode).appendChild(clone);
+    var maior = 0, inteiro = 0;
+    try {
+      clone.textContent = txt; inteiro = clone.scrollWidth;
+      txt.split(/\s+/).forEach(function (p) {
+        clone.textContent = p;
+        if (clone.scrollWidth > maior) maior = clone.scrollWidth;
+      });
+    } catch (e) {}
+    try { clone.parentNode.removeChild(clone); } catch (e) {}
+    if (!inteiro || !maior) return;
+    var alvo = Math.max(maior, Math.ceil(inteiro * 0.62));
+    if (alvo >= inteiro) return;                        // não dá pra estreitar sem cortar palavra
+    // ⛔ E A QUEBRA SÓ VALE SE COUBER. Sem esta volta atrás, o nome CURTO — que está numa
+    // fonte MAIOR justamente por ser curto — quebrava em duas linhas que não cabem na caixa
+    // de uma linha, e o `overflow:hidden` comia metade de cada uma. Foi o que o dono viu:
+    // "Nei Almeida" cortado em cima e embaixo ao lado da parceira de nome comprido.
+    // Encolher pra fazer caber está PROIBIDO aqui: seria fazer o nome curto pagar pelo longo,
+    // que é exatamente o que ele mandou parar de fazer. Então: ou quebra de graça, ou não
+    // quebra. A simetria é desejável; legibilidade é obrigatória.
+    var caixa = el.parentElement;
+    var altura0 = caixa ? caixa.clientHeight : 0;
+    el.style.maxWidth = alvo + 'px';
+    if (caixa && el.scrollHeight > altura0 + 1) {
+      el.style.maxWidth = '';
+      el.style.whiteSpace = '';
+      el.style.textWrap = '';
+    }
+  }
+  window._igualaGruposDeNomes = _igualaGrupos;
+
   // Ajusta UM elemento `.sp-name-fit` ao box pai. false = box sem dimensão.
   function _fitOne(el) {
     if (!el) return true;
@@ -5480,7 +5581,12 @@ window._firstNameOnly = function(name) {
         }
         if (typeof aoFim === 'function') aoFim();
       };
-      _lote(perto, function () { if (longe.length) _lote(longe); });
+      // ⭐ o igualador roda DEPOIS de todos os lotes: um grupo pode cair em lotes
+      // diferentes (o corte é de 40 em 40), e igualar no meio compararia meia dupla.
+      var _aoFimDeTudo = function () { _igualaGrupos(root); };
+      _lote(perto, function () {
+        if (longe.length) _lote(longe, _aoFimDeTudo); else _aoFimDeTudo();
+      });
       // ⚠️ RETRY: 12 tentativas a 60ms era o outro vagão — 12 varreduras completas
       // por render quando algum box ainda não tinha caixa (seção fechada, item fora
       // do fluxo). Quem NASCE sem caixa hoje é coberto pelo IntersectionObserver e

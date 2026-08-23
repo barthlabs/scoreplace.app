@@ -279,6 +279,7 @@ window._translations['pt'] = {
   'bracket.setN': 'Set',
   'bracket.stbCurto': 'STB',
   'bracket.superTiebreak': 'Super Tie-Break',
+  'bracket.setsLabel': 'Sets',
   'bracket.stbMargin': 'Super tie-break sem a diferença',
   'bracket.stbMarginDetail': 'O super tie-break só termina com {n} pontos de diferença.',
   'result.tbMargin': 'Tie-break sem a diferença',

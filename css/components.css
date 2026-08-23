@@ -2365,7 +2365,16 @@ html, body,
    O rótulo pode quebrar em 2 linhas ("Super Tie-Break (10)" não cabe em 62px numa
    linha só) — daí `align-items:flex-end` na linha: os rótulos ficam colados no box,
    independentemente de quantas linhas cada um ocupa. */
-.sp-set-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding:0 10px;margin:2px 0 5px;}
+/* ⭐ 2.0.35 · O TÍTULO GANHOU A LINHA DELE. Correção do dono, olhando o melhor de 5 a 280px:
+   _"você está quebrando em 3 linhas o título e deixando um baita espaço, que poderia ser numa
+   única linha por cima dos números dos sets"_. E era isso mesmo: título e rótulos disputavam a
+   MESMA linha, então com 5 colunas sobrava um talo de ~90px pro título e "MELHOR DE 5 · 3 × 2"
+   caía em três linhas — três linhas de altura pra dizer uma frase curta.
+   Agora a caixa empilha: título em cima ocupando a largura inteira (cabe numa linha), rótulos
+   embaixo, encostados à direita. ⛔ O que NÃO pode mudar é o alinhamento: a linha de baixo
+   continua sendo `Sets` + a grade, e é a GRADE que casa coluna a coluna com os boxes. */
+.sp-set-head{display:flex;flex-direction:column;align-items:stretch;gap:1px;padding:0 10px;margin:2px 0 5px;}
+.sp-set-head-linha2{display:flex;align-items:flex-end;justify-content:flex-end;gap:5px;}
 /* ⛔ SEM reticências: a linha ANUNCIA o super tie-break assim que os sets empatam, e um
    aviso cortado pela metade não avisa. Quando não cabe numa linha, quebra em duas —
    o `align-items:flex-end` da linha mantém os rótulos colados nos boxes de qualquer jeito. */
@@ -2380,6 +2389,11 @@ html, body,
    [[feedback_contraste_sempre_nos_dois_temas]] */
 .sp-tb-hint{margin-top:6px;font-size:0.58rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:6px;padding:3px 8px;text-align:center;}
 [data-theme="light"] .sp-tb-hint{color:#92400e;background:rgba(251,191,36,0.18);border-color:rgba(146,64,14,0.35);}
+/* ⭐ A palavra "SETS" fica UMA vez, colada à esquerda da coluna 1 (ordem do dono). Ela não
+   entra no `space-between` do cabeçalho: vira o par da grade, e é a GRADE que continua
+   alinhada com os boxes de baixo. `align-self:flex-end` deixa a palavra na linha de base dos
+   rótulos, não flutuando acima deles. */
+.sp-set-head-sets{align-self:flex-end;font-size:0.46rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;margin-right:1px;line-height:1.05;flex-shrink:0;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:3px;flex-shrink:0;}
 .sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:center;}
 .sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
@@ -2402,8 +2416,8 @@ html, body,
    já tem `margin-left:8px` separando do nome. Somei 2px de padding aqui e o slot de 6 nomes
    com grade de melhor de 3 no desktop passou a precisar de TRÊS linhas — a folga real ali
    era menor que 2px. Margem que estoura o vizinho não é elegante. */
-:root{--sp-num-fs:1rem;--sp-num-fs-set:1rem;}
-.sp-mc-num{font-weight:800;font-size:var(--sp-num-fs);min-width:1.5rem;text-align:center;line-height:1.15;}
+:root{--sp-num-fs:1.45rem;--sp-num-fs-set:0.78rem;}
+.sp-mc-num{font-weight:800;font-size:var(--sp-num-fs);min-width:1.9rem;text-align:center;line-height:1.15;}
 .sp-set-num{display:block;font-weight:800;font-size:var(--sp-num-fs-set);line-height:1.15;}
 /* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */
 .sp-set-zero{display:block;font-weight:800;font-size:1rem;line-height:1.2;color:rgba(255,255,255,0.3);}

@@ -1065,7 +1065,67 @@
   // colunas dividindo a linha com o nome da dupla, e cada px aqui sai do nome.
   // Medido a 430px: set=34 + stb=56 deixa ~150px pro nome no pior caso (2-2 na de 5), que
   // é onde o `.sp-name-fit` ainda encolhe a fonte sem cortar. Mexer aqui é mexer no nome.
-  window._SET_COL_W = { set: 34, stb: 38 };
+  // ⭐ 2.0.35 · ESTREITADA A PEDIDO DO DONO, e o teto é MEDIDO. Olhando o melhor de 5 na
+  // coluna da chave no desktop (280px), a grade de 5 sets comia 186px dos 232px úteis da
+  // linha: sobravam 8px pro nome e ele descia pro piso de 0,34rem — virava textura.
+  // Ordem: _"diminui a largura dos box dos números"_.
+  // ⛔ QUEM AMARRA A LARGURA É O TIE-BREAK, não o dígito. O pior conteúdo de uma coluna não é
+  // "11": é `7⁽⁵⁾` — o set decidido no tie-break, com o subplacar em sobrescrito, que mede
+  // 31px a 1rem. Varrido largura × tamanho do número: com o número a 1rem a coluna não passa
+  // de 30px (nome fica com 28px); a 0,78rem ela desce a 24px e o nome sobe pra 58px. Abaixo
+  // de 24 corta o tie-break em qualquer tamanho. Ficou o par que devolve mais nome sem cortar.
+  // ⭐ 2.0.35 · E A ESCALA É POR QUANTAS COLUNAS EXISTEM. Ordem do dono: _"conforme os sets
+  // vão avançando e ocupando mais espaço, os números poderiam ser maiores antes, ocupando
+  // mais altura, e ir diminuindo conforme necessário — assim no set único ficam maiores, no
+  // melhor de 3 entre um e outro, e no melhor de 5 ficam como no exemplo"_.
+  // Ou seja: o placar usa o espaço que TEM. Com 2 colunas sobra largura, então o número
+  // cresce; com 5 ele encolhe até caber. Cada degrau traz junto a largura da coluna, porque
+  // as duas coisas andam amarradas pelo mesmo limite (o `7⁽⁵⁾` do tie-break).
+  // ⚠️ ISTO É LARGURA POR ESTADO — e o cânone dizia "largura por TIPO, nunca por estado".
+  // A razão daquele ⛔ era o RÓTULO sair de cima do box quando UMA coluna mudasse de tamanho
+  // ao ser confirmada. Aqui não é uma coluna que muda: é a GRADE INTEIRA que troca de degrau,
+  // rótulos e boxes juntos, lendo o mesmo `--w` do mesmo plano. O alinhamento é por
+  // construção e o teste da tela o cobra em todos os degraus.
+  // ⛔ Os pares (largura, fonte) são MEDIDOS contra o pior conteúdo de uma coluna, que não é
+  // "11" e sim `7⁽⁵⁾` — set decidido no tie-break, com o subplacar em sobrescrito, nos DOIS
+  // lados. Mexer em um sem re-medir o outro corta o tie-break.
+  // MEDIDO (desenho real do número, não estimativa): o pior conteúdo de uma coluna é `6⁽⁷⁾`
+  // — dois caracteres mais o sobrescrito do tie-break. Ele mede 33px a 1,15rem, 29px a 1rem e
+  // 23px a 0,78rem. Cada largura abaixo é o pior + 2px de FOLGA: sem essa folga o número
+  // encosta na borda da coluna e a primeira mudança de fonte do sistema o corta.
+  // ── ⭐ A GEOMETRIA DO NOME NO CARD DE JOGO, NUM LUGAR SÓ (2.0.35) ────────────────────
+  // Ordem do dono: _"implemente em todos os cards de forma canônica — não só no Novidades,
+  // ou nos Últimos Resultados, ou nas chaves. Em TODOS os cards de torneio."_
+  // Existem dois desenhos legítimos de card de jogo, e eles vão continuar existindo porque
+  // mostram coisas diferentes (o da chave tem coroa, substituição e BYE; o da dashboard tem
+  // "(você)" e "Ir para o torneio"). O que NÃO pode existir em dois lugares são os NÚMEROS:
+  // era assim que a dashboard ficava com foto de 28px e nome de 0,8rem cravados — e com
+  // `text-overflow:ellipsis`, ou seja CORTANDO o nome, que é justamente o que o cânone da
+  // caixa invisível proíbe. Agora os dois leem daqui.
+  // [[project_name_fit_box_canonical]] · [[feedback_unify_dual_entry_points]]
+  window._cardNomeGeo = function (nMembros) {
+    var dupla = (parseInt(nMembros, 10) || 1) > 1;
+    var teto = dupla ? 0.78 : 0.85;
+    return {
+      avatar: dupla ? '20px' : '24px',   // altura da linha sai daqui: a foto é a mais alta
+      boxH: +(teto * 1.35).toFixed(2),   // caixa de UMA linha
+      maxRem: teto,
+      minRem: dupla ? 0.52 : 0.58
+    };
+  };
+
+  window._SET_COL_ESCALA = [
+    { ate: 2, set: 35, stb: 37, fs: 1.15 },   // 1 ou 2 colunas: sobra espaço, número cheio
+    { ate: 3, set: 31, stb: 33, fs: 1.00 },   // 3 colunas (melhor de 3 completo)
+    { ate: 5, set: 25, stb: 27, fs: 0.78 }    // 4 ou 5 colunas (melhor de 5)
+  ];
+  window._setColEscala = function (nCols) {
+    var e = window._SET_COL_ESCALA;
+    for (var i = 0; i < e.length; i++) if (nCols <= e[i].ate) return e[i];
+    return e[e.length - 1];
+  };
+  // compat: quem lia a constante antiga continua lendo o degrau mais apertado
+  window._SET_COL_W = { set: 25, stb: 27 };
   // O AVISO DA MARGEM, escrito UMA vez. Margem 1 (morte súbita) não avisa nada — anunciar
   // "dif 1 pt" seria ruído sobre a regra que a pessoa já espera.
   // A MARGEM EFETIVA, resolvida num lugar só. Nasceu porque eu tinha deixado DOIS defaults
@@ -1121,25 +1181,48 @@
     // a linha de cima anuncia "Super Tie-Break" inteiro, então repetir aqui só serve pra
     // quebrar o rótulo em 3 linhas e roubar largura do nome da dupla. MEDIDO: "SUPER
     // TIE-BREAK (10)" ocupava 56px de coluna e 3 linhas de altura; "STB (10)" cabe em 38.
+    // ⭐ 2.0.35 · A PALAVRA "SET" NÃO SE REPETE COLUNA A COLUNA. Ordem do dono, olhando o
+    // melhor de 5: _"coloca sets 1, 2, 3, 4, 5 apenas, sem repetir a palavra set toda vez"_.
+    // Numa de 5 sets, "SET" aparecia CINCO vezes numa linha de 136px — e era ela que fazia a
+    // linha dos rótulos quebrar em duas. Agora a coluna leva só o NÚMERO; quem diz que são
+    // sets é a linha de cima ("Melhor de 5 · Set 3"), que já está ali do lado.
+    // ⛔ O super tie-break MANTÉM a palavra: ele não é "o set 5", é outra coisa — e os pontos
+    // ("(10)") só existem aqui, a linha de cima não os carrega. [[project_placar_por_sets_no_card]]
+    // ⛔ O RÓTULO DA COLUNA CABE EM UMA LINHA, SEMPRE. Medido: "STB (10)" quer 34px e a
+    // coluna do degrau apertado tem 27 — ele quebrava em duas linhas e engordava o cabeçalho
+    // em 8px. Resultado: card COM super tie-break ficava mais alto que card sem, e o dono
+    // viu: _"no melhor de 3 e de 5 os cards têm alturas diferentes sem qualquer motivo"_.
+    // Os PONTOS saíram daqui e foram pro título, que desde a 2.0.35 tem a linha inteira só
+    // pra ele — lá cabem sobrando. A coluna fica com "STB" (17px), que cabe em qualquer
+    // degrau, e todos os cabeçalhos passam a medir a mesma coisa.
     var labelAt = function (i) {
-      return kindAt(i) === 'stb'
-        ? _tr('bracket.stbCurto', 'STB') + ' (' + stbPts + ')'
-        : _tr('bracket.setN', 'Set') + ' ' + (i + 1);
+      return kindAt(i) === 'stb' ? _tr('bracket.stbCurto', 'STB') : String(i + 1);
     };
 
     var done = !!(opts.done || (m && m.winner) ||
       wonP1 >= setsToWin || wonP2 >= setsToWin || played.length >= bestOf);
 
+    // ⭐ O DEGRAU SAI DO FORMATO, NÃO DO ANDAMENTO. Correção do dono: _"no melhor de 3 pode
+    // haver STB e precisa de espaço para isso"_. Eu tinha escolhido o degrau pelas colunas
+    // JÁ desenhadas — então uma partida de melhor de 3 começava com números grandes e os
+    // via encolher quando o super tie-break entrasse, e o placar mudava de tamanho no meio
+    // do jogo. O tamanho agora é do FORMATO: `bestOf` é o máximo de colunas que aquele jogo
+    // pode ter (o STB incluído), então o espaço dele já está reservado desde o primeiro set.
+    // 1 set não passa por aqui (não tem grade); melhor de 3 fica no meio; melhor de 5 no
+    // degrau mais apertado — exatamente a escada que o dono descreveu.
+    var esc = window._setColEscala(multi ? bestOf : 1);
+    var larg = function (k) { return k === 'stb' ? esc.stb : esc.set; };
+
     var cols = [], i;
     for (i = 0; i < played.length; i++) {
       cols.push({ i: i, kind: kindAt(i), label: labelAt(i), points: kindAt(i) === 'stb' ? stbPts : null,
-        state: 'done', set: played[i], w: window._SET_COL_W[kindAt(i)] });
+        state: 'done', set: played[i], w: larg(kindAt(i)) });
     }
     var live = null;
     if (multi && !done && played.length < bestOf) {
       var li = played.length;
       live = { i: li, kind: kindAt(li), label: labelAt(li), points: kindAt(li) === 'stb' ? stbPts : null,
-        state: 'live', set: null, w: window._SET_COL_W[kindAt(li)] };
+        state: 'live', set: null, w: larg(kindAt(li)) };
       cols.push(live);
     }
 
@@ -1151,19 +1234,25 @@
     // box, na mesma linha, já os mostra — e é o que faz o texto caber. Quando não cabe, a
     // linha QUEBRA em duas (nunca reticências): perder metade do aviso é perder o aviso.
     var head = _tr('bracket.bestOf', 'Melhor de') + ' ' + bestOf;
+    // os pontos do super tie-break, no título — só quando a coluna dele existe neste card
+    var _temStbCol = false;
     var _avisoDif = window._difPtsAviso(margem);
     var atual = live
       ? (live.kind === 'stb'
           ? (_tr('bracket.superTiebreak', 'Super Tie-Break') + (_avisoDif ? ' (' + _avisoDif + ')' : ''))
           : (_tr('bracket.setN', 'Set') + ' ' + (live.i + 1)))
       : (wonP1 + ' × ' + wonP2);
+    for (var _c = 0; _c < cols.length; _c++) if (cols[_c].kind === 'stb') _temStbCol = true;
+    var _stbNoTitulo = (_temStbCol && !(live && live.kind === 'stb'))
+      ? (' · ' + _tr('bracket.stbCurto', 'STB') + ' ' + stbPts) : '';
     return {
       multi: multi, setsToWin: setsToWin, bestOf: bestOf,
       superTiebreak: stbOn, superTiebreakPoints: stbPts, tiebreakMargin: margem,
+      numFs: esc.fs,      // tamanho do número desta grade (degrau da escala)
       difPtsAviso: _avisoDif,
       played: played, setsWonP1: wonP1, setsWonP2: wonP2,
       done: done, columns: cols, live: live,
-      headline: head + ' · ' + atual
+      headline: head + ' · ' + atual + _stbNoTitulo
     };
   };
 

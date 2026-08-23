@@ -84,6 +84,12 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.35 ───────────────────────────────────────────
+        // A leva de tamanhos do card, refeita com o dono olhando a tela a cada passo. Item
+        // ÚNICO porque pro usuário é uma coisa só: como o jogo aparece no card. A 2.0.34
+        // (revert) não ganhou item, e este substitui o que a 2.0.33 tinha escrito.
+        '<li><b>\uD83C\uDFBE O placar do jogo ficou leg\u00edvel em melhor de 3 e de 5:</b> na chave do computador, o placar com cinco sets ocupava tanto espa\u00e7o que <b>o nome dos jogadores virava um borr\u00e3o</b> \u2014 sobravam 8 pixels pro nome. Agora as colunas do placar s\u00e3o do tamanho do formato (mais largas em melhor de 3, mais estreitas em melhor de 5) e sobra espa\u00e7o pro nome. A palavra \u201cSet\u201d parou de se repetir coluna a coluna: aparece uma vez, e as colunas levam s\u00f3 <b>1, 2, 3, 4</b>. Os dois nomes de uma dupla passaram a <b>quebrar linha juntos</b>, e o nome curto n\u00e3o encolhe mais por causa do nome comprido do parceiro. Cards de melhor de 3 e de 5 agora t\u00eam a <b>mesma altura</b>.</li>' +
+        '<li><b>\uD83D\uDCCF O card do jogo \u00e9 igual em todo lugar:</b> o card que aparece na <b>tela inicial</b> (em \u201cNovidades\u201d e \u201cSeus \u00faltimos resultados\u201d) desenhava o nome de um jeito pr\u00f3prio \u2014 e <b>cortava</b> o nome comprido com retic\u00eancias, coisa que a chave nunca fez. Agora os dois usam a mesma regra: o nome nunca \u00e9 cortado, a letra \u00e9 que cede, e o espa\u00e7o do nome \u00e9 igual pra todo participante.</li>' +
         // ── ciclo 2.0.33 ───────────────────────────────────────────
         // Cinco pedidos do dono no mesmo dia, olhando o SB da Confra. Viram TRÊS itens
         // porque pro usuário são três coisas: (a) a chave parar de pular, (b) o placar de
