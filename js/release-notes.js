@@ -19,6 +19,15 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.0.32 NÃO ganhou item, e é DECISÃO. Ela é 100% ferramenta: uma trava de teste
+    // (scripts/check-vendor-fresh.js) que barra o `npm test` quando o
+    // `functions-autodraw/vendor/` — a cópia de js/views/* que o autoDraw roda no servidor
+    // — está velho, mais o pre-commit que sincroniza essa cópia sozinho. Motivo: 52 suítes
+    // carregam o servidor pela CÓPIA, então vendor velho deixava o gate verde sobre código
+    // que o servidor nem tinha (medido: 57% dos commits estavam assim). Zero mudança de
+    // tela, zero comportamento novo pra quem joga — o diff não toca css/, nem view alguma.
+    // A trava (check-release-notes) pega OMISSÃO e não sabe julgar isso; a justificativa
+    // fica aqui, pro próximo leitor não achar que faltou.
     // ⚠️ 1.9.66 NÃO ganhou item, e é DECISÃO. Ela é 100% servidor: a rotina diária que
     // cobra o celular no perfil de quem está inscrito na Confra (CF nudgeMissingPhones,
     // nasce em ensaio). Zero mudança de tela — nada a anunciar pra quem joga. A trava
