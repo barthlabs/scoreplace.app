@@ -3778,20 +3778,13 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     const onerror = cachedPhoto && initialsUrl ? `onerror="this.onerror=null;this.src='${initialsUrl}'"` : '';
     // o uid viaja no proprio <img> — a hidratacao acha por ele
     const _avatarUid = _semNomeAinda ? ` data-uid-avatar="${window._safeHtml(_slotUid)}"` : '';
-    // ⭐ 2.0.33 · A FOTO CRESCE PORQUE A CAIXA JÁ CRESCEU. Ordem do dono (23/ago/2026):
-    // _"com isso podemos aumentar um pouco o ícone/foto de cada jogador"_. A linha é
-    // `align-items:center`, então a altura dela é o MAIOR entre a foto e a caixa do nome —
-    // e desde a 2.0.30 a caixa mede duas linhas (≈27px na raiz de 16px) contra 20px de foto.
-    // Ou seja: esses 7px já estavam pagos e sobrando. A foto passa a sair da MESMA base da
-    // caixa (× 1.85 ≈ 84% da altura dela), então cresce sem esticar linha nenhuma.
-    // ⛔ 1.85 É TETO MEDIDO, não gosto: a foto rouba largura da caixa do nome, e a 1.90 o slot
-    // de 6 nomes com grade de melhor de 3 no desktop passava a precisar de TRÊS linhas — a
-    // terceira fica escondida pelo `overflow:hidden`. Varrido 1.80/1.85/1.90/1.98; 1.85 é o
-    // maior que ainda cabe em duas linhas em todos os contextos medidos.
-    // ⛔ E em rem, não px: o cânone da escala por área proíbe px em coisa que escala — a foto
-    // era a exceção que sobrou aqui. [[project_name_fit_box_canonical]] [[project_web_area_scaling_canon]]
-    const _nomeBaseRem = members.length > 1 ? 0.78 : 0.85;
-    const size = (_nomeBaseRem * 1.85).toFixed(2) + 'rem';
+    // ⚠️ 2.0.34 · REVERTIDO PELO DONO. A 2.0.33 tinha subido a foto (× 1.85 da base) e a
+    // fonte do nome (× 2, depois × 1.5) pra ocupar a caixa de duas linhas que a 2.0.30 criou.
+    // Vendo no ar, a ordem foi: _"reverte tudo que está uma merda"_ — a caixa maior, a fonte
+    // maior e a foto maior saem juntas, e o card volta ao tamanho que ele tinha ontem.
+    // ⛔ NÃO reintroduzir nenhum dos três sem o dono pedir: ele viu os quatro tetos lado a
+    // lado (×1.35, ×1.5, ×1.65, ×2) e recusou a leva inteira, não um valor.
+    const size = members.length > 1 ? '20px' : '24px';
     const fontSize = members.length > 1 ? '0.78rem' : '0.85rem';
     // ── CAIXA INVISÍVEL DO NOME (cânone fit-name-to-box) ───────────────────
     // Regra do dono: nome NUNCA é cortado. A caixa é do MESMO tamanho pra todo
@@ -3803,23 +3796,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // `flex:1;min-width:0` faz a caixa ocupar a largura que sobra do avatar;
     // a ALTURA é fixa em rem pra herdar a escala por área (e o piso do fit
     // impede que o nome vire ilegível pra quem só está LENDO a chave).
-    // ⭐ 2.0.33 · O TETO DOBRA — É ELE QUE FAZ O NOME CURTO ENCHER A CAIXA.
-    // Ordem do dono (23/ago/2026), olhando a chave depois da 2.0.30: _"faltou apenas aumentar
-    // a fonte dos nomes para encherem o espaço onde cabem os nomes de 2 linhas com fonte
-    // menor… assim os nomes menores ficam maiores e mais visíveis, e os nomes maiores ocupam
-    // realmente o mesmo espaço com fontes menores — a ideia é fazer as pessoas escolherem
-    // nomes menores intuitivamente para usar fontes maiores."_
-    // A caixa passou a ter DUAS linhas de altura na 2.0.30, mas o teto continuou o de UMA:
-    // nome curto ficava pequeno no meio de um espaço vazio, e o incentivo não existia.
-    // A CONTA: a caixa mede `base × 2.2` e o `line-height` dela é 1.1 → uma linha só enche a
-    // caixa quando a fonte vale `2.2 ÷ 1.1 = 2` vezes a base. Por isso o teto é `base × 2`, e
-    // nem um passo além: acima disso a linha única passaria da caixa.
-    // ⛔ A ALTURA DA CAIXA NÃO MUDA — ela continua saindo da BASE, não do teto. Se saísse do
-    // teto, subir a fonte esticaria a linha do card e a conta se perseguiria pra sempre.
-    // Quem for longo demais pro teto cai em duas linhas equilibradas, como já caía — só que
-    // agora a busca das duas linhas começa de um teto mais alto, então ele também ganha
-    // tamanho. O piso não muda: ele existe pra quem só está LENDO a chave.
-    const _nomeMaxRem = _nomeBaseRem * 2;
+    const _nomeMaxRem = members.length > 1 ? 0.78 : 0.85;
     const _nomeMinRem = members.length > 1 ? 0.52 : 0.58;
     // 1.9.39: o volume desta caixa virou CLASSE (`sp-mc-box`); só a ALTURA, que depende
     // do teto de fonte do nome, continua inline — como variável, que é o mínimo possível.
@@ -3833,7 +3810,7 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     // igual ao de ontem. Com `× 2.2` (duas linhas de `line-height:1.1`) o nome longo cabe
     // em duas linhas equilibradas com fonte legível, o nome curto fica centrado numa linha
     // só, e a caixa continua exatamente do mesmo tamanho pros dois — que é o cânone.
-    const _boxNome = `--sp-box-h:${(_nomeBaseRem * 2.2).toFixed(2)}rem`;
+    const _boxNome = `--sp-box-h:${(_nomeMaxRem * 1.35).toFixed(2)}rem`;
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +

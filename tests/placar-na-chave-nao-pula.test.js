@@ -417,8 +417,12 @@ async function numeroDoPlacar(browser) {
       };
     }, [simples.id, comSets.id]);
 
-    ok(r.fonteDoNumero >= 16 * (raiz / 16) * 1.2,
-      'raiz ' + raiz + 'px: o número cresceu de verdade (' + r.fonteDoNumero + 'px — era 1rem)');
+    // ⚠️ 2.0.34: caiu o assert de "o número CRESCEU". A 2.0.33 tinha subido `--sp-num-fs` pra
+    // 1,45rem; vendo no ar, o dono mandou reverter a leva de tamanhos inteira, e o número
+    // voltou a 1rem. O que sobrou aqui continua valendo e é o que importa: o número não pode
+    // passar da altura da caixa do nome (é ela que define a altura da linha) nem da largura
+    // da coluna de set, e tem que sobrar margem até a borda. São as PAREDES — elas seguram
+    // qualquer tamanho futuro, sem cravar qual é o tamanho de hoje.
     ok(r.alturaDoNumero <= r.alturaDaCaixaDoNome + 1,
       'raiz ' + raiz + 'px: e não passa da altura da caixa do nome (' + r.alturaDoNumero +
       ' ≤ ' + r.alturaDaCaixaDoNome + ') — é ela que define a altura da linha');

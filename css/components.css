@@ -2402,7 +2402,7 @@ html, body,
    já tem `margin-left:8px` separando do nome. Somei 2px de padding aqui e o slot de 6 nomes
    com grade de melhor de 3 no desktop passou a precisar de TRÊS linhas — a folga real ali
    era menor que 2px. Margem que estoura o vizinho não é elegante. */
-:root{--sp-num-fs:1.45rem;--sp-num-fs-set:1.20rem;}
+:root{--sp-num-fs:1rem;--sp-num-fs-set:1rem;}
 .sp-mc-num{font-weight:800;font-size:var(--sp-num-fs);min-width:1.5rem;text-align:center;line-height:1.15;}
 .sp-set-num{display:block;font-weight:800;font-size:var(--sp-num-fs-set);line-height:1.15;}
 /* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */

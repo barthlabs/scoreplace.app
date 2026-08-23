@@ -94,7 +94,13 @@ window._RELEASE_NOTES_HTML = (function () {
         // usuário vê a diferença: sobra card na tela.
         '<li><b>\uD83D\uDCCD A chave n\u00e3o pula mais de lugar quando voc\u00ea lan\u00e7a um placar:</b> em chave larga, bastava rolar at\u00e9 a rodada que voc\u00ea estava lan\u00e7ando e confirmar um placar \u2014 a chave <b>voltava sozinha para a Rodada 1</b> e voc\u00ea tinha que procurar o jogo de novo a cada resultado. Agora ela fica exatamente onde estava, em qualquer formato de chave.</li>' +
         '<li><b>\uD83C\uDFBE Tie-break e super tie-break avisam a diferen\u00e7a de 2 pontos ANTES:</b> empatou os sets, a linha do card j\u00e1 diz <b>\u201cSuper Tie-Break (dif 2 pts)\u201d</b> \u2014 antes de voc\u00ea entrar na quadra. No tie-break de um set, o aviso aparece junto com os campinhos de ponto. E o aplicativo passou a <b>cobrar</b> o que avisa: 10-9 no super tie-break n\u00e3o \u00e9 mais aceito. O placar que espera aprova\u00e7\u00e3o tamb\u00e9m ganhou o <b>nome de cada set em cima do n\u00famero</b> \u2014 quem vai confirmar precisa saber qual coluna \u00e9 o Set 2 e qual \u00e9 o super tie-break.</li>' +
-        '<li><b>\uD83D\uDD0D Nome e placar maiores no card do jogo:</b> a caixa do nome tinha crescido para caber nome comprido em duas linhas, mas a letra n\u00e3o \u2014 quem tem nome curto ficava pequeno no meio do espa\u00e7o vazio. Agora <b>nome curto usa letra grande</b>, nome comprido continua cabendo em duas linhas com letra menor, e os dois ocupam <b>o mesmo espa\u00e7o</b>. A <b>foto de cada jogador</b> e os <b>n\u00fameros do placar</b> cresceram junto, at\u00e9 o limite em que nada encavala. No card que espera aprova\u00e7\u00e3o, o cabe\u00e7alho passou de quatro linhas para duas.</li>' +
+        // ⚠️ 2.0.34 NÃO ganha item, e é DECISÃO. Ela DESFAZ o item de tamanhos que a 2.0.33
+        // tinha escrito aqui (nome/foto/número maiores) e também a caixa de duas linhas da
+        // 2.0.30 — ordem do dono, vendo no ar: _"reverte tudo que está uma merda"_. Anunciar
+        // "voltamos ao que era" seria contar pro usuário uma ida e volta que aconteceu dentro
+        // do mesmo dia e que, pra quem joga, não deixou saldo nenhum. O item da 2.0.30 (nome
+        // comprido em duas linhas) sai junto, pelo mesmo motivo: a entrega não está mais no ar.
+        // A justificativa fica aqui, pro próximo leitor não achar que faltou.
         // ── ciclos 2.0.30 + 2.0.31 ───────────────────
         // Substitui o item do ciclo 2.0.29 (que descrevia a MESMA entrega pela metade: lá o
         // nome parava de ser cortado, mas continuava encolhendo numa linha só). Item único,
@@ -105,7 +111,6 @@ window._RELEASE_NOTES_HTML = (function () {
         // o nome no peso certo. As outras duas metades da classe (`nowrap` e o alinhamento da
         // coroa) são invisíveis por si só: elas só sustentam a quebra em duas linhas descrita
         // acima, que faz `whiteSpace = ''` contando com o nowrap vir do CSS.
-        '<li><b>\uD83D\uDCDB Nome comprido no card do jogo agora ocupa duas linhas, em tamanho normal:</b> quem tem quatro ou cinco sobrenomes via o nome <b>encolher at\u00e9 virar um fio</b> ao lado do placar \u2014 e, nos casos piores, terminar no meio. Agora o nome longo <b>quebra em duas linhas equilibradas</b>, com a letra no tamanho de sempre e sem partir palavra ao meio. O espa\u00e7o do nome \u00e9 <b>igual para todos os participantes</b>, ent\u00e3o ningu\u00e9m fica com mais destaque por ter nome maior \u2014 e o nome nunca mais encosta na pontua\u00e7\u00e3o. O nome tamb\u00e9m passou a sair no <b>mesmo peso de letra</b> que ele j\u00e1 tinha no resto do aplicativo \u2014 s\u00f3 no card da chave ele vinha mais fino.</li>' +
         // ── ciclo 2.0.27 ─── (os 5 acertos do melhor de 3/5 vistos no sandbox pelo dono;
         //     o item do ciclo 2.0.26 abaixo descreve a entrega, este descreve o que mudou nela)
         '<li><b>🎾 O placar por set ficou no lugar em tela estreita — e o box do próximo set nasce zerado:</b> com a fonte grande, o card passava da borda e o <b>✓ Confirmar</b> aparecia cortado; agora o card para na largura da tela. E confirmar um set não copia mais o placar dele para o box seguinte — o Set 2 (e o super tie-break, na melhor de 3 ou de 5) começa em branco, como tem que ser. O box do super tie-break passou a ser rotulado <b>STB</b>, já que a linha de cima escreve o nome inteiro, e essa linha ganhou <b>cor de destaque</b>. Quando o jogo termina, ela some: fica só o placar dos sets.</li>' +
