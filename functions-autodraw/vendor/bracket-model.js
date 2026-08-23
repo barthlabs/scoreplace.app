@@ -1065,7 +1065,7 @@
   // colunas dividindo a linha com o nome da dupla, e cada px aqui sai do nome.
   // Medido a 430px: set=34 + stb=56 deixa ~150px pro nome no pior caso (2-2 na de 5), que
   // é onde o `.sp-name-fit` ainda encolhe a fonte sem cortar. Mexer aqui é mexer no nome.
-  window._SET_COL_W = { set: 34, stb: 56 };
+  window._SET_COL_W = { set: 34, stb: 38 };
   window._matchSetPlan = function (sc, m, opts) {
     opts = opts || {};
     var _tr = function (k, fb) {
@@ -1092,9 +1092,14 @@
     });
 
     var kindAt = function (i) { return (stbOn && i === bestOf - 1) ? 'stb' : 'set'; };
+    // ⛔ O RÓTULO DO BOX É "STB", NÃO O NOME POR EXTENSO. Ordem do dono (23/ago/2026):
+    // _"super tie-break já está escrito antes, pode colocar STB em cima do box do placar"_ —
+    // a linha de cima anuncia "Super Tie-Break" inteiro, então repetir aqui só serve pra
+    // quebrar o rótulo em 3 linhas e roubar largura do nome da dupla. MEDIDO: "SUPER
+    // TIE-BREAK (10)" ocupava 56px de coluna e 3 linhas de altura; "STB (10)" cabe em 38.
     var labelAt = function (i) {
       return kindAt(i) === 'stb'
-        ? _tr('bracket.superTiebreak', 'Super Tie-Break') + ' (' + stbPts + ')'
+        ? _tr('bracket.stbCurto', 'STB') + ' (' + stbPts + ')'
         : _tr('bracket.setN', 'Set') + ' ' + (i + 1);
     };
 
