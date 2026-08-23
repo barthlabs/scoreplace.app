@@ -2612,7 +2612,14 @@ function setupCreateTournamentModal() {
     var advSection = document.getElementById('adv-scoring-section');
     if (advSection) advSection.style.display = advScoringStandings ? 'block' : 'none';
     document.querySelectorAll('#tiebreaker-list li[data-tb="pontos_avancados"], #tiebreaker-excluded-list li[data-tb="pontos_avancados"]').forEach(function(tbAdv) {
-      tbAdv.style.display = advScoringStandings ? '' : 'none';
+      // ⛔ 'flex', NUNCA ''. `style.display = ''` REMOVE a propriedade do style inline — e o
+      // `display:flex` desta linha mora justamente ali. Sem ele o <li> volta pra `list-item`
+      // e os três blocos (alça · conteúdo · ✕) viram três LINHAS empilhadas: alça no topo,
+      // ✕ lá embaixo, 118px de altura no lugar de 70 (medido). Foi o "Pontos Avançados usa
+      // 4 linhas" que o dono viu — e só esta linha da lista sofria, porque é a única cuja
+      // visibilidade é ligada/desligada. O defeito era antigo e ficou invisível enquanto os
+      // filhos do <li> eram todos inline; virou visível quando eles viraram blocos flex.
+      tbAdv.style.display = advScoringStandings ? 'flex' : 'none';
     });
 
     window._updateAutoCloseVisibility();

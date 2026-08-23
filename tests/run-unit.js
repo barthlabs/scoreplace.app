@@ -638,6 +638,7 @@ const SUITES = [
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.
   'tests/participante-lanca-e-aprova.test.js',
   'tests/tiebreak-display-persist.test.js',
+  'tests/criterio-nao-perde-o-flex-ao-reaparecer.test.js',
   'tests/progress-third-place-nodouble.test.js',
   // Melhor derrotado pega a vaga com MENOS jogos (repescagem 1 linha) — regra do dono. v1.3.x.
   'tests/repechage-best-loser-advancement.test.js',
