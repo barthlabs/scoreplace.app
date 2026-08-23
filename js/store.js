@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.19';
+window.SCOREPLACE_VERSION = '2.0.20';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2590,14 +2590,33 @@ window._flag = function (name) {
 // (classe padrão .btn .btn-danger). Reverter = outline azul (ação de desfazer).
 // onclick: a string JS do handler (sem aspas duplas). isDeclare: true=W.O.(vermelho),
 // false=Reverter(outline). opts: {label, title, size('btn-sm'|'btn-micro'), fontSize}.
+/* ⭐ RÓTULO CANÔNICO do botão que DECLARA W.O. (2.0.20).
+ *
+ * Ordem do dono (22/ago/2026): _"era pra ser aplicar W.O. em 2 linhas com fonte pequena
+ * para caber"_ — e _"novo sistema que deve atingir TODO botão de W.O."_. Por isso o rótulo
+ * E a fonte moram AQUI dentro, não em cada chamada: o rótulo por chamada era justamente o
+ * que variava de tela pra tela (era 'W.O.' em umas, 'W.O. do time' em outra). Quem chama
+ * só diz o SUJEITO quando ele não é óbvio pelo contexto (ex.: `subject:'do time'`).
+ *
+ * As duas linhas exigem desfazer o `height:24px;line-height:1` que várias chamadas passam
+ * em `extraStyle` pra achatar o botão de 1 linha — por isso o override sai DEPOIS dele. */
+window._WO_DECLARE_FONT = '0.62rem';
+window._woDeclareLabel = function (subject) {
+  return subject ? ('Aplicar W.O.<br>' + subject) : 'Aplicar<br>W.O.';
+};
 window._woBtnHtml = function (onclick, isDeclare, opts) {
   opts = opts || {};
   var size = opts.size || 'btn-sm';
   var title = opts.title ? (' title="' + String(opts.title).replace(/"/g, '&quot;') + '"') : '';
   var base = 'font-size:' + (opts.fontSize || '0.72rem') + ';padding:3px 11px;' + (opts.extraStyle || '');
   if (isDeclare) {
+    var dStyle = 'font-size:' + window._WO_DECLARE_FONT + ';padding:3px 9px;' + (opts.extraStyle || '') +
+      'line-height:1.08;height:auto;white-space:normal;text-align:center;';
+    // ⚠️ só o `height` fixo é desfeito — o `min-height` de quem chama fica de pé. É ele
+    // que decide se o botão acompanha a altura dos vizinhos (cabeçalho do card, onde o
+    // `.btn` manda) ou encolhe pra caber na linha da lista de inscritos.
     return '<button type="button" class="btn btn-danger ' + size + '" onclick="' + onclick + '"' + title +
-      ' style="' + base + '">' + (opts.label || 'W.O.') + '</button>';
+      ' style="' + dStyle + '">' + window._woDeclareLabel(opts.subject) + '</button>';
   }
   return '<button type="button" class="btn btn-outline ' + size + '" onclick="' + onclick + '"' + title +
     ' style="' + base + 'color:#60a5fa;border-color:rgba(59,130,246,0.5);">' + (opts.label || '↩️ Reverter') + '</button>';

@@ -31,11 +31,15 @@ const ROOT = path.join(__dirname, '..');
 const SUB = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.js'), 'utf8');
 const STORE = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
 
-// O construtor REAL do botão (store.js) — extraído por marcadores, não copiado:
-// se a aparência mudar lá, muda aqui junto.
-const woBtnSrc = STORE.slice(STORE.indexOf('window._woBtnHtml = function'),
+// O SISTEMA REAL do botão (store.js) — extraído por marcadores, não copiado: se a
+// aparência mudar lá, muda aqui junto. ⚠️ 2.0.20: a fatia começa no CABEÇALHO da seção,
+// não mais no `window._woBtnHtml =` — o RÓTULO virou parte do sistema (`_woDeclareLabel`,
+// declarado logo acima do construtor) e cortar antes dele derrubava o módulo inteiro.
+const woBtnSrc = STORE.slice(STORE.indexOf('// ─── Botão W.O. PADRONIZADO em todo o app'),
                              STORE.indexOf('// ─── Trava de reversão de W.O.'));
-ok(woBtnSrc.length > 200, 'construtor _woBtnHtml extraído do store.js');
+ok(woBtnSrc.length > 200, 'sistema do botão W.O. extraído do store.js');
+ok(/window\._woDeclareLabel\s*=/.test(woBtnSrc) && /window\._woBtnHtml\s*=/.test(woBtnSrc),
+   'o rótulo e o construtor moram na MESMA seção (um sistema só, não dois pedaços)');
 
 function carrega(t) {
   const win = {
@@ -117,8 +121,14 @@ const classe = (h) => (h.match(/class="([^"]*btn-danger[^"]*)"/) || [])[1];
 const fonte = (h) => (h.match(/Aplicar<br>W\.O\./) ? (h.slice(0, h.indexOf('Aplicar')).match(/font-size:([^;]+);[^"]*"$/) || [])[1] : null);
 ok(classe(semWo) === classe(comWo),
    '🔒 mesma CLASSE nos dois estados (a 1.7.90 tinha btn-sm × btn-micro — visivelmente menor com W.O.)');
-ok(/font-size:0\.72rem/.test(semWo) && /font-size:0\.72rem/.test(comWo),
-   'mesmo tamanho de fonte nos dois estados');
+// 2.0.20: a fonte do botão de DECLARAR é canônica (`_WO_DECLARE_FONT`, menor porque o
+// rótulo tem 2 linhas). Lida do store.js — cravar "0.72rem" aqui era o teste guardando
+// um número que o sistema não promete mais.
+const FONTE_DECLARAR = (STORE.match(/_WO_DECLARE_FONT\s*=\s*'([^']+)'/) || [])[1];
+ok(!!FONTE_DECLARAR, 'o store.js declara a fonte canônica do botão de W.O. (_WO_DECLARE_FONT)');
+const _reFonte = new RegExp('font-size:' + FONTE_DECLARAR.replace('.', '\\.'));
+ok(_reFonte.test(semWo) && _reFonte.test(comWo),
+   'mesmo tamanho de fonte (o canônico, ' + FONTE_DECLARAR + ') nos dois estados');
 
 // ── 4. O CAMINHO IRMÃO (Rei/Rainha por t.matches) segue a mesma regra ─────
 const tMon = {
@@ -140,8 +150,13 @@ if (/Aplicar<br>W\.O\./.test(mon)) {
 }
 
 // ── 5. varredura: uma definição só, e o helper compõe com o botão no fim ──
-ok((SUB.match(/label: 'Aplicar<br>W\.O\.'/g) || []).length === 1,
-   '🔒 UMA definição do botão (duas montagens é o que fez uma delas divergir na 1.7.90)');
+// 2.0.20: o rótulo saiu da VIEW e virou canônico do `_woBtnHtml` (ordem do dono: um
+// sistema só, valendo pra todo botão de W.O. do app). Então aqui o invariante virou o
+// oposto do de antes: a view NÃO escreve o rótulo, e monta o botão num lugar só.
+ok((SUB.match(/label: 'Aplicar<br>W\.O\.'/g) || []).length === 0,
+   '🔒 a view não escreve mais o rótulo — quem manda é o _woDeclareLabel do store.js');
+ok((SUB.match(/function _woDeclareBtn/g) || []).length === 1,
+   '🔒 UMA montagem do botão (duas montagens é o que fez uma delas divergir na 1.7.90)');
 ok(/return resto \+ '<span style="margin-left:auto;[^']*'\s*\+ btn \+ '<\/span>';/.test(SUB),
    '🔒 o compositor põe o RESTO antes e o BOTÃO por último, colado na borda direita');
 ok(!/entra SEMPRE em primeiro|PRIMEIRO elemento do bloco/.test(SUB),

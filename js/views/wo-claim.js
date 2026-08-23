@@ -337,12 +337,13 @@
       }
       if (rc.done) return '';
       if (!iAmPlayer && !canMng) return '';
-      // Label padrão "W.O." em TODAS as variantes (cosmético — pedido do dono; a
-      // larga dizia "⚠️ Faltou alguém?"). O fluxo canônico de confirmação cruzada
-      // (apontar → outro lado confirma/contesta) continua idêntico.
-      var _label = 'W.O.';
-      return window._woBtnHtml ? window._woBtnHtml(open, true, { label: _label, title: 'Algum jogador não pôde vir? Aponte a falta — o outro lado confirma.', size: _sz, fontSize: _fs })
-        : '<button type="button" class="btn ' + _sz + ' btn-danger" onclick="' + open + '" style="font-size:' + _fs + ';border-radius:8px;">' + _label + '</button>';
+      // 2.0.20: o RÓTULO é do sistema, não desta tela — `_woBtnHtml` monta o canônico
+      // "Aplicar / W.O." em duas linhas ([[project_wo_button_standard]]). Aqui sobrou só
+      // o gatilho. O fluxo de confirmação cruzada segue igual quando se aponta OUTRA
+      // pessoa; apontar A SI MESMO vale na hora ([[project_wo_participant_claim]]).
+      var _label = (typeof window._woDeclareLabel === 'function') ? window._woDeclareLabel() : 'Aplicar<br>W.O.';
+      return window._woBtnHtml ? window._woBtnHtml(open, true, { title: 'Não vai dar pra jogar? Aponte a falta. Se for você mesmo, o W.O. vale na hora; apontando outra pessoa, o outro lado confirma.', size: _sz, fontSize: _fs })
+        : '<button type="button" class="btn ' + _sz + ' btn-danger" onclick="' + open + '" style="font-size:' + _fs + ';border-radius:8px;line-height:1.08;">' + _label + '</button>';
     } catch (e) { return ''; }
   };
 
@@ -435,7 +436,8 @@
       // havia rótulo gravado, que é exatamente o caso de quem trocou o nome no perfil.
       var byDisp = _esc(_liveNome(claim.byUid, '') || _voterName(t, claim.byUid) || claim.byName || 'Alguém');
       var info = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span></div>' +
-        '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:3px;">Apontado por ' + byDisp + (rc.scope === 'group' ? ' · grupo ' + _esc(rc.groupName || '') : '') + '. O W.O. só vale quando o outro lado confirma.</div>';
+        '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:3px;">Apontado por ' + byDisp + (rc.scope === 'group' ? ' · grupo ' + _esc(rc.groupName || '') : '') + '. ' +
+        (claim.selfDeclared ? 'O próprio jogador avisou — não precisa de confirmação.' : 'O W.O. só vale quando o outro lado confirma.') + '</div>';
       var actions = '';
       if (claim.status === 'disputed') {
         info += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:#f87171;">⚠️ Contestado</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide.</div></div>';
@@ -494,11 +496,20 @@
       var _nm = (typeof window._liveRowName === 'function')
         ? (window._liveRowName({ name: mb.name, uid: _u }) || mb.name)
         : mb.name;
-      return '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(_nm) + '</button>';
+      // AUTO-W.O.: o meu próprio botão diz que vale na hora — a diferença é de REGRA
+      // (não precisa de aprovação de ninguém), então tem que estar escrita no botão.
+      var _euMesmo = !!(uid && _u && String(_u) === String(uid));
+      var _sel = _euMesmo
+        ? 'background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.55);'
+        : 'background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);';
+      var _tag = _euMesmo
+        ? '<span style="display:block;font-size:0.7rem;font-weight:700;color:#fca5a5;margin-top:2px;">você · você confirma na tela seguinte e vale na hora</span>'
+        : '';
+      return '<button type="button" onclick="window.' + (_euMesmo ? '_woSelfConfirm' : '_woDeclare') + '(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;' + _sel + 'color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(_nm) + _tag + '</button>';
     }).join('');
     _overlay(_header('Faltou alguém?') +
       '<div style="padding:1.1rem;">' +
-        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">Quem não pôde vir? O outro lado vai confirmar antes do W.O. valer.</div>' +
+        '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">Quem não pôde vir? <b style="color:var(--text-bright);">Se for você, só a sua confirmação basta</b> — ninguém mais precisa aprovar. Apontando outra pessoa, o outro lado confirma antes.</div>' +
         picks +
       '</div>');
   };
@@ -555,6 +566,46 @@
   // ─── ações ─────────────────────────────────────────────────────────────────────
   // absentUid: o uid da PESSOA apontada (vem do botão do picker). É a identidade real do
   // alvo — `_nameUids` só serve de rede pro fictício/legado (sem conta, o nome é tudo que há).
+  /* ⭐ AUTO-W.O. — a CONFIRMAÇÃO é sua, e é a única (2.0.20).
+   *
+   * Ordem do dono (22/ago/2026): _"só precisa clicar no botão, no próprio nome, pedir a
+   * cancelar/confirmar advertindo do que vai acontecer e confirmado confere o auto W.O."_
+   *
+   * Ou seja: ninguém APROVA o seu W.O., mas você não o dá sem querer. O passo que sobrou
+   * é seu — e ele tem que DIZER o que vai acontecer, porque o efeito muda com o formato
+   * (o parceiro segue e escolhe o desfecho / o adversário leva o jogo / o grupo recebe
+   * substituto). Advertir "algo vai mudar" sem dizer O QUÊ seria só um obstáculo.
+   */
+  window._woSelfConfirm = function (tId, ctxKey, absentName, absentUid) {
+    var t = _findT(tId); if (!t) return;
+    var ctx = _ctxReg[ctxKey]; if (!ctx) return;
+    var rc = _resolveCtx(t, ctx); if (!rc) return;
+    var cu = _cu(); if (!cu || !cu.uid) return;
+    // Sonda PURA pro detector de desfecho (mesmo formato de claim, sem gravar nada).
+    var probe = { scope: rc.scope, matchId: rc.matchId, absentUids: absentUid ? [String(absentUid)] : [] };
+    var nctx = _outcomeCtx(t, probe);
+    var _pNm = nctx ? _esc(_liveNome(nctx.partnerUid, '') || 'seu parceiro') : '';
+    var oQueAcontece;
+    if (nctx) {
+      oQueAcontece = 'Você sai do jogo. <b>' + _pNm + '</b> continua e escolhe como o jogo segue (suplente, Jogador X ou o adversário avançar) — o adversário confirma a escolha.';
+    } else if (rc.scope === 'group') {
+      oQueAcontece = 'Você sai dos jogos do grupo que ainda não aconteceram. Se houver alguém de folga (ou Jogador X), entra no seu lugar; senão o W.O. vale a favor dos adversários.';
+    } else {
+      oQueAcontece = 'Este jogo é dado por W.O.: entra um suplente no seu lugar, se houver, ou o adversário avança.';
+    }
+    var aviso =
+      '<div style="font-weight:800;font-size:1.02rem;color:var(--text-bright);">🚫 Dar W.O. em você mesmo</div>' +
+      '<div style="margin-top:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:12px;padding:12px 13px;">' +
+        '<div style="font-size:0.86rem;color:var(--text-bright);line-height:1.45;">' + oQueAcontece + '</div>' +
+        '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:8px;line-height:1.4;">Vale <b>na hora</b> — ninguém precisa confirmar. Depois disso, só o organizador reverte, e só enquanto o jogo não acontecer.</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;">' +
+        '<button type="button" onclick="window._woOpenClaim(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\')" class="btn" style="flex:1;background:rgba(148,163,184,0.12);color:var(--text-bright);border:1px solid rgba(148,163,184,0.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
+        '<button type="button" onclick="window._woDeclare(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(absentName) + '\',\'' + _attr(absentUid) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Confirmar W.O.</button>' +
+      '</div>';
+    _overlay(_header('Confirmar o seu W.O.') + '<div style="padding:1.1rem;">' + aviso + '</div>');
+  };
+
   window._woDeclare = function (tId, ctxKey, absentName, absentUid) {
     var t = _findT(tId); if (!t) return;
     var ctx = _ctxReg[ctxKey]; if (!ctx) return;
@@ -570,12 +621,57 @@
     };
     if (rc.scope === 'match') { c.matchId = rc.matchId; }
     else { c.roundIndex = rc.roundIndex; c.groupName = rc.groupName; c.matchIds = rc.matches.map(function (m) { return m.id; }); c.players = rc.players; c.playerUids = rc.playerUids || []; }
+
+    /* ⭐ AUTO-W.O.: QUEM SE APONTA NÃO PRECISA DA APROVAÇÃO DE NINGUÉM (2.0.20).
+     *
+     * Ordem do dono (22/ago/2026): _"o participante pode se dar W.O. sem precisar de
+     * aprovação de ninguém."_ E é o único caso em que a confirmação cruzada nunca teve o
+     * que validar: o FATO é a própria pessoa dizendo que não vai jogar. Fazer o adversário
+     * confirmar isso só atrasava a chave — e, num 1×1, o "outro lado" era justamente quem
+     * lucra com o W.O.
+     *
+     * ⚠️ O que NÃO muda: as DUAS DECISÕES continuam separadas
+     * ([[project_wo_outcome_negotiation_canon]]). O que dispensa aprovação é o FATO da
+     * falta. O DESFECHO do jogo, quando há escolha real (W.O. individual de dupla numa
+     * eliminatória: o parceiro segue), continua negociado — o claim já nasce em
+     * 'awaiting-proposal', pulando só a etapa de confirmar o fato. Sem escolha de desfecho
+     * (time inteiro / 1×1 / Liga / grupo), aplica direto.
+     *
+     * Identidade por UID, sempre ([[project_match_slot_uid_identity]]): fictício não tem
+     * uid, então não existe auto-W.O. de fictício — cai no fluxo normal.
+     */
+    var _self = !!(cu.uid && (c.absentUids || []).some(function (u) { return String(u) === String(cu.uid); }));
+    var _nctx = _self ? _outcomeCtx(t, c) : null;
+    if (_self) {
+      c.selfDeclared = true;
+      c.factConfirmed = true;                 // o fato é de quem faltou: ninguém valida
+      c.confirms[cu.uid] = true;
+      if (_nctx) {
+        c.outcomeStage = 'awaiting-proposal';
+        c.outcomePartnerUid = _nctx.partnerUid;
+        c.outcomeOppUids = _nctx.oppUids || [];
+      }
+    }
+
     var conf = _confirmerUids(t, rc, c);
     var data = _notifData(t, '⚠️ Confirma a falta?', (c.byName || 'Alguém') + ' apontou que "' + absentName + '" faltou em "' + (t.name || '') + '". Confirme ou conteste.');
+    var selfData = _notifData(t, '🚫 W.O. avisado pelo próprio jogador',
+      '"' + absentName + '" avisou que não vai jogar em "' + (t.name || '') + '". Não precisa de confirmação.' +
+      (_nctx ? ' O parceiro que ficou escolhe o desfecho.' : ''));
     _commit(tId, function (ft) {
       var claims = _claims(ft);
       if (!claims.some(function (x) { return x.id === c.id; })) claims.push(c); // idempotente por id
-    }, function () {
+    }, function (okSave) {
+      if (_self) {
+        _notify(t, _claimAudience(t, c, cu.uid), selfData);
+        if (_nctx && _nctx.partnerUid) _notify(t, [_nctx.partnerUid], _notifData(t, '🤝 Proponha o desfecho',
+          'Seu parceiro avisou que não vai jogar em "' + (t.name || '') + '". Escolha como o seu jogo continua — o adversário confirma.'));
+        // Sem desfecho a negociar → o W.O. já vale. Com desfecho, o claim já nasceu em
+        // 'awaiting-proposal' e o overlay abre na etapa certa.
+        if (!_nctx && okSave !== false) { _applyClaimViaGate(tId, c.id, cu.uid, false); return; }
+        window._woOpenClaim(tId, ctxKey);
+        return;
+      }
       _notify(t, conf, data);
       if (t.creatorUid && conf.indexOf(t.creatorUid) === -1) _notify(t, [t.creatorUid], data);
       window._woOpenClaim(tId, ctxKey);

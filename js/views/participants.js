@@ -1310,7 +1310,7 @@ window._rollCallPresenceCtx = function (t, opts) {
             (p && p.p1Uid) ? ('u:' + p.p1Uid) : (p && p.p1Name ? ('n:' + String(p.p1Name).trim()) : ''),
             (p && p.p2Uid) ? ('u:' + p.p2Uid) : (p && p.p2Name ? ('n:' + String(p.p2Name).trim()) : '')
           ].filter(Boolean).join('|').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "', '" + _tIds + "');", !_tAbs, { label: _tAbs ? 'Reverter' : 'W.O. do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
+          _teamRow = window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _tE + "', '" + _tIds + "');", !_tAbs, { label: _tAbs ? 'Reverter' : '', subject: 'do time', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' });
         }
         // DUPLA → tom ESCURO ('pair'): VERDE só quando os DOIS estão presentes; qualquer outro
         // caso (ausente OU ainda não marcado) = AZUL. Antes o "pendente" não pintava nada e o card
@@ -1349,7 +1349,7 @@ window._rollCallPresenceCtx = function (t, opts) {
         var color = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
         var _onc = mc ? _tgl('present', 'solo') : (blu ? _tgl('confirmed', 'solo') : _tgl('absent', 'solo'));
         var wo = (!mc && !blu && isOrg)
-          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "', '" + _puid + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
+          ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "', '" + _puid + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
         rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
           '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
@@ -1381,7 +1381,7 @@ window._rollCallPresenceCtx = function (t, opts) {
       var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _oncM = mc ? _tgl('present', 'pair') : (blu ? _tgl('confirmed', 'pair') : _tgl('absent', 'pair'));
       var wo = (!mc && !blu && isOrg && woScope === 'individual')
-        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "', '" + _mUidEsc + "');", !abs, { label: abs ? 'Reverter' : 'W.O.', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
+        ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "', '" + _mUidEsc + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
         : '';
       var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
       var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
@@ -2525,7 +2525,7 @@ function renderParticipants(container, tournamentId) {
         : (isStandby
           ? `window._markAbsent('${tId}', '${safeName}', '${ind.uid || ''}')`
           : `window._declareAbsent('${tId}', '${safeName}')`);
-      const woLabel = isAbsent ? 'Reverter' : 'W.O.';
+      const woLabel = isAbsent ? 'Reverter' : '';   // declarar → rótulo canônico do _woBtnHtml
       // Regra simples: botão W.O./Reverter aparece para todo participante que
       // NÃO está com o toggle Presente ativado (!mc). Quando isAbsent=true →
       // mostra "Reverter"; quando !mc && !isAbsent → mostra "W.O.".

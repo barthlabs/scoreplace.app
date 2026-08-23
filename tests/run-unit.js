@@ -383,6 +383,7 @@ const SUITES = [
   'tests/wo-individual.test.js',
   'tests/wo-availability-canonical.test.js',
   'tests/wo-outcome-wiring.test.js',
+  'tests/wo-auto-do-proprio-jogador.test.js',
   'tests/wo-outcome-negotiation.test.js',
   'tests/late-enroll-inherit.test.js',
   'tests/late-enroll-window-r2-result.test.js',

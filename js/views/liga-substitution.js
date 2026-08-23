@@ -1331,10 +1331,9 @@ function _woDeclareBtn(onclickJs, mostrar) {
   // ⚠️ v1.8.72 — RÓTULO EM DUAS LINHAS (ordem do dono, print de 14/ago: os botões
   // gastavam largura demais e a linha do cabeçalho quebrava feio). "Aplicar" em
   // cima, "W.O." embaixo: o botão fica estreito e o cabeçalho cabe numa linha só.
-  // O <br> é literal de propósito — deixar o navegador decidir onde quebrar daria
-  // resultado diferente conforme a largura do nome do grupo.
+  // 2.0.20: o rótulo saiu daqui e virou o CANÔNICO de `_woBtnHtml` — esta tela era a
+  // única que já fazia certo, e o dono pediu o mesmo em TODO botão de W.O.
   return window._woBtnHtml(onclickJs, true, {
-    label: 'Aplicar<br>W.O.',
     title: 'Algum jogador não pôde vir? Dê W.O. e chame um substituto (folga ou Jogador X).'
   });
 }

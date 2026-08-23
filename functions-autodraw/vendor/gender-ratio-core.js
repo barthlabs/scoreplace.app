@@ -48,6 +48,18 @@
 
   window._isValidRatio = function (r) { return !!RATIOS[String(r || '')]; };
 
+  /* As DUAS leituras da mesma proporção, uma função cada — o slider e o arrasto pintam
+   * pelo mesmo texto. Ordem do dono (22/ago/2026): o % é o que fica GRANDE e em verde; a
+   * composição em H/M desceu para a linha menor. */
+  window._ratioPctFace = function (r) {
+    var c = RATIOS[String(r || '')];
+    return c ? (String(r).replace('/', '% / ') + '%') : '';
+  };
+  window._ratioHmFace = function (r) {
+    var c = RATIOS[String(r || '')];
+    return c ? (c.m + 'H / ' + c.f + 'M') : '';
+  };
+
   // Proporção VIGENTE do torneio/fase. A fase manda; sem ela, o topo; sem nada, o default.
   // Devolve '' quando o sorteio é LIVRE — ali proporção não existe, e devolver um valor
   // faria a UI mostrar uma regra que o motor não aplica.
@@ -184,11 +196,12 @@
     return '<div id="' + idp + '-box" style="background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.20);border-radius:12px;padding:1rem;margin-bottom:1rem;">' +
       '<p style="margin:0 0 0.35rem;font-size:0.8rem;color:var(--ratio-verde,#22c55e);font-weight:600;text-transform:uppercase;letter-spacing:1px;"><span style="margin-right:5px;">⚖️</span>Proporção do sorteio</p>' +
       '<p style="margin:0 0 0.9rem;font-size:0.74rem;color:var(--text-muted,#94a3b8);line-height:1.4;">Homens / mulheres em cada 4 pessoas sorteadas (grupo Rei/Rainha ou jogo). Vale no sorteio equilibrado.</p>' +
-      // A LEITURA em cima do slider: composição grande (é o que se vê na quadra) e o
-      // percentual embaixo, menor (é como o valor está gravado). Pedido do dono: os dois.
+      // A LEITURA em cima do slider: o PERCENTUAL grande e em verde (é como o valor está
+      // gravado e como o slider fala), a composição H/M embaixo, menor. Pedido do dono
+      // (22/ago/2026) — antes era o contrário. `-face` = linha grande, `-pct` = linha menor.
       '<div style="text-align:center;margin-bottom:6px;">' +
-        '<div id="' + idp + '-face" style="font-size:1.35rem;font-weight:900;color:var(--ratio-verde,#22c55e);font-variant-numeric:tabular-nums;line-height:1.15;">' + cfg.m + 'H / ' + cfg.f + 'M</div>' +
-        '<div id="' + idp + '-pct" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + r + '</div>' +
+        '<div id="' + idp + '-face" style="font-size:1.35rem;font-weight:900;color:var(--ratio-verde,#22c55e);font-variant-numeric:tabular-nums;line-height:1.15;">' + window._ratioPctFace(r) + '</div>' +
+        '<div id="' + idp + '-pct" style="font-size:0.72rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + window._ratioHmFace(r) + '</div>' +
       '</div>' +
       '<input type="range" id="' + idp + '-slider" min="0" max="2" step="1" value="' + i + '" ' +
         'aria-label="Proporção de gênero no sorteio" ' +
@@ -196,7 +209,7 @@
         'onchange="' + (o.onRatio || 'window._ratioSliderNoop') + '(window._ratioSliderValue(this.value))" ' +
         'style="width:100%;accent-color:var(--ratio-verde,#22c55e);">' +
       '<div style="display:flex;justify-content:space-between;font-size:0.66rem;color:var(--text-muted,#94a3b8);font-weight:700;margin-top:-2px;">' +
-        '<span>1H / 3M</span><span>2H / 2M</span><span>3H / 1M</span></div>' +
+        '<span>25%/75%</span><span>50%/50%</span><span>75%/25%</span></div>' +
       '<div class="toggle-row" style="margin-top:12px;padding:8px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.07);">' +
         '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🔒</span><div>' +
           '<span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Travar proporção</span>' +
@@ -218,9 +231,9 @@
   window._ratioSliderNoop = function () {};
   // Pintura ao arrastar: a leitura acompanha o dedo, sem esperar o `change`.
   window._ratioSliderMove = function (idp, i) {
-    var r = window._ratioSliderValue(i), cfg = RATIOS[r];
-    var f = document.getElementById(idp + '-face'); if (f && cfg) f.textContent = cfg.m + 'H / ' + cfg.f + 'M';
-    var p = document.getElementById(idp + '-pct'); if (p) p.textContent = r;
+    var r = window._ratioSliderValue(i);
+    var f = document.getElementById(idp + '-face'); if (f) f.textContent = window._ratioPctFace(r);
+    var p = document.getElementById(idp + '-pct'); if (p) p.textContent = window._ratioHmFace(r);
   };
   window._ratioSliderLock = function (idp, travada) {
     var d = document.getElementById(idp + '-lockdesc');
