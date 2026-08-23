@@ -277,6 +277,7 @@ window._translations['en'] = {
   // Best of 3 / best of 5 on the match card
   'bracket.bestOf': 'Best of',
   'bracket.setN': 'Set',
+  'bracket.stbCurto': 'STB',
   'bracket.superTiebreak': 'Super Tie-Break',
   'bracket.setNoDraw': 'A set cannot be tied',
   'bracket.setNoDrawDetail': '{set} needs a winner.',

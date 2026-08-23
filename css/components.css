@@ -2364,11 +2364,16 @@ html, body,
 /* ⛔ SEM reticências: a linha ANUNCIA o super tie-break assim que os sets empatam, e um
    aviso cortado pela metade não avisa. Quando não cabe numa linha, quebra em duas —
    o `align-items:flex-end` da linha mantém os rótulos colados nos boxes de qualquer jeito. */
-.sp-set-head-ttl{font-size:0.58rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);line-height:1.15;min-width:0;}
+/* ⭐ Cor de DESTAQUE (pedido do dono): esta linha é o que está EM DISPUTA agora — o mesmo
+   azul de "JOGO 154", que no card já significa "informação do jogo". Ela só existe
+   enquanto a partida está aberta, então destacar não polui o card decidido. */
+.sp-set-head-ttl{font-size:0.6rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#38bdf8;line-height:1.15;min-width:0;}
 .sp-set-grid{display:flex;align-items:flex-end;gap:3px;flex-shrink:0;}
 .sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:center;}
 .sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
 .sp-set-lbl--live{color:#38bdf8;}
+/* o rótulo do set já CONFIRMADO recua — quem tem que saltar é a coluna em disputa */
+.sp-set-col:not(.sp-set-col--fix) .sp-set-lbl{opacity:1;}
 .sp-set-num{display:block;font-weight:800;font-size:1rem;line-height:1.2;}
 /* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */
 .sp-set-zero{display:block;font-weight:800;font-size:1rem;line-height:1.2;color:rgba(255,255,255,0.3);}

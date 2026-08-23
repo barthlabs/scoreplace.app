@@ -78,7 +78,7 @@ function regua() {
   eq(p.headline, 'Melhor de 3 · Set 2', 'a linha nova acompanha o set em disputa');
 
   p = plano(MELHOR3, [S(6, 4), S(3, 6)]);
-  eq(rotulos(p), ['Set 1', 'Set 2', 'Super Tie-Break (10)'], 'empatou 1-1: entra o Super Tie-Break (10)');
+  eq(rotulos(p), ['Set 1', 'Set 2', 'STB (10)'], 'empatou 1-1: entra a coluna do super tie-break, rotulada STB (o nome inteiro já está na linha de cima)');
   eq(estados(p), ['done', 'done', 'live'], 'os dois sets à esquerda, o super tie-break em disputa');
   ok(p.columns[2].kind === 'stb' && p.columns[2].points === 10, 'a 3ª coluna é super tie-break de 10 pontos');
 
@@ -99,8 +99,8 @@ function regua() {
   eq(rotulos(p), ['Set 1', 'Set 2', 'Set 3', 'Set 4'], '2×1 na de 5: quatro colunas, a 4ª em disputa');
   ok(p.columns[3].kind === 'set', 'o Set 4 ainda é um set comum');
   p = plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(4, 6)]);
-  eq(rotulos(p), ['Set 1', 'Set 2', 'Set 3', 'Set 4', 'Super Tie-Break (10)'],
-    '2×2 na de 5: o 5º é que vira Super Tie-Break');
+  eq(rotulos(p), ['Set 1', 'Set 2', 'Set 3', 'Set 4', 'STB (10)'],
+    '2×2 na de 5: o 5º é que vira o super tie-break');
   p = plano(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(6, 1)]);
   ok(p.done === true, '3×1 fecha a melhor de 5');
 
@@ -314,17 +314,107 @@ async function tela() {
   ok(r.casos.every(function (g) { return !g.tituloCortado; }),
     'e o aviso nunca sai cortado — quebra em duas linhas em vez de reticências');
   eq(r.casos[1].inputs.sort(), ['s1-M1', 's2-M1'], 'só a coluna EM DISPUTA tem campo (ids de sempre)');
-  eq(r.casos[2].rotulos.map(function (x) { return x.txt; }), ['Set 1', 'Set 2', 'Super Tie-Break (10)'],
+  eq(r.casos[2].rotulos.map(function (x) { return x.txt; }), ['Set 1', 'Set 2', 'STB (10)'],
     'os rótulos são os que o dono pediu (o CAIXA ALTA é do CSS, não do texto)');
 
   ok(!r.umSet.temHead && !r.umSet.temGrid, '1 SET: nenhuma linha nova, nenhuma coluna — o card antigo intacto');
   ok(r.umSet.temInput, '1 SET: o campo de placar de sempre continua lá');
 }
 
+/* ── ⑤ AS CINCO CORREÇÕES DO SANDBOX (23/ago) ─────────────────────────────────────
+ * Relatos do dono, olhando o SB do Confra:
+ *   a) _"não pode cortar a tela dessa forma quando a largura é mais estreita"_
+ *   b) _"quando lança o primeiro set, não pode abrir o placar copiando o anterior.
+ *       Tem que ser 0-0 no set 2"_ + _"mesma coisa em 5 sets e STB"_
+ *   c) _"super tie-break já está escrito antes, pode colocar STB em cima do box"_
+ *   d) _"coloca uma cor mais brilhando no melhor de x - set 1, 2 STB"_
+ *   e) _"depois que o jogo termina, pode eliminar a linha do melhor de 3/5"_
+ */
+async function correcoesDoSandbox() {
+  console.log('\n⑤ As cinco correções do sandbox');
+  const browser = await chromium.launch();
+
+  // (a) o card não passa da borda — MEDIDO na escala de fonte do aparelho do dono.
+  //     A chave vive num scroll com min-width:max-content, então sem teto o card assume a
+  //     largura do conteúdo e some pra fora da tela. Raiz 22px = --ui-scale alto.
+  const htmlLargo = cardHtml(MELHOR3, [S(3, 6), S(6, 2)]);
+  for (const raiz of [16, 20, 22]) {
+    const page = await browser.newPage({ viewport: { width: 390, height: 800 } });
+    await page.setContent('<style>' + CSS + ' html{font-size:' + raiz + 'px !important;}</style>' +
+      '<body style="background:#0b1220;margin:0;">' +
+      '<div style="overflow-x:auto;"><div style="display:flex;min-width:max-content;padding:8px;">' +
+      '<div style="flex-shrink:0;">' + htmlLargo + '</div></div></div></body>', { waitUntil: 'load' });
+    const m = await page.evaluate(() => {
+      const c = document.querySelector('[id^=card-]'); const q = c.getBoundingClientRect();
+      return { passa: +(q.right - window.innerWidth).toFixed(0), card: +q.width.toFixed(0) };
+    });
+    ok(m.passa <= 0, '(a) raiz ' + raiz + 'px em tela de 390: o card (' + m.card + 'px) NÃO passa da borda (sobra ' + (-m.passa) + 'px)');
+    await page.close();
+  }
+
+  // (b) o box do set em disputa nasce VAZIO — nunca com o placar do set anterior
+  const page2 = await browser.newPage({ viewport: { width: 430, height: 900 } });
+  await page2.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:8px;">' +
+    '<div id="a">' + cardHtml(MELHOR3, [S(6, 3)]) + '</div>' +
+    '<div id="b">' + cardHtml(MELHOR3, [S(6, 3), S(3, 6)]) + '</div>' +
+    '<div id="c">' + cardHtml(MELHOR5, [S(6, 4), S(3, 6), S(6, 2), S(4, 6)]) + '</div>' +
+    '</body>', { waitUntil: 'load' });
+  const vazios = await page2.evaluate(() => ['a', 'b', 'c'].map((id) => {
+    const box = document.getElementById(id);
+    return [...box.querySelectorAll('input[id^="s1-"],input[id^="s2-"]')].map((e) => e.value);
+  }));
+  eq(vazios[0], ['', ''], '(b) set 1 confirmado → o box do Set 2 nasce VAZIO');
+  eq(vazios[1], ['', ''], '(b) 1-1 → o box do super tie-break nasce VAZIO');
+  eq(vazios[2], ['', ''], '(b) melhor de 5, 2-2 → o box do STB nasce VAZIO');
+
+  // (b·2) A OUTRA METADE: o markup nasce vazio, mas quem enchia o box era a RESTAURAÇÃO
+  // pós-render (`_typedScores`, por ID). Como a coluna em disputa reusa `s1-`/`s2-`, o
+  // placar recém-salvo voltava pra dentro do box do set seguinte. O jogo re-renderizado
+  // tem que sair da lista de restauração ANTES do laço que devolve os valores.
+  const fonte = read('js/views/bracket-ui.js');
+  const trecho = fonte.slice(fonte.indexOf('function _rerenderBracket'), fonte.indexOf('// 6. Restore scroll'));
+  const iLimpa = trecho.indexOf("delete _typedScores[pref + anchorMatchId]");
+  const iRestaura = trecho.indexOf('inp.value = _typedScores[inputId]');
+  ok(iLimpa !== -1, '(b·2) _rerenderBracket tira o jogo recém-gravado da lista de restauração');
+  ok(iLimpa !== -1 && iRestaura !== -1 && iLimpa < iRestaura,
+    '(b·2) e tira ANTES de restaurar — depois não adiantaria nada');
+  ok(/\['s1-', 's2-', 'tb1-', 'tb2-'\]/.test(trecho),
+    '(b·2) cobre os 4 campos do card (placar dos dois lados + os dois do tie-break)');
+
+  // (c)(d)(e) rótulo curto, cor de destaque e a linha que some no fim
+  const res = await page2.evaluate(() => {
+    const st = document.querySelector('#b .sp-set-head-ttl');
+    const rot = [...document.querySelectorAll('#b .sp-set-head .sp-set-lbl')].map((e) => e.textContent.trim());
+    const cor = st ? getComputedStyle(st).color : '';
+    return { rot: rot, cor: cor, mudo: getComputedStyle(document.body).getPropertyValue('--text-muted') };
+  });
+  ok(res.rot[res.rot.length - 1] === 'STB (10)',
+    '(c) o box do super tie-break é rotulado "STB" — o nome inteiro já está na linha de cima');
+  ok(res.cor && res.cor !== 'rgb(148, 163, 184)' && res.cor !== res.mudo,
+    '(d) a linha de cima tem cor de DESTAQUE, não a cinza de texto secundário (' + res.cor + ')');
+  await page2.close();
+
+  // (e) jogo TERMINADO: sem a linha do "Melhor de N", só os placares
+  const decidido = cardHtml(MELHOR3, [S(6, 4), S(3, 6), S(10, 8)], { winner: 'Ana Cattani / Maria Helena' });
+  const page3 = await browser.newPage({ viewport: { width: 430, height: 700 } });
+  await page3.setContent('<style>' + CSS + '</style><body style="background:#0b1220;padding:8px;">' + decidido + '</body>', { waitUntil: 'load' });
+  const fim = await page3.evaluate(() => ({
+    temLinha: !!document.querySelector('.sp-set-head'),
+    colunas: document.querySelectorAll('#score-p1-M1 .sp-set-col').length,
+    numeros: [...document.querySelectorAll('#score-p1-M1 .sp-set-num')].map((e) => e.textContent.trim())
+  }));
+  ok(!fim.temLinha, '(e) jogo terminado: a linha do "Melhor de 3" SOME');
+  ok(fim.colunas === 3, '(e) e os 3 placares de set continuam lá (obtido ' + fim.colunas + ')');
+  eq(fim.numeros, ['6', '3', '10'], '(e) com os números dos sets, na ordem');
+  await page3.close();
+  await browser.close();
+}
+
 (async function () {
   regua();
   decisao();
   await tela();
+  await correcoesDoSandbox();
   console.log('\n' + (falhas ? '✗ ' + falhas + '/' + testes + ' falharam' : '✓ ' + testes + '/' + testes + ' passaram'));
   process.exit(falhas ? 1 : 0);
 })();

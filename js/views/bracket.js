@@ -4097,7 +4097,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   }).join('');
   // A LINHA NOVA: "MELHOR DE 3 · SET 2" à esquerda, os rótulos das colunas à direita —
   // em cima dos boxes, no mesmo recuo de 10px que a linha do jogador usa.
-  const _setHeadHtml = _multiSet
+  // ⛔ JOGO TERMINADO NÃO PRECISA DA LINHA. Ordem do dono (23/ago/2026): _"depois que o jogo
+  // termina, pode eliminar a linha do melhor de 3/5 e deixar apenas os placares dos sets"_.
+  // Ela existe pra dizer o que está EM DISPUTA agora; com o jogo fechado vira ruído em cima
+  // de um placar que já se explica sozinho, e o card decidido volta a ser enxuto.
+  const _mostraCabecaSet = _multiSet && !!_plan.live;
+  const _setHeadHtml = _mostraCabecaSet
     ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
         '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
         '<div class="sp-set-grid">' + _setLabelsHtml() + '</div>' +
@@ -4529,7 +4534,16 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Sem o cap, os dois cards medem IGUAL tanto em pai de largura fixa quanto em
   // `max-content`. box-sizing fica: o padding do card não pode virar largura extra.
   var _showHeaderPending = hasPending && _pr && !_pr.disputed;
-  var _cardMax = 'box-sizing:border-box;';
+  // ⛔ O CARD NÃO PASSA DA LARGURA DA TELA. A chave vive num scroll horizontal com
+  // `min-width:max-content`, então o card assume a largura do CONTEÚDO — e o conteúdo cresce
+  // com a escala de fonte do aparelho. MEDIDO com a escala do dono (raiz 22px) numa tela de
+  // 390px: card de 421px, ou seja 39px cortados fora da borda; o "✓ Confirmar" aparecia pela
+  // metade. Com o teto, a linha de botões cede largura (o texto quebra dentro deles, que é o
+  // que `.btn-row` já sabe fazer) em vez de empurrar o card pra fora.
+  // ⚠️ É teto RELATIVO À TELA, não número fixo: o cap fixo de 280px foi removido em 1.8.46
+  // justamente porque fazia cards da mesma coluna medirem diferente. Aqui todos os cards
+  // param no mesmo lugar — a borda da tela.
+  var _cardMax = 'box-sizing:border-box;max-width:calc(100vw - 24px);';
   var _pendingBtnsRow = (_showHeaderPending && pendingActionBtns)
     ? `<div id="pending-banner-btns-${m.id}" style="display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${pendingActionBtns}</div>`
     : '';

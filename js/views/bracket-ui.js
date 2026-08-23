@@ -801,6 +801,18 @@ function _rerenderBracket(tId, anchorMatchId) {
   // re-render. Quando o user digita 6-3 em match A, confirma, o re-render
   // do bracket destruiria os inputs de match B onde ele já tinha digitado.
   // Agora os valores voltam após o re-render.
+  // ⛔ O JOGO QUE ACABOU DE SER GRAVADO NÃO RESTAURA NADA. Relato do dono (23/ago/2026):
+  // _"quando lança o primeiro set, não pode abrir o placar copiando o anterior. Tem que ser
+  // 0-0 no set 2"_ — e a mesma coisa na melhor de 5 e no super tie-break.
+  // A causa: esta restauração é por ID, e a coluna EM DISPUTA do melhor de N reusa `s1-`/
+  // `s2-` (é a assinatura que _saveResultInline lê). Confirmado o set 1, o re-render cria o
+  // box do set 2 com os MESMOS ids — e o 6-3 que acabou de ser salvo voltava pra dentro dele.
+  // Em 1 set isso nunca apareceu porque o jogo fecha e os campos somem.
+  // O que a restauração protege é o placar digitado em OUTRO jogo, que o re-render destruiria.
+  // Esse segue protegido; só o jogo recém-gravado sai da lista.
+  if (anchorMatchId) {
+    ['s1-', 's2-', 'tb1-', 'tb2-'].forEach(function (pref) { delete _typedScores[pref + anchorMatchId]; });
+  }
   Object.keys(_typedScores).forEach(function(inputId) {
     var inp = document.getElementById(inputId);
     if (inp && (inp.value === '' || inp.value == null)) {

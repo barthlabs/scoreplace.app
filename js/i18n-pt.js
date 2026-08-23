@@ -277,6 +277,7 @@ window._translations['pt'] = {
   // Melhor de 3 / melhor de 5 no card do jogo — [[project_placar_por_sets_no_card]]
   'bracket.bestOf': 'Melhor de',
   'bracket.setN': 'Set',
+  'bracket.stbCurto': 'STB',
   'bracket.superTiebreak': 'Super Tie-Break',
   'bracket.setNoDraw': 'Set não pode empatar',
   'bracket.setNoDrawDetail': 'O {set} precisa de um vencedor.',
