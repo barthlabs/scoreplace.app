@@ -1239,16 +1239,72 @@ function _slotObj(m, side) {
 // tinha contagem uid≠partes → a conta nunca resolvia pelo uid (o "Camila sumiu"). Aqui a conta
 // resolve pelo SEU uid mesmo com parceiro fictício, sem gravar nome nem pattern-match.
 // [[project_uid_identity_canon_locked]] — nome com uid nunca é gravado; resolve-se pelo uid.
-function _slotUidsPositional(m, side) {
+// ─── ⭐ UID QUE FALTA NO SLOT SE RECUPERA — NÃO SE ACEITA ──────────────────────────
+// Ordem do dono (23/ago/2026): _"não pode sumir o uid do slot porra!"_
+//
+// MEDIDO no doc real (SB do Confra, jogo ph-…-1-silver-VC-R1-P1): o slot p2 tem DOIS nomes
+// e UM uid — `team2Obj.p1Uid` veio null porque a linha da classificação que originou a dupla
+// nasceu sem uid (o nome dela estava velho e o resolvedor não o conhecia). Consertar o
+// resolvedor (ver `_buildNameToUid`) cura o que for GERADO daqui pra frente; o slot que já
+// está gravado continua furado — e é justamente ele que o card desenha hoje.
+//
+// Então o buraco se fecha na LEITURA: posição sem uid é preenchida pelo nome que está ali
+// do lado, via o mapa nome→uid do torneio (que agora conhece os rótulos velhos). Sem escrita,
+// sem migração — o dado gravado fica como está e a tela para de mentir.
+// ⚠️ `t` é opcional: sem ele o comportamento é o de antes (nada a recuperar). Quem tem o
+// torneio à mão (render do card, avanço) passa e ganha a cura.
+// Memo de 1 posição porque o render varre UM torneio por vez e chama isto por CARD.
+var _n2uMemoSig = '', _n2uMemoMap = null;
+function _nameToUidCached(t) {
+  if (!t) return null;
+  var sig = String(t.id) + '|' + String(t.updatedAt || '') + '|' + ((t.matches || []).length);
+  if (_n2uMemoSig !== sig || !_n2uMemoMap) { _n2uMemoMap = _nameToUidRecovery(t); _n2uMemoSig = sig; }
+  return _n2uMemoMap;
+}
+window._nameToUidCached = _nameToUidCached;
+function _completaUidsPorNome(uids, nomes, t) {
+  if (!t || !Array.isArray(uids)) return uids;
+  var map = null;
+  for (var i = 0; i < uids.length; i++) {
+    if (uids[i]) continue;
+    var nm = String((nomes && nomes[i]) || '').trim();
+    if (!nm || nm === 'TBD' || nm === 'BYE') continue;
+    map = map || _nameToUidCached(t);
+    if (map && map[nm]) uids[i] = map[nm];
+  }
+  return uids;
+}
+function _slotUidsPositional(m, side, t) {
   if (!m) return [];
   var obj = side === 'p1' ? m.team1Obj : m.team2Obj;
-  if (obj && typeof obj === 'object') {
-    if (obj.p1Uid || obj.p2Uid || (obj.p1Name && obj.p2Name)) return [obj.p1Uid || '', obj.p2Uid || ''];
-    if (Array.isArray(obj.participants) && obj.participants.length > 1) {
-      return obj.participants.map(function (s) { return (s && typeof s === 'object' && s.uid) || ''; });
-    }
+  // ── O CAMINHO DE SEMPRE, byte a byte ──────────────────────────────────────────────
+  // ⛔ SEM `t` NADA MUDA. A cura precisa do torneio (é dele que sai o mapa nome→uid); sem
+  // ele não há o que recuperar, e QUALQUER diferença aqui vaza pro motor. Eu já quebrei o
+  // golden master da eliminatória uma vez por devolver o array PREENCHIDO com vazios quando
+  // não havia `t` — o motor conta posições, e uma posição a mais muda o chaveamento inteiro.
+  var antes;
+  if (obj && typeof obj === 'object' && (obj.p1Uid || obj.p2Uid || (obj.p1Name && obj.p2Name))) {
+    antes = [obj.p1Uid || '', obj.p2Uid || ''];
+    if (!t) return antes;
+    var rotObj = String((side === 'p1' ? m.p1 : m.p2) || '').split(' / ').map(function (x) { return x.trim(); });
+    return _completaUidsPorNome(antes, [obj.p1Name || rotObj[0] || '', obj.p2Name || rotObj[1] || ''], t);
   }
-  return _slotUids(m, side); // 1v1 / solo / legado sem obj
+  if (obj && typeof obj === 'object' && Array.isArray(obj.participants) && obj.participants.length > 1) {
+    antes = obj.participants.map(function (s) { return (s && typeof s === 'object' && s.uid) || ''; });
+    if (!t) return antes;
+    return _completaUidsPorNome(antes,
+      obj.participants.map(function (s) { return (s && typeof s === 'object' && (s.displayName || s.name)) || ''; }), t);
+  }
+  antes = _slotUids(m, side); // 1v1 / solo / legado sem obj
+  if (!t) return antes;
+  // Com o torneio à mão: time por arrays (Rei/Rainha) tem team1/team1Uids PARALELOS, então dá
+  // pra recuperar a posição vazia pelo nome que está no mesmo índice.
+  var arr = side === 'p1' ? m.team1 : m.team2;
+  if (Array.isArray(arr) && arr.length && antes.length < arr.length) {
+    return _completaUidsPorNome(arr.map(function (nm, i) { return antes[i] || ''; }), arr, t);
+  }
+  return _completaUidsPorNome(antes.slice(),
+    String((side === 'p1' ? m.p1 : m.p2) || '').split(' / ').map(function (x) { return x.trim(); }), t);
 }
 window._slotUidsPositional = _slotUidsPositional;
 // Escreve a identidade num slot de destino: team*Uids sempre (forma geral),
@@ -3857,9 +3913,103 @@ function _buildNameToUid(t) {
       if (_dn && !map[_dn]) map[_dn] = p.uid;
     }
   });
+
+  // ─── ⭐ E O MOTOR TAMBÉM ENXERGA O NOME VELHO ──────────────────────────────────────
+  // Ordem do dono (23/ago/2026), depois de eu ter escopado isto só pra tela: _"corrige a
+  // merda do motor porra! estamos em sandbox justamente para conferir as merdas antes de
+  // rodar de verdade com as pessoas vendo."_
+  //
+  // MEDIDO, gerando a eliminatória do Confra pelos DOIS caminhos (mesma semente):
+  //     jogos 98 → 98 · pessoas 131 → 135 · sumiram 0 · slots furados 4 → 0
+  // Ou seja: QUATRO pessoas entravam na eliminatória sem identidade, porque o nome delas no
+  // documento era o antigo e este mapa não o conhecia. Não é "chaveamento diferente por
+  // capricho" — é gente que estava sendo perdida. 20 dos 98 jogos pareiam diferente porque
+  // a classificação passou a contar essas quatro no lugar certo.
+  //
+  // ⚠️ O GOLDEN MASTER DA ELIMINATÓRIA FOI RE-CONGELADO POR CAUSA DISTO, de propósito e com
+  // a medição acima na mão. Golden que muda sem medição é regressão disfarçada; este mudou
+  // porque o retrato velho fotografava o defeito. [[project_uid_identity_canon_locked]]
+  //
+  // Ordem das fontes: a recuperação entra por BAIXO — inscrito e nome vivo do perfil, que
+  // são mais confiáveis, continuam mandando quando existem.
+  try {
+    var _rec = _nameToUidRecovery(t);
+    Object.keys(_rec).forEach(function (n) { if (!map[n]) map[n] = _rec[n]; });
+  } catch (e) { /* mapa incompleto é melhor que motor derrubado */ }
+
   return map;
 }
 window._buildNameToUid = _buildNameToUid;
+
+// ─── ⭐ RECUPERAÇÃO DE UID: o nome velho está no doc, do lado do uid ────────────────
+//
+// Relato do dono (23/ago/2026): _"o Rodrigo Unger havia diminuído o nome e está aparecendo
+// nome completo"_ → _"não pode sumir o uid do slot porra!"_ → _"não tem que ter nome
+// congelado se tiver uid."_
+//
+// MEDIDO no doc real (SB do Confra): o perfil dele já estava curto e o uid estava em todo
+// lugar — inclusive `monarchGroups[6].playersUids[2]`. O que sobrou velho foi o NOME em
+// `players[2]`. Um slot de fase nasceu com UM uid pra DOIS nomes, e sem uid o card cai no
+// rótulo gravado: o nome velho, pra sempre.
+//
+// ⛔ POR QUE ISTO NÃO ENTROU NO `_buildNameToUid`: aquele mapa alimenta o MOTOR (semeadura,
+// classificação, sorteio). MEDIDO: com estas fontes ele saltava de 1 pra 147 chaves e a
+// eliminatória congelada do Confra MUDAVA de chaveamento — 5 uids passavam a ter dois nomes
+// apontando pra eles (a mesma pessoa antes e depois de renomear), o que funde linhas que
+// hoje são duas. Provavelmente é o certo, mas é mudança de MOTOR e merece leva própria, com
+// o golden master re-congelado de propósito. Aqui o alvo é outro e menor: devolver o uid ao
+// SLOT, que é o que a tela lê. Ver [[project_uid_identity_canon_locked]].
+//
+// Fontes (todas pares POSICIONAIS que já estão gravados):
+//   • elenco dos grupos Rei/Rainha — players[i] ↔ playersUids[i]  ← onde o nome velho mora
+//   • slots de jogo — team1[i] ↔ team1Uids[i], p1 ↔ p1Uid (só quando p1 é UMA pessoa)
+//   • classificação congelada — linha.name ↔ linha.uid
+function _nameToUidRecovery(t) {
+  var map = {};
+  function _par(nome, uid) {
+    if (!uid) return;
+    var n = String(nome == null ? '' : nome).trim();
+    if (!n || n === 'TBD' || n === 'BYE') return;
+    // ⛔ RÓTULO DE DUPLA NÃO É PESSOA. `m.p1` de um jogo de duplas é "Ana / Bia" e o
+    // `m.p1Uid` de doc antigo às vezes traz o uid de UM dos dois — mapear a string inteira
+    // pro uid de uma pessoa faria o resolvedor devolver a Ana quando perguntassem pela
+    // dupla, e aí duas linhas de classificação viram uma. O '/' é tipografia, nunca chave.
+    // [[project_dupla_entry_structural_not_slash]]
+    if (n.indexOf(' / ') !== -1) return;
+    if (!map[n]) map[n] = uid;
+  }
+  function _slotPares(m) {
+    if (!m || typeof m !== 'object') return;
+    _par(m.p1, m.p1Uid); _par(m.p2, m.p2Uid);
+    (m.team1 || []).forEach(function (nm, i) { _par(nm, (m.team1Uids || [])[i]); });
+    (m.team2 || []).forEach(function (nm, i) { _par(nm, (m.team2Uids || [])[i]); });
+    [m.team1Obj, m.team2Obj].forEach(function (o) {
+      if (!o || typeof o !== 'object') return;
+      _par(o.p1Name, o.p1Uid); _par(o.p2Name, o.p2Uid);
+      (o.participants || []).forEach(function (sp) { if (sp) _par(sp.displayName || sp.name, sp.uid); });
+    });
+  }
+  try {
+    (Array.isArray(t && t.matches) ? t.matches : []).forEach(_slotPares);
+    (Array.isArray(t && t.rounds) ? t.rounds : []).forEach(function (r) {
+      if (!r) return;
+      (r.matches || []).forEach(_slotPares);
+      (r.monarchGroups || []).forEach(function (g) {
+        if (!g) return;
+        (g.players || []).forEach(function (nm, i) { _par(nm, (g.playersUids || [])[i]); });
+        (g.classifCongelada || []).forEach(function (l) { if (l) _par(l.name, l.uid); });
+      });
+    });
+    (Array.isArray(t && t.groups) ? t.groups : []).forEach(function (g) {
+      if (!g) return;
+      (g.matches || []).forEach(_slotPares);
+      (g.players || []).forEach(function (nm, i) { _par(nm, (g.playersUids || [])[i]); });
+    });
+  } catch (e) { /* mapa incompleto é melhor que render derrubado */ }
+
+  return map;
+}
+window._nameToUidRecovery = _nameToUidRecovery;
 
 // v4.5.26: matriz de Confrontos Diretos (H2H) POR UID — espelha a identidade-por-uid de
 // _computeStandings (_idKey). O render (bracket.js) só formata o que sai daqui.
@@ -4014,7 +4164,7 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   var sameDay = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
   var eligible = fullWl.slice();
   if (sameDay) {
-    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    var _ci = window._presencaViva(t), _ab = t.absent || {};
     // Presença/ausência são MAPAS POR UID (t.checkedIn/t.absent). Passa a ENTRADA, não a
     // string: `_idMapKey` extrai o uid dela e casa pela chave certa. Passar texto obrigava
     // o mapa a ser consultado por nome — que é justamente o que a entrada strippada não tem.

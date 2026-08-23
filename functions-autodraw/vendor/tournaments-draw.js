@@ -743,7 +743,7 @@ window._integrateLateDuplas = function (t) {
   // (espelha _createExtraGamesFromWaitlist / _fillRepFillWithLateDuplas / CF redraw). Multi-dia ignora.
   var _orphPresent = function (p) {
     if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
-    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    var _ci = window._presencaViva(t), _ab = t.absent || {};
     var _uids = (typeof window._participantUids === 'function') ? window._participantUids(p) : [];
     if (_uids && _uids.length) return _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); });
     return false;
@@ -1098,7 +1098,7 @@ window._createExtraGamesFromWaitlist = function(t) {
   // v3.1.22: regra canônica — MESMO DIA conta presença (só check-in, não-ausentes);
   // multi-dia ignora presença. v2.2.39: ausentes nunca entram. Sem helper → mesmo-dia.
   if ((typeof window._tournamentIsSameDay !== 'function') || window._tournamentIsSameDay(t)) {
-    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    var _ci = window._presencaViva(t), _ab = t.absent || {};
     // v1.3.57: presença de PAR = TODOS os membros presentes (por uid). Antes checava o par como
     // um todo — mas o par não tem uid único e a presença é gravada por uid de MEMBRO → o par
     // nunca "batia" e a dupla tardia era filtrada fora (nunca integrava). Ver [[project_id_maps_uid_keyed]].
@@ -1285,7 +1285,7 @@ window._fillRepFillWithLateDuplas = function (t) {
   // "vs a definir" em vez de PREENCHER o "a definir" existente. Ver [[project_late_dupla_fills_awaiting_slot]].
   var _pairPresent = function (p) {
     if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true; // multi-dia ignora presença
-    var _ci = t.checkedIn || {}, _ab = t.absent || {};
+    var _ci = window._presencaViva(t), _ab = t.absent || {};
     if (window._idMapHas(t, _ci, p) && !window._idMapHas(t, _ab, p)) return true; // par marcado como um todo (legado)
     var _uids = _pu(p);
     if (_uids && _uids.length && _uids.every(function (u) { return window._idMapHas(t, _ci, { uid: u }) && !window._idMapHas(t, _ab, { uid: u }); })) return true;
@@ -2395,7 +2395,7 @@ window._triggerLateIntegration = function (t, opts) {
     if ((!wl || !wl.length) && !opts.force) return;
     // assinatura do estado (espera + presença) → não re-dispara o MESMO estado (evita loop/spam)
     var _nm = function (p) { return (typeof p === 'string') ? p : (p && (p.displayName || p.name || p.uid)) || ''; };
-    var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(t.checkedIn || {}).sort().join(',');
+    var sig = wl.map(_nm).sort().join('|') + '#' + Object.keys(window._presencaViva(t)).sort().join(',');
     if (!opts.force && window._lateIntegrateLastSig[tId] === sig) return;
     window._lateIntegrateInflight[tId] = true;
     // v1.5.2: LIBERA a trava e roda o pedido ENFILEIRADO (se houver). Chamado nos DOIS desfechos —
@@ -5293,7 +5293,7 @@ window._collectLateCandidates = function (t, _theCat) {
   // presença: mesmo-dia exige todos os membros presentes (cânone "só presentes")
   var _present = function (p) {
     if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
-    var ci = t.checkedIn || {}, ab = t.absent || {};
+    var ci = window._presencaViva(t), ab = t.absent || {};
     var _has = function (map, k) { return !!k && (window._idMapHas(t, map, { uid: k }) || window._idMapHas(t, map, k)); };
     // Presença POR MEMBRO: uid quando tem, senão o NOME do membro (placeholder "Jogador 01" entra por
     // nome). NUNCA o nome COMBINADO da dupla — que não está em checkedIn. Foi o bug do dono: time
@@ -5397,7 +5397,7 @@ window._placeLateEntriesSurgically = function (t, _theCat) {
   // presença: mesmo-dia exige todos os membros presentes (cânone "só presentes")
   var _present = function (p) {
     if ((typeof window._tournamentIsSameDay === 'function') && !window._tournamentIsSameDay(t)) return true;
-    var ci = t.checkedIn || {}, ab = t.absent || {};
+    var ci = window._presencaViva(t), ab = t.absent || {};
     var _has = function (map, k) { return !!k && (window._idMapHas(t, map, { uid: k }) || window._idMapHas(t, map, k)); };
     // Presença POR MEMBRO: uid quando tem, senão o NOME do membro (placeholder "Jogador 01" entra por
     // nome). NUNCA o nome COMBINADO da dupla — que não está em checkedIn. Foi o bug do dono: time

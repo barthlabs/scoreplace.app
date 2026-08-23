@@ -68,10 +68,21 @@
 
   // "TODOS os slots" — semântica de PRESENÇA: dupla com 1 ausente não joga (é exatamente
   // o que a chamada pré-sorteio existe pra evitar: 1 ausente travar o jogo do presente).
+  // ⭐ Presença VENCIDA não conta (24h) — [[project_presenca_caduca_em_24h]]. Estes dois
+  // leem o mapa CRU (`m[u]`), então passariam por FORA do `_idMapGet`, que é onde a validade
+  // mora. Aqui é a mesma régua, aplicada na mesma leitura.
+  function _vale(t, map, u) {
+    var v = map[u];
+    if (v == null || v === false) return false;
+    if (typeof window._ehMapaDePresenca === 'function' && window._ehMapaDePresenca(t, map)) {
+      return !!(window._presencaFresca && window._presencaFresca(v));
+    }
+    return true;
+  }
   window._entryAllInMap = function (t, map, entry) {
     var m = map || {};
     var uids = _uidsOf(entry);
-    if (uids.length) return uids.every(function (u) { return !!m[u]; });
+    if (uids.length) return uids.every(function (u) { return _vale(t, m, u); });
     return window._idMapHas(t, m, entry); // fictício: nome
   };
 
@@ -80,7 +91,7 @@
   window._entryAnyInMap = function (t, map, entry) {
     var m = map || {};
     var uids = _uidsOf(entry);
-    if (uids.length) return uids.some(function (u) { return !!m[u]; });
+    if (uids.length) return uids.some(function (u) { return _vale(t, m, u); });
     return window._idMapHas(t, m, entry); // fictício: nome
   };
 
