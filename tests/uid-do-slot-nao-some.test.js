@@ -85,8 +85,11 @@ function docComoNaProducao() {
     'o nome VELHO do elenco resolve pro uid certo (era isto que faltava)');
   ok(map['Adriana'] === UID_A, 'e os outros seguem resolvendo');
   // sem inscrito com nome, o mapa antigo era vazio — prova de que a fonte nova é a que salva
-  ok(W._buildNameToUid(t)[NOME_VELHO] === undefined,
-    '⛔ e o mapa do MOTOR (_buildNameToUid) segue intocado — mexer nele mudaria o chaveamento, e isso é leva própria');
+  ok(W._buildNameToUid(t)[NOME_VELHO] === UID_R,
+    'e o mapa do MOTOR também resolve — medido no Confra: 4 pessoas entravam na eliminatória SEM identidade, e os slots furados foram de 4 pra 0');
+  const soInscritos = { id: 'T1', participants: t.participants };
+  ok(W._buildNameToUid(soInscritos)[NOME_VELHO] === undefined,
+    '⛔ e sem as fontes novas ele não resolveria nada — o inscrito é stripado, quem carrega o par é o elenco do grupo');
 })();
 
 /* ── ② o slot furado se completa na leitura ──────────────────────────────────────── */

@@ -3914,6 +3914,29 @@ function _buildNameToUid(t) {
     }
   });
 
+  // ─── ⭐ E O MOTOR TAMBÉM ENXERGA O NOME VELHO ──────────────────────────────────────
+  // Ordem do dono (23/ago/2026), depois de eu ter escopado isto só pra tela: _"corrige a
+  // merda do motor porra! estamos em sandbox justamente para conferir as merdas antes de
+  // rodar de verdade com as pessoas vendo."_
+  //
+  // MEDIDO, gerando a eliminatória do Confra pelos DOIS caminhos (mesma semente):
+  //     jogos 98 → 98 · pessoas 131 → 135 · sumiram 0 · slots furados 4 → 0
+  // Ou seja: QUATRO pessoas entravam na eliminatória sem identidade, porque o nome delas no
+  // documento era o antigo e este mapa não o conhecia. Não é "chaveamento diferente por
+  // capricho" — é gente que estava sendo perdida. 20 dos 98 jogos pareiam diferente porque
+  // a classificação passou a contar essas quatro no lugar certo.
+  //
+  // ⚠️ O GOLDEN MASTER DA ELIMINATÓRIA FOI RE-CONGELADO POR CAUSA DISTO, de propósito e com
+  // a medição acima na mão. Golden que muda sem medição é regressão disfarçada; este mudou
+  // porque o retrato velho fotografava o defeito. [[project_uid_identity_canon_locked]]
+  //
+  // Ordem das fontes: a recuperação entra por BAIXO — inscrito e nome vivo do perfil, que
+  // são mais confiáveis, continuam mandando quando existem.
+  try {
+    var _rec = _nameToUidRecovery(t);
+    Object.keys(_rec).forEach(function (n) { if (!map[n]) map[n] = _rec[n]; });
+  } catch (e) { /* mapa incompleto é melhor que motor derrubado */ }
+
   return map;
 }
 window._buildNameToUid = _buildNameToUid;
