@@ -13,6 +13,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -27,7 +31,7 @@ function mkT(N) {
     currentPhaseIndex: 0, checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [],
     teamOrigins: {}, matches: [], lateEnrollment: 'expand', newMatchups: true,
   };
-  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; });
   dc.compileFromFmt2(t);
   return t;
 }
@@ -69,7 +73,7 @@ console.log('── entrada tardia NÃO pode re-sortear a chave já publicada �
   const chega = (nome, u1, n1, u2, n2) => {
     t.participants.push({ p1Uid: u1, p1Name: n1, p2Uid: u2, p2Name: n2, displayName: nome, name: nome, ligaActive: true });
     t.teamOrigins[nome] = 'formada';
-    t.checkedIn[u1] = 1; t.checkedIn[u2] = 1;   // presença é POR MEMBRO, nunca pelo nome da dupla
+    t.checkedIn[u1] = _AGORA; t.checkedIn[u2] = _AGORA;   // presença é POR MEMBRO, nunca pelo nome da dupla
   };
 
   // ── 9ª dupla sozinha: ENTRA por repescagem. Nada na chave se move. ──

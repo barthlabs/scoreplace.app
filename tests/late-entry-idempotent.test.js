@@ -11,6 +11,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -24,7 +28,7 @@ function mkT(N, dupla) {
     participants: mkPairs(N), teamSize: 2, enrollmentMode: 'teams', combinedCategories: [], currentPhaseIndex: 0,
     checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: [],
     lateEnrollment: 'expand', newMatchups: true };
-  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; });
   dc.compileFromFmt2(t);
   return t;
 }
@@ -43,7 +47,7 @@ console.log('── integração tardia é IDEMPOTENTE (N chamadas ⇒ 1 jogo) �
       W.AppStore.tournaments = [t];
       if (!dc.drawInitial(t, {}).ok) return;
       const d = { p1Uid: 'mm', p1Name: 'Marcello', p2Uid: 'kf', p2Name: 'Karla', displayName: NM, name: NM };
-      t.checkedIn['mm'] = 1; t.checkedIn['kf'] = 1;
+      t.checkedIn['mm'] = _AGORA; t.checkedIn['kf'] = _AGORA;
       if (where === 'roster') { t.participants.push(d); t.teamOrigins[NM] = 'formada'; }
       else { t.waitlist.push(Object.assign({ _lateJoin: true }, d)); t.teamOrigins[NM] = 'formada'; }
       // 3 chamadas seguidas (marcou 1º membro, marcou 2º, ligou "aceitar entradas")

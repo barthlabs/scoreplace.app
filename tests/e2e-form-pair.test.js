@@ -7,6 +7,10 @@
 // integrateLateEntries (integra na chave). Prova que a dupla formada pós-sorteio ENTRA na chave
 // SEM o cliente mutar/gravar roster (form/split NÃO chamam saveTournament).
 const E = require('./e2e-cf-harness');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 const W = E.W;
 const ok = E.ok;
 const BYE = W._t('bui.byeLabel');
@@ -57,7 +61,7 @@ console.log('── E2E form-pair pós-sorteio pelo DISPATCH REAL (todo formato)
   t.participants.push({ uid: 'ly', displayName: 'LateY', name: 'LateY', ligaActive: true });
   t.participants.push({ uid: 'lz', displayName: 'LateZ', name: 'LateZ', ligaActive: true });
   t.participants.push({ uid: 'lw', displayName: 'LateW', name: 'LateW', ligaActive: true });
-  t.checkedIn['lx'] = 1; t.checkedIn['ly'] = 1; t.checkedIn['lz'] = 1; t.checkedIn['lw'] = 1;
+  t.checkedIn['lx'] = _AGORA; t.checkedIn['ly'] = _AGORA; t.checkedIn['lz'] = _AGORA; t.checkedIn['lw'] = _AGORA;
   const before = labels(t);
   ok(!before.has('LateX / LateY'), label + ' :: (pré) dupla nova não está na chave');
 
@@ -86,7 +90,7 @@ console.log('\n── gate: sem novos confrontos, dupla formada fica fora ──
   E.draw(t);
   t.participants.push({ uid: 'lx', displayName: 'LateX', name: 'LateX', ligaActive: true });
   t.participants.push({ uid: 'ly', displayName: 'LateY', name: 'LateY', ligaActive: true });
-  t.checkedIn['lx'] = 1; t.checkedIn['ly'] = 1;
+  t.checkedIn['lx'] = _AGORA; t.checkedIn['ly'] = _AGORA;
   E.resetLateGuards();
   W._formDuplaByUids(t.id, 'LateX', 'lx', 'LateY', 'ly');
   ok(!labels(t).has('LateX / LateY'), 'gate OFF :: dupla formada NÃO entra na chave (config do dono)');

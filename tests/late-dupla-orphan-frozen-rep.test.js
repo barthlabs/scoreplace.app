@@ -13,6 +13,10 @@ sandbox.document = { getElementById: () => null, querySelector: () => null, quer
 sandbox.AppStore = { tournaments: [], logAction: () => {}, sync: () => {} };
 load('tournaments-draw.js');
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 const BYE = 'BYE (Avança Direto)';
 const isEmpty = v => !v || v === 'TBD' || v === BYE || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
 
@@ -25,7 +29,7 @@ function build(n, res){
   const cfg={format:'Dupla Eliminatória',formatCode:'elim_dupla',teamSize:2,bracketResolution:(res||'playin'),seedVip:true,thirdPlace:true,source:{type:'enrollment'},categories:[CAT]};
   const pool=mkPool(n).map(p=>Object.assign({categories:[CAT]},p));
   const t={id:'DEO'+n,format:'Dupla Eliminatória',teamSize:2,matches:[],currentPhaseIndex:0,lateEnrollment:'expand',newMatchups:true,participants:pool.slice(),teamOrigins:{},standbyParticipants:[],waitlist:[],checkedIn:{},absent:{},combinedCategories:[CAT]};
-  pool.forEach(p=>{t.checkedIn[p.uid]=1;});
+  pool.forEach(p=>{t.checkedIn[p.uid]=_AGORA;});
   const built=E.generatePhase(pool,cfg,{idPrefix:'gp',ordered:true,t,isVip:()=>false,catOf:e=>(e.categories&&e.categories[0])||''});
   E.storePhase(t,0,built);
   if(built.needsRepechageDoubleElim&&W._buildRepechageDoubleElim){(built.repMetaByCat&&built.repMetaByCat.length?built.repMetaByCat:[built.repMeta]).forEach(mm=>W._buildRepechageDoubleElim(t,mm));}
@@ -33,7 +37,7 @@ function build(n, res){
 }
 const all = t => W._collectAllMatches(t) || [];
 const labels = t => { const s = new Set(); all(t).forEach(m => { [m.p1,m.p2].forEach(x => { if (x && !isEmpty(x)) s.add(String(x)); }); }); return s; };
-function orphan(t, idx){ const nm='LX'+idx+' / LY'+idx; t.participants.push({p1Uid:'lx'+idx,p1Name:'LX'+idx,p2Uid:'ly'+idx,p2Name:'LY'+idx,displayName:nm,name:nm,ligaActive:true}); t.teamOrigins[nm]='formada'; t.checkedIn['lx'+idx]=1; t.checkedIn['ly'+idx]=1; return nm; }
+function orphan(t, idx){ const nm='LX'+idx+' / LY'+idx; t.participants.push({p1Uid:'lx'+idx,p1Name:'LX'+idx,p2Uid:'ly'+idx,p2Name:'LY'+idx,displayName:nm,name:nm,ligaActive:true}); t.teamOrigins[nm]='formada'; t.checkedIn['lx'+idx]=_AGORA; t.checkedIn['ly'+idx]=_AGORA; return nm; }
 function reaisSig(t){ return all(t).filter(m=>m.winner&&!m.isBye&&!isEmpty(m.p1)&&!isEmpty(m.p2)).map(m=>m.id+'|'+m.winner+'|'+m.scoreP1+'-'+m.scoreP2).sort(); }
 function liveDouble(t){ const s={}; all(t).filter(m=>!m.winner).forEach(m=>['p1','p2'].forEach(sl=>{const v=m[sl];if(v&&!isEmpty(v))(s[v]=s[v]||[]).push(m.id);})); return Object.keys(s).find(v=>s[v].length>1); }
 function playout(t){

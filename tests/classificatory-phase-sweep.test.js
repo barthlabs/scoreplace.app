@@ -13,6 +13,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 const BYE = W._t('bui.byeLabel');
 
 let pass = 0, fail = 0; const fails = [];
@@ -132,7 +136,7 @@ console.log('\n── integração tardia na classificatória ──');
  ['Suíço', { disputa: 'individual', grupos: 1, parceria: 'sorteio_rodada', classifAtiva: true, classificados: 2, rodadas: { modo: 'suico' }, eliminatoria: { ativa: true, linhas: 1 } }]].forEach(function (c, i) {
   const t = { id: 'LT' + i, sport: 'Tênis', fmt2: c[1], participants: mkIndiv(8), teamSize: 1, enrollmentMode: 'individual', lateEnrollment: 'expand', newMatchups: true, combinedCategories: [], currentPhaseIndex: 0, checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: [] };
   dc.compileFromFmt2(t); W.AppStore.tournaments = [t]; dc.drawInitial(t, {});
-  t.standbyParticipants.push({ uid: 'ltx', displayName: 'LateX', name: 'LateX', _lateJoin: true, ligaActive: true }); t.checkedIn['ltx'] = 1;
+  t.standbyParticipants.push({ uid: 'ltx', displayName: 'LateX', name: 'LateX', _lateJoin: true, ligaActive: true }); t.checkedIn['ltx'] = _AGORA;
   const r = dc.integrateLateEntries(t, {});
   const label = 'tardio classif ' + c[0] + ' #' + i;
   ok(r && r.changed === true, label + ' :: integrou (changed=true)');

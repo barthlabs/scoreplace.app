@@ -15,6 +15,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -29,7 +33,7 @@ function mkT(N) {
     participants: mkPairs(N), teamSize: 2, enrollmentMode: 'teams', combinedCategories: [], currentPhaseIndex: 0,
     checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: [],
     lateEnrollment: 'expand', newMatchups: true };
-  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; });
   dc.compileFromFmt2(t);
   return t;
 }
@@ -53,7 +57,7 @@ function r1real(t) { const sup = all(t).filter(m => m.bracket === 'upper' || !m.
   const dupla = { p1Uid: 'wA', p1Name: 'Espera A', p2Uid: 'wB', p2Name: 'Espera B', displayName: NM, name: NM };
   t.standbyParticipants.push(dupla);
   ok(!dupla._lateJoin, `N=${N}: (pré) a dupla NÃO tem _lateJoin — é pré-formada`);
-  t.checkedIn['wA'] = 1; t.checkedIn['wB'] = 1;
+  t.checkedIn['wA'] = _AGORA; t.checkedIn['wB'] = _AGORA;
 
   const r = dc.integrateLateEntries(t, {});
   ok(r && r.changed, `N=${N}: integração AGIU (não ficou no limbo) [${JSON.stringify(r)}]`);

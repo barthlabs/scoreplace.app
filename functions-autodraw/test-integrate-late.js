@@ -10,6 +10,10 @@
 // node functions-autodraw/test-integrate-late.js
 
 const core = require('./draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 
 let pass = 0, fail = 0;
 function ok(name, cond, got) {
@@ -49,7 +53,7 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
   // não existe em `checkedIn` na produção, e o coletor canônico (_collectLateCandidates)
   // rejeita de propósito. A fixture antiga marcava 'LA / LB' e por isso as duplas nem
   // chegavam a ser coletadas. Ver [[project_late_dupla_fills_awaiting_slot]].
-  t.checkedIn = { la: 1, lb: 1, lc: 1, ld: 1 };
+  t.checkedIn = { la: _AGORA, lb: _AGORA, lc: _AGORA, ld: _AGORA };
   const before = R1(t).length;
 
   const res = core.integrateLateEntries(t, {});

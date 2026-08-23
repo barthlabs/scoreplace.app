@@ -11,6 +11,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -26,7 +30,7 @@ function mkT(N) {
     participants: mkPairs(N), teamSize: 2, enrollmentMode: 'teams', combinedCategories: [],
     currentPhaseIndex: 0, checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [],
     teamOrigins: {}, matches: [], lateEnrollment: 'expand', newMatchups: true };
-  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; });
   dc.compileFromFmt2(t); dc.drawInitial(t, {});
   return t;
 }
@@ -39,7 +43,7 @@ function primeiraSup(t) {
 function chegaTardio(t, off) {
   const p = mkPairs(1, off)[0]; p._lateJoin = true;
   t.waitlist.push(p); t.participants.push(p);
-  t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1;
+  t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA;
   return p;
 }
 function liveDouble(t) {

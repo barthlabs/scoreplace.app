@@ -7,6 +7,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 const BYE = 'BYE (Avança Direto)';
 const isEmpty = v => !v || v === 'TBD' || v === BYE || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
 const isBye = v => v === BYE || /^bye/i.test(String(v || '').trim());
@@ -18,14 +22,14 @@ function mkT(N) {
   const t = { id: 'PG' + N, sport: 'Beach Tennis', fmt2: { disputa: 'dupla', grupos: 1, parceria: 'fixa', classifAtiva: false, eliminatoria: el },
     participants: mkPairs(N), teamSize: 2, enrollmentMode: 'teams', combinedCategories: [], currentPhaseIndex: 0, checkedIn: {}, absent: {},
     standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: [], lateEnrollment: 'expand', newMatchups: true };
-  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; });
   dc.compileFromFmt2(t); dc.drawInitial(t, {});
   return t;
 }
 function nBye(t) { return all(t).filter(m => (m.bracket === 'upper' || !m.bracket) && !isEmpty(m.p1) && isEmpty(m.p2)).length; }
 function r1real(t) { const sup = all(t).filter(m => m.bracket === 'upper' || !m.bracket); const minR = Math.min.apply(null, sup.map(m => m.round)); return sup.filter(m => m.round === minR && !isEmpty(m.p1) && !isEmpty(m.p2)).map(m => [m.p1, m.p2].sort().join(' vs ')).sort(); }
 function liveDouble(t) { const s = {}; all(t).filter(m => !m.winner).forEach(m => ['p1', 'p2'].forEach(sl => { const v = m[sl]; if (v && !isEmpty(v)) (s[v] = s[v] || []).push(m.id); })); return Object.keys(s).find(v => s[v].length > 1); }
-function addLate(t, i) { const p = { p1Uid: 'l' + i + 'a', p1Name: 'L' + i + 'a', p2Uid: 'l' + i + 'b', p2Name: 'L' + i + 'b', displayName: 'L' + i + 'a / L' + i + 'b', name: 'L' + i + 'a / L' + i + 'b', _lateJoin: true }; t.waitlist.push(p); t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; dc.integrateLateEntries(t, {}); return p.displayName; }
+function addLate(t, i) { const p = { p1Uid: 'l' + i + 'a', p1Name: 'L' + i + 'a', p2Uid: 'l' + i + 'b', p2Name: 'L' + i + 'b', displayName: 'L' + i + 'a / L' + i + 'b', name: 'L' + i + 'a / L' + i + 'b', _lateJoin: true }; t.waitlist.push(p); t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; dc.integrateLateEntries(t, {}); return p.displayName; }
 function playout(t) { let g = 0; while (g++ < 5000) { const self = all(t).find(m => m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2) && String(m.p1) === String(m.p2)); if (self) return 'SELF:' + self.p1; const p = all(t).filter(m => m && !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2)); if (!p.length) break; const m = p[0]; m.winner = m.p1; m.scoreP1 = 6; m.scoreP2 = g % 5; W._advanceWinner(t, m); if (W._resolveRepFills) try { W._resolveRepFills(t); } catch (e) {} } const stuck = all(t).filter(m => !m.winner && !m.isBye && m.p1 && m.p2 && !isEmpty(m.p1) && !isEmpty(m.p2)); const grand = all(t).filter(m => m.bracket === 'grand'); return stuck.length ? 'STUCK' + stuck.length : (grand.length && grand[grand.length - 1].winner ? 'CAMPEÃO' : 'NOCHAMP'); }
 
 let fail = 0;
@@ -37,9 +41,9 @@ console.log('== (A) 2 duplas formadas ==');
   const t = mkT(N); W.AppStore.tournaments = [t];
   const antes = r1real(t);
   t.waitlist = [solo('s1', 'X1'), solo('s2', 'X2'), solo('s3', 'Y1'), solo('s4', 'Y2')];
-  ['s1', 's2', 's3', 's4'].forEach(u => t.checkedIn[u] = 1);
-  dc.formLatePairCore(t, { key1: 's1', key2: 's2', nowTs: 1 });
-  dc.formLatePairCore(t, { key1: 's3', key2: 's4', nowTs: 2 });
+  ['s1', 's2', 's3', 's4'].forEach(u => t.checkedIn[u] = _AGORA);
+  dc.formLatePairCore(t, { key1: 's1', key2: 's2', nowTs: Date.now() + 1 });
+  dc.formLatePairCore(t, { key1: 's3', key2: 's4', nowTs: Date.now() + 2 });
   const labels = new Set(); all(t).forEach(m => [m.p1, m.p2].forEach(x => { if (x && !isEmpty(x)) labels.add(String(x)); }));
   const inX = [...labels].some(l => /X1/.test(l) && /X2/.test(l));
   const inY = [...labels].some(l => /Y1/.test(l) && /Y2/.test(l));

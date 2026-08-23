@@ -9,6 +9,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 const BYE = 'BYE (Avança Direto)';
 const isEmpty = v => !v || v === 'TBD' || v === BYE || /^bye/i.test(String(v).trim()) || /a definir/i.test(String(v));
 const all = t => W._collectAllMatches(t) || [];
@@ -24,7 +28,7 @@ function mkT(N) {
     participants: mkPairs(N), teamSize: 2, enrollmentMode: 'teams', combinedCategories: [],
     currentPhaseIndex: 0, checkedIn: {}, absent: {}, standbyParticipants: [], waitlist: [],
     teamOrigins: {}, matches: [], lateEnrollment: 'expand', newMatchups: true };
-  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = 1; t.checkedIn[p.p2Uid] = 1; });
+  mkPairs(N).forEach(p => { t.checkedIn[p.p1Uid] = _AGORA; t.checkedIn[p.p2Uid] = _AGORA; });
   dc.compileFromFmt2(t); dc.drawInitial(t, {});
   return t;
 }
@@ -41,7 +45,7 @@ function run(n) {
   const antesR1 = r1real(t);
   const NM = 'LA / LB';
   t.standbyParticipants = [{ p1Name: 'LA', p2Name: 'LB', p1Uid: 'lla', p2Uid: 'llb', displayName: NM, name: NM, _lateJoin: true }];
-  t.checkedIn['lla'] = 1; t.checkedIn['llb'] = 1;
+  t.checkedIn['lla'] = _AGORA; t.checkedIn['llb'] = _AGORA;
 
   const ret = dc.integrateLateEntries(t, {});
   ok(ret && ret.changed, 'integração AGIU (não ficou no limbo) [' + JSON.stringify(ret) + ']');

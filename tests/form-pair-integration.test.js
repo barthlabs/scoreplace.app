@@ -16,6 +16,10 @@
 const H = require('./render-harness');
 const W = H.sandbox;
 const dc = require('../functions-autodraw/draw-core.js');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores); o `1` daqui era atalho —
+// e atalho que não existe no dado real vira teste que passa sobre código quebrado.
+const _AGORA = Date.now();
 const BYE = W._t('bui.byeLabel');
 
 let pass = 0, fail = 0; const fails = [];
@@ -69,7 +73,7 @@ function formPairPostDraw(t, idx) {
   const nm = 'LX' + idx + ' / LY' + idx;
   t.participants.push({ p1Uid: 'lx' + idx, p1Name: 'LX' + idx, p2Uid: 'ly' + idx, p2Name: 'LY' + idx, displayName: nm, name: nm, ligaActive: true });
   t.teamOrigins[nm] = 'formada';
-  t.checkedIn['lx' + idx] = 1; t.checkedIn['ly' + idx] = 1;
+  t.checkedIn['lx' + idx] = _AGORA; t.checkedIn['ly' + idx] = _AGORA;
   return nm;
 }
 
@@ -145,7 +149,7 @@ console.log('\n── regressão: sorteadas (roster=indivíduos, chave=duplas) N
     teamOrigins: {}, lateEnrollment: 'expand', newMatchups: true,
     matches: [{ id: 'm1', round: 1, p1: 'P1 / P2', p2: 'P3 / P4' }, { id: 'm2', round: 1, p1: 'P5 / P6', p2: 'P7 / P8' }],
   };
-  inds.forEach((p) => { t.checkedIn[p.uid] = 1; });   // todos presentes (pior caso: todo indivíduo "órfão")
+  inds.forEach((p) => { t.checkedIn[p.uid] = _AGORA; });   // todos presentes (pior caso: todo indivíduo "órfão")
   W.AppStore.tournaments = [t];
   const before = JSON.stringify(t.matches);
   const r = dc.integrateLateEntries(t, {});

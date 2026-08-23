@@ -63,7 +63,7 @@ W.FirestoreDB.splitPair = function (tId, opts) {
 W.FirestoreDB.formLatePair = function (tId, opts) {
   var doc = findDoc(tId); if (!doc) return thenable(null, Object.assign(new Error('not-found'), { code: 'functions/not-found' }));
   var clone = JSON.parse(JSON.stringify(doc));
-  var res = dc.formLatePairCore(clone, { key1: opts.key1, key2: opts.key2, nowTs: 1 });
+  var res = dc.formLatePairCore(clone, { key1: opts.key1, key2: opts.key2, nowTs: Date.now() + 1 });
   if (!res || !res.ok) return thenable(null, Object.assign(new Error((res && res.reason) || 'form-failed'), { code: 'functions/failed-precondition' }));
   return thenable({ ok: true, formed: res.formed, integrated: res.integrated, tournament: clone });
 };
