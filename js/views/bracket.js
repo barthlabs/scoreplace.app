@@ -3814,7 +3814,15 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
       // o perfil chega — e com o nome ATUAL, não com o que foi gravado no sorteio.
       // A coroa fica FORA do span: a hidratação escreve `textContent` e apagaria qualquer
       // filho. Sem uid (fictício) segue o caminho antigo, onde o rótulo é a identidade.
-      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" class="sp-mc-nm">${
+      // ⛔ UM `class` SÓ (2.0.28). Este span nasceu com DOIS atributos `class` — o parser
+      // fica com o primeiro e descarta o segundo, calado, então `.sp-mc-nm` (peso 600 +
+      // nowrap + inline-flex, components.css) nunca valeu nos nomes da chave. Mesmíssima
+      // armadilha do `class="btn-row" class="sp-mc-acts"` no cabeçalho (2.0.25). O
+      // `nowrap` não é enfeite: o auto-fit espera achá-lo no CSS — a fase 1 do
+      // `_fitEmLote` devolve `whiteSpace=''` contando com ele. MEDIDO antes de juntar
+      // (0 a 9 sobrenomes, com/sem coroa, claro/escuro, 390/768/1280): a fronteira do
+      // corte não se move. Trava: tests/nome-do-card-da-chave-nao-perde-a-classe.test.js.
+      `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit sp-mc-nm" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}">${
         _slotUid
           ? `<span data-uid-name="${window._safeHtml(_slotUid)}">${window._safeHtml(name)}</span>` +
             ((name && typeof window._isOrgName === 'function' && window._currentBracketTournament &&

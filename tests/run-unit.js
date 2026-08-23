@@ -1214,6 +1214,13 @@ const SUITES = [
   // _buildNameToUid lia só os inscritos (que o save stripa) — daí linha 'name:', uid null no
   // slot e nome congelado no card pra sempre. Cura nos dois lados, na leitura.
   'tests/uid-do-slot-nao-some.test.js',
+  // A MESMA armadilha do `class=` duplicado, um card acima: o span do NOME no card da
+  // chave nascia `class="sp-name-fit" … class="sp-mc-nm"` e o parser jogava o segundo
+  // fora — `.sp-mc-nm` (peso 600, nowrap, inline-flex) NUNCA valeu ali. Juntar as duas
+  // classes mexe no MESMO span que o auto-fit mede, então a cura é MEDIDA: Chromium com
+  // o CSS real e o `_fitNames` real do store.js, claro e escuro, 390/768/1280 — e a
+  // fronteira do corte não pode se mover.
+  'tests/nome-do-card-da-chave-nao-perde-a-classe.test.js',
 ];
 
 let failed = [];

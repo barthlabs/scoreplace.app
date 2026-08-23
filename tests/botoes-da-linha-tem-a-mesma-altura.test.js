@@ -23,8 +23,9 @@
  *      basta: nenhuma linha do app depende mais de uma SEGUNDA classe pra alinhar.
  *
  * O teste cobre os dois lados, porque cada um sozinho deixa metade do estrago de pé:
- *   • ESTÁTICO: nenhuma tag `.btn-row` do app pode ter `class=` duplicado (a armadilha
- *     silenciosa que nos custou este bug);
+ *   • ESTÁTICO: nenhuma tag do app pode ter `class=` duplicado (a armadilha silenciosa
+ *     que nos custou este bug — a varredura começou em `.btn-row` e hoje cobre js/ e
+ *     index.html inteiros, porque o defeito reapareceu num span de nome);
  *   • MEDIDO: Chromium com o CSS REAL do app, renderizando o cabeçalho REAL do card —
  *     topo, base e altura iguais, e a altura sendo a do botão mais alto. E o markup
  *     QUEBRADO (o de antes) tem de FALHAR na mesma medição, senão o teste não mede nada.
@@ -45,9 +46,15 @@ function ok(cond, msg) {
   else { falhas++; console.log('  ✗ ' + msg); }
 }
 
-/* ── 1. ESTÁTICO — `class=` duplicado em linha de botões ──────────────────────────── */
+/* ── 1. ESTÁTICO — `class=` duplicado em QUALQUER tag ─────────────────────────────
+ * AMPLIADO em 23/ago/2026: nasceu olhando só as tags `.btn-row`, e o mesmo defeito
+ * reapareceu num span de NOME (`class="sp-name-fit" … class="sp-mc-nm"`, bracket.js
+ * ~3807) — `.sp-mc-nm` nunca valeu nos nomes do card da chave. A armadilha é da FORMA
+ * do atributo, não daquela linha de botões: agora a varredura proíbe `class=` duplicado
+ * em qualquer tag de js/ e index.html. Ver
+ * tests/nome-do-card-da-chave-nao-perde-a-classe.test.js. */
 function varrerClassDuplicado() {
-  console.log('\n① Nenhuma linha .btn-row com `class=` duplicado');
+  console.log('\n① Nenhuma tag de js/ ou index.html com `class=` duplicado');
   const arquivos = [];
   (function anda(dir) {
     for (const nome of fs.readdirSync(path.join(ROOT, dir))) {
@@ -62,12 +69,14 @@ function varrerClassDuplicado() {
   const culpados = [];
   for (const rel of arquivos) {
     const src = read(rel);
-    // cada tag de abertura do arquivo; só interessam as que carregam btn-row
+    // cada tag de abertura do arquivo — TODAS, não só as de botão (ver o bloco acima)
     const tags = src.match(/<[a-zA-Z][^<>]*>/g) || [];
     for (const tag of tags) {
-      if (tag.indexOf('btn-row') === -1) continue;
       const qtd = (tag.match(/\bclass\s*=/g) || []).length;
-      if (qtd > 1) culpados.push(rel + ' → ' + tag.slice(0, 120));
+      if (qtd > 1) {
+        const linha = src.slice(0, src.indexOf(tag)).split('\n').length;
+        culpados.push(rel + ':' + linha + ' → ' + tag.replace(/\s+/g, ' ').slice(0, 120));
+      }
     }
     // e a linha do cabeçalho do card tem de carregar AS DUAS classes no MESMO atributo
     if (rel === 'js/views/bracket.js') {
@@ -82,8 +91,8 @@ function varrerClassDuplicado() {
       }
     }
   }
-  ok(culpados.length === 0, 'nenhuma tag .btn-row com class duplicado' +
-    (culpados.length ? ' — ' + culpados.join(' | ') : ''));
+  ok(culpados.length === 0, 'nenhuma tag com `class=` duplicado em ' + arquivos.length +
+    ' arquivos' + (culpados.length ? ' — ' + culpados.join(' | ') : ''));
 }
 
 /* ── 2. MEDIDO — CSS real, cabeçalho real, régua de verdade ───────────────────────── */
