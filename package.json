@@ -4,7 +4,7 @@
   "private": true,
   "description": "scoreplace.app — vanilla JS SPA. Package.json existe apenas para devDependencies de tooling (Playwright, Lighthouse). NÃO há build step nem bundler — index.html serve js/ e css/ direto.",
   "scripts": {
-    "test": "node scripts/check-ext-version.js && node tests/run-unit.js",
+    "test": "node scripts/check-ext-version.js && node scripts/check-vendor-fresh.js && node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
     "test:ext": "node tests/lz-extensao-real.test.js",
     "test:concurrency": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
@@ -22,7 +22,8 @@
     "cap:sync": "node tools/build-www.js && node node_modules/@capacitor/cli/bin/capacitor sync",
     "ext:zip": "bash scripts/build-ext-zip.sh",
     "check:ext": "node scripts/check-ext-version.js",
-    "check:cache": "node scripts/check-cache-busters.js"
+    "check:cache": "node scripts/check-cache-busters.js",
+    "check:vendor": "node scripts/check-vendor-fresh.js"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

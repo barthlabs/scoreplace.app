@@ -1230,6 +1230,15 @@ const SUITES = [
   // o CSS real e o `_fitNames` real do store.js, claro e escuro, 390/768/1280 — e a
   // fronteira do corte não pode se mover.
   'tests/nome-do-card-da-chave-nao-perde-a-classe.test.js',
+  // O `functions-autodraw/vendor/` é cópia de js/views/* que só o PREDEPLOY re-sincroniza —
+  // e 52 suítes carregam o servidor por draw-core.js, que dá require() na CÓPIA. Vendor
+  // velho = suíte verde sobre código que o servidor não tem: mexi em identity-core/
+  // bracket-logic/bracket-ui, `npm test` deu 435/435, e o deploy (que sincroniza o vendor)
+  // quebrou 12 suítes NA HORA. Medido no histórico: 57% dos commits tinham vendor velho.
+  // Quem barra é `scripts/check-vendor-fresh.js`, ANTES desta lista (package.json). Este
+  // teste guarda as duas metades: a trava está ligada e o vendor daqui está em dia, e ela
+  // detecta de verdade (sandbox com o script REAL, não réplica).
+  'tests/vendor-do-autodraw-nao-fica-velho.test.js',
 ];
 
 let failed = [];

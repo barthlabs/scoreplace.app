@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# pre-commit — o snapshot do prerender entra NO PRÓPRIO COMMIT.
+# pre-commit — o que é GERADO entra NO PRÓPRIO COMMIT.
+#
+# São duas coisas derivadas, pela mesma razão: (1) o snapshot do prerender
+# (index.html/version.txt/…) e (2) o `functions-autodraw/vendor/`, cópia de `js/views/*`
+# que o autoDraw roda no servidor. Nos dois casos o gerador só rodava no PREDEPLOY — e o
+# que o predeploy gera nunca volta pro repo.
 #
 # POR QUE EXISTE (21/ago/2026). O `index.html` (snapshot estático da landing) e o
 # `version.txt` são GERADOS a partir de `window.SCOREPLACE_VERSION` (store.js). Quem
@@ -26,6 +31,46 @@ set -uo pipefail
 
 RAIZ="$(git rev-parse --show-toplevel)" || exit 0
 cd "$RAIZ" || exit 0
+
+# ── vendor do autoDraw: sincroniza e entra no commit ─────────────────────────────────
+# `functions-autodraw/vendor/` é cópia de `js/views/*` feita por copy-vendor.js, e quem
+# rodava o copy era SÓ o predeploy do deploy-functions.sh. Entre um deploy e outro o vendor
+# ficava velho — e 52 suítes carregam o servidor por draw-core.js, que dá require() na
+# CÓPIA, não no fonte. Medido em 23/ago/2026: `npm test` 435/435 verde, deploy da CF
+# sincroniza o vendor, 12 suítes quebram na hora. E 57% dos commits dos últimos 45 dias
+# estavam nesse estado — ou seja, era o NORMAL, não o acidente.
+#
+# Desde então `scripts/check-vendor-fresh.js` BARRA o `npm test` com vendor velho. Isto
+# aqui é o que faz esse bloqueio custar zero no dia a dia: o copy roda sozinho e o vendor
+# entra no MESMO commit da mudança em js/views/. (Sem hook, o conserto é uma linha:
+# `node functions-autodraw/copy-vendor.js`.)
+#
+# Não é gate: se algo aqui der errado, o commit segue e quem barra é o `npm test`.
+if [[ -f functions-autodraw/copy-vendor.js ]]; then
+  if ! node scripts/check-vendor-fresh.js >/dev/null 2>&1; then
+    # Aviso honesto: o copy lê a ÁRVORE DE TRABALHO. Se o fonte tem alteração não-staged,
+    # o vendor vai pro commit à frente do fonte que o acompanha.
+    SUJOS_FONTE="$(git diff --name-only -- js/views 2>/dev/null || true)"
+    LOGV="$(mktemp)"
+    if node functions-autodraw/copy-vendor.js >"$LOGV" 2>&1; then
+      if [[ -n "$(git status --porcelain -- functions-autodraw/vendor 2>/dev/null)" ]]; then
+        git add -A -- functions-autodraw/vendor
+        echo "▸ pre-commit: vendor do autoDraw re-sincronizado e incluído no commit"
+        echo "  ($(git diff --cached --name-only -- functions-autodraw/vendor | wc -l | tr -d ' ') arquivo(s) em functions-autodraw/vendor/)"
+        if [[ -n "$SUJOS_FONTE" ]]; then
+          echo "⚠️  pre-commit: copiei do que está NA ÁRVORE, e estes fontes têm alteração não-staged:" >&2
+          printf '%s\n' "$SUJOS_FONTE" | sed 's/^/     /' >&2
+          echo "   O vendor no commit fica À FRENTE do fonte que o acompanha. Confira." >&2
+        fi
+      fi
+    else
+      echo "⚠️  pre-commit: copy-vendor falhou — o vendor do autoDraw segue VELHO:" >&2
+      sed 's/^/   │ /' "$LOGV" >&2
+      echo "   O commit segue; quem barra é o 'npm test' (scripts/check-vendor-fresh.js)." >&2
+    fi
+    rm -f "$LOGV"
+  fi
+fi
 
 aviso() {
   echo "⚠️  pre-commit: $1" >&2

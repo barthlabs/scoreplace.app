@@ -426,11 +426,28 @@ nunca o código-fonte. **TRÊS** codebases (o 3º nasceu depois deste texto):
     lógica REAL de sorteio do cliente (Rei/Rainha, duplas, equilíbrio, categorias,
     folgas, desempate) via `draw-core.js` (shim Node `window=globalThis`) que dá
     `require()` em cópias dos arquivos do app em `functions-autodraw/vendor/`.
-    O `vendor/` é sincronizado de `js/views/*` no **predeploy** (`copy-vendor.js`,
-    hook em `firebase.json`) → zero drift. `bracket-logic.js` expõe
-    `window._generateNextRound` só pra isso. Validar com
+    `bracket-logic.js` expõe `window._generateNextRound` só pra isso. Validar com
     `cd functions-autodraw && node test-draw.js` antes de deployar. Ver memória
     `project_autodraw_server_parity`.
+  - ⚠️ **O `vendor/` é GERADO — e "zero drift" só é verdade porque hoje há TRAVA.**
+    Este arquivo dizia que o predeploy (`copy-vendor.js`, hook em `firebase.json`)
+    garantia zero drift. Garante no que SOBE pro servidor; **não garante no que você
+    TESTA**. 52 arquivos de teste carregam o servidor por `draw-core.js`, que dá
+    `require()` no **vendor**, não no fonte — então, entre um deploy e outro, `npm test`
+    exercitava a cópia congelada. Medido em 23/ago/2026: mudei `identity-core.js`/
+    `bracket-logic.js`/`bracket-ui.js`, `npm test` deu **435/435 verde**; rodei o deploy
+    da CF (que re-sincroniza o vendor) e **12 suítes quebraram na hora**
+    (`late-entry-idempotent`, `late-dupla-pow2-grow`, `e2e-form-pair`,
+    `classificatory-phase-sweep`, `functions-autodraw/test-integrate-late`…). E não era
+    acidente: nos 45 dias anteriores, **737 de 1296 commits (57%) tinham vendor velho**.
+    Desde então:
+    - **`scripts/check-vendor-fresh.js` BARRA o `npm test`** (roda antes das suítes, no
+      script `test` do `package.json`) se qualquer arquivo da lista divergir. Conserto:
+      `node functions-autodraw/copy-vendor.js`.
+    - **o `pre-commit` roda o copy sozinho** e põe o `vendor/` no MESMO commit da mudança
+      em `js/views/` — por isso o bloqueio custa zero (ligue com `scripts/install-hooks.sh`).
+    - **nunca editar `functions-autodraw/vendor/` à mão**: é saída de gerador, e a trava
+      acusa na hora. Cobertura: `tests/vendor-do-autodraw-nao-fica-velho.test.js`.
 
 **Deploy das functions (o `firebase` CLI está instalado e autenticado nesta máquina
 como `rstbarth@gmail.com`; deploy é ação outward-facing → confirmar com o usuário):**
