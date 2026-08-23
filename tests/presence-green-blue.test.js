@@ -11,6 +11,10 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores). O `1`/`1000` que estava
+// aqui era atalho de teste, e atalho que não existe no dado real vira teste que mente.
+const _AGORA = Date.now();
 const { sandbox } = require('./render-harness');
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'participants.js'), 'utf8'),
   sandbox, { filename: 'participants.js' });
@@ -32,7 +36,7 @@ ok(typeof W._rollCallPresenceCtx === 'function', '_rollCallPresenceCtx existe');
 
 // (1) AZUL: uid só em checkedInConfirmed → "Confirmado", toggle azul, NÃO presente.
 var t = mkT();
-W._idMapSet(t, t.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, 1000);
+W._idMapSet(t, t.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, _AGORA);
 var ctx = W._rollCallPresenceCtx(t, { isOrg: false, active: true });
 var r = ctx.cardPresence(t.participants[0]);
 ok(r.rowHtml.indexOf('Confirmado') !== -1, 'azul: rótulo "Confirmado"');
@@ -49,8 +53,8 @@ W._checkInFilter = 'all';
 
 // (3) VERDE vence AZUL: uid em checkedIn E checkedInConfirmed → "Presente" (verde), não azul.
 var t2 = mkT();
-W._idMapSet(t2, t2.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, 1000);
-W._idMapSet(t2, t2.checkedIn, { uid: 'uA', displayName: 'Ana' }, 2000);
+W._idMapSet(t2, t2.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, _AGORA);
+W._idMapSet(t2, t2.checkedIn, { uid: 'uA', displayName: 'Ana' }, _AGORA);
 var r2 = W._rollCallPresenceCtx(t2, { active: true }).cardPresence(t2.participants[0]);
 ok(r2.rowHtml.indexOf('Presente') !== -1 && r2.rowHtml.indexOf('Confirmado') === -1, 'verde vence azul → "Presente"');
 ok(r2.styleExtra.indexOf('16,185,129') !== -1, 'verde vence azul → tinta verde');

@@ -1563,7 +1563,7 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 // ("Presentes (4)" com 16) e não atualizava no toggle (id não batia). Ver [[project_id_maps_uid_keyed]].
 window._detailCheckInBarHtml = function (tId) {
   var t = window._findTournamentById(tId); if (!t) return '';
-  var checkedIn = t.checkedIn || {}, checkedInConf = t.checkedInConfirmed || {}, absent = t.absent || {};
+  var checkedIn = window._presencaViva(t), checkedInConf = window._presencaViva(t, 'checkedInConfirmed'), absent = t.absent || {};
   var parts = Array.isArray(t.participants) ? t.participants : [];
   var seen = {}, total = 0, present = 0, confirmed = 0;
   parts.forEach(function (p) {

@@ -1,3 +1,7 @@
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores). O `1`/`1000` que estava
+// aqui era atalho de teste, e atalho que não existe no dado real vira teste que mente.
+const _AGORA = Date.now();
 /* Lista de espera (painel de check-in `_renderStandbyPanel`, bracket.js) — os PRESENTES vêm
  * primeiro, e "presente" é decidido por UID e SÓ uid (dono, 18-jul: "uid only! não pode gravar
  * nada além do uid"). Os mapas t.checkedIn/t.absent guardam APENAS chave-uid pra quem tem conta.
@@ -30,7 +34,7 @@ const t = {
     { uid: 'uR2', displayName: 'Rodrigo' }
   ],
   // ⚠️ CHECK-IN GRAVADO SÓ POR UID — nenhuma chave-nome. Presente = uR2 (o 2º Rodrigo).
-  checkedIn: { 'uR2': 1000 },
+  checkedIn: { 'uR2': _AGORA },
   absent: {},
   matches: []
 };
@@ -40,7 +44,7 @@ ok(typeof W._renderStandbyPanel === 'function', '_renderStandbyPanel existe');
 ok(typeof W._idMapGet === 'function', '_idMapGet existe');
 
 // (1) presença por uid do OBJETO da entrada, sem chave-nome no mapa
-ok(W._idMapGet(t, t.checkedIn, { uid: 'uR2' }) === 1000, 'presença lida por uid (uR2) do objeto');
+ok(W._idMapGet(t, t.checkedIn, { uid: 'uR2' }) === _AGORA, 'presença lida por uid (uR2) do objeto');
 ok(W._idMapGet(t, t.checkedIn, { uid: 'uR1' }) == null, 'o outro homônimo (uR1) NÃO está presente');
 
 // (2) a REPRODUÇÃO da falha: resolver presença por NOME casa o homônimo ERRADO (uR1) → "ausente".

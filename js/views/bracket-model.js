@@ -1014,6 +1014,127 @@
     var p2 = window._formatSetForPlayer(set, 2, opts);
     return p1 + '-' + p2;
   };
+  // ─── ⭐ PLANO DE SETS DA PARTIDA — a FONTE ÚNICA do "melhor de N" ────────────────
+  //
+  // ORDEM DO DONO (23/ago/2026): _"esses cards de jogos estão perfeitos para disputas de
+  // 1 set, mas aqui temos melhor de 3. nesse caso precisava de mais uma linha indicando
+  // melhor de 3 - set 1 entre os botões e os nomes/placares. confirmou o placar do 1º set,
+  // esses números ficam na esquerda do box para o placar do set 2 que fica zerado até
+  // receber o placar do set 2. empatou em 1-1 os sets, o placar do set 1 na esquerda do
+  // placar do set 2 que por sua vez fica na esquerda do box para o Super Tie Break. Em cima
+  // dos box de placar deve aparecer set 1, set 2, super tie-break (10), conforme o caso."_
+  // E logo depois: _"já escreva também o código canônico para a melhor de 5"_.
+  //
+  // POR QUE UMA FUNÇÃO SÓ, e não um `if setsToWin===2` no render: **quatro** lugares
+  // precisam da MESMA resposta e nenhum deles pode divergir —
+  //   1. o card desenha as COLUNAS (quais existem, qual está em disputa, que largura);
+  //   2. o card desenha os RÓTULOS em cima delas (têm de casar coluna a coluna);
+  //   3. o Confirmar decide se fecha UM SET ou fecha O JOGO;
+  //   4. a validação sabe se o box em disputa é um set (6-4, tie-break em 6-6) ou um
+  //      SUPER TIE-BREAK (vai a 10 pontos, sem games e sem tie-break dentro).
+  // Duas leituras da mesma regra divergem na primeira mudança — e aqui divergir significa
+  // rótulo em cima de uma coluna que é outra coisa. [[feedback_resolution_one_logic]]
+  //
+  // ⛔ 1 SET NÃO PASSA POR AQUI (`multi:false`). O card de 1 set está do jeito que o dono
+  // quer; a coluna nova é só pra melhor de 3/5. Beach Tennis (`fixedSet`) idem.
+  //
+  // A CONTA (vale pra 3 e pra 5, sem caso especial):
+  //   bestOf   = setsToWin*2 - 1     → 2 ⇒ melhor de 3 · 3 ⇒ melhor de 5
+  //   super TB = o ÚLTIMO SET POSSÍVEL (índice bestOf-1), quando `scoring.superTiebreak`
+  //
+  // ⛔ "ÚLTIMO POSSÍVEL" NÃO É "DECISIVO", E A DIFERENÇA IMPORTA (correção do dono,
+  // 23/ago/2026): _"em melhor de 3 se ganhar 2 não tem super tie-break; em melhor de 5 se
+  // ganhar 3 não tem STB; assim, nem sempre o STB é o set decisivo e às vezes nem tem STB."_
+  // O set que DECIDE a partida é o que leva alguém a `setsToWin` — pode ser o Set 2 (2×0
+  // na de 3) ou o Set 4 (3×1 na de 5), e esses são sets COMUNS. O super tie-break só
+  // acontece quando a partida CHEGA ao último set, ou seja quando os sets empatam em
+  // `setsToWin-1`. Na maioria dos jogos ele nunca existe.
+  //
+  // É por isso que as colunas são só "o que JÁ FOI JOGADO + a que está EM DISPUTA": assim
+  // a régua nunca desenha, nem promete, um Super Tie-Break que talvez não aconteça. Quem
+  // vence 2×0 fecha com duas colunas (Set 1 · Set 2) e a de super tie-break não nasce.
+  //
+  // LARGURA POR TIPO, nunca por estado: a mesma coluna mede igual confirmada, em disputa
+  // ou em edição — é isso que mantém o rótulo em cima do box em TODOS os modos. Largura por
+  // estado quebraria o alinhamento no instante em que o set fosse confirmado.
+  //
+  // `sc` é o scoring EFETIVO do jogo (window._effectiveScoring — a fase manda,
+  // [[project_formato_da_partida_por_fase]]). opts.sets sobrepõe `m.sets` (o card usa isso
+  // pra desenhar a proposta PENDENTE, que carrega o array dela). opts.done força "acabou".
+  // Largura da coluna, em px, POR TIPO. Apertado de propósito: na melhor de 5 são CINCO
+  // colunas dividindo a linha com o nome da dupla, e cada px aqui sai do nome.
+  // Medido a 430px: set=34 + stb=56 deixa ~150px pro nome no pior caso (2-2 na de 5), que
+  // é onde o `.sp-name-fit` ainda encolhe a fonte sem cortar. Mexer aqui é mexer no nome.
+  window._SET_COL_W = { set: 34, stb: 56 };
+  window._matchSetPlan = function (sc, m, opts) {
+    opts = opts || {};
+    var _tr = function (k, fb) {
+      try { var v = (typeof window._t === 'function') ? window._t(k) : null; return (v && v !== k) ? v : fb; }
+      catch (e) { return fb; }
+    };
+    var setsToWin = parseInt(sc && sc.setsToWin, 10); if (!(setsToWin >= 1)) setsToWin = 1;
+    var usesSets = (typeof window._scoringUsesSets === 'function')
+      ? !!window._scoringUsesSets(sc) : !!(sc && (sc.type === 'sets' || sc.type === 'gsm'));
+    var multi = !!(usesSets && setsToWin > 1 && !(sc && sc.fixedSet));
+    var bestOf = setsToWin * 2 - 1;
+    var stbOn = multi && !!(sc && sc.superTiebreak);
+    var stbPts = parseInt(sc && sc.superTiebreakPoints, 10); if (!(stbPts >= 1)) stbPts = 10;
+
+    var played = Array.isArray(opts.sets) ? opts.sets.slice()
+      : (m && Array.isArray(m.sets) ? m.sets.slice() : []);
+    // Sets ganhos saem SEMPRE do array — nunca de m.setsWonP1/P2. Aqueles são espelho
+    // gravado; num jogo em curso o espelho pode estar meia-gravação atrás do array.
+    var wonP1 = 0, wonP2 = 0;
+    played.forEach(function (s) {
+      if (!s) return;
+      var a = Number(s.gamesP1) || 0, b = Number(s.gamesP2) || 0;
+      if (a > b) wonP1++; else if (b > a) wonP2++;
+    });
+
+    var kindAt = function (i) { return (stbOn && i === bestOf - 1) ? 'stb' : 'set'; };
+    var labelAt = function (i) {
+      return kindAt(i) === 'stb'
+        ? _tr('bracket.superTiebreak', 'Super Tie-Break') + ' (' + stbPts + ')'
+        : _tr('bracket.setN', 'Set') + ' ' + (i + 1);
+    };
+
+    var done = !!(opts.done || (m && m.winner) ||
+      wonP1 >= setsToWin || wonP2 >= setsToWin || played.length >= bestOf);
+
+    var cols = [], i;
+    for (i = 0; i < played.length; i++) {
+      cols.push({ i: i, kind: kindAt(i), label: labelAt(i), points: kindAt(i) === 'stb' ? stbPts : null,
+        state: 'done', set: played[i], w: window._SET_COL_W[kindAt(i)] });
+    }
+    var live = null;
+    if (multi && !done && played.length < bestOf) {
+      var li = played.length;
+      live = { i: li, kind: kindAt(li), label: labelAt(li), points: kindAt(li) === 'stb' ? stbPts : null,
+        state: 'live', set: null, w: window._SET_COL_W[kindAt(li)] };
+      cols.push(live);
+    }
+
+    // ⭐ A LINHA DE CIMA ANUNCIA O SUPER TIE-BREAK ASSIM QUE EMPATA. Ordem do dono
+    // (23/ago/2026), corrigindo a minha 1ª versão que dizia "Set 3": _"não pode ser set 3
+    // ou set 5. tem que estar super tie break assim que empata para as pessoas saberem que
+    // o próximo set é STB"_. O aviso tem que chegar ANTES de a pessoa entrar na quadra.
+    // Os PONTOS ficam de fora daqui ("Super Tie-Break", sem o "(10)"): o rótulo em cima do
+    // box, na mesma linha, já os mostra — e é o que faz o texto caber. Quando não cabe, a
+    // linha QUEBRA em duas (nunca reticências): perder metade do aviso é perder o aviso.
+    var head = _tr('bracket.bestOf', 'Melhor de') + ' ' + bestOf;
+    var atual = live
+      ? (live.kind === 'stb' ? _tr('bracket.superTiebreak', 'Super Tie-Break')
+                             : (_tr('bracket.setN', 'Set') + ' ' + (live.i + 1)))
+      : (wonP1 + ' × ' + wonP2);
+    return {
+      multi: multi, setsToWin: setsToWin, bestOf: bestOf,
+      superTiebreak: stbOn, superTiebreakPoints: stbPts,
+      played: played, setsWonP1: wonP1, setsWonP2: wonP2,
+      done: done, columns: cols, live: live,
+      headline: head + ' · ' + atual
+    };
+  };
+
   // v1.8.79: "quantos pontos viram 0/15/30/40/AD" saiu de dentro do overlay do
   // placar ao vivo e virou função PURA aqui, porque o REPLAY precisa da MESMA
   // conversão pra redesenhar uma partida gravada. Duas implementações da mesma

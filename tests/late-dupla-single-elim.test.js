@@ -1,3 +1,7 @@
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores). O `1`/`1000` que estava
+// aqui era atalho de teste, e atalho que não existe no dado real vira teste que mente.
+const _AGORA = Date.now();
 // GAP (dono, 17/jul): dupla FORMADA na lista de espera entra no Dupla Eliminatória
 // (Tier 1 upper via _integrateLateDuplas) mas NÃO na Eliminatória Simples. Causa:
 // _createExtraGamesFromWaitlist (tournaments-draw.js) filtrava "só indivíduos" (tirava
@@ -47,7 +51,7 @@ const hasDupla = (t, arr, dn) => arr.some((p) => (p && (p.displayName || p.name)
   const LA = latePair('LA', 'LB'), LC = latePair('LC', 'LD');
   t.standbyParticipants = [LA, LC];
   // mesmo-dia no harness (store._tournamentIsSameDay não carrega) → precisa presença
-  t.checkedIn = { 'LA / LB': 1, 'LC / LD': 1 };
+  t.checkedIn = { 'LA / LB': _AGORA, 'LC / LD': _AGORA };
 
   const before = R1(t).length;
   const ret = W._createExtraGamesFromWaitlist(t);
@@ -86,7 +90,7 @@ const hasDupla = (t, arr, dn) => arr.some((p) => (p && (p.displayName || p.name)
   const t = build();
   const LA = latePair('LA', 'LB');
   t.standbyParticipants = [LA];
-  t.checkedIn = { 'LA / LB': 1 };
+  t.checkedIn = { 'LA / LB': _AGORA };
 
   W._createExtraGamesFromWaitlist(t);
   const onBracket = R1(t).some((m) => m.p1 === 'LA / LB' || m.p2 === 'LA / LB');

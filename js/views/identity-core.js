@@ -133,13 +133,80 @@ window._idMapKey = function(t, who) {
   var nm = String(who == null ? '' : who);
   return { uid: window._memberUidByName(t, nm), name: nm };
 };
+// ─── ⭐ PRESENÇA CADUCA EM 24h — EM TODO O PROGRAMA ─────────────────────────────────
+//
+// Ordem do dono (23/ago/2026): _"essas presenças estão inconsistentes. uns tem presença
+// outros não e não consigo saber porque. Qualquer presença dada deveria caducar depois de
+// 24h. Isso deve resolver. Aplique isso sempre. Em todo o programa. Em torneios com rodadas
+// de mais de 24h a presença é irrelevante."_ E, corrigindo o meu vocabulário: _"não existe
+// marcação de ausência. Todos estão ausentes até marcar presença."_
+//
+// ⭐ O MODELO, ENTÃO, É UM SÓ: presença é um sinal POSITIVO e PERECÍVEL. Ninguém é marcado
+// ausente — quem não tem presença fresca simplesmente não tem presença. `t.absent` NÃO é
+// presença: é a máquina do W.O. (`_markAbsent` é o botão "Aplicar W.O."), tem vida própria
+// e NÃO caduca aqui. Ver [[project_wo_lives_in_four_places]].
+//
+// ⛔ POR QUE A VALIDADE MORA NA LEITURA, E NÃO NUMA VARREDURA QUE APAGA: apagar exigiria
+// alguém rodando a varredura na hora certa em todo dispositivo — e o que não rodou mente.
+// Filtrando na leitura, a presença vence sozinha, no relógio de quem lê, sem escrita
+// nenhuma. O dado gravado fica como está; o que muda é o que o programa ENXERGA.
+//
+// ⛔ E POR QUE AQUI DENTRO DO `_idMapGet`: este é o leitor ÚNICO de todo mapa por-pessoa do
+// torneio. Pendurar a validade nele faz TODO leitor de presença herdar a regra — inclusive
+// os que eu não conheço e os que ainda vão nascer. Espalhar `Date.now() - ts < 24h` pelos
+// call sites seria garantir que o próximo esqueça. [[feedback_resolution_one_logic]]
+//
+// Este arquivo é vendorado pra CF (copy-vendor), então o SERVIDOR aplica a mesma validade —
+// o sorteio "só entre os presentes" não pode ver presença de ontem. [[project_canon_runs_on_server]]
+window._PRESENCA_TTL_MS = 24 * 60 * 60 * 1000;
+// Mapas que são PRESENÇA (caducam). `absent` fica fora de propósito — é W.O., não presença.
+window._PRESENCA_MAPS = ['checkedIn', 'checkedInConfirmed'];
+// Um valor de presença ainda vale? O valor gravado é `Date.now()` desde sempre.
+// ⚠️ Valor SEM carimbo utilizável (true, 1, string vazia — formas legadas e de teste) conta
+// como VENCIDO: presença sem hora não dá pra provar que é de hoje, e o dono pediu que o que
+// não se sabe não seja exibido como presente.
+window._presencaFresca = function (val, agora) {
+  if (val == null || val === false) return false;
+  // string pode ser carimbo numérico ("1787512345678") OU data ISO — as duas formas
+  // existem em doc antigo, e `Date.parse` não entende a primeira.
+  var ts = NaN;
+  if (typeof val === 'number') ts = val;
+  else if (typeof val === 'string') { ts = /^\d+$/.test(val.trim()) ? Number(val) : Date.parse(val); }
+  if (!(ts > 946684800000)) return false;            // < ano 2000 = não é carimbo de verdade
+  return ((agora || Date.now()) - ts) < window._PRESENCA_TTL_MS;
+};
+// `map` é um dos mapas de presença DESTE torneio? (comparação por REFERÊNCIA — é o que
+// distingue `t.checkedIn` de `t.absent`/`t.vips` sem o chamador precisar dizer nada.)
+window._ehMapaDePresenca = function (t, map) {
+  if (!t || !map) return false;
+  for (var i = 0; i < window._PRESENCA_MAPS.length; i++) {
+    if (t[window._PRESENCA_MAPS[i]] === map) return true;
+  }
+  return false;
+};
+// Cópia do mapa de presença SÓ com o que ainda vale — pra quem conta, itera ou faz
+// Object.keys (o `_idMapGet` cuida de quem consulta UMA pessoa).
+// `qual` default 'checkedIn'. Devolve SEMPRE um objeto novo: ninguém escreve no filtrado.
+window._presencaViva = function (t, qual) {
+  var map = t && t[qual || 'checkedIn'];
+  if (!map || typeof map !== 'object') return {};
+  var agora = Date.now(), out = {}, ks = Object.keys(map);
+  for (var i = 0; i < ks.length; i++) {
+    if (window._presencaFresca(map[ks[i]], agora)) out[ks[i]] = map[ks[i]];
+  }
+  return out;
+};
+
 // Leitura: uid-key primeiro, nome só fallback (legado/informal). Retorna o valor
 // cru armazenado (ex.: Date.now()) pra ordenação por timestamp continuar valendo.
 window._idMapGet = function(t, map, who) {
   if (!map || who == null) return undefined;
   var k = window._idMapKey(t, who);
-  if (k.uid && map[k.uid] != null) return map[k.uid];
-  return k.name ? map[k.name] : undefined;
+  var v = (k.uid && map[k.uid] != null) ? map[k.uid] : (k.name ? map[k.name] : undefined);
+  if (v == null) return undefined;
+  // ⭐ presença vencida = presença que não existe (ver o bloco acima)
+  if (window._ehMapaDePresenca(t, map) && !window._presencaFresca(v)) return undefined;
+  return v;
 };
 window._idMapHas = function(t, map, who) { return !!window._idMapGet(t, map, who); };
 // Escrita: chaveia por uid quando há conta; migra (apaga a chave-nome legada).

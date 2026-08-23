@@ -25,9 +25,9 @@ function mkT(o) {
     participants: [{ uid: UID, displayName: NOME, name: NOME }],
     checkedIn: {}, absent: {}, checkedInConfirmed: {},
     standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: [], woHistory: [] };
-  if (o.present) t.checkedIn[UID] = 1;
+  if (o.present) t.checkedIn[UID] = Date.now();
   if (o.absent) t.absent[UID] = 1;
-  if (o.confirmed) t.checkedInConfirmed[UID] = 1;
+  if (o.confirmed) t.checkedInConfirmed[UID] = Date.now();
   return t;
 }
 // assinatura do estado que importa (presença/ausência), pra comparar N× vs 1×
@@ -42,13 +42,13 @@ function applyN(mk, fn, n) { const t = mk(); for (let i = 0; i < n; i++) fn(t); 
 // Cada caso: nome + estado inicial + mutator (como ele roda DENTRO da transação)
 const CASES = [
   { nome: 'presença: marcar PRESENTE', mk: () => mkT({}),
-    fn: (ft) => { W._idMapSet(ft, ft.checkedIn, { uid: UID }, 1); W._idMapDel(ft, ft.absent, { uid: UID }); W._idMapDel(ft, ft.checkedInConfirmed, { uid: UID }); } },
+    fn: (ft) => { W._idMapSet(ft, ft.checkedIn, { uid: UID }, Date.now()); W._idMapDel(ft, ft.absent, { uid: UID }); W._idMapDel(ft, ft.checkedInConfirmed, { uid: UID }); } },
   { nome: 'presença: DESMARCAR', mk: () => mkT({ present: true }),
     fn: (ft) => { W._idMapDel(ft, ft.checkedIn, { uid: UID }); } },
   { nome: 'autopresença: sair (verde+azul)', mk: () => mkT({ present: true, confirmed: true }),
     fn: (ft) => { W._idMapDel(ft, ft.checkedIn, { uid: UID }); W._idMapDel(ft, ft.checkedInConfirmed, { uid: UID }); } },
   { nome: 'autopresença: confirmar remoto (azul)', mk: () => mkT({}),
-    fn: (ft) => { W._idMapDel(ft, ft.absent, { uid: UID }); W._idMapSet(ft, ft.checkedInConfirmed, { uid: UID }, 1); W._idMapDel(ft, ft.checkedIn, { uid: UID }); } },
+    fn: (ft) => { W._idMapDel(ft, ft.absent, { uid: UID }); W._idMapSet(ft, ft.checkedInConfirmed, { uid: UID }, Date.now()); W._idMapDel(ft, ft.checkedIn, { uid: UID }); } },
   { nome: 'chamada: zerar tudo', mk: () => mkT({ present: true, absent: false }),
     fn: (ft) => { ft.checkedIn = {}; ft.absent = {}; ft.checkedInConfirmed = {}; } },
   // W.O. — pelo ALVO explícito (v1.3.154). Sem alvo seria toggle e falharia em nº par.
@@ -69,7 +69,7 @@ CASES.forEach(c => {
 // PROVA de que o teste TEM dente: um toggle clássico falha aqui
 console.log('\n── sanidade: um TOGGLE falha nesta trava (o teste tem dente) ──');
 (function () {
-  const toggle = (ft) => { if (W._idMapHas(ft, ft.checkedIn, { uid: UID })) W._idMapDel(ft, ft.checkedIn, { uid: UID }); else W._idMapSet(ft, ft.checkedIn, { uid: UID }, 1); };
+  const toggle = (ft) => { if (W._idMapHas(ft, ft.checkedIn, { uid: UID })) W._idMapDel(ft, ft.checkedIn, { uid: UID }); else W._idMapSet(ft, ft.checkedIn, { uid: UID }, Date.now()); };
   const uma = applyN(() => mkT({}), toggle, 1);
   ok(applyN(() => mkT({}), toggle, 2) !== uma, 'toggle aplicado 2× ≠ 1× — a trava PEGA esse padrão');
 })();

@@ -926,7 +926,7 @@ function renderBracket(container, tournamentId, isInline) {
       }
       var _prevBtn = (_hasHiddenInPhase && !_prevOpen)
         ? ''
-        : '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">' + (_prevOpen ? '✕ Ocultar anterior' : '👁 Fase anterior') + '</button>';
+        : '<button class="btn btn-micro btn-outline" onclick="window._togglePhasePrev(\'' + _tIdEsc2 + '\')" title="Ver resultados e chaves das fases anteriores (encerradas) sem sair da fase atual" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">' + (_prevOpen ? '✕ Ocultar anterior' : '👁 Fase anterior') + '</button>';
       var _prevSections = '';
       if (_prevOpen) {
         for (var _ppi = _curPh - 1; _ppi >= 0; _ppi--) {
@@ -1111,7 +1111,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
     : (t.format === 'Liga' || t.format === 'Ranking');
   var isSwissFmt = t.format === 'Suíço' || t.format === 'Suico' || t.format === 'Suíço Clássico';
   if (isLigaFmt || isSwissFmt) return '';
-  const ci = t.checkedIn;
+  const ci = window._presencaViva(t);   // presença caduca em 24h — [[project_presenca_caduca_em_24h]]
   const hasAnyCheckin = Object.keys(ci).length > 0;
   if (!hasAnyCheckin) return '';
 
@@ -1452,7 +1452,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     return 0;                         // nenhum presente → mantém a ordem original
   });
   var _canPair = isOrg || (t && t.manualPairing === 'open');
-  var ci = t.checkedIn || {};
+  var ci = window._presencaViva(t);
   var _nameFs = (window._INSCRITO_NAME_FONT_PX || 17);
 
   var _photoOf = function (nm) {
@@ -1849,7 +1849,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
 
   const getName = (p) => window._pName(p, '?');
   const _tIdSafe = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const ci = t.checkedIn || {};
+  const ci = window._presencaViva(t);
   const ab = t.absent || {};
 
   // Política de chamada da fila (Sorteio de Vagas): 'present' (padrão/legado) =
@@ -2322,7 +2322,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   const showBtnHtml = hiddenCount > 0 ? `
     <div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">
       <button onclick="window._showAllHiddenRounds('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"
-        style="position:sticky;top:120px;writing-mode:vertical-lr;text-orientation:mixed;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;"
+        style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;"
         onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='var(--text-bright)'"
         onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='var(--text-muted)'"
         title="Mostrar rodadas ocultas (${hiddenCount})">
@@ -3087,7 +3087,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     // v2.8.33: "Mostrar ocultas" fica à ESQUERDA das chaves, EM PÉ (vertical) e
     // STICKY no scroll vertical — top abaixo da topbar(60) + back-header fixo(~44).
     var showHiddenBtn = hiddenCount > 0
-      ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:112px;align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
+      ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
       : '';
     // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
     var _titleH4 = title ? '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
@@ -3881,7 +3881,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:1.1rem;">${_soIcon}</span>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
             <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">${_soDetail}</div>
           </div>
         </div>
@@ -3902,6 +3902,38 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // os valores propostos com banner "Pendente" + botões Aprovar/Rejeitar.
   const hasPending = !!m.pendingResult && !isDecided;
   const _pr = hasPending ? m.pendingResult : null;
+
+  // ─── ⭐ MELHOR DE 3 / MELHOR DE 5: UMA COLUNA POR SET ──────────────────────────────
+  // Ordem do dono (23/ago/2026): a linha "Melhor de 3 · Set 1" entre os botões e os nomes,
+  // e UM BOX POR SET — confirmou o set 1, o número dele fica à ESQUERDA do box do set 2,
+  // que nasce zerado; empatou 1-1, os dois ficam à esquerda do box do Super Tie-Break. Os
+  // rótulos (Set 1 · Set 2 · Super Tie-Break (10)) vão EM CIMA dos boxes.
+  //
+  // ⛔ O CARD DE 1 SET NÃO MUDA. `_plan.multi` é falso em 1 set e em Beach Tennis
+  // (`fixedSet`), e todo o caminho antigo segue intacto — palavras do dono: _"esses cards
+  // estão perfeitos para disputas de 1 set"_. Melhor de 3 e melhor de 5 saem da MESMA
+  // conta (setsToWin*2-1), sem caso especial pra nenhuma das duas.
+  //
+  // A régua das colunas mora em window._matchSetPlan (bracket-model.js) — é ela que diz
+  // quais colunas existem, qual está em disputa, o rótulo e a LARGURA de cada uma. O card
+  // só desenha. [[project_placar_por_sets_no_card]]
+  const _plan = (typeof window._matchSetPlan === 'function')
+    ? window._matchSetPlan(_msc, m, {
+        // PENDENTE desenha o array da PROPOSTA (o placar que espera aprovação), não o do
+        // jogo — e nunca abre coluna em disputa: quem decide agora é o outro lado.
+        sets: (hasPending && _pr && Array.isArray(_pr.sets)) ? _pr.sets : null,
+        done: hasPending || undefined
+      })
+    : null;
+  // W.O. e BYE ficam FORA: neles o box não carrega placar de set, carrega a palavra
+  // "W.O." / "Avança direto" — a coluna engoliria a informação. Jogo decidido sem sets
+  // gravados (placar simples, edição antiga) idem: `columns` vem vazio e cai no caminho
+  // de sempre em vez de desenhar uma linha de rótulos sobre nada.
+  const _multiSet = !!(_plan && _plan.multi) && !isByeMatch && !hasTBD && !m.wo && _plan.columns.length > 0;
+  // Jogo JÁ EM CURSO pelo card (set 1 confirmado, sem vencedor): o "Ao Vivo" sai de cena.
+  // Os dois caminhos escrevem o MESMO m.sets e o placar ao vivo começa do zero — abrir um
+  // depois do outro apagaria os sets já confirmados. Um jogo, uma porta.
+  const _setsEmCurso = !!(_multiSet && _plan.played.length > 0 && !isDecided && !hasPending);
 
   // Check-in status for match readiness
   const p1ci = _getCheckInStatus(tId, m.p1);
@@ -4018,6 +4050,61 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         oninput="window._highlightWinner('${_esc(m.id)}')">`
     : '';
 
+  // ── as COLUNAS do melhor de N ────────────────────────────────────────────────────
+  // Rótulo e box saem do MESMO array (_plan.columns) e da MESMA largura (`--w`, por TIPO
+  // de coluna). É por construção que o rótulo fica em cima do box: não há um segundo
+  // lugar decidindo largura pra divergir do primeiro.
+  const _setColOpen = (c, extra) => '<div class="sp-set-col' + (extra || '') + '" style="--w:' + c.w + 'px;">';
+  // Número do set já confirmado: verde pra quem VENCEU aquele set, vermelho pra quem
+  // perdeu. A tarja da linha continua respondendo outra pergunta — "o JOGO já fechou?" —
+  // e segue neutra enquanto não há vencedor. [[feedback_contraste_sempre_nos_dois_temas]]
+  const _setNumHtml = (c, side) => {
+    const g = Number(side === 1 ? c.set.gamesP1 : c.set.gamesP2) || 0;
+    const o = Number(side === 1 ? c.set.gamesP2 : c.set.gamesP1) || 0;
+    const cor = g > o ? '#4ade80' : (o > g ? '#f87171' : 'var(--text-muted)');
+    const txt = (typeof window._formatSetForPlayer === 'function')
+      ? window._formatSetForPlayer(c.set, side, { html: true })
+      : String(g);
+    return '<span class="sp-set-num" style="color:' + cor + (hasPending ? ';font-style:italic;' : '') + '">' + txt + '</span>';
+  };
+  // A coluna EM DISPUTA. Os ids seguem sendo s1-/s2- e tb1-/tb2-: são a assinatura que
+  // _highlightWinner e _saveResultInline já leem, e trocá-los por ids com índice quebraria
+  // os dois sem ganhar nada. O tie-break só existe em coluna de SET — super tie-break vai
+  // a 10 pontos corridos, não tem tie-break dentro dele.
+  const _setLiveHtml = (c, side) => {
+    if (!showInputs) return '<span class="sp-set-zero">0</span>';
+    const tb = (c.kind === 'set' && _tbEnabled)
+      ? '<input type="number" id="tb' + side + '-' + m.id + '" min="0" placeholder="tb" title="Tie-break"' +
+        ' class="sp-set-tb" style="display:none;" oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">'
+      : '';
+    return '<input type="number" id="s' + side + '-' + m.id + '" min="0" placeholder="0" class="sp-set-inp sp-set-inp--live"' +
+      ' oninput="window._highlightWinner(\'' + _esc(m.id) + '\')">' + tb;
+  };
+  // Set confirmado é CLICÁVEL pra corrigir enquanto o jogo não fechou — sem isso um 6-4
+  // digitado errado no set 1 fica preso até o fim da partida.
+  const _podeCorrigirSet = !isDecided && !hasPending && canEnterResult && !_readOnly;
+  const _setCellsHtml = (side) => _plan.columns.map(function (c) {
+    if (c.state === 'live') return _setColOpen(c) + _setLiveHtml(c, side) + '</div>';
+    const fix = _podeCorrigirSet
+      ? ' sp-set-col--fix" title="Corrigir ' + window._safeHtml(c.label) + '"' +
+        ' onclick="event.stopPropagation();window._reopenSet(\'' + _esc(tId) + '\',\'' + _esc(m.id) + '\',' + c.i + ')'
+      : '';
+    return '<div class="sp-set-col' + fix + '" style="--w:' + c.w + 'px;">' + _setNumHtml(c, side) + '</div>';
+  }).join('');
+  const _setLabelsHtml = () => _plan.columns.map(function (c) {
+    return _setColOpen(c) + '<span class="sp-set-lbl' + (c.state === 'live' ? ' sp-set-lbl--live' : '') + '">' +
+      window._safeHtml(c.label) + '</span></div>';
+  }).join('');
+  // A LINHA NOVA: "MELHOR DE 3 · SET 2" à esquerda, os rótulos das colunas à direita —
+  // em cima dos boxes, no mesmo recuo de 10px que a linha do jogador usa.
+  const _setHeadHtml = _multiSet
+    ? '<div id="sethead-' + m.id + '" class="sp-set-head">' +
+        '<span class="sp-set-head-ttl">' + window._safeHtml(_plan.headline) + '</span>' +
+        '<div class="sp-set-grid">' + _setLabelsHtml() + '</div>' +
+      '</div>'
+    : '';
+  const _setGridHtml = (side) => '<div class="sp-set-grid">' + _setCellsHtml(side) + '</div>';
+
   const p1Score = showInputs
     ? `<input type="number" id="s1-${m.id}" min="0" placeholder="0"
         class="sp-mc-inp"
@@ -4092,19 +4179,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)))}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)))}</div>
       ${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
-        ${showInputs ? p1Score : (p1ScoreVal || '')}
+        ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
       </div>
     </div>`;
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)))}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)))}</div>
       ${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
-        ${showInputs ? p2Score : (p2ScoreVal || '')}
+        ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
       </div>
     </div>`;
 
@@ -4112,7 +4199,8 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   // Format set scores for winner badge
   const _isFixedSetMatch = m.fixedSet || useFixedSet;
-  const setsDisplay = isDecided && useSets && m.sets && m.sets.length > 0
+  // ⛔ Em melhor de N as colunas JÁ mostram set a set — repetir embaixo é ruído.
+  const setsDisplay = _multiSet ? '' : isDecided && useSets && m.sets && m.sets.length > 0
     ? _isFixedSetMatch
       ? (() => {
           var _s0 = m.sets[0];
@@ -4332,7 +4420,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   );
   // v2.7.57: botões do header do card no PADRÃO do app (.btn + cor + .btn-micro,
   // sólido com volume) — não mais etiqueta flat com estilo inline.
-  const liveBtn = _canScoreLive
+  const liveBtn = (_canScoreLive && !_setsEmCurso)
     ? `<button class="btn btn-live btn-micro" onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
     : '';
 
@@ -4519,7 +4607,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
           <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${readyBadge}
         </div>
-        <div id="header-btns-${m.id}" class="btn-row" class="sp-mc-acts">${_headerActions}</div>
+        <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>
       </div>`;
   }
 
@@ -4545,7 +4633,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     }
     try {
       var _uidsFor = function (slot) {
-        return window._slotUidsPositional ? window._slotUidsPositional(m, slot)
+        return window._slotUidsPositional ? window._slotUidsPositional(m, slot, t)
           : (slot === 'p1' ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids));
       };
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p1, _uidsFor('p1')) : m.p1);
@@ -4576,6 +4664,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
+      ${_setHeadHtml}
       ${p1Row}
       ${vsRow}
       ${p2Row}
@@ -4721,7 +4810,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // v1.8.65: PRESENÇA na classificação do grupo — mesma regra do outro render de
     // grupo Rei/Rainha (rota Liga, _renderGroup): quem marcou "Cheguei" ganha bolinha
     // verde + nome verde. checkedIn E não absent; por uid quando há conta.
-    var _ciMonSt = t.checkedIn || {}, _abMonSt = t.absent || {};
+    var _ciMonSt = window._presencaViva(t), _abMonSt = t.absent || {};
     var _monStPresente = function (s) {
       if (typeof window._idMapHas !== 'function') return false;
       var who = { uid: s.uid || '', name: s.name };
@@ -5087,7 +5176,7 @@ function _buildSwissPastColumns(t, swissPastCols) {
     cols.push(
       '<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">' +
         '<button onclick="window._showAllHiddenSwissPast(\'' + _tIdEsc + '\')" ' +
-          'style="position:sticky;top:120px;writing-mode:vertical-lr;text-orientation:mixed;background:rgba(59,130,246,0.08);border:1px dashed rgba(59,130,246,0.3);color:#60a5fa;border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
+          'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(59,130,246,0.08);border:1px dashed rgba(59,130,246,0.3);color:#60a5fa;border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
           'onmouseover="this.style.background=\'rgba(59,130,246,0.15)\'" ' +
           'onmouseout="this.style.background=\'rgba(59,130,246,0.08)\'" ' +
           'title="Mostrar rodadas Suíças ocultas (' + hiddenCount + ')">' +
@@ -5568,7 +5657,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // caíam no NOME guardado no marcador, que ENVELHECE (quem troca o displayName
             // vira outra pessoa pro chip) e não distingue homônimo. Subi a leitura do uid
             // pra cá e ela passa a decidir os dois. Ver [[project_uid_identity_canon_locked]].
-            var _slotU = (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids));
+            var _slotU = (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids));
             var _nmPill = window._resolveSideLive(t, m.p1, _slotU);
             var _uidPill = (Array.isArray(_slotU) ? _slotU[0] : _slotU) || m.p1Uid || '';
             // Com uid, "sou eu" é comparação de uid e ponto. Sem uid (fictício — quem não
@@ -5651,7 +5740,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
-            if (_sameDayRR) { var _ciRR = t.checkedIn || {}, _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
+            if (_sameDayRR) { var _ciRR = window._presencaViva(t), _abRR = t.absent || {}; _eligRR = _wlNames.filter(function(n){ return window._idMapHas(t, _ciRR, n) && !window._idMapHas(t, _abRR, n); }).length; }
             var _need = (4 - (_eligRR % 4)) % 4; if (_need === 0 && _eligRR === 0) _need = 4;
             var _hint = (_need === 0) ? 'completou 4 — formando grupo…' : ('faltam ' + _need + (_sameDayRR ? ' presente(s)' : '') + ' para formar o próximo grupo');
             // v1.7.4: TOGGLE "Equilibrado" — ligado (default) o grupo novo formado da espera
@@ -5946,7 +6035,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // que não diz QUEM está e quem não. Mesma leitura da elegibilidade da
             // espera (linha ~5030): está em checkedIn E não está em absent — por uid
             // quando há conta, nome só pro fictício (_idMapGet resolve os dois).
-            var _ciGst = t.checkedIn || {}, _abGst = t.absent || {};
+            var _ciGst = window._presencaViva(t), _abGst = t.absent || {};
             var _gstPresente = function (s) {
               if (typeof window._idMapHas !== 'function') return false;
               var who = { uid: s.uid || '', name: s.name };
@@ -6382,7 +6471,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + _soBg2 + ';border:1px solid ' + _soBd2 + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
               '<span style="flex-shrink:0;">' + _soIc2 + '</span>' +
-              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids))) || m.p1) + '</span>' +
+              '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) || m.p1) + '</span>' +
               '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + _soCol + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
             '</div>' +
           '</div>';
@@ -6406,11 +6495,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:#94a3b8;text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
         prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
           '<div style="' + rowS + '">' +
-            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids))) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) || 'TBD') + '</span>' +
             '<span style="' + numS + (p1Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
           '</div>' +
           '<div style="' + rowS + 'margin-top:3px;">' +
-            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids))) || 'TBD') + '</span>' +
+            '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids))) || 'TBD') + '</span>' +
             '<span style="' + numS + (p2Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
           '</div>' +
           footer +
@@ -6638,7 +6727,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     var _showHiddenBtnHtml = _hiddenSwissCount > 0
       ? '<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">' +
           '<button onclick="window._showAllHiddenRounds(\'' + _tIdEsc + '\')" ' +
-            'style="position:sticky;top:120px;writing-mode:vertical-lr;text-orientation:mixed;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
+            'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
             'onmouseover="this.style.background=\'rgba(255,255,255,0.1)\';this.style.color=\'var(--text-bright)\'" ' +
             'onmouseout="this.style.background=\'rgba(255,255,255,0.05)\';this.style.color=\'var(--text-muted)\'" ' +
             'title="Mostrar rodadas ocultas (' + _hiddenSwissCount + ')">' +

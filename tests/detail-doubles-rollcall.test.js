@@ -10,6 +10,10 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores). O `1`/`1000` que estava
+// aqui era atalho de teste, e atalho que não existe no dado real vira teste que mente.
+const _AGORA = Date.now();
 const { sandbox } = require('./render-harness');
 
 // _rollCallPresenceCtx vive em participants.js (não carregado pela render-harness). Carrega por cima.
@@ -60,7 +64,7 @@ var dP = W._buildDoublesInscritosSection(t, { isOrg: true, drawDone: false, chro
 ok(dP.html.indexOf('Carla') === -1, "filtro 'present' esconde solo não-presente (Carla)");
 
 // (4) marca Carla presente por UID → filtro 'present' passa a mostrá-la.
-W._idMapSet(t, t.checkedIn, { uid: 'uC', displayName: 'Carla' }, 1000);
+W._idMapSet(t, t.checkedIn, { uid: 'uC', displayName: 'Carla' }, _AGORA);
 var ctxP2 = W._rollCallPresenceCtx(t, { isOrg: true, active: true });
 var dP2 = W._buildDoublesInscritosSection(t, { isOrg: true, drawDone: false, chrome: true, cardPresence: ctxP2.cardPresence, memberPresence: ctxP2.memberPresence });
 ok(dP2.html.indexOf('Carla') !== -1, "Carla presente (uid uC) aparece no filtro 'present'");

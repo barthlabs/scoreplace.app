@@ -436,6 +436,18 @@ body.hamburger-open .topbar {
    misturam botões com <h3>/badges, e esticar o título mudaria o layout. Aqui só
    os .btn esticam; o resto mantém o alinhamento do container.
    O !important vence o align-self implícito herdado do align-items inline. */
+/* 2.0.26 — .btn-row É a linha, não só um rótulo.
+   A regra de altura igual só funciona se o container FOR flex: se ele cai em layout
+   de bloco, os `.btn` (inline-flex) passam a se alinhar pela BASE do texto e o botão
+   de 2 linhas ("Aplicar / W.O.") nasce deslocado pra cima dos vizinhos de 1 linha —
+   mesma altura, topos diferentes. Foi exatamente o que aconteceu no cabeçalho do card
+   de jogo, onde um `class=` duplicado derrubou a classe que trazia o `display:flex`
+   (o parser de HTML fica com o PRIMEIRO `class` e joga o segundo fora, sem erro).
+   Com o display aqui, marcar `.btn-row` basta — a linha alinha topo E base sozinha.
+   Quem quiser centralizar/espaçar segue sobrescrevendo por inline (inline vence classe);
+   o `align-self:stretch !important` abaixo é que garante a altura do MAIS ALTO
+   mesmo nessas linhas com `align-items:center`. */
+.btn-row { display: flex; align-items: stretch; }
 .btn-row > .btn { align-self: stretch !important; }
 /* E os botoes ENCOLHEM em vez de a linha quebrar. O `.btn` global tem
    white-space:nowrap, entao ele nao cede largura: quando a soma passa do container o
@@ -2334,6 +2346,39 @@ html, body,
 .sp-mc-vs{text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;}
 .sp-mc-acts{display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
 .sp-mc-sc{display:flex;align-items:center;flex-shrink:0;}
+/* ─── ⭐ MELHOR DE 3 / MELHOR DE 5 no card do jogo (2.0.26) ────────────────────────
+   Uma COLUNA por set: os já confirmados à esquerda, o em disputa na ponta direita, e
+   os rótulos ("Set 1", "Super Tie-Break (10)") na linha de cima, cada um em cima do
+   seu box. Ver [[project_placar_por_sets_no_card]].
+
+   ⛔ A LARGURA É POR TIPO DE COLUNA, NUNCA POR ESTADO. `--w` vem do plano
+   (window._SET_COL_W: set=42, stb=62) e é o MESMO valor no rótulo e nos dois boxes.
+   Se a coluna encolhesse ao ser confirmada, o rótulo sairia de cima do box no exato
+   instante em que o dono confirma o set — que é quando ele está olhando. Por isso o
+   set confirmado ocupa a mesma largura do set em disputa.
+
+   O rótulo pode quebrar em 2 linhas ("Super Tie-Break (10)" não cabe em 62px numa
+   linha só) — daí `align-items:flex-end` na linha: os rótulos ficam colados no box,
+   independentemente de quantas linhas cada um ocupa. */
+.sp-set-head{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;padding:0 10px;margin:2px 0 5px;}
+/* ⛔ SEM reticências: a linha ANUNCIA o super tie-break assim que os sets empatam, e um
+   aviso cortado pela metade não avisa. Quando não cabe numa linha, quebra em duas —
+   o `align-items:flex-end` da linha mantém os rótulos colados nos boxes de qualquer jeito. */
+.sp-set-head-ttl{font-size:0.58rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-muted);line-height:1.15;min-width:0;}
+.sp-set-grid{display:flex;align-items:flex-end;gap:3px;flex-shrink:0;}
+.sp-set-col{width:var(--w,34px);flex:0 0 var(--w,34px);text-align:center;}
+.sp-set-lbl{display:block;font-size:0.46rem;font-weight:800;line-height:1.05;letter-spacing:0.02em;text-transform:uppercase;color:var(--text-muted);}
+.sp-set-lbl--live{color:#38bdf8;}
+.sp-set-num{display:block;font-weight:800;font-size:1rem;line-height:1.2;}
+/* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */
+.sp-set-zero{display:block;font-weight:800;font-size:1rem;line-height:1.2;color:rgba(255,255,255,0.3);}
+.sp-set-inp{width:100%;box-sizing:border-box;text-align:center;font-size:0.9rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 2px;}
+.sp-set-inp--live{border-color:rgba(56,189,248,0.55);}
+.sp-set-tb{width:100%;box-sizing:border-box;margin-top:3px;text-align:center;font-size:0.68rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
+/* Set confirmado é CLICÁVEL pra corrigir (só enquanto o jogo não fechou) — o cursor é
+   o único aviso, porque um ✕ por coluna encheria a linha de ruído. */
+.sp-set-col--fix{cursor:pointer;border-radius:6px;}
+.sp-set-col--fix:hover{background:rgba(255,255,255,0.06);}
 .sp-mc-inp{width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;}
 .sp-av{width:var(--sp-av,20px);height:var(--sp-av,20px);border-radius:50%;flex-shrink:0;object-fit:cover;}
 .sp-av-p{opacity:0.95;}

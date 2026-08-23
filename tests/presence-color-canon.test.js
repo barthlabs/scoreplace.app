@@ -11,6 +11,9 @@
 //     concordam — era a raiz do print: dupla "Ausente" aparecia VERDE por não pintar o pendente)
 // Fonte única: window._PRESENCE_TONES / _presenceCardStyle / _presenceTextColor (store.js).
 const H = require('./render-harness');
+// ⏱️ Presença tem CARIMBO e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// `absent` NÃO caduca — é W.O., e é dele que sai o ÂMBAR de parcial aqui.
+const _AGORA = Date.now();
 const W = H.sandbox;
 require('./headless').load('participants.js');   // _rollCallPresenceCtx
 
@@ -66,13 +69,13 @@ const SOLO = { uid: 's1', displayName: 'S1', name: 'S1' };
 const ctxOf = (t) => W._rollCallPresenceCtx(t, { isOrg: true, active: true });
 
 // dupla com os DOIS presentes → VERDE escuro
-let t = mkT({ a1: 1, b1: 1 });
+let t = mkT({ a1: _AGORA, b1: _AGORA });
 let st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(GREEN.test(st) && !BLUE.test(st), 'dupla com os DOIS presentes → VERDE');
 ok(st === W._presenceCardStyle('present', 'pair'), 'dupla presente usa o tom ESCURO de dupla');
 
 // dupla com UM presente e outro ausente → ÂMBAR (parcial) — o caso do print
-t = mkT({ a1: 1 }, { b1: 1 });
+t = mkT({ a1: _AGORA }, { b1: 1 });
 st = ctxOf(t).cardPresence(PAIR).styleExtra;
 ok(st === W._presenceCardStyle('partial', 'pair'), '✅ dupla com 1 presente → ÂMBAR (parcial), não azul');
 ok(st !== W._presenceCardStyle('absent', 'pair'), 'parcial NÃO é igual a "nenhum presente" (era o bug do print)');
@@ -91,7 +94,7 @@ ok(st === W._presenceCardStyle('absent', 'pair'), 'dupla não marcada usa o tom 
 // individual presente → VERDE claro; ausente → AZUL claro.
 // (a presença do SOLO é resolvida por _pName → chaveia pelo NOME neste mock; com uid o card
 //  passa o uid e o _idMapHas resolve igual — o que importa aqui é o TOM aplicado por estado.)
-t = mkT({ S1: 1 }); t.participants = [SOLO];
+t = mkT({ S1: _AGORA }); t.participants = [SOLO];
 st = ctxOf(t).cardPresence(SOLO).styleExtra;
 ok(st === W._presenceCardStyle('present', 'solo'), 'individual presente → VERDE tom CLARO');
 ok(GREEN.test(st) && !BLUE.test(st), 'individual presente é VERDE mesmo');

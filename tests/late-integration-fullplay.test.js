@@ -60,7 +60,7 @@ function simulate(t) {
 function runMode(label, resolution, expectByes, expRounds) {
   console.log('\n== ' + label + ' ==');
   const t = build8(resolution);
-  t.checkedIn['L1'] = 1; t.checkedIn['L2'] = 1;
+  t.checkedIn['L1'] = Date.now(); t.checkedIn['L2'] = Date.now();
   t.standbyParticipants.push({ p1Name: 'L1', p1Uid: '', p2Name: 'L2', p2Uid: '', displayName: 'L1 / L2', name: 'L1 / L2', _lateJoin: true });
   ok(W._createExtraGamesFromWaitlist(t) === 1, label + ': integrou a dupla tardia');
 
@@ -107,7 +107,7 @@ ok(W._createExtraGamesFromWaitlist(t2) === 0, 'dupla SEM check-in NÃO integra')
 // ── Par por UID (presente por membro) → integra e fecha ──
 console.log('== UID ==');
 const t3 = build8();
-t3.checkedIn['lu1'] = 1; t3.checkedIn['lu2'] = 1;
+t3.checkedIn['lu1'] = Date.now(); t3.checkedIn['lu2'] = Date.now();
 t3.standbyParticipants.push({ p1Name: '', p1Uid: 'lu1', p2Name: '', p2Uid: 'lu2', _lateJoin: true });
 ok(W._createExtraGamesFromWaitlist(t3) === 1, 'dupla por UID presente integra');
 simulate(t3);
@@ -119,7 +119,7 @@ ok(t3.matches.find(m => m.round === 3)?.winner, 'UID: final tem campeão');
 // cobria _createExtraGamesFromWaitlist e esse caminho passava sem gate.
 console.log('== 2ª dupla preenche o "a definir" ==');
 const t4 = build8();
-t4.checkedIn['L1'] = 1; t4.checkedIn['L2'] = 1; t4.checkedIn['P1'] = 1; t4.checkedIn['I1'] = 1;
+t4.checkedIn['L1'] = Date.now(); t4.checkedIn['L2'] = Date.now(); t4.checkedIn['P1'] = Date.now(); t4.checkedIn['I1'] = Date.now();
 t4.standbyParticipants.push({ p1Name: 'L1', p2Name: 'L2', p1Uid: '', p2Uid: '', displayName: 'L1 / L2', name: 'L1 / L2', _lateJoin: true });
 ok(W._createExtraGamesFromWaitlist(t4) === 1, '1ª dupla cria o jogo "dupla vs a-definir"');
 const _ad = t4.matches.find(m => m.round === 0 && m.repFill && m.repFill.length);

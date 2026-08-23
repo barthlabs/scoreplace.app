@@ -25,7 +25,7 @@ const UID = 'u1', NOME = 'Fulano';
 function mkT(present) {
   const t = { id: 'IDEMP', format: 'Eliminatórias Simples', teamSize: 2, participants: [{ uid: UID, displayName: NOME, name: NOME }],
     checkedIn: {}, absent: {}, checkedInConfirmed: {}, standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: [] };
-  if (present) t.checkedIn[UID] = 1;
+  if (present) t.checkedIn[UID] = Date.now();
   return t;
 }
 const isPresent = (t) => W._idMapHas(t, t.checkedIn || {}, { uid: UID, displayName: NOME });
@@ -65,7 +65,7 @@ console.log('── mutator de presença é IDEMPOTENTE (retry não inverte) ─
 // PROVA do furo antigo: um toggle sobre o estado fresco inverte a cada aplicação
 (function () {
   const t = mkT(false);
-  const toggleAntigo = (ft) => { if (W._idMapHas(ft, ft.checkedIn, { uid: UID })) W._idMapDel(ft, ft.checkedIn, { uid: UID }); else W._idMapSet(ft, ft.checkedIn, { uid: UID }, 1); };
+  const toggleAntigo = (ft) => { if (W._idMapHas(ft, ft.checkedIn, { uid: UID })) W._idMapDel(ft, ft.checkedIn, { uid: UID }); else W._idMapSet(ft, ft.checkedIn, { uid: UID }, Date.now()); };
   toggleAntigo(t); toggleAntigo(t);   // 2 aplicações (local + 1 retry)
   ok(isPresent(t) === false, 'toggle ANTIGO aplicado 2× DESMARCA — era exatamente o furo');
 })();

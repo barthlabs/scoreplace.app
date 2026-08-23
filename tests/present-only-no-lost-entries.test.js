@@ -1,3 +1,7 @@
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores). O `1`/`1000` que estava
+// aqui era atalho de teste, e atalho que não existe no dado real vira teste que mente.
+const _AGORA = Date.now();
 // "SÓ ENTRE OS PRESENTES" NÃO PODE PERDER/DUPLICAR NINGUÉM (dono, SB Casais 20/jul: "escolhi só
 // entre os presentes e meteu os ausentes na chave — e pior, uns ausentes entraram e outros sumiram").
 // RAIZ: entrada FICTÍCIA {p1Name:'X'} (nome em p1Name, SEM displayName nem uid) → _entryIdKey='' e
@@ -30,7 +34,7 @@ function build() {
   ] };
 }
 var t = build();
-t.checkedIn.u1 = 1; t.checkedIn.u2 = 1; // só os 2 reais presentes
+t.checkedIn.u1 = _AGORA; t.checkedIn.u2 = _AGORA; // só os 2 reais presentes
 var before = t.participants.length;
 var moved = W._moveAbsentToWaitlistForPresentDraw(t);
 ok(moved === 3, 'moveu os 3 não-presentes (got ' + moved + ')');
@@ -50,7 +54,7 @@ ok(t.waitlist.length === 3, 'waitlist NÃO duplicou na 2ª passada (got ' + t.wa
 var t2 = { id: 'T2', checkedIn: {}, absent: {}, waitlist: [], participants: [
   { p1Uid: 'a1', p2Uid: 'b1' }, { p1Uid: 'a2', p2Uid: 'b2' }, { p1Uid: 'a3', p2Uid: 'b3' }
 ] };
-t2.checkedIn.a1 = 1; t2.checkedIn.b1 = 1; // dupla1 presente; dupla2 sem marca; dupla3 sem marca
+t2.checkedIn.a1 = _AGORA; t2.checkedIn.b1 = _AGORA; // dupla1 presente; dupla2 sem marca; dupla3 sem marca
 var mv2 = W._moveAbsentToWaitlistForPresentDraw(t2);
 ok(mv2 === 2 && t2.participants.length === 1 && t2.waitlist.length === 2, 'duplas só-uid: 1 presente fica, 2 vão pra espera, total preservado (parts=' + t2.participants.length + ' wl=' + t2.waitlist.length + ')');
 
@@ -62,7 +66,7 @@ var t3 = { id: 'T3', checkedIn: {}, absent: {}, waitlist: [], participants: [
   { p1Uid: 'a2', p2Uid: 'b2' }, // 100% ausente
   { p1Uid: 'a3', p2Uid: 'b3' }  // MISTA: a3 presente, b3 ausente
 ] };
-t3.checkedIn.a1 = 1; t3.checkedIn.b1 = 1; t3.checkedIn.a3 = 1; // dupla3 só a3
+t3.checkedIn.a1 = _AGORA; t3.checkedIn.b1 = _AGORA; t3.checkedIn.a3 = _AGORA; // dupla3 só a3
 W._moveAbsentToWaitlistForPresentDraw(t3);
 ok(t3.participants.length === 1 && isPair(t3.participants[0]), 'só a dupla presente fica na chave (dupla, não solo)');
 ok(t3.waitlist.length === 2, '2 duplas na espera (a ausente + a mista)');

@@ -32,14 +32,14 @@ ok(html.indexOf('toggle-switch') !== -1, '1: usa o toggle canônico');
 
 // (2) estado VERDE (presente) → toggle marcado + rótulo "Presente".
 var tG = mkT();
-W._idMapSet(tG, tG.checkedIn, { uid: 'uA', displayName: 'Ana' }, 1);
+W._idMapSet(tG, tG.checkedIn, { uid: 'uA', displayName: 'Ana' }, Date.now());
 var hG = W._myPresenceCard(tG);
 ok(hG.indexOf('checked') !== -1, '2: verde → toggle checked');
 ok(hG.indexOf('Presente') !== -1, '2: verde → rótulo "Presente"');
 
 // (3) estado AZUL (confirmado) → toggle marcado + rótulo "Confirmado".
 var tB = mkT();
-W._idMapSet(tB, tB.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, 1);
+W._idMapSet(tB, tB.checkedInConfirmed, { uid: 'uA', displayName: 'Ana' }, Date.now());
 var hB = W._myPresenceCard(tB);
 ok(hB.indexOf('checked') !== -1, '3: azul → toggle checked');
 ok(hB.indexOf('Confirmado') !== -1, '3: azul → rótulo "Confirmado"');

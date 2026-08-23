@@ -31,7 +31,7 @@ function mkT() {
       { uid: 'c', displayName: 'Carla' },
       { uid: 'd', displayName: 'Diego' }
     ],
-    checkedIn: { a: 1, b: 1 },     // só 2 presentes
+    checkedIn: { a: Date.now(), b: Date.now() },     // só 2 presentes
     absent: { c: 1 },              // 1 marcado AUSENTE pelo organizador
     waitlist: [], standbyParticipants: [], teamOrigins: {}, matches: []
   };

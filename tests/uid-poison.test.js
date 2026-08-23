@@ -28,6 +28,10 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+// ⏱️ Presença tem CARIMBO DE HORA e caduca em 24h ([[project_presenca_caduca_em_24h]]).
+// Produção grava sempre Date.now() (medido: 317/317 valores). O `1`/`1000` que estava
+// aqui era atalho de teste, e atalho que não existe no dado real vira teste que mente.
+const _AGORA = Date.now();
 
 const sandbox = {};
 sandbox.window = sandbox;
@@ -155,12 +159,12 @@ console.log('\nPresença — dupla com nome envenenado:');
 {
   const t = { id: 'T3', enrollmentMode: 'teams', teamSize: 2,
               participants: [{ p1Uid: 'a1', p2Uid: 'b1' }],
-              checkedIn: { a1: 1, b1: 1 }, absent: {}, waitlist: [] };
+              checkedIn: { a1: Date.now(), b1: Date.now() }, absent: {}, waitlist: [] };
   ok('dupla 100% presente é PRESENTE (o rótulo não ajuda)',
      sandbox._entryIsPresent(t, t.participants[0]) === true);
   const t2 = { id: 'T4', enrollmentMode: 'teams', teamSize: 2,
                participants: [{ p1Uid: 'a1', p2Uid: 'b1' }],
-               checkedIn: { [POISON]: 1, 'NomeVelho1 / NomeVelho2': 1 }, absent: {}, waitlist: [] };
+               checkedIn: { [POISON]: Date.now(), 'NomeVelho1 / NomeVelho2': Date.now() }, absent: {}, waitlist: [] };
   ok('check-in gravado com NOME não vale (só uid)',
      sandbox._entryIsPresent(t2, t2.participants[0]) === false);
 }
@@ -189,7 +193,7 @@ console.log('\nSubstituição de W.O. — regra de gênero por uid (misto obriga
       { p1Uid: 'a2', p2Uid: 'b2', p1Gender: 'masculino', p2Gender: 'feminino' },
     ],
     standbyParticipants: [{ uid: 'sF', gender: 'feminino' }, { uid: 'sM', gender: 'masculino' }],
-    waitlist: [], checkedIn: { sF: 1, sM: 1 }, absent: {}, vips: {},
+    waitlist: [], checkedIn: { sF: Date.now(), sM: Date.now() }, absent: {}, vips: {},
     matches: [{ id: 'm1', round: 1, p1: 'X / X', p2: 'X / X',
                 team1Uids: ['a1', 'b1'], team2Uids: ['a2', 'b2'], winner: null }],
   });
@@ -201,7 +205,7 @@ console.log('\nSubstituição de W.O. — regra de gênero por uid (misto obriga
      r.subCount === 1 && (m.team1Uids || []).indexOf('sF') !== -1 && (m.team1Uids || []).indexOf('sM') === -1,
      'team1Uids=' + JSON.stringify(m.team1Uids));
   // W.O. no a1 (Masc) sem nenhum homem suplente → pendência, NÃO substitui calado
-  t = mkT(); t.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t.checkedIn = { sF: 1 }; t.absent = { a1: 1 };
+  t = mkT(); t.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t.checkedIn = { sF: _AGORA }; t.absent = { a1: 1 };
   r = sandbox._applyWoSubsToTournament(t);
   ok('homem ausente sem homem suplente → NÃO substitui automático',
      r.subCount === 0 && (r.subChoicePending || []).length === 1,
@@ -209,7 +213,7 @@ console.log('\nSubstituição de W.O. — regra de gênero por uid (misto obriga
   ok('a pendência é por uid (alvo a1, opção sF)',
      r.subChoicePending[0].absentUid === 'a1' && r.subChoicePending[0].options[0].uid === 'sF');
   // organizador ACEITA a quebra → sF entra no lugar do homem
-  const t2 = mkT(); t2.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t2.checkedIn = { sF: 1 }; t2.absent = { a1: 1 };
+  const t2 = mkT(); t2.standbyParticipants = [{ uid: 'sF', gender: 'feminino' }]; t2.checkedIn = { sF: _AGORA }; t2.absent = { a1: 1 };
   sandbox._findTournamentById = (id) => (String(id) === 'G' ? t2 : null);
   const rr = sandbox._woResolveSubChoice('G', 'a1', 'sF');
   ok('organizador aceita a quebra → sF assume a vaga do a1',
@@ -230,7 +234,7 @@ console.log('\nCategoria genérica (idade/habilidade/custom) — mesma trava, po
       { uid: 'p1', categories: ['A'] }, { uid: 'p2', categories: ['A'] },
     ],
     standbyParticipants: [{ uid: 'sB', categories: ['B'] }, { uid: 'sA', categories: ['A'] }],
-    waitlist: [], checkedIn: { sB: 1, sA: 1 }, absent: { p1: 1 }, vips: {},
+    waitlist: [], checkedIn: { sB: Date.now(), sA: Date.now() }, absent: { p1: 1 }, vips: {},
     matches: [{ id: 'm1', round: 1, p1: 'X', p2: 'X', p1Uid: 'p1', p2Uid: 'p2', winner: null }],
   });
   let t = mkT();
@@ -239,7 +243,7 @@ console.log('\nCategoria genérica (idade/habilidade/custom) — mesma trava, po
      r.subCount === 1 && t.matches[0].p1Uid === 'sA',
      'p1Uid=' + t.matches[0].p1Uid);
   // só suplente B disponível → pendência (organizador escolhe), não mete o B calado
-  t = mkT(); t.standbyParticipants = [{ uid: 'sB', categories: ['B'] }]; t.checkedIn = { sB: 1 };
+  t = mkT(); t.standbyParticipants = [{ uid: 'sB', categories: ['B'] }]; t.checkedIn = { sB: _AGORA };
   r = sandbox._applyWoSubsToTournament(t);
   ok('ausente A sem suplente A → pendência (idade/skill = mesma regra do gênero)',
      r.subCount === 0 && (r.subChoicePending || []).length === 1,
@@ -247,7 +251,7 @@ console.log('\nCategoria genérica (idade/habilidade/custom) — mesma trava, po
   // sem categorias no torneio → qualquer suplente serve (FIFO)
   const tNo = { id: 'N', format: 'Eliminatórias Simples', enrollmentMode: 'individual', teamSize: 1,
     woScope: 'individual', participants: [{ uid: 'p1' }, { uid: 'p2' }],
-    standbyParticipants: [{ uid: 'sX' }], waitlist: [], checkedIn: { sX: 1 }, absent: { p1: 1 }, vips: {},
+    standbyParticipants: [{ uid: 'sX' }], waitlist: [], checkedIn: { sX: Date.now() }, absent: { p1: 1 }, vips: {},
     matches: [{ id: 'm1', round: 1, p1: 'X', p2: 'X', p1Uid: 'p1', p2Uid: 'p2', winner: null }] };
   const rNo = sandbox._applyWoSubsToTournament(tNo);
   ok('torneio SEM categorias → qualquer suplente entra (FIFO)',
@@ -264,7 +268,7 @@ console.log('\nPendência de categoria → organizador dá W.O. ao time (recusa 
     woScope: 'individual', genderCategories: ['misto_obrigatorio'], combinedCategories: ['Misto Obrig.'],
     participants: [{ p1Uid: 'a1', p2Uid: 'b1', p1Gender: 'masculino', p2Gender: 'feminino', categories: ['Misto Obrig.'] }],
     standbyParticipants: [{ uid: 'sF', gender: 'feminino', categories: ['Misto Obrig.'] }],
-    waitlist: [], checkedIn: { sF: 1 }, absent: {}, vips: {},
+    waitlist: [], checkedIn: { sF: Date.now() }, absent: {}, vips: {},
     matches: [{ id: 'm1', round: 1, p1: 'X / X', p2: 'X / X', team1Uids: ['a1', 'b1'], team2Uids: ['a2', 'b2'], winner: null }],
   };
   sandbox.AppStore.tournaments = [t];

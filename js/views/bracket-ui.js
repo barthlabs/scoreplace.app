@@ -1366,6 +1366,27 @@ window._saveSetResult = function(tId, matchId) {
     }
   }
 
+
+  // ⭐ 2.0.26: daqui pra baixo era o corpo desta função; virou `_commitSetsResult` porque o
+  // card do melhor de 3/5 precisa EXATAMENTE do mesmo fecho (aprovação do adversário,
+  // vencedor, avanço, histórico, notificação, transação) quando o último set fecha o jogo.
+  // Duas cópias do fecho divergiriam na primeira mudança — e divergir aqui é jogo que
+  // avança de um jeito na chave e de outro no card. [[feedback_unify_dual_entry_points]]
+  return window._commitSetsResult(tId, matchId, sets, p1Sets, p2Sets, isFixedSet);
+};
+
+// ─── ⭐ FECHO ÚNICO DO PLACAR POR SETS ────────────────────────────────────────────────
+// Recebe o array de sets JÁ montado e fecha o jogo: proposta pendente quando precisa de
+// aprovação do adversário, ou resultado valendo (vencedor carimbado, avanço/standings,
+// histórico, notificações, transação blindada). Dois chamadores:
+//   • window._saveSetResult   — o overlay set a set (lê os inputs set-p1-N)
+//   • window._confirmSetFromCard — o Confirmar do CARD quando o set que acabou de entrar
+//     é o que decide a partida (melhor de 3 / melhor de 5)
+window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixedSet) {
+  const t = window._findTournamentById(tId);
+  if (!t) return;
+  const m = _findMatch(t, matchId);
+  if (!m) return;
   let totalGamesP1Pre = 0, totalGamesP2Pre = 0;
   sets.forEach(function(s) { totalGamesP1Pre += s.gamesP1; totalGamesP2Pre += s.gamesP2; });
 
@@ -1550,6 +1571,185 @@ window._saveSetResult = function(tId, matchId) {
   _rerenderBracket(tId, matchId);
 };
 
+// ─── ⭐ MELHOR DE 3 / MELHOR DE 5: O CARD FECHA UM SET POR VEZ ────────────────────────
+//
+// Ordem do dono (23/ago/2026): _"confirmou o placar do 1º set, esses números ficam na
+// esquerda do box para o placar do set 2 que fica zerado até receber o placar do set 2"_.
+// Ou seja: o Confirmar do card, em melhor de N, NÃO fecha a partida — fecha O SET. Só
+// quando alguém chega a `setsToWin` é que a partida fecha, e aí pelo caminho de sempre.
+//
+// ⚠️ VOCABULÁRIO (o dono cortou o meu, e com razão): **não existe "set parcial"**. O set
+// está INTEIRO — 6-4, acabou. O que está pela metade é o **JOGO**. Por isso o estado se
+// chama JOGO EM ANDAMENTO: sets confirmados, partida ainda aberta.
+//
+// ⛔ JOGO EM ANDAMENTO NÃO É RESULTADO, E POR ISSO NÃO ESCREVE `winner`/`scoreP1`/`resultAt`.
+// A classificação inteira gateia em `m.winner` (standings-core), então um jogo com 1 set
+// gravado e sem vencedor não conta ponto, não fecha grupo, não avança ninguém — que é o
+// certo: a partida ainda está sendo jogada. O que ele escreve é `m.sets` (+ o espelho
+// setsWonP1/P2) e o `startedAt`, exatamente como o placar ao vivo já faz.
+//
+// ⭐ E PASSA PELA CF, como TUDO. Ordem do dono: _"tudo tem que passar pelo CF, senão
+// ficamos reféns das lojas"_ — lógica que mora só no cliente só se conserta com release de
+// loja. Então o ramo `setsInProgress` vive no `_applyResultToTournament`, que É VENDORADO
+// pra CF (copy-vendor no predeploy), e o cliente grava por `commitResultTx` igual a
+// qualquer outro placar. [[project_canon_runs_on_server]]
+//
+// ⚠️ A ÚNICA JANELA DE RISCO É A ORDEM DO DEPLOY: web nova + CF velha. A CF anterior a este
+// ramo não conhece `setsInProgress`, cairia no ramo simples e CARIMBARIA VENCEDOR num jogo
+// aberto. Não dá pra impedir pelo payload (a CF velha não valida nada), então a defesa é
+// pela PROVA NO DADO: depois do commit, se o jogo voltou COM vencedor, o cliente desfaz na
+// hora (`_curaVencedorIndevido`). Isso se apaga sozinho no instante em que a CF sobe — e é
+// justamente o que evita depender de release pra consertar.
+// ⛔ Publique a CF ANTES da web: `scripts/deploy-functions.sh` e depois deploy-hosting.
+//
+// Mutação PURA, usada nos dois lados da transação (otimista local + doc fresco): sem isso
+// o retry da transação reescreveria `startedAt` com outro instante.
+window._applySetsInProgress = function (m, sets, p1Sets, p2Sets, agora) {
+  if (!m) return null;
+  m.sets = (sets || []).slice();
+  m.setsWonP1 = p1Sets || 0;
+  m.setsWonP2 = p2Sets || 0;
+  if (!m.sets.length) {
+    // voltou a zero (correção do 1º set): não deixa espelho de set nenhum pra trás
+    delete m.sets; delete m.setsWonP1; delete m.setsWonP2;
+  } else if (!m.startedAt) {
+    m.startedAt = agora || Date.now();
+  }
+  return m;
+};
+
+// Grava os sets de um JOGO EM ANDAMENTO (nenhum lado chegou a setsToWin ainda).
+// Vai pela MESMA porta de todo placar — `commitResultTx` → CF `applyMatchResult` → o ramo
+// `setsInProgress` do `_applyResultToTournament` sobre o doc fresco. Local só como queda.
+window._saveSetsEmAndamento = function (tId, matchId, sets, p1Sets, p2Sets) {
+  var t = window._findTournamentById(tId); if (!t) return;
+  var m = _findMatch(t, matchId); if (!m) return;
+  var agora = Date.now();
+  window._applySetsInProgress(m, sets, p1Sets, p2Sets, agora);          // otimista, pra tela não esperar
+  if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
+  var payload = {
+    setsInProgress: true, sets: sets, setsWonP1: p1Sets, setsWonP2: p2Sets, at: agora
+  };
+  var _log = 'Set confirmado (jogo em andamento): ' + m.p1 + ' vs ' + m.p2 + ' — ' +
+    sets.map(function (x) { return (x.gamesP1 || 0) + '-' + (x.gamesP2 || 0); }).join(' ');
+  if (window.AppStore && typeof window.AppStore.commitResultTx === 'function') {
+    Promise.resolve(window.AppStore.commitResultTx(tId, matchId, payload, _log))
+      .then(function () { window._curaVencedorIndevido(tId, matchId, sets, p1Sets, p2Sets, agora); })
+      .catch(function () {});
+  }
+  _rerenderBracket(tId, matchId);
+};
+
+// CF velha (anterior ao ramo `setsInProgress`) não conhece o payload e carimba vencedor num
+// jogo aberto. Não dá pra detectar isso pelo que ela responde — a CF velha responde `ok`.
+// Dá pra detectar pelo DADO: pedimos "em andamento" e o jogo voltou COM vencedor. Aí
+// desfaz na hora, pelo caminho local. Vira no-op no segundo em que a CF nova sobe.
+// [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
+window._curaVencedorIndevido = function (tId, matchId, sets, p1Sets, p2Sets, agora) {
+  try {
+    var t = window._findTournamentById(tId); if (!t) return;
+    var m = _findMatch(t, matchId); if (!m || !m.winner) return;        // caminho normal: nada a fazer
+    if (window._warn) window._warn('[setsInProgress] CF sem o ramo de jogo em andamento carimbou vencedor — desfazendo');
+    window._applySetsInProgress(m, sets, p1Sets, p2Sets, agora);
+    delete m.winner; delete m.winnerUids; delete m.draw; delete m.resultAt;
+    delete m.scoreP1; delete m.scoreP2; delete m.totalGamesP1; delete m.totalGamesP2;
+    if (window.AppStore && typeof window.AppStore.commitTournamentTx === 'function') {
+      window.AppStore.commitTournamentTx(tId, function (freshT) {
+        var fm = window._findMatch(freshT, matchId);
+        if (!fm) return false;
+        window._applySetsInProgress(fm, sets, p1Sets, p2Sets, agora);
+        delete fm.winner; delete fm.winnerUids; delete fm.draw; delete fm.resultAt;
+        delete fm.scoreP1; delete fm.scoreP2; delete fm.totalGamesP1; delete fm.totalGamesP2;
+        if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
+      });
+    }
+    _rerenderBracket(tId, matchId);
+  } catch (e) { if (window._error) window._error('curaVencedorIndevido', e); }
+};
+
+// O Confirmar do card em melhor de N. Recebe o placar do set em disputa já validado como
+// número; valida o que é DO SET (empate, super tie-break curto) e decide: fecha o set ou
+// fecha a partida.
+window._confirmSetFromCard = function (tId, matchId, o) {
+  o = o || {};
+  var t = window._findTournamentById(tId); if (!t) return;
+  var m = _findMatch(t, matchId); if (!m) return;
+  var plan = o.plan, col = plan && plan.live;
+  if (!plan || !col) return;
+  var s1 = o.s1, s2 = o.s2;
+  var _tt = function (k, fb, par) {
+    var v = (typeof _t === 'function') ? _t(k, par) : null;
+    if (!v || v === k) { v = fb; Object.keys(par || {}).forEach(function (x) { v = v.replace('{' + x + '}', par[x]); }); }
+    return v;
+  };
+  // ⛔ SET NÃO EMPATA — nem em grupo, onde a PARTIDA pode empatar. O empate é do jogo,
+  // nunca de um set: 6-6 é tie-break, e tie-break tem vencedor.
+  if (s1 === s2) {
+    showAlertDialog(_tt('bracket.setNoDraw', 'Set não pode empatar'),
+      _tt('bracket.setNoDrawDetail', 'O {set} precisa de um vencedor.', { set: col.label }), null, { type: 'warning' });
+    return;
+  }
+  if (col.kind === 'stb' && Math.max(s1, s2) < col.points) {
+    showAlertDialog(_tt('bracket.stbShort', 'Super tie-break incompleto'),
+      _tt('bracket.stbShortDetail', 'O super tie-break vai até {n} pontos.', { n: col.points }), null, { type: 'warning' });
+    return;
+  }
+  // FONTE ÚNICA do set gravado (games + subplacar do tie-break): _buildManualSet.
+  var novo = window._buildManualSet(s1, s2, {
+    isTiebreakEntry: !!o.isTiebreakEntry, tbP1: o.tbP1, tbP2: o.tbP2
+  }).sets[0];
+  if (col.kind === 'stb') novo.superTiebreak = true;   // marca o que ESTE set foi, pro replay/histórico
+
+  var sets = plan.played.concat([novo]);
+  var p1 = 0, p2 = 0;
+  sets.forEach(function (s) {
+    var a = Number(s.gamesP1) || 0, b = Number(s.gamesP2) || 0;
+    if (a > b) p1++; else if (b > a) p2++;
+  });
+  if (p1 >= plan.setsToWin || p2 >= plan.setsToWin) {
+    return window._commitSetsResult(tId, matchId, sets, p1, p2, false);   // ← a partida fecha aqui
+  }
+  window._saveSetsEmAndamento(tId, matchId, sets, p1, p2);
+  var prox = window._matchSetPlan(o.scoring, m, { sets: sets });
+  if (typeof showNotification === 'function') {
+    showNotification(_tt('bracket.setSaved', 'Set confirmado'),
+      _tt('bracket.setSavedNext', '{set} registrado. Agora o {next}.',
+        { set: col.label, next: (prox && prox.live) ? prox.live.label : '' }), 'success');
+  }
+};
+
+// Corrigir um set já confirmado (clique na coluna dele). Apaga aquele set E os seguintes —
+// o placar de um set posterior deixa de fazer sentido quando o anterior muda.
+window._reopenSet = function (tId, matchId, idx) {
+  var t = window._findTournamentById(tId); if (!t) return;
+  var m = _findMatch(t, matchId); if (!m) return;
+  if (m.winner) return;                     // jogo fechado corrige pelo ✏️ Editar, não por aqui
+  var sets = Array.isArray(m.sets) ? m.sets.slice() : [];
+  idx = parseInt(idx, 10);
+  if (!(idx >= 0) || idx >= sets.length) return;
+  var sc = (typeof window._effectiveScoring === 'function') ? window._effectiveScoring(t, m) : t.scoring;
+  var plan = window._matchSetPlan(sc, m);
+  var col = (plan.columns || [])[idx];
+  var rot = col ? col.label : ('Set ' + (idx + 1));
+  var _tt = function (k, fb) {
+    var v = (typeof _t === 'function') ? _t(k, { set: rot }) : null;
+    return (v && v !== k) ? v : fb.replace('{set}', rot);
+  };
+  showConfirmDialog(
+    _tt('bracket.reopenSet', 'Corrigir {set}?'),
+    _tt('bracket.reopenSetDetail', 'O placar do {set} volta a ficar em aberto. Os sets seguintes também são apagados.'),
+    function () {
+      var novos = sets.slice(0, idx);
+      var p1 = 0, p2 = 0;
+      novos.forEach(function (s) {
+        var a = Number(s.gamesP1) || 0, b = Number(s.gamesP2) || 0;
+        if (a > b) p1++; else if (b > a) p2++;
+      });
+      window._saveSetsEmAndamento(tId, matchId, novos, p1, p2);
+    }
+  );
+};
+
 // v2.3.46: re-renderiza UM card de partida in-place (sem re-render do bracket
 // inteiro). Usado pelo lançamento de placar em formatos por rodada (Liga/Suíço)
 // enquanto a rodada NÃO está completa — assim a página fica estática:
@@ -1599,6 +1799,26 @@ function _finalizeRoundCardInPlace(t, m, tId, matchId) {
 window._applyResultToTournament = function (t, matchId, payload) {
   var m = window._findMatch(t, matchId);
   if (!m) return null;
+
+  // ─── ⭐ JOGO EM ANDAMENTO (melhor de N): um SET fechou, a PARTIDA não ───────────────
+  // Ordem do dono: _"tudo tem que passar pelo CF, senão ficamos reféns das lojas"_. Este
+  // ramo mora aqui, e não no cliente, porque ESTA função é vendorada pra CF
+  // (functions-autodraw/copy-vendor.js) — é ela que o `applyMatchResult` roda sobre o doc
+  // FRESCO dentro da transação. Lógica que ficasse só no navegador só se conserta com
+  // release de loja. [[project_canon_runs_on_server]]
+  //
+  // ⛔ SAI ANTES de vencedor, avanço, standings, congelamento de grupo e auto check-in. A
+  // partida ainda está sendo jogada: nada disso pode acontecer. O que entra é só o que o
+  // placar ao vivo também escreve — os sets, o espelho de sets ganhos e o `startedAt`.
+  if (payload && payload.setsInProgress) {
+    // Corrida: o outro lado fechou o jogo inteiro entre o toque e a transação. Um jogo
+    // com vencedor NÃO volta a ficar aberto por causa de um set que chegou atrasado.
+    if (m.winner) return m;
+    window._applySetsInProgress(m, payload.sets || [], payload.setsWonP1 || 0, payload.setsWonP2 || 0, payload.at);
+    if (m.pendingResult) delete m.pendingResult;
+    if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(t, m);
+    return m;
+  }
   var s1 = payload.s1, s2 = payload.s2;
   var useSets = !!payload.useSets, isFixedSet = !!payload.isFixedSet;
   var isTiebreakEntry = !!payload.isTiebreakEntry, tbP1 = payload.tbP1, tbP2 = payload.tbP2;
@@ -1764,6 +1984,19 @@ window._saveResultInline = function (tId, matchId) {
       return;
     }
     isTiebreakEntry = true;
+  }
+
+  // ─── ⭐ MELHOR DE 3 / MELHOR DE 5 — o Confirmar fecha O SET, não a partida ──────────
+  // O card de melhor de N tem um box por set: o em disputa é que carrega os ids s1-/s2-,
+  // que é o que esta função acabou de ler. Quem decide se este set fecha o jogo é o plano
+  // (window._matchSetPlan) — a MESMA régua que desenhou as colunas. Em 1 set (e em Beach
+  // Tennis) `multi` é falso e nada abaixo muda. [[project_placar_por_sets_no_card]]
+  var _planSave = (typeof window._matchSetPlan === 'function') ? window._matchSetPlan(_isc, m) : null;
+  if (_planSave && _planSave.multi && _planSave.live) {
+    return window._confirmSetFromCard(tId, matchId, {
+      s1: s1, s2: s2, tbP1: tbP1, tbP2: tbP2, isTiebreakEntry: isTiebreakEntry,
+      plan: _planSave, scoring: _isc
+    });
   }
 
   if (s1 === s2 && !allowDraw) {
@@ -2891,6 +3124,11 @@ window._editResultInline = function(tId, matchId) {
       ' style="' + inputStyle + '" oninput="window._highlightWinner(\'' + _esc(matchId) + '\')">' + tb2Html;
   }
 
+  // A linha de rótulos das colunas (Set 1 · Set 2 · Super Tie-Break) some junto: a edição
+  // troca as colunas por UM box de placar, e rótulo em cima do que não existe mais mente.
+  var _shEdit = document.getElementById('sethead-' + matchId);
+  if (_shEdit) _shEdit.style.display = 'none';
+
   // Reveal TB inputs now if the score is a TB scoreline (e.g. 7-6)
   if (typeof window._highlightWinner === 'function') {
     try { window._highlightWinner(matchId); } catch(e) {}
@@ -3104,8 +3342,8 @@ window._tvBuildNextMatches = function(t) {
     html += '<div style="flex:1;text-align:center;">';
     // v4.5.68: nome vivo por uid do slot (Modo TV).
     var _rsl = (typeof window._resolveSideLive === 'function') ? window._resolveSideLive : function(_t, s) { return s; };
-    var _tvN1 = _rsl(t, m.p1 || 'TBD', (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1') : (m.p1Uid || m.team1Uids)));
-    var _tvN2 = _rsl(t, m.p2 || 'TBD', (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2') : (m.p2Uid || m.team2Uids)));
+    var _tvN1 = _rsl(t, m.p1 || 'TBD', (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)));
+    var _tvN2 = _rsl(t, m.p2 || 'TBD', (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)));
     html += '<div style="font-size:1rem;font-weight:700;color:white;">' + presenceP1 + ' ' + window._safeHtml(_tvN1) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.9rem;font-weight:800;color:rgba(255,255,255,0.25);margin:0 12px;">VS</div>';

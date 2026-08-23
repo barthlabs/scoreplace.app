@@ -492,7 +492,7 @@ window._expandParticipantWho = function (p) {
 // (parts + lista de espera) | 'checkin'. Casa presença por uid (não por nome/email).
 window._rollCallBarHtml = function (tId, mode) {
   var t = window._findTournamentById(tId); if (!t) return '';
-  var checkedIn = t.checkedIn || {}, absent = t.absent || {};
+  var checkedIn = window._presencaViva(t), absent = t.absent || {};
   var seen = {}, total = 0, present = 0, abs = 0;
   var _add = function (arr) {
     (arr || []).forEach(function (p) {

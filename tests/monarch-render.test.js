@@ -109,7 +109,7 @@ function pairKey(arr) { return (arr || []).slice().sort().join('+'); }
   const html = W._renderMonarchStage(t, false, false, { suppressAutoAdvance: true }) || '';
   ok(/Cheguei/.test(html) && /_toggleCheckIn/.test(html), 'header do grupo tem "Cheguei" (mesmo com resultEntry=organizer)');
   // marca presente → vira "Presente" (toggle)
-  if (typeof W._idMapSet === 'function') { t.checkedIn = t.checkedIn || {}; W._idMapSet(t, t.checkedIn, p0, true); }
+  if (typeof W._idMapSet === 'function') { t.checkedIn = t.checkedIn || {}; W._idMapSet(t, t.checkedIn, p0, Date.now()); }
   const html2 = W._renderMonarchStage(t, false, false, { suppressAutoAdvance: true }) || '';
   ok(!/Presente/.test(html) && /Presente/.test(html2), 'ausente→"Cheguei", presente→"Presente" (toggle)');
   W.AppStore.currentUser = prevUser;

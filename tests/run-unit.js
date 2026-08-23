@@ -1189,6 +1189,30 @@ const SUITES = [
   // gente com uid (ponto único) ou não é (declara o motivo). É o que impede o quarto lugar.
   // A dívida PENDENTE sai impressa a cada rodada, em vez de viver na cabeça de alguém.
   'tests/avatar-por-nome-e-inventario-fechado.test.js',
+  // Botões da MESMA LINHA: mesma altura (a do mais alto), mesmo topo, mesma base. O
+  // "Aplicar W.O." saía deslocado no cabeçalho do card porque um `class=` DUPLICADO
+  // derrubava a classe que trazia o `display:flex` — o parser fica com o primeiro
+  // `class` e joga o segundo fora, calado. Em bloco os .btn se alinham pela BASE do
+  // texto e o de 2 linhas sobe. Mede com o CSS real num Chromium.
+  'tests/botoes-da-linha-tem-a-mesma-altura.test.js',
+  // Botão vertical sticky (Fase anterior / Mostrar ocultas) não pode grudar em px cravado:
+  // o que fica colado no topo é topbar+dropdown+back-header+barra de busca, e com 112px
+  // fixo metade do botão ficava POR BAIXO da barra — o dono lia só "Fase a". A fonte única
+  // é --scroll-anchor (store.js/_reflowChrome), a mesma que os cards já usam.
+  'tests/botao-vertical-nao-some-atras-da-barra.test.js',
+  // Melhor de 3 / melhor de 5 no card: uma COLUNA por set, com o rótulo (Set 1 · Set 2 ·
+  // Super Tie-Break (10)) em cima do box. O Confirmar fecha O SET enquanto ninguém chega a
+  // setsToWin — e set parcial NÃO grava vencedor, senão a classificação passa a contar um
+  // jogo em andamento. Mede a régua, a decisão, o que o parcial grava e a TELA.
+  'tests/placar-por-sets-no-card.test.js',
+  // Presença é sinal POSITIVO e PERECÍVEL: caduca em 24h, em todo o programa. A validade
+  // mora na LEITURA (_idMapGet + _presencaViva), nunca numa varredura que apaga — varredura
+  // que não rodou mente. `absent` NÃO caduca: é W.O., não presença.
+  'tests/presenca-caduca-em-24h.test.js',
+  // O uid não some do slot. O nome VELHO vive no elenco do grupo ao lado do uid certo, e
+  // _buildNameToUid lia só os inscritos (que o save stripa) — daí linha 'name:', uid null no
+  // slot e nome congelado no card pra sempre. Cura nos dois lados, na leitura.
+  'tests/uid-do-slot-nao-some.test.js',
 ];
 
 let failed = [];

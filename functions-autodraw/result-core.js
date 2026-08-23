@@ -99,6 +99,23 @@ function applyResult(t, opts) {
   const authz = authorize(t, m, actor);
   if (!authz.ok) return { ok: false, reason: authz.reason };
 
+  // ⭐ JOGO EM ANDAMENTO (melhor de 3 / melhor de 5) NÃO PEDE APROVAÇÃO.
+  // O que a aprovação do adversário protege é o RESULTADO — quem venceu a partida. Um set
+  // confirmado no meio do jogo não decide nada: não há vencedor, não há avanço, não há
+  // ponto na classificação (o ramo `setsInProgress` do _applyResultToTournament sai antes
+  // de tudo isso). Mandar cada set pra fila de aprovação travaria a partida no meio,
+  // esperando o outro lado confirmar um placar que ainda vai mudar. A aprovação continua
+  // valendo, inteira, no set que FECHA o jogo — aí sim há resultado.
+  // ⚠️ A AUTORIZAÇÃO ACIMA (`authorize`) continua valendo: quem não pode lançar nesta fase,
+  // ou não está no jogo, segue barrado. O que este ramo dispensa é a NEGOCIAÇÃO, não o
+  // controle de acesso.
+  if (payload && payload.setsInProgress) {
+    const applied0 = win._applyResultToTournament(t, matchId, payload);
+    if (!applied0) return { ok: false, reason: 'apply-failed' };
+    if (o.logMessage) pushHistory(t, o.logMessage, o.now);
+    return { ok: true, outcome: 'in-progress', reason: '' };
+  }
+
   // Precisa de aprovação do adversário? A função é a MESMA do cliente — inclusive o caso
   // "adversário sem uid (informal) → auto-aprova, não há quem aprove".
   const needsApproval = !!(typeof win._resultNeedsApproval === 'function' &&

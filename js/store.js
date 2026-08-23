@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.25';
+window.SCOREPLACE_VERSION = '2.0.26';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -5998,7 +5998,7 @@ window._waitlistExpandPool = function(t, namesOnly) {
   var seen = {}, pool = [];
   list.forEach(function(p){ var n = _nm(p); if (n && n.indexOf(' / ') === -1 && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = 1; pool.push(p); } });
   if (window._tournamentIsSameDay(t)) {
-    var ci = t.checkedIn || {}, ab = t.absent || {};
+    var ci = window._presencaViva(t), ab = t.absent || {};
     pool = pool.filter(function(p){ return window._idMapHas(t, ci, p) && !window._idMapHas(t, ab, p); });
   }
   return namesOnly ? pool.map(_nm) : pool;

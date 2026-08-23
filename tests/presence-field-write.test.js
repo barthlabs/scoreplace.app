@@ -29,7 +29,7 @@ function mkT(present, comAusente) {
     participants: [{ uid: UID, displayName: NOME, name: NOME }, { uid: 'u9', displayName: 'Outro', name: 'Outro' }],
     checkedIn: {}, absent: {}, checkedInConfirmed: {}, standbyParticipants: [], waitlist: [], teamOrigins: {}, matches: []
   };
-  if (present) t.checkedIn[UID] = 1;
+  if (present) t.checkedIn[UID] = Date.now();
   if (comAusente) t.absent['u9'] = 1;
   return t;
 }
