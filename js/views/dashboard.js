@@ -2664,8 +2664,26 @@ function renderDashboard(container) {
       // resultados" já usa. Com os cabeçalhos de grupo dentro da grade, contar por
       // posição deixaria de fora o cabeçalho do 2º grupo, que ficaria ÓRFÃO na tela
       // fechada (um título anunciando cards que estão escondidos).
+      // ── 2.0.44 · SÓ O "VER MENOS" VIAJA; O "VER MAIS" FICA PARADO ───────────────
+      // Ordem do dono: _"apenas o ver menos deve scrollar. o ver mais fica fixo."_ E faz
+      // sentido: fechada, a seção é curta — não há lista pra percorrer, então flutuar não
+      // serve pra nada e ainda tira a etiqueta do lugar onde ela sempre esteve.
+      //
+      // São DOIS elementos que se revezam por CSS, no mesmo atributo que já governa o
+      // aberto/fechado — sem listener, sem re-render:
+      //   • ABERTA  → o trilho sticky mostra "ver menos"; a tag do cabeçalho fica
+      //     `visibility:hidden`, virando o CALÇO que segura o espaço do título;
+      //   • FECHADA → o trilho some e a tag do cabeçalho aparece, "ver mais", parada.
+      // Cada uma tem texto FIXO (a que se vê aberta só diz "ver menos"; a que se vê fechada
+      // só diz "ver mais"), então não há dois lugares dizendo a mesma coisa e discordando.
       _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-sp-extra]{display:none !important;}' +
-        '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}</style>';
+        '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}' +
+        // `!important` porque o trilho carrega `display:flex` INLINE — sem isso a regra não
+        // vence e o "ver menos" continuaria flutuando com a seção fechada (medido no
+        // navegador: `display` seguia `flex`). Mesmo motivo do `[data-sp-extra]` acima.
+        '#novidades-section[data-nov-collapsed="1"] #nov-toggle-rail{display:none !important;}' +
+        '#novidades-section[data-nov-collapsed="0"] #nov-toggle-fixo{visibility:hidden;}' +
+        '</style>';
       // ── 2.0.38 · O "VER MENOS" ACOMPANHA A ROLAGEM — DENTRO DESTA SEÇÃO ─────────
       // Pedido do dono (24/ago/2026): _"esse ver menos da sessão de novidades deve scrollar
       // junto com o scroll da página dentro da sessão. apenas o ver menos e apenas dentro da
@@ -2726,9 +2744,11 @@ function renderDashboard(container) {
         // então o calço é um TAMANHO FIXO, não um espelho do estado — nada pra sincronizar.
         // Em `em`/padding, não px: acompanha o --ui-scale como o resto do card.
         (_novList.length > 1
-          ? '<span data-tag-spacer-for="nov-toggle-tag" aria-hidden="true" style="visibility:hidden;margin-left:auto;flex-shrink:0;' +
-            'font-size:0.7rem;font-weight:700;border:1px solid transparent;border-radius:999px;padding:3px 10px;line-height:1.2;' +
-            'text-transform:none;letter-spacing:0;">ver menos</span>'
+          ? _verMaisTag('nov-toggle-fixo', true, {
+              // `data-tag-spacer-for`: some junto com a pílula quando não sobra nada a mostrar.
+              attrs: ' data-tag-spacer-for="nov-toggle-tag" onclick="window._toggleNovidadesCollapse()" title="Mostrar/ocultar"',
+              style: 'cursor:pointer;user-select:none;'
+            })
           : '') +
         '</h3>';
       _spReset();
@@ -4284,10 +4304,15 @@ function _spSyncHint(sec, attrColapso, tagId, hintId, resto, comJogos) {
     ? window._spVerMaisTexto(resto, comJogos) : ('ver os ' + resto + ' anteriores');
   if (tag) {
     tag.textContent = colapsada ? 'ver mais' : 'ver menos'; tag.style.display = resto > 0 ? '' : 'none';
-    // O calço do cabeçalho (quando a pílula é flutuante, em Novidades) acompanha a pílula:
-    // reservar espaço pra um controle que não está na tela abriria um buraco à direita.
+    // A tag do CABEÇALHO das Novidades se reveza com a flutuante (ver o <style> da seção):
+    // fechada ela é o "ver mais" que se vê; aberta ela fica invisível segurando o espaço do
+    // título. Quem escreve o texto é ESTE ponto, o mesmo da flutuante — assim o espaço
+    // reservado é o do texto que está de fato em cena (e "ver menos" é mais largo que
+    // "ver mais": deixar um fixo faria o título correr por baixo da pílula em um dos dois
+    // estados). Some junto com ela quando não sobra nada a mostrar.
     try {
       document.querySelectorAll('[data-tag-spacer-for="' + tagId + '"]').forEach(function (sp) {
+        sp.textContent = tag.textContent;
         sp.style.display = resto > 0 ? '' : 'none';
       });
     } catch (e) {}
@@ -4378,6 +4403,15 @@ window._toggleNovidadesCollapse = function() {
   var sec = document.getElementById('novidades-section');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-nov-collapsed') !== '1';
+  // ⚠️ MEDIR ANTES DE TROCAR O ATRIBUTO. Ao fechar, o CSS esconde o trilho (`display:none`) e
+  // ele passa a medir zero — a conta de "o topo já saiu de vista?" ficaria dependendo de um
+  // elemento que acabou de sair da tela. Aqui o retrato é tirado com a seção ainda aberta.
+  var _grudado = false;
+  try {
+    var _railM = document.getElementById('nov-toggle-rail');
+    var _topoM = sec.getBoundingClientRect().top;
+    _grudado = _railM ? (_railM.getBoundingClientRect().top - _topoM > 24) : (_topoM < 0);
+  } catch (e) {}
   sec.setAttribute('data-nov-collapsed', willCollapse ? '1' : '0');
   // v1.9.64: a contagem do convite saiu daqui — quem a escreve é `_spSyncCollapsePreview`,
   // que primeiro MEDE quantos cards cabem na linha. Duas contas para o mesmo número era o
@@ -4397,15 +4431,11 @@ window._toggleNovidadesCollapse = function() {
   // O respiro é `--scroll-anchor` via `scroll-margin-top` (a mesma âncora do trilho e de todo
   // scrollIntoView do app), nunca px cravado. [[project_sticky_vertical_usa_scroll_anchor]]
   if (willCollapse) {
-    try {
-      // "o topo já saiu de vista?" medido no PRÓPRIO trilho: grudado, ele está na linha da
-      // âncora, bem abaixo do topo da seção; solto, ele fica a um padding dele. Assim a
-      // conta não depende de ler `--scroll-anchor` (que é um `calc()`, não um número).
-      var _rail = document.getElementById('nov-toggle-rail');
-      var _topo = sec.getBoundingClientRect().top;
-      var _grudado = _rail ? (_rail.getBoundingClientRect().top - _topo > 24) : (_topo < 0);
-      if (_grudado) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    } catch (e) {}
+    // "o topo já saiu de vista?" foi medido no PRÓPRIO trilho, acima, com a seção ainda
+    // aberta: grudado, ele está na linha da âncora, bem abaixo do topo da seção; solto, ele
+    // fica a um padding dele. Assim a conta não depende de ler `--scroll-anchor` (que é um
+    // `calc()`, não um número).
+    try { if (_grudado) sec.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {}
   }
   try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
 };

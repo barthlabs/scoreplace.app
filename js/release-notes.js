@@ -96,6 +96,8 @@ window._RELEASE_NOTES_HTML = (function () {
         // scroll cortado (contain:paint + fit durante a rolagem + inscritos em fatias).
         // Item ÚNICO porque pro usuário é uma coisa só: o app no celular voltou a andar.
         '<li><b>📱 O aplicativo no celular voltou a ser rápido — e a abertura não fica mais preta:</b> ajustes internos recentes cobravam caro justamente no telefone: a tela podia abrir <b>preta</b>, a rolagem demorava a responder e o conteúdo <b>vinha cortado</b> ao rolar a tela inicial e o detalhe do torneio. As causas foram removidas uma a uma — o ajuste de nomes dos cards reaproveita o que já calculou, nada pesado roda enquanto você rola, e a abertura sempre mostra <b>conteúdo ou um botão de tentar de novo</b>, nunca uma tela vazia.</li>' +
+        // ── ciclo 2.0.44 ───────────────────────────────────────────
+        '<li><b>\uD83D\uDCCC S\u00f3 o \u201cver menos\u201d acompanha a rolagem:</b> com a se\u00e7\u00e3o de Novidades <b>fechada</b> n\u00e3o h\u00e1 lista pra percorrer \u2014 ent\u00e3o o \u201cver mais\u201d volta a ficar <b>parado</b> no cabe\u00e7alho, onde sempre esteve.</li>' +
         // ── ciclo 2.0.42 (a nota da 2.0.40 se perdeu num rebase entre sessões; vai aqui) ──
         '<li><b>\uD83D\uDCCC A etiqueta das Novidades para dentro da caixa:</b> ao rolar at\u00e9 o fim da se\u00e7\u00e3o, o \u201cver menos\u201d flutuante passava um pouco <b>para fora</b> da borda de baixo. Agora ele para com a <b>mesma folga</b> que tem no topo.</li>' +
         // ── ciclo 2.0.39 ───────────────────────────────────────────

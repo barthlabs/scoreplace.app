@@ -62,6 +62,25 @@ ok(/attrs: ' onclick="window\._toggleNovidadesCollapse\(\)"/.test(bloco),
   'a pílula é clicável e chama o MESMO toggle');
 ok(/_spSyncHint\(novSec, 'data-nov-collapsed', 'nov-toggle-tag'/.test(dash),
   '  → e quem escreve "ver mais"/"ver menos" segue sendo _spSyncHint (uma decisão só)');
+// ── SÓ O "VER MENOS" VIAJA; O "VER MAIS" FICA PARADO ────────────────────────────────
+// Ordem do dono (24/ago/2026): _"apenas o ver menos deve scrollar. o ver mais fica fixo."_
+// Fechada, a seção é curta — não há lista pra percorrer, então flutuar não serve pra nada e
+// ainda tira a etiqueta do lugar onde ela sempre esteve. São DOIS elementos se revezando pelo
+// MESMO atributo que já governa aberto/fechado: sem listener, sem re-render.
+// MEDIDO no navegador: aberta, a pílula gruda em 72px (a âncora) e a do cabeçalho fica
+// `hidden` segurando o espaço; fechada, o trilho é `none` e o "ver mais" fica a 16px do topo
+// da seção — os mesmos 16 depois de rolar 60px.
+ok(/data-nov-collapsed="1"\] #nov-toggle-rail\{display:none !important;\}/.test(dash),
+  'fechada, o trilho some — nada flutua');
+ok(/!important/.test((dash.match(/#nov-toggle-rail\{[^}]*\}/) || [''])[0]),
+  '  → com !important, senão o `display:flex` INLINE do trilho vence e ele continua flutuando');
+ok(/data-nov-collapsed="0"\] #nov-toggle-fixo\{visibility:hidden;\}/.test(dash),
+  'aberta, a tag do cabeçalho fica invisível — vira o calço que segura o espaço do título');
+ok(/_verMaisTag\('nov-toggle-fixo', true, \{/.test(dash),
+  'o "ver mais" do cabeçalho sai do MESMO builder (mesma aparência)');
+ok(/sp\.textContent = tag\.textContent;/.test(dash),
+  '  → e o texto das duas sai do MESMO ponto (_spSyncHint), pra o calço reservar o texto em cena');
+
 // ── APARÊNCIA: é a MESMA pílula das outras seções ───────────────────────────────────
 // Correção do dono (24/ago): _"o ver menos ficou com uma aparência diferente (compare com o
 // ver menos do últimos resultados)"_ — a flutuante tinha ganhado fundo opaco e sombra
@@ -77,21 +96,21 @@ ok(/function _verMaisTag\(id, colapsado, extra\)/.test(dash),
 // _"quando clicamos nele deve parecer que escondeu o que ele mostrava mas não ficar na
 // posição relativa em que estava (lá pra baixo). deve mostrar o topo das novidades."_
 const _tgi = dash.indexOf('window._toggleNovidadesCollapse = function');
-const tgl = dash.slice(_tgi, _tgi + 2600);
+const tgl = dash.slice(_tgi, _tgi + 4200);
 ok(/if \(willCollapse\) \{/.test(tgl),
   'só ao RECOLHER a rolagem é mexida (abrir não empurra a página)');
 ok(/scrollIntoView\(\{ block: 'start', behavior: 'smooth' \}\)/.test(tgl),
   '  → e leva ao TOPO da seção');
-ok(/_rail\.getBoundingClientRect\(\)\.top - _topo > 24/.test(tgl),
+ok(/_railM\.getBoundingClientRect\(\)\.top - _topoM > 24/.test(tgl),
   '  → só quando o topo já saiu de vista (medido no próprio trilho, não em px cravado)');
+ok(tgl.indexOf('_grudado = _railM') < tgl.indexOf("setAttribute('data-nov-collapsed'"),
+  '  → e a medida é tirada ANTES de fechar: fechando, o trilho some e passaria a medir zero');
 ok(/scroll-margin-top:var\(--scroll-anchor/.test(dash),
   '  → e o pouso respeita a âncora (não pousa embaixo da barra fixa)');
 
 // o calço que devolve ao título o limite que ele tinha
-ok(/data-tag-spacer-for="nov-toggle-tag"[^']*visibility:hidden/.test(dash),
-  'o calço invisível reserva a caixa da pílula no cabeçalho');
-ok(/data-tag-spacer-for="nov-toggle-tag"[\s\S]{0,400}>ver menos</.test(dash),
-  '  → com o texto MAIS LARGO dos dois estados: é tamanho fixo, não espelho de estado');
+ok(/data-tag-spacer-for="nov-toggle-tag"/.test(dash),
+  'a tag do cabeçalho se declara ligada à flutuante (some junto quando não sobra nada)');
 ok(/querySelectorAll\('\[data-tag-spacer-for="' \+ tagId \+ '"\]'\)/.test(dash),
   '  → e ele some junto com a pílula quando não sobra nada a mostrar');
 
