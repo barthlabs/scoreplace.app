@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.54';
+window.SCOREPLACE_VERSION = '2.0.55';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -596,7 +596,16 @@ window._preloadUserProfiles = function (uids) {
               gender: '', skillBySport: null, birthDate: '', defaultCategory: '' };
           }
         });
-      }).catch(function () {}).then(function () {
+      }).catch(function (e) {
+        // 2.0.55: o catch MUDO escondia a causa da seca de nomes (409 uids sem
+        // nome no aparelho do dono, e nenhum erro em lugar nenhum). Reporta o
+        // CÓDIGO 2x por sessão — permission-denied, unavailable, deadline… é o
+        // que diferencia regra de segurança, rede e IndexedDB preso.
+        window._preloadFalhas = (window._preloadFalhas || 0) + 1;
+        if (window._preloadFalhas <= 2 && typeof window._captureMessage === 'function') {
+          try { window._captureMessage('preload users falhou: ' + ((e && e.code) || (e && e.message) || e) + ' · lote=' + lote.length, 'warning'); } catch (e2) {}
+        }
+      }).then(function () {
         _lotou = true; clearTimeout(_prazoLote);
         lote.forEach(function (uid) {
           if (window._userProfilePending[uid] === _minhas[uid]) delete window._userProfilePending[uid];
@@ -622,7 +631,12 @@ window._preloadUserProfiles = function (uids) {
         birthDate: d.birthDate || '',
         defaultCategory: d.defaultCategory || ''
       };
-    }).catch(function () {}).then(function () {
+    }).catch(function (e) {
+      window._preloadFalhas = (window._preloadFalhas || 0) + 1;
+      if (window._preloadFalhas <= 2 && typeof window._captureMessage === 'function') {
+        try { window._captureMessage('preload user falhou: ' + ((e && e.code) || (e && e.message) || e), 'warning'); } catch (e2) {}
+      }
+    }).then(function () {
       if (window._userProfilePending[uid] === _guarda) delete window._userProfilePending[uid];
     });
     // mesmo prazo do lote: get() pendurado não pode virar promessa-cadáver
@@ -809,14 +823,22 @@ window._hydrateUidNames = function (root) {
     // a fonte dos que mudarem. E cada ocorrência reporta quantos ficaram sem nome —
     // é o aparelho dizendo o tamanho do buraco.
     try {
-      var _semNome = 0;
+      var _semNome = 0, _cacheVazio = 0;
       els.forEach(function (e) {
-        if (e.getAttribute('data-uid-name') && !(e.textContent || '').trim()) _semNome++;
+        var _u = e.getAttribute('data-uid-name');
+        if (_u && !(e.textContent || '').trim()) {
+          _semNome++;
+          // 2.0.55: distingue a seca — perfil FORA do cache (fetch nunca chegou)
+          // vs entrada no cache SEM displayName (doc veio vazio/permission): são
+          // consertos diferentes, e o relatório agora diz qual dos dois é.
+          var _pc = window._userProfileCache && window._userProfileCache[_u];
+          if (_pc && !_pc.displayName) _cacheVazio++;
+        }
       });
       if (_semNome > 0) {
         window._hydrateVazioN = (window._hydrateVazioN || 0) + 1;
         if (window._hydrateVazioN <= 3 && typeof window._captureMessage === 'function') {
-          try { window._captureMessage('hydrate: ' + _semNome + ' uid(s) sem nome pós-preload (pass ' + window._hydrateVazioN + ')', 'warning'); } catch (_eC) {}
+          try { window._captureMessage('hydrate: ' + _semNome + ' uid(s) sem nome (' + _cacheVazio + ' cache-vazio) pass ' + window._hydrateVazioN + ' falhas=' + (window._preloadFalhas || 0), 'warning'); } catch (_eC) {}
         }
         var _alvoRetry = (root && root.querySelectorAll) ? root : document;
         var _tent = _alvoRetry.__spHydrateTent || 0;
@@ -8112,6 +8134,7 @@ try {
   (function () {
     var _ALVO = '.card[onclick], a.compact-row, .compact-row[onclick]';
     var _aceso = null;
+    var _acesoAt = 0;
     var _apaga = function () {
       if (!_aceso) return;
       try { _aceso.classList.remove('sp-tocado'); } catch (e) {}
@@ -8135,8 +8158,27 @@ try {
       if (!card) return;
       card.classList.add('sp-tocado');
       _aceso = card;
+      _acesoAt = Date.now();
     }, { passive: true });
-    document.addEventListener('touchend', _apaga, { passive: true });
+    // ── ⭐ O CLIQUE ACONTECE NO TOUCHEND, NÃO 300ms DEPOIS (2.0.55) ────────────
+    // MEDIDO no aparelho do dono (telemetria 2.0.51): TODO toque em card chegava
+    // com ~285-289ms de atraso de entrada — constante demais pra ser thread; é o
+    // clique SINTÉTICO do WebKit, que `touch-action: manipulation` deveria matar
+    // e no WKWebView não mata. Então: toque LIMPO (sem rolagem — o touchmove já
+    // apagou `_aceso` — e curto: long-press não vira clique) sobre card navegável
+    // dispara o click AGORA e cancela o sintético (`preventDefault` em touchEND
+    // não interfere em rolagem — só nos derivados deste gesto: o click atrasado
+    // e o foco). `{passive:false}` aqui é seguro: touchend não segura scroll.
+    document.addEventListener('touchend', function (ev) {
+      var alvo = _aceso;
+      _apaga();
+      if (!alvo) return;
+      if (Date.now() - _acesoAt > 700) return;   // long-press não é clique
+      try {
+        if (ev.cancelable) ev.preventDefault();
+        alvo.click();
+      } catch (e) {}
+    }, { passive: false });
     document.addEventListener('touchcancel', _apaga, { passive: true });
     document.addEventListener('touchmove', _apaga, { passive: true });
   })();

@@ -135,10 +135,23 @@ ok(/var _ALVO = '\.card\[onclick\], a\.compact-row, \.compact-row\[onclick\]';/.
    'o ouvinte cobre card e linha compacta');
 ok(/document\.addEventListener\('touchstart', function \(ev\)[\s\S]{0,600}classList\.add\('sp-tocado'\)/.test(store),
    'o realce entra no TOUCHSTART — sem esperar decisao de gesto');
-['touchend', 'touchcancel', 'touchmove'].forEach(function (ev) {
+['touchcancel', 'touchmove'].forEach(function (ev) {
   ok(new RegExp("addEventListener\\('" + ev + "', _apaga, \\{ passive: true \\}\\)").test(store),
      'e sai no `' + ev + '`' + (ev === 'touchmove' ? ' — dedo que andou virou ROLAGEM, e card aceso rolando e pior que card sem realce' : ''));
 });
+// ── 2.0.55: O CLIQUE ACONTECE NO TOUCHEND ────────────────────────────────────
+// MEDIDO no aparelho do dono: todo toque chegava com ~285-289ms constantes — o
+// clique SINTETICO do WebKit, que touch-action:manipulation nao mata no
+// WKWebView. O touchend do realce agora dispara o click e cancela o sintetico.
+{
+  const mTe = store.match(/document\.addEventListener\('touchend', function \(ev\) \{[\s\S]{0,900}?\}, \{ passive: false \}\);/);
+  ok(!!mTe, 'o touchend do realce e NAO-passivo (precisa do preventDefault pro click sintetico)');
+  const te = mTe ? mTe[0] : '';
+  ok(/_apaga\(\);/.test(te), 'o realce continua saindo no touchend');
+  ok(/ev\.cancelable[\s\S]{0,40}ev\.preventDefault\(\)/.test(te), 'o click SINTETICO (300ms) e cancelado');
+  ok(/alvo\.click\(\)/.test(te), 'e o click REAL dispara no ato do touchend');
+  ok(/> 700\) return;/.test(te), 'long-press nao vira clique (teto de 700ms)');
+}
 ok(/closest\('button, input, label, select, textarea, a\[href\], \[data-no-card-nav\]'\)/.test(store),
    'controle DENTRO do card nao acende o card (ele tem o proprio feedback)');
 const comps3 = R('css/components.css').replace(/\/\*[\s\S]*?\*\//g, '');
