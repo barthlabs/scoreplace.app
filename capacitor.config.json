@@ -2,6 +2,7 @@
   "appId": "app.scoreplace",
   "appName": "scoreplace",
   "webDir": "www",
+  "backgroundColor": "#0f0f23",
   "zoomEnabled": false,
   "server": {
     "hostname": "scoreplace.app",

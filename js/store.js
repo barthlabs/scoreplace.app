@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.50';
+window.SCOREPLACE_VERSION = '2.0.51';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -8025,7 +8025,10 @@ window._navTorneioComAviso = function (tournamentId, evento) {
       var ms = performance.now() - _tapT0;
       window._ultimoTapLoaderMs = Math.round(ms);
       window._ultimoTapInputDelay = _inDelay;
-      if (ms > 400 || _inDelay > 300) {
+      // 2.0.50: os 3 PRIMEIROS toques da sessão reportam SEMPRE — o filtro de
+      // 400ms escondia a distribuição (o dono relata "sem feedback" e chegou UM
+      // relatório o dia inteiro). E a linha agora diz se o realce foi aplicado.
+      if (ms > 400 || _inDelay > 300 || (window._tapReportes || 0) < 3) {
         // ── ⚠️ A MENSAGEM É CURTA PORQUE ELA É CORTADA (1.9.91) ────────────────
         // O relatório da 1.9.90 chegou truncado em 253 caracteres, e o corte caiu
         // EXATAMENTE em cima das travadas — a parte que diz quem segurou a tela.
@@ -8057,7 +8060,8 @@ window._navTorneioComAviso = function (tournamentId, evento) {
             //   2. os TRECHOS — são eles que têm o NOME de quem segurou a thread;
             //   3. as travadas, só se sobrar espaço — elas descrevem o TAMANHO do
             //      estrago, e tamanho sem nome nunca consertou nada.
-            var _cab = 'tap: ' + (_inDelay >= 0 ? _inDelay : '?') + '/' + Math.round(ms) + 'ms';
+            var _cab = 'tap: ' + (_inDelay >= 0 ? _inDelay : '?') + '/' + Math.round(ms) + 'ms' +
+              ' sp:' + (window._spCardAbrindo ? 1 : 0);   // o realce sp-abrindo chegou a ser aplicado?
             var _linha = _cab + ' · quem: ' + (trechos.join(' | ') || 'nenhum');
             if (_linha.length < 200 && travadas.length) {
               _linha += ' · trav: ' + travadas.join(' | ');
@@ -10943,6 +10947,16 @@ window.AppStore = {
       // apareceu mesmo com preferreds salvos.
       if (this.currentUser) this.currentUser._profileLoaded = true;
       window._profileLoadDone = true; // v2.4.7b: marco real da barra do boot splash
+      // ── 🔬 O PERFILADOR LIGA SOZINHO NA CONTA DO DONO (2.0.50) ──────────────
+      // O dono relata travadas que a telemetria não explica porque o perfilador
+      // (gate ?perf=1 desde 2.0.40) está desligado no aparelho DELE. Na conta
+      // dele o flag persiste sozinho — vale a partir da PRÓXIMA abertura (os
+      // wrappers instalam no parse do store.js). Custo zero pros demais.
+      try {
+        if (uid === 'B17n7JCXYOfqahlcLZ0fKxGGyUu1' && localStorage.getItem('sp_perf') !== '1') {
+          localStorage.setItem('sp_perf', '1');
+        }
+      } catch (e) {}
       try {
         document.dispatchEvent(new CustomEvent('scoreplace:profile-loaded', { detail: { uid: uid } }));
       } catch (e) {}
