@@ -84,6 +84,13 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.40 ───────────────────────────────────────────
+        // O mutirão do celular (24/ago): tela preta na abertura (router esvaziando o
+        // container + SW respondendo null + splash nativo saindo cedo), travamento de
+        // segundos (motor de nomes 2.0.30/35 sem orçamento + perfilador em produção) e
+        // scroll cortado (contain:paint + fit durante a rolagem + inscritos em fatias).
+        // Item ÚNICO porque pro usuário é uma coisa só: o app no celular voltou a andar.
+        '<li><b>📱 O aplicativo no celular voltou a ser rápido — e a abertura não fica mais preta:</b> ajustes internos recentes cobravam caro justamente no telefone: a tela podia abrir <b>preta</b>, a rolagem demorava a responder e o conteúdo <b>vinha cortado</b> ao rolar a tela inicial e o detalhe do torneio. As causas foram removidas uma a uma — o ajuste de nomes dos cards reaproveita o que já calculou, nada pesado roda enquanto você rola, e a abertura sempre mostra <b>conteúdo ou um botão de tentar de novo</b>, nunca uma tela vazia.</li>' +
         // ── ciclo 2.0.39 ───────────────────────────────────────────
         '<li><b>\uD83C\uDFEA Os selos das lojas ficaram do mesmo tamanho:</b> na p\u00e1gina inicial (e no convite impresso), a arte do <b>Google Play</b> aparecia menor que a da <b>App Store</b>. As duas artes oficiais s\u00e3o enquadradas de um jeito \u2014 a do Google j\u00e1 vem com uma margem em volta \u2014 e agora isso \u00e9 compensado: o selo desenhado fica do mesmo tamanho nos dois.</li>' +
         '<li><b>\uD83D\uDCCC Fechar as Novidades traz voc\u00ea de volta ao topo da se\u00e7\u00e3o:</b> d\u00e1 pra fechar l\u00e1 do fim da lista, e antes a p\u00e1gina encolhia debaixo do dedo e deixava voc\u00ea perdido no meio do que vinha depois. A etiqueta tamb\u00e9m voltou a ter a <b>mesma apar\u00eancia</b> da de \u201cSeus \u00faltimos resultados\u201d.</li>' +

@@ -13440,8 +13440,9 @@ window._openCasualMatch = function(restoreOpts) {
       });
     });
 
-    // Touch drag support (mobile)
+    // Touch drag support (mobile) — long-press arma o arraste (ver touchstart)
     var _touchIdx = null;
+    var _touchArm = null;
     cards.forEach(function(card) {
       card.addEventListener('touchstart', function(e) {
         // Textarea editável sempre recebe foco — drag nunca começa ao tocar nela.
@@ -13467,13 +13468,31 @@ window._openCasualMatch = function(restoreOpts) {
           }
           if (!_onHandle) { _touchIdx = null; return; }
         }
-        // preventDefault impede o browser de focar elementos dentro do card
-        // antes do gesto de drag começar. Deve ser {passive:false} para funcionar.
-        e.preventDefault();
-        _touchIdx = parseInt(card.getAttribute('data-casual-idx'));
-        card.style.opacity = '0.6';
+        // ⚡ SEM preventDefault NO TOUCHSTART (24/ago/2026): ele matava a ROLAGEM
+        // que começasse em qualquer card — numa tela feita de cards, o scroll
+        // ficava com zonas mortas. O padrão vira o MESMO da dupla da lista de
+        // espera (bracket.js, long-press): segurar ~350ms arma o arraste;
+        // deslizar antes disso é rolagem e o navegador segue com ela.
+        var _t0 = e.touches && e.touches[0];
+        _touchArm = { card: card, x: _t0 ? _t0.clientX : 0, y: _t0 ? _t0.clientY : 0, timer: null };
+        _touchArm.timer = setTimeout(function () {
+          if (!_touchArm) return;
+          _touchIdx = parseInt(_touchArm.card.getAttribute('data-casual-idx'));
+          _touchArm.card.style.opacity = '0.6';
+          _touchArm = null;
+          if (window._haptic) { try { window._haptic('medium'); } catch (_eH) {} }
+        }, 350);
       }, { passive: false });
       card.addEventListener('touchmove', function(e) {
+        if (_touchArm) {
+          // ainda não armou: movimento = a pessoa está ROLANDO → cancela o arraste
+          var _tm = e.touches && e.touches[0];
+          if (_tm && (Math.abs(_tm.clientX - _touchArm.x) > 10 || Math.abs(_tm.clientY - _touchArm.y) > 10)) {
+            clearTimeout(_touchArm.timer);
+            _touchArm = null;
+          }
+          return;
+        }
         if (_touchIdx === null) return;
         e.preventDefault();
         if (!_teamDragGhost) {
@@ -13497,6 +13516,7 @@ window._openCasualMatch = function(restoreOpts) {
         }
       }, { passive: false });
       card.addEventListener('touchend', function(e) {
+        if (_touchArm) { clearTimeout(_touchArm.timer); _touchArm = null; }   // toque curto: nem arraste, nem estrago
         card.style.opacity = '1';
         if (_teamDragGhost) { _teamDragGhost.remove(); _teamDragGhost = null; }
         document.querySelectorAll('[data-casual-idx]').forEach(function(c) { c.style.transform = ''; });

@@ -245,6 +245,22 @@ function initRouter() {
             : ((typeof window._renderBallLoader === 'function')
               ? window._renderBallLoader('Carregando…', { minHeight: '60vh', bar: true })
               : '<div style="text-align:center;padding:60vh 0 0;">Carregando…</div>');
+          // ⛔ Este ramo era o ÚNICO sem vigia — se o onAuthStateChanged nunca
+          // dispara (IndexedDB do WKWebView preso: "Attempt to get records
+          // without an in-progress transaction", 94 eventos no Sentry), o
+          // container ficava vazio PRA SEMPRE atrás do splash → tela preta até
+          // matar o app (24/ago/2026). Mesmo timer do ramo sem cache (o
+          // auth.js já o limpa quando a auth resolve); janela maior porque
+          // aqui a sessão provavelmente existe — 8s ainda fica aquém do teto
+          // de 12s do splash, então a saída é a landing, nunca o preto.
+          clearTimeout(window._authNoCacheFallback);
+          window._authNoCacheFallback = setTimeout(function() {
+            window._authNoCacheFallback = null;
+            if (!window.AppStore || !window.AppStore.currentUser) {
+              window._authStateResolved = true;
+              if (typeof initRouter === 'function') initRouter();
+            }
+          }, 8000);
           _firstRoute = false;
           return;
         }

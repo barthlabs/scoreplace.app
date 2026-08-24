@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.39';
+window.SCOREPLACE_VERSION = '2.0.40';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -24,6 +24,24 @@ window._medirTrecho = function (nome, fn) {
   }
 };
 
+// ── ⚡ O PERFILADOR VIROU FERRAMENTA DE DIAGNÓSTICO, NÃO IMPOSTO (24/ago/2026) ─
+// Sentinela de 150ms (que fotografa a cena com `document.getAnimations()` +
+// contagem de TODOS os nós — trabalho extra exatamente quando a thread já está
+// presa), wrapper em todo setTimeout/setInterval, wrapper em todo ouvinte de
+// scroll/touchmove (2 `performance.now()` por evento, até 60×/s) e wrapper nos
+// observers rodavam PARA TODO USUÁRIO, sempre. Instrumentação é pra investigar,
+// não pra cobrar pedágio no caminho quente de quem só quer usar o app.
+// Liga com `?perf=1` na URL (persiste em localStorage); desliga com `?perf=0`.
+// `_medirTrecho` e os anéis continuam existindo — vazios custam nada.
+var _SP_PERF = false;
+try {
+  var _q = String(location.search || '') + String(location.hash || '');
+  if (/[?&#]perf=0/.test(_q)) localStorage.removeItem('sp_perf');
+  else if (/[?&#]perf(=1)?(&|$|#)/.test(_q)) localStorage.setItem('sp_perf', '1');
+  _SP_PERF = localStorage.getItem('sp_perf') === '1';
+} catch (e) {}
+window._spPerfAtivo = _SP_PERF;
+
 // ── SENTINELA DE TRAVADAS (1.9.78) — vê o que o iOS não deixa ver ────────────
 // O relato da 76 mostrou que o vácuo do toque acontece ANTES do handler rodar:
 // o evento espera uma tarefa longa que JÁ estava na thread. Nenhum código nosso
@@ -33,6 +51,7 @@ window._medirTrecho = function (nome, fn) {
 window._travadas = [];
 try {
   (function () {
+    if (!_SP_PERF) return;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
     var _ultimaBatida = (window.performance && performance.now) ? performance.now() : 0;
     if (!_ultimaBatida) return;
     setInterval(function () {
@@ -91,6 +110,7 @@ try {
 // corpo) — inclusive timers de SDK (Firebase). Custo: um wrapper por timer.
 try {
   (function () {
+    if (!_SP_PERF) return;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
     var _origSI = window.setInterval, _origST = window.setTimeout;
     var _snippet = function (fn) {
       try { return fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69); } catch (e) { return '?'; }
@@ -148,6 +168,7 @@ try {
 // Só `scroll` e `touchmove`, que disparam em rajada; e o piso é 8ms (não 120), porque
 // aqui o que mata é o custo POR EVENTO multiplicado por 60/s.
 try {
+  if (!_SP_PERF) throw 0;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
   var _origAEL = EventTarget.prototype.addEventListener;
   EventTarget.prototype.addEventListener = function (tipo, fn, opts) {
     if ((tipo === 'scroll' || tipo === 'touchmove') && typeof fn === 'function' && !fn.__spEnvolto) {
@@ -185,6 +206,7 @@ try {
 // alteração do DOM — os dois pontos cegos que sobraram depois de o perfilador
 // de timers (1.9.81) inocentar todos os setTimeout/setInterval.
 try {
+  if (!_SP_PERF) throw 0;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
   ['IntersectionObserver', 'MutationObserver', 'ResizeObserver'].forEach(function (nome) {
     var Orig = window[nome];
     if (typeof Orig !== 'function') return;
@@ -663,7 +685,14 @@ window._hydrateUidNames = function (root) {
     els.forEach(function (e) {
       var u = e.getAttribute('data-uid-name');
       var nm = window._nameForUid(u);
-      if (nm) e.textContent = nm;
+      // ⚡ só escreve (e só MARCA) quando o texto de fato mudou: é a marca que
+      // permite ao re-ajuste da chave (bracket.js) re-processar SÓ os nomes
+      // hidratados, em vez de zerar o fit dos 400 (24/ago/2026).
+      if (nm && e.textContent !== nm) {
+        e.textContent = nm;
+        // a guarda é pro harness headless (stub sem setAttribute); no navegador existe sempre
+        if (typeof e.setAttribute === 'function') e.setAttribute('data-sp-renamed', '1');
+      }
     });
     // e o ICONE, pelo mesmo nome que acabou de resolver
     avEls.forEach(function (e) {
@@ -3088,7 +3117,19 @@ window._formatCountdown = function(diff) {
   if (m > 0) return m + 'm';
   return s + 's';
 };
+// ⚡ O RELÓGIO CEDE A VEZ PRA ROLAGEM (24/ago/2026). O tique escreve texto que
+// muda TODO segundo (os relógios com segundos), então o dirty-check não segura
+// nada: é uma invalidação de layout por segundo, do documento inteiro. O
+// callback mede 0ms — a conta o navegador paga depois, e quem estava rolando
+// paga junto (o padrão que a própria 1.9.98 documentou). Rolou nos últimos
+// 300ms? O tique pula a vez; o relógio atrasa 1s pra quem está com o dedo na
+// tela — que é exatamente quem não está lendo o relógio.
+var _spUltimaRolagem = 0;
+try {
+  document.addEventListener('scroll', function () { _spUltimaRolagem = Date.now(); }, { capture: true, passive: true });
+} catch (e) {}
 setInterval(function() {
+  if (Date.now() - _spUltimaRolagem < 300) return;
   var _tick = function () {
   var now = Date.now();
   var els = document.querySelectorAll('[data-countdown-target]');
@@ -5235,6 +5276,12 @@ window._firstNameOnly = function(name) {
   // travadas de ~1s que o dono mediu nas builds 78-81.
   function _tentaDuasLinhasEmLote(itens) {
     if (!itens.length) return;
+    // ⚠️ TENTADO E REVERTIDO (24/ago/2026): rodar a busca SEM `balance` e aplicá-lo só
+    // na escrita final. Em tese o resultado seria idêntico (balance não muda o número
+    // de linhas); MEDIDO no Chromium (teste do card): no span `display:flex` (.sp-mc-nm)
+    // a busca sem balance assentava ATÉ 6 PASSOS abaixo (0,57→0,34). Medir numa forma e
+    // entregar noutra é medir errado — o balance fica DENTRO da busca.
+    //
     // (a) só ESCRITA — veste a forma de duas linhas e volta ao TETO da fonte: duas linhas
     //     podem sustentar uma fonte MAIOR que a linha única, então a busca recomeça do alto.
     itens.forEach(function (d) {
@@ -5336,18 +5383,30 @@ window._firstNameOnly = function(name) {
     catch (e) { return; }
     if (!alvos || !alvos.length) return;
     var grupos = {};
-    // (a) só LEITURA
+    // (a0) só ATRIBUTOS (zero layout): agrupa e descobre quem tem membro NOVO.
+    // Grupo em que TODOS os nomes saíram do cache de fit já carrega o desfecho
+    // do igualador da passada que o gravou — reler layout dele é pagar de novo
+    // pela mesma resposta. Só grupo com pelo menos um membro recalculado entra
+    // na fase de leitura. (24/ago/2026 — parte do conserto do travamento móvel.)
     for (var i = 0; i < alvos.length; i++) {
       var el = alvos[i], k = el.getAttribute('data-fit-group');
       if (!k) continue;
       var fs = parseFloat(el.style.fontSize);
       if (!(fs > 0)) continue;
-      var lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
-      var linhas = lh ? Math.round(el.scrollHeight / lh) : 1;
-      var g = grupos[k] || (grupos[k] = { itens: [], quebrou: false });
+      var g = grupos[k] || (grupos[k] = { itens: [], quebrou: false, temNovo: false });
       g.itens.push(el);
-      if (linhas > 1) g.quebrou = true;
+      if (!el.hasAttribute('data-fit-cached')) g.temNovo = true;
     }
+    // (a) só LEITURA — apenas dos grupos com membro novo
+    Object.keys(grupos).forEach(function (k) {
+      var g = grupos[k];
+      if (!g.temNovo || g.itens.length < 2) return;
+      g.itens.forEach(function (el) {
+        var lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
+        var linhas = lh ? Math.round(el.scrollHeight / lh) : 1;
+        if (linhas > 1) g.quebrou = true;
+      });
+    });
     // (b) só ESCRITA
     // ⛔ O GRUPO COMPARTILHA A QUEBRA, NUNCA O TAMANHO. Minha 1ª versão puxava todo mundo pra
     // MENOR fonte do grupo — e o dono cortou na hora: _"o nome longo sofre com fonte menor,
@@ -5356,9 +5415,10 @@ window._firstNameOnly = function(name) {
     // cinco sobrenomes paga em legibilidade, o parceiro dele não tem nada com isso.
     // O que precisa casar entre os dois é a FORMA (uma linha ou duas), porque é ela que faz
     // as metades do mesmo time parecerem desalinhadas. O tamanho continua sendo de cada um.
+    var _forcar = [];
     Object.keys(grupos).forEach(function (k) {
       var g = grupos[k];
-      if (g.itens.length < 2) return;              // sozinho não tem com quem se igualar
+      if (!g.temNovo || g.itens.length < 2) return;   // sozinho não tem com quem se igualar
       g.itens.forEach(function (el) {
         if (g.quebrou) { el.style.whiteSpace = 'normal'; el.style.textWrap = 'balance'; }
       });
@@ -5369,54 +5429,121 @@ window._firstNameOnly = function(name) {
       // O teto é a MAIOR PALAVRA: estreitar além disso não quebraria em espaço nenhum, ia
       // cortar a palavra no meio — que é justamente o que o dono proibiu.
       if (!g.quebrou) return;
-      g.itens.forEach(function (el) {
-        _forcaQuebra(el);
-      });
+      g.itens.forEach(function (el) { _forcar.push(el); });
     });
+    _forcaQuebraEmLote(_forcar);
   }
 
-  // Estreita UM nome até ele quebrar em duas linhas, sem nunca cortar palavra.
-  // A medição da maior palavra é feita num CLONE fora da tela: mexer no texto do próprio
-  // elemento brigaria com `_hydrateUidNames`, que reescreve `textContent` quando o perfil
-  // chega. Só roda pros poucos que sobraram numa linha dentro de um grupo já quebrado.
-  function _forcaQuebra(el) {
-    var txt = (el.textContent || '').trim();
-    if (txt.indexOf(' ') === -1) return;                 // uma palavra só: não há onde quebrar
-    var lh = parseFloat(getComputedStyle(el).lineHeight) || 0;
-    if (lh && Math.round(el.scrollHeight / lh) > 1) return;   // já quebrou
-    var clone = el.cloneNode(false);
-    clone.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:nowrap;visibility:hidden;' +
-      'font-size:' + el.style.fontSize + ';font-weight:' + getComputedStyle(el).fontWeight + ';';
-    (el.ownerDocument.body || el.parentNode).appendChild(clone);
-    var maior = 0, inteiro = 0;
-    try {
-      clone.textContent = txt; inteiro = clone.scrollWidth;
-      txt.split(/\s+/).forEach(function (p) {
-        clone.textContent = p;
-        if (clone.scrollWidth > maior) maior = clone.scrollWidth;
+  // Estreita nomes até quebrarem em duas linhas, sem nunca cortar palavra.
+  // ⚡ REESCRITA 24/ago/2026 (era `_forcaQuebra`, um por vez): a versão por elemento
+  // anexava um CLONE ao body e lia `scrollWidth` POR PALAVRA — 5-7 reflows forçados do
+  // documento INTEIRO por nome, rodando num bloco síncrono sem orçamento. Era o maior
+  // vilão isolado do travamento no iPhone (invisível no desktop: CPU ~10× e quase
+  // nenhum grupo quebrado). Agora a largura vem de `canvas.measureText` — ZERO layout —
+  // e o DOM é tocado em fases: escreve todos os maxWidth → lê todos os scrollHeight →
+  // reverte quem não coube. 2 reflows pro lote inteiro, qualquer que seja o tamanho.
+  var _medCanvas = null;
+  function _forcaQuebraEmLote(els) {
+    if (!els || !els.length) return;
+    var rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    if (!_medCanvas) { try { _medCanvas = document.createElement('canvas').getContext('2d'); } catch (e) {} }
+    if (!_medCanvas) return;
+    // fase 1 — só LEITURA (estilo computado + uma medida de linhas por elemento)
+    var cand = [];
+    els.forEach(function (el) {
+      var txt = (el.textContent || '').trim();
+      if (txt.indexOf(' ') === -1) return;               // uma palavra só: não há onde quebrar
+      var cs = getComputedStyle(el);
+      var lh = parseFloat(cs.lineHeight) || 0;
+      if (lh && Math.round(el.scrollHeight / lh) > 1) return;   // já quebrou
+      var caixa = el.parentElement;
+      cand.push({ el: el, txt: txt, cs: cs, caixa: caixa, altura0: caixa ? caixa.clientHeight : 0 });
+    });
+    if (!cand.length) return;
+    // fase 2 — medição SEM layout (canvas)
+    cand.forEach(function (d) {
+      var fsPx = (parseFloat(d.el.style.fontSize) || 1) * rootPx;
+      _medCanvas.font = d.cs.fontWeight + ' ' + fsPx + 'px ' + d.cs.fontFamily;
+      var inteiro = Math.ceil(_medCanvas.measureText(d.txt).width);
+      var maior = 0;
+      d.txt.split(/\s+/).forEach(function (p) {
+        var w = Math.ceil(_medCanvas.measureText(p).width);
+        if (w > maior) maior = w;
       });
-    } catch (e) {}
-    try { clone.parentNode.removeChild(clone); } catch (e) {}
-    if (!inteiro || !maior) return;
-    var alvo = Math.max(maior, Math.ceil(inteiro * 0.62));
-    if (alvo >= inteiro) return;                        // não dá pra estreitar sem cortar palavra
-    // ⛔ E A QUEBRA SÓ VALE SE COUBER. Sem esta volta atrás, o nome CURTO — que está numa
-    // fonte MAIOR justamente por ser curto — quebrava em duas linhas que não cabem na caixa
-    // de uma linha, e o `overflow:hidden` comia metade de cada uma. Foi o que o dono viu:
-    // "Nei Almeida" cortado em cima e embaixo ao lado da parceira de nome comprido.
-    // Encolher pra fazer caber está PROIBIDO aqui: seria fazer o nome curto pagar pelo longo,
-    // que é exatamente o que ele mandou parar de fazer. Então: ou quebra de graça, ou não
-    // quebra. A simetria é desejável; legibilidade é obrigatória.
-    var caixa = el.parentElement;
-    var altura0 = caixa ? caixa.clientHeight : 0;
-    el.style.maxWidth = alvo + 'px';
-    if (caixa && el.scrollHeight > altura0 + 1) {
-      el.style.maxWidth = '';
-      el.style.whiteSpace = '';
-      el.style.textWrap = '';
-    }
+      d.alvo = (inteiro && maior) ? Math.max(maior, Math.ceil(inteiro * 0.62)) : 0;
+      d.ok = d.alvo > 0 && d.alvo < inteiro;             // estreitar sem cortar palavra?
+    });
+    // fase 3 — só ESCRITA
+    cand.forEach(function (d) { if (d.ok) d.el.style.maxWidth = d.alvo + 'px'; });
+    // fase 4 — só LEITURA: a quebra só vale se COUBER
+    // ⛔ Sem esta volta atrás, o nome CURTO — que está numa fonte MAIOR justamente por
+    // ser curto — quebrava em duas linhas que não cabem na caixa de uma linha, e o
+    // `overflow:hidden` comia metade de cada uma. Foi o que o dono viu: "Nei Almeida"
+    // cortado em cima e embaixo ao lado da parceira de nome comprido. Encolher pra
+    // fazer caber está PROIBIDO aqui: seria fazer o nome curto pagar pelo longo. Então:
+    // ou quebra de graça, ou não quebra. A simetria é desejável; legibilidade é obrigatória.
+    cand.forEach(function (d) {
+      if (d.ok && d.caixa) d.estourou = (d.el.scrollHeight > d.altura0 + 1);
+    });
+    // fase 5 — só ESCRITA (reverte quem estourou)
+    cand.forEach(function (d) {
+      if (d.ok && d.estourou) {
+        d.el.style.maxWidth = '';
+        d.el.style.whiteSpace = '';
+        d.el.style.textWrap = '';
+      }
+    });
   }
   window._igualaGruposDeNomes = _igualaGrupos;
+
+  // ── ⚡ CACHE DE RESULTADO DO FIT (24/ago/2026) ────────────────────────────────
+  // O mesmo nome, na mesma caixa, com os mesmos limites, SEMPRE sai no mesmo
+  // tamanho — mas a dashboard repinta 2-3× na abertura, a hidratação da chave
+  // re-ajusta os 400 nomes e cada `innerHTML` zerava tudo: o motor pagava a
+  // busca inteira de novo pra chegar na MESMA resposta. Era o grosso do
+  // travamento de segundos no iPhone (2.0.30+2.0.35). O desfecho (fonte + forma)
+  // fica guardado por texto|caixa|limites; na repintura o nome recebe o estilo
+  // final numa ESCRITA só, sem nenhuma leitura de layout.
+  // `childElementCount` entra na chave: a coroa (svg) dentro do span muda a
+  // largura real do mesmo texto. A memorização acontece DEPOIS do igualador —
+  // o resultado gravado já carrega a decisão do grupo.
+  var _fitCache = Object.create(null), _fitCacheN = 0;
+  function _fitKey(el, bw, bh) {
+    // `className` entra na chave porque o MESMO texto na MESMA caixa sai
+    // diferente sob classes diferentes (peso da fonte muda a largura — medido
+    // no teste do card: 400 vs 600 diferem em até 2 passos de 0,03rem).
+    return (el.textContent || '') + '|' + el.childElementCount + '|' + (el.className || '') + '|' +
+      bw + 'x' + bh + '|' +
+      (el.getAttribute('data-maxrem') || '') + '|' + (el.getAttribute('data-minrem') || '');
+  }
+  function _fitAplica(el, s, bw, bh) {
+    el.style.fontSize = s.fs;
+    el.style.whiteSpace = s.ws;
+    el.style.wordBreak = s.wb;
+    el.style.textWrap = s.tw;
+    el.style.maxWidth = s.mw;
+    el.setAttribute('data-fitted', '1');
+    el.setAttribute('data-fit-cached', '1');
+    el.setAttribute('data-fitw', bw);
+    el.setAttribute('data-fith', bh);
+    if (_ro && el.parentElement) { try { _ro.observe(el.parentElement); } catch (e) {} }
+  }
+  function _fitMemoriza(root) {
+    var els;
+    try { els = ((root && root.querySelectorAll) ? root : document).querySelectorAll('.sp-name-fit[data-fitted]:not([data-fit-cached])'); }
+    catch (e) { return; }
+    if (!els || !els.length) return;
+    if (_fitCacheN > 800) { _fitCache = Object.create(null); _fitCacheN = 0; }
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var bw = el.getAttribute('data-fitw'), bh = el.getAttribute('data-fith');
+      if (!bw || !bh) continue;
+      var k = _fitKey(el, bw, bh);
+      if (!_fitCache[k]) _fitCacheN++;
+      // só estilo INLINE — ler `el.style` não força layout nenhum
+      _fitCache[k] = { fs: el.style.fontSize, ws: el.style.whiteSpace, wb: el.style.wordBreak, tw: el.style.textWrap, mw: el.style.maxWidth };
+    }
+  }
 
   // Ajusta UM elemento `.sp-name-fit` ao box pai. false = box sem dimensão.
   function _fitOne(el) {
@@ -5428,6 +5555,9 @@ window._firstNameOnly = function(name) {
     var maxR = parseFloat(el.getAttribute('data-maxrem')) || 1.5;
     var minR = parseFloat(el.getAttribute('data-minrem')) || 0.7;
     if (minR > maxR) minR = maxR;
+    // ⚡ cache primeiro: mesma resposta sem nenhuma busca (24/ago/2026)
+    var _hitOne = _fitCache[_fitKey(el, bw, bh)];
+    if (_hitOne) { _fitAplica(el, _hitOne, bw, bh); return true; }
     // ── 1.9.82 · O AJUSTE DEIXA DE SER BUSCA LINEAR (era O TREM) ──────────────
     // MEDIDO (preview, 400 nomes = a chave do Confra): 166-200ms por passada, ou
     // seja 0,5-0,8s NO IPHONE — e isto roda a cada render, ATÉ 12× seguidas pelo
@@ -5468,6 +5598,7 @@ window._firstNameOnly = function(name) {
       el.style.textWrap = '';
     }
     el.setAttribute('data-fitted', '1');
+    el.removeAttribute('data-fit-cached');   // recalculado agora
     el.setAttribute('data-fitw', bw);
     el.setAttribute('data-fith', bh);
     if (_ro) { try { _ro.observe(box); } catch (e) {} }
@@ -5535,6 +5666,11 @@ window._firstNameOnly = function(name) {
         var vivos = [];
         dados.forEach(function (d) {
           if (!d.bw || !d.bh) { pending = true; return; }
+          // ⚡ cache: mesmo texto + mesma caixa + mesmos limites = mesma resposta.
+          // A APLICAÇÃO fica pra fase 4 (escrita) — escrever aqui, no meio das
+          // leituras, forçaria um reflow por acerto e mataria o ganho.
+          var hit = _fitCache[_fitKey(d.el, d.bw, d.bh)];
+          if (hit) { d.hit = hit; return; }
           if (d.el.scrollWidth <= d.bw + 1 && d.el.scrollHeight <= d.bh + 1) { d.best = d.maxR; return; }
           vivos.push(d);
         });
@@ -5558,10 +5694,12 @@ window._firstNameOnly = function(name) {
         // fase 4 — aplica o resultado (só ESCRITA)
         dados.forEach(function (d) {
           if (!d.bw || !d.bh) return;
+          if (d.hit) { _fitAplica(d.el, d.hit, d.bw, d.bh); return; }   // ⚡ acerto de cache: uma escrita, zero busca
           var fs = (d.best != null) ? d.best : d.minR;
           d.el.style.fontSize = fs + 'rem';
           d.fsFinal = fs;
           d.el.setAttribute('data-fitted', '1');
+          d.el.removeAttribute('data-fit-cached');   // recalculado nesta passada
           d.el.setAttribute('data-fitw', d.bw);
           d.el.setAttribute('data-fith', d.bh);
           if (_ro) { try { _ro.observe(d.box); } catch (e) {} }
@@ -5572,7 +5710,7 @@ window._firstNameOnly = function(name) {
         // quem entra — e quem entra sai de lá com a forma final já aplicada.
         var _pQuebrar = [];
         dados.forEach(function (d) {
-          if (!d.bw || !d.bh) return;
+          if (!d.bw || !d.bh || d.hit) return;   // acerto de cache já saiu com a forma final
           var coube = (d.el.scrollWidth <= d.bw + 1 && d.el.scrollHeight <= d.bh + 1);
           // ⛔ sem espaço no texto não há onde quebrar: medir duas linhas seria pagar uma
           // busca binária inteira pra chegar exatamente no mesmo lugar.
@@ -5606,7 +5744,9 @@ window._firstNameOnly = function(name) {
       };
       // ⭐ o igualador roda DEPOIS de todos os lotes: um grupo pode cair em lotes
       // diferentes (o corte é de 40 em 40), e igualar no meio compararia meia dupla.
-      var _aoFimDeTudo = function () { _igualaGrupos(root); };
+      // ⚡ e a MEMORIZAÇÃO roda depois do igualador — o desfecho gravado no cache
+      // já carrega a decisão do grupo (por isso grupo 100% cacheado pode ser pulado).
+      var _aoFimDeTudo = function () { _igualaGrupos(root); _fitMemoriza(root); };
       _lote(perto, function () {
         if (longe.length) _lote(longe, _aoFimDeTudo); else _aoFimDeTudo();
       });
@@ -5638,13 +5778,40 @@ window._firstNameOnly = function(name) {
   function _observaParaAjuste(root) {
     if (typeof IntersectionObserver !== 'function') return;   // sem suporte: o passe de fundo continua valendo
     if (!_fitIO) {
+      // ⚡ EM FILA, NUNCA UM POR VEZ (24/ago/2026): o callback antigo chamava
+      // `_fitOne` síncrono por elemento — e desde a 2.0.30 cada `_fitOne` pode
+      // desembocar numa busca binária inteira (lote de 1: ~12 reflows por nome),
+      // DENTRO da rolagem. Era o scroll que "vem cortado" + a thread presa no
+      // iPhone. Agora as entradas viram fila e UM lote (`_fitNamesLote`, fases
+      // separadas de leitura/escrita) roda por quadro.
+      var _ioFila = [], _ioAgendado = false;
+      var _ioDespacha = function () {
+        _ioAgendado = false;
+        if (!_ioFila.length) return;
+        var leva = _ioFila.splice(0, _ioFila.length).filter(function (el) {
+          return el && !el.hasAttribute('data-fitted');
+        });
+        if (leva.length) {
+          try {
+            if (typeof window._fitNamesLote === 'function') window._fitNamesLote(leva);
+            else leva.forEach(function (el) { _fitOne(el); });
+          } catch (err) {}
+        }
+        leva.forEach(function (el) {
+          if (el.hasAttribute('data-fitted')) { try { _fitIO.unobserve(el); } catch (e) {} }
+        });
+      };
       _fitIO = new IntersectionObserver(function (entradas) {
         entradas.forEach(function (e) {
           if (!e.isIntersecting) return;
-          try { _fitOne(e.target); } catch (err) {}
-          // ajustado (ou sem caixa ainda) → para de observar quem já tem a marca
-          if (e.target.hasAttribute('data-fitted')) _fitIO.unobserve(e.target);
+          if (e.target.hasAttribute('data-fitted')) { try { _fitIO.unobserve(e.target); } catch (err) {} return; }
+          _ioFila.push(e.target);
         });
+        if (_ioFila.length && !_ioAgendado) {
+          _ioAgendado = true;
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_ioDespacha);
+          else setTimeout(_ioDespacha, 16);
+        }
       }, { rootMargin: '150% 0px 150% 0px', threshold: 0 });
     }
     var alvo = (root && root.querySelectorAll) ? root : document;

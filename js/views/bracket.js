@@ -685,8 +685,17 @@ function renderBracket(container, tournamentId, isInline) {
           });
           // a caixa do nome tem tamanho fixo e a FONTE é a variável — texto novo exige
           // re-ajuste, senão o nome hidratado sai fora da caixa (ou minúsculo demais).
+          // ⚡ SÓ quem MUDOU (24/ago/2026): zerar o fit dos 400 nomes fazia o motor
+          // rodar a passada inteira DUAS vezes por render da chave — metade do
+          // travamento no iPhone. `data-sp-renamed` é posto pelo próprio
+          // `_hydrateUidNames` apenas nos spans cujo texto trocou.
           container.querySelectorAll('.sp-name-fit[data-fitted]').forEach(function (el) {
-            el.removeAttribute('data-fitted');
+            if (el.hasAttribute('data-sp-renamed') || el.querySelector('[data-sp-renamed]')) {
+              el.removeAttribute('data-fitted');
+            }
+          });
+          container.querySelectorAll('[data-sp-renamed]').forEach(function (e) {
+            e.removeAttribute('data-sp-renamed');
           });
           if (typeof window._fitNames === 'function') window._fitNames(container);
         }).catch(function () {});
@@ -1650,13 +1659,31 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     }
     return null;
   }
-  function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; }
+  function _ljClearPending() { if (_ljPending && _ljPending.timer) clearTimeout(_ljPending.timer); _ljPending = null; _ljSyncMove(); }
+  // ⚡ O `touchmove` NÃO-PASSIVO SÓ EXISTE DURANTE O GESTO (24/ago/2026). Ele
+  // ficava registrado no document PARA SEMPRE depois da 1ª visita a uma chave
+  // com lista de espera — e um touchmove não-passivo no document obriga o
+  // navegador a esperar o JS a CADA frame de rolagem do app inteiro, dashboard
+  // incluída. Agora ele nasce no touchstart que arma o long-press e morre
+  // junto com o gesto; no resto do tempo o document fica limpo.
+  var _ljMoveWired = false;
+  function _ljSyncMove() {
+    var precisa = !!(_ljPending || _ljDrag);
+    if (precisa && !_ljMoveWired) {
+      _ljMoveWired = true;
+      document.addEventListener('touchmove', _ljMove, { passive: false });
+    } else if (!precisa && _ljMoveWired) {
+      _ljMoveWired = false;
+      document.removeEventListener('touchmove', _ljMove);
+    }
+  }
   // v1.5.20: aborta o arraste SEM soltar dupla — usado pela rede global (gesto
   // cancelado pelo SO, app pro fundo, navegação). Antes, um touchcancel caía no
   // _ljEnd e podia FORMAR a dupla de um gesto que o usuário nem concluiu.
   function _ljAbort() {
     _ljClearPending();
     var d = _ljDrag; _ljDrag = null;
+    _ljSyncMove();
     if (window._activeDragReset === _ljAbort) window._activeDragReset = null;
     if (!d) return;
     if (d.clone && d.clone.parentElement) d.clone.remove();
@@ -1706,7 +1733,9 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     _ljPending.timer = setTimeout(function () {
       var p = _ljPending; _ljPending = null;
       if (p) _ljBegin(p.card, { clientX: p.x, clientY: p.y });
+      _ljSyncMove();
     }, LJ_LONGPRESS_MS);
+    _ljSyncMove();   // arma o touchmove SÓ enquanto este gesto vive
     // sem preventDefault aqui: se o usuário rolar, cancelamos no touchmove
   }
   function _ljMove(e) {
@@ -1745,8 +1774,9 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
   };
   function _ljEnd(e) {
     if (_ljPending) _ljClearPending();
-    if (!_ljDrag) return;
+    if (!_ljDrag) { _ljSyncMove(); return; }
     var d = _ljDrag; _ljDrag = null;
+    _ljSyncMove();
     if (window._activeDragReset === _ljAbort) window._activeDragReset = null;
     if (d.clone) d.clone.remove();
     if (d.hi) { d.hi.style.outline = ''; d.hi.style.outlineOffset = ''; }
@@ -1767,7 +1797,8 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
     document.addEventListener('mousemove', _ljMove);
     document.addEventListener('mouseup', _ljEnd);
     document.addEventListener('touchstart', _ljTouchStart, { passive: true });
-    document.addEventListener('touchmove', _ljMove, { passive: false });
+    // ⚡ o touchmove {passive:false} NÃO mora mais aqui — é armado por gesto
+    // em `_ljSyncMove` (touchstart no card → arma; end/cancel/abort → desarma).
     document.addEventListener('touchend', _ljEnd);
     document.addEventListener('touchcancel', _ljEnd);
   };

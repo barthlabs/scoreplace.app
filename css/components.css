@@ -1202,19 +1202,17 @@ body.sp-drag-compact .sp-dnd-host .participant-card::before {
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   transition: transform var(--transition-normal), box-shadow var(--transition-normal);
-  /* ── 1.9.86 · ISOLA A PINTURA DO CARTÃO ─────────────────────────────────
-     MEDIDO no aparelho do dono: a tela tem 4.234 elementos. Sem isto, mexer em
-     UM cartão obriga o navegador a reconsiderar a página inteira — é o
-     multiplicador que tornava caro cada enfeite que consertamos nesta noite.
-     `contain: paint` promete só uma coisa: nada do cartão vaza para fora dele.
-     ⛔ NÃO CONFUNDIR com `content-visibility`, que está PROIBIDO aqui
-     ([[feedback_otimizacao_que_muda_o_que_a_tela_promete]]): aquele PULA o
-     desenho e entrega retângulo vazio ao rolar, além de comer o primeiro toque.
-     Este NÃO esconde nada, não altera layout e não mexe em evento — só delimita
-     o escopo do repaint. Zero mudança visual.
-     ⚠️ Só `paint`: `contain: layout/size` mudaria a altura de cartão sem altura
-     fixa e quebraria as travas de scroll que já foram pagas. */
-  contain: paint;
+  /* ── ⛔ `contain: paint` FOI RETIRADO (24/ago/2026) — mesma família do
+     `content-visibility` proibido, só que disfarçado. A spec AUTORIZA o
+     navegador a pular a pintura do conteúdo com `contain:paint` quando o
+     elemento está fora da tela — e no WKWebView, em rolagem rápida, isso vira
+     card entrando na viewport como retângulo vazio até a repintura alcançar:
+     o "scrolla cortado até na dashboard" do dono (24/ago), o mesmo sintoma que
+     baniu o `content-visibility`
+     ([[feedback_otimizacao_que_muda_o_que_a_tela_promete]]). O argumento da
+     1.9.86 ("só delimita o repaint, zero mudança visual") valia no desktop e
+     falhava no celular. O multiplicador de repaint que ele mitigava (enfeites
+     animados) já saiu na própria 1.9.9x; a isolação não paga o que cobra. */
 }
 
 .card:hover {

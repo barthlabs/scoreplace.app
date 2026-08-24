@@ -554,6 +554,31 @@ const CACHE_QUENTE = {
     /ATUALIZAR NUNCA PODE DESTRUIR O SW/.test(storeSrc));
 
   // ───────────────────────────────────────────────────────────────────────────
+  // 4ª ENCARNAÇÃO (24/ago/2026) — TELA PRETA SEM SER BRANCA. Duas formas novas,
+  // medidas no iPhone do dono:
+  //   (i)  `respondWith(undefined)`: o catch do _networkFirst devolvia o
+  //        caches.match direto — cache vazio + rede falhando = resposta nula =
+  //        "FetchEvent.respondWith received an error" = página morta, PRETA no
+  //        PWA standalone (sem barra de erro nenhuma). Reproduzido no simulador.
+  //   (ii) o splash saindo de cima de um #view-container que o router esvaziou
+  //        no boot (authCache + auth pendurada no IndexedDB) — o teto de 12s
+  //        revelava o fundo escuro puro.
+  // ───────────────────────────────────────────────────────────────────────────
+  {
+    ok('o catch do _networkFirst NUNCA resolve com undefined (nav ganha página de retry)',
+      /Tentar de novo/.test(swSrc) && /Response\.error\(\)/.test(swSrc) &&
+      /NUNCA resolver com undefined/.test(swSrc));
+    ok('o activate MIGRA o cache velho em vez de só apagar (deploy não vira load 100% rede)',
+      /novo\.put\(req, resp\)/.test(swSrc) && !/keys\.filter\(function\(k\) \{ return k !== CACHE_NAME; \}\)\s*\.map\(function\(k\) \{ return caches\.delete\(k\); \}\)/.test(swSrc));
+    ok('o hide() do splash tem fallback pra container vazio (splash nunca revela o preto)',
+      /O SPLASH NUNCA SAI DE CIMA DE UM CONTAINER VAZIO/.test(shell) &&
+      /Tentar de novo/.test(shell));
+    const routerSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'router.js'), 'utf8');
+    ok('o ramo do authCache no router tem VIGIA (auth pendurada não deixa o container vazio pra sempre)',
+      /_authNoCacheFallback = setTimeout[\s\S]{0,900}8000\)/.test(routerSrc));
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
   // ORÇAMENTO ESTRUTURAL — o <head> é o caminho crítico de pintura. Cada arquivo
   // aqui é um round-trip que o splash espera quando o cache está frio (e ele
   // FICA frio a cada deploy, porque CACHE_NAME carrega a versão).

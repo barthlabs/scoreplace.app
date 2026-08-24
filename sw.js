@@ -97,7 +97,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v2.0.39';
+var CACHE_NAME = 'scoreplace-v2.0.40';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -249,9 +249,9 @@ function _cacheEmSerie(cache, urls) {
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(STATIC_ASSETS).catch(function(err) {
-        console.warn('[SW] Pre-cache partial fail:', err);
-      }).then(function() {
+      // Em SÉRIE, como a 2ª passada: o install roda enquanto o SW velho ainda
+      // serve a página — `addAll` em paralelo disputava banda com o load dela.
+      return _cacheEmSerie(cache, STATIC_ASSETS).then(function() {
         // Segunda passada: as MESMAS coisas, sob a URL versionada que a página pede.
         // `cache.add` uma a uma (nunca addAll) pra que um arquivo que falhe não
         // derrube o precache inteiro.
@@ -268,14 +268,38 @@ self.addEventListener('install', function(event) {
   );
 });
 
-// Activate: clean old caches
+// Activate: MIGRA o cache antigo antes de apagá-lo.
+// ⛔ Apagar direto era o agravante da tela preta de 24/ago/2026: cada deploy
+// (e o dono publica várias vezes por dia) jogava fora TODO o runtime-cache —
+// inclusive os ~80 scripts defer cujo `?v=` NÃO mudou naquele deploy (o
+// cache-buster é por arquivo). O primeiro load pós-deploy virava carga 100%
+// pela rede: boot de segundos no celular, atrás do splash. Copiar as entradas
+// pro cache novo preserva tudo que continua válido — o cache-first casa URL
+// EXATA com `?v=`, então arquivo que MUDOU tem URL nova, dá miss e vai à rede:
+// zero risco de versão misturada. O que sobrar de entrada morta some no
+// próximo ciclo (o cache antigo inteiro é apagado ao fim).
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(keys) {
-      return Promise.all(
-        keys.filter(function(k) { return k !== CACHE_NAME; })
-            .map(function(k) { return caches.delete(k); })
-      );
+      var old = keys.filter(function(k) { return k !== CACHE_NAME; });
+      return caches.open(CACHE_NAME).then(function(novo) {
+        return Promise.all(old.map(function(k) {
+          return caches.open(k).then(function(velho) {
+            return velho.keys().then(function(reqs) {
+              return Promise.all(reqs.map(function(req) {
+                return novo.match(req).then(function(ja) {
+                  if (ja) return;
+                  return velho.match(req).then(function(resp) {
+                    if (resp) return novo.put(req, resp);
+                  });
+                }).catch(function() {});
+              }));
+            });
+          }).catch(function() {});
+        }));
+      }).then(function() {
+        return Promise.all(old.map(function(k) { return caches.delete(k); }));
+      });
     }).then(function() {
       return self.clients.claim();
     })
@@ -320,7 +344,29 @@ function _networkFirst(event) {
     // arquivo, mesmo que gravada sob outra versão. Servir um dicionário de uma versão
     // atrás é incomparavelmente melhor que servir a tela em chaves cruas — e isto só
     // roda quando a rede JÁ falhou; no caminho normal a rede manda.
-    return caches.match(event.request, { ignoreSearch: true });
+    return caches.match(event.request, { ignoreSearch: true }).then(function(cached) {
+      if (cached) return cached;
+      // ⛔ NUNCA resolver com undefined: `respondWith(undefined)` mata a página
+      // inteira com "Returned response is null" — no PWA standalone isso é TELA
+      // PRETA sem mensagem nenhuma (medido no simulador, 24/ago/2026). Acontece
+      // no pior momento possível: primeira visita (cache vazio) com a rede
+      // tropeçando, ou depois de o iOS expulsar o cache. Navegação ganha uma
+      // página mínima com botão de tentar de novo; asset ganha um erro de rede
+      // honesto (o script falha como falharia sem SW, sem derrubar o resto).
+      if (_isNav) {
+        return new Response(
+          '<!doctype html><html><head><meta charset="utf-8">' +
+          '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+          '<title>scoreplace.app</title></head>' +
+          '<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#e2e8f0;font-family:-apple-system,sans-serif;text-align:center">' +
+          '<div><p style="font-size:1.05rem;margin:0 0 16px">Sem conexão com o servidor.</p>' +
+          '<button onclick="location.reload()" style="font-size:1rem;font-weight:700;padding:12px 28px;border-radius:10px;border:0;background:#16a34a;color:#fff">Tentar de novo</button></div>' +
+          '</body></html>',
+          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+      return Response.error();
+    });
   });
 }
 

@@ -104,7 +104,10 @@ function servidor() {
   const total = (fx.participants || []).length;
   ok(total > 100, 'o fixture é grande de verdade (' + total + ' inscritos) — fatiar só se prova em lista grande');
 
-  // (a) no topo: a 1ª fatia é MENOR que a lista, e o que ela traz é card REAL
+  // (a) 24/ago/2026 — A 1ª FATIA PASSOU A SER A LISTA INTEIRA (a decisão da 1.9.90,
+  //     aplicada aqui: tela entregue incompleta MENTE — rolar mais rápido que as
+  //     fatias era buraco branco no iPhone). O maquinário de fatias/gerações/flush
+  //     continua no lugar e continua travado pelas outras asserções.
   const a = await p.evaluate(() => {
     const c = document.getElementById('view-container');
     c.innerHTML = ''; window.scrollTo(0, 0);
@@ -117,7 +120,7 @@ function servidor() {
     });
     return { naFatia1: cards.length, visiveis, alturaDoc: Math.round(document.documentElement.scrollHeight) };
   });
-  ok(a.naFatia1 > 0 && a.naFatia1 < total, 'no topo a 1ª fatia traz só parte da lista (' + a.naFatia1 + ' de ' + total + ')');
+  ok(a.naFatia1 === total, 'a 1ª entrega É a lista inteira — a tela nunca mente (' + a.naFatia1 + ' de ' + total + ')');
   ok(a.visiveis >= 3, 'e o que ela traz é card REAL preenchendo a tela (' + a.visiveis + ' visíveis) — nunca só o cabeçalho, que é o que produz a piscada preta');
 
   // (b) O INVARIANTE MAIS IMPORTANTE: sem rAF, a lista COMPLETA ainda chega.
@@ -138,7 +141,7 @@ function servidor() {
     window.requestAnimationFrame = guardado;
     return { logo, depois };
   });
-  ok(semRaf.logo < total, 'sem rAF a 1ª fatia continua sendo fatia (' + semRaf.logo + ')');
+  ok(semRaf.logo === total, 'sem rAF a lista JÁ nasce completa — nenhum agendador é necessário (' + semRaf.logo + ')');
   ok(semRaf.depois === total, 'SEM rAF NENHUM a lista chega COMPLETA pelo timeout (' + semRaf.depois + '/' + total + ') — lista incompleta que se diz completa é pior que lista lenta');
 
   // (c) a porta síncrona entrega tudo, e a ordem é a MESMA que a ordenação produz
@@ -174,7 +177,7 @@ function servidor() {
     if (inp) { inp.value = ''; window._partApplyFilter(); }
     return { antesDeDigitar, noDom, visiveis };
   });
-  ok(busca.antesDeDigitar < total, 'antes de digitar a lista ainda estava em fatias (' + busca.antesDeDigitar + ')');
+  ok(busca.antesDeDigitar === total, 'antes de digitar a lista já estava COMPLETA (' + busca.antesDeDigitar + ')');
   ok(busca.noDom === total, 'digitar COMPLETA a lista antes de filtrar (' + busca.noDom + '/' + total + ') — filtrar meia lista deixaria as fatias seguintes aparecerem sem casar com a busca');
   ok(busca.visiveis === 0, 'e o filtro vale pra TODOS, inclusive os que acabaram de chegar (' + busca.visiveis + ' visíveis pra uma busca que não casa com ninguém)');
 

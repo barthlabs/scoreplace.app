@@ -383,8 +383,25 @@
     clone.style.cssText = 'position:fixed;z-index:100060;pointer-events:none;background:#0ea5e9;color:#fff;font-weight:700;font-size:0.8rem;padding:6px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:translate(-50%,-160%);left:' + pt.clientX + 'px;top:' + pt.clientY + 'px;';
     document.body.appendChild(clone);
     _phDrag = { name: name, uid: uid, clone: clone, over: null, hi: null };
+    _phSyncMove();   // ⚡ o touchmove global só existe enquanto ESTE arraste vive
     document.body.style.userSelect = 'none';
     if (e.cancelable) e.preventDefault();
+  }
+  // ⚡ O `touchmove` NÃO-PASSIVO SÓ EXISTE DURANTE O ARRASTE (24/ago/2026). Ele
+  // ficava no document pra sempre depois da 1ª chave com vaga (e o dono é
+  // organizador, então no aparelho DELE estava sempre ativo) — um touchmove
+  // não-passivo no document faz o navegador esperar o JS a cada frame de
+  // rolagem do app inteiro. Agora nasce no _phStart e morre no _phEnd.
+  var _phMoveWired = false;
+  function _phSyncMove() {
+    var precisa = !!_phDrag;
+    if (precisa && !_phMoveWired) {
+      _phMoveWired = true;
+      document.addEventListener('touchmove', _phMove, { passive: false });
+    } else if (!precisa && _phMoveWired) {
+      _phMoveWired = false;
+      document.removeEventListener('touchmove', _phMove);
+    }
   }
   function _phMove(e) {
     if (!_phDrag) return;
@@ -403,6 +420,7 @@
   function _phEnd(e) {
     if (!_phDrag) return;
     var d = _phDrag; _phDrag = null;
+    _phSyncMove();
     if (d.clone) d.clone.remove();
     if (d.hi) { d.hi.style.outline = ''; }
     document.body.style.userSelect = '';
@@ -445,7 +463,8 @@
       window._phDndGlobalWired = true;
       document.addEventListener('mousemove', _phMove);
       document.addEventListener('mouseup', _phEnd);
-      document.addEventListener('touchmove', _phMove, { passive: false });
+      // ⚡ o touchmove {passive:false} NÃO mora mais aqui — é armado por arraste
+      // em `_phSyncMove` (_phStart → arma; _phEnd → desarma).
       document.addEventListener('touchend', _phEnd);
     }
   };

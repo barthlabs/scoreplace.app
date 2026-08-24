@@ -153,14 +153,15 @@ window._flushInscritosPaint = function () {
 // Conservador de propósito: errar pra mais custa alguns ms; errar pra menos deixa
 // buraco branco na tela.
 function _inscritosPrimeiraFatia(total) {
-  var vh = 800, y = 0, larg = 0;
-  try { vh = window.innerHeight || 800; } catch (e) {}
-  try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
-  try { var c = document.getElementById('view-container'); larg = c ? c.clientWidth : 0; } catch (e) {}
-  var colunas = Math.max(1, Math.floor((larg || 390) / 240));   // o grid é minmax(240px,1fr)
-  var ALTURA = 110;                                             // medido: 118px; 110 sobra a favor
-  var precisa = Math.ceil((y + vh * 2.5) / ALTURA) * colunas;
-  return Math.max(colunas * 6, Math.min(total, precisa));
+  // ⚡ A 1ª FATIA É A LISTA INTEIRA (24/ago/2026) — a decisão da 1.9.90 ("tela
+  // entregue incompleta MENTE: enquanto as fatias voam, rolar mais rápido que
+  // 24 cards/quadro é buraco branco") vale aqui igual valeu na chave. E o
+  // preço de entregar tudo é pequeno: o render completo mede 34,5ms no
+  // desktop (~150ms no iPhone), UMA vez — contra buraco branco toda vez que
+  // alguém dá um flick. O maquinário de fatias/gerações/flush fica no lugar:
+  // com a 1ª fatia = total ele encerra no primeiro passo, e volta a fatiar
+  // com uma linha se um dia a lista crescer a ponto de precisar.
+  return total;
 }
 
 // Anexa o RESTO da lista em lotes, um por quadro, dentro do grid que já está na tela.
