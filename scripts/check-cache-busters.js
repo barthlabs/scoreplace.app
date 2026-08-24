@@ -21,15 +21,47 @@ const store = fs.readFileSync(path.join(root, 'js/store.js'), 'utf8');
 const versao = (store.match(/window\.SCOREPLACE_VERSION\s*=\s*'([^']+)'/) || [])[1];
 if (!versao) { console.error('✗ não achei SCOREPLACE_VERSION em js/store.js'); process.exit(1); }
 
+// ── 2.0.42 · O `merge-base` SOZINHO DEIXAVA A TRAVA VAZIA ────────────────────────────
+// INCIDENTE (24/ago/2026): publiquei um conserto em `js/views/dashboard.js` e ele foi pro ar
+// servido como `?v=2.0.39` — a URL ANTIGA. Quem já tinha o arquivo em cache continuou com o
+// código velho. Duas causas somadas:
+//   1. este script não era chamado por NINGUÉM do pipeline (só `npm run check:cache`);
+//   2. e, mesmo chamado no deploy, ele seria VAZIO: `deploy-hosting.sh` empurra pro `main`
+//      ANTES de publicar, então nessa hora `merge-base HEAD origin/main === HEAD` e o diff
+//      não tem arquivo nenhum. A trava passava sem conferir nada — o pior tipo de verde.
+// Agora, quando não há nada à frente do `main`, a comparação cai pro RELEASE ANTERIOR (o
+// commit anterior ao último que mexeu em `version.txt`). Assim a pergunta continua sendo a
+// mesma — "o que mudou nesta leva tem o `?v=` da versão desta leva?" — em vez de virar
+// "mudou algo desde agora?", que é sempre não.
+// ⚠️ Foi também assim que a mistura de DUAS sessões na mesma árvore passou batida: a outra
+// sessão publicou 2.0.40/2.0.41 no meio, meu bump se perdeu no rebase e ninguém acusou.
+// [[feedback_uma_sessao_por_arvore_chip_vai_isolado]] · [[project_cache_buster_gate_so_confere_js]]
 let mudados = [];
+let _de = '';
 try {
-  const base = execSync('git merge-base HEAD origin/main', { cwd: root }).toString().trim();
+  let base = execSync('git merge-base HEAD origin/main', { cwd: root }).toString().trim();
+  const head = execSync('git rev-parse HEAD', { cwd: root }).toString().trim();
+  if (base === head) {
+    // Nada à frente do main → a base vira o RELEASE ANTERIOR (exclusive): o último commit que
+    // mexeu em `version.txt` e que não seja o próprio HEAD. Assim o diff é exatamente ESTA
+    // leva.
+    // ⚠️ Duas bordas que eu já errei ao escrever isto, as duas medidas:
+    //   • usar o PAI do release anterior varre a leva anterior junto e acusa arquivo que já
+    //     está com o `?v=` certo (aconteceu: router.js e bracket.js da leva de outra sessão);
+    //   • no release normal o próprio HEAD é quem carimba o `version.txt` — pegar "o último"
+    //     sem descartar o HEAD devolve HEAD..HEAD, e a trava fica vazia de novo.
+    const rels = execSync('git log -3 --format=%H -- version.txt', { cwd: root })
+      .toString().split('\n').map((x) => x.trim()).filter(Boolean);
+    const anterior = rels.filter((h) => h !== head)[0];
+    if (anterior) { base = anterior; _de = ' (desde o release anterior ' + anterior.slice(0, 8) + ' — nada à frente do main)'; }
+  }
   mudados = execSync('git diff --name-only ' + base + ' -- js/', { cwd: root })
     .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
 } catch (e) {
   console.log('⚠ sem origin/main pra comparar — pulando (' + (e.message || '').split('\n')[0] + ')');
   process.exit(0);
 }
+if (_de) console.log('▸ check-cache-busters' + _de);
 
 const falhas = [];
 mudados.forEach((f) => {
