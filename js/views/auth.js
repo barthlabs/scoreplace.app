@@ -4243,6 +4243,24 @@ async function simulateLoginSuccess(user) {
   window._simulateLoginInProgressUid = newUid || '';
   window._simulateLoginInProgress = true; // mantido pra compat com callers antigos
 
+  // ── ⭐ A LANDING MORRE NO INSTANTE DO LOGIN (2.0.48) ────────────────────────
+  // Relato do dono (24/ago): _"depois do toast do login, volta para a landing
+  // page e demora uma vida até mostrar algo diferente. isso faz a pessoa ficar
+  // questionando e clicando no entrar de novo."_ E ele tem razão: logou, a tela
+  // tem que dizer "estou entrando" JÁ — não continuar vendendo o botão ENTRAR.
+  // Aqui é o funil único de TODO login; se a landing está na tela, ela vira o
+  // loader de bola agora, e quem o substitui é o initRouter quando a dashboard
+  // estiver pronta (mesmo padrão do loader da rota).
+  try {
+    var _vcLogin = document.getElementById('view-container');
+    if (_vcLogin && _vcLogin.querySelector('.landing-page')) {
+      _vcLogin.innerHTML = (typeof window._renderBallLoader === 'function')
+        ? window._renderBallLoader('Entrando…', { minHeight: '60vh', bar: true })
+        : '<div style="text-align:center;padding:40vh 0 0;color:var(--text-muted);">Entrando…</div>';
+      try { window.scrollTo(0, 0); } catch (_eSc) {}
+    }
+  } catch (_eLd) {}
+
   // v2.5.x: LOGIN PÓS-MERGE. Se esta conta foi mesclada em outra (mergedInto),
   // a credencial (celular/e-mail) ficou nela — o Firebase não move credencial
   // entre uids. Re-loga no SOBREVIVENTE via custom token (resolveMergedLogin só

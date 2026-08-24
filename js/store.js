@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.47';
+window.SCOREPLACE_VERSION = '2.0.48';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -554,10 +554,29 @@ window._preloadUserProfiles = function (uids) {
     for (var _i = 0; _i < toLoad.length; _i += _porLote) _lotes.push(toLoad.slice(_i, _i + _porLote));
     _lotes.forEach(function (lote) {
       var _resolvers = {};
+      var _minhas = {};
       lote.forEach(function (uid) {
         window._userProfilePending[uid] = new Promise(function (res) { _resolvers[uid] = res; });
+        _minhas[uid] = window._userProfilePending[uid];
         waitFor.push(window._userProfilePending[uid]);
       });
+      // ── ⛔ PROMESSA MORTA ENVENENA A SESSÃO INTEIRA (24/ago/2026) ─────────
+      // Um `.get()` que NUNCA responde (Firestore com o IndexedDB do WKWebView
+      // pendurado pós-resume — a família dos 94 eventos do Sentry) deixava
+      // `_userProfilePending[uid]` vivo pra sempre: TODA hidratação futura,
+      // em QUALQUER tela, esperava a promessa-cadáver — chave inteira com
+      // "…" no lugar dos nomes até matar o app (foto do dono, 09:42).
+      // O prazo liberta quem espera e LIMPA a pendência SEM gravar cache
+      // vazio: a próxima hidratação re-pede de verdade. Se o get() acordar
+      // depois, ele ainda preenche o cache — só não segura mais ninguém.
+      var _lotou = false;
+      var _prazoLote = setTimeout(function () {
+        if (_lotou) return;
+        lote.forEach(function (uid) {
+          if (window._userProfilePending[uid] === _minhas[uid]) delete window._userProfilePending[uid];
+          if (_resolvers[uid]) { try { _resolvers[uid](); } catch (e) {} _resolvers[uid] = null; }
+        });
+      }, 8000);
       db.collection('users').where(_fb, 'in', lote).get().then(function (snap) {
         var vistos = {};
         snap.forEach(function (doc) {
@@ -578,7 +597,11 @@ window._preloadUserProfiles = function (uids) {
           }
         });
       }).catch(function () {}).then(function () {
-        lote.forEach(function (uid) { delete window._userProfilePending[uid]; _resolvers[uid](); });
+        _lotou = true; clearTimeout(_prazoLote);
+        lote.forEach(function (uid) {
+          if (window._userProfilePending[uid] === _minhas[uid]) delete window._userProfilePending[uid];
+          if (_resolvers[uid]) { try { _resolvers[uid](); } catch (e) {} _resolvers[uid] = null; }
+        });
       });
     });
     return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
@@ -599,9 +622,14 @@ window._preloadUserProfiles = function (uids) {
         birthDate: d.birthDate || '',
         defaultCategory: d.defaultCategory || ''
       };
-    }).catch(function () {}).then(function () { delete window._userProfilePending[uid]; });
-    window._userProfilePending[uid] = pr;
-    waitFor.push(pr);
+    }).catch(function () {}).then(function () {
+      if (window._userProfilePending[uid] === _guarda) delete window._userProfilePending[uid];
+    });
+    // mesmo prazo do lote: get() pendurado não pode virar promessa-cadáver
+    var _guarda = Promise.race([pr, new Promise(function (res) { setTimeout(res, 8000); })])
+      .then(function () { if (window._userProfilePending[uid] === _guarda) delete window._userProfilePending[uid]; });
+    window._userProfilePending[uid] = _guarda;
+    waitFor.push(_guarda);
   });
   return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
 };
@@ -774,6 +802,44 @@ window._hydrateUidNames = function (root) {
       // tela de inscritos (sem [data-part-card]).
       if (_anyRenamed && typeof window._partApplyFilter === 'function') { try { window._partApplyFilter(); } catch (_eS) {} }
     } catch (_e) {}
+    // ── ⭐ NOME QUE NÃO CHEGOU TENTA DE NOVO — E CONTA PRO SENTRY (24/ago/2026) ──
+    // Foto do dono: chave inteira com "…" ([data-uid-name]:empty) porque o
+    // Firestore ficou pendurado. O preload agora tem prazo (não envenena mais a
+    // sessão), então re-tentar FUNCIONA: até 2 passes extras (3s/6s), re-ajustando
+    // a fonte dos que mudarem. E cada ocorrência reporta quantos ficaram sem nome —
+    // é o aparelho dizendo o tamanho do buraco.
+    try {
+      var _semNome = 0;
+      els.forEach(function (e) {
+        if (e.getAttribute('data-uid-name') && !(e.textContent || '').trim()) _semNome++;
+      });
+      if (_semNome > 0) {
+        window._hydrateVazioN = (window._hydrateVazioN || 0) + 1;
+        if (window._hydrateVazioN <= 3 && typeof window._captureMessage === 'function') {
+          try { window._captureMessage('hydrate: ' + _semNome + ' uid(s) sem nome pós-preload (pass ' + window._hydrateVazioN + ')', 'warning'); } catch (_eC) {}
+        }
+        var _alvoRetry = (root && root.querySelectorAll) ? root : document;
+        var _tent = _alvoRetry.__spHydrateTent || 0;
+        if (_tent < 2) {
+          _alvoRetry.__spHydrateTent = _tent + 1;
+          setTimeout(function () {
+            try {
+              window._hydrateUidNames(_alvoRetry).then(function () {
+                try {
+                  _alvoRetry.querySelectorAll('.sp-name-fit[data-fitted]').forEach(function (el) {
+                    if (el.hasAttribute('data-sp-renamed') || el.querySelector('[data-sp-renamed]')) el.removeAttribute('data-fitted');
+                  });
+                  _alvoRetry.querySelectorAll('[data-sp-renamed]').forEach(function (e) { e.removeAttribute('data-sp-renamed'); });
+                  if (typeof window._fitNames === 'function') window._fitNames(_alvoRetry);
+                } catch (_eF) {}
+              }).catch(function () {});
+            } catch (_eR) {}
+          }, 3000 * (_tent + 1));
+        }
+      } else if (root && root.__spHydrateTent) {
+        root.__spHydrateTent = 0;   // resolveu tudo: próxima seca começa do zero
+      }
+    } catch (_eV) {}
   });
 };
 

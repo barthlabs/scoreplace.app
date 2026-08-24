@@ -84,6 +84,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.48 ───────────────────────────────────────────
+        // Três relatos do dono no aparelho, mesma manhã:
+        '<li><b>🧑‍🤝‍🧑 Os nomes da chave não somem mais quando a rede engasga:</b> uma busca de perfis que ficasse pendurada (acontece no celular ao voltar pro app) travava <b>todas</b> as buscas seguintes — a chave inteira ficava com "…" no lugar dos nomes até fechar o app. Agora a busca tem prazo, tenta de novo sozinha e os nomes entram assim que chegam.</li>' +
+        '<li><b>🔑 Fez login, a tela já diz "Entrando…":</b> depois do aviso de login a página inicial continuava na tela por vários segundos — e dava vontade de clicar em ENTRAR de novo. Agora ela vira a tela de carregando no instante do login.</li>' +
+        '<li><b>📵 Destravou o celular com o app aberto e a tela ficou branca?</b> O iOS às vezes descarta o miolo do app em segundo plano e ele voltava como um retângulo branco morto. Agora o app percebe e se recarrega sozinho (só no aplicativo instalado).</li>' +
         // ── ciclo 2.0.47 ───────────────────────────────────────────
         // Dois pedidos do dono testando a build 246 no aparelho:
         '<li><b>🔢 O box do placar ainda não lançado ficou do tamanho do placar lançado:</b> o número do resultado tinha crescido, mas o box de digitar (com o 0 dentro) continuava pequeno ao lado dele. Agora os dois seguem a <b>mesma régua</b>, em todos os cards de jogo, em qualquer fase.</li>' +
