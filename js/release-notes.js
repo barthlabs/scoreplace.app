@@ -91,6 +91,9 @@ window._RELEASE_NOTES_HTML = (function () {
         // ── ciclo 2.0.51 ───────────────────────────────────────────
         // Veredito do dono na 249: "um piscar de tela PRETA é bem mais aceitável".
         '<li><b>⬛ Nenhum quadro branco sobrou:</b> o fundo do app agora é escuro desde o primeiro instante — na web e no aplicativo — então qualquer transição (abrir, atualizar, destravar o celular) no máximo dá um <b>piscar escuro</b>, nunca uma tela branca. E se um carregamento emperrar de verdade, o app <b>se recarrega sozinho</b> uma vez antes de pedir qualquer coisa a você.</li>' +
+        // ── ciclo 2.0.56 ───────────────────────────────────────────
+        // (2.0.55 é da leva mobile — toque no touchend + telemetria, itens dela.)
+        '<li><b>🎯 Substituição de W.O. agora alcança os jogos SEMPRE:</b> dois consertos da mesma regra — o card não desenha mais o parceiro duplicado quando o Jogador X está no time (a vaga dele aparece como Jogador X mesmo), e dar W.O. em quem entrou por substituição anterior troca a pessoa também nos jogos ainda não jogados, não só na classificação. Jogo já disputado continua intocável.</li>' +
         // ── ciclo 2.0.54 ───────────────────────────────────────────
         '<li><b>📞 O campo do WhatsApp no perfil voltou a se comportar:</b> a máscara aparece enquanto você digita (só números), no formato do país escolhido, e o botão <b>Verificar</b> acende assim que o número fica completo — havia um jeito de abrir o perfil em que nada disso funcionava e o botão ficava apagado pra sempre.</li>' +
         // ── ciclo 2.0.53 ───────────────────────────────────────────

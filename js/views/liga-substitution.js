@@ -156,10 +156,20 @@ function _rewriteSlot(group, fromName, toName, clearResults, t) {
     var _fi = group.players.indexOf(fromName);
     if (_fi >= 0 && (group.playersUids || [])[_fi]) _fromUid = group.playersUids[_fi];
   }
+  // ⛔ 2.0.56 — O SLOT SE DECIDE POR UID; nome só quando o slot NÃO tem uid.
+  // Medido no Confra (Grupo A, 24/ago): o W.O. Carol→Karla trocou a classificação e
+  // DEIXOU OS JOGOS PRA TRÁS — os slots tinham o uid da Carol com o RÓTULO VELHO
+  // "Denise Mamesso" (rótulo gravado envelhece; o nome vivo é resolvido no render), e
+  // o casamento por `n === fromName` não achou nada. O dado foi reparado por script;
+  // esta é a regra canônica que impede a repetição ("nada por nome. tudo por uid a
+  // menos que seja nome digitado sem uid"). O nome VIVO também casa (fromName é o que
+  // o organizador vê na tela) — mas só decide onde não há uid pra decidir.
   function _rw(names, uids) {
     if (!Array.isArray(names)) return names;
     return names.map(function (n, i) {
-      if (n === fromName) { if (Array.isArray(uids)) uids[i] = _toUid; return toName; }
+      var slotU = (Array.isArray(uids) && uids[i]) ? String(uids[i]) : '';
+      var hit = (slotU && _fromUid) ? (slotU === String(_fromUid)) : (!slotU && n === fromName);
+      if (hit) { if (Array.isArray(uids)) uids[i] = _toUid; return toName; }
       return n;
     });
   }

@@ -1317,7 +1317,19 @@ function _slotUidsPositional(m, side, t) {
   // pra recuperar a posição vazia pelo nome que está no mesmo índice.
   var arr = side === 'p1' ? m.team1 : m.team2;
   if (Array.isArray(arr) && arr.length && antes.length < arr.length) {
-    return _completaUidsPorNome(arr.map(function (nm, i) { return antes[i] || ''; }), arr, t);
+    // ⛔ 2.0.56 — POSIÇÃO NÃO SE INFERE DE ARRAY FILTRADO. `antes` (via _slotUids) perde
+    // os BURACOS: uid null no MEIO do time some e `antes[i]` desliza o uid do parceiro
+    // pra posição do fantasma. Medido no Confra (E2, 24/ago): team1 = ["Jogador X",
+    // "Ana Ribeiro"], team1Uids = [null, uid-da-Ana] → o card resolvia AMBAS as posições
+    // pro uid da Ana e desenhava "Ana Ribeiro / Ana Ribeiro". Os arrays team*/team*Uids
+    // são PARALELOS — a posição vem do PRÓPRIO team*Uids, buraco preservado; a cura por
+    // nome (_completaUidsPorNome) continua só nas posições realmente vazias (e "Jogador
+    // X"/fictício não resolve → fica sem uid, que é a identidade correta dele).
+    var _arrU = side === 'p1' ? m.team1Uids : m.team2Uids;
+    var _posU = Array.isArray(_arrU)
+      ? arr.map(function (nm, i) { return _arrU[i] || ''; })
+      : arr.map(function (nm, i) { return antes[i] || ''; });
+    return _completaUidsPorNome(_posU, arr, t);
   }
   return _completaUidsPorNome(antes.slice(),
     String((side === 'p1' ? m.p1 : m.p2) || '').split(' / ').map(function (x) { return x.trim(); }), t);

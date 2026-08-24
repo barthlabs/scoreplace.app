@@ -123,6 +123,10 @@ const SUITES = [
   // ⛔ A máscara do celular do perfil mora no MARKUP (2.0.54, caso Vanessa) —
   // addEventListener se perde em re-render e deixava campo cru + Verificar apagado.
   'tests/mascara-do-celular-mora-no-markup.test.js',
+  // ⛔ O SLOT SE DECIDE POR UID (2.0.56): render posicional preserva o buraco do uid
+  // null (Jogador X não rouba o nome do parceiro) e _rewriteSlot troca por uid mesmo
+  // com rótulo envelhecido (jogos não jogados SEMPRE recebem o substituto).
+  'tests/slot-se-decide-por-uid.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.
   // O ranking de derrotados que decide a REPESCAGEM era a QUARTA cópia da lista de critérios
   // e a classificação dos não-classificados a QUINTA. Na quarta: um critério FANTASMA
