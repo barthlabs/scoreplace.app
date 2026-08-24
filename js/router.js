@@ -442,11 +442,24 @@ function initRouter() {
               if (_pintouTorneio) return; _pintouTorneio = true;
               _pintaTorneio();
             };
-            if (typeof requestAnimationFrame === 'function') {
-              requestAnimationFrame(function () { requestAnimationFrame(_pintaUmaVez); });
-              setTimeout(_pintaUmaVez, 120);
+            // ── ⭐ O TIMEOUT DE 120ms ROUBAVA A PINTURA QUE ELE DEVIA PROTEGER (2.0.62)
+            // MEDIDO no aparelho do dono: `tap: 289/2658ms · quem: rota-torneio=925ms |
+            // timeout:_pintaUmaVez=925ms`. Ou seja: quem chamou o render de 925ms foi o
+            // TIMEOUT, e ele venceu a corrida — o "Abrindo o torneio…" só virou pixel
+            // 2,6s depois do toque. O timeout nasceu na 1.9.75 pra cobrir aba de fundo
+            // (onde rAF não dispara), mas com a thread ocupada ele dispara ANTES do
+            // primeiro quadro e o render pesado come a pintura do loader.
+            // Agora: rAF → setTimeout(0). O callback do rAF roda ANTES da pintura; um
+            // timeout agendado DENTRO dele roda DEPOIS — é o único jeito de saber que o
+            // loader virou PIXEL antes de gastar 925ms montando a tela. A aba de fundo
+            // (o cenário real do timeout) é atendida pelo ramo `hidden`, e sobra um
+            // backstop LONGO pra thread jamais ficar presa no loader.
+            var _oculto = (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+            if (typeof requestAnimationFrame === 'function' && !_oculto) {
+              requestAnimationFrame(function () { setTimeout(_pintaUmaVez, 0); });
+              setTimeout(_pintaUmaVez, 1200);   // backstop: era 120 e ROUBAVA o quadro
             } else {
-              setTimeout(_pintaUmaVez, 32);
+              setTimeout(_pintaUmaVez, 32);     // sem rAF / aba de fundo: segue no timer
             }
           } else {
             renderTournaments(viewContainer, cleanParam);

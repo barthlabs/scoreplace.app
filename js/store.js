@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.61';
+window.SCOREPLACE_VERSION = '2.0.62';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -8100,9 +8100,14 @@ window._navTorneioComAviso = function (tournamentId, evento) {
     if (_foiPro) return; _foiPro = true;
     window.location.hash = '#tournaments/' + tournamentId;
   };
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(function () { requestAnimationFrame(_irPro); });
-    setTimeout(_irPro, 120);
+  // 2.0.62 — MESMA correção do router: o `setTimeout(_irPro, 120)` disparava a
+  // navegação ANTES de o loader virar pixel (com a thread ocupada o timeout vence
+  // o rAF), e lá na frente o render de 925ms comia o quadro. rAF → setTimeout(0)
+  // = depois da PINTURA de verdade; backstop longo só pra nunca prender.
+  var _ocultoNav = (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+  if (typeof requestAnimationFrame === 'function' && !_ocultoNav) {
+    requestAnimationFrame(function () { setTimeout(_irPro, 0); });
+    setTimeout(_irPro, 1200);
   } else {
     _irPro();
   }
