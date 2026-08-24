@@ -77,7 +77,21 @@ window._computeMonarchStandings = function(group, t, category) {
     return u ? ('uid:' + u) : ('name:' + name);
   }
   function _monEnsure(name, uid) {
-    if (_isGhostMon(name)) return null;
+    // ⭐ 2.0.52 — O FANTASMA OCUPA A VAGA NA TABELA, ZERADO. Ordem do dono (24/ago/2026,
+    // G2 do Confra, com o print na mão): _"era para colocar o jogador x no 3o lugar
+    // deixando a kallana em 4o e a adele em 5o"_. Antes o ghost era pulado no seed e a
+    // vaga SUMIA da tabela — quem estava abaixo subia um degrau que não ganhou em quadra.
+    // O que NÃO mudou: ghost segue sem PONTUAR (o crédito de jogo pula linha isGhost,
+    // e o PA dele é 0) e fora do sorteio/avanço — só a VAGA fica visível, com zeros.
+    if (_isGhostMon(name)) {
+      var kg = 'name:' + name;
+      if (!stats[kg]) stats[kg] = {
+        key: kg, uid: null, name: name, isGhost: true,
+        wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
+        setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, tiebreaksWon: 0, tiebreaksLost: 0
+      };
+      return null;   // null preservado: quem chama pra CREDITAR jogo continua pulando
+    }
     var k = _monKey(name, uid);
     var _u = _monUid(name, uid);
     // O NOME DA LINHA SAI DO PERFIL, o rótulo é só reserva. O seed do elenco já fazia isso
@@ -163,7 +177,7 @@ window._computeMonarchStandings = function(group, t, category) {
     // v1.7.79: itera pelo par POSICIONAL (uid manda) — `m.team1.forEach` era
     // name-driven e, sem rótulo gravado, não somava jogo nenhum.
     _ladoPares(m.team1, _u1m).forEach(function(_p) {
-      var k = _monKey(_p.name, _p.uid); if (!stats[k]) return;
+      var k = _monKey(_p.name, _p.uid); if (!stats[k] || stats[k].isGhost) return;
       stats[k].played++;
       stats[k].pointsFor += s1;
       stats[k].pointsAgainst += s2;
@@ -176,7 +190,7 @@ window._computeMonarchStandings = function(group, t, category) {
       if (team1Won) stats[k].wins++; else stats[k].losses++;
     });
     _ladoPares(m.team2, _u2m).forEach(function(_p) {
-      var k = _monKey(_p.name, _p.uid); if (!stats[k]) return;
+      var k = _monKey(_p.name, _p.uid); if (!stats[k] || stats[k].isGhost) return;
       stats[k].played++;
       stats[k].pointsFor += s2;
       stats[k].pointsAgainst += s1;
@@ -205,6 +219,8 @@ window._computeMonarchStandings = function(group, t, category) {
   var _adv = !!(t && t.advancedScoring && t.advancedScoring.enabled && typeof window._calcAdvancedPoints === 'function');
   if (_adv) {
     Object.keys(stats).forEach(function(k) {
+      // Ghost não pontua — nem no PA (2.0.52).
+      if (stats[k].isGhost) { stats[k].points = 0; return; }
       // v4.4.117: passa o uid EXATO (stats[k].uid) pro PA — casa os jogos por uid, não por
       // nome (k agora é 'uid:...'; o nome do slot pode estar clobberado). Fecha o homônimo.
       stats[k].points = window._calcAdvancedPoints(t, stats[k].name, category || null, matches, stats[k].uid).total;

@@ -87,6 +87,9 @@ window._RELEASE_NOTES_HTML = (function () {
         // ── ciclo 2.0.51 ───────────────────────────────────────────
         // Veredito do dono na 249: "um piscar de tela PRETA é bem mais aceitável".
         '<li><b>⬛ Nenhum quadro branco sobrou:</b> o fundo do app agora é escuro desde o primeiro instante — na web e no aplicativo — então qualquer transição (abrir, atualizar, destravar o celular) no máximo dá um <b>piscar escuro</b>, nunca uma tela branca. E se um carregamento emperrar de verdade, o app <b>se recarrega sozinho</b> uma vez antes de pedir qualquer coisa a você.</li>' +
+        // ── ciclo 2.0.52 ───────────────────────────────────────────
+        // (2.0.51 é da leva mobile — chão escuro/fallback/telemetria, itens dela.)
+        '<li><b>👤 A vaga do Jogador X aparece na classificação do grupo:</b> quando um W.O. é completado com Jogador X, a tabela agora mostra a vaga dele — zerada — em vez de sumir com a linha e subir todo mundo um degrau. Ele continua sem pontuar e fora do sorteio; só a vaga fica visível, na posição que os critérios dão a uma linha zerada.</li>' +
         // ── ciclo 2.0.50 ───────────────────────────────────────────
         '<li><b>🚫 W.O. também depois das partidas jogadas:</b> o organizador pode decretar W.O. (por exemplo, por atitude antidesportiva) mesmo com o grupo já terminado. Os placares e os nomes de quem jogou ficam exatamente como estão; quem entra da lista de espera herda a vaga e a posição na classificação — a mesma regra de sempre: quem sai mantém o que fez, quem entra herda a posição.</li>' +
         '<li><b>🎾 letzplay no botão de contato:</b> além do celular, o organizador agora pode registrar a conta letzplay de um inscrito — a pessoa é avisada e pode corrigir o @ no próprio perfil. E como o histórico do letzplay é público, o toggle "Autorizar importação" saiu do perfil: criar a conta já autoriza a consulta, como passou a constar nos Termos de Uso.</li>' +

@@ -201,7 +201,11 @@ function mkT() {
     W._findTournamentById = _prevFind;
   })();
 
-  // ── 4c. Jogador X (ghost) FORA da classificação; uid real (inclusive W.O.) DENTRO.
+  // ── 4c. Jogador X (ghost) na classificação: a VAGA aparece ZERADA, sem nunca pontuar.
+  // ⚠️ REVISADO na 2.0.52 por ordem do dono (24/ago/2026, G2 do Confra): _"era para
+  // colocar o jogador x no 3o lugar"_ — o "não aparece" da v4.x morreu; o "não pontua"
+  // continua de pé (a linha dele fica em zero mesmo jogando; ver
+  // tests/jogador-x-ocupa-a-vaga-zerado.test.js).
   (function () {
     var g = { players: ['W1', 'W2', 'Jogador X', 'W4'], matches: [
       { isMonarch: true, team1: ['W1', 'W2'], team2: ['Jogador X', 'W4'], p1: 'W1 / W2', p2: 'Jogador X / W4', winner: 'W1 / W2', scoreP1: 6, scoreP2: 3 }
@@ -209,7 +213,9 @@ function mkT() {
     var tg = { ligaGhosts: ['Jogador X'] };
     var st = W._computeMonarchStandings(g, tg, null);
     var names = st.map(function (s) { return s.name; });
-    ok(names.indexOf('Jogador X') === -1, 'Jogador X (ghost) NÃO aparece na classificação [' + names.join(',') + ']');
+    var gx = st.filter(function (s) { return s.isGhost; })[0];
+    ok(!!gx && gx.name === 'Jogador X', 'Jogador X (ghost) aparece na classificação como VAGA [' + names.join(',') + ']');
+    ok(!!gx && gx.wins === 0 && gx.played === 0, 'a vaga do ghost fica ZERADA mesmo com jogo dele: ' + JSON.stringify(gx));
     ok(names.indexOf('W1') !== -1 && names.indexOf('W4') !== -1, 'uids reais aparecem na classificação');
     // sem ligaGhosts (ou sem t) → compat: todos aparecem
     var st2 = W._computeMonarchStandings(g, null, null);

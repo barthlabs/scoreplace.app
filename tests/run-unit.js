@@ -114,6 +114,9 @@ const SUITES = [
   // sistemática da Juliana Reis. E a rota canônica Rei/Rainha ganha a MESMA fronteira
   // (jogo com placar não se renomeia).
   'tests/wo-pos-jogos-herda-posicao.test.js',
+  // ⭐ Jogador X ocupa a VAGA na tabela do grupo, ZERADO (2.0.52, G2 do Confra) — a
+  // linha aparece mas o ghost segue sem pontuar (jogo e PA), mesmo quando joga.
+  'tests/jogador-x-ocupa-a-vaga-zerado.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.
   // O ranking de derrotados que decide a REPESCAGEM era a QUARTA cópia da lista de critérios
   // e a classificação dos não-classificados a QUINTA. Na quarta: um critério FANTASMA
