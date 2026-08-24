@@ -127,6 +127,8 @@ const SUITES = [
   // null (Jogador X não rouba o nome do parceiro) e _rewriteSlot troca por uid mesmo
   // com rótulo envelhecido (jogos não jogados SEMPRE recebem o substituto).
   'tests/slot-se-decide-por-uid.test.js',
+  // ⭐ Jogador X é escolha de PRIMEIRA CLASSE no ato do W.O. (2.0.61, caso Fábio/E2).
+  'tests/jogador-x-e-escolha-de-primeira-classe.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.
   // O ranking de derrotados que decide a REPESCAGEM era a QUARTA cópia da lista de critérios
   // e a classificação dos não-classificados a QUINTA. Na quarta: um critério FANTASMA

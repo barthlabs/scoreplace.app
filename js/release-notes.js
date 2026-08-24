@@ -84,6 +84,8 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.61 ───────────────────────────────────────────
+        '<li><b>🎾 Fila ou Jogador X — a escolha aparece na hora do W.O.:</b> ao apontar a falta, os dois caminhos ficam lado a lado ("Aplicar W.O. — entra o 1º da fila" × "W.O. + Jogador X no lugar, sem pontuar") — antes o Jogador X ficava escondido no fim da tela seguinte, e na tela de escolher substituto ele subiu pra cima da explicação.</li>' +
         // ── ciclo 2.0.55 ───────────────────────────────────────────
         // Telemetria do aparelho do dono nomeou: ~285-289ms constantes = clique
         // SINTÉTICO do WebKit (touch-action:manipulation não o mata no WKWebView).

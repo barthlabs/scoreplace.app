@@ -475,9 +475,22 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
 
   // Sem escolha: o destino é UM só. O box explica o que acontece e como se volta.
   html += _ligaWoDestBox(absentName);
-  html += '<button class="btn btn-danger" style="width:100%;font-weight:800;" onclick="window._ligaApplyWo(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 Aplicar W.O.</button>';
+  // ⭐ 2.0.61 — QUEM ASSUME é escolha de PRIMEIRA CLASSE no ato de apontar. Ordem do
+  // dono (24/ago, caso Fábio/E2 — a fila tinha gente que não podia ir): _"quero que
+  // quando o organizador aponte ele possa indicar se atende pela fila ou por jogador x"_.
+  // Antes o Jogador X só existia enterrado na tela seguinte; agora são dois botões:
+  html += '<button class="btn btn-danger" style="width:100%;font-weight:800;" onclick="window._ligaApplyWo(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 Aplicar W.O.' + (sub ? ' — entra ' + _safe(_wlDisplay(sub)) : '') + '</button>';
+  html += '<button class="btn btn-outline" style="width:100%;margin-top:8px;font-weight:800;border-color:rgba(251,191,36,0.45);color:#fbbf24;" onclick="window._ligaWoConfirmGuest(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 W.O. + 🎾 Jogador X no lugar (não pontua)</button>';
 
   if (window.showAlertDialog) window.showAlertDialog('Confirmar W.O.?', html, function () {}, { type: 'warning', confirmText: 'Cancelar' });
+};
+
+// 2.0.61 — o atalho do botão "W.O. + Jogador X" do diálogo de confirmação: fecha o
+// diálogo e cai no fluxo canônico do Jogador X (_ligaFillGuestPrompt → _ligaFillGuest,
+// que marca o W.O. inteiro: marcador, slots, ghost, desativação, notificação).
+window._ligaWoConfirmGuest = function (tId, roundIndex, groupName, absentName) {
+  _closeDialogs();
+  window._ligaFillGuestPrompt(tId, roundIndex, groupName, absentName);
 };
 
 // O SUPLENTE = primeiro da fila que atende a CATEGORIA do grupo — e, desde a v1.8.45,
@@ -976,9 +989,11 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     // dita quando a espera está REALMENTE vazia.
     html += '<div style="font-size:0.74rem;color:var(--text-muted);margin:8px 0;">A lista de espera está vazia e ninguém ficou de fora nesta rodada — não há quem convidar.</div>';
   }
-  html += _ligaWoDestBox(absentName);
   html += '<div style="font-size:0.74rem;font-weight:700;color:#fbbf24;margin:12px 0 6px;">Jogador X — qualquer pessoa presente (não pontua)</div>';
   html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
+  // ⭐ 2.0.61 — o Jogador X SOBE: era a última coisa da tela, abaixo do box de destino,
+  // e o dono não o achou no caso Fábio/E2. Opção de primeira classe vem ANTES da explicação.
+  html += _ligaWoDestBox(absentName);
 
   if (window.showAlertDialog) window.showAlertDialog('Substituto', html, function () {}, { type: 'info', confirmText: 'Fechar' });
 
