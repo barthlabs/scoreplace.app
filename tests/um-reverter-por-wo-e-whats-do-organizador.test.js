@@ -278,6 +278,37 @@ sec('whatsapp pro organizador', function () {
   ok(chip2.indexOf('_waGrpOpenLink') !== -1, 'com link, o botão dele abre o grupo');
 });
 
+// ── 6b. …EM TODOS OS JOGOS (ordem do dono, 24/ago): grupo encerrado, jogo decidido e
+// rodada que ainda não abriu deixam de esconder o botão DO ORGANIZADOR ───────────
+sec('em todos os jogos', function () {
+  const { t, g } = torneio();
+  comoOrganizador(t);
+  // (a) grupo com todos os jogos decididos
+  g.matches.forEach((m) => { m.winner = m.p1; });
+  ok(W._waGrpGroupChip(t, g.matches) !== '', 'grupo encerrado: o organizador ainda vê o botão');
+  W.AppStore.currentUser = { uid: 'u_fer', displayName: 'Fernanda Biojone', notifyWhatsApp: true };
+  ok(W._waGrpGroupChip(t, g.matches) === '', 'e o jogador não — pra ele o grupo acabou');
+
+  // (b) jogo avulso (não Rei/Rainha) fora da rodada atual
+  const t2 = torneio().t;
+  comoOrganizador(t2);
+  const avulso = { id: 'av1', round: 9, p1: 'Fernanda Biojone', p2: 'Eduardo Mange',
+    p1Uid: 'u_fer', p2Uid: 'u_edu', winner: null };
+  t2.rounds[0].matches.push(avulso);
+  W._schIsCurrentRoundMatch = () => false;     // rodada ainda não abriu
+  ok(W._waGrpCardChip(t2, avulso) !== '', 'rodada futura: o organizador já pode montar o grupo');
+  W.AppStore.currentUser = { uid: 'u_fer', displayName: 'Fernanda Biojone', notifyWhatsApp: true };
+  ok(W._waGrpCardChip(t2, avulso) === '', 'o jogador só vê quando a rodada dele chega');
+  W._schIsCurrentRoundMatch = () => true;
+
+  // (c) jogo já decidido
+  comoOrganizador(t2);
+  avulso.winner = 'Fernanda Biojone';
+  ok(W._waGrpCardChip(t2, avulso) !== '', 'jogo decidido: o organizador segue com o botão');
+  // (d) folga/BYE nunca vira grupo — nem pra ele
+  ok(W._waGrpCardChip(t2, { id: 'f1', isSitOut: true, p1: 'X', p2: 'FOLGA' }) === '', 'folga não tem grupo de WhatsApp');
+});
+
 // ── 7. …e quem NÃO é organizador nem joga continua sem ver nada ─────────────────
 sec('estranho não vê', function () {
   const { t, g } = torneio();

@@ -302,6 +302,10 @@ const SUITES = [
   // estado), a lista sem a pílula duplicada, e o chip do grupo de WhatsApp na mão do
   // ORGANIZADOR — que quase nunca joga o grupo que precisa montar.
   'tests/um-reverter-por-wo-e-whats-do-organizador.test.js',
+  // o HISTÓRICO de W.O. é gravado (t.woLog), não deduzido do estado. Trava o contrato que
+  // custou 4 consertos em 4 dias: aplicar grava, reverter marca (não apaga), a tela lê, e
+  // mexer no estado — marcador, rastro, slot do grupo, ir pra espera — não muda o passado.
+  'tests/wo-log-o-historico-e-gravado.test.js',
   // Os DOIS chips do rodapé do card ("Combinar jogo" + grupo de whats) são irmãos
   // com GATE COMUM: quebrar o gate derruba os dois DE UMA VEZ e EM SILÊNCIO (todo
   // call site é guardado por `typeof === 'function'`). Nasceu de um relato de

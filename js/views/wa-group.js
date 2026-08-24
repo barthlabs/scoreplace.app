@@ -233,19 +233,34 @@
         _btn(_pos, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
         _editBtn(open, 'Trocar o link do grupo ' + _mine) + '</span>';
     }
-    if (!window._schIsCurrentRoundMatch(t, m)) return '';
+    // Rodada que ainda não é a atual: o jogador não precisa (não há o que combinar), o
+    // ORGANIZADOR precisa — é ele quem prepara a rodada antes de ela abrir (2.0.60).
+    if (!_isOrg(t, cu) && !window._schIsCurrentRoundMatch(t, m)) return '';
     // v1.7.25 (dono): ANTES de existir link, os dois botões começam com "Criar grupo" —
     // é a ação, e o complemento diz DE QUEM: "geral oficial do torneio" × "dos seus jogos".
     return _btn(_souJogador ? 'Criar grupo<br>dos seus jogos' : 'Criar grupo<br>dos jogos', open);
   }
 
+  // ⭐ 2.0.60 — PRO ORGANIZADOR, O BOTÃO APARECE EM TODOS OS JOGOS.
+  // Ordem do dono (24/ago/2026): _"o botão do grupo de whats do grupo de jogos para o
+  // organizador em todos os jogos."_ A 2.0.57 tirou o gate "só quem joga este grupo", mas
+  // sobravam TRÊS filtros que continuavam escondendo dele — todos escritos pensando no
+  // JOGADOR, pra quem fazem sentido (ninguém combina um jogo que já acabou):
+  //   1. grupo com todos os jogos decididos;      2. jogo já decidido;
+  //   3. jogo fora da rodada atual.
+  // Pra quem ORGANIZA a regra é outra: ele monta os grupos de todas as rodadas, inclusive
+  // antes de a rodada abrir e depois de os jogos acabarem (o grupo do WhatsApp sobrevive ao
+  // jogo — é onde se combina o próximo). Os filtros seguem valendo pro jogador.
   window._waGrpCardChip = function (t, m) {
     try {
       if (!t || !m) return '';
       // Rei/Rainha: o chip é ÚNICO por grupo (cabeçalho, via _waGrpGroupChip) —
-      // não um por jogo. Mesma supressão do _schCardChip.
+      // não um por jogo. Mesma supressão do _schCardChip. Vale também pro organizador:
+      // três botões idênticos no mesmo grupo seriam ruído, não acesso.
       if (m.isMonarch) return '';
-      if (m.winner || m.isBye || m.isSitOut) return '';
+      var _souOrg = _isOrg(t, _cu());
+      if (!_souOrg && (m.winner || m.isBye || m.isSitOut)) return '';
+      if (m.isBye || m.isSitOut) return '';   // folga/BYE não é jogo, pra ninguém
       if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
       return _matchChip(t, m, false);
     } catch (e) { return ''; }
@@ -256,7 +271,9 @@
       if (!t || !Array.isArray(groupMatches) || !groupMatches.length) return '';
       var m0 = groupMatches.find(function (m) { return m && !m.isBye && !m.isSitOut; }) || groupMatches[0];
       if (!m0) return '';
-      if (groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
+      // grupo encerrado: o jogador não vê mais; o organizador continua vendo (ele usa o
+      // grupo pra falar com aquelas 4 pessoas depois do jogo também).
+      if (!_isOrg(t, _cu()) && groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
       return _matchChip(t, m0, true);
     } catch (e) { return ''; }
   };

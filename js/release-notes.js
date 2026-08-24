@@ -91,6 +91,9 @@ window._RELEASE_NOTES_HTML = (function () {
         // ── ciclo 2.0.51 ───────────────────────────────────────────
         // Veredito do dono na 249: "um piscar de tela PRETA é bem mais aceitável".
         '<li><b>⬛ Nenhum quadro branco sobrou:</b> o fundo do app agora é escuro desde o primeiro instante — na web e no aplicativo — então qualquer transição (abrir, atualizar, destravar o celular) no máximo dá um <b>piscar escuro</b>, nunca uma tela branca. E se um carregamento emperrar de verdade, o app <b>se recarrega sozinho</b> uma vez antes de pedir qualquer coisa a você.</li>' +
+        // ── ciclo 2.0.60 ───────────────────────────────────────────
+        '<li><b>📒 O histórico de W.O. do grupo virou registro de verdade:</b> antes ele era deduzido do estado do torneio, então mudava sozinho — quem voltava para a lista de espera sumia da lista, uma substituição antiga desaparecia, um W.O. revertido reaparecia. Agora cada W.O. é gravado no momento em que acontece, com quem levou, quem entrou e quando; reverter marca como desfeito em vez de apagar. Mexer no torneio depois não muda mais o que já aconteceu.</li>' +
+        '<li><b>💬 O organizador vê o botão do grupo de WhatsApp em todos os jogos:</b> em qualquer grupo da rodada, inclusive nos que já terminaram e nas rodadas que ainda vão abrir. Para quem joga, continua como era: o grupo aparece no seu jogo, na sua rodada.</li>' +
         // ── ciclo 2.0.59 ───────────────────────────────────────────
         // (só rastro interno: reverter deixava a marca de substituição pendurada. Sem tela
         // nova — mas MUDA o que aparece na lista de W.O. depois de reverter, então tem item.)

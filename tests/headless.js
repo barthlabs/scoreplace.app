@@ -143,6 +143,7 @@ function load(rel) {
 
 // Ordem importa (mesma do index.html / draw-core.js): utils → categorias → model → logic
 load('waitlist-core.js');        // _getWaitlist/_removeFromWaitlist/_nameForms — cânone da espera
+load('wo-log.js');               // REGISTRO de W.O. (t.woLog) — o histórico é gravado, não deduzido
 load('standings-core.js');       // _standingsCompare — cadeia de desempate padrão
 load('gender-ratio-core.js');    // proporção de gênero do sorteio equilibrado (50/50, 25/75, 75/25)
 load('sport-rules.js');             // window.SPORT_RULES — fonte única das regras das modalidades

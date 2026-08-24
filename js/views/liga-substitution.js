@@ -259,6 +259,39 @@ function _marcaRastroWo(entry, absentName, absentUid) {
   if (absentUid) entry.woSubstituteForUid = String(absentUid); // identidade (uid manda)
   entry.woSubstituteAt = new Date().toISOString();
 }
+// Em que rodada mora este grupo? `_ligaGroupWoList` recebe só o objeto do grupo, e o
+// registro de W.O. é indexado por (rodada, grupo) — sem isso, dois grupos de mesmo nome em
+// rodadas diferentes ("R1 Grupo A" da temporada que recomeça) compartilhariam histórico.
+// Casa pela IDENTIDADE do objeto primeiro; o nome é só desempate pra cópia serializada.
+function _roundIndexDoGrupo(t, group) {
+  var rounds = (t && Array.isArray(t.rounds)) ? t.rounds : [];
+  for (var i = 0; i < rounds.length; i++) {
+    var gs = (rounds[i] && rounds[i].monarchGroups) || [];
+    if (gs.indexOf(group) !== -1) return i;
+  }
+  for (var j = 0; j < rounds.length; j++) {
+    var gs2 = (rounds[j] && rounds[j].monarchGroups) || [];
+    for (var k = 0; k < gs2.length; k++) if (gs2[k] && gs2[k].name === group.name) return j;
+  }
+  return 0;
+}
+
+// ⭐ 2.0.60 · PONTE ÚNICA PRO REGISTRO DE W.O. (js/views/wo-log.js).
+// Todo fluxo que aplica, preenche ou reverte um W.O. passa por aqui — uma chamada só, com
+// `typeof` guard, pra que nenhum caminho fique sem gravar e pra que o módulo possa faltar
+// (teste headless que não o carrega) sem derrubar a substituição, que é a operação crítica
+// na quadra. `quem` é 'add' | 'fill' | 'revert'.
+function _woLog(quem, ft, ev) {
+  try {
+    var fn = window['_woLog' + quem.charAt(0).toUpperCase() + quem.slice(1)];
+    if (typeof fn === 'function') {
+      if (!ev.byUid) ev.byUid = _meUid() || null;
+      return fn(ft, ev);
+    }
+  } catch (e) { if (window._warn) window._warn('[wo-log]', e); }
+  return null;
+}
+
 // ⛔ 2.0.59 · DESFEZ O W.O., APAGA O RASTRO — e casa por UID.
 // Espelho de `_marcaRastroWo`: reverter uma substituição sem tirar o rastro deixa o elo
 // vivo no histórico do grupo (a lista o reconstrói dali), e o botão de reverter voltaria a
@@ -587,6 +620,11 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
     g.woAbsent = absentName;
     g.woDest = 'inactive';   // v1.7.59: destino único — W.O. desativa
     if (_absU) g.woAbsentUid = _absU; else delete g.woAbsentUid;
+    // ⭐ 2.0.60 — O FATO VAI PRO REGISTRO (t.woLog), no ato. Tudo acima é ESTADO e muda
+    // com a vida do torneio; o registro é o que sobrevive. Ver js/views/wo-log.js.
+    _woLog('add', ft, { roundIndex: roundIndex, groupName: groupName, category: _cat,
+      absentUid: _absU || null, absentName: absentName,
+      subUid: (_sub && _sub.uid) || null, subName: _subName || '', subIsGuest: false });
 
     // (2) o suplente ASSUME — no grupo e no ELENCO. Entrar em participants é o que faz
     // "ocupa a posição até o final do torneio": em Liga cada rodada é sorteada de novo a
@@ -993,6 +1031,9 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
     _addWoMarker(ft, r, roundIndex, absentName, cat, _absU2);
     g.woAbsent = absentName; g.woDest = 'inactive';   // v1.7.59: destino único
     if (_absU2) g.woAbsentUid = _absU2; else delete g.woAbsentUid;
+    _woLog('add', ft, { roundIndex: roundIndex, groupName: groupName, category: cat,   // 2.0.60
+      absentUid: _absU2 || null, absentName: absentName,
+      subUid: subUid || null, subName: subName || '', subIsGuest: false });
 
     // O suplente entra no ELENCO antes do _rewriteSlot — o slot resolve o uid dele por
     // _buildNameToUid(ft), e fora do elenco (e já fora da espera) o mapa não o acha:
@@ -1191,6 +1232,11 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     if (_absU4) g.woAbsentUid = _absU4; else delete g.woAbsentUid;
     g.woDest = 'inactive';   // v1.7.59: destino único
     delete g.pendingInviteId;
+    // 2.0.60 — registro. Jogador X entra como `subIsGuest` SEM uid: ele não tem conta, e
+    // aqui o nome é a identidade dele (a ressalva do dono).
+    _woLog('add', ft, { roundIndex: roundIndex, groupName: groupName, category: cat,
+      absentUid: _absU4 || null, absentName: absentName,
+      subUid: null, subName: gname, subIsGuest: true });
     _ligaWoDeactivate(ft, absentName, _absU4);   // v1.7.59: W.O. sempre desativa
     // Completar com Jogador X supera qualquer convite pendente do grupo — cancela
     // pra não deixar convite órfão (que um jogador real poderia aceitar depois).
@@ -1247,6 +1293,10 @@ window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, i
 
     g.woAbsent = absentName; g.subStatus = 'pending'; g.pendingInviteId = list[0].id; delete g.subName; delete g.subIsGuest;
     if (_absU5) g.woAbsentUid = _absU5; else delete g.woAbsentUid;
+    // 2.0.60 — o W.O. JÁ VALE (o ausente já tem 0 pts); quem assume vem depois, no aceite.
+    // Registrar só quando alguém aceitasse deixaria de fora o W.O. cuja vaga ninguém pegou.
+    _woLog('add', ft, { roundIndex: roundIndex, groupName: groupName, category: cat,
+      absentUid: _absU5 || null, absentName: absentName });
   });
   if (typeof window._sendUserNotification === 'function') {
     list.forEach(function (li) {
@@ -1328,6 +1378,11 @@ window._ligaAcceptSub = function (tId, inviteId) {
     // W.O. foi aplicado) ou do próprio convite, que passa a carregá-lo.
     var _absUAceite = g.woAbsentUid || fiv.absentUid || iv.absentUid || null;
     _marcaRastroWo(_subEntry, _absName, _absUAceite);
+    // 2.0.60 — a vaga foi preenchida: carimba QUEM assumiu no evento aberto (o W.O. já
+    // tinha sido registrado quando o convite saiu).
+    _woLog('fill', ft, { roundIndex: _ri, groupName: _gn,
+      absentUid: _absUAceite, absentName: _absName,
+      subUid: _subEntry.uid || null, subName: _invName, subIsGuest: false });
     if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
     var _jaS = _entradaNoElenco(ft, _subEntry.uid, _invName);
     if (_jaS) _marcaRastroWo(_jaS, _absName, _absUAceite);   // já era do elenco: marca a entrada REAL
@@ -1500,6 +1555,11 @@ function _revertWoDoRastro(t, tId, roundIndex, groupName, absentUid, absentName)
       // O rastro daquele elo deixa de existir — senão a lista o mostraria de novo e o
       // botão reverteria o que já foi revertido.
       _limpaRastroWo(ft, par.subUid, par.subName, par.absentUid, par.absentName);
+      // 2.0.60 — no registro ele não some: fica marcado como REVERTIDO. "Aconteceu e foi
+      // desfeito" é outra informação que "nunca aconteceu", e é a primeira que o
+      // organizador procura quando perguntam por que a tabela mudou.
+      _woLog('revert', ft, { roundIndex: roundIndex, groupName: groupName,
+        absentUid: par.absentUid || null, absentName: par.absentName });
     });
     if (window.showNotification) window.showNotification('W.O. revertido', par.absentName + ' voltou ao grupo.', 'success');
     _rerender(tId);
@@ -1553,6 +1613,11 @@ window._ligaRevertWo = function (tId, roundIndex, groupName, absentUid, absentNa
         _limpaRastroWo(ft, g.subUid, g.subName, g.woAbsentUid, _abs);
       }
       _removeSitOut(r, _abs, g.woAbsentUid || null); // remove o marcador de W.O.
+      // 2.0.60 — e o registro marca REVERTIDO (append-only). Os DOIS caminhos de reversão
+      // gravam: o do estado (aqui) e o do rastro (_revertWoDoRastro). Um só deixaria
+      // metade dos "desfazer" invisível no histórico.
+      _woLog('revert', ft, { roundIndex: roundIndex, groupName: groupName,
+        absentUid: g.woAbsentUid || null, absentName: _abs });
       // cancela convites pendentes do grupo
       if (Array.isArray(ft.ligaSubInvites)) ft.ligaSubInvites.forEach(function (iv) { if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled'; });
       delete g.woAbsent; delete g.subStatus; delete g.subName; delete g.subIsGuest; delete g.pendingInviteId;
@@ -1584,8 +1649,23 @@ window._ligaGroupPending = function (group) { return !!(group && group.subStatus
 // uid do ausente: `woAbsentUid` (estado) ou o marcador — nome só decide sem uid (regra
 // canônica, [[project_wo_lives_in_four_places]]).
 // Devolve [{absentName, absentUid, subName, subUid, at}] do mais antigo pro mais novo.
+//
+// ⭐ 2.0.60 — ISTO VIROU O CAMINHO DE LEGADO. O histórico agora é GRAVADO quando o W.O.
+// acontece (`t.woLog`, js/views/wo-log.js) e lido de lá; a reconstrução abaixo só roda em
+// documento anterior ao registro. Ela ficou porque torneio de temporada em andamento não
+// pode perder o histórico de um dia pro outro — mas NÃO é mais onde se conserta nada: bug
+// de histórico se conserta na GRAVAÇÃO. Ver o cabeçalho do wo-log.js pra saber por que
+// deduzir o passado do estado do presente custou quatro consertos em quatro dias.
 window._ligaGroupWoList = function (t, group) {
   if (!t || !group) return [];
+  var _ri0 = _roundIndexDoGrupo(t, group);
+  if (typeof window._woLogCobreGrupo === 'function' && window._woLogCobreGrupo(t, _ri0, group.name)) {
+    return (window._woLogForGroup(t, _ri0, group.name) || []).map(function (ev) {
+      return { absentName: ev.absentName || '', absentUid: ev.absentUid || null,
+               subName: ev.subName || '', subUid: ev.subUid || null,
+               subIsGuest: !!ev.subIsGuest, at: ev.at || '', doRegistro: true };
+    });
+  }
   // ⚠️ 2.0.57 — O RASTRO VIAJA COM A PESSOA, E ELA NÃO FICA SÓ NO ELENCO.
   // Ordem do dono (24/ago/2026): _"carol entrou substituindo outro wo anterior e isso
   // deveria estar registrado no histórico aqui com o nome de quem ela substituiu"_.
@@ -2012,6 +2092,13 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
     });
     if (isGuest) { _addGhost(ft, fillName); }              // Jogador X — não pontua
     else { _removeGhost(ft, fillName); }                    // folga real — pontua
+    // 2.0.60 — o registro vale pras DUAS rotas de W.O. Esta é a canônica (t.matches), e
+    // deixá-la de fora faria o histórico existir só em metade dos torneios. `phaseIndex`
+    // entra como `roundIndex` (é o mesmo eixo: qual fase está em jogo).
+    _woLog('add', ft, { roundIndex: pIdx, groupName: gName,
+      category: (playing[0] && playing[0].category) || null,
+      absentUid: absentUid || null, absentName: absentName,
+      subUid: fillUid || null, subName: fillName, subIsGuest: !!isGuest });
     if (!Array.isArray(ft.history)) ft.history = [];
     ft.history.push({ date: new Date().toISOString(), message: 'W.O. (Rei/Rainha ' + gName + '): ' + absentName + ' → ' + fillName + (isGuest ? ' (Jogador X)' : '') });
   });
@@ -2052,6 +2139,11 @@ window._monWoRevert = function (tId, pIdx, gName) {
     });
     ft.matches = (ft.matches || []).filter(function (m) { return !(m.bracket === 'monarch' && m.groupName === gName && ((m.phaseIndex || 0) === pIdx) && m.isSitOut && m.sitOutReason === 'wo'); });
     if (isGuest) _removeGhost(ft, fillName);
+    // 2.0.60 — marca REVERTIDO no registro (o uid do ausente vem do slot do próprio
+    // marcador, que é a fonte canônica desta rota).
+    _woLog('revert', ft, { roundIndex: pIdx, groupName: gName,
+      absentUid: ((wm.team1Uids || [])[0] || wm.p1Uid || absentUid || null), absentName: absentName });
+    _limpaRastroWo(ft, fillUid, fillName, absentUid, absentName);
   });
   if (window.showNotification) window.showNotification('↩️ W.O. revertido', absentName + ' voltou ao grupo.', 'info');
   _rerender(tId);
