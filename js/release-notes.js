@@ -84,6 +84,13 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.49 ───────────────────────────────────────────
+        // ⚠️ 2.0.49 NÃO ganhou item, e é DECISÃO: é a CONCLUSÃO do item 🔢 da 2.0.47 —
+        // o box tinha crescido no CSS, mas a regra anti-zoom do iOS (16px !important em
+        // todo input NO CELULAR) o engolia de volta; o dono testou a 2.0.47 no aparelho
+        // e viu "não mudou nada", com razão. A exceção de especificidade maior entrega
+        // o que o item 🔢 já prometia. Verificado com emulação touch (pointer:coarse):
+        // box = número (24,65px). Anunciar de novo venderia a mesma entrega duas vezes.
         // ── ciclo 2.0.48 ───────────────────────────────────────────
         // Três relatos do dono no aparelho, mesma manhã:
         '<li><b>🧑‍🤝‍🧑 Os nomes da chave não somem mais quando a rede engasga:</b> uma busca de perfis que ficasse pendurada (acontece no celular ao voltar pro app) travava <b>todas</b> as buscas seguintes — a chave inteira ficava com "…" no lugar dos nomes até fechar o app. Agora a busca tem prazo, tenta de novo sozinha e os nomes entram assim que chegam.</li>' +

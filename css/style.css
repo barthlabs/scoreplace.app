@@ -554,6 +554,16 @@ body, .topbar, .card {
   textarea {
     font-size: 16px !important;
   }
+  /* ⛔ FOI ESTA REGRA QUE ENGOLIU O BOX DO PLACAR (2.0.49 — relato do dono na
+     2.0.47: "não mudou porra nenhuma dos boxes"): o box pendente ganhou
+     font-size 1.45rem em components.css, mas ESTE !important o cravava de
+     volta em 16px — SÓ no celular, que é onde o dono testa (no desktop a
+     media não casa e o box cresceu). A exceção é segura: o zoom automático
+     do iOS dispara com fonte MENOR que 16px; 1.45rem (~23px) está acima do
+     limiar. A régua continua a MESMA do número lançado (--sp-num-fs). */
+  input[type="number"].sp-mc-inp {
+    font-size: var(--sp-num-fs, 1.45rem) !important;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
