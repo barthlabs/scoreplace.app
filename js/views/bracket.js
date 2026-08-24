@@ -673,6 +673,16 @@ function renderBracket(container, tournamentId, isInline) {
     // que é a ordem do dono: uid resolve o nome, e o nome segue o perfil.
     if (typeof window._hydrateUidNames === 'function') {
       try {
+        // ── ⭐ A PROMESSA "NOMES PRONTOS" (2.0.41) ─────────────────────────────
+        // Relato do dono (24/ago, Confra): _"aparece os nomes nas classificações,
+        // mas nas chaves demora um pouco mais. o certo seria ficar na tela
+        // carregando até que a tela estivesse pronta com todos os nomes em seus
+        // devidos lugares."_ O loader da rota (router.js, 'Abrindo o torneio…')
+        // espera esta promessa antes de sair — ela resolve depois de hidratar E
+        // de o ajuste de nomes assentar (aoTerminar do _fitNames). O teto de 6s
+        // da rota continua por cima: loader preso é pior que nome pipocando.
+        var _nomesResolve = null;
+        window._bracketNamesPromise = new Promise(function (res) { _nomesResolve = res; });
         window._hydrateUidNames(container).then(function () {
           // o avatar é cacheado por NOME: com o nome resolvido agora, o rótulo do <img>
           // passa a casar com o cache de fotos.
@@ -697,8 +707,9 @@ function renderBracket(container, tournamentId, isInline) {
           container.querySelectorAll('[data-sp-renamed]').forEach(function (e) {
             e.removeAttribute('data-sp-renamed');
           });
-          if (typeof window._fitNames === 'function') window._fitNames(container);
-        }).catch(function () {});
+          if (typeof window._fitNames === 'function') window._fitNames(container, 0, _nomesResolve);
+          else if (_nomesResolve) _nomesResolve();
+        }).catch(function () { if (_nomesResolve) _nomesResolve(); });
       } catch (e) {}
     }
     // After photos loaded, update all bracket avatar images with real photos

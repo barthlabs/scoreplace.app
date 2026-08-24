@@ -84,6 +84,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.41 ───────────────────────────────────────────
+        // Dois relatos do dono no mesmo dia, os dois sobre o ABRIR do torneio no
+        // celular: (1) toque no card sem feedback até o loader; (2) loader saindo
+        // antes de a chave ter os nomes. Um item só: é a mesma experiência.
+        '<li><b>👆 Tocar no card do torneio responde na hora — e o carregando só sai com a tela pronta:</b> no celular, o toque no card não dava nenhum sinal até a tela de carregando aparecer; agora o card <b>escurece e ganha contorno no instante do toque</b> e assim fica até o aviso assumir. E ao abrir um torneio grande, o "Abrindo o torneio…" passou a segurar até a chave estar com <b>todos os nomes nos seus lugares</b> — antes a classificação vinha pronta e os nomes da chave pipocavam depois.</li>' +
         // ── ciclo 2.0.40 ───────────────────────────────────────────
         // O mutirão do celular (24/ago): tela preta na abertura (router esvaziando o
         // container + SW respondendo null + splash nativo saindo cedo), travamento de

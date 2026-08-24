@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.40';
+window.SCOREPLACE_VERSION = '2.0.41';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -5618,11 +5618,19 @@ window._firstNameOnly = function(name) {
   // pedido) é ajustado JÁ; o resto vai em fatias de 40, uma por quadro, pra a mão não
   // travar. `data-fitted` continua sendo a marca de quem já foi.
   var _FIT_ADIANTE = 1.5;   // telas de folga abaixo e acima do que se vê
-  window._fitNames = function(root, retry) {
+  // `aoTerminar` (2.0.41): chamado UMA vez, depois do igualador — é o sinal de
+  // "todos os nomes em seus devidos lugares" que o loader do torneio espera.
+  // Só a invocação inicial o recebe; os retries não o repassam.
+  window._fitNames = function(root, retry, aoTerminar) {
+    var _termFeito = false;
+    var _terminou = function () {
+      if (_termFeito) return; _termFeito = true;
+      if (typeof aoTerminar === 'function') { try { aoTerminar(); } catch (e) {} }
+    };
     try {
       var scope = (root && root.querySelectorAll) ? root : document;
       var els = Array.prototype.slice.call(scope.querySelectorAll('.sp-name-fit:not([data-fitted])'));
-      if (!els.length) return;
+      if (!els.length) { _terminou(); return; }
       var alturaTela = (window.innerHeight || 800);
       var margem = alturaTela * _FIT_ADIANTE;
       var perto = [], longe = [];
@@ -5746,7 +5754,7 @@ window._firstNameOnly = function(name) {
       // diferentes (o corte é de 40 em 40), e igualar no meio compararia meia dupla.
       // ⚡ e a MEMORIZAÇÃO roda depois do igualador — o desfecho gravado no cache
       // já carrega a decisão do grupo (por isso grupo 100% cacheado pode ser pulado).
-      var _aoFimDeTudo = function () { _igualaGrupos(root); _fitMemoriza(root); };
+      var _aoFimDeTudo = function () { _igualaGrupos(root); _fitMemoriza(root); _terminou(); };
       _lote(perto, function () {
         if (longe.length) _lote(longe, _aoFimDeTudo); else _aoFimDeTudo();
       });
@@ -5757,7 +5765,7 @@ window._firstNameOnly = function(name) {
       if (pending && (retry || 0) < 3) {
         setTimeout(function() { window._fitNames(root, (retry || 0) + 1); }, 220);
       }
-    } catch (e) {}
+    } catch (e) { _terminou(); }
   };
 
   // ── O QUE ENTRA NA TELA AO ROLAR TAMBÉM PRECISA CABER (1.9.55) ──────────────
@@ -7871,6 +7879,27 @@ window._openTournamentCard = function (event, tournamentId) {
 // classe de bug da 1.9.55, viva no outro caminho — grep pela AÇÃO, não pelo handler).
 window._navTorneioComAviso = function (tournamentId, evento) {
   if (!tournamentId) return;
+  // ── ⭐ O CARD FICA ACESO ATÉ O AVISO PINTAR (2.0.41) ─────────────────────────
+  // Relato do dono (24/ago): _"ao clicar no card não temos nenhum feedback visual
+  // até que venha a tela de carregando, uns 3-4s"_. O realce de toque (sp-tocado)
+  // acende no touchstart mas o touchend o APAGA — num toque rápido são ~80ms de
+  // esmaecimento sobre gradiente escuro, invisível. No desktop o :active persiste
+  // enquanto o botão está apertado; no toque o dedo já saiu. Então AQUI, no clique
+  // que de fato navega, o card ganha `sp-abrindo` (esmaecer + contorno, o MESMO
+  // visual do :active do desktop) e segura até o "Abrindo o torneio…" cobrir a
+  // tela (a remoção mora no callback de 2 rAF logo abaixo — quando ele roda, o
+  // loader já pintou por cima). Toque em controle interno não passa por aqui.
+  // Sequência sem buraco: touchstart acende sp-tocado → touchend apaga → o click
+  // (mesmo esvaziamento de fila) acende sp-abrindo — nenhum quadro pinta no meio.
+  try {
+    var _cardTap = (evento && evento.target && evento.target.closest)
+      ? evento.target.closest('.card[onclick], a.compact-row, .compact-row[onclick]')
+      : null;
+    if (_cardTap) {
+      _cardTap.classList.add('sp-abrindo');
+      window._spCardAbrindo = _cardTap;
+    }
+  } catch (e) {}
   // familiaridade: entrar no próprio torneio é EXATAMENTE o que o convite
   // "encontre seu torneio" queria ensinar — 3 vezes e ele se cala (1.9.89).
   try { if (window._marcarFamiliaridade) window._marcarFamiliaridade('torneio'); } catch (e) {}
@@ -8029,8 +8058,9 @@ try {
       if (Date.now() - _rolando < 250) return;    // ainda rolando: nao e clique
       var t = ev && ev.target;
       if (!t || !t.closest) return;
-      // controle DENTRO do card (botao, link, input) tem o proprio feedback
-      if (t.closest('button, input, label, select, textarea, a[href], [data-no-card-nav]')) return;
+      // controle DENTRO do card (botao, link, input, toggle da Liga) tem o proprio
+      // feedback — e o toggle nao navega, entao acender o card ali mentiria clique
+      if (t.closest('button, input, label, select, textarea, a[href], [data-no-card-nav], [data-liga-toggle-tid]')) return;
       var card = t.closest(_ALVO);
       if (!card) return;
       card.classList.add('sp-tocado');

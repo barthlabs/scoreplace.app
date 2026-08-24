@@ -1282,6 +1282,25 @@ a.compact-row.sp-tocado,
   transition: none !important;
 }
 
+/* ── ⭐ O CARD FICA ACESO ATÉ O "ABRINDO O TORNEIO…" PINTAR (2.0.41) ──────────
+   Relato do dono (24/ago): _"ao clicar no card não temos nenhum feedback visual
+   até que venha a tela de carregando, uns 3-4s"_. O sp-tocado acima morre no
+   touchend — num toque rápido são ~80ms de esmaecimento, invisível no gradiente
+   escuro. Esta classe é posta pelo CLIQUE que navega (_navTorneioComAviso) e
+   fica até o loader cobrir a tela: é o MESMO visual do `:active` do desktop
+   (esmaecer + contorno), agora persistente no toque.
+   ⚠️ Sem transform/filter — a regra da 1.9.114 vale aqui também. `outline` é
+   pintura, não layout, e aqui NÃO há rolagem em voo: a classe entra depois do
+   touchend, num toque já confirmado como clique. */
+.card[onclick].sp-abrindo,
+a.compact-row.sp-abrindo,
+.compact-row[onclick].sp-abrindo {
+  opacity: 0.55 !important;
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+  transition: none !important;
+}
+
 /* ── ⛔ EFEITO DE MOUSE NAO ENCOSTA EM TELA DE TOQUE (1.9.114) ───────────────
    Relato do dono, testando o realce novo: _"o clique deu 2x um pulo e nao da a
    sensacao de clique"_. Os DOIS pulos tem causa exata: o card carregava

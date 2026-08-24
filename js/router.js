@@ -401,6 +401,9 @@ function initRouter() {
           if (!window._isSoftRefresh && typeof window._showLoading === 'function') {
             try { window._showLoading('Abrindo o torneio…'); } catch (e) {}
             window._spLoadingOwnedByNav = false; // a rota assumiu; a marca já serviu
+            // zera a promessa da navegação ANTERIOR: se ESTE torneio não tiver
+            // chave, o loader não pode esperar a hidratação de outro
+            window._bracketNamesPromise = null;
             var _saiuTour = false;
             var _fecharTour = function () {
               if (_saiuTour) return; _saiuTour = true;
@@ -415,8 +418,20 @@ function initRouter() {
                 else renderTournaments(viewContainer, cleanParam);
               }
               finally {
-                // sai só depois de a tela montada ter tido um quadro pra pintar
-                requestAnimationFrame(function () { requestAnimationFrame(_fecharTour); });
+                // ── O LOADER SÓ SAI COM OS NOMES NOS LUGARES (2.0.41) ─────────
+                // Ordem do dono (24/ago, Confra): a classificação vinha com nomes
+                // e a chave ainda pipocava os dela depois. Se o render publicou a
+                // promessa "nomes prontos" (bracket.js — hidratação + fit), o
+                // loader espera por ela; sem chave, sai como antes (2 quadros).
+                // O teto de 6s acima segue mandando: loader preso é pior.
+                requestAnimationFrame(function () { requestAnimationFrame(function () {
+                  var _pNomes = window._bracketNamesPromise;
+                  if (_pNomes && typeof _pNomes.then === 'function') {
+                    _pNomes.then(_fecharTour, _fecharTour);
+                  } else {
+                    _fecharTour();
+                  }
+                }); });
               }
             };
             // 1.9.75 — CORRIDA rAF × timeout (com trava de uma vez): rAF não dispara em
