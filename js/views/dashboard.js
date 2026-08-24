@@ -2653,7 +2653,7 @@ function renderDashboard(container) {
       // formariam outra grade, e o primeiro card ficaria sozinho numa linha própria).
       // Com `data-nov-collapsed`, os cards são todos irmãos na MESMA grade e o estado
       // fechado apenas esconde do 2º em diante — a grade reflui sozinha.
-      _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="position:relative;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
       // ⚠️ v1.8.78: o corte do colapso deixou de ser `[data-nov-card]:nth-child(n+2)` e
       // passou a ser "tudo que vem DEPOIS do primeiro card" — mesmo `~` que "Seus últimos
       // resultados" já usa. Com os cabeçalhos de grupo dentro da grade, contar por
@@ -2661,9 +2661,50 @@ function renderDashboard(container) {
       // fechada (um título anunciando cards que estão escondidos).
       _novHtml += '<style>#novidades-section[data-nov-collapsed="1"] #novidades-grid > [data-sp-extra]{display:none !important;}' +
         '#novidades-section[data-nov-collapsed="1"] [data-nov-extra]{display:none;}</style>';
+      // ── 2.0.38 · O "VER MENOS" ACOMPANHA A ROLAGEM — DENTRO DESTA SEÇÃO ─────────
+      // Pedido do dono (24/ago/2026): _"esse ver menos da sessão de novidades deve scrollar
+      // junto com o scroll da página dentro da sessão. apenas o ver menos e apenas dentro da
+      // sessão de novidades."_ Aberta, a seção fica longa: pra fechar era preciso rolar TODA
+      // a lista de volta até o cabeçalho.
+      //
+      // COMO: um TRILHO de altura ZERO (não empurra nada) que é `position:sticky` e mora
+      // direto na seção — o alcance de um sticky é o BOX DO PAI, então ele viaja do topo ao
+      // fim de #novidades-section e para exatamente onde a seção acaba. Não é `fixed`: fora
+      // da seção o botão não existe, que é a metade "apenas dentro da sessão" do pedido.
+      // ⛔ O topo é `--scroll-anchor` (topbar + dropdown + back-header + barra sticky + 12px),
+      // nunca px cravado — com número fixo metade do botão some sob a barra.
+      // [[project_sticky_vertical_usa_scroll_anchor]]
+      // O trilho é `pointer-events:none` pra não roubar o toque dos cards por baixo; só a
+      // pílula recebe clique. `align-self:flex-start` impede o span de esticar na altura.
+      // O id segue sendo `nov-toggle-tag` — quem escreve o texto continua sendo
+      // `_spSyncHint` (uma decisão só sobre o que o convite diz).
+      if (_novList.length > 1) {
+        _novHtml += '<div id="nov-toggle-rail" style="position:sticky;top:var(--scroll-anchor,120px);height:0;z-index:6;display:flex;justify-content:flex-end;pointer-events:none;">' +
+          '<span id="nov-toggle-tag" onclick="window._toggleNovidadesCollapse()" title="Mostrar/ocultar"' +
+          ' style="pointer-events:auto;cursor:pointer;user-select:none;align-self:flex-start;flex-shrink:0;' +
+          'font-size:0.7rem;font-weight:700;color:#7dd3fc;' +
+          // fundo OPACO por baixo do mesmo tom translúcido de sempre: rolando, a pílula passa
+          // por cima dos cards, e tinta transparente sobre card não se lê em tema nenhum.
+          // [[feedback_contraste_sempre_nos_dois_temas]]
+          'background:linear-gradient(rgba(125,211,252,0.14),rgba(125,211,252,0.14)),var(--bg-card,#1e293b);' +
+          'border:1px solid rgba(125,211,252,0.45);box-shadow:0 2px 8px rgba(0,0,0,0.28);' +
+          'border-radius:999px;padding:3px 10px;line-height:1.2;">' +
+          (_novCollapsed ? 'ver mais' : 'ver menos') + '</span>' +
+        '</div>';
+      }
       _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '📣 Novidades no seu torneio' +
-        (_novList.length > 1 ? _verMaisTag('nov-toggle-tag', _novCollapsed) : '') +
+        // ⚠️ O CALÇO. A pílula saiu do fluxo do cabeçalho (foi pro trilho sticky), então o
+        // título passou a correr POR BAIXO dela — medido na tela estreita: "NOVIDADES NO SEU
+        // TOR|ver menos". Este span invisível ocupa a MESMA caixa e devolve ao título o
+        // limite que ele tinha; o texto é sempre "ver menos" (o mais largo dos dois estados),
+        // então o calço é um TAMANHO FIXO, não um espelho do estado — nada pra sincronizar.
+        // Em `em`/padding, não px: acompanha o --ui-scale como o resto do card.
+        (_novList.length > 1
+          ? '<span data-tag-spacer-for="nov-toggle-tag" aria-hidden="true" style="visibility:hidden;margin-left:auto;flex-shrink:0;' +
+            'font-size:0.7rem;font-weight:700;border:1px solid transparent;border-radius:999px;padding:3px 10px;line-height:1.2;' +
+            'text-transform:none;letter-spacing:0;">ver menos</span>'
+          : '') +
         '</h3>';
       _spReset();
       _novHtml += '<div id="novidades-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;margin-top:12px;">';
@@ -4216,7 +4257,16 @@ function _spSyncHint(sec, attrColapso, tagId, hintId, resto, comJogos) {
   var hint = document.getElementById(hintId);
   var texto = (typeof window._spVerMaisTexto === 'function')
     ? window._spVerMaisTexto(resto, comJogos) : ('ver os ' + resto + ' anteriores');
-  if (tag) { tag.textContent = colapsada ? 'ver mais' : 'ver menos'; tag.style.display = resto > 0 ? '' : 'none'; }
+  if (tag) {
+    tag.textContent = colapsada ? 'ver mais' : 'ver menos'; tag.style.display = resto > 0 ? '' : 'none';
+    // O calço do cabeçalho (quando a pílula é flutuante, em Novidades) acompanha a pílula:
+    // reservar espaço pra um controle que não está na tela abriria um buraco à direita.
+    try {
+      document.querySelectorAll('[data-tag-spacer-for="' + tagId + '"]').forEach(function (sp) {
+        sp.style.display = resto > 0 ? '' : 'none';
+      });
+    } catch (e) {}
+  }
   if (hint) {
     hint.textContent = colapsada ? texto : 'ver menos';
     var p = hint.parentNode;   // o <p> centralizado do rodapé

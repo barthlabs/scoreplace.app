@@ -84,6 +84,8 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.38 ───────────────────────────────────────────
+        '<li><b>\uD83D\uDCCC O \u201cver menos\u201d das Novidades acompanha a rolagem:</b> com a se\u00e7\u00e3o aberta, era preciso rolar toda a lista de volta at\u00e9 o t\u00edtulo pra fech\u00e1-la. Agora a etiqueta <b>desce junto</b> enquanto voc\u00ea percorre a se\u00e7\u00e3o \u2014 e some quando ela acaba, sem atrapalhar o resto da tela.</li>' +
         // ── ciclo 2.0.37 ───────────────────────────────────────────
         // Ordem do dono lendo a leva anterior: "nada por nome porra. só uid. a menos que seja
         // digitado sem uid." Item pro usuário porque os DOIS defeitos apareciam na tela dele:
