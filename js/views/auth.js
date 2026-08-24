@@ -6444,6 +6444,13 @@ window._phoneDigitsFor = function (ddi) {
 
 function _setupPhoneMask(inputEl, countryCode) {
   inputEl.addEventListener('input', function() {
+    // 2.0.54: delega pro handler global quando ele existe — ele lê o DDI VIVO do
+    // select (este closure ficava preso no countryCode do dia da criação) e ainda
+    // reavalia o botão Verificar. O fallback preserva o comportamento antigo.
+    if (typeof window._profilePhoneMaskInput === 'function' && inputEl.id === 'profile-edit-phone') {
+      window._profilePhoneMaskInput(this);
+      return;
+    }
     var raw = this.value.replace(/\D/g, '');
     this.setAttribute('data-digits', raw);
     this.value = _formatPhoneDisplay(raw, countryCode || '55');
@@ -7124,10 +7131,10 @@ function setupProfileModal() {
               '<div id="profile-phone-edit-wrap" style="display:none;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
               '<div style="display: flex; gap: 6px; align-items: center;">' +
-                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 90px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.35rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value);">' +
+                '<select id="profile-phone-country" aria-label="DDI do telefone" class="form-control" style="width: 90px; flex-shrink: 0; box-sizing: border-box; font-size: 0.85rem; padding: 0.75rem 0.35rem;" onchange="var inp=document.getElementById(\'profile-edit-phone\'); var d=inp.getAttribute(\'data-digits\')||\'\'; inp.value=_formatPhoneDisplay(d,this.value); if(window._profilePhoneSyncVerifyBtn)window._profilePhoneSyncVerifyBtn();">' +
                   countryOpts +
                 '</select>' +
-                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="">' +
+                '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="" oninput="window._profilePhoneMaskInput && window._profilePhoneMaskInput(this)">' +
                 '<button type="button" id="profile-phone-verify-btn" onclick="if(this.disabled)return; window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
               '</div>' +
               // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
@@ -7674,6 +7681,28 @@ function setupProfileModal() {
       var d = String(digits || '').replace(/\D/g, '');
       if (String(ddi || '55') === '55') return d.length === 10 || d.length === 11;
       return d.length >= 8;
+    };
+
+    // ⛔ 2.0.54 — A FIAÇÃO DO CELULAR MORA NO MARKUP, não em addEventListener.
+    // Caso Vanessa Kaufmann (24/ago/2026, print no desktop): digitou 11991372028 e o
+    // campo ficou CRU (sem máscara) com o Verificar apagado — os listeners presos por
+    // `_setupPhoneMask`/addEventListener na criação do modal tinham se perdido (nó
+    // recriado/movido por innerHTML em algum caminho de render). Handler INLINE no
+    // atributo sobrevive a qualquer re-render — mesma tática do diálogo de contato.
+    // Bônus: a máscara antiga formatava presa no DDI '55' da closure; esta lê o DDI
+    // VIVO do select. `input` cobre digitação, colar e autopreenchimento.
+    window._profilePhoneMaskInput = function (inp) {
+      if (!inp) return;
+      var sel = document.getElementById('profile-phone-country');
+      var ddi = (sel && sel.value) || '55';
+      var raw = String(inp.value || '').replace(/\D/g, '');
+      inp.setAttribute('data-digits', raw);
+      var novo = (typeof _formatPhoneDisplay === 'function') ? _formatPhoneDisplay(raw, ddi) : raw;
+      if (inp.value !== novo) {
+        inp.value = novo;
+        try { inp.setSelectionRange(novo.length, novo.length); } catch (e) {}
+      }
+      if (typeof window._profilePhoneSyncVerifyBtn === 'function') window._profilePhoneSyncVerifyBtn();
     };
 
     // Reavalia o botão. Chamada no input, na troca de DDI e no render.
