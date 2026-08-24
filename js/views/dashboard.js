@@ -2683,8 +2683,29 @@ function renderDashboard(container) {
       // pílula recebe clique. `align-self:flex-start` impede o span de esticar na altura.
       // O id segue sendo `nov-toggle-tag` — quem escreve o texto continua sendo
       // `_spSyncHint` (uma decisão só sobre o que o convite diz).
+      // ── 2.0.40 · A PÍLULA PARA COM A MESMA FOLGA EMBAIXO ────────────────────────
+      // Correção do dono: _"o ver mais do box de novidades tem uma margem do seu topo ao topo
+      // do box. ao rolar até a base da seção deve parar com a mesma margem da sua base à base
+      // do box. agora está passando desse ponto."_
+      //
+      // POR QUÊ PASSAVA: o trilho tem altura ZERO (pra não empurrar o conteúdo), e o sticky só
+      // garante que a CAIXA DELE fique dentro do pai. Caixa de altura 0 chega até a base do
+      // pai — e a pílula, desenhada a partir dali pra baixo, sai 21px por fora. MEDIDO: 6,4px
+      // além da borda do box.
+      // A CORREÇÃO: uma margem INFERIOR do tamanho da pílula. O retângulo que prende um sticky
+      // é o do pai DESCONTADAS as margens do próprio sticky — então essa margem sobe o limite
+      // exatamente uma pílula, e a base dela pousa na base da caixa de conteúdo: a mesma folga
+      // do topo (padding + borda), dos dois lados. O `<h3>` puxa o mesmo tanto de volta pra
+      // essa margem não abrir buraco nenhum no fluxo (medido: h3 e altura da seção idênticos
+      // ao de antes).
+      // ⛔ NÃO usar margem NEGATIVA no trilho (foi a 1ª tentativa): ela ESTENDE o retângulo de
+      // volta e a pílula torna a passar — medido, os mesmos 6,4px de sobra.
+      // A altura da pílula é a caixa dela em rem, não um px cravado: 0.7rem × 1.2 de
+      // line-height = 0.84rem, + 3px+3px de padding + 1px+1px de borda. Assim acompanha o
+      // --ui-scale como o resto do card. [[feedback_maximize_screen_area_all_devices]]
+      var _pilulaH = 'calc(0.84rem + 8px)';
       if (_novList.length > 1) {
-        _novHtml += '<div id="nov-toggle-rail" style="position:sticky;top:var(--scroll-anchor,120px);height:0;z-index:6;display:flex;justify-content:flex-end;pointer-events:none;">' +
+        _novHtml += '<div id="nov-toggle-rail" style="position:sticky;top:var(--scroll-anchor,120px);height:0;margin-bottom:' + _pilulaH + ';z-index:6;display:flex;justify-content:flex-end;pointer-events:none;">' +
           _verMaisTag('nov-toggle-tag', _novCollapsed, {
             attrs: ' onclick="window._toggleNovidadesCollapse()" title="Mostrar/ocultar"',
             // só a posição e o gesto: fundo/cor/borda são os do desenho canônico, pra a
@@ -2693,7 +2714,10 @@ function renderDashboard(container) {
           }) +
         '</div>';
       }
-      _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+      _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;' +
+        // devolve ao fluxo o que a margem do trilho tomou (ver _pilulaH acima)
+        (_novList.length > 1 ? 'margin-top:calc(-1 * ' + _pilulaH + ');' : '') +
+        'font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '📣 Novidades no seu torneio' +
         // ⚠️ O CALÇO. A pílula saiu do fluxo do cabeçalho (foi pro trilho sticky), então o
         // título passou a correr POR BAIXO dela — medido na tela estreita: "NOVIDADES NO SEU

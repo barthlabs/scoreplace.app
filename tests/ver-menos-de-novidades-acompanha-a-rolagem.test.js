@@ -38,7 +38,21 @@ ok(/id="nov-toggle-rail"[^']*top:var\(--scroll-anchor/.test(bloco),
   '  → gruda em --scroll-anchor, não em px cravado (senão some sob a barra)');
 ok(/id="nov-toggle-rail"[^']*height:0/.test(bloco),
   '  → altura ZERO: o trilho não empurra o conteúdo da seção');
-ok(/id="nov-toggle-rail"[^']*pointer-events:none/.test(bloco) && /pointer-events:auto/.test(bloco),
+
+// ── A PÍLULA PARA COM A MESMA FOLGA EMBAIXO ─────────────────────────────────────────
+// _"o ver mais tem uma margem do seu topo ao topo do box. ao rolar até a base da seção deve
+// parar com a mesma margem da sua base à base do box. agora está passando desse ponto."_
+// Caixa de altura 0 chega até a base do pai e a pílula sai por fora (medido: 6,4px além da
+// borda). A margem inferior do tamanho da pílula sobe o limite do sticky exatamente isso.
+ok(/margin-bottom:' \+ _pilulaH/.test(bloco),
+  'o trilho reserva embaixo o tamanho da pílula (a folga fica simétrica)');
+ok(/var _pilulaH = 'calc\(0\.84rem \+ 8px\)'/.test(dash),
+  '  → e esse tamanho é a caixa da pílula em rem (0.7rem × 1.2 + padding + borda), não px cravado');
+ok(/margin-top:calc\(-1 \* ' \+ _pilulaH/.test(dash),
+  '  → o <h3> devolve ao fluxo o que a margem tomou (a seção não muda de altura)');
+ok(!/margin-bottom:calc\(-/.test(bloco),
+  '  → ⛔ nunca margem NEGATIVA no trilho: ela ESTENDE o limite e a pílula volta a passar');
+ok(/id="nov-toggle-rail"[\s\S]{0,260}pointer-events:none/.test(bloco) && /pointer-events:auto/.test(bloco),
   '  → o trilho não rouba o toque dos cards; só a pílula recebe clique');
 ok(/<div id="novidades-section"[\s\S]{0,220}position:relative/.test(dash),
   'a seção é o contexto do sticky (o alcance é o box do pai)');
