@@ -354,6 +354,11 @@ const SUITES = [
   // → reverter → formar), pelo código real. Cada transição já tinha dono; ninguém rodava
   // a cadeia — e é ENTRE uma e a seguinte que some gente.
   'tests/ciclo-espera-desativado-wo.test.js',
+  // quem reativou e foi pra fila não pode seguir na lista "⚠️ W.O." (caso Carol Moresco,
+  // 24/ago/2026): com a vaga preenchida o marcador de folga 'wo' sai no mesmo ato; com a
+  // vaga aberta ele fica (é dele que saem os 0 pts e a punição). A história do grupo
+  // (g.woAbsent/g.subName) não se toca em cenário nenhum.
+  'tests/wo-na-fila-nao-esta-na-lista-de-wo.test.js',
   // o card do topo NUNCA pode contradizer o torneio: quem está na lista de espera,
   // desativado ou com W.O. lia "você não está inscrito" (dado REAL do Confra).
   'tests/meu-card-nunca-contradiz.test.js',

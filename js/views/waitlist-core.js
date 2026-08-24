@@ -335,7 +335,8 @@ window._sanitizeWaitlistVsGroups = function (t) {
   return removed;
 };
 
-// SANEAMENTO IDEMPOTENTE, IRMÃO DO DE CIMA: **folga de inativo só é de quem ESTÁ inativo.**
+// SANEAMENTO IDEMPOTENTE, IRMÃO DO DE CIMA: **folga de inativo só é de quem ESTÁ
+// inativo — e folga de W.O. não é de quem está na fila (vaga preenchida).**
 //
 // REGRA DO DONO (07/ago/2026): _"quem era folga e reativou entra na lista de espera"_ ·
 // _"reativou sai da folga e entra na lista de espera"_ — os dois numa tacada só. Sair da
@@ -351,9 +352,22 @@ window._sanitizeWaitlistVsGroups = function (t) {
 //
 // A folga de inativo descreve UM estado: "esta pessoa está desativada no elenco". Quem não
 // está mais assim (foi pra fila, voltou a jogar, ou saiu) não tem por que carregá-la.
-// `'wo'` e `'remainder'` NÃO são tocados: o W.O. é o registro de uma falta que aconteceu
-// (com 0 pts na rodada) e apagá-lo apagaria a penalidade; `remainder` é a sobra do sorteio,
-// que tem cura própria (`_healMonarchRemainderToWaitlist`).
+//
+// FOLGA DE W.O. (v2.0.57 — regra do dono, 24/ago/2026, caso Carol Moresco na Confra):
+// _"ou está inativa, ou na lista de espera ou no wo ou em jogo. não pode estar em 2
+// lugares diferentes. no grupo em que ela tomou wo fica a indicação histórica, ela não
+// está lá."_ A Carol tomou W.O. no R1, a vaga foi PREENCHIDA por substituta, ela reativou
+// e foi pra fila — e seguia listada em "⚠️ W.O.", porque é do marcador de folga que essa
+// lista lê os nomes. O marcador é ESTADO; quando o estado vira "na fila", ele sai. A
+// indicação histórica que FICA é a do grupo (g.woAbsent/g.woAbsentUid/g.subName/
+// g.subStatus e os campos woAbsent/subName dos matches) — nesses ninguém mexe.
+// ⚠️ SÓ quando a pessoa NÃO ocupa mais vaga nos grupos da rodada (vaga preenchida).
+// Com a vaga ABERTA o nome dela segue nos players do grupo e o marcador é load-bearing:
+// é dele que saem os 0 pts da rodada, a punição de W.O. dos Pontos Avançados
+// (_calcAdvancedPoints) e a blindagem contra jogos-fantasma (_woRounds) — remover aí
+// mudaria a classificação, então esse cenário fica como está.
+// `'remainder'` segue intocado: é a sobra do sorteio, com cura própria
+// (`_healMonarchRemainderToWaitlist`).
 //
 // Casa por UID (identidade canônica) e cai no nome só pra quem não tem conta.
 // Retorna o nº de folgas removidas.
@@ -369,16 +383,48 @@ window._sanitizeSitOutsVsRoster = function (t) {
     us.forEach(function (u) { inativoUid[u] = 1; });
     if (!us.length) _nameForms(p).forEach(function (n) { inativoNome[n] = 1; });
   });
+  // quem está NA ESPERA — folga de W.O. não é de quem está na fila
+  var esperaUid = {}, esperaNome = {};
+  window._getWaitlist(t).forEach(function (e) {
+    var us = _uids(e).filter(Boolean);
+    us.forEach(function (u) { esperaUid[String(u)] = 1; });
+    if (!us.length) _nameForms(e).forEach(function (n) { esperaNome[n] = 1; });
+  });
   var removed = 0;
   t.rounds.forEach(function (r) {
     if (!r || !Array.isArray(r.matches)) return;
+    // quem ainda ocupa vaga num grupo DESTA rodada mantém a folga 'wo' (vaga aberta)
+    var rodadaUid = {}, rodadaNome = {};
+    (r.monarchGroups || []).forEach(function (g) {
+      if (!g) return;
+      (g.playersUids || []).forEach(function (u) { if (u) rodadaUid[String(u)] = 1; });
+      (g.players || []).forEach(function (n) {
+        var s = String(n || '').trim().toLowerCase();
+        if (!s) return;
+        if (s.indexOf(' / ') !== -1) s.split(' / ').forEach(function (x) { var k = x.trim(); if (k) rodadaNome[k] = 1; });
+        else rodadaNome[s] = 1;
+      });
+    });
     r.matches = r.matches.filter(function (m) {
-      if (!m || !m.isSitOut || m.sitOutReason !== 'inactive') return true;
-      // uid manda; nome só quando não há uid nenhum no marcador
-      if (m.p1Uid) { if (inativoUid[m.p1Uid]) return true; removed++; return false; }
-      var nm = String(m.p1 || '').trim().toLowerCase();
-      if (!nm || inativoNome[nm]) return true;
-      removed++; return false;
+      if (!m || !m.isSitOut) return true;
+      if (m.sitOutReason === 'inactive') {
+        // uid manda; nome só quando não há uid nenhum no marcador
+        if (m.p1Uid) { if (inativoUid[m.p1Uid]) return true; removed++; return false; }
+        var nm = String(m.p1 || '').trim().toLowerCase();
+        if (!nm || inativoNome[nm]) return true;
+        removed++; return false;
+      }
+      if (m.sitOutReason === 'wo') {
+        // sai só quem está NA ESPERA e FORA dos grupos da rodada (vaga preenchida)
+        if (m.p1Uid) {
+          if (!esperaUid[m.p1Uid] || rodadaUid[m.p1Uid]) return true;
+          removed++; return false;
+        }
+        var nm2 = String(m.p1 || '').trim().toLowerCase();
+        if (!nm2 || !esperaNome[nm2] || rodadaNome[nm2]) return true;
+        removed++; return false;
+      }
+      return true;
     });
   });
   return removed;

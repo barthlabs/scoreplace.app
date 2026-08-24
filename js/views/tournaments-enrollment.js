@@ -1796,18 +1796,31 @@ window._toggleLigaActive = function(tId, isActive) {
       // "está desativada"; a partir daqui ela não está mais, então o marcador some junto —
       // senão a pessoa entra na fila e SEGUE listada em "Desativados", que foi o que
       // aconteceu com a Ana Ribeiro no Confra. O saneamento é idempotente e casa por uid.
-      // ⚠️ Não toca em `wo`: aquele é registro de uma falta que aconteceu (0 pts na rodada).
-      // Guarda o que sair, pra que o rollback do save falho devolva a folga junto com a
-      // pessoa — desfazer metade deixaria o doc num estado que nenhum caminho produz.
+      // v2.0.57 — a folga `wo` TAMBÉM sai quando a vaga foi PREENCHIDA (regra do dono,
+      // 24/ago/2026, caso Carol Moresco: _"ou está inativa, ou na lista de espera ou no wo
+      // ou em jogo. não pode estar em 2 lugares diferentes"_). A Carol reativou, foi pra
+      // fila — e seguia em "⚠️ W.O.", que lê os nomes do marcador de folga. A indicação
+      // histórica que fica é a do GRUPO (g.woAbsent/g.subName); o marcador é estado, e o
+      // estado agora é "na fila". Com a vaga ABERTA (nome ainda nos players do grupo) o
+      // marcador PERMANECE: é dele que saem os 0 pts da rodada, a punição de W.O. e a
+      // blindagem de jogos-fantasma — a régua mora em _sanitizeSitOutsVsRoster.
+      // Snapshot → sanitize → diff: o rollback do save falho devolve EXATAMENTE o que
+      // saiu junto com a pessoa — desfazer metade deixaria o doc num estado que nenhum
+      // caminho produz.
+      var _minhasFolgas = [];
       (t.rounds || []).forEach(function (r, ri) {
         (r && r.matches || []).forEach(function (m) {
-          if (m && m.isSitOut && m.sitOutReason === 'inactive' &&
+          if (m && m.isSitOut && (m.sitOutReason === 'inactive' || m.sitOutReason === 'wo') &&
               (m.p1Uid ? _uidsDe(found).indexOf(m.p1Uid) !== -1 : false)) {
-            _folgasRemovidas.push({ ri: ri, m: m });
+            _minhasFolgas.push({ ri: ri, m: m });
           }
         });
       });
       if (typeof window._sanitizeSitOutsVsRoster === 'function') window._sanitizeSitOutsVsRoster(t);
+      _minhasFolgas.forEach(function (f) {
+        var _r = (t.rounds || [])[f.ri];
+        if (!_r || !Array.isArray(_r.matches) || _r.matches.indexOf(f.m) === -1) _folgasRemovidas.push(f);
+      });
       _movedToWait = { entry: found, idx: _idx };
     }
   }
