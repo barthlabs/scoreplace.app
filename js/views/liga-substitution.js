@@ -484,7 +484,7 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
     }
 
     // (3) O AUSENTE É DESATIVADO — sempre (v1.7.59).
-    _ligaWoDeactivate(ft, absentName);
+    _ligaWoDeactivate(ft, absentName, _absU);
   });
 
   if (window.showNotification) {
@@ -507,11 +507,34 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
 //
 // Ao reativar, `_toggleLigaActive` (tournaments-enrollment.js) o manda pro FIM da fila —
 // é lá que mora a segunda metade da regra, e ela depende DESTA marca (`woDeactivatedAt`).
-function _ligaWoDeactivate(ft, absentName) {
+// ⛔ QUEM É A PESSOA: uid (v2.0.37). O nome só decide pra quem NÃO tem conta.
+// Ordem do dono (24/ago/2026): _"nada por nome porra. só uid. a menos que seja digitado sem
+// uid."_ Aqui o elenco era varrido comparando o NOME EXIBIDO — e o nome exibido é resolvido
+// do perfil vivo, então ele MUDA quando a pessoa se renomeia. Quando não casava, o `else`
+// abaixo empurrava uma entrada NOVA com o nome: a mesma pessoa duas vezes no elenco (uma
+// só-uid, outra só-nome) — inscrito fantasma e +1 na contagem. Com o uid (que os 4 pontos
+// de chamada já calculam ANTES de mexer no slot, via `_woAbsentUidOf`) a busca é exata.
+// [[feedback_uid_controls_everything_name_only_ficticio]] · [[project_wo_lives_in_four_places]]
+function _ligaWoDeactivate(ft, absentName, absentUid) {
   var _parts = Array.isArray(ft.participants) ? ft.participants : (ft.participants ? Object.values(ft.participants) : []);
+  var _uidsDe = function (x) {
+    if (!x || typeof x !== 'object') return [];
+    return (typeof window._participantUids === 'function') ? window._participantUids(x)
+         : [x.uid, x.p1Uid, x.p2Uid].filter(Boolean);
+  };
+  var _u = absentUid ? String(absentUid)
+        : ((typeof window._memberUidByName === 'function') ? String(window._memberUidByName(ft, absentName) || '') : '');
   var _i = -1;
   for (var k = 0; k < _parts.length; k++) {
-    if (_parts[k] && typeof _parts[k] === 'object' && _wlDisplay(_parts[k]) === absentName) { _i = k; break; }
+    var _p = _parts[k];
+    if (!_p || typeof _p !== 'object') continue;
+    if (_u) {                                   // TEM uid → só o uid decide
+      if (_uidsDe(_p).indexOf(_u) !== -1) { _i = k; break; }
+      continue;
+    }
+    // sem uid = nome digitado/fictício: aí, e só aí, o nome é a identidade — e a entrada
+    // do outro lado também precisa ser sem uid (senão é gente diferente com nome parecido).
+    if (!_uidsDe(_p).length && _wlDisplay(_p) === absentName) { _i = k; break; }
   }
   if (_i !== -1) {
     _parts[_i].ligaActive = false;
@@ -522,8 +545,12 @@ function _ligaWoDeactivate(ft, absentName) {
     delete _parts[_i].woSentToWaitlistAt;
   } else {
     // Não estava no elenco (veio da fila / doc legado): entra desativado — nunca fica
-    // sem lugar nenhum, que é como o inscrito fantasma nasce.
-    _parts.push({ name: absentName, displayName: absentName, ligaActive: false, woDeactivatedAt: new Date().toISOString() });
+    // sem lugar nenhum, que é como o inscrito fantasma nasce. ⚠️ Com uid conhecido, a
+    // entrada nasce COM ele (o nome vai junto só como rótulo de doc legado): sem uid a
+    // pessoa volta a existir duas vezes na contagem de inscritos.
+    var _nova = { name: absentName, displayName: absentName, ligaActive: false, woDeactivatedAt: new Date().toISOString() };
+    if (_u) _nova.uid = _u;
+    _parts.push(_nova);
   }
   ft.participants = _parts;
   // Sai da espera: desativado e na fila ao mesmo tempo é estado impossível de explicar,
@@ -861,7 +888,7 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
         if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled';
       });
     }
-    _ligaWoDeactivate(ft, absentName);
+    _ligaWoDeactivate(ft, absentName, _absU2);
     if (!Array.isArray(ft.history)) ft.history = [];
     ft.history.push({ date: new Date().toISOString(), message: 'W.O. (' + groupName + '): ' + absentName + ' → ' + subName + ' (substituição direta do organizador)' });
   });
@@ -970,7 +997,7 @@ window._ligaInviteSelected = function (tId, roundIndex, groupName, absentName) {
       g.woDest = 'inactive'; g.woAbsent = absentName;
       if (_absU3) g.woAbsentUid = _absU3; else delete g.woAbsentUid;
     }
-    _ligaWoDeactivate(ft, absentName);
+    _ligaWoDeactivate(ft, absentName, _absU3);
   });
   window._ligaInviteSubMulti(tId, roundIndex, groupName, absentName, sel);
 };
@@ -1026,7 +1053,7 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     if (_absU4) g.woAbsentUid = _absU4; else delete g.woAbsentUid;
     g.woDest = 'inactive';   // v1.7.59: destino único
     delete g.pendingInviteId;
-    _ligaWoDeactivate(ft, absentName);   // v1.7.59: W.O. sempre desativa
+    _ligaWoDeactivate(ft, absentName, _absU4);   // v1.7.59: W.O. sempre desativa
     // Completar com Jogador X supera qualquer convite pendente do grupo — cancela
     // pra não deixar convite órfão (que um jogador real poderia aceitar depois).
     if (Array.isArray(ft.ligaSubInvites)) {

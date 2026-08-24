@@ -876,10 +876,40 @@ window._resolvePhaseInactives = function(tId, choice){
         // Entram por classificação: como não jogaram (0 pts), são os piores → pior linha.
         // Reativa (ligaActive=true) pra ficarem consistentes no resto do app.
         if (t.phases && t.phases[_niIdx]) t.phases[_niIdx]._includeInactive = inativos.slice();
+        // ⛔ IDENTIDADE É uid (v2.0.37) — nome SÓ pra quem não tem uid (digitado/fictício).
+        //
+        // Aqui casava por `displayName || name`, e isso não era só estilo: o save STRIPA o
+        // nome de toda entrada com uid ([[project_uid_identity_canon_locked]]), então os dois
+        // lados viravam `undefined` e `undefined === undefined` dava TRUE — a comparação
+        // reativava TODO participante só-uid do torneio, não os inativos escolhidos.
+        //
+        // `inativos` são as PRÓPRIAS entradas de `t.participants` (mesma referência), então a
+        // reativação é direta. A varredura por uid existe pro caso de o elenco vir de um mapa
+        // (Object.values clona a lista, não os objetos) e pra irmãs do mesmo uid.
         var _allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+        var _uidsDe = function (x) {
+            return (typeof window._participantUids === 'function') ? window._participantUids(x)
+                 : ((x && x.uid) ? [x.uid] : []);
+        };
         inativos.forEach(function(inp){
-            var _nm = inp && (inp.displayName || inp.name);
-            _allP.forEach(function(p){ if (p && typeof p === 'object' && (p.displayName || p.name) === _nm) p.ligaActive = true; });
+            if (!inp || typeof inp !== 'object') return;
+            inp.ligaActive = true;                       // a entrada escolhida, sem intermediário
+            var _u = _uidsDe(inp);
+            if (_u.length) {
+                _allP.forEach(function(p){
+                    if (!p || typeof p !== 'object' || p === inp) return;
+                    var _pu = _uidsDe(p);
+                    if (_pu.some(function (x) { return _u.indexOf(x) !== -1; })) p.ligaActive = true;
+                });
+                return;
+            }
+            // SEM uid = nome digitado/fictício — aí, e só aí, o nome é a identidade.
+            var _nm = String((inp.displayName || inp.name || '')).trim().toLowerCase();
+            if (!_nm) return;
+            _allP.forEach(function(p){
+                if (!p || typeof p !== 'object' || p === inp || _uidsDe(p).length) return;
+                if (String((p.displayName || p.name || '')).trim().toLowerCase() === _nm) p.ligaActive = true;
+            });
         });
     }
     // 'exclude' → nada a fazer (não entram na próxima fase)

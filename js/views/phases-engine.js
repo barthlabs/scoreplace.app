@@ -1951,17 +1951,11 @@
       // na fase eliminatória: +1 por cada nome empurrado pra fila.
       // `_waitlistPushBack` é a porta canônica — preserva o uid e deduplica POR UID.
       built.waitlist.forEach(function (tm) {
-        if (!tm) return;
-        if (typeof window._waitlistPushBack === 'function') { window._waitlistPushBack(t, tm); return; }
-        // fallback (ordem de carga): mesma dedup, mas guardando a ENTRADA
-        var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : (t.standbyParticipants = []);
-        var _u = tm.uid || tm.p1Uid || null, _nm = tm.displayName || tm.name || '';
-        var _ja = _sb.some(function (p) {
-          if (_u && p && typeof p === 'object' && (p.uid === _u || p.p1Uid === _u)) return true;
-          var pn = (typeof p === 'string') ? p : (p && (p.displayName || p.name));
-          return !!_nm && pn === _nm;
-        });
-        if (!_ja) _sb.push(tm);
+        // PORTA ÚNICA: `_waitlistPushBack` (waitlist-core.js, carregado ANTES deste arquivo
+        // no site e no vendor do autoDraw). ⛔ Sem fallback próprio de dedup aqui: uma segunda
+        // regra de "é a mesma pessoa?" é como se volta a casar gente por NOME.
+        // [[feedback_uid_controls_everything_name_only_ficticio]] · [[feedback_reuse_what_already_works]]
+        if (tm && typeof window._waitlistPushBack === 'function') window._waitlistPushBack(t, tm);
       });
     }
     t.currentPhaseIndex = idx;

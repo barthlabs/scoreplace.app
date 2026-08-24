@@ -83,7 +83,7 @@ ok(W._waitlistPushBack(tc, { uid: 'u1' }) === false, '  → e deduplica por uid'
 
 // ── 4. quem escreve na fila no avanço de fase usa a porta canônica ───────────────────
 const eng = fs.readFileSync(path.join(ROOT, 'js', 'views', 'phases-engine.js'), 'utf8');
-ok(/built\.waitlist\.forEach\(function \(tm\) \{[\s\S]{0,400}_waitlistPushBack\(t, tm\)/.test(eng),
+ok(/built\.waitlist\.forEach\(function \(tm\) \{[\s\S]{0,900}_waitlistPushBack\(t, tm\)/.test(eng),
   'storePhase empurra a ENTRADA via _waitlistPushBack (suplentes de grupo/corte)');
 ok(!/_sb\.push\(nm\)/.test(eng), '  → e não empurra mais o NOME');
 
