@@ -122,6 +122,12 @@ function computeSetContactPhone(input) {
       phoneSource: 'organizer',
       phoneSetBy: callerUid,
       phoneSetAt: nowIso,
+      // notifyWhatsApp é DERIVADO da existência de celular (cânone v1.9.68 — o toggle
+      // saiu da UI e o save do perfil grava phoneDigits>=8). Sem derivar AQUI também,
+      // um false residual de antes do número existir derruba o canal 💬 pro e-mail
+      // (_resolvePersonContact checa notifyWhatsApp !== false) — foi o que exigiu o
+      // conserto manual dos 13 perfis da Confra em 24/ago/2026.
+      notifyWhatsApp: true,
       updatedAt: nowIso,
     },
   };

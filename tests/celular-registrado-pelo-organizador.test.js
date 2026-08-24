@@ -104,6 +104,12 @@ ok(r.update.phoneSetBy === ORG, 'E3. grava QUEM registrou (sem isso não há res
 ok(r.update.phoneSetAt === '2026-08-20T18:00:00.000Z', 'E4. grava QUANDO');
 ok(!('phoneVerified' in r.update),
   'E5. NÃO inventa phoneVerified — duas fontes de verdade exigiriam backfill nas contas antigas');
+// notifyWhatsApp é DERIVADO de ter celular (cânone v1.9.68 — o toggle saiu da UI).
+// Sem derivar no registro do organizador, um false residual de antes do número existir
+// derruba o canal 💬 pro e-mail (_resolvePersonContact checa notifyWhatsApp !== false):
+// foi exatamente o buraco que exigiu conserto manual em 13 perfis da Confra (24/ago/2026).
+ok(r.update.notifyWhatsApp === true,
+  'E6. registrar celular DERIVA notifyWhatsApp:true — senão o false residual mata o balãozinho 💬');
 
 // ── F. NUNCA IDENTIDADE (os três caminhos) ──────────────────────────────────
 ok(core.isIdentityPhone({ phone: '+5511988887777' }) === true,
@@ -124,6 +130,12 @@ ok(/_survSemIdentidade/.test(IDX),
   'F7. na fusão, celular VERIFICADO vence o registrado pelo organizador');
 ok(/phoneSource: admin\.firestore\.FieldValue\.delete\(\)/.test(IDX),
   'F8. quando o SMS finalmente prova a posse, a procedência de organizador é apagada');
+// Todo caminho do SERVIDOR que põe telefone num perfil deriva notifyWhatsApp junto —
+// mesma razão do E6: o false residual não pode sobreviver ao número chegar.
+ok(/phone: ghPhone[\s\S]{0,900}notifyWhatsApp: true/.test(IDX),
+  'F9. o ghost-claim do mergePhoneAccount (número provado por SMS) deriva notifyWhatsApp:true');
+ok(/surv\.phone = _oldPhone;[\s\S]{0,500}surv\.notifyWhatsApp = true/.test(IDX),
+  'F10. o sobrevivente da fusão que herda celular deriva notifyWhatsApp:true');
 
 // ── G. A PESSOA É AVISADA ───────────────────────────────────────────────────
 const aviso = core.buildContactPhoneNotice({

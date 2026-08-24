@@ -5581,6 +5581,9 @@ exports.mergePhoneAccount = onCall(
             phoneSource: admin.firestore.FieldValue.delete(),
             phoneSetBy: admin.firestore.FieldValue.delete(),
             phoneSetAt: admin.firestore.FieldValue.delete(),
+            // notifyWhatsApp é derivado de ter celular (cânone v1.9.68) — sem isto,
+            // um false residual de antes do número deixaria o canal 💬 caído.
+            notifyWhatsApp: true,
           }, { merge: true }
         ).catch(() => {});
       }
@@ -5843,6 +5846,9 @@ exports.mergePhoneAccount = onCall(
     if (_survSemIdentidade && _oldPhone) {
       surv.phone = _oldPhone;
       surv.phoneCountry = oldData.phoneCountry || "55";
+      // notifyWhatsApp é derivado de ter celular (cânone v1.9.68): o sobrevivente
+      // acabou de ganhar um número — um false residual não pode derrubar o canal 💬.
+      surv.notifyWhatsApp = true;
       // o número passou a ser o VERIFICADO — a procedência de organizador morre aqui
       if (newData.phoneSource === 'organizer') {
         surv.phoneSource = admin.firestore.FieldValue.delete();
