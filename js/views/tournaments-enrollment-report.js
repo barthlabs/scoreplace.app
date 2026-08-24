@@ -2597,9 +2597,10 @@
       r._lzColor = null; r._lzSkill = null; r._lzSrc = null;
       r._lzVerified = false; r._lzAuthorized = false;
       var prof = r.uid && profileMap[r.uid];
-      // Autorizou = tem letzplay indicado no perfil (@handle) E ligou o toggle
-      // "Autorizar importação". É o que separa violeta (autorizou) de branco (não).
-      r._lzAuthorized = !!(prof && prof.letzplayHandle && prof.letzplayConsent === true);
+      // 2.0.50 (dono): o letzplay é PÚBLICO e criar a conta já autoriza a consulta
+      // (termos de uso) — o toggle de autorização MORREU. "Autorizado" = tem o @
+      // indicado no perfil. É o que separa violeta (consultável) de branco (sem @).
+      r._lzAuthorized = !!(prof && prof.letzplayHandle);
       // O HISTÓRICO PODE ESTAR EM DOIS LUGARES, e eu só olhava um:
       //   • users/{uid}.letzplayImport      → a pessoa fez o autoimport dela;
       //   • letzplayScans/{uid}.fullImport  → o ORGANIZADOR puxou por ela (busca completa).
@@ -3403,7 +3404,7 @@
            '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
            'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
         : ('<div style="font-size:0.8rem;">Jogos de <b>' + _esc(tg.name) + '</b> no scoreplace. ' +
-           '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não autorizou a leitura.</span></div>'));
+           '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não tem o @ indicado no perfil.</span></div>'));
     var btnLabel = '📚 Puxar histórico completo';
     // 3 BARRAS (x = gravado · y = total do perfil letzplay). Os "de y" que faltarem são
     // completados ao vivo pela extensão (lz-profile-counts lê "472 Jogos · 29 Rankings ·
@@ -4110,15 +4111,13 @@
     window._lzRenderCtx = { t: t, rows: rows, profileMap: profileMap, scanMap: scanMap };
     var _isOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
 
-    // Alvos da busca = TODOS os competidores autorizados (@ + consentimento). O ORGANIZADOR
-    // competidor entra auto-autorizado (é o próprio dado público dele). Inclui quem JÁ tem
-    // import — pra atualizar os desatualizados; a precedência (scan mais novo) só sobrescreve
-    // quando de fato é mais recente, então perfil atual não é clobbado à toa.
-    var _meUid = (window.AppStore && window.AppStore.currentUser && window.AppStore.currentUser.uid) || null;
+    // Alvos da busca = TODO competidor com @ no perfil. 2.0.50 (dono): o letzplay é
+    // PÚBLICO e criar a conta já autoriza a consulta (termos de uso) — o consentimento
+    // por toggle morreu. Inclui quem JÁ tem import — pra atualizar os desatualizados; a
+    // precedência (scan mais novo) só sobrescreve quando de fato é mais recente.
     var targets = (rows || []).filter(function (r) {
       var prof = r.uid && profileMap[r.uid];
-      if (!prof || !prof.letzplayHandle) return false;
-      return (_meUid && r.uid === _meUid) || prof.letzplayConsent === true;
+      return !!(prof && prof.letzplayHandle);
     }).map(function (r) { return { uid: r.uid, handle: profileMap[r.uid].letzplayHandle, name: r.name }; });
     // v1.1.21: FIM do lote (Essencial/Completa em batch) — travava e não trazia nada.
     // A busca virou INDIVIDUAL: clicar num nome autorizado abre a tela de puxar o
@@ -5220,13 +5219,14 @@
     _fetchProfiles(parts).then(function (fetchResult) {
       if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }
       var byUid = fetchResult.byUid || {};
-      // Candidatos = TODO inscrito com @ + consentimento (v1.1.18: inclui quem já tem
-      // import próprio). Antes eles ficavam de fora e a página não sabia QUANDO cada um
-      // foi verificado — sem isso não dá pra aplicar a regra dos 6 dias. O veredito não
-      // muda: em _erApplyLzToRows o import próprio continua tendo precedência sobre o scan.
+      // Candidatos = TODO inscrito com @ no perfil (2.0.50: letzplay é público, o
+      // consentimento por toggle morreu — criar a conta já autoriza, termos de uso).
+      // v1.1.18: inclui quem já tem import próprio — sem isso a página não sabia QUANDO
+      // cada um foi verificado (regra dos 6 dias). O veredito não muda: em
+      // _erApplyLzToRows o import próprio continua tendo precedência sobre o scan.
       var candUids = parts.filter(function (p) {
         var prof = p.uid && byUid[p.uid];
-        return prof && prof.letzplayHandle && prof.letzplayConsent === true;
+        return prof && prof.letzplayHandle;
       }).map(function (p) { return p.uid; });
       _fetchGlobalScans(candUids).then(function (scanMap) {
         if (window.location.hash !== '#analise/' + tId) { _doneLoading(); return; }

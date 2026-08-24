@@ -2614,6 +2614,17 @@ function renderParticipants(container, tournamentId) {
             'display:inline-flex;align-items:center;justify-content:center;text-decoration:none;' +
             'border-radius:7px;flex-shrink:0;background:' + _waCor + ';">\uD83D\uDCAC</a>';
         }
+        // 2.0.50: quem JA tem celular mas ainda nao tem letzplay tambem precisa de um
+        // caminho -- sem isto o organizador so alcancava o @ pela pendencia do telefone.
+        // O MESMO dialogo registra (a parte do celular sai travada/preenchida).
+        if (_telJa && !(_profTel && _profTel.letzplayHandle)) {
+          _telBtnC += ' <button type="button" class="btn btn-micro" ' +
+            'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
+            'title="Sem letzplay \u2014 clique para registrar o @ da pessoa" ' +
+            'style="min-height:0;height:24px;line-height:1;padding:0 10px;font-size:0.66rem;font-weight:800;' +
+            'border-radius:7px;flex-shrink:0;background:rgba(125,211,252,0.10);color:#7dd3fc;' +
+            'border:1px dashed rgba(125,211,252,0.45);">\uD83C\uDFBE letzplay</button>';
+        }
       }
 
       // v2.7.54: botão de REMOVER inscrito (só organizador) — poder de tirar qualquer
@@ -3055,23 +3066,24 @@ window._orgSetContactPhone = function (tId, uid, nome) {
     ? window._phoneMaskFor('99999999999'.slice(0, (typeof window._phoneDigitsFor === 'function' ? window._phoneDigitsFor(_ddiAtual) : 11) || 11), _ddiAtual)
     : '(11) 99999-9999';
 
-  // Celular que a PRÓPRIA pessoa verificou por SMS não se toca. Só ela manda no número
-  // dela — o organizador registra contato de quem não tem, não corrige quem tem.
-  if (verificado) {
-    if (typeof showAlertDialog === 'function') {
-      showAlertDialog('Celular já verificado',
-        (nome || 'Essa pessoa') + ' já confirmou o celular por SMS: +' + _ddiAtual + ' ' + _valorInicial + '.\n\n' +
-        'Só ela pode trocar esse número, no próprio perfil.', null, { type: 'info' });
-    }
-    return;
-  }
+  // 2.0.50 (dono): o diálogo passa a registrar CONTATO no plural — celular E letzplay:
+  // _"vamos permitir que ele coloque tambem o letzplay da pessoa. o letzplay é publico
+  // e todos podem consultar."_ A mesma régua de procedência vale pros dois campos: o que
+  // a PRÓPRIA pessoa declarou (celular verificado por SMS; @ com letzplaySource próprio)
+  // não se sobrescreve — o organizador registra o de quem não tem, não corrige o de quem
+  // tem. Por isso celular verificado NÃO fecha mais o diálogo: trava só a parte dele.
+  var _lzAtual = String((prof && prof.letzplayHandle) || '');
+  var _lzProprio = !!_lzAtual && String((prof && prof.letzplaySource) || '') !== 'organizer';
 
   var jaRegistrado = atual.replace(/\D/g, '').length >= 8;
   var corpo =
     '<div style="font-size:0.86rem;line-height:1.5;color:var(--text-muted);">' +
-      (jaRegistrado
+      (verificado
+        ? '<p style="margin:0 0 10px;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já confirmou o celular por SMS: <b style="color:var(--text-bright);">' + window._safeHtml('+' + _ddiAtual + ' ' + _valorInicial) + '</b>. Só ela pode trocá-lo, no próprio perfil.</p>'
+        : jaRegistrado
         ? '<p style="margin:0 0 10px;">Hoje está registrado <b style="color:var(--text-bright);">' + window._safeHtml('+' + _ddiAtual + ' ' + _valorInicial) + '</b>, colocado por um organizador. Você pode corrigir.</p>'
         : '<p style="margin:0 0 10px;">Use isto quando o SMS de verificação não chegar pra pessoa. Confirme o número <b>com ela</b> antes.</p>') +
+      (verificado ? '' :
       // ⭐ 2.1 (dono): "tem que poder escolher o DDI como em qualquer outra situação de
       // telefone" + "a máscara do número deve ser preenchida automaticamente e o organizador
       // digita apenas números". O seletor sai da MESMA lista do login/perfil
@@ -3092,6 +3104,20 @@ window._orgSetContactPhone = function (tId, uid, nome) {
       '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:9px 11px;font-size:0.76rem;color:#fbbf24;">' +
         'Fica registrado que <b>você</b> colocou este número, e ' + window._safeHtml(nome || 'a pessoa') + ' recebe um aviso. ' +
         'Ele vale só para <b>contato</b> — não serve para entrar no app nem para recuperar senha; para isso ela precisa confirmar por SMS.' +
+      '</div>') +
+      // ── 🎾 letzplay (2.0.50) — mesmo diálogo, mesma procedência ────────────
+      '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#28313f);">' +
+        '<label style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:6px;">🎾 Conta letzplay</label>' +
+        (_lzProprio
+          ? '<p style="margin:0;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já indicou a própria conta: <b style="color:var(--text-bright);">@' + window._safeHtml(_lzAtual) + '</b>. Só ela pode trocá-la, no próprio perfil.</p>'
+          : ('<input id="org-contact-lz-input" class="form-control" autocomplete="off" ' +
+             'placeholder="@usuario no letzplay" value="' + window._safeHtml(_lzAtual ? '@' + _lzAtual : '') + '" ' +
+             'style="width:100%;box-sizing:border-box;font-size:0.95rem;">' +
+             '<div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);line-height:1.4;">' +
+               'O histórico do letzplay é <b>público</b> — o @ permite consultá-lo e trazê-lo pro scoreplace. ' +
+               (_lzAtual ? 'O @ atual foi colocado por um organizador; você pode corrigir. ' : '') +
+               window._safeHtml(nome || 'A pessoa') + ' recebe um aviso.' +
+             '</div>')) +
       '</div>' +
     '</div>';
 
@@ -3101,37 +3127,68 @@ window._orgSetContactPhone = function (tId, uid, nome) {
     var _ddiEl = document.getElementById('org-contact-phone-ddi');
     var _ddi = (_ddiEl && _ddiEl.value) || '55';
     var digits = el ? String(el.value || '').replace(/\D/g, '') : '';
-    // O mínimo não é mais 10 cravado: Portugal e Chile têm 9, e recusar aqui deixaria o
-    // seletor de DDI de enfeite. Quem diz a última palavra é o servidor (toE164).
+    // letzplay (2.0.50): o campo pode nem existir (celular verificado sem campo de
+    // telefone; @ próprio da pessoa trava a parte do letzplay).
+    var lzEl = document.getElementById('org-contact-lz-input');
+    var lzVal = lzEl ? String(lzEl.value || '').trim().replace(/^@+/, '') : '';
+    var lzMudou = !!lzEl && !!lzVal && lzVal.toLowerCase() !== _lzAtual.toLowerCase();
+
+    // O celular virou OPCIONAL (dá pra registrar só o letzplay) — mas número COMEÇADO
+    // tem que estar completo: meio número salvo é pior que nada. O mínimo não é 10
+    // cravado: Portugal e Chile têm 9. Quem diz a última palavra é o servidor (toE164).
+    var telTenta = !!el && digits.length > 0;
     var _minimo = (_ddi === '55') ? 10 : 6;
-    if (digits.length < _minimo) {
+    if (telTenta && digits.length < _minimo) {
       if (typeof showNotification === 'function') {
         showNotification('Número incompleto',
           (_ddi === '55') ? 'Digite DDD + número do celular.' : 'Digite o número completo do país escolhido.', 'warning');
       }
       return;
     }
+    if (!telTenta && !lzMudou) {
+      if (typeof showNotification === 'function') showNotification('Nada a registrar', 'Preencha o celular ou a conta letzplay.', 'info');
+      return;
+    }
     if (typeof showNotification === 'function') showNotification('Registrando…', 'Salvando o contato de ' + (nome || '') + '.', 'info');
-    firebase.functions().httpsCallable('setParticipantContactPhone')({
-      tournamentId: String(tId), uid: String(uid), phone: digits, country: String(_ddi),
-    }).then(function (res) {
-      var r = (res && res.data) || {};
-      // O cache local acompanha na hora — senão o botão continua "sem contato" até o
-      // próximo carregamento e parece que não salvou.
-      if (window._userProfileCache && window._userProfileCache[uid]) {
-        window._userProfileCache[uid].phone = r.phone || ('+' + _ddi + digits);
-        window._userProfileCache[uid].phoneCountry = String(_ddi);
-        window._userProfileCache[uid].phoneSource = 'organizer';
-      }
-      if (typeof showNotification === 'function') {
-        showNotification('Contato registrado', (nome || 'A pessoa') + ' foi avisada de que você registrou o celular dela.', 'success');
-      }
-      if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
-    }).catch(function (err) {
+    var _falhou = function (err) {
       var msg = (err && (err.message || err.code)) || 'erro';
       if (typeof showAlertDialog === 'function') showAlertDialog('Não deu pra registrar', String(msg), null, { type: 'error' });
       else if (typeof showNotification === 'function') showNotification('Não deu pra registrar', String(msg), 'error');
-    });
+    };
+    if (telTenta) {
+      firebase.functions().httpsCallable('setParticipantContactPhone')({
+        tournamentId: String(tId), uid: String(uid), phone: digits, country: String(_ddi),
+      }).then(function (res) {
+        var r = (res && res.data) || {};
+        // O cache local acompanha na hora — senão o botão continua "sem contato" até o
+        // próximo carregamento e parece que não salvou.
+        if (window._userProfileCache && window._userProfileCache[uid]) {
+          window._userProfileCache[uid].phone = r.phone || ('+' + _ddi + digits);
+          window._userProfileCache[uid].phoneCountry = String(_ddi);
+          window._userProfileCache[uid].phoneSource = 'organizer';
+        }
+        // `jaEra` = botão apertado com o mesmo número — não houve registro nem aviso.
+        if (!r.jaEra && typeof showNotification === 'function') {
+          showNotification('Contato registrado', (nome || 'A pessoa') + ' foi avisada de que você registrou o celular dela.', 'success');
+        }
+        if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+      }).catch(_falhou);
+    }
+    if (lzMudou) {
+      firebase.functions().httpsCallable('setParticipantLetzplay')({
+        tournamentId: String(tId), uid: String(uid), handle: lzVal,
+      }).then(function (res) {
+        var r = (res && res.data) || {};
+        if (window._userProfileCache && window._userProfileCache[uid]) {
+          window._userProfileCache[uid].letzplayHandle = r.handle || lzVal;
+          window._userProfileCache[uid].letzplaySource = 'organizer';
+        }
+        if (!r.jaEra && typeof showNotification === 'function') {
+          showNotification('letzplay registrado', '@' + (r.handle || lzVal) + ' ficou como a conta letzplay de ' + (nome || 'participante') + ' — a pessoa foi avisada.', 'success');
+        }
+        if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+      }).catch(_falhou);
+    }
   }, null, { confirmText: 'Registrar', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
 };
 

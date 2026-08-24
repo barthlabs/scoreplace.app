@@ -154,6 +154,77 @@ function maskTail(e164) {
   return d.length >= 4 ? '****-' + d.slice(-4) : '';
 }
 
+/* ── LETZPLAY PELO ORGANIZADOR (2.0.50) ─────────────────────────────────────
+ * Ordem do dono (24/ago/2026): _"no botao do contato que o organizador pode colocar o
+ * celular da pessoa, vamos permitir que ele coloque tambem o letzplay da pessoa. o
+ * letzplay é publico e todos podem consultar."_
+ *
+ * MESMA arquitetura de procedência do celular: quem registra é o organizador DESTE
+ * torneio, o uid dele fica gravado (`letzplaySetBy` + `letzplaySource:'organizer'`) e a
+ * pessoa é NOTIFICADA. E o mesmo limite: @ que a PRÓPRIA pessoa indicou no perfil
+ * (`letzplaySource` ausente ou 'self') não se sobrescreve — organizador registra o de
+ * quem não tem, não corrige o de quem tem. Diferença pro celular: aqui não há
+ * verificação por SMS — o dado é público no letzplay, a "prova" é o perfil público. */
+function normalizeLzHandle(raw) {
+  const h = String(raw == null ? '' : raw).trim().replace(/^@+/, '');
+  return /^[A-Za-z0-9_.\-]{2,32}$/.test(h) ? h : '';
+}
+
+function computeSetContactLetzplay(input) {
+  const inp = input || {};
+  const t = inp.tournament;
+  const callerUid = String(inp.callerUid || '');
+  const targetUid = String(inp.targetUid || '');
+  const nowIso = inp.nowIso || new Date().toISOString();
+
+  if (!t) return { ok: false, reason: 'torneio-inexistente' };
+  if (!callerUid) return { ok: false, reason: 'sem-login' };
+  if (!targetUid) return { ok: false, reason: 'sem-alvo' };
+  if (computeAdminUids(t).indexOf(callerUid) === -1) return { ok: false, reason: 'nao-e-organizador' };
+  if (computeMemberUids(t).indexOf(targetUid) === -1) return { ok: false, reason: 'nao-esta-no-elenco' };
+  if (targetUid === callerUid) return { ok: false, reason: 'use-o-proprio-perfil' };
+
+  const handle = normalizeLzHandle(inp.handle);
+  if (!handle) return { ok: false, reason: 'handle-invalido' };
+
+  const alvo = inp.targetProfile || {};
+  const atual = String(alvo.letzplayHandle || '');
+  // @ da própria pessoa (ausência de letzplaySource = ela indicou, estado de todo dado
+  // anterior a esta camada — o default seguro é o que protege o dado velho).
+  if (atual && String(alvo.letzplaySource || '') !== 'organizer') {
+    return { ok: false, reason: 'ja-tem-proprio' };
+  }
+  if (atual.toLowerCase() === handle.toLowerCase()) return { ok: false, reason: 'sem-mudanca' };
+
+  return {
+    ok: true,
+    handle: handle,
+    anterior: atual,
+    update: {
+      letzplayHandle: handle,
+      letzplaySource: 'organizer',
+      letzplaySetBy: callerUid,
+      letzplaySetAt: nowIso,
+      updatedAt: nowIso,
+    },
+  };
+}
+
+function buildContactLetzplayNotice(input) {
+  const inp = input || {};
+  const orgNome = String(inp.organizerName || 'O organizador').trim();
+  const torneio = String(inp.tournamentName || '').trim();
+  return {
+    type: 'contact_letzplay_set',
+    title: '🎾 Seu letzplay foi registrado',
+    message: orgNome + ' registrou @' + String(inp.handle || '') + ' como sua conta letzplay'
+      + (torneio ? ' no torneio "' + torneio + '"' : '') + '.\n'
+      + 'O histórico do letzplay é público. Se o @ não for seu, corrija no seu perfil.',
+    createdAt: inp.nowIso || new Date().toISOString(),
+    read: false,
+  };
+}
+
 const RECUSA_HUMANA = {
   'torneio-inexistente': 'Torneio não encontrado.',
   'sem-login': 'Entre novamente.',
@@ -163,10 +234,13 @@ const RECUSA_HUMANA = {
   'use-o-proprio-perfil': 'Para o seu próprio celular, use o seu perfil — lá o número é verificado por SMS.',
   'numero-invalido': 'Número inválido. Use DDD + 9 dígitos.',
   'ja-tem-verificado': 'Essa pessoa já verificou um celular por SMS. Só ela pode trocá-lo.',
-  'sem-mudanca': 'Esse já é o celular registrado.',
+  'sem-mudanca': 'Esse já é o dado registrado.',
+  'handle-invalido': 'Conta letzplay inválida. Use o @ do perfil público (letras, números, ponto, hífen ou _).',
+  'ja-tem-proprio': 'Essa pessoa já indicou a própria conta letzplay no perfil. Só ela pode trocá-la.',
 };
 
 module.exports = {
   isIdentityPhone, contactPhoneOf, toE164, computeSetContactPhone,
   buildContactPhoneNotice, maskTail, RECUSA_HUMANA,
+  normalizeLzHandle, computeSetContactLetzplay, buildContactLetzplayNotice,
 };

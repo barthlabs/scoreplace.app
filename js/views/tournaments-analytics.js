@@ -963,14 +963,15 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
 
     // Load persistent per-user matchHistory — primary data source, survives deletion
     var _lastMerged = null;
-    // Terceiros: letzplay é público → se o jogador visto autorizou o import,
-    // mostramos o card "nível (geral)" dele e dobramos os jogos nas estatísticas.
+    // Terceiros: letzplay é público — criar a conta já autoriza a consulta (2.0.50,
+    // termos de uso). Se o jogador visto tem import, mostramos o card "nível (geral)"
+    // dele e dobramos os jogos nas estatísticas.
     if (!_lpIsCurUser && resolvedUid && window.FirestoreDB) {
         var _tpDb = window.FirestoreDB.db || (window.FirestoreDB.ensureDb && window.FirestoreDB.ensureDb());
         if (_tpDb) {
             _tpDb.collection('users').doc(resolvedUid).get().then(function(doc) {
                 var d = doc.exists ? (doc.data() || {}) : null;
-                if (!d || d.letzplayConsent !== true || !d.letzplayImport || !Array.isArray(d.letzplayImport.games) || !d.letzplayImport.games.length) return;
+                if (!d || !d.letzplayImport || !Array.isArray(d.letzplayImport.games) || !d.letzplayImport.games.length) return;
                 window._spLetzplayImportByUid[resolvedUid] = d.letzplayImport;
                 var cardSlot = modal.querySelector('#letzplay-card-stats-slot');
                 if (cardSlot && typeof window._renderLetzplayCard === 'function') cardSlot.innerHTML = window._renderLetzplayCard(d.letzplayImport, _spExtra);
@@ -1332,7 +1333,7 @@ function _letzplayGamesForUid(uid) {
     if (!uid) return [];
     var cu = window.AppStore && window.AppStore.currentUser;
     if (cu && cu.uid === uid && cu.letzplayImport && Array.isArray(cu.letzplayImport.games)) return cu.letzplayImport.games;
-    // terceiros: letzplay é público; mostramos se a pessoa autorizou o import
+    // terceiros: letzplay é público — criar a conta já autoriza (2.0.50, termos de uso)
     // (doc carregado sob demanda em _showPlayerStats → cache por uid).
     var imp = window._spLetzplayImportByUid[uid];
     return (imp && Array.isArray(imp.games)) ? imp.games : [];

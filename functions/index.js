@@ -7542,3 +7542,77 @@ exports.setParticipantContactPhone = onCall(
     return { ok: true, phone: r.phone, anterior: r.anterior };
   }
 );
+
+// ─── setParticipantLetzplay (2.0.50) ──────────────────────────────────────────
+// Ordem do dono (24/ago/2026): _"no botao do contato que o organizador pode colocar o
+// celular da pessoa, vamos permitir que ele coloque tambem o letzplay da pessoa. o
+// letzplay é publico e todos podem consultar."_
+//
+// MESMA arquitetura de procedência do setParticipantContactPhone: só org/co-org DESTE
+// torneio, só alvo do elenco, nunca por cima do @ que a PRÓPRIA pessoa indicou
+// (`letzplaySource` ausente/'self'), nunca no próprio perfil, e a pessoa é NOTIFICADA.
+// Grava `letzplaySource:'organizer'` + `letzplaySetBy` — a procedência fica no dado.
+//
+// Deploy: scripts/deploy-functions.sh (NUNCA firebase deploy na mão)
+exports.setParticipantLetzplay = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 30, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+
+    const data = request.data || {};
+    const tournamentId = String(data.tournamentId || "").trim();
+    const targetUid = String(data.uid || "").trim();
+    if (!tournamentId || !targetUid) {
+      throw new HttpsError("invalid-argument", "tournamentId e uid são obrigatórios");
+    }
+
+    const db = admin.firestore();
+    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
+    const t = tSnap.exists ? (tSnap.data() || {}) : null;
+
+    const alvoSnap = await db.collection("users").doc(targetUid).get();
+    const alvo = alvoSnap.exists ? (alvoSnap.data() || {}) : null;
+    if (!alvo) throw new HttpsError("not-found", "Perfil não encontrado");
+    if (alvo.mergedInto) throw new HttpsError("failed-precondition", "Essa conta foi unida a outra.");
+
+    const r = _contactPhone.computeSetContactLetzplay({
+      tournament: t, callerUid, targetUid,
+      handle: data.handle,
+      targetProfile: alvo, nowIso: new Date().toISOString(),
+    });
+    if (!r.ok) {
+      const humano = _contactPhone.RECUSA_HUMANA[r.reason] || "Não foi possível registrar.";
+      if (r.reason === "sem-mudanca") return { ok: true, jaEra: true, handle: data.handle || "" };
+      const code = (r.reason === "nao-e-organizador") ? "permission-denied"
+        : (r.reason === "torneio-inexistente") ? "not-found" : "failed-precondition";
+      throw new HttpsError(code, humano);
+    }
+
+    await db.collection("users").doc(targetUid).set(r.update, { merge: true });
+
+    // A pessoa PRECISA saber — mesma regra do celular: registro com procedência é
+    // diferente de "mexeram no meu cadastro" exatamente porque ela fica sabendo.
+    try {
+      if (alvo.notifyPlatform !== false) {
+        const orgSnap = await db.collection("users").doc(callerUid).get();
+        const orgNome = (orgSnap.exists && orgSnap.data() && orgSnap.data().displayName) || "O organizador";
+        const aviso = _contactPhone.buildContactLetzplayNotice({
+          organizerName: orgNome, tournamentName: t.name || "", handle: r.handle,
+          nowIso: r.update.letzplaySetAt,
+        });
+        const notifId = ("contact_letzplay__" + tournamentId + "__" + r.handle)
+          .replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 200);
+        await db.collection("users").doc(targetUid).collection("notifications").doc(notifId).set(
+          Object.assign({ tournamentId, tournamentName: t.name || "" }, aviso), { merge: true }
+        );
+      }
+    } catch (e) {
+      console.error("[setParticipantLetzplay] aviso falhou:", e && e.message);
+    }
+
+    console.log("[setParticipantLetzplay]", tournamentId, callerUid, "→", targetUid,
+      "@" + r.handle, "(anterior:", r.anterior || "vazio", ")");
+    return { ok: true, handle: r.handle, anterior: r.anterior };
+  }
+);

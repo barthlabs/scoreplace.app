@@ -5088,8 +5088,6 @@ async function simulateLoginSuccess(user) {
     _setVal('profile-edit-city', cu.city || '');
     _setVal('profile-edit-hrmax', cu.hrMax ? String(cu.hrMax) : '');
     _setVal('profile-edit-letzplay', cu.letzplayHandle ? ('@' + cu.letzplayHandle) : '');
-    var _lpConsentEl = document.getElementById('profile-letzplay-consent');
-    if (_lpConsentEl) _lpConsentEl.checked = (cu.letzplayConsent === true);
     // v1.8: o card "Seu nível (letzplay)" saiu daqui — agora vive nas
     // Estatísticas do jogador (📊 _showPlayerStats). O perfil só guarda @ +
     // consentimento (config), sem renderizar o histórico (não pesa o perfil).
@@ -7387,13 +7385,10 @@ function setupProfileModal() {
             '<div class="form-group" style="margin-bottom: 10px;">' +
               '<label class="form-label" style="font-size: 0.75rem;">🎾 Conta letzplay <span style="opacity:0.55;font-weight:400;">(opcional)</span></label>' +
               '<input type="text" id="profile-edit-letzplay" class="form-control" style="width: 100%; box-sizing: border-box;" placeholder="@seu_usuario no letzplay" autocomplete="off">' +
-              '<div style="margin-top:8px;">' +
-                (window._toggleSwitch ? window._toggleSwitch({
-                  id: 'profile-letzplay-consent',
-                  label: 'Autorizar importação do histórico',
-                  desc: 'Autorizo os organizadores dos meus torneios a importar meu histórico público do letzplay.',
-                  checked: false
-                }) : '') +
+              // 2.0.50 (dono): o toggle "Autorizar importação" MORREU. O letzplay é
+              // PÚBLICO e criar a conta já autoriza a consulta — está nos Termos de Uso.
+              '<div style="margin-top:6px;font-size:0.7rem;color:var(--text-muted);line-height:1.4;">' +
+                'O histórico do letzplay é público — indicar o seu @ permite trazê-lo para o scoreplace.' +
               '</div>' +
               // v1.24: botão de importar do letzplay + "Última atualização" num SLOT dinâmico.
               // O modal é montado 1x; sem slot, o botão/data ficam congelados no estado de
@@ -9698,9 +9693,9 @@ window._profileHydrateNameConflict = function () {
       var hrMaxIn = parseInt(hrMaxRaw.replace(/\D/g, ''), 10);
       var hrMaxValid = !isNaN(hrMaxIn) && hrMaxIn >= 100 && hrMaxIn <= 230;
       if (hrMaxRaw && !hrMaxValid && cu.hrMax) { hrMaxIn = cu.hrMax; hrMaxValid = true; }
-      // letzplay: guarda o handle SEM '@' (canônico); consentimento é boolean.
+      // letzplay: guarda o handle SEM '@' (canônico). 2.0.50: o consentimento por
+      // toggle morreu — o letzplay é público e criar a conta já autoriza (Termos de Uso).
       var letzplayHandleIn = (_v('profile-edit-letzplay') || '').trim().replace(/^@+/, '');
-      var letzplayConsentIn = _chk('profile-letzplay-consent', false);
       var phoneEl = document.getElementById('profile-edit-phone');
       var phoneDigits = (phoneEl && (phoneEl.getAttribute('data-digits') || '')).replace(/\D/g, '');
       var phoneCountry = _v('profile-phone-country') || '55';
@@ -9946,7 +9941,12 @@ window._profileHydrateNameConflict = function () {
       if (age != null) payload.age = age;
       if (cityIn) payload.city = cityIn;
       if (hrMaxRaw && hrMaxValid) payload.hrMax = hrMaxIn;
-      if (letzplayHandleIn) payload.letzplayHandle = letzplayHandleIn;
+      if (letzplayHandleIn) {
+        payload.letzplayHandle = letzplayHandleIn;
+        // 2.0.50: @ salvo pela PRÓPRIA pessoa carimba a procedência dela — o registro
+        // de contato do organizador (letzplaySource:'organizer') não sobrescreve isto.
+        if (letzplayHandleIn !== (cu.letzplayHandle || '')) payload.letzplaySource = 'self';
+      }
       // v2.5.x: celular NÃO é gravado direto quando MUDA — precisa ser verificado
       // por SMS/WhatsApp (botão "Verificar e vincular", que prova posse e, se for
       // de outra conta, mescla). Só persiste aqui se o número for IGUAL ao já
@@ -10036,7 +10036,6 @@ window._profileHydrateNameConflict = function () {
       // v2.4.3: privacidade de contato (default OFF).
       payload.omitEmail = omitEmail;
       payload.omitPhone = omitPhone;
-      payload.letzplayConsent = letzplayConsentIn;
 
       // ── 3b. APAGAR TAMBÉM É UM ATO ──────────────────────────────────────
       // "Campo vazio = campo omitido = valor preservado" fechou o buraco em

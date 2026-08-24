@@ -454,10 +454,11 @@
         // duplas
         (pairsHtml ? '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted,#8b93a3);margin-bottom:4px;">Suas duplas</div>' + pairsHtml + '</div>' : '') +
 
-        // privacidade — dados públicos do letzplay, trazidos com autorização
+        // privacidade — dados públicos do letzplay; a consulta é autorizada nos
+        // Termos de Uso (2.0.50 — o toggle de autorização morreu).
         '<div style="font-size:11px;color:var(--text-muted,#8b93a3);margin-top:12px;border-top:1px solid var(--border-color,#28313f);padding-top:9px;">' +
-          'Histórico público do letzplay (nomes e placares), importado com sua autorização' +
-          (imp.importedAt ? ' em ' + esc(String(imp.importedAt).slice(0, 10)) : '') + '.' +
+          'Histórico público do letzplay (nomes e placares) — consulta autorizada nos Termos de Uso' +
+          (imp.importedAt ? '; importado em ' + esc(String(imp.importedAt).slice(0, 10)) : '') + '.' +
         '</div>' +
       '</div>';
   };

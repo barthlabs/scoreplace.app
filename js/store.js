@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.49';
+window.SCOREPLACE_VERSION = '2.0.50';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -10874,7 +10874,6 @@ window.AppStore = {
         // card "Seu nível" não renderizava). Bug: conta vinculada "apagava"
         // toda vez que o app fechava. Fix: mergear no load como os demais.
         if (profile.letzplayHandle) this.currentUser.letzplayHandle = profile.letzplayHandle;
-        if (profile.letzplayConsent !== undefined) this.currentUser.letzplayConsent = profile.letzplayConsent;
         if (profile.letzplayImport) this.currentUser.letzplayImport = window._lzCuraImport(profile.letzplayImport);
         // v0.17.86: bug crítico — acceptedTerms* não estavam na lista de merge.
         // Toda vez que simulateLoginSuccess re-rodava (ex: onAuthStateChanged

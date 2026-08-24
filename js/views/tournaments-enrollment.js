@@ -267,8 +267,10 @@ function _checkEnrollmentEligibility(t, user) {
         }
         if (req.age && !user.birthDate) missing.push('data de nascimento');
         if (req.history) {
-            var hasHist = user.letzplayImport || (user.letzplayHandle && user.letzplayConsent === true);
-            if (!hasHist) missing.push('histórico do letzplay (@ + autorização)');
+            // 2.0.50 (dono): o letzplay é PÚBLICO — criar a conta já autoriza a consulta
+            // (termos de uso). O toggle de autorização morreu; basta o @ no perfil.
+            var hasHist = user.letzplayImport || user.letzplayHandle;
+            if (!hasHist) missing.push('histórico do letzplay (@ no perfil)');
         }
         if (missing.length) {
             var list = missing.join(', ');
