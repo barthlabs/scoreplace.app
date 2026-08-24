@@ -78,6 +78,28 @@ ok(/data-nov-collapsed="0"\] #nov-toggle-fixo\{visibility:hidden;\}/.test(dash),
   'aberta, a tag do cabeçalho fica invisível — vira o calço que segura o espaço do título');
 ok(/_verMaisTag\('nov-toggle-fixo', true, \{/.test(dash),
   'o "ver mais" do cabeçalho sai do MESMO builder (mesma aparência)');
+
+// ── DUAS REGRESSÕES QUE EU CAUSEI NA 2.0.44 (bronca do dono) — travadas aqui ─────────
+// ① "ver mais parou de funcionar": a pílula mora DENTRO do <h3>, que já alterna. Dar clique
+//    aos dois fazia o toque disparar o dela E subir pro h3 — DOIS toggles, estado igual ao de
+//    antes, botão aparentemente morto. Medido: com o clique só no h3, `toggles === 1`.
+// ② "acabou com a margem superior": o <h3> sobe o tanto que a margem do trilho desce, mas
+//    FECHADA o trilho é `display:none` e essa margem não existe — o negativo sobrava e comia
+//    21px do topo da caixa. Medido depois do conserto: 15px nos DOIS estados.
+// olha o ATRIBUTO emitido (a linha `attrs:`), não a palavra "onclick" — que aparece no
+// comentário que explica justamente por que ela não deve ter clique próprio.
+const _fixoTag = (dash.match(/_verMaisTag\('nov-toggle-fixo'[\s\S]{0,900}?\}\)/) || [''])[0];
+const _fixoAttrs = (_fixoTag.match(/attrs: '[^']*'/) || [''])[0];
+ok(!!_fixoTag && !/onclick=/.test(_fixoAttrs),
+  '  → e NÃO tem onclick próprio (quem alterna é o <h3> que a contém; dois cliques se anulavam)');
+ok(/data-tag-spacer-for="nov-toggle-tag"/.test(_fixoAttrs),
+  '  → mas segue ligada à flutuante pra sumir junto quando não há o que mostrar');
+ok(/data-nov-collapsed="0"\] #nov-h3\{margin-top:calc\(-1 \* ' \+ _pilulaH \+ '\) !important;\}/.test(dash),
+  'a compensação da margem só existe com a seção ABERTA (fechada, o trilho nem está em cena)');
+ok(/#nov-h3\{[^}]*!important/.test(dash),
+  '  → com !important: o <h3> tem `margin:0` INLINE e sem isso o computado sai 0px (medido)');
+ok(/_novHtml \+= '<h3 id="nov-h3"/.test(dash),
+  '  → e o <h3> tem id pra regra alcançá-lo');
 ok(/sp\.textContent = tag\.textContent;/.test(dash),
   '  → e o texto das duas sai do MESMO ponto (_spSyncHint), pra o calço reservar o texto em cena');
 

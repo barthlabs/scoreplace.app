@@ -2683,6 +2683,14 @@ function renderDashboard(container) {
         // navegador: `display` seguia `flex`). Mesmo motivo do `[data-sp-extra]` acima.
         '#novidades-section[data-nov-collapsed="1"] #nov-toggle-rail{display:none !important;}' +
         '#novidades-section[data-nov-collapsed="0"] #nov-toggle-fixo{visibility:hidden;}' +
+        // ⚠️ A COMPENSAÇÃO SÓ VALE COM O TRILHO EM CENA. O `<h3>` sobe o tanto que a margem do
+        // trilho desce — mas FECHADA o trilho é `display:none` e essa margem não existe: o
+        // negativo sobrava e COMIA a margem superior da caixa (bronca do dono, 2.0.44).
+        // Por isso ela vive aqui, casada com o estado, e não no `style` do h3.
+        // `!important` pelo MESMO motivo do trilho: o `<h3>` carrega `margin:0` INLINE e o
+        // inline vence a folha. Sem isso a regra parseia, aparece no CSSOM e o computado sai
+        // `0px` — medido. Duas vezes a mesma armadilha nesta seção; está anotada nas duas.
+        '#novidades-section[data-nov-collapsed="0"] #nov-h3{margin-top:calc(-1 * ' + _pilulaH + ') !important;}' +
         '</style>';
       // ── 2.0.38 · O "VER MENOS" ACOMPANHA A ROLAGEM — DENTRO DESTA SEÇÃO ─────────
       // Pedido do dono (24/ago/2026): _"esse ver menos da sessão de novidades deve scrollar
@@ -2732,9 +2740,7 @@ function renderDashboard(container) {
           }) +
         '</div>';
       }
-      _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;' +
-        // devolve ao fluxo o que a margem do trilho tomou (ver _pilulaH acima)
-        (_novList.length > 1 ? 'margin-top:calc(-1 * ' + _pilulaH + ');' : '') +
+      _novHtml += '<h3 id="nov-h3" onclick="window._toggleNovidadesCollapse()" style="margin:0;' +
         'font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '📣 Novidades no seu torneio' +
         // ⚠️ O CALÇO. A pílula saiu do fluxo do cabeçalho (foi pro trilho sticky), então o
@@ -2745,8 +2751,12 @@ function renderDashboard(container) {
         // Em `em`/padding, não px: acompanha o --ui-scale como o resto do card.
         (_novList.length > 1
           ? _verMaisTag('nov-toggle-fixo', true, {
-              // `data-tag-spacer-for`: some junto com a pílula quando não sobra nada a mostrar.
-              attrs: ' data-tag-spacer-for="nov-toggle-tag" onclick="window._toggleNovidadesCollapse()" title="Mostrar/ocultar"',
+              // ⛔ SEM `onclick` PRÓPRIO. Ela mora DENTRO do `<h3>`, que já alterna — dar clique
+              // aos dois fazia o toque disparar o dela E subir pro h3: DOIS toggles, e o
+              // "ver mais" parecia morto (bronca do dono, 2.0.44). O h3 é a área clicável, ela
+              // é só o rótulo. `data-tag-spacer-for`: some junto com a flutuante quando não
+              // sobra nada a mostrar. [[feedback_unify_dual_entry_points]]
+              attrs: ' data-tag-spacer-for="nov-toggle-tag"',
               style: 'cursor:pointer;user-select:none;'
             })
           : '') +
