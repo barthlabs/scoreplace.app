@@ -6113,22 +6113,57 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // Estado de W.O. na CLASSIFICAÇÃO DO GRUPO (pedido do dono):
             //  • falta APONTADA (claim pending/disputed, ainda não confirmada) → nome ÂMBAR + tag W.O.;
             //  • W.O. CONFIRMADO (g.woAbsent / marcador sit-out 'wo' da rodada) → nome VERMELHO + tag W.O.
-            var _woRed = {};
-            if (g.woAbsent) _woRed[g.woAbsent] = 1;
+            // ⛔ QUEM ESTÁ MARCADO É DECIDIDO POR uid (v2.0.39). Ordem do dono: _"nada por
+            // nome. tudo por uid a menos que seja nome digitado pelo organizador sem uid."_
+            // As três fontes da marca JÁ carregam uid (`g.woAbsentUid`, `team1Uids/p1Uid` do
+            // marcador de folga, `absentUids` do claim) — só a leitura é que ainda casava por
+            // nome. Casar por nome aqui erra dos dois lados: homônimos no mesmo grupo pegam a
+            // tag do outro, e quem se renomeia perde a tag (a classificação mostra o nome VIVO,
+            // resolvido do perfil, enquanto `woAbsent` guarda o rótulo do dia do W.O.).
+            // O mapa por NOME sobrevive só pra quem não tem uid — jogador digitado pelo
+            // organizador, onde o nome é a única identidade que existe.
+            // [[feedback_uid_controls_everything_name_only_ficticio]] · [[project_wo_lives_in_four_places]]
+            var _woRedU = {}, _woRed = {};
+            if (g.woAbsentUid) _woRedU[String(g.woAbsentUid)] = 1;
+            else if (g.woAbsent) _woRed[g.woAbsent] = 1;
             (((rounds[currentRound - 1] || {}).matches) || []).forEach(function (mm) {
-              if (mm && mm.isSitOut && mm.sitOutReason === 'wo' && mm.p1) _woRed[mm.p1] = 1;
+              if (!mm || !mm.isSitOut || mm.sitOutReason !== 'wo') return;
+              var _us = [].concat(mm.team1Uids || [], mm.p1Uid || []).filter(Boolean);
+              if (_us.length) { _us.forEach(function (u) { _woRedU[String(u)] = 1; }); }
+              else if (mm.p1) _woRed[mm.p1] = 1;
             });
-            var _woAmber = {};
+            var _woAmberU = {}, _woAmber = {};
             // match por groupName APENAS (é único por rodada — 'R1 Grupo X'); o
             // roundIndex do claim pode divergir da numeração local e escondia o âmbar.
             (Array.isArray(t.woClaims) ? t.woClaims : []).forEach(function (c) {
-              if (c && (c.status === 'pending' || c.status === 'disputed') && c.scope === 'group' &&
-                  c.groupName === g.name && c.absentName) _woAmber[c.absentName] = 1;
+              if (!c || (c.status !== 'pending' && c.status !== 'disputed') || c.scope !== 'group' ||
+                  c.groupName !== g.name) return;
+              var _cu = (Array.isArray(c.absentUids) ? c.absentUids : []).filter(Boolean);
+              if (_cu.length) { _cu.forEach(function (u) { _woAmberU[String(u)] = 1; }); }
+              else if (c.absentName) _woAmber[c.absentName] = 1;
             });
+            // Régua ÚNICA de "esta linha está marcada?": uid quando a linha tem uid; nome só
+            // pra linha SEM uid. Usada pela cor, pela tag e pela ordenação — três leituras da
+            // mesma pergunta não podem discordar.
+            // ⚠️ QUEM MANDA É A MARCA, NÃO A LINHA. O uid decide quando a MARCA tem uid; a
+            // marca que não tem (doc legado gravado antes do `woAbsentUid`, ou jogador
+            // digitado pelo organizador, que não tem conta) só pode ser casada pelo nome —
+            // e ela existe em torneio de verdade, então cair fora do nome apagaria a tag de
+            // W.O. de quem já está marcado. Por isso os dois mapas são consultados, nesta
+            // ordem: nunca é o nome vencendo um uid, é o nome cobrindo o que não tem uid.
+            // Mesma régua de `_meuStatusNoTorneio` (store.js) — uma só no app.
+            var _woMark = function (s) {
+              var _u = s && s.uid ? String(s.uid) : '';
+              if (_u && _woRedU[_u]) return 2;
+              if (_u && _woAmberU[_u]) return 1;
+              var _nm = (s && s.name) || '';
+              if (_woRed[_nm]) return 2;
+              if (_woAmber[_nm]) return 1;
+              return 0;
+            };
             // Apontado/W.O. AFUNDA pro fim da tabela do grupo (pedido do dono) —
             // âmbar antes do vermelho; estável entre os demais.
-            var _stRank = function (nm) { return _woRed[nm] ? 2 : _woAmber[nm] ? 1 : 0; };
-            _gst = _gst.slice().sort(function (a, b) { return _stRank(a.name) - _stRank(b.name); });
+            _gst = _gst.slice().sort(function (a, b) { return _woMark(a) - _woMark(b); });
             // v1.8.65: PRESENÇA na classificação do grupo (pedido do dono) — quem marcou
             // "Cheguei" ganha bolinha verde + nome verde na lista. Antes a única pista
             // era o pontinho de check-in POR TIME no card do jogo (âmbar = parcial),
@@ -6186,8 +6221,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _gstRows = _gst.map(function(s, idx) {
                 var _pos = idx + 1, _md = _pos === 1 ? '🥇' : _pos === 2 ? '🥈' : _pos === 3 ? '🥉' : '';
                 var _sld = (s.pointsFor || 0) - (s.pointsAgainst || 0);
-                var _isRed = !!_woRed[s.name];
-                var _isAmb = !_isRed && !!_woAmber[s.name];
+                var _mk = _woMark(s);
+                var _isRed = _mk === 2;
+                var _isAmb = _mk === 1;
                 // Presença NUNCA vence o estado de W.O. — vermelho/âmbar continuam
                 // mandando na cor (o W.O. é o acionável; a presença é informativa).
                 var _isPres = !_isRed && !_isAmb && _gstPresente(s);
@@ -6213,8 +6249,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 // tabela, o bloco "📊 Classificação do grupo" INTEIRO sumia — o grupo aparecia
                 // sem classificação (relato do dono: buscar "lucia" e o Grupo F sem tabela).
                 // Marcador = nunca se esconde e só empurra "tem gente aqui" pros ancestrais.
+                // ⚠️ O texto da busca leva os DOIS nomes: o VIVO (resolvido do perfil, que é o
+                // que a pessoa vê na tela e vai digitar) e o rótulo GRAVADO no sorteio (que é o
+                // que o doc guarda). Quem se renomeia depois do W.O. tem os dois em circulação.
+                var _nmVivoBusca = (typeof window._liveRowName === 'function') ? window._liveRowName(s) : s.name;
                 var _woBuscaLinha = (_isRed || _isAmb)
-                  ? ' data-players="' + window._safeHtml(String(s.name || '')) + '" data-my-match="1" data-fb-marker="1"'
+                  ? ' data-players="' + window._safeHtml(String(s.name || '') + ' ' + String(_nmVivoBusca || '')) + '" data-my-match="1" data-fb-marker="1"'
                   : '';
                 return '<tr' + _woBuscaLinha + ' style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +

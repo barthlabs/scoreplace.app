@@ -44,12 +44,34 @@ ok(/<div id="novidades-section"[\s\S]{0,220}position:relative/.test(dash),
   'a seção é o contexto do sticky (o alcance é o box do pai)');
 
 // a pílula continua sendo O MESMO controle (mesmo id → mesma sincronia de texto)
-ok(/id="nov-toggle-tag" onclick="window\._toggleNovidadesCollapse\(\)"/.test(bloco),
+ok(/attrs: ' onclick="window\._toggleNovidadesCollapse\(\)"/.test(bloco),
   'a pílula é clicável e chama o MESMO toggle');
 ok(/_spSyncHint\(novSec, 'data-nov-collapsed', 'nov-toggle-tag'/.test(dash),
   '  → e quem escreve "ver mais"/"ver menos" segue sendo _spSyncHint (uma decisão só)');
-ok(/background:linear-gradient\(rgba\(125,211,252,0\.14\),rgba\(125,211,252,0\.14\)\),var\(--bg-card/.test(bloco),
-  'a pílula tem fundo OPACO — rolando, ela passa por cima dos cards');
+// ── APARÊNCIA: é a MESMA pílula das outras seções ───────────────────────────────────
+// Correção do dono (24/ago): _"o ver menos ficou com uma aparência diferente (compare com o
+// ver menos do últimos resultados)"_ — a flutuante tinha ganhado fundo opaco e sombra
+// próprios. Desenho é UM só: as duas saem de `_verMaisTag`; o trilho só acrescenta POSIÇÃO.
+ok(/_verMaisTag\('nov-toggle-tag', _novCollapsed, \{/.test(bloco),
+  'a pílula flutuante sai do MESMO builder das outras (_verMaisTag)');
+ok(!/linear-gradient|box-shadow/.test(bloco),
+  '  → sem fundo/sombra próprios: mesma aparência de "Seus últimos resultados"');
+ok(/function _verMaisTag\(id, colapsado, extra\)/.test(dash),
+  '  → o builder aceita só POSIÇÃO a mais (extra), não um segundo desenho');
+
+// ── RECOLHER LEVA AO TOPO DA SEÇÃO ─────────────────────────────────────────────────
+// _"quando clicamos nele deve parecer que escondeu o que ele mostrava mas não ficar na
+// posição relativa em que estava (lá pra baixo). deve mostrar o topo das novidades."_
+const _tgi = dash.indexOf('window._toggleNovidadesCollapse = function');
+const tgl = dash.slice(_tgi, _tgi + 2600);
+ok(/if \(willCollapse\) \{/.test(tgl),
+  'só ao RECOLHER a rolagem é mexida (abrir não empurra a página)');
+ok(/scrollIntoView\(\{ block: 'start', behavior: 'smooth' \}\)/.test(tgl),
+  '  → e leva ao TOPO da seção');
+ok(/_rail\.getBoundingClientRect\(\)\.top - _topo > 24/.test(tgl),
+  '  → só quando o topo já saiu de vista (medido no próprio trilho, não em px cravado)');
+ok(/scroll-margin-top:var\(--scroll-anchor/.test(dash),
+  '  → e o pouso respeita a âncora (não pousa embaixo da barra fixa)');
 
 // o calço que devolve ao título o limite que ele tinha
 ok(/data-tag-spacer-for="nov-toggle-tag"[^']*visibility:hidden/.test(dash),

@@ -1932,8 +1932,17 @@ window._storeBadgesHtml = function (opts) {
   var lojas = [L.apple, L.play].filter(function (l) { return l && l.on && l.url && l.badge; });
   if (!lojas.length) return '';
   var alt = 'Baixar na ';
-  // altura igual nos dois: as artes têm proporções diferentes e alinhar pela
-  // ALTURA é o que a diretriz das duas lojas pede.
+  // ── 2.0.39 · A ALTURA QUE IMPORTA É A DA TINTA, NÃO A DO ARQUIVO ───────────
+  // Ordem do dono (24/ago/2026): _"na landing page e onde mais for, as artes das lojas App
+  // Store e Google Play devem ter o mesmo tamanho (o Google está menor)."_
+  //
+  // Aqui as duas recebiam a MESMA altura CSS — e era exatamente isso que as deixava
+  // diferentes: a arte da Apple é de borda a borda no arquivo, e a do Google traz a clear
+  // space dela EMBUTIDA (só 76,8% da altura do arquivo é selo). Com 44px nos dois, o Google
+  // desenhava 33,8px de selo contra 44px da Apple — 23% menor, medido.
+  // Agora a caixa de cada selo cresce na proporção da margem que a arte carrega
+  // (`SP_LOJAS[x].tinta`), então a TINTA sai igual nos dois — que é o que se vê.
+  // ⛔ Sem recortar arte: as duas lojas proíbem, e a margem do Google é a clear space dele.
   var h = opts.altura || 44;
   return '<div data-store-badges style="display:flex;gap:12px;justify-content:center;align-items:center;' +
     'flex-wrap:wrap;margin-top:' + (opts.margemTopo || '14px') + ';">' +
@@ -1942,7 +1951,7 @@ window._storeBadgesHtml = function (opts) {
         ' aria-label="' + alt + l.nome + '" title="' + alt + l.nome + '"' +
         ' style="display:inline-block;line-height:0;text-decoration:none;">' +
         '<img src="' + l.badge + '" alt="' + alt + l.nome + '"' +
-        ' style="height:' + h + 'px;width:auto;display:block;">' +
+        ' style="height:' + (Math.round((h / (l.tinta || 1)) * 100) / 100) + 'px;width:auto;display:block;">' +
         '</a>';
     }).join('') +
     '</div>';

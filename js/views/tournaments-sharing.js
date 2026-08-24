@@ -897,7 +897,13 @@ function _buildFlyerPrintHtml(o) {
     var txt = esc((loja.glifo ? loja.glifo + ' ' : '') + loja.nome);
     if (!loja.badge) return '<span class="loja">' + txt + '</span>';
     var base = (window.SCOREPLACE_URL || 'https://scoreplace.app').replace(/\/$/, '');
-    return '<img class="loja-badge" src="' + esc(base + loja.badge) + '" alt="' + esc(loja.nome) + '" ' +
+    // ⚠️ v2.0.39 — MESMA ALTURA DE TINTA, não de arquivo. A arte do Google traz a clear
+    // space embutida (só 76,8% do arquivo é selo) e a da Apple é de borda a borda: com a
+    // mesma altura no CSS, o selo do Google saía 23% MENOR no papel. A caixa dele cresce
+    // na proporção de `tinta` (SP_LOJAS, medido) e os dois imprimem do mesmo tamanho.
+    // Mesma correção do bloco da landing (`_storeBadgesHtml`) — a régua é uma só.
+    var _esc2 = (loja.tinta && loja.tinta !== 1) ? ' style="height:calc(var(--loja-badge-h) / ' + loja.tinta + ');"' : '';
+    return '<img class="loja-badge" src="' + esc(base + loja.badge) + '" alt="' + esc(loja.nome) + '"' + _esc2 + ' ' +
       'onerror="this.outerHTML=\'<span class=&quot;loja&quot;>' + txt + '</span>\'" />';
   }
   function _flyerLojasHtml() {
@@ -1007,7 +1013,10 @@ function _buildFlyerPrintHtml(o) {
       // O selo oficial tem proporção fixa (~3,3:1): trava-se a ALTURA e a largura
       // acompanha, senão o logo distorce — distorcer marca de loja é pior que não usá-la.
       // Altura ~2,4x a linha de texto: menor que isso e o selo fica ilegível impresso.
-      '.loja-badge { height:' + cpx(17, 4.6, 26) + 'px; width:auto; display:block; }' +
+      // a altura vive numa variável pra o selo que carrega margem própria poder crescer
+      // a caixa dele sem inventar outro número (ver _flyerSeloHtml).
+      ':root { --loja-badge-h: ' + cpx(17, 4.6, 26) + 'px; }' +
+      '.loja-badge { height:var(--loja-badge-h); width:auto; display:block; }' +
     '</style>' +
     // size-style: separado pra ser atualizado IN-PLACE pelos sliders sem
     // recarregar o iframe (e portanto sem o QR piscar/desaparecer).

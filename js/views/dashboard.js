@@ -1617,10 +1617,15 @@ function renderDashboard(container) {
     // v1.8.79: virou TAG com box (pedido do dono) — texto solto num cabeçalho não lê como
     // coisa clicável, ainda mais ao lado de um título que também é clicável. O box em
     // azul-céu translúcido com borda dá o contorno de "isto é um controle".
-    function _verMaisTag(id, colapsado) {
-      return '<span id="' + id + '" style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
+    // v2.0.39: `extra` deixa a MESMA tag ser usada solta (no trilho sticky das Novidades)
+    // sem virar um segundo desenho. Correção do dono, comparando as duas seções: _"o ver
+    // menos ficou com uma aparência diferente"_ — a versão flutuante tinha ganhado fundo
+    // opaco e sombra próprios. Desenho é UM só; o que muda é onde ele mora.
+    function _verMaisTag(id, colapsado, extra) {
+      return '<span id="' + id + '"' + ((extra && extra.attrs) || '') + ' style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
         'color:#7dd3fc;background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
-        'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;">' +
+        'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;' +
+        ((extra && extra.style) || '') + '">' +
         (colapsado ? 'ver mais' : 'ver menos') + '</span>';
     }
     // O convite do RODAPÉ é o MESMO controle, então usa o MESMO desenho — só centralizado
@@ -2653,7 +2658,7 @@ function renderDashboard(container) {
       // formariam outra grade, e o primeiro card ficaria sozinho numa linha própria).
       // Com `data-nov-collapsed`, os cards são todos irmãos na MESMA grade e o estado
       // fechado apenas esconde do 2º em diante — a grade reflui sozinha.
-      _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="position:relative;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
+      _novHtml += '<div id="novidades-section" data-nov-collapsed="' + (_novCollapsed ? '1' : '0') + '" style="position:relative;scroll-margin-top:var(--scroll-anchor,120px);background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
       // ⚠️ v1.8.78: o corte do colapso deixou de ser `[data-nov-card]:nth-child(n+2)` e
       // passou a ser "tudo que vem DEPOIS do primeiro card" — mesmo `~` que "Seus últimos
       // resultados" já usa. Com os cabeçalhos de grupo dentro da grade, contar por
@@ -2680,16 +2685,12 @@ function renderDashboard(container) {
       // `_spSyncHint` (uma decisão só sobre o que o convite diz).
       if (_novList.length > 1) {
         _novHtml += '<div id="nov-toggle-rail" style="position:sticky;top:var(--scroll-anchor,120px);height:0;z-index:6;display:flex;justify-content:flex-end;pointer-events:none;">' +
-          '<span id="nov-toggle-tag" onclick="window._toggleNovidadesCollapse()" title="Mostrar/ocultar"' +
-          ' style="pointer-events:auto;cursor:pointer;user-select:none;align-self:flex-start;flex-shrink:0;' +
-          'font-size:0.7rem;font-weight:700;color:#7dd3fc;' +
-          // fundo OPACO por baixo do mesmo tom translúcido de sempre: rolando, a pílula passa
-          // por cima dos cards, e tinta transparente sobre card não se lê em tema nenhum.
-          // [[feedback_contraste_sempre_nos_dois_temas]]
-          'background:linear-gradient(rgba(125,211,252,0.14),rgba(125,211,252,0.14)),var(--bg-card,#1e293b);' +
-          'border:1px solid rgba(125,211,252,0.45);box-shadow:0 2px 8px rgba(0,0,0,0.28);' +
-          'border-radius:999px;padding:3px 10px;line-height:1.2;">' +
-          (_novCollapsed ? 'ver mais' : 'ver menos') + '</span>' +
+          _verMaisTag('nov-toggle-tag', _novCollapsed, {
+            attrs: ' onclick="window._toggleNovidadesCollapse()" title="Mostrar/ocultar"',
+            // só a posição e o gesto: fundo/cor/borda são os do desenho canônico, pra a
+            // pílula das Novidades ser IGUAL à de "Seus últimos resultados".
+            style: 'pointer-events:auto;cursor:pointer;user-select:none;align-self:flex-start;'
+          }) +
         '</div>';
       }
       _novHtml += '<h3 onclick="window._toggleNovidadesCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
@@ -4358,6 +4359,30 @@ window._toggleNovidadesCollapse = function() {
   // que primeiro MEDE quantos cards cabem na linha. Duas contas para o mesmo número era o
   // caminho garantido pra o botão prometer uma coisa e a tela mostrar outra.
   window._spSyncCollapsePreview();
+  // ── 2.0.39 · RECOLHER LEVA AO TOPO DA SEÇÃO ─────────────────────────────────
+  // Correção do dono: _"quando clicamos nele deve parecer que escondeu o que ele mostrava,
+  // mas não ficar na posição relativa em que estava (lá pra baixo). deve mostrar o topo das
+  // novidades do seu torneio para o usuário não se perder."_
+  //
+  // Com a pílula flutuante dá pra fechar a seção lá do fim dela — e aí a página encolhe
+  // debaixo do dedo: o conteúdo que estava sob o cursor sobe centenas de pixels e o usuário
+  // é cuspido no meio do que vinha DEPOIS. Fechar tem que devolver a seção fechada à vista.
+  // Só ao RECOLHER: abrir mantém a página onde está (o que aparece nasce abaixo, sem empurrar
+  // nada pra cima). E só quando o topo da seção já saiu de vista — se ele está na tela, mexer
+  // na rolagem seria um pulo gratuito.
+  // O respiro é `--scroll-anchor` via `scroll-margin-top` (a mesma âncora do trilho e de todo
+  // scrollIntoView do app), nunca px cravado. [[project_sticky_vertical_usa_scroll_anchor]]
+  if (willCollapse) {
+    try {
+      // "o topo já saiu de vista?" medido no PRÓPRIO trilho: grudado, ele está na linha da
+      // âncora, bem abaixo do topo da seção; solto, ele fica a um padding dele. Assim a
+      // conta não depende de ler `--scroll-anchor` (que é um `calc()`, não um número).
+      var _rail = document.getElementById('nov-toggle-rail');
+      var _topo = sec.getBoundingClientRect().top;
+      var _grudado = _rail ? (_rail.getBoundingClientRect().top - _topo > 24) : (_topo < 0);
+      if (_grudado) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } catch (e) {}
+  }
   try { localStorage.setItem('scoreplace_collapse_novidades', willCollapse ? '1' : '0'); } catch (e) {}
 };
 

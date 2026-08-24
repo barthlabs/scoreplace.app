@@ -133,6 +133,7 @@ const SUITES = [
   'tests/avanco-de-fase-nao-enfileira.test.js',
   'tests/identidade-por-uid-no-avanco-e-no-wo.test.js',
   'tests/ver-menos-de-novidades-acompanha-a-rolagem.test.js',
+  'tests/selos-das-lojas-do-mesmo-tamanho.test.js',
   'tests/regressiva-e-da-rodada-nao-da-fase.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',

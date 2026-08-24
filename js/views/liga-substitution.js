@@ -182,11 +182,40 @@ function _rewriteSlot(group, fromName, toName, clearResults, t) {
   });
   if (Array.isArray(group.players)) group.players = _rw(group.players, group.playersUids);
 }
-function _removeSitOut(round, name) {
-  if (Array.isArray(round.matches)) round.matches = round.matches.filter(function (m) { return !(m.isSitOut && m.p1 === name); });
+// ── 2.0.39 · O MARCADOR DE FOLGA/W.O. TAMBÉM SE RESOLVE POR uid ──────────────
+// Ordem do dono: _"nada por nome. tudo por uid a menos que seja nome digitado pelo
+// organizador sem uid."_ Estes marcadores JÁ nasciam com `p1Uid`/`team1Uids` (v4.5.71) —
+// mas eram ACHADOS por `m.p1 === name`. Duas consequências reais: homônimo no mesmo grupo
+// apagava a folga do outro, e quem se renomeia entre o sorteio e o W.O. deixava o marcador
+// velho de pé (a pessoa aparecia jogando E de folga).
+// A régua é a MESMA de `_meuStatusNoTorneio` (store.js), pra não haver duas: o marcador que
+// TEM uid é decidido só por uid; o marcador SEM uid (doc legado, ou nome digitado pelo
+// organizador) é decidido pelo nome — senão o legado nunca mais seria removido.
+function _sitOutUids(m) {
+  return [].concat((m && m.team1Uids) || [], (m && m.p1Uid) || []).filter(Boolean).map(String);
 }
-function _addWoMarker(t, round, roundIndex, name, category) {
-  _removeSitOut(round, name); // não pode ser folga E W.O.
+function _mesmoSitOut(m, name, uid) {
+  var us = _sitOutUids(m);
+  if (us.length) return uid ? us.indexOf(String(uid)) !== -1 : false;
+  return m.p1 === name;
+}
+// Semente name→uid pra quem chama sem uid em mãos. É a ÚNICA resolução por nome aceita:
+// converter um rótulo em identidade uma vez, na entrada — nunca decidir por nome depois.
+function _uidDoNome(t, name) {
+  if (!name) return null;
+  var u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
+  return u || null;
+}
+function _removeSitOut(round, name, uid) {
+  if (Array.isArray(round.matches)) {
+    round.matches = round.matches.filter(function (m) {
+      return !(m && m.isSitOut && _mesmoSitOut(m, name, uid));
+    });
+  }
+}
+function _addWoMarker(t, round, roundIndex, name, category, uid) {
+  var _woUid = uid || _uidDoNome(t, name);
+  _removeSitOut(round, name, _woUid); // não pode ser folga E W.O.
   if (!Array.isArray(round.matches)) round.matches = [];
   var o = {
     id: 'wo-r' + (roundIndex + 1) + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e4),
@@ -195,15 +224,15 @@ function _addWoMarker(t, round, roundIndex, name, category) {
     label: 'R' + (roundIndex + 1) + ' • W.O.'
   };
   // v4.5.71: identidade por uid no slot real (p1). W.O. é sentinela (sem uid).
-  var _woUid = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
   if (_woUid) { o.p1Uid = _woUid; o.team1Uids = [_woUid]; }
   if (category) o.category = category;
   round.matches.push(o);
 }
-function _addFolgaMarker(t, round, roundIndex, name, category) {
+function _addFolgaMarker(t, round, roundIndex, name, category, uid) {
   if (!Array.isArray(round.matches)) round.matches = [];
+  var _foUid = uid || _uidDoNome(t, name);
   // evita duplicar
-  if (round.matches.some(function (m) { return m.isSitOut && m.p1 === name; })) return;
+  if (round.matches.some(function (m) { return m && m.isSitOut && _mesmoSitOut(m, name, _foUid); })) return;
   var pts = (typeof window._sitOutComp === 'function') ? window._sitOutComp(t, name, category) : 0;
   var o = {
     id: 'folga-r' + (roundIndex + 1) + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e4),
@@ -212,7 +241,6 @@ function _addFolgaMarker(t, round, roundIndex, name, category) {
     label: 'R' + (roundIndex + 1) + ' • Folga'
   };
   // v4.5.71: identidade por uid no slot real (p1). FOLGA é sentinela (sem uid).
-  var _foUid = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
   if (_foUid) { o.p1Uid = _foUid; o.team1Uids = [_foUid]; }
   if (category) o.category = category;
   round.matches.push(o);
@@ -443,7 +471,7 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
 
     // (1) marca o W.O. da rodada (0 pts) — igual ao fluxo antigo
     var _absU = _woAbsentUidOf(g, absentName); // antes de qualquer mutação do elenco
-    _addWoMarker(ft, r, roundIndex, absentName, _cat);
+    _addWoMarker(ft, r, roundIndex, absentName, _cat, _absU);
     g.woAbsent = absentName;
     g.woDest = 'inactive';   // v1.7.59: destino único — W.O. desativa
     if (_absU) g.woAbsentUid = _absU; else delete g.woAbsentUid;
@@ -471,7 +499,7 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
         if (!_jaNoElenco) ft.participants.push(_subEntry);
       }
       window._removeFromWaitlist(ft, _subName);          // sai da fila (assumiu)
-      _removeSitOut(r, _subName);                        // não é mais folga — vai jogar
+      _removeSitOut(r, _subName, (_subEntry && _subEntry.uid) || null);                        // não é mais folga — vai jogar
       _rewriteSlot(g, absentName, _subName, true, ft);
       // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
       // ausente (v1.7.21). `subName` sozinho é rótulo, e rótulo ENVELHECE: quem troca o
@@ -847,7 +875,7 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
     var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
     if (!g || !r) return;
     var _absU2 = _woAbsentUidOf(g, absentName); // antes de qualquer mutação do elenco
-    _addWoMarker(ft, r, roundIndex, absentName, cat);
+    _addWoMarker(ft, r, roundIndex, absentName, cat, _absU2);
     g.woAbsent = absentName; g.woDest = 'inactive';   // v1.7.59: destino único
     if (_absU2) g.woAbsentUid = _absU2; else delete g.woAbsentUid;
 
@@ -874,7 +902,7 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
     });
     if (!_ja) ft.participants.push(_entry);
     if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, subName);
-    _removeSitOut(r, subName);
+    _removeSitOut(r, subName, subUid || null);
     _rewriteSlot(g, absentName, subName, true, ft);
       // v1.7.63 — O SUPLENTE GUARDA O UID, espelhando o que `woAbsentUid` já fazia pro
       // ausente (v1.7.21). `subName` sozinho é rótulo, e rótulo ENVELHECE: quem troca o
@@ -1044,7 +1072,7 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     // ⚠️ ANTES do _rewriteSlot: ele troca o ausente pelo Jogador X no elenco, e depois
     // disso o uid dele não é mais encontrável pelo nome.
     var _absU4 = _woAbsentUidOf(g, absentName);
-    _addWoMarker(ft, r, roundIndex, absentName, cat);
+    _addWoMarker(ft, r, roundIndex, absentName, cat, _absU4);
     _rewriteSlot(g, absentName, gname, true, t);
     _addGhost(ft, gname);
     // Jogador X NÃO tem conta — aqui o nome É a identidade, e não existe uid a gravar.
@@ -1099,8 +1127,9 @@ window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, i
         byUid: _byUid, byName: _byName, status: 'pending', createdAt: _createdAt
       });
     });
-    _addWoMarker(ft, r, roundIndex, absentName, cat); // W.O. já vale (ausente = 0)
-    var _absU5 = _woAbsentUidOf(g, absentName);
+    var _absU5 = _woAbsentUidOf(g, absentName); // ANTES de mutar: o uid sai do elenco do grupo
+    _addWoMarker(ft, r, roundIndex, absentName, cat, _absU5); // W.O. já vale (ausente = 0)
+
     g.woAbsent = absentName; g.subStatus = 'pending'; g.pendingInviteId = list[0].id; delete g.subName; delete g.subIsGuest;
     if (_absU5) g.woAbsentUid = _absU5; else delete g.woAbsentUid;
   });
@@ -1161,7 +1190,7 @@ window._ligaAcceptSub = function (tId, inviteId) {
     var fiv = (ft.ligaSubInvites || []).filter(function (x) { return x.id === inviteId && x.status === 'pending'; })[0]; if (!fiv) return;
     var g = _getGroup(ft, _ri, _gn); var r = ft.rounds && ft.rounds[_ri];
     if (!g || !r) { fiv.status = 'expired'; return; }
-    _removeSitOut(r, _invName);     // não é mais folga — vai jogar
+    _removeSitOut(r, _invName, fiv.inviteeUid || iv.inviteeUid || null);     // não é mais folga — vai jogar
     // v1.6.90 — O SUPLENTE ASSUME A POSIÇÃO ATÉ O FIM DO TORNEIO (regra do dono).
     // Entrar em t.participants é o que sustenta isso: em Liga cada rodada é sorteada de
     // novo a partir do elenco, então quem fica só no grupo desta rodada SUMIRIA no
@@ -1304,9 +1333,9 @@ window._ligaRevertWo = function (tId, roundIndex, groupName) {
       if (g.subStatus === 'filled' && g.subName) {
         _rewriteSlot(g, g.subName, _abs, true, t); // substituto → ausente de volta
         if (g.subIsGuest) _removeGhost(ft, g.subName);
-        else _addFolgaMarker(ft, r, roundIndex, g.subName, cat); // folga volta pro substituto real
+        else _addFolgaMarker(ft, r, roundIndex, g.subName, cat, g.subUid || null); // folga volta pro substituto real
       }
-      _removeSitOut(r, _abs); // remove o marcador de W.O.
+      _removeSitOut(r, _abs, g.woAbsentUid || null); // remove o marcador de W.O.
       // cancela convites pendentes do grupo
       if (Array.isArray(ft.ligaSubInvites)) ft.ligaSubInvites.forEach(function (iv) { if (iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending') iv.status = 'cancelled'; });
       delete g.woAbsent; delete g.subStatus; delete g.subName; delete g.subIsGuest; delete g.pendingInviteId;
@@ -1572,7 +1601,10 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
       phaseIndex: pIdx, round: (playing[0] && playing[0].round) || 1,
       isSitOut: true, sitOutReason: 'wo', sitOutPoints: 0, p1: absentName, p2: 'W.O.',
       // v4.5.71: identidade por uid no slot real (p1 = ausente). W.O. é sentinela.
-      p1Uid: ((typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {})[absentName] : null) || null,
+      // v2.0.39: reusa o `absentUid` que este mesmo bloco já resolveu — resolver o nome
+      // DUAS vezes é duas chances de discordar sobre quem é a pessoa.
+      p1Uid: absentUid || null,
+      team1Uids: absentUid ? [absentUid] : undefined,
       woReplacedBy: fillName, woIsGuest: !!isGuest, label: 'W.O.',
       category: (playing[0] && playing[0].category) || undefined
     });
