@@ -1943,11 +1943,26 @@
     // v2.7.25: resolução 'standby' → os cortados vão pra lista de espera (reusa a
     // infra existente: aparecem no painel de Lista de Espera + servem pra W.O.).
     if (built.waitlist && built.waitlist.length) {
-      var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : [];
-      var _have = {};
-      _sb.forEach(function (p) { var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)); if (nm) _have[nm] = 1; });
-      built.waitlist.forEach(function (tm) { var nm = tm && (tm.displayName || tm.name); if (nm && !_have[nm]) { _sb.push(nm); _have[nm] = 1; } });
-      t.standbyParticipants = _sb;
+      // ⚠️ ENTRA A ENTRADA, NUNCA O NOME (v2.0.36). Empurrar o NOME de quem já está no
+      // elenco DUPLICA a pessoa na contagem de inscritos: a entrada do elenco tem uid e o
+      // save STRIPA o nome dela ([[project_uid_identity_canon_locked]]), então
+      // `_countCompetitors` chaveia o elenco por `id:uid` e a string da fila por `n:nome` —
+      // duas chaves, duas pessoas. Foi assim que o sandbox pulou de ~142 pra 156 inscritos
+      // na fase eliminatória: +1 por cada nome empurrado pra fila.
+      // `_waitlistPushBack` é a porta canônica — preserva o uid e deduplica POR UID.
+      built.waitlist.forEach(function (tm) {
+        if (!tm) return;
+        if (typeof window._waitlistPushBack === 'function') { window._waitlistPushBack(t, tm); return; }
+        // fallback (ordem de carga): mesma dedup, mas guardando a ENTRADA
+        var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants : (t.standbyParticipants = []);
+        var _u = tm.uid || tm.p1Uid || null, _nm = tm.displayName || tm.name || '';
+        var _ja = _sb.some(function (p) {
+          if (_u && p && typeof p === 'object' && (p.uid === _u || p.p1Uid === _u)) return true;
+          var pn = (typeof p === 'string') ? p : (p && (p.displayName || p.name));
+          return !!_nm && pn === _nm;
+        });
+        if (!_ja) _sb.push(tm);
+      });
     }
     t.currentPhaseIndex = idx;
     t.currentStage = 'phase' + idx;

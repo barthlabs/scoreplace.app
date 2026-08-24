@@ -84,6 +84,12 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.36 ───────────────────────────────────────────
+        // Três relatos do dono no mesmo dia, todos no avanço de fase do sandbox da Confra.
+        // Viram DOIS itens porque pro usuário são duas coisas: o que a busca esconde e o
+        // que acontece com as pessoas (e com o relógio) quando a fase vira.
+        '<li><b>\uD83D\uDD0D Buscar um nome na chave n\u00e3o esconde mais a classifica\u00e7\u00e3o do grupo:</b> ao filtrar por um nome, o grupo dessa pessoa aparecia <b>sem a tabela de classifica\u00e7\u00e3o</b> quando havia um W.O. naquele grupo. Agora a classifica\u00e7\u00e3o fica sempre de p\u00e9 \u2014 e continua sendo poss\u00edvel achar o grupo de quem <b>tomou o W.O.</b> pelo nome dela.</li>' +
+        '<li><b>\u23F1\uFE0F Ao virar de fase, ningu\u00e9m vai pra lista de espera \u2014 e a contagem regressiva \u00e9 da RODADA:</b> quem estava <b>desativado</b> ou tinha levado <b>W.O.</b> era mandado pra lista de espera na virada da fase, sem ter pedido isso (a fila s\u00f3 acontece quando a pr\u00f3pria pessoa religa o bot\u00e3o <b>Ativado</b>) \u2014 e isso ainda fazia o <b>n\u00famero de inscritos aumentar</b>, contando a mesma pessoa duas vezes. O rel\u00f3gio da rodada tamb\u00e9m contava at\u00e9 o fim da <b>fase inteira</b>; agora o prazo da fase \u00e9 dividido pelo n\u00famero de rodadas e a regressiva \u00e9 <b>do fim da rodada atual</b>.</li>' +
         // ── ciclo 2.0.35 ───────────────────────────────────────────
         // A leva de tamanhos do card, refeita com o dono olhando a tela a cada passo. Item
         // ÚNICO porque pro usuário é uma coisa só: como o jogo aparece no card. A 2.0.34

@@ -6206,8 +6206,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 // do grupo inteiro. A linha da classificação sobrevive sempre, então é ela
                 // que garante a regra em qualquer estado. `data-my-match="1"` porque linha
                 // de tabela não é JOGO — o "Só meus jogos" não pode apagá-la.
+                // ⭐ v2.0.36 — E ELA É MARCADOR, NÃO RESULTADO DE BUSCA. A linha existe pra
+                // DECLARAR que aquela pessoa é daquele grupo; ela não é um card de jogo. Sem
+                // `data-fb-marker` o filtro a tratava como card: buscar OUTRA pessoa do mesmo
+                // grupo escondia esta linha e, como ela era o único `[data-players]` dentro da
+                // tabela, o bloco "📊 Classificação do grupo" INTEIRO sumia — o grupo aparecia
+                // sem classificação (relato do dono: buscar "lucia" e o Grupo F sem tabela).
+                // Marcador = nunca se esconde e só empurra "tem gente aqui" pros ancestrais.
                 var _woBuscaLinha = (_isRed || _isAmb)
-                  ? ' data-players="' + window._safeHtml(String(s.name || '')) + '" data-my-match="1"'
+                  ? ' data-players="' + window._safeHtml(String(s.name || '')) + '" data-my-match="1" data-fb-marker="1"'
                   : '';
                 return '<tr' + _woBuscaLinha + ' style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
@@ -7137,10 +7144,31 @@ window._bracketApplyFilter = function () {
   var shown = 0;
   var conts = [];            // ancestrais candidatos, na ordem em que aparecem
   var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
+  var markHit = function (el) {
+    for (var p = el; p && p !== root && p !== document.body; p = p.parentElement) {
+      if (holdsSearch(p)) break;
+      var ix = conts.indexOf(p);
+      if (ix === -1) { conts.push(p); contHasHit.push(true); }
+      else contHasHit[ix] = true;
+    }
+  };
   for (var i = 0; i < cards.length; i++) {
     var c = cards[i];
     var hit = (!q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1)
       && (!onlyMine || c.getAttribute('data-my-match') !== '0');
+    // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de
+    // quem levou W.O. e a pílula "🔁 Fulana W.O. → Beltrana" existem pra dizer DE QUAL GRUPO
+    // a pessoa é — não são cards de jogo. Tratá-las como card tinha dois efeitos errados:
+    //   (a) buscar outra pessoa do MESMO grupo escondia a linha/pílula e, sendo ela o único
+    //       `[data-players]` do bloco, sumia a CLASSIFICAÇÃO DO GRUPO inteira (ou a linha de
+    //       estado do W.O.) — justamente informação do grupo que está sendo mostrado;
+    //   (b) a linha voltava com um buraco na numeração (1º, 2º, 4º).
+    // Então: marcador nunca mexe no próprio `display` e só empurra "tem gente aqui" pros
+    // ancestrais QUANDO casa. Sem casar, ele não conta como ausência de ninguém.
+    if (c.getAttribute('data-fb-marker') === '1') {
+      if (hit) { shown++; markHit(c.parentElement); }
+      continue;
+    }
     // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
     setDisp(c, hit);
     if (hit) shown++;
@@ -7166,7 +7194,11 @@ window._bracketApplyFilter = function () {
     if (lbl.dataset.fbTxt === undefined) lbl.dataset.fbTxt = lbl.textContent;
     if (!q && !onlyMine) { lbl.textContent = lbl.dataset.fbTxt; continue; }
     var nvis = 0;
-    for (var z = 0; z < inside.length; z++) { if (inside[z].style.display !== 'none') nvis++; }
+    for (var z = 0; z < inside.length; z++) {
+      // marcador não é jogo: não entra no "Demais jogos da rodada (N)"
+      if (inside[z].getAttribute && inside[z].getAttribute('data-fb-marker') === '1') continue;
+      if (inside[z].style.display !== 'none') nvis++;
+    }
     lbl.textContent = lbl.dataset.fbTxt.replace(/\((\d+)\)\s*$/, '(' + nvis + ')');
   }
   var empty = document.getElementById('bracket-search-empty');

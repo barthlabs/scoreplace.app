@@ -129,6 +129,9 @@ const SUITES = [
   // classificação passam a se declarar; a linha cobre o torneio já encerrado, em que a
   // pílula não é renderizada.
   'tests/busca-acha-o-grupo-de-quem-tomou-wo.test.js',
+  'tests/classificacao-do-grupo-sobrevive-a-busca.test.js',
+  'tests/avanco-de-fase-nao-enfileira.test.js',
+  'tests/regressiva-e-da-rodada-nao-da-fase.test.js',
   // o cronômetro da Liga mira o fim da rodada
   'tests/liga-countdown-round-end.test.js',
   // o relógio do meio (RODADA e TORNEIO COMPLETO) vira REGRESSIVA quando há fim programado

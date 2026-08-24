@@ -839,25 +839,40 @@ window._phaseResToInfo = function(phaseCtx, t){
 // (disponíveis pra W.O.) / Excluir (ficam de fora). Gate em advanceMultiPhase chama daqui.
 
 // Lista os inativos pendentes (objetos de participante). Vazio se auto-desativação está off.
+//
+// ⛔ QUEM LEVOU W.O. NÃO ENTRA AQUI (v2.0.36). W.O. **sempre desativa**, e a marca é
+// `woDeactivatedAt` — então essa pessoa também tem `ligaActive === false` e vinha nesta
+// lista de carona. O desfecho dela JÁ ESTÁ DECIDIDO ("fica no elenco, desativada"), e a
+// fila só pode ser consequência de um ATO dela (religar o toggle). Misturá-la aqui fazia a
+// escolha feita para os inativos recair sobre ela — foi assim que gente com W.O. acabou na
+// lista de espera no avanço de fase, o estado que o próprio cânone chama de impossível de
+// explicar ("desativado e na fila ao mesmo tempo").
+// [[project_wo_always_deactivates]] · [[project_sitout_vs_waitlist_canon]]
 window._phasePendingInactives = function(t){
     if (!t || t.allowSelfDeactivation === false) return [];
     var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    return allP.filter(function(p){ return p && typeof p === 'object' && p.ligaActive === false; });
+    return allP.filter(function(p){
+        return p && typeof p === 'object' && p.ligaActive === false && !p.woDeactivatedAt;
+    });
 };
 
 // Aplica a escolha do organizador e retoma o avanço de fase.
+// ⛔ NÃO EXISTE MAIS "LISTA DE ESPERA" AQUI (v2.0.36) — ordem do dono (24/ago/2026):
+// _"ao avançar de fase o sistema colocou em lista de espera os inativos e os W.O., que foi
+// expressamente dito para não acontecer"_. É a MESMA regra do W.O.: a fila é consequência
+// de um ATO da pessoa (religar o toggle "Ativado"), nunca de uma decisão tomada por ela.
+// Quem desativou a participação declarou o CONTRÁRIO de disponibilidade — pôr essa pessoa
+// na fila afirma por ela uma intenção que ela não teve, e ainda a coloca entre quem estava
+// esperando de verdade. Sobram as duas escolhas que são de fato do organizador: INCLUIR
+// (por classificação) ou EXCLUIR (fica de fora da fase, segue inscrita).
+// Um `choice` desconhecido cai no mesmo lugar de 'exclude': não mexe em fila nenhuma.
+// [[project_wo_always_deactivates]] · [[project_sitout_vs_waitlist_canon]]
 window._resolvePhaseInactives = function(tId, choice){
     var t = window._findTournamentById(tId);
     if (!t) return;
     var _niIdx = (t.currentPhaseIndex || 0) + 1;
     var inativos = window._phasePendingInactives(t);
-    if (choice === 'standby') {
-        var _sb = Array.isArray(t.standbyParticipants) ? t.standbyParticipants.slice() : [];
-        var _have = {};
-        _sb.forEach(function(p){ var nm = (typeof p === 'string') ? p : (p && (p.displayName || p.name)); if (nm) _have[nm] = 1; });
-        inativos.forEach(function(p){ var nm = p.displayName || p.name; if (nm && !_have[nm]) { _sb.push(nm); _have[nm] = 1; } });
-        t.standbyParticipants = _sb;
-    } else if (choice === 'include') {
+    if (choice === 'include') {
         // Entram por classificação: como não jogaram (0 pts), são os piores → pior linha.
         // Reativa (ligaActive=true) pra ficarem consistentes no resto do app.
         if (t.phases && t.phases[_niIdx]) t.phases[_niIdx]._includeInactive = inativos.slice();
@@ -911,8 +926,9 @@ window._showInactivePhasePanel = function(tId, inativos){
         '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
             '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);background:rgba(148,163,184,0.08);border-radius:10px;padding:8px 11px;margin-bottom:14px;line-height:1.5;">' + _namesStr + '</div>' +
             _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação, igual aos ativos: sobem ou descem de linha conforme os pontos que somaram. Quem não jogou fica com 0 e cai na linha de baixo.', 'rgba(74,222,128,0.5)') +
-            _optCard('standby', '⏱️', 'Lista de espera', 'Ficam disponíveis pra substituir num W.O., mas não entram na chave agora.', 'rgba(251,191,36,0.5)') +
-            _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio.', 'rgba(248,113,113,0.45)') +
+            // ⛔ SEM "Lista de espera": a fila é consequência de a pessoa religar o toggle,
+            // nunca de uma escolha feita por ela aqui. Ver _resolvePhaseInactives.
+            _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio. Se quiserem voltar, é só religar a participação — aí entram no fim da lista de espera.', 'rgba(248,113,113,0.45)') +
         '</div>' +
     '</div>';
     document.body.appendChild(overlay);

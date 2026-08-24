@@ -1004,6 +1004,9 @@ window._phaseCurrentRoundProgress = function(t) {
   if (!_name || _name.indexOf('bracket.') === 0) _name = 'Rodada ' + (_idx + 1);
   return {
     roundNum: _idx + 1,
+    // quantas rodadas esta fase tem (colunas com jogo real) — é o divisor do prazo da fase
+    // quando a regressiva é POR RODADA. Ver window._phaseRoundWindow.
+    roundsTotal: rounds.length,
     name: _name,
     total: total, done: done, pct: total ? Math.round(done / total * 100) : 0,
     complete: total > 0 && done === total,
@@ -1197,7 +1200,16 @@ window._buildProgressInner = function(t) {
       var _cfgStartMs = window._tProgParseMs(_ph.startDate ? (_ph.startDate + (_ph.startTime ? ('T' + _ph.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEndMs = window._tProgParseMs(_ph.endDate ? (_ph.endDate + (_ph.endTime ? ('T' + _ph.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
       if (_cfgStartMs) schedStart = _cfgStartMs;
-      if (_cfgEndMs) { plannedEnd = _cfgEndMs; _schedEndReal = true; }
+      var _rwP = null;
+      if (_cfgEndMs) {
+        // ⏱️ mesma régua do ramo das chaves: o prazo da FASE dividido pelas rodadas dela.
+        // Rodada única (_plannedPhR<=1) devolve a janela inteira — sem regressão.
+        _rwP = window._phaseRoundWindow(_cfgStartMs, _cfgEndMs, _roundNum, _plannedPhR);
+        if (_rwP) {
+          // (o rótulo das colunas é decidido UMA vez, no fim deste ramo)
+          schedStart = _rwP.startMs; plannedEnd = _rwP.endMs; _schedEndReal = true;
+        } else { plannedEnd = _cfgEndMs; _schedEndReal = true; }
+      }
       else {
         var _gdMp = parseInt(t.gameDuration) || 30, _ctMp = parseInt(t.callTime) || 0, _wuMp = parseInt(t.warmupTime) || 0;
         var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
@@ -1217,8 +1229,10 @@ window._buildProgressInner = function(t) {
       if (_roundStart) actualStart = _roundStart;
       else if (t.drawManual !== true && _rTotal > 0 && schedStart && now >= schedStart) actualStart = schedStart;
       else actualStart = null;
-      _labelSchedStart = 'início programado';
-      _labelSchedEnd = 'final programado';
+      // rótulo: com a janela FATIADA por rodada as duas colunas são da RODADA (não da fase);
+      // sem fatia (rodada única) seguem "programado", como antes.
+      if (_rwP && _rwP.sliced) { _labelSchedStart = 'início da rodada'; _labelSchedEnd = 'final da rodada'; }
+      else { _labelSchedStart = 'início programado'; _labelSchedEnd = 'final programado'; }
     }
   }
 
@@ -1248,7 +1262,15 @@ window._buildProgressInner = function(t) {
       var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
       var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
       if (_cfgSL) schedStart = _cfgSL;
-      if (_cfgEL) { plannedEnd = _cfgEL; _schedEndReal = true; }
+      if (_cfgEL) {
+        // ⏱️ A REGRESSIVA É DA RODADA: fatia a janela da fase pelas rodadas dela e pega a
+        // fatia desta rodada. Ver window._phaseRoundWindow (a régua e o porquê).
+        var _rwL = window._phaseRoundWindow(_cfgSL || schedStart, _cfgEL, _pr.roundNum, _pr.roundsTotal);
+        if (_rwL) {
+          schedStart = _rwL.startMs; plannedEnd = _rwL.endMs; _schedEndReal = true;
+          if (_rwL.sliced) { _labelSchedStart = 'início da rodada'; _labelSchedEnd = 'final da rodada'; }
+        } else { plannedEnd = _cfgEL; _schedEndReal = true; }
+      }
       else {
         var _gdL = parseInt(t.gameDuration) || 30, _ctL = parseInt(t.callTime) || 0, _wuL = parseInt(t.warmupTime) || 0;
         var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = _gdL + _ctL + _wuL + 5;
@@ -1785,6 +1807,40 @@ window._isIncrementalLigaPhase = function(t) {
     if (cur < 1) return false;
     var cfg = t.phases[cur] || {};
     return cfg.ligaCadence === 'incremental' && !!(t.phaseRounds && t.phaseRounds[cur]);
+};
+
+// ── 2.0.36 · A REGRESSIVA DA RODADA É DA RODADA, NÃO DA FASE ─────────────────
+// Ordem do dono (24/ago/2026, ao avançar de fase no sandbox): _"está contando na regressiva
+// da rodada o prazo até o final da FASE e não da rodada. O certo é ver o número de rodadas
+// que teremos e dividir o prazo total da fase pelo número de rodadas e dar a regressiva para
+// o final da rodada. E repetir isso até o final da fase."_
+//
+// O que acontecia: a fase materializada trazia início/fim CONFIGURADOS da fase e o relógio do
+// meio contava até o fim da fase inteira. Numa fase de 4 rodadas isso diz "faltam 6 dias" na
+// R1 — prazo que ninguém tem, porque a R1 precisa acabar muito antes disso.
+//
+// A régua, exatamente como o dono definiu: fatia [início da fase, fim da fase] em N pedaços
+// IGUAIS (N = nº de rodadas da fase) e a rodada k fica com o k-ésimo pedaço. Rodada 1 de 4
+// numa fase de 8 dias → 2 dias. Ao virar a rodada, a fatia anda — e repete até o fim da fase,
+// onde a última fatia termina exatamente no fim da fase (sem sobra e sem estourar).
+//
+// FONTE ÚNICA de propósito: os DOIS ramos que montam a janela (Pontos Corridos multi-fase e
+// fase posterior materializada) chamam esta função. Já foi provado neste arquivo que corrigir
+// um ramo só deixa metade do defeito de pé. [[feedback_unify_dual_entry_points]]
+// N=1 devolve a janela inteira da fase — rodada única e fase são a MESMA coisa, sem regressão.
+window._phaseRoundWindow = function (phaseStartMs, phaseEndMs, roundNum, roundsTotal) {
+    if (!phaseStartMs || !phaseEndMs || phaseEndMs <= phaseStartMs) return null;
+    var n = parseInt(roundsTotal, 10); if (!n || n < 1) n = 1;
+    var k = parseInt(roundNum, 10); if (!k || k < 1) k = 1;
+    // mais rodadas do que o planejado (rodada extra) → o divisor é o que EXISTE, senão a
+    // última rodada herdaria uma fatia que já venceu.
+    if (k > n) n = k;
+    var slot = (phaseEndMs - phaseStartMs) / n;
+    return {
+        startMs: Math.round(phaseStartMs + (k - 1) * slot),
+        endMs: Math.round(phaseStartMs + k * slot),
+        slotMs: slot, roundNum: k, roundsTotal: n, sliced: n > 1
+    };
 };
 
 // v4.x: FONTE ÚNICA das RODADAS PLANEJADAS de uma fase Pontos Corridos (Liga comum OU

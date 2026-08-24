@@ -1432,7 +1432,11 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     // pode apagá-la — mesma decisão dos cards de organização e dos chips de quem ficou de
     // fora. [[feedback_unify_dual_entry_points]]
     var _woBusca = window._safeHtml(String(group.woAbsent || '') + ' ' + String(group.subName || ''));
-    var s2 = '<span data-players="' + _woBusca + '" data-my-match="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O.<br>→ ' + lbl + '</span>';
+    // `data-fb-marker="1"`: a pílula DECLARA de qual grupo a pessoa era — não é card de jogo.
+    // Sem isso, buscar outra pessoa do MESMO grupo escondia a pílula e a linha de estado do
+    // W.O. inteira (ela é o único `[data-players]` de lá). Marcador nunca se esconde; só
+    // empurra "tem gente aqui" pros ancestrais quando casa. [[project_wo_lives_in_four_places]]
+    var s2 = '<span data-players="' + _woBusca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O.<br>→ ' + lbl + '</span>';
     // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
     var _woPlayed = (typeof window._matchHasRealPlay === 'function')
       && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
