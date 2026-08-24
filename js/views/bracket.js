@@ -6373,7 +6373,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // logo abaixo dela — a linha de botões fica limpa.
           var _grpArrivedL = (typeof window._monGroupArrivedBtn === 'function') ? window._monGroupArrivedBtn(t, g.matches, gDone) : '';
           var _schGrpBtn = (isMyGroup && typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
-          var _waGrpBtn = (isMyGroup && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';
+          // ⭐ 2.0.57 — O CHIP DO WHATSAPP APARECE EM TODO GRUPO PRO ORGANIZADOR.
+          // Ordem do dono (24/ago/2026): _"faltam os botões do whatsapp dos grupos de jogos
+          // para os organizadores poderem criar os grupos e entrar nos grupos"_. O gate
+          // `isMyGroup` escondia o chip em TODOS os grupos que não fossem o dele — e o
+          // organizador quase nunca joga o grupo que precisa montar. Quem decide o que o
+          // botão mostra continua sendo o módulo (wa-group.js, `_podeGerirJogo`): aqui só
+          // se para de esconder. O irmão "Combinar jogos" segue restrito ao meu grupo — o
+          // dono pediu o do WhatsApp, e enquete é negociação entre quem joga.
+          var _waPodeGerir = isMyGroup || !!(typeof window._isUserOrgOrCoHost === 'function' &&
+            window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
+          var _waGrpBtn = (_waPodeGerir && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';
           // v1.7.90: com W.O. ativo o bloco SEGUE indo pra linha de estado (_woStateLine)
           // e não pra linha de botões — isso não mudou, e é o que mantém a linha de ações
           // limpa. O que mudou é o CONTEÚDO do bloco: `_ligaGroupControlsHtml` agora

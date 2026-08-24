@@ -125,9 +125,20 @@
   // Quem pode CRIAR/TROCAR o link. Jogo: qualquer jogador do confronto (o grupo é
   // deles; quem chegar primeiro monta). Torneio: só organizador/co-host — o grupo
   // é oficial do evento.
+  // ⭐ 2.0.57 — O ORGANIZADOR TAMBÉM MONTA E ENTRA NOS GRUPOS DE JOGO.
+  // Ordem do dono (24/ago/2026): _"ainda falta os botões do whatsapp dos grupos de jogos
+  // para os organizadores poderem criar os grupos e entrar nos grupos"_.
+  // O gate era "só jogador do confronto" — e o organizador quase nunca joga o grupo que
+  // precisa organizar. Num torneio de temporada é ELE quem monta os grupos da rodada (os
+  // jogadores chegam depois), então sem isso a feature não saía do papel na quadra.
+  // Não é exceção ao desenho: quem cria o grupo é o dono do WhatsApp que clicou, e o link
+  // continua sendo dado do torneio. `_waAllowed` (toggle do perfil) segue mandando nos dois.
+  function _podeGerirJogo(t, m, cu) {
+    return !!(window._schUserIsPlayer(t, m, cu) || _isOrg(t, cu));
+  }
   function _canManage(ctx, cu) {
     if (!cu || !cu.uid) return false;
-    if (ctx.scope === 'match') return window._schUserIsPlayer(ctx.t, ctx.m, cu);
+    if (ctx.scope === 'match') return _podeGerirJogo(ctx.t, ctx.m, cu);
     return _isOrg(ctx.t, cu);
   }
 
@@ -200,7 +211,8 @@
   function _matchChip(t, m, groupMode) {
     var cu = _cu(); if (!cu || !cu.uid) return '';
     if (!_waAllowed(cu)) return '';
-    if (!window._schUserIsPlayer(t, m, cu)) return '';
+    // jogador do confronto OU organizador/co-org (2.0.57 — ver _podeGerirJogo)
+    if (!_podeGerirJogo(t, m, cu)) return '';
     var args = '\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\',' + (groupMode ? '1' : '0');
     var open = 'event.stopPropagation(); window._waGrpOpen(' + args + ')';
     // v1.7.24: o rótulo diz DE QUEM é o grupo. "grupo" sozinho era o que fazia a pessoa
@@ -209,17 +221,22 @@
     // É o contraste com "grupo geral oficial do torneio"; qualquer sinônimo meu
     // aqui recria a ambiguidade que estamos desfazendo.
     var _mine = 'de whats de jogo';
+    // 2.0.57: o organizador que NÃO joga este grupo vê o mesmo botão com o possessivo
+    // trocado — "seus jogos" seria mentira, e é exatamente o tipo de rótulo que fez a
+    // pessoa clicar no botão errado na v1.7.24. O grupo é DOS JOGADORES; ele só monta.
+    var _souJogador = !!window._schUserIsPlayer(t, m, cu);
+    var _pos = _souJogador ? 'Seu grupo<br>' + _mine : 'Grupo<br>' + _mine;
     if (m.waGroup && m.waGroup.link) {
       // "Abrir grupo" é VERBO — clicar faz o que diz (abre o WhatsApp), sem tela
       // intermediária. O ✎ ao lado é a saída pra trocar o link (grupo refeito).
       return '<span style="display:inline-flex;align-items:stretch;align-self:stretch;gap:2px;min-width:0;">' +
-        _btn('Seu grupo<br>' + _mine, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
-        _editBtn(open, 'Trocar o link do seu grupo ' + _mine) + '</span>';
+        _btn(_pos, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
+        _editBtn(open, 'Trocar o link do grupo ' + _mine) + '</span>';
     }
     if (!window._schIsCurrentRoundMatch(t, m)) return '';
     // v1.7.25 (dono): ANTES de existir link, os dois botões começam com "Criar grupo" —
     // é a ação, e o complemento diz DE QUEM: "geral oficial do torneio" × "dos seus jogos".
-    return _btn('Criar grupo<br>dos seus jogos', open);
+    return _btn(_souJogador ? 'Criar grupo<br>dos seus jogos' : 'Criar grupo<br>dos jogos', open);
   }
 
   window._waGrpCardChip = function (t, m) {

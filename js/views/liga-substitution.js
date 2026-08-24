@@ -1356,14 +1356,115 @@ window._ligaSwitchToGuest = function (tId, roundIndex, groupName) {
   window._ligaFillGuestPrompt(tId, roundIndex, groupName, _absent);
 };
 
+// ── 2.0.57 · UM "REVERTER" PARA CADA W.O. DADO ───────────────────────────────
+// Ordem do dono (24/ago/2026, print do Grupo A com 3 W.O.s e UM botão): _"o reverter wo
+// deveria ser 1 para cada wo dado."_ (E antes, na 1.7.90: _"o botao reverter wo fica
+// vinculado a cada um que tomou o wo."_ — a lista cumpriu metade em 2.0.53, mostrando
+// todos; faltava o desfazer de cada um.)
+//
+// O estado do grupo é SLOT ÚNICO (woAbsent/subName): só o W.O. mais recente mora nele.
+// Os outros vivem no rastro (`woSubstituteFor` na entrada do substituto). Reverter passa
+// a aceitar QUAL par desfazer:
+//   · o par do ESTADO   → caminho de sempre (limpa woAbsent/subStatus/subName/…);
+//   · um par do RASTRO  → desfaz só aquele elo (substituto → ausente de volta, marcador
+//                         do ausente removido, folga devolvida ao substituto) e o estado
+//                         do grupo fica intacto.
+// ⚠️ ELO ENCADEADO NÃO PULA A FILA: numa cadeia (Denise→Carol→Karla) o substituto do elo
+// antigo já não ocupa slot nenhum — quem está lá é o suplente do elo novo. Reverter fora
+// de ordem não teria onde escrever, então quem chama tem que desfazer do mais novo pro
+// mais antigo. `_ligaRevertWoBloqueadoPor` responde isso e o botão nasce desabilitado
+// dizendo quem reverter primeiro (em vez de um botão que falha em silêncio).
+window._ligaRevertWoBloqueadoPor = function (t, group, par) {
+  if (!t || !group || !par) return '';
+  var _ehEstado = (group.woAbsentUid && par.absentUid)
+    ? (String(par.absentUid) === String(group.woAbsentUid))
+    : (par.absentName === group.woAbsent);
+  if (_ehEstado) return '';
+  // o substituto daquele elo precisa estar NO GRUPO pra poder sair dele
+  var _uids = Array.isArray(group.playersUids) ? group.playersUids : [];
+  var _nomes = Array.isArray(group.players) ? group.players : [];
+  var _no = par.subUid
+    ? _uids.some(function (u) { return u && String(u) === String(par.subUid); })
+    : _nomes.indexOf(par.subName) !== -1;
+  if (_no) return '';
+  // quem tomou o lugar dele? (o elo mais novo da cadeia) — é esse que tem que sair antes
+  var _lista = window._ligaGroupWoList(t, group) || [];
+  var _depois = _lista.filter(function (x) {
+    return x !== par && ((x.absentUid && par.subUid) ? String(x.absentUid) === String(par.subUid)
+                                                     : x.absentName === par.subName);
+  })[0];
+  return _depois ? (_depois.absentName || 'o W.O. seguinte') : (par.subName || 'o W.O. seguinte');
+};
+
+// Desfaz UM elo do rastro (W.O. que não é o do estado atual do grupo). Mesmas peças do
+// caminho principal — `_rewriteSlot` (com o guard de jogo com placar dentro), marcador de
+// W.O. fora, folga de volta pro substituto — mas SEM tocar em `woAbsent`/`subStatus`: o
+// estado é de outro W.O., que continua valendo.
+function _revertWoDoRastro(t, tId, roundIndex, groupName, absentUid, absentName) {
+  var group = _getGroup(t, roundIndex, groupName); if (!group) return;
+  var lista = (typeof window._ligaGroupWoList === 'function') ? window._ligaGroupWoList(t, group) : [];
+  var par = lista.filter(function (x) {
+    return (absentUid && x.absentUid) ? String(x.absentUid) === String(absentUid) : x.absentName === absentName;
+  })[0];
+  if (!par || !par.subName) return;
+  var _bloq = window._ligaRevertWoBloqueadoPor(t, group, par);
+  if (_bloq) {
+    if (window.showNotification) window.showNotification('Reverta na ordem',
+      'Antes de desfazer o W.O. de ' + par.absentName + ', reverta o de ' + _bloq + ' — o lugar dele no grupo está ocupado.', 'warning');
+    return;
+  }
+  if (typeof window._matchHasRealPlay === 'function' && Array.isArray(group.matches) &&
+      group.matches.some(function (m) { return window._matchHasRealPlay(m); })) {
+    if (window.showNotification) window.showNotification('W.O. não pode ser revertido',
+      'Os jogos do grupo já começaram (placar lançado ou placar ao vivo iniciado). O W.O. não é mais reversível.', 'warning');
+    return;
+  }
+  var cat = _groupCategory(group);
+  var doRevert = function () {
+    _commitLiga(tId, function (ft) {
+      var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
+      if (!g || !r) return;
+      _rewriteSlot(g, par.subName, par.absentName, true, ft);       // suplente sai, ausente volta
+      _removeSitOut(r, par.absentName, par.absentUid || null);      // marcador de W.O. dele sai
+      _addFolgaMarker(ft, r, roundIndex, par.subName, cat, par.subUid || null); // suplente volta a folgar
+      // O rastro daquele elo deixa de existir — senão a lista o mostraria de novo e o
+      // botão reverteria o que já foi revertido.
+      var parts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
+      parts.forEach(function (p) {
+        if (!p || typeof p !== 'object') return;
+        var _casa = (par.subUid && p.uid) ? (String(p.uid) === String(par.subUid))
+                                          : ((p.displayName || p.name) === par.subName);
+        if (_casa && p.woSubstituteFor === par.absentName) { delete p.woSubstituteFor; delete p.woSubstituteAt; }
+      });
+    });
+    if (window.showNotification) window.showNotification('W.O. revertido', par.absentName + ' voltou ao grupo.', 'success');
+    _rerender(tId);
+  };
+  if (window.showConfirmDialog) {
+    window.showConfirmDialog('Reverter W.O.?',
+      'Isso desfaz o W.O. de ' + par.absentName + ', tira ' + par.subName + ' do grupo e reabre os jogos.',
+      doRevert, null, { type: 'warning', confirmText: 'Reverter' });
+  } else doRevert();
+}
+
 // Reverter o W.O. (desfaz tudo: substituto sai, ausente volta).
-window._ligaRevertWo = function (tId, roundIndex, groupName) {
+// `absentUid`/`absentName` (opcionais) escolhem QUAL W.O. do grupo desfazer — sem eles,
+// desfaz o do estado atual, que é o comportamento histórico de todo call-site antigo.
+window._ligaRevertWo = function (tId, roundIndex, groupName, absentUid, absentName) {
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) return;
   var round = t.rounds[roundIndex];
   var cat = _groupCategory(group);
   var absent = group.woAbsent;
+  // Alvo explícito: se NÃO é o par do estado, desfaz o elo do rastro e sai por lá.
+  if (absentUid || absentName) {
+    var _ehEstado = (absentUid && group.woAbsentUid)
+      ? (String(absentUid) === String(group.woAbsentUid))
+      : (absentName === group.woAbsent);
+    if (!_ehEstado) return _revertWoDoRastro(t, tId, roundIndex, groupName, absentUid, absentName);
+    absent = group.woAbsent;
+  }
   if (!absent) return;
   // Trava: se o substituto já jogou (algum jogo do grupo com placar lançado /
   // placar ao vivo iniciado), não dá pra reverter — reverter zeraria resultados
@@ -1417,7 +1518,17 @@ window._ligaGroupPending = function (group) { return !!(group && group.subStatus
 // Devolve [{absentName, absentUid, subName, subUid, at}] do mais antigo pro mais novo.
 window._ligaGroupWoList = function (t, group) {
   if (!t || !group) return [];
-  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  // ⚠️ 2.0.57 — O RASTRO VIAJA COM A PESSOA, E ELA NÃO FICA SÓ NO ELENCO.
+  // Ordem do dono (24/ago/2026): _"carol entrou substituindo outro wo anterior e isso
+  // deveria estar registrado no histórico aqui com o nome de quem ela substituiu"_.
+  // `woSubstituteFor` mora na ENTRADA da pessoa — e quem levou W.O. e reativou está na
+  // LISTA DE ESPERA (`standbyParticipants`), não em `participants`. Lendo só o elenco, a
+  // cadeia morria nela e o elo anterior sumia do histórico do grupo. Os três storages da
+  // espera são os mesmos de sempre ([[project_sitout_vs_waitlist_canon]]).
+  var parts = (Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {}))
+    .concat(Array.isArray(t.standbyParticipants) ? t.standbyParticipants : [])
+    .concat(Array.isArray(t.waitlist) ? t.waitlist : [])
+    .filter(function (p) { return p && typeof p === 'object'; });
   var byUid = {};
   parts.forEach(function (p) { if (p && p.uid) byUid[String(p.uid)] = p; });
   var markerUid = {};
@@ -1428,12 +1539,47 @@ window._ligaGroupWoList = function (t, group) {
       if (u && !markerUid[m.p1]) markerUid[m.p1] = String(u);
     });
   });
-  var out = [], seen = {};
+  // ⚠️ 2.0.57 — O UID DO AUSENTE NÃO PODE DEPENDER SÓ DO MARCADOR.
+  // O marcador de W.O. é ESTADO e pode ter saído (v2.0.57: quem reativa pra fila com a
+  // vaga preenchida perde o marcador — caso Carol). Quando ele some, `markerUid` fica
+  // sem a pessoa, o mesmo ausente entra uma vez por UID (pelo estado do grupo, que tem
+  // `woAbsentUid`) e outra por NOME (pela cadeia de traces) — e a pílula DUPLICA na tela.
+  // Foi o que apareceu no print do Grupo A: "Carol Moresco W.O. → Karla Lia" duas vezes.
+  // O mapa nome→uid dos participantes é a segunda fonte, e o dedup abaixo casa os dois
+  // lados: entrada sem uid não cria linha nova quando já existe uma com o mesmo nome.
+  var n2u = _nameUidMap(t) || {};
+  // o mapa canônico cobre o ELENCO; quem está na espera entra por `parts` (acima)
+  parts.forEach(function (p) {
+    var nm = p.displayName || p.name || '';
+    if (nm && p.uid && !n2u[nm]) n2u[nm] = p.uid;
+  });
+  // uid de um ausente: marcador da rodada primeiro (é o mais específico), elenco/espera
+  // depois. As DUAS fontes, sempre — usar só uma duplicou a pílula E parou a cadeia.
+  var _absUidDe = function (nome) { return markerUid[nome] || n2u[nome] || null; };
+  // entrada de participants por uid OU por nome (o fictício não tem uid, e a cadeia dele
+  // morreria em `byUid` — que é indexado só por uid).
+  var _entradaDe = function (uid, nome) {
+    if (uid && byUid[String(uid)]) return byUid[String(uid)];
+    if (!nome) return null;
+    return parts.filter(function (p) { return p && typeof p === 'object' && !p.uid && (p.displayName || p.name) === nome; })[0] || null;
+  };
+  var out = [], seen = {}, porNome = {};
   var push = function (absName, absUid, subName, subUid, at) {
-    var k = absUid ? ('u:' + absUid) : ('n:' + absName);
-    if (!absName || seen[k]) return;
-    seen[k] = 1;
-    out.push({ absentName: absName, absentUid: absUid || null, subName: subName || '', subUid: subUid || null, at: at || '' });
+    if (!absName) return;
+    absUid = absUid || _absUidDe(absName);
+    var kU = absUid ? ('u:' + absUid) : '', kN = 'n:' + absName;
+    if ((kU && seen[kU]) || seen[kN]) return;
+    // já entrou SEM uid e agora chega COM: adota o uid na linha que já existe
+    if (kU && porNome[absName] && !porNome[absName].absentUid) {
+      porNome[absName].absentUid = absUid;
+      seen[kU] = 1;
+      return;
+    }
+    if (kU) seen[kU] = 1;
+    seen[kN] = 1;
+    var linha = { absentName: absName, absentUid: absUid || null, subName: subName || '', subUid: subUid || null, at: at || '' };
+    porNome[absName] = linha;
+    out.push(linha);
   };
   var nomeVivo = function (uid, fb) {
     if (uid && typeof window._nameForUid === 'function') { var v = window._nameForUid(uid); if (v) return v; }
@@ -1446,10 +1592,12 @@ window._ligaGroupWoList = function (t, group) {
     var guard = 0;
     while (cur && cur.woSubstituteFor && guard++ < 10) {
       var absName = cur.woSubstituteFor;
-      var absUid = markerUid[absName] || null;
+      var absUid = _absUidDe(absName);
       push(absName, absUid, nomeVivo(curUid, curName), curUid, cur.woSubstituteAt || '');
       curName = absName; curUid = absUid;
-      cur = absUid ? byUid[absUid] : null;
+      // a cadeia continua no ausente — e ele pode não ter marcador (2.0.57) nem uid
+      // (fictício). Parar aqui era o que sumia com o elo mais antigo (Denise→Carol).
+      cur = _entradaDe(absUid, absName);
     }
   });
   if (group.woAbsent) {
@@ -1620,16 +1768,34 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     // O estado é slot único; a LISTA sai de `_ligaGroupWoList` (traces + cadeia + estado).
     var _woLista = (typeof window._ligaGroupWoList === 'function') ? window._ligaGroupWoList(t, group) : [];
     if (!_woLista.length) _woLista = [{ absentName: group.woAbsent, subName: group.subName || '' }];
+    // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
+    var _woPlayed = (typeof window._matchHasRealPlay === 'function')
+      && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
+    // ⭐ 2.0.57 — UM "REVERTER" POR W.O., COLADO NA PÍLULA DELE (ordem do dono: _"o
+    // reverter wo deveria ser 1 para cada wo dado"_). Antes o botão era um só, no fim da
+    // linha, e desfazia sempre o W.O. do ESTADO — com 3 W.O.s no grupo (print do Grupo A)
+    // não havia como desfazer os outros dois, e o botão solto nem dizia de quem era.
+    // Cada par vira uma unidade "pílula + reverter"; o alvo vai no onclick (uid quando há,
+    // nome pro fictício). Elo encadeado que ainda não pode ser desfeito nasce DESABILITADO
+    // dizendo quem reverter primeiro — botão que falha calado é pior que botão ausente.
     var s2 = _woLista.map(function (par) {
       var _ehAtual = (group.woAbsentUid && par.absentUid) ? (String(par.absentUid) === String(group.woAbsentUid)) : (par.absentName === group.woAbsent);
       var _lblPar = (_ehAtual && group.subIsGuest) ? (_safe(par.subName || group.subName) + ' (Jogador X)') : _safe(par.subName);
       var _busca = window._safeHtml(String(par.absentName || '') + ' ' + String(par.subName || ''));
-      return '<span data-players="' + _busca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(par.absentName) + ' W.O.<br>→ ' + _lblPar + '</span>';
+      var _pill = '<span data-players="' + _busca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(par.absentName) + ' W.O.<br>→ ' + _lblPar + '</span>';
+      var _rev = '';
+      if (manage && !_woPlayed && par.subName) {
+        var _bloq = (typeof window._ligaRevertWoBloqueadoPor === 'function')
+          ? window._ligaRevertWoBloqueadoPor(t, group, par) : '';
+        var _alvo = "'" + tE + "'," + roundIndex + ",'" + gE + "','" + _esc(par.absentUid || '') + "','" + _esc(par.absentName) + "'";
+        _rev = _bloq
+          ? '<button type="button" class="btn btn-outline btn-sm" disabled title="Reverta antes o W.O. de ' + window._safeHtml(_bloq) + ' — o lugar de ' + window._safeHtml(par.absentName) + ' no grupo está ocupado." style="' + poBtnStyle + 'opacity:0.45;cursor:not-allowed;">↩️ Reverter<br>W.O.</button>'
+          : window._woBtnHtml('window._ligaRevertWo(' + _alvo + ')', false,
+              { label: '↩️ Reverter<br>W.O.', title: 'Desfazer o W.O. de ' + par.absentName + ' (' + par.subName + ' sai do grupo)' });
+      }
+      // pílula + seu reverter andam juntos: com vários W.O.s, um botão solto não diria de quem é
+      return '<span style="display:inline-flex;align-items:center;gap:4px;">' + _pill + _rev + '</span>';
     }).join(' ');
-    // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
-    var _woPlayed = (typeof window._matchHasRealPlay === 'function')
-      && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });
-    if (manage && !_woPlayed) s2 += ' ' + window._woBtnHtml("window._ligaRevertWo('" + tE + "'," + roundIndex + ",'" + gE + "')", false, { label: '↩️ Reverter<br>W.O.' });
     return _woBlocoComBotao(_btnNovoWo, s2);  // idem — o Reverter é do W.O. desta pessoa
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher

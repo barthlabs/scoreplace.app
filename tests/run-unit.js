@@ -298,6 +298,10 @@ const SUITES = [
   // identidade lida por NOME (que o strip do save apaga) → chave de irmãos vazia →
   // o link de UM grupo espelhado nos 81 jogos dos 27 grupos.
   'tests/wa-group-por-grupo.test.js',
+  // um "Reverter" para CADA W.O. do grupo (o botão era um só e desfazia sempre o do
+  // estado), a lista sem a pílula duplicada, e o chip do grupo de WhatsApp na mão do
+  // ORGANIZADOR — que quase nunca joga o grupo que precisa montar.
+  'tests/um-reverter-por-wo-e-whats-do-organizador.test.js',
   // Os DOIS chips do rodapé do card ("Combinar jogo" + grupo de whats) são irmãos
   // com GATE COMUM: quebrar o gate derruba os dois DE UMA VEZ e EM SILÊNCIO (todo
   // call site é guardado por `typeof === 'function'`). Nasceu de um relato de
