@@ -68,13 +68,28 @@ try {
     'const r=execSync(\'git log -3 --format=%H -- version.txt\').toString().split(\'\\n\').map(s=>s.trim()).filter(Boolean).filter(x=>x!==h)[0];' +
     'process.stdout.write(execSync(\'git diff --name-only \'+r+\' -- js/\').toString())"',
     { cwd: ROOT }).toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
-  ok(mudados.length > 0, '  → e ela vê ' + mudados.length + ' js alterado(s) nesta leva (não zero — trava vazia)');
+  // ⚠️ "0 js alterados" NÃO é trava vazia — é uma leva sem JS, e ela EXISTE: o bump do iOS
+  // mexe só no `project.pbxproj`. Foi assim que esta asserção reprovou o push da build 245.
+  // O que precisa ser verdade sempre é a BASE não ser o próprio HEAD (aí sim o diff seria
+  // vazio POR CONSTRUÇÃO, que é o defeito). Com JS na leva, o teste vai além e rebaixa um
+  // `?v=` pra ver a trava reprovar.
+  const _base = execSync('node -e "' +
+    'const {execSync}=require(\'child_process\');' +
+    'const h=execSync(\'git rev-parse HEAD\').toString().trim();' +
+    'let b=execSync(\'git merge-base HEAD origin/main\').toString().trim();' +
+    'if(b===h){const r=execSync(\'git log -3 --format=%H -- version.txt\').toString().split(\'\\n\').map(s=>s.trim()).filter(Boolean).filter(x=>x!==h)[0]; if(r) b=r;}' +
+    'process.stdout.write(b)"', { cwd: ROOT }).toString().trim();
+  const _head = execSync('git rev-parse HEAD', { cwd: ROOT }).toString().trim();
+  ok(_base && _base !== _head,
+    '  → a base NUNCA é o próprio HEAD (base ' + _base.slice(0, 8) + ' ≠ head ' + _head.slice(0, 8) + ')');
   const um = mudados.map((f) => new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=[0-9.]+'))
     .map((re) => (original.match(re) || [])[0]).filter(Boolean)[0];
   if (um) {
     fs.writeFileSync(idx, original.replace(um, um.replace(/\?v=[0-9.]+/, '?v=0.0.1')));
     ok(rodar() === 1, '  → e REPROVA quando um js alterado fica com o ?v= velho (o incidente)');
-  } else { ok(false, 'não achei no index.html o ?v= de um js alterado'); }
+  } else {
+    console.log('  ⏭  esta leva não tem js alterado (ex.: bump só do iOS) — nada pra rebaixar');
+  }
 } finally {
   fs.writeFileSync(idx, original);
 }
