@@ -6125,29 +6125,38 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 ? (window._displayNameForUid(_rU, _rN) || _rN) : _rN;
               _stRoster.push({ name: _rD, uid: _rU });
             }
-            if (g.woAbsent && !_stRoster.some(function (r) { return r.name === g.woAbsent; })) {
-              // SEMPRE POR UID QUANDO HOUVER (regra do dono). Duas fontes, nesta ordem:
-              //  1. `g.woAbsentUid`, gravado na aplicação do W.O. (liga-substitution) —
-              //     o caminho estrutural, que não depende de nada ser reencontrado;
-              //  2. o SLOT do marcador de W.O. da rodada (`isSitOut && sitOutReason==='wo'`),
-              //     via `_slotUidsPositional` — a MESMA fonte que a caixa "ficaram de fora"
-              //     usa, então as duas telas mostram a mesma pessoa. Cobre o W.O. já
-              //     aplicado antes de (1) existir: no Confra a Thereza só tinha o uid aqui
-              //     (`p1Uid` do marcador), e sem esta leitura o nome dela abria a ficha com
-              //     uid vazio — ou seja, por NOME, que é o que a regra proíbe.
-              // Sem uid nas duas = nome digitado (fictício): aí sim fica só o nome.
-              var _absUid = g.woAbsentUid || '';
+            // ⭐ 2.0.53 — TODOS os W.O.s do grupo entram na tabela, não só o último.
+            // Ordem do dono (print do Grupo A: 3 substituições — Denise→Carol,
+            // Claudia→Bruna, Carol→Karla — e só a Carol aparecia): _"todos os wos num
+            // grupo devem ser indicados"_. O estado do grupo é slot único; a LISTA é
+            // reconstruída por `_ligaGroupWoList` (traces `woSubstituteFor` + cadeia +
+            // marcadores da rodada, uid-first — a mesma régua canônica de sempre).
+            // Cada ausente entra com o uid; a marca vermelha e o afundar pro fim já
+            // são por uid nos mapas logo abaixo (_woRedU), que leem TODOS os
+            // marcadores da rodada.
+            var _woLista = (typeof window._ligaGroupWoList === 'function') ? window._ligaGroupWoList(t, g) : [];
+            if (!_woLista.length && g.woAbsent) _woLista = [{ absentName: g.woAbsent, absentUid: g.woAbsentUid || null }];
+            _woLista.forEach(function (_par) {
+              if (!_par || !_par.absentName) return;
+              var _jaTem = _stRoster.some(function (r) {
+                if (_par.absentUid && r.uid) return String(r.uid) === String(_par.absentUid);
+                return r.name === _par.absentName;
+              });
+              if (_jaTem) return;
+              var _absUid = _par.absentUid || '';
+              // fallback legado (marca sem uid no helper): o SLOT do marcador da rodada,
+              // mesma fonte da caixa "ficaram de fora" (cobre W.O. anterior ao woAbsentUid).
               if (!_absUid) {
                 (currentRoundData.matches || []).some(function (wm) {
-                  if (!wm || !wm.isSitOut || wm.sitOutReason !== 'wo' || wm.p1 !== g.woAbsent) return false;
+                  if (!wm || !wm.isSitOut || wm.sitOutReason !== 'wo' || wm.p1 !== _par.absentName) return false;
                   var _su = (typeof window._slotUidsPositional === 'function')
                     ? window._slotUidsPositional(wm, 'p1') : (wm.p1Uid || wm.team1Uids);
                   _absUid = (Array.isArray(_su) ? _su[0] : _su) || wm.p1Uid || '';
                   return !!_absUid;
                 });
               }
-              _stRoster.push({ name: g.woAbsent, uid: _absUid || null });
-            }
+              _stRoster.push({ name: _par.absentName, uid: _absUid || null });
+            });
             var _stPlayers = _stRoster.map(function (r) { return r.name; });
             var _gst = window._computeMonarchStandings(
               { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: g.matches },

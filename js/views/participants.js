@@ -3110,7 +3110,7 @@ window._orgSetContactPhone = function (tId, uid, nome) {
         '<label style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:6px;">🎾 Conta letzplay</label>' +
         (_lzProprio
           ? '<p style="margin:0;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já indicou a própria conta: <b style="color:var(--text-bright);">@' + window._safeHtml(_lzAtual) + '</b>. Só ela pode trocá-la, no próprio perfil.</p>'
-          : ('<input id="org-contact-lz-input" class="form-control" autocomplete="off" ' +
+          : ('<input id="org-contact-lz-input" class="form-control" autocomplete="off" oninput="window._orgContactLzDraft(this.value)" ' +
              'placeholder="@usuario no letzplay" value="' + window._safeHtml(_lzAtual ? '@' + _lzAtual : '') + '" ' +
              'style="width:100%;box-sizing:border-box;font-size:0.95rem;">' +
              '<div style="margin-top:6px;font-size:0.72rem;color:var(--text-muted);line-height:1.4;">' +
@@ -3122,80 +3122,194 @@ window._orgSetContactPhone = function (tId, uid, nome) {
     '</div>';
 
   if (typeof showConfirmDialog !== 'function') return;
+  // Rascunho vivo dos campos (2.0.53) — ver o comentário no onConfirm: o diálogo é
+  // removido do DOM antes do callback rodar, então o valor NÃO pode morar só no DOM.
+  window._orgContactDraft = {
+    ddi: _ddiAtual,
+    digits: verificado ? '' : _nacional,
+    lz: _lzProprio ? '' : _lzAtual,
+    telOn: !verificado,
+    lzOn: !_lzProprio,
+  };
   showConfirmDialog('📱 Registrar contato de ' + (nome || 'participante'), corpo, function () {
     var el = document.getElementById('org-contact-phone-input');
     var _ddiEl = document.getElementById('org-contact-phone-ddi');
-    var _ddi = (_ddiEl && _ddiEl.value) || '55';
-    var digits = el ? String(el.value || '').replace(/\D/g, '') : '';
+    // ⛔ 2.0.53 — O DIÁLOGO MORRE ANTES DO CALLBACK. `showConfirmDialog`
+    // (notifications.js) faz `dialog.remove()` e SÓ DEPOIS chama o onConfirm —
+    // getElementById aqui devolvia null, digits saía vazio e o organizador via
+    // "Nada a registrar" com o número DIGITADO na tela (casos Bruna e Fabiana,
+    // 24/ago; medido: users doc sem phone — nenhuma CF chegou a ser chamada).
+    // Os valores vivem num RASCUNHO atualizado a cada tecla (_orgContactDraft,
+    // alimentado pela máscara e pelo oninput do letzplay); o DOM, quando ainda
+    // existir, continua mandando.
+    var _draft = window._orgContactDraft || {};
+    var _ddi = (_ddiEl && _ddiEl.value) || _draft.ddi || '55';
+    var digits = el ? String(el.value || '').replace(/\D/g, '') : String(_draft.digits || '');
     // letzplay (2.0.50): o campo pode nem existir (celular verificado sem campo de
     // telefone; @ próprio da pessoa trava a parte do letzplay).
     var lzEl = document.getElementById('org-contact-lz-input');
-    var lzVal = lzEl ? String(lzEl.value || '').trim().replace(/^@+/, '') : '';
-    var lzMudou = !!lzEl && !!lzVal && lzVal.toLowerCase() !== _lzAtual.toLowerCase();
+    var lzVal = lzEl ? String(lzEl.value || '').trim().replace(/^@+/, '') : String(_draft.lz || '');
+    var lzMudou = (!!lzEl || !!_draft.lzOn) && !!lzVal && lzVal.toLowerCase() !== _lzAtual.toLowerCase();
 
-    // O celular virou OPCIONAL (dá pra registrar só o letzplay) — mas número COMEÇADO
-    // tem que estar completo: meio número salvo é pior que nada. O mínimo não é 10
-    // cravado: Portugal e Chile têm 9. Quem diz a última palavra é o servidor (toE164).
-    var telTenta = !!el && digits.length > 0;
-    var _minimo = (_ddi === '55') ? 10 : 6;
-    if (telTenta && digits.length < _minimo) {
-      if (typeof showNotification === 'function') {
-        showNotification('Número incompleto',
-          (_ddi === '55') ? 'Digite DDD + número do celular.' : 'Digite o número completo do país escolhido.', 'warning');
-      }
-      return;
-    }
-    if (!telTenta && !lzMudou) {
-      if (typeof showNotification === 'function') showNotification('Nada a registrar', 'Preencha o celular ou a conta letzplay.', 'info');
-      return;
-    }
-    if (typeof showNotification === 'function') showNotification('Registrando…', 'Salvando o contato de ' + (nome || '') + '.', 'info');
-    var _falhou = function (err) {
-      var msg = (err && (err.message || err.code)) || 'erro';
-      if (typeof showAlertDialog === 'function') showAlertDialog('Não deu pra registrar', String(msg), null, { type: 'error' });
-      else if (typeof showNotification === 'function') showNotification('Não deu pra registrar', String(msg), 'error');
-    };
-    if (telTenta) {
-      firebase.functions().httpsCallable('setParticipantContactPhone')({
-        tournamentId: String(tId), uid: String(uid), phone: digits, country: String(_ddi),
-      }).then(function (res) {
-        var r = (res && res.data) || {};
-        // O cache local acompanha na hora — senão o botão continua "sem contato" até o
-        // próximo carregamento e parece que não salvou.
-        if (window._userProfileCache && window._userProfileCache[uid]) {
-          window._userProfileCache[uid].phone = r.phone || ('+' + _ddi + digits);
-          window._userProfileCache[uid].phoneCountry = String(_ddi);
-          window._userProfileCache[uid].phoneSource = 'organizer';
-        }
-        // `jaEra` = botão apertado com o mesmo número — não houve registro nem aviso.
-        if (!r.jaEra && typeof showNotification === 'function') {
-          showNotification('Contato registrado', (nome || 'A pessoa') + ' foi avisada de que você registrou o celular dela.', 'success');
-        }
-        if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
-      }).catch(_falhou);
-    }
-    if (lzMudou) {
-      firebase.functions().httpsCallable('setParticipantLetzplay')({
-        tournamentId: String(tId), uid: String(uid), handle: lzVal,
-      }).then(function (res) {
-        var r = (res && res.data) || {};
-        if (window._userProfileCache && window._userProfileCache[uid]) {
-          window._userProfileCache[uid].letzplayHandle = r.handle || lzVal;
-          window._userProfileCache[uid].letzplaySource = 'organizer';
-        }
-        if (!r.jaEra && typeof showNotification === 'function') {
-          showNotification('letzplay registrado', '@' + (r.handle || lzVal) + ' ficou como a conta letzplay de ' + (nome || 'participante') + ' — a pessoa foi avisada.', 'success');
-        }
-        if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
-      }).catch(_falhou);
-    }
+    window._orgContactCommit(tId, uid, nome, {
+      ddi: _ddi, digits: digits, telTenta: (!!el || !!_draft.telOn) && digits.length > 0,
+      lzVal: lzVal, lzMudou: lzMudou,
+    });
   }, null, { confirmText: 'Registrar', cancelText: 'Cancelar', type: 'info', maxWidth: '460px' });
+};
+
+// ── PONTO ÚNICO da gravação (2.0.53): o diálogo E o bloco da ficha chamam AQUI ──
+// Valida (número começado tem que estar completo; nada preenchido avisa) e chama as
+// DUAS CFs de procedência (setParticipantContactPhone / setParticipantLetzplay).
+// Extraído do onConfirm do diálogo — duas cópias divergiriam ([[feedback_unify_dual_entry_points]]).
+window._orgContactCommit = function (tId, uid, nome, o) {
+  o = o || {};
+  var _ddi = String(o.ddi || '55');
+  var digits = String(o.digits || '');
+  var telTenta = !!o.telTenta;
+  var lzVal = String(o.lzVal || '');
+  var lzMudou = !!o.lzMudou;
+  // O celular é OPCIONAL (dá pra registrar só o letzplay) — mas número COMEÇADO
+  // tem que estar completo: meio número salvo é pior que nada. O mínimo não é 10
+  // cravado: Portugal e Chile têm 9. Quem diz a última palavra é o servidor (toE164).
+  var _minimo = (_ddi === '55') ? 10 : 6;
+  if (telTenta && digits.length < _minimo) {
+    if (typeof showNotification === 'function') {
+      showNotification('Número incompleto',
+        (_ddi === '55') ? 'Digite DDD + número do celular.' : 'Digite o número completo do país escolhido.', 'warning');
+    }
+    return false;
+  }
+  if (!telTenta && !lzMudou) {
+    if (typeof showNotification === 'function') showNotification('Nada a registrar', 'Preencha o celular ou a conta letzplay.', 'info');
+    return false;
+  }
+  if (typeof showNotification === 'function') showNotification('Registrando…', 'Salvando o contato de ' + (nome || '') + '.', 'info');
+  var _falhou = function (err) {
+    var msg = (err && (err.message || err.code)) || 'erro';
+    if (typeof showAlertDialog === 'function') showAlertDialog('Não deu pra registrar', String(msg), null, { type: 'error' });
+    else if (typeof showNotification === 'function') showNotification('Não deu pra registrar', String(msg), 'error');
+  };
+  if (telTenta) {
+    firebase.functions().httpsCallable('setParticipantContactPhone')({
+      tournamentId: String(tId), uid: String(uid), phone: digits, country: String(_ddi),
+    }).then(function (res) {
+      var r = (res && res.data) || {};
+      // O cache local acompanha na hora — senão o botão continua "sem contato" até o
+      // próximo carregamento e parece que não salvou.
+      if (window._userProfileCache && window._userProfileCache[uid]) {
+        window._userProfileCache[uid].phone = r.phone || ('+' + _ddi + digits);
+        window._userProfileCache[uid].phoneCountry = String(_ddi);
+        window._userProfileCache[uid].phoneSource = 'organizer';
+      }
+      // `jaEra` = botão apertado com o mesmo número — não houve registro nem aviso.
+      if (!r.jaEra && typeof showNotification === 'function') {
+        showNotification('Contato registrado', (nome || 'A pessoa') + ' foi avisada de que você registrou o celular dela.', 'success');
+      }
+      if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+    }).catch(_falhou);
+  }
+  if (lzMudou) {
+    firebase.functions().httpsCallable('setParticipantLetzplay')({
+      tournamentId: String(tId), uid: String(uid), handle: lzVal,
+    }).then(function (res) {
+      var r = (res && res.data) || {};
+      if (window._userProfileCache && window._userProfileCache[uid]) {
+        window._userProfileCache[uid].letzplayHandle = r.handle || lzVal;
+        window._userProfileCache[uid].letzplaySource = 'organizer';
+      }
+      if (!r.jaEra && typeof showNotification === 'function') {
+        showNotification('letzplay registrado', '@' + (r.handle || lzVal) + ' ficou como a conta letzplay de ' + (nome || 'participante') + ' — a pessoa foi avisada.', 'success');
+      }
+      if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
+    }).catch(_falhou);
+  }
+  return true;
+};
+
+// ── 2.0.53 · CONTATO DIRETO NA FICHA DO PARTICIPANTE (só organizador) ──────────
+// Ordem do dono (24/ago/2026): _"ao clicar no nome do participante já poderia abrir logo
+// abaixo do nome os campos para telefone e letzplay para ja colocar ai e salvar no perfil
+// como organizador. só para o organizador."_
+// O bloco entra no hero da ficha (_openPlayerProfile, tournaments-analytics.js). Os
+// inputs ficam VIVOS no overlay (sem o buraco do showConfirmDialog que remove o DOM
+// antes do callback); a gravação é o MESMO _orgContactCommit do diálogo.
+window._ppoOrgContactHtml = function (t, uid, prof, nome) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!t || !uid || !cu || uid === cu.uid) return '';
+  if (!(typeof window._canManagePresence === 'function' && window._canManagePresence(t, cu))) return '';
+  var _sh = window._safeHtml || function (s) { return String(s || ''); };
+  var atual = String((prof && prof.phone) || '');
+  var verificado = atual.replace(/\D/g, '').length >= 8 && (!prof || prof.phoneSource !== 'organizer');
+  var ddi = String((prof && prof.phoneCountry) || '55').replace(/\D/g, '') || '55';
+  var soDig = atual.replace(/\D/g, '');
+  var nacional = (soDig.indexOf(ddi) === 0 && soDig.length > ddi.length + 5) ? soDig.slice(ddi.length) : soDig;
+  var valorIni = (typeof window._phoneMaskFor === 'function') ? window._phoneMaskFor(nacional, ddi) : nacional;
+  var lzAtual = String((prof && prof.letzplayHandle) || '');
+  var lzProprio = !!lzAtual && String((prof && prof.letzplaySource) || '') !== 'organizer';
+
+  var telHtml = verificado
+    ? '<div style="font-size:0.76rem;color:var(--text-muted);">✅ Celular verificado por SMS: <b style="color:var(--text-bright);">+' + _sh(ddi) + ' ' + _sh(valorIni) + '</b> — só a própria pessoa troca.</div>'
+    : ('<div style="display:flex;gap:6px;align-items:center;">' +
+        '<select id="ppo-contact-ddi" class="form-control" aria-label="DDI" style="width:auto;min-width:0;flex:0 0 auto;font-size:0.82rem;padding:8px 4px;">' +
+          ((typeof window._phoneCountryOptionsHtml === 'function') ? window._phoneCountryOptionsHtml(ddi) : '<option value="55">🇧🇷 +55</option>') +
+        '</select>' +
+        '<input id="ppo-contact-phone" class="form-control" inputmode="numeric" autocomplete="off" ' +
+          'oninput="window._ppoContactMask()" placeholder="celular (só números)" value="' + _sh(valorIni) + '" ' +
+          'style="flex:1;min-width:0;font-size:0.9rem;">' +
+      '</div>');
+  var lzHtml = lzProprio
+    ? '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:6px;">✅ letzplay: <b style="color:var(--text-bright);">@' + _sh(lzAtual) + '</b> (indicado pela própria pessoa).</div>'
+    : ('<input id="ppo-contact-lz" class="form-control" autocomplete="off" placeholder="@usuario no letzplay" ' +
+       'value="' + _sh(lzAtual ? '@' + lzAtual : '') + '" style="width:100%;box-sizing:border-box;font-size:0.9rem;margin-top:6px;">');
+  var btn = (verificado && lzProprio) ? '' :
+    '<button type="button" class="btn btn-outline btn-sm" onclick="window._ppoOrgContactSave(\'' + _sh(t.id) + '\',\'' + _sh(uid) + '\',\'' + _sh(nome || '') + '\',\'' + _sh(lzAtual) + '\',' + (verificado ? 'false' : 'true') + ')" ' +
+    'style="margin-top:8px;font-size:0.76rem;padding:6px 16px;color:#4ade80;border-color:rgba(16,185,129,0.4);">💾 Registrar como organizador</button>';
+
+  return '<div id="ppo-org-contact" style="margin:10px auto 0;max-width:340px;text-align:left;background:rgba(245,158,11,0.06);border:1px dashed rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;">' +
+    '<div style="font-size:0.68rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📱 Contato (organizador)</div>' +
+    telHtml + lzHtml + btn +
+    '<div style="font-size:0.66rem;color:var(--text-muted);margin-top:6px;line-height:1.35;">Vai pro perfil com a marca de que <b>você</b> registrou; a pessoa é avisada e pode corrigir.</div>' +
+  '</div>';
+};
+window._ppoContactMask = function () {
+  var inp = document.getElementById('ppo-contact-phone');
+  var sel = document.getElementById('ppo-contact-ddi');
+  if (!inp) return;
+  var ddi = (sel && sel.value) || '55';
+  var max = (typeof window._phoneDigitsFor === 'function') ? window._phoneDigitsFor(ddi) : 11;
+  var d = String(inp.value || '').replace(/\D/g, '');
+  if (max > 0 && d.length > max) d = d.slice(0, max);
+  var novo = (typeof window._phoneMaskFor === 'function') ? window._phoneMaskFor(d, ddi) : d;
+  if (inp.value !== novo) {
+    inp.value = novo;
+    try { inp.setSelectionRange(novo.length, novo.length); } catch (e) {}
+  }
+};
+window._ppoOrgContactSave = function (tId, uid, nome, lzAtual, telOn) {
+  var el = document.getElementById('ppo-contact-phone');
+  var sel = document.getElementById('ppo-contact-ddi');
+  var lzEl = document.getElementById('ppo-contact-lz');
+  var digits = el ? String(el.value || '').replace(/\D/g, '') : '';
+  var lzVal = lzEl ? String(lzEl.value || '').trim().replace(/^@+/, '') : '';
+  window._orgContactCommit(tId, uid, nome, {
+    ddi: (sel && sel.value) || '55',
+    digits: digits,
+    telTenta: !!telOn && !!el && digits.length > 0,
+    lzVal: lzVal,
+    lzMudou: !!lzEl && !!lzVal && lzVal.toLowerCase() !== String(lzAtual || '').toLowerCase(),
+  });
 };
 
 // Máscara ao vivo do campo de contato: o organizador digita SÓ NÚMEROS e a pontuação
 // aparece sozinha, no formato do país escolhido. Ordem do dono (22/ago): "a máscara do
 // número deve ser preenchida automaticamente e o organizador digita apenas números".
 // O formato vem de window._phoneMaskFor (auth.js) — a mesma lista de países do login.
+// 2.0.53: espelho do rascunho pro campo do letzplay (mesmo motivo da máscara acima).
+window._orgContactLzDraft = function (v) {
+  if (window._orgContactDraft) window._orgContactDraft.lz = String(v == null ? '' : v).trim().replace(/^@+/, '');
+};
+
 window._orgContactPhoneMask = function () {
   var inp = document.getElementById('org-contact-phone-input');
   var sel = document.getElementById('org-contact-phone-ddi');
@@ -3205,6 +3319,9 @@ window._orgContactPhoneMask = function () {
   var d = String(inp.value || '').replace(/\D/g, '');
   if (max > 0 && d.length > max) d = d.slice(0, max);
   var novo = (typeof window._phoneMaskFor === 'function') ? window._phoneMaskFor(d, ddi) : d;
+  // 2.0.53: o rascunho acompanha cada tecla — é dele que o confirm lê depois que o
+  // showConfirmDialog remove o DOM (ver _orgSetContactPhone).
+  if (window._orgContactDraft) { window._orgContactDraft.digits = d; window._orgContactDraft.ddi = ddi; }
   if (inp.value !== novo) {
     inp.value = novo;
     // Digitação é sempre no fim do campo; sem isto o cursor pulava pro começo a cada

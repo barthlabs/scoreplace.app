@@ -287,7 +287,9 @@ sec(function () {
   const BR = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
   ok(BR.indexOf('não existe `woAbsentUid`') === -1,
      'o comentário do box não pode mais afirmar que woAbsentUid não existe');
-  ok(BR.indexOf('var _absUid = g.woAbsentUid') !== -1,
+  // 2.0.53: o append virou lista (_ligaGroupWoList, uid-first) — a âncora acompanha,
+  // o invariante é o mesmo: o uid do ausente decide antes de qualquer nome.
+  ok(BR.indexOf('_ligaGroupWoList') !== -1 && BR.indexOf("var _absUid = _par.absentUid || ''") !== -1,
      'e o renderer continua lendo o uid ANTES de qualquer nome');
 })();
 

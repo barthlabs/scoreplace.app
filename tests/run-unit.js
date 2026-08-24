@@ -117,6 +117,9 @@ const SUITES = [
   // ⭐ Jogador X ocupa a VAGA na tabela do grupo, ZERADO (2.0.52, G2 do Confra) — a
   // linha aparece mas o ghost segue sem pontuar (jogo e PA), mesmo quando joga.
   'tests/jogador-x-ocupa-a-vaga-zerado.test.js',
+  // ⭐ TODOS os W.O.s do grupo indicados (2.0.53) — o estado é slot único; a lista
+  // completa (traces + cadeia + estado) sai de _ligaGroupWoList.
+  'tests/todos-os-wos-do-grupo-indicados.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.
   // O ranking de derrotados que decide a REPESCAGEM era a QUARTA cópia da lista de critérios
   // e a classificação dos não-classificados a QUINTA. Na quarta: um critério FANTASMA

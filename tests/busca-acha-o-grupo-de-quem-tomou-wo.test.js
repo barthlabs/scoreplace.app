@@ -38,14 +38,16 @@ const liga = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.j
 const bracket = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
 
 // ── 1. a pílula do W.O. ──────────────────────────────────────────────────────────────
+// 2.0.53: a pílula virou LISTA (uma por W.O., _ligaGroupWoList) — âncora acompanha;
+// o invariante segue: TODA pílula declara data-players com os dois nomes.
 ok('a pílula "W.O. → substituto" declara data-players',
-  /var s2 = '<span data-players="' \+ _woBusca/.test(liga),
+  /'<span data-players="' \+ _busca/.test(liga),
   'sem isso o box do grupo some quando se busca quem saiu');
 ok('  → e carrega os DOIS nomes (quem saiu E quem entrou)',
-  /_woBusca = window\._safeHtml\(String\(group\.woAbsent \|\| ''\) \+ ' ' \+ String\(group\.subName \|\| ''\)\)/.test(liga),
+  /_busca = window\._safeHtml\(String\(par\.absentName \|\| ''\) \+ ' ' \+ String\(par\.subName \|\| ''\)\)/.test(liga),
   'o dono quer achar o grupo tanto pelo nome de quem saiu quanto pelo de quem entrou');
 ok('  → e é marcada como não-jogo, pro "Só meus jogos" não apagá-la',
-  /var s2 = '<span data-players="[\s\S]{0,60}data-my-match="1"/.test(liga));
+  /'<span data-players="[\s\S]{0,60}data-my-match="1"/.test(liga));
 
 // ── 2. a linha da classificação (o caso do torneio encerrado) ────────────────────────
 ok('a linha de quem levou W.O. na classificação declara data-players',

@@ -87,6 +87,9 @@ window._RELEASE_NOTES_HTML = (function () {
         // ── ciclo 2.0.51 ───────────────────────────────────────────
         // Veredito do dono na 249: "um piscar de tela PRETA é bem mais aceitável".
         '<li><b>⬛ Nenhum quadro branco sobrou:</b> o fundo do app agora é escuro desde o primeiro instante — na web e no aplicativo — então qualquer transição (abrir, atualizar, destravar o celular) no máximo dá um <b>piscar escuro</b>, nunca uma tela branca. E se um carregamento emperrar de verdade, o app <b>se recarrega sozinho</b> uma vez antes de pedir qualquer coisa a você.</li>' +
+        // ── ciclo 2.0.53 ───────────────────────────────────────────
+        '<li><b>🔁 Todos os W.O.s do grupo ficam indicados:</b> grupo com mais de uma substituição mostrava só a última pílula — agora cada W.O. aparece ("fulana W.O. → sicrana"), inclusive a cadeia (quem entrou e depois também levou W.O.), e todo mundo que saiu por W.O. aparece na classificação do grupo, afundado no fim com a tag.</li>' +
+        '<li><b>📱 Registrar contato funciona de novo — e também pela ficha:</b> o diálogo de registrar celular/letzplay dizia "Nada a registrar" com o número digitado na tela (o diálogo era removido antes de ler os campos) — corrigido. E abrindo a ficha de um participante, o organizador agora tem os campos de celular e letzplay logo abaixo do nome, salvando direto no perfil com a marca de quem registrou (a pessoa é avisada).</li>' +
         // ── ciclo 2.0.52 ───────────────────────────────────────────
         // (2.0.51 é da leva mobile — chão escuro/fallback/telemetria, itens dela.)
         '<li><b>👤 A vaga do Jogador X aparece na classificação do grupo:</b> quando um W.O. é completado com Jogador X, a tabela agora mostra a vaga dele — zerada — em vez de sumir com a linha e subir todo mundo um degrau. Ele continua sem pontuar e fora do sorteio; só a vaga fica visível, na posição que os critérios dão a uma linha zerada.</li>' +

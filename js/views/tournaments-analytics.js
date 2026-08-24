@@ -145,6 +145,16 @@ window._openPlayerProfile = function(playerName, opts) {
         '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#f1f5f9);margin-top:10px;">' + _sh(name) + '</div>' +
         (isFriend && city ? '<div style="font-size:0.8rem;color:var(--text-muted);margin-top:3px;">📍 '+_sh(city)+'</div>' : '') +
         sportsHtml +
+        // 2.0.53 (dono): "ao clicar no nome do participante já poderia abrir logo abaixo
+        // do nome os campos para telefone e letzplay... só para o organizador." O gate
+        // (org/co-org do torneio de onde a ficha abriu, nunca a própria pessoa) mora
+        // dentro de _ppoOrgContactHtml; a gravação é o mesmo _orgContactCommit do
+        // diálogo de contato, com a mesma procedência (CFs + aviso à pessoa).
+        (function () {
+          if (typeof window._ppoOrgContactHtml !== 'function' || !opts.tournamentId) return '';
+          var _tOrg = (window.AppStore && window.AppStore.tournaments || []).find(function (x) { return x && String(x.id) === String(opts.tournamentId); });
+          return _tOrg ? window._ppoOrgContactHtml(_tOrg, playerUid || uid, profile, name) : '';
+        })() +
       '</div>' +
       // histórico compartilhado
       sharedHtml +

@@ -1388,6 +1388,68 @@ window._ligaRevertWo = function (tId, roundIndex, groupName) {
 // True quando o grupo está aguardando aceite de convite (trava lançamento).
 window._ligaGroupPending = function (group) { return !!(group && group.subStatus === 'pending'); };
 
+// ── 2.0.53 · TODOS OS W.O.s DO GRUPO, NÃO SÓ O ÚLTIMO ────────────────────────
+// Ordem do dono (24/ago/2026, print do Grupo A na mão — 3 substituições, UMA pílula):
+// _"apliquei 2 wo num grupo e cade eles indicados. todos os wos num grupo devem ser
+// indicados."_
+//
+// O estado do grupo (`woAbsent`/`subName`) é um SLOT ÚNICO — cada W.O. novo atropela a
+// indicação do anterior. Mas o rastro completo NUNCA se perdeu: quem entra por W.O.
+// carrega `woSubstituteFor` na entrada de participants (e a CADEIA continua — o ausente
+// de hoje pode ter entrado ontem por W.O. de outro: Denise→Carol→Karla), e o uid do
+// ausente mora no marcador de W.O. da rodada. Este helper reconstrói a lista:
+//   1. pra cada membro ATUAL do grupo, segue a cadeia de `woSubstituteFor` (limitada,
+//      à prova de ciclo);
+//   2. o estado atual do grupo cobre suplente SEM trace (Jogador X / convidado sem
+//      conta, que não entram em participants).
+// uid do ausente: `woAbsentUid` (estado) ou o marcador — nome só decide sem uid (regra
+// canônica, [[project_wo_lives_in_four_places]]).
+// Devolve [{absentName, absentUid, subName, subUid, at}] do mais antigo pro mais novo.
+window._ligaGroupWoList = function (t, group) {
+  if (!t || !group) return [];
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var byUid = {};
+  parts.forEach(function (p) { if (p && p.uid) byUid[String(p.uid)] = p; });
+  var markerUid = {};
+  (t.rounds || []).forEach(function (r) {
+    ((r && r.matches) || []).forEach(function (m) {
+      if (!m || !m.isSitOut || m.sitOutReason !== 'wo' || !m.p1) return;
+      var u = (Array.isArray(m.team1Uids) && m.team1Uids[0]) || m.p1Uid || null;
+      if (u && !markerUid[m.p1]) markerUid[m.p1] = String(u);
+    });
+  });
+  var out = [], seen = {};
+  var push = function (absName, absUid, subName, subUid, at) {
+    var k = absUid ? ('u:' + absUid) : ('n:' + absName);
+    if (!absName || seen[k]) return;
+    seen[k] = 1;
+    out.push({ absentName: absName, absentUid: absUid || null, subName: subName || '', subUid: subUid || null, at: at || '' });
+  };
+  var nomeVivo = function (uid, fb) {
+    if (uid && typeof window._nameForUid === 'function') { var v = window._nameForUid(uid); if (v) return v; }
+    return fb || '';
+  };
+  (group.playersUids || []).forEach(function (u, i) {
+    var curUid = u ? String(u) : null;
+    var curName = (group.players || [])[i] || '';
+    var cur = curUid ? byUid[curUid] : null;
+    var guard = 0;
+    while (cur && cur.woSubstituteFor && guard++ < 10) {
+      var absName = cur.woSubstituteFor;
+      var absUid = markerUid[absName] || null;
+      push(absName, absUid, nomeVivo(curUid, curName), curUid, cur.woSubstituteAt || '');
+      curName = absName; curUid = absUid;
+      cur = absUid ? byUid[absUid] : null;
+    }
+  });
+  if (group.woAbsent) {
+    push(group.woAbsent, group.woAbsentUid || markerUid[group.woAbsent] || null,
+      group.subName || '', group.subUid || null, '');
+  }
+  out.sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); });
+  return out;
+};
+
 // ── v1.7.92 · O BOTÃO DE DAR W.O. É UM SÓ, NO MESMO LUGAR, EM TODO ESTADO ──────
 // Ordem do dono, com o print do R1 Grupo A na mão: _"esse botao wo esta diferente de
 // todos os outros e em outra posicao. ele precisa estar na mesma posicao (com ou sem
@@ -1538,12 +1600,22 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     // `data-my-match="1"`: pílula de estado não é JOGO, então o toggle "Só meus jogos" não
     // pode apagá-la — mesma decisão dos cards de organização e dos chips de quem ficou de
     // fora. [[feedback_unify_dual_entry_points]]
-    var _woBusca = window._safeHtml(String(group.woAbsent || '') + ' ' + String(group.subName || ''));
     // `data-fb-marker="1"`: a pílula DECLARA de qual grupo a pessoa era — não é card de jogo.
     // Sem isso, buscar outra pessoa do MESMO grupo escondia a pílula e a linha de estado do
     // W.O. inteira (ela é o único `[data-players]` de lá). Marcador nunca se esconde; só
     // empurra "tem gente aqui" pros ancestrais quando casa. [[project_wo_lives_in_four_places]]
-    var s2 = '<span data-players="' + _woBusca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(group.woAbsent) + ' W.O.<br>→ ' + lbl + '</span>';
+    //
+    // ⭐ 2.0.53 — TODOS os W.O.s do grupo, não só o último. Ordem do dono (print do Grupo A
+    // com 3 substituições e UMA pílula): _"todos os wos num grupo devem ser indicados"_.
+    // O estado é slot único; a LISTA sai de `_ligaGroupWoList` (traces + cadeia + estado).
+    var _woLista = (typeof window._ligaGroupWoList === 'function') ? window._ligaGroupWoList(t, group) : [];
+    if (!_woLista.length) _woLista = [{ absentName: group.woAbsent, subName: group.subName || '' }];
+    var s2 = _woLista.map(function (par) {
+      var _ehAtual = (group.woAbsentUid && par.absentUid) ? (String(par.absentUid) === String(group.woAbsentUid)) : (par.absentName === group.woAbsent);
+      var _lblPar = (_ehAtual && group.subIsGuest) ? (_safe(par.subName || group.subName) + ' (Jogador X)') : _safe(par.subName);
+      var _busca = window._safeHtml(String(par.absentName || '') + ' ' + String(par.subName || ''));
+      return '<span data-players="' + _busca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(par.absentName) + ' W.O.<br>→ ' + _lblPar + '</span>';
+    }).join(' ');
     // Some quando os jogos do grupo já começaram — W.O. não é mais reversível.
     var _woPlayed = (typeof window._matchHasRealPlay === 'function')
       && Array.isArray(group.matches) && group.matches.some(function (m) { return window._matchHasRealPlay(m); });

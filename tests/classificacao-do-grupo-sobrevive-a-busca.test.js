@@ -29,7 +29,9 @@ const liga = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.j
 // ── 1. quem declara sem ser jogo se declara MARCADOR ────────────────────────────────
 ok(/_woBuscaLinha = \(_isRed \|\| _isAmb\)[\s\S]{0,200}data-fb-marker="1"/.test(bracket),
   'a linha da classificação (W.O.) é marcador');
-ok(/var s2 = '<span data-players="' \+ _woBusca \+ '" data-my-match="1" data-fb-marker="1"/.test(liga),
+// 2.0.53: a pílula virou LISTA (uma por W.O., _ligaGroupWoList) — a âncora acompanha;
+// o invariante é o mesmo: toda pílula declara data-players + data-fb-marker.
+ok(/'<span data-players="' \+ _busca \+ '" data-my-match="1" data-fb-marker="1"/.test(liga),
   'a pílula "🔁 W.O. → substituto" é marcador');
 // não perder a regra anterior: o grupo tem de continuar sendo ACHADO por esses dois
 ok(/_woBuscaLinha = \(_isRed \|\| _isAmb\)[\s\S]{0,200}data-players="/.test(bracket),
