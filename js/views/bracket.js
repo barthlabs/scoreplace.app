@@ -6177,6 +6177,18 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _woRedU = {}, _woRed = {};
             if (g.woAbsentUid) _woRedU[String(g.woAbsentUid)] = 1;
             else if (g.woAbsent) _woRed[g.woAbsent] = 1;
+            // ⛔ 2.0.58 — A TAG SAI DA LISTA CANÔNICA, POR UID.
+            // MEDIDO no doc de produção (Grupo A, 24/ago): a Carol perdeu a tag "W.O." na
+            // tabela. As duas fontes daqui — o ESTADO do grupo (slot único) e os MARCADORES
+            // da rodada — não cobrem quem está no histórico sem ser nenhum dos dois: o
+            // marcador dela saiu (2.0.57, quem volta pra fila) e o estado só guarda um. A
+            // lista já é a fonte única de "todos os W.O.s deste grupo" e agora carrega uid
+            // (2.0.58), então é dela que a marca vem — nome só pra quem não tem conta.
+            _woLista.forEach(function (_p) {
+              if (!_p) return;
+              if (_p.absentUid) _woRedU[String(_p.absentUid)] = 1;
+              else if (_p.absentName) _woRed[_p.absentName] = 1;
+            });
             (((rounds[currentRound - 1] || {}).matches) || []).forEach(function (mm) {
               if (!mm || !mm.isSitOut || mm.sitOutReason !== 'wo') return;
               var _us = [].concat(mm.team1Uids || [], mm.p1Uid || []).filter(Boolean);

@@ -202,6 +202,32 @@ sec('cadeia atravessa a lista de espera', function () {
   ok(html.indexOf('Denise Mamesso W.O.') !== -1, 'e a pílula dele está na tela');
 });
 
+// ── 5c. O RASTRO É POR UID — nome NÃO pode ser o que sustenta a cadeia ──────────
+// Ordem do dono (24/ago/2026, sem meio-termo): _"sempre uid porra. nunca por nome."_
+// MEDIDO no doc de produção antes deste conserto: a cadeia parava na Carol porque o elo
+// guardava NOME (`woSubstituteFor`) e a reconversão nome→uid falhava — o save strippa o
+// nome de entrada com uid, e o marcador de W.O. (a outra ponte) some quando a pessoa volta
+// pra fila. Agora o elo guarda `woSubstituteForUid` e a leitura anda por uid.
+sec('a cadeia anda por uid', function () {
+  const { t, g } = torneio();
+  comoOrganizador(t);
+  // doc do jeito que o save deixa: NENHUMA entrada tem nome, e o marcador não existe
+  t.participants.forEach((p) => { delete p.displayName; delete p.name; });
+  t.participants.push({ uid: 'u_denise' });
+  t.rounds[0].matches = t.rounds[0].matches.filter((m) => !m.isSitOut);
+  t.standbyParticipants = [{ uid: 'u_carol', woSubstituteFor: 'Denise Mamesso', woSubstituteForUid: 'u_denise', woSubstituteAt: '2026-08-24T11:00:00Z' }];
+  // e os elos carregam o uid (é o que a 2.0.58 grava)
+  t.participants.filter((p) => p.uid === 'u_karla')[0].woSubstituteForUid = 'u_carol';
+  t.participants.filter((p) => p.uid === 'u_bruna')[0].woSubstituteForUid = 'u_claudia';
+  W._nameForUid = () => '';   // cache de perfis FRIO — nada resolve por nome
+  const lista = W._ligaGroupWoList(t, g);
+  const uids = lista.map((x) => x.absentUid);
+  ok(uids.indexOf('u_denise') !== -1, 'o elo mais antigo aparece sem nenhum nome no doc — uids: ' + uids.join(' · '));
+  ok(uids.indexOf('u_carol') !== -1 && uids.indexOf('u_claudia') !== -1, 'e os outros dois também');
+  ok(lista.every((x) => !!x.absentUid), 'TODA linha tem uid — nenhuma sobrevive só de rótulo');
+  ok(lista.length === 3, 'três elos, sem duplicar — veio ' + lista.length);
+});
+
 // ── 6. WHATSAPP DO GRUPO: o ORGANIZADOR vê o botão mesmo sem jogar ──────────────
 sec('whatsapp pro organizador', function () {
   const { t, g } = torneio();

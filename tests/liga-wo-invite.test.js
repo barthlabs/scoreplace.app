@@ -111,6 +111,14 @@ function mkT() {
   ok(g.matches.every(function (m) { return (m.team1.concat(m.team2)).indexOf('B') === -1; }), 'B saiu de TODOS os jogos do grupo');
   ok(_curT.monarchWaitlist._default_.indexOf('E') === -1 && _curT.monarchWaitlist._default_.indexOf('F') !== -1,
     'E saiu da lista de espera (entrou como sorteado); F continua');
+  // ⛔ 2.0.58 — O RASTRO GRAVA UID. Ordem do dono: _"sempre uid. nunca por nome."_
+  // O `woSubstituteFor` guardava só o NOME do ausente, e era a leitura que tentava
+  // reconverter — falhando quando o nome não está no doc (o save o strippa) ou quando o
+  // marcador de W.O. já saiu. Sem este assert, a gravação regride sem ninguém ver: a
+  // LEITURA continuaria verde por causa das pontes de legado.
+  const _eE = _curT.participants.filter(function (p) { return p && p.uid === 'uE'; })[0];
+  ok(_eE && _eE.woSubstituteForUid === 'uB', 'o rastro do substituto guarda o UID do ausente [' + (_eE && _eE.woSubstituteForUid) + ']');
+  ok(_eE && _eE.woSubstituteFor === 'B', 'e o nome fica só como rótulo, ao lado do uid');
   const ivF = _curT.ligaSubInvites.filter(function (iv) { return iv.inviteeUid === 'uF'; })[0];
   ok(ivF.status === 'superseded', 'convite do F supersedido pelo aceite do E');
   ok(_notifs.some(function (n) { return n.uid === 'uF' && /preenchida/.test(n.data.message); }), 'F avisado que a vaga foi preenchida');

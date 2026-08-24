@@ -89,11 +89,20 @@ function _getGroup(t, roundIndex, groupName) {
 // no elenco do grupo; depois disso `players.indexOf(nome)` não acha mais nada e o uid se
 // perde em silêncio. Foi essa ordem que já mordeu na v1.6.88 (slot com uid null).
 // Devolve '' pra quem não tem conta (fictício/nome digitado) — aí o nome é tudo que há.
-function _woAbsentUidOf(group, name) {
+// uid de quem levou o W.O. O SLOT do grupo manda (identidade canônica). Quando o slot não
+// tem uid — doc legado, sorteado antes de os grupos gravarem `playersUids` — cai na ponte
+// nome→uid, que é a MESMA conversão que `_addWoMarker` já fazia pro marcador (`_uidDoNome`).
+// ⛔ 2.0.58: sem essa segunda linha, `g.woAbsentUid` ficava vazio em doc legado e TUDO que
+// depende dele nascia por nome — o convite, o rastro do substituto e a tag da classificação.
+// A ponte é lida UMA vez, na entrada, e vira uid dali pra frente; nunca se decide por nome
+// depois. [[project_uid_identity_canon_locked]]
+function _woAbsentUidOf(group, name, t) {
   if (!group || !name) return '';
   var i = (group.players || []).indexOf(name);
   var u = (i >= 0) ? (group.playersUids || [])[i] : null;
-  return u ? String(u) : '';
+  if (u) return String(u);
+  var viaNome = t ? _uidDoNome(t, name) : null;
+  return viaNome ? String(viaNome) : '';
 }
 function _groupCategory(group) {
   var m = (group && group.matches || []).filter(function (x) { return x && x.category; })[0];
@@ -237,11 +246,40 @@ function _mesmoSitOut(m, name, uid) {
   if (us.length) return uid ? us.indexOf(String(uid)) !== -1 : false;
   return m.p1 === name;
 }
+// ⛔ 2.0.58 · O RASTRO TEM QUE POUSAR NA ENTRADA QUE FICA NO DOC.
+// Os três fluxos de substituição montam uma CÓPIA do suplente, carimbam o rastro nela e
+// só a inserem em `participants` se ele ainda não estiver lá. Quem JÁ ERA DO ELENCO caía
+// no `if (!ja)` e a cópia carimbada era JOGADA FORA: o rastro nunca existia, e o histórico
+// do grupo perdia aquele elo pra sempre (é o que apagava substituições da lista). Este
+// helper aplica as marcas na entrada REAL — a que sobrevive ao save.
+function _marcaRastroWo(entry, absentName, absentUid) {
+  if (!entry || typeof entry !== 'object' || !absentName) return;
+  entry.ligaActive = true;
+  entry.woSubstituteFor = absentName;                       // rótulo, pra quem não tem conta
+  if (absentUid) entry.woSubstituteForUid = String(absentUid); // identidade (uid manda)
+  entry.woSubstituteAt = new Date().toISOString();
+}
+// Acha no elenco a entrada da pessoa — por uid quando há; nome só pro fictício.
+function _entradaNoElenco(ft, uid, nome) {
+  var arr = Array.isArray(ft.participants) ? ft.participants : [];
+  for (var i = 0; i < arr.length; i++) {
+    var p = arr[i];
+    if (!p || typeof p !== 'object') continue;
+    if (uid && p.uid) { if (String(p.uid) === String(uid)) return p; continue; }
+    if (!uid && !p.uid && _wlDisplay(p) === nome) return p;
+  }
+  return null;
+}
 // Semente name→uid pra quem chama sem uid em mãos. É a ÚNICA resolução por nome aceita:
 // converter um rótulo em identidade uma vez, na entrada — nunca decidir por nome depois.
 function _uidDoNome(t, name) {
   if (!name) return null;
   var u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {})[name] : null;
+  // 2.0.58: o mapa canônico mora em bracket-logic.js — quando ele não está carregado, a
+  // semente cai no mapa LOCAL deste módulo em vez de devolver null. Devolver null aqui
+  // significa "esta pessoa não tem uid", e é mentira quando o elenco tem: o W.O. inteiro
+  // nascia por nome a partir daí (estado do grupo, convite e rastro do substituto).
+  if (!u) { try { u = (_nameUidMap(t) || {})[name] || null; } catch (e) { u = null; } }
   return u || null;
 }
 function _removeSitOut(round, name, uid) {
@@ -518,7 +556,7 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
     if (!g || !r) return;
 
     // (1) marca o W.O. da rodada (0 pts) — igual ao fluxo antigo
-    var _absU = _woAbsentUidOf(g, absentName); // antes de qualquer mutação do elenco
+    var _absU = _woAbsentUidOf(g, absentName, ft); // antes de qualquer mutação do elenco
     _addWoMarker(ft, r, roundIndex, absentName, _cat, _absU);
     g.woAbsent = absentName;
     g.woDest = 'inactive';   // v1.7.59: destino único — W.O. desativa
@@ -535,16 +573,19 @@ window._ligaApplyWo = function (tId, roundIndex, groupName, absentName) {
       // participants (e já saiu da espera), o mapa não o acha e o slot fica com uid null:
       // o jogo passaria a apontar pra ninguém. Bug pego pelo teste.
       if (_subEntry && typeof _subEntry === 'object') {
-        _subEntry.ligaActive = true;
-        _subEntry.woSubstituteFor = absentName;          // rastro: entrou por W.O., não por sorteio
-        _subEntry.woSubstituteAt = new Date().toISOString();
+        // ⛔ 2.0.58 — O RASTRO GUARDA O **UID**. Ordem do dono: _"sempre uid. nunca por
+        // nome."_ O `woSubstituteFor` (nome) nasceu rótulo e por isso a cadeia do histórico
+        // dependia de reconverter nome→uid na leitura — que falha quando o nome não está
+        // gravado (o save strippa nome de entrada com uid) e quando o marcador de W.O. já
+        // saiu. Foi o que apagou a Denise Mamesso do histórico do Grupo A. O nome fica só
+        // como rótulo de exibição pra quem NÃO TEM conta.
+        _marcaRastroWo(_subEntry, absentName, _absU);
         if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
-        var _jaNoElenco = ft.participants.some(function (p) {
-          if (!p || typeof p !== 'object') return false;
-          if (_subEntry.uid && p.uid) return p.uid === _subEntry.uid;
-          return _wlDisplay(p) === _subName;
-        });
-        if (!_jaNoElenco) ft.participants.push(_subEntry);
+        // quem JÁ é do elenco não recebe cópia nova — a marca vai na entrada REAL, senão
+        // ela morre junto com a cópia descartada (ver _marcaRastroWo).
+        var _jaEntry = _entradaNoElenco(ft, _subEntry.uid, _subName);
+        if (_jaEntry) _marcaRastroWo(_jaEntry, absentName, _absU);
+        else ft.participants.push(_subEntry);
       }
       window._removeFromWaitlist(ft, _subName);          // sai da fila (assumiu)
       _removeSitOut(r, _subName, (_subEntry && _subEntry.uid) || null);                        // não é mais folga — vai jogar
@@ -922,7 +963,7 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
   _commitLiga(tId, function (ft) {
     var g = _getGroup(ft, roundIndex, groupName); var r = ft.rounds && ft.rounds[roundIndex];
     if (!g || !r) return;
-    var _absU2 = _woAbsentUidOf(g, absentName); // antes de qualquer mutação do elenco
+    var _absU2 = _woAbsentUidOf(g, absentName, ft); // antes de qualquer mutação do elenco
     _addWoMarker(ft, r, roundIndex, absentName, cat, _absU2);
     g.woAbsent = absentName; g.woDest = 'inactive';   // v1.7.59: destino único
     if (_absU2) g.woAbsentUid = _absU2; else delete g.woAbsentUid;
@@ -939,16 +980,11 @@ window._ligaSubstituteNow = function (tId, roundIndex, groupName, absentName, su
       });
     } catch (e) {}
     if (!_entry) _entry = { uid: subUid || undefined, displayName: subName, name: subName };
-    _entry.ligaActive = true;
-    _entry.woSubstituteFor = absentName;
-    _entry.woSubstituteAt = new Date().toISOString();
+    _marcaRastroWo(_entry, absentName, _absU2);   // 2.0.58 — o rastro é por UID
     if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
-    var _ja = ft.participants.some(function (p) {
-      if (!p || typeof p !== 'object') return false;
-      if (_entry.uid && p.uid) return p.uid === _entry.uid;
-      return _wlDisplay(p) === subName;
-    });
-    if (!_ja) ft.participants.push(_entry);
+    var _jaE = _entradaNoElenco(ft, _entry.uid, subName);
+    if (_jaE) _marcaRastroWo(_jaE, absentName, _absU2);   // já era do elenco: marca a entrada REAL
+    else ft.participants.push(_entry);
     if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, subName);
     _removeSitOut(r, subName, subUid || null);
     _rewriteSlot(g, absentName, subName, true, ft);
@@ -1069,7 +1105,7 @@ window._ligaInviteSelected = function (tId, roundIndex, groupName, absentName) {
   _commitLiga(tId, function (ft) {
     var g = _getGroup(ft, roundIndex, groupName);
     if (g) {
-      var _absU3 = _woAbsentUidOf(g, absentName);
+      var _absU3 = _woAbsentUidOf(g, absentName, ft);
       g.woDest = 'inactive'; g.woAbsent = absentName;
       if (_absU3) g.woAbsentUid = _absU3; else delete g.woAbsentUid;
     }
@@ -1119,7 +1155,7 @@ window._ligaFillGuest = function (tId, roundIndex, groupName, absentName, guestN
     if (!g || !r) return;
     // ⚠️ ANTES do _rewriteSlot: ele troca o ausente pelo Jogador X no elenco, e depois
     // disso o uid dele não é mais encontrável pelo nome.
-    var _absU4 = _woAbsentUidOf(g, absentName);
+    var _absU4 = _woAbsentUidOf(g, absentName, ft);
     _addWoMarker(ft, r, roundIndex, absentName, cat, _absU4);
     _rewriteSlot(g, absentName, gname, true, t);
     _addGhost(ft, gname);
@@ -1167,15 +1203,20 @@ window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, i
     if (!Array.isArray(ft.ligaSubInvites)) ft.ligaSubInvites = [];
     // Cancela qualquer convite pendente anterior do mesmo grupo.
     ft.ligaSubInvites = ft.ligaSubInvites.filter(function (iv) { return !(iv.groupName === groupName && iv.roundIndex === roundIndex && iv.status === 'pending'); });
+    // ⛔ 2.0.58 — o uid do ausente é resolvido AQUI, antes de mutar o elenco, e viaja
+    // DENTRO do convite. O convite dizia só o NOME de quem faltou; quem aceitasse depois
+    // teria de reconverter nome→uid pra gravar o rastro — a conversão tardia que o dono
+    // proibiu ("sempre uid, nunca por nome").
+    var _absU5 = _woAbsentUidOf(g, absentName, ft);
     list.forEach(function (li) {
       if (ft.ligaSubInvites.some(function (iv) { return iv.id === li.id; })) return; // idempotente por id
       ft.ligaSubInvites.push({
         id: li.id, roundIndex: roundIndex, groupName: groupName, absentName: absentName,
+        absentUid: _absU5 || null,
         category: cat || null, inviteeUid: li.uid, inviteeName: li.name,
         byUid: _byUid, byName: _byName, status: 'pending', createdAt: _createdAt
       });
     });
-    var _absU5 = _woAbsentUidOf(g, absentName); // ANTES de mutar: o uid sai do elenco do grupo
     _addWoMarker(ft, r, roundIndex, absentName, cat, _absU5); // W.O. já vale (ausente = 0)
 
     g.woAbsent = absentName; g.subStatus = 'pending'; g.pendingInviteId = list[0].id; delete g.subName; delete g.subIsGuest;
@@ -1252,16 +1293,19 @@ window._ligaAcceptSub = function (tId, inviteId) {
       });
     } catch (e) {}
     if (!_subEntry) _subEntry = { uid: fiv.inviteeUid || undefined, displayName: _invName, name: _invName };
-    _subEntry.ligaActive = true;
-    _subEntry.woSubstituteFor = _absName;
-    _subEntry.woSubstituteAt = new Date().toISOString();
+    // ⛔ 2.0.58 — o suplente também é UID. A entrada copiada da espera pode vir SÓ COM NOME
+    // (a fila guarda texto pra quem foi inscrito à mão, e docs antigos guardam nome puro);
+    // sem carimbar o uid do convite aqui, tudo o que vem depois — achar a entrada dele no
+    // elenco, gravar o rastro, apontar `g.subUid` — cai no nome e erra com homônimo.
+    if (!_subEntry.uid && fiv.inviteeUid) _subEntry.uid = fiv.inviteeUid;
+    // 2.0.58 — o rastro é por UID. O do ausente vem do estado do grupo (gravado quando o
+    // W.O. foi aplicado) ou do próprio convite, que passa a carregá-lo.
+    var _absUAceite = g.woAbsentUid || fiv.absentUid || iv.absentUid || null;
+    _marcaRastroWo(_subEntry, _absName, _absUAceite);
     if (!Array.isArray(ft.participants)) ft.participants = ft.participants ? Object.values(ft.participants) : [];
-    var _ja = ft.participants.some(function (p) {
-      if (!p || typeof p !== 'object') return false;
-      if (_subEntry.uid && p.uid) return p.uid === _subEntry.uid;
-      return _wlDisplay(p) === _invName;
-    });
-    if (!_ja) ft.participants.push(_subEntry);
+    var _jaS = _entradaNoElenco(ft, _subEntry.uid, _invName);
+    if (_jaS) _marcaRastroWo(_jaS, _absName, _absUAceite);   // já era do elenco: marca a entrada REAL
+    else ft.participants.push(_subEntry);
     // sai da LISTA DE ESPERA — dos TRÊS storages, não só do monarchWaitlist (ele assumiu;
     // a espera não pode continuar contando com ele pra formar grupo novo).
     if (typeof window._removeFromWaitlist === 'function') window._removeFromWaitlist(ft, _invName);
@@ -1548,14 +1592,35 @@ window._ligaGroupWoList = function (t, group) {
   // O mapa nome→uid dos participantes é a segunda fonte, e o dedup abaixo casa os dois
   // lados: entrada sem uid não cria linha nova quando já existe uma com o mesmo nome.
   var n2u = _nameUidMap(t) || {};
-  // o mapa canônico cobre o ELENCO; quem está na espera entra por `parts` (acima)
+  // o mapa canônico cobre o ELENCO e lê `displayName`/`name` — mas o save STRIPPA o nome
+  // de toda entrada com uid ([[project_uid_identity_canon_locked]]), então num torneio real
+  // ele resolve por NOME VIVO (perfil em cache) ou não resolve. Quem está na espera nem
+  // entra lá. Aqui completamos com as duas coisas, pra espera também.
   parts.forEach(function (p) {
+    if (!p.uid) return;
     var nm = p.displayName || p.name || '';
-    if (nm && p.uid && !n2u[nm]) n2u[nm] = p.uid;
+    if (nm && !n2u[nm]) n2u[nm] = p.uid;
+    if (typeof window._nameForUid === 'function') {
+      var vivo = String(window._nameForUid(p.uid) || '').trim();
+      if (vivo && !n2u[vivo]) n2u[vivo] = p.uid;
+    }
   });
-  // uid de um ausente: marcador da rodada primeiro (é o mais específico), elenco/espera
-  // depois. As DUAS fontes, sempre — usar só uma duplicou a pílula E parou a cadeia.
-  var _absUidDe = function (nome) { return markerUid[nome] || n2u[nome] || null; };
+  // ⛔ 2.0.58 — O UID DO AUSENTE PRECISA DE FONTE DURÁVEL, NÃO DE CACHE.
+  // MEDIDO no doc de produção (Grupo A, 24/ago): a Carol saía da lista SEM UID e a cadeia
+  // parava nela — a Denise Mamesso, que ela substituiu em 09/ago, sumia do histórico. As
+  // fontes de nome→uid eram frágeis demais: o MARCADOR de W.O. dela foi removido (é o que
+  // a 2.0.57 faz com quem volta pra fila) e o mapa por nome depende do cache de perfis
+  // (assíncrono) porque o doc não guarda nome em entrada com uid.
+  // A ordem agora vai do durável pro circunstancial:
+  //   1. `woSubstituteForUid` — gravado junto com o rastro (2.0.58). Não depende de nada.
+  //   2. o ESTADO do grupo (`woAbsent`/`woAbsentUid`) — dado do próprio grupo.
+  //   3. o marcador de W.O. da rodada — some quando a pessoa volta pra fila.
+  //   4. o mapa por nome — só resolve com o perfil já carregado.
+  var _absUidDe = function (nome, uidDoRastro) {
+    if (uidDoRastro) return String(uidDoRastro);
+    if (group.woAbsentUid && group.woAbsent === nome) return String(group.woAbsentUid);
+    return markerUid[nome] || n2u[nome] || null;
+  };
   // entrada de participants por uid OU por nome (o fictício não tem uid, e a cadeia dele
   // morreria em `byUid` — que é indexado só por uid).
   var _entradaDe = function (uid, nome) {
@@ -1568,13 +1633,18 @@ window._ligaGroupWoList = function (t, group) {
     if (!absName) return;
     absUid = absUid || _absUidDe(absName);
     var kU = absUid ? ('u:' + absUid) : '', kN = 'n:' + absName;
-    if ((kU && seen[kU]) || seen[kN]) return;
-    // já entrou SEM uid e agora chega COM: adota o uid na linha que já existe
+    if (kU && seen[kU]) return;
+    // ⚠️ A ADOÇÃO DO UID VEM ANTES DO CORTE POR NOME (2.0.58). Ela estava DEPOIS, e o
+    // `seen[kN]` devolvia cedo: a linha da Carol — criada sem uid pela cadeia — nunca
+    // recebia o uid que chegava logo em seguida pelo estado do grupo. Ficava `uid:null`,
+    // e é o uid que a classificação usa pra pintar a tag "W.O." (por isso a tag dela
+    // sumiu da tabela). Ordem errada de dois ifs; o resto do desenho estava certo.
     if (kU && porNome[absName] && !porNome[absName].absentUid) {
       porNome[absName].absentUid = absUid;
       seen[kU] = 1;
       return;
     }
+    if (seen[kN]) return;
     if (kU) seen[kU] = 1;
     seen[kN] = 1;
     var linha = { absentName: absName, absentUid: absUid || null, subName: subName || '', subUid: subUid || null, at: at || '' };
@@ -1592,7 +1662,8 @@ window._ligaGroupWoList = function (t, group) {
     var guard = 0;
     while (cur && cur.woSubstituteFor && guard++ < 10) {
       var absName = cur.woSubstituteFor;
-      var absUid = _absUidDe(absName);
+      // `woSubstituteForUid` (2.0.58) é o que mantém a cadeia de pé sem cache nem marcador
+      var absUid = _absUidDe(absName, cur.woSubstituteForUid);
       push(absName, absUid, nomeVivo(curUid, curName), curUid, cur.woSubstituteAt || '');
       curName = absName; curUid = absUid;
       // a cadeia continua no ausente — e ele pode não ter marcador (2.0.57) nem uid
