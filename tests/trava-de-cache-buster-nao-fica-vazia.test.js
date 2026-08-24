@@ -43,6 +43,17 @@ ok(!/rev-parse ' \+ rel \+ '\^'/.test(src),
   '  → e NÃO o pai dele: isso varre a leva anterior junto e acusa quem já está certo');
 
 // ── 3. o comportamento, no repo de verdade ──────────────────────────────────────────
+// ⚠️ SÓ COM `.git`. O `hosting.predeploy` roda a suíte na CÓPIA EXTRAÍDA (`git archive` pra
+// /tmp), que não é repositório — e a 1ª versão deste teste morreu lá, ABORTANDO o deploy
+// (medido: predeploy exit 1, prod ficou uma versão atrás do main). A parte estática acima
+// vale em qualquer lugar; esta aqui pergunta antes. Mesmo cuidado que o próprio script tem.
+const _temGit = (function () {
+  try { execSync('git rev-parse --is-inside-work-tree', { cwd: ROOT, stdio: 'pipe' }); return true; }
+  catch (e) { return false; }
+})();
+if (!_temGit) {
+  console.log('  ⏭  sem .git (cópia extraída do deploy) — a parte de comportamento não roda aqui');
+} else {
 // Roda a trava como o pre-push roda. Verde agora (o index está bumpado); e vermelha quando o
 // buster de um js ALTERADO é rebaixado — que é exatamente o incidente.
 const idx = path.join(ROOT, 'index.html');
@@ -68,6 +79,7 @@ try {
   fs.writeFileSync(idx, original);
 }
 ok(fs.readFileSync(idx, 'utf8') === original, 'o teste devolveu o index.html como estava');
+}
 
 console.log(fail === 0
   ? '\n✅ trava-de-cache-buster-nao-fica-vazia: OK (' + pass + ')'
