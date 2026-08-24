@@ -228,6 +228,42 @@ sec('a cadeia anda por uid', function () {
   ok(lista.length === 3, 'três elos, sem duplicar — veio ' + lista.length);
 });
 
+// ── 5d. DESFEZ, APAGA O RASTRO — nos dois caminhos, e casando por uid ──────────
+// Reverter sem tirar o rastro deixa o elo vivo no histórico: ele some da tela só porque a
+// pessoa saiu do grupo, e volta como W.O. fantasma se ela reentrar por qualquer caminho.
+sec('reverter apaga o rastro', function () {
+  // (a) caminho do RASTRO
+  const a = torneio();
+  comoOrganizador(a.t);
+  W._ligaRevertWo('T', 0, 'R1 Grupo A', 'u_claudia', 'Claudia Kohl Pessoal');
+  const bruna = a.t.participants.filter((p) => p.uid === 'u_bruna')[0];
+  ok(!bruna.woSubstituteFor && !bruna.woSubstituteForUid && !bruna.woSubstituteAt,
+     'rastro do elo revertido some inteiro (nome, uid e data)');
+
+  // (b) caminho do ESTADO
+  const b = torneio();
+  comoOrganizador(b.t);
+  b.t.participants.filter((p) => p.uid === 'u_karla')[0].woSubstituteForUid = 'u_carol';
+  W._ligaRevertWo('T', 0, 'R1 Grupo A', 'u_carol', 'Carol Moresco');
+  const karla = b.t.participants.filter((p) => p.uid === 'u_karla')[0];
+  ok(!karla.woSubstituteFor && !karla.woSubstituteForUid,
+     'reverter o W.O. do estado também limpa o rastro do substituto');
+  const bruna2 = b.t.participants.filter((p) => p.uid === 'u_bruna')[0];
+  ok(bruna2.woSubstituteFor === 'Claudia Kohl Pessoal', 'e não encosta no rastro do OUTRO W.O.');
+
+  // (c) homônimo: quem casa é o uid, não o nome
+  const c = torneio();
+  comoOrganizador(c.t);
+  const karlaC = c.t.participants.filter((p) => p.uid === 'u_karla')[0];
+  karlaC.woSubstituteForUid = 'u_carol';
+  // uma xará da Carol, com uid diferente, substituída por outra pessoa
+  c.t.participants.push({ uid: 'u_outra', displayName: 'Outra', woSubstituteFor: 'Carol Moresco', woSubstituteForUid: 'u_carol_xara' });
+  W._ligaRevertWo('T', 0, 'R1 Grupo A', 'u_carol', 'Carol Moresco');
+  const outra = c.t.participants.filter((p) => p.uid === 'u_outra')[0];
+  ok(outra.woSubstituteFor === 'Carol Moresco',
+     'o rastro da XARÁ (mesmo nome, outro uid) fica intacto — o uid é que decide');
+});
+
 // ── 6. WHATSAPP DO GRUPO: o ORGANIZADOR vê o botão mesmo sem jogar ──────────────
 sec('whatsapp pro organizador', function () {
   const { t, g } = torneio();

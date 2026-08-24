@@ -259,6 +259,32 @@ function _marcaRastroWo(entry, absentName, absentUid) {
   if (absentUid) entry.woSubstituteForUid = String(absentUid); // identidade (uid manda)
   entry.woSubstituteAt = new Date().toISOString();
 }
+// ⛔ 2.0.59 · DESFEZ O W.O., APAGA O RASTRO — e casa por UID.
+// Espelho de `_marcaRastroWo`: reverter uma substituição sem tirar o rastro deixa o elo
+// vivo no histórico do grupo (a lista o reconstrói dali), e o botão de reverter voltaria a
+// oferecer desfazer o que já foi desfeito. Varre o ELENCO e os storages da ESPERA, porque a
+// entrada viaja entre eles ([[project_sitout_vs_waitlist_canon]]). O par (substituto ↔
+// ausente) é conferido por uid dos DOIS lados; nome só decide onde não existe uid — o
+// fictício, a ressalva do dono.
+function _limpaRastroWo(ft, subUid, subName, absentUid, absentName) {
+  var listas = [ft.participants, ft.standbyParticipants, ft.waitlist];
+  listas.forEach(function (arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function (p) {
+      if (!p || typeof p !== 'object' || !p.woSubstituteFor) return;
+      // é ESTE substituto?
+      var ehSub = (subUid && p.uid) ? (String(p.uid) === String(subUid))
+                                    : (!subUid && !p.uid && (p.displayName || p.name) === subName);
+      if (!ehSub) return;
+      // e o rastro aponta pra ESTE ausente?
+      var ehAusente = (absentUid && p.woSubstituteForUid)
+        ? (String(p.woSubstituteForUid) === String(absentUid))
+        : (p.woSubstituteFor === absentName);
+      if (!ehAusente) return;
+      delete p.woSubstituteFor; delete p.woSubstituteForUid; delete p.woSubstituteAt;
+    });
+  });
+}
 // Acha no elenco a entrada da pessoa — por uid quando há; nome só pro fictício.
 function _entradaNoElenco(ft, uid, nome) {
   var arr = Array.isArray(ft.participants) ? ft.participants : [];
@@ -1473,13 +1499,7 @@ function _revertWoDoRastro(t, tId, roundIndex, groupName, absentUid, absentName)
       _addFolgaMarker(ft, r, roundIndex, par.subName, cat, par.subUid || null); // suplente volta a folgar
       // O rastro daquele elo deixa de existir — senão a lista o mostraria de novo e o
       // botão reverteria o que já foi revertido.
-      var parts = Array.isArray(ft.participants) ? ft.participants : Object.values(ft.participants || {});
-      parts.forEach(function (p) {
-        if (!p || typeof p !== 'object') return;
-        var _casa = (par.subUid && p.uid) ? (String(p.uid) === String(par.subUid))
-                                          : ((p.displayName || p.name) === par.subName);
-        if (_casa && p.woSubstituteFor === par.absentName) { delete p.woSubstituteFor; delete p.woSubstituteAt; }
-      });
+      _limpaRastroWo(ft, par.subUid, par.subName, par.absentUid, par.absentName);
     });
     if (window.showNotification) window.showNotification('W.O. revertido', par.absentName + ' voltou ao grupo.', 'success');
     _rerender(tId);
@@ -1527,6 +1547,10 @@ window._ligaRevertWo = function (tId, roundIndex, groupName, absentUid, absentNa
         _rewriteSlot(g, g.subName, _abs, true, t); // substituto → ausente de volta
         if (g.subIsGuest) _removeGhost(ft, g.subName);
         else _addFolgaMarker(ft, r, roundIndex, g.subName, cat, g.subUid || null); // folga volta pro substituto real
+        // 2.0.59 — e o RASTRO do substituto some junto. Sem isto ele fica órfão na entrada
+        // dela: some da tela só porque `_rewriteSlot` a tirou do grupo, e RESSUSCITA como
+        // um W.O. fantasma no dia em que ela voltar a esse grupo por qualquer caminho.
+        _limpaRastroWo(ft, g.subUid, g.subName, g.woAbsentUid, _abs);
       }
       _removeSitOut(r, _abs, g.woAbsentUid || null); // remove o marcador de W.O.
       // cancela convites pendentes do grupo

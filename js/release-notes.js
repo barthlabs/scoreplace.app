@@ -91,6 +91,10 @@ window._RELEASE_NOTES_HTML = (function () {
         // ── ciclo 2.0.51 ───────────────────────────────────────────
         // Veredito do dono na 249: "um piscar de tela PRETA é bem mais aceitável".
         '<li><b>⬛ Nenhum quadro branco sobrou:</b> o fundo do app agora é escuro desde o primeiro instante — na web e no aplicativo — então qualquer transição (abrir, atualizar, destravar o celular) no máximo dá um <b>piscar escuro</b>, nunca uma tela branca. E se um carregamento emperrar de verdade, o app <b>se recarrega sozinho</b> uma vez antes de pedir qualquer coisa a você.</li>' +
+        // ── ciclo 2.0.59 ───────────────────────────────────────────
+        // (só rastro interno: reverter deixava a marca de substituição pendurada. Sem tela
+        // nova — mas MUDA o que aparece na lista de W.O. depois de reverter, então tem item.)
+        '<li><b>↩️ Reverter um W.O. apaga mesmo o registro dele:</b> a marca de "fulana entrou no lugar de sicrana" ficava guardada depois de reverter e podia reaparecer como um W.O. fantasma se a pessoa voltasse àquele grupo. Agora o registro sai junto com a reversão — e sem encostar nos outros W.O.s do mesmo grupo, nem no de um xará.</li>' +
         // ── ciclo 2.0.58 ───────────────────────────────────────────
         '<li><b>🕓 O histórico de W.O. do grupo ficou completo:</b> quem entrou no lugar de alguém e depois também levou W.O. deixava o elo anterior invisível — a tabela do grupo pulava uma pessoa e a lista mostrava um "quem substituiu quem" pela metade. Agora a corrente inteira aparece, cada um com a sua linha na classificação e a marca de W.O., mesmo quando a pessoa já voltou para a lista de espera.</li>' +
         // ── ciclo 2.0.57 ───────────────────────────────────────────
