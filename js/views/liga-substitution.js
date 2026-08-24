@@ -144,8 +144,18 @@ function _rewriteSlot(group, fromName, toName, clearResults, t) {
   // outra pessoa — o jogo/elenco tem que apontar pro uid DELE (ou null se convidado sem
   // conta). Sem isto, o slot mantinha o uid do ausente e a classificação por uid confundia
   // o substituto com o ausente. toUid resolvido pelo perfil do substituto.
-  var _toUid = null;
-  try { var _n2u = (t && typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null; if (_n2u && Object.prototype.hasOwnProperty.call(_n2u, toName)) _toUid = _n2u[toName] || null; } catch (e) {}
+  var _toUid = null, _fromUid = null;
+  try {
+    var _n2u = (t && typeof window._buildNameToUid === 'function') ? window._buildNameToUid(t) : null;
+    if (_n2u && Object.prototype.hasOwnProperty.call(_n2u, toName)) _toUid = _n2u[toName] || null;
+    if (_n2u && Object.prototype.hasOwnProperty.call(_n2u, fromName)) _fromUid = _n2u[fromName] || null;
+  } catch (e) {}
+  // O uid do ausente pode já não estar no mapa (ele sai do elenco antes em alguns fluxos) —
+  // o slot do grupo ainda o guarda, e é dele que o retrato congelado precisa pra casar.
+  if (!_fromUid && Array.isArray(group.players)) {
+    var _fi = group.players.indexOf(fromName);
+    if (_fi >= 0 && (group.playersUids || [])[_fi]) _fromUid = group.playersUids[_fi];
+  }
   function _rw(names, uids) {
     if (!Array.isArray(names)) return names;
     return names.map(function (n, i) {
@@ -181,6 +191,24 @@ function _rewriteSlot(group, fromName, toName, clearResults, t) {
     if (clearResults) { m.winner = null; m.scoreP1 = null; m.scoreP2 = null; m.sets = null; delete m.pendingResult; delete m.draw; }
   });
   if (Array.isArray(group.players)) group.players = _rw(group.players, group.playersUids);
+  // ⭐ A POSIÇÃO PUBLICADA TAMBÉM É HERDADA (W.O. pós-jogos, caso Adele — 24/ago/2026).
+  //
+  // Grupo que TERMINOU tem a ordem gravada em `classifCongelada` ([[project_classificacao_
+  // publicada_congela]]), e a tela LÊ o retrato. Trocar só `group.players` deixava a
+  // suplente FORA do retrato — e quem não está nele vai pro fim da tabela (ordem 9999),
+  // o contrário de "a que entra herda a posição" (ordem do dono, 22/ago/2026, caso
+  // Juliana Reis → Erika Muller: a Juliana era a 4ª, a Erika virou a 4ª).
+  //
+  // A régua de identidade é a canônica ([[project_wo_lives_in_four_places]], "quem manda
+  // é a MARCA"): entrada do retrato COM uid só casa por uid; entrada SEM uid (doc legado,
+  // nome digitado) casa por nome. Os números não mudam — o retrato congela a ORDEM.
+  if (Array.isArray(group.classifCongelada)) {
+    group.classifCongelada.forEach(function (l) {
+      if (!l) return;
+      var hit = l.uid ? (!!_fromUid && String(l.uid) === String(_fromUid)) : (l.name === fromName);
+      if (hit) { l.name = toName; l.uid = _toUid || null; }
+    });
+  }
 }
 // ── 2.0.39 · O MARCADOR DE FOLGA/W.O. TAMBÉM SE RESOLVE POR uid ──────────────
 // Ordem do dono: _"nada por nome. tudo por uid a menos que seja nome digitado pelo
@@ -306,6 +334,16 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
   var _woPenVal = (typeof window._woAdvPenalty === 'function') ? window._woAdvPenalty(t) : 0;
 
   var html = '<div style="font-size:0.85rem;opacity:0.9;margin-bottom:12px;"><b>' + _safe(absentName) + '</b> leva W.O. — 0 pts nesta rodada' + (_woPenVal ? ' e ' + _woPenVal + ' nos Pontos Avançados' : '') + '.</div>';
+
+  // W.O. pós-jogos (2.0.50): se o grupo já tem placar lançado, o organizador precisa
+  // saber ANTES de confirmar o que muda e o que não muda — a sistemática da 2.0.15:
+  // jogo disputado fica como está (nome e placar); quem entra herda vaga e posição.
+  var _temPlacar = (group.matches || []).some(_jogoJaTemPlacar);
+  if (_temPlacar) {
+    html += '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:0.74rem;color:#93c5fd;">' +
+      '📌 Este grupo já tem <b>jogos disputados</b>. Eles <b>não mudam</b>: nome e placar de quem jogou ficam como estão. Quem assumir herda a <b>vaga e a posição</b> de ' + _safe(absentName) + ' na classificação e nos jogos futuros.' +
+    '</div>';
+  }
 
   // Quem assume — mostrado ANTES de confirmar: o organizador tem que saber quem entra.
   if (sub) {
@@ -1442,7 +1480,20 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   // (`group.woAbsent`) — é ele que fica vinculado à pessoa, como o dono pediu.
   // v1.7.92: UMA definição só (era montado aqui em btn-micro e lá embaixo em btn-sm) e
   // entra SEMPRE por ÚLTIMO, via `_woBlocoComBotao` — ver o comentário do helper.
-  var _btnNovoWo = _woDeclareBtn("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", manage && !gDone);
+  // ⭐ 2.0.50 — O BOTÃO NÃO SOME QUANDO O GRUPO TERMINA (caso Adele, 24/ago/2026).
+  //
+  // Ordem do dono: _"preciso do botao do WO mesmo depois das partidas realizadas. os
+  // placares e resultados continuam ali, mas a suplente toma o lugar de quem teve o WO
+  // decretado"_ (W.O. disciplinar — atitude antidesportiva). A sistemática é a da 2.0.15
+  // (Juliana Reis): jogo com placar é intocável (`_jogoJaTemPlacar` em `_rewriteSlot`);
+  // quem entra herda a vaga E a posição (elenco + retrato congelado).
+  //
+  // Com o grupo CONCLUÍDO o botão é só de ORGANIZADOR (org/co-org/árbitro via
+  // `_canManagePresence`) — W.O. retroativo é ato disciplinar, não cabe a jogador do
+  // grupo. Com o grupo em andamento, segue a regra de sempre (`_canManageGroup`).
+  var _org = (typeof window._canManagePresence === 'function')
+    && !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser);
+  var _btnNovoWo = _woDeclareBtn("window._ligaAbsentFlow('" + tE + "'," + roundIndex + ",'" + gE + "')", gDone ? _org : manage);
   // Estado: pendente de aceite
   if (group.subStatus === 'pending') {
     // multi-convite: lista TODOS os pendentes do grupo (1 → nome; 2+ → contagem).
@@ -1519,7 +1570,9 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
       return _btnNovoWo;
     }
   }
-  return '';
+  // Grupo CONCLUÍDO sem W.O. ativo: o botão continua pro ORGANIZADOR (2.0.50 — W.O.
+  // disciplinar pós-jogos). Pra quem não é org, `_woDeclareBtn` já devolveu ''.
+  return _btnNovoWo;
 };
 
 // ─── W.O. CANÔNICO em Rei/Rainha (fonte única = t.matches) ───────────────────
@@ -1588,6 +1641,12 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
       m[uk] = uids;
     };
     playing.forEach(function (m) {
+      // ⛔ JOGO COM PLACAR NÃO SE TOCA (2.0.50) — mesma fronteira do `_rewriteSlot`
+      // (2.0.15, caso Juliana Reis): _"a pessoa que sai mantém o que fez e a que entra
+      // herda a posição. nenhum placar alterado ou apagado. SEMPRE."_ Esta rota
+      // renomeava o ausente também nos jogos JÁ DISPUTADOS — o resultado de quem jogou
+      // passaria a ser creditado ao substituto.
+      if (_jogoJaTemPlacar(m)) return;
       _rwSide(m, 'team1', 'team1Uids');
       _rwSide(m, 'team2', 'team2Uids');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
@@ -1713,8 +1772,12 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
   // comentário do `_woBlocoComBotao`). Aqui ele nem chegava a aparecer quando
   // havia W.O. no grupo (a função retornava antes), o que é a mesma trava que a 1.7.90
   // consertou do outro lado — dar W.O. em OUTRA pessoa tem que continuar possível.
+  // 2.0.50 — grupo CONCLUÍDO: o botão continua, mas só pro ORGANIZADOR (W.O.
+  // disciplinar pós-jogos — mesma regra da rota Liga, ver `_ligaGroupControlsHtml`).
+  var _org = (typeof window._canManagePresence === 'function')
+    && !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser);
   var _btnNovoWo = _woDeclareBtn("window._monWoFlow('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')",
-    !groupDone && manage);
+    groupDone ? _org : manage);
   if (wm) {
     var lbl = wm.woIsGuest ? (_safe(wm.woReplacedBy) + ' (Jogador X)') : _safe(wm.woReplacedBy);
     var s = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O.<br>→ ' + lbl + '</span>';

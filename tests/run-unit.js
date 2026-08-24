@@ -108,6 +108,12 @@ const SUITES = [
   // que provou que ali havia resultado. Regra do dono: quem sai mantém o que fez, quem
   // entra herda a POSIÇÃO. Passado é de quem jogou; futuro é de quem entra.
   'tests/placar-lancado-nunca-e-reescrito.test.js',
+  // ⭐ W.O. PÓS-JOGOS (2.0.50, caso Adele): o botão de Aplicar W.O. continua pro
+  // ORGANIZADOR mesmo com o grupo terminado; placar e nome de quem jogou ficam; a
+  // suplente herda a vaga no elenco E a posição no retrato congelado (classifCongelada) —
+  // sistemática da Juliana Reis. E a rota canônica Rei/Rainha ganha a MESMA fronteira
+  // (jogo com placar não se renomeia).
+  'tests/wo-pos-jogos-herda-posicao.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.
   // O ranking de derrotados que decide a REPESCAGEM era a QUARTA cópia da lista de critérios
   // e a classificação dos não-classificados a QUINTA. Na quarta: um critério FANTASMA
