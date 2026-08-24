@@ -84,6 +84,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.63 ───────────────────────────────────────────
+        // A CAUSA RAIZ dos 3 dias, achada com profiler sobre a chave REAL do Confra:
+        // _sideBelongsToUser varria os 111 inscritos a CADA lado de jogo (1.020×/render)
+        // = 116.883 resoluções de nome por render, 85% da CPU. Índice O(1) → 193ms→34ms.
+        '<li><b>🚀 A chave e a tela inicial ficaram muito mais rápidas no celular:</b> ao montar a tela, o app relia a lista inteira de inscritos para <b>cada lado de cada jogo</b> — numa chave grande isso passava de <b>cem mil</b> consultas repetidas e travava o telefone por segundos (no computador passava batido, porque a CPU é bem mais rápida). Agora a lista é consultada uma vez e reaproveitada: o mesmo desenho da chave ficou <b>quase 6× mais rápido</b>.</li>' +
         // ── ciclo 2.0.62 ───────────────────────────────────────────
         // A telemetria do aparelho do dono nomeou: `timeout:_pintaUmaVez=925ms` —
         // o fallback de 120ms (1.9.75) vencia o rAF com a thread ocupada e chamava

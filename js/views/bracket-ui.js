@@ -509,11 +509,28 @@ window._resultNeedsApproval = _resultNeedsApproval;
 // ficava invisível em "seu jogo"/lançar placar/destaque de grupo. Espelha o
 // checkSide interno de _userTeamInMatch, mas standalone (não toca o caminho
 // crítico de aprovação).
-function _sideBelongsToUser(t, sideStr, user) {
-  if (!t || !sideStr || !user) return false;
-  if (typeof sideStr !== 'string' || sideStr === 'TBD' || sideStr === 'BYE') return false;
+// ── ⭐ O ÍNDICE QUE MATOU O O(n²) DO RENDER (2.0.63) ─────────────────────────
+// MEDIDO com o profiler sobre a chave REAL do Confra (111 inscritos, harness de
+// render): UM render fazia **116.883 chamadas** de `_entryDisplayName` — 113.220
+// delas vindas DAQUI —, e as quatro resolvedoras de nome comiam **85% da CPU do
+// render**. A conta é simples e cruel: esta função era chamada ~1.020 vezes por
+// render (uma por lado de jogo) e cada chamada VARRIA os 111 participantes
+// resolvendo o nome canônico de cada um. 1.020 × 111 = 113.220.
+// É isto que fazia a chave levar ~925ms no iPhone e ~150ms no desktop: a mesma
+// conta, com CPU 5× mais lenta. E piorou a cada leva da campanha "tudo por uid",
+// porque cada troca de comparação-de-string por resolução-de-uid multiplicava
+// esta varredura.
+// O índice é montado UMA vez por (torneio × época do cache de perfis) e responde
+// em O(1). ⛔ A SEMÂNTICA NÃO MUDA: as chaves são as MESMAS (`pName` e `pCanon`),
+// e quem chega primeiro vence — igual ao `break` do laço antigo.
+var _sbuIdx = (typeof WeakMap === 'function') ? new WeakMap() : null;
+function _sideIndex(t) {
+  var epoca = (window._profileEpoch || 0);
   var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-  var pp = null;
+  var hit = _sbuIdx && _sbuIdx.get(t);
+  if (hit && hit.epoca === epoca && hit.n === parts.length) return hit.mapa;
+  var mapa = (typeof Map === 'function') ? new Map() : null;
+  if (!mapa) return null;
   for (var j = 0; j < parts.length; j++) {
     var p = parts[j];
     var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
@@ -521,7 +538,27 @@ function _sideBelongsToUser(t, sideStr, user) {
     // _userTeamInMatch (4.0.76). Sem isto, dupla formada (displayName = só o p1) não era
     // achada quando o lado é "A / B" → caía no fallback de nome/split, não no uid.
     var pCanon = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p) : pName;
-    if (pName === sideStr || pCanon === sideStr) { pp = p; break; }
+    if (pName && !mapa.has(pName)) mapa.set(pName, p);
+    if (pCanon && !mapa.has(pCanon)) mapa.set(pCanon, p);
+  }
+  if (_sbuIdx) _sbuIdx.set(t, { epoca: epoca, n: parts.length, mapa: mapa });
+  return mapa;
+}
+function _sideBelongsToUser(t, sideStr, user) {
+  if (!t || !sideStr || !user) return false;
+  if (typeof sideStr !== 'string' || sideStr === 'TBD' || sideStr === 'BYE') return false;
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var pp = null;
+  var _idx = _sideIndex(t);
+  if (_idx) {
+    pp = _idx.get(sideStr) || null;
+  } else {
+    for (var j = 0; j < parts.length; j++) {
+      var p = parts[j];
+      var pName = typeof p === 'string' ? p : (p.displayName || p.name || '');
+      var pCanon = (typeof window._entryDisplayName === 'function') ? window._entryDisplayName(p) : pName;
+      if (pName === sideStr || pCanon === sideStr) { pp = p; break; }
+    }
   }
   if (pp && typeof pp === 'object') {
     if (user.uid) {

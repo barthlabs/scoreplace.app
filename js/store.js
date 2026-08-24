@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.62';
+window.SCOREPLACE_VERSION = '2.0.63';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -521,6 +521,12 @@ window._spNameForLetzplay = function (handle, fallback) {
 //   _hydrateUidNames(root) — pós-render, preenche [data-uid-name] com o nome vivo.
 window._userProfileCache = window._userProfileCache || {};
 window._userProfilePending = window._userProfilePending || {};
+// ⭐ ÉPOCA DO CACHE DE PERFIS (2.0.63): sobe a cada perfil que entra no cache.
+// É o que permite indexar nome→participante sem servir índice velho: quem
+// memoiza resolução de nome confere esta época (ver _sideIndex, bracket-ui).
+window._profileEpoch = window._profileEpoch || 0;
+window._bumpProfileEpoch = function () { window._profileEpoch = (window._profileEpoch || 0) + 1; };
+
 window._preloadUserProfiles = function (uids) {
   var db = window.FirestoreDB && window.FirestoreDB.db;
   // v4.5.93: _userProfilePending guarda a PROMISE em voo (não só um flag). Um 2º caller
@@ -582,6 +588,7 @@ window._preloadUserProfiles = function (uids) {
         snap.forEach(function (doc) {
           var d = doc.data() || {};
           vistos[doc.id] = 1;
+          window._bumpProfileEpoch();
           window._userProfileCache[doc.id] = {
             displayName: d.displayName || d.name || '', email: d.email || '', phone: d.phone || '',
             photoURL: d.photoURL || '', gender: d.gender || '',
@@ -618,6 +625,7 @@ window._preloadUserProfiles = function (uids) {
   toLoad.forEach(function (uid) {
     var pr = db.collection('users').doc(uid).get().then(function (s) {
       var d = (s && s.exists) ? (s.data() || {}) : {};
+      window._bumpProfileEpoch();
       window._userProfileCache[uid] = {
         displayName: d.displayName || d.name || '',
         email: d.email || '',
