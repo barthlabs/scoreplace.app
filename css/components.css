@@ -1278,7 +1278,10 @@ a.compact-row.sp-tocado,
      `opacity` nao muda geometria nem cria contexto de filtro: e a mudanca mais
      barata que existe e ainda assim se ve de longe (o card inteiro esmaece).
      ⛔ Nao reintroduzir transform/filter aqui. */
-  opacity: 0.6 !important;
+  /* 2.0.47: 0.6→0.45 — no APARELHO (TestFlight 246) o dono seguiu sem ver o
+     realce: 0.6 sobre card de foto/gradiente é sutil demais. 0.45 escurece de
+     verdade e continua sendo SÓ opacity (regra 1.9.114 intacta). */
+  opacity: 0.45 !important;
   transition: none !important;
 }
 
@@ -1295,9 +1298,11 @@ a.compact-row.sp-tocado,
 .card[onclick].sp-abrindo,
 a.compact-row.sp-abrindo,
 .compact-row[onclick].sp-abrindo {
-  opacity: 0.55 !important;
-  outline: 2px solid var(--primary-color);
-  outline-offset: -2px;
+  /* 2.0.47: mais forte (0.55→0.45, contorno 2→3px) — no aparelho o dono não
+     percebia o realce sobre cards de foto/gradiente. */
+  opacity: 0.45 !important;
+  outline: 3px solid var(--primary-color);
+  outline-offset: -3px;
   transition: none !important;
 }
 
@@ -1364,7 +1369,11 @@ a.compact-row,
      sobre o gradiente escuro do card — por isso parecia que nao havia nada.
      ⚠️ Isto NAO substitui o `:active`: os dois convivem. Com a thread livre a
      pessoa ve os dois; com a thread presa, ve pelo menos este. */
-  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.30);
+  /* 2.0.47: 0.30→0.45 — este é o ÚNICO feedback que aparece com a thread presa
+     (o toque do dono mediu 285ms de atraso de entrada: até o realce por JS
+     chegar, quem responde é o UIKit). A 0.30 ele se perdia no gradiente do
+     card; a 0.45 o flash é inconfundível. */
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.45);
 }
 .card[onclick] input,
 .card[onclick] textarea,
@@ -2445,7 +2454,14 @@ html, body,
    o único aviso, porque um ✕ por coluna encheria a linha de ruído. */
 .sp-set-col--fix{cursor:pointer;border-radius:6px;}
 .sp-set-col--fix:hover{background:rgba(255,255,255,0.06);}
-.sp-mc-inp{width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;}
+/* ⭐ O BOX PENDENTE TEM O MESMO TAMANHO DO NÚMERO LANÇADO (2.0.47, ordem do dono):
+   _"o número do placar aumentou mas o box enquanto não temos o placar ficou do mesmo
+   tamanho. aumente esse box e o 0 dentro dele para ficar no tamanho do número com
+   resultado lançado. em todos os cards de jogos, em qualquer fase."_
+   A fonte vem da MESMA régua do número (`--sp-num-fs`) — se o teto mudar lá, muda
+   aqui junto. O padding vertical caiu (4→2px) pra altura do box não estourar a linha
+   do card; a largura de 52px fica (dois dígitos a 1.45rem ≈ 36px, sobra folga). */
+.sp-mc-inp{width:52px;text-align:center;font-size:var(--sp-num-fs,1.45rem);font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:2px 6px;}
 .sp-av{width:var(--sp-av,20px);height:var(--sp-av,20px);border-radius:50%;flex-shrink:0;object-fit:cover;}
 .sp-av-p{opacity:0.95;}
 .sp-mc-box{flex:1;min-width:0;height:var(--sp-box-h,1.05rem);overflow:hidden;display:flex;align-items:center;line-height:1.1;}

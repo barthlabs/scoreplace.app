@@ -55,8 +55,8 @@ const comps = R('css/components.css').replace(/\/\*[\s\S]*?\*\//g, '');
 const iGesto = comps.indexOf('.card[onclick],');
 ok(iGesto > 0, 'a regra de gesto do card existe');
 const gesto = comps.slice(iGesto, comps.indexOf('}', iGesto));
-ok(/-webkit-tap-highlight-color:\s*rgba\(255, 255, 255, 0\.30\)/.test(gesto),
-   'o card pede o realce do SISTEMA explicitamente (o padrão some no fundo escuro)');
+ok(/-webkit-tap-highlight-color:\s*rgba\(255, 255, 255, 0\.45\)/.test(gesto),
+   'o card pede o realce do SISTEMA explicitamente, e FORTE (0.45) — 2.0.47: a 0.30 o dono seguia sem ver nada no aparelho; este é o único feedback que sobrevive à thread presa');
 ok(!/-webkit-tap-highlight-color:\s*transparent/.test(gesto),
    '⛔ o card nunca apaga o realce do sistema — é o único que sobrevive à thread presa');
 ok(/touch-action:\s*manipulation/.test(gesto), 'e o atraso do duplo-toque segue removido');
@@ -161,8 +161,8 @@ ok(!/filter:/.test(corpoToc),
 // obriga o WebKit a re-rasterizar a area — caro justamente no toque, quando a
 // thread ja esta disputada. `opacity` faz o mesmo trabalho visual e o compositor
 // resolve sozinho.
-ok(/opacity: 0\.6 !important/.test(corpoToc),
-   'o realce e esmaecer forte (60%) — a mudanca mais barata que existe e se ve de longe');
+ok(/opacity: 0\.45 !important/.test(corpoToc),
+   'o realce e esmaecer FORTE (0.45 — 2.0.47, era 0.6 e o dono nao via no card de foto) — a mudanca mais barata que existe e se ve de longe');
 ok(/var _rolando = 0;/.test(store) && /if \(Date\.now\(\) - _rolando < 250\) return;/.test(store),
    'ROLANDO NAO ACENDE: encostar o dedo pra parar a inercia nao e clique, e o realce cairia no pior quadro');
 ok(!/\.sp-tocado[\s\S]{0,320}filter:/.test(comps3),
