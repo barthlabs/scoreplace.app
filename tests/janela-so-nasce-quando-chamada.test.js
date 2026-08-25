@@ -36,15 +36,23 @@ const semComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/
   const vivo = semComentarios(main);
   [['setupHelpModal', '#modal-help', 1609],
    ['setupProfileModal', '#modal-profile', 327],
-   ['setupCreateTournamentModal', '#modal-create-tournament', 835]].forEach(function (t) {
+   ['setupCreateTournamentModal', '#modal-create-tournament', 835],
+   // 2.0.85: as duas restantes seguem o mesmo caminho. ⚠️ `setupQuickCreateModal`
+   // era uma IIFE — construía no arranque sem sequer existir no `window`, então
+   // não aparecia numa busca por "quem chama".
+   ['setupLoginModal', '#modal-login', 0],
+   ['setupQuickCreateModal', '#modal-quick-create', 0]].forEach(function (t) {
     const nome = t[0], id = t[1], nos = t[2];
     // chamada "solta" no arranque = a função invocada sem estar protegida por uma
     // checagem de ausência do modal na MESMA linha ou logo acima.
     const chamadas = [];
     vivo.split('\n').forEach(function (l, i) {
-      // ⚠️ `function setupX() {` é DECLARAÇÃO, não chamada — a 1ª versão deste teste
-      // acusou a própria definição. Só conta invocação.
+      // ⚠️ DEFINIÇÃO não é CHAMADA. Duas formas enganam a busca ingênua, e as duas
+      // já me deram falso positivo aqui:
+      //   `function setupX() {`                       (declaração)
+      //   `window.setupX = function setupX() {`       (expressão nomeada)
       if (/^\s*(async\s+)?function\s/.test(l)) return;
+      if (/=\s*(async\s+)?function\b/.test(l)) return;
       if (new RegExp('(^|[^.\\w])' + nome + '\\s*\\(\\s*\\)').test(l)) chamadas.push({ i: i, l: l.trim() });
     });
     const soltas = chamadas.filter(function (c) {
@@ -52,8 +60,8 @@ const semComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/
       return !/getElementById\(|!document\./.test(volta);
     });
     ok(soltas.length === 0,
-       '⛔ ' + nome + ' NÃO é chamada no arranque (' + id + ' = ' + nos +
-       ' elementos no aparelho do dono)' +
+       '⛔ ' + nome + ' NÃO é chamada no arranque (' + id +
+       (nos ? ' = ' + nos + ' elementos no aparelho do dono' : '') + ')' +
        (soltas.length ? ' — achei: ' + soltas.map(function (x) { return x.l.slice(0, 50); }).join(' | ') : ''));
   });
 }
@@ -61,7 +69,8 @@ const semComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/
 // ── ② a porta única constrói sob demanda ────────────────────────────────────
 {
   ok(/_MODAIS_SOB_DEMANDA/.test(ui), 'existe o registro de janelas sob demanda (js/ui.js)');
-  ['modal-help', 'modal-profile', 'modal-create-tournament'].forEach(function (id) {
+  ['modal-help', 'modal-profile', 'modal-create-tournament',
+   'modal-login', 'modal-quick-create'].forEach(function (id) {
     ok(new RegExp("'" + id + "'").test(ui), '  · ' + id + ' está no registro');
   });
   const i = ui.indexOf('function openModal(');

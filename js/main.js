@@ -1353,7 +1353,11 @@ window.renderHelpPage = function (container) {
 };
 
 // === Modal Criação Rápida ===
-(function setupQuickCreateModal() {
+// ⛔ 2.0.85 — era IIFE: construía #modal-quick-create NO ARRANQUE. Agora é função
+// nomeada, chamada sob demanda pela porta única `_garanteModal` (js/ui.js).
+// Tudo que ela define (`_qcSelectSport`, ouvintes dos botões) é do PRÓPRIO
+// modal — nasce junto com ele, nada global fica faltando antes disso.
+window.setupQuickCreateModal = function setupQuickCreateModal() {
   if (document.getElementById('modal-quick-create')) return;
   const html = `
     <div class="modal-overlay" id="modal-quick-create">
@@ -1670,7 +1674,7 @@ window.renderHelpPage = function (container) {
     // Refresh the list
     document.getElementById('btn-quick-template').click();
   };
-})();
+};
 
 // Inicializa estrutura base da UI (Modais, Menus).
 // v1.3.28-beta: defensive — se um setup* falhar (ex.: arquivo deferred
@@ -1704,9 +1708,10 @@ if (typeof setupUI === 'function') { try { setupUI(); } catch (e) { window._warn
 // abrir, pela porta única `_garanteModal` (js/ui.js). A própria
 // `setupCreateTournamentModal` já sai cedo se o modal existir.
 
-if (typeof setupLoginModal === 'function') {
-  try { setupLoginModal(); } catch (e) { window._warn('[main.js] setupLoginModal threw:', e); }
-} else { _safeSetup('setupLoginModal'); }
+// ⛔ 2.0.85 — #modal-login sai do arranque: nasce ao abrir (porta única
+// `_garanteModal`, js/ui.js). Os dois acessos diretos que existem já tratam a
+// ausência: `_forceCloseLoginModal` faz `if (modal)`, e `_loginNaTela` devolve
+// false — que é a resposta CERTA quando a janela nem existe.
 
 // ⛔ 2.0.84 — #modal-profile (327 elementos) sai do arranque: nasce ao abrir,
 // pela porta única `_garanteModal` (js/ui.js). A rota #profile e a troca de

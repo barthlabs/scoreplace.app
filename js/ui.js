@@ -40,7 +40,9 @@ function setupUI() {
 var _MODAIS_SOB_DEMANDA = {
   'modal-help': 'setupHelpModal',
   'modal-profile': 'setupProfileModal',
-  'modal-create-tournament': 'setupCreateTournamentModal'
+  'modal-create-tournament': 'setupCreateTournamentModal',
+  'modal-login': 'setupLoginModal',
+  'modal-quick-create': 'setupQuickCreateModal'
 };
 function _garanteModal(modalId) {
   try {

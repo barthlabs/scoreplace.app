@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.84';
+window.SCOREPLACE_VERSION = '2.0.85';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -211,7 +211,12 @@ try {
                 ' snaps=' + (foto.snaps || 0) + ' busca=' + (window._discoveryFetches || 0) +
                 ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum') +
                 (_tre ? ' · trechos: ' + _tre : ' · trechos: nenhum') +
-                (foto.onde ? ' · onde: ' + foto.onde : ''),
+                (foto.onde ? ' · onde: ' + foto.onde : '') +
+                // ⭐ 2.0.85 — HÁ QUANTO TEMPO O APP ESTÁ ABERTO. O dono: "mas só no
+                // começo e depois estabiliza". Se for verdade, todo episódio cai
+                // nos primeiros segundos — e aí a causa é a ABERTURA disputando a
+                // thread com a rolagem, não a rolagem em si. Um número, de graça.
+                ' · aberto=' + (Math.round((performance.now ? performance.now() : 0) / 100) / 10) + 's',
                 'warning');
             }
           }

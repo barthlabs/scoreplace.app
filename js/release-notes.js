@@ -84,6 +84,16 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.85 ───────────────────────────────────────────
+        // Fecha o que a 2.0.84 começou: login e criação rápida também saem do
+        // arranque. ⚠️ `setupQuickCreateModal` era uma IIFE — construía sem sequer
+        // existir no `window`, então não aparecia numa busca por "quem chama".
+        // MEDIDO depois da 2.0.84, no aparelho do dono: nos 3645→868, travada ao
+        // rolar pra cima 3766ms→~710ms. Ainda corta, e ele precisou: "mas só no
+        // começo e depois estabiliza" ⇒ a telemetria passa a levar `aberto=Xs`,
+        // que confirma (ou desmente) que os episódios caem nos primeiros segundos.
+        // Se cair, a causa é a ABERTURA disputando a thread, não a rolagem.
+        '<li><b>⚡ Mais duas janelas saem do carregamento inicial:</b> a de <b>entrar na conta</b> e a de <b>criação rápida</b> também eram montadas junto com o app e ficavam escondidas. Agora nascem no momento em que você as abre — completando a limpeza começada na versão anterior.</li>' +
         // ── ciclo 2.0.84 ───────────────────────────────────────────
         // ⭐ A RESPOSTA DA INVESTIGAÇÃO INTEIRA, e veio do aparelho do dono. Sentry,
         // release 2.0.83, travada de 3.766ms rolando pra cima:
