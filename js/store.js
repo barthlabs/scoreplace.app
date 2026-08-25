@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.67';
+window.SCOREPLACE_VERSION = '2.0.68';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -7979,6 +7979,25 @@ window._openTournamentCard = function (event, tournamentId) {
 // navegava NO MESMO task do toque — o aviso era criado e a rota rodava antes de
 // qualquer pintura, ou seja o "Abrindo o torneio…" podia nem aparecer (a MESMA
 // classe de bug da 1.9.55, viva no outro caminho — grep pela AÇÃO, não pelo handler).
+// ⛔ O REALCE TEM QUE SAIR (2.0.68 — mina achada auditando a minha própria leva).
+// `sp-abrindo` era ACESO e NUNCA APAGADO: o card ficava esmaecido com contorno
+// verde PARA SEMPRE, e voltar pra tela inicial sem re-render deixava um card
+// "morto" na lista. `_spCardAbrindo` ainda segurava o elemento (nó destacado
+// preso na memória). Uma porta só pra apagar, chamada antes de acender o
+// próximo e depois que o loader cobre a tela.
+window._limpaRealceAbrindo = function () {
+  try {
+    var alvo = window._spCardAbrindo;
+    if (alvo && alvo.classList) alvo.classList.remove('sp-abrindo');
+    window._spCardAbrindo = null;
+    // varredura de segurança: se alguém acendeu por outro caminho, some também
+    if (typeof document !== 'undefined' && document.querySelectorAll) {
+      var teimosos = document.querySelectorAll('.sp-abrindo');
+      for (var i = 0; i < teimosos.length; i++) teimosos[i].classList.remove('sp-abrindo');
+    }
+  } catch (e) {}
+};
+
 window._navTorneioComAviso = function (tournamentId, evento) {
   if (!tournamentId) return;
   // ══════════════════════════════════════════════════════════════════════════
@@ -8004,6 +8023,7 @@ window._navTorneioComAviso = function (tournamentId, evento) {
   // realce — é exatamente este bug. [[project_mutirao_mobile_2040]]
   // ══════════════════════════════════════════════════════════════════════════
   var _seguir = function () { window._navTorneioComAvisoAgora(tournamentId, evento); };
+  window._limpaRealceAbrindo();   // nunca deixa o realce anterior aceso
   try {
     var _cardRealce = (evento && evento.target && evento.target.closest)
       ? evento.target.closest('.card[onclick], a.compact-row, .compact-row[onclick]')
@@ -8012,6 +8032,7 @@ window._navTorneioComAviso = function (tournamentId, evento) {
         (typeof document === 'undefined' || document.visibilityState !== 'hidden')) {
       _cardRealce.classList.add('sp-abrindo');
       window._spCardAbrindo = _cardRealce;
+      window._spRealceAplicado = 1;   // marca pra telemetria; a limpeza zera o _spCardAbrindo
       var _foi = false;
       var _umaVez = function () { if (_foi) return; _foi = true; _seguir(); };
       // rAF roda ANTES da pintura; o timeout agendado DENTRO dele roda DEPOIS —
@@ -8073,6 +8094,9 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
       // marca a posse: o `hashchange` logo abaixo NÃO pode apagar este loader —
       // quem o tira é a rota do torneio, quando a tela estiver pronta.
       window._spLoadingOwnedByNav = true;
+      // o overlay já cobre a tela: o realce cumpriu o papel dele e SAI, senão
+      // o card fica esmaecido pra sempre quando a pessoa voltar (2.0.68).
+      setTimeout(window._limpaRealceAbrindo, 0);
     } catch (e) {}
   }
   // ── O AVISO PINTA ANTES DE A NAVEGAÇÃO COMEÇAR (1.9.55) ─────────────────────
@@ -8147,7 +8171,7 @@ window._navTorneioComAvisoAgora = function (tournamentId, evento) {
             //   3. as travadas, só se sobrar espaço — elas descrevem o TAMANHO do
             //      estrago, e tamanho sem nome nunca consertou nada.
             var _cab = 'tap: ' + (_inDelay >= 0 ? _inDelay : '?') + '/' + Math.round(ms) + 'ms' +
-              ' sp:' + (window._spCardAbrindo ? 1 : 0);   // o realce sp-abrindo chegou a ser aplicado?
+              ' sp:' + (window._spRealceAplicado ? 1 : 0);   // o realce chegou a ser aplicado?
             var _linha = _cab + ' · quem: ' + (trechos.join(' | ') || 'nenhum');
             if (_linha.length < 200 && travadas.length) {
               _linha += ' · trav: ' + travadas.join(' | ');
