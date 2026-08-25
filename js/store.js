@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.69';
+window.SCOREPLACE_VERSION = '2.0.70';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -33,6 +33,20 @@ window._medirTrecho = function (nome, fn) {
 // não pra cobrar pedágio no caminho quente de quem só quer usar o app.
 // Liga com `?perf=1` na URL (persiste em localStorage); desliga com `?perf=0`.
 // `_medirTrecho` e os anéis continuam existindo — vazios custam nada.
+// carimbo + DIREÇÃO da rolagem: barato (dois números), passivo, e é o que permite
+// dizer se a travada aconteceu rolando PRA CIMA ou PRA BAIXO (2.0.70).
+window._spUltimaRolagemT = 0;
+window._spDirRolagem = '?';
+try {
+  var _spYant = 0;
+  document.addEventListener('scroll', function () {
+    var y = window.scrollY || window.pageYOffset || 0;
+    window._spDirRolagem = (y < _spYant) ? 'pra-cima' : 'pra-baixo';
+    _spYant = y;
+    window._spUltimaRolagemT = Date.now();
+  }, { passive: true, capture: true });
+} catch (e) {}
+
 var _SP_PERF = false;
 try {
   var _q = String(location.search || '') + String(location.hash || '');
@@ -97,6 +111,26 @@ try {
         } catch (e) {}
         window._travadas.push(foto);
         if (window._travadas.length > 15) window._travadas.shift();
+        // ── ⭐ TRAVADA DURANTE A ROLAGEM SE REPORTA SOZINHA (2.0.70) ───────────
+        // Buraco de instrumentação que custou caro: as travadas só viajavam pro
+        // Sentry DENTRO do relatório de TOQUE. O dono relata "corte ao rolar pra
+        // cima" — e se ele rola e não toca em nada, o episódio não chega a
+        // ninguém e eu volto a adivinhar. Aqui: travada > 500ms com rolagem
+        // recente (< 1,2s) manda UM aviso, no máximo 3 por sessão, com a mesma
+        // foto da cena (nós, animações, snapshots) + a DIREÇÃO da rolagem — que é
+        // o dado que separa "corte só pra cima" de "corte sempre".
+        try {
+          var _rolouAgora = window._spUltimaRolagemT || 0;
+          if (foto.dur > 500 && (Date.now() - _rolouAgora) < 1200) {
+            window._travScrollN = (window._travScrollN || 0) + 1;
+            if (window._travScrollN <= 3 && typeof window._captureMessage === 'function') {
+              window._captureMessage('scroll-trav: ' + foto.dur + 'ms · ' + (window._spDirRolagem || '?') +
+                ' · nos=' + (foto.nos || '?') + ' anim=' + (foto.anim != null ? foto.anim : '?') +
+                ' snaps=' + (foto.snaps || 0) + ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum'),
+                'warning');
+            }
+          }
+        } catch (eSc) {}
       }
     }, 150);
   })();
