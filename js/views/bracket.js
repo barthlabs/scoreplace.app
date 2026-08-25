@@ -248,6 +248,7 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
 
     if (!_fatiar) {
       container.innerHTML = leve + _tudo;
+      try { window._chaveLigaLotes(container); } catch (eL) {}   // ⭐ 2.0.88: liga os lotes guardados
       if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
       return;
     }
@@ -269,6 +270,7 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
     var PRIMEIRAS = 6, MINIMO_PRA_FATIAR = 8;
     if (!bulk || maxFilhos <= MINIMO_PRA_FATIAR) {
       container.innerHTML = leve + _tudo;   // tela pequena: de uma vez, como sempre
+      try { window._chaveLigaLotes(container); } catch (eL) {}   // ⭐ 2.0.88: liga os lotes guardados
       if (typeof depois === 'function') { try { depois(); } catch (e2) {} }
       return;
     }
@@ -295,6 +297,7 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
         // rede: anexo falhou → HTML inteiro de uma vez. NUNCA meia tela.
         if (window._error) window._error('[Bracket] fatia falhou — pintando inteiro:', eAnexo);
         try { container.innerHTML = leve + _tudo; } catch (e6) {}
+        try { window._chaveLigaLotes(container); } catch (eL) {}
         if (typeof depois === 'function') { try { depois(); } catch (e7) {} }
         return;
       }
@@ -302,6 +305,9 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
       // última fatia: hidrata o que chegou tarde e roda o "depois" (filtro/DnD/scroll)
       try { if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(container); } catch (e3) {}
       try { if (typeof window._fitNames === 'function') window._fitNames(container); } catch (e4) {}
+      // ⭐ 2.0.88: os lotes guardados são ligados na ÚLTIMA fatia — antes disso o
+      // <details> deles pode nem estar no DOM ainda.
+      try { window._chaveLigaLotes(container); } catch (eL) {}
       if (typeof depois === 'function') { try { depois(); } catch (e5) {} }
     };
     _agendarPasso(passo);
@@ -498,6 +504,68 @@ window._grpKey = function (s) {
   return String(s == null ? '' : s)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/\s+/g, ' ').trim();
+};
+
+// ══ ⭐ LOTE GUARDADO DA CHAVE (2.0.88) ═══════════════════════════════════════
+// Regra do dono: "nada que não estiver visível deve ser carregado… o que não
+// estiver não carrega enquanto o usuário não clicar pedindo outra seção".
+//
+// MEDIDO no aparelho dele: #inline-bracket-container = 6.157 dos 8.061 elementos
+// da tela de torneio, e travada de 1.662ms ao rolar. Reproduzido aqui com o
+// documento real: 34 grupos × 158 elementos = 5.482, dos quais os "demais grupos"
+// (fora o do usuário) são a esmagadora maioria — e já viviam dentro de um
+// <details>, construídos assim mesmo.
+//
+// `_chaveGuardaLote(fn)` devolve um marcador leve pro HTML e guarda a FUNÇÃO que
+// monta o conteúdo. `_chaveLigaLotes(raiz)` liga cada marcador ao <details> que o
+// contém: no primeiro `toggle` aberto, monta e injeta — uma vez só.
+// ⛔ Guardar a FUNÇÃO, não a string: adiar só a inserção deixaria o custo de montar
+// 500 KB de HTML no caminho de abertura, que é justamente o que trava o toque.
+window._chaveLotes = window._chaveLotes || {};
+var _chaveLoteSeq = 0;
+// A partir de quantos grupos vale adiar. Abaixo disso o ganho é ruído e o custo é
+// real: grupo fora do DOM não tem âncora `data-group-box`, e é por ela que a tela
+// rola até um grupo. Torneio pequeno segue montando tudo, como sempre.
+window._CHAVE_LOTE_MIN = 6;
+window._chaveGuardaLote = function (montar) {
+  var id = 'cl' + (++_chaveLoteSeq);
+  window._chaveLotes[id] = montar;
+  return '<div data-chave-lote="' + id + '"></div>';
+};
+// Monta AGORA todo lote ainda guardado. Usado por quem precisa da chave inteira:
+// busca, 'só os meus jogos', exportação, testes.
+window._chaveMontaTudo = function (raiz) {
+  try {
+    var marcas = (raiz || document).querySelectorAll('[data-chave-lote]');
+    for (var i = 0; i < marcas.length; i++) {
+      var id = marcas[i].getAttribute('data-chave-lote');
+      var fn = window._chaveLotes[id];
+      if (!fn) continue;
+      delete window._chaveLotes[id];
+      try { marcas[i].outerHTML = fn(); } catch (e) { if (window._warn) window._warn('[chave lote]', e); }
+    }
+  } catch (e) { if (window._warn) window._warn('[chave monta tudo]', e); }
+};
+window._chaveLigaLotes = function (raiz) {
+  try {
+    var marcas = (raiz || document).querySelectorAll('[data-chave-lote]');
+    for (var i = 0; i < marcas.length; i++) {
+      (function (marca) {
+        var id = marca.getAttribute('data-chave-lote');
+        var det = marca.closest ? marca.closest('details') : null;
+        var monta = function () {
+          var fn = window._chaveLotes[id];
+          if (!fn) return;                       // já montado
+          delete window._chaveLotes[id];         // uma vez só
+          try { marca.outerHTML = fn(); } catch (e) { if (window._warn) window._warn('[chave lote]', e); }
+        };
+        // Sem <details> em volta (caso inesperado), monta já: melhor pesado que faltando.
+        if (!det) { monta(); return; }
+        if (det.open) { monta(); return; }
+        det.addEventListener('toggle', function () { if (det.open) monta(); });
+      })(marcas[i]);
+    }
+  } catch (e) { if (window._warn) window._warn('[chave lotes]', e); }
 };
 
 function renderBracket(container, tournamentId, isInline) {
@@ -6465,18 +6533,39 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // (split por jogador) mantém "Demais jogos da rodada", aberto.
           var _otherInner, _otherSummary, _detailsOpen;
           if (_hasMultiCat) {
-            var _byCat = {}, _catOrder = [];
-            _otherGroups.forEach(function(g) { var k = _catKey(g); if (!_byCat[k]) { _byCat[k] = []; _catOrder.push(k); } _byCat[k].push(g); });
-            _otherInner = _catOrder.map(function(k) {
-              var _lbl = (k === '__none') ? 'Sem categoria' : ('Categoria ' + (window._displayCategoryName ? window._displayCategoryName(k) : k));
-              return '<div style="font-size:0.72rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;margin:0.75rem 0 0.6rem;">' + window._safeHtml(_lbl) + '</div>' + _byCat[k].map(_renderGroup).join('');
-            }).join('');
+            // ⭐ 2.0.88 — também sob demanda: a montagem inteira (agrupar por
+            // categoria + renderizar cada grupo) só roda se alguém abrir.
+            var _montaCats = function () {
+              var _byCat = {}, _catOrder = [];
+              _otherGroups.forEach(function(g) { var k = _catKey(g); if (!_byCat[k]) { _byCat[k] = []; _catOrder.push(k); } _byCat[k].push(g); });
+              return _catOrder.map(function(k) {
+                var _lbl = (k === '__none') ? 'Sem categoria' : ('Categoria ' + (window._displayCategoryName ? window._displayCategoryName(k) : k));
+                return '<div style="font-size:0.72rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;margin:0.75rem 0 0.6rem;">' + window._safeHtml(_lbl) + '</div>' +
+                  _byCat[k].map(_renderGroup).join('');
+              }).join('');
+            };
+            _otherInner = (_otherGroups.length >= window._CHAVE_LOTE_MIN)
+              ? window._chaveGuardaLote(_montaCats) : _montaCats();
             _otherSummary = '▸ Demais categorias (' + _otherCount + ' jogos)';
             _detailsOpen = '';
           } else {
-            _otherInner = _otherGroups.map(_renderGroup).join('');
+            // ── ⭐ OS DEMAIS GRUPOS SÓ NASCEM AO ABRIR (2.0.88) ────────────────
+            // MEDIDO no aparelho do dono: #inline-bracket-container = 6.157 dos
+            // 8.061 elementos da tela de torneio → travada de 1.662ms ao rolar.
+            // Reproduzido aqui: 34 grupos × 158 elementos = 5.482. E a divisão
+            // 'meu grupo' × 'demais' JÁ EXISTIA — os demais só eram construídos
+            // assim mesmo, dentro de um <details>. É a MESMA confusão das janelas
+            // (2.0.84) e do histórico (2.0.86): **esconder não é deixar de
+            // construir**. Terceira vez no mesmo dia, agora no maior de todos.
+            // Regra do dono: 'o que não estiver não carrega enquanto o usuário não
+            // clicar pedindo outra seção'.
+            _otherInner = (_otherGroups.length >= window._CHAVE_LOTE_MIN)
+              ? window._chaveGuardaLote(function () { return _otherGroups.map(_renderGroup).join(''); })
+              : _otherGroups.map(_renderGroup).join('');
             _otherSummary = '▸ Demais jogos da rodada (' + _otherCount + ')';
-            _detailsOpen = ' open';
+            // ⛔ Adiou ⇒ nasce FECHADO (aberto, o navegador montaria tudo na hora e o
+            // ganho evaporaria). Não adiou ⇒ segue aberto, como sempre foi.
+            _detailsOpen = (_otherGroups.length >= window._CHAVE_LOTE_MIN) ? '' : ' open';
           }
           ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
             '<details' + _detailsOpen + '>' +
@@ -7243,6 +7332,11 @@ window._bracketApplyFilter = function () {
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
   var onlyMine = !!window._showOnlyMyMatches;
+  // ⛔ 2.0.88 — BUSCAR OBRIGA A MONTAR TUDO. Os demais grupos passaram a nascer só
+  // ao abrir; se alguém procura um jogador que está num deles, os cards nem existem
+  // no DOM e a busca diria 'nenhum resultado' — mentindo. Filtrar é justamente
+  // 'pedir para ver o que não está à vista', então aqui o adiamento acaba.
+  if ((q || onlyMine) && typeof window._chaveMontaTudo === 'function') window._chaveMontaTudo();
   var cards = document.querySelectorAll('[data-players]');
   if (!cards.length) return;
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,

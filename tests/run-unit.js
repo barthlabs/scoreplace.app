@@ -179,6 +179,7 @@ const SUITES = [
   'tests/perfilador-tem-dois-niveis.test.js',
   'tests/janela-so-nasce-quando-chamada.test.js',
   'tests/historico-so-monta-quando-aberto.test.js',
+  'tests/chave-monta-os-demais-grupos-ao-abrir.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

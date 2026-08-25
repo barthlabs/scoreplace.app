@@ -64,7 +64,11 @@ ok('  → também marcada como não-jogo',
 // Se alguém criar um segundo mecanismo de visibilidade, as duas decisões brigam e a
 // segunda a rodar desfaz a primeira — foi o que já aconteceu com busca × "só meus jogos".
 ok('quem decide visibilidade continua sendo _bracketApplyFilter, por [data-players]',
-  /window\._bracketApplyFilter = function[\s\S]{0,600}querySelectorAll\('\[data-players\]'\)/.test(bracket));
+  // ⚠️ Janela ampliada em 2.0.88: a função ganhou, no topo, a porta que MONTA os
+  // lotes guardados da chave antes de filtrar — grupo adiado não tem card no DOM, e
+  // a busca diria "nenhum resultado" MENTINDO. A intenção não mudou: quem decide
+  // visibilidade continua sendo ESTE filtro, por [data-players].
+  /window\._bracketApplyFilter = function[\s\S]{0,1200}querySelectorAll\('\[data-players\]'\)/.test(bracket));
 
 // ── 4. a regra vale para o caso REAL do Confra ───────────────────────────────────────
 // Simula o que o filtro faz: normaliza e procura o trecho no data-players declarado.
