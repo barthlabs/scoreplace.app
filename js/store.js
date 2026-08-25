@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.82';
+window.SCOREPLACE_VERSION = '2.0.83';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -54,14 +54,38 @@ try {
   }, { passive: true, capture: true });
 } catch (e) {}
 
-var _SP_PERF = false;
+// ── ⚖️ DOIS NÍVEIS DE DIAGNÓSTICO (2.0.83) ──────────────────────────────────
+// ⛔ O ERRO QUE ISTO CORRIGE ERA MEU: o perfilador era tudo-ou-nada, e o aparelho do
+// dono ficou DIAS com ele ligado — inclusive a parte cara. O nível pesado embrulha
+// TODO ouvinte de `scroll`/`touchmove` (dois `performance.now()` por evento, até
+// 60×/s ENQUANTO SE ROLA), todo timer e todo observer. Ou seja: eu pendurei um
+// medidor em cada quadro da rolagem justamente no aparelho que reclamava de
+// rolagem, e ainda somei mais peso (2.0.80) tentando entender a lentidão.
+// Ele disse, com razão: _"até aqui só piorou o que estava razoável"_.
+//
+//   perf=1 (LEVE, o padrão)  → sentinela de 150ms + relato de travada com direção,
+//                              nós e ONDE eles estão. É o que responde as perguntas
+//                              que importam, e custa um intervalo.
+//   perf=2 (FUNDO)           → + embrulho de timers/observers/ouvintes e medição de
+//                              callback assíncrono. Só quando eu for caçar um
+//                              culpado nomeado, e por pouco tempo.
+//   perf=0                   → nada.
+//
+// ⚠️ No nível LEVE o campo `ultimo=` sai vazio (ele vem do embrulho de timer) — e
+// tudo bem: ele apontou `_poll`/`handleDelayElapsed` por FREQUÊNCIA e nos custou
+// duas hipóteses erradas. Duração, direção e ONDE valem mais.
+var _SP_PERF = false, _SP_FUNDO = false;
 try {
   var _q = String(location.search || '') + String(location.hash || '');
   if (/[?&#]perf=0/.test(_q)) localStorage.removeItem('sp_perf');
+  else if (/[?&#]perf=2/.test(_q)) localStorage.setItem('sp_perf', '2');
   else if (/[?&#]perf(=1)?(&|$|#)/.test(_q)) localStorage.setItem('sp_perf', '1');
-  _SP_PERF = localStorage.getItem('sp_perf') === '1';
+  var _nivel = localStorage.getItem('sp_perf');
+  _SP_PERF = (_nivel === '1' || _nivel === '2');
+  _SP_FUNDO = (_nivel === '2');
 } catch (e) {}
 window._spPerfAtivo = _SP_PERF;
+window._spPerfFundo = _SP_FUNDO;
 
 // ── SENTINELA DE TRAVADAS (1.9.78) — vê o que o iOS não deixa ver ────────────
 // O relato da 76 mostrou que o vácuo do toque acontece ANTES do handler rodar:
@@ -206,6 +230,7 @@ try {
 try {
   (function () {
     if (!_SP_PERF) return;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
+    if (!_SP_FUNDO) return;   // ⚖️ 2.0.83 — embrulhar TODO timer é do nível de FUNDO
     var _origSI = window.setInterval, _origST = window.setTimeout;
     var _snippet = function (fn) {
       try { return fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69); } catch (e) { return '?'; }
@@ -301,6 +326,9 @@ try {
 // aqui o que mata é o custo POR EVENTO multiplicado por 60/s.
 try {
   if (!_SP_PERF) throw 0;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
+  if (!_SP_FUNDO) throw 0;   // ⚖️ 2.0.83 — DOIS performance.now() por evento de
+  // rolagem, até 60x/s. É o mais caro do perfilador e ficou ligado por dias no
+  // aparelho do dono enquanto ele reclamava de rolagem. Nível de FUNDO.
   var _origAEL = EventTarget.prototype.addEventListener;
   EventTarget.prototype.addEventListener = function (tipo, fn, opts) {
     if ((tipo === 'scroll' || tipo === 'touchmove') && typeof fn === 'function' && !fn.__spEnvolto) {
@@ -339,6 +367,7 @@ try {
 // de timers (1.9.81) inocentar todos os setTimeout/setInterval.
 try {
   if (!_SP_PERF) throw 0;   // ⚡ diagnóstico sob demanda — ver o gate lá em cima
+  if (!_SP_FUNDO) throw 0;   // ⚖️ 2.0.83 — nível de FUNDO
   ['IntersectionObserver', 'MutationObserver', 'ResizeObserver'].forEach(function (nome) {
     var Orig = window[nome];
     if (typeof Orig !== 'function') return;

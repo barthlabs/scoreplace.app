@@ -84,6 +84,17 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.83 ───────────────────────────────────────────
+        // ⛔ DESFAZ PESO QUE EU MESMO PUS. O perfilador era tudo-ou-nada e ficou
+        // DIAS ligado no aparelho do dono — inclusive a parte cara, que embrulha
+        // TODO ouvinte de scroll/touchmove com dois performance.now() POR EVENTO,
+        // até 60x/s enquanto se rola. Eu pendurei um medidor em cada quadro da
+        // rolagem no aparelho que reclamava de rolagem, e ainda somei mais peso
+        // (2.0.80) tentando entender a lentidão. Ele: "até aqui só piorou o que
+        // estava razoável". Agora: perf=1 é LEVE (sentinela + relato com direção,
+        // nós e onde) e perf=2 é FUNDO (embrulhos). O item pro usuário existe
+        // porque QUEM TEM diagnóstico ligado sente a diferença na rolagem.
+        '<li><b>⚡ Rolagem mais leve para quem tem diagnóstico ligado:</b> as ferramentas que eu uso para investigar lentidão mediam o tempo de <b>cada</b> toque e <b>cada</b> quadro de rolagem — e isso, ligado por dias, atrapalhava justamente o que vinha sendo investigado. Agora o diagnóstico tem dois níveis: o normal continua reportando as travadas, e o pesado só liga quando é para caçar um culpado específico.</li>' +
         // ── ciclo 2.0.82 ───────────────────────────────────────────
         // Ordem do dono: "tem o mostrar mais nos 2. poderia não carregar tudo antes
         // que alguém clicasse no mostrar mais." MEDIDO na forma da tela dele (1
