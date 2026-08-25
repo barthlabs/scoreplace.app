@@ -671,6 +671,61 @@ window._tournamentPlayableFromTs = function (t) {
   if (!_cands.length) return null;
   return Math.max.apply(null, _cands);
 };
+// ══ O CARTÃO LÊ O RESUMO, OU O DOCUMENTO COMPLETO ═══════════════════════════
+// Desenho do dono: _"na dashboard precisamos da versão reduzida sempre e clicando no
+// torneio traz os detalhes"_. A tela inicial vai passar a ler `tournaments_summary`
+// (documento leve), mas o MESMO cartão continua sendo desenhado a partir do documento
+// completo em outros lugares (detalhe, busca, sandbox).
+//
+// Estes acessadores são a ponte: se o campo já veio calculado, usa; senão calcula como
+// sempre calculou. ⛔ Números IDÊNTICOS nos dois caminhos — o resumo é montado pelas
+// PRÓPRIAS funções abaixo (functions-autodraw/tournament-summary-core.js recebe-as por
+// injeção), então não existe "segunda regra". Travado em
+// tests/cartao-le-resumo-ou-documento.test.js, torneio por torneio, na base real.
+//
+// ⚠️ Passo INVISÍVEL de propósito: aqui só se ensina o cartão a tolerar as duas formas.
+// Trocar a FONTE de dados é a leva seguinte — fazer as duas juntas foi o que já obrigou
+// uma reversão.
+var _num = function (v) { return (typeof v === 'number' && isFinite(v)) ? v : null; };
+
+window._cardCompetidores = function (t) {
+  if (!t) return { people: 0, teams: 0 };
+  var p = _num(t.competitorsCount);
+  if (p != null) return { people: p, teams: _num(t.teamsCount) || 0 };
+  return (typeof window._countCompetitors === 'function')
+    ? window._countCompetitors(t) : { people: 0, teams: 0 };
+};
+
+window._cardEspera = function (t) {
+  if (!t) return 0;
+  var n = _num(t.waitlistCount);
+  if (n != null) return n;
+  return (typeof window._waitlistPeopleCount === 'function')
+    ? window._waitlistPeopleCount(t)
+    : (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
+};
+
+window._cardProgresso = function (t) {
+  if (!t) return { total: 0, completed: 0, pct: 0 };
+  var tot = _num(t.matchesTotal), done = _num(t.matchesDone);
+  if (tot != null && done != null) {
+    var pct = _num(t.progressPct);
+    return { total: tot, completed: done, pct: (pct != null) ? pct : (tot > 0 ? Math.round(done / tot * 100) : 0) };
+  }
+  return (typeof window._getTournamentProgress === 'function')
+    ? window._getTournamentProgress(t) : { total: 0, completed: 0, pct: 0 };
+};
+
+// "Já sorteou?" — no documento completo é a presença das listas; no resumo é um
+// booleano (as listas não viajam, é justamente o ponto).
+window._cardTemChave = function (t) {
+  if (!t) return false;
+  if (typeof t.hasDraw === 'boolean') return t.hasDraw;
+  return (Array.isArray(t.matches) && t.matches.length > 0)
+    || (Array.isArray(t.rounds) && t.rounds.length > 0)
+    || (Array.isArray(t.groups) && t.groups.length > 0);
+};
+
 // v2.0.74: DUAS correções, ambas do dono, na mesma régua.
 //
 // ① O tempo configurado é POR SET (`_minutosDaPartida`, em sport-rules.js) e cada

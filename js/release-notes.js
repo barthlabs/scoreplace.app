@@ -84,6 +84,16 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.77 ───────────────────────────────────────────
+        // ⚠️ SEM item pro usuário, e é DECISÃO: a tela não muda NADA. É o passo
+        // invisível da arquitetura do resumo — o cartão da tela inicial passa a aceitar
+        // TAMBÉM o documento leve (`tournaments_summary`), mantendo número por número
+        // idêntico quando recebe o documento completo (provado nos 28 torneios da base
+        // em tests/cartao-le-resumo-ou-documento.test.js). A troca da FONTE de dados,
+        // essa sim visível, é a leva seguinte: fazer as duas juntas foi exatamente o
+        // que obrigou a reversão da 2.0.69/70/71.
+        // Junto: `sw.js` estava com CACHE_NAME em 2.0.74 (duas versões atrás) — o cache
+        // do service worker não estava sendo invalidado nos releases 75 e 76.
         // ── ciclo 2.0.76 ───────────────────────────────────────────
         // Quatro frases do dono (25/ago): renomear "Combinar jogos" pra "Propor datas";
         // o botão mostra a data definida INCLUSIVE nas Novidades; o organizador aponta

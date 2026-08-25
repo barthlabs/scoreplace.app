@@ -782,16 +782,17 @@ function renderDashboard(container) {
     // a própria lógica que EXCLUÍA os da lista de espera, dando números diferentes
     // do detalhe (100/50 vs 103/51). Agora INSCRITOS/EQUIPES batem em todo lugar, e
     // ESPERA conta PESSOAS (dupla na espera = 2).
-    const _ccDash = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t) : { people: 0, teams: 0 };
+    // v2.0.77: pelos acessadores — o cartão passa a aceitar TAMBÉM o resumo leve
+    // (`tournaments_summary`), sem mudar um número sequer quando recebe o documento
+    // completo. Ver `_cardCompetidores` & cia. em tournaments-utils.js.
+    const _ccDash = window._cardCompetidores(t);
     let individualCount = _ccDash.people;
     let teamCount = _ccDash.teams;
-    const _standbyCount = (typeof window._waitlistPeopleCount === 'function')
-      ? window._waitlistPeopleCount(t)
-      : (Array.isArray(t.waitlist) ? t.waitlist.length : 0);
+    const _standbyCount = window._cardEspera(t);
 
     // Enroll/unenroll button: only when inscriptions are truly open
     // hasDraw = tournament already has matches/rounds/groups drawn
-    const hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) || (Array.isArray(t.rounds) && t.rounds.length > 0) || (Array.isArray(t.groups) && t.groups.length > 0);
+    const hasDraw = window._cardTemChave(t);
     const _leE = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
     const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || _leE === 'standby' || _leE === 'expand');
     let enrollBtnHtml = '';
@@ -1066,8 +1067,8 @@ function renderDashboard(container) {
             ${(() => {
               var _html = '';
               // Progress bar for active tournaments
-              if (typeof window._getTournamentProgress === 'function') {
-                var _prog = window._getTournamentProgress(t);
+              if (typeof window._cardProgresso === 'function') {
+                var _prog = window._cardProgresso(t);   // resumo ou documento completo
                 // v2.1.55/v2.3.14: quando o box de progresso COMPLETO (rico) já
                 // aparece (qualquer formato em andamento, não encerrado), não
                 // mostrar a barra simples — evita duplicar. Agora inclui Liga.
@@ -3228,16 +3229,15 @@ function renderDashboard(container) {
       // v1.6.2-beta: hasDraw must be per-item — was referencing outer scope's
       // hasDraw (defined inside a different forEach) causing ReferenceError on
       // iOS Safari when compact view was used. Sentry #7474466372 (count=12).
-      var hasDraw = (Array.isArray(t.matches) && t.matches.length > 0) ||
-                    (Array.isArray(t.rounds) && t.rounds.length > 0) ||
-                    (Array.isArray(t.groups) && t.groups.length > 0);
+      var hasDraw = window._cardTemChave(t);
       if (isFinished) { statusText = _t('status.finished'); statusColor = '#94a3b8'; }
       else if (tournamentStarted) { statusText = _t('status.active'); statusColor = '#4ade80'; }
       else if (isClosed) { statusText = _t('status.closed'); statusColor = '#fca5a5'; }
       else { statusText = _t('status.open'); statusColor = '#60a5fa'; }
       // CANÔNICO: PESSOAS inscritas (dupla=2), não entradas. Ver _countCompetitors.
-      var pCount = typeof window._countCompetitors === 'function' ? window._countCompetitors(t).people : (Array.isArray(t.participants) ? t.participants.length : 0);
-      var prog = typeof window._getTournamentProgress === 'function' ? window._getTournamentProgress(t) : { pct: 0 };
+      // v2.0.77: pelos acessadores (resumo leve OU documento completo, mesmo número).
+      var pCount = window._cardCompetidores(t).people;
+      var prog = window._cardProgresso(t);
       var dateStr = '';
       if (t.startDate) { try { dateStr = new Date(t.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch(e) {} }
       var isFav = typeof window._isFavorite === 'function' && window._isFavorite(t.id);
