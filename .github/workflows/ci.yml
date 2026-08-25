@@ -34,6 +34,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # ⚠️ 2.0.75 · HISTÓRICO COMPLETO, e isto NÃO é preferência. O padrão do
+          # actions/checkout é `fetch-depth: 1` — um commit só. Com isso,
+          # tests/trava-de-cache-buster-nao-fica-vazia.test.js não achava o release
+          # anterior (ele é achado pelo `git log -- version.txt`), e a trava de
+          # cache-buster que ele exercita ficava sem base pra comparar. Medido: 53 runs
+          # do CI, 53 vermelhos, 0 verdes, da 2.0.42 (24/ago) até a 2.0.75 — e um gate
+          # sempre vermelho é um gate que ninguém lê: uma quebra de VERDADE ia se
+          # perder no meio do mesmo email de falha de sempre.
+          # O teste agora PULA em clone raso (dizendo alto que pulou) em vez de morrer;
+          # esta linha é a outra metade — sem ela o CI ficaria verde PULANDO, que é
+          # trocar um verde falso por outro.
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4

@@ -54,6 +54,31 @@ const _temGit = (function () {
 if (!_temGit) {
   console.log('  ⏭  sem .git (cópia extraída do deploy) — a parte de comportamento não roda aqui');
 } else {
+// ⚠️ 2.0.75 · E SÓ COM HISTÓRICO. Este bloco pergunta "o que mudou desde o release anterior?"
+// — pergunta que um clone RASO não tem como responder. O `actions/checkout@v4` clona com
+// `fetch-depth: 1` por padrão, então no CI havia UM commit só: o `git log -- version.txt`
+// devolvia apenas o HEAD, filtrar o HEAD fora deixava `undefined`, e o teste MORRIA em
+// `git diff --name-only undefined` (exceção não-tratada, não asserção). Resultado medido:
+// 53 runs do CI, 53 vermelhos, 0 verdes, desde a 2.0.42 — e um gate sempre vermelho é um
+// gate que ninguém lê, então uma quebra de VERDADE ia se misturar no mesmo email de sempre.
+// O conserto tem duas metades e precisa das duas: aqui o teste PERGUNTA antes (e diz que
+// pulou, alto), e o `.github/workflows/ci.yml` passou a clonar com `fetch-depth: 0` pra este
+// caminho não ser pulado lá. Pular em silêncio seria trocar um verde falso por outro.
+const _relAnterior = (function () {
+  try {
+    const h = execSync('git rev-parse HEAD', { cwd: ROOT, stdio: 'pipe' }).toString().trim();
+    return execSync('git log -3 --format=%H -- version.txt', { cwd: ROOT, stdio: 'pipe' })
+      .toString().split('\n').map((x) => x.trim()).filter(Boolean).filter((x) => x !== h)[0] || null;
+  } catch (e) { return null; }
+})();
+if (!_relAnterior) {
+  const _raso = (function () {
+    try { return execSync('git rev-parse --is-shallow-repository', { cwd: ROOT, stdio: 'pipe' }).toString().trim() === 'true'; }
+    catch (e) { return false; }
+  })();
+  console.log('  ⏭  sem release anterior no histórico' + (_raso ? ' (clone RASO — use fetch-depth: 0 no CI)' : '') +
+    ' — a parte de comportamento não roda aqui');
+} else {
 // Roda a trava como o pre-push roda. Verde agora (o index está bumpado); e vermelha quando o
 // buster de um js ALTERADO é rebaixado — que é exatamente o incidente.
 const idx = path.join(ROOT, 'index.html');
@@ -61,27 +86,21 @@ const original = fs.readFileSync(idx, 'utf8');
 const rodar = () => { try { execSync('node scripts/check-cache-busters.js', { cwd: ROOT, stdio: 'pipe' }); return 0; } catch (e) { return e.status || 1; } };
 try {
   ok(rodar() === 0, 'no estado atual do repo a trava passa');
-  const alvo = (original.match(/js\/views\/[a-z-]+\.js\?v=[0-9.]+/g) || [])[0];
-  const mudados = execSync('node -e "' +
-    'const {execSync}=require(\'child_process\');' +
-    'const h=execSync(\'git rev-parse HEAD\').toString().trim();' +
-    'const r=execSync(\'git log -3 --format=%H -- version.txt\').toString().split(\'\\n\').map(s=>s.trim()).filter(Boolean).filter(x=>x!==h)[0];' +
-    'process.stdout.write(execSync(\'git diff --name-only \'+r+\' -- js/\').toString())"',
-    { cwd: ROOT }).toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
+  const mudados = execSync('git diff --name-only ' + _relAnterior + ' -- js/', { cwd: ROOT })
+    .toString().split('\n').map((s) => s.trim()).filter((s) => s.endsWith('.js'));
   // ⚠️ "0 js alterados" NÃO é trava vazia — é uma leva sem JS, e ela EXISTE: o bump do iOS
   // mexe só no `project.pbxproj`. Foi assim que esta asserção reprovou o push da build 245.
   // O que precisa ser verdade sempre é a BASE não ser o próprio HEAD (aí sim o diff seria
   // vazio POR CONSTRUÇÃO, que é o defeito). Com JS na leva, o teste vai além e rebaixa um
   // `?v=` pra ver a trava reprovar.
-  const _base = execSync('node -e "' +
-    'const {execSync}=require(\'child_process\');' +
-    'const h=execSync(\'git rev-parse HEAD\').toString().trim();' +
-    'let b=execSync(\'git merge-base HEAD origin/main\').toString().trim();' +
-    'if(b===h){const r=execSync(\'git log -3 --format=%H -- version.txt\').toString().split(\'\\n\').map(s=>s.trim()).filter(Boolean).filter(x=>x!==h)[0]; if(r) b=r;}' +
-    'process.stdout.write(b)"', { cwd: ROOT }).toString().trim();
   const _head = execSync('git rev-parse HEAD', { cwd: ROOT }).toString().trim();
+  let _base = _head;
+  try {
+    _base = execSync('git merge-base HEAD origin/main', { cwd: ROOT, stdio: 'pipe' }).toString().trim();
+  } catch (e) { /* sem origin/main (clone solto): a base é o release anterior, abaixo */ }
+  if (_base === _head) _base = _relAnterior;
   ok(_base && _base !== _head,
-    '  → a base NUNCA é o próprio HEAD (base ' + _base.slice(0, 8) + ' ≠ head ' + _head.slice(0, 8) + ')');
+    '  → a base NUNCA é o próprio HEAD (base ' + String(_base).slice(0, 8) + ' ≠ head ' + _head.slice(0, 8) + ')');
   const um = mudados.map((f) => new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=[0-9.]+'))
     .map((re) => (original.match(re) || [])[0]).filter(Boolean)[0];
   if (um) {
@@ -94,6 +113,7 @@ try {
   fs.writeFileSync(idx, original);
 }
 ok(fs.readFileSync(idx, 'utf8') === original, 'o teste devolveu o index.html como estava');
+}
 }
 
 console.log(fail === 0
