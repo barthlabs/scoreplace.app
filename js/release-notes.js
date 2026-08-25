@@ -84,6 +84,15 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.78 ───────────────────────────────────────────
+        // MEDIDO no render REAL da tela inicial (28 torneios da base): 8.959
+        // resoluções de nome por desenho, 54% de toda a CPU (_memberUidByName 25,6%
+        // + _nameForUid 22,9% + _idMapKey 5,8%). Causa: a 2ª passada resolvia o nome
+        // VIVO de CADA entrada a CADA chamada — e ela roda SEMPRE em torneio real,
+        // porque _stripUidEntryNames apaga o nome gravado de quem tem uid.
+        // Depois do índice: 491 resoluções, render 13,4ms → 6,5ms (desktop). É a
+        // mesma forma do O(n²) que fazia a CHAVE levar 925ms no iPhone.
+        '<li><b>⚡ A tela inicial desenha na metade do tempo:</b> a cada vez que a lista de torneios era redesenhada — abrir o app, ocultar, desocultar, expandir os ocultados — o aplicativo procurava cada pessoa <b>pelo nome</b>, varrendo a lista inteira de inscritos de todos os torneios. Eram quase <b>9 mil</b> buscas por desenho. Agora ele monta o índice uma vez e consulta direto: <b>18 vezes menos trabalho</b>, e o desenho caiu pela metade. Quanto mais gente inscrita, maior a diferença.</li>' +
         // ── ciclo 2.0.77 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário, e é DECISÃO: a tela não muda NADA. É o passo
         // invisível da arquitetura do resumo — o cartão da tela inicial passa a aceitar

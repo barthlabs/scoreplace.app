@@ -43,53 +43,114 @@ window._participantUids = function(p) {
 // do torneio — varre solos (p.uid), slots de dupla (p1Name/p1Uid, p2Name/p2Uid),
 // sub-participants[], e também espera/standby (pra substitutos resolverem).
 // Retorna '' pra jogador informal (sem conta).
-window._memberUidByName = function(t, name) {
-  if (!t || !name) return '';
-  var target = String(name).trim().toLowerCase();
-  if (!target) return '';
+// ⚡ v2.0.78 — ÍNDICE, não varredura. MEDIDO no render REAL da tela inicial com os
+// 28 torneios da base: `_memberUidByName` era chamada 58 vezes e disparava ~8.000
+// resoluções de nome (8.959 no total do render) — 54% de toda a CPU do desenho
+// (`_memberUidByName` 25,6% + `_nameForUid` 22,9% + `_idMapKey` 5,8%).
+//
+// A causa é a 2ª passada: ela resolve o nome VIVO de CADA entrada a cada chamada. E
+// ela roda SEMPRE em torneio real, porque `_stripUidEntryNames` apaga o nome de toda
+// entrada cujo uid resolve — medido no Confra: 111 entradas, 111 com uid, ZERO com
+// nome. Ou seja, a passada barata nunca casa e a cara varre tudo, toda vez.
+//
+// É a MESMA forma do O(n²) que fazia a chave levar 925ms no iPhone
+// ([[project_render_on2_resolucao_de_nome]]) — e a cura é a mesma do `_sideIndex`:
+// montar o mapa nome→uid UMA vez por (torneio × época do cache de perfis).
+//
+// ⛔ A SEMÂNTICA NÃO MUDA:
+//   · nome GRAVADO tem precedência sobre nome VIVO (era passada 1 antes da 2);
+//   · dentro de cada passada, a PRIMEIRA entrada que casa vence (era o `return`);
+//   · a ordem das piscinas e dos campos é a mesma (participants → standby → waitlist;
+//     displayName/name → p1Name → p2Name → sub-participants);
+//   · entrada sem uid (jogador informal) continua devolvendo ''.
+// ⚠️ A 2ª passada é PREGUIÇOSA: só é montada quando a busca erra no mapa dos nomes
+// gravados. Sem isso, torneio que AINDA tem nome gravado pagaria uma varredura que
+// antes não pagava.
+// ⚠️ A época vem de `_bumpProfileEpoch`, que é bumpada UMA vez por perfil resolvido e
+// não por escrita — invalidar por documento foi o que causou a travada de 20s da
+// 2.0.63. Não trocar isso sem medir.
+var _mubnIdx = (typeof WeakMap === 'function') ? new WeakMap() : null;
+
+function _mubnPools(t) {
   var pools = [];
   if (Array.isArray(t.participants)) pools.push(t.participants);
   if (Array.isArray(t.standbyParticipants)) pools.push(t.standbyParticipants);
   if (Array.isArray(t.waitlist)) pools.push(t.waitlist);
+  return pools;
+}
+
+function _mubnCache(t) {
+  var epoca = (window._profileEpoch || 0);
+  var pools = _mubnPools(t);
+  var n = 0;
+  for (var i = 0; i < pools.length; i++) n += pools[i].length;
+  var hit = _mubnIdx && _mubnIdx.get(t);
+  if (hit && hit.epoca === epoca && hit.n === n) return hit;
+  var novo = { epoca: epoca, n: n, pools: pools, gravados: null, vivos: null };
+  if (_mubnIdx) _mubnIdx.set(t, novo);
+  return novo;
+}
+
+// Percorre as piscinas na ORDEM original chamando `visita(nome, uid)`. `comoNome`
+// decide se o nome vem do campo gravado ou do perfil vivo — as duas passadas
+// percorrem exatamente a mesma árvore.
+function _mubnVarre(pools, visita, live) {
   for (var pi = 0; pi < pools.length; pi++) {
     var arr = pools[pi];
     for (var i = 0; i < arr.length; i++) {
       var p = arr[i];
       if (!p || typeof p !== 'object') continue;
-      if ((p.displayName || p.name || '').trim().toLowerCase() === target && p.uid) return p.uid;
-      if ((p.p1Name || '').trim().toLowerCase() === target && p.p1Uid) return p.p1Uid;
-      if ((p.p2Name || '').trim().toLowerCase() === target && p.p2Uid) return p.p2Uid;
+      if (live) {
+        if (p.uid) visita(live(p.uid), p.uid);
+        if (p.p1Uid) visita(live(p.p1Uid), p.p1Uid);
+        if (p.p2Uid) visita(live(p.p2Uid), p.p2Uid);
+      } else {
+        visita(p.displayName || p.name, p.uid);
+        visita(p.p1Name, p.p1Uid);
+        visita(p.p2Name, p.p2Uid);
+      }
       if (Array.isArray(p.participants)) {
         for (var s = 0; s < p.participants.length; s++) {
           var sub = p.participants[s];
-          if (sub && (sub.displayName || sub.name || '').trim().toLowerCase() === target && sub.uid) return sub.uid;
+          if (!sub) continue;
+          if (live) { if (sub.uid) visita(live(sub.uid), sub.uid); }
+          else visita(sub.displayName || sub.name, sub.uid);
         }
       }
     }
   }
-  // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome GRAVADO não
-  // casou (a passada acima ganha → zero regressão). Resolve a pessoa quando a entrada não tem
-  // p1Name/p2Name/displayName gravado (pós-Fase-4). Vazio no autoDraw (sem _nameForUid).
+}
+
+function _mubnMapa(pools, live) {
+  var mapa = (typeof Map === 'function') ? new Map() : null;
+  if (!mapa) return null;
+  _mubnVarre(pools, function (nome, uid) {
+    if (!uid || !nome) return;
+    var k = String(nome).trim().toLowerCase();
+    if (k && !mapa.has(k)) mapa.set(k, uid);   // primeiro que chega vence (era o `return`)
+  }, live);
+  return mapa;
+}
+
+window._memberUidByName = function(t, name) {
+  if (!t || !name) return '';
+  var target = String(name).trim().toLowerCase();
+  if (!target) return '';
+  var c = _mubnCache(t);
+  if (!c.gravados) {
+    c.gravados = _mubnMapa(c.pools, null);
+    if (!c.gravados) return '';   // ambiente sem Map: não há como indexar
+  }
+  var achado = c.gravados.get(target);
+  if (achado) return achado;
+  // v4.5.84 (ITEM 3 · Fase 3): 2ª passada por nome VIVO (perfil) — só quando o nome
+  // GRAVADO não casou (a passada acima ganha → zero regressão). Resolve a pessoa
+  // quando a entrada não tem p1Name/p2Name/displayName gravado (pós-Fase-4).
+  // Vazio no autoDraw (sem _nameForUid).
   var _live = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
-  if (_live) {
-    for (var pi2 = 0; pi2 < pools.length; pi2++) {
-      var arr2 = pools[pi2];
-      for (var j = 0; j < arr2.length; j++) {
-        var q = arr2[j];
-        if (!q || typeof q !== 'object') continue;
-        if (q.uid && String(_live(q.uid) || '').trim().toLowerCase() === target) return q.uid;
-        if (q.p1Uid && String(_live(q.p1Uid) || '').trim().toLowerCase() === target) return q.p1Uid;
-        if (q.p2Uid && String(_live(q.p2Uid) || '').trim().toLowerCase() === target) return q.p2Uid;
-        if (Array.isArray(q.participants)) {
-          for (var s2 = 0; s2 < q.participants.length; s2++) {
-            var sub2 = q.participants[s2];
-            if (sub2 && sub2.uid && String(_live(sub2.uid) || '').trim().toLowerCase() === target) return sub2.uid;
-          }
-        }
-      }
-    }
-  }
-  return '';
+  if (!_live) return '';
+  if (!c.vivos) c.vivos = _mubnMapa(c.pools, _live);
+  return (c.vivos && c.vivos.get(target)) || '';
 };
 
 // _memberNameByUid(t, uid): reverso de _memberUidByName — dado um uid, devolve o

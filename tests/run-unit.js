@@ -172,6 +172,7 @@ const SUITES = [
   'tests/duracao-por-set.test.js',
   'tests/previsao-conta-fase-nao-sorteada.test.js',
   'tests/cartao-le-resumo-ou-documento.test.js',
+  'tests/nome-para-uid-e-indice-nao-varredura.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador
