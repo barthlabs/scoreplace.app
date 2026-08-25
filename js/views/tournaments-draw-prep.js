@@ -1151,6 +1151,47 @@ window._showLateConfrontosPanel = function(tId) {
     if (window._dtrace) window._dtrace('lateConfrontosPanel:shown', { le: (window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment) });
 };
 
+// v2.0.75: CONTAGEM DE JOGOS por opção de resolução — FUNÇÃO PURA, fora do painel.
+// Era um closure (`_uGamesFor`) dentro de showUnifiedResolutionPanel: intestável, e por isso
+// divergiu do sorteio sem ninguém ver. Agora é global pura, coberta por
+// tests/painel-resolucao-conta-como-o-sorteio.test.js.
+//   info  = {effectiveTeams, loP2, hiP2}
+//   opts  = {isDouble, swissRounds, swissElim, lines}
+// Devolve null quando a opção não tem estimativa direta (dissolve/poll) — o painel omite o ⏱️.
+window._resolucaoJogos = function (key, info, opts) {
+    info = info || {}; opts = opts || {};
+    var s = info.effectiveTeams, lo = info.loP2, hi = info.hiP2, base;
+    var isDouble = !!opts.isDouble;
+    if (!s || s <= 1) return null;
+    if ((s & (s - 1)) === 0) base = s - 1;                                  // já é potência de 2
+    else if (key === 'bye') base = s - 1;                                    // chave de hi com folgas
+    else if (key === 'playin') {
+        if (isDouble && typeof window._countRepechageDoubleElim === 'function') {
+            // Dupla Eliminatória c/ repescagem: NINGUÉM é eliminado na 1ª — todos os
+            // derrotados caem na chave inferior. O total = contador que espelha o sorteio
+            // real (_buildRepechageDoubleElim). Ex.: 14 duplas = 28 jogos.
+            base = window._countRepechageDoubleElim(s);
+            if (!base) return null;
+        } else if (typeof window._countMinimalElimGames === 'function') {
+            // v2.0.75: eliminação SIMPLES c/ repescagem — a conta sai do MOTOR (a árvore mínima
+            // que o sorteio monta, Gᵣ=⌈E/2⌉), não de uma fórmula paralela. A antiga
+            // (⌊s/2⌋+(lo−1)+s%2) prometia 48 jogos pra N=33 quando o sorteio faz 37.
+            base = window._countMinimalElimGames(s);
+        } else {
+            return null; // motor ausente: sem estimativa é melhor que estimativa errada
+        }
+    }
+    else if (key === 'reopen') base = hi - 1;                                // enche até hi
+    else if (key === 'standby' || key === 'exclusion') base = lo - 1;        // cai pra lo
+    else if (key === 'swiss') { base = (opts.swissRounds || 3) * Math.floor(s / 2) + (opts.swissElim || 0); } // X rodadas de suíço + eliminatória de loP2
+    else return null;                                                        // dissolve/poll: sem estimativa direta
+    // dupla elim ≈ dobro - 1; NÃO ao Suíço nem ao Play-in (ambos já contabilizados acima).
+    if (isDouble && base > 0 && key !== 'swiss' && key !== 'playin') base = 2 * base - 1;
+    // fase: a MESMA estratégia roda em cada linha → multiplica pelo nº de linhas.
+    if (opts.lines && base != null) base = base * (opts.lines || 1);
+    return base;
+};
+
 window.showUnifiedResolutionPanel = function(tId) {
     const t = window._findTournamentById(tId);
     if (!t) { if (window._dtrace) window._dtrace('resolutionPanel:NO-TOURNAMENT'); return; }
@@ -1289,31 +1330,14 @@ window.showUnifiedResolutionPanel = function(tId) {
     var _uDur = window._minutosDaPartida(t, window._faseDoTorneio(t, t.currentPhaseIndex || 0));
     var _uCourts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
     var _uIsDouble = (t.format || '').indexOf('Dupla') !== -1;
+    // a CONTA mora em window._resolucaoJogos (pura, testada); aqui só o contexto do painel.
     var _uGamesFor = function(key) {
-        var s = info.effectiveTeams, lo = info.loP2, hi = info.hiP2, base;
-        if (!s || s <= 1) return null;
-        if ((s & (s - 1)) === 0) base = s - 1;                                  // já é potência de 2
-        else if (key === 'bye') base = s - 1;                                    // chave de hi com folgas
-        else if (key === 'playin') {
-            if (_uIsDouble && typeof window._countRepechageDoubleElim === 'function') {
-                // Dupla Eliminatória c/ repescagem: NINGUÉM é eliminado na 1ª — todos os
-                // derrotados caem na chave inferior. O total = contador que espelha o sorteio
-                // real (_buildRepechageDoubleElim). Ex.: 14 duplas = 28 jogos.
-                base = window._countRepechageDoubleElim(s) || (Math.floor(s / 2) + (lo - 1) + (s % 2));
-            } else {
-                // Eliminação simples c/ play-in: repescagem (floor(s/2)) + chave de lo (lo-1).
-                base = Math.floor(s / 2) + (lo - 1) + (s % 2);
-            }
-        }
-        else if (key === 'reopen') base = hi - 1;                                // enche até hi
-        else if (key === 'standby' || key === 'exclusion') base = lo - 1;        // cai pra lo
-        else if (key === 'swiss') { base = (window._unifiedSwissRounds || 3) * Math.floor(s / 2) + (window._unifiedSwissElim || 0); } // X rodadas de suíço + eliminatória de loP2
-        else return null;                                                        // dissolve/poll: sem estimativa direta
-        // dupla elim ≈ dobro - 1; NÃO ao Suíço nem ao Play-in (ambos já contabilizados acima).
-        if (_uIsDouble && base > 0 && key !== 'swiss' && key !== 'playin') base = 2 * base - 1;
-        // fase: a MESMA estratégia roda em cada linha → multiplica pelo nº de linhas.
-        if (t._phaseResInfo && base != null) base = base * (t._phaseResInfo.lines.length || 1);
-        return base;
+        return window._resolucaoJogos(key, info, {
+            isDouble: _uIsDouble,
+            swissRounds: window._unifiedSwissRounds,
+            swissElim: window._unifiedSwissElim,
+            lines: t._phaseResInfo ? (t._phaseResInfo.lines.length || 1) : 0
+        });
     };
     var _uFmtMin = function(m) { var h = Math.floor(m / 60), mm = m % 60; return h > 0 ? (h + 'h' + (mm ? ' ' + mm + 'm' : '')) : (mm + 'm'); };
     // v4.0.70: Suíço = X RODADAS de suíço → classifica pra ELIMINATÓRIA (chave de loP2).

@@ -443,6 +443,27 @@
   }
   if (typeof window !== 'undefined') window._buildMinimalElimTree = _buildMinimalTree;
 
+  // v2.0.75: CONTADOR da eliminatória mínima — quantos jogos a repescagem gera pra N entrantes,
+  // ANTES de existir chave. Quem pergunta é o painel de resolução (o organizador escolhe olhando
+  // "quantos jogos / quanto tempo"). Não é uma 2ª fórmula: MONTA a árvore de verdade (descartável,
+  // sem times) com o MESMO _buildMinimalTree do sorteio e conta os jogos. Espelha o que
+  // _countRepechageDoubleElim (tournaments-draw.js) faz do lado da DUPLA eliminatória.
+  // Sem 3º lugar e sem BYE — a conta é da CHAVE (pow2 → N−1: 8→7, 16→15, 64→63), e ninguém joga
+  // um BYE. Ver [[project_minimal_elim_formula_canon]]: uma fórmula só, sempre a mesma.
+  function _countMinimalElimGames(n) {
+    n = parseInt(n, 10) || 0;
+    if (n <= 1) return 0;
+    // 1ª rodada do sorteio 'playin': ⌊n/2⌋ jogos reais + (n ímpar) o jogo do satout = ⌈n/2⌉.
+    var matches = [], seq = 0, mkId = function () { return 'cnt' + (++seq); }, firstRound = [];
+    for (var i = 0, g0 = Math.ceil(n / 2); i < g0; i++) {
+      var m = { id: mkId(), round: 0, bracket: 'main', p1: 'TBD', p2: 'TBD', winner: null };
+      matches.push(m); firstRound.push(m);
+    }
+    _buildMinimalTree(matches, firstRound, mkId, 'main', false, false, {}, 0);
+    return matches.filter(function (mm) { return !mm.isBye && !mm.isThirdPlace; }).length;
+  }
+  if (typeof window !== 'undefined') window._countMinimalElimGames = _countMinimalElimGames;
+
   // v1.3.78: FÓRMULA DO BYE (própria, diferente da repescagem). A partir de W vencedores da 1ª
   // rodada: arredonda pra próxima POTÊNCIA DE 2 (T); as (T−W) FOLGAS vão pros MELHORES colocados
   // (semente 1×T → o topo pega o slot alto vazio = BYE). Chave pow2 limpa daí pra frente; semis
