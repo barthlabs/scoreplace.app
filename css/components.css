@@ -2465,6 +2465,22 @@ html, body,
 .sp-av{width:var(--sp-av,20px);height:var(--sp-av,20px);border-radius:50%;flex-shrink:0;object-fit:cover;}
 .sp-av-p{opacity:0.95;}
 .sp-mc-box{flex:1;min-width:0;height:var(--sp-box-h,1.05rem);overflow:hidden;display:flex;align-items:center;line-height:1.1;}
+/* ── ⭐⭐ O NOME NASCE CABENDO — É ISTO O "SCROLL CORTADO" (2.0.66) ────────────
+   Relato do dono, repetido por dias: _"scrolla cortado"_. MEDIDO no HTML REAL da
+   chave do Confra, no motor do Safari, ANTES de o ajuste de nomes rodar:
+   **324 de 324 nomes (100%) nascem CORTADOS** — texto de 17px numa caixa de 15px.
+   Ou seja: todo card que entra na tela mostra o nome cortado até o motor de
+   ajuste alcançá-lo. Rolando, a pessoa vê exatamente o que relatou.
+   POR QUÊ: `.sp-name-fit` não tinha estilo NENHUM, então o nome nascia com a
+   fonte HERDADA do corpo (~14,6px + line-height ~17px) dentro de uma caixa de
+   altura fixa com `overflow:hidden` dimensionada para uma fonte MENOR.
+   O CONSERTO: enquanto não foi ajustado (`:not([data-fitted])`), o nome usa uma
+   fonte DERIVADA da própria caixa — cabe por construção, sem número mágico. O
+   motor então o faz CRESCER até o tamanho final. Nascer pequeno e crescer é
+   incomparavelmente melhor que nascer cortado: texto completo em todo quadro.
+   ⛔ Não mexer no `line-height`: é ele que a caixa de duas linhas usa como régua
+   (o motor calcula a quebra a partir dele). */
+.sp-name-fit:not([data-fitted]){font-size:calc(var(--sp-box-h, 1.05rem) / 1.25);line-height:1.1;}
 /* ⚠️ O `line-height:1.1` acima NÃO é cosmético: esta caixa tem ALTURA FIXA, e quando
    o nome é longo demais o motor do fit (store.js, `_quebraNaCaixaEmLote`) o quebra em
    DUAS linhas DENTRO deste mesmo espaço — cânone do dono, 23/ago/2026: a caixa é igual

@@ -84,6 +84,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.66 ───────────────────────────────────────────
+        // O "scroll cortado" de dias: MEDIDO no HTML real da chave do Confra, no motor
+        // do Safari — 324 de 324 nomes (100%) nasciam CORTADOS (texto 17px em caixa de
+        // 15px), porque `.sp-name-fit` não tinha estilo e herdava a fonte do corpo.
+        '<li><b>✂️ Acabou o texto cortado ao rolar:</b> os nomes dos jogadores nasciam <b>grandes demais para a caixa</b> e ficavam cortados até o ajuste automático alcançá-los — rolando, cada card novo aparecia assim. Agora o nome já nasce cabendo e só <b>cresce</b> até o tamanho final: texto inteiro em todo instante.</li>' +
         // ── ciclo 2.0.65 ───────────────────────────────────────────
         // 3 dias de "continua sem feedback de clique". A causa era de manual: o
         // navegador só pinta ENTRE tarefas, e o realce + o overlay do loader (96%
