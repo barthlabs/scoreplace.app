@@ -1304,10 +1304,12 @@ window._buildActivityLog = function(tournamentId) {
           '</div>';
     }).join('');
 
-    var allEventsHtml = '';
-    if (hasMore) {
-        // a cauda: tudo que ficou depois dos `maxShow` mais recentes
-        allEventsHtml = events.slice(maxShow).map(function(ev) {
+    // ⭐ A CAUDA É FUNÇÃO, NÃO STRING (2.0.86): montar o texto de TODOS os
+    // eventos antigos era trabalho feito sempre, pra um <details> que quase
+    // ninguém abre. Agora só roda se alguém pedir.
+    function montaCauda() {
+        if (!hasMore) return '';
+        return events.slice(maxShow).map(function(ev) {
             var dateStr = '';
             if (ev.date) {
                 try { var d = new Date(ev.date); dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch(e) {}
@@ -1320,19 +1322,38 @@ window._buildActivityLog = function(tournamentId) {
         }).join('');
     }
 
+    // ── ⭐ O HISTÓRICO SÓ NASCE QUANDO É ABERTO (2.0.86) ─────────────────────
+    // MEDIDO no aparelho do dono (Sentry, tela de DETALHE do torneio):
+    //   nos=8061 · onde: #app=7870 #inline-bracket-container=6157
+    //                    #activity-log-section=1242
+    // O histórico inteiro era montado e escondido dentro de um <details> FECHADO —
+    // 1.242 elementos que ninguém pediu. Regra do dono: "nada que não estiver
+    // visível deve ser carregado... o que não estiver não carrega enquanto o
+    // usuário não clicar pedindo outra seção".
+    // Agora nasce o cabeçalho (que precisa da CONTAGEM, por isso `events` continua
+    // sendo calculado) e o corpo se monta no primeiro `toggle` — inclusive a cauda
+    // dos eventos antigos, que é a parte cara.
     container.innerHTML = '<div class="mt-5">' +
-      '<details>' +
+      '<details data-log-lazy="1">' +
         '<summary style="cursor:pointer;font-size:1.1rem;font-weight:700;color:var(--text-bright,#fff);padding:12px 0;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.1));">' +
           '📜 Histórico de Atividades <span style="font-size:0.75rem;font-weight:400;color:var(--text-muted,#94a3b8);">(' + events.length + ' eventos)</span>' +
         '</summary>' +
-        '<div style="padding:8px 0;">' +
-          // v1.8.92: os recentes primeiro; o "Ver anteriores" foi pro FIM (era o
-          // primeiro elemento). Passado se busca depois de ver o presente.
-          timelineHtml +
-          (hasMore ? '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted,#64748b);padding:4px 0;">Ver ' + (events.length - maxShow) + ' eventos anteriores...</summary><div>' + allEventsHtml + '</div></details>' : '') +
-        '</div>' +
+        '<div data-log-corpo="1" style="padding:8px 0;"></div>' +
       '</details>' +
     '</div>';
+    try {
+      var _det = container.querySelector('[data-log-lazy]');
+      var _corpo = container.querySelector('[data-log-corpo]');
+      if (_det && _corpo) {
+        _det.addEventListener('toggle', function () {
+          if (!_det.open || _corpo.firstChild) return;   // uma vez só
+          // v1.8.92: os recentes primeiro; o "Ver anteriores" fica no FIM.
+          _corpo.innerHTML = timelineHtml +
+            (hasMore ? '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:0.75rem;color:var(--text-muted,#64748b);padding:4px 0;">Ver ' +
+              (events.length - maxShow) + ' eventos anteriores...</summary><div>' + montaCauda() + '</div></details>' : '');
+        });
+      }
+    } catch (e) { if (window._warn) window._warn('[histórico sob demanda]', e); }
 };
 
 // v1.15.19: os jogos importados do letzplay entram nas estatísticas de barras

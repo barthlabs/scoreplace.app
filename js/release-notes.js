@@ -84,6 +84,16 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.86 ───────────────────────────────────────────
+        // MEDIDO no aparelho do dono, agora na tela de DETALHE do torneio:
+        //   nos=8061 · onde: #app=7870 #inline-bracket-container=6157
+        //                    #activity-log-section=1242  → travada de 1.662ms
+        // (a tela INICIAL, depois de 2.0.84, está em 868 nós.) O histórico inteiro
+        // era montado e escondido num <details> FECHADO — 1.242 elementos que
+        // ninguém pediu, mais o texto de TODOS os eventos antigos remontado a cada
+        // render. ⛔ <details> fechado PARECE não carregado, e não é.
+        // ⚠️ Falta o maior: #inline-bracket-container, 6.157 elementos.
+        '<li><b>⚡ O histórico do torneio só é montado quando você o abre:</b> a lista de atividades era construída inteira toda vez que a página do torneio carregava, mesmo fechada — e num torneio grande ela sozinha era mais de mil elementos escondidos. Agora ela nasce no instante em que você clica pra ver.</li>' +
         // ── ciclo 2.0.85 ───────────────────────────────────────────
         // Fecha o que a 2.0.84 começou: login e criação rápida também saem do
         // arranque. ⚠️ `setupQuickCreateModal` era uma IIFE — construía sem sequer
