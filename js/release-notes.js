@@ -84,6 +84,12 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.65 ───────────────────────────────────────────
+        // 3 dias de "continua sem feedback de clique". A causa era de manual: o
+        // navegador só pinta ENTRE tarefas, e o realce + o overlay do loader (96%
+        // opaco, tela inteira) aconteciam na MESMA tarefa. PROVA por quadro no motor
+        // do Safari: desenho antigo = 0 quadros com o card realçado; novo = 7.
+        '<li><b>👆 Agora o card RESPONDE quando você toca:</b> ao abrir um torneio, o card ficava exatamente igual até a tela de carregando aparecer — e não era o realce que faltava, era que a tela de carregando cobria tudo <b>antes de o realce chegar a ser desenhado</b>. Agora o card escurece visivelmente primeiro e só depois o carregando assume.</li>' +
         // ── ciclo 2.0.64 ───────────────────────────────────────────
         // Print do dono no JOGO 92 do Confra: aprovou pelo feed, o app confirmou,
         // a tela não mudou — e depois o pendente tinha sumido. Corrida: o

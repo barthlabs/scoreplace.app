@@ -67,7 +67,13 @@ ok(/_openTournamentCard\(event, tournamentId\)/.test(dashboard),
 // _navTorneioComAviso — a porta ficou com as GUARDAS e delega; a linha compacta da
 // dash (que era um <a> navegando no mesmo task, sem pintura do aviso) entra pela
 // MESMA função. O recorte cobre as duas: a regra continua morando num lugar só.
-const corpoPorta = (store.match(/window\._openTournamentCard\s*=\s*function[\s\S]*?window\._navTorneioComAviso\s*=\s*function[\s\S]*?\n};/) || [''])[0];
+// ⚠️ 2.0.65: o miolo da navegação passou a morar em `_navTorneioComAvisoAgora` —
+// `_navTorneioComAviso` virou o INVÓLUCRO que acende o realce e CEDE UM QUADRO
+// antes de deixar o overlay do loader cobrir a tela (sem esse quadro o realce
+// nunca chegava a ser pintado; prova por quadro em
+// tests/realce-do-toque-chega-a-pintar.test.js). As invariantes abaixo continuam
+// valendo — só mudaram de função.
+const corpoPorta = (store.match(/window\._openTournamentCard\s*=\s*function[\s\S]*?window\._navTorneioComAvisoAgora\s*=\s*function[\s\S]*?\n};/) || [''])[0];
 ok(/_navTorneioComAviso\(tournamentId, event\)/.test(corpoPorta),
    'a porta do card DELEGA pro miolo único (_navTorneioComAviso)');
 ok(/_navTorneioComAviso\(/.test(dashboard),

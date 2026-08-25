@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.64';
+window.SCOREPLACE_VERSION = '2.0.65';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -7974,6 +7974,56 @@ window._openTournamentCard = function (event, tournamentId) {
 // qualquer pintura, ou seja o "Abrindo o torneio…" podia nem aparecer (a MESMA
 // classe de bug da 1.9.55, viva no outro caminho — grep pela AÇÃO, não pelo handler).
 window._navTorneioComAviso = function (tournamentId, evento) {
+  if (!tournamentId) return;
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⛔⛔ 2.0.65 — POR QUE O REALCE DO CLIQUE NUNCA APARECEU, EM NENHUMA VERSÃO
+  //
+  // Relato do dono, repetido por DIAS: _"continua sem feedback de clique no card
+  // do torneio"_. Eu reforcei CSS quatro vezes (opacidade, contorno, tap-highlight)
+  // e a telemetria dizia `sp:1` — a classe ERA aplicada. As duas coisas eram
+  // verdade ao mesmo tempo, e a explicação é de manual:
+  //
+  //   O NAVEGADOR SÓ PINTA ENTRE TAREFAS. Aqui, na MESMA tarefa, acontecia:
+  //     1. o card recebe a classe de realce;
+  //     2. `_showLoading` cria um overlay `position:fixed;inset:0` com fundo
+  //        `rgba(15,23,42,0.96)` — a TELA INTEIRA coberta;
+  //     3. a tarefa termina → o navegador pinta → e o que ele pinta é o OVERLAY.
+  //   O card escurecido nunca chegou a existir em quadro nenhum. Não era timing
+  //   ruim, era impossível — e nenhum ajuste de CSS jamais consertaria isso.
+  //
+  // O CONSERTO: aplicar o realce, CEDER UM QUADRO DE VERDADE (rAF → setTimeout 0
+  // = depois da pintura) e só ENTÃO cobrir a tela com o loader e navegar. Custa
+  // ~16ms e é a diferença entre "não acontece nada" e "o card responde na hora".
+  // ⚠️ Quem for mexer aqui: NÃO volte a chamar `_showLoading` na mesma tarefa do
+  // realce — é exatamente este bug. [[project_mutirao_mobile_2040]]
+  // ══════════════════════════════════════════════════════════════════════════
+  var _seguir = function () { window._navTorneioComAvisoAgora(tournamentId, evento); };
+  try {
+    var _cardRealce = (evento && evento.target && evento.target.closest)
+      ? evento.target.closest('.card[onclick], a.compact-row, .compact-row[onclick]')
+      : null;
+    if (_cardRealce && typeof requestAnimationFrame === 'function' &&
+        (typeof document === 'undefined' || document.visibilityState !== 'hidden')) {
+      _cardRealce.classList.add('sp-abrindo');
+      window._spCardAbrindo = _cardRealce;
+      var _foi = false;
+      var _umaVez = function () { if (_foi) return; _foi = true; _seguir(); };
+      // rAF roda ANTES da pintura; o timeout agendado DENTRO dele roda DEPOIS —
+      // ou seja, quando este callback corre, o realce JÁ É PIXEL na tela.
+      // ⏱️ E aí ele fica visível por mais ~110ms: UM quadro (16ms) é pouco pro olho
+      // — MEDIDO no motor do Safari (tests/realce-do-toque-chega-a-pintar), o
+      // desenho antigo dava ZERO quadros e este dá vários. O atraso é imperceptível
+      // como espera e é a diferença entre "não acontece nada" e "o card respondeu".
+      requestAnimationFrame(function () { setTimeout(_umaVez, 110); });
+      setTimeout(_umaVez, 400);   // rede de segurança: quadro que não vem não prende ninguém
+      return;
+    }
+  } catch (e) {}
+  _seguir();
+};
+
+// O corpo original da navegação — agora chamado DEPOIS de o realce ter pintado.
+window._navTorneioComAvisoAgora = function (tournamentId, evento) {
   if (!tournamentId) return;
   // ── ⭐ O CARD FICA ACESO ATÉ O AVISO PINTAR (2.0.41) ─────────────────────────
   // Relato do dono (24/ago): _"ao clicar no card não temos nenhum feedback visual
