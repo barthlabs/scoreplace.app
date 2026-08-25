@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.79';
+window.SCOREPLACE_VERSION = '2.0.80';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -162,6 +162,25 @@ try {
     var _snippet = function (fn) {
       try { return fn.name || String(fn).replace(/\s+/g, ' ').slice(9, 69); } catch (e) { return '?'; }
     };
+    // Marca no rastro quanto tempo um callback ASSÍNCRONO levou até ASSENTAR.
+    // O prefixo `~` diz que é tempo de ponta a ponta (inclui espera), não CPU —
+    // ler os dois como a mesma coisa seria acusar o inocente.
+    var _marcaFimAssinc = function (nome, t0) {
+      return function (v) {
+        try {
+          var d = performance.now() - t0;
+          if (d > 180 && window._trechos) {
+            window._trechos.push({ nome: '~' + nome, ini: t0, dur: d });
+            if (window._trechos.length > 30) window._trechos.shift();
+          }
+        } catch (e) {}
+        // ⛔ O ramo de OBSERVAÇÃO termina aqui, resolvido. A promessa ORIGINAL segue
+        // intacta pra quem chamou (rejeita igual, se for o caso) — mas o ramo daqui
+        // não pode ficar pendurado rejeitado, senão a instrumentação vira a issue nº1
+        // do Sentry ("try/catch não pega promessa"). Observar, nunca alterar.
+        return v;
+      };
+    };
     var _embrulha = function (fn, rotulo) {
       if (typeof fn !== 'function') return fn;
       // ⛔ O NOME SE CALCULA UMA VEZ, NO EMBRULHO — NUNCA POR CHAMADA (1.9.99).
@@ -174,7 +193,25 @@ try {
       var _nomeFixo = rotulo + ':' + _snippet(fn);
       return function () {
         var t0 = (window.performance && performance.now) ? performance.now() : 0;
-        try { return fn.apply(this, arguments); }
+        try {
+          var _r = fn.apply(this, arguments);
+          // ── ⭐ CALLBACK ASSÍNCRONO TAMBÉM CUSTA (2.0.80) ────────────────────
+          // ⛔ O PONTO CEGO QUE FAZIA TODO EPISÓDIO SAIR COM `quem: nenhum`.
+          // `async () => this._poll()` devolve uma PROMESSA na hora: o `finally`
+          // abaixo cronometra ~0ms, e o trabalho de verdade (IndexedDB, rede, fila
+          // do SDK) acontece DEPOIS, fora de qualquer medição. Era por isso que as
+          // travadas do dono chegavam com "nenhum JS rodando" enquanto o `ultimo=`
+          // apontava justamente `_poll()`, `handleDelayElapsed()` e `Mu:schedule` —
+          // os três são pontos de entrada ASSÍNCRONOS de SDK.
+          // Instrumento que não cobre o caminho quente manda procurar no lugar
+          // errado — mesma lição da 1.9.94, quando a rolagem ficou fora do rastro.
+          // ⛔ A promessa é OBSERVADA, nunca trocada: devolvemos o mesmo objeto, e
+          // o `.then` daqui não engole rejeição (repassa nos dois lados).
+          if (t0 && _r && typeof _r.then === 'function' && window._trechos) {
+            try { _r.then(_marcaFimAssinc(_nomeFixo, t0), _marcaFimAssinc(_nomeFixo, t0)); } catch (eA) {}
+          }
+          return _r;
+        }
         finally {
           if (t0) {
             var d = performance.now() - t0;

@@ -84,6 +84,18 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.80 ───────────────────────────────────────────
+        // ⚠️ SEM item pro usuário, e é DECISÃO: 100% instrumentação, zero mudança de
+        // tela. Conserta um PONTO CEGO do próprio instrumento: `async () => x()`
+        // devolve promessa na hora, então o cronômetro do embrulho media ~0ms e o
+        // trabalho real (IndexedDB, rede, fila do SDK) ficava fora da medição. Era
+        // por isso que TODA travada do dono chegava com `quem: nenhum` enquanto o
+        // `ultimo=` apontava `intervalo800:this._poll()` (vigia de abas do Firebase
+        // Auth sobre IndexedDB), `handleDelayElapsed()` e `Mu:schedule` (fila do
+        // Firestore) — os três são entradas ASSÍNCRONAS de SDK.
+        // Agora o rastro marca esses com "~" (ponta a ponta, não CPU). Mesma lição
+        // da 1.9.94: instrumento que não cobre o caminho quente manda procurar no
+        // lugar errado.
         // ── ciclo 2.0.79 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário, e é DECISÃO: 100% instrumentação, zero mudança
         // de tela. Restaura o aviso de travada DURANTE A ROLAGEM (com direção), que

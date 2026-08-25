@@ -174,6 +174,7 @@ const SUITES = [
   'tests/cartao-le-resumo-ou-documento.test.js',
   'tests/nome-para-uid-e-indice-nao-varredura.test.js',
   'tests/travada-ao-rolar-se-reporta.test.js',
+  'tests/instrumento-enxerga-callback-assincrono.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador
