@@ -84,6 +84,26 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.93 ───────────────────────────────────────────
+        // DOIS relatos do dono no mesmo dia, os dois na chave do Confra.
+        // ① _"não sei porque veio o grupo com um wo da denise que não tem nada a ver
+        //    com esse grupo"_ (R1 Grupo I2). MEDIDO no doc ao vivo: o rastro
+        //    `woSubstituteFor` mora na ENTRADA de quem substituiu, e a entrada viaja
+        //    com a pessoa. A Carol substituiu a Denise no Grupo A em 09/ago; em 24/ago
+        //    voltou pra fila e caiu num grupo NOVO — que, por ser novo, não tem
+        //    registro no `woLog` e cai na reconstrução legada por rastro. O registro
+        //    guarda o grupo do dia: quando ele diz que o W.O. é de outro grupo, o
+        //    legado se cala. ⛔ Provado grupo a grupo: dos 35 grupos do Confra e dos
+        //    34 do backup, MUDOU UM — exatamente o I2, de 1 linha pra 0.
+        // ② _"cliquei em criar grupo de whats do grupo I2 e acabou abrindo no whats o
+        //    meu grupo de participante"_. O link estava certo (medido: o chip do I2
+        //    escreve só nos 3 jogos do I2). O que o clique faz é abrir o WhatsApp SEM
+        //    destino — não existe deep link pra "criar grupo", então o app abre na
+        //    última conversa. O texto agora avisa isso.
+        //    ⛔ Mas havia bug de verdade ao lado: o nome sugerido em modo grupo era
+        //    "R{rodada}", e desde a 2.0.57 é o ORGANIZADOR quem cria o grupo de TODOS.
+        //    MEDIDO: 1 nome pra 35 grupos. Agora o nome é o da chave ("R1 Grupo I2").
+        // SEM item na tela pro usuário: são correções, não novidade.
         // ── ciclo 2.0.92 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário: é rede de proteção da migração, zero mudança de
         // tela. Desde a 2.0.90 a vitrine entrega o documento LEVE. MEDIDO: 41 lugares

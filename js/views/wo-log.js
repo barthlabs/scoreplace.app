@@ -157,6 +157,31 @@ window._woLogCobreGrupo = function (t, roundIndex, groupName) {
   return _woLogArr(t).some(function (ev) { return _mesmoGrupo(ev, roundIndex, groupName); });
 };
 
+/* ⛔ 2.0.93 · ONDE O W.O. ACONTECEU — o W.O. é do GRUPO, não da PESSOA que substituiu.
+ * MEDIDO no doc ao vivo do Confra (25/ago): a Carol substituiu a Denise no R1 Grupo A em
+ * 09/ago; em 24/ago ela voltou pra fila (`woSentToWaitlistAt`) e entrou num grupo NOVO,
+ * o R1 Grupo I2, com Fábio, Nina e Deborah. O rastro `woSubstituteFor: "Denise Mamesso"`
+ * mora na ENTRADA dela e viaja junto — então a reconstrução legada (a que roda em grupo
+ * SEM registro, como o I2) desenhava "Denise Mamesso W.O. → Carol Moresco" num grupo em
+ * que a Denise nunca esteve. Relato do dono: _"não sei porque veio o grupo com um wo da
+ * denise que não tem nada a ver com esse grupo"_.
+ * O registro sabe a resposta e é durável: ele guarda o `groupName` do dia. Quando existe
+ * um evento ATIVO daquela pessoa em OUTRO grupo, o W.O. é de lá — e a reconstrução por
+ * rastro (que é o caminho de compatibilidade, pra doc anterior à 2.0.60) não tem o que
+ * dizer. Devolve {roundIndex, groupName} ou null. */
+window._woLogGrupoDoWo = function (t, absentUid, absentName) {
+  var k = _woKey(absentUid, absentName);
+  if (!k) return null;
+  var arr = _woLogArr(t);
+  for (var i = arr.length - 1; i >= 0; i--) {
+    var ev = arr[i];
+    if (!ev || ev.status === 'reverted') continue;
+    if (_woKey(ev.absentUid, ev.absentName) !== k) continue;
+    return { roundIndex: ev.roundIndex || 0, groupName: ev.groupName || '' };
+  }
+  return null;
+};
+
 /* BACKFILL — deriva os eventos do estado atual, pra doc gravado antes do registro existir.
  * Usa exatamente as pistas que a reconstrução usava (é a última vez que elas são lidas como
  * histórico). `pares` vem de quem sabe reconstruir (`_ligaGroupWoList`), pra não haver duas

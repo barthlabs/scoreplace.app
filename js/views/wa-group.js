@@ -159,6 +159,26 @@
   // Nome sugerido do grupo. No jogo, "JOGO N" é a numeração canônica do torneio
   // (m._gameNum, carimbada no render) — o mesmo número que a pessoa vê no card,
   // então o grupo bate com o app sem ela traduzir nada.
+  // O NOME DO GRUPO NA CHAVE ("R1 Grupo I2"), pra batizar o grupo do WhatsApp com ele.
+  // A âncora é a mesma que `_schGroupMatches` usa pra achar os irmãos — índice do grupo
+  // gravado no jogo — e a rodada é achada pelo jogo, não pelo `m.round` (que é NÚMERO da
+  // rodada, não índice do array). Sem âncora, devolve '' e quem chama usa o fallback.
+  function _nomeDoGrupoDaChave(t, m) {
+    if (!t || !m) return '';
+    var gi = (m.groupIdx != null) ? m.groupIdx : ((m.monarchGroup != null) ? m.monarchGroup : null);
+    if (gi == null) return '';
+    var rounds = Array.isArray(t.rounds) ? t.rounds : [];
+    for (var i = 0; i < rounds.length; i++) {
+      var ms = (rounds[i] && rounds[i].matches) || [];
+      var achou = false;
+      for (var j = 0; j < ms.length; j++) { if (ms[j] && ms[j].id === m.id) { achou = true; break; } }
+      if (!achou) continue;
+      var g = ((rounds[i] || {}).monarchGroups || [])[gi];
+      return (g && g.name) ? String(g.name) : '';
+    }
+    return '';
+  }
+
   function _groupName(ctx) {
     var t = ctx.t;
     var sport = (t && t.sport) ? String(t.sport) : '';
@@ -178,7 +198,14 @@
     // a MESMA convenção que o motor já grava no label do jogo ('R' + roundNum, ver
     // bracket-logic). Sem colisão: cada pessoa está em um só grupo por rodada.
     if (ctx.groupMode) {
-      return withSport([(m && m.round != null) ? ('R' + m.round) : 'Rodada']);
+      // ⛔ 2.0.93 · O NOME PRECISA DIZER QUAL GRUPO — "R1" sozinho serve pro JOGADOR,
+      // não pra quem ORGANIZA. O comentário acima ("sem colisão: cada pessoa está em um
+      // só grupo por rodada") era verdade quando só quem jogava criava o grupo. Desde a
+      // 2.0.57 o ORGANIZADOR cria o grupo de TODOS os grupos da rodada — e no Confra isso
+      // são 35 grupos de WhatsApp propostos com o nome IDÊNTICO ("R1 · Confra..."), sem
+      // como distinguir I2 de A depois de criados. O nome do grupo já traz a rodada
+      // ("R1 Grupo I2"), então ele substitui o "R{rodada}" sem repetir nada.
+      return withSport([_nomeDoGrupoDaChave(t, m) || ((m && m.round != null) ? ('R' + m.round) : 'Rodada')]);
     }
     return withSport([(m && m._gameNum != null) ? ('Jogo ' + m._gameNum) : 'Jogo']);
   }
@@ -436,7 +463,7 @@
         'style="width:100%;box-sizing:border-box;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);' +
         'border-radius:8px;padding:9px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' +
         '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyName(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:' + _accent + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp\u2197</button>',
-        'Agora abra o WhatsApp: <b style="color:var(--text-bright);">Novo grupo → pule a escolha de participantes</b> → cole o nome. Não precisa salvar contato de ninguém.');
+        'O WhatsApp abre na ÚLTIMA conversa que você usou — isso é do WhatsApp, não é o grupo daqui. De lá: <b style="color:var(--text-bright);">Novo grupo → pule a escolha de participantes</b> → cole o nome. Não precisa salvar contato de ninguém.');
       if (isT) body += _permsHtml();
     }
 

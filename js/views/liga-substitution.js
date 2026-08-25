@@ -1774,6 +1774,20 @@ window._ligaGroupWoList = function (t, group) {
     if (uid && typeof window._nameForUid === 'function') { var v = window._nameForUid(uid); if (v) return v; }
     return fb || '';
   };
+  // ⛔ 2.0.93 · O RASTRO VIAJA COM A PESSOA — MAS O W.O. É DO GRUPO ONDE ACONTECEU.
+  // O `woSubstituteFor` mora na ENTRADA de quem entrou, e a entrada acompanha a pessoa
+  // pra onde ela for. Quando quem substituiu volta pra fila e cai num grupo NOVO, o rastro
+  // vem junto e esta reconstrução desenhava o W.O. antigo no grupo novo (Confra, 25/ago:
+  // "Denise Mamesso W.O. → Carol Moresco" apareceu no R1 Grupo I2, onde a Denise nunca
+  // pisou — ela levou W.O. no Grupo A). O registro (`woLog`, 2.0.60) guarda o grupo do dia
+  // e é durável: se ele diz que o W.O. daquela pessoa é de OUTRO grupo, aqui não é lugar
+  // dele, e a CADEIA inteira a partir dali também é de lá. Grupo COBERTO pelo registro nem
+  // chega neste laço (sai no primeiro `return` da função) — isto só afeta o legado.
+  var _woEDeOutroGrupo = function (absUid, absName) {
+    if (typeof window._woLogGrupoDoWo !== 'function') return false;
+    var onde = window._woLogGrupoDoWo(t, absUid, absName);
+    return !!onde && !(onde.groupName === group.name && (onde.roundIndex || 0) === (_ri0 || 0));
+  };
   (group.playersUids || []).forEach(function (u, i) {
     var curUid = u ? String(u) : null;
     var curName = (group.players || [])[i] || '';
@@ -1783,6 +1797,7 @@ window._ligaGroupWoList = function (t, group) {
       var absName = cur.woSubstituteFor;
       // `woSubstituteForUid` (2.0.58) é o que mantém a cadeia de pé sem cache nem marcador
       var absUid = _absUidDe(absName, cur.woSubstituteForUid);
+      if (_woEDeOutroGrupo(absUid, absName)) break;
       push(absName, absUid, nomeVivo(curUid, curName), curUid, cur.woSubstituteAt || '');
       curName = absName; curUid = absUid;
       // a cadeia continua no ausente — e ele pode não ter marcador (2.0.57) nem uid
