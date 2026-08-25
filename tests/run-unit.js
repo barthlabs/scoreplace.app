@@ -194,6 +194,10 @@ const SUITES = [
   'tests/cartao-do-resumo-e-igual-ao-completo.test.js',
   'tests/busca-acha-e-mostra.test.js',
   'tests/resumo-avisa-quem-pede-pesado.test.js',
+  // ⭐ "Meus torneios" lê o ÍNDICE (2.0.95): 518 KB → 25 KB no organizador da Confra.
+  // O risco tem nome — torneio sem resumo SOME da lista — então a rede (cai no caminho
+  // antigo) e a sentinela são obrigatórias, e é isso que o teste trava.
+  'tests/meus-torneios-le-o-indice.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

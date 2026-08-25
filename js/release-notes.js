@@ -84,6 +84,54 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.95 ───────────────────────────────────────────
+        // "MEUS TORNEIOS" LÊ O ÍNDICE, não o torneio inteiro.
+        // A tela desenha CARTÕES — e cartão não usa jogos, inscritos nem histórico.
+        // Lendo o documento completo, ela arrastava o torneio inteiro por linha da lista.
+        // MEDIDO no uid do organizador da Confra (scripts/medir-meus-torneios.js):
+        //     documento COMPLETO ... 518 KB   →   RESUMO ... 25 KB
+        //     (a Confra sozinha: 433 KB → 17 KB)
+        // Abrir o torneio segue trocando o resumo pelo completo.
+        // ⚠️ O RISCO TEM NOME, e por isso a troca só saiu com prova: torneio SEM resumo
+        // sumiria da lista da pessoa — e sumir é pior que pesar. O conferidor antigo
+        // provava que o espelhado DIZ a mesma coisa; faltava provar que não FALTA
+        // ninguém. scripts/conferir-indice-completo.js compara o conjunto de ids e o
+        // `memberUids` dos dois lados: 39/39, 0 faltando, 0 órfão, 0 divergente.
+        // Rede mantida (resumo vazio ⇒ caminho antigo) e sentinela mantida.
+        // SEM item pro usuário: a tela é a mesma, só chega mais leve.
+        //
+        // ── ciclo 2.0.94 ───────────────────────────────────────────
+        // ⚠️ ESTA NOTA ENTROU ATRASADA: a 2.0.94 foi publicada sem ela. O pipeline da
+        // migração de cor roda `git checkout` pra refazer do zero, e isso levou junto o
+        // texto que eu já tinha escrito. Fica registrado — nota some em silêncio.
+        //
+        // A COR SAIU DO SELETOR E VIROU TABELA.
+        // O tema claro remapeava contraste com ~1.943 regras `[style*="cor"]` —
+        // casamento de SUBSTRING DE ATRIBUTO, o pior caso do seletor CSS: nenhum índice
+        // do navegador (tag, classe, id) filtra antes, então cada regra é testada contra
+        // cada elemento e o custo é LINEAR no número delas. Eram 29% de todo o CSS, e
+        // nasceram do trabalho de contraste do tema claro (v2.1.84-beta / v2.1.90-beta)
+        // — que é quando o dono disse que piorou.
+        // MEDIDO no WebKit, mesma tela de 5.117 elementos:
+        //     recálculo de estilo  1.454 ms → 21 ms    ·    CSS 343 KB → 205 KB
+        //     css/style.css        3.008 linhas → 542
+        // O remap virou tabela de variáveis (css/paleta.css + js/paleta-tabela.js),
+        // resolvida por HERANÇA: custo zero de casamento.
+        // ⛔ A régua era ser INVISÍVEL, e foi provado em duas medidas independentes:
+        //   · 3.060 comparações de declaração de cor (2 temas + dentro da tarja);
+        //   · 12.488 elementos das telas reais, cor RESOLVIDA elemento a elemento.
+        // ⚠️ O que quase passou batido, e só a prova de TELA pegou: metade das cores não
+        // está escrita junto da propriedade — chega por argumento e é concatenada
+        // (`'color:' + cor`). Regex no texto não vê; o navegador vê.
+        // ⚠️ Ficaram DE FORA de propósito (eram imunes ao remap e continuam): hex em
+        // MAIÚSCULA (preserva o verde do WhatsApp), `!important` em linha, e grafia que a
+        // regra não casava (`background:#hex` nunca foi remapeado, só `background: rgb()`).
+        //
+        // E OS TEMAS MORTOS SAÍRAM. Ordem do dono, ao me ver escrever "3 temas":
+        // _"2 temas, que 3 temas?"_ · _"podemos eliminar esse código morto?"_
+        // sunset/ocean saíram da ESCOLHA na v2.6.27 e o código deles ficou: dois blocos
+        // de variáveis, regras de balão de dica, e ramos que nunca executaram.
+        // Código morto não é só peso — ele MENTE: foi ele que me fez reportar 3 temas.
         // ── ciclo 2.0.93 ───────────────────────────────────────────
         // DOIS relatos do dono no mesmo dia, os dois na chave do Confra.
         // ① _"não sei porque veio o grupo com um wo da denise que não tem nada a ver

@@ -1874,10 +1874,43 @@ window.FirestoreDB = {
   // v1.2.2: UID ONLY (era loadMyTournaments(email) → where memberEmails).
   async loadMyTournaments(uid) {
     if (!this.db || !uid) return [];
+    // ⭐ 2.0.95 — "MEUS TORNEIOS" LÊ O ÍNDICE, não o torneio inteiro.
+    //
+    // Esta tela desenha CARTÕES, e cartão não usa jogos, inscritos nem histórico. Lendo o
+    // documento completo ela arrastava o torneio inteiro pra cada linha da lista.
+    // MEDIDO no uid do organizador da Confra (scripts/medir-meus-torneios.js):
+    //     documento COMPLETO ... 518 KB      RESUMO ... 25 KB
+    // Abrir o torneio segue trocando o resumo pelo completo (`_ensureTournamentLoaded`).
+    //
+    // ⚠️ REDE: resumo vazio ⇒ cai no caminho antigo. Lista vazia por causa da migração
+    // seria MUITO pior que lista pesada — o torneio da pessoa sumir da tela dela.
+    // O espelho é conferido todo dia por scripts/conferir-banco-novo.js (39/39 idênticos).
+    var _viaResumo = [];
+    try {
+      var snapS = await this.db.collection('tournaments_summary')
+        .where('memberUids', 'array-contains', uid)
+        .get();
+      try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'meus-torneios-resumo'); } catch (e) {}
+      snapS.forEach(function (doc) {
+        var d = doc.data();
+        if (!d) return;
+        d._docId = doc.id;
+        if (!d.id) d.id = doc.id;
+        // sentinela: se alguém pedir jogo/inscrito a este documento leve, o app avisa
+        // com o rastro de quem pediu (ver `_marcaResumo` em store.js)
+        if (typeof window._marcaResumo === 'function') window._marcaResumo(d);
+        _viaResumo.push(d);
+      });
+    } catch (eR) {
+      window._warn('[meus torneios] resumo indisponível, caindo no caminho antigo:', eR && eR.message);
+    }
+    if (_viaResumo.length) return _viaResumo;
+
     try {
       var snap = await this.db.collection('tournaments')
         .where('memberUids', 'array-contains', uid)
         .get();
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'meus-torneios-completo'); } catch (e) {}
       var tournaments = [];
       snap.forEach(function(doc) {
         var d = doc.data();
