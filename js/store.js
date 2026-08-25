@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.71';
+window.SCOREPLACE_VERSION = '2.0.72';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -33,20 +33,6 @@ window._medirTrecho = function (nome, fn) {
 // não pra cobrar pedágio no caminho quente de quem só quer usar o app.
 // Liga com `?perf=1` na URL (persiste em localStorage); desliga com `?perf=0`.
 // `_medirTrecho` e os anéis continuam existindo — vazios custam nada.
-// carimbo + DIREÇÃO da rolagem: barato (dois números), passivo, e é o que permite
-// dizer se a travada aconteceu rolando PRA CIMA ou PRA BAIXO (2.0.70).
-window._spUltimaRolagemT = 0;
-window._spDirRolagem = '?';
-try {
-  var _spYant = 0;
-  document.addEventListener('scroll', function () {
-    var y = window.scrollY || window.pageYOffset || 0;
-    window._spDirRolagem = (y < _spYant) ? 'pra-cima' : 'pra-baixo';
-    _spYant = y;
-    window._spUltimaRolagemT = Date.now();
-  }, { passive: true, capture: true });
-} catch (e) {}
-
 var _SP_PERF = false;
 try {
   var _q = String(location.search || '') + String(location.hash || '');
@@ -111,27 +97,6 @@ try {
         } catch (e) {}
         window._travadas.push(foto);
         if (window._travadas.length > 15) window._travadas.shift();
-        // ── ⭐ TRAVADA DURANTE A ROLAGEM SE REPORTA SOZINHA (2.0.70) ───────────
-        // Buraco de instrumentação que custou caro: as travadas só viajavam pro
-        // Sentry DENTRO do relatório de TOQUE. O dono relata "corte ao rolar pra
-        // cima" — e se ele rola e não toca em nada, o episódio não chega a
-        // ninguém e eu volto a adivinhar. Aqui: travada > 500ms com rolagem
-        // recente (< 1,2s) manda UM aviso, no máximo 3 por sessão, com a mesma
-        // foto da cena (nós, animações, snapshots) + a DIREÇÃO da rolagem — que é
-        // o dado que separa "corte só pra cima" de "corte sempre".
-        try {
-          var _rolouAgora = window._spUltimaRolagemT || 0;
-          if (foto.dur > 500 && (Date.now() - _rolouAgora) < 1200) {
-            window._travScrollN = (window._travScrollN || 0) + 1;
-            if (window._travScrollN <= 3 && typeof window._captureMessage === 'function') {
-              window._captureMessage('scroll-trav: ' + foto.dur + 'ms · ' + (window._spDirRolagem || '?') +
-                ' · nos=' + (foto.nos || '?') + ' anim=' + (foto.anim != null ? foto.anim : '?') +
-                ' snaps=' + (foto.snaps || 0) + ' busca=' + (window._discoveryFetches || 0) +
-                ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum'),
-                'warning');
-            }
-          }
-        } catch (eSc) {}
       }
     }, 150);
   })();
@@ -8273,22 +8238,10 @@ try {
     // duas vezes: a pessoa nao quis clicar em nada, e o realce cai no primeiro
     // quadro do gesto, justo quando o WebKit esta rasterizando os tiles.
     var _rolando = 0;
-    var _rolandoNoInicio = false;   // o toque começou com a tela ainda em inércia?
     document.addEventListener('scroll', function () { _rolando = Date.now(); }, { passive: true, capture: true });
-    // ── ⭐ ACENDER SEMPRE; QUEM DECIDE A NAVEGAÇÃO É O SOLTAR (2.0.69) ────────
-    // Relato do dono (25/ago): _"apenas no terceiro ou quarto clique deu o feedback
-    // visual"_. REPRODUZIDO no motor do Safari: o 1º toque logo após rolar NÃO
-    // acendia. A guarda `_rolando < 250` (que existia pra "encostar o dedo pra parar
-    // a inércia não é clique") engolia o realce — e no aparelho é pior, porque a
-    // INÉRCIA REAL dispara eventos de rolagem continuamente e prolonga a guarda.
-    // A guarda estava no lugar errado: ela protege a NAVEGAÇÃO, não o FEEDBACK.
-    // Agora o card SEMPRE acende ao ser tocado (e o `touchmove` apaga se o gesto
-    // virar rolagem — essa parte do cânone continua de pé); o que a rolagem recente
-    // impede é só o clique sintético do `touchend`, então encostar pra parar a
-    // inércia segue sem navegar. Feedback sempre, navegação só quando é clique.
     document.addEventListener('touchstart', function (ev) {
       _apaga();
-      _rolandoNoInicio = (Date.now() - _rolando < 250);
+      if (Date.now() - _rolando < 250) return;    // ainda rolando: nao e clique
       var t = ev && ev.target;
       if (!t || !t.closest) return;
       // controle DENTRO do card (botao, link, input, toggle da Liga) tem o proprio
@@ -8311,13 +8264,9 @@ try {
     // e o foco). `{passive:false}` aqui é seguro: touchend não segura scroll.
     document.addEventListener('touchend', function (ev) {
       var alvo = _aceso;
-      var _eraInercia = _rolandoNoInicio;
       _apaga();
       if (!alvo) return;
       if (Date.now() - _acesoAt > 700) return;   // long-press não é clique
-      // encostou pra PARAR a inércia: o realce já deu o retorno visual e some aqui,
-      // mas não vira navegação — o iOS também suprime o clique nesse caso (2.0.69)
-      if (_eraInercia) return;
       try {
         if (ev.cancelable) ev.preventDefault();
         alvo.click();
@@ -9344,35 +9293,6 @@ function _prefList(kind, field) {
   return _mirrorRead(kind);
 }
 // Persiste UM item na conta. Otimista: quem chama já mexeu na lista local.
-// ── ⭐ A INTENÇÃO SOBREVIVE AO RECARREGAMENTO DO PERFIL (2.0.69) ─────────────
-// Relato do dono (25/ago): _"um torneio que teima em voltar"_ depois de ocultado.
-// É a MESMA corrida do aprovar-pelo-feed ([[project_mutacao_otimista_morre_no_carregamento_em_voo]]):
-// `_toggleHidden` muda a lista LOCAL na hora, a gravação vai por trás, e um
-// `loadUserProfile` que já estava em voo SOBRESCREVE `currentUser.hiddenTournaments`
-// com a lista do SERVIDOR — que ainda não tem a mudança. O torneio reaparece.
-// Aqui a intenção fica REGISTRADA e é re-aplicada em cima de toda lista que chega
-// do servidor. E se apaga SOZINHA no instante em que o servidor concorda — sem
-// prazo mágico, sem varredura: quem concorda não precisa mais de intenção.
-window._prefIntents = window._prefIntents || {};
-function _prefIntent(field, id, add) {
-  var m = window._prefIntents[field] || (window._prefIntents[field] = {});
-  m[String(id)] = !!add;
-}
-// devolve a lista do servidor JÁ com as intenções pendentes aplicadas
-function _prefComIntents(field, listaDoServidor) {
-  var m = window._prefIntents[field];
-  var set = {};
-  (listaDoServidor || []).forEach(function (x) { set[String(x)] = 1; });
-  if (!m) return Object.keys(set);
-  Object.keys(m).forEach(function (id) {
-    var noServidor = !!set[id];
-    if (noServidor === !!m[id]) { delete m[id]; return; }   // servidor concordou: intenção cumpriu o papel
-    if (m[id]) set[id] = 1; else delete set[id];            // ainda não chegou lá: a intenção manda
-  });
-  return Object.keys(set);
-}
-window._prefComIntents = _prefComIntents;
-
 function _prefPersist(field, id, add) {
   var cu = window.AppStore && window.AppStore.currentUser;
   if (!cu || !cu.uid) return Promise.resolve(false);   // deslogado → só espelho
@@ -9430,14 +9350,12 @@ window._toggleFavorite = function (tId, event) {
   var nowFav = list.indexOf(id) === -1;
   var next = nowFav ? list.concat([id]) : list.filter(function (x) { return x !== id; });
   if (cu) cu.favorites = next;
-  _prefIntent('favorites', id, nowFav);   // mesma proteção do ocultar (2.0.69)
   _mirrorWrite('favorites', next);
   _paintStars(id, nowFav);
   _prefPersist('favorites', id, nowFav).catch(function (err) {
     // Reverte: sem isto a estrela mente (fica cheia e o servidor não sabe).
     var back = nowFav ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
     if (cu) cu.favorites = back;
-    _prefIntent('favorites', id, !nowFav);   // não gravou: a intenção volta atrás junto
     _mirrorWrite('favorites', back);
     _paintStars(id, !nowFav);
     if (typeof showNotification === 'function') {
@@ -9471,12 +9389,10 @@ window._toggleHidden = function (tId, event) {
   var nowHidden = list.indexOf(id) === -1;
   var next = nowHidden ? list.concat([id]) : list.filter(function (x) { return x !== id; });
   if (cu) cu.hiddenTournaments = next;
-  _prefIntent('hiddenTournaments', id, nowHidden);   // sobrevive ao recarregamento do perfil
   _mirrorWrite('hidden', next);
   _prefPersist('hiddenTournaments', id, nowHidden).catch(function (err) {
     var back = nowHidden ? next.filter(function (x) { return x !== id; }) : next.concat([id]);
     if (cu) cu.hiddenTournaments = back;
-    _prefIntent('hiddenTournaments', id, !nowHidden);   // não gravou: a intenção volta atrás junto
     _mirrorWrite('hidden', back);
     if (typeof showNotification === 'function') {
       showNotification('⚠️ Não salvou', 'Não foi possível registrar na sua conta (' + ((err && (err.code || err.message)) || 'tente de novo') + ').', 'error');
@@ -11028,11 +10944,8 @@ window.AppStore = {
         // v1.2.11: favoritos e ocultados VÊM DA CONTA (users/{uid}), não do device.
         // Arrays: usar !== undefined (lista VAZIA é um valor legítimo — "desfavoritei
         // tudo" — e com truthy-check o [] seria ignorado e a lista velha ressuscitaria).
-        // ⚠️ passa pelas INTENÇÕES pendentes (2.0.69): a lista do servidor pode ser
-        // anterior à gravação que acabou de sair daqui — sem isto, ocultar/favoritar
-        // "volta atrás sozinho" quando um carregamento em voo aterrissa.
-        if (Array.isArray(profile.favorites)) this.currentUser.favorites = _prefComIntents('favorites', profile.favorites.map(String));
-        if (Array.isArray(profile.hiddenTournaments)) this.currentUser.hiddenTournaments = _prefComIntents('hiddenTournaments', profile.hiddenTournaments.map(String));
+        if (Array.isArray(profile.favorites)) this.currentUser.favorites = profile.favorites.map(String);
+        if (Array.isArray(profile.hiddenTournaments)) this.currentUser.hiddenTournaments = profile.hiddenTournaments.map(String);
         if (profile.defaultCategory) this.currentUser.defaultCategory = profile.defaultCategory;
         // v1.3.6-beta: skillBySport — habilidade por modalidade
         if (profile.skillBySport && typeof profile.skillBySport === 'object') {

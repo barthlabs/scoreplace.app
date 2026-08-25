@@ -168,7 +168,6 @@ const SUITES = [
   'tests/aprovar-no-feed-a-tela-muda.test.js',
   'tests/realce-do-toque-chega-a-pintar.test.js',
   'tests/nome-nasce-cabendo-nao-cortado.test.js',
-  'tests/ocultar-nao-teima-em-voltar.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

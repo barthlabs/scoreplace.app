@@ -176,21 +176,8 @@ ok(!/filter:/.test(corpoToc),
 // resolve sozinho.
 ok(/opacity: 0\.45 !important/.test(corpoToc),
    'o realce e esmaecer FORTE (0.45 — 2.0.47, era 0.6 e o dono nao via no card de foto) — a mudanca mais barata que existe e se ve de longe');
-// ── 2.0.69: A GUARDA DA INERCIA MUDOU DE LUGAR (nao sumiu) ───────────────────
-// Relato do dono: "apenas no terceiro ou quarto clique deu o feedback visual".
-// REPRODUZIDO no motor do Safari: o 1o toque depois de rolar NAO acendia, porque a
-// guarda `_rolando < 250` bloqueava o REALCE. No aparelho e pior: a inercia real
-// dispara eventos de rolagem sem parar e prolonga a guarda.
-// A guarda existe pra "encostar o dedo pra parar a inercia nao e clique" — isso e
-// sobre NAVEGACAO, nao sobre FEEDBACK. Agora o card SEMPRE acende (e o touchmove
-// apaga se virar rolagem, invariante logo abaixo), e o que a inercia impede e o
-// clique sintetico do touchend. Feedback sempre; navegacao so quando e clique.
-ok(/var _rolando = 0;/.test(store) && /_rolandoNoInicio = \(Date\.now\(\) - _rolando < 250\)/.test(store),
-   'a inercia recente e MEDIDA no touchstart (_rolandoNoInicio)');
-ok(/if \(_eraInercia\) return;/.test(store),
-   '⛔ e ela bloqueia a NAVEGACAO no touchend (encostar pra parar a inercia nao abre torneio)');
-ok(!/if \(Date\.now\(\) - _rolando < 250\) return;/.test(store),
-   '⛔ e NAO bloqueia mais o REALCE — era isso que engolia o 1o toque depois de rolar');
+ok(/var _rolando = 0;/.test(store) && /if \(Date\.now\(\) - _rolando < 250\) return;/.test(store),
+   'ROLANDO NAO ACENDE: encostar o dedo pra parar a inercia nao e clique, e o realce cairia no pior quadro');
 ok(!/\.sp-tocado[\s\S]{0,320}filter:/.test(comps3),
    '⛔ sem `filter` no realce: ele forca re-rasterizacao no pior momento');
 

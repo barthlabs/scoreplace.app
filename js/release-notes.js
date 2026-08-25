@@ -84,12 +84,18 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.72 — REVERSÃO ────────────────────────────────
+        // ⚠️ SEM item pro usuário, e é DECISÃO: esta versão DESFAZ 2.0.69/70/71 e volta
+        // ao código da 2.0.68, que o dono aprovou ("a versão mais aceitável que
+        // chegamos"). As levas seguintes pioraram no aparelho dele — ocultar/desocultar
+        // travando, toque exigindo dezenas de tentativas. Não há nada NOVO a anunciar:
+        // o que o usuário vê é exatamente o que a 2.0.68 já entregava. Os itens que as
+        // levas revertidas anunciavam saem junto (ver commit).
         // ── ciclo 2.0.71 ───────────────────────────────────────────
         // MEDIDO no aparelho do dono: read spike de 276 leituras em 10s
         // (load-all-public=180) + travadas de 1,2s a 4,5s + toque com 4s de atraso.
         // Causa: `_force = curLen===0` tirava o intervalo mínimo, então TODA
         // renderização (ocultar/desocultar/expandir) disparava busca completa.
-        '<li><b>🌐 Ocultar, desocultar e abrir "Torneios ocultados" pararam de engasgar a tela:</b> cada um desses gestos redesenha a lista — e, quando a vitrine de torneios públicos estava vazia, o app aproveitava para <b>rebuscar tudo do servidor a cada vez</b>. Em poucos segundos isso virava centenas de consultas travando o aparelho. Agora a busca respeita um intervalo mínimo, sem deixar de ser rápida quando não há nada na tela.</li>' +
         // ── ciclo 2.0.70 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário, e é DECISÃO: é 100% instrumentação (relatório de
         // travada durante rolagem, com direção, no rastro de diagnóstico do dono).
@@ -101,8 +107,6 @@ window._RELEASE_NOTES_HTML = (function () {
         //     de inércia bloqueava o REALCE (ela é sobre navegação, não sobre feedback);
         // (2) torneio ocultado "teima em voltar" — mesma corrida do aprovar: o perfil
         //     em voo sobrescrevia a lista local com a do servidor.
-        '<li><b>👆 O card responde no PRIMEIRO toque, mesmo logo depois de rolar:</b> quando você rolava a lista e tocava num torneio, os primeiros toques não davam sinal nenhum — só o terceiro ou quarto. Agora o card acende sempre que você encosta nele; e encostar só para parar a rolagem continua não abrindo nada.</li>' +
-        '<li><b>🙈 Torneio ocultado não volta mais sozinho:</b> ao ocultar, a lista podia ser sobrescrita pela versão que o servidor ainda tinha e o torneio reaparecia. Agora a sua escolha é preservada até o servidor confirmá-la — vale também para <b>favoritar</b>, que tinha o mesmo problema.</li>' +
         // ── ciclo 2.0.68 ───────────────────────────────────────────
         // Auditoria da minha própria leva de 4 dias: `sp-abrindo` era aceso e NUNCA
         // apagado (card esmaecido pra sempre + nó destacado preso). Verificado no
