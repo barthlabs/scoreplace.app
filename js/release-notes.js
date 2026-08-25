@@ -84,6 +84,12 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.71 ───────────────────────────────────────────
+        // MEDIDO no aparelho do dono: read spike de 276 leituras em 10s
+        // (load-all-public=180) + travadas de 1,2s a 4,5s + toque com 4s de atraso.
+        // Causa: `_force = curLen===0` tirava o intervalo mínimo, então TODA
+        // renderização (ocultar/desocultar/expandir) disparava busca completa.
+        '<li><b>🌐 Ocultar, desocultar e abrir "Torneios ocultados" pararam de engasgar a tela:</b> cada um desses gestos redesenha a lista — e, quando a vitrine de torneios públicos estava vazia, o app aproveitava para <b>rebuscar tudo do servidor a cada vez</b>. Em poucos segundos isso virava centenas de consultas travando o aparelho. Agora a busca respeita um intervalo mínimo, sem deixar de ser rápida quando não há nada na tela.</li>' +
         // ── ciclo 2.0.70 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário, e é DECISÃO: é 100% instrumentação (relatório de
         // travada durante rolagem, com direção, no rastro de diagnóstico do dono).

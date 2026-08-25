@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.70';
+window.SCOREPLACE_VERSION = '2.0.71';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -126,7 +126,8 @@ try {
             if (window._travScrollN <= 3 && typeof window._captureMessage === 'function') {
               window._captureMessage('scroll-trav: ' + foto.dur + 'ms · ' + (window._spDirRolagem || '?') +
                 ' · nos=' + (foto.nos || '?') + ' anim=' + (foto.anim != null ? foto.anim : '?') +
-                ' snaps=' + (foto.snaps || 0) + ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum'),
+                ' snaps=' + (foto.snaps || 0) + ' busca=' + (window._discoveryFetches || 0) +
+                ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum'),
                 'warning');
             }
           }

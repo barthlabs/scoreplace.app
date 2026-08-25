@@ -4032,10 +4032,26 @@ function renderDashboard(container) {
   if (window.AppStore && typeof window.AppStore.loadPublicDiscovery === 'function') {
     var _curLen = (window.AppStore.publicDiscovery || []).length;
     var _lastFetch = window.AppStore._publicDiscoveryLastFetch || 0;
-    var _force = _curLen === 0; // sem dados = sempre re-fetch, sem throttle
+    // ── ⛔ "SEM THROTTLE" VIROU TEMPESTADE (2.0.71) ─────────────────────────
+    // MEDIDO no aparelho do dono (Sentry): `Firestore read spike ~27,6/s em 10s
+    // (276 leituras) — load-all-public=180`, junto com travadas de 1,2s a 4,5s e
+    // um toque com 4 SEGUNDOS de atraso de entrada. E o relato bate: _"piora
+    // depois de expandir os ocultados, ocultar/desocultar"_.
+    // A CAUSA: `_force = _curLen === 0` tirava o intervalo mínimo por completo.
+    // Com a descoberta vazia, TODA renderização da dashboard disparava uma busca
+    // INTEIRA dos torneios públicos — e ocultar, desocultar e expandir são
+    // renderizações. Cada gesto virava 180 leituras + parse + snapshot na thread
+    // principal, que é exatamente o que corta a rolagem.
+    // A intenção original ("sem dados = busca logo, o Nelson não vê NADA") FICA:
+    // vazio continua sendo mais agressivo que o normal (5s contra 15s). O que sai
+    // é o "sem intervalo nenhum", que transformava repetição de tela em enxurrada.
+    var _force = _curLen === 0 && (Date.now() - _lastFetch > 5000);
     if (_force || Date.now() - _lastFetch > 15000) {
       window.AppStore._publicDiscoveryLastFetch = Date.now();
-      window._log('[Discovery v0.16.60] re-fetch disparado', { curLen: _curLen, force: _force, msSinceLast: Date.now() - _lastFetch });
+      // conta as buscas COMPLETAS disparadas — é o número que diz se a tempestade
+      // (276 leituras em 10s, medida no aparelho do dono) acabou de verdade (2.0.71)
+      window._discoveryFetches = (window._discoveryFetches || 0) + 1;
+      window._log('[Discovery v0.16.60] re-fetch disparado', { curLen: _curLen, force: _force, msSinceLast: Date.now() - _lastFetch, total: window._discoveryFetches });
       window.AppStore.loadPublicDiscovery().then(function() {
         var newLen = (window.AppStore.publicDiscovery || []).length;
         window._log('[Discovery v0.16.60] re-fetch retornou', { newLen: newLen, oldLen: _curLen });
