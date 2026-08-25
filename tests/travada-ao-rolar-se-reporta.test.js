@@ -74,7 +74,7 @@ const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboar
 // reproduziu" quase me fez trocar de hipótese.
 {
   const i = store.indexOf("'scroll-trav: '");
-  const volta = store.slice(Math.max(0, i - 1500), i);
+  const volta = store.slice(Math.max(0, i - 2600), i);
   ok(/_travScrollN/.test(volta) && /<=\s*3/.test(volta),
      'no máximo 3 avisos por janela — telemetria não pode virar a própria enxurrada');
   ok(/_travScrollT/.test(volta) && /600000/.test(volta),
@@ -97,7 +97,7 @@ const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboar
 // ── ⑤ só reporta quando a rolagem foi RECENTE ────────────────────────────────
 {
   const i = store.indexOf("'scroll-trav: '");
-  const volta = store.slice(Math.max(0, i - 1600), i);
+  const volta = store.slice(Math.max(0, i - 2600), i);
   ok(/_spUltimaRolagemT/.test(volta) && /1200/.test(volta),
      'a travada só conta como "ao rolar" se houve rolagem há menos de 1,2s');
 }

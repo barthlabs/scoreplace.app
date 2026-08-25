@@ -8,6 +8,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
+const _tSplit = require('./tournament-split-core.js');
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
 // categorias, folgas, desempate) carregada via shim Node. Substitui o stub 1×1
@@ -1587,6 +1588,105 @@ exports.tournamentSummary = onDocumentWritten(
       await db.collection('tournaments_summary').doc(id).set(resumo);
     } catch (e) {
       console.error('[tournamentSummary] falhou', id, e);
+    }
+  }
+);
+
+
+// ══ ⭐ ESPELHO PRO BANCO NOVO (2.0.89) ═══════════════════════════════════════
+// Ordem do dono: "cria o banco novo, lê o banco atual, grava no banco novo e refaz as
+// ligações para gravarem também no banco novo… nada da Confra pode mudar no que as
+// pessoas veem e como ela funciona".
+//
+// ⭐ POR QUE UM GATILHO, E NÃO ESCRITA DUPLA NO CLIENTE:
+// o torneio é gravado por MUITOS caminhos — inscrição, sorteio, placar, W.O., lista
+// de espera — alguns em TRANSAÇÃO, alguns por Cloud Function. Interceptar um por um é
+// exatamente onde uma migração quebra: basta esquecer um e o banco novo diverge em
+// silêncio. O gatilho vê TODA escrita, venha de onde vier, e **nenhuma linha do
+// cliente muda** — então inscrição, sorteio, placar, W.O., ativo/inativo, espera e
+// classificação congelada seguem no caminho de sempre, byte por byte.
+//
+// ⛔ O banco velho continua sendo a VERDADE. Isto aqui só ESPELHA. Trocar a leitura é
+// uma decisão separada, depois de o conferidor ficar verde por dias.
+//
+// Idempotente e incremental: grava só o que mudou e apaga o que deixou de existir —
+// um torneio ao vivo escreve muito, e reescrever 112 jogos a cada ponto seria trocar
+// um problema de custo por outro.
+// ⛔ COMPARA O DOCUMENTO ANTES × DEPOIS — NÃO LÊ O ESPELHO.
+// A 1ª versão desta função fazia `col.get()` pra saber o que mudou. No Confra isso
+// seriam ~456 LEITURAS por lançamento de placar (112 jogos + 144 inscritos + 200
+// eventos), num torneio ao vivo que escreve o dia inteiro. Seria trocar um problema
+// de peso por um de custo. O gatilho JÁ RECEBE o antes e o depois: o diff sai daí,
+// de graça, e só as linhas que mudaram de fato são gravadas.
+function _diffEspelho(antes, depois, chaveDe) {
+  const mapa = (lista) => {
+    const m = new Map();
+    (lista || []).forEach((it) => m.set(String(chaveDe(it)), it));
+    return m;
+  };
+  const A = mapa(antes), D = mapa(depois);
+  const gravar = [], apagar = [];
+  D.forEach((item, k) => {
+    const a = A.get(k);
+    if (!a || JSON.stringify(a) !== JSON.stringify(item)) gravar.push({ k, item });
+  });
+  A.forEach((_, k) => { if (!D.has(k)) apagar.push(k); });
+  return { gravar, apagar };
+}
+
+async function _espelhaColecao(db, id, nome, antes, depois, chaveDe) {
+  const { gravar, apagar } = _diffEspelho(antes, depois, chaveDe);
+  if (!gravar.length && !apagar.length) return { gravados: 0, apagados: 0, total: (depois || []).length };
+  const col = db.collection('tournaments').doc(id).collection(nome);
+  let lote = db.batch(), n = 0;
+  const solta = async () => { if (n) { await lote.commit(); lote = db.batch(); n = 0; } };
+  for (const g of gravar) { lote.set(col.doc(g.k), g.item); if (++n >= 400) await solta(); }
+  for (const k of apagar) { lote.delete(col.doc(k)); if (++n >= 400) await solta(); }
+  await solta();
+  return { gravados: gravar.length, apagados: apagar.length, total: (depois || []).length };
+}
+
+exports.tournamentMirror = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 300 },
+  async (event) => {
+    const id = event.params && event.params.tournamentId;
+    try {
+      const db = getFirestore();
+      const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
+
+      // torneio apagado ⇒ o espelho some junto (senão sobra fantasma no banco novo)
+      if (!depois) {
+        for (const nome of ['matches', 'participants', 'history']) {
+          const col = db.collection('tournaments').doc(id).collection(nome);
+          const snap = await col.get();
+          let lote = db.batch(), n = 0;
+          for (const d of snap.docs) { lote.delete(d.ref); if (++n >= 400) { await lote.commit(); lote = db.batch(); n = 0; } }
+          if (n) await lote.commit();
+        }
+        return;
+      }
+
+      const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
+      const pDepois = _tSplit.dividir(depois);
+      if (!pDepois) return;
+      // ⚠️ Sem `antes` (torneio novo, ou 1ª passada) o diff grava TUDO — que é o
+      // certo: espelho vazio precisa nascer inteiro.
+      const pAntes = antes ? _tSplit.dividir(antes) : { matches: [], participants: [], history: [] };
+
+      const r1 = await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
+      const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants, (p) => 'p' + p._idx);
+      const r3 = await _espelhaColecao(db, id, 'history', pAntes.history, pDepois.history, (h) => 'h' + h._idx);
+
+      if (r1.gravados || r1.apagados || r2.gravados || r2.apagados || r3.gravados || r3.apagados) {
+        console.log('[tournamentMirror]', id,
+          'jogos', r1.gravados + '/' + r1.total, '(-' + r1.apagados + ')',
+          'inscritos', r2.gravados + '/' + r2.total, '(-' + r2.apagados + ')',
+          'histórico', r3.gravados + '/' + r3.total, '(-' + r3.apagados + ')');
+      }
+    } catch (e) {
+      // ⛔ NUNCA derruba a escrita original: o espelho é secundário até a troca de
+      // leitura. Falha aqui vira alarme no log, não erro pro usuário.
+      console.error('[tournamentMirror] falhou', id, e);
     }
   }
 );

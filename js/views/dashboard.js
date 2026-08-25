@@ -1932,6 +1932,14 @@ function renderDashboard(container) {
         '🏅 Seus últimos resultados' +
         (_mrTotalCards > 1 ? _verMaisTag('mr-toggle-tag', _mrCollapsed) : '') +
         '</h3>';
+      // ── ⭐ SÓ O BLOCO À VISTA NASCE (2.0.89) ───────────────────────────
+      // Regra do dono: "nada que não estiver visível deve ser carregado". Fechada,
+      // esta seção mostra UM bloco (`data-mr-first`) e escondia os demais com
+      // `display:none` — construídos assim mesmo. Mesma confusão das janelas
+      // (2.0.84), do histórico (2.0.86) e da chave (2.0.88).
+      // A região abaixo tem ~630 linhas de `html +=`; em vez de reescrevê-las, a
+      // saída dela é DESVIADA pra um acumulador e cortada no início do 2º bloco.
+      var _mrAntes = html; html = '';
       html += '<div id="meus-resultados-body" style="margin-top:12px;">';
     }
 
@@ -2563,6 +2571,26 @@ function renderDashboard(container) {
 
     if (_collapsibleHasContent) {
       html += '</div>'; // fecha #meus-resultados-body
+      // ⭐ corta no 2º `data-mr-block`: dali pra frente é o que a seção fechada
+      // esconde. ⛔ Recorta a partir do `<div` que ABRE o bloco (os atributos vêm
+      // logo depois de `<div`), senão o HTML sairia partido no meio de uma tag.
+      var _mrCorpo = html; html = _mrAntes;
+      window._mrExtraPend = '';
+      if (_mrCollapsed) {
+        var _m1 = _mrCorpo.indexOf('data-mr-block="1"');
+        var _m2 = _m1 >= 0 ? _mrCorpo.indexOf('data-mr-block="1"', _m1 + 8) : -1;
+        if (_m2 > 0) {
+          var _abre = _mrCorpo.lastIndexOf('<div', _m2);
+          if (_abre > _m1) {
+            var _fecha = _mrCorpo.lastIndexOf('</div>');   // fecha o #meus-resultados-body
+            if (_fecha > _abre) {
+              window._mrExtraPend = _mrCorpo.slice(_abre, _fecha);
+              _mrCorpo = _mrCorpo.slice(0, _abre) + _mrCorpo.slice(_fecha);
+            }
+          }
+        }
+      }
+      html += _mrCorpo;
       // v1.8.69: o convite pra abrir, igual ao de Novidades. Só existe com 2+ cards —
       // com um só não há "anteriores" e a linha seria ruído.
       if (_mrTotalCards > 1) {
@@ -4122,17 +4150,34 @@ function renderDashboard(container) {
   // Um único interval global (guard _discoveryPollStarted) — só age na dashboard.
   if (!window._discoveryPollStarted) {
     window._discoveryPollStarted = true;
+    // ── ⛔🔴 O RELÓGIO DE 25s ERA A CAUSA DAS TRAVADAS PERIÓDICAS (2.0.89) ─────
+    // MEDIDO no aparelho do dono, com o carimbo de tempo desde a abertura:
+    //   3270ms · pra-cima  · nos=739 · aberto=45s
+    //   1014ms · pra-cima  · nos=739 · aberto=26s
+    //    860ms · pra-cima  · nos=739 · aberto=25.2s
+    // 25,2s · 26s · 45s — é ESTE relógio. E `loadPublicDiscovery` lê a coleção
+    // `tournaments` com os DOCUMENTOS INTEIROS: a cada 25s o aparelho baixava e
+    // desserializava dezenas de torneios completos na thread principal. Com 739
+    // elementos na tela, a travada de 3,2s nunca foi peso de DOM — era isto.
+    //
+    // ⛔ E era REDUNDANTE: `startDiscoveryFeedListener` (store.js) já escuta
+    // `discoveryFeed` em TEMPO REAL e re-busca quando algo muda de verdade. O poll
+    // nasceu (v0.17.4) como rede pra quando o listener falha — virou imposto fixo.
+    //
+    // Fica como REDE, não como relógio: 5 minutos, e só se o listener não estiver
+    // de pé. Frescor continua garantido pelo tempo real.
     setInterval(function() {
       var _h = window.location.hash || '';
       var _onDash = _h === '' || _h === '#' || _h.indexOf('#dashboard') === 0;
       if (!_onDash) return;
       if (!window.AppStore || typeof window.AppStore.loadPublicDiscovery !== 'function') return;
       if (!window.AppStore.currentUser) return;
+      // ⭐ o tempo real está de pé ⇒ não há o que buscar. Buscar assim mesmo é
+      // pagar o preço todo sem trazer nada novo.
+      if (window.AppStore._discoveryUnsub) return;
       window.AppStore._publicDiscoveryLastFetch = Date.now();
-      // v2.8.23: o poll só MANTÉM os dados frescos (pra próxima navegação/entrada) —
-      // NÃO re-renderiza a dashboard já mostrada (re-render visível = travada no scroll).
       window.AppStore.loadPublicDiscovery().catch(function() {});
-    }, 25000);
+    }, 300000);
   }
 
   // v0.17.4: real-time listeners SUBSTITUEM o polling de 60s. Pedido do
@@ -4527,6 +4572,15 @@ window._toggleMyResultsCollapse = function() {
   var sec = document.getElementById('meus-resultados-section');
   if (!sec) return;
   var willCollapse = sec.getAttribute('data-mr-collapsed') !== '1';
+  // ⭐ 2.0.89 — o escondido entra AGORA, ANTES de o CSS revelar. Fechada, a seção
+  // nasce só com o bloco à vista; o resto ficou guardado em texto (regra do dono:
+  // "nada que não estiver visível deve ser carregado").
+  if (!willCollapse && window._mrExtraPend) {
+    try {
+      var _body = document.getElementById('meus-resultados-body');
+      if (_body) { _body.insertAdjacentHTML('beforeend', window._mrExtraPend); window._mrExtraPend = ''; }
+    } catch (e) {}
+  }
   sec.setAttribute('data-mr-collapsed', willCollapse ? '1' : '0');
   window._spSyncCollapsePreview();   // v1.9.64: mede a linha e escreve o convite (fonte única)
   try { localStorage.setItem('scoreplace_collapse_myresults', willCollapse ? '1' : '0'); } catch (e) {}

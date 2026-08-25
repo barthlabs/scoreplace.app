@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.88';
+window.SCOREPLACE_VERSION = '2.0.89';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -22,6 +22,17 @@ window._medirTrecho = function (nome, fn) {
       if (window._trechos.length > 30) window._trechos.shift();
     }
   }
+};
+
+// Envelope de medição: devolve uma função que roda a original dentro de
+// `_medirTrecho`. ⛔ Nome fixo no embrulho, nunca por chamada.
+window._medEnv = function (nome, fn) {
+  return function () {
+    var self = this, args = arguments, r;
+    if (!window._medirTrecho) return fn.apply(self, args);
+    window._medirTrecho(nome, function () { r = fn.apply(self, args); });
+    return r;
+  };
 };
 
 // ── ⚡ O PERFILADOR VIROU FERRAMENTA DE DIAGNÓSTICO, NÃO IMPOSTO (24/ago/2026) ─
@@ -203,7 +214,13 @@ try {
               // eterno "quem: nenhum" por um nome com duração.
               var _tre = '';
               try {
-                _tre = (window._trechos || []).slice(-3)
+                // ⛔ OS MAIS CAROS, NÃO OS ÚLTIMOS (2.0.89). Mostrar os 3 ÚLTIMOS
+                // escondia justamente o culpado: um trecho de 3s é empurrado da
+                // lista por três `countdown-tick` de 1ms que vieram depois. Os
+                // relatos do dono chegavam com 'countdown-tick=1ms' como se nada
+                // pesado tivesse rodado — e o pesado estava no anel, invisível.
+                _tre = (window._trechos || []).slice()
+                  .sort(function (a, b) { return (b.dur || 0) - (a.dur || 0); }).slice(0, 3)
                   .map(function (x) { return x.nome + '=' + Math.round(x.dur) + 'ms'; }).join(' | ');
               } catch (eT) {}
               window._captureMessage('scroll-trav: ' + foto.dur + 'ms · ' + (window._spDirRolagem || '?') +
@@ -13375,3 +13392,26 @@ try {
     window._conviteMostradoNestaRodada = false;    // nova rodada: a vez passa ao próximo
   });
 } catch (e) {}
+
+
+// ══ ⭐ OS CAMINHOS CAROS PASSAM A TER NOME (2.0.89) ══════════════════════════
+// O relato do dono chegava assim:
+//   scroll-trav: 3270ms · pra-cima · nos=739 · aberto=45s
+//   trechos: countdown-tick=2ms | progress-tick=1ms | countdown-tick=0ms
+// 3,2 SEGUNDOS de thread presa, 45s depois de abrir, com 739 elementos na tela —
+// e nenhum culpado, porque os caminhos caros do re-render simplesmente NÃO ERAM
+// MEDIDOS. (`snapshot-torneios`, `rota-torneio` e `dash-repintura` já eram.)
+//
+// ⛔ Reatribuição DEPOIS da definição, de propósito: embrulhar na declaração exige
+// fechar parêntese no fim de funções de centenas de linhas — tentei e quebrei o
+// arquivo. Assim o corpo original não é tocado.
+// Custo: dois timestamps por CHAMADA (não por evento) — vale no nível LEVE.
+try {
+  ['_softRefreshView', '_hydrateUidNames', '_fitNames', '_preloadUserProfiles'].forEach(function (nome) {
+    if (typeof window[nome] === 'function' && !window[nome].__medido) {
+      var envolto = window._medEnv(nome, window[nome]);
+      envolto.__medido = true;
+      window[nome] = envolto;
+    }
+  });
+} catch (e) { if (window._warn) window._warn('[medição por nome]', e); }

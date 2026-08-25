@@ -84,6 +84,18 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.89 ───────────────────────────────────────────
+        // ⛔🔴 A CAUSA DAS TRAVADAS PERIÓDICAS, e ela era um RELÓGIO. MEDIDO no
+        // aparelho do dono com o carimbo de tempo: 3270ms/pra-cima aos 45s, 1014ms
+        // aos 26s, 860ms aos 25,2s — com apenas 739 elementos na tela. Era o
+        // `setInterval(…, 25000)` da dashboard chamando `loadPublicDiscovery`, que
+        // lê a coleção `tournaments` com os DOCUMENTOS INTEIROS. A cada 25s o
+        // aparelho baixava e desserializava dezenas de torneios completos.
+        // E era REDUNDANTE: o listener de tempo real já cobre isso.
+        // Junto: 'Seus últimos resultados' monta só o bloco à vista, e o relatório
+        // de travada passa a mostrar os trechos MAIS CAROS (mostrava os ÚLTIMOS —
+        // um trecho de 3s era empurrado da lista por três de 1ms).
+        '<li><b>⚡ O aplicativo para de rebuscar tudo a cada 25 segundos:</b> mesmo parado, a tela inicial refazia a busca de torneios em segundo plano — baixando cada torneio por inteiro — e era isso que travava a rolagem de tempos em tempos. As novidades continuam chegando na hora, pelo tempo real. E a caixa de <b>últimos resultados</b> passa a montar só o que está à vista.</li>' +
         // ── ciclo 2.0.88 ───────────────────────────────────────────
         // ⭐ O MAIOR DE TODOS. MEDIDO no aparelho do dono: #inline-bracket-container
         // = 6.157 dos 8.061 elementos da tela de torneio → travada de 1.662ms ao

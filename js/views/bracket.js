@@ -553,14 +553,45 @@ window._chaveLigaLotes = function (raiz) {
       (function (marca) {
         var id = marca.getAttribute('data-chave-lote');
         var det = marca.closest ? marca.closest('details') : null;
-        var monta = function () {
+        // ⭐ 2.0.89 — ENTRA EM FATIAS. Relato do dono: "continua cortando rolando pra
+        // baixo depois de abrir os demais". Claro: abrir despejava ~5.000 elementos
+        // num quadro só. Agora entram em lotes, com o navegador respirando entre
+        // eles — mesma ideia da pintura fatiada que a chave já usa no primeiro
+        // desenho. ⛔ `_chaveMontaTudo` (busca) continua SÍNCRONO: quem procura
+        // precisa dos cards AGORA, senão o filtro roda sobre um DOM incompleto.
+        var monta = function (deUmaVez) {
           var fn = window._chaveLotes[id];
           if (!fn) return;                       // já montado
           delete window._chaveLotes[id];         // uma vez só
-          try { marca.outerHTML = fn(); } catch (e) { if (window._warn) window._warn('[chave lote]', e); }
+          var html;
+          try { html = fn(); } catch (e) { if (window._warn) window._warn('[chave lote]', e); return; }
+          if (deUmaVez) { try { marca.outerHTML = html; } catch (e2) {} return; }
+          try {
+            var tpl = document.createElement('template');
+            tpl.innerHTML = html;
+            var filhos = Array.prototype.slice.call(tpl.content.children);
+            var alvo = document.createElement('div');
+            if (!marca.parentNode) return;
+            marca.parentNode.replaceChild(alvo, marca);
+            var i = 0, lote = 4;
+            var passo = function () {
+              if (!alvo.isConnected) return;     // outro render assumiu a tela
+              var fim = Math.min(filhos.length, i + lote);
+              for (; i < fim; i++) alvo.appendChild(filhos[i]);
+              if (i < filhos.length) {
+                if (typeof requestAnimationFrame === 'function') requestAnimationFrame(passo);
+                else setTimeout(passo, 0);
+                return;
+              }
+              // hidrata só o que chegou tarde
+              try { if (typeof window._hydrateUidNames === 'function') window._hydrateUidNames(alvo); } catch (e3) {}
+              try { if (typeof window._fitNames === 'function') window._fitNames(alvo); } catch (e4) {}
+            };
+            passo();
+          } catch (e5) { if (window._warn) window._warn('[chave lote fatiado]', e5); }
         };
         // Sem <details> em volta (caso inesperado), monta já: melhor pesado que faltando.
-        if (!det) { monta(); return; }
+        if (!det) { monta(true); return; }   // sem <details>: já, e inteiro
         if (det.open) { monta(); return; }
         det.addEventListener('toggle', function () { if (det.open) monta(); });
       })(marcas[i]);

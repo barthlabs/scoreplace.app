@@ -128,7 +128,16 @@ function render(tours, opts) {
   const fn = new Function('window', 'document', 'localStorage', 'participacoes',
     'with (window) { ' + body + ' return _buildMyResultsHtml; }'
   )(W, W.document, W.localStorage, tours);
-  return fn();
+  const _h = fn();
+  // ⭐ 2.0.89 — fechada, a seção passa a nascer só com o bloco à vista; o resto
+  // fica em `window._mrExtraPend` e entra no DOM ao abrir (ordem do dono: "nada
+  // que não estiver visível deve ser carregado"). Este teste conta CARDS e a
+  // MARCAÇÃO do conteúdo COMPLETO — o mesmo que a pessoa vê ao abrir — então o
+  // guardado volta pra dentro da seção. ⛔ Nenhuma asserção foi afrouxada.
+  const _pend = W._mrExtraPend || '';
+  if (!_pend) return _h;
+  const _iFim = _h.lastIndexOf('</div>');
+  return _iFim > 0 ? (_h.slice(0, _iFim) + _pend + _h.slice(_iFim)) : (_h + _pend);
 }
 
 // A seção vem DEPOIS das Novidades no retorno (`_upHtml + _novHtml + html`), então basta

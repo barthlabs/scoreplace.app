@@ -77,13 +77,20 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.j
 // ── ⑤ montar é UMA VEZ SÓ ───────────────────────────────────────────────────
 {
   const i = src.indexOf('window._chaveLigaLotes = function');
-  const corpo = src.slice(i, i + 1200);
+  // janela ampliada em 2.0.89: `monta` cresceu ao passar a injetar em fatias.
+  const corpo = src.slice(i, i + 3000);
   ok(/delete window\._chaveLotes\[id\];/.test(corpo),
      '⛔ o lote é apagado do cofre ao montar — abrir e fechar não pode duplicar grupo');
   ok(/if \(det\.open\) \{ monta\(\); return; \}/.test(corpo),
      '<details> que já nasce aberto monta na hora (não espera um toggle que não virá)');
-  ok(/if \(!det\) \{ monta\(\); return; \}/.test(corpo),
-     '⛔ marcador sem <details> em volta monta já — melhor pesado que faltando');
+  ok(/if \(!det\) \{ monta\(true\); return; \}/.test(corpo),
+     '⛔ marcador sem <details> em volta monta já e INTEIRO — melhor pesado que faltando');
+  // ⭐ 2.0.89: abrir despejava ~5.000 elementos num quadro só, e o dono relatou
+  // "continua cortando rolando pra baixo depois de abrir os demais".
+  ok(/requestAnimationFrame\(passo\)/.test(corpo) && /lote = \d+/.test(corpo),
+     '⭐ o lote entra em FATIAS, com o navegador respirando entre elas');
+  ok(/if \(!alvo\.isConnected\) return;/.test(corpo),
+     '⛔ e para se outro render assumiu a tela (senão pinta numa árvore morta)');
 }
 
 // ── ⑥ a ligação acontece em TODOS os caminhos de pintura ────────────────────
