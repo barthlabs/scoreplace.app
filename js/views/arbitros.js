@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // scoreplace.app — Árbitros do Torneio
 // v1.6.7-beta
 // Página #arbitros/<tId>: gestão de árbitros do torneio pelo organizador.
@@ -62,7 +64,7 @@
     if (Array.isArray(person.refereeSports) && person.refereeSports.length > 0) {
       sportBadges = person.refereeSports.map(function(s) {
         return '<span style="font-size:0.6rem;padding:1px 6px;border-radius:4px;background:rgba(20,184,166,0.12);'
-          + 'color:#2dd4bf;border:1px solid rgba(20,184,166,0.25);">' + safe(s) + '</span>';
+          + 'color:var(--sp-c-2dd4bf,#2dd4bf);border:1px solid rgba(20,184,166,0.25);">' + safe(s) + '</span>';
       }).join('');
     }
 
@@ -78,12 +80,12 @@
     var actionBtn = '';
     if (status === 'confirmed') {
       actionBtn = '<button class="btn btn-sm" style="font-size:0.7rem;padding:5px 10px;background:rgba(239,68,68,0.1);'
-        + 'color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:8px;" '
+        + 'color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.3);border-radius:8px;" '
         + 'onclick="event.stopPropagation();window._arbitrosRemove(\'' + safeUid + '\',\'' + safeTid + '\')" '
         + 'title="Remover árbitro">✕ Remover</button>';
     } else if (status === 'invited') {
       actionBtn = '<button class="btn btn-sm" style="font-size:0.7rem;padding:5px 10px;background:rgba(239,68,68,0.1);'
-        + 'color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:8px;" '
+        + 'color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.3);border-radius:8px;" '
         + 'onclick="event.stopPropagation();window._arbitrosRemove(\'' + safeUid + '\',\'' + safeTid + '\')" '
         + 'title="Cancelar convite">✕ Cancelar</button>';
     } else if (status === 'available') {
@@ -92,13 +94,13 @@
         // Organizador se auto-confirma diretamente — sem fluxo de convite
         actionBtn = '<button class="btn btn-sm" style="font-size:0.7rem;padding:5px 10px;'
           + 'background:linear-gradient(135deg,rgba(20,184,166,0.18),rgba(13,148,136,0.18));'
-          + 'color:#2dd4bf;border:1px solid rgba(20,184,166,0.4);border-radius:8px;" '
+          + 'color:var(--sp-c-2dd4bf,#2dd4bf);border:1px solid rgba(20,184,166,0.4);border-radius:8px;" '
           + 'onclick="event.stopPropagation();window._arbitrosSelfConfirm(\'' + safeUid + '\',\'' + safeTid + '\')" '
           + 'title="Confirmar como árbitro deste torneio">✓ Arbitrarei</button>';
       } else {
         actionBtn = '<button class="btn btn-sm" style="font-size:0.7rem;padding:5px 10px;'
           + 'background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(79,70,229,0.18));'
-          + 'color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);border-radius:8px;" '
+          + 'color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.4);border-radius:8px;" '
           + 'onclick="event.stopPropagation();window._arbitrosInvite(\'' + safeUid + '\',\'' + safeTid + '\')" '
           + 'title="Convidar para arbitrar">+ Convidar</button>';
       }
@@ -121,13 +123,13 @@
   // ─── Section renderer ───────────────────────────────────────────────────────
   function _arbSection(title, icon, color, borderColor, bgColor, cards) {
     if (cards.length === 0) {
-      return '<div style="background:' + bgColor + ';border:1px solid ' + borderColor + ';border-radius:14px;padding:14px 16px;margin-bottom:20px;">'
-        + '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:' + color + ';margin-bottom:4px;">' + icon + ' ' + window._safeHtml(title) + '</div>'
+      return '<div style="background:' + window._spCor(bgColor, 'background') + ';border:1px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:14px;padding:14px 16px;margin-bottom:20px;">'
+        + '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:' + window._spCor(color, 'color') + ';margin-bottom:4px;">' + icon + ' ' + window._safeHtml(title) + '</div>'
         + '<div style="font-size:0.8rem;color:var(--text-muted);padding:8px 0;">Nenhum árbitro aqui ainda.</div>'
       + '</div>';
     }
-    return '<div style="background:' + bgColor + ';border:1px solid ' + borderColor + ';border-radius:14px;padding:14px 16px;margin-bottom:20px;">'
-      + '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:' + color + ';margin-bottom:10px;">' + icon + ' ' + window._safeHtml(title) + ' <span style="opacity:0.65;">(' + cards.length + ')</span></div>'
+    return '<div style="background:' + window._spCor(bgColor, 'background') + ';border:1px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:14px;padding:14px 16px;margin-bottom:20px;">'
+      + '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:' + window._spCor(color, 'color') + ';margin-bottom:10px;">' + icon + ' ' + window._safeHtml(title) + ' <span style="opacity:0.65;">(' + cards.length + ')</span></div>'
       + cards.join('')
     + '</div>';
   }
@@ -154,7 +156,7 @@
     var db = window.FirestoreDB && window.FirestoreDB.db;
     if (!db) {
       document.getElementById('arbitros-content').innerHTML =
-        '<div style="color:#f87171;font-size:0.85rem;">Banco de dados indisponível.</div>';
+        '<div style="color:var(--sp-c-f87171,#f87171);font-size:0.85rem;">Banco de dados indisponível.</div>';
       return;
     }
 
@@ -173,7 +175,7 @@
              (cu.email && (t.organizerEmail === cu.email || t.creatorEmail === cu.email)));
         if (!isOrg) {
           document.getElementById('arbitros-content').innerHTML =
-            '<div style="color:#f87171;font-size:0.85rem;">Somente o organizador pode gerenciar árbitros.</div>';
+            '<div style="color:var(--sp-c-f87171,#f87171);font-size:0.85rem;">Somente o organizador pode gerenciar árbitros.</div>';
           return;
         }
 
@@ -246,7 +248,7 @@
       })
       .catch(function(err) {
         var el = document.getElementById('arbitros-content');
-        if (el) el.innerHTML = '<div style="color:#f87171;font-size:0.85rem;">Erro ao carregar: ' + window._safeHtml(String(err.message || err)) + '</div>';
+        if (el) el.innerHTML = '<div style="color:var(--sp-c-f87171,#f87171);font-size:0.85rem;">Erro ao carregar: ' + window._safeHtml(String(err.message || err)) + '</div>';
       });
   };
 

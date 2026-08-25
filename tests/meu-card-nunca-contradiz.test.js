@@ -33,6 +33,11 @@ const clona = () => JSON.parse(JSON.stringify(FIX));
 // verde com o arquivo revertido). O store.js inteiro não é require-ável (toca document no
 // load), então extraímos os dois blocos por contagem de chaves.
 const win = {};
+// ⭐ 2.0.94 — a tabela de cor (js/paleta-tabela.js) não existe aqui: este teste extrai
+// um TRECHO do arquivo, então a linha de guarda que o topo do arquivo tem fica de fora.
+// Identidade devolve a cor crua, que é o comportamento anterior à tabela — que é o que
+// este teste afirma.
+win._spCor = function (c) { return c; };
 // `obrigatoria:false` → some sem estourar. É o que faz este arquivo ficar vermelho pela
 // ASSERÇÃO CERTA contra o código anterior (que não tinha `_meuStatusNoTorneio`): sem a
 // função de status, o card ainda é exercido e acusa o "não está inscrito" do print, em vez

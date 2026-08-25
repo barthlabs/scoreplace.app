@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
 // ─── Bracket / Standings View ───────────────────────────────────────────────
 
@@ -923,7 +925,7 @@ function renderBracket(container, tournamentId, isInline) {
       t.groups.map((g, i) => {
         const c = colors[i % colors.length];
         const letter = window._groupLetter(i);
-        return '<button onclick="var el=document.getElementById(\'group-section-' + i + '\');if(el){el.scrollIntoView({behavior:\'smooth\',block:\'start\'});}" style="min-width:28px;height:28px;padding:0 8px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:1.5px solid ' + c + ';background:' + c + '20;color:' + c + ';transition:all 0.15s;white-space:nowrap;line-height:1;" onmouseover="this.style.background=\'' + c + '40\'" onmouseout="this.style.background=\'' + c + '20\'">' + letter + '</button>';
+        return '<button onclick="var el=document.getElementById(\'group-section-' + i + '\');if(el){el.scrollIntoView({behavior:\'smooth\',block:\'start\'});}" style="min-width:28px;height:28px;padding:0 8px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;border:1.5px solid ' + window._spCor(c, 'borda') + ';background:' + window._spCor(c, 'background') + '20;color:' + window._spCor(c, 'color') + ';transition:all 0.15s;white-space:nowrap;line-height:1;" onmouseover="this.style.background=\'' + c + '40\'" onmouseout="this.style.background=\'' + c + '20\'">' + letter + '</button>';
       }).join('') +
     '</div>';
   })() : '';
@@ -940,10 +942,10 @@ function renderBracket(container, tournamentId, isInline) {
       <div>
         <h2 style="margin:0;">${isLiga || isSuico ? _t('bracket.title.standings') + ' — ' : window._isMonarchFormat(t) ? '👑 ' + _t('bracket.title.monarch') + ' — ' : isGrupos ? _t('bracket.title.groups') + ' — ' : _t('bracket.title.bracket') + ' — '}${window._safeHtml(t.name)}</h2>
         <div class="d-flex gap-2 mt-1">
-          ${hasContent ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:#34d399;">${_t('bracket.drawDone')}</span>` : `<span class="badge badge-warning">${_t('bracket.waitingDraw')}</span>`}
+          ${hasContent ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:var(--sp-c-34d399,#34d399);">${_t('bracket.drawDone')}</span>` : `<span class="badge badge-warning">${_t('bracket.waitingDraw')}</span>`}
           <span class="badge badge-info">${(window._formatLabel ? window._formatLabel(t) : t.format) || 'Eliminatórias'}</span>
           ${isGrupos && t.currentStage === 'groups' ? `<span class="badge badge-warning">${_t('stage.groups')}</span>` : ''}
-          ${isGrupos && t.currentStage === 'elimination' ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:#34d399;">${_t('stage.elimination')}</span>` : ''}
+          ${isGrupos && t.currentStage === 'elimination' ? `<span class="badge badge-success" style="background:rgba(16,185,129,0.2);color:var(--sp-c-34d399,#34d399);">${_t('stage.elimination')}</span>` : ''}
         </div>
       </div>
       <div>${actionBtnsHtml}</div>
@@ -979,7 +981,7 @@ function renderBracket(container, tournamentId, isInline) {
   // banner some sozinho — sem caso especial _ligaAutoDraw. Manual mantém o banner.
   const startTournamentBanner = (!isInline && isOrg && hasDrawContent && !t.tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
     <div style="margin:1rem 0 1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
-        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
+        <p style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;margin-bottom:12px;">Sorteio realizado. Inicie o torneio para habilitar a chamada de presença.</p>
         <button class="btn btn-success btn-cta hover-lift" onclick="window._startTournament('${_tIdSafe}')">
             ▶ Iniciar Torneio
         </button>
@@ -1074,7 +1076,7 @@ function renderBracket(container, tournamentId, isInline) {
           // v4.3.11: cada fase anterior é uma COLUNA à ESQUERDA (flex-shrink:0), largura
           // contida — o timeline lê da esquerda (mais antigo) pra direita (fase atual).
           _prevSections += '<div style="flex-shrink:0;width:min(88vw,560px);margin:0 22px 0 0;border:1px solid rgba(129,140,248,0.45);border-radius:12px;background:rgba(99,102,241,0.08);overflow:hidden;align-self:stretch;">' +
-            '<div style="padding:10px 14px;font-weight:800;color:#c7d2fe;border-bottom:1px solid rgba(129,140,248,0.25);">👁 ' + _ppName + ' — fase encerrada</div>' +
+            '<div style="padding:10px 14px;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);border-bottom:1px solid rgba(129,140,248,0.25);">👁 ' + _ppName + ' — fase encerrada</div>' +
             '<div style="padding:8px 12px 14px;">' + _ppContent + '</div>' +
           '</div>';
         }
@@ -1158,7 +1160,7 @@ function renderBracket(container, tournamentId, isInline) {
   if ((!t.matches || t.matches.length === 0) && !hasContent) {
     container.innerHTML = headerHtml + `
       <div style="display:flex;justify-content:center;align-items:center;min-height:40vh;">
-        <div class="text-center text-muted" style="background:rgba(255,255,255,0.02);padding:3rem;border-radius:24px;border:1px dashed rgba(255,255,255,0.1);">
+        <div class="text-center text-muted" style="background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));padding:3rem;border-radius:24px;border:1px dashed rgba(255,255,255,0.1);">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:1rem;opacity:0.5;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
           <h3 style="color:var(--text-bright);margin-bottom:.5rem;">Nenhuma chave gerada ainda</h3>
           <p style="max-width:400px;margin:0 auto 1.5rem;">As chaves aparecerão aqui após o organizador realizar o sorteio.</p>
@@ -1179,7 +1181,7 @@ function renderBracket(container, tournamentId, isInline) {
     }
   } catch (bracketErr) {
     window._error('[Bracket] Render error:', bracketErr);
-    container.innerHTML = headerHtml + '<div style="padding:2rem;text-align:center;color:#f87171;"><p>Erro ao renderizar chaveamento.</p><pre style="font-size:0.7rem;text-align:left;max-width:600px;margin:1rem auto;overflow:auto;background:rgba(0,0,0,0.3);padding:1rem;border-radius:8px;">' + window._safeHtml(String(bracketErr.stack || bracketErr)) + '</pre></div>';
+    container.innerHTML = headerHtml + '<div style="padding:2rem;text-align:center;color:var(--sp-c-f87171,#f87171);"><p>Erro ao renderizar chaveamento.</p><pre style="font-size:0.7rem;text-align:left;max-width:600px;margin:1rem auto;overflow:auto;background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));padding:1rem;border-radius:8px;">' + window._safeHtml(String(bracketErr.stack || bracketErr)) + '</pre></div>';
   }
   _applyMyMatchesFilter();
 
@@ -1289,7 +1291,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
       // nome do topo quebra em 2 linhas, a "/" acompanha "…Souza /" em vez de vazar pro
       // começo da linha do 2º nome (o deslocamento que aparecia na Karla/Adriano). (dono)
       const sep = (i < members.length - 1) ? '<span style="font-size:0.65rem;color:rgba(255,255,255,0.2);margin-left:4px;">/</span>' : '';
-      return `<span style="display:inline-flex;align-items:baseline;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block;align-self:center;"></span><span style="font-size:0.78rem;color:${textColor};">${_sh(n)}${sep}</span></span>`;
+      return `<span style="display:inline-flex;align-items:baseline;gap:3px;"><span style="width:7px;height:7px;border-radius:50%;background:${window._spCor(dotColor, 'background')};flex-shrink:0;display:inline-block;align-self:center;"></span><span style="font-size:0.78rem;color:${window._spCor(textColor, 'color')};">${_sh(n)}${sep}</span></span>`;
     }).join('');
     return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${dots}</div>`;
   };
@@ -1325,13 +1327,13 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
       const opts = '<option value="">📍 Definir quadra…</option>' +
         _courts.map(function(c){ return '<option value="' + _sh(c) + '"' + (cur === c ? ' selected' : '') + '>' + _sh(c) + '</option>'; }).join('');
       courtHtml = '<select onclick="event.stopPropagation()" onchange="window._assignMatchCourt(\'' + _tIdSafe + '\',\'' + _mid + '\',this.value)" ' +
-        'style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.4);color:#bbf7d0;font-size:0.78rem;font-weight:700;cursor:pointer;">' + opts + '</select>';
+        'style="margin-top:4px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:8px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.4);color:var(--sp-c-bbf7d0,#bbf7d0);font-size:0.78rem;font-weight:700;cursor:pointer;">' + opts + '</select>';
     } else if (e.match.court) {
-      courtHtml = '<div style="margin-top:4px;font-size:0.74rem;font-weight:800;color:#34d399;display:flex;align-items:center;gap:4px;">📍 ' + _sh(e.match.court) + '</div>';
+      courtHtml = '<div style="margin-top:4px;font-size:0.74rem;font-weight:800;color:var(--sp-c-34d399,#34d399);display:flex;align-items:center;gap:4px;">📍 ' + _sh(e.match.court) + '</div>';
     }
     return `
-    <div style="padding:10px 14px;background:${bg};border:1px solid ${border};border-radius:10px;display:flex;flex-direction:column;gap:4px;">
-      <div style="font-size:0.8rem;font-weight:800;color:${labelColor};letter-spacing:0.5px;">${_t('bracket.matchNum', {n: e.friendlyNum})}</div>
+    <div style="padding:10px 14px;background:${window._spCor(bg, 'background')};border:1px solid ${border};border-radius:10px;display:flex;flex-direction:column;gap:4px;">
+      <div style="font-size:0.8rem;font-weight:800;color:${window._spCor(labelColor, 'color')};letter-spacing:0.5px;">${_t('bracket.matchNum', {n: e.friendlyNum})}</div>
       ${renderSideRow(e.match.p1)}
       <div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.2);letter-spacing:2px;padding:0 2px;">VS</div>
       ${renderSideRow(e.match.p2)}
@@ -1344,14 +1346,14 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
   const readySection = readyMatches.length > 0 ? `
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-size:1rem;">🟢</span>
-      <span style="font-size:0.9rem;font-weight:700;color:#4ade80;">${readyMatches.length} jogo${readyMatches.length > 1 ? 's' : ''} pronto${readyMatches.length > 1 ? 's' : ''} para chamar</span>
+      <span style="font-size:0.9rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);">${readyMatches.length} jogo${readyMatches.length > 1 ? 's' : ''} pronto${readyMatches.length > 1 ? 's' : ''} para chamar</span>
     </div>
     <div style="${gridStyle}">${readyMatches.map(renderCard).join('')}</div>` : '';
 
   const partialSection = partialMatches.length > 0 ? `
-    <div style="display:flex;align-items:center;gap:8px;${readyMatches.length > 0 ? 'margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);' : ''}">
+    <div style="display:flex;align-items:center;gap:8px;${readyMatches.length > 0 ? 'margin-top:16px;padding-top:14px;border-top:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));' : ''}">
       <span style="font-size:1rem;">🟡</span>
-      <span style="font-size:0.85rem;font-weight:600;color:#fbbf24;">${partialMatches.length} aguardando presença</span>
+      <span style="font-size:0.85rem;font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);">${partialMatches.length} aguardando presença</span>
     </div>
     <div style="${gridStyle}">${partialMatches.map(renderCard).join('')}</div>` : '';
 
@@ -1517,7 +1519,7 @@ window._lateGrowthGapBanner = function (gap) {
     + 'background:linear-gradient(rgba(245,158,11,0.10),rgba(245,158,11,0.10)),var(--bg-card);'
     + 'border:1px solid rgba(245,158,11,0.32);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.35);">'
     + '<div style="min-width:0;">'
-    + '<div style="font-weight:800;font-size:0.86rem;color:#fbbf24;">⏳ ' + alvo + ' para novo confronto</div>'
+    + '<div style="font-weight:800;font-size:0.86rem;color:var(--sp-c-fbbf24,#fbbf24);">⏳ ' + alvo + ' para novo confronto</div>'
     + '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">A chave está cheia — o jogo novo abre com duas entradas de uma vez, sem mexer em nenhum confronto já publicado.</div>'
     + '</div></div>';
 };
@@ -1551,7 +1553,7 @@ window._lateGrowthWaitTag = function (gap, entrada) {
   var mostra = !!(gap && gap.falta === 1 && gap.waitingKeys && gap.waitingKeys.indexOf(k) !== -1);
   var quem = (gap && !gap.teams) ? '1 jogador' : '1 equipe';
   return '<div data-late-wait-tag="' + window._safeHtml(k) + '" style="' + (mostra ? '' : 'display:none;')
-    + 'font-size:0.68rem;font-weight:800;color:#fbbf24;background:rgba(245,158,11,0.12);'
+    + 'font-size:0.68rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.12);'
     + 'border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:4px 9px;align-self:flex-start;">'
     + '⏳ Aguardando mais ' + quem + '</div>';
 };
@@ -1597,7 +1599,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var safeName = _sa(nm);
     return '<div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 42%;">'
       + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
-      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\',\'' + String((pObj && pObj.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + (mc ? '#4ade80' : '#64748b') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\',\'' + String((pObj && pObj.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + window._spCor((mc ? '#4ade80' : '#64748b'), 'color') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
       + '</div>';
   };
 
@@ -1629,7 +1631,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var _st = (mc ? 'present' : 'absent');
     var _txtC = window._presenceTextColor ? window._presenceTextColor(_st, 'solo') : (mc ? '#4ade80' : '#bfdbfe');
     var _tglC = window._presenceToggleColor ? window._presenceToggleColor(_st, 'solo') : '#10b981';
-    var row = '<span style="font-size:0.74rem;font-weight:800;color:' + _txtC + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
+    var row = '<span style="font-size:0.74rem;font-weight:800;color:' + window._spCor(_txtC, 'color') + ';white-space:nowrap;">' + (mc ? 'Presente' : 'Ausente') + '</span>'
       + '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _tglC + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _tglC + ';flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmp) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label>'
       + wo;
     return { skip: false, styleExtra: (window._presenceCardStyle ? window._presenceCardStyle(_st, 'solo') : ''), rowHtml: row };
@@ -1667,7 +1669,7 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var uidp = String(mm.uid || '').replace(/'/g, "\\'");
     // v1.3.76: toggle À DIREITA da palavra Presente/Ausente (pedido do dono) — span antes, label depois.
     var _mTxt = window._presenceTextColor ? window._presenceTextColor(mc ? 'present' : 'absent', 'pair') : (mc ? '#4ade80' : '#93c5fd');
-    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + _mTxt + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
+    var html = '<div style="display:flex;align-items:center;gap:6px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.62rem;font-weight:700;color:' + window._spCor(_mTxt, 'color') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + _sa(nmm) + '\',\'' + uidp + '\');"><span class="toggle-slider"></span></label></div>';
     return { html: html };
   };
   // Desfazer: passa as 2 IDENTIDADES de membro (uid||nome-guest), NUNCA a string "A / B" — o cânone
@@ -1700,16 +1702,16 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     : '';
 
   var _readyMsg = (_duplas.length >= 1)
-    ? '<div style="font-size:0.72rem;color:#2dd4bf;font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
+    ? '<div style="font-size:0.72rem;color:var(--sp-c-2dd4bf,#2dd4bf);font-weight:700;margin-top:2px;">✔️ ' + _duplas.length + ' dupla(s) formada(s) na lista de espera.</div>'
     : '';
 
   var _ljStage = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null;
   return '<div id="late-join-pairing-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.25);border-radius:16px;padding:1.5rem;">'
-    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + ((_ljStage && _ljStage.label) || 'inscrições abertas · R1') + '</span></div>'
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;"><span style="font-size:1.3rem;">🤝</span><h3 style="margin:0;color:var(--sp-c-f1f5f9,#f1f5f9);font-size:1.05rem;font-weight:700;">Formar novas duplas</h3><span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:var(--sp-c-f59e0b,#f59e0b);padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + ((_ljStage && _ljStage.label) || 'inscrições abertas · R1') + '</span></div>'
     + ((typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_ljGap) : '')
     + '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:1rem;">Arraste um card sobre outro para formar uma dupla (no celular, segure e arraste). Enquanto a 2ª rodada da chave superior não começou, cada dupla nova entra na <b>R1 da chave superior</b> (vencedor sobe, derrotado cai para a chave inferior).</div>'
-    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#f59e0b;margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:10px;margin-bottom:1.1rem;align-items:stretch;">' + solosHtml + '</div>' : '')
-    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:#2dd4bf;margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px;align-items:stretch;">' + duplasHtml + '</div>' : '')
+    + (solosHtml ? '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:6px;">Sem dupla</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:10px;margin-bottom:1.1rem;align-items:stretch;">' + solosHtml + '</div>' : '')
+    + (duplasHtml ? '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-2dd4bf,#2dd4bf);margin-bottom:6px;">Duplas formadas</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:10px;align-items:stretch;">' + duplasHtml + '</div>' : '')
     + _readyMsg
     + '</div>';
 };
@@ -1874,7 +1876,7 @@ window._formLateJoinDupla = function (tId, src, tgt, opts) {
       try { if (window.getComputedStyle(tgt).position === 'static') tgt.style.position = 'relative'; } catch (e) {}
       var b = document.createElement('div');
       b.className = 'lj-forming-badge';
-      b.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(15,23,42,0.6);border-radius:inherit;z-index:6;color:#22d3ee;font-weight:800;font-size:0.8rem;pointer-events:none;';
+      b.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(15,23,42,0.6);border-radius:inherit;z-index:6;color:var(--sp-c-22d3ee,#22d3ee);font-weight:800;font-size:0.8rem;pointer-events:none;';
       b.innerHTML = '<span class="lj-spin"></span> Formando dupla…';
       tgt.appendChild(b);
     }
@@ -1977,7 +1979,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
     _lateToggleHtml =
       '<div style="margin-bottom:0.9rem;padding:10px 12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.22);border-radius:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' +
         '<div style="min-width:0;flex:1;">' +
-          '<div style="font-weight:800;font-size:0.84rem;color:' + (_leOn ? '#4ade80' : 'var(--text-color)') + ';">➕ Aceitar entradas tardias nesta fase</div>' +
+          '<div style="font-weight:800;font-size:0.84rem;color:' + window._spCor((_leOn ? '#4ade80' : 'var(--text-color)'), 'color') + ';">➕ Aceitar entradas tardias nesta fase</div>' +
           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">' +
             (_leOn ? 'Marque presença de quem está na espera — entra por repescagem (vs a definir).'
                    : 'Ligado: marcar presença de quem está na espera cria um novo confronto (vs a definir).') +
@@ -2098,11 +2100,11 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       : '';
 
     return `
-      <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)'};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
-        <div style="width:26px;height:26px;border-radius:50%;background:${isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${isNext ? '#000' : '#94a3b8'};flex-shrink:0;">${i + 1}</div>
-        <span style="font-weight:600;font-size:0.88rem;color:${isNext ? '#fbbf24' : '#94a3b8'};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
+      <div ${_phDragAttrs}style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:${window._spCor(mc ? 'rgba(16,185,129,0.08)' : isAb ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)', 'background')};border-radius:10px;border-left:4px solid ${isNext ? '#f59e0b' : 'rgba(255,255,255,0.08)'};${dimAbsent ? 'opacity:0.5;' : ''}${_phDragAttrs ? 'cursor:grab;touch-action:none;' : ''}">
+        <div style="width:26px;height:26px;border-radius:50%;background:${window._spCor(isNext ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'rgba(255,255,255,0.08)', 'background')};display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:${window._spCor(isNext ? '#000' : '#94a3b8', 'color')};flex-shrink:0;">${i + 1}</div>
+        <span style="font-weight:600;font-size:0.88rem;color:${window._spCor(isNext ? '#fbbf24' : '#94a3b8', 'color')};flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">${name}${isNext && _policy === 'locked' ? ' <span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.15);padding:1px 6px;border-radius:6px;white-space:nowrap;">Próximo a entrar</span>' : ''}</span>
         <label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAb ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}"><input type="checkbox" ${mc ? 'checked' : ''} ${isAb ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>
-        <span style="font-size:0.65rem;font-weight:700;color:${statusColor};white-space:nowrap;">${statusLabel}</span>
+        <span style="font-size:0.65rem;font-weight:700;color:${window._spCor(statusColor, 'color')};white-space:nowrap;">${statusLabel}</span>
         ${window._woBtnHtml(`event.stopPropagation(); window._markAbsent('${_tIdSafe}', '${safeName}', '${String(_pUid).replace(/'/g, "\\'")}')`, !isAb, { label: isAb ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem' })}
       </div>`;
   }).join('');
@@ -2112,14 +2114,14 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       ${_lateToggleHtml}
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:0.75rem;flex-wrap:wrap;">
         <span style="font-size:1.3rem;">📋</span>
-        <h3 style="margin:0;color:#f1f5f9;font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
-        ${(function () { var s = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null; return s ? ('<span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + s.label + '</span>') : ''; })()}
-        <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:#f59e0b;padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
+        <h3 style="margin:0;color:var(--sp-c-f1f5f9,#f1f5f9);font-size:1.05rem;font-weight:700;">Lista de Espera</h3>
+        ${(function () { var s = (typeof window._lateDoorStage === 'function') ? window._lateDoorStage(t) : null; return s ? ('<span style="font-size:0.7rem;background:rgba(245,158,11,0.15);color:var(--sp-c-f59e0b,#f59e0b);padding:2px 10px;border-radius:10px;font-weight:700;white-space:nowrap;">' + s.label + '</span>') : ''; })()}
+        <span style="font-size:0.75rem;background:rgba(245,158,11,0.15);color:var(--sp-c-f59e0b,#f59e0b);padding:2px 10px;border-radius:10px;font-weight:700;">${(function () { var n = 0; sorted.forEach(function (p) { var nm = getName(p); if (p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) n += 2; else if (p && typeof p === 'object' && Array.isArray(p.participants) && p.participants.length) n += p.participants.length; else if (nm.indexOf('/') !== -1) n += nm.split('/').filter(function (x) { return x.trim(); }).length; else n += 1; }); return n; })()}
       </div>
       ${(typeof window._lateGrowthGapBanner === 'function') ? window._lateGrowthGapBanner(_sbGap) : ''}
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${_policy === 'locked' ? '🔒 Ordem do sorteio travada — entra o próximo presente na ordem.' : '🏃 Quem fizer check-in primeiro é o próximo a entrar.'}</div>
-      ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
-      ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
+      ${_duplaCardsWL ? ('<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-34d399,#34d399);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">👫 Duplas na espera (' + _duplasWL.length + ')</div>' + _duplaCardsWL) : ''}
+      ${(_duplaCardsWL && listItems) ? '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">🙋 Sem dupla</div>' : ''}
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${listItems}
       </div>
@@ -2474,7 +2476,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   const showBtnHtml = hiddenCount > 0 ? `
     <div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">
       <button onclick="window._showAllHiddenRounds('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"
-        style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;"
+        style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;"
         onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='var(--text-bright)'"
         onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='var(--text-muted)'"
         title="Mostrar rodadas ocultas (${hiddenCount})">
@@ -2628,9 +2630,9 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   const championHtml = champion ? `
     <div style="text-align:center;margin-bottom:1.5rem;padding:1rem;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:12px;">
       <div style="font-size:1.5rem;">🏆</div>
-      <div style="font-weight:800;color:#fbbf24;font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:4px;">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._resolveClassifName(t, champion), t) : window._safeHtml(window._resolveClassifName(t, champion))}</div>
+      <div style="font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);font-size:1.1rem;display:flex;align-items:center;justify-content:center;gap:4px;">${typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._resolveClassifName(t, champion), t) : window._safeHtml(window._resolveClassifName(t, champion))}</div>
       <div style="font-size:0.75rem;color:var(--text-muted);">Campeão</div>
-      ${_champDurLabel ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;border-top:1px solid rgba(251,191,36,0.15);padding-top:6px;">⏱️ Duração do torneio: <b style="color:#fbbf24;">${_champDurLabel}</b></div>` : ''}
+      ${_champDurLabel ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;border-top:1px solid rgba(251,191,36,0.15);padding-top:6px;">⏱️ Duração do torneio: <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_champDurLabel}</b></div>` : ''}
     </div>` : '';
 
   // Progressive classification
@@ -2656,8 +2658,8 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
       var color = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
       var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._resolveClassifName(t, name), t) : window._safeHtml(window._resolveClassifName(t, name)));
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
-        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + color + ';">' + posLabel + '</span>' +
-        '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;">' + nameHtml + '</span>' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + window._spCor(color, 'color') + ';">' + posLabel + '</span>' +
+        '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="font-weight:600;color:' + window._spCor(color, 'color') + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;">' + nameHtml + '</span>' +
         (medalEmoji ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medalEmoji + '</span>' : '') +
         '</div>';
     }).join('');
@@ -2669,7 +2671,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   const modeIcon = canMirror ? '➡️' : '🏆';
   const toggleBtnHtml = mirrorPossible ? `
       <button onclick="window._toggleBracketMode('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"
-        style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;"
+        style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;"
         onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='var(--text-bright)';this.style.borderColor='rgba(255,255,255,0.25)'"
         onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='var(--text-muted)';this.style.borderColor='rgba(255,255,255,0.12)'"
         title="Alternar entre visualização linear e espelhada (Copa do Mundo)">
@@ -2680,7 +2682,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
   // rodada oculta, começando pela mais recente e indo para trás.
   const showAllHiddenBtnHtml = hiddenCount > 0 ? `
       <button onclick="window._showAllHiddenRounds('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')"
-        style="background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.4);color:#a5b4fc;border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;"
+        style="background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;"
         onmouseover="this.style.background='rgba(129,140,248,0.25)';this.style.color='#c7d2fe'"
         onmouseout="this.style.background='rgba(129,140,248,0.15)';this.style.color='#a5b4fc'"
         title="Revelar a rodada oculta mais recente (clique de novo para revelar a anterior)">
@@ -2695,7 +2697,7 @@ function renderSingleElimBracket(t, canEnterResult, standbyHtml) {
     <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:0.75rem;gap:10px;flex-wrap:wrap;">
       ${showAllHiddenBtnHtml}
       ${toggleBtnHtml}
-      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:4px 10px;">
+      <div style="display:inline-flex;align-items:center;gap:6px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:20px;padding:4px 10px;">
         <button onclick="window._setBracketZoom('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', -1)"
           style="background:transparent;border:none;color:var(--text-muted);font-size:1rem;cursor:pointer;padding:3px 6px;line-height:1;border-radius:50%;"
           onmouseover="this.style.color='var(--text-bright)'" onmouseout="this.style.color='var(--text-muted)'"
@@ -2860,7 +2862,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       // sempre foi" (dono). Centralizar só os cards afastava o nome deles nas colunas curtas.
       return `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
-        <h5 style="color:${color};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${rname}</h5>
+        <h5 style="color:${window._spCor(color, 'color')};font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ${color};padding-left:8px;">${rname}</h5>
         ${reais.map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>`;
     }).join('');
@@ -2876,7 +2878,7 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
   // linha horizontal (não seção separada). O campeão da Superior segue direto pra cá.
   var _grandColHtml = grandMatches.length ? `
       <div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;align-self:flex-start;">
-        <h5 style="color:#fbbf24;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;">🏆 ${_t('bracket.grandFinal')}</h5>
+        <h5 style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid #fbbf24;padding-left:8px;">🏆 ${_t('bracket.grandFinal')}</h5>
         ${grandMatches.filter(m => !window._isByeMatch(m)).map(m => renderMatchCard(m, canEnterResult, t.id, m._gameNum)).join('')}
       </div>` : '';
 
@@ -2901,8 +2903,8 @@ function renderDoubleElimBracket(t, canEnterResult, standbyHtml) {
       var color = pos === 1 ? '#fbbf24' : pos === 2 ? '#94a3b8' : pos === 3 ? '#cd7f32' : 'var(--text-muted)';
       var nameHtml = (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._resolveClassifName(t, name), t) : window._safeHtml(window._resolveClassifName(t, name)));
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 12px;">' +
-        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + color + ';">' + posLabel + '</span>' +
-        '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="font-weight:600;color:' + color + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;">' + nameHtml + '</span>' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + window._spCor(color, 'color') + ';">' + posLabel + '</span>' +
+        '<span class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="font-weight:600;color:' + window._spCor(color, 'color') + ';font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-wrap:anywhere;">' + nameHtml + '</span>' +
         (medalEmoji ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medalEmoji + '</span>' : '') +
         '</div>';
     }).join('');
@@ -3226,14 +3228,14 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       if (isFinalCol && thirdM) { globalNum++; thirdNum = globalNum; } // reserva o nº (final-1) ANTES da final
       var cards = realMatches.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
       var thirdHtml = (isFinalCol && thirdM)
-        ? '<h5 style="color:#cd7f32;font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
+        ? '<h5 style="color:var(--sp-c-cd7f32,#cd7f32);font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin:1rem 0 .5rem;border-left:3px solid #cd7f32;padding-left:8px;">🥉 3º lugar</h5>' + renderMatchCard(thirdM, canEnterResult, t.id, thirdNum)
         : '';
       // botão Ocultar (direita, alinhado ao box) só em rodada CONCLUÍDA e não-final
       var hideBtn = (!isFinalCol && _roundComplete(col))
         ? '<button class="btn btn-micro btn-outline" onclick="window._tierHideRound(\'' + _tIdEsc + '\',\'' + _bkEsc + '\',' + col.round + ')" style="flex-shrink:0;">Ocultar</button>'
         : '';
       return '<div style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
-        '<h5 style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:' + color + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + color + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5>' +
+        '<h5 style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:' + window._spCor(color, 'color') + ';font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:8px;"><span>' + label + '</span>' + hideBtn + '</h5>' +
         cards + thirdHtml + '</div>';
     }).join('');
     // v2.8.33: "Mostrar ocultas" fica à ESQUERDA das chaves, EM PÉ (vertical) e
@@ -3242,7 +3244,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
       ? '<button class="btn btn-micro btn-outline" onclick="window._tierRevealOne(\'' + _tIdEsc + '\',\'' + _bkEsc + '\')" title="Mostrar a rodada oculta mais recente (1 por clique)" style="position:sticky;top:var(--scroll-anchor,112px);align-self:flex-start;writing-mode:vertical-rl;transform:rotate(180deg);padding:14px 7px;flex-shrink:0;margin:0;line-height:1.15;white-space:nowrap;z-index:5;">👁 Mostrar ocultas (' + hiddenCount + ')</button>'
       : '';
     // Título da chave suprimido quando vazio (chave única → sem rótulo, igual categoria única).
-    var _titleH4 = title ? '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + color + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
+    var _titleH4 = title ? '<h4 style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;margin-bottom:1rem;">' + title + '</h4>' : '';
     return '<div style="margin-bottom:2rem;">' +
       _titleH4 +
       (showClassif === false ? '' : _tierClassifHtml(bracketKey, color)) +
@@ -3258,7 +3260,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
     if (!ms.length) return '';
     var cards = ms.map(function (m) { globalNum++; return renderMatchCard(m, canEnterResult, t.id, globalNum); }).join('');
     return '<div style="margin-top:1rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">' +
-      '<h4 style="color:' + color + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:4px solid ' + color + ';padding-left:10px;">' + title + '</h4>' +
+      '<h4 style="color:' + window._spCor(color, 'color') + ';font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:1rem;border-left:4px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;">' + title + '</h4>' +
       '<div style="max-width:300px;">' + cards + '</div></div>';
   }
 
@@ -3301,7 +3303,7 @@ function _renderPhaseBracket(t, canEnterResult, standbyHtml, _viewPhaseIdx) {
 
   var phaseTitle = window._safeHtml(phaseCfg.name || ('Fase ' + (curPhase + 1)));
   var header = '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.25);border-radius:12px;">' +
-    '<span style="font-size:0.7rem;font-weight:700;color:#818cf8;text-transform:uppercase;letter-spacing:1px;">Fase ' + (curPhase + 1) + '</span>' +
+    '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-818cf8,#818cf8);text-transform:uppercase;letter-spacing:1px;">Fase ' + (curPhase + 1) + '</span>' +
     '<span style="font-weight:700;color:var(--text-bright);margin-left:8px;">' + phaseTitle + '</span>' +
     '</div>';
 
@@ -3966,8 +3968,8 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
     if (_isPendingSlot) {
       html += `<div style="display:flex;align-items:center;gap:5px;overflow:hidden;flex-wrap:wrap;">` +
         `<img src="${photoSrc}"${_avatarUid} ${onerror} data-player-name="${window._safeHtml(dispName)}" class="sp-av sp-av-p" style="--sp-av:${size}">` +
-        `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:#fbbf24;white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
-        `<span style="font-size:0.52rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
+        `<div class="sp-mc-box" style="${_boxNome}"><span class="sp-name-fit" data-maxrem="${_nomeMaxRem}" data-minrem="${_nomeMinRem}" style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;">${window._safeHtml(dispName)}</span></div>` +
+        `<span style="font-size:0.52rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.4);padding:1px 5px;border-radius:5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;flex-shrink:0;">aguardando resposta</span>` +
       `</div>`;
       return;
     }
@@ -4058,17 +4060,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       : (m.sitOutPoints || 0);
     var _soUnit = _soAdv ? ' PA' : (' pt' + (_soPts !== 1 ? 's' : ''));
     var _soDetail = _isInactiveSO
-      ? 'Folga (inativo) — <b style="color:#ef4444;">0' + (_soAdv ? ' PA' : ' pts') + '</b>'
-      : 'Folga — recebe <b style="color:#fbbf24;">' + _soPts + _soUnit + '</b> (média)';
+      ? 'Folga (inativo) — <b style="color:var(--sp-c-ef4444,#ef4444);">0' + (_soAdv ? ' PA' : ' pts') + '</b>'
+      : 'Folga — recebe <b style="color:var(--sp-c-fbbf24,#fbbf24);">' + _soPts + _soUnit + '</b> (média)';
     var _soBg = _isInactiveSO ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.08)';
     var _soBorder = _isInactiveSO ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)';
     var _soIcon = _isInactiveSO ? '🔴' : '😴';
     return `
-      <div style="background:${_soBg};border:1px solid ${_soBorder};border-radius:12px;padding:10px 14px;margin-bottom:8px;position:relative;">
+      <div style="background:${window._spCor(_soBg, 'background')};border:1px solid ${_soBorder};border-radius:12px;padding:10px 14px;margin-bottom:8px;position:relative;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:1.1rem;">${_soIcon}</span>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
+            <div style="font-size:0.82rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;" onclick="if(window._showPlayerStats)window._showPlayerStats('${window._safeHtml(String(m.p1).replace(/\\/g, '\\\\').replace(/'/g, "\\'"))}','${String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${window._safeHtml(t ? window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) : m.p1)}</div>
             <div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">${_soDetail}</div>
           </div>
         </div>
@@ -4179,7 +4181,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     var _corDoNumero = isWinner ? '#4ade80'
       : isDecided ? '#f87171'
       : (val === 0 ? 'rgba(255,255,255,0.3)' : 'var(--text-muted)');
-    return `<span class="sp-mc-num" style="color:${_corDoNumero};">${val}</span>`;
+    return `<span class="sp-mc-num" style="color:${window._spCor(_corDoNumero, 'color')};">${val}</span>`;
   };
 
   // Format set scores for display
@@ -4214,7 +4216,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     if (!hasAnyCheckIn && !matchReady) return '';
     const color = status === 'full' ? '#10b981' : status === 'partial' ? '#f59e0b' : '#64748b';
     const title = status === 'full' ? _t('bracket.checkedIn') : status === 'partial' ? _t('bracket.partial') : _t('bracket.notCheckedIn');
-    return `<span title="${title}" style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;margin-right:4px;display:inline-block;"></span>`;
+    return `<span title="${title}" style="width:8px;height:8px;border-radius:50%;background:${window._spCor(color, 'background')};flex-shrink:0;margin-right:4px;display:inline-block;"></span>`;
   };
 
   const _esc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
@@ -4252,7 +4254,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     const txt = (typeof window._formatSetForPlayer === 'function')
       ? window._formatSetForPlayer(c.set, side, { html: true })
       : String(g);
-    return '<span class="sp-set-num" style="color:' + cor + (hasPending ? ';font-style:italic;' : '') + '">' + txt + '</span>';
+    return '<span class="sp-set-num" style="color:' + window._spCor(cor, 'color') + (hasPending ? ';font-style:italic;' : '') + '">' + txt + '</span>';
   };
   // A coluna EM DISPUTA. Os ids seguem sendo s1-/s2- e tb1-/tb2-: são a assinatura que
   // _highlightWinner e _saveResultInline já leem, e trocá-los por ids com índice quebraria
@@ -4347,7 +4349,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // (mais o italico do numero). Antes o numero era ambar dos dois lados, e a
   // pessoa via o placar sem saber quem tinha ganho.
   const _scorePendingStyle = function(isWin) {
-    return 'color:' + (isWin ? '#4ade80' : '#f87171') + ';font-style:italic;';
+    return 'color:' + window._spCor((isWin ? '#4ade80' : '#f87171'), 'color') + ';font-style:italic;';
   };
   const p1ScoreVal = (!showInputs)
     ? (hasPending
@@ -4375,12 +4377,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // v1.0.67-beta: tag "BYE" indicando que o jogador veio de BYE NESTA rodada.
   // v1.0.70-beta: posicionada à esquerda do placar (entre o nome e o placar).
   // v2.8.87: tag ÂMBAR (era verde) — some quando o time avança por vitória.
-  var _byeTag = '<span title="Passou de BYE nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">BYE</span>';
+  var _byeTag = '<span title="Passou de BYE nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">BYE</span>';
   var _p1ByeBadge = m.p1FromBye ? _byeTag : '';
   var _p2ByeBadge = m.p2FromBye ? _byeTag : '';
   // v2.1.36: tag "Repescagem" no TIME que entrou por repescagem NESTA rodada
   // (preenchido via melhor-derrotado). Quem avança por vitória NÃO recebe a tag.
-  var _repTag = '<span title="Passou por repescagem nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:#fb923c;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">REP</span>';
+  var _repTag = '<span title="Passou por repescagem nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-fb923c,#fb923c);background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">REP</span>';
   var _p1RepBadge = m.p1FromRepechage ? _repTag : '';
   var _p2RepBadge = m.p2FromRepechage ? _repTag : '';
 
@@ -4444,9 +4446,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     // v2.3.19: NÃO mostra mais o troféu "🏆 vencedor" — a tarja verde + placar
     // em destaque já deixam claro quem venceu. Só sobra a nota de W.O. quando
     // aplicável (informação que não está em nenhum outro lugar do card).
-    ? (m.wo ? `<div style="text-align:center;font-size:0.68rem;color:#fbbf24;font-weight:800;margin-top:4px;">· por W.O.</div>` : '')
+    ? (m.wo ? `<div style="text-align:center;font-size:0.68rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;margin-top:4px;">· por W.O.</div>` : '')
     : isByeMatch
-    ? `<div style="text-align:center;font-size:0.72rem;color:#4ade80;font-weight:700;margin-top:6px;">BYE — Avança Direto</div>`
+    ? `<div style="text-align:center;font-size:0.72rem;color:var(--sp-c-4ade80,#4ade80);font-weight:700;margin-top:6px;">BYE — Avança Direto</div>`
     : '';
 
 
@@ -4614,14 +4616,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   let readyBadge = '';
   if (hasPending) {
     // Jogo com placar pendente: nem PRONTO nem PARCIAL — tag âmbar PENDENTE
-    readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">PENDENTE</span>`;
+    readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">PENDENTE</span>`;
   } else if (!isDecided && !isByeMatch && !hasTBD) {
     if (matchReady) {
       cardBorder = 'rgba(16,185,129,0.5)';
-      readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:#10b981;background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.ready')}</span>`;
+      readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-10b981,#10b981);background:rgba(16,185,129,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.ready')}</span>`;
     } else if (matchPartial) {
       cardBorder = 'rgba(245,158,11,0.4)';
-      readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.partial')}</span>`;
+      readyBadge = `<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-f59e0b,#f59e0b);background:rgba(245,158,11,0.12);padding:2px 6px;border-radius:4px;text-transform:uppercase;">${_t('bracket.partial')}</span>`;
     }
   }
 
@@ -4700,7 +4702,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
         var _btnOrgEdit = `<button class="btn btn-indigo btn-sm" onclick="window._editPendingResult('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">✏️ Editar placar</button>`;
         var _btnOrgRedo = `<button class="btn btn-warning btn-sm" onclick="window._organizerResetMatch('${_esc(tId)}','${_esc(m.id)}')" style="font-size:0.78rem;">🔄 Refazer (0×0)</button>`;
         _orgResolvePanel = `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(239,68,68,0.35);">
-          <div style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — decida o resultado definitivo:</div>
+          <div style="font-size:0.68rem;color:var(--sp-c-fca5a5,#fca5a5);font-weight:700;margin-bottom:6px;">🛠️ Você está atuando como <b>ORGANIZADOR</b> — decida o resultado definitivo:</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">${_btnOrgConfirm}${_btnOrgEdit}${_btnOrgRedo}</div>
         </div>`;
       }
@@ -4711,12 +4713,12 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       var _op = _pr.originalProposal;
       if (_op && _op.proposedByName) {
         var _opScore = (_op.scoreP1 != null ? _op.scoreP1 : '?') + ' × ' + (_op.scoreP2 != null ? _op.scoreP2 : '?');
-        _histHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(239,68,68,0.2);font-size:0.7rem;color:#fca5a5;line-height:1.6;">
-          📝 Proposto por <b>${window._safeHtml(_op.proposedByName)}</b>: <b style="color:#fde047;">${_opScore}</b><br>
-          ✏️ Revisado por <b>${_proposerName}</b>: <b style="color:#fde047;">${_scoreDisp}</b>
+        _histHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(239,68,68,0.2);font-size:0.7rem;color:var(--sp-c-fca5a5,#fca5a5);line-height:1.6;">
+          📝 Proposto por <b>${window._safeHtml(_op.proposedByName)}</b>: <b style="color:var(--sp-c-fde047,#fde047);">${_opScore}</b><br>
+          ✏️ Revisado por <b>${_proposerName}</b>: <b style="color:var(--sp-c-fde047,#fde047);">${_scoreDisp}</b>
         </div>`;
       }
-      pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:#f87171;">
+      pendingBanner = `<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:0.72rem;color:var(--sp-c-f87171,#f87171);">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
           <span style="font-size:0.85rem;">🚨</span>
           <span><b>Em disputa</b> — contestado por <b>${_disputerName}</b>.${_isAuthorityInner ? '' : ' Aguardando resolução do organizador.'}</span>
@@ -4829,22 +4831,22 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _headerHtml;
   if (_showHeaderPending) {
     _headerHtml = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:6px;">
         <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
-          <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
-          <span style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;">proposto por <b style="color:#fbbf24;">${_proposerName}</b> · ${_agoLabel}</span>
+          <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
+          <span style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;">proposto por <b style="color:var(--sp-c-fbbf24,#fbbf24);">${_proposerName}</b> · ${_agoLabel}</span>
         </div>
         <div id="header-btns-${m.id}" style="display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:4px 6px;flex-shrink:1;min-width:0;max-width:62%;text-align:right;">
           ${readyBadge}
           ${_presenceTag}
-          <span style="font-size:0.56rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;">⏳&nbsp;Aguardando aprovação</span>
+          <span style="font-size:0.56rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.02em;line-height:1.3;text-align:right;">⏳&nbsp;Aguardando aprovação</span>
         </div>
       </div>`;
   } else {
     _headerHtml = `
       <div class="sp-mc-head">
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;">
-          <span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
+          <span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">${window._safeHtml(matchLabel)}</span>
           ${readyBadge}
         </div>
         <div id="header-btns-${m.id}" class="btn-row sp-mc-acts">${_headerActions}</div>
@@ -4898,9 +4900,9 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   })();
 
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
-  var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + _tierLC[m.bracket] + ';') : '';
+  var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + window._spCor(_tierLC, 'borda')[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)'};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -5068,21 +5070,21 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var _presDotM = _presM
         ? '<span title="Presente no local" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.7);margin-right:5px;vertical-align:middle;"></span>'
         : '';
-      var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + bg + ';' : '') + '">' +
-        '<td style="padding:6px 10px;font-weight:700;color:' + clr + ';text-align:center;">' + (i + 1) + 'º</td>' +
-        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + (_presM ? '#4ade80' : 'var(--text-bright)') + ';">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
-        '<td style="padding:6px 10px;text-align:center;color:#4ade80;font-weight:700;">' + s.wins + '</td>' +
-        '<td style="padding:6px 10px;text-align:center;color:#f87171;">' + s.losses + '</td>' +
+      var row = '<tr style="border-bottom:1px solid var(--border-color);' + (bg ? 'background:' + window._spCor(bg, 'background') + ';' : '') + '">' +
+        '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
+        '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
+        '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
+        '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>' +
         (s.points != null
           ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, s.category || '') : '') + ' style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + s.points + '</td>'
           : '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>') +
-        '<td style="padding:6px 10px;text-align:center;color:' + (diff >= 0 ? '#4ade80' : '#f87171') + ';" title="Saldo (pró − contra)">' + (diff >= 0 ? '+' : '') + diff + '</td>';
+        '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((diff >= 0 ? '#4ade80' : '#f87171'), 'color') + ';" title="Saldo (pró − contra)">' + (diff >= 0 ? '+' : '') + diff + '</td>';
       if (_useSetsMonarch) {
-        row += '<td style="padding:6px 10px;text-align:center;color:#06b6d4;" title="Sets V-D">' + s.setsWon + '-' + s.setsLost + '</td>' +
-          '<td style="padding:6px 10px;text-align:center;color:' + (setDiff >= 0 ? '#06b6d4' : '#f87171') + ';" title="Saldo de sets">' + (setDiff >= 0 ? '+' : '') + setDiff + '</td>' +
-          '<td style="padding:6px 10px;text-align:center;color:#8b5cf6;" title="Games V-D">' + s.gamesWon + '-' + s.gamesLost + '</td>' +
-          '<td style="padding:6px 10px;text-align:center;color:' + (gameDiff >= 0 ? '#8b5cf6' : '#f87171') + ';" title="Saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' +
-          '<td style="padding:6px 10px;text-align:center;color:#f59e0b;" title="Tie-breaks V-D">' + s.tiebreaksWon + '-' + s.tiebreaksLost + '</td>';
+        row += '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);" title="Sets V-D">' + s.setsWon + '-' + s.setsLost + '</td>' +
+          '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((setDiff >= 0 ? '#06b6d4' : '#f87171'), 'color') + ';" title="Saldo de sets">' + (setDiff >= 0 ? '+' : '') + setDiff + '</td>' +
+          '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);" title="Games V-D">' + s.gamesWon + '-' + s.gamesLost + '</td>' +
+          '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((gameDiff >= 0 ? '#8b5cf6' : '#f87171'), 'color') + ';" title="Saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' +
+          '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f59e0b,#f59e0b);" title="Tie-breaks V-D">' + s.tiebreaksWon + '-' + s.tiebreaksLost + '</td>';
       }
       row += '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="Aproveitamento (V/J)">' + winRatePct + '%</td>' +
       '</tr>';
@@ -5090,11 +5092,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     }).join('');
 
     var extraHeaders = _useSetsMonarch ? (
-      '<th style="padding:6px 10px;text-align:center;color:#06b6d4;font-size:0.7rem;" title="Sets vencidos − perdidos">Sets</th>' +
-      '<th style="padding:6px 10px;text-align:center;color:#06b6d4;font-size:0.7rem;" title="Saldo de sets">±S</th>' +
-      '<th style="padding:6px 10px;text-align:center;color:#8b5cf6;font-size:0.7rem;" title="Games vencidos − perdidos">Games</th>' +
-      '<th style="padding:6px 10px;text-align:center;color:#8b5cf6;font-size:0.7rem;" title="Saldo de games">±G</th>' +
-      '<th style="padding:6px 10px;text-align:center;color:#f59e0b;font-size:0.7rem;" title="Tie-breaks vencidos − perdidos">TB</th>'
+      '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Sets vencidos − perdidos">Sets</th>' +
+      '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Saldo de sets">±S</th>' +
+      '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);font-size:0.7rem;" title="Games vencidos − perdidos">Games</th>' +
+      '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);font-size:0.7rem;" title="Saldo de games">±G</th>' +
+      '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-f59e0b,#f59e0b);font-size:0.7rem;" title="Tie-breaks vencidos − perdidos">TB</th>'
     ) : '';
     var standingsTable = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:1rem;">' +
       '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
@@ -5103,7 +5105,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">V</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">D</th>' +
       ((t.advancedScoring && t.advancedScoring.enabled)
-        ? '<th style="padding:6px 10px;text-align:center;color:#fbbf24;font-size:0.7rem;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>'
+        ? '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>'
         : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>') +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Saldo de pontos (pró − contra)">Saldo</th>' +
       extraHeaders +
@@ -5121,7 +5123,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
 
     // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
     // "Concluído" (verde) permanece, pois aí sim informa algo útil.
-    var statusBadge = groupDone ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
+    var statusBadge = groupDone ? '<span style="font-size:0.65rem;padding:2px 8px;border-radius:6px;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + _t('bracket.complete') + '</span>' : '';
 
     var _schGrpBtn2 = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, matches) : '';
     // Rei/Rainha: o grupo do WhatsApp é ÚNICO por GRUPO (3 jogos, mesmas 4 pessoas),
@@ -5138,11 +5140,11 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // pro topo da lista, mas não se ANUNCIAVA: sem badge, sem borda e sem marca pro scroll.
     var _isMineMon = _sgHasMe(sg);
     var _mineBadgeMon = _isMineMon
-      ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>'
+      ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
-    html += '<div data-group-box="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + (groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')) + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
+    html += '<div data-group-box="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
       '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
-        '<h3 style="margin:0;font-size:1.1rem;color:' + (_isMineMon ? '#22d3ee' : 'var(--text-bright)') + ';flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
+        '<h3 style="margin:0;font-size:1.1rem;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
         _mineBadgeMon + (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
@@ -5307,13 +5309,13 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     const _drawsAllowedGS = !_isSetsBasedGS && !_explicitlyDisallowedGS && _hasAnyDrawsGS;
     const rows = sorted.map((s, i) => `
       <tr style="border-bottom:1px solid var(--border-color);${i < classified ? 'background:rgba(34,197,94,0.08);' : ''}">
-        <td style="padding:8px 12px;font-weight:700;color:${i < classified ? '#4ade80' : 'var(--text-muted)'};">${medal(i)}</td>
+        <td style="padding:8px 12px;font-weight:700;color:${window._spCor(i < classified ? '#4ade80' : 'var(--text-muted)', 'color')};">${medal(i)}</td>
         <td class="sp-name-fit" data-maxrem="0.9" data-minrem="0.62" style="overflow-wrap:anywhere;padding:8px 12px;font-weight:600;color:var(--text-bright);">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(window._liveRowName(s))))}</td>
-        <td style="padding:8px 12px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>
-        <td style="padding:8px 12px;text-align:center;color:#4ade80;">${s.wins}</td>
-        ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>` : ''}
-        <td style="padding:8px 12px;text-align:center;color:#f87171;">${s.losses}</td>
-        <td style="padding:8px 12px;text-align:center;color:${s.pointsDiff >= 0 ? '#4ade80' : '#f87171'};">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
+        <td style="padding:8px 12px;font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));text-align:center;">${s.points}</td>
+        <td style="padding:8px 12px;text-align:center;color:var(--sp-c-4ade80,#4ade80);">${s.wins}</td>
+        ${_drawsAllowedGS ? `<td style="padding:8px 12px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">${s.draws || 0}</td>` : ''}
+        <td style="padding:8px 12px;text-align:center;color:var(--sp-c-f87171,#f87171);">${s.losses}</td>
+        <td style="padding:8px 12px;text-align:center;color:${window._spCor(s.pointsDiff >= 0 ? '#4ade80' : '#f87171', 'color')};">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
       </tr>`).join('');
 
     // Mostrar TODAS as rodadas do grupo (completas, ativa e pendentes)
@@ -5330,7 +5332,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
       }).join('');
       return `
         <div style="margin-bottom:0.75rem;">
-          <h5 style="font-size:0.7rem;color:${roundLabelColor};text-transform:uppercase;letter-spacing:1px;margin-bottom:0.5rem;border-left:3px solid ${roundLabelColor};padding-left:8px;">${roundLabel}</h5>
+          <h5 style="font-size:0.7rem;color:${window._spCor(roundLabelColor, 'color')};text-transform:uppercase;letter-spacing:1px;margin-bottom:0.5rem;border-left:3px solid ${roundLabelColor};padding-left:8px;">${roundLabel}</h5>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">${matchesInRound}</div>
         </div>`;
     }).join('');
@@ -5340,7 +5342,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     // v0.16.52: highlight visual quando o grupo é do usuário logado.
     const isMyGroupGS = _subgroupHasMe(sg);
     const myGroupBadge = isMyGroupGS
-      ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;margin-left:8px;">SEU GRUPO</span>'
+      ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;margin-left:8px;">SEU GRUPO</span>'
       : '';
 
     var _woGsMatches = gRounds.reduce(function (a, r) { return a.concat(r.matches || []); }, []).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
@@ -5348,17 +5350,17 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
     var _woGsChip = (typeof window._woClaimChip === 'function') ? window._woClaimChip(t, { scope: 'group', roundIndex: (t.currentPhaseIndex || 0), groupName: sg.name, players: _woGsPlayers, matches: _woGsMatches }) : '';
     return `
       <div class="card" id="group-section-${gi}" data-group-box="1"${isMyGroupGS ? ' data-my-group="1"' : ''} data-group-label="${window._safeHtml(window._grpKey(sg.name))}" style="border-left:4px solid ${isMyGroupGS ? '#22d3ee' : groupColor};scroll-margin-top:var(--scroll-anchor,120px);">
-        <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${isMyGroupGS ? '#22d3ee' : groupColor};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin:0 0 1rem;flex-wrap:wrap;"><h3 style="margin:0;color:${window._spCor(isMyGroupGS ? '#22d3ee' : groupColor, 'color')};font-size:1rem;font-weight:800;">${window._safeHtml(sg.name)}${myGroupBadge}</h3>${_woGsChip ? `<span style="margin-left:auto;">${_woGsChip}</span>` : ''}</div>
         <div class="standings-scroll" style="margin-bottom:1rem;">
           <table style="width:100%;border-collapse:collapse;font-size:0.85rem;min-width:480px;">
             <thead>
               <tr style="border-bottom:2px solid var(--border-color);">
                 <th style="padding:6px 12px;text-align:left;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">#</th>
                 <th style="padding:6px 12px;text-align:left;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;">Participante</th>
-                <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:var(--primary-color);text-transform:uppercase;">Pts</th>
-                <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:#4ade80;text-transform:uppercase;" title="Vitórias">V</th>
-                ${_drawsAllowedGS ? '<th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:#94a3b8;text-transform:uppercase;" title="Empates">E</th>' : ''}
-                <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:#f87171;text-transform:uppercase;" title="Derrotas">D</th>
+                <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:var(--sp-c-var-primary-color-,var(--primary-color));text-transform:uppercase;">Pts</th>
+                <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:var(--sp-c-4ade80,#4ade80);text-transform:uppercase;" title="Vitórias">V</th>
+                ${_drawsAllowedGS ? '<th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;" title="Empates">E</th>' : ''}
+                <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:var(--sp-c-f87171,#f87171);text-transform:uppercase;" title="Derrotas">D</th>
                 <th style="padding:6px 12px;text-align:center;font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;" title="Saldo de pontos (pró − contra)">Saldo</th>
               </tr>
             </thead>
@@ -5417,7 +5419,7 @@ function _buildSwissPastColumns(t, swissPastCols) {
     cols.push(
       '<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">' +
         '<button onclick="window._showAllHiddenSwissPast(\'' + _tIdEsc + '\')" ' +
-          'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(59,130,246,0.08);border:1px dashed rgba(59,130,246,0.3);color:#60a5fa;border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
+          'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(59,130,246,0.08);border:1px dashed rgba(59,130,246,0.3);color:var(--sp-c-60a5fa,#60a5fa);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
           'onmouseover="this.style.background=\'rgba(59,130,246,0.15)\'" ' +
           'onmouseout="this.style.background=\'rgba(59,130,246,0.08)\'" ' +
           'title="Mostrar rodadas Suíças ocultas (' + hiddenCount + ')">' +
@@ -5449,7 +5451,7 @@ function _buildSwissPastColumns(t, swissPastCols) {
     cols.push(
       '<div class="bracket-round-column" data-round-num="' + (col.round || 0) + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-          '<h4 style="color:#60a5fa;font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid #3b82f6;padding-left:8px;flex:1;">' + safe(roundLabel) + '</h4>' +
+          '<h4 style="color:var(--sp-c-60a5fa,#60a5fa);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid #3b82f6;padding-left:8px;flex:1;">' + safe(roundLabel) + '</h4>' +
           hideBtn +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:1.5rem;">' + matchesHtml + '</div>' +
@@ -5497,7 +5499,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
 
   if (!currentRound) {
     return `
-      <div style="text-align:center;padding:3rem;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:24px;">
+      <div style="text-align:center;padding:3rem;background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border:1px dashed rgba(255,255,255,0.1);border-radius:24px;">
         <h3 style="color:var(--text-bright);">${_t('bracket.noRounds')}</h3>
         <p class="text-muted">${_t('bracket.noRoundsDesc')}</p>
         ${isOrg ? `<button class="btn btn-primary" style="margin-top:1rem;" onclick="window.generateDrawFunction('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">${_t('bracket.startFirstRound')}</button>` : ''}
@@ -5604,29 +5606,29 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       var _safeTid = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       // 1ª coluna de pontuação: PA (quando ativo) OU Pts simples
       var _scoreCell = _useAdvStandings
-        ? `<td style="padding:11px 14px;text-align:center;color:#fbbf24;font-weight:800;font-size:1.02rem;cursor:pointer;" onclick="window._showAdvancedPointsBreakdown('${_safeTid}','${_safeName}','${String(s.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Pontos Avançados (classificação) — clique para ver o detalhamento">${s.advancedPoints || 0}</td>`
-        : `<td style="padding:11px 14px;font-weight:800;color:var(--primary-color);text-align:center;">${s.points}</td>`;
-      var _pctCell = `<td style="padding:11px 14px;text-align:center;color:${_pctG >= 50 ? '#4ade80' : 'var(--text-muted)'};font-weight:600;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="% de games vencidos (${s.gamesWon || 0} de ${_totG}) — clique para ver os confrontos">${_totG > 0 ? _pctG + '%' : '—'}</td>`;
+        ? `<td style="padding:11px 14px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;font-size:1.02rem;cursor:pointer;" onclick="window._showAdvancedPointsBreakdown('${_safeTid}','${_safeName}','${String(s.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" title="Pontos Avançados (classificação) — clique para ver o detalhamento">${s.advancedPoints || 0}</td>`
+        : `<td style="padding:11px 14px;font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));text-align:center;">${s.points}</td>`;
+      var _pctCell = `<td style="padding:11px 14px;text-align:center;color:${window._spCor(_pctG >= 50 ? '#4ade80' : 'var(--text-muted)', 'color')};font-weight:600;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="% de games vencidos (${s.gamesWon || 0} de ${_totG}) — clique para ver os confrontos">${_totG > 0 ? _pctG + '%' : '—'}</td>`;
       var _drawCell = _drawsAllowed
-        ? `<td style="padding:11px 14px;text-align:center;color:#94a3b8;">${s.draws || 0}</td>`
+        ? `<td style="padding:11px 14px;text-align:center;color:var(--sp-c-94a3b8,#94a3b8);">${s.draws || 0}</td>`
         : '';
       var _gsmCells = _showGsm
-        ? `<td style="padding:11px 14px;text-align:center;color:${_setsDiff >= 0 ? '#06b6d4' : '#f87171'};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td><td style="padding:11px 14px;text-align:center;color:${_gamesDiff >= 0 ? '#8b5cf6' : '#f87171'};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>`
+        ? `<td style="padding:11px 14px;text-align:center;color:${window._spCor(_setsDiff >= 0 ? '#06b6d4' : '#f87171', 'color')};">${_setsDiff >= 0 ? '+' : ''}${_setsDiff}</td><td style="padding:11px 14px;text-align:center;color:${window._spCor(_gamesDiff >= 0 ? '#8b5cf6' : '#f87171', 'color')};">${_gamesDiff >= 0 ? '+' : ''}${_gamesDiff}</td>`
         : '';
       return `
     ${(() => {
       var _lineIdx = _geralLineIdxFor(i, computed.length);
       var _bg = _lineIdx >= 0 ? _GERAL_LINE_TINTS[_lineIdx % _GERAL_LINE_TINTS.length] : (i < 3 && !_geralLinePlan ? 'rgba(251,191,36,0.03)' : '');
-      return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + _bg + ';' : '') + '">';
+      return '<tr style="border-bottom:1px solid var(--border-color);' + (_bg ? 'background:' + window._spCor(_bg, 'background') + ';' : '') + '">';
     })()}
-      <td style="padding:11px 14px;font-weight:800;color:${posColor(i)};">${medal(i)}</td>
+      <td style="padding:11px 14px;font-weight:800;color:${window._spCor(posColor(i), 'color')};">${medal(i)}</td>
       <td style="padding:11px 14px;font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:6px;"><span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;display:inline-flex;align-items:center;gap:2px;" onclick="event.stopPropagation();if(typeof window._openPlayerProfile==='function')window._openPlayerProfile('${_safeName}',{uid:'${String(s.uid||'').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}',tournamentId:'${_safeTid}'});else window._showPlayerHistory('${_safeTid}','${_safeName}')" title="${(typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s) ? 'Ver ficha de ' + window._safeHtml((typeof window._plainRowName === 'function' ? window._plainRowName : function (s) { return (s && s.name) || ''; })(s)) : 'Ver ficha'}">${(typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), t) : (typeof window._nameWithCrown === 'function' ? window._nameWithCrown(window._liveRowName(s), t) : window._safeHtml(s.name)))}</span><span style="cursor:pointer;font-size:0.7rem;opacity:0.5;transition:opacity 0.2s;" onclick="event.stopPropagation();if(typeof window._showPlayerStats==='function')window._showPlayerStats('${_safeName}')" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'" title="Estatísticas globais">📊</span>${typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: false }) : ''}</td>
       ${_scoreCell}
       ${_pctCell}
-      <td style="padding:11px 14px;text-align:center;color:#4ade80;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
-      <td style="padding:11px 14px;text-align:center;color:#f87171;cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','losses')" title="Clique para ver as derrotas">${s.losses}</td>
+      <td style="padding:11px 14px;text-align:center;color:var(--sp-c-4ade80,#4ade80);cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','wins')" title="Clique para ver as vitórias">${s.wins}</td>
+      <td style="padding:11px 14px;text-align:center;color:var(--sp-c-f87171,#f87171);cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','losses')" title="Clique para ver as derrotas">${s.losses}</td>
       ${_drawCell}
-      <td style="padding:11px 14px;text-align:center;color:${s.pointsDiff >= 0 ? '#4ade80' : '#f87171'};cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="Saldo de games — clique para ver os confrontos">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
+      <td style="padding:11px 14px;text-align:center;color:${window._spCor(s.pointsDiff >= 0 ? '#4ade80' : '#f87171', 'color')};cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="Saldo de games — clique para ver os confrontos">${s.pointsDiff >= 0 ? '+' : ''}${s.pointsDiff}</td>
       ${_gsmCells}
       <td style="padding:11px 14px;text-align:center;color:var(--text-muted);cursor:pointer;" onclick="window._showPlayerHistory('${_safeTid}','${_safeName}','all')" title="Jogos disputados — clique para ver os confrontos">${s.played}</td>
     </tr>`;
@@ -5747,7 +5749,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           <button class="btn btn-success btn-sm hover-lift" onclick="window._closeRound('${String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${currentRound - 1})">
             ${_t('bracket.closeRound')}
           </button>` : ''}
-        ${isFinished ? `<span style="color:#fbbf24;font-weight:700;">${_t('bracket.tournamentFinished')}</span>` : ''}
+        ${isFinished ? `<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">${_t('bracket.tournamentFinished')}</span>` : ''}
       </div>
       ${(() => {
         // v0.16.95: seção "Ficaram de fora desta rodada" — lista jogadores
@@ -5910,7 +5912,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             var _bgPill = _isMe ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.06)';
             var _borderPill = _isMe ? 'rgba(34,211,238,0.55)' : border;
             var _colorPill = _isMe ? '#22d3ee' : color;
-            var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
+            var _meBadge = _isMe ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.5px;background:rgba(34,211,238,0.22);color:var(--sp-c-a5f3fc,#a5f3fc);padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
             // v1.6.93 — A BUSCA TEM QUE ACHAR QUEM ESTÁ AQUI (regra do dono: "a barra de
             // busca/filtro deve encontrar quem estiver em desativados/lista de espera/W.O.
             // SEMPRE"). O filtro varre `[data-players]`; sem o atributo, estes chips eram
@@ -5934,12 +5936,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // data-players pelo nome VIVO (uid) — senão a busca acha pelo nome antigo.
             var _nmBusca = (_uidPill && typeof window._displayNameForUid === 'function')
               ? window._displayNameForUid(_uidPill, _nmPill) : _nmPill;
-            return '<span data-players="' + window._safeHtml(_nmBusca) + '" data-my-match="1" style="background:' + _bgPill + ';border:1px solid ' + _borderPill + ';color:' + _colorPill + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
+            return '<span data-players="' + window._safeHtml(_nmBusca) + '" data-my-match="1" style="background:' + window._spCor(_bgPill, 'background') + ';border:1px solid ' + window._spCor(_borderPill, 'borda') + ';color:' + window._spCor(_colorPill, 'color') + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;"' + _pillClick + '>' + _outPersonHtml(_nmPill, _uidPill) + _ptsLbl + _meBadge + '</span>';
           }).join('');
           // v4.x: cabeçalho DENTRO do box colorido (igual à Lista de espera) — o título
           // "Desativados (N) — …" fica no mesmo box vermelho dos chips, não solto acima.
-          return '<div style="margin-bottom:8px;background:' + bg + ';border:1px solid ' + border + ';border-radius:10px;padding:8px 10px;">' +
-            '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:' + color + ';margin-bottom:6px;flex-wrap:wrap;">' +
+          return '<div style="margin-bottom:8px;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(border, 'borda') + ';border-radius:10px;padding:8px 10px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:' + window._spCor(color, 'color') + ';margin-bottom:6px;flex-wrap:wrap;">' +
               '<span>' + icon + '</span>' +
               '<span>' + label + ' (' + items.length + ')</span>' +
               (hint ? '<span style="font-size:0.66rem;font-weight:400;color:var(--text-muted);">— ' + hint + '</span>' : '') +
@@ -5972,12 +5974,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var _bg = _isMe ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.06)';
               var _bd = _isMe ? 'rgba(34,211,238,0.55)' : 'rgba(251,191,36,0.3)';
               var _co = _isMe ? '#22d3ee' : '#fbbf24';
-              var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
+              var _me = _isMe ? '<span style="font-size:0.6rem;font-weight:800;background:rgba(34,211,238,0.22);color:var(--sp-c-a5f3fc,#a5f3fc);padding:1px 5px;border-radius:5px;margin-left:6px;">VOCÊ</span>' : '';
               // v1.6.93: idem — a busca tem que achar quem está na lista de espera.
               // v1.7.10: mesmo miolo dos demais chips — ficha (autoridade) + 💬 de contato.
               var _nBusca = (_wlUidByName[n] && typeof window._displayNameForUid === 'function')
                 ? window._displayNameForUid(_wlUidByName[n], n) : n;
-              return '<span data-players="' + window._safeHtml(_nBusca) + '" data-my-match="1" style="background:' + _bg + ';border:1px solid ' + _bd + ';color:' + _co + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
+              return '<span data-players="' + window._safeHtml(_nBusca) + '" data-my-match="1" style="background:' + window._spCor(_bg, 'background') + ';border:1px solid ' + window._spCor(_bd, 'borda') + ';color:' + window._spCor(_co, 'color') + ';font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;">' + _outPersonHtml(n, _wlUidByName[n] || '') + _me + '</span>';
             }).join('');
             var _sameDayRR = (typeof window._tournamentIsSameDay === 'function') ? window._tournamentIsSameDay(t) : false;
             var _eligRR = _wlNames.length;
@@ -6009,7 +6011,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               // v1.8.79: o conjunto pode ENCOLHER (o rótulo ganha reticências em tela
               // estreita); o que nunca encolhe é o interruptor — alvo de toque não cede.
               ('<span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto;min-width:0;">' +
-                '<span style="font-size:0.62rem;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (_wlEquil ? '#fbbf24' : '#64748b') + ';">' +
+                '<span style="font-size:0.62rem;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + window._spCor((_wlEquil ? '#fbbf24' : '#64748b'), 'color') + ';">' +
                 'Travar proporção</span>' +
                 '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;" title="' +
                 (window._safeHtml || String)(_wlEquil
@@ -6027,7 +6029,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // ele. `nowrap` + `min-width:0` no título: em tela estreita quem encolhe é o
             // texto, nunca o alvo de toque.
             _waitBoxHtml = '<div style="margin-bottom:8px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:10px;padding:8px 10px;">' +
-              '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:#fbbf24;flex-wrap:nowrap;">' +
+              '<div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);flex-wrap:nowrap;">' +
                 // ⚠️ o TÍTULO não encolhe: medido a 320px, ele truncava em "Lista de
                 // espera …" e comia a CONTAGEM — que é o dado. Quem cede é o rótulo do
                 // toggle, que é dica repetida e já vive no `title` do próprio controle.
@@ -6043,7 +6045,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           }
         }
         if (!_inactiveHtml && !_woHtml && !_remainderHtml && !_waitBoxHtml) return '';
-        return '<details open style="margin-bottom:1rem;background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;">' +
+        return '<details open style="margin-bottom:1rem;background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;">' +
           '<summary style="cursor:pointer;user-select:none;font-size:0.82rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;">📋 Ficaram de fora desta rodada</summary>' +
           // v1.6.86 — ORDEM (regressão apontada pelo dono, ago/2026): a Lista de espera vem
           // LOGO ABAIXO dos Desativados, não acima. A ordem lê do mais definitivo pro mais
@@ -6394,7 +6396,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                   ? '<span title="Presente no local" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.7);margin-right:5px;vertical-align:middle;"></span>'
                   : '';
                 var _woTag = (_isRed || _isAmb)
-                  ? ' <span style="font-size:0.58rem;font-weight:900;color:' + (_isRed ? '#f87171' : '#fbbf24') + ';border:1px solid ' + (_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
+                  ? ' <span style="font-size:0.58rem;font-weight:900;color:' + window._spCor((_isRed ? '#f87171' : '#fbbf24'), 'color') + ';border:1px solid ' + window._spCor((_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)'), 'borda') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
                 var _clsGreen = (idx < _classifN && !_isRed && !_isAmb) ? 'background:rgba(34,197,94,0.10);' : '';
                 // ⭐ A LINHA DE QUEM LEVOU W.O. ENTRA NO FILTRO. A pílula "🔁 Fulana W.O.
@@ -6418,17 +6420,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _woBuscaLinha = (_isRed || _isAmb)
                   ? ' data-players="' + window._safeHtml(String(s.name || '') + ' ' + String(_nmVivoBusca || '')) + '" data-my-match="1" data-fb-marker="1"'
                   : '';
-                return '<tr' + _woBuscaLinha + ' style="border-top:1px solid rgba(255,255,255,0.06);' + _clsGreen + '">' +
+                return '<tr' + _woBuscaLinha + ' style="border-top:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
-                  '<td style="padding:3px 6px;color:' + _nmColor + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
-                  (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:#fbbf24;font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
-                  '<td style="padding:3px 6px;text-align:center;color:#4ade80;font-weight:700;">' + (s.wins || 0) + '</td>' +
+                  '<td style="padding:3px 6px;color:' + window._spCor(_nmColor, 'color') + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
+                  (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
+                  '<td style="padding:3px 6px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + (s.wins || 0) + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +
                 '</tr>';
               }).join('');
-              _grpStTable = '<div style="margin-bottom:0.6rem;background:rgba(0,0,0,0.18);border-radius:8px;padding:6px 9px;">' +
-                '<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.4px;color:#fbbf24;font-weight:700;margin-bottom:3px;">📊 Classificação do grupo</div>' +
-                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th>' + (_advPtsOn ? '<th style="font-weight:600;color:#fbbf24;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>' : '') + '<th style="font-weight:600;" title="Vitórias — 1º desempate">V</th><th style="font-weight:600;" title="Saldo de pontos — desempate">Saldo</th></tr></thead><tbody>' + _gstRows + '</tbody></table>' +
+              _grpStTable = '<div style="margin-bottom:0.6rem;background:var(--sp-g-0-0-0-018,rgba(0,0,0,0.18));border-radius:8px;padding:6px 9px;">' +
+                '<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;margin-bottom:3px;">📊 Classificação do grupo</div>' +
+                '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr style="color:var(--text-muted);font-size:0.58rem;text-transform:uppercase;"><th></th><th style="text-align:left;font-weight:600;">Jogador</th>' + (_advPtsOn ? '<th style="font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);" title="Pontos Avançados — critério principal da classificação">💯 PA</th>' : '') + '<th style="font-weight:600;" title="Vitórias — 1º desempate">V</th><th style="font-weight:600;" title="Saldo de pontos — desempate">Saldo</th></tr></thead><tbody>' + _gstRows + '</tbody></table>' +
               '</div>';
             }
           }
@@ -6464,7 +6466,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           window._suppressMatchArrivedBtn = false;
           // "Em andamento" REMOVIDO (pedido do dono — é óbvio, só rouba espaço). Só o
           // "✓" de concluído (verde) permanece, pois aí sim informa algo útil.
-          var statusBadge = gDone ? '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;font-weight:700;">✓</span>' : '';
+          var statusBadge = gDone ? '<span style="font-size:0.6rem;padding:2px 6px;border-radius:5px;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);font-weight:700;">✓</span>' : '';
           // Highlight visual quando o grupo é do usuário logado.
           var isMyGroup = _groupHasMe(g);
           var groupBorderLeft = gDone ? '#4ade80' : (isMyGroup ? '#22d3ee' : '#fbbf24');
@@ -6473,7 +6475,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // v2.4.6: título gendered da série — 👑 Rei / 👑 Rainha / 👑 Rei/Rainha
           // conforme a composição de gênero dos 4 jogadores do grupo.
           var _monarchTitle = (typeof window._monarchGroupTitle === 'function') ? window._monarchGroupTitle(g.players, t) : 'Rei/Rainha';
-          var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
+          var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
           // Header do grupo (pedido do dono, jul/2026): no GRUPO DO USUÁRIO → [W.O.]
           // [Cheguei] [Propor datas]; nos DEMAIS grupos → só o W.O. (que os próprios
@@ -6519,14 +6521,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // o convite pendente aparece UMA vez só no card de controle (_ligaCtrl) e
           // o substituto convidado já surge nos cards de jogo (via _pendingSub).
           // _woName já foi calculado acima.
-          return '<div data-group-box="1"' + (isMyGroup ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(g.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + groupBg + ';border:1px solid ' + groupBorder + ';border-left:3px solid ' + groupBorderLeft + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
+          return '<div data-group-box="1"' + (isMyGroup ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(g.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:' + window._spCor(groupBg, 'background') + ';border:1px solid ' + window._spCor(groupBorder, 'borda') + ';border-left:3px solid ' + window._spCor(groupBorderLeft, 'borda') + ';border-radius:10px;padding:1rem;margin-bottom:1rem;">' +
             // Header do grupo: nome + SEU GRUPO + 👑 Rei/Rainha. Quando NÃO há botões
             // (_rightCtrl vazio) economiza espaço colocando tudo numa LINHA só (pedido do
             // dono); com botões, empilha à esquerda e deixa os controles à direita.
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;">' +
               '<div style="display:flex;' + (_rightCtrl ? 'flex-direction:column;align-items:flex-start;gap:5px;' : 'flex-direction:row;align-items:center;gap:8px;flex-wrap:wrap;') + '">' +
                 '<span style="display:inline-flex;align-items:center;gap:6px;"><strong style="font-size:0.9rem;color:var(--text-bright);">' + window._safeHtml(g.name) + '</strong>' + statusBadge + '</span>' +
-                (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:#22d3ee;font-weight:700;">SEU GRUPO</span>' : '') +
+                (isMyGroup ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>' : '') +
                 _monarchBadge +
               '</div>' +
               (_rightCtrl ? '<span class="btn-row" style="margin-left:auto;display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">' + _rightCtrl + '</span>' : '') +
@@ -6571,7 +6573,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               _otherGroups.forEach(function(g) { var k = _catKey(g); if (!_byCat[k]) { _byCat[k] = []; _catOrder.push(k); } _byCat[k].push(g); });
               return _catOrder.map(function(k) {
                 var _lbl = (k === '__none') ? 'Sem categoria' : ('Categoria ' + (window._displayCategoryName ? window._displayCategoryName(k) : k));
-                return '<div style="font-size:0.72rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;margin:0.75rem 0 0.6rem;">' + window._safeHtml(_lbl) + '</div>' +
+                return '<div style="font-size:0.72rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:1px;margin:0.75rem 0 0.6rem;">' + window._safeHtml(_lbl) + '</div>' +
                   _byCat[k].map(_renderGroup).join('');
               }).join('');
             };
@@ -6607,7 +6609,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             '</details>' +
           '</div>';
           var _myCatHeader = (_hasMultiCat && _primaryCat != null && _primaryCat !== '__none')
-            ? '<div style="font-size:0.75rem;font-weight:800;color:#22d3ee;text-transform:uppercase;letter-spacing:1px;margin-bottom:0.6rem;">⭐ Sua categoria — ' + window._safeHtml(window._displayCategoryName ? window._displayCategoryName(_primaryCat) : _primaryCat) + '</div>'
+            ? '<div style="font-size:0.75rem;font-weight:800;color:var(--sp-c-22d3ee,#22d3ee);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.6rem;">⭐ Sua categoria — ' + window._safeHtml(window._displayCategoryName ? window._displayCategoryName(_primaryCat) : _primaryCat) + '</div>'
             : '';
           return _myCatHeader + _myGroups.map(_renderGroup).join('');
         }
@@ -6665,7 +6667,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               </details>
             </div>`;
             return `<div>
-              <div style="font-size:0.75rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:1px;margin-bottom:0.6rem;">⭐ ${myLabel}</div>
+              <div style="font-size:0.75rem;font-weight:800;color:var(--sp-c-818cf8,#818cf8);text-transform:uppercase;letter-spacing:1px;margin-bottom:0.6rem;">⭐ ${myLabel}</div>
               <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">${myHtml}</div>
             </div>`;
           }
@@ -6685,22 +6687,22 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   var _jColIdx = _saldoColIdx + 1 + (_showGsm ? 2 : 0);
   const _paExplain = 'Sistema de classificação configurado pelo organizador. Cada jogador soma pontos por participação na rodada, por vitória e por jogo disputado — e, se o organizador ativou, também pelos pontos marcados no placar ao vivo. É o critério principal da classificação. Toque no número de PA de um jogador pra ver o detalhamento exato dele.';
   const _scoreHeader = _useAdvStandings
-    ? `<th style="${_thStyle}text-align:center;color:#fbbf24;" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="💯 Pontos Avançados (PA)" data-explain="${_paExplain}" title="Pontos Avançados (PA) — ${_paExplain}">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`
-    : `<th style="${_thStyle}text-align:center;color:var(--primary-color);" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="Pontos" data-explain="Pontos da classificação: vitória pontua mais, empate menos, derrota não pontua. Toque no número de um jogador pra ver os confrontos." title="Pontos da classificação (vitória/empate/derrota)">Pts <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
-  const _pctHeader = `<th style="${_thStyle}text-align:center;color:#a3e635;" data-sort-col="3" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="% G — Games vencidos" data-explain="Percentual de games vencidos: games ganhos dividido pelo total de games jogados. Toque no número pra ver os confrontos." title="% de games vencidos (games ganhos ÷ total)">% G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
+    ? `<th style="${_thStyle}text-align:center;color:var(--sp-c-fbbf24,#fbbf24);" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="💯 Pontos Avançados (PA)" data-explain="${_paExplain}" title="Pontos Avançados (PA) — ${_paExplain}">💯 PA <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`
+    : `<th style="${_thStyle}text-align:center;color:var(--sp-c-var-primary-color-,var(--primary-color));" data-sort-col="2" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="Pontos" data-explain="Pontos da classificação: vitória pontua mais, empate menos, derrota não pontua. Toque no número de um jogador pra ver os confrontos." title="Pontos da classificação (vitória/empate/derrota)">Pts <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
+  const _pctHeader = `<th style="${_thStyle}text-align:center;color:var(--sp-c-a3e635,#a3e635);" data-sort-col="3" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="% G — Games vencidos" data-explain="Percentual de games vencidos: games ganhos dividido pelo total de games jogados. Toque no número pra ver os confrontos." title="% de games vencidos (games ganhos ÷ total)">% G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>`;
   const _drawHeader = _drawsAllowed ? `
-              <th style="${_thStyle}text-align:center;color:#94a3b8;" data-sort-col="${_eColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Empates">E <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
+              <th style="${_thStyle}text-align:center;color:var(--sp-c-94a3b8,#94a3b8);" data-sort-col="${_eColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Empates">E <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
   const _gsmHeaders = _showGsm ? `
-              <th style="${_thStyle}text-align:center;color:#06b6d4;" data-sort-col="${_gsmStartIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de sets (vencidos − perdidos)">±S <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              <th style="${_thStyle}text-align:center;color:#8b5cf6;" data-sort-col="${_gsmStartIdx + 1}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de games (vencidos − perdidos)">±G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
+              <th style="${_thStyle}text-align:center;color:var(--sp-c-06b6d4,#06b6d4);" data-sort-col="${_gsmStartIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de sets (vencidos − perdidos)">±S <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);" data-sort-col="${_gsmStartIdx + 1}" data-sort-type="num" onclick="window._sortStandingsTable(this)" title="Saldo de games (vencidos − perdidos)">±G <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>` : '';
   const _tableHeader = `<thead>
             <tr style="border-bottom:2px solid var(--border-color);">
               <th style="${_thStyle}text-align:left;color:var(--text-muted);" data-sort-col="0" data-sort-type="num" onclick="window._sortStandingsTable(this)"># <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">▼</span></th>
               <th style="${_thStyle}text-align:left;color:var(--text-muted);" data-sort-col="1" data-sort-type="text" onclick="window._sortStandingsTable(this)">Participante <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_scoreHeader}
               ${_pctHeader}
-              <th style="${_thStyle}text-align:center;color:#4ade80;" data-sort-col="${_vColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="V — Vitórias" data-explain="Número de vitórias. Toque no número de um jogador pra ver quais confrontos ele venceu." title="Vitórias — clique no número de um jogador pra ver os confrontos vencidos">V <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
-              <th style="${_thStyle}text-align:center;color:#f87171;" data-sort-col="${_dColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="D — Derrotas" data-explain="Número de derrotas. Toque no número pra ver os confrontos perdidos." title="Derrotas — clique no número de um jogador pra ver os confrontos perdidos">D <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:var(--sp-c-4ade80,#4ade80);" data-sort-col="${_vColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="V — Vitórias" data-explain="Número de vitórias. Toque no número de um jogador pra ver quais confrontos ele venceu." title="Vitórias — clique no número de um jogador pra ver os confrontos vencidos">V <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
+              <th style="${_thStyle}text-align:center;color:var(--sp-c-f87171,#f87171);" data-sort-col="${_dColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="D — Derrotas" data-explain="Número de derrotas. Toque no número pra ver os confrontos perdidos." title="Derrotas — clique no número de um jogador pra ver os confrontos perdidos">D <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_drawHeader}
               <th style="${_thStyle}text-align:center;color:var(--text-muted);" data-sort-col="${_saldoColIdx}" data-sort-type="num" onclick="window._sortStandingsTable(this)" data-explain-title="Saldo de games" data-explain="Saldo de games: games a favor menos games contra. Toque pra ver os confrontos." title="Saldo de games (pró − contra)">Saldo <span class="sort-arrow" style="font-size:0.6rem;opacity:0.4;">⇅</span></th>
               ${_gsmHeaders}
@@ -6815,11 +6817,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _soBg2 = _inact ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.08)';
           var _soBd2 = _inact ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)';
           var _soIc2 = _inact ? '🔴' : '😴';
-          prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + _soBg2 + ';border:1px solid ' + _soBd2 + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
+          prevRoundsInner += '<div style="min-width:200px;flex:1;max-width:280px;background:' + window._spCor(_soBg2, 'background') + ';border:1px solid ' + window._spCor(_soBd2, 'borda') + ';border-radius:8px;padding:8px 12px;font-size:0.8rem;">' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
               '<span style="flex-shrink:0;">' + _soIc2 + '</span>' +
               '<span style="flex:1;min-width:0;overflow-wrap:anywhere;color:var(--text-muted);">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) || m.p1) + '</span>' +
-              '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + _soCol + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
+              '<span style="flex-shrink:0;font-weight:800;font-size:0.6rem;color:' + window._spCor(_soCol, 'color') + ';text-transform:uppercase;letter-spacing:0.4px;">' + _soLbl + '</span>' +
             '</div>' +
           '</div>';
           return;
@@ -6828,8 +6830,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var isDraw = w === 'draw' || m.draw;
         var p1Win = !!w && w === m.p1;
         var p2Win = !!w && w === m.p2;
-        var p1Style = p1Win ? 'color:#4ade80;font-weight:700;' : (isDraw ? 'color:#94a3b8;' : 'color:var(--text-muted);opacity:0.8;');
-        var p2Style = p2Win ? 'color:#4ade80;font-weight:700;' : (isDraw ? 'color:#94a3b8;' : 'color:var(--text-muted);opacity:0.8;');
+        var p1Style = p1Win ? 'color:var(--sp-c-4ade80,#4ade80);font-weight:700;' : (isDraw ? 'color:var(--sp-c-94a3b8,#94a3b8);' : 'color:var(--text-muted);opacity:0.8;');
+        var p2Style = p2Win ? 'color:var(--sp-c-4ade80,#4ade80);font-weight:700;' : (isDraw ? 'color:var(--sp-c-94a3b8,#94a3b8);' : 'color:var(--text-muted);opacity:0.8;');
         var hasScore = (m.scoreP1 !== undefined && m.scoreP1 !== null);
         // v2.3.5: layout empilhado (dupla + placar à direita), igual aos cards
         // do bracket. Antes era p1 | placar | p2 em 3 colunas num card estreito —
@@ -6839,15 +6841,15 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         var numS = 'flex-shrink:0;font-weight:700;min-width:16px;text-align:right;';
         var footer = '';
         if (!w) footer = '<div style="font-size:0.65rem;color:var(--text-muted);text-align:center;margin-top:3px;">' + _t('bracket.pending') + '</div>';
-        else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:#94a3b8;text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
-        prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
+        else if (isDraw && !hasScore) footer = '<div style="font-size:0.65rem;color:var(--sp-c-94a3b8,#94a3b8);text-align:center;margin-top:3px;">' + _t('bracket.draw') + '</div>';
+        prevRoundsInner += '<div style="min-width: 200px; flex: 1; max-width: 280px; background: var(--sp-g-0-0-0-015,rgba(0,0,0,0.15)); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem;">' +
           '<div style="' + rowS + '">' +
             '<span style="' + nameS + p1Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p1, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids))) || 'TBD') + '</span>' +
-            '<span style="' + numS + (p1Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
+            '<span style="' + numS + (p1Win ? 'color:var(--sp-c-4ade80,#4ade80);' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP1 : '') + '</span>' +
           '</div>' +
           '<div style="' + rowS + 'margin-top:3px;">' +
             '<span style="' + nameS + p2Style + '">' + window._safeHtml(window._resolveSideLive(t, m.p2, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids))) || 'TBD') + '</span>' +
-            '<span style="' + numS + (p2Win ? 'color:#4ade80;' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
+            '<span style="' + numS + (p2Win ? 'color:var(--sp-c-4ade80,#4ade80);' : 'color:var(--text-muted);') + '">' + (hasScore ? m.scoreP2 : '') + '</span>' +
           '</div>' +
           footer +
         '</div>';
@@ -6906,13 +6908,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         statItems.push('<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(251,191,36,0.08); border-radius: 10px; border-left: 3px solid #fbbf24;">' +
           '<span style="font-size: 1.1rem;">⚡</span>' +
           '<div><div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('bracket.statMostWins') + '</div>' +
-          '<div style="font-weight: 700; color: var(--text-bright);">' + window._safeHtml(byWins[0].name) + ' <span style="color: #4ade80;">(' + byWins[0].wins + 'V)</span></div></div></div>');
+          '<div style="font-weight: 700; color: var(--text-bright);">' + window._safeHtml(byWins[0].name) + ' <span style="color: var(--sp-c-4ade80,#4ade80);">(' + byWins[0].wins + 'V)</span></div></div></div>');
       }
       if (byStreak[0] && byStreak[0].streak >= 2) {
         statItems.push('<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(16,185,129,0.08); border-radius: 10px; border-left: 3px solid #10b981;">' +
           '<span style="font-size: 1.1rem;">🔥</span>' +
           '<div><div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('bracket.statStreak') + '</div>' +
-          '<div style="font-weight: 700; color: var(--text-bright);">' + window._safeHtml(byStreak[0].name) + ' <span style="color: #10b981;">(' + byStreak[0].streak + ' seguidas)</span></div></div></div>');
+          '<div style="font-weight: 700; color: var(--text-bright);">' + window._safeHtml(byStreak[0].name) + ' <span style="color: var(--sp-c-10b981,#10b981);">(' + byStreak[0].streak + ' seguidas)</span></div></div></div>');
       }
       // v2.3.8: exclui sit-outs (jogador que folga na rodada) — não são partidas
       // disputadas. Antes contava 25 (24 jogos reais + 1 folga com "vencedor").
@@ -6922,7 +6924,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         statItems.push('<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: rgba(99,102,241,0.08); border-radius: 10px; border-left: 3px solid #6366f1;">' +
           '<span style="font-size: 1.1rem;">📈</span>' +
           '<div><div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('bracket.statTotal') + '</div>' +
-          '<div style="font-weight: 700; color: var(--text-bright);">' + totalMatches + (totalDraws > 0 ? ' <span style="color: #94a3b8;">(' + totalDraws + ' ' + _t('bracket.draw').toLowerCase() + (totalDraws > 1 ? 's' : '') + ')</span>' : '') + '</div></div></div>');
+          '<div style="font-weight: 700; color: var(--text-bright);">' + totalMatches + (totalDraws > 0 ? ' <span style="color: var(--sp-c-94a3b8,#94a3b8);">(' + totalDraws + ' ' + _t('bracket.draw').toLowerCase() + (totalDraws > 1 ? 's' : '') + ')</span>' : '') + '</div></div></div>');
       }
 
       if (statItems.length > 0) {
@@ -6990,7 +6992,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         keys.forEach(function(colKey, ci) {
           var colName = _nameOf(colKey);
           if (ri === ci) {
-            rows += '<td style="padding:4px;text-align:center;background:rgba(255,255,255,0.03);font-size:0.7rem;color:var(--text-muted);">—</td>';
+            rows += '<td style="padding:4px;text-align:center;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));font-size:0.7rem;color:var(--text-muted);">—</td>';
           } else {
             var rec = matrix[rowKey][colKey];
             var total = rec.w + rec.d + rec.l;
@@ -7002,7 +7004,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               var label = rec.w + 'V';
               if (rec.d > 0) label += ' ' + rec.d + 'E';
               label += ' ' + rec.l + 'D';
-              rows += '<td style="padding:4px;text-align:center;font-size:0.65rem;font-weight:600;background:' + bg + ';color:' + color + ';" title="' + (window._safeHtml ? window._safeHtml(rowName) : rowName) + ' vs ' + (window._safeHtml ? window._safeHtml(colName) : colName) + ': ' + label + '">' + rec.w + '-' + rec.d + '-' + rec.l + '</td>';
+              rows += '<td style="padding:4px;text-align:center;font-size:0.65rem;font-weight:600;background:' + window._spCor(bg, 'background') + ';color:' + window._spCor(color, 'color') + ';" title="' + (window._safeHtml ? window._safeHtml(rowName) : rowName) + ' vs ' + (window._safeHtml ? window._safeHtml(colName) : colName) + ': ' + label + '">' + rec.w + '-' + rec.d + '-' + rec.l + '</td>';
             }
           }
         });
@@ -7034,7 +7036,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // Minimal TBD match card (no inputs, no handlers — purely visual).
   var _tbdMatchCard = function(matchNum, accentColor) {
     var _accent = accentColor || 'rgba(148,163,184,0.35)';
-    var _row = '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.02);border-radius:8px;">' +
+    var _row = '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border-radius:8px;">' +
                  '<div style="width:28px;height:28px;border-radius:50%;background:rgba(148,163,184,0.12);border:1px dashed ' + _accent + ';display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.9rem;flex-shrink:0;">?</div>' +
                  '<div style="flex:1;color:var(--text-muted);font-weight:600;font-size:0.88rem;">' + _t('bracket.tbd') + '</div>' +
                '</div>';
@@ -7074,7 +7076,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     var _showHiddenBtnHtml = _hiddenSwissCount > 0
       ? '<div style="display:flex;flex-direction:column;align-items:center;min-width:48px;gap:8px;align-self:stretch;">' +
           '<button onclick="window._showAllHiddenRounds(\'' + _tIdEsc + '\')" ' +
-            'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
+            'style="position:sticky;top:var(--scroll-anchor,120px);writing-mode:vertical-lr;text-orientation:mixed;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.15);color:var(--text-muted);border-radius:8px;padding:12px 8px;font-size:0.7rem;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:1px;margin-top:1rem;" ' +
             'onmouseover="this.style.background=\'rgba(255,255,255,0.1)\';this.style.color=\'var(--text-bright)\'" ' +
             'onmouseout="this.style.background=\'rgba(255,255,255,0.05)\';this.style.color=\'var(--text-muted)\'" ' +
             'title="Mostrar rodadas ocultas (' + _hiddenSwissCount + ')">' +
@@ -7111,7 +7113,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         '<div class="bracket-round-column" data-round-num="' + (_pri + 1) + '" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;">' +
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
             '<h4 style="color:var(--text-bright);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid var(--primary-color);padding-left:8px;flex:1;">' + _prLabel + '</h4>' +
-            '<span style="color:#4ade80;font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>' +
+            '<span style="color:var(--sp-c-4ade80,#4ade80);font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>' +
             _prHideBtn +
           '</div>' +
           '<div style="display:flex;flex-direction:column;gap:1.5rem;">' + _prCardsHtml + '</div>' +
@@ -7127,8 +7129,8 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
     }).join('');
     var _currentLabel = isSwissQualifier ? _swissQualifierLabel(currentRound) : (_t('bracket.round', {n: currentRound}) + ' / ' + maxRounds);
     var _currentStatusBadge = currentRoundData.status === 'complete'
-      ? '<span style="color:#4ade80;font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>'
-      : (isFinished ? '<span style="color:#fbbf24;font-weight:700;font-size:0.7rem;white-space:nowrap;">' + _t('bracket.tournamentFinished') + '</span>' : '');
+      ? '<span style="color:var(--sp-c-4ade80,#4ade80);font-size:0.7rem;font-weight:700;white-space:nowrap;">✓ ' + _t('bracket.complete') + '</span>'
+      : (isFinished ? '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;font-size:0.7rem;white-space:nowrap;">' + _t('bracket.tournamentFinished') + '</span>' : '');
     var _closeBtn = (isOrg && !isFinished && allComplete && !(window._isLigaAutoDraw && window._isLigaAutoDraw(t)) && !(window._phasesPhaseComplete && window._phasesPhaseComplete(t)))
       ? '<button class="btn btn-success btn-sm" onclick="window._closeRound(\'' + _tIdEsc + '\', ' + (currentRound - 1) + ')" style="font-size:0.72rem;white-space:nowrap;">' + _t('bracket.closeRound') + '</button>'
       : '';
@@ -7221,7 +7223,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           _roundColumns.push(
             '<div class="bracket-round-column" style="display:flex;flex-direction:column;gap:1rem;min-width:280px;opacity:0.9;">' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
-                '<h4 style="color:#fbbf24;font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid rgba(251,191,36,0.5);padding-left:8px;flex:1;">🏆 ' + _phaseLabel + '</h4>' +
+                '<h4 style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid rgba(251,191,36,0.5);padding-left:8px;flex:1;">🏆 ' + _phaseLabel + '</h4>' +
               '</div>' +
               '<div style="font-size:0.7rem;color:var(--text-muted);font-style:italic;">⏳ ' + _t('bracket.awaitingSwissEnd') + '</div>' +
               '<div style="display:flex;flex-direction:column;gap:1.5rem;">' + _tbdElim + '</div>' +
@@ -7269,14 +7271,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   if (isSwissClassification) {
     if (useColumnLayout) {
       _phaseBannerHtml =
-        '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;font-weight:700;color:#60a5fa;font-size:0.85rem;">' +
+        '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;font-weight:700;color:var(--sp-c-60a5fa,#60a5fa);font-size:0.85rem;">' +
           _t('bracket.phaseClassif') + ' — ' + maxRounds + ' ' + (maxRounds === 1 ? 'rodada' : 'rodadas') +
           ' <span style="color:var(--text-muted);font-weight:500;">→</span> ' +
-          '<span style="color:#fbbf24;">🏆 ' + _t('bracket.phaseElim', {n: t.p2TargetCount}) + '</span>' +
+          '<span style="color:var(--sp-c-fbbf24,#fbbf24);">🏆 ' + _t('bracket.phaseElim', {n: t.p2TargetCount}) + '</span>' +
         '</div>';
     } else {
       _phaseBannerHtml =
-        '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;font-weight:700;color:#60a5fa;font-size:0.85rem;">' +
+        '<div style="margin-bottom:1rem;padding:10px 14px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:10px;font-weight:700;color:var(--sp-c-60a5fa,#60a5fa);font-size:0.85rem;">' +
           _t('bracket.phaseClassif') + ' — ' + maxRounds + ' ' + (maxRounds === 1 ? 'rodada' : 'rodadas') +
         '</div>';
     }

@@ -247,7 +247,7 @@ summary::-webkit-details-marker { display: none; }
   background-attachment: local, local, scroll, scroll;
 }
 
-/* Tema light/sunset: gradient fade usa background do card (cream/branco),
+/* Tema light: gradient fade usa background do card (cream/branco),
    não dark. CSS variable --bg-card já cobre isso automaticamente. */
 
 /* ─── v1.7.88 — O BOX DO GRUPO PARA DE DESPERDIÇAR AS LATERAIS ──────────────

@@ -37,7 +37,59 @@ function ok(c, m) { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } }
 
 const style = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
 const components = fs.readFileSync(path.join(ROOT, 'css', 'components.css'), 'utf8');
-const CSS = style + '\n' + components;
+const paleta = fs.readFileSync(path.join(ROOT, 'css', 'paleta.css'), 'utf8');
+const CSS = style + '\n' + components + '\n' + paleta;
+
+/* ⭐ 2.0.94 — A TRADUÇÃO MUDOU DE LUGAR, A GARANTIA NÃO.
+ * Até aqui este teste perguntava "existe a regra `[data-theme="light"] [style*="cor"]`?".
+ * Aquelas ~1.943 regras saíram (custavam 1.391ms de recálculo numa tela de 5.117
+ * elementos; ver tests/cor-vive-na-tabela-nao-no-seletor) e o remap virou tabela de
+ * variáveis em css/paleta.css.
+ * A pergunta agora é MAIS DURA: não "existe uma regra", e sim "o token tem valor próprio
+ * no tema claro?" — e, no caso do texto, "esse valor PASSA no AA?". Antes uma regra podia
+ * existir apontando pra cor errada e o teste aprovava.
+ */
+function tabela() {
+  const secoes = {};
+  // ⛔ comentário fora ANTES de parsear: um `{` dentro de comentário quebra o bloco
+  // seguinte e o leitor perde a seção inteira do tema claro (foi o que aconteceu).
+  const limpo = paleta.replace(/\/\*[\s\S]*?\*\//g, '');
+  // ⛔ SEM `(^|\})` no começo: esse prefixo CONSOME a chave de fechamento de um bloco como
+  // início do próximo, e o parser pula um bloco sim, um não — foi assim que a seção do
+  // tema claro (111 tokens) sumiu e o teste acusou "nada tem tradução".
+  const re = /([^{}]+)\{([^}]*)\}/g;
+  let m;
+  while ((m = re.exec(limpo))) {
+    const sel = m[1].trim();
+    const corpo = m[2];
+    const alvo = /^:root$/.test(sel) ? 'escuro'
+      : (/^\[data-theme="light"\]$/.test(sel) ? 'claro'
+      : (/--sp-tarja/.test(sel) ? 'tarja' : null));
+    if (!alvo) continue;
+    const rt = /(--sp-[a-z]-[a-z0-9-]+)\s*:\s*([^;]+);/g;
+    let d;
+    while ((d = rt.exec(corpo))) {
+      (secoes[alvo] = secoes[alvo] || {})[d[1]] = d[2].trim();
+    }
+  }
+  return secoes;
+}
+const TAB = tabela();
+/* ⛔ O NOME DO TOKEN VEM DO GERADOR, não de uma cópia aqui. Escrevi a regra de nome duas
+ * vezes e as duas versões divergiram no alpha (`-06` × `-006`): o teste passou a dizer que
+ * NADA tinha tradução. Teste com lógica própria atesta um mecanismo que não é o que roda. */
+const { canon, tokenPara } = require(path.join(ROOT, 'scripts', 'gerar-paleta.js'));
+const nomeToken = (cor, prop) =>
+  tokenPara(canon(cor), prop === 'fundo' ? 'background' : (prop === 'borda' ? 'borda' : 'color'));
+
+/* tem tradução própria no claro? (existir com o MESMO valor não é tradução) */
+function traduzido(cor, prop) {
+  const tk = nomeToken(cor, prop);
+  const claro = TAB.claro && TAB.claro[tk];
+  const escuro = TAB.escuro && TAB.escuro[tk];
+  return !!claro && claro !== escuro;
+}
+const luzDoToken = (cor, prop) => (TAB.claro || {})[nomeToken(cor, prop)] || null;
 
 // ---------- utilidades de cor (WCAG 2.1) ----------
 function hex(h) { h = h.replace('#', ''); const n = parseInt(h, 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
@@ -65,11 +117,12 @@ console.log('\n== Contraste nos DOIS temas ==');
 // ---------- 1. FUNDO branco translúcido: some no branco se não houver tradução ----------
 (function () {
   const alphas = new Set();
-  const re = /background(?:-color)?: ?rgba\(255, ?255, ?255, ?(0?\.\d+)\)/g;
+  // ⚠️ a cor agora vive como `var(--sp-g-…, rgba(255,255,255,α))` — o literal segue ali,
+  // como fallback, e é ele que este teste colhe.
+  const re = /background(?:-color)?: ?(?:var\(--sp-g-[a-z0-9-]+, ?)?rgba\(255, ?255, ?255, ?(0?\.\d+)\)/g;
   let m; while ((m = re.exec(JS))) alphas.add(m[1]);
   ok(alphas.size > 0, 'o js/ usa fundo branco translúcido (se zerou, este teste perdeu o sentido)');
-  const semTraducao = [...alphas].filter(a =>
-    CSS.indexOf(`[data-theme="light"] [style*="background:rgba(255,255,255,${a})"]`) < 0);
+  const semTraducao = [...alphas].filter((a) => !traduzido('rgba(255,255,255,' + a + ')', 'fundo'));
   ok(semTraducao.length === 0,
     'todo alpha de fundo branco tem tradução no tema claro — sem: ' + semTraducao.join(', '));
 })();
@@ -77,10 +130,9 @@ console.log('\n== Contraste nos DOIS temas ==');
 // ---------- 2. BORDA branca translúcida ----------
 (function () {
   const alphas = new Set();
-  const re = /solid rgba\(255, ?255, ?255, ?(0?\.\d+)\)/g;
+  const re = /solid (?:var\(--sp-b-[a-z0-9-]+, ?)?rgba\(255, ?255, ?255, ?(0?\.\d+)\)/g;
   let m; while ((m = re.exec(JS))) alphas.add(m[1]);
-  const semTraducao = [...alphas].filter(a =>
-    CSS.indexOf(`[data-theme="light"] [style*="solid rgba(255,255,255,${a})"]`) < 0);
+  const semTraducao = [...alphas].filter((a) => !traduzido('rgba(255,255,255,' + a + ')', 'borda'));
   ok(semTraducao.length === 0,
     'toda borda branca translúcida tem tradução — sem: ' + semTraducao.join(', '));
 })();
@@ -88,17 +140,16 @@ console.log('\n== Contraste nos DOIS temas ==');
 // ---------- 3. SCRIM escuro: vira lajota cinza no claro ----------
 (function () {
   const alphas = new Set();
-  const re = /background(?:-color)?: ?rgba\(0, ?0, ?0, ?(0?\.\d+)\)/g;
+  const re = /background(?:-color)?: ?(?:var\(--sp-g-[a-z0-9-]+, ?)?rgba\(0, ?0, ?0, ?(0?\.\d+)\)/g;
   let m; while ((m = re.exec(JS))) { if (parseFloat(m[1]) <= 0.35) alphas.add(m[1]); }
-  const semTraducao = [...alphas].filter(a =>
-    CSS.indexOf(`[data-theme="light"] [style*="background:rgba(0,0,0,${a})"]`) < 0);
+  const semTraducao = [...alphas].filter((a) => !traduzido('rgba(0,0,0,' + a + ')', 'fundo'));
   ok(semTraducao.length === 0,
     'todo scrim escuro <= 0.35 tem tradução no claro — sem: ' + semTraducao.join(', '));
 
   // O teto de 0.35 é o que separa "recuo dentro de card" de "backdrop de modal".
   // Clarear backdrop seria o oposto do que ele existe pra fazer.
   const backdrops = [];
-  const reB = /background: ?rgba\(0, ?0, ?0, ?(0?\.\d+)\)/g;
+  const reB = /background: ?(?:var\(--sp-g-[a-z0-9-]+, ?)?rgba\(0, ?0, ?0, ?(0?\.\d+)\)/g;
   let b; while ((b = reB.exec(JS))) {
     const around = JS.slice(Math.max(0, reB.lastIndex - 220), reB.lastIndex);
     if (/position: ?fixed|inset: ?0/.test(around) && parseFloat(b[1]) <= 0.35) backdrops.push(b[1]);
@@ -110,31 +161,35 @@ console.log('\n== Contraste nos DOIS temas ==');
 // ---------- 4. TEXTO claro: todo hex que reprova o AA precisa de remap ----------
 (function () {
   const usados = new Set();
-  const re = /(?:^|[;"'\s{])color:\s*(#[0-9a-fA-F]{6})\b/g;
+  // A cor sai como `color:var(--sp-c-…, #hex)` — o literal segue lá, como fallback.
+  // ⛔ SÓ os tokens da tabela: `var(--text-bright,#f8fafc)` é token de TEMA do app, que já
+  // muda sozinho entre claro e escuro. Aceitar o fallback de qualquer `var()` acusava 5
+  // cores "sem remap" que nunca precisaram de um.
+  const re = /(?:^|[;"'\s{])color:\s*(?:var\(--sp-c-[a-z0-9-]+, ?)?(#[0-9a-fA-F]{6})\b/g;
   let m; while ((m = re.exec(JS))) usados.add(m[1].toLowerCase());
   const reprovam = [...usados].filter(h => contraste(hex(h), CAIXA) < 4.5);
   ok(reprovam.length > 0, 'existem cores de texto que reprovam o AA no claro (base do teste)');
-  const semRemap = reprovam.filter(h =>
+  const semRemap = reprovam.filter((h) =>
     // branco puro fica de fora: só aparece sobre botão de cor sólida, igual nos 2 temas
-    h !== '#ffffff' && CSS.indexOf(`[data-theme="light"] [style^="color:${h}"]`) < 0);
+    h !== '#ffffff' && !traduzido(h, 'texto'));
   ok(semRemap.length === 0,
     'toda cor de texto que reprova o AA tem remap no claro — sem: ' + semRemap.join(', '));
 })();
 
 // ---------- 5. os ALVOS do remap precisam PASSAR (senão o remap é decorativo) ----------
+// ⭐ 2.0.94 — os alvos agora são os VALORES do tema claro na tabela. Mais duro que antes:
+// a versão anterior varria o CSS atrás de regras e podia aprovar uma que apontasse pra
+// cor errada; aqui cada tom que o tema claro realmente aplica é medido no AA.
 (function () {
   const alvos = new Set();
-  const re = /\[data-theme="light"\]([^{]*)\{\s*color:\s*(#[0-9a-fA-F]{6})\s*!important/g;
-  let m;
-  while ((m = re.exec(style))) {
-    // O bloco de RESTAURAÇÃO (dentro da tarja de leitura) devolve a cor pálida de
-    // propósito — lá o fundo é escuro. Ele não é alvo de remap; é o contrário dele.
-    if (m[1].indexOf('rgba(30,41,59,0.85)') >= 0) continue;
-    alvos.add(m[2].toLowerCase());
-  }
+  Object.entries(TAB.claro || {}).forEach(([tk, v]) => {
+    if (tk.indexOf('--sp-c-') !== 0) return;          // só TEXTO (fundo/borda não são legibilidade)
+    const h = String(v).trim().toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(h)) alvos.add(h);
+  });
   ok(alvos.size >= 10, 'o remap tem alvos (' + alvos.size + ')');
-  const fracos = [...alvos].filter(h => contraste(hex(h), CAIXA) < 4.5)
-    .map(h => h + '=' + contraste(hex(h), CAIXA).toFixed(2));
+  const fracos = [...alvos].filter((h) => contraste(hex(h), CAIXA) < 4.5)
+    .map((h) => h + '=' + contraste(hex(h), CAIXA).toFixed(2));
   ok(fracos.length === 0, 'todo alvo do remap passa o AA na caixa tingida — fracos: ' + fracos.join(', '));
 })();
 
@@ -147,26 +202,25 @@ console.log('\n== Contraste nos DOIS temas ==');
 })();
 
 // ---------- 7. O ESCURO NÃO É TOCADO — a garantia que o dono pediu ----------
+// ⭐ 2.0.94 — antes isto se provava exigindo que cada regra nova fosse escopada em
+// `[data-theme="light"]`. Com a tabela a garantia é estrutural e mais forte: o valor do
+// tema ESCURO é o `:root`, e ele tem que ser o LITERAL ORIGINAL — o mesmo que continua
+// escrito como fallback no código. Se alguém "melhorar" um tom, o escuro muda e cai aqui.
 (function () {
-  // toda regra dos blocos novos tem que ser escopada em [data-theme="light"].
-  // Fundo/borda casam com [style*=…]; TEXTO casa com [style^=…] (a disciplina que
-  // impede pegar `accent-color:`), então cada marcador traz o operador que usa.
-  const marcadores = [
-    ['[style*="background:rgba(255,255,255,0.06)"]', 'fundo branco 6%'],
-    ['[style*="background:rgba(0,0,0,0.25)"]', 'scrim escuro 25%'],
-    ['[style^="color:#fde68a"]', 'texto âmbar pálido'],
-    ['[style^="color:var(--primary-color)"]', 'texto --primary-color']
+  const amostra = [
+    ['rgba(255,255,255,0.06)', 'fundo'], ['rgba(0,0,0,0.25)', 'fundo'],
+    ['#fde68a', 'texto'], ['#fbbf24', 'texto']
   ];
-  marcadores.forEach(([sel, nome]) => {
-    const i = CSS.indexOf(sel);
-    ok(i >= 0, 'a regra de ' + nome + ' existe');
-    if (i < 0) return;
-    // pega o começo da linha do seletor e exige o escopo do tema claro
-    const linha = CSS.slice(CSS.lastIndexOf('\n', i) + 1, i);
-    ok(linha.indexOf('[data-theme="light"]') >= 0,
-      'a regra de ' + nome + ' é escopada no tema CLARO (nunca vale no escuro)');
+  amostra.forEach(([cor, prop]) => {
+    const tk = nomeToken(cor, prop);
+    const raiz = (TAB.escuro || {})[tk];
+    ok(!!raiz, 'a tabela tem o token de ' + cor + ' (' + tk + ')');
+    if (!raiz) return;
+    ok(raiz.replace(/\s+/g, '') === cor.replace(/\s+/g, ''),
+      'no tema ESCURO ' + cor + ' segue sendo ele mesmo (veio ' + raiz + ')');
+    ok(!!(TAB.claro || {})[tk], 'e tem tradução própria no tema claro');
   });
-  // e nenhum token do bloco escuro pode ter sido alterado pelos ajustes de contraste
+  // e nenhum token do bloco escuro do style.css pode ter sido alterado
   const blocoEscuro = style.slice(style.indexOf(':root, [data-theme="dark"]'), style.indexOf('[data-theme="light"] {'));
   ok(/--text-muted: #98989d/.test(blocoEscuro), 'o --text-muted do tema ESCURO segue #98989d');
   ok(/--text-main: #ebebf5/.test(blocoEscuro), 'o --text-main do tema ESCURO segue #ebebf5');
@@ -180,14 +234,21 @@ console.log('\n== Contraste nos DOIS temas ==');
   const store = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
   const m = store.match(/bg: 'rgba\((\d+,\d+,\d+,[\d.]+)\)'/);
   ok(!!m, '_photoReadBox declara a cor da tarja do tema claro');
-  ok(/\[data-theme="light"\] \[style\*="rgba\(30,41,59,0\.85\)"\] \[style\^="color:/.test(style),
-    'o remap de texto se DESLIGA dentro da tarja de leitura (senão vira escuro sobre escuro)');
-  ok(/\[data-theme="light"\] \[style\*="rgba\(30,41,59,0\.85\)"\] \[style\*="background:rgba\(255,255,255,/.test(style),
-    'o fundo translúcido volta a ser BRANCO dentro da tarja escura');
-  // se alguém trocar a cor da tarja no store.js, os seletores acima param de casar em
-  // silêncio — este check amarra os dois lados.
-  ok(store.indexOf("bg: 'rgba(30,41,59,0.85)'") >= 0,
-    'a cor da tarja no store.js é a MESMA que os seletores do CSS esperam');
+  // ⭐ 2.0.94 — eram 952 regras (uma por cor × 12 grafias); agora é UMA linha na tabela:
+  // a tarja redeclara os tokens e a herança leva pros filhos.
+  const naTarja = TAB.tarja || {};
+  const textos = Object.keys(naTarja).filter((t) => t.indexOf('--sp-c-') === 0);
+  ok(textos.length >= 40,
+    'o remap de texto se DESLIGA dentro da tarja de leitura (' + textos.length + ' tokens devolvidos)');
+  const voltamAoEscuro = textos.filter((t) => naTarja[t] === (TAB.escuro || {})[t]);
+  ok(voltamAoEscuro.length === textos.length,
+    'dentro da tarja o texto volta EXATAMENTE ao tom do tema escuro (senão vira escuro sobre escuro)');
+  ok(Object.keys(naTarja).some((t) => t.indexOf('--sp-g-') === 0),
+    'o fundo translúcido também volta ao valor escuro dentro da tarja');
+  // se alguém trocar a cor da tarja no store.js, o marcador para de casar em silêncio —
+  // este check amarra os dois lados.
+  ok(store.indexOf('--sp-tarja,rgba(30,41,59,0.85)') >= 0,
+    'a tarja no store.js carrega o marcador `--sp-tarja` que a tabela procura');
 })();
 
 // ---------- 9. O CÂNONE, nos DOIS temas (ordem do dono, 16/ago/2026) ----------

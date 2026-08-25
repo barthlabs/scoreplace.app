@@ -1,4 +1,6 @@
-window.SCOREPLACE_VERSION = '2.0.93';
+window.SCOREPLACE_VERSION = '2.0.94';
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -2956,7 +2958,7 @@ window._woBtnHtml = function (onclick, isDeclare, opts) {
       ' style="' + dStyle + '">' + window._woDeclareLabel(opts.subject) + '</button>';
   }
   return '<button type="button" class="btn btn-outline ' + size + '" onclick="' + onclick + '"' + title +
-    ' style="' + base + 'color:#60a5fa;border-color:rgba(59,130,246,0.5);">' + (opts.label || '↩️ Reverter') + '</button>';
+    ' style="' + base + 'color:var(--sp-c-60a5fa,#60a5fa);border-color:rgba(59,130,246,0.5);">' + (opts.label || '↩️ Reverter') + '</button>';
 };
 
 // ─── Trava de reversão de W.O. depois que o jogo aconteceu ────────────────────
@@ -4521,7 +4523,7 @@ window._spLoaderBarHtml = function (largura) {
   var w = largura || '300px';
   return '<div class="sp-loader-bar" data-sp-prog="4" style="position:relative;width:' + w + ';max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
       '<div class="sp-loader-fill" style="position:absolute;top:2px;bottom:2px;left:2px;right:2px;transform-origin:left center;transform:scaleX(0.04);animation:sp-loader-creep 9s linear forwards;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
-      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:#fbe6c4;text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;overflow:hidden;">' +
+      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:var(--sp-c-fbe6c4,#fbe6c4);text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;overflow:hidden;">' +
         '<div class="sp-loader-odo" style="animation:sp-loader-odo ' + (window._SP_LOADER_CREEP_MS / 1000) + 's steps(' + (_SP_ODO_N - 1) + ') forwards;">' +
           window._spOdoNumeros() +
         '</div>' +
@@ -4599,7 +4601,7 @@ window._spLoaderLogoHtml = function () {
   // wordmark 1.2rem. NÃO reintroduzir tamanho "especial" em nenhum lado.
   return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:2px;" aria-hidden="true">' +
       '<svg width="152" height="114" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="13" width="5" height="7" rx="1" fill="#CBD5E1"/><rect x="9.5" y="8" width="5" height="12" rx="1" fill="#F59E0B"/><rect x="16" y="15" width="5" height="5" rx="1" fill="#FB923C"/><path d="M 12 4.4 L 12.5 5.8 L 13.9 5.8 L 12.8 6.7 L 13.2 8 L 12 7.2 L 10.8 8 L 11.2 6.7 L 10.1 5.8 L 11.5 5.8 Z" fill="#F59E0B"/></svg>' +
-      '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;">scoreplace<span style="color:#fbbf24">.app</span></span>' +
+      '<span style="font-size:1.2rem;font-weight:800;letter-spacing:.3px;color:#fff;">scoreplace<span style="color:var(--sp-c-fbbf24,#fbbf24)">.app</span></span>' +
     '</div>';
 };
 
@@ -6351,7 +6353,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     { label: 'Cinza',        value: '#94a3b8',     css: '#94a3b8' },
   ];
   var _bgSwatchHtml = _bgPresets.map(function(p, i) {
-    return '<button id="crop-bg-' + i + '" title="' + p.label + '" onclick="window._cropPickBg(' + i + ')" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;flex-shrink:0;background:' + p.css + ';padding:0;"></button>';
+    return '<button id="crop-bg-' + i + '" title="' + p.label + '" onclick="window._cropPickBg(' + i + ')" style="width:22px;height:22px;border-radius:4px;border:2px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));cursor:pointer;flex-shrink:0;background:' + window._spCor(p.css, 'background') + ';padding:0;"></button>';
   }).join('');
 
   var _formaSliderHtml = RADIUS_CTRL
@@ -6376,21 +6378,21 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">☀−</span>' +
       '<input type="range" id="crop-brightness" min="-75" max="75" value="0" style="flex:1;accent-color:#f59e0b;">' +
       '<span style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;">+☀</span>' +
-      '<span id="crop-brightness-label" style="font-size:0.7rem;color:#fbbf24;min-width:32px;text-align:right;">0%</span>' +
+      '<span id="crop-brightness-label" style="font-size:0.7rem;color:var(--sp-c-fbbf24,#fbbf24);min-width:32px;text-align:right;">0%</span>' +
     '</div>' +
     (COVER ? '' :
       '<div style="margin:6px 0 8px;">' +
         '<div style="font-size:0.65rem;color:var(--text-muted,#94a3b8);margin-bottom:5px;text-align:left;">Fundo</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           _bgSwatchHtml +
-          '<button id="crop-bg-eyedropper" title="Conta-gotas — capturar cor da tela" onclick="window._cropEyedropper()" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;background:rgba(255,255,255,0.08);font-size:0.8rem;padding:0;flex-shrink:0;">🩸</button>' +
-          '<input type="color" id="crop-bg-custom" title="Cor personalizada" onchange="window._cropCustomColor(this.value)" style="width:22px;height:22px;border-radius:4px;border:2px solid rgba(255,255,255,0.3);cursor:pointer;padding:1px;background:none;flex-shrink:0;">' +
+          '<button id="crop-bg-eyedropper" title="Conta-gotas — capturar cor da tela" onclick="window._cropEyedropper()" style="width:22px;height:22px;border-radius:4px;border:2px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));cursor:pointer;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));font-size:0.8rem;padding:0;flex-shrink:0;">🩸</button>' +
+          '<input type="color" id="crop-bg-custom" title="Cor personalizada" onchange="window._cropCustomColor(this.value)" style="width:22px;height:22px;border-radius:4px;border:2px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));cursor:pointer;padding:1px;background:none;flex-shrink:0;">' +
         '</div>' +
       '</div>'
     ) +
     '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);margin-bottom:14px;">' + (COVER ? 'Arraste · Zoom · Luminosidade · a faixa tracejada central é o que aparece no celular em pé' : 'Arraste · Zoom · Luminosidade · Fundo') + '</div>' +
     '<div style="display:flex;gap:10px;">' +
-      '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:rgba(255,255,255,0.06);color:var(--text-muted,#94a3b8);border:1px solid rgba(255,255,255,0.1);">Cancelar</button>' +
+      '<button id="crop-cancel" class="btn btn-sm" style="flex:1;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-muted,#94a3b8);border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">Cancelar</button>' +
       '<button id="crop-confirm" class="btn btn-sm btn-primary" style="flex:2;">✅ Confirmar</button>' +
     '</div>';
 
@@ -6415,7 +6417,7 @@ window._openImageCropEditor = function(dataUrl, opts, callback) {
     // Destacar swatch ativo
     _bgPresets.forEach(function(p, i) {
       var el = document.getElementById('crop-bg-' + i);
-      if (el) el.style.border = (p.value === color) ? '2px solid #6366f1' : '2px solid rgba(255,255,255,0.3)';
+      if (el) el.style.border = (p.value === color) ? '2px solid #6366f1' : '2px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3))';
     });
     draw();
   }
@@ -6837,7 +6839,7 @@ window._avatarHtml = function(pp, size) {
   var hiddenCircle = '<div style="display:none;width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);align-items:center;justify-content:center;font-size:' + Math.round(sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + initial + '</div>';
   var visibleCircle = '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:' + Math.round(sz * 0.45) + 'px;color:white;font-weight:700;flex-shrink:0;">' + initial + '</div>';
   if (photo) {
-    return '<img src="' + window._safeHtml(photo) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' + hiddenCircle;
+    return '<img src="' + window._safeHtml(photo) + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' + hiddenCircle;
   }
   return visibleCircle;
 };
@@ -7108,8 +7110,8 @@ window._photoReadBox = function () {
     // e produz texto escuro sobre tarja escura — regressão de contraste que já foi
     // paga uma vez. Sai o desfoque, ficam as cores. (tests/contraste-nos-dois-temas)
     return light
-        ? { bg: 'rgba(30,41,59,0.85)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.14)' }
-        : { bg: 'rgba(0,0,0,0.60)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.12)' };
+        ? { bg: 'var(--sp-tarja,rgba(30,41,59,0.85))', fg: '#f1f5f9', border: 'rgba(255,255,255,0.14)' }
+        : { bg: 'var(--sp-leitura2,rgba(0,0,0,0.60))', fg: '#e2e8f0', border: 'rgba(255,255,255,0.12)' };
 };
 
 // v4.0.56: cor de texto semântica legível por tema. As cores semânticas dos
@@ -7379,7 +7381,7 @@ window._fbInner = function (key) {
         var bg = active ? c.bg : 'rgba(255,255,255,0.05)';
         var bd = active ? c.bd : 'rgba(255,255,255,0.14)';
         var fg = active ? c.fg : 'var(--text-muted)';
-        return '<button type="button" title="' + title + '" onclick="' + onclick + '" style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:3px;height:44px;min-height:44px;min-width:44px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:800;line-height:1;background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';transition:all 0.15s;box-sizing:border-box;' + (extra || '') + '">' + inner + '</button>';
+        return '<button type="button" title="' + title + '" onclick="' + onclick + '" style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:3px;height:44px;min-height:44px;min-width:44px;padding:0 10px;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:800;line-height:1;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(bd, 'borda') + ';color:' + window._spCor(fg, 'color') + ';transition:all 0.15s;box-sizing:border-box;' + (extra || '') + '">' + inner + '</button>';
     }
     var IND = { bg: 'rgba(99,102,241,0.30)', bd: 'rgba(99,102,241,0.85)', fg: '#c7d2fe' };
     var RED = { bg: 'rgba(248,113,113,0.18)', bd: 'rgba(248,113,113,0.6)', fg: '#f87171' };
@@ -7475,7 +7477,7 @@ window._fbInner = function (key) {
     if (opts.sportId) hidden += '<input type="hidden" id="' + opts.sportId + '" value="' + esc(spCur) + '">';
     var searchInp = '';
     if (opts.searchId) {
-        var sctrl = 'box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:var(--text-bright);';
+        var sctrl = 'box-sizing:border-box;background:var(--bg-dark,#0f1320);border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:8px;color:var(--text-bright);';
         // v3.0.97: MESMA altura dos botões — pedido do dono "a busca precisa ser da mesma
         // altura que os botões". As pílulas são <button>, e o CSS global força
         // min-height:44px (alvo de toque iOS) por cima do height inline → renderizam 44px.
@@ -7523,7 +7525,7 @@ window._fbInner = function (key) {
     return hidden
         + '<div style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;">'
         + azPill + clockPill + activePill
-        + '<span style="flex:0 0 auto;width:1px;height:22px;background:rgba(255,255,255,0.12);margin:0 1px;"></span>'
+        + '<span style="flex:0 0 auto;width:1px;height:22px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));margin:0 1px;"></span>'
         + (modeT ? '' : genderBtn) + thirdBtn + searchInp
         + '</div>';
 };
@@ -8055,7 +8057,7 @@ window.renderSupportPage = function(container) {
         '<img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent('00020126580014br.gov.bcb.pix0136' + pixKey + '5204000053039865802BR5925SCOREPLACE6009SAO PAULO62070503***6304') + '" alt="QR Code PIX" style="width:160px;height:160px;border-radius:8px;background:#fff;padding:6px;margin-bottom:0.6rem;" />' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Chave PIX (CNPJ):</div>' +
         '<div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap;">' +
-          '<code id="pix-key-text" style="background:rgba(255,255,255,0.08);padding:6px 10px;border-radius:8px;font-size:0.85rem;color:var(--text-color);letter-spacing:0.3px;">' + pixKey + '</code>' +
+          '<code id="pix-key-text" style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));padding:6px 10px;border-radius:8px;font-size:0.85rem;color:var(--text-color);letter-spacing:0.3px;">' + pixKey + '</code>' +
           '<button onclick="navigator.clipboard.writeText(\'' + pixKey + '\').then(function(){var b=event.target;b.textContent=\'Copiado!\';setTimeout(function(){b.textContent=\'Copiar\'},2000)})" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;white-space:nowrap;">Copiar</button>' +
         '</div>' +
       '</div>' +
@@ -8627,7 +8629,7 @@ window._meuCardNoTopo = function (t, opts) {
     ? window._profileAvatarUrl(cu.displayName, cu.photoURL, 40) : (cu.photoURL || '');
   var avatar = foto
     ? '<img src="' + window._safeHtml(foto) + '" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
-    : '<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>';
+    : '<div style="width:40px;height:40px;border-radius:50%;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;"></div>';
 
   if (st.code === 'none') {
     // NÃO INSCRITO também é resposta — e é a que faz a pessoa procurar o organizador.
@@ -8664,8 +8666,7 @@ window._meuCardNoTopo = function (t, opts) {
   var selo = '';
   if (st.wo) {
     selo = '<span style="font-size:0.62rem;font-weight:800;padding:2px 7px;border-radius:999px;' +
-      'background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.42);color:' +
-      (_claro ? '#b91c1c' : '#fca5a5') + ';">⚠️ W.O. decretado</span>';
+      'background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.42);color:' + window._spCor((_claro ? '#b91c1c' : '#fca5a5'), 'color') + ';">⚠️ W.O. decretado</span>';
     if (st.code === 'waitlist') sub = 'Você levou W.O. e foi para o fim da fila' +
       (st.pos ? ' (<b>' + st.pos + 'º</b> de ' + st.total + ')' : '') + ' — não precisa fazer nada, você é chamado quando chegar a vez.';
     else if (st.code === 'inactive') sub = 'Você levou W.O. e foi para os desativados. Ligue o botão <b>Ativado</b> e você entra no fim da lista de espera.';
@@ -8678,12 +8679,12 @@ window._meuCardNoTopo = function (t, opts) {
   else if (eu.category) cats = [eu.category];
   var chips = cats.map(function (c) {
     return '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;' +
-      'background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.35);color:#a5b4fc;">' +
+      'background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.35);color:var(--sp-c-a5b4fc,#a5b4fc);">' +
       window._safeHtml(String(c)) + '</span>';
   }).join(' ');
   var seq = (eu.enrollSeq != null) ? eu.enrollSeq : null;
   var numero = (seq != null)
-    ? '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(255,255,255,0.06);' +
+    ? '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));' +
       'border:1px solid var(--border-color,rgba(255,255,255,0.12));color:var(--text-muted);">nº ' + window._safeHtml(String(seq)) + '</span>'
     : '';
   // presença, quando a chamada está aberta. `checkedIn`/`absent` são MAPAS chaveados por
@@ -8700,10 +8701,10 @@ window._meuCardNoTopo = function (t, opts) {
   };
   if (_mapHas(t.checkedIn)) {
     pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,0.18);' +
-      'border:1px solid rgba(16,185,129,0.38);color:' + (_claro ? '#047857' : '#6ee7b7') + ';">✓ presente</span>';
+      'border:1px solid rgba(16,185,129,0.38);color:' + window._spCor((_claro ? '#047857' : '#6ee7b7'), 'color') + ';">✓ presente</span>';
   } else if (_mapHas(t.absent)) {
     pres = '<span style="font-size:0.66rem;font-weight:700;padding:2px 7px;border-radius:999px;background:rgba(239,68,68,0.16);' +
-      'border:1px solid rgba(239,68,68,0.35);color:' + (_claro ? '#b91c1c' : '#fca5a5') + ';">ausente</span>';
+      'border:1px solid rgba(239,68,68,0.35);color:' + window._spCor((_claro ? '#b91c1c' : '#fca5a5'), 'color') + ';">ausente</span>';
   }
   var dupla = '';
   if (eu.p1Name && eu.p2Name) {
@@ -8713,11 +8714,11 @@ window._meuCardNoTopo = function (t, opts) {
   }
   return '<div id="sp-meu-card" data-meu-status="' + st.code + '"' + (st.wo ? ' data-meu-wo="1"' : '') +
     ' style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
-    'background:' + pele.bg + ';border:1px solid ' + pele.bd + ';">' + avatar +
+    'background:' + window._spCor(pele.bg, 'background') + ';border:1px solid ' + window._spCor(pele.bd, 'borda') + ';">' + avatar +
     '<div style="min-width:0;flex:1;">' +
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
         '<span style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</span>' +
-        '<span style="font-size:0.7rem;font-weight:800;color:' + pele.cor + ';">' + pele.txt + '</span>' + selo +
+        '<span style="font-size:0.7rem;font-weight:800;color:' + window._spCor(pele.cor, 'color') + ';">' + pele.txt + '</span>' + selo +
       '</div>' + dupla +
       (sub ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">' + sub + '</div>' : '') +
       ((chips || numero || pres) ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px;">' + chips + ' ' + numero + ' ' + pres + '</div>' : '') +
@@ -8765,7 +8766,7 @@ window._profileMetaGenderBadge = function(g) {
   var _lt = window._profileMetaIsLight();
   var _fg = _lt ? e[3] : e[4];
   var _bd = _lt ? 0.55 : 0.4;
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:' + _fg + ';border:1px solid rgba(' + e[2] + ',' + _bd + ');display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(' + e[2] + ',0.16);color:' + window._spCor(_fg, 'color') + ';border:1px solid rgba(' + e[2] + ',' + _bd + ');display:inline-flex;align-items:center;gap:3px;line-height:1.5;">' + e[0] + ' ' + e[1] + '</span>';
 };
 
 window._profileMetaExtractSkill = function(catStr, t) {
@@ -8785,7 +8786,7 @@ window._profileMetaSkillBadge = function(skill) {
   var _lt = window._profileMetaIsLight();
   var _fg = _lt ? '#312e81' : '#a5b4fc';
   var _bd = _lt ? 0.5 : 0.35;
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:' + _fg + ';border:1px solid rgba(99,102,241,' + _bd + ');line-height:1.5;">' + window._safeHtml(skill) + '</span>';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(99,102,241,0.18);color:' + window._spCor(_fg, 'color') + ';border:1px solid rgba(99,102,241,' + _bd + ');line-height:1.5;">' + window._safeHtml(skill) + '</span>';
 };
 
 window._profileMetaAgeBadge = function(birthDate, t) {
@@ -8809,7 +8810,7 @@ window._profileMetaAgeBadge = function(birthDate, t) {
   var _ltA = window._profileMetaIsLight();
   var _fgA = _ltA ? '#78350f' : '#fbbf24';
   var _bdA = _ltA ? 0.55 : 0.4;
-  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:' + _fgA + ';border:1px solid rgba(245,158,11,' + _bdA + ');line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
+  return '<span style="font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:6px;background:rgba(245,158,11,0.16);color:' + window._spCor(_fgA, 'color') + ';border:1px solid rgba(245,158,11,' + _bdA + ');line-height:1.5;">' + window._safeHtml(bucket) + '</span>';
 };
 
 // v2.4.39: tag "sem cat" na COR do eixo que está faltando (no lugar onde o badge
@@ -12307,7 +12308,7 @@ window._presenceTone = function (state, scope) {
 window._presenceCardStyle = function (state, scope) {
   var c = window._presenceTone(state, scope);
   if (!c) return '';
-  return 'background:' + c.bg + ' !important;border:2px solid ' + c.border + ' !important;box-shadow:0 0 0 1px ' + c.glow + ',0 4px 12px rgba(0,0,0,0.14);';
+  return 'background:' + c.bg + ' !important;border:2px solid ' + window._spCor(c.border, 'borda') + ' !important;box-shadow:0 0 0 1px ' + c.glow + ',0 4px 12px rgba(0,0,0,0.14);';
 };
 window._presenceTextColor = function (state, scope) {
   var c = window._presenceTone(state, scope);
@@ -12590,10 +12591,10 @@ window._renderClassifBlock = function (t, clMap, opts) {
       var rng = (g.lo === g.hi) ? (g.lo + 'º') : (g.lo + 'º–' + g.hi + 'º');
       var bc = g.k === 1 ? '#fbbf24' : g.k === 2 ? '#cd7f32' : 'var(--text-muted)';
       return '<div style="padding:6px 12px;">' +
-        '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + bc + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
+        '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;font-weight:800;color:' + window._spCor(bc, 'color') + ';margin-bottom:3px;">' + rng + (g.names.length > 1 ? ' · ' + g.names.length + ' times' : '') + '</div>' +
         g.names.map(function (n) {
           var _meB = (typeof window._classifEntryIsMe === 'function') && window._classifEntryIsMe(t, n);
-          return '<div data-classif-name="' + esc(n) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + (_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
+          return '<div data-classif-name="' + esc(n) + '" style="font-size:0.84rem;font-weight:' + (_meB ? '800' : '600') + ';color:' + window._spCor((_meB ? '#34d399' : 'var(--text-bright,#f1f5f9)'), 'color') + ';padding:1px 0;">' + nameHtml(n) + '</div>';
         }).join('') +
         '</div>';
     }).join('');
@@ -12612,15 +12613,15 @@ window._renderClassifBlock = function (t, clMap, opts) {
         ? 'display:flex;align-items:center;gap:8px;padding:4px 12px;background:rgba(52,211,153,0.10);border-left:3px solid #34d399;'
         : 'display:flex;align-items:center;gap:8px;padding:4px 12px;';
       return '<div data-classif-name="' + esc(e.name) + '" style="' + _rowSt + '">' +
-        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + c + ';">' + pos + 'º</span>' +
-        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + c + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
+        '<span style="min-width:30px;text-align:center;font-size:0.85rem;font-weight:800;color:' + window._spCor(c, 'color') + ';">' + pos + 'º</span>' +
+        '<span style="font-weight:' + (_me ? '800' : '600') + ';color:' + window._spCor(c, 'color') + ';font-size:0.85rem;flex:1;min-width:0;">' + nameHtml(e.name) + '</span>' +
         (pos <= 3 ? '<span style="font-size:1.05rem;flex-shrink:0;padding-right:4px;">' + medals[pos] + '</span>' : '') +
         '</div>';
     }).join('');
     countLabel = entries.length + ' definidos';
   }
   var _searchBar = (typeof window._classifSearchBar === 'function') ? window._classifSearchBar() : '';
-  return _searchBar + '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + color + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
+  return _searchBar + '<details' + (open ? ' open' : '') + ' style="margin:6px 0 1rem;"><summary style="cursor:pointer;font-weight:700;font-size:0.78rem;color:' + window._spCor(color, 'color') + ';padding:7px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;user-select:none;">' + label + ' — ' + countLabel + '</summary><div style="margin-top:6px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:8px 0;">' + inner + '</div></details>';
 };
 
 // pódio de UMA linha (winner/loser da final da linha + 3º da linha). '' se não há final.

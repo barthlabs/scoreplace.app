@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — Explorar (Buscar Usuários + Amizades)
 // ========================================
@@ -237,8 +239,8 @@ function _userCardHtml(u, uid, actionHtml, variant, onClickFn) {
 
   var _cardClick = onClickFn ? ' onclick="' + onClickFn + '"' : '';
   var _cardCursor = onClickFn ? 'cursor:pointer;' : '';
-  return '<div class="card"' + _personFilterAttrs(u) + _cardClick + ' style="' + _cardCursor + 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
-    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">' +
+  return '<div class="card"' + _personFilterAttrs(u) + _cardClick + ' style="' + _cardCursor + 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + window._spCor(bgTint, 'background') + ';border:1px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:10px;min-width:0;">' +
+    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor(borderColor, 'borda') + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
       (infoChips.length > 0 ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(infoChips.join(' · ')) + '</div>' : '') +
@@ -791,7 +793,7 @@ function _userCardWithEncounterHtml(u, uid, actionHtml) {
   if (hasShared) {
     var sharedLabel = _t('explore.sharedTournaments');
     if (sharedLabel === 'explore.sharedTournaments') sharedLabel = 'torneio(s) em comum';
-    sharedLine = '<div style="font-size: 0.65rem; color: #f59e0b; margin-top: 2px;">' + (u._sharedCount || 0) + ' ' + sharedLabel + '</div>';
+    sharedLine = '<div style="font-size: 0.65rem; color: var(--sp-c-f59e0b,#f59e0b); margin-top: 2px;">' + (u._sharedCount || 0) + ' ' + sharedLabel + '</div>';
   }
 
   var _safeUidEnc = (uid || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -800,8 +802,8 @@ function _userCardWithEncounterHtml(u, uid, actionHtml) {
 
   // Date is shown as a group header above a batch of cards (see _renderOtrosCards),
   // so we don't repeat it on each individual card.
-  return '<div class="card"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + _safeUidEnc + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + bgTint + ';border:1px solid ' + borderColor + ';border-radius:10px;min-width:0;">' +
-    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid ' + avatarBorder + ';flex-shrink:0;">' +
+  return '<div class="card"' + _personFilterAttrs(u) + ' onclick="window._openUserProfile(\'' + _safeUidEnc + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;background:' + window._spCor(bgTint, 'background') + ';border:1px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:10px;min-width:0;">' +
+    '<img src="' + photo + '" onerror="this.onerror=null;this.src=\'' + fallbackPhoto + '\'" style="width:2.125rem;height:2.125rem;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor(avatarBorder, 'borda') + ';flex-shrink:0;">' +
     '<div style="flex:1;min-width:0;">' +
       _nameHtml(_nl.line1, _nl.line2) +
       sharedLine +
@@ -830,7 +832,7 @@ function _renderPendingRequests(myUid, receivedIds) {
     var receivedLabel = _tR('explore.receivedInvites');
     if (receivedLabel === 'explore.receivedInvites') receivedLabel = 'Convites Recebidos';
     var html = '<div style="margin-bottom: 1.25rem;">' +
-      '<div style="font-weight: 600; font-size: 0.9rem; color: #f59e0b; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">' + receivedLabel + ' (' + profiles.length + ')</div>';
+      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--sp-c-f59e0b,#f59e0b); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">' + receivedLabel + ' (' + profiles.length + ')</div>';
 
     profiles.forEach(function(u) {
       var uid = u._docId;
@@ -937,7 +939,7 @@ function _renderSentRequests(myUid, sentIds) {
     var html = '<div style="margin-bottom: 1.5rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:12px;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;">' +
         '<span style="font-size:1rem;">✉️</span>' +
-        '<div style="font-weight:700;font-size:0.88rem;color:#f59e0b;text-transform:uppercase;letter-spacing:0.5px;">' + titleLabel + ' (' + dedupedGroups.length + ')</div>' +
+        '<div style="font-weight:700;font-size:0.88rem;color:var(--sp-c-f59e0b,#f59e0b);text-transform:uppercase;letter-spacing:0.5px;">' + titleLabel + ' (' + dedupedGroups.length + ')</div>' +
       '</div>' +
       '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">Aguardando resposta. Clique em ✕ no card para cancelar.</div>' +
       '<div style="display:flex;flex-direction:column;gap:6px;">';
@@ -1278,10 +1280,10 @@ function _loadAndRenderFriendStats(friendUid, hr) {
   // Section container — same visual language as _sectionShell in tournaments-analytics.js
   var _sectionBox = function(title, icon, accent, badge, bodyHtml) {
     return (
-      '<div style="margin-top:10px;padding:12px;border-radius:14px;background:var(--info-box-bg,rgba(255,255,255,0.04));border:1px solid ' + accent + '44;display:flex;flex-direction:column;gap:8px;">' +
+      '<div style="margin-top:10px;padding:12px;border-radius:14px;background:var(--info-box-bg,rgba(255,255,255,0.04));border:1px solid ' + window._spCor(accent, 'borda') + '44;display:flex;flex-direction:column;gap:8px;">' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
           '<span style="font-size:1rem;">' + icon + '</span>' +
-          '<span style="font-size:0.85rem;font-weight:900;color:' + accent + ';text-transform:uppercase;letter-spacing:0.8px;">' + title + '</span>' +
+          '<span style="font-size:0.85rem;font-weight:900;color:' + window._spCor(accent, 'color') + ';text-transform:uppercase;letter-spacing:0.8px;">' + title + '</span>' +
           '<span style="margin-left:auto;font-size:0.78rem;color:var(--text-bright,#fff);font-weight:700;opacity:0.75;">' + badge + '</span>' +
         '</div>' +
         bodyHtml +
@@ -1294,7 +1296,7 @@ function _loadAndRenderFriendStats(friendUid, hr) {
     return (
       '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:10px;background:var(--stat-box-bg,rgba(255,255,255,0.05));border:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
         '<span style="font-size:1rem;">' + icon + '</span>' +
-        '<span style="font-size:1.15rem;font-weight:900;color:' + accent + ';font-variant-numeric:tabular-nums;line-height:1;">' + value + '</span>' +
+        '<span style="font-size:1.15rem;font-weight:900;color:' + window._spCor(accent, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">' + value + '</span>' +
         '<span style="font-size:0.55rem;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">' + label + '</span>' +
       '</div>'
     );
@@ -1313,14 +1315,14 @@ function _loadAndRenderFriendStats(friendUid, hr) {
     var col = function(pct, n, clr) {
       if (sum === 0) {
         return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
-          '<span style="font-size:0.9rem;font-weight:900;color:' + clr + ';">–</span>' +
+          '<span style="font-size:0.9rem;font-weight:900;color:' + window._spCor(clr, 'color') + ';">–</span>' +
         '</div>';
       }
       return (
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
           '<div style="display:flex;align-items:baseline;gap:2px;">' +
-            '<span data-stat-count="' + pct + '" data-stat-count-suffix="%" style="font-size:0.9rem;font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;">0%</span>' +
-            '<span data-stat-count="' + (n || 0) + '" data-stat-count-prefix="(" data-stat-count-suffix=")" style="font-size:0.58rem;font-weight:600;color:' + clr + ';opacity:0.65;font-variant-numeric:tabular-nums;line-height:1;">(0)</span>' +
+            '<span data-stat-count="' + pct + '" data-stat-count-suffix="%" style="font-size:0.9rem;font-weight:900;color:' + window._spCor(clr, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">0%</span>' +
+            '<span data-stat-count="' + (n || 0) + '" data-stat-count-prefix="(" data-stat-count-suffix=")" style="font-size:0.58rem;font-weight:600;color:' + window._spCor(clr, 'color') + ';opacity:0.65;font-variant-numeric:tabular-nums;line-height:1;">(0)</span>' +
           '</div>' +
         '</div>'
       );
@@ -1329,9 +1331,9 @@ function _loadAndRenderFriendStats(friendUid, hr) {
       '<div style="display:flex;flex-direction:column;gap:4px;padding:6px 0;">' +
         // 3-column header: [left label] [center metric] [right label]
         '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:baseline;">' +
-          '<div style="font-size:0.62rem;font-weight:700;color:' + leftClr + ';text-transform:uppercase;letter-spacing:0.6px;text-align:left;">' + (leftLabel || '') + '</div>' +
+          '<div style="font-size:0.62rem;font-weight:700;color:' + window._spCor(leftClr, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;text-align:left;">' + (leftLabel || '') + '</div>' +
           '<div style="font-size:0.72rem;font-weight:800;color:var(--text-bright,#fff);text-transform:uppercase;letter-spacing:0.8px;text-align:center;white-space:nowrap;">' + (centerLabel || '') + '</div>' +
-          '<div style="font-size:0.62rem;font-weight:700;color:' + rightClr + ';text-transform:uppercase;letter-spacing:0.6px;text-align:right;">' + (rightLabel || '') + '</div>' +
+          '<div style="font-size:0.62rem;font-weight:700;color:' + window._spCor(rightClr, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;text-align:right;">' + (rightLabel || '') + '</div>' +
         '</div>' +
         // Numbers row — pushed to extreme edges
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;align-items:end;">' +
@@ -1509,7 +1511,7 @@ function _profileSheetAvatarHtml(u, uid, size, borderColor) {
   var fallback = 'https://api.dicebear.com/9.x/initials/svg?seed=' + seed + '&backgroundColor=c0aede,d1d4f9,b6e3f4,ffd5dc,ffdfbf';
   var src = _isRealPhoto(u.photoURL) ? u.photoURL : fallback;
   var s = size || 72; var bc = borderColor || 'var(--primary-color)';
-  return '<img src="' + src + '" onerror="this.onerror=null;this.src=\'' + fallback + '\'" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover;border:3px solid ' + bc + ';margin-bottom:12px;">';
+  return '<img src="' + src + '" onerror="this.onerror=null;this.src=\'' + fallback + '\'" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover;border:3px solid ' + window._spCor(bc, 'borda') + ';margin-bottom:12px;">';
 }
 
 function _profileSheetSportsHtml(u) {
@@ -1548,7 +1550,7 @@ function _mountProfileSheet(innerHtml) {
   panel.style.cssText = 'background:var(--bg-card);border-radius:20px 20px 0 0;padding:0 0 36px;width:100%;max-width:480px;box-shadow:0 -4px 40px rgba(0,0,0,0.4);transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);overflow-y:auto;max-height:90%;';
   var backRow =
     '<div style="display:flex;align-items:center;padding:14px 20px 0;margin-bottom:6px;">' +
-      '<button onclick="window._closeUserProfileSheet()" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.08);border:none;border-radius:20px;padding:7px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.13)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.08)\'">' +
+      '<button onclick="window._closeUserProfileSheet()" style="display:inline-flex;align-items:center;gap:6px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:none;border-radius:20px;padding:7px 16px;color:var(--text-muted,#94a3b8);font-size:0.85rem;font-weight:600;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.13)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.08)\'">' +
         '<span style="font-size:0.8rem;">←</span> Voltar' +
       '</button>' +
     '</div>' +
@@ -1572,7 +1574,7 @@ function _renderUserProfileSheet(u) {
   var safeUid = String(uid || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var fullName = window._safeHtml(window._friendlyDisplayName ? window._friendlyDisplayName(u) : (u.displayName || u.email || 'Usuário'));
   var borderColor = isFriend ? 'var(--success-color)' : 'var(--primary-color)';
-  var hr = '<div style="height:1px;background:rgba(255,255,255,0.07);margin:12px 0;"></div>';
+  var hr = '<div style="height:1px;background:var(--sp-g-255-255-255-007,rgba(255,255,255,0.07));margin:12px 0;"></div>';
 
   // ── Location ──────────────────────────────────────────────
   var locationParts = [u.city, u.state].filter(Boolean).map(function(s) { return window._safeHtml(s); });
@@ -1699,7 +1701,7 @@ function _renderInviteDetailSheet(u) {
       '<div style="font-size:1.1rem;font-weight:700;color:var(--text-bright);">' + fullName + '</div>' +
       cityHtml +
       sportsHtml +
-      '<div style="margin-top:14px;padding:10px 16px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;font-size:0.82rem;color:#fbbf24;">✉️ Convite enviado — aguardando resposta' + (sentAtHtml ? '<br>' + sentAtHtml : '') + '</div>' +
+      '<div style="margin-top:14px;padding:10px 16px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:10px;font-size:0.82rem;color:var(--sp-c-fbbf24,#fbbf24);">✉️ Convite enviado — aguardando resposta' + (sentAtHtml ? '<br>' + sentAtHtml : '') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:10px;justify-content:center;margin-top:20px;">' +
       '<button class="btn btn-warning btn-sm hover-lift" onclick="window._closeUserProfileSheet(); window._spinButton(this,\'Reenviando...\'); _sendFriendRequest(\'' + safeUid + '\')">🔄 Reenviar</button>' +

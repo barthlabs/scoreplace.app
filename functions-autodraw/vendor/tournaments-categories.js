@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // tournaments-categories.js — Category system (extracted from tournaments.js)
 
 (function() {
@@ -239,7 +241,7 @@ window._askBirthDateForEnroll = function(t, cb) {
         '<div class="modal-content" style="background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:15px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.4);box-sizing:border-box;">' +
         '<h2 style="margin:0 0 8px;font-size:1.1rem;">🎂 Data de nascimento</h2>' +
         '<p style="margin:0 0 16px;opacity:0.8;font-size:0.9rem;line-height:1.45;">Este torneio tem categorias por idade. Informe sua data de nascimento para concluir a inscrição — ela também fica salva no seu perfil.</p>' +
-        '<input type="date" id="birthdate-enroll-input" max="' + maxDate + '" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,#0f1626);color:var(--text-main,#fff);font-size:1rem;margin-bottom:18px;">' +
+        '<input type="date" id="birthdate-enroll-input" max="' + maxDate + '" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--bg-darker,#0f1626);color:var(--text-main,#fff);font-size:1rem;margin-bottom:18px;">' +
         '<div style="display:flex;gap:10px;">' +
         '<button class="btn btn-outline" id="birthdate-enroll-cancel" style="flex:1;cursor:pointer;">Cancelar</button>' +
         '<button class="btn btn-primary" id="birthdate-enroll-ok" style="flex:1;cursor:pointer;">Confirmar</button>' +
@@ -681,8 +683,8 @@ window._buildCategoryCountHtml = function(t) {
         row.cats.forEach(function(cat) {
             // v4.0.54: fundo OPACO + blur — a pílula fica sobre a foto de capa; fundo
             // translúcido deixava a foto vazar e o label indigo ilegível.
-            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:' + _catRb.bg + ';backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid ' + _catRb.border + ';padding:3px 9px;border-radius:10px;">' +
-                '<span style="font-size:0.65rem;font-weight:700;color:#c7cdfb;">' + cat.display + '</span>' +
+            html += '<div style="display:inline-flex;align-items:center;gap:4px;background:' + window._spCor(_catRb.bg, 'background') + ';backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid ' + window._spCor(_catRb.border, 'borda') + ';padding:3px 9px;border-radius:10px;">' +
+                '<span style="font-size:0.65rem;font-weight:700;color:var(--sp-c-c7cdfb,#c7cdfb);">' + cat.display + '</span>' +
                 '<span style="font-size:0.75rem;font-weight:800;color:#ffffff;">' + cat.count + '</span>' +
                 '</div>';
         });
@@ -925,25 +927,25 @@ window._buildTimeEstimation = function(t, opts) {
   // claro=rgba(30,41,59,0.72)) + blur. Antes (v4.0.54) eu pus um escuro próprio
   // (0.92) que ficou MAIS escuro que os demais box. Agora fica idêntico.
   var _estRb = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.40)', fg: '#e2e8f0', border: 'rgba(255,255,255,0.10)' };
-  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: ' + _estRb.bg + '; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid ' + _estRb.border + '; border-radius: 12px;">';
+  var html = '<div style="margin-top: 8px; padding: 10px 14px; background: ' + window._spCor(_estRb.bg, 'background') + '; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 1px solid ' + window._spCor(_estRb.border, 'borda') + '; border-radius: 12px;">';
   html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">';
   html += '<span style="font-size:1.1rem;">⏱️</span>';
-  html += '<span style="font-size:0.8rem; font-weight:800; color:#c7cdfb; text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
-  html += '<span style="font-size:0.65rem; color:#cbd5e1;">(' + gameDur + 'min/partida · ' + courtsLabel + ')</span>';
+  html += '<span style="font-size:0.8rem; font-weight:800; color:var(--sp-c-c7cdfb,#c7cdfb); text-transform:uppercase; letter-spacing:0.5px;">' + _t('cat.estimatedDuration') + '</span>';
+  html += '<span style="font-size:0.65rem; color:var(--sp-c-cbd5e1,#cbd5e1);">(' + gameDur + 'min/partida · ' + courtsLabel + ')</span>';
   html += '</div>';
 
   html += '<div style="display:flex; flex-direction:column; gap:4px;">';
   rows.forEach(function(r) {
     var bg = r.highlight ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.07)';
-    var border = r.highlight ? '1px solid rgba(96,165,250,0.55)' : '1px solid rgba(255,255,255,0.1)';
+    var border = r.highlight ? '1px solid rgba(96,165,250,0.55)' : '1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1))';
     var labelColor = r.highlight ? '#93c5fd' : '#e2e8f0';
     var durColor = r.highlight ? '#ffffff' : '#f1f5f9';
-    html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:' + bg + '; border:' + border + '; border-radius:8px; flex-wrap:wrap;">';
-    html += '<span style="font-size:0.78rem; font-weight:700; color:' + labelColor + '; min-width:110px;">' + r.label + '</span>';
-    html += '<span style="font-size:0.78rem; color:#aab4c5;">' + r.matches + ' ' + _t('cat.matchesSuffix') + '</span>';
-    html += '<span style="font-size:0.85rem; font-weight:800; color:' + durColor + '; margin-left:auto;">' + r.duration + '</span>';
+    html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:' + window._spCor(bg, 'background') + '; border:' + border + '; border-radius:8px; flex-wrap:wrap;">';
+    html += '<span style="font-size:0.78rem; font-weight:700; color:' + window._spCor(labelColor, 'color') + '; min-width:110px;">' + r.label + '</span>';
+    html += '<span style="font-size:0.78rem; color:var(--sp-c-aab4c5,#aab4c5);">' + r.matches + ' ' + _t('cat.matchesSuffix') + '</span>';
+    html += '<span style="font-size:0.85rem; font-weight:800; color:' + window._spCor(durColor, 'color') + '; margin-left:auto;">' + r.duration + '</span>';
     if (r.endTime) {
-      html += '<span style="font-size:0.72rem; font-weight:600; color:#bcc6f9;">' + _t('cat.endTimePrefix') + r.endTime + '</span>';
+      html += '<span style="font-size:0.72rem; font-weight:600; color:var(--sp-c-bcc6f9,#bcc6f9);">' + _t('cat.endTimePrefix') + r.endTime + '</span>';
     }
     html += '</div>';
   });
@@ -1022,7 +1024,7 @@ window._buildDurationForecast = function(t) {
     var _colon = '<span style="font-size:1.2rem;font-weight:900;opacity:0.4;color:' + rb.fg + ' !important;">:</span>';
     // Título + "(participantes/jogos)" empilhados e colados à esquerda; bloco de
     // tempo DD:HH:MM centralizado ocupando as 2 linhas à direita.
-    return '<div style="margin-top:6px;padding:8px 14px;background:' + rb.bg + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + rb.border + ';border-radius:12px;">' +
+    return '<div style="margin-top:6px;padding:8px 14px;background:' + window._spCor(rb.bg, 'background') + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid ' + window._spCor(rb.border, 'borda') + ';border-radius:12px;">' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
         '<div style="display:flex;flex-direction:column;min-width:0;">' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -1147,7 +1149,7 @@ window.renderCategoryManagerPage = function(container, tId) {
                 // Delete button — only visible on empty categories
                 var delRight = isMerged ? '27px' : '3px';
                 var deleteBtn = count === 0
-                    ? '<div class="cat-delete-btn" data-cat="' + catEsc + '" title="Excluir categoria" style="position:absolute;top:3px;right:' + delRight + ';width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;line-height:1;color:#f87171;font-weight:700;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">×</div>'
+                    ? '<div class="cat-delete-btn" data-cat="' + catEsc + '" title="Excluir categoria" style="position:absolute;top:3px;right:' + delRight + ';width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;line-height:1;color:var(--sp-c-f87171,#f87171);font-weight:700;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">×</div>'
                     : '';
                 // Participant chips inside the card
                 var catParts = catPartsMap[cat] || [];
@@ -1164,7 +1166,7 @@ window.renderCategoryManagerPage = function(container, tId) {
                 return '<div class="cat-mgr-card" draggable="true" data-cat="' + catEsc + '" ' +
                     'style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
                     unmergeIcon + deleteBtn +
-                    '<div style="font-weight:700;font-size:0.8rem;color:#818cf8;white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
+                    '<div style="font-weight:700;font-size:0.8rem;color:var(--sp-c-818cf8,#818cf8);white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
                     '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + chipsHtml + '</div>' +
                     emptyLabel +
                     '</div>';
@@ -1178,7 +1180,7 @@ window.renderCategoryManagerPage = function(container, tId) {
             var tSportForDiag = t.sport ? String(t.sport).trim() : null;
             var uncatCards = uncategorized.map(function(u) {
                 return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" ' +
-                    'style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;">' +
+                    'style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:var(--sp-c-fca5a5,#fca5a5);touch-action:none;">' +
                     '<span style="font-size:0.7rem;">👤</span> ' + window._safeHtml(u.name || 'Sem nome') +
                     '</div>';
             }).join('');
@@ -1191,11 +1193,11 @@ window.renderCategoryManagerPage = function(container, tId) {
                 var skill = (_smDiag && tSportForDiag && _smDiag[tSportForDiag]) || window._pDefaultCat(p) || '—';
                 var bd = window._pBirth(p) || '—';
                 var uid = p.uid ? p.uid.substring(0, 6) + '…' : '(sem uid)';
-                return '<tr style="font-size:0.72rem;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+                return '<tr style="font-size:0.72rem;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
                     '<td style="padding:3px 6px;color:var(--text-bright);">' + window._safeHtml(u.name || '?') + '</td>' +
-                    '<td style="padding:3px 6px;color:' + (g === '—' ? '#f87171' : '#86efac') + ';">' + window._safeHtml(g) + '</td>' +
-                    '<td style="padding:3px 6px;color:' + (skill === '—' ? '#f87171' : '#86efac') + ';">' + window._safeHtml(skill) + '</td>' +
-                    '<td style="padding:3px 6px;color:' + (bd === '—' ? '#fca5a5' : '#86efac') + ';">' + (bd !== '—' ? '✓' : '—') + '</td>' +
+                    '<td style="padding:3px 6px;color:' + window._spCor((g === '—' ? '#f87171' : '#86efac'), 'color') + ';">' + window._safeHtml(g) + '</td>' +
+                    '<td style="padding:3px 6px;color:' + window._spCor((skill === '—' ? '#f87171' : '#86efac'), 'color') + ';">' + window._safeHtml(skill) + '</td>' +
+                    '<td style="padding:3px 6px;color:' + window._spCor((bd === '—' ? '#fca5a5' : '#86efac'), 'color') + ';">' + (bd !== '—' ? '✓' : '—') + '</td>' +
                     '<td style="padding:3px 6px;color:var(--text-muted);">' + uid + '</td>' +
                     '</tr>';
             }).join('');
@@ -1210,11 +1212,11 @@ window.renderCategoryManagerPage = function(container, tId) {
                 '<th style="padding:3px 6px;text-align:left;">Nasc.</th>' +
                 '<th style="padding:3px 6px;text-align:left;">UID</th>' +
                 '</tr></thead><tbody>' + diagRows + '</tbody></table>' +
-                '<p style="font-size:0.7rem;color:#f87171;margin-top:6px;">🔴 vermelho = dado ausente no objeto de inscrição. Se o perfil tiver o dado, ele será buscado ao abrir esse painel — aguarde o auto-assign.</p>' +
+                '<p style="font-size:0.7rem;color:var(--sp-c-f87171,#f87171);margin-top:6px;">🔴 vermelho = dado ausente no objeto de inscrição. Se o perfil tiver o dado, ele será buscado ao abrir esse painel — aguarde o auto-assign.</p>' +
                 '</details>'
             ) : '';
             uncatHtml = '<div class="cat-mgr-uncat-zone" style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
-                '<div style="font-weight:700;color:#fca5a5;font-size:0.85rem;margin-bottom:8px;">' + _t('cat.noCategory', {count: uncategorized.length}) + '</div>' +
+                '<div style="font-weight:700;color:var(--sp-c-fca5a5,#fca5a5);font-size:0.85rem;margin-bottom:8px;">' + _t('cat.noCategory', {count: uncategorized.length}) + '</div>' +
                 '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">' + _t('cat.dragToAssign') + '</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + uncatCards + '</div>' +
                 diagTable +
@@ -1296,9 +1298,9 @@ window.renderCategoryManagerPage = function(container, tId) {
                 // Source badge
                 var srcBadge = '';
                 if (p.categorySource === 'perfil') {
-                    srcBadge = '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:600;background:rgba(34,197,94,0.12);color:#4ade80;border:1px solid rgba(34,197,94,0.25);margin-left:4px;">(perfil)</span>';
+                    srcBadge = '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:600;background:rgba(34,197,94,0.12);color:var(--sp-c-4ade80,#4ade80);border:1px solid rgba(34,197,94,0.25);margin-left:4px;">(perfil)</span>';
                 } else if (p.wasUncategorized) {
-                    srcBadge = '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:600;background:rgba(239,68,68,0.1);color:#fca5a5;border:1px solid rgba(239,68,68,0.2);margin-left:4px;">(sem cat.)</span>';
+                    srcBadge = '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:600;background:rgba(239,68,68,0.1);color:var(--sp-c-fca5a5,#fca5a5);border:1px solid rgba(239,68,68,0.2);margin-left:4px;">(sem cat.)</span>';
                 }
                 // Remove button
                 var catNameEsc = catName.replace(/\\/g, '\\\\').replace(/"/g, '&quot;');
@@ -1459,7 +1461,7 @@ window._buildInlineCatMgrHTML = function(tId) {
                     : '';
                 var delRight = isMerged ? '27px' : '3px';
                 var deleteBtn = count === 0
-                    ? '<div class="cat-delete-btn" data-cat="' + catEsc + '" title="Excluir categoria" style="position:absolute;top:3px;right:' + delRight + ';width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;line-height:1;color:#f87171;font-weight:700;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">×</div>'
+                    ? '<div class="cat-delete-btn" data-cat="' + catEsc + '" title="Excluir categoria" style="position:absolute;top:3px;right:' + delRight + ';width:20px;height:20px;border-radius:50%;background:rgba(239,68,68,0.15);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;line-height:1;color:var(--sp-c-f87171,#f87171);font-weight:700;z-index:2;" onmouseenter="this.style.background=\'rgba(239,68,68,0.35)\'" onmouseleave="this.style.background=\'rgba(239,68,68,0.15)\'">×</div>'
                     : '';
                 var catParts = catPartsMap[cat] || [];
                 var chipsHtml = catParts.map(function(item) {
@@ -1470,7 +1472,7 @@ window._buildInlineCatMgrHTML = function(tId) {
                 var prRight = (isMerged || count === 0) ? '44px' : '8px';
                 return '<div class="cat-mgr-card" draggable="true" data-cat="' + catEsc + '" style="position:relative;display:inline-flex;flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:12px;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.2);cursor:default;transition:border-color 0.2s;min-width:120px;">' +
                     unmergeIcon + deleteBtn +
-                    '<div style="font-weight:700;font-size:0.8rem;color:#818cf8;white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
+                    '<div style="font-weight:700;font-size:0.8rem;color:var(--sp-c-818cf8,#818cf8);white-space:nowrap;margin-bottom:6px;padding-right:' + prRight + ';">' + catDisplay + '</div>' +
                     '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + chipsHtml + '</div>' +
                     emptyLabel + '</div>';
             }).join('') + '</div>';
@@ -1479,10 +1481,10 @@ window._buildInlineCatMgrHTML = function(tId) {
     var uncatHtml = '';
     if (uncategorized.length > 0) {
         var uncatCards = uncategorized.map(function(u) {
-            return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:#fca5a5;touch-action:none;"><span style="font-size:0.7rem;">👤</span> ' + window._safeHtml(u.name || 'Sem nome') + '</div>';
+            return '<div class="cat-mgr-participant" draggable="true" data-pidx="' + u.idx + '" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);cursor:grab;font-size:0.85rem;font-weight:500;color:var(--sp-c-fca5a5,#fca5a5);touch-action:none;"><span style="font-size:0.7rem;">👤</span> ' + window._safeHtml(u.name || 'Sem nome') + '</div>';
         }).join('');
         uncatHtml = '<div class="cat-mgr-uncat-zone" style="margin-top:0.75rem;padding:0.75rem 1rem;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;">' +
-            '<div style="font-weight:700;color:#fca5a5;font-size:0.82rem;margin-bottom:6px;">' + uncategorized.length + ' sem categoria — arraste para uma categoria</div>' +
+            '<div style="font-weight:700;color:var(--sp-c-fca5a5,#fca5a5);font-size:0.82rem;margin-bottom:6px;">' + uncategorized.length + ' sem categoria — arraste para uma categoria</div>' +
             '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + uncatCards + '</div></div>';
     }
 
@@ -3331,11 +3333,11 @@ window._categoryRequestsBannerHtml = function(t) {
             '<strong>' + window._safeHtml(r.playerName || 'Participante') + '</strong> · ' +
             window._safeHtml(fromLbl) + ' → <strong>' + window._safeHtml(toLbl) + '</strong></span>' +
             '<button onclick="window._approveCategoryChange(\'' + tid + '\',\'' + uidEsc + '\')" style="background:#10b981;color:#fff;border:none;padding:6px 12px;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;">✅ Aprovar</button>' +
-            '<button onclick="window._rejectCategoryChange(\'' + tid + '\',\'' + uidEsc + '\')" style="background:transparent;color:#ef4444;border:1px solid rgba(239,68,68,0.5);padding:6px 12px;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;">❌ Recusar</button>' +
+            '<button onclick="window._rejectCategoryChange(\'' + tid + '\',\'' + uidEsc + '\')" style="background:transparent;color:var(--sp-c-ef4444,#ef4444);border:1px solid rgba(239,68,68,0.5);padding:6px 12px;border-radius:8px;font-weight:700;font-size:0.78rem;cursor:pointer;">❌ Recusar</button>' +
             '</div>';
     }).join('');
     return '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:12px 14px;margin-bottom:1rem;">' +
-        '<div style="font-weight:700;font-size:0.9rem;color:#f59e0b;margin-bottom:4px;">⏳ Mudanças de categoria por perfil — aprovação necessária (' + pending.length + ')</div>' +
+        '<div style="font-weight:700;font-size:0.9rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:4px;">⏳ Mudanças de categoria por perfil — aprovação necessária (' + pending.length + ')</div>' +
         '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:4px;">Estes inscritos mudaram a habilidade no perfil. Aprovar move a categoria; recusar mantém a atual.</div>' +
         rows + '</div>';
 };

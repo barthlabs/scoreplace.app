@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 /* scoreplace.app — letzplay-profile.js
  * Card "Seu nível (letzplay)" no perfil. Lê users/{uid}.letzplayImport (já normalizado)
  * e renderiza: categoria OFICIAL (torneio) + rating recreativo (forma) num medidor
@@ -152,7 +154,7 @@
     };
     return '<div style="background:var(--bg-darker,#0f1420);border:1px solid var(--border-color,#28313f);border-radius:9px;padding:9px 11px;text-align:center;">' +
       linha('sequência atual', atualHtml) +
-      (maior > 0 ? linha('maior sequência', '<span style="color:#2dd4a0;">' + maior + 'V</span>') : '') +
+      (maior > 0 ? linha('maior sequência', '<span style="color:var(--sp-c-2dd4a0,#2dd4a0);">' + maior + 'V</span>') : '') +
     '</div>';
   }
 
@@ -203,7 +205,7 @@
     var _gen = /fem/.test(_g) ? 'Feminina ' : (/mas/.test(_g) ? 'Masculina ' : '');
     var offHtml = cat
       ? '<span title="' + (cat.deMista ? 'faixa apurada em torneio misto — o gênero é do torneio, não do atleta' : 'categoria oficial disputada em torneio') +
-        '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(cat.label) + '</span>'
+        '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:var(--sp-c-2dd4a0,#2dd4a0);padding:2px 9px;border-radius:6px;">' + esc(cat.label) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
     return '' +
       '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:4px;">' +
@@ -214,7 +216,7 @@
         ('<div><span style="font-size:11px;color:var(--text-muted,#8b93a3);">categoria</span><br>' +
           (_cs
             ? ('<span title="' + esc(_cs.porque) + '" style="font-family:ui-monospace,Menlo,monospace;font-weight:700;' +
-               'background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' +
+               'background:rgba(16,185,129,0.16);color:var(--sp-c-2dd4a0,#2dd4a0);padding:2px 9px;border-radius:6px;">' +
                esc(_gen + _cs.rotulo) + '</span>')
             : offHtml) + '</div>') +
         // ⛔ A "FORMA" SAIU (17/ago/2026). Ordem do dono: "os outros tem essa merda de
@@ -234,7 +236,7 @@
           ? '<div style="margin-left:auto;text-align:right;">' +
               '<span style="font-size:11px;color:var(--text-muted,#8b93a3);">pontos</span><br>' +
               '<span style="font-family:ui-monospace,Menlo,monospace;font-size:26px;font-weight:800;line-height:1;' +
-                'color:#2dd4a0;text-shadow:0 0 18px rgba(45,212,160,.28);font-variant-numeric:tabular-nums;">' + r.value + '</span>' +
+                'color:var(--sp-c-2dd4a0,#2dd4a0);text-shadow:0 0 18px rgba(45,212,160,.28);font-variant-numeric:tabular-nums;">' + r.value + '</span>' +
             '</div>'
           : '') +
       '</div>' +
@@ -242,10 +244,10 @@
         '<div style="display:flex;">' + ['FUN', 'D', 'C', 'B', 'A'].map(function (t) {
           return '<span style="flex:1;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700;color:var(--text-muted,#8b93a3);">' + t + '</span>';
         }).join('') + '</div>' +
-        '<div style="position:relative;height:20px;border-radius:11px;margin-top:5px;background:' + gStops + ';box-shadow:inset 0 1px 4px rgba(0,0,0,.3);">' +
+        '<div style="position:relative;height:20px;border-radius:11px;margin-top:5px;background:' + window._spCor(gStops, 'background') + ';box-shadow:inset 0 1px 4px rgba(0,0,0,.3);">' +
           '<span style="position:absolute;top:50%;left:' + pct.toFixed(1) + '%;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid #0f9d6b;box-shadow:0 0 0 4px rgba(16,157,107,.22);"></span>' +
         '</div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted,#8b93a3);margin-top:7px;"><span>↓ abaixo</span><span style="color:#2dd4a0;font-weight:700;">no seu nível</span><span>acima ↑</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted,#8b93a3);margin-top:7px;"><span>↓ abaixo</span><span style="color:var(--sp-c-2dd4a0,#2dd4a0);font-weight:700;">no seu nível</span><span>acima ↑</span></div>' +
       '</div>';
   };
 
@@ -270,7 +272,7 @@
       Math.min(97, pct + 26) + '%,#dc2626 100%)';
 
     var offHtml = off
-      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:#2dd4a0;padding:2px 9px;border-radius:6px;">' + esc(off.label) + '</span>'
+      ? '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;background:rgba(16,185,129,0.16);color:var(--sp-c-2dd4a0,#2dd4a0);padding:2px 9px;border-radius:6px;">' + esc(off.label) + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
 
     // ── Data de conclusão (mês/ano) + ordenação cronológica ──────────────
@@ -378,7 +380,7 @@
       var strong = (p.wins > p.losses);
       return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12.5px;">' +
         '<span>com <b>' + esc(p.partner) + '</b></span>' +
-        '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + (strong ? '#2dd4a0' : 'var(--text-muted,#8b93a3)') + ';">' + p.wins + '–' + p.losses + '</span></div>';
+        '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:' + window._spCor((strong ? '#2dd4a0' : 'var(--text-muted,#8b93a3)'), 'color') + ';">' + p.wins + '–' + p.losses + '</span></div>';
     }).join('');
 
     var totW = (st.wins != null) ? st.wins : (imp.profile && imp.profile.totals ? imp.profile.totals.wins : '');
@@ -399,7 +401,7 @@
     // os DÍGITOS seguem alinhados um sob o outro (é o que o traço estragava) e o
     // conjunto fica no meio da caixa.
     var _linhaVD = function (n, letra, cor) {
-      return '<div style="display:inline-grid;grid-template-columns:auto auto;align-items:baseline;gap:6px;color:' + cor + ';">' +
+      return '<div style="display:inline-grid;grid-template-columns:auto auto;align-items:baseline;gap:6px;color:' + window._spCor(cor, 'color') + ';">' +
         '<span style="text-align:right;">' + n + '</span><span style="text-align:left;">' + letra + '</span></div>';
     };
     var totalHtml = '<div style="text-align:center;">' + _linhaVD(totWn, 'V', '#2dd4a0') + '</div>' +
@@ -422,7 +424,7 @@
       : { n: 0, won: null };
     var _stN = _seq.n, _stT = _seq.won;
     var streakHtml = _stN
-      ? '<span style="color:' + (_stT ? '#2dd4a0' : '#f87171') + ';">' + _stN + (_stT ? 'V' : 'D') + '</span>'
+      ? '<span style="color:' + window._spCor((_stT ? '#2dd4a0' : '#f87171'), 'color') + ';">' + _stN + (_stT ? 'V' : 'D') + '</span>'
       : '<span style="color:var(--text-muted,#8b93a3);">—</span>';
 
     return '' +
@@ -447,7 +449,7 @@
 
         // footprint
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">' +
-          '<div><div style="font-size:11px;font-weight:700;color:#2dd4a0;margin-bottom:3px;">OFICIAL (torneio)</div>' + footList(footOff, 'off') + '</div>' +
+          '<div><div style="font-size:11px;font-weight:700;color:var(--sp-c-2dd4a0,#2dd4a0);margin-bottom:3px;">OFICIAL (torneio)</div>' + footList(footOff, 'off') + '</div>' +
           '<div><div style="font-size:11px;font-weight:700;color:var(--text-muted,#8b93a3);margin-bottom:3px;">RANKING</div>' + footList(footRec, 'rec') + '</div>' +
         '</div>' +
 
@@ -543,18 +545,18 @@
         var rightVal = isRk
           ? (r.points != null ? ('<b>' + r.points + '</b> pts') : '')
           : ((r.wins != null || r.losses != null) ? ((r.wins || 0) + '–' + (r.losses || 0)) : '');
-        var inactive = r.inactive ? ' <span style="color:#f59e0b;font-size:10px;">inativo</span>' : '';
+        var inactive = r.inactive ? ' <span style="color:var(--sp-c-f59e0b,#f59e0b);font-size:10px;">inativo</span>' : '';
         return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;' +
           (mine ? 'background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.35);' : '') + '">' +
-          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:800;color:' + (mine ? '#2dd4a0' : 'var(--text-muted,#8b93a3)') + ';min-width:22px;">' + (r.pos != null ? r.pos + 'º' : '–') + '</span>' +
-          '<span style="flex:1;font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:' + (mine ? '700' : '500') + ';">' + players + (mine ? ' <span style="color:#2dd4a0;font-size:11px;">(você)</span>' : '') + inactive + '</span>' +
+          '<span style="font-family:ui-monospace,Menlo,monospace;font-weight:800;color:' + window._spCor((mine ? '#2dd4a0' : 'var(--text-muted,#8b93a3)'), 'color') + ';min-width:22px;">' + (r.pos != null ? r.pos + 'º' : '–') + '</span>' +
+          '<span style="flex:1;font-size:12.5px;color:var(--text-main,#cbd5e1);font-weight:' + (mine ? '700' : '500') + ';">' + players + (mine ? ' <span style="color:var(--sp-c-2dd4a0,#2dd4a0);font-size:11px;">(você)</span>' : '') + inactive + '</span>' +
           (rightVal ? '<span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--text-muted,#8b93a3);">' + rightVal + '</span>' : '') +
         '</div>';
       }).join('');
       // Ranking = classificação única (o header "CLASSIFICAÇÃO" acima já rotula) → sem
       // título de grupo redundante. Torneio = mostra "GRUPO 01/02…".
       var groupTitle = isRk ? '' :
-        '<div style="font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#2dd4a0;margin-bottom:4px;">' + esc(grp.group || 'Grupo') + '</div>';
+        '<div style="font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--sp-c-2dd4a0,#2dd4a0);margin-bottom:4px;">' + esc(grp.group || 'Grupo') + '</div>';
       return '<div style="margin-top:10px;">' + groupTitle + rows + '</div>';
     }).join('');
   }
@@ -563,7 +565,7 @@
     if (!g2.length) return '<div style="font-size:12px;color:var(--text-muted,#8b93a3);padding:8px 0;">Sem jogos seus registrados aqui.</div>';
     return g2.map(function (g) {
       var won = g.won === true, lost = g.won === false;
-      var badge = won ? '<span style="color:#2dd4a0;font-weight:800;">V</span>' : (lost ? '<span style="color:#f87171;font-weight:800;">D</span>' : '<span style="color:var(--text-muted,#8b93a3);">–</span>');
+      var badge = won ? '<span style="color:var(--sp-c-2dd4a0,#2dd4a0);font-weight:800;">V</span>' : (lost ? '<span style="color:var(--sp-c-f87171,#f87171);font-weight:800;">D</span>' : '<span style="color:var(--text-muted,#8b93a3);">–</span>');
       var opps = (Array.isArray(g.oppNames) ? g.oppNames.filter(Boolean) : []).map(esc).join(' / ') || 'adversário';
       var withP = g.partnerName ? '<span style="color:var(--text-muted,#8b93a3);">com ' + esc(g.partnerName) + '</span> ' : '';
       var score = (typeof g.myScore === 'number' && typeof g.oppScore === 'number')
@@ -617,7 +619,7 @@
         '<button onclick="window._closeLpTourneyDetail()" style="background:var(--bg-card,#141a24);border:1px solid var(--border-color,#28313f);color:var(--text-main,#cbd5e1);border-radius:10px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;">← Voltar</button>' +
         '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 2px;">' + logoHtml +
           '<div style="font-size:17px;font-weight:800;color:var(--text-bright,#fff);line-height:1.3;">' + esc(name) + '</div></div>' +
-        '<div style="font-size:12px;color:var(--text-muted,#8b93a3);margin-bottom:14px;">Seu desempenho: <span style="color:#2dd4a0;font-weight:700;">' + w + ' V</span> – <span style="color:#f87171;font-weight:700;">' + l + ' D</span> · ' + myGames.length + ' jogo' + (myGames.length === 1 ? '' : 's') + '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted,#8b93a3);margin-bottom:14px;">Seu desempenho: <span style="color:var(--sp-c-2dd4a0,#2dd4a0);font-weight:700;">' + w + ' V</span> – <span style="color:var(--sp-c-f87171,#f87171);font-weight:700;">' + l + ' D</span> · ' + myGames.length + ' jogo' + (myGames.length === 1 ? '' : 's') + '</div>' +
         (spark ? ('<div style="background:var(--info-box-bg,#141a24);border:1px solid var(--border-color,#28313f);border-radius:12px;padding:12px;margin-bottom:16px;">' +
           '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted,#8b93a3);margin-bottom:6px;">Saldo V/D ao longo do ' + kindLabel + '</div>' + spark + '</div>') : '') +
         '<div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted,#8b93a3);margin-bottom:2px;">Classificação</div>' +

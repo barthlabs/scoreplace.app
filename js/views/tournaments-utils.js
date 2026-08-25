@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // Normalize format: 'Ranking' → 'Liga' (unificado em v0.2.6)
 var _t = window._t || function(k) { return k; };
 // Defined at top level so it's available immediately on script load
@@ -167,7 +169,7 @@ window._pendingCoHostFor = function(t, name, uid, email) {
 // Tag âmbar "Aguardando aceite" com a estrela de organizador à esquerda —
 // usada no card do convidado enquanto o convite de co-organização está pendente.
 window._pendingCoHostBadgeHtml = function() {
-  return '<span class="sp-pending-cohost" title="Convite de co-organização enviado — aguardando aceite" style="display:inline-flex;align-items:center;gap:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);color:#fbbf24;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:0.3px;white-space:nowrap;vertical-align:middle;margin-left:4px;">' +
+  return '<span class="sp-pending-cohost" title="Convite de co-organização enviado — aguardando aceite" style="display:inline-flex;align-items:center;gap:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.45);color:var(--sp-c-fbbf24,#fbbf24);font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:6px;letter-spacing:0.3px;white-space:nowrap;vertical-align:middle;margin-left:4px;">' +
     '<svg width="11" height="11" viewBox="0 0 24 24" fill="#fbbf24" style="flex-shrink:0;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>' +
     'Aguardando aceite</span>';
 };
@@ -1185,9 +1187,9 @@ window._progBarPct = function(pct, color, h, radius, trackBg, outColor) {
     ';font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:0.2px;line-height:1;pointer-events:none;';
   var lbl = (p >= 16)
     ? '<span style="' + base + 'left:0;width:' + p + '%;justify-content:flex-end;padding-right:6px;box-sizing:border-box;color:#fff !important;text-shadow:0 1px 2px rgba(0,0,0,0.35);">' + p + '%</span>'
-    : '<span style="' + base + 'left:' + p + '%;padding-left:6px;color:' + (outColor || color) + ';">' + p + '%</span>';
-  return '<div style="position:relative;width:100%;height:' + h + 'px;background:' + trackBg + ';border-radius:' + radius + ';overflow:hidden;">' +
-    '<div style="width:' + p + '%;height:100%;background:' + color + ';transition:width 0.5s ease,background 0.5s ease;"></div>' + lbl +
+    : '<span style="' + base + 'left:' + p + '%;padding-left:6px;color:' + window._spCor((outColor || color), 'color') + ';">' + p + '%</span>';
+  return '<div style="position:relative;width:100%;height:' + h + 'px;background:' + window._spCor(trackBg, 'background') + ';border-radius:' + radius + ';overflow:hidden;">' +
+    '<div style="width:' + p + '%;height:100%;background:' + window._spCor(color, 'background') + ';transition:width 0.5s ease,background 0.5s ease;"></div>' + lbl +
   '</div>';
 };
 window._buildProgressInner = function(t) {
@@ -1521,11 +1523,11 @@ window._buildProgressInner = function(t) {
     // caso substitui o "🏁 limite" (que vira redundante com o "fim programado").
     var _schedRow = '';
     if (_win && _win.startMs && _win.endMs) {
-      var _spLblS = 'font-size:0.6rem;color:#60a5fa;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
+      var _spLblS = 'font-size:0.6rem;color:var(--sp-c-60a5fa,#60a5fa);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;line-height:1.25;';
       var _spCol = function(ms, label, align) {
         return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
-          '<span style="font-size:1rem;font-weight:800;color:#93c5fd;line-height:1.1;">' + _time(ms) + '</span>' +
-          '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
+          '<span style="font-size:1rem;font-weight:800;color:var(--sp-c-93c5fd,#93c5fd);line-height:1.1;">' + _time(ms) + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--sp-c-60a5fa,#60a5fa);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
           '<span style="' + _spLblS + 'text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
         '</div>';
       };
@@ -1535,9 +1537,9 @@ window._buildProgressInner = function(t) {
       '</div>';
     }
 
-    _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">' +
+    _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
-        '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#a78bfa;">🏆 Torneio completo</span>' +
+        '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--sp-c-a78bfa,#a78bfa);">🏆 Torneio completo</span>' +
         '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>' +
       '</div>' +
       window._progBarPct(_barPct, 'linear-gradient(90deg,#8b5cf6,#a78bfa)', 18, '7px', 'rgba(255,255,255,0.08)', '#a78bfa') +
@@ -1549,7 +1551,7 @@ window._buildProgressInner = function(t) {
   // Só no estado ATIVO; "encerrado" e "aguardando início" já têm indicadores próprios abaixo
   // (evita duplicar). Substitui o badge separado que ficava embaixo (tournaments.js).
   var _statusLine = (!isFinished && actualStart)
-    ? '<div style="text-align:center;margin-bottom:9px;font-size:0.85rem;font-weight:800;color:#4ade80;display:flex;align-items:center;justify-content:center;gap:7px;">' +
+    ? '<div style="text-align:center;margin-bottom:9px;font-size:0.85rem;font-weight:800;color:var(--sp-c-4ade80,#4ade80);display:flex;align-items:center;justify-content:center;gap:7px;">' +
         '<span style="width:9px;height:9px;border-radius:50%;background:#10b981;display:inline-block;flex-shrink:0;animation:pulse 2s infinite;"></span>Torneio em andamento</div>'
     : '';
   var head = _statusLine +
@@ -1571,17 +1573,17 @@ window._buildProgressInner = function(t) {
     var c = prog.pct === 100 ? '#10b981' : (prog.pct > 50 ? '#3b82f6' : '#f59e0b');
     var _pending = !isFinished && prog.pct < 100 && !actualStart;
     var _waitTop2 = _pending
-      ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
+      ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:var(--sp-c-93c5fd,#93c5fd);">⏳ Aguardando início</div>'
       : '';
     var _estMin2 = Math.round(window._estimateTournamentMinutes ? (window._estimateTournamentMinutes(t) || 0) : 0);
     var _estH = Math.floor(_estMin2 / 60), _estM = _estMin2 % 60;
     var _estStr2 = _estH > 0 ? (_estH + 'h' + (_estM ? (' ' + _estM + 'min') : '')) : (_estM + 'min');
     var _estLine2 = (_pending && _estMin2 > 0)
-      ? '<div style="margin-top:7px;font-size:0.72rem;color:#93c5fd;font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
+      ? '<div style="margin-top:7px;font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);font-weight:600;text-align:center;">⏱️ Duração estimada: ~' + _estStr2 + '</div>'
       : '';
     return head + _waitTop2 +
       window._progBarPct(prog.pct, c, 18, '7px', 'rgba(255,255,255,0.1)', c) +
-      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:#10b981;font-weight:600;">✅ ' + ((_isLiga || _phaseRoundActive) ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
+      (prog.pct === 100 && !isFinished ? '<div style="margin-top:6px;font-size:0.75rem;color:var(--sp-c-10b981,#10b981);font-weight:600;">✅ ' + ((_isLiga || _phaseRoundActive) ? 'Rodada concluída!' : 'Todas as partidas concluídas!') + '</div>' : '') +
       _estLine2 +
       _ligaBarHtml;
   }
@@ -1653,16 +1655,16 @@ window._buildProgressInner = function(t) {
   // coluna PROGRAMADO: horário + data + label (3 linhas, azul)
   var _progCol = function(ms, label, align) {
     return '<div style="display:flex;flex-direction:column;align-items:' + align + ';gap:2px;min-width:0;">' +
-      '<span style="' + _timeS + 'color:#93c5fd;">' + _time(ms) + '</span>' +
-      '<span style="font-size:0.72rem;color:#60a5fa;font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
-      '<span style="' + _lblS + 'color:#60a5fa;text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
+      '<span style="' + _timeS + 'color:var(--sp-c-93c5fd,#93c5fd);">' + _time(ms) + '</span>' +
+      '<span style="font-size:0.72rem;color:var(--sp-c-60a5fa,#60a5fa);font-weight:600;line-height:1.1;">' + _date(ms) + '</span>' +
+      '<span style="' + _lblS + 'color:var(--sp-c-60a5fa,#60a5fa);text-align:' + (align === 'flex-end' ? 'right' : 'left') + ';">' + window._tProgLbl2L(label) + '</span>' +
     '</div>';
   };
 
   // v2.7.79: antes de iniciar não há "início real / decorrido" — mostra só um
   // selo "⏳ Aguardando início" (a janela programada vem na linha de baixo).
   var topRow = _notStarted
-    ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:#93c5fd;">⏳ Aguardando início</div>'
+    ? '<div style="text-align:center;margin-bottom:8px;font-size:0.82rem;font-weight:700;color:var(--sp-c-93c5fd,#93c5fd);">⏳ Aguardando início</div>'
     : '<div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:flex-start;margin-bottom:7px;gap:8px;">' +
         _realCol(actualStart, 'início real', 'flex-start', _multiDay) +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;">' +
@@ -1699,7 +1701,7 @@ window._renderTournamentProgress = function(t) {
   var _hasPhoto = !!(t && (window._tourCoverSrc(t) || t.venuePhotoUrl));
   var _rb = (_hasPhoto && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
   var _wrapStyle = _rb
-    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + _rb.bg + ';border:1px solid ' + _rb.border + ';'
+    ? 'margin-top:1rem;padding:14px 16px;border-radius:14px;background:' + window._spCor(_rb.bg, 'background') + ';border:1px solid ' + window._spCor(_rb.border, 'borda') + ';'
     : 'margin-top:1rem;';
   // Sobre foto: a CSS do tema claro INVERTE os hex claros de _buildProgressInner
   // (#60a5fa→#1d4ed8 etc.) pra escuro → ilegível na tarja escura. Em vez de caçar
@@ -2311,7 +2313,7 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
     if (_ce.kind === 'round-in-progress') {
         var _solo = _rowFn ? _rowFn(t, _fg) : '';
         if (!_solo) return ''; // nada a dizer — NUNCA cair no render genérico (era o "null null 0s")
-        return '<div style="margin-top:' + _mt + ';display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px;background:' + _rb.bg + ';border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
+        return '<div style="margin-top:' + _mt + ';display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px;background:' + window._spCor(_rb.bg, 'background') + ';border:1px solid rgba(56,189,248,0.45);border-radius:12px;">' + _solo + '</div>';
     }
     // Guarda dura: box com regressiva EXIGE alvo e rótulo. Sem isso não se desenha nada.
     var _ts = _ce.ts;
@@ -2333,8 +2335,8 @@ window._ligaCountdownBoxHtml = function (t, size, marginTop) {
         }
     }
     var _box = _lg
-        ? 'padding:14px 18px;background:' + _rb.bg + ';border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
-        : 'padding:10px 14px;background:' + _rb.bg + ';border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
+        ? 'padding:14px 18px;background:' + window._spCor(_rb.bg, 'background') + ';border:1.5px solid rgba(' + _rgb + ',0.7);border-radius:14px;box-shadow:0 0 0 1px rgba(' + _rgb + ',0.15);'
+        : 'padding:10px 14px;background:' + window._spCor(_rb.bg, 'background') + ';border:1px solid rgba(' + _rgb + ',0.55);border-radius:12px;';
     return '<div style="margin-top:' + _mt + ';' + _box + '">' +
         // v1.7.86: rótulo e relógio EMPILHADOS. Antes dividiam UMA linha e, com a
         // escala grande, o rótulo virava "Fim da r…" — some justamente a palavra
@@ -2659,7 +2661,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     var _rbC = (opts.bg && typeof window._photoReadBox === 'function') ? window._photoReadBox() : null;
     // v4.x: sobre foto → tarja densa (_photoReadBox) + backdrop blur pra suavizar o fundo
     // agitado e garantir contraste do texto.
-    var bgStyle = opts.bg ? ('background:' + opts.bg + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + (_rbC ? _rbC.border : 'rgba(255,255,255,0.12)') + ';') : '';
+    var bgStyle = opts.bg ? ('background:' + window._spCor(opts.bg, 'background') + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + window._spCor((_rbC ? _rbC.border : 'rgba(255,255,255,0.12)'), 'borda') + ';') : '';
     // v4.4.x: SEMPRE colapsado por padrão — no DETALHE e na DASHBOARD (pedido do dono:
     // "sempre fechado no detalhe e na dashboard"). Abre só quando o usuário clica (estado
     // do <details> na sessão); sem persistência de "aberto" — todo render começa fechado.

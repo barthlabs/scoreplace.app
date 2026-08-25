@@ -84,11 +84,11 @@
       ].join(';');
 
       var title = document.createElement('div');
-      title.style.cssText = 'font-weight:800;font-size:0.95rem;color:#fbbf24;margin-bottom:4px;';
+      title.style.cssText = 'font-weight:800;font-size:0.95rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;';
       title.textContent = '⌚📲 scoreplace agora é app oficial';
 
       var msg = document.createElement('div');
-      msg.style.cssText = 'font-size:0.82rem;line-height:1.45;color:#e2e8f0;margin-bottom:10px;';
+      msg.style.cssText = 'font-size:0.82rem;line-height:1.45;color:var(--sp-c-e2e8f0,#e2e8f0);margin-bottom:10px;';
       msg.textContent = 'Este é o atalho antigo (PWA). O app oficial está na ' + storeName
         + ' — com placar no relógio e mais. Se você já instalou, pode remover este atalho da tela de início pra não ficar com dois ícones iguais. ' + removeHow;
 
@@ -105,7 +105,7 @@
       var dismissBtn = document.createElement('button');
       dismissBtn.type = 'button';
       dismissBtn.textContent = 'Entendi';
-      dismissBtn.style.cssText = 'flex:0 0 auto;background:rgba(255,255,255,0.08);color:#cbd5e1;border:1px solid rgba(255,255,255,0.15);font-weight:600;font-size:0.85rem;padding:10px 14px;border-radius:10px;cursor:pointer;';
+      dismissBtn.style.cssText = 'flex:0 0 auto;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--sp-c-cbd5e1,#cbd5e1);border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));font-weight:600;font-size:0.85rem;padding:10px 14px;border-radius:10px;cursor:pointer;';
       dismissBtn.addEventListener('click', function () {
         try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) {}
         wrap.remove();

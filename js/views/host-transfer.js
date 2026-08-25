@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ─── Host Transfer / Co-Host System ─────────────────────────────────────────
 (function() {
   'use strict';
@@ -39,8 +41,8 @@
     overlay.innerHTML = '<div style="background:var(--bg-card);width:94%;max-width:380px;border-radius:16px;border:1px solid rgba(251,191,36,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);overflow:hidden;">' +
       // Sticky header with buttons
       '<div style="padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#78350f,#b45309);">' +
-        '<button type="button" onclick="document.getElementById(\'host-transfer-overlay\').remove()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fef3c7;border:1px solid rgba(255,255,255,0.25);">' + _tH('org.cancel') + '</button>' +
-        '<span style="font-weight:700;color:#fef3c7;font-size:0.9rem;">' + CROWN_SVG + ' ' + _tH('org.organization') + '</span>' +
+        '<button type="button" onclick="document.getElementById(\'host-transfer-overlay\').remove()" class="btn btn-sm" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:var(--sp-c-fef3c7,#fef3c7);border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));">' + _tH('org.cancel') + '</button>' +
+        '<span style="font-weight:700;color:var(--sp-c-fef3c7,#fef3c7);font-size:0.9rem;">' + CROWN_SVG + ' ' + _tH('org.organization') + '</span>' +
         '<button type="button" id="btn-confirm-host-transfer" class="btn btn-sm" style="background:#fbbf24;color:#78350f;font-weight:700;border:none;">' + _tH('org.confirm') + '</button>' +
       '</div>' +
       // Body
@@ -56,7 +58,7 @@
             '<input type="radio" name="host-type" value="cohost" checked style="margin-top:2px;accent-color:#fbbf24;">' +
             '<div><div style="font-weight:700;color:var(--text-bright);font-size:0.88rem;">' + _tH('org.share') + '</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">' + _tH('org.shareDesc') + '</div></div>' +
           '</label>' +
-          '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:rgba(255,255,255,0.03);border:2px solid var(--border-color);border-radius:12px;cursor:pointer;" id="opt-transfer">' +
+          '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:2px solid var(--border-color);border-radius:12px;cursor:pointer;" id="opt-transfer">' +
             '<input type="radio" name="host-type" value="transfer" style="margin-top:2px;accent-color:#fbbf24;">' +
             '<div><div style="font-weight:700;color:var(--text-bright);font-size:0.88rem;">' + _tH('org.transfer') + '</div><div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">' + _tH('org.transferDesc') + '</div></div>' +
           '</label>' +
@@ -411,7 +413,7 @@
         var safeEmail = email.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeUid = pUid.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var safeName = window._safeHtml(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        listHtml += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:' + (isPending ? 'default' : 'pointer') + ';background:' + (isPending ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)') + ';border:1px solid ' + (isPending ? 'rgba(251,191,36,0.3)' : 'var(--border-color)') + ';transition:background 0.2s;" ' +
+        listHtml += '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:' + (isPending ? 'default' : 'pointer') + ';background:' + window._spCor((isPending ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)'), 'background') + ';border:1px solid ' + window._spCor((isPending ? 'rgba(251,191,36,0.3)' : 'var(--border-color)'), 'borda') + ';transition:background 0.2s;" ' +
           (isPending ? '' : 'onmouseover="this.style.background=\'rgba(251,191,36,0.1)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.03)\'" onclick="document.getElementById(\'org-picker-overlay\').remove(); window._openHostTransferDialog({email:\'' + safeEmail + '\',uid:\'' + safeUid + '\',displayName:\'' + safeName + '\'},\'' + String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')"') + '>' +
           // ⭐ PONTO ÚNICO: o uid está aqui (pUid) e o perfil pode não ter resolvido ainda.
           // Semear o avatar pelo NOME devolvia círculo mudo, e o nome escrito no HTML
@@ -422,15 +424,15 @@
               window._personNameHtml(pUid, name, '') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(email) + '</div>' +
           '</div>' +
-          (isPending ? '<span style="font-size:0.65rem;color:#fbbf24;font-weight:600;white-space:nowrap;">' + _tH('org.pendingInvite') + '</span>' : '<span style="font-size:1rem;color:var(--text-muted);">›</span>') +
+          (isPending ? '<span style="font-size:0.65rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;white-space:nowrap;">' + _tH('org.pendingInvite') + '</span>' : '<span style="font-size:1rem;color:var(--text-muted);">›</span>') +
         '</div>';
       });
     }
 
     overlay.innerHTML = '<div style="background:var(--bg-card);width:94%;max-width:400px;border-radius:16px;border:1px solid rgba(251,191,36,0.3);box-shadow:0 20px 60px rgba(0,0,0,0.6);overflow:hidden;max-height:80%;display:flex;flex-direction:column;">' +
       '<div style="padding:0.75rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#78350f,#b45309);flex-shrink:0;">' +
-        '<button type="button" onclick="document.getElementById(\'org-picker-overlay\').remove()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fef3c7;border:1px solid rgba(255,255,255,0.25);">' + _tH('org.cancel') + '</button>' +
-        '<span style="font-weight:700;color:#fef3c7;font-size:0.9rem;">' + CROWN_SVG + ' ' + _tH('org.organization') + '</span>' +
+        '<button type="button" onclick="document.getElementById(\'org-picker-overlay\').remove()" class="btn btn-sm" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:var(--sp-c-fef3c7,#fef3c7);border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));">' + _tH('org.cancel') + '</button>' +
+        '<span style="font-weight:700;color:var(--sp-c-fef3c7,#fef3c7);font-size:0.9rem;">' + CROWN_SVG + ' ' + _tH('org.organization') + '</span>' +
         '<div style="width:70px;"></div>' +
       '</div>' +
       '<div style="padding:1rem;font-size:0.8rem;color:var(--text-muted);text-align:center;border-bottom:1px solid var(--border-color);flex-shrink:0;">' + _tH('org.pickParticipant') + '</div>' +

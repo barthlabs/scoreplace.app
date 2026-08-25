@@ -2041,7 +2041,7 @@ window._translations['en'] = {
   'predraw.exclusionExcessFallback': 'participants',
   'predraw.excludeOptionTitle': 'Exclude this option',
   'predraw.detectedPrefix': 'Detected: ',
-  'predraw.nashColorLegend': 'Colors indicate Nash equilibrium: <span style="color:#22c55e;">■</span> best (green) → <span style="color:#ef4444;">■</span> worst (red). Click ✕ to exclude an option and recalculate.',
+  'predraw.nashColorLegend': 'Colors indicate Nash equilibrium: <span style="color:var(--sp-c-22c55e,#22c55e);">■</span> best (green) → <span style="color:var(--sp-c-ef4444,#ef4444);">■</span> worst (red). Click ✕ to exclude an option and recalculate.',
   // Draw-prep: top-level reopen panel
   'predraw.reopenTopTeamsCur': 'Current teams: {n} ({p} participants)',
   'predraw.reopenTopPartsCur': 'Currently enrolled: {n}',
@@ -2066,7 +2066,7 @@ window._translations['en'] = {
   'predraw.incompleteFormed': 'Teams Formed',
   'predraw.incompletePossible': 'Possible Teams',
   'predraw.incompleteNoTeam': 'No Team',
-  'predraw.incompleteBody': '<strong style="color:#fbbf24;">{n} participant{s}</strong> will not be able{a} to form a complete team. What to do with {ele}?',
+  'predraw.incompleteBody': '<strong style="color:var(--sp-c-fbbf24,#fbbf24);">{n} participant{s}</strong> will not be able{a} to form a complete team. What to do with {ele}?',
   'predraw.incompleteAnonymous': 'Names are not revealed to avoid influencing the decision.',
   'predraw.itdStandby': 'Waitlist',
   'predraw.itdStandbyDesc': 'Participants without a team go to the waitlist and can replace no-shows.',

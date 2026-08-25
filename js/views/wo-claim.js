@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // wo-claim.js — W.O. APONTADO POR PARTICIPANTE, canônico (v3.1.72)
 //
 // "Faltou alguém?" pros próprios JOGADORES, em QUALQUER torneio que (a) NÃO
@@ -333,7 +335,7 @@
         if (claim.status === 'disputed') { label = _cpt ? '⚠️ Contestado' : '⚠️ W.O. contestado'; bg = 'rgba(239,68,68,0.14)'; col = '#f87171'; bd = 'rgba(239,68,68,0.45)'; }
         else if (claim.outcomeStage && claim.outcomeStage !== 'resolved') { label = _cpt ? '⏳ Desfecho' : '⏳ Definindo desfecho'; bg = 'rgba(99,102,241,0.14)'; col = '#a5b4fc'; bd = 'rgba(99,102,241,0.45)'; }
         else { label = _cpt ? '⏳ Apontado' : '⏳ Falta apontada'; bg = 'rgba(251,191,36,0.14)'; col = '#fbbf24'; bd = 'rgba(251,191,36,0.45)'; }
-        return '<button type="button" class="btn ' + _sz + ' hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;font-size:' + _fs + ';border-radius:8px;padding:' + (_cpt ? '3px 8px' : '4px 10px') + ';flex-shrink:0;">' + label + '</button>';
+        return '<button type="button" class="btn ' + _sz + ' hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(bd, 'borda') + ';color:' + window._spCor(col, 'color') + ';font-weight:800;font-size:' + _fs + ';border-radius:8px;padding:' + (_cpt ? '3px 8px' : '4px 10px') + ';flex-shrink:0;">' + label + '</button>';
       }
       if (rc.done) return '';
       if (!iAmPlayer && !canMng) return '';
@@ -363,7 +365,7 @@
 
   function _header(title) {
     return '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#7f1d1d,#991b1b);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
-      '<button type="button" onclick="window._woCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-weight:700;">‹ Voltar</button>' +
+      '<button type="button" onclick="window._woCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:#fff;border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));font-weight:700;">‹ Voltar</button>' +
       '<span style="font-weight:800;color:#fff;font-size:0.92rem;">' + title + '</span>' +
       '<span style="width:54px;"></span>' +
       '</div>';
@@ -402,8 +404,8 @@
         var _pNm = (_pUid && typeof window._displayNameForUid === 'function') ? window._displayNameForUid(_pUid, '') : '';
         var _choiceLbl = function (ch) { return ch === 'advance' ? 'Desclassificar (adversário avança)' : ch === 'waitlistSub' ? 'Puxar suplente da lista de espera' : ch === 'ghost' ? 'Jogador X (o parceiro segue)' : String(ch || ''); };
         var _proposeBtn = '<button type="button" onclick="window._woOutcomeOverlay(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\',null,\'propose\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Propor desfecho</button>';
-        var _orgDecideBtn = '<button type="button" onclick="window._woOutcomeOverlay(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\',null,\'org\')" class="btn" style="flex:1;background:rgba(99,102,241,0.14);color:#a5b4fc;border:1px solid rgba(99,102,241,0.5);font-weight:800;border-radius:10px;padding:10px;">Decidir o desfecho (org.)</button>';
-        var nInfo = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span> · <span style="color:#34d399;font-weight:700;font-size:0.82rem;">falta confirmada</span></div>';
+        var _orgDecideBtn = '<button type="button" onclick="window._woOutcomeOverlay(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\',null,\'org\')" class="btn" style="flex:1;background:rgba(99,102,241,0.14);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.5);font-weight:800;border-radius:10px;padding:10px;">Decidir o desfecho (org.)</button>';
+        var nInfo = '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span> · <span style="color:var(--sp-c-34d399,#34d399);font-weight:700;font-size:0.82rem;">falta confirmada</span></div>';
         var nAct = '';
         if (claim.outcomeStage === 'awaiting-proposal') {
           nInfo += '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">' + (iAmPartner ? 'Você ficou no jogo — proponha como ele continua.' : (_pNm ? _esc(_pNm) + ' vai propor o desfecho.' : 'O parceiro que ficou vai propor o desfecho.')) + '</div>';
@@ -415,7 +417,7 @@
           nInfo += '<div style="margin-top:12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.35);border-radius:12px;padding:11px 13px;"><div style="font-size:0.72rem;color:var(--text-muted);">Proposta</div><div style="font-weight:800;color:var(--text-bright);margin-top:2px;">' + _esc(_choiceLbl(_prop.choice)) + '</div></div>';
           if (iAmOpp) {
             nAct = '<div style="display:flex;gap:8px;margin-top:14px;">' +
-              '<button type="button" onclick="window._woRejectOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">❌ Rejeitar</button>' +
+              '<button type="button" onclick="window._woRejectOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">❌ Rejeitar</button>' +
               '<button type="button" onclick="window._woAcceptOutcome(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">✅ Aceitar</button>' +
             '</div>';
           } else {
@@ -423,7 +425,7 @@
           }
           if (iAmOrg && !iAmOpp) nAct += '<div style="display:flex;gap:8px;margin-top:8px;">' + _orgDecideBtn + '</div>';
         } else if (claim.outcomeStage === 'escalated') {
-          nInfo += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:#f87171;">⚖️ Sem acordo</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide o desfecho.</div></div>';
+          nInfo += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:var(--sp-c-f87171,#f87171);">⚖️ Sem acordo</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide o desfecho.</div></div>';
           nAct = iAmOrg ? '<div style="display:flex;gap:8px;margin-top:14px;">' + _orgDecideBtn + '</div>'
             : '<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);text-align:center;">O organizador vai decidir o desfecho…</div>';
         }
@@ -440,12 +442,12 @@
         (claim.selfDeclared ? 'O próprio jogador avisou — não precisa de confirmação.' : 'O W.O. só vale quando o outro lado confirma.') + '</div>';
       var actions = '';
       if (claim.status === 'disputed') {
-        info += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:#f87171;">⚠️ Contestado</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide.</div></div>';
+        info += '<div style="margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:12px;padding:12px;text-align:center;"><div style="font-weight:900;color:var(--sp-c-f87171,#f87171);">⚠️ Contestado</div><div style="font-size:0.82rem;color:var(--text-bright);margin-top:3px;">O organizador decide.</div></div>';
         if (iAmOrg) {
           // Contestado: o organizador DECIDE — Reverter (azul, derruba o apontamento
           // avisando todos) à esquerda de Aplicar W.O. (org.).
           actions = '<div style="display:flex;gap:8px;margin-top:14px;">' +
-            '<button type="button" onclick="window._woResolveDiscard(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.5);font-weight:800;border-radius:10px;padding:10px;">↩️ Reverter</button>' +
+            '<button type="button" onclick="window._woResolveDiscard(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(59,130,246,0.12);color:var(--sp-c-60a5fa,#60a5fa);border:1px solid rgba(59,130,246,0.5);font-weight:800;border-radius:10px;padding:10px;">↩️ Reverter</button>' +
             '<button type="button" onclick="window._woResolveApply(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">Aplicar W.O. (org.)</button>' +
           '</div>';
         }
@@ -453,7 +455,7 @@
         // "Os demais" (o outro lado): Cancelar (NEGA o W.O. → vira contestado, o
         // organizador decide) à esquerda + Confirmar à direita.
         actions = '<div style="display:flex;gap:8px;margin-top:14px;">' +
-          '<button type="button" onclick="window._woContest(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
+          '<button type="button" onclick="window._woContest(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(239,68,68,0.12);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.4);font-weight:800;border-radius:10px;padding:10px;">Cancelar</button>' +
           '<button type="button" onclick="window._woConfirm(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:10px;">✅ Confirmar</button>' +
         '</div>';
       } else if (iAmDeclarer) {
@@ -467,7 +469,7 @@
       if (claim.status === 'pending' && (iAmDeclarer || iAmOrg)) {
         var _rowBtns = '';
         if (iAmDeclarer) {
-          _rowBtns += '<button type="button" onclick="window._woCancel(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.5);font-weight:800;border-radius:10px;padding:9px;font-size:0.8rem;">↩️ Reverter</button>';
+          _rowBtns += '<button type="button" onclick="window._woCancel(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn" style="flex:1;background:rgba(59,130,246,0.12);color:var(--sp-c-60a5fa,#60a5fa);border:1px solid rgba(59,130,246,0.5);font-weight:800;border-radius:10px;padding:9px;font-size:0.8rem;">↩️ Reverter</button>';
         }
         if (iAmOrg) {
           _rowBtns += '<button type="button" onclick="window._woResolveApply(\'' + _attr(t.id) + '\',\'' + _attr(claim.id) + '\')" class="btn btn-danger" style="flex:1;font-weight:800;border-radius:10px;padding:9px;font-size:0.8rem;">Aplicar agora (org.)</button>';
@@ -503,7 +505,7 @@
         ? 'background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.55);'
         : 'background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);';
       var _tag = _euMesmo
-        ? '<span style="display:block;font-size:0.7rem;font-weight:700;color:#fca5a5;margin-top:2px;">você · você confirma na tela seguinte e vale na hora</span>'
+        ? '<span style="display:block;font-size:0.7rem;font-weight:700;color:var(--sp-c-fca5a5,#fca5a5);margin-top:2px;">você · você confirma na tela seguinte e vale na hora</span>'
         : '';
       return '<button type="button" onclick="window.' + (_euMesmo ? '_woSelfConfirm' : '_woDeclare') + '(\'' + _attr(t.id) + '\',\'' + _attr(ctxKey) + '\',\'' + _attr(mb.name) + '\',\'' + _attr(_u) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;' + _sel + 'color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.92rem;">🚫 ' + _esc(_nm) + _tag + '</button>';
     }).join('');
@@ -884,7 +886,7 @@
       var oc = (o.categories && o.categories.length) ? o.categories.join(', ') : (o.gender || '');
       return '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'' + _attr(o.uid) + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.4);color:var(--text-bright);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">⚠️ ' + _esc(nm) + (oc ? ' <span style="font-weight:500;opacity:0.7;font-size:0.8rem;">(' + _esc(oc) + ')</span>' : '') + '<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Entra quebrando a categoria' + (catTxt ? ' ' + _esc(catTxt) : '') + '.</span></button>';
     }).join('');
-    var woTeam = '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'\')" class="btn" style="display:block;width:100%;text-align:left;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">🚫 Dar W.O. ao time<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Ninguém assume — o adversário vence.</span></button>';
+    var woTeam = '<button type="button" onclick="window._woResolveSubChoiceUI(\'' + _attr(t.id) + '\',\'' + _attr(gc.absentUid) + '\',\'\')" class="btn" style="display:block;width:100%;text-align:left;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:var(--sp-c-fca5a5,#fca5a5);font-weight:700;border-radius:11px;padding:11px 13px;font-size:0.9rem;">🚫 Dar W.O. ao time<br><span style="font-weight:400;font-size:0.76rem;opacity:0.7;">Ninguém assume — o adversário vence.</span></button>';
     _overlay(_header('Substituto quebra a categoria') +
       '<div style="padding:1.1rem;">' +
         '<div style="font-size:0.86rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5;"><b style="color:var(--text-bright);">' + _esc(absN) + '</b>' + (catTxt ? ' (' + _esc(catTxt) + ')' : '') + ' faltou, e nenhum suplente presente atende a categoria. Escolha quem assume — ou dê W.O. ao time.</div>' +
@@ -987,12 +989,12 @@
     });
     var _handler = mode === 'propose' ? 'window._woProposeOutcome' : 'window._woChooseOutcome';
     var _btn = function (choice, bg, col, bd, label, sub) {
-      return '<button type="button" onclick="' + _handler + '(\'' + _attr(t.id) + '\',\'' + _attr(claimId) + '\',\'' + choice + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:10px;background:' + bg + ';border:1px solid ' + bd + ';color:' + col + ';font-weight:800;border-radius:12px;padding:12px 14px;">' + label +
+      return '<button type="button" onclick="' + _handler + '(\'' + _attr(t.id) + '\',\'' + _attr(claimId) + '\',\'' + choice + '\')" class="btn hover-lift" style="display:block;width:100%;text-align:left;margin-bottom:10px;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(bd, 'borda') + ';color:' + window._spCor(col, 'color') + ';font-weight:800;border-radius:12px;padding:12px 14px;">' + label +
         '<div style="font-weight:600;font-size:0.72rem;color:var(--text-muted);margin-top:3px;">' + sub + '</div></button>';
     };
     var _lead = mode === 'propose'
       ? 'Você ficou no jogo — proponha como ele continua. O adversário aceita, ou o organizador decide.'
-      : 'Como resolver o jogo' + (partnerName ? ' de <b style="color:#fbbf24;">' + _esc(partnerName) + '</b>' : '') + '?';
+      : 'Como resolver o jogo' + (partnerName ? ' de <b style="color:var(--sp-c-fbbf24,#fbbf24);">' + _esc(partnerName) + '</b>' : '') + '?';
     var body = '<div style="padding:1.1rem;">' +
       '<div style="font-weight:800;font-size:1.0rem;color:var(--text-bright);">🚫 ' + absDisp + ' <span style="color:var(--text-muted);font-weight:600;">faltou</span></div>' +
       '<div style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 14px;">' + _lead + '</div>' +

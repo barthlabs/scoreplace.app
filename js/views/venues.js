@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — Descobrir Locais (Venues)
 // ========================================
@@ -314,8 +316,8 @@
       var safeS = String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return '<button type="button" onclick="window._venuesToggleSport(\'' + safeS + '\')" ' +
         'aria-pressed="' + sel + '" ' +
-        'style="padding:7px 12px;border-radius:999px;border:1px solid ' + bd + ';' +
-        'background:' + bg + ';color:' + col + ';font-size:0.78rem;font-weight:600;' +
+        'style="padding:7px 12px;border-radius:999px;border:1px solid ' + window._spCor(bd, 'borda') + ';' +
+        'background:' + window._spCor(bg, 'background') + ';color:' + window._spCor(col, 'color') + ';font-size:0.78rem;font-weight:600;' +
         'cursor:pointer;white-space:nowrap;transition:all 0.15s;line-height:1;' + shadow + '">' +
         _sportIcon(s) + ' ' + _safe(s) + '</button>';
     }).join('');
@@ -413,11 +415,11 @@
 
   function _venueCard(v) {
     var sportsHtml = (Array.isArray(v.sports) ? v.sports : []).slice(0, 5).map(function(s) {
-      return '<span style="font-size:0.65rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:2px 8px;border-radius:999px;">' + _safe(s) + '</span>';
+      return '<span style="font-size:0.65rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-a5b4fc,#a5b4fc);padding:2px 8px;border-radius:999px;">' + _safe(s) + '</span>';
     }).join('');
     var officialBadge = v.ownerUid
-      ? '<span style="font-size:0.6rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#10b981;padding:1px 7px;border-radius:999px;font-weight:700;">✅ oficial</span>'
-      : (v.createdByName ? '<span style="font-size:0.6rem;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);color:#94a3b8;padding:1px 7px;border-radius:999px;">comunidade</span>' : '');
+      ? '<span style="font-size:0.6rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:var(--sp-c-10b981,#10b981);padding:1px 7px;border-radius:999px;font-weight:700;">✅ oficial</span>'
+      : (v.createdByName ? '<span style="font-size:0.6rem;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);color:var(--sp-c-94a3b8,#94a3b8);padding:1px 7px;border-radius:999px;">comunidade</span>' : '');
     var distText = '';
     if (state.center && v.lat != null && v.lon != null) {
       var d = _haversineKm(state.center, { lat: Number(v.lat), lng: Number(v.lon) });
@@ -450,11 +452,11 @@
   // (sem GPS, chegou antes do radar detectar, ou quer planejar pra depois).
   function _preferredCardMatched(v) {
     var sportsHtml = (Array.isArray(v.sports) ? v.sports : []).slice(0, 5).map(function(s) {
-      return '<span style="font-size:0.65rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:2px 8px;border-radius:999px;">' + _safe(s) + '</span>';
+      return '<span style="font-size:0.65rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-a5b4fc,#a5b4fc);padding:2px 8px;border-radius:999px;">' + _safe(s) + '</span>';
     }).join('');
     var officialBadge = v.ownerUid
-      ? '<span style="font-size:0.6rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#10b981;padding:1px 7px;border-radius:999px;font-weight:700;">✅ oficial</span>'
-      : (v.createdByName ? '<span style="font-size:0.6rem;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);color:#94a3b8;padding:1px 7px;border-radius:999px;">comunidade</span>' : '');
+      ? '<span style="font-size:0.6rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:var(--sp-c-10b981,#10b981);padding:1px 7px;border-radius:999px;font-weight:700;">✅ oficial</span>'
+      : (v.createdByName ? '<span style="font-size:0.6rem;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);color:var(--sp-c-94a3b8,#94a3b8);padding:1px 7px;border-radius:999px;">comunidade</span>' : '');
     var distText = '';
     if (state.center && v.lat != null && v.lon != null) {
       var d = _haversineKm(state.center, { lat: Number(v.lat), lng: Number(v.lon) });
@@ -535,7 +537,7 @@
         '\'' + _safe(String(p.address || '').replace(/'/g, "\\'")) + '\',' +
         (p.lat != null ? Number(p.lat) : 'null') + ',' +
         (p.lng != null ? Number(p.lng) : 'null') +
-        ')" style="flex-shrink:0;white-space:nowrap;font-size:0.66rem;font-weight:700;padding:3px 9px;line-height:1.3;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.45);color:#a5b4fc;border-radius:999px;cursor:pointer;" title="Cadastrar este local no scoreplace">+<span class="gv-register-label"> Cadastrar</span></button>'
+        ')" style="flex-shrink:0;white-space:nowrap;font-size:0.66rem;font-weight:700;padding:3px 9px;line-height:1.3;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.45);color:var(--sp-c-a5b4fc,#a5b4fc);border-radius:999px;cursor:pointer;" title="Cadastrar este local no scoreplace">+<span class="gv-register-label"> Cadastrar</span></button>'
       : '';
     return '<div onclick="window._openExternalUrl(\'' + _safe(mapsUrl) + '\')" style="display:flex;align-items:center;gap:10px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;padding:12px 14px;cursor:pointer;">' +
       '<div style="flex:1;min-width:0;">' +
@@ -544,7 +546,7 @@
       '</div>' +
       (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);min-width:36px;text-align:right;">' + _safe(distText) + '</div>' : '') +
       registerBtn +
-      '<span style="flex-shrink:0;font-size:0.64rem;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.25);color:#94a3b8;padding:2px 8px;border-radius:999px;">Google</span>' +
+      '<span style="flex-shrink:0;font-size:0.64rem;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.25);color:var(--sp-c-94a3b8,#94a3b8);padding:2px 8px;border-radius:999px;">Google</span>' +
     '</div>';
   }
 
@@ -555,9 +557,9 @@
     var safeId = _safe(p.placeId || '');
     if (ev) {
       // Registered → compact one-liner, click opens venue detail with courts etc.
-      return '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg-card);border:2px solid ' + borderColor + ';border-radius:12px;padding:10px 14px;margin-bottom:14px;">' +
+      return '<div onclick="window._venuesOpenDetail(\'' + safeId + '\')" style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg-card);border:2px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:12px;padding:10px 14px;margin-bottom:14px;">' +
         '<span style="font-weight:700;color:var(--text-bright);font-size:0.9rem;flex:1;min-width:0;word-break:break-word;">📍 ' + safeName + '</span>' +
-        '<span style="flex-shrink:0;display:flex;align-items:center;gap:3px;font-size:0.78rem;font-weight:700;color:#10b981;white-space:nowrap;">✅ Score</span>' +
+        '<span style="flex-shrink:0;display:flex;align-items:center;gap:3px;font-size:0.78rem;font-weight:700;color:var(--sp-c-10b981,#10b981);white-space:nowrap;">✅ Score</span>' +
       '</div>';
     } else {
       var mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.name || '') +
@@ -566,10 +568,10 @@
       // that deep-links into #my-venues with the place data pre-stashed, so
       // the user doesn't have to re-search the same place there.
       var registerBtn = p.placeId ? '<button onclick="window._venuesRegisterPlace(event)" class="btn btn-sm btn-primary hover-lift" style="flex-shrink:0;white-space:nowrap;font-size:0.72rem;padding:4px 10px;">+ Cadastrar</button>' : '';
-      return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg-card);border:2px solid ' + borderColor + ';border-radius:12px;padding:10px 14px;margin-bottom:14px;">' +
+      return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg-card);border:2px solid ' + window._spCor(borderColor, 'borda') + ';border-radius:12px;padding:10px 14px;margin-bottom:14px;">' +
         '<span style="font-weight:700;color:var(--text-bright);font-size:0.9rem;flex:1;min-width:0;word-break:break-word;">📍 ' + safeName + '</span>' +
         registerBtn +
-        '<a href="' + _safe(mapsUrl) + '" target="_blank" rel="noopener" style="flex-shrink:0;font-size:0.72rem;color:#94a3b8;white-space:nowrap;text-decoration:none;" title="Abrir no Google Maps">🗺️</a>' +
+        '<a href="' + _safe(mapsUrl) + '" target="_blank" rel="noopener" style="flex-shrink:0;font-size:0.72rem;color:var(--sp-c-94a3b8,#94a3b8);white-space:nowrap;text-decoration:none;" title="Abrir no Google Maps">🗺️</a>' +
       '</div>';
     }
   }
@@ -903,13 +905,13 @@
         ? ' / ' + venueCapacity + ' (' + totalPct + '%)'
         : ' (escala estimada — local sem quadras cadastradas)';
       bars += '<div data-hour="' + slot + '" title="' + labelH + 'h: ' + total + ' pessoa(s)' + tooltipExtra + '" style="flex:0 0 28px;display:flex;flex-direction:column;align-items:center;gap:2px;' + (isNow ? 'transform:scale(1.05);' : '') + '">' +
-        '<div style="position:relative;height:90px;width:20px;display:flex;flex-direction:column-reverse;border-radius:4px;background:' + (isNow ? 'rgba(99,102,241,0.1)' : 'rgba(150,150,150,0.08)') + ';overflow:hidden;' + (isNow ? 'outline:2px solid rgba(99,102,241,0.4);' : '') + '">' +
+        '<div style="position:relative;height:90px;width:20px;display:flex;flex-direction:column-reverse;border-radius:4px;background:' + window._spCor((isNow ? 'rgba(99,102,241,0.1)' : 'rgba(150,150,150,0.08)'), 'background') + ';overflow:hidden;' + (isNow ? 'outline:2px solid rgba(99,102,241,0.4);' : '') + '">' +
           (total > 0
             ? '<div style="height:' + totalPct + '%;width:100%;background:#fbbf24;"></div>'
             : '') +
           (total > 0 ? '<span style="position:absolute;top:2px;left:0;right:0;text-align:center;font-size:0.6rem;font-weight:700;color:var(--text-bright);text-shadow:0 1px 2px rgba(0,0,0,0.5);">' + total + '</span>' : '') +
         '</div>' +
-        '<span style="font-size:0.65rem;color:' + labelColor + ';font-weight:' + (isNow ? 700 : 500) + ';">' + labelH + '</span>' +
+        '<span style="font-size:0.65rem;color:' + window._spCor(labelColor, 'color') + ';font-weight:' + (isNow ? 700 : 500) + ';">' + labelH + '</span>' +
       '</div>';
     });
 
@@ -961,7 +963,7 @@
           '<span style="font-size:0.7rem;color:var(--text-muted);flex:1;min-width:180px;">' +
             '⚠️ Escala estimada — local sem quadras cadastradas.' +
           '</span>' +
-          '<a href="#my-venues" onclick="' + clickHandler + '" style="font-size:0.72rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);padding:4px 10px;border-radius:8px;text-decoration:none;white-space:nowrap;">🎾 Cadastrar quadras →</a>' +
+          '<a href="#my-venues" onclick="' + clickHandler + '" style="font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);padding:4px 10px;border-radius:8px;text-decoration:none;white-space:nowrap;">🎾 Cadastrar quadras →</a>' +
         '</div>';
     }
     // v1.0.18-beta: título dinâmico — "Movimento hoje" / "Movimento amanhã"
@@ -1032,8 +1034,8 @@
         else if (p.uid && _planStartByUid[p.uid] != null && _planStartByUid[p.uid] > p.startsAt) { subtitle = '✅ chegou antes · planejou ' + _hhmm(_planStartByUid[p.uid]); }
         var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';
         var avatar = p.photoURL
-          ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:40px;height:40px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';flex-shrink:0;">'
-          : '<div style="width:40px;height:40px;min-width:40px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;border:2px solid ' + borderColor + ';flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
+          ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:40px;height:40px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor(borderColor, 'borda') + ';flex-shrink:0;">'
+          : '<div style="width:40px;height:40px;min-width:40px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.9rem;border:2px solid ' + window._spCor(borderColor, 'borda') + ';flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
         // v0.16.32: botão "Sair" discreto, bold, maior, inline logo depois
         // do nome "Você" — sem círculo, sem sobreposição na foto.
         // v0.16.65: usa p.placeId do próprio doc com fallback pra realPid (igual
@@ -1168,8 +1170,8 @@
       var borderColor = late ? '#f59e0b' : (klass === 'me' ? '#10b981' : '#fbbf24');
       var lateIcon = late ? '<span title="Atrasado — planejou chegar às ' + _hhmmU(p.startsAt) + ', ainda sem check-in" style="font-size:0.85rem;line-height:1;flex-shrink:0;">⏰</span>' : '';
       var avatar = p.photoURL
-        ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:26px;height:26px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">'
-        : '<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.68rem;border:2px solid ' + borderColor + ';box-sizing:border-box;flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
+        ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:26px;height:26px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor(borderColor, 'borda') + ';box-sizing:border-box;flex-shrink:0;">'
+        : '<div style="width:26px;height:26px;min-width:26px;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.68rem;border:2px solid ' + window._spCor(borderColor, 'borda') + ';box-sizing:border-box;flex-shrink:0;">' + _safe(_initials(name)) + '</div>';
       var cancelBtn = '';
       var pidForCancel = p.placeId || realPid || '';
       if (klass === 'me' && p._id) {
@@ -1179,7 +1181,7 @@
       }
       var chipSports = Array.isArray(p.sports) ? p.sports : [];
       var iconStr = _sportsIcons(chipSports);
-      return '<div title="' + (late ? 'Atrasado — sem check-in' : '') + '" style="display:inline-flex;align-items:center;gap:6px;background:' + (late ? 'rgba(245,158,11,0.16)' : 'rgba(251,191,36,0.08)') + ';border:1px solid ' + (late ? 'rgba(245,158,11,0.55)' : 'rgba(251,191,36,0.25)') + ';border-radius:999px;padding:3px 10px 3px 6px;min-width:0;height:36px;box-sizing:border-box;line-height:1;">' +
+      return '<div title="' + (late ? 'Atrasado — sem check-in' : '') + '" style="display:inline-flex;align-items:center;gap:6px;background:' + window._spCor((late ? 'rgba(245,158,11,0.16)' : 'rgba(251,191,36,0.08)'), 'background') + ';border:1px solid ' + window._spCor((late ? 'rgba(245,158,11,0.55)' : 'rgba(251,191,36,0.25)'), 'borda') + ';border-radius:999px;padding:3px 10px 3px 6px;min-width:0;height:36px;box-sizing:border-box;line-height:1;">' +
         lateIcon +
         (iconStr ? '<span title="' + _safe(chipSports.join(', ')) + '" style="font-size:0.88rem;line-height:1;flex-shrink:0;">' + iconStr + '</span>' : '') +
         avatar +
@@ -1257,8 +1259,8 @@
       tOrder.forEach(function(tk) {
         var grp = byTournament[tk];
         var titleAttr = grp.id
-          ? ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:#fbbf24;margin-bottom:6px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(grp.id) + '\'"'
-          : ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:#fbbf24;margin-bottom:6px;"';
+          ? ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:6px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(grp.id) + '\'"'
+          : ' style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:6px;"';
         var grpR = _renderPeople(grp.people, grp.other);
         inner += '<div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:8px 10px;">' +
           '<div' + titleAttr + '>🏆 ' + _safe(grp.name) + '</div>' +
@@ -1619,7 +1621,7 @@
           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">do seu perfil · não cadastrado</div>' +
         '</div>' +
         (distText ? '<div style="flex-shrink:0;font-size:0.74rem;font-weight:600;color:var(--text-muted);text-align:right;min-width:36px;">' + _safe(distText) + '</div>' : '') +
-        '<a href="' + _safe(mapsUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Ver no Google Maps" style="flex-shrink:0;font-size:0.85rem;color:#94a3b8;text-decoration:none;padding:4px 6px;border-radius:6px;">🗺️</a>' +
+        '<a href="' + _safe(mapsUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="Ver no Google Maps" style="flex-shrink:0;font-size:0.85rem;color:var(--sp-c-94a3b8,#94a3b8);text-decoration:none;padding:4px 6px;border-radius:6px;">🗺️</a>' +
         // v3.1.61: coração de preferido (cheio) à direita — clicar remove dos preferidos.
         '<button type="button" onclick="event.stopPropagation();window._venuesTogglePreferredFromList(this)" title="Remover dos locais preferidos" style="background:none;border:none;cursor:pointer;font-size:1.4rem;line-height:1;flex-shrink:0;padding:0 2px;align-self:center;">❤️</button>' +
       '</div>' +
@@ -1778,8 +1780,8 @@
     if (focusedResolved) {
       html += '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">' +
-        '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;">⭐ ' + (fp.type === 'planned' ? 'Plano ativo' : 'Você está aqui') + '</div>' +
-        '<button type="button" onclick="window._venuesClearFocusedPreferred()" style="background:none;border:none;color:#94a3b8;font-size:0.72rem;font-weight:600;cursor:pointer;padding:2px 6px;" title="Ver todos os preferidos">ver todos ↗</button>' +
+        '<div style="font-size:0.7rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.5px;">⭐ ' + (fp.type === 'planned' ? 'Plano ativo' : 'Você está aqui') + '</div>' +
+        '<button type="button" onclick="window._venuesClearFocusedPreferred()" style="background:none;border:none;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.72rem;font-weight:600;cursor:pointer;padding:2px 6px;" title="Ver todos os preferidos">ver todos ↗</button>' +
       '</div>';
       // v0.16.28: slots de chart/agora/próximas agora vivem DENTRO do card
       // (pref-chart-* / pref-now-* / pref-upcoming-*), populados por
@@ -1790,7 +1792,7 @@
       html += '</div></div>';
     } else if (resolvedPreferred.length > 0) {
       html += '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
-      html += '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Locais preferidos</div>';
+      html += '<div style="font-size:0.7rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Locais preferidos</div>';
       html += '<div style="display:flex;flex-direction:column;gap:6px;">';
       resolvedPreferred.forEach(function(x) {
         if (x.match) html += _preferredCardMatched(x.match);
@@ -1803,9 +1805,9 @@
       // errado durante o gap async entre simulateLoginSuccess e profile merge —
       // usuário com preferreds salvos via "Marque seus lugares" mesmo tendo.
       html += '<div style="background:rgba(251,191,36,0.06);border:1px dashed rgba(251,191,36,0.35);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
-      html += '<div style="font-size:0.7rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Locais preferidos</div>';
+      html += '<div style="font-size:0.7rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Locais preferidos</div>';
       html += '<div style="font-size:0.82rem;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">Marque seus lugares favoritos no perfil e eles aparecem aqui primeiro.</div>';
-      html += '<button type="button" onclick="if(window._openMyProfileModal)window._openMyProfileModal();else window.location.hash=\'#dashboard\';" style="background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:#fbbf24;border-radius:10px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">Adicionar no perfil →</button>';
+      html += '<button type="button" onclick="if(window._openMyProfileModal)window._openMyProfileModal();else window.location.hash=\'#dashboard\';" style="background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);border-radius:10px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">Adicionar no perfil →</button>';
       html += '</div>';
     } else if (cu && !cu._profileLoaded) {
       // Profile ainda carregando — mostra loading sutil sem CTA enganoso.
@@ -1823,13 +1825,13 @@
     // PLANO ATIVO e SUGESTÕES DO GOOGLE que confundia o usuário ("cadê os
     // locais cadastrados?"). Empty state agora explica + dá CTA pra cadastrar.
     html += '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.22);border-radius:14px;padding:10px 12px;margin-bottom:14px;">';
-    html += '<div style="font-size:0.7rem;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🏢 Outros locais no scoreplace</div>';
+    html += '<div style="font-size:0.7rem;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🏢 Outros locais no scoreplace</div>';
     if (spResults.length > 0) {
       html += '<div style="display:flex;flex-direction:column;gap:6px;">';
       displaySP.forEach(function(v) { html += _venueCard(v); });
       html += '</div>';
       if (spResults.length > SHOW_LIMIT && !state.showAllSP) {
-        html += '<button onclick="window._venuesShowAllSP()" style="margin-top:8px;background:none;border:none;color:#a5b4fc;font-size:0.82rem;cursor:pointer;padding:2px 0;">Mostrar mais (' + (spResults.length - SHOW_LIMIT) + ' locais) →</button>';
+        html += '<button onclick="window._venuesShowAllSP()" style="margin-top:8px;background:none;border:none;color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.82rem;cursor:pointer;padding:2px 0;">Mostrar mais (' + (spResults.length - SHOW_LIMIT) + ' locais) →</button>';
       }
     } else {
       // Empty state — diferencia 2 casos: (a) DB vazio na região e (b) tem
@@ -1840,7 +1842,7 @@
         var newRadius = Math.max(50, state.distanceKm * 2);
         html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
           '<div style="flex:1;min-width:180px;font-size:0.78rem;color:var(--text-muted);line-height:1.4;">' +
-            '<b style="color:#a5b4fc;">' + venuesOutsideRadius + ' local(is)</b> cadastrado(s) fora do raio atual de <b>' + state.distanceKm + 'km</b>. Expandir busca?' +
+            '<b style="color:var(--sp-c-a5b4fc,#a5b4fc);">' + venuesOutsideRadius + ' local(is)</b> cadastrado(s) fora do raio atual de <b>' + state.distanceKm + 'km</b>. Expandir busca?' +
           '</div>' +
           '<button type="button" onclick="window._venuesExpandRadius(' + newRadius + ')" class="btn btn-sm btn-primary hover-lift" style="white-space:nowrap;font-size:0.78rem;">📡 Expandir pra ' + newRadius + 'km</button>' +
         '</div>';
@@ -2226,12 +2228,12 @@
     }).slice(0, 5);
     if (matchedSP.length > 0) {
       var spHdr = document.createElement('div');
-      spHdr.style.cssText = 'padding:5px 14px 4px;font-size:0.66rem;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;';
+      spHdr.style.cssText = 'padding:5px 14px 4px;font-size:0.66rem;color:var(--sp-c-a5b4fc,#a5b4fc);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;';
       spHdr.textContent = '🏢 No scoreplace';
       box.appendChild(spHdr);
       matchedSP.forEach(function(v) {
         var item = document.createElement('div');
-        item.style.cssText = 'padding:9px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);';
+        item.style.cssText = 'padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));';
         item.innerHTML = '<div style="color:var(--text-bright);font-size:0.88rem;font-weight:600;">✅ ' + _safe(v.name) + '</div>' +
           (v.address ? '<div style="color:var(--text-muted);font-size:0.74rem;margin-top:1px;">' + _safe(v.address) + '</div>' : '');
         item.addEventListener('mouseenter', function() { item.style.background = 'rgba(16,185,129,0.1)'; });
@@ -2267,7 +2269,7 @@
     if (sugs.length > 0) {
       if (hasAny) {
         var gHdr = document.createElement('div');
-        gHdr.style.cssText = 'padding:5px 14px 4px;font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;border-top:1px solid rgba(255,255,255,0.08);';
+        gHdr.style.cssText = 'padding:5px 14px 4px;font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));';
         gHdr.textContent = '📍 Google Places';
         box.appendChild(gHdr);
       }
@@ -2276,7 +2278,7 @@
         var main = pred.mainText ? pred.mainText.text : '';
         var sec = pred.secondaryText ? pred.secondaryText.text : '';
         var item = document.createElement('div');
-        item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);';
+        item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));';
         item.innerHTML = '<div style="color:var(--text-bright);font-size:0.88rem;font-weight:500;">📍 ' + _safe(main) + '</div>' +
           (sec ? '<div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px;">' + _safe(sec) + '</div>' : '');
         item.addEventListener('mouseenter', function() { item.style.background = 'rgba(99,102,241,0.12)'; });
@@ -2853,9 +2855,9 @@
     return '<div style="background:linear-gradient(135deg, rgba(59,130,246,0.12), rgba(99,102,241,0.12));border:1px solid rgba(99,102,241,0.35);border-radius:10px;padding:12px;">' +
       '<div style="font-weight:700;color:var(--text-bright);font-size:0.85rem;margin-bottom:8px;">📊 Seu painel (dono)</div>' +
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">' +
-        '<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#a5b4fc;">' + views + '</div><div style="font-size:0.68rem;color:var(--text-muted);">visualizações</div></div>' +
-        '<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#fbbf24;">' + weekCount + '</div><div style="font-size:0.68rem;color:var(--text-muted);">check-ins (7 dias)</div></div>' +
-        '<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#10b981;">' + totalTournaments + '</div><div style="font-size:0.68rem;color:var(--text-muted);">torneios no local</div></div>' +
+        '<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);">' + views + '</div><div style="font-size:0.68rem;color:var(--text-muted);">visualizações</div></div>' +
+        '<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + weekCount + '</div><div style="font-size:0.68rem;color:var(--text-muted);">check-ins (7 dias)</div></div>' +
+        '<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:var(--sp-c-10b981,#10b981);">' + totalTournaments + '</div><div style="font-size:0.68rem;color:var(--text-muted);">torneios no local</div></div>' +
       '</div>' +
     '</div>';
   }
@@ -2903,7 +2905,7 @@
     var prev = document.getElementById('venues-detail-overlay');
     if (prev) prev.remove();
     var sportsHtml = (Array.isArray(v.sports) ? v.sports : []).map(function(s) {
-      return '<span style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;font-size:0.72rem;padding:3px 10px;border-radius:999px;margin-right:4px;">' + _safe(s) + '</span>';
+      return '<span style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;padding:3px 10px;border-radius:999px;margin-right:4px;">' + _safe(s) + '</span>';
     }).join('');
     var contactBits = [];
     var c = v.contact || {};
@@ -2945,9 +2947,9 @@
     // Tags de proveniência: "✅ Informações oficiais" quando reivindicado;
     // "📝 Cadastrado por [nome]" quando é cadastro comunitário.
     var ownershipTag = v.ownerUid
-      ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;font-weight:600;color:#10b981;opacity:0.85;">✅ oficial</span>'
+      ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.68rem;font-weight:600;color:var(--sp-c-10b981,#10b981);opacity:0.85;">✅ oficial</span>'
       : (v.createdByName
-          ? '<span title="Cadastro comunitário — pode não refletir 100% a realidade até o proprietário reivindicar." style="display:inline-flex;flex-direction:column;font-size:0.65rem;color:#64748b;line-height:1.3;opacity:0.8;">🤝 comunidade<span>por ' + _safe(v.createdByName) + '</span></span>'
+          ? '<span title="Cadastro comunitário — pode não refletir 100% a realidade até o proprietário reivindicar." style="display:inline-flex;flex-direction:column;font-size:0.65rem;color:var(--sp-c-64748b,#64748b);line-height:1.3;opacity:0.8;">🤝 comunidade<span>por ' + _safe(v.createdByName) + '</span></span>'
           : '');
     // Header buttons: Editar (always when user can edit) + Reivindicar (when
     // unclaimed and logged in). Reivindicar moved from body into the header's
@@ -3048,7 +3050,7 @@
               private:             { icon: '🔒', category: 'Acesso restrito',  label: 'Privado',                       bg: 'rgba(239,68,68,0.12)',   color: '#f87171' }
             }[ap] || null;
             if (!apCfg) return '';
-            return '<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:' + apCfg.bg + ';color:' + apCfg.color + ';border:1px solid ' + apCfg.color + '40;font-size:0.72rem;font-weight:700;margin-bottom:10px;">' +
+            return '<div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:' + window._spCor(apCfg.bg, 'background') + ';color:' + window._spCor(apCfg.color, 'color') + ';border:1px solid ' + window._spCor(apCfg.color, 'borda') + '40;font-size:0.72rem;font-weight:700;margin-bottom:10px;">' +
               apCfg.icon + ' <span>' + apCfg.category + '</span><span style="opacity:0.6;font-weight:400;font-size:0.68rem;">· ' + apCfg.label + '</span>' +
             '</div>';
           })()) +
@@ -3103,11 +3105,11 @@
           var surfaceList = Object.keys(info.surfaces || {});
           var surfaceTxt = surfaceList.length > 0 ? ' <span style="opacity:0.6;font-weight:400;">(' + _safe(surfaceList.join(', ')) + ')</span>' : '';
           var sharedTxt = info.shared
-            ? '<span style="font-size:0.62rem;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;padding:1px 6px;border-radius:10px;margin-left:4px;">🔁 compartilhada</span>'
+            ? '<span style="font-size:0.62rem;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:var(--sp-c-fbbf24,#fbbf24);padding:1px 6px;border-radius:10px;margin-left:4px;">🔁 compartilhada</span>'
             : '';
-          return '<div style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--text-bright);padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+          return '<div style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--text-bright);padding:5px 0;border-bottom:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));">' +
             '<span style="font-size:1rem;flex-shrink:0;">' + _sportIcon(sportName) + '</span>' +
-            '<b style="color:#a5b4fc;min-width:16px;text-align:right;">' + info.count + '</b>' +
+            '<b style="color:var(--sp-c-a5b4fc,#a5b4fc);min-width:16px;text-align:right;">' + info.count + '</b>' +
             '<span>quadra' + (info.count === 1 ? '' : 's') + ' de <b>' + _safe(sportName) + '</b>' + surfaceTxt + '</span>' +
             sharedTxt +
           '</div>';
@@ -3304,9 +3306,9 @@
       var char = filled ? '★' : '☆';
       var color = filled ? '#fbbf24' : 'rgba(148,163,184,0.5)';
       if (interactive) {
-        out += '<span onclick="window._venuesPickStars(' + i + ')" style="cursor:pointer;font-size:' + size + ';color:' + color + ';padding:0 2px;" data-star="' + i + '">' + char + '</span>';
+        out += '<span onclick="window._venuesPickStars(' + i + ')" style="cursor:pointer;font-size:' + size + ';color:' + window._spCor(color, 'color') + ';padding:0 2px;" data-star="' + i + '">' + char + '</span>';
       } else {
-        out += '<span style="font-size:' + size + ';color:' + color + ';">' + char + '</span>';
+        out += '<span style="font-size:' + size + ';color:' + window._spCor(color, 'color') + ';">' + char + '</span>';
       }
     }
     return out;
@@ -3333,7 +3335,7 @@
       '<div style="font-weight:700;color:var(--text-bright);font-size:0.92rem;">⭐ Avaliações</div>' +
       (count > 0
         ? '<div style="display:inline-flex;align-items:center;gap:6px;">' +
-            '<span style="font-weight:700;color:#fbbf24;font-size:0.95rem;">' + avg.toFixed(1) + '</span>' +
+            '<span style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.95rem;">' + avg.toFixed(1) + '</span>' +
             _starsHtml(Math.round(avg), '0.9rem', false) +
             '<span style="color:var(--text-muted);font-size:0.78rem;">(' + count + (count === 1 ? ' avaliação' : ' avaliações') + ')</span>' +
           '</div>'
@@ -3419,7 +3421,7 @@
       var fieldsTxt = Array.isArray(e.fields) && e.fields.length > 0
         ? ' · <span style="color:var(--text-main);">' + _safe(e.fields.join(', ')) + '</span>'
         : '';
-      return '<div style="font-size:0.76rem;color:var(--text-muted);padding:5px 0;border-top:1px solid rgba(255,255,255,0.04);line-height:1.4;">' +
+      return '<div style="font-size:0.76rem;color:var(--text-muted);padding:5px 0;border-top:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));line-height:1.4;">' +
         icon + ' ' + verb + ' <b style="color:var(--text-bright);">' + _safe(e.userName || 'alguém') + '</b>' +
         ' · ' + fmtDate(e.timestamp) + fieldsTxt +
       '</div>';
@@ -3428,7 +3430,7 @@
       '<details style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;padding:10px 14px;">' +
         '<summary style="font-weight:700;color:var(--text-bright);font-size:0.82rem;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;">' +
           '<span>📜 Histórico de atualizações</span>' +
-          '<span style="background:rgba(99,102,241,0.2);color:#a5b4fc;font-size:0.7rem;padding:2px 8px;border-radius:999px;font-weight:600;">' + entries.length + '</span>' +
+          '<span style="background:rgba(99,102,241,0.2);color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.7rem;padding:2px 8px;border-radius:999px;font-weight:600;">' + entries.length + '</span>' +
         '</summary>' +
         '<div style="margin-top:6px;">' + rows + '</div>' +
       '</details>';

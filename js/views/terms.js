@@ -32,7 +32,7 @@
 
           // Banner alpha disclaimer
           '<div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:12px 14px;margin-bottom:1.25rem;">' +
-            '<div style="font-weight:700;font-size:0.85rem;color:#f59e0b;margin-bottom:6px;">' +
+            '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:6px;">' +
               '⚠️ ' + _t('terms.alphaBannerTitle') + '</div>' +
             '<p style="font-size:0.78rem;color:var(--text-main);line-height:1.6;margin:0;">' +
               _t('terms.alphaBannerBody') + '</p>' +
@@ -95,7 +95,7 @@
             '10. ' + _t('terms.contactTitle') + '</h2>' +
           '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0;">' +
             _t('terms.contactBody') +
-            ' <a href="mailto:' + supportEmail + '" style="color:var(--primary-color);">' +
+            ' <a href="mailto:' + supportEmail + '" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">' +
               supportEmail +
             '</a>.' +
           '</p>' +

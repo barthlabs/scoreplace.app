@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — Venue Owner (Claim + Edit)
 // ========================================
@@ -487,7 +489,7 @@
   };
   function _addSectionHeader(box, label) {
     var hdr = document.createElement('div');
-    hdr.style.cssText = 'padding:8px 14px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted);background:var(--bg-darker);border-bottom:1px solid rgba(255,255,255,0.06);';
+    hdr.style.cssText = 'padding:8px 14px;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-muted);background:var(--bg-darker);border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));';
     hdr.textContent = label;
     box.appendChild(hdr);
   }
@@ -495,12 +497,12 @@
   function _addRegisteredItem(box, venue) {
     var address = venue.address || venue.city || '';
     var claimedTag = venue.ownerUid
-      ? '<span style="font-size:0.62rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#10b981;padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;">✓ oficial</span>'
-      : '<span style="font-size:0.62rem;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;">🤝 comunitário</span>';
+      ? '<span style="font-size:0.62rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:var(--sp-c-10b981,#10b981);padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;">✓ oficial</span>'
+      : '<span style="font-size:0.62rem;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:var(--sp-c-fbbf24,#fbbf24);padding:1px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;">🤝 comunitário</span>';
     var item = document.createElement('div');
-    item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);';
-    item.innerHTML = '<div style="color:#e2e8f0;font-size:0.85rem;font-weight:500;">🏢 ' + _safe(venue.name || '') + claimedTag + '</div>' +
-      (address ? '<div style="color:#94a3b8;font-size:0.75rem;margin-top:2px;">' + _safe(address) + '</div>' : '');
+    item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));';
+    item.innerHTML = '<div style="color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.85rem;font-weight:500;">🏢 ' + _safe(venue.name || '') + claimedTag + '</div>' +
+      (address ? '<div style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.75rem;margin-top:2px;">' + _safe(address) + '</div>' : '');
     item.addEventListener('mouseenter', function() { item.style.background = 'rgba(251,191,36,0.08)'; });
     item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
     item.addEventListener('mousedown', function(ev) {
@@ -516,9 +518,9 @@
     var main = pred.mainText ? pred.mainText.text : '';
     var sec = pred.secondaryText ? pred.secondaryText.text : '';
     var item = document.createElement('div');
-    item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);';
-    item.innerHTML = '<div style="color:#e2e8f0;font-size:0.85rem;font-weight:500;">📍 ' + _safe(main) + '</div>' +
-      (sec ? '<div style="color:#94a3b8;font-size:0.75rem;margin-top:2px;">' + _safe(sec) + '</div>' : '');
+    item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));';
+    item.innerHTML = '<div style="color:var(--sp-c-e2e8f0,#e2e8f0);font-size:0.85rem;font-weight:500;">📍 ' + _safe(main) + '</div>' +
+      (sec ? '<div style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.75rem;margin-top:2px;">' + _safe(sec) + '</div>' : '');
     item.addEventListener('mouseenter', function() { item.style.background = 'rgba(129,140,248,0.15)'; });
     item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
     item.addEventListener('mousedown', function(ev) { ev.preventDefault(); _selectPlace(pred); });
@@ -574,8 +576,8 @@
     box.innerHTML = '';
     if (matched.length === 0 && googleSugs.length === 0) {
       box.innerHTML = googleError
-        ? '<div style="padding:10px;color:#f87171;font-size:0.8rem;">' + _safe(googleError) + '</div>'
-        : '<div style="padding:10px;color:#94a3b8;font-size:0.8rem;">Nada encontrado.</div>';
+        ? '<div style="padding:10px;color:var(--sp-c-f87171,#f87171);font-size:0.8rem;">' + _safe(googleError) + '</div>'
+        : '<div style="padding:10px;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.8rem;">Nada encontrado.</div>';
       box.style.display = 'block';
       _googleSuggestionsForMap = [];
       _renderOwnerMarkers();
@@ -676,7 +678,7 @@
     if (!wrap) return;
     opts = opts || {};
     if (opts.warning) {
-      wrap.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;color:#fca5a5;font-size:0.82rem;">⚠️ ' + _safe(opts.warning) + '</div>';
+      wrap.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;color:var(--sp-c-fca5a5,#fca5a5);font-size:0.82rem;">⚠️ ' + _safe(opts.warning) + '</div>';
       return;
     }
     _currentEditingPlace = place;
@@ -724,14 +726,14 @@
     var hasOtherOwner = ex.ownerUid && !imOwner;
     var canClaim = !hasOtherOwner;
     var claimBtnHtml = canClaim
-      ? '<button type="button" id="venue-owner-claim-btn" onclick="window._venueOwnerToggleClaim()" data-claimed="' + (imClaimed ? '1' : '0') + '" style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;cursor:pointer;border:1px solid ' + (imClaimed ? 'rgba(16,185,129,0.5)' : 'rgba(251,191,36,0.4)') + ';background:' + (imClaimed ? 'rgba(16,185,129,0.15)' : 'rgba(251,191,36,0.1)') + ';color:' + (imClaimed ? '#10b981' : '#fbbf24') + ';">' + (imClaimed ? '✅ Reivindicado por você' : '🏢 Reivindicar como proprietário') + '</button>'
+      ? '<button type="button" id="venue-owner-claim-btn" onclick="window._venueOwnerToggleClaim()" data-claimed="' + (imClaimed ? '1' : '0') + '" style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;cursor:pointer;border:1px solid ' + window._spCor((imClaimed ? 'rgba(16,185,129,0.5)' : 'rgba(251,191,36,0.4)'), 'borda') + ';background:' + window._spCor((imClaimed ? 'rgba(16,185,129,0.15)' : 'rgba(251,191,36,0.1)'), 'background') + ';color:' + window._spCor((imClaimed ? '#10b981' : '#fbbf24'), 'color') + ';">' + (imClaimed ? '✅ Reivindicado por você' : '🏢 Reivindicar como proprietário') + '</button>'
       : '<button type="button" disabled style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-muted);cursor:not-allowed;" title="Já reivindicado por outro usuário">🔒 Já reivindicado</button>';
 
     // Courts button — if venue not yet saved, auto-saves first then opens courts.
     var safePlaceId = _safe(place.placeId).replace(/\\/g, '\\\\').replace(/\'/g, "\\'");
     var courtsBtnHtml = opts.existing
-      ? '<button type="button" onclick=\'window._venueCourtAddDialog("' + safePlaceId + '")\' style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;cursor:pointer;border:1px solid rgba(99,102,241,0.5);background:rgba(99,102,241,0.15);color:#a5b4fc;">🎾 Cadastrar quadras</button>'
-      : '<button type="button" onclick=\'window._venueSaveAndOpenCourts()\' style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;cursor:pointer;border:1px solid rgba(99,102,241,0.5);background:rgba(99,102,241,0.15);color:#a5b4fc;">🎾 Cadastrar quadras</button>';
+      ? '<button type="button" onclick=\'window._venueCourtAddDialog("' + safePlaceId + '")\' style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;cursor:pointer;border:1px solid rgba(99,102,241,0.5);background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);">🎾 Cadastrar quadras</button>'
+      : '<button type="button" onclick=\'window._venueSaveAndOpenCourts()\' style="flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:0.88rem;cursor:pointer;border:1px solid rgba(99,102,241,0.5);background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);">🎾 Cadastrar quadras</button>';
 
     wrap.innerHTML =
       '<div style="background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;padding:14px;margin-top:6px;">' +
@@ -750,18 +752,18 @@
 
         // ── Logo do Local (espelha a seção do torneio) ──
         '<div id="vlogo-section" style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:12px;padding:1rem;margin-bottom:12px;">' +
-          '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#a5b4fc;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Logo do local</p>' +
+          '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:600;text-transform:uppercase;letter-spacing:1px;">Logo do local</p>' +
           '<div style="display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">' +
-            '<div id="vlogo-preview" style="width:80px;height:80px;border-radius:16px;border:2px dashed rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:rgba(0,0,0,0.2);">' +
+            '<div id="vlogo-preview" style="width:80px;height:80px;border-radius:16px;border:2px dashed rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));">' +
               '<span style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:4px;">Sem logo</span>' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:180px;">' +
-              '<button type="button" onclick="window._generateVenueLogo()" style="padding:8px 16px;border-radius:10px;border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.15);color:#a5b4fc;font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;">🎨 Gerar Logo</button>' +
+              '<button type="button" onclick="window._generateVenueLogo()" style="padding:8px 16px;border-radius:10px;border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;">🎨 Gerar Logo</button>' +
               '<div style="display:flex;gap:6px;">' +
-                '<button type="button" onclick="window._generateVenueLogo()" title="Regerar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.08);color:#a5b4fc;font-size:0.8rem;cursor:pointer;">🔄</button>' +
-                '<button type="button" id="vlogo-lock-btn" onclick="window._toggleVenueLogoLock()" title="Travar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">🔓</button>' +
-                '<button type="button" onclick="window._downloadVenueLogo()" title="Baixar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">⬇️</button>' +
-                '<button type="button" onclick="document.getElementById(\'vlogo-file-input\').click()" title="Upload de arquivo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:var(--text-muted);font-size:0.8rem;cursor:pointer;">📁</button>' +
+                '<button type="button" onclick="window._generateVenueLogo()" title="Regerar logo" style="padding:8px 10px;border-radius:10px;border:1px solid rgba(99,102,241,0.2);background:rgba(99,102,241,0.08);color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.8rem;cursor:pointer;">🔄</button>' +
+                '<button type="button" id="vlogo-lock-btn" onclick="window._toggleVenueLogoLock()" title="Travar logo" style="padding:8px 10px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-muted);font-size:0.8rem;cursor:pointer;">🔓</button>' +
+                '<button type="button" onclick="window._downloadVenueLogo()" title="Baixar logo" style="padding:8px 10px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-muted);font-size:0.8rem;cursor:pointer;">⬇️</button>' +
+                '<button type="button" onclick="document.getElementById(\'vlogo-file-input\').click()" title="Upload de arquivo" style="padding:8px 10px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-muted);font-size:0.8rem;cursor:pointer;">📁</button>' +
                 '<button type="button" class="cancel-x-btn" onclick="window._clearVenueLogo()" title="Remover logo" style="--cx-size:24px;">✕</button>' +
               '</div>' +
               '<input type="file" id="vlogo-file-input" accept="image/*" style="display:none;" onchange="window._handleVenueLogoUpload(event)">' +
@@ -823,7 +825,7 @@
         // pra reduzir chance de clique acidental.
         '<div style="display:flex;gap:6px;justify-content:space-between;align-items:center;flex-wrap:wrap;">' +
           ((opts.existing && cu && cu.uid && (opts.existing.ownerUid === cu.uid || opts.existing.createdByUid === cu.uid))
-            ? '<button type="button" class="btn btn-sm" onclick=\'window._venueOwnerDelete("' + safePlaceId + '")\' style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;">🗑️ Apagar local</button>'
+            ? '<button type="button" class="btn btn-sm" onclick=\'window._venueOwnerDelete("' + safePlaceId + '")\' style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:var(--sp-c-fca5a5,#fca5a5);">🗑️ Apagar local</button>'
             : '<span></span>') +
           '<div style="display:flex;gap:6px;">' +
             '<button type="button" class="btn btn-secondary btn-sm" onclick="window._venueOwnerCancel()">Cancelar</button>' +
@@ -920,7 +922,7 @@
     overlay.innerHTML =
       '<div style="max-width:720px;margin:0 auto;">' +
         '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">' +
-          '<button type="button" onclick="document.getElementById(\'court-dialog-overlay\').remove()" style="background:rgba(255,255,255,0.08);border:1px solid var(--border-color);color:var(--text-bright);border-radius:10px;padding:8px 14px;font-size:0.86rem;font-weight:600;cursor:pointer;">← Voltar</button>' +
+          '<button type="button" onclick="document.getElementById(\'court-dialog-overlay\').remove()" style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--border-color);color:var(--text-bright);border-radius:10px;padding:8px 14px;font-size:0.86rem;font-weight:600;cursor:pointer;">← Voltar</button>' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:0.72rem;color:var(--text-muted);">Quadras de</div>' +
             '<div style="font-weight:800;color:var(--text-bright);font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(venueName) + '</div>' +
@@ -929,7 +931,7 @@
 
         // ── + (add) button + inline form placeholder ──
         '<div style="margin-bottom:12px;">' +
-          '<button type="button" onclick="window._courtsToggleForm(null)" id="courts-add-btn" style="width:100%;padding:14px;border-radius:12px;background:rgba(99,102,241,0.15);border:2px dashed rgba(99,102,241,0.5);color:#a5b4fc;font-size:1rem;font-weight:700;cursor:pointer;">' +
+          '<button type="button" onclick="window._courtsToggleForm(null)" id="courts-add-btn" style="width:100%;padding:14px;border-radius:12px;background:rgba(99,102,241,0.15);border:2px dashed rgba(99,102,241,0.5);color:var(--sp-c-a5b4fc,#a5b4fc);font-size:1rem;font-weight:700;cursor:pointer;">' +
             '➕ Adicionar quadras' +
           '</button>' +
           '<div id="courts-form-slot" style="margin-top:8px;"></div>' +
@@ -966,16 +968,16 @@
 
     var sportPills = SPORTS.map(function(s) {
       var on = currentSports.indexOf(s) !== -1;
-      var onStyle = 'background:rgba(99,102,241,0.3);border-color:rgba(99,102,241,0.8);color:#c4b5fd;';
+      var onStyle = 'background:rgba(99,102,241,0.3);border-color:rgba(99,102,241,0.8);color:var(--sp-c-c4b5fd,#c4b5fd);';
       var offStyle = 'background:var(--bg-darker);border-color:var(--border-color);color:var(--text-main);';
       return '<button type="button" class="court-form-sport-pill" data-sport="' + _safe(s) + '" data-active="' + (on ? '1' : '') + '" ' +
         'onclick="var a=!this.dataset.active;this.dataset.active=a?\'1\':\'\';this.style.cssText=\'padding:6px 12px;border-radius:999px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid \'+' +
         '(a?\'rgba(99,102,241,0.8)\':\'var(--border-color)\')+\';background:\'+' +
         '(a?\'rgba(99,102,241,0.3)\':\'var(--bg-darker)\')+\';color:\'+' +
         '(a?\'#c4b5fd\':\'var(--text-main)\')+\';\'" ' +
-        'style="padding:6px 12px;border-radius:999px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ' + (on ? 'rgba(99,102,241,0.8)' : 'var(--border-color)') + ';' +
-        'background:' + (on ? 'rgba(99,102,241,0.3)' : 'var(--bg-darker)') + ';' +
-        'color:' + (on ? '#c4b5fd' : 'var(--text-main)') + ';">' +
+        'style="padding:6px 12px;border-radius:999px;font-size:0.8rem;font-weight:600;cursor:pointer;border:1px solid ' + window._spCor((on ? 'rgba(99,102,241,0.8)' : 'var(--border-color)'), 'borda') + ';' +
+        'background:' + window._spCor((on ? 'rgba(99,102,241,0.3)' : 'var(--bg-darker)'), 'background') + ';' +
+        'color:' + window._spCor((on ? '#c4b5fd' : 'var(--text-main)'), 'color') + ';">' +
         _sportIconFor(s) + ' ' + _safe(s) +
       '</button>';
     }).join('');
@@ -1048,7 +1050,7 @@
         var canEdit = hasOwner ? imOwner : (c.contributorUid === myUid);
         var sportList = Array.isArray(c.sports) ? c.sports : [];
         var sportsText = sportList.map(function(s) { return _sportIconFor(s) + ' ' + _safe(s); }).join(' + ');
-        var sharedTag = sportList.length > 1 ? '<span style="font-size:0.64rem;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;padding:2px 6px;border-radius:999px;margin-left:6px;">compartilhada</span>' : '';
+        var sharedTag = sportList.length > 1 ? '<span style="font-size:0.64rem;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:var(--sp-c-fbbf24,#fbbf24);padding:2px 6px;border-radius:999px;margin-left:6px;">compartilhada</span>' : '';
         var safeId = _safe(c._id).replace(/\\/g, '\\\\').replace(/\'/g, "\\'");
         html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;">' +
           '<div style="flex:1;min-width:0;">' +
@@ -1058,7 +1060,7 @@
           '</div>' +
           (canEdit
             ? '<div style="display:flex;gap:4px;flex-shrink:0;">' +
-                '<button class="btn btn-sm" onclick="window._courtsToggleForm(' + JSON.stringify(c).replace(/'/g, '&#39;').replace(/"/g, '&quot;') + ')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;padding:4px 10px;font-size:0.72rem;">Editar</button>' +
+                '<button class="btn btn-sm" onclick="window._courtsToggleForm(' + JSON.stringify(c).replace(/'/g, '&#39;').replace(/"/g, '&quot;') + ')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-a5b4fc,#a5b4fc);padding:4px 10px;font-size:0.72rem;">Editar</button>' +
                 '<button type="button" class="cancel-x-btn" title="Apagar quadra" onclick="window._venueCourtDelete(\'' + safeKey + '\',\'' + safeId + '\')" style="--cx-size:20px;">✕</button>' +
               '</div>'
             : '') +
@@ -1138,7 +1140,7 @@
     window._venueLogoLocked = !window._venueLogoLocked;
     var hl = _vlogo('locked'); if (hl) hl.value = window._venueLogoLocked ? '1' : '';
     var lb = _vlogo('lock-btn');
-    if (lb) { lb.textContent = window._venueLogoLocked ? '🔒' : '🔓'; lb.style.background = window._venueLogoLocked ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.05)'; lb.style.color = window._venueLogoLocked ? '#fbbf24' : 'var(--text-muted)'; lb.style.border = window._venueLogoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.1)'; }
+    if (lb) { lb.textContent = window._venueLogoLocked ? '🔒' : '🔓'; lb.style.background = window._venueLogoLocked ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.05)'; lb.style.color = window._venueLogoLocked ? '#fbbf24' : 'var(--text-muted)'; lb.style.border = window._venueLogoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1))'; }
   };
   window._downloadVenueLogo = function() {
     var data = (_vlogo('data') || {}).value;
@@ -1194,7 +1196,7 @@
     var prev = _vlogo('preview');
     if (prev) {
       prev.style.border = '2px dashed rgba(99,102,241,0.3)';
-      prev.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:6px;color:#a5b4fc;font-size:0.65rem;font-weight:600;text-align:center;padding:6px;"><div style="width:24px;height:24px;border:3px solid rgba(99,102,241,0.2);border-top-color:#6366f1;border-radius:50%;animation:scoreplace-spin 0.8s linear infinite;"></div><span>Gerando<br>logo IA…</span></div>';
+      prev.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:6px;color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.65rem;font-weight:600;text-align:center;padding:6px;"><div style="width:24px;height:24px;border:3px solid rgba(99,102,241,0.2);border-top-color:#6366f1;border-radius:50%;animation:scoreplace-spin 0.8s linear infinite;"></div><span>Gerando<br>logo IA…</span></div>';
       if (!document.getElementById('scoreplace-logo-keyframes')) {
         var st = document.createElement('style'); st.id = 'scoreplace-logo-keyframes'; st.textContent = '@keyframes scoreplace-spin { to { transform: rotate(360deg); } }'; document.head.appendChild(st);
       }
@@ -1343,7 +1345,7 @@
       // o abrir-edição do wrapper clicável.
       var canDelete = !!(cu && cu.uid && (v.ownerUid === cu.uid || v.createdByUid === cu.uid));
       var deleteBtn = canDelete
-        ? '<button onclick="event.stopPropagation(); window._venueOwnerDelete(\'' + safePid + '\')" title="Apagar local" style="border:none;background:transparent;color:#ef4444;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:1rem;line-height:1;" onmouseover="this.style.background=\'rgba(239,68,68,0.12)\'" onmouseout="this.style.background=\'transparent\'">🗑️</button>'
+        ? '<button onclick="event.stopPropagation(); window._venueOwnerDelete(\'' + safePid + '\')" title="Apagar local" style="border:none;background:transparent;color:var(--sp-c-ef4444,#ef4444);cursor:pointer;padding:4px 8px;border-radius:6px;font-size:1rem;line-height:1;" onmouseover="this.style.background=\'rgba(239,68,68,0.12)\'" onmouseout="this.style.background=\'transparent\'">🗑️</button>'
         : '';
       html += '<div class="hover-lift" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:12px;margin-bottom:8px;">' +
         '<div onclick="window._venueOwnerEditExisting(\'' + safePid + '\')" style="flex:1;min-width:0;cursor:pointer;">' +

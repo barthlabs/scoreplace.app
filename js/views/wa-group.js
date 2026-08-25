@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // scoreplace.app — Grupo no WhatsApp (do JOGO e do TORNEIO)
 //
 // POR QUE ESTE MÓDULO EXISTE (ler antes de mexer):
@@ -223,13 +225,13 @@
   // `bg` opcional: sem ele o botão é VERDE (grupo do jogo). O do torneio passa WA_BLUE.
   function _btn(label, onclick, extra, bg) {
     return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + onclick + '" ' +
-      'style="background:' + (bg || WA_GREEN) + ';color:#fff;font-size:0.72rem;font-weight:800;' +
+      'style="background:' + window._spCor((bg || WA_GREEN), 'background') + ';color:#fff;font-size:0.72rem;font-weight:800;' +
       'padding:4px 9px;line-height:1.05;text-align:center;border-radius:10px;' + (extra || '') + '">' +
       _icon() + label + '</button>';
   }
   function _editBtn(onclick, title) {
     return '<button type="button" class="btn btn-micro hover-lift" title="' + title + '" onclick="' + onclick + '" ' +
-      'style="background:rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.72rem;font-weight:800;padding:4px 5px;">✎</button>';
+      'style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted);font-size:0.72rem;font-weight:800;padding:4px 5px;">✎</button>';
   }
 
   // Chip do JOGO. Regra de exibição idêntica ao irmão (_schCardChip): só jogador do
@@ -373,7 +375,7 @@
   window._waGrpClose = function () { var o = document.getElementById(OVERLAY_ID); if (o) o.remove(); };
 
   function _step(n, title, bodyHtml, note) {
-    return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:10px;">' +
+    return '<div style="background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:10px;">' +
       '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">' +
         '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:rgba(37,211,102,0.18);border:1px solid rgba(37,211,102,0.5);color:#25D366;font-size:0.68rem;font-weight:800;flex-shrink:0;">' + n + '</span>' +
         '<span style="font-size:0.8rem;font-weight:700;color:var(--text-bright);">' + title + '</span>' +
@@ -396,13 +398,13 @@
   function _permsHtml() {
     var row = function (verb, color, name, body) {
       return '<div style="display:flex;gap:7px;align-items:baseline;margin-bottom:7px;">' +
-        '<span style="flex-shrink:0;font-size:0.6rem;font-weight:800;color:' + color + ';border:1px solid ' + color + ';border-radius:4px;padding:1px 5px;letter-spacing:0.03em;">' + verb + '</span>' +
+        '<span style="flex-shrink:0;font-size:0.6rem;font-weight:800;color:' + window._spCor(color, 'color') + ';border:1px solid ' + window._spCor(color, 'borda') + ';border-radius:4px;padding:1px 5px;letter-spacing:0.03em;">' + verb + '</span>' +
         '<div style="font-size:0.7rem;line-height:1.5;color:var(--text-muted);">' +
           '<b style="color:var(--text-bright);">' + name + '</b> — ' + body + '</div></div>';
     };
-    return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:10px;">' +
+    return '<div style="background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--border-color);border-radius:12px;padding:12px;margin-bottom:10px;">' +
       '<div style="font-size:0.8rem;font-weight:700;color:var(--text-bright);margin-bottom:4px;">⚙️ Deixe o grupo só seu (recomendado)</div>' +
-      '<div style="font-size:0.68rem;line-height:1.5;color:#fbbf24;margin-bottom:10px;">Faça isto <b>antes</b> de copiar o link: mexer nessas opções <b>redefine o link</b>, e o que já estiver salvo aqui para de funcionar.</div>' +
+      '<div style="font-size:0.68rem;line-height:1.5;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:10px;">Faça isto <b>antes</b> de copiar o link: mexer nessas opções <b>redefine o link</b>, e o que já estiver salvo aqui para de funcionar.</div>' +
       '<div style="font-size:0.64rem;color:var(--text-muted);margin-bottom:6px;">Nome do grupo → <b style="color:var(--text-bright);">Permissões do grupo</b> → "Os membros do grupo podem":</div>' +
       row('DESLIGUE', '#f87171', 'Enviar novas mensagens', 'o grupo vira mural: só você avisa, os inscritos leem.') +
       row('DESLIGUE', '#f87171', 'Adicionar membros', 'ninguém põe gente de fora no grupo.') +
@@ -429,12 +431,12 @@
     var idArgs = '\'' + _attr(t.id) + '\',\'' + (isT ? '' : _attr(ctx.m.id)) + '\'';
 
     var header =
-      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:' + _hdrBg + ';border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
+      '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:' + window._spCor(_hdrBg, 'background') + ';border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
         '<div style="min-width:0;">' +
           '<div style="font-size:0.95rem;font-weight:800;color:#fff;display:flex;align-items:center;gap:6px;">' + _icon() + title + '</div>' +
           '<div style="font-size:0.68rem;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + sub + '</div>' +
         '</div>' +
-        '<button type="button" class="btn btn-micro" onclick="window._waGrpClose()" style="background:rgba(255,255,255,0.15);color:#fff;flex-shrink:0;">Fechar</button>' +
+        '<button type="button" class="btn btn-micro" onclick="window._waGrpClose()" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:#fff;flex-shrink:0;">Fechar</button>' +
       '</div>';
 
     var body = '';
@@ -444,14 +446,14 @@
         '<div style="font-size:0.8rem;font-weight:700;color:#25D366;margin-bottom:4px;">✅ O grupo já existe</div>' +
         '<div style="font-size:0.68rem;color:var(--text-muted);">Criado por <b style="color:var(--text-bright);">' + _esc(wg.byName || 'um jogador') + '</b>. ' +
           (isT ? 'Todos os inscritos entram pelo mesmo link.' : 'Todos deste jogo entram pelo mesmo link.') + '</div>' +
-        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpOpenLink(' + idArgs + ')" style="background:' + _accent + ';color:#fff;width:100%;justify-content:center;margin-top:10px;">' + _icon() + 'Abrir grupo no WhatsApp ↗</button>' +
+        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpOpenLink(' + idArgs + ')" style="background:' + window._spCor(_accent, 'background') + ';color:#fff;width:100%;justify-content:center;margin-top:10px;">' + _icon() + 'Abrir grupo no WhatsApp ↗</button>' +
         // v1.3.17: organizador reenvia o link do grupo pra TODOS os inscritos (app + e-mail +
         // notificação nativa). Já dispara sozinho ao SALVAR o link; este botão é o reenvio
         // manual (ex.: inscritos que entraram depois). Só no torneio (o modal já é org-only).
         (isT ? '<button type="button" class="btn hover-lift" onclick="window._waGrpNotifyParticipants(' + idArgs + ', this)" style="background:rgba(37,211,102,0.14);border:1px solid rgba(37,211,102,0.5);color:#25D366;width:100%;justify-content:center;margin-top:8px;font-weight:700;">🔔 Notificar participantes</button>' +
           // v1.3.21: confirmação visual — quando foi a última notificação (+ nº de envios).
           (wg.notifiedAt
-            ? '<div style="font-size:0.66rem;color:#34d399;font-weight:700;margin-top:7px;display:flex;align-items:center;gap:5px;justify-content:center;"><span>✅</span> Última notificação: ' + _fmtNotifiedAt(wg.notifiedAt) + ((wg.notifyCount > 1) ? ' · ' + wg.notifyCount + ' envios' : '') + '</div>'
+            ? '<div style="font-size:0.66rem;color:var(--sp-c-34d399,#34d399);font-weight:700;margin-top:7px;display:flex;align-items:center;gap:5px;justify-content:center;"><span>✅</span> Última notificação: ' + _fmtNotifiedAt(wg.notifiedAt) + ((wg.notifyCount > 1) ? ' · ' + wg.notifyCount + ' envios' : '') + '</div>'
             : '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:7px;text-align:center;">Ainda não notificado.</div>') +
           '<div style="font-size:0.64rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Envia o link do grupo pra todos os inscritos — no app, por e-mail e por notificação. Já acontece sozinho quando você salva o link. O histórico fica em <b style="color:var(--text-bright);">Comunicar inscritos</b>.</div>' : '') +
         '</div>';
@@ -460,16 +462,16 @@
     } else {
       body += _step(1, 'Criar o grupo (vazio) no WhatsApp',
         '<input type="text" id="wa-grp-name" readonly value="' + _esc(gname).replace(/"/g, '&quot;') + '" ' +
-        'style="width:100%;box-sizing:border-box;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);' +
+        'style="width:100%;box-sizing:border-box;min-width:0;background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));border:1px solid var(--border-color);' +
         'border-radius:8px;padding:9px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' +
-        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyName(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:' + _accent + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp\u2197</button>',
+        '<button type="button" class="btn hover-lift btn-shine" onclick="window._waGrpCopyName(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ')" style="background:' + window._spCor(_accent, 'background') + ';color:#fff;width:100%;justify-content:center;margin-top:8px;">' + _icon() + 'Copiar nome e abrir WhatsApp\u2197</button>',
         'O WhatsApp abre na ÚLTIMA conversa que você usou — isso é do WhatsApp, não é o grupo daqui. De lá: <b style="color:var(--text-bright);">Novo grupo → pule a escolha de participantes</b> → cole o nome. Não precisa salvar contato de ninguém.');
       if (isT) body += _permsHtml();
     }
 
     body += _step(wg && wg.link ? '✎' : (isT ? 3 : 2), 'Colar o link do convite',
       '<input type="text" id="wa-grp-link" placeholder="https://chat.whatsapp.com/..." ' +
-        'style="width:100%;box-sizing:border-box;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border-color);color:var(--text-bright);border-radius:8px;padding:9px 10px;font-size:0.82rem;">' +
+        'style="width:100%;box-sizing:border-box;min-width:0;background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));border:1px solid var(--border-color);color:var(--text-bright);border-radius:8px;padding:9px 10px;font-size:0.82rem;">' +
       '<button type="button" class="btn hover-lift" onclick="window._waGrpSaveLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ', this)" style="background:#4f46e5;color:#fff;width:100%;justify-content:center;margin-top:8px;">Salvar link do grupo</button>',
       'No grupo: <b style="color:var(--text-bright);">Convidar via link → Copiar</b>. A partir daí ' +
       (isT ? 'os inscritos só clicam em "Entrar no grupo"' : 'os outros só clicam em "Abrir grupo"') + ' — ninguém mais monta nada.');
@@ -481,7 +483,7 @@
       // isso sozinhos (o WhatsApp não devolve status pra nós).
       body += '<div style="border-top:1px solid var(--border-color);margin-top:6px;padding-top:10px;">' +
         '<button type="button" class="btn hover-lift" onclick="window._waGrpDeleteLink(' + idArgs + ',' + (ctx.groupMode ? '1' : '0') + ', this)" ' +
-        'style="background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.45);color:#f87171;width:100%;justify-content:center;">🗑️ Apagar o link</button>' +
+        'style="background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.45);color:var(--sp-c-f87171,#f87171);width:100%;justify-content:center;">🗑️ Apagar o link</button>' +
         '<div style="font-size:0.66rem;color:var(--text-muted);line-height:1.5;margin-top:6px;">Tira o link sem pôr outro no lugar — some o botão ' +
         (isT ? '"Entrar no grupo"' : '"Abrir grupo"') + ' e volta o "Criar grupo", como era antes. Use quando o grupo foi apagado no WhatsApp.</div>' +
         '</div>';

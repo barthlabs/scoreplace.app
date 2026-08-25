@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 /* AO VIVO AGORA — quem está com o placar ao vivo aberto, e quem quiser, assiste.
  *
  * Pedido do dono (18/ago/2026): uma seção logo abaixo da hero box da dashboard que só
@@ -234,16 +236,16 @@
     var borda = sacando ? cor : 'rgba(255,255,255,0.08)';
     var chips = (sets || []).map(function (v) {
       return '<span style="display:inline-block;min-width:17px;text-align:center;font-family:ui-monospace,Menlo,monospace;' +
-             'font-size:0.72rem;font-weight:700;color:var(--text-main);background:rgba(255,255,255,0.06);' +
+             'font-size:0.72rem;font-weight:700;color:var(--text-main);background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));' +
              'border-radius:4px;padding:1px 3px;margin-left:3px;">' + v + '</span>';
     }).join('');
     return '<div style="padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;' +
-        'background:' + fundo + ';border-left:3px solid ' + borda + ';margin-bottom:2px;">' +
+        'background:' + window._spCor(fundo, 'background') + ';border-left:3px solid ' + window._spCor(borda, 'borda') + ';margin-bottom:2px;">' +
         '<div style="flex:1;overflow:hidden;min-width:0;font-size:0.8rem;font-weight:600;color:var(--text-bright);' +
           'white-space:nowrap;text-overflow:ellipsis;">' + (sacando ? '🎾 ' : '') + _esc(_timeLabel(nomes)) + '</div>' +
         '<div style="display:flex;align-items:center;flex-shrink:0;gap:2px;">' + chips +
           '<span style="min-width:30px;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:0.95rem;' +
-            'font-weight:800;color:' + (sacando ? cor : 'var(--text-bright)') + ';margin-left:5px;">' + ponto + '</span>' +
+            'font-weight:800;color:' + window._spCor((sacando ? cor : 'var(--text-bright)'), 'color') + ';margin-left:5px;">' + ponto + '</span>' +
         '</div>' +
       '</div>';
   }
@@ -268,9 +270,9 @@
 
   window._liveNowCardHtml = function (d) {
     var l = _leituraPlacar(d);
-    var badge = d._peso >= 4 ? '<span style="font-size:0.56rem;font-weight:800;letter-spacing:0.02em;background:rgba(34,211,238,0.22);color:#a5f3fc;padding:1px 6px;border-radius:5px;">VOCÊ JOGA</span>'
-      : d._peso === 3 ? '<span style="font-size:0.56rem;font-weight:800;letter-spacing:0.02em;background:rgba(99,102,241,0.22);color:#c7d2fe;padding:1px 6px;border-radius:5px;">SEU TORNEIO</span>'
-      : d._peso === 2 ? '<span style="font-size:0.56rem;font-weight:800;letter-spacing:0.02em;background:rgba(16,185,129,0.2);color:#6ee7b7;padding:1px 6px;border-radius:5px;">AMIGO</span>'
+    var badge = d._peso >= 4 ? '<span style="font-size:0.56rem;font-weight:800;letter-spacing:0.02em;background:rgba(34,211,238,0.22);color:var(--sp-c-a5f3fc,#a5f3fc);padding:1px 6px;border-radius:5px;">VOCÊ JOGA</span>'
+      : d._peso === 3 ? '<span style="font-size:0.56rem;font-weight:800;letter-spacing:0.02em;background:rgba(99,102,241,0.22);color:var(--sp-c-c7d2fe,#c7d2fe);padding:1px 6px;border-radius:5px;">SEU TORNEIO</span>'
+      : d._peso === 2 ? '<span style="font-size:0.56rem;font-weight:800;letter-spacing:0.02em;background:rgba(16,185,129,0.2);color:var(--sp-c-6ee7b7,#6ee7b7);padding:1px 6px;border-radius:5px;">AMIGO</span>'
       : '';
     // o rótulo do jogo ocupa o lugar exato do "JOGO N · GRUPO X" do card da chave
     var rotulo = d.kind === 'tournament'
@@ -281,14 +283,14 @@
         'style="background:var(--bg-card);border:2px solid rgba(239,68,68,0.55);border-radius:12px;padding:14px;cursor:pointer;' +
         'box-shadow:0 0 16px rgba(239,68,68,0.18),0 4px 12px rgba(0,0,0,0.15);">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;' +
-          'margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
+          'margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:5px;">' +
           '<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;min-width:0;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _esc(rotulo) + '</span>' +
+            '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">' + _esc(rotulo) + '</span>' +
             (sub ? '<span style="font-size:0.6rem;color:var(--text-muted);line-height:1.3;overflow:hidden;text-overflow:ellipsis;">' + _esc(sub) + '</span>' : '') +
           '</div>' +
           '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;margin-left:auto;">' +
             '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.56rem;font-weight:800;' +
-              'color:#f87171;text-transform:uppercase;letter-spacing:0.02em;">' +
+              'color:var(--sp-c-f87171,#f87171);text-transform:uppercase;letter-spacing:0.02em;">' +
               '<span class="sp-live-dot" style="width:7px;height:7px;border-radius:50%;background:#ef4444;display:inline-block;"></span>AO VIVO</span>' +
             badge +
             '<span style="font-size:0.56rem;color:var(--text-muted);">' + _esc(_minutos(d)) + '</span>' +
@@ -298,7 +300,7 @@
         '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
         _linhaTime(d.p2Players, l.s2, l.pt2, l.saca === 2, '#ef4444') +
         '<div class="btn-row" style="display:flex;justify-content:center;align-items:center;gap:6px;margin:8px 0 2px;">' +
-          '<span class="btn btn-micro" style="font-size:0.72rem;background:rgba(239,68,68,0.16);color:#fca5a5;' +
+          '<span class="btn btn-micro" style="font-size:0.72rem;background:rgba(239,68,68,0.16);color:var(--sp-c-fca5a5,#fca5a5);' +
             'border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:4px 12px;font-weight:700;">👀 Assistir</span>' +
         '</div>' +
       '</div>';
@@ -325,7 +327,7 @@
           'background:linear-gradient(180deg,rgba(239,68,68,0.10),rgba(239,68,68,0.03));box-shadow:0 0 18px rgba(239,68,68,0.10);">' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
             '<span style="font-size:1rem;">🔴</span>' +
-            '<span style="font-size:0.9rem;font-weight:800;color:#f87171;">' + _esc(titulo) + '</span>' +
+            '<span style="font-size:0.9rem;font-weight:800;color:var(--sp-c-f87171,#f87171);">' + _esc(titulo) + '</span>' +
             '<span style="font-size:0.68rem;color:var(--text-muted);">' + lista.length + ' ' + (lista.length === 1 ? 'partida' : 'partidas') + ' · toque para assistir</span>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">' +

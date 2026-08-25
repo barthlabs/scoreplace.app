@@ -24,6 +24,11 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
 const win = globalThis.window;
+// ⭐ 2.0.94 — a tabela de cor (js/paleta-tabela.js) não existe aqui: este teste extrai
+// um TRECHO do arquivo, então a linha de guarda que o topo do arquivo tem fica de fora.
+// Identidade devolve a cor crua, que é o comportamento anterior à tabela — que é o que
+// este teste afirma.
+win._spCor = function (c) { return c; };
 
 // ── Extrai a IIFE do box direto do arquivo do app ────────────────────────────
 const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket.js'), 'utf8');
@@ -50,6 +55,10 @@ function renderBox(t) {
     _monarchHealInFlight: true,      // não dispara o auto-heal no teste
     _healMonarchRemainderToWaitlist: null,
     _warn: () => {},
+    // ⭐ 2.0.94 — a tabela de cor não existe aqui (o teste roda um TRECHO do bracket.js,
+    // sem a linha de guarda do topo do arquivo). Identidade devolve a cor crua, que é o
+    // comportamento anterior à tabela — e é sobre ele que este teste afirma.
+    _spCor: (c) => c,
   };
   ctx.window = ctx;
   const fn = new Function('window', 't', 'currentRoundData', '_isReiRainhaRound', '_nameMatchesCurUser', '_t',

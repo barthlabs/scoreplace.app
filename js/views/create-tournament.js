@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Game Set Match Scoring Defaults by Sport ──
 // DERIVADO da FONTE ÚNICA window.SPORT_RULES (js/views/sport-rules.js, carregado antes deste).
 // Regra de uma modalidade mudou/estava errada? Mude LÁ, num lugar só — propaga pra cá (torneio)
@@ -65,7 +67,7 @@ function setupCreateTournamentModal() {
     var val = window._phaseReVal(idx);
     function rowt(role, icon, labelKey, descKey) {
       var on = val.indexOf(role) !== -1;
-      return '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">'
+      return '<div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">'
         + '<div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">' + icon + '</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">' + T(labelKey) + '</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">' + T(descKey) + '</div></div></div>'
         + '<label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="window._togglePhaseResultEntry(' + idx + ',\'' + role + '\')"><span class="toggle-slider"></span></label>'
         + '</div>';
@@ -92,7 +94,7 @@ function setupCreateTournamentModal() {
     var val = window._phaseRankingVal(idx);
     function btn(v, label) {
       var act = (val === v);
-      return '<button type="button" onclick="window._setPhaseRankingType(' + idx + ',\'' + v + '\')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;' + (act ? 'border:2px solid #f87171;background:rgba(248,113,113,0.12);color:#fca5a5;font-weight:600;' : 'border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:500;') + 'text-align:center;">' + label + '</button>';
+      return '<button type="button" onclick="window._setPhaseRankingType(' + idx + ',\'' + v + '\')" style="flex:1;padding:10px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;' + (act ? 'border:2px solid #f87171;background:rgba(248,113,113,0.12);color:var(--sp-c-fca5a5,#fca5a5);font-weight:600;' : 'border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);font-weight:500;') + 'text-align:center;">' + label + '</button>';
     }
     return '<div id="phase-classif-' + idx + '">'
       + (idx === 0 ? '<input type="hidden" id="elim-third-place" value="true"><input type="hidden" id="elim-ranking-type" value="' + val + '">' : '')
@@ -129,7 +131,7 @@ function setupCreateTournamentModal() {
       var _d = _ADV_SCORING_DEFAULTS[key];
       if (_d) { val = _d.value; checked = _d.enabled; }
       if (cats && cats[key]) { checked = !!cats[key].enabled; val = (cats[key].value != null ? cats[key].value : val); }
-      return '<div class="adv-row" data-adv-key="' + key + '" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px;">'
+      return '<div class="adv-row" data-adv-key="' + key + '" style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:8px;">'
         + '<label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" class="adv-enabled"' + (checked ? ' checked' : '') + '><span class="toggle-slider"></span></label>'
         + '<div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:600;">' + T(label) + '</div><div style="font-size:0.68rem; color:var(--text-muted);">' + T(desc) + '</div></div>'
         + '<input type="number" class="adv-value form-control" value="' + val + '" style="width:70px; flex-shrink:0; text-align:center; padding:4px 6px; font-size:0.85rem;">'
@@ -137,12 +139,12 @@ function setupCreateTournamentModal() {
     }
     var h = '<div id="adv-scoring-section' + s + '" style="display:' + disp + '; background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">';
     h += '<div class="toggle-row" style="padding:0; margin-bottom:10px;">';
-    h += '<div class="toggle-row-label"><span style="font-size:0.85rem;font-weight:700;color:#fbbf24;">💯 ' + T('create.advScoringTitle') + '</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">' + T('create.advScoringDesc') + '</div></div>';
+    h += '<div class="toggle-row-label"><span style="font-size:0.85rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);">💯 ' + T('create.advScoringTitle') + '</span><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">' + T('create.advScoringDesc') + '</div></div>';
     h += '<label class="toggle-switch toggle-sm"><input type="checkbox" id="adv-scoring-enabled' + s + '"' + (enabledOn ? ' checked' : '') + ' onchange="window._onAdvScoringToggle(' + idx + ')"><span class="toggle-slider"></span></label>';
     h += '</div>';
     h += '<div id="adv-scoring-body' + s + '" style="display:' + (enabledOn ? 'block' : 'none') + '; margin-top:12px;">';
-    h += '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;"><button type="button" onclick="window._resetAdvScoring(' + idx + ')" style="padding:5px 12px; border-radius:8px; border:1px solid rgba(251,191,36,0.35); background:rgba(251,191,36,0.1); color:#fbbf24; font-size:0.74rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">↺ ' + T('create.advResetBtn') + '</button></div>';
-    h += '<p style="font-size:0.7rem; color:#10b981; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupA') + '</p>';
+    h += '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;"><button type="button" onclick="window._resetAdvScoring(' + idx + ')" style="padding:5px 12px; border-radius:8px; border:1px solid rgba(251,191,36,0.35); background:rgba(251,191,36,0.1); color:var(--sp-c-fbbf24,#fbbf24); font-size:0.74rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:5px;">↺ ' + T('create.advResetBtn') + '</button></div>';
+    h += '<p style="font-size:0.7rem; color:var(--sp-c-10b981,#10b981); font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupA') + '</p>';
     h += '<div style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;">';
     h += row('participation', 'create.advParticipation', 'create.advParticipationDesc', '150', true);
     h += row('match_won', 'create.advMatchWon', 'create.advMatchWonDesc', '150', true);
@@ -151,11 +153,11 @@ function setupCreateTournamentModal() {
     h += row('tiebreak_point', 'create.advTiebreakPoint', 'create.advTiebreakPointDesc', '2', true);
     h += row('wo_penalty', 'create.advWoPenalty', 'create.advWoPenaltyDesc', '-100', true);
     h += '</div>';
-    h += '<p style="font-size:0.7rem; color:#f87171; font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupB') + '</p>';
+    h += '<p style="font-size:0.7rem; color:var(--sp-c-f87171,#f87171); font-weight:600; text-transform:uppercase; letter-spacing:1px; margin:0 0 8px;">' + T('create.advScoringGroupB') + '</p>';
     h += '<div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; padding:6px 10px; background:rgba(248,113,113,0.06); border-radius:6px; border-left:2px solid #f87171;">ⓘ ' + T('create.advScoringGroupBWarn') + '</div>';
     h += '<div style="display:flex; align-items:center; gap:10px; padding:9px 11px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.25); border-radius:8px; margin-bottom:8px;">';
     h += '<label class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="adv-apply-live' + s + '"' + (applyLiveOn ? ' checked' : '') + ' onchange="window._onAdvApplyLiveToggle(' + idx + ')"><span class="toggle-slider"></span></label>';
-    h += '<div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:700; color:#f87171;">' + T('create.advApplyLive') + '</div><div style="font-size:0.68rem; color:var(--text-muted);">' + T('create.advApplyLiveDesc') + '</div></div>';
+    h += '<div style="flex:1; min-width:0;"><div style="font-size:0.82rem; font-weight:700; color:var(--sp-c-f87171,#f87171);">' + T('create.advApplyLive') + '</div><div style="font-size:0.68rem; color:var(--text-muted);">' + T('create.advApplyLiveDesc') + '</div></div>';
     h += '</div>';
     h += '<div style="display:flex; flex-direction:column; gap:6px;">';
     h += row('killing_point', 'create.advKillingPoint', 'create.advKillingPointDesc', '10', false);
@@ -226,42 +228,42 @@ function setupCreateTournamentModal() {
                     <option>⚽ Futevôlei</option>
                   </select>
                   <div id="sport-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button type="button" class="sport-btn sport-btn-active" data-sport="🎾 Beach Tennis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:600;">${(window._sportIcon && window._sportIcon('Beach Tennis')) || '🎾'} Beach Tennis</button>
-                    <button type="button" class="sport-btn" data-sport="🥒 Pickleball" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Pickleball')) || '🥒'} Pickleball</button>
-                    <button type="button" class="sport-btn" data-sport="🎾 Tênis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis')) || '🎾'} Tênis</button>
-                    <button type="button" class="sport-btn" data-sport="🏓 Tênis de Mesa" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis de Mesa')) || '🏓'} Tênis de Mesa</button>
-                    <button type="button" class="sport-btn" data-sport="🏸 Padel" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Padel')) || '🏸'} Padel</button>
-                    <button type="button" class="sport-btn" data-sport="🏐 Vôlei de Praia" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Vôlei de Praia')) || '🏐'} Vôlei de Praia</button>
-                    <button type="button" class="sport-btn" data-sport="⚽ Futevôlei" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Futevôlei')) || '⚽'} Futevôlei</button>
+                    <button type="button" class="sport-btn sport-btn-active" data-sport="🎾 Beach Tennis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">${(window._sportIcon && window._sportIcon('Beach Tennis')) || '🎾'} Beach Tennis</button>
+                    <button type="button" class="sport-btn" data-sport="🥒 Pickleball" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Pickleball')) || '🥒'} Pickleball</button>
+                    <button type="button" class="sport-btn" data-sport="🎾 Tênis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis')) || '🎾'} Tênis</button>
+                    <button type="button" class="sport-btn" data-sport="🏓 Tênis de Mesa" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis de Mesa')) || '🏓'} Tênis de Mesa</button>
+                    <button type="button" class="sport-btn" data-sport="🏸 Padel" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Padel')) || '🏸'} Padel</button>
+                    <button type="button" class="sport-btn" data-sport="🏐 Vôlei de Praia" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Vôlei de Praia')) || '🏐'} Vôlei de Praia</button>
+                    <button type="button" class="sport-btn" data-sport="⚽ Futevôlei" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Futevôlei')) || '⚽'} Futevôlei</button>
                   </div>
                 </div>
               </div>
 
               <!-- Logo do Torneio -->
               <div id="logo-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a5b4fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.logoSection')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.logoSection')}</p>
                 <div style="display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
-                  <div id="logo-preview" style="width: 80px; height: 80px; border-radius: 16px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: rgba(0,0,0,0.2);">
+                  <div id="logo-preview" style="width: 80px; height: 80px; border-radius: 16px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; background: var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));">
                     <span style="font-size: 0.7rem; color: var(--text-muted); text-align: center; padding: 4px;">${_t('create.noLogo')}</span>
                   </div>
                   <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 180px;">
-                    <button type="button" onclick="window._generateTournamentLogo()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: #a5b4fc; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; justify-content: center;" onmouseover="this.style.background='rgba(99,102,241,0.25)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">
+                    <button type="button" onclick="window._generateTournamentLogo()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; justify-content: center;" onmouseover="this.style.background='rgba(99,102,241,0.25)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">
                       🎨 ${_t('create.genLogo')}
                     </button>
                     <div style="display: flex; gap: 6px;">
-                      <button type="button" onclick="window._generateTournamentLogo()" title="Regerar logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.08); color: #a5b4fc; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.18)'" onmouseout="this.style.background='rgba(99,102,241,0.08)'">
+                      <button type="button" onclick="window._generateTournamentLogo()" title="Regerar logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.08); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.18)'" onmouseout="this.style.background='rgba(99,102,241,0.08)'">
                         🔄
                       </button>
-                      <button type="button" id="btn-logo-lock" onclick="window._toggleLogoLock()" title="Travar logo (não regera ao salvar)" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                      <button type="button" id="btn-logo-lock" onclick="window._toggleLogoLock()" title="Travar logo (não regera ao salvar)" style="padding: 8px 10px; border-radius: 10px; border: 1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1)); background: var(--sp-g-255-255-255-005,rgba(255,255,255,0.05)); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
                         🔓
                       </button>
-                      <button type="button" onclick="window._downloadTournamentLogo()" title="Baixar logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                      <button type="button" onclick="window._downloadTournamentLogo()" title="Baixar logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1)); background: var(--sp-g-255-255-255-005,rgba(255,255,255,0.05)); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
                         ⬇️
                       </button>
-                      <button type="button" onclick="document.getElementById('logo-file-input').click()" title="Upload de arquivo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                      <button type="button" onclick="document.getElementById('logo-file-input').click()" title="Upload de arquivo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1)); background: var(--sp-g-255-255-255-005,rgba(255,255,255,0.05)); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
                         📁
                       </button>
-                      <button type="button" onclick="window._clearTournamentLogo()" title="Remover logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: #f87171; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
+                      <button type="button" onclick="window._clearTournamentLogo()" title="Remover logo" style="padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.background='rgba(239,68,68,0.08)'">
                         ✕
                       </button>
                     </div>
@@ -287,14 +289,14 @@ function setupCreateTournamentModal() {
 
               <!-- Foto de fundo do torneio (v4.0.21) — se definida, substitui a do Google -->
               <div id="cover-section" style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: #a5b4fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🖼️ Foto de fundo do torneio</p>
+                <p style="margin: 0 0 0.35rem; font-size: 0.8rem; color: var(--sp-c-a5b4fc,#a5b4fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🖼️ Foto de fundo do torneio</p>
                 <p style="margin: 0 0 0.75rem; font-size: 0.72rem; color: var(--text-muted); line-height: 1.35;">Opcional. Se você definir, ela substitui a foto do Google nos cards e no detalhe. Ao escolher, dá pra dar zoom e arrastar pra enquadrar (sem distorcer).</p>
-                <div id="cover-preview" style="width: 100%; max-width: 300px; aspect-ratio: 2/1; border-radius: 12px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(0,0,0,0.2); background-size: cover; background-position: center; margin-bottom: 8px;">
+                <div id="cover-preview" style="width: 100%; max-width: 300px; aspect-ratio: 2/1; border-radius: 12px; border: 2px dashed rgba(99,102,241,0.3); display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); background-size: cover; background-position: center; margin-bottom: 8px;">
                   <span id="cover-placeholder" style="font-size: 0.72rem; color: var(--text-muted);">Sem foto de fundo</span>
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                  <button type="button" onclick="document.getElementById('cover-file-input').click()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: #a5b4fc; font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
-                  <button type="button" id="btn-cover-clear" onclick="window._clearCoverPhoto()" title="Remover foto de fundo" style="padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: #f87171; font-size: 0.8rem; cursor: pointer; display: none;">✕ Remover</button>
+                  <button type="button" onclick="document.getElementById('cover-file-input').click()" style="padding: 8px 16px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.3); background: rgba(99,102,241,0.15); color: var(--sp-c-a5b4fc,#a5b4fc); font-size: 0.8rem; font-weight: 600; cursor: pointer;">🖼️ Escolher foto</button>
+                  <button type="button" id="btn-cover-clear" onclick="window._clearCoverPhoto()" title="Remover foto de fundo" style="padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); font-size: 0.8rem; cursor: pointer; display: none;">✕ Remover</button>
                 </div>
                 <input type="file" id="cover-file-input" accept="image/*" style="display:none;" onchange="window._handleCoverUpload(event)">
                 <input type="hidden" id="tourn-cover-data" value="">
@@ -320,9 +322,9 @@ function setupCreateTournamentModal() {
                    "+ Adicionar fase" logo abaixo do box. -->
               <div id="fase1-box" style="border:1px solid rgba(129,140,248,0.35); border-radius:14px; padding:1rem; margin-bottom:1rem; background:rgba(99,102,241,0.05);">
                 <div id="fase1-header-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-                  <button type="button" id="fase1-collapse-btn" onclick="window._toggleFase1Collapse()" title="Colapsar/expandir fase" style="flex-shrink:0;border:none;background:rgba(99,102,241,0.2);color:#a5b4fc;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:700;line-height:1;">▾</button>
-                  <span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:#a5b4fc;background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE 1</span>
-                  <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
+                  <button type="button" id="fase1-collapse-btn" onclick="window._toggleFase1Collapse()" title="Colapsar/expandir fase" style="flex-shrink:0;border:none;background:rgba(99,102,241,0.2);color:var(--sp-c-a5b4fc,#a5b4fc);width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:700;line-height:1;">▾</button>
+                  <span style="flex-shrink:0;font-size:0.7rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,0.2);padding:4px 10px;border-radius:7px;letter-spacing:0.5px;">FASE 1</span>
+                  <input type="text" id="phase1-name" placeholder="Nome da fase (opcional)" oninput="window._phase1Name=this.value" style="flex:1;min-width:0;padding:7px 11px;border-radius:9px;border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);font-size:0.85rem;box-sizing:border-box;">
                 </div>
 
               <!-- (Estimativa de tempo da fase movida pra DEPOIS do Formato + Datas — v2.6.46) -->
@@ -343,13 +345,13 @@ function setupCreateTournamentModal() {
                   <option value="liga">Liga</option>
                 </select>
                 <div id="formato-buttons" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-                  <button type="button" class="formato-btn" data-fmt="pontos" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
+                  <button type="button" class="formato-btn" data-fmt="pontos" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
                     <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><rect x="2" y="2" width="36" height="32" rx="3" opacity=".3" fill="currentColor" stroke="none"/><rect x="2" y="2" width="36" height="32" rx="3" fill="none" opacity=".6"/><line x1="2" y1="10" x2="38" y2="10" opacity=".4"/><line x1="2" y1="18" x2="38" y2="18" opacity=".25"/><line x1="2" y1="26" x2="38" y2="26" opacity=".25"/><line x1="14" y1="2" x2="14" y2="34" opacity=".25"/><line x1="26" y1="2" x2="26" y2="34" opacity=".25"/><text x="5" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">#</text><text x="17" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">V</text><text x="29" y="8" font-size="5" font-weight="700" fill="currentColor" stroke="none" opacity=".5">P</text><circle cx="7" cy="15" r="1.5" fill="currentColor" stroke="none" opacity=".5"/><circle cx="7" cy="23" r="1.5" fill="currentColor" stroke="none" opacity=".35"/><circle cx="7" cy="31" r="1.5" fill="currentColor" stroke="none" opacity=".25"/></svg>
                     ${_t('format.league')}</button>
-                  <button type="button" class="formato-btn" data-fmt="grupos" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.05);color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
+                  <button type="button" class="formato-btn" data-fmt="grupos" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);font-weight:700;text-align:center;line-height:1.1;">
                     <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="2" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="2" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="7" x2="13" y2="7" opacity=".5"/><line x1="4" y1="12" x2="13" y2="12" opacity=".5"/><rect x="1" y="20" width="15" height="14" rx="2" opacity=".45" fill="currentColor" stroke="none"/><rect x="1" y="20" width="15" height="14" rx="2" fill="none"/><line x1="4" y1="25" x2="13" y2="25" opacity=".5"/><line x1="4" y1="30" x2="13" y2="30" opacity=".5"/><line x1="20" y1="9" x2="20" y2="27"/><line x1="20" y1="9" x2="28" y2="9" opacity=".6"/><line x1="20" y1="27" x2="28" y2="27" opacity=".6"/><line x1="28" y1="9" x2="28" y2="27"/><line x1="28" y1="18" x2="36" y2="18"/><circle cx="38" cy="18" r="1.8" fill="currentColor" stroke="none" opacity=".6"/></svg>
                     ${_t('format.groupsShort')}</button>
-                  <button type="button" class="formato-btn formato-btn-active" data-fmt="elim" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid #3b82f6;background:rgba(59,130,246,0.12);color:#60a5fa;font-weight:700;text-align:center;line-height:1.1;">
+                  <button type="button" class="formato-btn formato-btn-active" data-fmt="elim" onclick="window._selectFormato(this)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px 10px;border-radius:12px;font-size:0.7rem;cursor:pointer;transition:all 0.2s;border:2px solid #3b82f6;background:rgba(59,130,246,0.12);color:var(--sp-c-60a5fa,#60a5fa);font-weight:700;text-align:center;line-height:1.1;">
                     <svg width="40" height="36" viewBox="0 0 40 36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="12" y2="4" opacity=".5"/><line x1="2" y1="14" x2="12" y2="14" opacity=".5"/><line x1="12" y1="4" x2="12" y2="14"/><line x1="12" y1="9" x2="22" y2="9"/><line x1="2" y1="22" x2="12" y2="22" opacity=".5"/><line x1="2" y1="32" x2="12" y2="32" opacity=".5"/><line x1="12" y1="22" x2="12" y2="32"/><line x1="12" y1="27" x2="22" y2="27"/><line x1="22" y1="9" x2="22" y2="27"/><line x1="22" y1="18" x2="32" y2="18"/><circle cx="36" cy="18" r="3" fill="currentColor" stroke="none" opacity=".6"/></svg>
                     ${_t('format.elimination')}</button>
                 </div>
@@ -367,23 +369,23 @@ function setupCreateTournamentModal() {
 
               <!-- Datas da fase (logo abaixo do Formato) — v2.6.46 -->
               <div id="phase-dates-box" style="background:rgba(99,102,241,0.04); border:1px solid rgba(129,140,248,0.18); border-radius:10px; padding:0.6rem 0.4rem; margin-bottom:1rem;">
-                <div style="font-size:0.72rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
+                <div style="font-size:0.72rem; color:var(--sp-c-a5b4fc,#a5b4fc); font-weight:700; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:0.5rem; padding-left:0.35rem;">📅 ${_t('create.phaseDatesTitle')}</div>
                 <div class="dates-row" style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
-                  <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
+                  <div id="reg-date-container" style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnrollDeadline')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
                       <input type="date" class="form-control" id="tourn-reg-date" aria-label="Data limite das inscrições da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" oninput="window._recalcDuration()">
                       <input type="time" class="form-control" id="tourn-reg-time" aria-label="Hora limite das inscrições da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration()">
                     </div>
                   </div>
-                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseStart')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
                       <input type="date" class="form-control" id="tourn-start-date" aria-label="Data de início da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._checkWeather(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
                       <input type="time" class="form-control" id="tourn-start-time" aria-label="Hora de início da fase" style="padding:5px 3px; font-size:0.74rem; width:58px; flex-shrink:0; box-sizing:border-box;" oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
                     </div>
                   </div>
-                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:8px 6px;">
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:10px; padding:8px 6px;">
                     <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.phaseEnd')}</div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:auto;">
                       <input type="date" class="form-control" id="tourn-end-date" aria-label="Data de término da fase" style="padding:5px 3px; font-size:0.68rem; flex:1 1 0; min-width:0; white-space:nowrap; box-sizing:border-box;" required oninput="window._recalcDuration(); window._f2RecalcRoundsFromWindow && window._f2RecalcRoundsFromWindow()">
@@ -408,7 +410,7 @@ function setupCreateTournamentModal() {
                 <div id="gender-ratio-mount"></div>
               </div>
               <div id="late-enroll-box" style="background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-fbbf24,#fbbf24); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ ${_t('create.lateEnrollSection')}</p>
                 <input type="hidden" id="late-enrollment" value="closed">
                 <input type="hidden" id="new-matchups" value="false">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="late-enrollment-buttons">
@@ -426,27 +428,27 @@ function setupCreateTournamentModal() {
               <!-- Estimativa de tempo da fase (após Formato + Datas) -->
               <div id="time-estimates-container" style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); border-radius: 10px; padding: 0.6rem 0.75rem; margin-bottom: 1rem;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom: 0.5rem;">
-                  <span style="font-size: 0.72rem; color: #f59e0b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">⏱ Estimativa de tempo da fase</span>
+                  <span style="font-size: 0.72rem; color: var(--sp-c-f59e0b,#f59e0b); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">⏱ Estimativa de tempo da fase</span>
                   <span id="duration-estimate-inline" style="font-size: 0.8rem; font-weight: 700; color: var(--text-bright); white-space: nowrap;">—</span>
                 </div>
                 <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items:end;">
                   <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.callTimeDesc')}">
                     <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.callTimeLabel')}</span>
-                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
+                    <div style="display:flex; align-items:center; gap:4px; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px;">
                       <input type="number" id="tourn-call-time" min="0" max="60" value="5" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
                       <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
                     </div>
                   </label>
                   <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.warmupDesc')}">
                     <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.warmupLabel')}</span>
-                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
+                    <div style="display:flex; align-items:center; gap:4px; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px;">
                       <input type="number" id="tourn-warmup-time" min="0" max="60" value="5" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
                       <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
                     </div>
                   </label>
                   <label style="display:flex; flex-direction:column; gap:2px; margin:0; min-width:0;" title="${_t('create.gameDurDesc')}">
                     <span style="font-size:0.7rem; color:var(--text-muted); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_t('create.gameDurLabel')}</span>
-                    <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:2px 6px;">
+                    <div style="display:flex; align-items:center; gap:4px; background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2)); border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px;">
                       <input type="number" id="tourn-game-duration" min="5" max="300" value="30" oninput="window._recalcDuration()" style="flex:1; min-width:0; width:100%; background:transparent; border:none; color:var(--text-bright); font-size:0.9rem; font-weight:600; padding:4px 0; outline:none;">
                       <span style="font-size:0.7rem; color:var(--text-muted);">min</span>
                     </div>
@@ -460,7 +462,7 @@ function setupCreateTournamentModal() {
                 <div id="duration-estimate-box" style="display:none; margin-top: 0.5rem;">
                   <div id="duration-estimate-text" style="display:none;">—</div>
                   <div id="duration-estimate-detail" style="display:none;"></div>
-                  <div id="duration-warning" style="display:none; padding:6px 10px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:6px; font-size:0.78rem; color:#f87171;">
+                  <div id="duration-warning" style="display:none; padding:6px 10px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:6px; font-size:0.78rem; color:var(--sp-c-f87171,#f87171);">
                   </div>
                   <div id="capacity-warning" style="display:none; margin-top:6px; padding:6px 10px; border-radius:6px; font-size:0.78rem;">
                   </div>
@@ -474,16 +476,16 @@ function setupCreateTournamentModal() {
                 <label class="form-label">${_t('create.drawMode')}</label>
                 <input type="hidden" id="draw-mode" value="sorteio">
                 <div id="draw-mode-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-                  <button type="button" class="draw-mode-btn draw-mode-active" data-value="sorteio" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;font-weight:600;">🎲 ${_t('create.drawModeSorteio')}</button>
-                  <button type="button" class="draw-mode-btn" data-value="rei_rainha" id="btn-draw-mode-monarch" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;">👑 ${_t('format.monarchShort')}</button>
-                  <button type="button" class="draw-mode-btn" data-value="round_robin" id="btn-draw-mode-rr" onclick="window._selectDrawMode(this)" style="display:none;padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;">🔄 Todos contra todos</button>
+                  <button type="button" class="draw-mode-btn draw-mode-active" data-value="sorteio" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:var(--sp-c-34d399,#34d399);font-weight:600;">🎲 ${_t('create.drawModeSorteio')}</button>
+                  <button type="button" class="draw-mode-btn" data-value="rei_rainha" id="btn-draw-mode-monarch" onclick="window._selectDrawMode(this)" style="padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;">👑 ${_t('format.monarchShort')}</button>
+                  <button type="button" class="draw-mode-btn" data-value="round_robin" id="btn-draw-mode-rr" onclick="window._selectDrawMode(this)" style="display:none;padding:7px 13px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;">🔄 Todos contra todos</button>
                 </div>
                 <small class="text-muted" style="display:block;margin-top:4px;" id="draw-mode-desc">${_t('create.drawModeSorteioDesc')}</small>
               </div>
 
               <!-- Rei/Rainha da Praia (logo abaixo do formato, visível só quando rei_rainha selecionado) -->
               <div id="rei-rainha-fields" style="display:none; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #fbbf24; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">👑 ${_t('format.monarch')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-fbbf24,#fbbf24); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">👑 ${_t('format.monarch')}</p>
                 <div style="font-size:0.78rem;color:var(--text-muted);">${_t('format.monarchDesc')}</div>
                 <!-- v2.6.44: controles "Classificados por grupo" + "Formação dos grupos de 4"
                      e a linha de avanço REMOVIDOS daqui — são lógica de SUCESSÃO/transição
@@ -494,7 +496,7 @@ function setupCreateTournamentModal() {
 
               <!-- Campos específicos: Todos contra todos -->
               <div id="round-robin-fields" style="display:none; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #818cf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🔄 Todos contra todos</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-818cf8,#818cf8); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🔄 Todos contra todos</p>
                 <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.75rem;">A cada turno, todos os jogadores da categoria enfrentam todos os outros (grupos de 4). O sorteio de rodadas é pré-gerado automaticamente.</div>
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                   <label class="form-label" style="margin:0;font-size:0.8rem;">Número de turnos:</label>
@@ -505,7 +507,7 @@ function setupCreateTournamentModal() {
 
               <!-- Campos específicos: Fase de Grupos -->
               <div id="grupos-fields" style="display:none; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.gruposConfig')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-f59e0b,#f59e0b); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.gruposConfig')}</p>
                 <!-- v3.0.x: divisão por SLIDER (nº de grupos × tamanho), sugerida a
                      partir do nº de inscritos. O nº de classificados foi pra transição
                      entre fases (respeitando potência de 2), não fica mais aqui.
@@ -534,7 +536,7 @@ function setupCreateTournamentModal() {
 
               <!-- Campos específicos: Suíço -->
               <div id="suico-fields" style="display:none; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #818cf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.suicoConfig')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-818cf8,#818cf8); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.suicoConfig')}</p>
                 <div class="d-flex gap-2">
                   <div class="form-group full-width">
                     <label class="form-label">${_t('create.suicoRounds')}</label>
@@ -546,7 +548,7 @@ function setupCreateTournamentModal() {
 
               <!-- Campos específicos: Liga (unificado com antigo Ranking) -->
               <div id="liga-fields" style="display:none; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.ligaConfig')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-34d399,#34d399); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.ligaConfig')}</p>
                 <!-- v2.7.80: toggle "Ativado/Desativado dos inscritos" PROMOVIDO pro topo da
                      config da fase (antes ficava enterrado lá embaixo e o organizador não
                      achava). Controla o canon do "Ativado/Desativado" que aparece nos cards. -->
@@ -572,8 +574,8 @@ function setupCreateTournamentModal() {
                       <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.ligaBalanceBy')}</label>
                       <input type="hidden" id="liga-balance-by" value="individual">
                       <div id="liga-balance-buttons" style="display:flex;gap:6px;">
-                        <button type="button" class="liga-balance-btn liga-balance-active" data-value="individual" onclick="window._selectLigaBalance(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">${_t('create.ligaBalanceIndividual')}</button>
-                        <button type="button" class="liga-balance-btn" data-value="team" onclick="window._selectLigaBalance(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">${_t('create.ligaBalanceTeam')}</button>
+                        <button type="button" class="liga-balance-btn liga-balance-active" data-value="individual" onclick="window._selectLigaBalance(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:var(--sp-c-34d399,#34d399);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">${_t('create.ligaBalanceIndividual')}</button>
+                        <button type="button" class="liga-balance-btn" data-value="team" onclick="window._selectLigaBalance(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">${_t('create.ligaBalanceTeam')}</button>
                       </div>
                     </div>
                   </div>
@@ -586,19 +588,19 @@ function setupCreateTournamentModal() {
                   <label class="form-label" style="font-size:0.75rem;">${_t('create.ligaNewScore')}</label>
                   <input type="hidden" id="liga-new-player-score" value="zero">
                   <div id="liga-nps-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button type="button" class="liga-nps-btn liga-nps-active" data-value="zero" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Zero</button>
-                    <button type="button" class="liga-nps-btn" data-value="min" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Mínima</button>
-                    <button type="button" class="liga-nps-btn" data-value="avg" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Média</button>
-                    <button type="button" class="liga-nps-btn" data-value="organizer" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Org. decide</button>
+                    <button type="button" class="liga-nps-btn liga-nps-active" data-value="zero" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:var(--sp-c-34d399,#34d399);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Zero</button>
+                    <button type="button" class="liga-nps-btn" data-value="min" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Mínima</button>
+                    <button type="button" class="liga-nps-btn" data-value="avg" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Média</button>
+                    <button type="button" class="liga-nps-btn" data-value="organizer" onclick="window._selectLigaNps(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Org. decide</button>
                   </div>
                 </div>
                 <div class="form-group mb-3">
                   <label class="form-label" style="font-size:0.75rem;">${_t('create.ligaInactRule')}</label>
                   <input type="hidden" id="liga-inactivity" value="keep">
                   <div id="liga-inact-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button type="button" class="liga-inact-btn liga-inact-active" data-value="keep" onclick="window._selectLigaInact(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:#34d399;font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Manter</button>
-                    <button type="button" class="liga-inact-btn" data-value="decay" onclick="window._selectLigaInact(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Decaimento</button>
-                    <button type="button" class="liga-inact-btn" data-value="remove" onclick="window._selectLigaInact(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Remover</button>
+                    <button type="button" class="liga-inact-btn liga-inact-active" data-value="keep" onclick="window._selectLigaInact(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid #34d399;background:rgba(16,185,129,0.15);color:var(--sp-c-34d399,#34d399);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Manter</button>
+                    <button type="button" class="liga-inact-btn" data-value="decay" onclick="window._selectLigaInact(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Decaimento</button>
+                    <button type="button" class="liga-inact-btn" data-value="remove" onclick="window._selectLigaInact(this)" style="flex:1;min-width:0;padding:7px 8px;border-radius:10px;font-size:0.72rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:600;text-align:center;white-space:normal;line-height:1.1;display:flex;align-items:center;justify-content:center;">Remover</button>
                   </div>
                 </div>
                 <div class="form-group" id="liga-inactivity-x-container" style="display:none;">
@@ -617,7 +619,7 @@ function setupCreateTournamentModal() {
 
               <!-- Game Set Match Config — Presets (Formato das Partidas) -->
               <div id="gsm-section" style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #c084fc; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ${_t('create.matchFormat')}</p>
+                <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: var(--sp-c-c084fc,#c084fc); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎾 ${_t('create.matchFormat')}</p>
                 <div id="gsm-presets" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px;"></div>
                 <!-- ⭐ 2.1: o empate do set vive AQUI, na seção do formato, à parte dos botões —
                      e é por FASE (a eliminatória tem o seu, em âmbar). -->
@@ -630,7 +632,7 @@ function setupCreateTournamentModal() {
                   </div>
                 </div>
                 <!-- Summary -->
-                <div id="gsm-summary" style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;display:none;"></div>
+                <div id="gsm-summary" style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-radius:8px;display:none;"></div>
                 <!-- Hidden fields to store config -->
                 <input type="hidden" id="gsm-type" value="simple">
                 <input type="hidden" id="gsm-setsToWin" value="1">
@@ -654,8 +656,8 @@ function setupCreateTournamentModal() {
               <div style="background: rgba(168,85,247,0.06); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <!-- Rigor da inscrição (v1.15.28) — no topo do box de Categorias.
                      Espectro Casual ↔ Oficial; travas duras entram gradualmente. -->
-                <div id="rigor-section" style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.08);">
-                  <p style="margin: 0 0 0.6rem; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎚️ Rigor da inscrição</p>
+                <div id="rigor-section" style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">
+                  <p style="margin: 0 0 0.6rem; font-size: 0.8rem; color: var(--sp-c-38bdf8,#38bdf8); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🎚️ Rigor da inscrição</p>
                   <div style="display:flex; justify-content:space-between; font-size:0.66rem; color:var(--text-muted); font-weight:700; margin-bottom:2px;">
                     <span>Casual</span><span>Moderado</span><span>Oficial</span>
                   </div>
@@ -675,14 +677,14 @@ function setupCreateTournamentModal() {
                     <div style="font-size:0.7rem; color:var(--text-muted); margin-top:7px; line-height:1.4;">No <b>Oficial</b>, quem não tiver isso no perfil <b>não se inscreve</b>. No <b>Moderado</b>, entra mas é <b>avisado</b> a completar.</div>
                   </div>
                 </div>
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a855f7; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-a855f7,#a855f7); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.catSection')}</p>
                 <div style="margin-bottom:0.75rem;">
                   <label class="form-label" style="margin-bottom:6px;">${_t('create.genderCatLabel')}</label>
                   <div style="display:flex; gap:8px; flex-wrap:wrap;" id="gender-cat-buttons">
-                    <button type="button" id="btn-cat-fem" onclick="window._toggleGenderCat('fem')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♀</span>${_t('create.catFem')}</button>
-                    <button type="button" id="btn-cat-masc" onclick="window._toggleGenderCat('masc')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♂</span>${_t('create.catMasc')}</button>
-                    <button type="button" id="btn-cat-misto-ale" onclick="window._toggleGenderCat('misto_aleatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚥</span>${_t('create.catMistoAle')}</button>
-                    <button type="button" id="btn-cat-misto-obr" onclick="window._toggleGenderCat('misto_obrigatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚤</span>${_t('create.catMistoObr')}</button>
+                    <button type="button" id="btn-cat-fem" onclick="window._toggleGenderCat('fem')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♀</span>${_t('create.catFem')}</button>
+                    <button type="button" id="btn-cat-masc" onclick="window._toggleGenderCat('masc')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">♂</span>${_t('create.catMasc')}</button>
+                    <button type="button" id="btn-cat-misto-ale" onclick="window._toggleGenderCat('misto_aleatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚥</span>${_t('create.catMistoAle')}</button>
+                    <button type="button" id="btn-cat-misto-obr" onclick="window._toggleGenderCat('misto_obrigatorio')" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;"><span style="line-height:1;flex-shrink:0;">⚤</span>${_t('create.catMistoObr')}</button>
                   </div>
                   <input type="hidden" id="tourn-gender-categories" value="">
                   <small class="text-muted" style="display:block;margin-top:6px;">${_t('create.genderCatHint')}</small>
@@ -691,11 +693,11 @@ function setupCreateTournamentModal() {
                   <label class="form-label" style="margin-bottom:6px;">${_t('create.skillCatLabel')}</label>
                   <!-- v1.2.2-beta: pills A, B, C, D, FUN. Indigo, multi-select. -->
                   <div style="display:flex; gap:8px; flex-wrap:wrap;" id="skill-cat-buttons">
-                    <button type="button" data-skill="A" data-active="0" onclick="window._toggleSkillCat('A')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">A</button>
-                    <button type="button" data-skill="B" data-active="0" onclick="window._toggleSkillCat('B')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">B</button>
-                    <button type="button" data-skill="C" data-active="0" onclick="window._toggleSkillCat('C')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">C</button>
-                    <button type="button" data-skill="D" data-active="0" onclick="window._toggleSkillCat('D')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">D</button>
-                    <button type="button" data-skill="FUN" data-active="0" onclick="window._toggleSkillCat('FUN')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">FUN</button>
+                    <button type="button" data-skill="A" data-active="0" onclick="window._toggleSkillCat('A')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">A</button>
+                    <button type="button" data-skill="B" data-active="0" onclick="window._toggleSkillCat('B')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">B</button>
+                    <button type="button" data-skill="C" data-active="0" onclick="window._toggleSkillCat('C')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">C</button>
+                    <button type="button" data-skill="D" data-active="0" onclick="window._toggleSkillCat('D')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">D</button>
+                    <button type="button" data-skill="FUN" data-active="0" onclick="window._toggleSkillCat('FUN')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">FUN</button>
                   </div>
                   <input type="hidden" id="tourn-skill-categories" value="">
                   <small class="text-muted" style="display:block;margin-top:6px;">A é o nível mais alto (avançado), D o mais iniciante. FUN = categoria iniciante.</small>
@@ -705,10 +707,10 @@ function setupCreateTournamentModal() {
                 <div style="margin-top:0.75rem;">
                   <label class="form-label" style="margin-bottom:6px;">Categorias por Idade</label>
                   <div style="display:flex; gap:8px; flex-wrap:wrap;" id="age-cat-buttons">
-                    <button type="button" data-age="40+" onclick="window._toggleAgeCat('40+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">40+</button>
-                    <button type="button" data-age="50+" onclick="window._toggleAgeCat('50+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">50+</button>
-                    <button type="button" data-age="60+" onclick="window._toggleAgeCat('60+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">60+</button>
-                    <button type="button" data-age="70+" onclick="window._toggleAgeCat('70+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.06); color:var(--text-main); font-weight:500;">70+</button>
+                    <button type="button" data-age="40+" onclick="window._toggleAgeCat('40+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">40+</button>
+                    <button type="button" data-age="50+" onclick="window._toggleAgeCat('50+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">50+</button>
+                    <button type="button" data-age="60+" onclick="window._toggleAgeCat('60+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">60+</button>
+                    <button type="button" data-age="70+" onclick="window._toggleAgeCat('70+')" style="padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18)); background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06)); color:var(--text-main); font-weight:500;">70+</button>
                   </div>
                   <input type="hidden" id="tourn-age-categories" value="">
                   <small class="text-muted" style="display:block;margin-top:6px;">Sub-bracket por faixa etária. Inscritos podem competir na categoria de habilidade, na de idade, ou em ambas. Sub-bracket também é separado por gênero.</small>
@@ -720,13 +722,13 @@ function setupCreateTournamentModal() {
                 <div style="margin-top:0.75rem;">
                   <label class="form-label" style="margin-bottom:6px;">Categorias personalizadas</label>
                   <div id="custom-cat-chips" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;"></div>
-                  <button type="button" id="btn-add-custom-cat" onclick="window._addCustomCat()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px dashed rgba(20,184,166,0.5); background:rgba(20,184,166,0.08); color:#5eead4; font-weight:600;"><span style="line-height:1;">＋</span> Adicionar categoria</button>
+                  <button type="button" id="btn-add-custom-cat" onclick="window._addCustomCat()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px; border-radius:8px; font-size:0.8rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; border:2px dashed rgba(20,184,166,0.5); background:rgba(20,184,166,0.08); color:var(--sp-c-5eead4,#5eead4); font-weight:600;"><span style="line-height:1;">＋</span> Adicionar categoria</button>
                   <input type="hidden" id="tourn-custom-categories" value="">
                   <small class="text-muted" style="display:block;margin-top:6px;">Categoria livre (ex.: Estreante, Profissional). Cruza com gênero como a habilidade e gera sub-bracket próprio. O inscrito escolhe na inscrição; você pode reatribuir no gerenciador de categorias.</small>
                 </div>
 
                 <div id="category-preview" style="display:none; margin-top:0.75rem; padding:8px 12px; background:rgba(168,85,247,0.08); border:1px solid rgba(168,85,247,0.2); border-radius:8px;">
-                  <div style="font-size:0.7rem; color:#a855f7; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
+                  <div style="font-size:0.7rem; color:var(--sp-c-a855f7,#a855f7); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.catPreview')}</div>
                   <div id="category-preview-list" style="display:flex; flex-direction:column; gap:6px; font-size:0.8rem;"></div>
                 </div>
               </div>
@@ -737,7 +739,7 @@ function setupCreateTournamentModal() {
                    mesma de TODAS as fases). #manual-pairing-container interno mantém o id pra
                    continuar escondendo/mostrando só a parte de duplas em Simples. -->
               <div class="mb-3" style="background: rgba(167,139,250,0.06); border: 1px solid rgba(167,139,250,0.22); border-radius: 12px; padding: 1rem;" id="pairing-wo-box">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #a78bfa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🤝 Formação de duplas e ausências (W.O.)</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-a78bfa,#a78bfa); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">🤝 Formação de duplas e ausências (W.O.)</p>
                 <div id="manual-pairing-container">
                   <input type="hidden" id="manual-pairing" value="organizer_only">
                   <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(167,139,250,0.25);background:rgba(167,139,250,0.06);">
@@ -748,8 +750,8 @@ function setupCreateTournamentModal() {
                   <div id="manual-pairing-notice" style="display:none;margin-top:8px;"></div>
                 </div>
                 <!-- W.O. (Ausência) — movido pra cá, logo após formação de duplas (v3.1.34) -->
-                <div id="wo-scope-container" style="margin-top:0.9rem;padding-top:0.85rem;border-top:1px solid rgba(255,255,255,0.08);">
-                  <p style="margin: 0 0 0.6rem; font-size: 0.78rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
+                <div id="wo-scope-container" style="margin-top:0.9rem;padding-top:0.85rem;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">
+                  <p style="margin: 0 0 0.6rem; font-size: 0.78rem; color: var(--sp-c-f87171,#f87171); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚠️ ${_t('create.woSection')}</p>
                   <input type="hidden" id="wo-scope" value="individual">
                   ${window._woButtonsHtml(0)}
                 </div>
@@ -762,7 +764,7 @@ function setupCreateTournamentModal() {
 
               <!-- Lançamento de Resultados (toggles não-excludentes) -->
               <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #60a5fa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-60a5fa,#60a5fa); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 ${_t('create.resultSection')}</p>
                 ${window._resultEntryButtonsHtml(0)}
                 <input type="hidden" id="select-result-entry" value="organizer">
               </div>
@@ -781,7 +783,7 @@ function setupCreateTournamentModal() {
                    Resultados (v3.1.34). Render CANÔNICA _classifModeHtml(0), a MESMA das fases
                    extras. Visível só em Eliminatórias/Grupos (#elim-settings + visibilidade). -->
               <div id="elim-settings" style="display:none; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #f87171; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.classificationSection')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-f87171,#f87171); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.classificationSection')}</p>
                 ${window._classifModeHtml(0)}
               </div>
 
@@ -791,7 +793,7 @@ function setupCreateTournamentModal() {
               <!-- + Adicionar fase (fases 2+ — cada uma com as mesmas configs da Fase 1) -->
               <div class="form-group mb-3" id="phases-section">
                 <div id="phases-list"></div>
-                <button type="button" id="add-phase-btn" onclick="window._addPhase()" style="margin-top:4px;padding:10px 16px;border-radius:10px;font-size:0.84rem;cursor:pointer;border:2px dashed rgba(129,140,248,0.55);background:rgba(99,102,241,0.08);color:#818cf8;font-weight:600;width:100%;transition:all 0.15s;">+ Adicionar fase</button>
+                <button type="button" id="add-phase-btn" onclick="window._addPhase()" style="margin-top:4px;padding:10px 16px;border-radius:10px;font-size:0.84rem;cursor:pointer;border:2px dashed rgba(129,140,248,0.55);background:rgba(99,102,241,0.08);color:var(--sp-c-818cf8,#818cf8);font-weight:600;width:100%;transition:all 0.15s;">+ Adicionar fase</button>
                 <small class="text-muted" style="display:block;margin-top:8px;">Adicione fases para criar etapas com formato e origem próprios (ex.: <em>Liga classificatória</em> → <em>Eliminatória Ouro/Prata</em>). Cada fase tem as mesmas configurações da Fase 1.</small>
               </div>
 
@@ -800,7 +802,7 @@ function setupCreateTournamentModal() {
 
               <!-- Campos periocidade de sorteio: Suíço -->
               <div id="suico-draw-schedule-fields" style="display:none; background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: #818cf8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.swissDrawSchedule')}</p>
+                <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-818cf8,#818cf8); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.swissDrawSchedule')}</p>
                 <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;margin-bottom:0.5rem;">
                   <div class="form-group" style="margin:0;flex:0 0 auto;">
                     <label class="form-label" style="font-size:0.7rem;margin-bottom:2px;">${_t('create.dateLabel')}</label>
@@ -830,7 +832,7 @@ function setupCreateTournamentModal() {
 
               <!-- Local e Quadras -->
               <div id="venue-photo-box" style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: #34d399; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.venueSection')}</p>
+                <p style="margin: 0 0 0.75rem; font-size: 0.8rem; color: var(--sp-c-34d399,#34d399); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.venueSection')}</p>
                 <div class="mb-2">
                   <div class="form-group" style="flex:1;">
                     <label class="form-label">${_t('create.venueLabel')}</label>
@@ -876,7 +878,7 @@ function setupCreateTournamentModal() {
 
               <!-- Weather Forecast -->
               <div id="weather-forecast" style="display:none; margin-bottom:0.75rem; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); border-radius:10px; padding:10px 14px;">
-                <div style="font-size:0.7rem; font-weight:600; color:#60a5fa; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.weatherSection')}</div>
+                <div style="font-size:0.7rem; font-weight:600; color:var(--sp-c-60a5fa,#60a5fa); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">${_t('create.weatherSection')}</div>
                 <div id="weather-content"></div>
               </div>
 
@@ -897,11 +899,11 @@ function setupCreateTournamentModal() {
                   <input type="hidden" id="tourn-team-size" value="2">
                   <input type="hidden" id="tourn-game-types" value="duplas">
                   <div id="game-type-buttons" style="display:flex;flex-direction:column;gap:8px;">
-                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">
                       <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏸</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.gameSimples')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.simplesSideDesc')}</div></div></div>
                       <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="game-toggle-simples" aria-label="Modo simples" onchange="window._syncGameTypeToggles()"><span class="toggle-slider"></span></label>
                     </div>
-                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                    <div class="toggle-row" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">
                       <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏖️</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">${_t('create.gameDuplas')}</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">${_t('create.duplasSideDesc')}</div></div></div>
                       <label class="toggle-switch" style="--toggle-on-bg:#3b82f6;--toggle-on-glow:rgba(59,130,246,0.3);--toggle-on-border:#3b82f6;"><input type="checkbox" id="game-toggle-duplas" aria-label="Modo duplas" checked onchange="window._syncGameTypeToggles()"><span class="toggle-slider"></span></label>
                     </div>
@@ -921,7 +923,7 @@ function setupCreateTournamentModal() {
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏁</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Limite com corrida</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">As vagas enchem por ordem de inscrição — pode gerar corrida.</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#60a5fa;--toggle-on-glow:rgba(96,165,250,0.3);--toggle-on-border:#60a5fa;"><input type="checkbox" id="elm-toggle-cap" aria-label="Limite com corrida" checked onchange="window._syncEnrollLimitMode('cap')"><span class="toggle-slider"></span></label>
                   </div>
-                  <div class="toggle-row" id="elm-row-draw" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                  <div class="toggle-row" id="elm-row-draw" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">
                     <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🎲</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.88rem;">Vagas com sorteio</span><div class="toggle-desc" style="font-size:0.72rem;margin-top:2px;">Inscrição aberta sem corrida; ao encerrar, um sorteio define quem entra e a lista de espera.</div></div></div>
                     <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="elm-toggle-draw" aria-label="Vagas com sorteio" onchange="window._syncEnrollLimitMode('draw')"><span class="toggle-slider"></span></label>
                   </div>
@@ -939,7 +941,7 @@ function setupCreateTournamentModal() {
                         <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🏃</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.84rem;">Quem chegar primeiro</span><div class="toggle-desc" style="font-size:0.7rem;margin-top:2px;">O próximo da fila é quem fizer check-in primeiro (presença).</div></div></div>
                         <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="cp-toggle-present" aria-label="Chamada por presença" checked onchange="window._syncCallPolicy('present')"><span class="toggle-slider"></span></label>
                       </div>
-                      <div class="toggle-row" id="cp-row-locked" style="padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);">
+                      <div class="toggle-row" id="cp-row-locked" style="padding:8px 12px;border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));">
                         <div class="toggle-row-label" style="gap:8px;"><span class="toggle-icon">🔒</span><div><span style="font-weight:600;color:var(--text-color);font-size:0.84rem;">Ordem do sorteio (travada)</span><div class="toggle-desc" style="font-size:0.7rem;margin-top:2px;">A fila segue a ordem sorteada; entra o próximo presente nela.</div></div></div>
                         <label class="toggle-switch" style="--toggle-on-bg:#a78bfa;--toggle-on-glow:rgba(167,139,250,0.3);--toggle-on-border:#a78bfa;"><input type="checkbox" id="cp-toggle-locked" aria-label="Ordem travada do sorteio" onchange="window._syncCallPolicy('locked')"><span class="toggle-slider"></span></label>
                       </div>
@@ -997,23 +999,23 @@ function setupCreateTournamentModal() {
 
               <!-- Critérios de Desempate -->
               <div id="tiebreaker-section" style="background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.15); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
-                <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: #58a6ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
+                <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--sp-c-58a6ff,#58a6ff); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${_t('create.tiebreakerSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tiebreakerDesc')}</small>
-                <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;"><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:#58a6ff;font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
+                <div style="display:flex;justify-content:flex-end;margin-bottom:0.6rem;"><button type="button" onclick="window._resetTiebreakers()" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(88,166,255,0.35);background:rgba(88,166,255,0.1);color:var(--sp-c-58a6ff,#58a6ff);font-size:0.74rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">↺ ${_t('create.tbResetBtn')}</button></div>
                 <ul id="tiebreaker-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
                   <li draggable="true" data-tb="pontos_avancados" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 💯 ${_t('create.tbAdvancedPoints')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbAdvancedPointsNote')} <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('pontos_avancados')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🆚 ${_t('create.tbHeadToHead')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="saldo_pontos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbPointDiffTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> ⚖️ ${_t('create.tbPointDiff')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🏆 ${_t('create.tbWins')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 💪 ${_t('create.tbBuchholz')} <small style="color:var(--text-muted); font-size:0.65rem;">(${_t('create.tbBuchholzAbbr')}) <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> ⭐ ${_t('create.tbSonneborn')} <small style="color:var(--text-muted); font-size:0.65rem;">(${_t('create.tbSonnebornAbbr')}) <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="antiguidade" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 👴 ${_t('create.tbOldest')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbOldestNote')}</small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
-                  <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🎲 ${_t('create.tbRandom')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="confronto_direto" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbHeadToHeadTip')}" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🆚 ${_t('create.tbHeadToHead')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="saldo_pontos" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbPointDiffTip')}" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> ⚖️ ${_t('create.tbPointDiff')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="vitorias" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbWinsTip')}" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🏆 ${_t('create.tbWins')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="buchholz" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbBuchholzTip')}" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 💪 ${_t('create.tbBuchholz')} <small style="color:var(--text-muted); font-size:0.65rem;">(${_t('create.tbBuchholzAbbr')}) <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('buchholz')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="sonneborn_berger" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" title="${_t('create.tbSonnebornTip')}" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> ⭐ ${_t('create.tbSonneborn')} <small style="color:var(--text-muted); font-size:0.65rem;">(${_t('create.tbSonnebornAbbr')}) <span onclick="event.stopPropagation();event.preventDefault();window._showTiebreakInfo('sonneborn_berger')" style="cursor:pointer;font-size:1.2em;opacity:1;padding:0 1px;" title="${_t('create.tbInfoBtn')}">ℹ️</span></small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="antiguidade" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 👴 ${_t('create.tbOldest')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbOldestNote')}</small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
+                  <li draggable="true" data-tb="sorteio" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 🎲 ${_t('create.tbRandom')}</span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move class="cancel-x-btn" onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="--cx-size:20px;margin-left:auto;" title="${_t('create.tbRemoveBtn')}">✕</button></span></li>
                 </ul>
                 <p style="margin: 1rem 0 0.4rem; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">${_t('create.tbExcludedSection')}</p>
                 <small class="text-muted" style="display:block;margin-bottom:0.5rem;">${_t('create.tbExcludedDesc')}</small>
                 <ul id="tiebreaker-excluded-list" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;min-height:40px;border:1px dashed rgba(255,255,255,0.12);border-radius:8px;padding:6px;">
-                  <li draggable="true" data-tb="juventude" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 👶 ${_t('create.tbYoungest')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbYoungestNote')}</small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;line-height:1;" title="${_t('create.tbRestoreBtn')}">↩</button></span></li>
+                  <li draggable="true" data-tb="juventude" ontouchstart="window._onTiebreakerTouchStart(event)" ontouchmove="window._onTiebreakerTouchMove(event)" ontouchend="window._onTiebreakerTouchEnd(event)" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:8px;padding:8px 12px;cursor:grab;display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-bright);user-select:none;"><span style="opacity:0.4;">⠿</span><span style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;flex:1 1 auto;min-width:0;"> 👶 ${_t('create.tbYoungest')} <small style="color:var(--text-muted); font-size:0.65rem;">${_t('create.tbYoungestNote')}</small></span><span style="display:flex;align-items:center;flex:0 0 auto;margin-left:auto;"><button type="button" data-tb-move onclick="event.stopPropagation();event.preventDefault();window._tbMove(this)" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sp-c-34d399,#34d399);font-weight:700;font-size:0.95rem;padding:0 6px;line-height:1;" title="${_t('create.tbRestoreBtn')}">↩</button></span></li>
                 </ul>
               </div>
 
@@ -1102,7 +1104,7 @@ function setupCreateTournamentModal() {
         if (inExcluded) {
           btn.classList.remove('cancel-x-btn');
           btn.textContent = '↩';
-          btn.style.cssText = 'margin-left:auto;background:none;border:none;cursor:pointer;color:#34d399;font-weight:700;font-size:0.95rem;padding:0 6px;line-height:1;';
+          btn.style.cssText = 'margin-left:auto;background:none;border:none;cursor:pointer;color:var(--sp-c-34d399,#34d399);font-weight:700;font-size:0.95rem;padding:0 6px;line-height:1;';
           btn.title = (window._t ? window._t('create.tbRestoreBtn') : 'Reativar critério');
         } else {
           btn.classList.add('cancel-x-btn');
@@ -1288,7 +1290,7 @@ function setupCreateTournamentModal() {
     var btns = document.querySelectorAll('#sport-buttons .sport-btn');
     btns.forEach(function(b) {
       b.classList.remove('sport-btn-active');
-      b.style.border = '2px solid rgba(255,255,255,0.18)';
+      b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))';
       b.style.background = 'rgba(255,255,255,0.06)';
       b.style.color = 'var(--text-main)';
     });
@@ -1398,7 +1400,7 @@ function setupCreateTournamentModal() {
         b.style.boxShadow = '0 0 12px rgba(59,130,246,0.2)';
       } else {
         b.classList.remove('formato-btn-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))';
         b.style.background = 'rgba(255,255,255,0.05)';
         b.style.color = 'var(--text-main)';
         b.style.fontWeight = '700';
@@ -1465,7 +1467,7 @@ function setupCreateTournamentModal() {
         b.style.fontWeight = '600';
       } else {
         b.classList.remove('draw-mode-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))';
         b.style.background = 'rgba(255,255,255,0.06)';
         b.style.color = 'var(--text-main)';
         b.style.fontWeight = '600';
@@ -1723,7 +1725,7 @@ function setupCreateTournamentModal() {
     var show = !!(mp && mp.checked && indiv && indiv.checked);
     if (!show) { box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = '';
-    box.innerHTML = '<div style="padding:8px 10px;border-radius:9px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);font-size:0.74rem;color:#fbbf24;line-height:1.4;">⚠️ <strong>Inscrição individual</strong> também está selecionada — junto com Times Montados, isso é <strong>misto</strong> (indivíduos se inscrevem sozinhos e podem se juntar formando duplas). Mantenha assim, ou desmarque <strong>Individual</strong> no Modo de Inscrição pra aceitar <strong>só duplas montadas</strong>.</div>';
+    box.innerHTML = '<div style="padding:8px 10px;border-radius:9px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.08);font-size:0.74rem;color:var(--sp-c-fbbf24,#fbbf24);line-height:1.4;">⚠️ <strong>Inscrição individual</strong> também está selecionada — junto com Times Montados, isso é <strong>misto</strong> (indivíduos se inscrevem sozinhos e podem se juntar formando duplas). Mantenha assim, ou desmarque <strong>Individual</strong> no Modo de Inscrição pra aceitar <strong>só duplas montadas</strong>.</div>';
   };
 
   // v2.2.46: separar duplas formadas x sorteadas em chaveamentos próprios.
@@ -1756,8 +1758,8 @@ function setupCreateTournamentModal() {
       else { semEquipe++; pessoas++; }
     });
     var _pill = function(label, n, color) {
-      return '<div style="flex:1;min-width:86px;background:rgba(255,255,255,0.04);border:1px solid ' + color + '55;border-radius:10px;padding:8px 6px;text-align:center;">' +
-        '<div style="font-size:1.35rem;font-weight:800;color:' + color + ';line-height:1;">' + n + '</div>' +
+      return '<div style="flex:1;min-width:86px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid ' + window._spCor(color, 'borda') + '55;border-radius:10px;padding:8px 6px;text-align:center;">' +
+        '<div style="font-size:1.35rem;font-weight:800;color:' + window._spCor(color, 'color') + ';line-height:1;">' + n + '</div>' +
         '<div style="font-size:0.64rem;color:var(--text-muted);margin-top:3px;text-transform:uppercase;letter-spacing:0.3px;">' + label + '</div>' +
       '</div>';
     };
@@ -1850,7 +1852,7 @@ function setupCreateTournamentModal() {
     if (hidden) hidden.value = value;
     var row = document.querySelector('#wo-scope-buttons .toggle-row');
     if (row) {
-      row.style.border = indiv.checked ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      row.style.border = indiv.checked ? '1px solid rgba(239,68,68,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       row.style.background = indiv.checked ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)';
     }
     var desc = document.getElementById('wo-indiv-desc');
@@ -1904,12 +1906,12 @@ function setupCreateTournamentModal() {
     // Update visual active state independently per toggle
     var rows = document.querySelectorAll('#late-enrollment-buttons .toggle-row');
     if (rows[0]) {
-      rows[0].style.border = closed.checked ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      rows[0].style.border = closed.checked ? '1px solid rgba(251,191,36,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       rows[0].style.background = closed.checked ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
     }
     if (rows[1]) {
       var expandEffective = expand.checked; // v1.3.x: independente de "Fechadas"
-      rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      rows[1].style.border = expandEffective ? '1px solid rgba(251,191,36,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       rows[1].style.background = expandEffective ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)';
       // v1.3.98 (dono, "inscrições durante a fase travadas"): "Novos Confrontos" SEMPRE visível —
       // antes sumia quando Fechadas estava ON (display:none), então o organizador via só "Fechadas"
@@ -1945,7 +1947,7 @@ function setupCreateTournamentModal() {
       } else if (expand.checked) {
         if (_isGrupos) {
           var _txt = _t('create.lateEnrollExpandGruposOnDesc');
-          if (_eqOnly) _txt += '<div style="margin-top:5px;color:#f59e0b;font-weight:600;">' + _t('create.lateEnrollGruposOverride') + '</div>';
+          if (_eqOnly) _txt += '<div style="margin-top:5px;color:var(--sp-c-f59e0b,#f59e0b);font-weight:600;">' + _t('create.lateEnrollGruposOverride') + '</div>';
           expandDesc.innerHTML = _txt;
         } else {
           expandDesc.innerHTML = _t('create.lateEnrollExpandOnDesc');
@@ -1984,12 +1986,12 @@ function setupCreateTournamentModal() {
     // Visual das rows
     var capRow = document.getElementById('elm-row-cap');
     if (capRow) {
-      capRow.style.border = capT.checked ? '1px solid rgba(96,165,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      capRow.style.border = capT.checked ? '1px solid rgba(96,165,250,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       capRow.style.background = capT.checked ? 'rgba(96,165,250,0.08)' : 'rgba(255,255,255,0.03)';
     }
     var drawRow = document.getElementById('elm-row-draw');
     if (drawRow) {
-      drawRow.style.border = drawT.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      drawRow.style.border = drawT.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       drawRow.style.background = drawT.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
     }
     // Mostra/esconde o bloco de vagas e o limite por corrida
@@ -2021,12 +2023,12 @@ function setupCreateTournamentModal() {
     if (hidden) hidden.value = mode;
     var presRow = document.getElementById('cp-row-present');
     if (presRow) {
-      presRow.style.border = pres.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      presRow.style.border = pres.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       presRow.style.background = pres.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
     }
     var lockRow = document.getElementById('cp-row-locked');
     if (lockRow) {
-      lockRow.style.border = lock.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid rgba(255,255,255,0.08)';
+      lockRow.style.border = lock.checked ? '1px solid rgba(167,139,250,0.25)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
       lockRow.style.background = lock.checked ? 'rgba(167,139,250,0.08)' : 'rgba(255,255,255,0.03)';
     }
   };
@@ -2044,7 +2046,7 @@ function setupCreateTournamentModal() {
         b.style.fontWeight = '600';
       } else {
         b.classList.remove('monarch-gb-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))';
         b.style.background = 'rgba(255,255,255,0.06)';
         b.style.color = 'var(--text-main)';
         b.style.fontWeight = '500';
@@ -2069,7 +2071,7 @@ function setupCreateTournamentModal() {
     var hiddenLock = document.getElementById('tourn-logo-locked');
     if (btn) {
       btn.textContent = window._logoLocked ? '🔒' : '🔓';
-      btn.style.border = window._logoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.1)';
+      btn.style.border = window._logoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1))';
       btn.style.background = window._logoLocked ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.05)';
       btn.style.color = window._logoLocked ? '#fbbf24' : 'var(--text-muted)';
     }
@@ -2159,7 +2161,7 @@ function setupCreateTournamentModal() {
     // Loading spinner no preview
     var previewEl = document.getElementById('logo-preview');
     if (previewEl) {
-      previewEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:8px;color:#a5b4fc;font-size:0.7rem;font-weight:600;text-align:center;padding:8px;">' +
+      previewEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:8px;color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.7rem;font-weight:600;text-align:center;padding:8px;">' +
         '<div class="scoreplace-logo-spin" style="width:28px;height:28px;border:3px solid rgba(99,102,241,0.2);border-top-color:#6366f1;border-radius:50%;animation:scoreplace-spin 0.8s linear infinite;"></div>' +
         '<span>Gerando<br>logo IA…</span>' +
       '</div>';
@@ -2479,7 +2481,7 @@ function setupCreateTournamentModal() {
     // Reset lock
     window._logoLocked = false;
     var btn = document.getElementById('btn-logo-lock');
-    if (btn) { btn.textContent = '🔓'; btn.style.border = '1px solid rgba(255,255,255,0.1)'; btn.style.background = 'rgba(255,255,255,0.05)'; btn.style.color = 'var(--text-muted)'; }
+    if (btn) { btn.textContent = '🔓'; btn.style.border = '1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1))'; btn.style.background = 'rgba(255,255,255,0.05)'; btn.style.color = 'var(--text-muted)'; }
     var hiddenLock = document.getElementById('tourn-logo-locked');
     if (hiddenLock) hiddenLock.value = '';
   };
@@ -2676,7 +2678,7 @@ function setupCreateTournamentModal() {
         b.style.border = '2px solid #34d399'; b.style.background = 'rgba(16,185,129,0.15)'; b.style.color = '#34d399';
       } else {
         b.classList.remove('liga-nps-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
       }
     });
   };
@@ -2692,7 +2694,7 @@ function setupCreateTournamentModal() {
         b.style.border = '2px solid #34d399'; b.style.background = 'rgba(16,185,129,0.15)'; b.style.color = '#34d399';
       } else {
         b.classList.remove('liga-inact-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
       }
     });
     var xContainer = document.getElementById('liga-inactivity-x-container');
@@ -2718,7 +2720,7 @@ function setupCreateTournamentModal() {
         b.style.border = '2px solid #34d399'; b.style.background = 'rgba(16,185,129,0.15)'; b.style.color = '#34d399';
       } else {
         b.classList.remove('liga-balance-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)';
       }
     });
   };
@@ -2770,8 +2772,8 @@ function setupCreateTournamentModal() {
       var h = document.getElementById('tourn-age-categories');
       values = h && h.value ? h.value.split(',').filter(Boolean) : [];
     }
-    var onStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #f59e0b;background:rgba(245,158,11,0.22);color:#fbbf24;font-weight:700;box-shadow:0 0 0 1px rgba(245,158,11,0.3);';
-    var offStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;';
+    var onStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #f59e0b;background:rgba(245,158,11,0.22);color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;box-shadow:0 0 0 1px rgba(245,158,11,0.3);';
+    var offStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;';
     var btns = document.querySelectorAll('#age-cat-buttons button[data-age]');
     btns.forEach(function(btn) {
       var age = btn.getAttribute('data-age');
@@ -2794,8 +2796,8 @@ function setupCreateTournamentModal() {
   };
 
   window._applySkillCatUI = function() {
-    var onStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #6366f1;background:rgba(99,102,241,0.22);color:#a5b4fc;font-weight:700;box-shadow:0 0 0 1px rgba(99,102,241,0.3);';
-    var offStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;';
+    var onStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #6366f1;background:rgba(99,102,241,0.22);color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;box-shadow:0 0 0 1px rgba(99,102,241,0.3);';
+    var offStyle = 'padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;';
     var btns = document.querySelectorAll('#skill-cat-buttons button[data-skill]');
     btns.forEach(function(btn) {
       btn.setAttribute('style', btn.getAttribute('data-active') === '1' ? onStyle : offStyle);
@@ -2871,7 +2873,7 @@ function setupCreateTournamentModal() {
     var _esc = window._safeHtml || function(s) { return s; };
     wrap.innerHTML = list.map(function(label) {
       var escAttr = String(label).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:0.8rem;border:2px solid #14b8a6;background:rgba(20,184,166,0.18);color:#5eead4;font-weight:700;">' +
+      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;font-size:0.8rem;border:2px solid #14b8a6;background:rgba(20,184,166,0.18);color:var(--sp-c-5eead4,#5eead4);font-weight:700;">' +
         _esc(label) +
         '<button type="button" class="cancel-x-btn" title="Remover" onclick="window._removeCustomCat(\'' + escAttr + '\')" style="--cx-size:18px;">✕</button>' +
         '</span>';
@@ -2891,8 +2893,8 @@ function setupCreateTournamentModal() {
       values = h && h.value ? h.value.split(',').filter(Boolean) : [];
     }
     var map = { fem: 'btn-cat-fem', masc: 'btn-cat-masc', misto_aleatorio: 'btn-cat-misto-ale', misto_obrigatorio: 'btn-cat-misto-obr' };
-    var onStyle = 'display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #a855f7;background:rgba(168,85,247,0.22);color:#d8b4fe;font-weight:700;box-shadow:0 0 0 1px rgba(168,85,247,0.3);';
-    var offStyle = 'display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;';
+    var onStyle = 'display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #a855f7;background:rgba(168,85,247,0.22);color:var(--sp-c-d8b4fe,#d8b4fe);font-weight:700;box-shadow:0 0 0 1px rgba(168,85,247,0.3);';
+    var offStyle = 'display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;';
     Object.keys(map).forEach(function(k) {
       var btn = document.getElementById(map[k]);
       if (btn) btn.style.cssText = values.indexOf(k) !== -1 ? onStyle : offStyle;
@@ -3023,10 +3025,10 @@ function setupCreateTournamentModal() {
       if (skill.length === 0 && age.length === 0) return;
       var rowHtml = '<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">';
       skill.forEach(function(c) {
-        rowHtml += '<span style="padding:3px 10px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.25);border-radius:6px;color:#d8b4fe;font-weight:600;">' + c + '</span>';
+        rowHtml += '<span style="padding:3px 10px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.25);border-radius:6px;color:var(--sp-c-d8b4fe,#d8b4fe);font-weight:600;">' + c + '</span>';
       });
       age.forEach(function(c) {
-        rowHtml += '<span style="padding:3px 10px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.30);border-radius:6px;color:#fbbf24;font-weight:600;">' + c + '</span>';
+        rowHtml += '<span style="padding:3px 10px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.30);border-radius:6px;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">' + c + '</span>';
       });
       rowHtml += '</div>';
       rows.push(rowHtml);
@@ -3209,7 +3211,7 @@ function setupCreateTournamentModal() {
 
     // Wait for library
     if (!_placesLibLoaded) {
-      suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:#94a3b8; font-size:0.8rem;">' + _t('create.loadingPlaces') + '</div>';
+      suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:var(--sp-c-94a3b8,#94a3b8); font-size:0.8rem;">' + _t('create.loadingPlaces') + '</div>';
       suggestionsDiv.style.display = 'block';
       return;
     }
@@ -3226,7 +3228,7 @@ function setupCreateTournamentModal() {
       var suggestions = result.suggestions || [];
 
       if (suggestions.length === 0) {
-        suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:#94a3b8; font-size:0.8rem;">' + _t('create.noResults') + '</div>';
+        suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:var(--sp-c-94a3b8,#94a3b8); font-size:0.8rem;">' + _t('create.noResults') + '</div>';
         suggestionsDiv.style.display = 'block';
         return;
       }
@@ -3239,10 +3241,10 @@ function setupCreateTournamentModal() {
         var secondaryText = pred.secondaryText ? pred.secondaryText.text : '';
 
         var item = document.createElement('div');
-        item.style.cssText = 'padding:10px 14px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.06); transition:background 0.15s;';
-        item.innerHTML = '<div style="color:#e2e8f0; font-size:0.85rem; font-weight:500;">📍 ' +
+        item.style.cssText = 'padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06)); transition:background 0.15s;';
+        item.innerHTML = '<div style="color:var(--sp-c-e2e8f0,#e2e8f0); font-size:0.85rem; font-weight:500;">📍 ' +
           window._safeHtml(mainText) + '</div>' +
-          (secondaryText ? '<div style="color:#94a3b8; font-size:0.75rem; margin-top:2px;">' + window._safeHtml(secondaryText) + '</div>' : '');
+          (secondaryText ? '<div style="color:var(--sp-c-94a3b8,#94a3b8); font-size:0.75rem; margin-top:2px;">' + window._safeHtml(secondaryText) + '</div>' : '');
 
         item.addEventListener('mouseenter', function () { item.style.background = 'rgba(129,140,248,0.15)'; });
         item.addEventListener('mouseleave', function () { item.style.background = 'transparent'; });
@@ -3257,7 +3259,7 @@ function setupCreateTournamentModal() {
       suggestionsDiv.style.display = 'block';
     } catch (err) {
       window._error('Venue search error:', err);
-      suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:#f87171; font-size:0.8rem;">Erro na busca: ' + window._safeHtml(err.message || 'API indisponível') + '</div>';
+      suggestionsDiv.innerHTML = '<div style="padding:10px 14px; color:var(--sp-c-f87171,#f87171); font-size:0.8rem;">Erro na busca: ' + window._safeHtml(err.message || 'API indisponível') + '</div>';
       suggestionsDiv.style.display = 'block';
     }
   };
@@ -3326,10 +3328,10 @@ function setupCreateTournamentModal() {
           ? 'https://www.google.com/maps/search/?api=1&query=' + encodedName + '&query_place_id=' + place.id
           : 'https://www.google.com/maps/search/?api=1&query=' + place.location.lat() + ',' + place.location.lng();
         infoEl.innerHTML = '<span style="display:flex; flex-direction:column; gap:2px;">' +
-          '<span style="font-weight:500; color:#e2e8f0;">📍 ' + window._safeHtml(name) + '</span>' +
-          '<span style="color:#94a3b8; font-size:0.7rem;">' + window._safeHtml(fullAddress) + '</span>' +
+          '<span style="font-weight:500; color:var(--sp-c-e2e8f0,#e2e8f0);">📍 ' + window._safeHtml(name) + '</span>' +
+          '<span style="color:var(--sp-c-94a3b8,#94a3b8); font-size:0.7rem;">' + window._safeHtml(fullAddress) + '</span>' +
           '</span>' +
-          ' &nbsp;<a href="' + mapsUrl + '" target="_blank" title="Ver no mapa" style="color:#818cf8; text-decoration:none; font-size:1.1rem; line-height:1; flex-shrink:0;">🗺️</a>';
+          ' &nbsp;<a href="' + mapsUrl + '" target="_blank" title="Ver no mapa" style="color:var(--sp-c-818cf8,#818cf8); text-decoration:none; font-size:1.1rem; line-height:1; flex-shrink:0;">🗺️</a>';
       }
 
       // Infer access from types
@@ -3533,7 +3535,7 @@ function setupCreateTournamentModal() {
           // Check if date is within 5 days
           if (startTs - now > 5 * 24 * 60 * 60 * 1000) {
             weatherDiv.style.display = 'block';
-            weatherContent.innerHTML = '<div style="font-size:0.8rem; color:#cbd5e1;">' + _t('create.weatherFuture') + '</div>';
+            weatherContent.innerHTML = '<div style="font-size:0.8rem; color:var(--sp-c-cbd5e1,#cbd5e1);">' + _t('create.weatherFuture') + '</div>';
             return;
           }
 
@@ -3570,9 +3572,9 @@ function setupCreateTournamentModal() {
           weatherContent.innerHTML = '<div style="display:flex; gap:10px; align-items:flex-start;">' +
             '<img src="' + iconUrl + '" alt="weather" style="width:40px; height:40px;">' +
             '<div style="flex:1;">' +
-            '<div style="font-size:0.85rem; font-weight:600; color:#a5b4fc;">' + tempDisplay + '</div>' +
-            '<div style="font-size:0.75rem; color:#cbd5e1; text-transform:capitalize; margin-top:2px;">' + description + '</div>' +
-            '<div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">' + _t('create.humidity') + ': ' + humidity + '%</div>' +
+            '<div style="font-size:0.85rem; font-weight:600; color:var(--sp-c-a5b4fc,#a5b4fc);">' + tempDisplay + '</div>' +
+            '<div style="font-size:0.75rem; color:var(--sp-c-cbd5e1,#cbd5e1); text-transform:capitalize; margin-top:2px;">' + description + '</div>' +
+            '<div style="font-size:0.75rem; color:var(--sp-c-94a3b8,#94a3b8); margin-top:4px;">' + _t('create.humidity') + ': ' + humidity + '%</div>' +
             '</div></div>';
         })
         .catch(() => {
@@ -3762,7 +3764,7 @@ function setupCreateTournamentModal() {
     var catLabel = K > 1 ? (' · ' + K + ' categorias') : '';
     var h = '';
     h += '<div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:6px;">' + headLabel + catLabel + ' · ' + courts + (courts > 1 ? ' quadras' : ' quadra') + ' · ' + slot + 'min/jogo</div>';
-    if (slot <= 0) h += '<div style="font-size:0.72rem;color:#f59e0b;margin-bottom:6px;">Preencha chamada/aquecimento/duração pra estimar o tempo.</div>';
+    if (slot <= 0) h += '<div style="font-size:0.72rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:6px;">Preencha chamada/aquecimento/duração pra estimar o tempo.</div>';
     if (!isReal && N < 2) h += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Sem inscritos ainda — simulação genérica. Edite um torneio com inscritos pra ver o nº real.</div>';
 
     h += '<div style="display:flex;flex-direction:column;gap:4px;">';
@@ -3770,12 +3772,12 @@ function setupCreateTournamentModal() {
       var real = isReal && c === N;
       var m = totalMatches(c);
       var bg = real ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.03)';
-      var bd = real ? '1px solid rgba(59,130,246,0.4)' : '1px solid rgba(255,255,255,0.06)';
+      var bd = real ? '1px solid rgba(59,130,246,0.4)' : '1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06))';
       var lc = real ? '#60a5fa' : 'var(--text-muted)';
-      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + bg + ';border:' + bd + ';border-radius:8px;flex-wrap:wrap;">';
-      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + lc + ';min-width:104px;">' + c + ' ' + (o.unitLbl || 'inscritos') + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + window._spCor(bg, 'background') + ';border:' + bd + ';border-radius:8px;flex-wrap:wrap;">';
+      h += '<span style="font-size:0.78rem;font-weight:' + (real ? '700' : '600') + ';color:' + window._spCor(lc, 'color') + ';min-width:104px;">' + c + ' ' + (o.unitLbl || 'inscritos') + (real ? ' <span style="font-size:0.62rem;">(real)</span>' : '') + '</span>';
       h += '<span style="font-size:0.74rem;color:var(--text-muted);opacity:0.65;">' + m + ' jogos</span>';
-      h += '<span style="font-size:0.85rem;font-weight:700;color:' + (real ? '#e2e8f0' : 'rgba(255,255,255,0.7)') + ';margin-left:auto;">' + fmtMin(timeFor(c)) + '</span>';
+      h += '<span style="font-size:0.85rem;font-weight:700;color:' + window._spCor((real ? '#e2e8f0' : 'rgba(255,255,255,0.7)'), 'color') + ';margin-left:auto;">' + fmtMin(timeFor(c)) + '</span>';
       h += '</div>';
     });
     h += '</div>';
@@ -3863,7 +3865,7 @@ function setupCreateTournamentModal() {
     // Rei/Rainha só faz sentido com inscrição individual (grupos de 4 que rodam
     // parceiros). Em duplas/equipes o sorteio já forma os pares — sem Rei/Rainha.
     if (teamSize < 2 && c.minS <= 4 && c.maxS >= 4) parts.push('👑 pode ser Rei/Rainha');
-    if (c.excl > 0) parts.push('<span style="color:#f59e0b;">' + c.excl + ' suplente' + (c.excl > 1 ? 's' : '') + '</span>');
+    if (c.excl > 0) parts.push('<span style="color:var(--sp-c-f59e0b,#f59e0b);">' + c.excl + ' suplente' + (c.excl > 1 ? 's' : '') + '</span>');
     return parts.join(' · ');
   };
   window._gruposComputeCands = function () {
@@ -3902,7 +3904,7 @@ function setupCreateTournamentModal() {
     var lateVal = (document.getElementById('late-enrollment') || {}).value || 'closed';
     helper.style.display = 'block';
     if (lateVal === 'expand') {
-      helper.innerHTML = '<span style="color:#f59e0b;font-weight:600;">' + _t('create.lateEnrollGruposOverride') + '</span>';
+      helper.innerHTML = '<span style="color:var(--sp-c-f59e0b,#f59e0b);font-weight:600;">' + _t('create.lateEnrollGruposOverride') + '</span>';
     } else {
       helper.innerHTML = 'Ninguém é desativado — todos entram no sorteio. Os que sobram pra igualar os grupos ficam como <strong>suplentes</strong> (lista de espera) e entram por substituição.';
     }
@@ -3931,8 +3933,8 @@ function setupCreateTournamentModal() {
     var h = '';
     h += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">' + info.units + ' ' + info.unitLbl + ' — arraste pra dividir <span style="opacity:0.8;">(← mais grupos menores · menos grupos maiores →)</span>:</div>';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
-    h += '<div style="text-align:center;min-width:64px;"><div id="grupos-lbl-g" style="font-size:1.6rem;font-weight:800;color:#fbbf24;line-height:1;">' + c.g + '</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">grupos</div></div>';
-    h += '<div style="text-align:center;min-width:64px;"><div id="grupos-lbl-p" style="font-size:1.6rem;font-weight:800;color:#fbbf24;line-height:1;">' + sizeLbl + '</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">por grupo</div></div>';
+    h += '<div style="text-align:center;min-width:64px;"><div id="grupos-lbl-g" style="font-size:1.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);line-height:1;">' + c.g + '</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">grupos</div></div>';
+    h += '<div style="text-align:center;min-width:64px;"><div id="grupos-lbl-p" style="font-size:1.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);line-height:1;">' + sizeLbl + '</div><div style="font-size:0.68rem;color:var(--text-muted);margin-top:2px;">por grupo</div></div>';
     h += '</div>';
     h += '<input type="range" id="grupos-slider" min="0" max="' + (info.cands.length - 1) + '" step="1" value="' + idx + '" oninput="window._onGruposSlider(this.value)" style="width:100%;accent-color:#f59e0b;margin:2px 0;">';
     h += '<div id="grupos-lbl-est" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;text-align:center;">' + window._gruposEstLine(c) + '</div>';
@@ -4143,7 +4145,7 @@ function setupCreateTournamentModal() {
       let rows = pows.map(p => {
         const m = _calcMatchesFor(fmt, p);
         const t = _calcTimeFor(fmt, p);
-        return '<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.04);">' +
+        return '<div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));">' +
           '<span><strong>' + p + '</strong> ' + _t('create.enrollees') + '</span>' +
           '<span style="opacity:0.7;">' + _t('create.matchesTime', { matches: m, time: _fmtMin(t) }) + '</span></div>';
       }).join('');
@@ -4169,10 +4171,10 @@ function setupCreateTournamentModal() {
       const timePlayIn = _calcTimeFor(fmt, pCount);
 
       let html = '<div style="margin-top:6px; padding:6px 8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.15); border-radius:6px; font-size:0.75rem;">';
-      html += '<div style="font-weight:600; color:#fbbf24; margin-bottom:4px;">' + _t('create.notPow2Title', { n: pCount }) + '</div>';
+      html += '<div style="font-weight:600; color:var(--sp-c-fbbf24,#fbbf24); margin-bottom:4px;">' + _t('create.notPow2Title', { n: pCount }) + '</div>';
 
       // Play-in
-      html += '<div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid rgba(255,255,255,0.04);">' +
+      html += '<div style="display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));">' +
         '<span>' + _t('create.playinRow', { excess: excess, players: excess * 2, prev: prev }) + '</span>' +
         '<span style="opacity:0.7;">' + _t('create.matchesTime', { matches: matchesPlayIn, time: _fmtMin(timePlayIn) }) + '</span></div>';
 
@@ -4183,9 +4185,9 @@ function setupCreateTournamentModal() {
 
       // Recommendation
       if (timePlayIn <= timeWithByes) {
-        html += '<div style="margin-top:4px; color:#34d399;">' + _t('create.playinFaster', { time: _fmtMin(timeWithByes - timePlayIn) }) + '</div>';
+        html += '<div style="margin-top:4px; color:var(--sp-c-34d399,#34d399);">' + _t('create.playinFaster', { time: _fmtMin(timeWithByes - timePlayIn) }) + '</div>';
       } else {
-        html += '<div style="margin-top:4px; color:#34d399;">' + _t('create.byeFaster', { time: _fmtMin(timePlayIn - timeWithByes) }) + '</div>';
+        html += '<div style="margin-top:4px; color:var(--sp-c-34d399,#34d399);">' + _t('create.byeFaster', { time: _fmtMin(timePlayIn - timeWithByes) }) + '</div>';
       }
       html += '</div>';
       return html;
@@ -4199,7 +4201,7 @@ function setupCreateTournamentModal() {
         '<div style="flex:1;">' +
         '<div style="font-weight:600; color:var(--text-bright); margin-bottom:2px;">' + title + '</div>' +
         '<div style="color:var(--text-muted); line-height:1.4;">' + body + '</div>' +
-        (btnText ? '<button onclick="' + btnAction + '" style="margin-top:6px; padding:4px 12px; background:rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.3); border-radius:6px; color:#818cf8; font-size:0.75rem; font-weight:600; cursor:pointer; transition:all 0.15s;">' + btnText + '</button>' : '') +
+        (btnText ? '<button onclick="' + btnAction + '" style="margin-top:6px; padding:4px 12px; background:rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.3); border-radius:6px; color:var(--sp-c-818cf8,#818cf8); font-size:0.75rem; font-weight:600; cursor:pointer; transition:all 0.15s;">' + btnText + '</button>' : '') +
         '</div></div></div>';
     };
 
@@ -4360,7 +4362,7 @@ function setupCreateTournamentModal() {
 
         if (suggestions.length > 0) {
           sugEl.style.display = 'flex';
-          sugEl.innerHTML = '<div style="font-size:0.75rem; font-weight:600; color:#818cf8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">' + _t('create.systemSuggestions') + '</div>' + suggestions.join('');
+          sugEl.innerHTML = '<div style="font-size:0.75rem; font-weight:600; color:var(--sp-c-818cf8,#818cf8); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">' + _t('create.systemSuggestions') + '</div>' + suggestions.join('');
         }
 
       // ---- NEAR LIMIT: >75% usage ----
@@ -4397,7 +4399,7 @@ function setupCreateTournamentModal() {
         }
         if (suggestions.length > 0) {
           sugEl.style.display = 'flex';
-          sugEl.innerHTML = '<div style="font-size:0.75rem; font-weight:600; color:#818cf8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">' + _t('create.systemSuggestions') + '</div>' + suggestions.join('');
+          sugEl.innerHTML = '<div style="font-size:0.75rem; font-weight:600; color:var(--sp-c-818cf8,#818cf8); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">' + _t('create.systemSuggestions') + '</div>' + suggestions.join('');
         }
 
       // ---- OK: within limits ----
@@ -4484,7 +4486,7 @@ function setupCreateTournamentModal() {
         b.style.border = '2px solid #34d399'; b.style.background = 'rgba(16,185,129,0.15)'; b.style.color = '#34d399'; b.style.fontWeight = '600';
       } else {
         b.classList.remove('draw-mode-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)'; b.style.fontWeight = '600';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))'; b.style.background = 'rgba(255,255,255,0.06)'; b.style.color = 'var(--text-main)'; b.style.fontWeight = '600';
       }
     });
     var dmDescEl = document.getElementById('draw-mode-desc');
@@ -4504,7 +4506,7 @@ function setupCreateTournamentModal() {
         b.style.fontWeight = '600';
       } else {
         b.classList.remove('formato-btn-active');
-        b.style.border = '2px solid rgba(255,255,255,0.18)';
+        b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))';
         b.style.background = 'rgba(255,255,255,0.06)';
         b.style.color = 'var(--text-main)';
         b.style.fontWeight = '500';
@@ -4579,7 +4581,7 @@ function setupCreateTournamentModal() {
       if (sportCleanBtn === (t.sport || '').replace(/^[^\w\u00C0-\u024F]+/u, '').trim()) {
         sb.classList.add('sport-btn-active'); sb.style.border='2px solid #fbbf24'; sb.style.background='rgba(251,191,36,0.15)'; sb.style.color='#fbbf24';
       } else {
-        sb.classList.remove('sport-btn-active'); sb.style.border='2px solid rgba(255,255,255,0.18)'; sb.style.background='rgba(255,255,255,0.06)'; sb.style.color='var(--text-main)';
+        sb.classList.remove('sport-btn-active'); sb.style.border='2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))'; sb.style.background='rgba(255,255,255,0.06)'; sb.style.color='var(--text-main)';
       }
     });
 
@@ -4663,7 +4665,7 @@ function setupCreateTournamentModal() {
     var lockBtn = document.getElementById('btn-logo-lock');
     if (lockBtn) {
       lockBtn.textContent = window._logoLocked ? '🔒' : '🔓';
-      lockBtn.style.border = window._logoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid rgba(255,255,255,0.1)';
+      lockBtn.style.border = window._logoLocked ? '1px solid rgba(251,191,36,0.4)' : '1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1))';
       lockBtn.style.background = window._logoLocked ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.05)';
       lockBtn.style.color = window._logoLocked ? '#fbbf24' : 'var(--text-muted)';
     }
@@ -4679,10 +4681,10 @@ function setupCreateTournamentModal() {
       var addrText = t.venueAddress || t.venue;
       infoEl.style.display = 'flex';
       infoEl.innerHTML = '<span style="display:flex; flex-direction:column; gap:2px;">' +
-        '<span style="font-weight:500; color:#e2e8f0;">📍 ' + (t.venue || '') + '</span>' +
-        '<span style="color:#94a3b8; font-size:0.7rem;">' + addrText + '</span>' +
+        '<span style="font-weight:500; color:var(--sp-c-e2e8f0,#e2e8f0);">📍 ' + (t.venue || '') + '</span>' +
+        '<span style="color:var(--sp-c-94a3b8,#94a3b8); font-size:0.7rem;">' + addrText + '</span>' +
         '</span>' +
-        ' &nbsp;<a href="' + mapsUrl + '" target="_blank" title="Ver no mapa" style="color:#818cf8; text-decoration:none; font-size:1.1rem; line-height:1; flex-shrink:0;">🗺️</a>';
+        ' &nbsp;<a href="' + mapsUrl + '" target="_blank" title="Ver no mapa" style="color:var(--sp-c-818cf8,#818cf8); text-decoration:none; font-size:1.1rem; line-height:1; flex-shrink:0;">🗺️</a>';
     } else if (infoEl) {
       infoEl.style.display = 'none';
       infoEl.innerHTML = '';
@@ -5017,7 +5019,7 @@ function setupCreateTournamentModal() {
     lines += '<li style="margin-bottom:6px;"><b>Vencedores, vitórias/derrotas e pontos não mudam.</b> O histórico dos ' + impact.playedCount + ' jogo(s) já disputado(s) é preservado.</li>';
     lines += '<li style="margin-bottom:6px;">Os critérios de <b>desempate</b> (saldo de sets/games) são recalculados pela nova regra.</li>';
     if (impact.paradigm === 'toSets' && impact.noSetDataCount > 0) {
-      lines += '<li style="margin-bottom:6px;color:#fbbf24;">⚠️ ' + impact.noSetDataCount + ' jogo(s) foram lançados como <b>placar simples</b> (sem sets). Eles continuam contando o resultado, mas <b>não entram</b> nos critérios de desempate por sets/games. Não dá pra convertê-los em sets — ficam como estão.</li>';
+      lines += '<li style="margin-bottom:6px;color:var(--sp-c-fbbf24,#fbbf24);">⚠️ ' + impact.noSetDataCount + ' jogo(s) foram lançados como <b>placar simples</b> (sem sets). Eles continuam contando o resultado, mas <b>não entram</b> nos critérios de desempate por sets/games. Não dá pra convertê-los em sets — ficam como estão.</li>';
     }
     var html =
       '<div class="modal-overlay active" id="' + modalId + '" style="display:flex;align-items:center;justify-content:center;z-index:10045;">' +
@@ -5809,7 +5811,7 @@ window._hydrateVenuePrefChips = function() {
     var full = (loc && (loc.label || loc.name)) || ('Local ' + (i + 1));
     var nm = window._venueNameOnly(full); // v2.1.44: só o nome, sem endereço
     return '<button type="button" data-pref-chip="' + i + '" onclick="window._venuePickPreferred(' + i + ')" ' +
-      'style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#34d399;border-radius:999px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;">⭐ ' + _sh(nm) + '</button>';
+      'style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:var(--sp-c-34d399,#34d399);border-radius:999px;padding:5px 12px;font-size:0.76rem;font-weight:700;cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;">⭐ ' + _sh(nm) + '</button>';
   }).join('');
   box.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:100%;overflow:hidden;">' +
     '<span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">Preferidos:</span>' + chips +
@@ -6159,12 +6161,12 @@ window._gsmRenderPresets = function() {
     var isActive = key === selected;
     html += '<button type="button" onclick="window._gsmSelectPreset(\'' + key + '\')" style="' +
       'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
-      'border:2px solid ' + (isActive ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)') + ';' +
-      'background:' + (isActive ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)') + ';' +
+      'border:2px solid ' + window._spCor((isActive ? 'rgba(168,85,247,0.7)' : 'rgba(255,255,255,0.1)'), 'borda') + ';' +
+      'background:' + window._spCor((isActive ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.03)'), 'background') + ';' +
       'box-shadow:' + (isActive ? '0 0 12px rgba(168,85,247,0.2)' : 'none') + ';' +
       '">' +
       '<span style="font-size:1.3rem;">' + p.icon + '</span>' +
-      '<span style="font-size:0.78rem;font-weight:700;color:' + (isActive ? '#c084fc' : 'var(--text-bright)') + ';">' + p.label + '</span>' +
+      '<span style="font-size:0.78rem;font-weight:700;color:' + window._spCor((isActive ? '#c084fc' : 'var(--text-bright)'), 'color') + ';">' + p.label + '</span>' +
       '<span style="font-size:0.65rem;color:var(--text-muted);text-align:center;line-height:1.3;">' + window._gsmBuildPresetDesc(key, p) + '</span>' +
     '</button>';
   });
@@ -6352,9 +6354,9 @@ window._openGSMConfig = function(targetPhase) {
 
   overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:600px;border-radius:20px;border:1px solid rgba(168,85,247,0.25);box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto 0;max-height:90%;display:flex;flex-direction:column;">' +
     '<div style="background:linear-gradient(135deg,#6d28d9 0%,#a855f7 100%);padding:1rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">' +
-      '<h3 style="margin:0;color:#f5f3ff;font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
+      '<h3 style="margin:0;color:var(--sp-c-f5f3ff,#f5f3ff);font-size:1.1rem;font-weight:800;">⚙️ Personalizado</h3>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button type="button" onclick="window._gsmCloseConfig()" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
+        '<button type="button" onclick="window._gsmCloseConfig()" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
         '<button type="button" onclick="window._gsmSaveConfig();" class="btn btn-sm" style="background:#fff;color:#6d28d9;font-weight:700;border:none;">Aplicar</button>' +
       '</div>' +
     '</div>' +
@@ -6424,7 +6426,7 @@ window._openGSMConfig = function(targetPhase) {
       '</div>' +
       // Summary
       '<div id="gsm-summary-box" style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:12px 16px;">' +
-        '<p style="margin:0;font-size:0.78rem;color:#c084fc;font-weight:600;margin-bottom:6px;">Resumo</p>' +
+        '<p style="margin:0;font-size:0.78rem;color:var(--sp-c-c084fc,#c084fc);font-weight:600;margin-bottom:6px;">Resumo</p>' +
         '<div id="gsm-summary-text" style="font-size:0.85rem;color:var(--text-main);line-height:1.5;"></div>' +
       '</div>' +
     '</div>' +
@@ -6555,7 +6557,7 @@ window._gsmSetTieAtInline = function (curto) {
 
 function _gsmSegBtn(ativo, onclick, titulo, sub) {
   return '<button type="button" onclick="' + onclick + '" style="flex:1;padding:8px 6px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;' +
-    'border:2px solid ' + (ativo ? '#a855f7' : 'rgba(255,255,255,0.12)') + ';background:' + (ativo ? 'rgba(168,85,247,0.18)' : 'transparent') + ';color:var(--text-bright,#f1f5f9);">' +
+    'border:2px solid ' + window._spCor((ativo ? '#a855f7' : 'rgba(255,255,255,0.12)'), 'borda') + ';background:' + window._spCor((ativo ? 'rgba(168,85,247,0.18)' : 'transparent'), 'background') + ';color:var(--text-bright,#f1f5f9);">' +
     titulo + '<span style="font-size:0.64rem;color:var(--text-muted);display:block;font-weight:600;margin-top:2px;">' + sub + '</span></button>';
 }
 function _gsmTieRuleBtn(valor, tbLigado, titulo, sub) {
@@ -7526,7 +7528,7 @@ window._showTemplatePickerInCreate = function() {
     } else {
       _fmtLabel = _disp(tpl.format || '');
     }
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid var(--border-color);border-radius:12px;cursor:pointer;transition:background 0.15s;" ' +
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--border-color);border-radius:12px;cursor:pointer;transition:background 0.15s;" ' +
       'onmouseenter="this.style.background=\'rgba(99,102,241,0.15)\'" onmouseleave="this.style.background=\'rgba(255,255,255,0.04)\'" ' +
       'onclick="window._applyTemplateInCreate(' + i + ')">' +
       '<span style="font-size:1.4rem;">' + sportIcon + '</span>' +
@@ -7597,7 +7599,7 @@ window._showTiebreakInfo = function(criterion) {
           {
             icon: '🔢',
             title: 'Exemplo numérico',
-            body: 'Você (8 pts) e João (8 pts) empataram.<br>Seus 5 adversários somaram <b>30 pts</b> no torneio.<br>Os adversários do João somaram <b>22 pts</b>.<br><br><b style="color:#10b981;">Buchholz seu = 30 → fica à frente.</b>'
+            body: 'Você (8 pts) e João (8 pts) empataram.<br>Seus 5 adversários somaram <b>30 pts</b> no torneio.<br>Os adversários do João somaram <b>22 pts</b>.<br><br><b style="color:var(--sp-c-10b981,#10b981);">Buchholz seu = 30 → fica à frente.</b>'
           },
           {
             icon: '📜',
@@ -7632,7 +7634,7 @@ window._showTiebreakInfo = function(criterion) {
           {
             icon: '🔢',
             title: 'Exemplo numérico',
-            body: 'Você venceu 3 jogadores que somaram <b>20 pts</b> no torneio + empatou com 1 que fez <b>6 pts</b>.<br><b style="color:#10b981;">SB seu = 20 + (6 ÷ 2) = 23</b><br><br>João venceu 3 jogadores fracos que somaram <b>9 pts</b>.<br><b style="color:#f87171;">SB do João = 9</b><br><br>→ <b>Você fica à frente.</b>'
+            body: 'Você venceu 3 jogadores que somaram <b>20 pts</b> no torneio + empatou com 1 que fez <b>6 pts</b>.<br><b style="color:var(--sp-c-10b981,#10b981);">SB seu = 20 + (6 ÷ 2) = 23</b><br><br>João venceu 3 jogadores fracos que somaram <b>9 pts</b>.<br><b style="color:var(--sp-c-f87171,#f87171);">SB do João = 9</b><br><br>→ <b>Você fica à frente.</b>'
           },
           {
             icon: '📜',
@@ -7667,7 +7669,7 @@ window._showTiebreakInfo = function(criterion) {
           {
             icon: '🔢',
             title: 'Exemplo numérico',
-            body: 'Beach Tennis, valores padrão. Você venceu por <b>6–4</b>:<br>Participação +150 · Vitória +150 · 6 games ×50 = +300 · 4 games ×(−20) = −80<br><br><b style="color:#10b981;">Total da partida = 520.</b><br>Somando todas as suas partidas, dá o número que aparece na coluna <b>💯 PA</b> da classificação (clicável pra ver o detalhamento).'
+            body: 'Beach Tennis, valores padrão. Você venceu por <b>6–4</b>:<br>Participação +150 · Vitória +150 · 6 games ×50 = +300 · 4 games ×(−20) = −80<br><br><b style="color:var(--sp-c-10b981,#10b981);">Total da partida = 520.</b><br>Somando todas as suas partidas, dá o número que aparece na coluna <b>💯 PA</b> da classificação (clicável pra ver o detalhamento).'
           },
           {
             icon: '🛡️',
@@ -7693,10 +7695,10 @@ window._showTiebreakInfo = function(criterion) {
 
   // Build sections HTML
   const sectionsHtml = sections.sections.map(s =>
-    '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;">' +
+    '<div style="background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));border-radius:12px;padding:14px 16px;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
         '<span style="font-size:1.1rem;">' + s.icon + '</span>' +
-        '<h4 style="margin:0;font-size:0.85rem;font-weight:700;color:' + sections.accent + ';text-transform:uppercase;letter-spacing:0.5px;">' + s.title + '</h4>' +
+        '<h4 style="margin:0;font-size:0.85rem;font-weight:700;color:' + window._spCor(sections.accent, 'color') + ';text-transform:uppercase;letter-spacing:0.5px;">' + s.title + '</h4>' +
       '</div>' +
       '<div style="font-size:0.9rem;line-height:1.55;color:var(--text-main);">' + s.body + '</div>' +
     '</div>'
@@ -7722,7 +7724,7 @@ window._showTiebreakInfo = function(criterion) {
           '</div>' +
         '</div>' +
         '<button onclick="document.getElementById(\'tiebreak-info-overlay\').remove()" aria-label="Fechar" ' +
-          'style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright,#fff);' +
+          'style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:var(--text-bright,#fff);' +
           'width:36px;height:36px;border-radius:50%;font-size:1.2rem;font-weight:700;cursor:pointer;flex-shrink:0;' +
           'display:flex;align-items:center;justify-content:center;transition:background 0.2s;" ' +
           'onmouseover="this.style.background=\'rgba(255,255,255,0.16)\'" ' +

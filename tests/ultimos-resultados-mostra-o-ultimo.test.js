@@ -287,7 +287,10 @@ ok(ABERTA.indexOf('ver menos') !== -1,
   'F5 — aberta, o convite vira "ver menos"');
 ok(ABERTA.indexOf('▾') === -1 && ABERTA.indexOf('▴') === -1 && ABERTA.indexOf('▸') === -1,
   'F6 — nenhuma setinha sobrou na seção (o dono achou o glifo discreto demais)');
-ok(/id="mr-toggle-tag"[^>]*color:#7dd3fc/.test(ABERTA),
+// ⚠️ 2.0.94 — a cor sai como `color:var(--sp-c-7dd3fc,#7dd3fc)`: o literal continua ali,
+// como fallback, e é ele que vale no tema escuro. O padrão aceita as duas formas pra que
+// a afirmação siga sendo sobre a COR, não sobre a sintaxe.
+ok(/id="mr-toggle-tag"[^>]*color:(?:var\(--sp-c-7dd3fc,)?#7dd3fc/.test(ABERTA),
   'F7 — a tag de abrir/fechar mora à DIREITA do título, em azul-claro');
 
 // ═══════════════════════════════════════════════════════════════════════════

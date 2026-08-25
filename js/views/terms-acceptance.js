@@ -95,11 +95,11 @@
             '</div>' +
             '<div style="padding:1.25rem 1.5rem;">' +
               '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem;">' +
-                '<a href="#terms" target="_blank" rel="noopener" id="terms-accept-link-terms" style="display:block;padding:10px 14px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;color:var(--primary-color);text-decoration:none;font-size:0.88rem;font-weight:600;transition:all 0.2s;">' +
+                '<a href="#terms" target="_blank" rel="noopener" id="terms-accept-link-terms" style="display:block;padding:10px 14px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;color:var(--sp-c-var-primary-color-,var(--primary-color));text-decoration:none;font-size:0.88rem;font-weight:600;transition:all 0.2s;">' +
                   '📜 ' + _t('terms.openTerms') +
                   ' <span style="float:right;opacity:0.6;font-size:0.75rem;">↗</span>' +
                 '</a>' +
-                '<a href="#privacy" target="_blank" rel="noopener" id="terms-accept-link-privacy" style="display:block;padding:10px 14px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;color:var(--primary-color);text-decoration:none;font-size:0.88rem;font-weight:600;transition:all 0.2s;">' +
+                '<a href="#privacy" target="_blank" rel="noopener" id="terms-accept-link-privacy" style="display:block;padding:10px 14px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;color:var(--sp-c-var-primary-color-,var(--primary-color));text-decoration:none;font-size:0.88rem;font-weight:600;transition:all 0.2s;">' +
                   '🔐 ' + _t('terms.openPrivacy') +
                   ' <span style="float:right;opacity:0.6;font-size:0.75rem;">↗</span>' +
                 '</a>' +

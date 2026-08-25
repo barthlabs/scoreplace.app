@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // liga-substitution.js — W.O. + substituição em grupos de Liga (Rei/Rainha). v2.4.30
 //
 // Quando um jogador não consegue fazer seus jogos da rodada, os demais do grupo
@@ -447,7 +449,7 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
   // jogo disputado fica como está (nome e placar); quem entra herda vaga e posição.
   var _temPlacar = (group.matches || []).some(_jogoJaTemPlacar);
   if (_temPlacar) {
-    html += '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:0.74rem;color:#93c5fd;">' +
+    html += '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:0.74rem;color:var(--sp-c-93c5fd,#93c5fd);">' +
       '📌 Este grupo já tem <b>jogos disputados</b>. Eles <b>não mudam</b>: nome e placar de quem jogou ficam como estão. Quem assumir herda a <b>vaga e a posição</b> de ' + _safe(absentName) + ' na classificação e nos jogos futuros.' +
     '</div>';
   }
@@ -463,12 +465,12 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
       ? 'Entra <b>na frente da fila</b> pra manter a proporção ' + _safe((typeof window._ratioLabel === 'function' && window._ratioLabel(_rrExp.ratio)) || _rrExp.ratio) + ' do grupo. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.'
       : 'Primeiro da lista de espera. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.';
     html += '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:10px;margin-bottom:14px;">' +
-      '<div style="font-size:0.72rem;font-weight:700;color:#4ade80;margin-bottom:4px;">✅ QUEM ASSUME A VAGA</div>' +
+      '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin-bottom:4px;">✅ QUEM ASSUME A VAGA</div>' +
       '<div style="font-size:0.95rem;font-weight:700;">' + _safe(_wlDisplay(sub)) + '</div>' +
       '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">' + _comoEntra + '</div>' +
     '</div>';
   } else {
-    html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:10px;margin-bottom:14px;font-size:0.78rem;color:#fbbf24;">' +
+    html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:10px;margin-bottom:14px;font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);">' +
       '⚠️ <b>A lista de espera está vazia</b> — ninguém assume a vaga automaticamente. O grupo fica com a vaga aberta; você ainda pode convidar quem ficou de fora ou completar com Jogador X.' +
     '</div>';
   }
@@ -480,7 +482,7 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
   // quando o organizador aponte ele possa indicar se atende pela fila ou por jogador x"_.
   // Antes o Jogador X só existia enterrado na tela seguinte; agora são dois botões:
   html += '<button class="btn btn-danger" style="width:100%;font-weight:800;" onclick="window._ligaApplyWo(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 Aplicar W.O.' + (sub ? ' — entra ' + _safe(_wlDisplay(sub)) : '') + '</button>';
-  html += '<button class="btn btn-outline" style="width:100%;margin-top:8px;font-weight:800;border-color:rgba(251,191,36,0.45);color:#fbbf24;" onclick="window._ligaWoConfirmGuest(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 W.O. + 🎾 Jogador X no lugar (não pontua)</button>';
+  html += '<button class="btn btn-outline" style="width:100%;margin-top:8px;font-weight:800;border-color:rgba(251,191,36,0.45);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._ligaWoConfirmGuest(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 W.O. + 🎾 Jogador X no lugar (não pontua)</button>';
 
   if (window.showAlertDialog) window.showAlertDialog('Confirmar W.O.?', html, function () {}, { type: 'warning', confirmText: 'Cancelar' });
 };
@@ -764,7 +766,7 @@ function _ligaWoDestBox(absentName) {
       // "fica desativado" concordaria em gênero com a pessoa — e o app não sabe (nem
       // presume) o gênero de ninguém. "vai para os Desativados" nomeia a LISTA, que é
       // como o app já a chama na tela, e serve pra qualquer pessoa.
-      '<div style="font-size:0.8rem;font-weight:800;color:#f87171;">🔴 ' + _safe(absentName) + ' vai para os Desativados</div>' +
+      '<div style="font-size:0.8rem;font-weight:800;color:var(--sp-c-f87171,#f87171);">🔴 ' + _safe(absentName) + ' vai para os Desativados</div>' +
       '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:3px;">Fica de fora dos próximos sorteios. Ao ligar o botão <b>Ativado</b>, entra no <b>fim da lista de espera</b> e joga quando chegar a vez.</div>' +
     '</div>';
 }
@@ -915,7 +917,7 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   if (folgas.length > 0) {
     var _souOrgHint = (typeof window._canManagePresence === 'function')
       ? !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser) : false;
-    html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:10px 0 6px;">' + (_souOrgHint ? 'Substituir ou convidar' : 'Convidar') + ' da lista de espera / folgas' + (catLbl ? ' · categoria ' + _safe(catLbl) : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
+    html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin:10px 0 6px;">' + (_souOrgHint ? 'Substituir ou convidar' : 'Convidar') + ' da lista de espera / folgas' + (catLbl ? ' · categoria ' + _safe(catLbl) : '') + ' — o PRIMEIRO que aceitar entra e pontua de verdade</div>';
     html += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px;">' +
       (_souOrgHint ? 'Marque <b>um</b> pra colocar na hora, ou <b>vários</b> pra convidar — aí o primeiro que aceitar entra.'
                    : 'Marque quem recebe o convite — o primeiro que aceitar entra.') + '</div>';
@@ -947,12 +949,12 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
       // offCat NÃO some com a pessoa: mostra marcado, e o organizador decide se aceita a
       // quebra de categoria. Sumir era o que fazia a fila "não existir" na tela.
       var _tag = f.offCat
-        ? '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;flex:0 0 auto;">fora da categoria</span>'
-        : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:1px 6px;border-radius:5px;flex:0 0 auto;">espera</span>' : '');
+        ? '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:var(--sp-c-fbbf24,#fbbf24);padding:1px 6px;border-radius:5px;flex:0 0 auto;">fora da categoria</span>'
+        : (f.fromWaitlist ? '<span style="font-size:0.62rem;font-weight:700;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted);padding:1px 6px;border-radius:5px;flex:0 0 auto;">espera</span>' : '');
       // v1.8.45 — quem quebraria a proporção NÃO some (esconder é o que fez a fila "não
       // existir" na tela): vem marcado, e o organizador decide se aceita a quebra.
       if (_rr && f.dist > 0 && !f.offCat) {
-        _tag += '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:#fbbf24;padding:1px 6px;border-radius:5px;flex:0 0 auto;margin-left:4px;">quebra ' + _safe(_rr.ratio) + '</span>';
+        _tag += '<span style="font-size:0.62rem;font-weight:800;background:rgba(251,191,36,0.2);color:var(--sp-c-fbbf24,#fbbf24);padding:1px 6px;border-radius:5px;flex:0 0 auto;margin-left:4px;">quebra ' + _safe(_rr.ratio) + '</span>';
       }
       var _bd = f.offCat ? 'rgba(251,191,36,0.5)' : 'rgba(16,185,129,0.55)';
       var _co = f.offCat ? '#fbbf24' : '#4ade80';
@@ -964,7 +966,7 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
       // desmarcados e podem ser ligados no toque (é assim que se convida vários).
       var _on = (!_jaMarcou && !f.offCat && f.dist === 0);
       if (_on) _jaMarcou = true;
-      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="' + (_on ? '1' : '0') + '" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + _bd + ';color:' + _co + ';' + (_on ? '' : 'opacity:0.6;') + '">' +
+      return '<button type="button" class="btn btn-outline" data-cand="1" data-on="' + (_on ? '1' : '0') + '" data-uid="' + _safe(f.uid) + '" data-name="' + _safe(f.name) + '" onclick="window._ligaToggleCand(this)" style="width:100%;margin-bottom:6px;text-align:left;display:flex;align-items:center;gap:8px;border-color:' + window._spCor(_bd, 'color') + ';color:' + window._spCor(_co, 'color') + ';' + (_on ? '' : 'opacity:0.6;') + '">' +
         '<span data-mark="1" style="flex:0 0 auto;">' + (_on ? '✅' : '⬜') + '</span>' +
         // ⚠️ NOME NÃO SE COMPRIME. Era `nowrap + ellipsis`: com a tag "quebra 25/75" ao
         // lado sobravam 132px pra um nome que precisa de 206 e virava "Fabi…" / "Nath…" —
@@ -989,8 +991,8 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
     // dita quando a espera está REALMENTE vazia.
     html += '<div style="font-size:0.74rem;color:var(--text-muted);margin:8px 0;">A lista de espera está vazia e ninguém ficou de fora nesta rodada — não há quem convidar.</div>';
   }
-  html += '<div style="font-size:0.74rem;font-weight:700;color:#fbbf24;margin:12px 0 6px;">Jogador X — qualquer pessoa presente (não pontua)</div>';
-  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
+  html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin:12px 0 6px;">Jogador X — qualquer pessoa presente (não pontua)</div>';
+  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._ligaFillGuestPrompt(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
   // ⭐ 2.0.61 — o Jogador X SOBE: era a última coisa da tela, abaixo do box de destino,
   // e o dono não o achou no caso Fábio/E2. Opção de primeira classe vem ANTES da explicação.
   html += _ligaWoDestBox(absentName);
@@ -1344,11 +1346,11 @@ window._ligaInviteBannerHtml = function (t) {
   return mine.map(function (iv) {
     var idE = _esc(iv.id), tE = _esc(t.id);
     return '<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.45);border-radius:12px;padding:12px 14px;margin-bottom:1rem;">' +
-      '<div style="font-weight:700;font-size:0.9rem;color:#4ade80;margin-bottom:4px;">📨 Convite pra substituir</div>' +
+      '<div style="font-weight:700;font-size:0.9rem;color:var(--sp-c-4ade80,#4ade80);margin-bottom:4px;">📨 Convite pra substituir</div>' +
       '<div style="font-size:0.84rem;color:var(--text-bright);margin-bottom:10px;">Entre no lugar de <b>' + _safe(iv.absentName) + '</b> no <b>' + _safe(iv.groupName) + '</b>. Você joga e <b>pontua de verdade</b>.</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
         '<button onclick="window._ligaAcceptSub(\'' + tE + '\',\'' + idE + '\')" style="background:#10b981;color:#fff;border:none;padding:8px 16px;border-radius:9px;font-weight:700;font-size:0.82rem;cursor:pointer;">✅ Aceitar e jogar</button>' +
-        '<button onclick="window._ligaDeclineSub(\'' + tE + '\',\'' + idE + '\')" style="background:transparent;color:#ef4444;border:1px solid rgba(239,68,68,0.5);padding:8px 16px;border-radius:9px;font-weight:700;font-size:0.82rem;cursor:pointer;">❌ Recusar</button>' +
+        '<button onclick="window._ligaDeclineSub(\'' + tE + '\',\'' + idE + '\')" style="background:transparent;color:var(--sp-c-ef4444,#ef4444);border:1px solid rgba(239,68,68,0.5);padding:8px 16px;border-radius:9px;font-weight:700;font-size:0.82rem;cursor:pointer;">❌ Recusar</button>' +
       '</div></div>';
   }).join('');
 };
@@ -1926,12 +1928,12 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
     var who = _pend.length === 1 ? (_pend[0].inviteeName + ' convidado, aguardando confirmação')
       : _pend.length > 1 ? (_pend.length + ' convidados — o 1º que aceitar joga')
       : 'substituto convidado, aguardando confirmação';
-    var s = '<span style="font-size:0.66rem;font-weight:700;color:#fbbf24;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' levou W.O. · ' + _safe(who) + '</span>';
+    var s = '<span style="font-size:0.66rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' levou W.O. · ' + _safe(who) + '</span>';
     // Demorou ou vai recusar? Os jogadores não ficam travados: convidam outro
     // folga OU completam com Jogador X na hora.
     if (manage) {
-      s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#4ade80;border-color:rgba(16,185,129,0.4);">📨 Convidar outro</button>';
-      s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaSwitchToGuest(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">🎾 Jogador X</button>';
+      s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaCancelInvite(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:var(--sp-c-4ade80,#4ade80);border-color:rgba(16,185,129,0.4);">📨 Convidar outro</button>';
+      s += ' <button type="button" class="btn btn-outline btn-sm" onclick="window._ligaSwitchToGuest(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\')" style="' + poBtnStyle + 'color:var(--sp-c-fbbf24,#fbbf24);border-color:rgba(251,191,36,0.45);">🎾 Jogador X</button>';
       // Reverter W.O. também no estado pendente — enquanto os jogos não começaram,
       // o organizador pode desfazer o W.O. (cancela o convite e reabre o grupo).
       var _woPlayedP = (typeof window._matchHasRealPlay === 'function')
@@ -1987,7 +1989,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
       var _ehAtual = (group.woAbsentUid && par.absentUid) ? (String(par.absentUid) === String(group.woAbsentUid)) : (par.absentName === group.woAbsent);
       var _lblPar = (_ehAtual && group.subIsGuest) ? (_safe(par.subName || group.subName) + ' (Jogador X)') : _safe(par.subName);
       var _busca = window._safeHtml(String(par.absentName || '') + ' ' + String(par.subName || ''));
-      var _pill = '<span data-players="' + _busca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(par.absentName) + ' W.O.<br>→ ' + _lblPar + '</span>';
+      var _pill = '<span data-players="' + _busca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:var(--sp-c-a78bfa,#a78bfa);background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(par.absentName) + ' W.O.<br>→ ' + _lblPar + '</span>';
       var _rev = '';
       if (manage && !_woPlayed && par.subName) {
         var _bloq = (typeof window._ligaRevertWoBloqueadoPor === 'function')
@@ -2005,7 +2007,7 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   }
   // Estado: W.O. declarado mas sem substituto (recusa) — precisa preencher
   if (group.woAbsent && (group.subStatus === 'open' || !group.subStatus) && manage) {
-    return _woBlocoComBotao(_btnNovoWo, '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:#fbbf24;border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>');
+    return _woBlocoComBotao(_btnNovoWo, '<button type="button" class="btn btn-outline btn-sm" onclick="window._ligaPickFill(\'' + tE + '\',' + roundIndex + ',\'' + gE + '\',\'' + _esc(group.woAbsent) + '\')" style="' + poBtnStyle + 'color:var(--sp-c-fbbf24,#fbbf24);border-color:rgba(251,191,36,0.45);">⚠️ ' + _safe(group.woAbsent) + ' levou W.O. · escolher substituto</button>');
   }
   // Estado normal: oferece declarar ausência (só se grupo não terminou).
   // v3.1.72: torneio multi-dia + jogadores lançam resultado → usa o fluxo CANÔNICO
@@ -2202,15 +2204,15 @@ window._monWoPickFill = function (tId, pIdx, gName, absentName) {
   var folgas = _monRoundFolgas(t, pIdx);
   var html = '<div style="font-size:0.85rem;opacity:0.85;margin-bottom:10px;"><b>' + _safe(absentName) + '</b> leva W.O. (0 pts). Quem entra no lugar?</div>';
   if (folgas.length) {
-    html += '<div style="font-size:0.74rem;font-weight:700;color:#4ade80;margin:4px 0 6px;">Folga da rodada — entra e PONTUA</div>';
+    html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin:4px 0 6px;">Folga da rodada — entra e PONTUA</div>';
     html += folgas.map(function (f) {
-      return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(16,185,129,0.4);color:#4ade80;" onclick="window._monWoApply(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f) + '\',false); window._dismissAllOverlays&&window._dismissAllOverlays();">🟢 ' + _safe(f) + '</button>';
+      return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(16,185,129,0.4);color:var(--sp-c-4ade80,#4ade80);" onclick="window._monWoApply(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f) + '\',false); window._dismissAllOverlays&&window._dismissAllOverlays();">🟢 ' + _safe(f) + '</button>';
     }).join('');
   } else {
     html += '<div style="font-size:0.72rem;opacity:0.7;margin-bottom:8px;">Nenhum jogador de folga nesta rodada.</div>';
   }
-  html += '<div style="font-size:0.74rem;font-weight:700;color:#fbbf24;margin:12px 0 6px;">Jogador X — qualquer presente (NÃO pontua)</div>';
-  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:#fbbf24;" onclick="window._monWoGuestPrompt(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
+  html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin:12px 0 6px;">Jogador X — qualquer presente (NÃO pontua)</div>';
+  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._monWoGuestPrompt(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
   if (window.showAlertDialog) window.showAlertDialog('Substituir ' + _safe(absentName), html, function () {}, { type: 'info', confirmText: 'Fechar' });
 };
 
@@ -2245,7 +2247,7 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
     groupDone ? _org : manage);
   if (wm) {
     var lbl = wm.woIsGuest ? (_safe(wm.woReplacedBy) + ' (Jogador X)') : _safe(wm.woReplacedBy);
-    var s = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:#a78bfa;background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O.<br>→ ' + lbl + '</span>';
+    var s = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:var(--sp-c-a78bfa,#a78bfa);background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O.<br>→ ' + lbl + '</span>';
     var played = (typeof window._matchHasRealPlay === 'function') && _monPlaying(t, gName, pIdx).some(function (m) { return window._matchHasRealPlay(m); });
     if (manage && !played && typeof window._woBtnHtml === 'function') {
       s += ' ' + window._woBtnHtml("window._monWoRevert('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')", false, { label: '↩️ Reverter<br>W.O.', size: 'btn-sm' });

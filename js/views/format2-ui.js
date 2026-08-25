@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ─────────────────────────────────────────────────────────────────────────────
 // format2-ui.js — UI do CONFIGURADOR ÚNICO (reescrita v4.4.x)
 //
@@ -71,15 +73,15 @@
   }
 
   function _pill(active, onclick, label) {
-    var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:#c7d2fe;';
-    var off = 'border:2px solid rgba(255,255,255,0.16);background:rgba(255,255,255,0.05);color:var(--text-main);';
+    var on = 'border:2px solid #818cf8;background:rgba(99,102,241,0.22);color:var(--sp-c-c7d2fe,#c7d2fe);';
+    var off = 'border:2px solid var(--sp-b-255-255-255-016,rgba(255,255,255,0.16));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-main);';
     return '<button type="button" onclick="' + onclick + '" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;white-space:nowrap;margin:0 4px 4px 0;' + (active ? on : off) + '">' + label + '</button>';
   }
   function _sec(title, inner) {
     return '<div style="margin-bottom:16px;"><div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:7px;">' + title + '</div>' + inner + '</div>';
   }
   function _num(val, min, max, onchange) {
-    return '<input type="number" min="' + min + '" max="' + max + '" value="' + val + '" onchange="' + onchange + '" style="width:60px;text-align:center;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);">';
+    return '<input type="number" min="' + min + '" max="' + max + '" value="' + val + '" onchange="' + onchange + '" style="width:60px;text-align:center;padding:6px;border-radius:8px;border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);">';
   }
   // Toggle padrão do app (.toggle-switch) com rótulo à direita do controle.
   function _toggle(label, checked, onchange) {
@@ -146,7 +148,7 @@
     var _nmInh = (function () { var el = document.getElementById('new-matchups'); if (el) return el.value === 'true'; return _inh === 'expand'; })();
     var isExpand = (e.newMatchups === true || e.newMatchups === false) ? e.newMatchups : _nmInh;
     var onRow = 'border:1px solid rgba(251,191,36,0.25);background:rgba(251,191,36,0.08);';
-    var offRow = 'border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);';
+    var offRow = 'border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));';
     function _tg(checked, on) {
       return '<label class="toggle-switch" style="--toggle-on-bg:#fbbf24;--toggle-on-glow:rgba(251,191,36,0.3);--toggle-on-border:#fbbf24;flex-shrink:0;"><input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="' + on + '"><span class="toggle-slider"></span></label>';
     }
@@ -166,9 +168,9 @@
       T(isExpand ? 'create.lateEnrollExpand' : 'create.lateEnrollSuplentesOnly'),
       T(isExpand ? 'create.lateEnrollExpandOnDesc' : 'create.lateEnrollExpandOffDesc'),
       _tg(isExpand, 'window._f2ElimLateConf(this.checked)')) + '</div>');
-    var inheritHint = _explicit ? '' : ('<div style="font-size:0.72rem;color:#93c5fd;margin:0 0 8px;display:flex;align-items:flex-start;gap:5px;line-height:1.4;"><span>🔗</span><span>' + T('create.lateEnrollInheritHint') + '</span></div>');
+    var inheritHint = _explicit ? '' : ('<div style="font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);margin:0 0 8px;display:flex;align-items:flex-start;gap:5px;line-height:1.4;"><span>🔗</span><span>' + T('create.lateEnrollInheritHint') + '</span></div>');
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
-      '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
+      '<p style="margin:0 0 0.75rem;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">⏱️ ' + T('create.lateEnrollSection') + '</p>' +
       inheritHint + masterRow + confRow + '</div>';
   }
 
@@ -272,17 +274,17 @@
           : '');
       grid += '<button type="button" onclick="window._f2ElimScoringPreset(\'' + k + '\')" style="' +
         'display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border-radius:12px;cursor:pointer;transition:all 0.2s;' +
-        'border:2px solid ' + (active ? 'rgba(251,191,36,0.7)' : 'rgba(255,255,255,0.1)') + ';' +
-        'background:' + (active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)') + ';' +
+        'border:2px solid ' + window._spCor((active ? 'rgba(251,191,36,0.7)' : 'rgba(255,255,255,0.1)'), 'borda') + ';' +
+        'background:' + window._spCor((active ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.03)'), 'background') + ';' +
         'box-shadow:' + (active ? '0 0 12px rgba(251,191,36,0.2)' : 'none') + ';">' +
         '<span style="font-size:1.3rem;">' + p.icon + '</span>' +
-        '<span style="font-size:0.78rem;font-weight:700;color:' + (active ? '#fbbf24' : 'var(--text-bright)') + ';">' + _safe(p.label) + '</span>' +
+        '<span style="font-size:0.78rem;font-weight:700;color:' + window._spCor((active ? '#fbbf24' : 'var(--text-bright)'), 'color') + ';">' + _safe(p.label) + '</span>' +
         '<span style="font-size:0.65rem;color:var(--text-muted);text-align:center;line-height:1.3;">' + _safe(desc) + '</span>' +
         '</button>';
     });
     var resumo = _elimScoringDesc(eff);
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:12px;padding:1rem;margin-top:14px;">' +
-      '<p style="margin:0 0 10px 0;font-size:0.8rem;color:#fbbf24;font-weight:600;text-transform:uppercase;letter-spacing:1px;">\uD83C\uDFBE Formato da Partida</p>' +
+      '<p style="margin:0 0 10px 0;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;text-transform:uppercase;letter-spacing:1px;">\uD83C\uDFBE Formato da Partida</p>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">' + grid + '</div>' +
       // O empate do set, à parte dos botões — o MESMO desenho da fase inicial, em âmbar.
       // Só aparece onde há set com tie-break; num formato sem set não há o que empatar.
@@ -292,7 +294,7 @@
             cor: '251,191,36', pfx: 'f2elim', onToggle: 'window._f2ElimTieAt' })
         : '') +
       (resumo
-        ? ('<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;">' +
+        ? ('<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px;line-height:1.5;padding:8px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-radius:8px;">' +
            _safe(resumo) + (e.scoring ? '' : ' <span style="opacity:0.75;">\u00b7 mesmo formato da classificat\u00f3ria</span>') + '</div>')
         : '') +
       '</div>';
@@ -301,7 +303,7 @@
   function _elimEndDateBlock(e) {
     var d = e.endDate || '', h = e.endTime || '';
     return '<div style="background:rgba(129,140,248,0.05);border:1px solid rgba(129,140,248,0.18);border-radius:12px;padding:1rem;margin-top:14px;">' +
-      '<p style="margin:0 0 0.6rem;font-size:0.8rem;color:#a5b4fc;font-weight:600;text-transform:uppercase;letter-spacing:1px;">📅 Término da fase</p>' +
+      '<p style="margin:0 0 0.6rem;font-size:0.8rem;color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:600;text-transform:uppercase;letter-spacing:1px;">📅 Término da fase</p>' +
       // ⭐ 2.0.1 (dono): o ✕ fica na MESMA LINHA da data e da hora — "dá pra diminuir um pouco
       // os campos para ele caber ali". Com `flex-wrap:wrap` ele descia sozinho pra segunda
       // linha em tela estreita, virando um botão vermelho solto embaixo do campo. Agora:
@@ -341,7 +343,7 @@
   //   [toggle] Sortear manualmente  (embaixo)
   // Manual é o efetivo quando não há data do 1º sorteio (auto precisa dela).
   function _schedBlock(r) {
-    var inp = 'padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;font-size:0.85rem;';
+    var inp = 'padding:8px 10px;border-radius:8px;border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));background:var(--bg-darker,rgba(0,0,0,0.25));color:var(--text-main);box-sizing:border-box;font-size:0.85rem;';
     var canAuto = !!r.drawFirstDate;
     var manual = !!r.drawManual || !canAuto;
     var ivVal = (parseInt(r.drawIntervalDays, 10) >= 1) ? parseInt(r.drawIntervalDays, 10) : '';
@@ -379,7 +381,7 @@
     // controle travado — travar foi invenção minha. O organizador liga se quiser.
     var _oneRound = (parseInt(r.n, 10) || 0) === 1;
     var _adOn = (r.allowSelfDeactivation != null) ? (r.allowSelfDeactivation !== false) : !_oneRound;
-    var _adTgl = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);">' +
+    var _adTgl = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
       '<label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font-size:0.9rem;color:var(--text-main);width:100%;">' +
         '<span>Deixar inscritos ficarem de fora <span style="color:var(--text-muted);font-size:0.78rem;">(Ativado/Desativado)</span></span>' +
         '<span class="toggle-switch"><input type="checkbox" id="liga-allow-self-deactivation"' +
@@ -389,11 +391,11 @@
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:6px;line-height:1.4;">' +
         'Cada inscrito pode se marcar como <b>Desativado</b> pra ficar de fora de um sorteio. ' +
         'Desligue pra que ninguém fique de fora — todos sempre <b>Ativados</b> e o controle some dos cards.' +
-        (_oneRound ? ' <span style="color:#94a3b8;">(Rodada única: já vem desligado, porque não há próximo sorteio pra ficar de fora.)</span>' : '') +
+        (_oneRound ? ' <span style="color:var(--sp-c-94a3b8,#94a3b8);">(Rodada única: já vem desligado, porque não há próximo sorteio pra ficar de fora.)</span>' : '') +
       '</div>' +
     '</div>';
     var note = '<div id="f2-sched-note" style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">' + _f2SchedNote(r) + '</div>';
-    return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);">' +
+    return '<div style="margin-top:14px;padding:12px 13px;border-radius:10px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">' +
       '<div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;">Agendamento dos sorteios</div>' +
       row1 + row2 + tgl + _adTgl + note + '</div>';
   }
@@ -444,7 +446,7 @@
     var hh = Math.floor(mins / 60), mm = mins % 60;
     var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
     var gdTxt = (gdG === gdE) ? (gdG + 'min') : (gdG + '/' + gdE + 'min');
-    return '<div style="margin-top:8px;font-size:0.78rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
+    return '<div style="margin-top:8px;font-size:0.78rem;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
       '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla ? (' → <b>' + gi.units + '</b> duplas') : '') +
       ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gdTxt + ' · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
   }
@@ -458,7 +460,7 @@
     // não dá pra saber quantos "todos" são → mensagem em vez de número fixo.
     if (cfg.eliminatoria.qualifyAll) {
       if (gi.units <= 0) {
-        return '<div style="margin-top:8px;font-size:0.78rem;color:#fde68a;background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">👥 <b>Todos</b> os inscritos entram na eliminatória — o total (duplas · jogos · tempo) aparece quando houver gente inscrita.</div>';
+        return '<div style="margin-top:8px;font-size:0.78rem;color:var(--sp-c-fde68a,#fde68a);background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">👥 <b>Todos</b> os inscritos entram na eliminatória — o total (duplas · jogos · tempo) aparece quando houver gente inscrita.</div>';
       }
     }
     var q = cfg.eliminatoria.qualifyAll ? gi.units : (perGroupScope ? cfg.grupos * cfg.classificados : cfg.classificados);
@@ -475,7 +477,7 @@
     var who = isDupla
       ? ('👥 <b>' + people + '</b> ' + (people === 1 ? 'pessoa' : 'pessoas') + ' → <b>' + teams + '</b> ' + (teams === 1 ? 'dupla' : 'duplas'))
       : ('👥 <b>' + teams + '</b> ' + (teams === 1 ? 'jogador' : 'jogadores'));
-    return '<div style="margin-top:8px;font-size:0.78rem;color:#fde68a;background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
+    return '<div style="margin-top:8px;font-size:0.78rem;color:var(--sp-c-fde68a,#fde68a);background:rgba(251,191,36,0.09);border:1px solid rgba(251,191,36,0.18);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
       who + ' na eliminatória · 🎯 <b>' + games + '</b> ' + (games === 1 ? 'jogo' : 'jogos') +
       (games > 0 ? ' · ⏱️ ~<b>' + timeStr + '</b>' : '') + '</div>';
   }
@@ -485,7 +487,7 @@
       return '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">1 grupo — <b>Pontos Corridos</b> (tabela única, classificação geral)</div>' + _estimateLine(cfg);
     }
     var gi = _groupInfo(cfg);
-    var col = function (n, lbl) { return '<div style="text-align:center;min-width:62px;"><div style="font-size:1.7rem;font-weight:800;color:#c7d2fe;line-height:1;">' + n + '</div><div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px;">' + lbl + '</div></div>'; };
+    var col = function (n, lbl) { return '<div style="text-align:center;min-width:62px;"><div style="font-size:1.7rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);line-height:1;">' + n + '</div><div style="font-size:0.66rem;color:var(--text-muted);margin-top:3px;">' + lbl + '</div></div>'; };
     var dot = '<div style="font-size:1.1rem;color:var(--text-muted);align-self:center;opacity:0.6;">·</div>';
     var nums = '<div style="display:flex;gap:10px;justify-content:center;align-items:flex-start;margin:12px 0 4px;">' +
       col(cfg.grupos, 'grupos') + dot + col(gi.perP, gi.isDupla ? 'pessoas/grupo' : 'por grupo') +
@@ -496,11 +498,11 @@
 
   // Bloco de fase (Classificatória / Eliminatória) com cabeçalho destacado.
   function _phaseBlock(title, color, inner, headerRight) {
-    var pill = '<span style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + color + ';background:' + color + '22;padding:9px 17px;border-radius:10px;">' + title + '</span>';
+    var pill = '<span style="display:inline-block;font-size:1.05rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:' + window._spCor(color, 'color') + ';background:' + window._spCor(color, 'background') + '22;padding:9px 17px;border-radius:10px;">' + title + '</span>';
     var header = headerRight
       ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;">' + pill + headerRight + '</div>'
       : '<div style="margin-bottom:16px;">' + pill + '</div>';
-    return '<div style="border:1px solid ' + color + '55;border-radius:14px;padding:14px 14px 8px;margin-bottom:16px;background:' + color + '0d;">' +
+    return '<div style="border:1px solid ' + window._spCor(color, 'borda') + '55;border-radius:14px;padding:14px 14px 8px;margin-bottom:16px;background:' + window._spCor(color, 'background') + '0d;">' +
       header + inner + '</div>';
   }
 
@@ -547,7 +549,7 @@
     classif += _sec('Estrutura — nº de grupos',
       '<div style="display:flex;align-items:center;gap:12px;">' +
       '<input type="range" min="1" max="16" value="' + cfg.grupos + '" oninput="window._f2GruposLive(this.value)" onchange="window._f2Grupos(this.value)" style="flex:1;accent-color:#818cf8;">' +
-      '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#c7d2fe;">' + cfg.grupos + '</span></div>' +
+      '<span id="f2-grupos-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-c7d2fe,#c7d2fe);">' + cfg.grupos + '</span></div>' +
       '<div id="f2-estrutura-block">' + _estruturaBlock(cfg) + '</div>');
 
     // (A FORMAÇÃO das duplas — participantes montam × organizador, + times sorteados vs
@@ -616,7 +618,7 @@
       if (!cfg.classifAtiva) {
         // v4.4.33: ELIMINAÇÃO DIRETA (sem classificatória) — todos os inscritos entram no bracket
         // por sorteio. A disputa e a formação das duplas moram AQUI (o início da eliminatória).
-        eb += '<div style="font-size:0.74rem;color:#fbbf24;background:rgba(251,191,36,0.08);border-radius:8px;padding:8px 10px;margin-bottom:12px;">Sem fase classificatória — todos os inscritos entram direto na eliminatória.</div>';
+        eb += '<div style="font-size:0.74rem;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.08);border-radius:8px;padding:8px 10px;margin-bottom:12px;">Sem fase classificatória — todos os inscritos entram direto na eliminatória.</div>';
         if (allowsS) {
           eb += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:6px;">Disputa</div>' +
             _pill(cfg.disputa === 'individual', 'window._f2Disputa(\'individual\')', '👤 Individual') +
@@ -669,9 +671,9 @@
           eb += '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;">' + classLabel + '</div>' +
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">' +
             '<input type="range" min="1" max="' + classMax + '" value="' + cfg.classificados + '" oninput="window._f2ClassLive(this.value)" onchange="window._f2Class(this.value)" style="flex:1;accent-color:#fbbf24;">' +
-            '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:#fde68a;">' + cfg.classificados + '</span></div>';
+            '<span id="f2-class-val" style="min-width:30px;text-align:center;font-weight:800;font-size:1.15rem;color:var(--sp-c-fde68a,#fde68a);">' + cfg.classificados + '</span></div>';
         } else {
-          eb += '<div style="font-size:0.74rem;color:#fde68a;margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
+          eb += '<div style="font-size:0.74rem;color:var(--sp-c-fde68a,#fde68a);margin-bottom:6px;">Todos os participantes da classificatória entram no bracket, semeados pela classificação.</div>';
         }
         // v4.4.41: resumo LOGO ABAIXO do slider (pedido do dono).
         eb += '<div id="f2-elim-summary">' + _elimSummary(cfg) + '</div>';
@@ -765,7 +767,7 @@
         // durante a fase (novos confrontos) ficam editáveis pra o organizador corrigir no calor do
         // torneio (estender/abreviar a fase, aceitar/parar novos confrontos).
         : '🔒 <b>Estrutura travada</b> — formato, chaves e estratégia não mudam mais (já sorteada). Você ainda pode ajustar as <b>datas</b> e as <b>inscrições durante a fase</b> abaixo.';
-      elimInner = '<div style="font-size:0.76rem;color:#fde68a;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
+      elimInner = '<div style="font-size:0.76rem;color:var(--sp-c-fde68a,#fde68a);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">' + _elimNote + '</div>' +
         '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + eb + '</div>' +
         _elimEndExtra + _elimInitExtra;   // DATAS + INSCRIÇÕES FORA do lock → editáveis no calor do torneio
     }
@@ -784,7 +786,7 @@
     // (#f2-classif-extra, dentro de classifSchedule) ficam FORA do wrapper → SEMPRE editáveis, pra
     // o organizador ajustar a temporada durante a fase (reduzir/estender rodadas, mudar o término).
     if (_classifLocked) {
-      classifInner = '<div style="font-size:0.76rem;color:#c7d2fe;background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Estrutura travada</b> — formato, grupos e formação não mudam mais (fase já sorteada). Você ainda pode ajustar o <b>agendamento</b> (repetição, nº de rodadas, término da fase) e a <b>fase eliminatória</b>.</div>' +
+      classifInner = '<div style="font-size:0.76rem;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(129,140,248,0.12);border:1px solid rgba(129,140,248,0.35);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.45;">🔒 <b>Estrutura travada</b> — formato, grupos e formação não mudam mais (fase já sorteada). Você ainda pode ajustar o <b>agendamento</b> (repetição, nº de rodadas, término da fase) e a <b>fase eliminatória</b>.</div>' +
         '<div style="pointer-events:none;opacity:0.5;filter:grayscale(0.4);" aria-disabled="true">' + classif + '</div>' +
         classifSchedule;
     }

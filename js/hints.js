@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Visual Hints System (Dicas Visuais) v2 ──────────────────────────────────
 // Contextual, progressive visual hints. Only shows for elements truly visible
 // on screen. Balloon arrow points precisely at the target element.
@@ -791,11 +793,11 @@
 
     // Apply arrow theme colors
     var theme = document.documentElement.getAttribute('data-theme') || 'dark';
-    var arrowBg = theme === 'light' ? '#ffffff' : theme === 'sunset' ? '#292018' : theme === 'ocean' ? '#1c3d5e' : '#1e293b';
-    var arrowBorder = theme === 'light' ? 'rgba(37,99,235,0.35)' : theme === 'sunset' ? 'rgba(245,158,11,0.4)' : theme === 'ocean' ? 'rgba(34,211,238,0.4)' : 'rgba(251,191,36,0.4)';
+    var arrowBg = theme === 'light' ? '#ffffff' : '#1e293b';
+    var arrowBorder = theme === 'light' ? 'rgba(37,99,235,0.35)' : 'rgba(251,191,36,0.4)';
     arrowEl.style.background = arrowBg;
-    arrowEl.style.borderLeft = '1.5px solid ' + arrowBorder;
-    arrowEl.style.borderTop = '1.5px solid ' + arrowBorder;
+    arrowEl.style.borderLeft = '1.5px solid ' + window._spCor(arrowBorder, 'borda');
+    arrowEl.style.borderTop = '1.5px solid ' + window._spCor(arrowBorder, 'borda');
 
     // Clamp horizontally within viewport
     // Use translateY component based on position (top uses -100%, others don't)

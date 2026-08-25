@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 /* scoreplace.app — match-history.js
  * HISTÓRICO DE JOGOS unificado e cronológico (mais recente no topo).
  * Une duas fontes numa lista só, com badge de origem e filtros:
@@ -309,17 +311,17 @@
 
   function _sourceBadge(source) {
     if (source === 'letzplay') {
-      return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(132,204,22,0.16);border:1px solid rgba(132,204,22,0.5);color:#84cc16;">🎾 LetzPlay</span>';
+      return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(132,204,22,0.16);border:1px solid rgba(132,204,22,0.5);color:var(--sp-c-84cc16,#84cc16);">🎾 LetzPlay</span>';
     }
-    return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(99,102,241,0.16);border:1px solid rgba(99,102,241,0.5);color:#818cf8;">🏆 Scoreplace</span>';
+    return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.62rem;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(99,102,241,0.16);border:1px solid rgba(99,102,241,0.5);color:var(--sp-c-818cf8,#818cf8);">🏆 Scoreplace</span>';
   }
 
   // Linha de um time: nomes à esquerda, placar à direita, ambos na cor do time
   // (verde vencedor / vermelho perdedor). Sem texto "Vitória/Derrota".
   function _teamRow(names, score, color) {
     return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">' +
-        '<div style="font-size:0.84rem;font-weight:700;line-height:1.3;color:' + color + ';min-width:0;overflow-wrap:anywhere;">' + names + '</div>' +
-        (score !== '' ? '<div style="font-size:0.95rem;font-weight:800;white-space:nowrap;color:' + color + ';">' + _esc(score) + '</div>' : '') +
+        '<div style="font-size:0.84rem;font-weight:700;line-height:1.3;color:' + window._spCor(color, 'color') + ';min-width:0;overflow-wrap:anywhere;">' + names + '</div>' +
+        (score !== '' ? '<div style="font-size:0.95rem;font-weight:800;white-space:nowrap;color:' + window._spCor(color, 'color') + ';">' + _esc(score) + '</div>' : '') +
       '</div>';
   }
 
@@ -430,7 +432,7 @@
   function _pctBadge(v, n) {
     var p = n ? Math.round(v / n * 100) : 0;
     var cor = p >= 60 ? '#2dd4a0' : (p >= 40 ? '#f0b445' : '#f26a6a');
-    return '<span style="color:' + cor + ';font-weight:800;font-variant-numeric:tabular-nums;">' + p + '%</span>';
+    return '<span style="color:' + window._spCor(cor, 'color') + ';font-weight:800;font-variant-numeric:tabular-nums;">' + p + '%</span>';
   }
   function _linhasPessoas(titulo, dica, lista) {
     if (!lista.length) return '';

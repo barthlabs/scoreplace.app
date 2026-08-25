@@ -2101,33 +2101,7 @@ input[type="number"] {
 [data-theme="light"] .hint-balloon-disable { color: #6c6c70; }
 [data-theme="light"] .hint-balloon-disable:hover { color: #3a3a3c; }
 
-[data-theme="sunset"] .hint-balloon-body {
-  background: linear-gradient(135deg, #fffdf8 0%, #f5ede0 100%);
-  border-color: rgba(180,83,9,0.35);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 0 12px rgba(180,83,9,0.10);
-}
-[data-theme="sunset"] .hint-balloon-text { color: #44403c; }
-[data-theme="sunset"] .hint-balloon-got-it {
-  background: rgba(180,83,9,0.10);
-  border-color: rgba(180,83,9,0.30);
-  color: #b45309;
-}
-[data-theme="sunset"] .hint-balloon-got-it:hover { background: rgba(180,83,9,0.20); }
-[data-theme="sunset"] .hint-balloon-actions { border-top-color: rgba(0,0,0,0.08); }
-[data-theme="sunset"] .hint-balloon-disable { color: #78716c; }
-[data-theme="sunset"] .hint-balloon-disable:hover { color: #44403c; }
 
-[data-theme="ocean"] .hint-balloon-body {
-  background: linear-gradient(135deg, #1c3d5e 0%, #173352 100%);
-  border-color: rgba(34,211,238,0.4);
-}
-[data-theme="ocean"] .hint-balloon-text { color: #d0e8f7; }
-[data-theme="ocean"] .hint-balloon-got-it {
-  background: rgba(34,211,238,0.18);
-  border-color: rgba(34,211,238,0.40);
-  color: #22d3ee;
-}
-[data-theme="ocean"] .hint-balloon-got-it:hover { background: rgba(34,211,238,0.30); }
 
 /* ─── Pending invite animations ─── */
 /* 1.9.86 — a SOMBRA saiu da animação (repintava a cada quadro); o pulso agora é

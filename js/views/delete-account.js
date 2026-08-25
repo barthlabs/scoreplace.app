@@ -61,7 +61,7 @@
           '<ul style="padding-left:1.2rem;margin:0 0 0.75rem;">' +
             '<li style="' + LI + '">E-mail: ' +
               '<a href="mailto:' + supportEmail + '?subject=Excluir%20minha%20conta%20scoreplace" ' +
-              'style="color:var(--primary-color);">' + supportEmail + '</a></li>' +
+              'style="color:var(--sp-c-var-primary-color-,var(--primary-color));">' + supportEmail + '</a></li>' +
           '</ul>' +
           '<p style="' + P + '">' +
             'Concluímos a exclusão em até <b>7 dias úteis</b> após confirmarmos a titularidade da conta.' +
@@ -90,9 +90,9 @@
 
           '<p style="font-size:0.85rem;color:var(--text-muted);line-height:1.7;margin:1.5rem 0 0;">' +
             'Dúvidas sobre privacidade e tratamento de dados: consulte a ' +
-            '<a href="#privacy" style="color:var(--primary-color);">Política de Privacidade</a> ' +
+            '<a href="#privacy" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">Política de Privacidade</a> ' +
             'ou fale com ' +
-            '<a href="mailto:' + supportEmail + '" style="color:var(--primary-color);">' + supportEmail + '</a>.' +
+            '<a href="mailto:' + supportEmail + '" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">' + supportEmail + '</a>.' +
           '</p>' +
 
         '</div>' +

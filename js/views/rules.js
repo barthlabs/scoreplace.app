@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 function renderRules(container, tournamentId) {
   const _t = window._t || function(k) { return k; };
   const tId = tournamentId || window._lastActiveTournamentId;
@@ -94,11 +96,11 @@ function renderRules(container, tournamentId) {
       </li>`).join('');
     const howToHtml = tbEnabled
       ? `<div style="margin-top:1rem;padding:0.9rem 1rem;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;">
-          <div style="font-size:0.8rem;font-weight:700;color:#c4b5fd;margin-bottom:6px;">💡 ${_t('rules.scoringHowTitle')}</div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-c4b5fd,#c4b5fd);margin-bottom:6px;">💡 ${_t('rules.scoringHowTitle')}</div>
           <div style="font-size:0.82rem;color:var(--text-main);line-height:1.5;">${_t('rules.scoringHowManualTb', { trigger: tbFinal, points: tbPoints, margin: tbMargin })}</div>
         </div>`
       : `<div style="margin-top:1rem;padding:0.9rem 1rem;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:10px;">
-          <div style="font-size:0.8rem;font-weight:700;color:#93c5fd;margin-bottom:6px;">💡 ${_t('rules.scoringHowTitle')}</div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-93c5fd,#93c5fd);margin-bottom:6px;">💡 ${_t('rules.scoringHowTitle')}</div>
           <div style="font-size:0.82rem;color:var(--text-main);line-height:1.5;">${_t('rules.scoringHowManualNoTb')}</div>
         </div>`;
     return `<ul style="list-style:none;padding:0;margin:0;">${listHtml}</ul>${howToHtml}`;
@@ -137,7 +139,7 @@ function renderRules(container, tournamentId) {
       : '';
     return `
       <div style="margin-top:1.25rem;padding:0.9rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:10px;">
-        <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:6px;">🎾 Formato por fase</div>
+        <div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:6px;">🎾 Formato por fase</div>
         <ul style="list-style:none;padding:0;margin:0;">${linhas}</ul>
         ${notaHerda}
       </div>`;
@@ -155,7 +157,7 @@ function renderRules(container, tournamentId) {
         const isFirst = i === (Math.min(t.history.length, 20) - 1);
         return `
           <div style="display:flex;gap:12px;margin-bottom:1.25rem;position:relative;">
-            <div style="flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${isFirst ? 'var(--text-muted)' : 'var(--primary-color)'};margin-top:5px;"></div>
+            <div style="flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${window._spCor(isFirst ? 'var(--text-muted)' : 'var(--primary-color)', 'background')};margin-top:5px;"></div>
             <div>
               <div style="font-size:0.8rem;font-weight:700;color:var(--text-bright);">${date}</div>
               <div style="font-size:0.85rem;color:var(--text-muted);margin-top:2px;">${window._safeHtml(log.message || log.action || '—')}</div>
@@ -239,7 +241,7 @@ function renderRules(container, tournamentId) {
 
         ${isOrg ? `
           <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border-color);">
-            <button onclick="window.openEditTournamentModal('${t.id}')" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#818cf8;padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem;">
+            <button onclick="window.openEditTournamentModal('${t.id}')" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-818cf8,#818cf8);padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem;">
               ✏️ ${_t('rules.editRules')}
             </button>
           </div>` : ''}

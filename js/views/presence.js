@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — Presença (Quem está no local)
 // ========================================
@@ -253,7 +255,7 @@
     var emptyHint = (venues.length === 0)
       ? '<div style="margin-top:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);border-radius:10px;padding:10px 12px;font-size:0.78rem;color:var(--text-bright);">' +
           '<span style="margin-right:4px;">💡</span>Adicione seus locais de jogo em <b>Perfil → Locais de preferência</b> e eles aparecerão aqui automaticamente. ' +
-          '<a href="#" onclick="event.preventDefault(); if(typeof window._showProfileModal===\'function\')window._showProfileModal(); else if(typeof openModal===\'function\')openModal(\'modal-profile\');" style="color:#a5b4fc;font-weight:700;text-decoration:underline;">Abrir perfil</a>' +
+          '<a href="#" onclick="event.preventDefault(); if(typeof window._showProfileModal===\'function\')window._showProfileModal(); else if(typeof openModal===\'function\')openModal(\'modal-profile\');" style="color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;text-decoration:underline;">Abrir perfil</a>' +
         '</div>'
       : '';
 
@@ -262,8 +264,8 @@
       var active = sportsActive.indexOf(s) !== -1;
       var style = 'padding:6px 12px;border-radius:999px;font-size:0.75rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;font-weight:' + (active ? '700' : '500') + ';' +
         'border:' + (active ? '2px solid #fbbf24' : '1.5px solid var(--border-color)') + ';' +
-        'background:' + (active ? 'rgba(251,191,36,0.18)' : 'transparent') + ';' +
-        'color:' + (active ? '#fbbf24' : 'var(--text-muted)') + ';';
+        'background:' + window._spCor((active ? 'rgba(251,191,36,0.18)' : 'transparent'), 'background') + ';' +
+        'color:' + window._spCor((active ? '#fbbf24' : 'var(--text-muted)'), 'color') + ';';
       return '<button type="button" onclick="window._presenceToggleSport(\'' + _safe(s) + '\')" style="' + style + '">' + _safe(s) + '</button>';
     }).join('');
 
@@ -329,7 +331,7 @@
       // botar na agenda evento já em andamento. Mesmo padrão que torneios
       // (v0.15.16): picker com Google/Outlook/.ics.
       var calBtn = (p.type === 'planned')
-        ? '<button class="btn btn-sm" onclick="window._presenceAddToCalendar(\'' + _safe(p._id) + '\')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);color:#a5b4fc;padding:4px 10px;font-size:0.75rem;font-weight:600;" title="Adicionar à agenda">📅</button>'
+        ? '<button class="btn btn-sm" onclick="window._presenceAddToCalendar(\'' + _safe(p._id) + '\')" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);color:var(--sp-c-a5b4fc,#a5b4fc);padding:4px 10px;font-size:0.75rem;font-weight:600;" title="Adicionar à agenda">📅</button>'
         : '';
       html += '<div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
         '<span style="flex:1;min-width:160px;color:var(--text-bright);font-size:0.88rem;">' + _safe(label) + '</span>' +
@@ -562,7 +564,7 @@
       var isNow = slot === win.nowH;
       var labelColor = isNow ? 'var(--primary-color)' : (inDay ? 'var(--text-muted)' : 'rgba(107,114,128,0.5)');
       bars += '<div title="' + labelH + 'h: ' + (b.friends + b.me) + ' amigo(s) · ' + b.others + ' outro(s)" style="flex:0 0 28px;display:flex;flex-direction:column;align-items:center;gap:2px;' + (isNow ? 'transform:scale(1.05);' : '') + '">' +
-        '<div style="height:90px;width:20px;display:flex;flex-direction:column-reverse;border-radius:4px;background:' + (isNow ? 'rgba(99,102,241,0.1)' : 'rgba(150,150,150,0.08)') + ';overflow:hidden;position:relative;' + (isNow ? 'outline:2px solid rgba(99,102,241,0.4);' : '') + '">' +
+        '<div style="height:90px;width:20px;display:flex;flex-direction:column-reverse;border-radius:4px;background:' + window._spCor((isNow ? 'rgba(99,102,241,0.1)' : 'rgba(150,150,150,0.08)'), 'background') + ';overflow:hidden;position:relative;' + (isNow ? 'outline:2px solid rgba(99,102,241,0.4);' : '') + '">' +
           (total > 0
             ? '<div style="height:' + totalPct + '%;width:100%;display:flex;flex-direction:column-reverse;">' +
                 '<div style="flex:' + (100 - friendsPct) + ';background:#6b7280;"></div>' +
@@ -570,7 +572,7 @@
               '</div>'
             : '') +
         '</div>' +
-        '<span style="font-size:0.65rem;color:' + labelColor + ';font-weight:' + (isNow ? 700 : 500) + ';">' + labelH + '</span>' +
+        '<span style="font-size:0.65rem;color:' + window._spCor(labelColor, 'color') + ';font-weight:' + (isNow ? 700 : 500) + ';">' + labelH + '</span>' +
       '</div>';
     });
 
@@ -624,8 +626,8 @@
           subtitle = 'há ' + mins + ' min';
         }
         var avatar = p.photoURL
-          ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:44px;height:44px;min-width:44px;flex-shrink:0;border-radius:50%;object-fit:cover;border:2px solid ' + (klass === 'me' ? '#10b981' : '#fbbf24') + ';">'
-          : '<div style="width:44px;height:44px;min-width:44px;flex-shrink:0;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;border:2px solid ' + (klass === 'me' ? '#10b981' : '#fbbf24') + ';">' + _safe(_initials(name)) + '</div>';
+          ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:44px;height:44px;min-width:44px;flex-shrink:0;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor((klass === 'me' ? '#10b981' : '#fbbf24'), 'borda') + ';">'
+          : '<div style="width:44px;height:44px;min-width:44px;flex-shrink:0;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;border:2px solid ' + window._spCor((klass === 'me' ? '#10b981' : '#fbbf24'), 'borda') + ';">' + _safe(_initials(name)) + '</div>';
         // Prefix sports icons so friends see which modalities this person is
         // available to play right now. Same _sportsIcons helper used in
         // Próximas horas — keeps the two sections visually consistent.
@@ -708,7 +710,7 @@
       var tournamentBadge = '';
       list.forEach(function(p) {
         if (p.type === 'tournament' && !tournamentBadge) {
-          tournamentBadge = '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;background:rgba(251,191,36,0.18);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;padding:2px 8px;border-radius:999px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(p._tournamentId) + '\'">🏆 ' + _safe(p._tournamentName) + '</span>';
+          tournamentBadge = '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;background:rgba(251,191,36,0.18);border:1px solid rgba(251,191,36,0.35);color:var(--sp-c-fbbf24,#fbbf24);padding:2px 8px;border-radius:999px;cursor:pointer;" onclick="window.location.hash=\'#tournaments/' + _safe(p._tournamentId) + '\'">🏆 ' + _safe(p._tournamentName) + '</span>';
         }
         var klass = _classify(p);
         if (klass === 'me' || klass === 'friend') {
@@ -720,8 +722,8 @@
           // flex-shrink:0 keeps the circle perfectly round inside the flex
           // container — without it, tight rows squish the image horizontally.
           var avatar = p.photoURL
-            ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:28px;height:28px;min-width:28px;flex-shrink:0;border-radius:50%;object-fit:cover;border:2px solid ' + borderColor + ';">'
-            : '<div style="width:28px;height:28px;min-width:28px;flex-shrink:0;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;border:2px solid ' + borderColor + ';">' + _safe(_initials(name)) + '</div>';
+            ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:28px;height:28px;min-width:28px;flex-shrink:0;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor(borderColor, 'borda') + ';">'
+            : '<div style="width:28px;height:28px;min-width:28px;flex-shrink:0;border-radius:50%;background:#6366f1;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;border:2px solid ' + window._spCor(borderColor, 'borda') + ';">' + _safe(_initials(name)) + '</div>';
           // Chip: [sport icons] avatar [name]. Icons come before the avatar so
           // friends know at a glance which modalities this person will play.
           var chipSports = Array.isArray(p.sports) ? p.sports : [];

@@ -94,7 +94,7 @@
             '10. ' + _t('privacy.contactTitle') + '</h2>' +
           '<p style="font-size:0.88rem;color:var(--text-main);line-height:1.7;margin:0;">' +
             _t('privacy.contactBody') +
-            ' <a href="mailto:' + supportEmail + '" style="color:var(--primary-color);">' +
+            ' <a href="mailto:' + supportEmail + '" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">' +
               supportEmail +
             '</a>.' +
           '</p>' +

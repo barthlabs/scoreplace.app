@@ -82,7 +82,7 @@ window._RELEASE_NOTES_HTML = (function () {
     // propósito: o ciclo 2.0 começa agora, e repetir aqui os destaques da v1.9 (logo abaixo,
     // e que o usuário do site já leu) seria anunciar duas vezes a mesma entrega.
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
-      '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         // ── ciclo 2.0.93 ───────────────────────────────────────────
         // DOIS relatos do dono no mesmo dia, os dois na chave do Confra.
@@ -577,7 +577,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #34d399;border-radius:12px;padding:14px 16px;background:rgba(52,211,153,0.08);">' +
-      '<div style="font-weight:800; color:#6ee7b7; font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-6ee7b7,#6ee7b7); font-size:1rem; margin-bottom:8px;">\uD83C\uDFAF v1.9 \u2014 O app responde na hora, os n\u00fameros batem em todo lugar, e a tela nunca mais fica muda <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>\uD83C\uDFBE Cada FASE pode ter o seu formato de partida:</b> a se\u00e7\u00e3o <b>\uD83C\uDFBE Formato da Partida</b> deixou de valer pro torneio inteiro e agora aparece <b>dentro de cada fase</b>, na cria\u00e7\u00e3o e na edi\u00e7\u00e3o \u2014 uma na classificat\u00f3ria, outra na eliminat\u00f3ria, com valores independentes. D\u00e1 pra fazer, por exemplo, <b>Rei/Rainha em 1 set</b> na classificat\u00f3ria e <b>melhor de 3 com super tie-break</b> na eliminat\u00f3ria. Em torneio de elimina\u00e7\u00e3o direta continua sendo um formato s\u00f3 (a eliminat\u00f3ria \u00e9 a fase inicial). A tela de <b>Regras</b> passou a mostrar o formato de cada fase \u2014 antes ela dizia \"1 set\" enquanto a eliminat\u00f3ria jogava melhor de 3.</li>' +
         '<li><b>\uD83D\uDCCD Abrir o torneio j\u00e1 cai no topo do SEU grupo:</b> antes a tela mirava o seu pr\u00f3ximo <i>jogo</i> \u2014 quem ainda n\u00e3o tinha jogo marcado ficava no topo do torneio, procurando onde estava. Agora o alvo \u00e9 o <b>seu grupo</b>, mesmo sem jogo pendente. E no Rei/Rainha ele passou a se anunciar com o selo <b>SEU GRUPO</b> e a borda ciano, como j\u00e1 acontecia nos outros formatos. Quem chega pelo \"Ir para o torneio\" de um grupo espec\u00edfico continua caindo naquele grupo.</li>' +
@@ -709,7 +709,7 @@ window._RELEASE_NOTES_HTML = (function () {
 
     // ── v1.8 ─────────────────────────────────────────────────────────────────
     '<div style="margin-bottom:1rem;border:2px solid #a78bfa;border-radius:12px;padding:14px 16px;background:rgba(167,139,250,0.08);">' +
-      '<div style="font-weight:800; color:#c4b5fd; font-size:1rem; margin-bottom:8px;">\uD83C\uDFC5 v1.8 \u2014 Sua coloca\u00e7\u00e3o calculada, conta duplicada que o app pergunta antes, e o app s\u00f3 abre quando terminou de carregar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-c4b5fd,#c4b5fd); font-size:1rem; margin-bottom:8px;">\uD83C\uDFC5 v1.8 \u2014 Sua coloca\u00e7\u00e3o calculada, conta duplicada que o app pergunta antes, e o app s\u00f3 abre quando terminou de carregar <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🎯 “Ir para o torneio” abre no grupo que você clicou:</b> antes o botão levava para o <b>topo do torneio</b>; agora a chave abre já rolada no <b>grupo daquele card</b>, com a classificação dele à vista. Se o grupo não existir mais (re-sorteio, fase avançada), a tela volta a rolar para o seu próximo jogo em vez de ficar parada no topo.</li>' +
         '<li><b>🔢 Vitórias e derrotas centralizadas:</b> no card de nível, os números voltaram ao centro da caixa — continuam alinhados entre si, sem o traço que os desencontrava.</li>' +
@@ -852,7 +852,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #22d3ee;border-radius:12px;padding:14px 16px;background:rgba(34,211,238,0.08);">' +
-      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🛡️ v1.7 — Sorteio que não se apaga, contato direto com quem joga com você, e placar validado no servidor <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-67e8f9,#67e8f9); font-size:1rem; margin-bottom:8px;">🛡️ v1.7 — Sorteio que não se apaga, contato direto com quem joga com você, e placar validado no servidor <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🛟 Nada do que já aconteceu se perde:</b> quando duas pessoas mexem no mesmo torneio ao mesmo tempo, o aparelho que estava com a tela aberta há mais tempo podia gravar por cima e <b>apagar o que aconteceu no meio tempo</b>. Agora não apaga mais: <b>inscrição</b>, <b>placar já lançado</b>, <b>rodada recém-sorteada</b>, <b>jogo de quem entrou depois</b>, <b>link do grupo de WhatsApp</b>, <b>horário combinado</b>, <b>substituição por W.O.</b> e <b>aceite de co-organização</b> ficam de pé. O que você quis mudar continua sendo salvo normalmente — só o que ficou para trás é que volta.</li>' +
         '<li><b>🔒 Sorteio realizado não se apaga:</b> depois de sorteado, o chaveamento <b>não é mais destruído</b> para fazer outro — nem por engano, nem com resultados já lançados. Na fase eliminatória a chave é uma árvore fechada e o app recusa; em fase de rodadas, o que existe é <b>gerar uma rodada extra</b>, que acrescenta sem apagar nada do que já foi jogado.</li>' +
@@ -883,7 +883,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:1px solid var(--border-color);border-radius:12px;padding:14px 16px;">' +
-      '<div style="font-weight:800; color:#67e8f9; font-size:1rem; margin-bottom:8px;">🌳 v1.6 — Chave enxuta, repescagem justa, histórico grande do letzplay e o treino do relógio contando <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-67e8f9,#67e8f9); font-size:1rem; margin-bottom:8px;">🌳 v1.6 — Chave enxuta, repescagem justa, histórico grande do letzplay e o treino do relógio contando <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🌳 Chave mínima, sem folga de graça:</b> a chave agora nasce do <b>tamanho real</b> do torneio, em vez de inflar até a próxima potência de 2. Com 12 duplas são 6 jogos, depois 3, 2 e a final — e o <b>último inscrito nunca folga</b>. Da 2ª rodada em diante a chave fecha redonda, sem BYE no meio do caminho.</li>' +
         '<li><b>🎟️ Repescagem justa e transparente:</b> a vaga de repescagem fica <b>vazia até a rodada inteira fechar</b> — nada de nome provisório que troca depois. Quem volta é o <b>melhor derrotado</b> segundo os critérios de desempate <b>do próprio organizador</b>, e a chave se corrige sozinha ao ser aberta.</li>' +
@@ -907,7 +907,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
-      '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">✨ v1.5 — Entrada tardia madura, busca nas chaves e identidade blindada <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-fbbf24,#fbbf24); font-size:1rem; margin-bottom:8px;">✨ v1.5 — Entrada tardia madura, busca nas chaves e identidade blindada <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🎾 Entrada tardia sempre entra:</b> na Dupla Eliminatória, quem chega depois do sorteio entra <b>na hora</b> — vira um confronto novo que faz a chave crescer (nunca "passa de BYE" de graça), com repescagem no número ímpar. O painel de chaveamento sumiu pra Eliminatória: potência de 2 é resolvida <b>sozinha</b>; só o resto abre decisão.</li>' +
         '<li><b>🔎 Busca nas chaves e na classificação:</b> nova barra de busca no chaveamento e na tabela — ache seu jogo ou sua posição na hora. E a <b>sua linha aparece em verde</b> (nome e colocação) pra você se achar de relance.</li>' +
@@ -918,7 +918,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #6366f1;border-radius:12px;padding:14px 16px;background:rgba(99,102,241,0.08);">' +
-      '<div style="font-weight:800; color:#a5b4fc; font-size:1rem; margin-bottom:8px;">🏆 v1.4 — Eliminatórias com repescagem redondas, do sorteio ao campeão <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-a5b4fc,#a5b4fc); font-size:1rem; margin-bottom:8px;">🏆 v1.4 — Eliminatórias com repescagem redondas, do sorteio ao campeão <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🎾 Repescagem como deve ser:</b> a Dupla Eliminatória usa a <b>árvore mínima</b> (chaves superior e inferior espelhadas, sem BYE artificial) e quem chega atrasado entra <b>na hora</b>: o jogo novo nasce contra o <b>melhor derrotado</b> da 1ª rodada — já definido, sem "a definir" pendurado. Chegou um segundo atrasado antes do jogo acontecer? Os dois se enfrentam e o repescado <b>volta pro jogo original dele</b> na chave inferior.</li>' +
         '<li><b>⚖️ Desempate visível:</b> empate de saldo e pontos entre derrotados resolve pela <b>ordem dos jogos na tela</b> — o critério que o organizador consegue conferir olhando a chave.</li>' +
@@ -930,7 +930,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #25D366;border-radius:12px;padding:14px 16px;background:rgba(37,211,102,0.08);">' +
-      '<div style="font-weight:800; color:#4ade80; font-size:1rem; margin-bottom:8px;">🎾 v1.3 — Torneio ao vivo, grupo do WhatsApp e presença <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-4ade80,#4ade80); font-size:1rem; margin-bottom:8px;">🎾 v1.3 — Torneio ao vivo, grupo do WhatsApp e presença <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>💬 Grupo do WhatsApp completo:</b> o organizador cria o grupo oficial e <b>notifica todos os inscritos</b> — no app, por e-mail (com o botão <b>"Entrar no grupo"</b>) e no celular; o e-mail chega em <b>todos</b> os seus e-mails vinculados. O botão de entrar fica na cara, ao lado do "Desinscrever-se", e o card mostra <b>quando</b> foi a última notificação.</li>' +
         '<li><b>📋 Chamada direto na tela do torneio:</b> marcar Presente/Ausente e W.O. no próprio card do inscrito, com a contagem presa no topo. E <b>você mesmo marca sua presença</b>: fica <b>verde (presente)</b> se o GPS confirmar que está no local, <b>azul (confirmado)</b> se for um "eu venho" — e o check-in no local vira presente sozinho.</li>' +
@@ -942,7 +942,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #8b5cf6;border-radius:12px;padding:14px 16px;background:rgba(139,92,246,0.08);">' +
-      '<div style="font-weight:800; color:#a78bfa; font-size:1rem; margin-bottom:8px;">💬 v1.2 — WhatsApp no app e recuperação de conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-a78bfa,#a78bfa); font-size:1rem; margin-bottom:8px;">💬 v1.2 — WhatsApp no app e recuperação de conta <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>💬 Grupo do WhatsApp entra no app:</b> grupo do jogo (os jogadores do confronto) e grupo oficial do torneio, sem expor o telefone de ninguém — você cria o grupo, cola o link e todo mundo entra num toque. Favoritos e torneios ocultados passam a seguir a sua conta em qualquer aparelho.</li>' +
         '<li><b>📵 O app parou de mandar mensagem por WhatsApp</b> (o número foi bloqueado): seus avisos vão por notificação no app e e-mail. O toggle "WhatsApp" do perfil virou "<b>aceito ser chamado no WhatsApp</b>", e o login por celular passou a ser só por SMS.</li>' +
@@ -953,7 +953,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #f59e0b;border-radius:12px;padding:14px 16px;background:rgba(245,158,11,0.08);">' +
-      '<div style="font-weight:800; color:#fbbf24; font-size:1rem; margin-bottom:8px;">⌚ v1.1 — Placar no relógio e letzplay <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-fbbf24,#fbbf24); font-size:1rem; margin-bottom:8px;">⌚ v1.1 — Placar no relógio e letzplay <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>⌚ Placar no relógio (Apple Watch e Wear OS):</b> controle o placar ao vivo do pulso — ponto de cada time, desfazer, resolver empates e jogar de novo no casual; o relógio espelha o celular em tempo real e instala junto com o app do telefone.</li>' +
         '<li><b>🎾 letzplay mais fiel:</b> os jogos importados mostram o <b>nome real do torneio</b>, quem foi verificado aparece <b>verde na hora</b>, a busca preenche o perfil do inscrito e respeita o ritmo do letzplay (não trava nem "conclui" sem trazer nada), com <b>cronômetro na tela</b> e busca completa de todos os inscritos num job só.</li>' +
@@ -963,7 +963,7 @@ window._RELEASE_NOTES_HTML = (function () {
       '</ul>' +
     '</div>' +
     '<div style="margin-bottom:1rem;border:2px solid #38bdf8;border-radius:12px;padding:14px 16px;background:rgba(56,189,248,0.08);">' +
-      '<div style="font-weight:800; color:#7dd3fc; font-size:1rem; margin-bottom:8px;">🏷️ v1.0 — Importe o letzplay, estatísticas e feedback <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
+      '<div style="font-weight:800; color:var(--sp-c-7dd3fc,#7dd3fc); font-size:1rem; margin-bottom:8px;">🏷️ v1.0 — Importe o letzplay, estatísticas e feedback <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Julho, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
         '<li><b>🎾 Traga seu histórico do letzplay:</b> uma extensão do Chrome importa seus jogos pro scoreplace, unificados no seu Histórico com os nomes reais de parceiros e adversários.</li>' +
         '<li><b>📊 Estatísticas repaginadas:</b> gráfico de <b>Forma</b> com janela temporal e filtros, e Top parceiros/adversários somando letzplay + scoreplace lado a lado.</li>' +

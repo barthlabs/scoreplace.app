@@ -19,6 +19,11 @@ const i = src.indexOf('window._meuStatusNoTorneio = function');
 const j = src.indexOf('// Usados no card de inscritos');
 const ctx = { window: {}, console, Object, Array, String, JSON };
 vm.createContext(ctx);
+// ⭐ 2.0.94 — a tabela de cor (js/paleta-tabela.js) não existe aqui: este teste extrai
+// um TRECHO do arquivo, então a linha de guarda que o topo do arquivo tem fica de fora.
+// Identidade devolve a cor crua, que é o comportamento anterior à tabela — que é o que
+// este teste afirma.
+ctx.window._spCor = function (c) { return c; };
 ctx.window._safeHtml = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 ctx.window._participantUids = (p) => [p && p.uid, p && p.p1Uid, p && p.p2Uid].filter(Boolean);
 ctx.window._profileAvatarUrl = () => 'http://x/a.png';

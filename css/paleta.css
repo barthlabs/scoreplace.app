@@ -1,0 +1,383 @@
+/* css/paleta.css — A TABELA DE COR (gerado por scripts/gerar-paleta.js)
+ *
+ * ⛔ NÃO EDITE À MÃO. Rode `node scripts/gerar-paleta.js` — ele deriva tudo das
+ * regras que existiam em css/style.css, pra que a migração não invente nenhum tom.
+ *
+ * POR QUE ISTO EXISTE (medido no WebKit, mesma tela de 5.482 elementos):
+ *   CSS completo ......... 506 ms de casamento de seletor
+ *   CSS mínimo ...........  12 ms
+ *   sem as regras [style*=] 23 ms   (486 → 23)
+ * Eram ~1.943 seletores de SUBSTRING DE ATRIBUTO — o pior caso do casamento CSS,
+ * porque nenhum índice do navegador (tag/classe/id) filtra antes. O custo é LINEAR
+ * no número dessas regras, e elas nasceram do trabalho de contraste do tema claro
+ * (v2.1.84-beta / v2.1.90-beta) — que é quando o dono notou a piora.
+ *
+ * COMO FUNCIONA: a cor vira um TOKEN com o literal de fallback —
+ *   color: var(--sp-c-a5b4fc, #a5b4fc)
+ * O tema claro redefine o token. Variável CSS resolve por HERANÇA: custo ZERO de
+ * casamento, e o valor original continua legível no ponto de uso.
+ */
+
+/* ── A PALETA: o valor ORIGINAL de cada cor (é o que o tema escuro mostra) ── */
+:root {
+  --sp-b-255-255-255-004: rgba(255,255,255,0.04);
+  --sp-b-255-255-255-005: rgba(255,255,255,0.05);
+  --sp-b-255-255-255-006: rgba(255,255,255,0.06);
+  --sp-b-255-255-255-007: rgba(255,255,255,0.07);
+  --sp-b-255-255-255-008: rgba(255,255,255,0.08);
+  --sp-b-255-255-255-01: rgba(255,255,255,0.1);
+  --sp-b-255-255-255-012: rgba(255,255,255,0.12);
+  --sp-b-255-255-255-014: rgba(255,255,255,0.14);
+  --sp-b-255-255-255-015: rgba(255,255,255,0.15);
+  --sp-b-255-255-255-016: rgba(255,255,255,0.16);
+  --sp-b-255-255-255-018: rgba(255,255,255,0.18);
+  --sp-b-255-255-255-02: rgba(255,255,255,0.2);
+  --sp-b-255-255-255-025: rgba(255,255,255,0.25);
+  --sp-b-255-255-255-03: rgba(255,255,255,0.3);
+  --sp-b-255-255-255-035: rgba(255,255,255,0.35);
+  --sp-b-255-255-255-04: rgba(255,255,255,0.4);
+  --sp-c-06b6d4: #06b6d4;
+  --sp-c-0891b2: #0891b2;
+  --sp-c-10b981: #10b981;
+  --sp-c-16a34a: #16a34a;
+  --sp-c-22c55e: #22c55e;
+  --sp-c-22d3ee: #22d3ee;
+  --sp-c-25d366: #25d366;
+  --sp-c-2dd4a0: #2dd4a0;
+  --sp-c-2dd4bf: #2dd4bf;
+  --sp-c-34d399: #34d399;
+  --sp-c-38bdf8: #38bdf8;
+  --sp-c-3b82f6: #3b82f6;
+  --sp-c-4ade80: #4ade80;
+  --sp-c-58a6ff: #58a6ff;
+  --sp-c-5eead4: #5eead4;
+  --sp-c-60a5fa: #60a5fa;
+  --sp-c-6366f1: #6366f1;
+  --sp-c-64748b: #64748b;
+  --sp-c-67e8f9: #67e8f9;
+  --sp-c-6ee7b7: #6ee7b7;
+  --sp-c-7dd3fc: #7dd3fc;
+  --sp-c-818cf8: #818cf8;
+  --sp-c-84cc16: #84cc16;
+  --sp-c-8592a6: #8592a6;
+  --sp-c-86efac: #86efac;
+  --sp-c-8b5cf6: #8b5cf6;
+  --sp-c-93c5fd: #93c5fd;
+  --sp-c-94a3b8: #94a3b8;
+  --sp-c-9ca3af: #9ca3af;
+  --sp-c-a3e635: #a3e635;
+  --sp-c-a5b4fc: #a5b4fc;
+  --sp-c-a5f3fc: #a5f3fc;
+  --sp-c-a78bfa: #a78bfa;
+  --sp-c-a7f3d0: #a7f3d0;
+  --sp-c-a855f7: #a855f7;
+  --sp-c-aab4c5: #aab4c5;
+  --sp-c-b45309: #b45309;
+  --sp-c-bbf7d0: #bbf7d0;
+  --sp-c-bcc6f9: #bcc6f9;
+  --sp-c-c084fc: #c084fc;
+  --sp-c-c4b5fd: #c4b5fd;
+  --sp-c-c7cdfb: #c7cdfb;
+  --sp-c-c7d2fe: #c7d2fe;
+  --sp-c-cbd5e1: #cbd5e1;
+  --sp-c-cd7f32: #cd7f32;
+  --sp-c-d1d5db: #d1d5db;
+  --sp-c-d5d5e5: #d5d5e5;
+  --sp-c-d8b4fe: #d8b4fe;
+  --sp-c-dbeafe: #dbeafe;
+  --sp-c-dc2626: #dc2626;
+  --sp-c-e0e7ff: #e0e7ff;
+  --sp-c-e2e8f0: #e2e8f0;
+  --sp-c-e9d5ff: #e9d5ff;
+  --sp-c-ec4899: #ec4899;
+  --sp-c-ede9fe: #ede9fe;
+  --sp-c-ef4444: #ef4444;
+  --sp-c-f0fdf4: #f0fdf4;
+  --sp-c-f1f5f9: #f1f5f9;
+  --sp-c-f3f4f6: #f3f4f6;
+  --sp-c-f472b6: #f472b6;
+  --sp-c-f59e0b: #f59e0b;
+  --sp-c-f5f3ff: #f5f3ff;
+  --sp-c-f87171: #f87171;
+  --sp-c-f9a8d4: #f9a8d4;
+  --sp-c-fb7185: #fb7185;
+  --sp-c-fb923c: #fb923c;
+  --sp-c-fbbf24: #fbbf24;
+  --sp-c-fbe6c4: #fbe6c4;
+  --sp-c-fca5a5: #fca5a5;
+  --sp-c-fcd34d: #fcd34d;
+  --sp-c-fde047: #fde047;
+  --sp-c-fde68a: #fde68a;
+  --sp-c-fef08a: #fef08a;
+  --sp-c-fef3c7: #fef3c7;
+  --sp-c-var-primary-color-: var(--primary-color);
+  --sp-c-var-text-muted-: var(--text-muted);
+  --sp-g-0-0-0-01: rgba(0,0,0,0.1);
+  --sp-g-0-0-0-015: rgba(0,0,0,0.15);
+  --sp-g-0-0-0-018: rgba(0,0,0,0.18);
+  --sp-g-0-0-0-02: rgba(0,0,0,0.2);
+  --sp-g-0-0-0-025: rgba(0,0,0,0.25);
+  --sp-g-0-0-0-03: rgba(0,0,0,0.3);
+  --sp-g-0-0-0-035: rgba(0,0,0,0.35);
+  --sp-g-255-255-255-002: rgba(255,255,255,0.02);
+  --sp-g-255-255-255-003: rgba(255,255,255,0.03);
+  --sp-g-255-255-255-004: rgba(255,255,255,0.04);
+  --sp-g-255-255-255-005: rgba(255,255,255,0.05);
+  --sp-g-255-255-255-006: rgba(255,255,255,0.06);
+  --sp-g-255-255-255-007: rgba(255,255,255,0.07);
+  --sp-g-255-255-255-008: rgba(255,255,255,0.08);
+  --sp-g-255-255-255-01: rgba(255,255,255,0.1);
+  --sp-g-255-255-255-012: rgba(255,255,255,0.12);
+  --sp-g-255-255-255-015: rgba(255,255,255,0.15);
+  --sp-g-255-255-255-02: rgba(255,255,255,0.2);
+  --sp-g-255-255-255-025: rgba(255,255,255,0.25);
+}
+
+/* ── TEMA CLARO: o remap de contraste, exatamente o que as regras faziam ── */
+[data-theme="light"] {
+  --sp-b-255-255-255-004: rgba(0,0,0,0.1);
+  --sp-b-255-255-255-005: rgba(0,0,0,0.1);
+  --sp-b-255-255-255-006: rgba(0,0,0,0.11);
+  --sp-b-255-255-255-007: rgba(0,0,0,0.12);
+  --sp-b-255-255-255-008: rgba(0,0,0,0.12);
+  --sp-b-255-255-255-01: rgba(0,0,0,0.14);
+  --sp-b-255-255-255-012: rgba(0,0,0,0.16);
+  --sp-b-255-255-255-014: rgba(0,0,0,0.18);
+  --sp-b-255-255-255-015: rgba(0,0,0,0.18);
+  --sp-b-255-255-255-016: rgba(0,0,0,0.19);
+  --sp-b-255-255-255-018: rgba(0,0,0,0.2);
+  --sp-b-255-255-255-02: rgba(0,0,0,0.22);
+  --sp-b-255-255-255-025: rgba(0,0,0,0.26);
+  --sp-b-255-255-255-03: rgba(0,0,0,0.3);
+  --sp-b-255-255-255-035: rgba(0,0,0,0.34);
+  --sp-b-255-255-255-04: rgba(0,0,0,0.38);
+  --sp-c-06b6d4: #155e75;
+  --sp-c-0891b2: #155e75;
+  --sp-c-10b981: #065f46;
+  --sp-c-16a34a: #166534;
+  --sp-c-22c55e: #166534;
+  --sp-c-22d3ee: #155e75;
+  --sp-c-25d366: #166534;
+  --sp-c-2dd4a0: #047857;
+  --sp-c-2dd4bf: #065f46;
+  --sp-c-34d399: #065f46;
+  --sp-c-38bdf8: #0369a1;
+  --sp-c-3b82f6: #1d4ed8;
+  --sp-c-4ade80: #166534;
+  --sp-c-58a6ff: #1d4ed8;
+  --sp-c-5eead4: #065f46;
+  --sp-c-60a5fa: #1d4ed8;
+  --sp-c-6366f1: #4338ca;
+  --sp-c-64748b: #475569;
+  --sp-c-67e8f9: #155e75;
+  --sp-c-6ee7b7: #065f46;
+  --sp-c-7dd3fc: #0369a1;
+  --sp-c-818cf8: #4338ca;
+  --sp-c-84cc16: #166534;
+  --sp-c-8592a6: #475569;
+  --sp-c-86efac: #166534;
+  --sp-c-8b5cf6: #6d28d9;
+  --sp-c-93c5fd: #1d4ed8;
+  --sp-c-94a3b8: #475569;
+  --sp-c-9ca3af: #475569;
+  --sp-c-a3e635: #166534;
+  --sp-c-a5b4fc: #4338ca;
+  --sp-c-a5f3fc: #155e75;
+  --sp-c-a78bfa: #6d28d9;
+  --sp-c-a7f3d0: #166534;
+  --sp-c-a855f7: #7e22ce;
+  --sp-c-aab4c5: #475569;
+  --sp-c-b45309: #92400e;
+  --sp-c-bbf7d0: #166534;
+  --sp-c-bcc6f9: #4338ca;
+  --sp-c-c084fc: #7e22ce;
+  --sp-c-c4b5fd: #6d28d9;
+  --sp-c-c7cdfb: #4338ca;
+  --sp-c-c7d2fe: #4338ca;
+  --sp-c-cbd5e1: #334155;
+  --sp-c-cd7f32: #92400e;
+  --sp-c-d1d5db: #475569;
+  --sp-c-d5d5e5: #475569;
+  --sp-c-d8b4fe: #7e22ce;
+  --sp-c-dbeafe: #334155;
+  --sp-c-dc2626: #b91c1c;
+  --sp-c-e0e7ff: #4338ca;
+  --sp-c-e2e8f0: #334155;
+  --sp-c-e9d5ff: #4338ca;
+  --sp-c-ec4899: #9d174d;
+  --sp-c-ede9fe: #334155;
+  --sp-c-ef4444: #b91c1c;
+  --sp-c-f0fdf4: #166534;
+  --sp-c-f1f5f9: #334155;
+  --sp-c-f3f4f6: #334155;
+  --sp-c-f472b6: #9d174d;
+  --sp-c-f59e0b: #92400e;
+  --sp-c-f5f3ff: #4338ca;
+  --sp-c-f87171: #b91c1c;
+  --sp-c-f9a8d4: #9d174d;
+  --sp-c-fb7185: #9d174d;
+  --sp-c-fb923c: #92400e;
+  --sp-c-fbbf24: #92400e;
+  --sp-c-fbe6c4: #92400e;
+  --sp-c-fca5a5: #b91c1c;
+  --sp-c-fcd34d: #92400e;
+  --sp-c-fde047: #92400e;
+  --sp-c-fde68a: #92400e;
+  --sp-c-fef08a: #92400e;
+  --sp-c-fef3c7: #92400e;
+  --sp-c-var-primary-color-: #1d4ed8;
+  --sp-c-var-text-muted-: var(--text-muted);
+  --sp-g-0-0-0-01: rgba(0,0,0,0.03);
+  --sp-g-0-0-0-015: rgba(0,0,0,0.035);
+  --sp-g-0-0-0-018: rgba(0,0,0,0.04);
+  --sp-g-0-0-0-02: rgba(0,0,0,0.045);
+  --sp-g-0-0-0-025: rgba(0,0,0,0.055);
+  --sp-g-0-0-0-03: rgba(0,0,0,0.065);
+  --sp-g-0-0-0-035: rgba(0,0,0,0.075);
+  --sp-g-255-255-255-002: rgba(0,0,0,0.025);
+  --sp-g-255-255-255-003: rgba(0,0,0,0.03);
+  --sp-g-255-255-255-004: rgba(0,0,0,0.035);
+  --sp-g-255-255-255-005: rgba(0,0,0,0.04);
+  --sp-g-255-255-255-006: rgba(0,0,0,0.045);
+  --sp-g-255-255-255-007: rgba(0,0,0,0.05);
+  --sp-g-255-255-255-008: rgba(0,0,0,0.055);
+  --sp-g-255-255-255-01: rgba(0,0,0,0.065);
+  --sp-g-255-255-255-012: rgba(0,0,0,0.075);
+  --sp-g-255-255-255-015: rgba(0,0,0,0.09);
+  --sp-g-255-255-255-02: rgba(0,0,0,0.12);
+  --sp-g-255-255-255-025: rgba(0,0,0,0.15);
+}
+
+/* ── A TARJA DE LEITURA ────────────────────────────────────────────────────
+ * Ela é escura NOS DOIS temas (fica sobre foto), então lá dentro o remap do claro
+ * tem que ser DESLIGADO e a cor volta a ser a do tema escuro.
+ * Isto custava 952 regras — uma por cor × 12 grafias da inline style. Agora é UMA:
+ * a tarja redeclara os tokens, e a herança leva pra todos os filhos.
+ * ⚠️ Devolve as 87 cores que as regras devolviam — nem uma a mais: cor que hoje
+ * segue remapeada dentro da tarja tem que continuar assim. */
+[data-theme="light"] [style*="--sp-tarja"] {
+  --sp-c-06b6d4: #06b6d4;
+  --sp-c-0891b2: #0891b2;
+  --sp-c-10b981: #10b981;
+  --sp-c-16a34a: #16a34a;
+  --sp-c-22c55e: #22c55e;
+  --sp-c-22d3ee: #22d3ee;
+  --sp-c-25d366: #25d366;
+  --sp-c-2dd4a0: #2dd4a0;
+  --sp-c-2dd4bf: #2dd4bf;
+  --sp-c-34d399: #34d399;
+  --sp-c-38bdf8: #38bdf8;
+  --sp-c-3b82f6: #3b82f6;
+  --sp-c-4ade80: #4ade80;
+  --sp-c-58a6ff: #58a6ff;
+  --sp-c-5eead4: #5eead4;
+  --sp-c-60a5fa: #60a5fa;
+  --sp-c-6366f1: #6366f1;
+  --sp-c-64748b: #64748b;
+  --sp-c-67e8f9: #67e8f9;
+  --sp-c-6ee7b7: #6ee7b7;
+  --sp-c-7dd3fc: #7dd3fc;
+  --sp-c-818cf8: #818cf8;
+  --sp-c-84cc16: #84cc16;
+  --sp-c-8592a6: #8592a6;
+  --sp-c-86efac: #86efac;
+  --sp-c-8b5cf6: #8b5cf6;
+  --sp-c-93c5fd: #93c5fd;
+  --sp-c-94a3b8: #94a3b8;
+  --sp-c-9ca3af: #9ca3af;
+  --sp-c-a3e635: #a3e635;
+  --sp-c-a5b4fc: #a5b4fc;
+  --sp-c-a5f3fc: #a5f3fc;
+  --sp-c-a78bfa: #a78bfa;
+  --sp-c-a7f3d0: #a7f3d0;
+  --sp-c-a855f7: #a855f7;
+  --sp-c-aab4c5: #aab4c5;
+  --sp-c-b45309: #b45309;
+  --sp-c-bbf7d0: #bbf7d0;
+  --sp-c-bcc6f9: #bcc6f9;
+  --sp-c-c084fc: #c084fc;
+  --sp-c-c4b5fd: #c4b5fd;
+  --sp-c-c7cdfb: #c7cdfb;
+  --sp-c-c7d2fe: #c7d2fe;
+  --sp-c-cbd5e1: #cbd5e1;
+  --sp-c-cd7f32: #cd7f32;
+  --sp-c-d1d5db: #d1d5db;
+  --sp-c-d5d5e5: #d5d5e5;
+  --sp-c-d8b4fe: #d8b4fe;
+  --sp-c-dbeafe: #dbeafe;
+  --sp-c-dc2626: #dc2626;
+  --sp-c-e0e7ff: #e0e7ff;
+  --sp-c-e2e8f0: #e2e8f0;
+  --sp-c-e9d5ff: #e9d5ff;
+  --sp-c-ec4899: #ec4899;
+  --sp-c-ede9fe: #ede9fe;
+  --sp-c-ef4444: #ef4444;
+  --sp-c-f0fdf4: #f0fdf4;
+  --sp-c-f1f5f9: #f1f5f9;
+  --sp-c-f3f4f6: #f3f4f6;
+  --sp-c-f472b6: #f472b6;
+  --sp-c-f59e0b: #f59e0b;
+  --sp-c-f5f3ff: #f5f3ff;
+  --sp-c-f87171: #f87171;
+  --sp-c-f9a8d4: #f9a8d4;
+  --sp-c-fb7185: #fb7185;
+  --sp-c-fb923c: #fb923c;
+  --sp-c-fbbf24: #fbbf24;
+  --sp-c-fbe6c4: #fbe6c4;
+  --sp-c-fca5a5: #fca5a5;
+  --sp-c-fcd34d: #fcd34d;
+  --sp-c-fde047: #fde047;
+  --sp-c-fde68a: #fde68a;
+  --sp-c-fef08a: #fef08a;
+  --sp-c-fef3c7: #fef3c7;
+  --sp-g-255-255-255-002: rgba(255,255,255,0.02);
+  --sp-g-255-255-255-003: rgba(255,255,255,0.03);
+  --sp-g-255-255-255-004: rgba(255,255,255,0.04);
+  --sp-g-255-255-255-005: rgba(255,255,255,0.05);
+  --sp-g-255-255-255-006: rgba(255,255,255,0.06);
+  --sp-g-255-255-255-007: rgba(255,255,255,0.07);
+  --sp-g-255-255-255-008: rgba(255,255,255,0.08);
+  --sp-g-255-255-255-01: rgba(255,255,255,0.1);
+  --sp-g-255-255-255-012: rgba(255,255,255,0.12);
+  --sp-g-255-255-255-015: rgba(255,255,255,0.15);
+  --sp-g-255-255-255-02: rgba(255,255,255,0.2);
+  --sp-g-255-255-255-025: rgba(255,255,255,0.25);
+}
+
+/* ── O RITMO DENTRO DA TARJA ────────────────────────────────────────────────────
+ * Estas 3 regras substituem 12 do CSS antigo, e precisam manter DUAS coisas que o
+ * token sozinho não carrega: o `!important` e a especificidade (0,3,0). É por elas que
+ * o ritmo vence o `<style>` embutido da caixa de leitura (`.tourn-progress-live * {
+ * color:… !important }`, que é (0,2,0)). MEDIDO: sem isso a regressiva do Confra
+ * mudava de vermelha pra cinza — nos DOIS temas. */
+[style*="--sp-tarja"] .sp-ritmo.sp-ritmo-emdia,
+[style*="--sp-tarja"] .sp-ritmo.sp-ritmo-emdia *,
+[style*="--sp-leitura2"] .sp-ritmo.sp-ritmo-emdia,
+[style*="--sp-leitura2"] .sp-ritmo.sp-ritmo-emdia * { color: #34d399 !important; }
+[style*="--sp-tarja"] .sp-ritmo.sp-ritmo-apertando,
+[style*="--sp-tarja"] .sp-ritmo.sp-ritmo-apertando *,
+[style*="--sp-leitura2"] .sp-ritmo.sp-ritmo-apertando,
+[style*="--sp-leitura2"] .sp-ritmo.sp-ritmo-apertando * { color: #fbbf24 !important; }
+[style*="--sp-tarja"] .sp-ritmo.sp-ritmo-atrasado,
+[style*="--sp-tarja"] .sp-ritmo.sp-ritmo-atrasado *,
+[style*="--sp-leitura2"] .sp-ritmo.sp-ritmo-atrasado,
+[style*="--sp-leitura2"] .sp-ritmo.sp-ritmo-atrasado * { color: #f87171 !important; }
+
+/* ── O ritmo da rodada tem destino próprio no claro (não é o da inline style) ── */
+[data-theme="light"] {
+  --sp-ritmo-emdia: #047857;
+  --sp-ritmo-apertando: #b45309;
+  --sp-ritmo-atrasado: #b91c1c;
+}
+[data-theme="light"] [style*="--sp-tarja"] {
+  --sp-ritmo-emdia: #34d399;
+  --sp-ritmo-apertando: #fbbf24;
+  --sp-ritmo-atrasado: #f87171;
+}
+
+/* ── Os overlays de placar escurecem por conta própria ── */
+[data-theme="light"] #casual-match-overlay,
+[data-theme="light"] #live-scoring-overlay {
+  --sp-c-255-255-255-002: rgba(0,0,0,0.03);
+  --sp-c-255-255-255-004: rgba(0,0,0,0.05);
+}

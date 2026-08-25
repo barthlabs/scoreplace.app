@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 /* letzplay-onboarding.js — fluxo COMPLETO e guiado de importação do letzplay:
  * detecta a extensão (instalada / versão / ausente), guia o usuário passo a passo
  * (instalar → entrar no letzplay → importar → ver histórico) e reflete AO VIVO o
@@ -312,10 +314,10 @@
         var fa = opts.feedAdd;
         if (fa && typeof fa === 'object') {
           var h = (fa.icon ? _esc(fa.icon) + ' ' : '');
-          if (fa.data) h += '<span style="color:#7dd3fc;">' + _esc(fa.data) + '</span> · ';
+          if (fa.data) h += '<span style="color:var(--sp-c-7dd3fc,#7dd3fc);">' + _esc(fa.data) + '</span> · ';
           h += _esc(fa.nome || '');
-          if (fa.cat) h += ' · <span style="color:#a78bfa;font-weight:700;">' + _esc(fa.cat) + '</span>';
-          if (fa.pos != null) h += ' · <span style="color:#fbbf24;font-weight:800;">' + _esc(fa.pos) + '</span>';
+          if (fa.cat) h += ' · <span style="color:var(--sp-c-a78bfa,#a78bfa);font-weight:700;">' + _esc(fa.cat) + '</span>';
+          if (fa.pos != null) h += ' · <span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;">' + _esc(fa.pos) + '</span>';
           ln.innerHTML = h;
         } else {
           ln.textContent = String(fa);
@@ -478,7 +480,7 @@
         // 0/Y, o nome real não pôde ser lido — o Histórico mostra a categoria por ora.
         var _ns = _tourneyNameStats();
         var nsLine = (_ns && _ns.total > 0)
-          ? '<div style="font-size:0.72rem;color:' + (_ns.resolved > 0 ? '#2dd4a0' : '#f59e0b') + ';margin-bottom:12px;">🏷️ nomes de torneio: ' + _ns.resolved + ' de ' + _ns.total + (_ns.resolved === 0 ? ' — o letzplay não deixou ler o nome desta vez (mostra a categoria).' : ' resolvidos.') + '</div>'
+          ? '<div style="font-size:0.72rem;color:' + window._spCor((_ns.resolved > 0 ? '#2dd4a0' : '#f59e0b'), 'color') + ';margin-bottom:12px;">🏷️ nomes de torneio: ' + _ns.resolved + ' de ' + _ns.total + (_ns.resolved === 0 ? ' — o letzplay não deixou ler o nome desta vez (mostra a categoria).' : ' resolvidos.') + '</div>'
           : '';
         var _title = d.unchanged ? 'Tudo em dia' : 'Importado!';
         var _body = d.unchanged
@@ -499,7 +501,7 @@
         // "erro sem nenhuma dica": dá o que foi que falhou, pra reportar/diagnosticar.
         var detailHtml = d.detail
           ? '<details style="margin:2px 0 14px;text-align:left;"><summary style="cursor:pointer;font-size:0.72rem;color:var(--text-muted,#94a3b8);">detalhes técnicos</summary>' +
-            '<div style="font-family:ui-monospace,Menlo,monospace;font-size:0.68rem;color:#94a3b8;background:var(--bg-darker,#171a2b);border-radius:8px;padding:8px 10px;margin-top:6px;word-break:break-all;">' + _esc(d.detail) + '</div></details>'
+            '<div style="font-family:ui-monospace,Menlo,monospace;font-size:0.68rem;color:var(--sp-c-94a3b8,#94a3b8);background:var(--bg-darker,#171a2b);border-radius:8px;padding:8px 10px;margin-top:6px;word-break:break-all;">' + _esc(d.detail) + '</div></details>'
           : '';
         _overlayCard('<div style="font-size:2rem;margin-bottom:6px;">⚠️</div>' +
           '<div style="font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Não deu pra importar</div>' +
@@ -567,7 +569,7 @@
   function _stepShell(n, title, statusIcon, statusColor, bodyHtml) {
     return '' +
       '<div style="display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:14px;margin-bottom:10px;background:var(--bg-card,#1e2235);">' +
-        '<div style="flex:0 0 30px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9rem;background:' + statusColor + ';color:#0b1020;">' + statusIcon + '</div>' +
+        '<div style="flex:0 0 30px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9rem;background:' + window._spCor(statusColor, 'background') + ';color:#0b1020;">' + statusIcon + '</div>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright,#fff);margin-bottom:2px;">' + _esc(title) + '</div>' +
           '<div style="font-size:0.8rem;color:var(--text-muted,#cbd5e1);line-height:1.45;">' + bodyHtml + '</div>' +
@@ -582,7 +584,7 @@
 
   function _installStepBody() {
     if (_isMobile()) {
-      return '<span style="color:#f59e0b;">A importação é feita <b>no computador</b> (Chrome/Edge/Brave). No celular não dá pra instalar extensão — abra o scoreplace no desktop pra importar.</span>';
+      return '<span style="color:var(--sp-c-f59e0b,#f59e0b);">A importação é feita <b>no computador</b> (Chrome/Edge/Brave). No celular não dá pra instalar extensão — abra o scoreplace no desktop pra importar.</span>';
     }
     if (_ext.present && _verGte(_ext.version, MIN_EXT_VERSION)) {
       return 'Extensão detectada e pronta. <b>v' + _esc(_ext.version) + '</b> ✓';
@@ -592,7 +594,7 @@
       // caminho que resolve enquanto a revisão não sai. A alternativa em texto só faz
       // sentido quando o botão é o da loja — com o zip como botão, ela seria a mesma coisa
       // duas vezes.
-      return '<span style="color:#f59e0b;">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
+      return '<span style="color:var(--sp-c-f59e0b,#f59e0b);">Sua extensão é a <b>v' + _esc(_ext.version) + '</b> — atualize pra <b>v' + _esc(MIN_EXT_VERSION) + '</b> ' +
         // ⛔ sem citar o letzplay — ver tests/lz-nao-culpa-o-letzplay.test.js
         '(a antiga desiste no meio e não traz os jogos).</span>' +
         _instalarBtn('🎾 Atualizar pela Chrome Web Store', '🎾 Baixar a v' + _esc(MIN_EXT_VERSION) + ' (zip)') +
@@ -620,9 +622,9 @@
   function _zipAlternativa() {
     var z = (typeof window._spExtZipUrl === 'function') ? window._spExtZipUrl() : null;
     if (!z) return '';
-    return '<div style="margin-top:8px;font-size:0.76rem;color:#94a3b8;">A loja pode levar alguns dias pra publicar a ' +
+    return '<div style="margin-top:8px;font-size:0.76rem;color:var(--sp-c-94a3b8,#94a3b8);">A loja pode levar alguns dias pra publicar a ' +
       'v' + _esc(MIN_EXT_VERSION) + '. Se ela ainda não apareceu por lá, ' +
-      '<a href="' + _esc(z) + '" download style="color:#fbbf24;font-weight:700;">baixe o zip da v' + _esc(MIN_EXT_VERSION) + '</a>' +
+      '<a href="' + _esc(z) + '" download style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">baixe o zip da v' + _esc(MIN_EXT_VERSION) + '</a>' +
       ' e carregue em <code>chrome://extensions</code> com o Modo do desenvolvedor.</div>';
   }
 
@@ -646,7 +648,7 @@
   // instrução que sempre funciona.
   function _storeBtn(label, secundario) {
     if (!STORE_URL) {
-      return '<div style="margin-top:8px;color:#94a3b8;font-size:0.8rem;">Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.</div>';
+      return '<div style="margin-top:8px;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.8rem;">Procure por <b>“scoreplace — importar letzplay”</b> na Chrome Web Store.</div>';
     }
     return '<div style="margin-top:10px;"><a href="' + _esc(STORE_URL) + '" target="_blank" rel="noopener" class="btn ' +
       (secundario ? 'btn-outline' : 'btn-primary') + '">' + _esc(label) + '</a>' +
@@ -686,7 +688,7 @@
     var s2body = (_lzLoggedIn === true)
       ? 'Logado no letzplay ✓ — a extensão vai ler seu histórico na sua sessão (nenhuma senha passa pelo scoreplace).'
       : ('Abra o letzplay e confirme que está logado (a extensão usa a SUA sessão — nenhuma senha passa pelo scoreplace).' +
-         (_lzLoggedIn === false ? '<div style="margin-top:4px;color:#f59e0b;">Ainda não detectei login no letzplay.</div>' : '') +
+         (_lzLoggedIn === false ? '<div style="margin-top:4px;color:var(--sp-c-f59e0b,#f59e0b);">Ainda não detectei login no letzplay.</div>' : '') +
          '<div style="margin-top:10px;"><a href="https://letzplay.me/u/matches/history" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Abrir meu histórico no letzplay ↗</a></div>');
     html += _stepShell(2, 'Logar no letzplay', s2.ic || '2', s2.col, s2body);
 
@@ -694,7 +696,7 @@
     var s3 = imported ? DONE : (extOk ? CURRENT : WAIT);
     var s3body;
     if (imported) {
-      s3body = '<div style="color:#22c55e;font-weight:700;">✅ Importado — ' + games + ' jogos no seu perfil.</div>' +
+      s3body = '<div style="color:var(--sp-c-22c55e,#22c55e);font-weight:700;">✅ Importado — ' + games + ' jogos no seu perfil.</div>' +
         (_isMobile()
           ? '<div style="margin-top:10px;">' + _mobileImportBlocked('Reimportar', { variant: 'solid', shortNote: true }) + '</div>'
           : '<button onclick="window._spStartImport&&window._spStartImport()" class="btn btn-outline btn-sm" style="margin-top:10px;">🔄 Reimportar</button>');

@@ -95,12 +95,24 @@ ok(typeof W._tProgRitmo === 'function', '_tProgRitmo existe (régua ÚNICA do ca
 // ─── 3) A COR SOBREVIVE À TARJA DE FOTO — e alcança os FILHOS ──────────────────────────
 (function () {
   const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  const paleta = fs.readFileSync(path.join(__dirname, '..', 'css', 'paleta.css'), 'utf8');
+  /* ⭐ 2.0.94 — O TOM MUDOU DE LUGAR, A REGRA NÃO. O tom do claro e a exceção da tarja
+   * moravam em 6 + 12 regras no style.css. Agora o tom vem de um token (--sp-ritmo-*,
+   * css/paleta.css) e a exceção da tarja é UMA regra por estado — que precisa manter
+   * `!important` e a especificidade (0,3,0) pra vencer o <style> escopado da caixa de
+   * leitura, que é (0,2,0). Sem os dois a regressiva do Confra virava cinza (medido). */
   ['emdia', 'apertando', 'atrasado'].forEach(function (e) {
     ok(css.indexOf('.sp-ritmo.sp-ritmo-' + e + ' *') > -1,
        '[' + e + '] a regra alcança os DESCENDENTES (o número mora em spans filhos — pai colorido e filho branco foi o defeito medido)');
-    ok(new RegExp('\\[style\\*="rgba\\(0,0,0,0\\.60\\)"\\] \\.sp-ritmo\\.sp-ritmo-' + e).test(css),
+    ok(new RegExp('\\.sp-ritmo\\.sp-ritmo-' + e + '[^{]*\\{[^}]*var\\(--sp-ritmo-' + e).test(css),
+       '[' + e + '] a cor vem do token da tabela (--sp-ritmo-' + e + ')');
+    const _tarja = new RegExp('\\[style\\*="--sp-(?:tarja|leitura2)"\\] \\.sp-ritmo\\.sp-ritmo-' + e);
+    ok(_tarja.test(paleta),
        '[' + e + '] tem tom próprio DENTRO da tarja de foto (escura nos dois temas)');
-    ok(new RegExp('\\[data-theme="light"\\] \\.sp-ritmo\\.sp-ritmo-' + e).test(css),
+    const _bloco = paleta.slice(paleta.search(_tarja));
+    ok(/!important/.test(_bloco.slice(0, _bloco.indexOf('}') + 1)),
+       '[' + e + '] a exceção da tarja mantém o !important (sem ele perde pro <style> da caixa)');
+    ok(new RegExp('--sp-ritmo-' + e + '\\s*:').test(paleta),
        '[' + e + '] tem tom próprio no TEMA CLARO (contraste é regra dos dois temas)');
   });
   // classe DUPLA: é ela que dá especificidade pra vencer o <style> escopado da tarja

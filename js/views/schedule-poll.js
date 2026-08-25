@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // schedule-poll.js — "Propor datas" (agendamento POR JOGO) — Frente F (v3.1.46)
 // ⚠️ O botão se chamava "Combinar jogos" até a 2.0.75; o dono renomeou pra "Propor
 // datas" porque o que ele faz é PROPOR data/hora — e porque agora há três origens pra
@@ -526,7 +528,7 @@
     var cor = est ? '245,158,11' : '16,185,129';
     var txt = est ? '#fbbf24' : '#34d399';
     var tit = est ? 'Horário estimado pelo sistema — muda quando o organizador aponta ou os jogadores combinam' : 'Horário definido';
-    return '<span title="' + tit + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + cor + ',0.14);border:1px solid rgba(' + cor + ',0.45);color:' + txt + ';font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + (est ? '≈ ' : '') + _esc(_fmtDateTime(iso)) + '</span>';
+    return '<span title="' + tit + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + cor + ',0.14);border:1px solid rgba(' + cor + ',0.45);color:' + window._spCor(txt, 'color') + ';font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + (est ? '≈ ' : '') + _esc(_fmtDateTime(iso)) + '</span>';
   }
   window._schChipData = _chipData;
 
@@ -556,7 +558,7 @@
       // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
       return '<button class="btn btn-micro btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
         'style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;">' +
-        '📅 Propor datas' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
+        '📅 Propor datas' + (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
         '</button>';
     } catch (e) { return ''; }
   };
@@ -647,7 +649,7 @@
       if (schedISO) {
         var _est = (_comData.scheduledKind === 'estimate');
         var _c = _est ? '245,158,11' : '16,185,129', _tx = _est ? '#fbbf24' : '#34d399';
-        return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" title="' + (_est ? 'Horário estimado pelo sistema' : 'Horário definido') + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + _c + ',0.14);border:1px solid rgba(' + _c + ',0.45);color:' + _tx + ';font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">📅 ' + (_est ? '≈ ' : '') + _esc(_fmtDateTime(schedISO)) + '</button>';
+        return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" title="' + (_est ? 'Horário estimado pelo sistema' : 'Horário definido') + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + _c + ',0.14);border:1px solid rgba(' + _c + ',0.45);color:' + window._spCor(_tx, 'color') + ';font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">📅 ' + (_est ? '≈ ' : '') + _esc(_fmtDateTime(schedISO)) + '</button>';
       }
       var cu = _cu(); if (!cu || !cu.uid) return '';
       if (!_schUserIsPlayer(t, m0, cu)) return '';
@@ -662,7 +664,7 @@
       // conteúdo é UMA pilha (coluna, alinhada à esquerda) e o badge mora na linha
       // de baixo, ao lado de "jogos" — a largura do botão é a de "📅 Combinar",
       // com ou sem badge.
-      var _badge = n ? '<span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '';
+      var _badge = n ? '<span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '';
       return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;">' +
         '<span style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">' +
           '<span>📅 Propor</span>' +
@@ -726,11 +728,11 @@
     var ymd = isNaN(ms) ? (_dtParts(t.startDate, '09:00') || {}).ymd || _brtYmd(Date.now()) : _brtYmd(ms);
     var hm = isNaN(ms) ? ((_dtParts(t.startDate, '09:00') || {}).hm || '09:00') : _brtHm(ms);
     return '<div style="margin-top:14px;background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.35);border-radius:12px;padding:12px;">' +
-      '<div style="font-size:0.78rem;font-weight:800;color:#60a5fa;margin-bottom:2px;">🛠️ Organizador</div>' +
+      '<div style="font-size:0.78rem;font-weight:800;color:var(--sp-c-60a5fa,#60a5fa);margin-bottom:2px;">🛠️ Organizador</div>' +
       '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:9px;">Apontar a data/hora aqui DEFINE o jogo na hora e encerra as propostas. Dá pra desfazer.</div>' +
       '<div style="display:flex;gap:8px;margin-bottom:9px;">' +
-        '<input type="date" id="sch-org-date" value="' + _esc(ymd) + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
-        '<input type="time" id="sch-org-time" value="' + _esc(hm) + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+        '<input type="date" id="sch-org-date" value="' + _esc(ymd) + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+        '<input type="time" id="sch-org-time" value="' + _esc(hm) + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
       '</div>' +
       '<button type="button" onclick="window._schOrgDefinir(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;font-weight:800;border:none;border-radius:10px;padding:10px;font-size:0.85rem;">📌 Definir data e hora</button>' +
     '</div>';
@@ -773,9 +775,9 @@
     var titleTxt = '📅 Propor datas';
     var header =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
-        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-weight:700;">‹ Voltar</button>' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:#fff;border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));font-weight:700;">‹ Voltar</button>' +
         '<span style="font-weight:800;color:#fff;font-size:0.92rem;">' + titleTxt + '</span>' +
-        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(16,185,129,0.9);color:#fff;border:1px solid rgba(255,255,255,0.35);font-weight:800;">Confirmar</button>' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(16,185,129,0.9);color:#fff;border:1px solid var(--sp-b-255-255-255-035,rgba(255,255,255,0.35));font-weight:800;">Confirmar</button>' +
       '</div>';
     var matchLine;
     if (groupMode) {
@@ -793,7 +795,7 @@
         '<div style="padding:1.1rem;">' + matchLine +
           '<div style="margin-top:14px;text-align:center;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:18px;">' +
             '<div style="font-size:2rem;line-height:1;">📅</div>' +
-            '<div style="font-weight:900;font-size:1.1rem;color:#34d399;margin-top:8px;">' + (groupMode ? 'Jogos marcados' : 'Jogo marcado') + '</div>' +
+            '<div style="font-weight:900;font-size:1.1rem;color:var(--sp-c-34d399,#34d399);margin-top:8px;">' + (groupMode ? 'Jogos marcados' : 'Jogo marcado') + '</div>' +
             '<div style="font-size:0.95rem;color:var(--text-bright);margin-top:4px;">' + _esc(_fmtDateTime(m.scheduledAt)) + '</div>' +
             // A ORIGEM em texto: estimada pelo sistema ≠ marcada por gente. Sem isto o
             // jogador não tem como saber se aquele horário é combinado ou chute do app.
@@ -801,7 +803,7 @@
           '</div>' +
           // Desfazer: quem joga desfaz o que foi combinado/estimado. O organizador não
           // precisa deste botão — ele reaponta direto no bloco abaixo (e pode limpar ali).
-          (canUndo ? '<button type="button" onclick="window._schUnconfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;">↩️ Desfazer</button>' : '') +
+          (canUndo ? '<button type="button" onclick="window._schUnconfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(239,68,68,0.12);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;">↩️ Desfazer</button>' : '') +
           (isOrg ? _orgBloco(t, m) : '') +
         '</div>';
       _overlay('sch-overlay', header + body);
@@ -820,11 +822,11 @@
       var on = mine === val, pos = val === 1;
       var bg = on ? (pos ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#ef4444,#dc2626)') : 'rgba(255,255,255,0.05)';
       var col = on ? '#fff' : (pos ? '#34d399' : '#f87171');
-      var bd = on ? 'none' : ('1px solid ' + (pos ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'));
+      var bd = on ? 'none' : ('1px solid ' + window._spCor((pos ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'), 'borda'));
       var pad = big ? '8px' : '5px 8px', fs = big ? '0.82rem' : '0.8rem';
       var g = (typeof window._opVoteGlyph === 'function') ? window._opVoteGlyph(pos ? 'yes' : 'no') : (pos ? '✅' : '🚫');
       var label = big ? (g + (pos ? ' Posso' : ' Não')) : g;
-      return '<button type="button" onclick="' + onclick + '" class="btn" style="' + (big ? 'flex:1;' : '') + 'background:' + bg + ';color:' + col + ';border:' + bd + ';font-weight:800;border-radius:9px;padding:' + pad + ';font-size:' + fs + ';line-height:1;">' + label + '</button>';
+      return '<button type="button" onclick="' + onclick + '" class="btn" style="' + (big ? 'flex:1;' : '') + 'background:' + window._spCor(bg, 'background') + ';color:' + window._spCor(col, 'color') + ';border:' + bd + ';font-weight:800;border-radius:9px;padding:' + pad + ';font-size:' + fs + ';line-height:1;">' + label + '</button>';
     }
 
     function _renderOption(o) {
@@ -838,18 +840,18 @@
         var ed;
         if (o.kind === 'date') {
           ed = '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-            '<input type="date" id="sch-edit-date" value="' + _esc(o.dateISO || '') + '" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
-            '<input type="time" id="sch-edit-time" value="' + _esc(o.time || '17:00') + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;"></div>';
+            '<input type="date" id="sch-edit-date" value="' + _esc(o.dateISO || '') + '" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+            '<input type="time" id="sch-edit-time" value="' + _esc(o.time || '17:00') + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;"></div>';
         } else {
           var wsel = (o.weekdays || []);
           ed = '<div id="sch-edit-weekdays" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">' +
-            WD.map(function (w, i) { var on = wsel.indexOf(i) !== -1; return '<button type="button" data-wd="' + i + '" data-on="' + (on ? '1' : '0') + '" onclick="window._schToggleWd(this)" style="background:' + (on ? 'linear-gradient(135deg,#10b981,#059669)' : 'var(--bg-darker,#0b1220)') + ';border:1px solid ' + (on ? '#10b981' : 'rgba(255,255,255,0.14)') + ';color:' + (on ? '#fff' : 'var(--text-muted)') + ';border-radius:8px;padding:6px 9px;font-size:0.78rem;font-weight:700;cursor:pointer;">' + w + '</button>'; }).join('') +
+            WD.map(function (w, i) { var on = wsel.indexOf(i) !== -1; return '<button type="button" data-wd="' + i + '" data-on="' + (on ? '1' : '0') + '" onclick="window._schToggleWd(this)" style="background:' + window._spCor((on ? 'linear-gradient(135deg,#10b981,#059669)' : 'var(--bg-darker,#0b1220)'), 'background') + ';border:1px solid ' + window._spCor((on ? '#10b981' : 'rgba(255,255,255,0.14)'), 'borda') + ';color:' + window._spCor((on ? '#fff' : 'var(--text-muted)'), 'color') + ';border-radius:8px;padding:6px 9px;font-size:0.78rem;font-weight:700;cursor:pointer;">' + w + '</button>'; }).join('') +
             '</div>' +
-            '<input type="time" id="sch-edit-weekly-time" value="' + _esc(o.time || '17:00') + '" style="width:96px;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;margin-bottom:8px;">';
+            '<input type="time" id="sch-edit-weekly-time" value="' + _esc(o.time || '17:00') + '" style="width:96px;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;margin-bottom:8px;">';
         }
         return '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.4);border-radius:11px;padding:11px 12px;margin-bottom:9px;">' + ed +
           '<div style="display:flex;gap:8px;">' +
-            '<button type="button" onclick="window._schCancelEdit(' + oa + ')" class="btn" style="flex:1;background:rgba(239,68,68,0.10);color:#ef4444;border:1px solid rgba(239,68,68,0.45);font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">Cancelar</button>' +
+            '<button type="button" onclick="window._schCancelEdit(' + oa + ')" class="btn" style="flex:1;background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);border:1px solid rgba(239,68,68,0.45);font-weight:700;border-radius:9px;padding:8px;font-size:0.8rem;">Cancelar</button>' +
             '<button type="button" onclick="window._schSaveEdit(' + oa + ')" class="btn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:800;border-radius:9px;padding:8px;font-size:0.8rem;">Salvar</button>' +
           '</div></div>';
       }
@@ -857,7 +859,7 @@
       // ── ícones gerenciar (lápis / X) ──
       var manage = canManage ? (
         '<span style="display:inline-flex;gap:4px;flex-shrink:0;">' +
-          '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:rgba(255,255,255,0.06);color:#cbd5e1;border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✏️</button>' +
+          '<button type="button" title="Editar" onclick="window._schEditOption(' + oa + ')" class="btn" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-cbd5e1,#cbd5e1);border:1px solid var(--border-color);border-radius:7px;padding:3px 7px;font-size:0.82rem;line-height:1;">✏️</button>' +
           '<button type="button" title="Apagar" onclick="window._schDeleteOption(' + oa + ')" class="cancel-x-btn" style="--cx-size:20px;">✕</button>' +
         '</span>') : '';
 
@@ -884,7 +886,7 @@
         var nc = allUids.filter(function (u) { return (((dayVotes[u] || {})[o.id]) || {})[wd] === -1; }).length;
         var mv = (myDayVotes[o.id] || {})[wd];
         var da = oa + ',' + wd;
-        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.06);">' +
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
           '<span style="font-weight:700;font-size:0.85rem;color:var(--text-bright);min-width:52px;">' + WD[wd] + (o.time ? ' <span style="color:var(--text-muted);font-weight:600;">' + _esc(o.time) + '</span>' : '') + '</span>' +
           '<span style="font-size:0.7rem;color:var(--text-muted);font-weight:700;flex:1;text-align:right;">' + yc + '/' + (allUids.length || '?') + ' ✅' + (nc ? ' · ' + nc + ' 🚫' : '') + '</span>' +
           (isPlayer ? '<span style="display:inline-flex;gap:5px;flex-shrink:0;">' +
@@ -895,7 +897,7 @@
       }).join('');
       return '<div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.22);border-radius:11px;padding:10px 12px;margin-bottom:9px;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
-          '<span style="font-weight:800;font-size:0.9rem;color:#34d399;">📆 Dias da semana ' + (o.time ? '· ' + _esc(o.time) : '') + '</span>' + manage +
+          '<span style="font-weight:800;font-size:0.9rem;color:var(--sp-c-34d399,#34d399);">📆 Dias da semana ' + (o.time ? '· ' + _esc(o.time) : '') + '</span>' + manage +
         '</div>' + dayRows + '</div>';
     }
 
@@ -907,7 +909,7 @@
     var optsHtml = order.map(function (puid) {
       var nm = _userName(t, puid) + (puid === uid ? ' (você)' : '');
       var inner = byUser[puid].map(_renderOption).join('');
-      return '<div style="background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:14px;padding:10px 11px 4px;margin-bottom:12px;">' +
+      return '<div style="background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border:1px solid var(--border-color);border-radius:14px;padding:10px 11px 4px;margin-bottom:12px;">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">' + _avatarImg(t, puid, 24) +
           '<span style="font-weight:800;font-size:0.86rem;color:var(--text-bright);">' + _esc(nm) + '</span>' +
           '<span style="font-size:0.7rem;color:var(--text-muted);font-weight:700;">propôs</span></div>' +
@@ -917,21 +919,21 @@
 
     var addHtml = isPlayer ? (
       '<div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border-color);">' +
-        '<div style="font-size:0.78rem;font-weight:800;color:#34d399;margin-bottom:8px;">Propor até ' + _esc(_fmtDateTime(win.endMs)) + '</div>' +
+        '<div style="font-size:0.78rem;font-weight:800;color:var(--sp-c-34d399,#34d399);margin-bottom:8px;">Propor até ' + _esc(_fmtDateTime(win.endMs)) + '</div>' +
         // data + hora
         '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-          '<input type="date" id="sch-date" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
-          '<input type="time" id="sch-date-time" value="17:00" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+          '<input type="date" id="sch-date" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+          '<input type="time" id="sch-date-time" value="17:00" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
         '</div>' +
-        '<button type="button" onclick="window._schProposeDate(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:#34d399;font-weight:700;border-radius:9px;padding:9px;font-size:0.82rem;margin-bottom:14px;">＋ propor data e hora</button>' +
+        '<button type="button" onclick="window._schProposeDate(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:var(--sp-c-34d399,#34d399);font-weight:700;border-radius:9px;padding:9px;font-size:0.82rem;margin-bottom:14px;">＋ propor data e hora</button>' +
         // combo de dias
         '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:6px;">ou combo de dias da semana:</div>' +
         '<div id="sch-weekdays" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">' +
-          WD.map(function (w, i) { return '<button type="button" data-wd="' + i + '" data-on="0" onclick="window._schToggleWd(this)" style="background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);color:var(--text-muted);border-radius:8px;padding:6px 9px;font-size:0.78rem;font-weight:700;cursor:pointer;">' + w + '</button>'; }).join('') +
+          WD.map(function (w, i) { return '<button type="button" data-wd="' + i + '" data-on="0" onclick="window._schToggleWd(this)" style="background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));color:var(--text-muted);border-radius:8px;padding:6px 9px;font-size:0.78rem;font-weight:700;cursor:pointer;">' + w + '</button>'; }).join('') +
         '</div>' +
         '<div style="display:flex;gap:8px;">' +
-          '<input type="time" id="sch-weekly-time" value="17:00" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
-          '<button type="button" onclick="window._schProposeWeekly(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="flex:1;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:#34d399;font-weight:700;border-radius:9px;padding:9px;font-size:0.82rem;">＋ propor dias</button>' +
+          '<input type="time" id="sch-weekly-time" value="17:00" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+          '<button type="button" onclick="window._schProposeWeekly(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="flex:1;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:var(--sp-c-34d399,#34d399);font-weight:700;border-radius:9px;padding:9px;font-size:0.82rem;">＋ propor dias</button>' +
         '</div>' +
       '</div>'
     ) : (isOrg ? '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);text-align:center;">Você não joga este confronto — acompanhando como organizador.</div>' : '');
@@ -1123,23 +1125,23 @@
       if (m.scheduledAt) { status = '📅 ' + _fmtDateTime(m.scheduledAt); color = '#34d399'; }
       else if (m.schedule && (m.schedule.options || []).length) { status = '⏳ combinando (' + m.schedule.options.length + ' opç.)'; color = '#fbbf24'; }
       else { status = 'sem propostas'; color = 'var(--text-muted)'; }
-      return '<div onclick="window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);border-radius:10px;margin-bottom:8px;cursor:pointer;">' +
+      return '<div onclick="window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--border-color);border-radius:10px;margin-bottom:8px;cursor:pointer;">' +
         '<span style="font-size:0.88rem;color:var(--text-bright);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc((m.p1 || '') + ' vs ' + (m.p2 || '')) + '</span>' +
-        '<span style="font-size:0.74rem;font-weight:700;color:' + color + ';flex-shrink:0;">' + _esc(status) + '</span>' +
+        '<span style="font-size:0.74rem;font-weight:700;color:' + window._spCor(color, 'color') + ';flex-shrink:0;">' + _esc(status) + '</span>' +
       '</div>';
     }).join('');
     if (!rows) rows = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:14px 0;">Sem jogos na rodada atual.</div>';
     var header =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
         '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Propor datas</span>' +
-        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
+        '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:#fff;border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));">Fechar</button>' +
       '</div>';
     // Botão da grade: só aparece quando o torneio CABE na régua (até 3 dias). Em torneio
     // longo não há grade a calcular — ali quem marca são os jogadores, e oferecer o botão
     // seria prometer uma conta que não vai acontecer.
     var _plano = window._schGradeEstimada(t);
     var _gradeBtn = _plano ? (
-      '<button type="button" onclick="window._schRecalcularGrade(\'' + _attr(t.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:#fbbf24;font-weight:800;border-radius:11px;padding:10px;font-size:0.85rem;margin-bottom:10px;">🧮 Recalcular horários estimados</button>' +
+      '<button type="button" onclick="window._schRecalcularGrade(\'' + _attr(t.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;border-radius:11px;padding:10px;font-size:0.85rem;margin-bottom:10px;">🧮 Recalcular horários estimados</button>' +
       '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-bottom:12px;">' + _plano.slots.length + ' jogo(s) · ' + _plano.quadras + ' quadra(s) · ' + _plano.dias + ' dia(s)' +
         (_plano.cabe ? '' : ' · ⚠️ não cabe na janela do torneio') + '. Datas já marcadas por você ou pelos jogadores não são tocadas.</div>'
     ) : '';

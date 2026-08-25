@@ -280,18 +280,21 @@ function mkT() {
   // 18/jul) tem que ser o uid certo, senão o sorteio aleatório desalinha o "meu grupo" (flake).
   RW.AppStore.currentUser = { uid: 'u' + String(g.players[0]).replace(/^J/, ''), displayName: g.players[0], email: 'x@y.z' };
 
+  // ⚠️ 2.0.94 — a cor sai como `color:var(--sp-c-f87171,#f87171)`: o literal continua ali,
+  // como fallback, e é ele que decide a cor no tema escuro. O padrão aceita as duas formas
+  // pra que o teste continue afirmando sobre a COR, não sobre a sintaxe.
   // (a) falta APONTADA (claim pendente, não confirmada) → nome ÂMBAR + tag W.O.
   t.woClaims = [{ id: 'c1', status: 'pending', scope: 'group', groupName: g.name, roundIndex: 0,
     absentName: absent, absentUids: [], byUid: 'ux', byName: 'X', confirms: {}, createdAt: '2026-07-02' }];
   var htmlA = RW.renderStandings(t, true, true, '', '') || '';
-  ok(new RegExp('color:#fbbf24;">[^<]*' + absent).test(htmlA), 'apontado: nome do ausente em ÂMBAR na classificação do grupo');
+  ok(new RegExp('color:(?:var\\(--sp-c-fbbf24,)?#fbbf24\\)?;">[^<]*' + absent).test(htmlA), 'apontado: nome do ausente em ÂMBAR na classificação do grupo');
   ok(htmlA.indexOf('W.O.</span>') !== -1, 'apontado: tag W.O. ao lado do nome');
 
   // (b) W.O. CONFIRMADO (convite pendente; ausente ainda no grupo) → nome VERMELHO + tag
   t.woClaims = [];
   g.woAbsent = absent; g.subStatus = 'pending';
   var htmlB = RW.renderStandings(t, true, true, '', '') || '';
-  ok(new RegExp('color:#f87171;">[^<]*' + absent).test(htmlB), 'confirmado: nome do ausente em VERMELHO na classificação do grupo');
+  ok(new RegExp('color:(?:var\\(--sp-c-f87171,)?#f87171\\)?;">[^<]*' + absent).test(htmlB), 'confirmado: nome do ausente em VERMELHO na classificação do grupo');
   ok(htmlB.indexOf('W.O.</span>') !== -1, 'confirmado: tag W.O. ao lado do nome');
   ok(/levou W\.O\./.test(htmlB), 'render: estado do W.O. em linha própria no grupo');
 
@@ -317,7 +320,7 @@ function mkT() {
   ok(/W\.O\.<br>→/.test(htmlC), 'render: estado preenchido (X W.O. → substituto)');
   ok(htmlC.indexOf('Reverter<br>W.O.') !== -1, 'render: botão Reverter presente junto do estado');
   ok(htmlC.indexOf('Sub Real') !== -1, 'preenchido: substituto ACRESCENTADO na tabela do grupo');
-  ok(new RegExp('color:#f87171;">[^<]*' + absent).test(htmlC), 'preenchido: ausente CONTINUA na tabela (vermelho, não some)');
+  ok(new RegExp('color:(?:var\\(--sp-c-f87171,)?#f87171\\)?;">[^<]*' + absent).test(htmlC), 'preenchido: ausente CONTINUA na tabela (vermelho, não some)');
 
   // (d) REVERTIDO → substituto some da tabela; ausente volta à posição normal (sem cor/tag)
   g.players = _origPlayers.slice();

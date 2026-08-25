@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — FCM Push Notifications
 // ========================================
@@ -308,7 +310,7 @@ window._initFCM = async function() {
   banner.innerHTML =
     '<span style="font-size:1.3rem;">🔔</span>' +
     '<span>Quer receber notificações de torneios, rodadas e resultados?</span>' +
-    '<button class="btn btn-sm" onclick="window._enablePushNotifications()" style="background:#fff;color:#3b82f6;">Ativar Notificações</button>' +
+    '<button class="btn btn-sm" onclick="window._enablePushNotifications()" style="background:#fff;color:var(--sp-c-3b82f6,#3b82f6);">Ativar Notificações</button>' +
     '<button class="btn btn-ghost btn-sm" onclick="window._dismissFCMBanner()">Agora não</button>';
   document.body.appendChild(banner);
 
@@ -370,7 +372,7 @@ function showNotification(title, message, type = 'info') {
     if (!badge) {
       badge = document.createElement('span');
       badge.setAttribute('data-toast-badge', '1');
-      badge.style.cssText = 'display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;background:rgba(255,255,255,0.12);font-size:0.7rem;font-weight:700;color:var(--text-bright, #fff);vertical-align:middle;';
+      badge.style.cssText = 'display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));font-size:0.7rem;font-weight:700;color:var(--text-bright, #fff);vertical-align:middle;';
       var h4 = existing.querySelector('h4');
       if (h4) h4.appendChild(badge);
     }
@@ -398,7 +400,7 @@ function showNotification(title, message, type = 'info') {
   toast.style.cssText = `
     background: var(--bg-card, #1e293b);
     border-left: 4px solid ${border};
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));
     border-left: 4px solid ${border};
     border-radius: 12px;
     padding: 0.85rem 1rem;
@@ -516,7 +518,7 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: ${c.bg}; border-bottom: 1px solid var(--border-color); padding: 1rem 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto; flex-wrap: wrap;">
+      <div style="background: ${window._spCor(c.bg, 'background')}; border-bottom: 1px solid var(--border-color); padding: 1rem 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto; flex-wrap: wrap;">
         <span style="font-size: 2rem; flex: 0 0 auto;">${c.icon}</span>
         <div style="flex: 1 1 auto; min-width: 0;">
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color); overflow-wrap: anywhere;">${title}</div>
@@ -528,9 +530,9 @@ function showConfirmDialog(title, message, onConfirm, onCancel, options = {}) {
       </div>
       <div style="padding: 1rem 1.25rem 1.25rem; display: ${hideFooter ? 'none' : 'flex'}; gap: 10px; justify-content: flex-end; flex: 0 0 auto; border-top: 1px solid var(--border-color);">
         <button id="confirm-cancel-btn" style="
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--sp-g-255-255-255-008,rgba(255, 255, 255, 0.08));
           color: var(--text-main);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          border: 1px solid var(--sp-b-255-255-255-015,rgba(255, 255, 255, 0.15));
           padding: 10px 20px;
           font-weight: 600;
           font-size: 0.9rem;
@@ -628,7 +630,7 @@ function showAlertDialog(title, message, onOk, options = {}) {
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     ">
-      <div style="background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto;">
+      <div style="background: var(--sp-g-255-255-255-003,rgba(255,255,255,0.03)); border-bottom: 1px solid var(--border-color); padding: 1.25rem; display: flex; align-items: center; gap: 12px; flex: 0 0 auto;">
         <span style="font-size: 2rem;">${c.icon}</span>
         <div>
           <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-color);">${title}</div>
@@ -724,9 +726,9 @@ function showInputDialog(title, message, onSubmit, options = {}) {
       </div>
       <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
         <button id="input-cancel-btn" style="
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--sp-g-255-255-255-008,rgba(255, 255, 255, 0.08));
           color: var(--text-main);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          border: 1px solid var(--sp-b-255-255-255-015,rgba(255, 255, 255, 0.15));
           padding: 10px 20px;
           font-weight: 600;
           font-size: 0.9rem;
@@ -833,9 +835,9 @@ function showMultiInputDialog(title, items, onSubmit, options = {}) {
       </div>
       <div style="padding: 1rem 1.25rem 1.25rem; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--border-color); flex-shrink: 0;">
         <button id="multi-input-cancel-btn" style="
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--sp-g-255-255-255-008,rgba(255, 255, 255, 0.08));
           color: var(--text-main);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          border: 1px solid var(--sp-b-255-255-255-015,rgba(255, 255, 255, 0.15));
           padding: 10px 20px;
           font-weight: 600;
           font-size: 0.9rem;

@@ -77,6 +77,10 @@ loadAbs(path.join(ROOT, 'i18n-pt.js'));
 
 // camada de render (tournaments-draw já veio? não — headless não carrega). Ordem: draw →
 // tournaments (_buildPodiumHtml) → store (_renderPodiumsAndClassif) → bracket (nomes de rodada).
+// ⭐ A TABELA DE COR (lado dinâmico) vem ANTES de qualquer render: as views chamam
+// `window._spCor(cor)` ao montar inline style, e sem ela o render QUEBRA — não é
+// enfeite, é dependência. Mesma posição do index.html (primeiro script do app).
+loadAbs(path.join(ROOT, 'paleta-tabela.js'));
 loadAbs(path.join(ROOT, 'views', 'tournaments-draw.js'));
 loadAbs(path.join(ROOT, 'views', 'tournaments.js'));
 // identity-core: cânone de identidade por uid, extraído do store.js (jul/2026) — o store.js

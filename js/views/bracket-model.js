@@ -941,7 +941,7 @@
           }
         }
         if (ok) {
-          window._log('%c[bracket-model ✓] ' + fx.name, 'color:#4ade80;');
+          window._log('%c[bracket-model ✓] ' + fx.name, 'color:var(--sp-c-4ade80,#4ade80);');
         } else {
           window._warn('[bracket-model ✗] ' + fx.name, msgs.join(' | '), out);
         }

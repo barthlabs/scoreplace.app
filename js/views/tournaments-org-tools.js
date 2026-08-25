@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 /* tournaments-org-tools.js — v4.0.90
  * Ferramentas do organizador CONSOLIDADAS em page-routes canônicas (padrão renderXxxPage +
  * _renderBackHeader + caso no router; nunca hack de modal). Tira 2 botões das ferramentas:
@@ -43,10 +45,10 @@
       var c = { fundamental: 'rgba(239,68,68,', important: 'rgba(251,191,36,', all: 'rgba(16,185,129,' }[level];
       var color = { fundamental: '#f87171', important: '#fbbf24', all: '#10b981' }[level];
       var bg = active ? c + '0.25)' : c + '0.08)';
-      var bd = active ? '2px solid ' + c + '0.7)' : '1px solid ' + c + '0.3)';
+      var bd = active ? '2px solid ' + window._spCor(c, 'borda') + '0.7)' : '1px solid ' + window._spCor(c, 'borda') + '0.3)';
       var sh = active ? 'box-shadow:0 0 8px ' + c + '0.2);' : '';
       return '<button type="button" class="btn org-comm-level-btn" data-level="' + level + '" onclick="window._selectCommLevel(this, \'' + safeId + '\')" ' +
-        'style="padding:8px 6px;border-radius:10px;font-size:0.72rem;font-weight:600;border:' + bd + ';background:' + bg + ';color:' + color + ';cursor:pointer;text-align:center;' + sh + '">' + emoji + ' ' + label + '</button>';
+        'style="padding:8px 6px;border-radius:10px;font-size:0.72rem;font-weight:600;border:' + bd + ';background:' + window._spCor(bg, 'background') + ';color:' + window._spCor(color, 'color') + ';cursor:pointer;text-align:center;' + sh + '">' + emoji + ' ' + label + '</button>';
     };
 
     var writeBox =
@@ -84,10 +86,10 @@
     if (_wg.notifiedAt || (Array.isArray(_wg.notifyLog) && _wg.notifyLog.length)) {
       var _fmt = function (ms) { try { var d = new Date(ms); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
       var _rows = (Array.isArray(_wg.notifyLog) ? _wg.notifyLog : []).slice(0, 10).map(function (e) {
-        return '<div style="display:flex;align-items:center;gap:8px;font-size:0.74rem;color:var(--text-color);padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.05);"><span style="color:#34d399;">✅</span><span style="color:var(--text-muted);min-width:104px;">' + _fmt(e.at) + '</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(e.byName || 'organizador') + '</span></div>';
+        return '<div style="display:flex;align-items:center;gap:8px;font-size:0.74rem;color:var(--text-color);padding:5px 0;border-bottom:1px solid var(--sp-b-255-255-255-005,rgba(255,255,255,0.05));"><span style="color:var(--sp-c-34d399,#34d399);">✅</span><span style="color:var(--text-muted);min-width:104px;">' + _fmt(e.at) + '</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _safe(e.byName || 'organizador') + '</span></div>';
       }).join('');
       _wgBlock = '<div style="background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.3);border-radius:14px;padding:1rem;margin-bottom:1.25rem;">' +
-        '<h3 style="margin:0 0 6px;font-size:0.9rem;color:#34d399;">📱 Convites do grupo do WhatsApp</h3>' +
+        '<h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--sp-c-34d399,#34d399);">📱 Convites do grupo do WhatsApp</h3>' +
         '<p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 10px;">Link do grupo enviado aos inscritos (app · e-mail · notificação)' + (_wg.notifyCount ? ' — ' + _wg.notifyCount + ' envio(s)' : '') + '.</p>' +
         (_rows || '<div style="font-size:0.72rem;color:var(--text-muted);">Último envio: ' + _fmt(_wg.notifiedAt) + '.</div>') +
       '</div>';
@@ -115,7 +117,7 @@
       _commsCache[tId] = comms;
       window._renderCommsList(tId, '');
     } catch (e) {
-      listEl.innerHTML = '<div style="text-align:center;color:#f87171;font-size:0.82rem;padding:1.2rem 0;">Erro ao carregar: ' + _safe((e && e.message) || String(e)) + '</div>';
+      listEl.innerHTML = '<div style="text-align:center;color:var(--sp-c-f87171,#f87171);font-size:0.82rem;padding:1.2rem 0;">Erro ao carregar: ' + _safe((e && e.message) || String(e)) + '</div>';
     }
   };
 
@@ -439,8 +441,8 @@
     if (typeof showConfirmDialog === 'function') {
       showConfirmDialog('Ocupar a vaga?',
         '<div style="text-align:left;line-height:1.8;">' +
-          '<div><strong style="color:#94a3b8;">Vaga:</strong> ' + _safe(phName) + '</div>' +
-          '<div><strong style="color:#4ade80;">Jogador:</strong> ' + _safe(d.name) + '</div>' +
+          '<div><strong style="color:var(--sp-c-94a3b8,#94a3b8);">Vaga:</strong> ' + _safe(phName) + '</div>' +
+          '<div><strong style="color:var(--sp-c-4ade80,#4ade80);">Jogador:</strong> ' + _safe(d.name) + '</div>' +
         '</div>',
         apply, null, { type: 'success', confirmText: 'Confirmar', cancelText: 'Cancelar' });
     } else { apply(); }

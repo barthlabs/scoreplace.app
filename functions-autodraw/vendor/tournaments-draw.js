@@ -1693,10 +1693,10 @@ window._showDrawBalanceOverlay = function (opts) {
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100200;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:3rem 1rem 2rem;';
 
   var rowsHtml = rows.map(function (r, i) {
-    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-dark,#0f172a);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">' +
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-dark,#0f172a);border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));border-radius:10px;">' +
       '<span style="flex:1;min-width:0;font-size:0.88rem;color:var(--text-bright,#f1f5f9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _sh(r.name) + '</span>' +
-      '<button id="gd-f-' + i + '" onclick="window._gdSetGender(' + i + ',\'feminino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(236,72,153,0.4);background:rgba(236,72,153,0.08);color:#f9a8d4;font-size:0.78rem;font-weight:700;cursor:pointer;">♀ Fem</button>' +
-      '<button id="gd-m-' + i + '" onclick="window._gdSetGender(' + i + ',\'masculino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.08);color:#93c5fd;font-size:0.78rem;font-weight:700;cursor:pointer;">♂ Masc</button>' +
+      '<button id="gd-f-' + i + '" onclick="window._gdSetGender(' + i + ',\'feminino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(236,72,153,0.4);background:rgba(236,72,153,0.08);color:var(--sp-c-f9a8d4,#f9a8d4);font-size:0.78rem;font-weight:700;cursor:pointer;">♀ Fem</button>' +
+      '<button id="gd-m-' + i + '" onclick="window._gdSetGender(' + i + ',\'masculino\')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(59,130,246,0.4);background:rgba(59,130,246,0.08);color:var(--sp-c-93c5fd,#93c5fd);font-size:0.78rem;font-weight:700;cursor:pointer;">♂ Masc</button>' +
     '</div>';
   }).join('');
 
@@ -1711,22 +1711,22 @@ window._showDrawBalanceOverlay = function (opts) {
 
   ov.innerHTML =
     '<div style="background:var(--bg-card,#1e293b);border-radius:18px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto;overflow:hidden;">' +
-      '<div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
+      '<div style="padding:16px 18px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
         // O título diz o que ESTA porta vai sortear. "duplas" só quando são duplas
         // mesmo — na Liga/Rei-Rainha o sorteio é de GRUPO, e chamar de dupla mente.
         '<div style="font-weight:800;font-size:1rem;color:var(--text-bright,#f1f5f9);">' + _sh(opts.title || '⚖️ Sorteio') + '</div>' +
         '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;">' + _sh(opts.subtitle || 'Defina o gênero de quem está sem, e escolha como formar as duplas.') + '</div>' +
         '<div style="display:flex;gap:8px;margin-top:12px;">' +
-          '<button onclick="window._gdCancel()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="window._gdCancel()" style="flex:1;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button onclick="window._gdConfirm()" style="flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.88rem;cursor:pointer;">✓ Confirmar</button>' +
         '</div>' +
       '</div>' +
       '<div style="padding:16px 18px;">' +
         '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted,#94a3b8);margin-bottom:8px;">Modo de sorteio</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' +
-          '<button id="gd-mode-livre" onclick="window._gdSetMode(\'livre\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
+          '<button id="gd-mode-livre" onclick="window._gdSetMode(\'livre\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
             '<div style="font-weight:700;font-size:0.9rem;">🎲 Livre</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Sorteio puro, sem olhar gênero.</div></button>' +
-          '<button id="gd-mode-equilibrado" onclick="window._gdSetMode(\'equilibrado\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
+          '<button id="gd-mode-equilibrado" onclick="window._gdSetMode(\'equilibrado\')" style="text-align:left;padding:11px 14px;border-radius:12px;border:2px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));background:var(--bg-dark,#0f172a);color:var(--text-bright,#f1f5f9);cursor:pointer;">' +
             '<div style="font-weight:700;font-size:0.9rem;">⚖️ Equilibrado</div><div style="font-size:0.74rem;color:var(--text-muted,#94a3b8);margin-top:2px;">Espalha a minoria conforme a proporção escolhida abaixo. Se não der pra todos, faz o melhor possível.</div></button>' +
         '</div>' +
         // PROPORÇÃO + TRAVA — só aparecem no equilibrado (_gdSetMode mostra/esconde).
@@ -1933,8 +1933,8 @@ window.showFinalReviewPanel = function (tId) {
                 <div style="display:flex;align-items:center;gap:12px;">
                     <span style="font-size:1.8rem;">🎉</span>
                     <div>
-                        <h3 style="margin:0;color:#f0fdf4;font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;">${_t('tdraw.readyTitle')}</h3>
-                        <p style="margin:2px 0 0;color:#bbf7d0;font-size:0.78rem;line-height:1.35;">${_t('tdraw.readySubtitle')}</p>
+                        <h3 style="margin:0;color:var(--sp-c-f0fdf4,#f0fdf4);font-size:1.05rem;font-weight:800;letter-spacing:-0.01em;">${_t('tdraw.readyTitle')}</h3>
+                        <p style="margin:2px 0 0;color:var(--sp-c-bbf7d0,#bbf7d0);font-size:0.78rem;line-height:1.35;">${_t('tdraw.readySubtitle')}</p>
                     </div>
                 </div>
             </div>
@@ -1944,37 +1944,37 @@ window.showFinalReviewPanel = function (tId) {
                 <!-- Summary Checklist -->
                 <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem;">
                     <div style="display:flex;align-items:center;gap:10px;background:rgba(34,197,94,0.1);padding:9px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.2);">
-                        <span style="color:#22c55e;font-size:1.05rem;flex-shrink:0;">✅</span>
+                        <span style="color:var(--sp-c-22c55e,#22c55e);font-size:1.05rem;flex-shrink:0;">✅</span>
                         <div style="flex:1;min-width:0;">
                             <div style="font-weight:700;color:white;font-size:0.85rem;">${_t('tdraw.enrollClosed')}</div>
-                            <div style="font-size:0.7rem;color:#94a3b8;line-height:1.3;">${_t('tdraw.enrollClosedDesc')}</div>
+                            <div style="font-size:0.7rem;color:var(--sp-c-94a3b8,#94a3b8);line-height:1.3;">${_t('tdraw.enrollClosedDesc')}</div>
                         </div>
                     </div>
 
                     <div style="display:flex;align-items:center;gap:10px;background:rgba(34,197,94,0.1);padding:9px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.2);">
-                        <span style="color:#22c55e;font-size:1.05rem;flex-shrink:0;">✅</span>
+                        <span style="color:var(--sp-c-22c55e,#22c55e);font-size:1.05rem;flex-shrink:0;">✅</span>
                         <div style="flex:1;min-width:0;">
                             <div style="font-weight:700;color:white;font-size:0.85rem;">${_t('tdraw.teamsConsolidated')}</div>
-                            <div style="font-size:0.7rem;color:#94a3b8;line-height:1.3;">${_t('tdraw.teamsConsolidatedDesc')}</div>
+                            <div style="font-size:0.7rem;color:var(--sp-c-94a3b8,#94a3b8);line-height:1.3;">${_t('tdraw.teamsConsolidatedDesc')}</div>
                         </div>
                     </div>
 
                     <div style="display:flex;align-items:center;gap:10px;background:rgba(34,197,94,0.1);padding:9px 12px;border-radius:10px;border:1px solid rgba(34,197,94,0.2);">
-                        <span style="color:#22c55e;font-size:1.05rem;flex-shrink:0;">✅</span>
+                        <span style="color:var(--sp-c-22c55e,#22c55e);font-size:1.05rem;flex-shrink:0;">✅</span>
                         <div style="flex:1;min-width:0;">
                             <div style="font-weight:700;color:white;font-size:0.85rem;">${_t('tdraw.bracketStructure')}</div>
-                            <div style="font-size:0.7rem;color:#94a3b8;line-height:1.3;">${_t('tdraw.p2AchievedVia', {resolution: window._safeHtml(t.p2Resolution || 'Natural')})}</div>
+                            <div style="font-size:0.7rem;color:var(--sp-c-94a3b8,#94a3b8);line-height:1.3;">${_t('tdraw.p2AchievedVia', {resolution: window._safeHtml(t.p2Resolution || 'Natural')})}</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- History / Log -->
                 <div>
-                    <h4 style="margin:0 0 6px;color:#94a3b8;font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;">${_t('tdraw.resolutionHistory')}</h4>
-                    <div style="background:rgba(0,0,0,0.2);border-radius:12px;padding:0.75rem;max-height:100px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:#cbd5e1;">
+                    <h4 style="margin:0 0 6px;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;">${_t('tdraw.resolutionHistory')}</h4>
+                    <div style="background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));border-radius:12px;padding:0.75rem;max-height:100px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:var(--sp-c-cbd5e1,#cbd5e1);">
                         ${(t.history || []).slice().reverse().map(log => `
                             <div style="margin-bottom:5px;display:flex;gap:8px;">
-                                <span style="color:#64748b;flex-shrink:0;">[${new Date(log.date).toLocaleTimeString()}]</span>
+                                <span style="color:var(--sp-c-64748b,#64748b);flex-shrink:0;">[${new Date(log.date).toLocaleTimeString()}]</span>
                                 <span>${window._safeHtml(log.message)}</span>
                             </div>
                         `).join('')}
@@ -1983,11 +1983,11 @@ window.showFinalReviewPanel = function (tId) {
             </div>
 
             <!-- Sticky footer (always visible) -->
-            <div style="padding:0.85rem 1.25rem;border-top:1px solid rgba(255,255,255,0.08);background:var(--bg-card,#1e293b);display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
+            <div style="padding:0.85rem 1.25rem;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));background:var(--bg-card,#1e293b);display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
                 <button onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window.generateDrawFunction('${tIdSafe}')" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:white;border:none;padding:13px;border-radius:14px;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:0 8px 24px rgba(34,197,94,0.3);display:flex;align-items:center;justify-content:center;gap:8px;">
                     <span>🎲</span> ${_t('tdraw.rollDrawNow')}
                 </button>
-                <button onclick="document.getElementById('final-review-panel').remove();document.body.style.overflow='';" style="background:rgba(255,255,255,0.05);color:#94a3b8;border:none;padding:10px;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
+                <button onclick="document.getElementById('final-review-panel').remove();document.body.style.overflow='';" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--sp-c-94a3b8,#94a3b8);border:none;padding:10px;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
                     ${_t('tdraw.backAndReview')}
                 </button>
             </div>
@@ -3670,14 +3670,14 @@ window._showDropChoiceOverlay = function(opts) {
         : '';
     // Notas explicativas — distinguir CLARAMENTE formar dupla de mesclar pessoas.
     var teamNote = opts.ruleAllowsTeam
-        ? '<div style="font-size:0.72rem;color:#93c5fd;margin-top:2px;">🔵 <b>Formar equipe</b>: os dois viram uma dupla.</div>'
-        : '<div style="font-size:0.72rem;color:#fbbf24;margin-top:2px;">🔵 <b>Formar equipe</b>: este torneio é individual — formar dupla vai <b>passar a permitir times pra todos</b>.</div>';
+        ? '<div style="font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);margin-top:2px;">🔵 <b>Formar equipe</b>: os dois viram uma dupla.</div>'
+        : '<div style="font-size:0.72rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:2px;">🔵 <b>Formar equipe</b>: este torneio é individual — formar dupla vai <b>passar a permitir times pra todos</b>.</div>';
     var mergeNote = opts.canMerge
-        ? '<div style="font-size:0.72rem;color:#fca5a5;margin-top:4px;">🔴 <b>Mesclar jogador</b>: vincula um participante genérico ao usuário real (com conta). O real assume os jogos do genérico <b>neste torneio</b>. Exige o <b>aceite</b> dele.</div>'
+        ? '<div style="font-size:0.72rem;color:var(--sp-c-fca5a5,#fca5a5);margin-top:4px;">🔴 <b>Mesclar jogador</b>: vincula um participante genérico ao usuário real (com conta). O real assume os jogos do genérico <b>neste torneio</b>. Exige o <b>aceite</b> dele.</div>'
         : '';
     // v2.7.76: Cancelar logo ABAIXO dos 2 botões (agrupado com eles), com cara de
     // botão (fundo sólido + volume), e as notas explicativas vão pro rodapé.
-    var btnCancel = '<button id="dc-cancel" style="width:100%;margin-top:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 2px 6px rgba(0,0,0,0.25);">Cancelar</button>';
+    var btnCancel = '<button id="dc-cancel" style="width:100%;margin-top:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:var(--sp-c-ef4444,#ef4444);border-radius:10px;padding:12px 10px;font-weight:800;font-size:0.9rem;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 2px 6px rgba(0,0,0,0.25);">Cancelar</button>';
     ov.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:20px;max-width:400px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.4);">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:1rem;margin-bottom:4px;">' + esc(opts.sourceName) + ' &rarr; ' + esc(opts.targetName) + '</div>' +
         '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">O que você quer fazer com esses dois?</div>' +

@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Organizer Actions & Notifications ──
 // Clone tournament — creates a new tournament based on an existing one
 // ─── Sandbox (SB) do desenvolvedor ──────────────────────────────────────────
@@ -467,14 +469,14 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         var _rej = templateData.rejectUrl || templateData.tournamentUrl || '';
         if (channelResult.emails && channelResult.emails.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
             var _html =
-              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:#e2e8f0;">' +
-                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:#fbbf24;">🤝 Convite de dupla</div>' +
-                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:#cbd5e1;"><b>' + _inv + '</b> quer formar dupla com você' + (_tn ? ' em <b>' + _tn + '</b>' : '') + '.</p>' +
+              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:var(--sp-c-e2e8f0,#e2e8f0);">' +
+                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:var(--sp-c-fbbf24,#fbbf24);">🤝 Convite de dupla</div>' +
+                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:var(--sp-c-cbd5e1,#cbd5e1);"><b>' + _inv + '</b> quer formar dupla com você' + (_tn ? ' em <b>' + _tn + '</b>' : '') + '.</p>' +
                 '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>' +
                   '<td style="padding:0 6px;"><a href="' + _rej + '" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">❌ Recusar</a></td>' +
                   '<td style="padding:0 6px;"><a href="' + _acc + '" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">✅ Aceitar</a></td>' +
                 '</tr></table>' +
-                '<p style="font-size:0.78rem;color:#64748b;margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
+                '<p style="font-size:0.78rem;color:var(--sp-c-64748b,#64748b);margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
               '</div>';
             window.FirestoreDB.queueEmail(channelResult.emails, '🤝 Convite de dupla — ' + (templateData.tournamentName || 'scoreplace.app'), _html);
         }
@@ -493,14 +495,14 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
         var _crej = templateData.rejectUrl || templateData.tournamentUrl || '';
         if (channelResult.emails && channelResult.emails.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
             var _chtml =
-              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:#e2e8f0;">' +
-                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:#fbbf24;">👑 Convite de co-organização</div>' +
-                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:#cbd5e1;"><b>' + _cwho + '</b> convidou você pra <b>co-organizar</b>' + (_ctn ? ' <b>' + _ctn + '</b>' : '') + '.</p>' +
+              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:var(--sp-c-e2e8f0,#e2e8f0);">' +
+                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:var(--sp-c-fbbf24,#fbbf24);">👑 Convite de co-organização</div>' +
+                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:var(--sp-c-cbd5e1,#cbd5e1);"><b>' + _cwho + '</b> convidou você pra <b>co-organizar</b>' + (_ctn ? ' <b>' + _ctn + '</b>' : '') + '.</p>' +
                 '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>' +
                   '<td style="padding:0 6px;"><a href="' + _crej + '" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">❌ Recusar</a></td>' +
                   '<td style="padding:0 6px;"><a href="' + _cacc + '" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">✅ Aceitar</a></td>' +
                 '</tr></table>' +
-                '<p style="font-size:0.78rem;color:#64748b;margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
+                '<p style="font-size:0.78rem;color:var(--sp-c-64748b,#64748b);margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
               '</div>';
             window.FirestoreDB.queueEmail(channelResult.emails, '👑 Convite de co-organização — ' + (templateData.tournamentName || 'scoreplace.app'), _chtml);
         }
@@ -730,9 +732,9 @@ window._sendOrgCommunication = function(tId) {
             '<label class="form-label" style="font-size: 0.8rem; font-weight: 600;">' + (window._t||function(k){return k;})('org.commLevel') + '</label>' +
             '<p style="font-size: 0.65rem; color: var(--text-muted); margin: 0 0 8px;">' + (window._t||function(k){return k;})('org.commLevelDesc') + '</p>' +
             '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">' +
-              '<button type="button" class="btn org-comm-level-btn" data-level="fundamental" onclick="window._selectCommLevel(this, \'' + tId + '\')" style="padding: 8px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); color: #f87171; cursor: pointer; text-align: center;">🔴 ' + (window._t||function(k){return k;})('org.levelFundamental') + '</button>' +
-              '<button type="button" class="btn org-comm-level-btn" data-level="important" onclick="window._selectCommLevel(this, \'' + tId + '\')" style="padding: 8px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; border: 2px solid rgba(251,191,36,0.7); background: rgba(251,191,36,0.25); color: #fbbf24; cursor: pointer; text-align: center; box-shadow: 0 0 8px rgba(251,191,36,0.2);">🟡 ' + (window._t||function(k){return k;})('org.levelImportant') + '</button>' +
-              '<button type="button" class="btn org-comm-level-btn" data-level="all" onclick="window._selectCommLevel(this, \'' + tId + '\')" style="padding: 8px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.08); color: #10b981; cursor: pointer; text-align: center;">🟢 ' + (window._t||function(k){return k;})('org.levelGeneral') + '</button>' +
+              '<button type="button" class="btn org-comm-level-btn" data-level="fundamental" onclick="window._selectCommLevel(this, \'' + tId + '\')" style="padding: 8px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); color: var(--sp-c-f87171,#f87171); cursor: pointer; text-align: center;">🔴 ' + (window._t||function(k){return k;})('org.levelFundamental') + '</button>' +
+              '<button type="button" class="btn org-comm-level-btn" data-level="important" onclick="window._selectCommLevel(this, \'' + tId + '\')" style="padding: 8px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; border: 2px solid rgba(251,191,36,0.7); background: rgba(251,191,36,0.25); color: var(--sp-c-fbbf24,#fbbf24); cursor: pointer; text-align: center; box-shadow: 0 0 8px rgba(251,191,36,0.2);">🟡 ' + (window._t||function(k){return k;})('org.levelImportant') + '</button>' +
+              '<button type="button" class="btn org-comm-level-btn" data-level="all" onclick="window._selectCommLevel(this, \'' + tId + '\')" style="padding: 8px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.08); color: var(--sp-c-10b981,#10b981); cursor: pointer; text-align: center;">🟢 ' + (window._t||function(k){return k;})('org.levelGeneral') + '</button>' +
             '</div>' +
             '<input type="hidden" id="org-comm-level-' + tId + '" value="important">' +
           '</div>' +
@@ -757,11 +759,11 @@ window._selectCommLevel = function(btn, tId) {
         var c = colors[l];
         if (l === level) {
             b.style.background = c + '0.25)';
-            b.style.border = '2px solid ' + c + '0.7)';
+            b.style.border = '2px solid ' + window._spCor(c, 'borda') + '0.7)';
             b.style.boxShadow = '0 0 8px ' + c + '0.2)';
         } else {
             b.style.background = c + '0.08)';
-            b.style.border = '1px solid ' + c + '0.3)';
+            b.style.border = '1px solid ' + window._spCor(c, 'borda') + '0.3)';
             b.style.boxShadow = 'none';
         }
     });
@@ -883,7 +885,7 @@ window._openCommunicationsPanel = async function(tId) {
         }).join('');
         listEl.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px;">📱 plataforma · ✉️ e-mail · 💬 WhatsApp — toque num comunicado pra ver quem recebeu e quem abriu.</div>' + rows;
     } catch (e) {
-        if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#f87171;font-size:0.82rem;padding:1.5rem 0;">Erro ao carregar: ' + window._safeHtml((e && e.message) || String(e)) + '</div>';
+        if (listEl) listEl.innerHTML = '<div style="text-align:center;color:var(--sp-c-f87171,#f87171);font-size:0.82rem;padding:1.5rem 0;">Erro ao carregar: ' + window._safeHtml((e && e.message) || String(e)) + '</div>';
     }
 };
 
@@ -909,7 +911,7 @@ window._openCommunicationDetail = async function(tId, commId) {
         var resp = await firebase.functions().httpsCallable('getCommunicationStats')({ tournamentId: String(tId), commId: String(commId) });
         var d = resp && resp.data ? resp.data : null;
         if (!bodyEl) return;
-        if (!d) { bodyEl.innerHTML = '<div style="color:#f87171;">Sem dados.</div>'; return; }
+        if (!d) { bodyEl.innerHTML = '<div style="color:var(--sp-c-f87171,#f87171);">Sem dados.</div>'; return; }
         var c = d.counts || {};
         var dt = d.sentAt ? new Date(d.sentAt) : null;
         var when = dt ? (dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})) : '';
@@ -922,18 +924,18 @@ window._openCommunicationDetail = async function(tId, commId) {
 
         var summary =
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">' + window._commLevelLabel(d.level) + ' · ' + when + '</div>' +
-            '<div style="font-size:0.9rem;color:var(--text-main);background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;margin-bottom:14px;">' + (window._safeHtml(d.rawMessage || '') || '<i>(sem texto)</i>') + '</div>' +
+            '<div style="font-size:0.9rem;color:var(--text-main);background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border-radius:8px;padding:10px 12px;margin-bottom:14px;">' + (window._safeHtml(d.rawMessage || '') || '<i>(sem texto)</i>') + '</div>' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">' +
-                statCard('📱', 'Plataforma', bigNum(c.platformSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + (c.platformOpened || 0) + ' abriram</div>') +
-                statCard('✉️', 'E-mail', bigNum(c.emailSent || 0, 'enviados') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + ((c.emailDelivered != null) ? c.emailDelivered : (c.emailSent || 0)) + ' entregues' + (c.emailBounced ? ' · <span style="color:#f87171;">' + c.emailBounced + ' falharam</span>' : '') + '</div>') +
-                statCard('💬', 'WhatsApp', bigNum(c.whatsappSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:#34d399;margin-top:4px;">' + (c.whatsappDelivered || 0) + ' entregues</div>') +
+                statCard('📱', 'Plataforma', bigNum(c.platformSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:var(--sp-c-34d399,#34d399);margin-top:4px;">' + (c.platformOpened || 0) + ' abriram</div>') +
+                statCard('✉️', 'E-mail', bigNum(c.emailSent || 0, 'enviados') + '<div style="font-size:0.78rem;color:var(--sp-c-34d399,#34d399);margin-top:4px;">' + ((c.emailDelivered != null) ? c.emailDelivered : (c.emailSent || 0)) + ' entregues' + (c.emailBounced ? ' · <span style="color:var(--sp-c-f87171,#f87171);">' + c.emailBounced + ' falharam</span>' : '') + '</div>') +
+                statCard('💬', 'WhatsApp', bigNum(c.whatsappSent || 0, 'enviadas') + '<div style="font-size:0.78rem;color:var(--sp-c-34d399,#34d399);margin-top:4px;">' + (c.whatsappDelivered || 0) + ' entregues</div>') +
             '</div>';
 
         var recips = d.recipients || [];
         // ✓ = enviado · ✓✓ = entregue. Sem canal = —.
         function deliveryCheck(sent, delivered, sentTitle, deliveredTitle) {
             if (!sent) return '<span style="opacity:0.3;">—</span>';
-            if (delivered) return '<span style="color:#34d399;font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="' + deliveredTitle + '">✓✓</span>';
+            if (delivered) return '<span style="color:var(--sp-c-34d399,#34d399);font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="' + deliveredTitle + '">✓✓</span>';
             return '<span style="color:var(--text-muted);" title="' + sentTitle + '">✓</span>';
         }
         var cellSt = 'padding:6px 2px;text-align:center;font-size:0.95rem;';
@@ -943,11 +945,11 @@ window._openCommunicationDetail = async function(tId, commId) {
         // emailDelivered → tratamos como entregue (sem retorno de falha).
         function emailCheck(r) {
             if (!r.email) return '<span style="opacity:0.3;">—</span>';
-            if (r.emailBounced) return '<span style="color:#f87171;font-weight:700;" title="Falha na entrega: e-mail inválido ou caixa cheia (bounce)">✗</span>';
-            return '<span style="color:#34d399;font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="Entregue (presumido — sem retorno de falha)">✓✓</span>';
+            if (r.emailBounced) return '<span style="color:var(--sp-c-f87171,#f87171);font-weight:700;" title="Falha na entrega: e-mail inválido ou caixa cheia (bounce)">✗</span>';
+            return '<span style="color:var(--sp-c-34d399,#34d399);font-weight:700;letter-spacing:-3px;padding-right:3px;white-space:nowrap;" title="Entregue (presumido — sem retorno de falha)">✓✓</span>';
         }
         var rowsHtml = recips.map(function(r) {
-            var nameHtml = window._safeHtml(r.name || '') + (r.isOrganizer ? ' <span style="font-size:0.62rem;color:#a5b4fc;">(você)</span>' : '');
+            var nameHtml = window._safeHtml(r.name || '') + (r.isOrganizer ? ' <span style="font-size:0.62rem;color:var(--sp-c-a5b4fc,#a5b4fc);">(você)</span>' : '');
             return '<tr style="border-top:1px solid var(--border-color,rgba(255,255,255,0.07));' + (r.isOrganizer ? 'background:rgba(99,102,241,0.06);' : '') + '">' +
                 '<td style="padding:6px 4px;font-size:0.78rem;color:var(--text-main);word-break:break-word;">' + nameHtml + '</td>' +
                 // Plataforma: aberto = entregue (✓✓)
@@ -958,7 +960,7 @@ window._openCommunicationDetail = async function(tId, commId) {
             '</tr>';
         }).join('');
         var table = '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">Por inscrito (' + recips.length + ')' + (d.skippedCount ? ' · ' + d.skippedCount + ' sem canal/elegibilidade' : '') + '</div>' +
-            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;line-height:1.55;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:#34d399;font-weight:700;letter-spacing:-3px;">✓✓</span> entregue · <span style="color:#f87171;font-weight:700;">✗</span> falhou<br><span style="opacity:0.9;">✉️ No <b>e-mail</b>, ✓✓ = <b>entregue</b> (presumido) — só vira <span style="color:#f87171;">✗</span> se o servidor devolver falha (<b>e-mail inválido</b> ou <b>caixa cheia</b>).</span></div>' +
+            '<div style="font-size:0.66rem;color:var(--text-muted);margin-bottom:8px;line-height:1.55;"><span style="color:var(--text-muted);">✓</span> enviado · <span style="color:var(--sp-c-34d399,#34d399);font-weight:700;letter-spacing:-3px;">✓✓</span> entregue · <span style="color:var(--sp-c-f87171,#f87171);font-weight:700;">✗</span> falhou<br><span style="opacity:0.9;">✉️ No <b>e-mail</b>, ✓✓ = <b>entregue</b> (presumido) — só vira <span style="color:var(--sp-c-f87171,#f87171);">✗</span> se o servidor devolver falha (<b>e-mail inválido</b> ou <b>caixa cheia</b>).</span></div>' +
             '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">' +
             '<colgroup><col><col style="width:48px;"><col style="width:48px;"><col style="width:48px;"></colgroup>' +
             '<thead><tr style="font-size:0.7rem;color:var(--text-muted);">' +
@@ -970,7 +972,7 @@ window._openCommunicationDetail = async function(tId, commId) {
 
         bodyEl.innerHTML = summary + table;
     } catch (e) {
-        if (bodyEl) bodyEl.innerHTML = '<div style="text-align:center;color:#f87171;font-size:0.82rem;padding:1.5rem 0;">Erro ao carregar: ' + window._safeHtml((e && e.message) || String(e)) + '</div>';
+        if (bodyEl) bodyEl.innerHTML = '<div style="text-align:center;color:var(--sp-c-f87171,#f87171);font-size:0.82rem;padding:1.5rem 0;">Erro ao carregar: ' + window._safeHtml((e && e.message) || String(e)) + '</div>';
     }
 };
 
@@ -1002,7 +1004,7 @@ window._contactOrgButtonHtml = function(t, opts) {
   var mt = (opts.marginTop != null) ? opts.marginTop : '10px';
   var html = '<button type="button" class="sp-contact-org-btn hover-lift" data-contact-org-uid="' + uid + '" ' +
     'onclick="event.stopPropagation();window._contactOrganizerDirect(\'' + tId + '\')" ' +
-    'style="' + full + 'margin-top:' + mt + ';display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.38);border-radius:10px;padding:9px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:background 0.15s,border-color 0.15s,color 0.15s;">' +
+    'style="' + full + 'margin-top:' + mt + ';display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(59,130,246,0.12);color:var(--sp-c-60a5fa,#60a5fa);border:1px solid rgba(59,130,246,0.38);border-radius:10px;padding:9px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;transition:background 0.15s,border-color 0.15s,color 0.15s;">' +
     '<span class="sp-contact-org-ic" style="display:inline-flex;align-items:center;">💬</span>' +
     '<span class="sp-contact-org-lb">Falar com o organizador</span></button>';
   // Auto-hidrata (debounced) — não precisa o caller chamar nada após inserir.

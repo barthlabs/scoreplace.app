@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Analytics & Details Functions ──
 
 // ── Perfil de jogador ─────────────────────────────────────────────────────────
@@ -27,7 +29,7 @@ window._openPlayerProfile = function(playerName, opts) {
     return '<img src="'+_sh(src)+'" onerror="this.onerror=null;this.src=\''+fb+'\'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;display:block;margin:0 auto;">';
   };
   var _pill = function(label, bg) {
-    return '<span style="background:'+( bg||'rgba(99,102,241,0.15)')+';border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:#a5b4fc;">'+_sh(label)+'</span>';
+    return '<span style="background:' + window._spCor(( bg||'rgba(99,102,241,0.15)'), 'background')+';border:1px solid rgba(99,102,241,0.3);border-radius:20px;padding:2px 10px;font-size:0.72rem;color:var(--sp-c-a5b4fc,#a5b4fc);">'+_sh(label)+'</span>';
   };
 
   // ── criar overlay vazio imediatamente ──
@@ -45,7 +47,7 @@ window._openPlayerProfile = function(playerName, opts) {
         // o "Voltar" ficava SOB o relógio/sinal — e a faixa da status bar não recebe
         // toque (o iOS a reserva pro scroll-to-top), então o botão parecia quebrado.
         '<div id="ppo-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
-          '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted,#94a3b8);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:0.82rem;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Voltar</button>' +
+          '<button onclick="document.getElementById(\'player-profile-overlay\').remove()" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:var(--text-muted,#94a3b8);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:0.82rem;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Voltar</button>' +
           '<div id="ppo-friend-btn"></div>' +
         '</div>' +
         '<div id="ppo-body" style="padding:0;">' + (typeof window._renderBallLoader === 'function' ? window._renderBallLoader('Carregando…', { minHeight: '22vh', size: '2.2rem' }) : '<div style="text-align:center;padding:32px;color:var(--text-muted);">Carregando…</div>') + '</div>' +
@@ -68,9 +70,9 @@ window._openPlayerProfile = function(playerName, opts) {
     var friendBtnHtml = '';
     if (playerUid && cu && cu.uid) {
       if (isFriend) {
-        friendBtnHtml = '<span style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#34d399;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;">✅ '+_amigoLabel+'</span>';
+        friendBtnHtml = '<span style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:var(--sp-c-34d399,#34d399);border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;">✅ '+_amigoLabel+'</span>';
       } else {
-        friendBtnHtml = '<button onclick="window._sendFriendRequest&&window._sendFriendRequest(\''+playerUid+'\');this.textContent=\'Convite enviado\';this.disabled=true;" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">'+_addAmigo+'</button>';
+        friendBtnHtml = '<button onclick="window._sendFriendRequest&&window._sendFriendRequest(\''+playerUid+'\');this.textContent=\'Convite enviado\';this.disabled=true;" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);border-radius:8px;padding:6px 12px;font-size:0.78rem;font-weight:600;cursor:pointer;">'+_addAmigo+'</button>';
       }
     }
     var fBtn = document.getElementById('ppo-friend-btn');
@@ -124,15 +126,15 @@ window._openPlayerProfile = function(playerName, opts) {
       sharedHtml =
         '<div style="padding:16px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));">' +
           '<div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">🏆 Histórico juntos</div>' +
-          (shared.asPartner.length ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.82rem;"><span style="color:#34d399;font-weight:600;">🤝 Parceiros</span><span style="color:var(--text-muted);">'+shared.asPartner.length+' torneio(s)</span><span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">'+partnerStats.w+'V '+partnerStats.l+'D juntos</span></div>' : '') +
-          (shared.asOpponent.length ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.82rem;"><span style="color:#f59e0b;font-weight:600;">⚔️ Adversários</span><span style="color:var(--text-muted);">'+shared.asOpponent.length+' torneio(s)</span><span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">'+opponentStats.w+'V '+opponentStats.d+(opponentStats.d?'E ':'')+opponentStats.l+'D (seu)</span></div>' : '') +
+          (shared.asPartner.length ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.82rem;"><span style="color:var(--sp-c-34d399,#34d399);font-weight:600;">🤝 Parceiros</span><span style="color:var(--text-muted);">'+shared.asPartner.length+' torneio(s)</span><span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">'+partnerStats.w+'V '+partnerStats.l+'D juntos</span></div>' : '') +
+          (shared.asOpponent.length ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:0.82rem;"><span style="color:var(--sp-c-f59e0b,#f59e0b);font-weight:600;">⚔️ Adversários</span><span style="color:var(--text-muted);">'+shared.asOpponent.length+' torneio(s)</span><span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">'+opponentStats.w+'V '+opponentStats.d+(opponentStats.d?'E ':'')+opponentStats.l+'D (seu)</span></div>' : '') +
         '</div>';
     }
 
     // ── montar body ──
     var sportsHtml = sports.length ? '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:8px;">' +
       sports.map(function(s) {
-        var sk = skillBySport[s] ? ' <span style="font-size:0.6rem;color:#fbbf24;">'+_sh(skillBySport[s])+'</span>' : '';
+        var sk = skillBySport[s] ? ' <span style="font-size:0.6rem;color:var(--sp-c-fbbf24,#fbbf24);">'+_sh(skillBySport[s])+'</span>' : '';
         return isFriend ? _pill(s)+ sk : _pill(s);
       }).join('') + '</div>' : '';
 
@@ -162,7 +164,7 @@ window._openPlayerProfile = function(playerName, opts) {
       (isFriend ? '<div id="ppo-trophies" style="padding:0 16px 4px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));"><div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:12px 0 8px;">🏅 Conquistas</div><div id="ppo-trophies-inner" style="font-size:0.8rem;color:var(--text-muted);">' + (typeof window._renderBallLoaderInline === 'function' ? window._renderBallLoaderInline('Carregando…') : 'Carregando…') + '</div></div>' : '') +
       // stats
       '<div style="padding:12px 16px 20px;border-top:1px solid var(--border-color,rgba(255,255,255,0.08));text-align:center;">' +
-        '<button id="ppo-stats-btn" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
+        '<button id="ppo-stats-btn" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--sp-c-a5b4fc,#a5b4fc);border-radius:10px;padding:8px 20px;font-size:0.82rem;cursor:pointer;">📊 Ver estatísticas detalhadas</button>' +
       '</div>';
 
     // Foto: popular no cache ANTES de abrir stats para aparecer corretamente
@@ -248,7 +250,7 @@ window._openPlayerProfile = function(playerName, opts) {
 
           var _tierBadge = function(tier, n) {
             if (!n) return '';
-            return '<span style="font-size:0.7rem;color:'+tierColor[tier]+';font-weight:700;margin-right:4px;">'+tierEmoji[tier]+'×'+n+'</span>';
+            return '<span style="font-size:0.7rem;color:' + window._spCor(tierColor, 'color')[tier]+';font-weight:700;margin-right:4px;">'+tierEmoji[tier]+'×'+n+'</span>';
           };
           var _tRow = function(tr, t, highlight) {
             var tier = (t&&t.tier)||'bronze';
@@ -256,7 +258,7 @@ window._openPlayerProfile = function(playerName, opts) {
             var bg   = highlight ? 'background:rgba(251,191,36,0.06);border-radius:6px;' : '';
             return '<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;'+bg+'">' +
               '<span style="font-size:0.9rem;line-height:1;">'+_sh(tr.icon||'🏆')+'</span>' +
-              '<span style="font-size:0.72rem;color:'+col+';font-weight:600;line-height:1.3;">'+_sh(tr.title)+'</span>' +
+              '<span style="font-size:0.72rem;color:' + window._spCor(col, 'color')+';font-weight:600;line-height:1.3;">'+_sh(tr.title)+'</span>' +
             '</div>';
           };
 
@@ -302,7 +304,7 @@ window._openPlayerProfile = function(playerName, opts) {
               '<div style="text-align:left;">'+(hasMe?chk:xmk)+'</div>' +
               '<div style="text-align:center;">' +
                 '<span style="font-size:0.9rem;">'+_sh(tr.icon||'🏅')+'</span> ' +
-                '<span style="font-size:0.72rem;color:'+col+';font-weight:600;">'+_sh(tr.title)+'</span>' +
+                '<span style="font-size:0.72rem;color:' + window._spCor(col, 'color')+';font-weight:600;">'+_sh(tr.title)+'</span>' +
               '</div>' +
               '<div style="text-align:right;">'+(hasThem?chk:xmk)+'</div>' +
             '</div>';
@@ -395,16 +397,16 @@ function _boxStat(label, value, icon, accent) {
     accent = accent || 'var(--text-bright,#fff)';
     return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:10px;background:var(--stat-box-bg);border:1px solid var(--border-color);">' +
       '<span style="font-size:1rem;">' + icon + '</span>' +
-      '<span style="font-size:1.15rem;font-weight:900;color:' + accent + ';font-variant-numeric:tabular-nums;line-height:1;">' + value + '</span>' +
+      '<span style="font-size:1.15rem;font-weight:900;color:' + window._spCor(accent, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">' + value + '</span>' +
       '<span style="font-size:0.55rem;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">' + label + '</span>' +
     '</div>';
 }
 
 function _sectionShell(id, title, icon, accent, badge) {
-    return '<div id="' + id + '" style="margin-top:12px;padding:12px;border-radius:14px;background:var(--info-box-bg);border:1px solid ' + accent + '44;display:flex;flex-direction:column;gap:8px;">' +
+    return '<div id="' + id + '" style="margin-top:12px;padding:12px;border-radius:14px;background:var(--info-box-bg);border:1px solid ' + window._spCor(accent, 'borda') + '44;display:flex;flex-direction:column;gap:8px;">' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="font-size:1rem;">' + icon + '</span>' +
-        '<span style="font-size:0.85rem;font-weight:900;color:' + accent + ';text-transform:uppercase;letter-spacing:0.8px;">' + title + '</span>' +
+        '<span style="font-size:0.85rem;font-weight:900;color:' + window._spCor(accent, 'color') + ';text-transform:uppercase;letter-spacing:0.8px;">' + title + '</span>' +
         '<span style="margin-left:auto;font-size:0.62rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + badge + '</span>' +
       '</div>';
 }
@@ -418,7 +420,7 @@ function _compareBar(label, icon, leftVal, rightVal, leftClr, rightClr, fmt, max
     return '<div style="display:flex;flex-direction:column;gap:4px;">' +
         '<div style="text-align:center;font-size:0.6rem;font-weight:700;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:0.8px;">' + icon + ' ' + label + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;">' +
-            '<span style="flex:0 0 auto;min-width:36px;text-align:right;font-size:0.9rem;font-weight:900;color:' + leftClr + ';font-variant-numeric:tabular-nums;">' + fmt(leftVal) + '</span>' +
+            '<span style="flex:0 0 auto;min-width:36px;text-align:right;font-size:0.9rem;font-weight:900;color:' + window._spCor(leftClr, 'color') + ';font-variant-numeric:tabular-nums;">' + fmt(leftVal) + '</span>' +
             '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:var(--stat-box-bg);display:flex;justify-content:flex-end;">' +
                 '<div style="width:' + lp + '%;background:linear-gradient(90deg,' + leftClr + '44,' + leftClr + ');border-radius:5px 0 0 5px;transition:width 0.5s ease-out;"></div>' +
             '</div>' +
@@ -426,7 +428,7 @@ function _compareBar(label, icon, leftVal, rightVal, leftClr, rightClr, fmt, max
             '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:var(--stat-box-bg);display:flex;">' +
                 '<div style="width:' + rp + '%;background:linear-gradient(90deg,' + rightClr + ',' + rightClr + '44);border-radius:0 5px 5px 0;transition:width 0.5s ease-out;"></div>' +
             '</div>' +
-            '<span style="flex:0 0 auto;min-width:36px;font-size:0.9rem;font-weight:900;color:' + rightClr + ';font-variant-numeric:tabular-nums;">' + fmt(rightVal) + '</span>' +
+            '<span style="flex:0 0 auto;min-width:36px;font-size:0.9rem;font-weight:900;color:' + window._spCor(rightClr, 'color') + ';font-variant-numeric:tabular-nums;">' + fmt(rightVal) + '</span>' +
         '</div>' +
     '</div>';
 }
@@ -436,8 +438,8 @@ function _compareShell(badge, bodyHtml) {
     return '<div style="width:100%;padding:clamp(12px,2.2vh,18px);border-radius:14px;background:var(--info-box-bg);border:1px solid var(--border-color);display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);margin-top:12px;">' +
         '<div style="text-align:center;font-size:0.6rem;font-weight:800;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:2px;">⚖ Casual vs Torneios' + (badge ? ' · ' + badge : '') + '</div>' +
         '<div style="display:flex;align-items:center;justify-content:space-between;font-size:0.68rem;font-weight:700;">' +
-            '<span style="color:#38bdf8;">📡 Casual</span>' +
-            '<span style="color:#fbbf24;">Torneio 🏆</span>' +
+            '<span style="color:var(--sp-c-38bdf8,#38bdf8);">📡 Casual</span>' +
+            '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Torneio 🏆</span>' +
         '</div>' +
         bodyHtml +
     '</div>';
@@ -1252,7 +1254,7 @@ window._buildActivityLog = function(tournamentId) {
         var winnerD = winner ? _rs(winner, m.winnerUid || m.winnerUids || (winner === p1 ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids))) : '';
         var txt = '<b>' + window._safeHtml(p1D) + '</b> vs <b>' + window._safeHtml(p2D) + '</b>';
         if (score) txt += ' — ' + score;
-        if (winner) txt += ' → <span style="color:#4ade80;">' + window._safeHtml(winnerD) + '</span>';
+        if (winner) txt += ' → <span style="color:var(--sp-c-4ade80,#4ade80);">' + window._safeHtml(winnerD) + '</span>';
         txt += ' <span style="opacity:0.5;">(' + item.label + ')</span>';
         events.push({ date: m.updatedAt || m.resultAt || null, icon: '⚔️', text: txt, color: '#94a3b8' });
     });
@@ -1297,7 +1299,7 @@ window._buildActivityLog = function(tournamentId) {
                 if (timeStr !== '00:00') dateStr += ' ' + timeStr;
             } catch(e) {}
         }
-        return '<div style="display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+        return '<div style="display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));">' +
             '<div style="font-size:1.1rem;flex-shrink:0;width:28px;text-align:center;">' + ev.icon + '</div>' +
             '<div style="flex:1;font-size:0.82rem;color:var(--text-bright,#fff);line-height:1.4;">' + ev.text + '</div>' +
             (dateStr ? '<div style="font-size:0.7rem;color:var(--text-muted,#94a3b8);white-space:nowrap;flex-shrink:0;">' + dateStr + '</div>' : '') +
@@ -1314,7 +1316,7 @@ window._buildActivityLog = function(tournamentId) {
             if (ev.date) {
                 try { var d = new Date(ev.date); dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch(e) {}
             }
-            return '<div style="display:flex;gap:12px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+            return '<div style="display:flex;gap:12px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--sp-b-255-255-255-004,rgba(255,255,255,0.04));">' +
                 '<div style="font-size:1rem;flex-shrink:0;width:28px;text-align:center;">' + ev.icon + '</div>' +
                 '<div style="flex:1;font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.4;">' + ev.text + '</div>' +
                 (dateStr ? '<div style="font-size:0.65rem;color:var(--text-muted,#64748b);white-space:nowrap;flex-shrink:0;">' + dateStr + '</div>' : '') +
@@ -1519,7 +1521,7 @@ window._spBuildForm = function (events, source, sliderVal, kind) {
     if (!n) return _spEmpty('Sem jogos nesta seleção.');
     var wins = 0; for (var k = 0; k < n; k++) if (win[k].win) wins++;
     var losses = n - wins, pctAll = n ? Math.round(wins / n * 100) : 0, saldoAll = wins - losses;
-    var stats = n + ' jogos · <span style="color:#16a34a;">' + wins + 'V</span> <span style="color:#dc2626;">' + losses + 'D</span> · ' + pctAll + '% · saldo ' + (saldoAll > 0 ? '+' : '') + saldoAll;
+    var stats = n + ' jogos · <span style="color:var(--sp-c-16a34a,#16a34a);">' + wins + 'V</span> <span style="color:var(--sp-c-dc2626,#dc2626);">' + losses + 'D</span> · ' + pctAll + '% · saldo ' + (saldoAll > 0 ? '+' : '') + saldoAll;
     var r, i2;
     if (kind === 'saldo') {
         var cum = 0, vals = []; for (i2 = 0; i2 < n; i2++) { cum += win[i2].win ? 1 : -1; vals.push(cum); }
@@ -1615,10 +1617,10 @@ function _formTrendHtml(casualRecs, tournRecs, lpGames, uid, lpImp) {
     var b = window._spBuildForm(ev, 'all', 0, 'saldo');
     function pill(src, label, active) {
         return '<button data-src="' + src + '" data-active="' + (active ? '1' : '0') + '" onclick="window._spFormSetSource(\'' + src + '\')" ' +
-            'style="border:1px solid var(--border-color,rgba(255,255,255,0.15));background:' + (active ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'var(--bg-darker,#171a2b)') + ';color:' + (active ? '#fff' : 'var(--text-main,#cbd5e1)') + ';border-radius:999px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;">' + label + '</button>';
+            'style="border:1px solid var(--border-color,rgba(255,255,255,0.15));background:' + window._spCor((active ? 'linear-gradient(135deg,#16a34a,#15803d)' : 'var(--bg-darker,#171a2b)'), 'background') + ';color:' + window._spCor((active ? '#fff' : 'var(--text-main,#cbd5e1)'), 'color') + ';border-radius:999px;padding:3px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;">' + label + '</button>';
     }
     var opts = Object.keys(window._SP_CHART_LABELS).map(function (k) { return '<option value="' + k + '">' + window._SP_CHART_LABELS[k] + '</option>'; }).join('');
-    return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + b.clr + '33;">' +
+    return '<div style="margin-top:2px;margin-bottom:8px;padding:10px 12px;border-radius:12px;background:var(--info-box-bg);border:1px solid ' + window._spCor(b.clr, 'borda') + '33;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
           '<select id="sp-form-chart" onchange="window._spFormSetChart(this.value)" style="font-size:0.78rem;font-weight:800;color:var(--text-bright,#fff);background:var(--bg-darker,#171a2b);border:1px solid var(--border-color,rgba(255,255,255,0.18));border-radius:8px;padding:4px 8px;cursor:pointer;">' + opts + '</select>' +
           '<span id="sp-form-stats" style="font-size:0.6rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + b.stats + '</span>' +
@@ -1868,11 +1870,11 @@ window._renderPersistentMatchStats = function(records, uid) {
             var mainRow;
             if (pct !== null && pct !== undefined) {
                 mainRow = '<div style="display:flex;align-items:baseline;gap:3px;">' +
-                    '<span data-stat-count="' + pct + '" data-stat-count-suffix="%" style="font-size:0.9rem;font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;">0%</span>' +
-                    '<span data-stat-count="' + absVal + '" data-stat-count-prefix="(" data-stat-count-suffix=")" style="font-size:0.58rem;font-weight:600;color:' + clr + ';opacity:0.65;font-variant-numeric:tabular-nums;line-height:1;">(0)</span>' +
+                    '<span data-stat-count="' + pct + '" data-stat-count-suffix="%" style="font-size:0.9rem;font-weight:900;color:' + window._spCor(clr, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">0%</span>' +
+                    '<span data-stat-count="' + absVal + '" data-stat-count-prefix="(" data-stat-count-suffix=")" style="font-size:0.58rem;font-weight:600;color:' + window._spCor(clr, 'color') + ';opacity:0.65;font-variant-numeric:tabular-nums;line-height:1;">(0)</span>' +
                 '</div>';
             } else {
-                mainRow = '<span data-stat-count="' + absVal + '" style="font-size:0.9rem;font-weight:900;color:' + clr + ';font-variant-numeric:tabular-nums;line-height:1;">0</span>';
+                mainRow = '<span data-stat-count="' + absVal + '" style="font-size:0.9rem;font-weight:900;color:' + window._spCor(clr, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">0</span>';
             }
             return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
                 '<span style="font-size:0.7rem;opacity:0.85;line-height:1;">' + icon + '</span>' +
@@ -1882,9 +1884,9 @@ window._renderPersistentMatchStats = function(records, uid) {
         return '<div style="display:flex;flex-direction:column;gap:4px;padding:6px 0;">' +
             // Header: [left label] [center metric] [right label]
             '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:baseline;">' +
-                '<div style="font-size:0.62rem;font-weight:700;color:' + leftClr + ';text-transform:uppercase;letter-spacing:0.6px;text-align:left;">' + (leftLabel || '') + '</div>' +
+                '<div style="font-size:0.62rem;font-weight:700;color:' + window._spCor(leftClr, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;text-align:left;">' + (leftLabel || '') + '</div>' +
                 '<div style="font-size:0.72rem;font-weight:800;color:var(--text-bright,#fff);text-transform:uppercase;letter-spacing:0.8px;text-align:center;white-space:nowrap;">' + (centerLabel || '') + '</div>' +
-                '<div style="font-size:0.62rem;font-weight:700;color:' + rightClr + ';text-transform:uppercase;letter-spacing:0.6px;text-align:right;">' + (rightLabel || '') + '</div>' +
+                '<div style="font-size:0.62rem;font-weight:700;color:' + window._spCor(rightClr, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;text-align:right;">' + (rightLabel || '') + '</div>' +
             '</div>' +
             // Icons + numbers row: tournament at extreme edge, casual halfway between
             // center and tournament (via flex:1 spacers on both sides of casual).
@@ -1946,9 +1948,9 @@ window._renderPersistentMatchStats = function(records, uid) {
         return '<div style="display:flex;flex-direction:column;gap:4px;padding:6px 0;">' +
             // Header: [casuais] [metric name] [torneios]
             '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:baseline;">' +
-                '<div style="font-size:0.58rem;font-weight:700;color:' + casualClr + ';text-transform:uppercase;letter-spacing:0.6px;text-align:left;">casuais</div>' +
+                '<div style="font-size:0.58rem;font-weight:700;color:' + window._spCor(casualClr, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;text-align:left;">casuais</div>' +
                 '<div style="font-size:0.72rem;font-weight:800;color:var(--text-bright,#fff);text-transform:uppercase;letter-spacing:0.8px;text-align:center;white-space:nowrap;">' + label + '</div>' +
-                '<div style="font-size:0.58rem;font-weight:700;color:' + tournClr + ';text-transform:uppercase;letter-spacing:0.6px;text-align:right;">torneios</div>' +
+                '<div style="font-size:0.58rem;font-weight:700;color:' + window._spCor(tournClr, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;text-align:right;">torneios</div>' +
             '</div>' +
             // Icons + values pushed to extreme edges (⚡ left, 🏆 right).
             // v1.0.33-beta: spans com data-stat-count quando o display é
@@ -1957,10 +1959,10 @@ window._renderPersistentMatchStats = function(records, uid) {
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;align-items:end;">' +
                 '<div style="display:flex;justify-content:flex-start;gap:6px;align-items:baseline;">' +
                     '<span style="font-size:0.72rem;opacity:0.9;line-height:1;">⚡</span>' +
-                    '<span style="font-size:0.92rem;font-weight:900;color:' + casualClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + casualDisplay + '</span>' +
+                    '<span style="font-size:0.92rem;font-weight:900;color:' + window._spCor(casualClr, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">' + casualDisplay + '</span>' +
                 '</div>' +
                 '<div style="display:flex;justify-content:flex-end;gap:6px;align-items:baseline;">' +
-                    '<span style="font-size:0.92rem;font-weight:900;color:' + tournClr + ';font-variant-numeric:tabular-nums;line-height:1;">' + tournDisplay + '</span>' +
+                    '<span style="font-size:0.92rem;font-weight:900;color:' + window._spCor(tournClr, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">' + tournDisplay + '</span>' +
                     '<span style="font-size:0.72rem;opacity:0.9;line-height:1;">🏆</span>' +
                 '</div>' +
             '</div>' +
@@ -2120,7 +2122,7 @@ window._renderPersistentMatchStats = function(records, uid) {
                 '<span style="font-size:0.68rem;color:var(--success-color,#22c55e);font-weight:700;">' + e.wins + 'V</span>' +
                 '<span style="font-size:0.68rem;color:var(--danger-color,#ef4444);font-weight:700;">' + e.losses + 'D</span>' +
                 (e.draws ? '<span style="font-size:0.68rem;color:var(--text-muted,#94a3b8);font-weight:700;">' + e.draws + 'E</span>' : '') +
-                '<span style="font-size:0.7rem;color:' + (wr >= 50 ? 'var(--success-color,#22c55e)' : 'var(--danger-color,#ef4444)') + ';font-weight:800;min-width:36px;text-align:right;">' + wr + '%</span>' +
+                '<span style="font-size:0.7rem;color:' + window._spCor((wr >= 50 ? 'var(--success-color,#22c55e)' : 'var(--danger-color,#ef4444)'), 'color') + ';font-weight:800;min-width:36px;text-align:right;">' + wr + '%</span>' +
             '</div>';
         }
         h += '</div>';

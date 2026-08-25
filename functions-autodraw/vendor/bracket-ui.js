@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Bracket UI Handlers ──
 var _t = window._t || function(k) { return k; };
 
@@ -2970,7 +2972,7 @@ window._editPendingResult = function(tId, matchId) {
 
   // Modifica o card IN-PLACE: substitui spans de placar por inputs
   var inputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;' +
-    'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);' +
+    'background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));' +
     'color:var(--text-bright);border-radius:6px;padding:4px 6px;';
   var sp1 = document.getElementById('score-p1-' + matchId);
   var sp2 = document.getElementById('score-p2-' + matchId);
@@ -3024,8 +3026,8 @@ window._editPendingResult = function(tId, matchId) {
   var headerBtnArea = document.getElementById('header-btns-' + matchId);
   if (headerBtnArea) {
     headerBtnArea.innerHTML =
-      '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +
-      '<button id="confirm-pending-edit-' + matchId + '" style="background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.5);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
+      '<button id="cancel-pending-edit-' + matchId + '" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:var(--sp-c-f87171,#f87171);border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;">✕ Cancelar</button>' +
+      '<button id="confirm-pending-edit-' + matchId + '" style="background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.5);color:var(--sp-c-4ade80,#4ade80);border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;margin-left:4px;">✅ Confirmar</button>';
   }
   // v1.9.89: enquanto edita, esconde os botões do banner (Editar/Confirmar) —
   // só ficam o Cancelar/Confirmar do header. O re-render (cancelar/confirmar)
@@ -3244,7 +3246,7 @@ window._editResultInline = function(tId, matchId) {
   if (!m) return;
 
   var _esc = function(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); };
-  var inputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(245,158,11,0.4);color:var(--text-bright);border-radius:6px;padding:4px 6px;';
+  var inputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid rgba(245,158,11,0.4);color:var(--text-bright);border-radius:6px;padding:4px 6px;';
 
   // If this is a GSM set match with tiebreak enabled, also render hidden TB inputs
   // pre-filled with any existing tiebreak points from the saved set.
@@ -3292,7 +3294,7 @@ window._editResultInline = function(tId, matchId) {
   var headerDiv = card.querySelector('div:first-child > div:last-child');
   if (headerDiv) {
     headerDiv.innerHTML = '<button id="confirm-' + matchId + '" onclick="window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(matchId) + '\')"' +
-      ' style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#4ade80;border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;"' +
+      ' style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:var(--sp-c-4ade80,#4ade80);border-radius:6px;padding:3px 10px;font-size:0.72rem;font-weight:700;cursor:pointer;transition:all 0.2s;"' +
       ' onmouseover="this.style.background=\'rgba(16,185,129,0.3)\'" onmouseout="this.style.background=\'rgba(16,185,129,0.15)\'">✓ ' +
       (typeof _t === 'function' ? _t('bracket.confirm') : 'Confirmar') + '</button>';
   }
@@ -3487,11 +3489,11 @@ window._tvBuildNextMatches = function(t) {
   html += '<div style="font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.4);margin-bottom:12px;">' + _t('bui.nextGames') + '</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
   upcoming.forEach(function(m) {
-    var courtInfo = m.court ? '<div style="font-size:0.7rem;color:#818cf8;margin-top:4px;">📍 ' + window._safeHtml(m.court) + '</div>' : '';
+    var courtInfo = m.court ? '<div style="font-size:0.7rem;color:var(--sp-c-818cf8,#818cf8);margin-top:4px;">📍 ' + window._safeHtml(m.court) + '</div>' : '';
     var roundInfo = m._roundLabel ? '<div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:2px;">' + window._safeHtml(m._roundLabel) + '</div>' : '';
     var presenceP1 = m.presenceP1 ? '✅' : '⏳';
     var presenceP2 = m.presenceP2 ? '✅' : '⏳';
-    html += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;">';
+    html += '<div style="background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));border-radius:12px;padding:14px 16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     html += '<div style="flex:1;text-align:center;">';
     // v4.5.68: nome vivo por uid do slot (Modo TV).
@@ -3525,7 +3527,7 @@ window._tvBuildAttendance = function(t) {
   html += '<div style="display:flex;align-items:center;gap:10px;">';
   html += '<span style="font-size:1.5rem;">⏳</span>';
   html += '<div>';
-  html += '<div style="font-size:0.95rem;font-weight:700;color:#fbbf24;">' + _t('bui.waitingPresence') + '</div>';
+  html += '<div style="font-size:0.95rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);">' + _t('bui.waitingPresence') + '</div>';
   html += '<div style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-top:2px;">' + _t('bui.waitingPresenceCount', {n: waitingPresence.length}) + '</div>';
   html += '</div></div></div>';
   return html;
@@ -3557,7 +3559,7 @@ window._tvMode = function(tId) {
     : '';
   var hero = '<div' + _heroVphoto + ' style="' + heroBg + 'padding:30px 40px;flex-shrink:0;position:relative;">';
   // Exit button (top right)
-  hero += '<button onclick="window._exitTvMode()" style="position:absolute;top:16px;right:20px;background:rgba(239,68,68,0.25);color:#f87171;border:1px solid rgba(239,68,68,0.4);padding:10px 20px;border-radius:10px;cursor:pointer;font-size:0.9rem;font-weight:700;z-index:1;">✕ Sair do Modo TV</button>';
+  hero += '<button onclick="window._exitTvMode()" style="position:absolute;top:16px;right:20px;background:rgba(239,68,68,0.25);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.4);padding:10px 20px;border-radius:10px;cursor:pointer;font-size:0.9rem;font-weight:700;z-index:1;">✕ Sair do Modo TV</button>';
   // Clock (top right, below exit)
   hero += '<div style="position:absolute;top:60px;right:20px;text-align:right;">';
   hero += '<div id="tv-mode-clock" style="color:rgba(255,255,255,0.7);font-size:1.4rem;font-weight:700;font-variant-numeric:tabular-nums;"></div>';
@@ -3594,8 +3596,8 @@ window._tvMode = function(tId) {
       progHtml += '<span style="font-size:0.8rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:rgba(255,255,255,0.4);">Progresso do Torneio</span>';
       progHtml += '<span style="font-size:1rem;font-weight:800;color:white;">' + prog.completed + '/' + prog.total + ' partidas (' + prog.pct + '%)</span>';
       progHtml += '</div>';
-      progHtml += '<div style="width:100%;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden;">';
-      progHtml += '<div style="width:' + prog.pct + '%;height:100%;background:' + barCol + ';border-radius:4px;transition:width 0.5s;"></div>';
+      progHtml += '<div style="width:100%;height:8px;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));border-radius:4px;overflow:hidden;">';
+      progHtml += '<div style="width:' + prog.pct + '%;height:100%;background:' + window._spCor(barCol, 'background') + ';border-radius:4px;transition:width 0.5s;"></div>';
       progHtml += '</div></div>';
     }
   }
@@ -3858,7 +3860,7 @@ window._showPlayerHistory = function(tId, playerName, filter) {
     var roundLabel = item.label || (item.round ? 'Rodada ' + item.round : (m.label || ''));
     return {
       type: isWin ? 'win' : (isLoss ? 'loss' : (isDraw ? 'draw' : 'pending')),
-      html: '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
+      html: '<tr style="border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
         '<td style="padding:8px 10px;font-size:0.8rem;color:var(--text-muted);">' + roundLabel + '</td>' +
         '<td style="padding:8px 10px;font-size:0.8rem;font-weight:600;color:var(--text-bright);">' + (opponent || 'BYE') + '</td>' +
         '<td style="padding:8px 10px;font-size:0.8rem;text-align:center;">' + scoreStr + '</td>' +
@@ -3875,9 +3877,9 @@ window._showPlayerHistory = function(tId, playerName, filter) {
   var rows = shown.map(function(r) { return r.html; }).join('');
 
   var summary = '<div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">' +
-    '<span style="font-weight:700;color:#4ade80;">' + wins + 'V</span>' +
-    '<span style="font-weight:700;color:#94a3b8;">' + draws + 'E</span>' +
-    '<span style="font-weight:700;color:#f87171;">' + losses + 'D</span>' +
+    '<span style="font-weight:700;color:var(--sp-c-4ade80,#4ade80);">' + wins + 'V</span>' +
+    '<span style="font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);">' + draws + 'E</span>' +
+    '<span style="font-weight:700;color:var(--sp-c-f87171,#f87171);">' + losses + 'D</span>' +
     '<span style="color:var(--text-muted);">' + matches.length + ' partidas</span>' +
     '</div>';
 
@@ -4060,7 +4062,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   var _fmtVal = function(v) {
     if (v === 0 || v == null) return '<span style="color:var(--text-muted);opacity:0.35;">·</span>';
     var sign = v > 0 ? '+' : '';
-    return '<span style="color:' + (v >= 0 ? '#4ade80' : '#f87171') + ';font-weight:700;">' + sign + v + '</span>';
+    return '<span style="color:' + window._spCor((v >= 0 ? '#4ade80' : '#f87171'), 'color') + ';font-weight:700;">' + sign + v + '</span>';
   };
   var _fmtZero = '<span style="color:var(--text-muted);opacity:0.5;">0</span>';
 
@@ -4068,12 +4070,12 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
   if (folgaCount > 0) _subParts.push(folgaCount + ' folga' + (folgaCount === 1 ? '' : 's'));
   if (inativoCount > 0) _subParts.push(inativoCount + ' inativa' + (inativoCount === 1 ? '' : 's'));
   var summary = '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap;">' +
-    '<span style="font-size:1.4rem;font-weight:900;color:#fbbf24;">💯 ' + (result.total || 0) + '</span>' +
+    '<span style="font-size:1.4rem;font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);">💯 ' + (result.total || 0) + '</span>' +
     '<span style="color:var(--text-muted);font-size:0.8rem;">pontos avançados · ' + _subParts.join(' · ') + '</span>' +
     '</div>';
   // Punição de W.O. (quando houve): linha explícita — explica o desconto no total.
   if (_woPenaltyTotal !== 0) {
-    summary += '<div style="margin:-4px 0 12px;padding:8px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:10px;font-size:0.82rem;color:#f87171;font-weight:700;">🚫 Punição por W.O.: ' + _woPenaltyTotal + ' <span style="opacity:0.75;font-weight:500;">(já incluído no total acima)</span></div>';
+    summary += '<div style="margin:-4px 0 12px;padding:8px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.35);border-radius:10px;font-size:0.82rem;color:var(--sp-c-f87171,#f87171);font-weight:700;">🚫 Punição por W.O.: ' + _woPenaltyTotal + ' <span style="opacity:0.75;font-weight:500;">(já incluído no total acima)</span></div>';
   }
 
   var tableHtml;
@@ -4087,8 +4089,8 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     var _bgFolga = 'background:rgba(245,158,11,0.06);';
     var _bgInativo = 'background:rgba(248,113,113,0.05);';
     var _roundTag = function(st) {
-      if (st === 'folga') return '<div style="font-size:0.58rem;color:#fbbf24;font-weight:700;letter-spacing:0;">folga</div>';
-      if (st === 'inativo') return '<div style="font-size:0.58rem;color:#f87171;font-weight:700;letter-spacing:0;">inativo</div>';
+      if (st === 'folga') return '<div style="font-size:0.58rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;letter-spacing:0;">folga</div>';
+      if (st === 'inativo') return '<div style="font-size:0.58rem;color:var(--sp-c-f87171,#f87171);font-weight:700;letter-spacing:0;">inativo</div>';
       return '';
     };
     var _roundBg = function(st) { return st === 'folga' ? _bgFolga : (st === 'inativo' ? _bgInativo : ''); };
@@ -4096,7 +4098,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     // Cabeçalho: Categoria | Total | Média | R(desc)…
     var head = '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
       '<th style="' + _thBase + 'text-align:left;' + _stkL + 'z-index:2;">Categoria</th>' +
-      '<th style="' + _thBase + 'text-align:center;color:#fbbf24;">Total</th>' +
+      '<th style="' + _thBase + 'text-align:center;color:var(--sp-c-fbbf24,#fbbf24);">Total</th>' +
       '<th style="' + _thBase + 'text-align:center;">Média</th>';
     rounds.forEach(function(rk) {
       var st = roundStatus[rk];
@@ -4109,7 +4111,7 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     cats.forEach(function(catKey) {
       var lbl = itemLabels[catKey] || catKey;
       var catTotal = (catPlayedTotal[catKey] || 0) + (catAvg[catKey] || 0) * folgaCount;
-      body += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">' +
+      body += '<tr style="border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
         '<td style="' + _tdBase + 'text-align:left;color:var(--text-bright);' + _stkL + '">' + lbl + '</td>' +
         '<td style="' + _tdBase + 'font-weight:800;color:var(--text-bright);">' + _cntPfx(catTotalCount[catKey]) + _fmtVal(catTotal) + '</td>' +
         '<td style="' + _tdBase + 'opacity:0.85;" title="média por rodada jogada">' + _cntPfx(catAvgCount[catKey]) + _fmtVal(catAvg[catKey] || 0) + '</td>';
@@ -4133,19 +4135,19 @@ window._showAdvancedPointsBreakdown = function(tId, playerName, category) {
     // Rodapé: Total geral | média do total | total por coluna (rodada)
     var foot = '<tfoot><tr style="border-top:2px solid var(--border-color);">' +
       '<td style="' + _tdBase + 'text-align:left;font-weight:800;color:var(--text-muted);text-transform:uppercase;' + _stkL + 'z-index:2;">Total</td>' +
-      '<td style="' + _tdBase + 'font-weight:900;color:#fbbf24;font-size:0.95rem;">' + (result.total || 0) + '</td>' +
-      '<td style="' + _tdBase + 'font-weight:800;color:#fbbf24;opacity:0.85;" title="média por rodada jogada">' + avgTotal + '</td>';
+      '<td style="' + _tdBase + 'font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.95rem;">' + (result.total || 0) + '</td>' +
+      '<td style="' + _tdBase + 'font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);opacity:0.85;" title="média por rodada jogada">' + avgTotal + '</td>';
     rounds.forEach(function(rk) {
       var st = roundStatus[rk];
       var val = st === 'played' ? (roundTotalsPlayed[rk] || 0) : (st === 'folga' ? (folgaColTotal[rk] || 0) : 0);
-      foot += '<td style="' + _tdBase + 'font-weight:800;color:#fbbf24;' + _roundBg(st) + '">' + (st === 'inativo' ? '0' : val) + '</td>';
+      foot += '<td style="' + _tdBase + 'font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);' + _roundBg(st) + '">' + (st === 'inativo' ? '0' : val) + '</td>';
     });
     foot += '</tr></tfoot>';
 
     tableHtml = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:max-content;">' + head + body + foot + '</table></div>' +
       '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:8px;line-height:1.4;">' +
-        '<b style="color:#fbbf24;">Folga</b> (saiu por sorteio): recebe a média das rodadas jogadas em cada linha. ' +
-        '<b style="color:#f87171;">Inativo</b> (ficou de fora da rodada): zero em cada linha.' +
+        '<b style="color:var(--sp-c-fbbf24,#fbbf24);">Folga</b> (saiu por sorteio): recebe a média das rodadas jogadas em cada linha. ' +
+        '<b style="color:var(--sp-c-f87171,#f87171);">Inativo</b> (ficou de fora da rodada): zero em cada linha.' +
       '</div>';
   }
   showAlertDialog('💯 Pontos Avançados — ' + playerName, summary + tableHtml, null, { type: 'info', okText: '‹ Voltar' });
@@ -5079,15 +5081,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // NA QUADRA, com o celular longe do olho — os antigos tinham fundo a 8% de
           // opacidade e rótulo de 0.88rem, que na areia somem.
           '<button onclick="window._liveResolveTie(\'extend\')" style="width:' + _larguraBtn + ';flex:0 0 auto;box-sizing:border-box;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:' + _padBtn + ';border-radius:16px;border:2px solid #10b981;background:linear-gradient(180deg,rgba(16,185,129,0.32),rgba(16,185,129,0.16));box-shadow:0 6px 22px rgba(16,185,129,0.28);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;">' +
-            '<div style="font-size:' + _fTitulo + ';font-weight:900;color:#34d399;line-height:1.1;">Prorrogar</div>' +
-            '<div style="font-size:' + _fSub + ';color:#a7f3d0;margin-top:5px;">Continuar até vantagem de 2 games</div>' +
+            '<div style="font-size:' + _fTitulo + ';font-weight:900;color:var(--sp-c-34d399,#34d399);line-height:1.1;">Prorrogar</div>' +
+            '<div style="font-size:' + _fSub + ';color:var(--sp-c-a7f3d0,#a7f3d0);margin-top:5px;">Continuar até vantagem de 2 games</div>' +
           '</button>' +
           '<button onclick="window._liveResolveTie(\'tiebreak\')" style="width:' + _larguraBtn + ';flex:0 0 auto;box-sizing:border-box;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:' + _padBtn + ';border-radius:16px;border:2px solid #c084fc;background:linear-gradient(180deg,rgba(192,132,252,0.32),rgba(192,132,252,0.16));box-shadow:0 6px 22px rgba(192,132,252,0.28);cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;">' +
-            '<div style="font-size:' + _fTitulo + ';font-weight:900;color:#d8b4fe;line-height:1.1;">Tie-break</div>' +
+            '<div style="font-size:' + _fTitulo + ';font-weight:900;color:var(--sp-c-d8b4fe,#d8b4fe);line-height:1.1;">Tie-break</div>' +
             // "(7 pts)" em linha própria, abaixo do rótulo (ordem do dono) — dentro do
             // título ele competia com a palavra e obrigava o rótulo a ser menor.
-            '<div style="font-size:' + _fSub + ';font-weight:800;opacity:0.95;color:#d8b4fe;line-height:1.15;margin-top:3px;">(7 pts)</div>' +
-            '<div style="font-size:' + _fSub + ';color:#e9d5ff;margin-top:5px;">Tie-break a 7 pontos com margem de 2</div>' +
+            '<div style="font-size:' + _fSub + ';font-weight:800;opacity:0.95;color:var(--sp-c-d8b4fe,#d8b4fe);line-height:1.15;margin-top:3px;">(7 pts)</div>' +
+            '<div style="font-size:' + _fSub + ';color:var(--sp-c-e9d5ff,#e9d5ff);margin-top:5px;">Tie-break a 7 pontos com margem de 2</div>' +
           '</button>' +
         '</div>';
     }
@@ -5105,9 +5107,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
           // do número; (2) abaixo, a balança e "Empate" na MESMA linha, em 70% da largura.
           '<div style="text-align:center;margin-bottom:clamp(10px,2vh,18px);">' +
             '<div style="display:flex;align-items:center;justify-content:center;gap:0;width:' + (_tbDeit ? '60vw' : '90vw') + ';margin:0 auto;line-height:0.95;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;font-size:' + _fPlacar + ';">' +
-              '<span style="color:' + (window._LS_NUM_1 || '#2667FF') + ';">' + tiedAt + '</span>' +
+              '<span style="color:' + window._spCor((window._LS_NUM_1 || '#2667FF'), 'color') + ';">' + tiedAt + '</span>' +
               '<span style="color:var(--text-muted);opacity:0.5;font-size:0.62em;margin:0 -0.04em;">-</span>' +
-              '<span style="color:' + (window._LS_NUM_2 || '#DB3027') + ';">' + tiedAt + '</span>' +
+              '<span style="color:' + window._spCor((window._LS_NUM_2 || '#DB3027'), 'color') + ';">' + tiedAt + '</span>' +
             '</div>' +
             '<div style="display:flex;align-items:center;justify-content:center;gap:0.35em;width:70vw;margin:clamp(6px,1.4vh,12px) auto 0;">' +
               '<span style="font-size:' + _fBalanca + ';line-height:1;">⚖️</span>' +
@@ -6327,11 +6329,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // v1.7.67: sem `max-width:360px` — ele vinha da lista de UMA coluna e agora
         // deixaria sobra dentro da própria coluna (que já é metade da tela).
         'style="box-sizing:border-box;width:100%;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:clamp(12px,2.2vh,20px) 16px;border-radius:12px;cursor:pointer;text-align:left;' +
-        'border:2px solid ' + bd + ';background:' + bg + ';transition:background 0.12s,border-color 0.12s;">' +
+        'border:2px solid ' + window._spCor(bd, 'borda') + ';background:' + window._spCor(bg, 'background') + ';transition:background 0.12s,border-color 0.12s;">' +
           ball + _liveAvatarHtml(p.name, 34) +
           // v1.7.72: fonte maior (ordem do dono, "para leitura melhor"). Cabe porque agora
           // é UMA coluna em pé e só o primeiro nome — antes 1rem já cortava ("Nelson Ba…").
-          '<span style="flex:1;min-width:0;font-size:clamp(1.5rem,7.5vw,2.6rem);font-weight:800;line-height:1.05;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(_pkNome[p.name] || p.name) + '</span>' +
+          '<span style="flex:1;min-width:0;font-size:clamp(1.5rem,7.5vw,2.6rem);font-weight:800;line-height:1.05;color:' + window._spCor(clr, 'color') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(_pkNome[p.name] || p.name) + '</span>' +
         '</button>';
     });   // ⚠️ ARRAY, não string: as colunas abaixo consomem card a card.
 
@@ -6666,16 +6668,16 @@ window._openLiveScoring = function(tId, matchId, opts) {
           var _combinedHtml = (typeof window._formatSetCombined === 'function')
             ? window._formatSetCombined(ss, { html: true })
             : (ss.gamesP1 + '-' + ss.gamesP2);
-          scoreSummary += '<span style="font-size:clamp(1.3rem,4vw,2rem);font-weight:900;color:' + setClr + ';font-variant-numeric:tabular-nums;">' + _combinedHtml + '</span>';
+          scoreSummary += '<span style="font-size:clamp(1.3rem,4vw,2rem);font-weight:900;color:' + window._spCor(setClr, 'color') + ';font-variant-numeric:tabular-nums;">' + _combinedHtml + '</span>';
           if (si < state.sets.length - 1) scoreSummary += '<span style="color:rgba(255,255,255,0.15);margin:0 clamp(4px,1vw,8px);">·</span>';
         }
       } else {
         // Simple or fixed set score
         var scP1 = state.isFixedSet ? state.sets[0].gamesP1 : state.currentGameP1;
         var scP2 = state.isFixedSet ? state.sets[0].gamesP2 : state.currentGameP2;
-        scoreSummary = '<span style="font-size:clamp(1.8rem,6vw,3rem);font-weight:900;color:#60a5fa;font-variant-numeric:tabular-nums;">' + scP1 + '</span>' +
+        scoreSummary = '<span style="font-size:clamp(1.8rem,6vw,3rem);font-weight:900;color:var(--sp-c-60a5fa,#60a5fa);font-variant-numeric:tabular-nums;">' + scP1 + '</span>' +
           '<span style="color:rgba(255,255,255,0.25);margin:0 8px;font-size:1.2rem;">×</span>' +
-          '<span style="font-size:clamp(1.8rem,6vw,3rem);font-weight:900;color:#f87171;font-variant-numeric:tabular-nums;">' + scP2 + '</span>';
+          '<span style="font-size:clamp(1.8rem,6vw,3rem);font-weight:900;color:var(--sp-c-f87171,#f87171);font-variant-numeric:tabular-nums;">' + scP2 + '</span>';
       }
 
       // Elapsed time
@@ -6820,23 +6822,23 @@ window._openLiveScoring = function(tId, matchId, opts) {
         modal.id = 'player-match-stats-modal';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:100020;display:flex;align-items:center;justify-content:center;padding:1rem;';
         var _boxStat = function(label, value, icon) {
-          return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);">' +
+          return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;border-radius:10px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
             '<span style="font-size:1rem;">' + icon + '</span>' +
-            '<span style="font-size:1.1rem;font-weight:900;color:' + accent + ';font-variant-numeric:tabular-nums;line-height:1;">' + value + '</span>' +
+            '<span style="font-size:1.1rem;font-weight:900;color:' + window._spCor(accent, 'color') + ';font-variant-numeric:tabular-nums;line-height:1;">' + value + '</span>' +
             '<span style="font-size:0.55rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">' + label + '</span>' +
           '</div>';
         };
         modal.innerHTML =
-          '<div style="background:#0f172a;border:1.5px solid ' + accent + ';border-radius:18px;max-width:380px;width:100%;padding:1.25rem;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">' +
+          '<div style="background:#0f172a;border:1.5px solid ' + window._spCor(accent, 'borda') + ';border-radius:18px;max-width:380px;width:100%;padding:1.25rem;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">' +
             // Header
             '<div style="display:flex;align-items:center;gap:12px;">' + _liveAvatarHtml(playerName, 52) +
               '<div style="flex:1;min-width:0;">' +
                 '<div style="font-size:1.15rem;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(playerName) + '</div>' +
-                '<div style="font-size:0.7rem;color:' + accent + ';font-weight:700;display:flex;align-items:center;gap:6px;">' +
+                '<div style="font-size:0.7rem;color:' + window._spCor(accent, 'color') + ';font-weight:700;display:flex;align-items:center;gap:6px;">' +
                   (isWinner ? '🏆 ' : '') + 'Time ' + ps.team + ' · ' + window._safeHtml(teamLabel) +
                 '</div>' +
               '</div>' +
-              /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">✕</button>' +
+              /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:700;cursor:pointer;">✕</button>' +
             '</div>' +
             // Serve stats grid
             (hasServeData ? (
@@ -6859,13 +6861,13 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '</div>'
             ) : '<div style="text-align:center;font-size:0.72rem;color:var(--text-muted);padding:10px;">Sem dados de saque (tracking desativado)</div>') +
             // Team context
-            '<div style="padding:10px;border-radius:10px;background:' + accentBg + ';border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:4px;">' +
+            '<div style="padding:10px;border-radius:10px;background:' + window._spCor(accentBg, 'background') + ';border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;flex-direction:column;gap:4px;">' +
               '<div style="font-size:0.55rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Seu time na partida</div>' +
               '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:0.8rem;font-weight:800;color:#fff;">' +
                 '<span>' + st.teamStats[ps.team].points + ' pts · ' + st.teamStats[ps.team].games + ' games · ' + st.teamStats[ps.team].sets + ' sets</span>' +
               '</div>' +
             '</div>' +
-            '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="padding:12px;border-radius:10px;border:none;background:rgba(99,102,241,0.2);color:#818cf8;font-weight:700;cursor:pointer;font-size:0.9rem;">Fechar</button>' +
+            '<button onclick="document.getElementById(\'player-match-stats-modal\').remove()" style="padding:12px;border-radius:10px;border:none;background:rgba(99,102,241,0.2);color:var(--sp-c-818cf8,#818cf8);font-weight:700;cursor:pointer;font-size:0.9rem;">Fechar</button>' +
           '</div>';
         modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
         document.body.appendChild(modal);
@@ -6882,7 +6884,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var escName = String(name).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         return (
           '<button type="button" onclick="window._showPlayerMatchStats(\'' + escName + '\')" title="Ver estatísticas" ' +
-            'style="display:flex;align-items:center;gap:8px;padding:' + pad + ';background:rgba(255,255,255,0.05);border:1px solid ' + borderClr + ';border-radius:10px;cursor:pointer;color:#fff;font-family:inherit;width:100%;min-width:0;transition:all 0.15s;" ' +
+            'style="display:flex;align-items:center;gap:8px;padding:' + pad + ';background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid ' + window._spCor(borderClr, 'borda') + ';border-radius:10px;cursor:pointer;color:#fff;font-family:inherit;width:100%;min-width:0;transition:all 0.15s;" ' +
             'onmouseover="this.style.background=\'rgba(255,255,255,0.09)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.05)\'">' +
             _liveAvatarHtml(name, sz) +
             '<span style="font-size:' + fs + ';font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">' + window._safeHtml(name) + '</span>' +
@@ -6901,7 +6903,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         ? '<div style="display:flex;justify-content:center;padding:1px 0;">' +
             '<button type="button" onclick="window._liveScoreUnpairFromStats()" title="Desparear — volta à tela de formação de times" ' +
               'style="display:flex;align-items:center;justify-content:center;width:40px;height:22px;' +
-              'border-radius:11px;border:1px dashed rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);' +
+              'border-radius:11px;border:1px dashed rgba(255,255,255,0.18);background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));' +
               'cursor:pointer;font-size:0.85rem;line-height:1;color:var(--text-muted);transition:all 0.18s;' +
               '-webkit-tap-highlight-color:transparent;padding:0;">🔗</button>' +
           '</div>'
@@ -6954,15 +6956,15 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="display:flex;flex-direction:column;gap:4px;">' +
             '<div style="text-align:center;font-size:0.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;">' + icon + ' ' + label + '</div>' +
             '<div style="display:flex;align-items:center;gap:6px;">' +
-              '<span data-stat-count="' + p2Val + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;text-align:right;font-size:0.9rem;font-weight:900;color:' + p2Clr + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
-              '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,0.05);display:flex;justify-content:flex-end;position:relative;">' +
+              '<span data-stat-count="' + p2Val + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;text-align:right;font-size:0.9rem;font-weight:900;color:' + window._spCor(p2Clr, 'color') + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
+              '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));display:flex;justify-content:flex-end;position:relative;">' +
                 '<div data-stat-bar="' + p2PctBar + '" style="width:0%;height:100%;background:linear-gradient(90deg,' + p2Clr + '44,' + p2Clr + ');border-radius:5px 0 0 5px;transition:width 0.8s cubic-bezier(0.2,0.8,0.2,1);"></div>' +
               '</div>' +
-              '<div style="width:1px;height:14px;background:rgba(255,255,255,0.2);"></div>' +
-              '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,0.05);display:flex;">' +
+              '<div style="width:1px;height:14px;background:var(--sp-g-255-255-255-02,rgba(255,255,255,0.2));"></div>' +
+              '<div style="flex:1;height:9px;border-radius:5px;overflow:hidden;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));display:flex;">' +
                 '<div data-stat-bar="' + p1PctBar + '" style="width:0%;height:100%;background:linear-gradient(90deg,' + p1Clr + ',' + p1Clr + '44);border-radius:0 5px 5px 0;transition:width 0.8s cubic-bezier(0.2,0.8,0.2,1);"></div>' +
               '</div>' +
-              '<span data-stat-count="' + p1Val + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;font-size:0.9rem;font-weight:900;color:' + p1Clr + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
+              '<span data-stat-count="' + p1Val + '" data-stat-count-suffix="' + dataSuffix + '" style="flex:0 0 auto;min-width:36px;font-size:0.9rem;font-weight:900;color:' + window._spCor(p1Clr, 'color') + ';font-variant-numeric:tabular-nums;">0' + dataSuffix + '</span>' +
             '</div>' +
           '</div>'
         );
@@ -7004,11 +7006,11 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // `_fs` é o ÚNICO lugar que escala: em pé devolve o valor original.
       var _fs = function(v) { return (_fimDeitado ? (v * 1.35).toFixed(2) : v) + 'rem'; };
       var comparativeSection =
-        '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(12px,2.2vh,18px);border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.08);">' +
-            '<span style="font-size:0.65rem;font-weight:800;color:' + p2Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">← ' + window._safeHtml(_t2Label) + '</span>' +
+        '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(12px,2.2vh,18px);border-radius:14px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));display:flex;flex-direction:column;gap:clamp(8px,1.6vh,14px);">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:4px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+            '<span style="font-size:0.65rem;font-weight:800;color:' + window._spCor(p2Clr, 'color') + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">← ' + window._safeHtml(_t2Label) + '</span>' +
             '<span style="font-size:0.55rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;">⚖</span>' +
-            '<span style="font-size:' + _fs(0.65) + ';font-weight:800;color:' + p1Clr + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;">' + window._safeHtml(_t1Label) + ' →</span>' +
+            '<span style="font-size:' + _fs(0.65) + ';font-weight:800;color:' + window._spCor(p1Clr, 'color') + ';text-transform:uppercase;letter-spacing:0.5px;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;">' + window._safeHtml(_t1Label) + ' →</span>' +
           '</div>' +
           (useSets && !state.isFixedSet ? _compareBar('Sets', '🏅', t1T.sets, t2T.sets) : '') +
           (state.totalGamesPlayed > 0 ? _compareBar('Games', '🎾', t1T.games, t2T.games) : '') +
@@ -7026,7 +7028,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var winnerSection =
         '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(10px,2vh,16px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.16),rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.04));border:1px solid rgba(' + (winTeam === 1 ? '59,130,246' : '239,68,68') + ',0.4);display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vh,10px);">' +
           '<div style="font-size:clamp(1.8rem,6vw,2.8rem);line-height:1;">🏆</div>' +
-          '<div style="font-size:' + _fs(0.6) + ';font-weight:800;color:' + winClr + ';text-transform:uppercase;letter-spacing:2px;">Vencedor</div>' +
+          '<div style="font-size:' + _fs(0.6) + ';font-weight:800;color:' + window._spCor(winClr, 'color') + ';text-transform:uppercase;letter-spacing:2px;">Vencedor</div>' +
           '<div style="display:flex;flex-direction:' + _chipsDir + ';align-items:' + (_fimDeitado ? 'center' : 'stretch') + ';justify-content:center;gap:6px;width:100%;max-width:' + _chipsMax + ';">' + winChipsHtml + '</div>' +
           '<div style="display:flex;align-items:center;justify-content:center;gap:0;margin:4px 0 2px;">' + scoreSummary + '</div>' +
           '<div style="font-size:' + _fs(0.55) + ';color:var(--text-muted);text-align:center;">💡 toque nos jogadores para ver estatísticas</div>' +
@@ -7035,7 +7037,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // Loser section: names as clickable chips
       var loserSection =
         '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(8px,1.8vh,14px) clamp(10px,2vw,16px);border-radius:14px;background:linear-gradient(180deg,rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.08),rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.02));border:1px solid rgba(' + (winTeam === 1 ? '239,68,68' : '59,130,246') + ',0.25);display:flex;flex-direction:column;align-items:center;gap:clamp(4px,1vh,8px);opacity:0.94;">' +
-          '<div style="font-size:' + _fs(0.6) + ';font-weight:700;color:' + loseClr + ';text-transform:uppercase;letter-spacing:2px;opacity:0.8;">Perdedor</div>' +
+          '<div style="font-size:' + _fs(0.6) + ';font-weight:700;color:' + window._spCor(loseClr, 'color') + ';text-transform:uppercase;letter-spacing:2px;opacity:0.8;">Perdedor</div>' +
           '<div style="display:flex;flex-direction:' + _chipsDir + ';align-items:' + (_fimDeitado ? 'center' : 'stretch') + ';justify-content:center;gap:4px;width:100%;max-width:' + _chipsMax + ';">' + loseChipsHtml + '</div>' +
         '</div>';
 
@@ -7084,8 +7086,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var timeStatsSection = '';
       if (_timeStats) {
         var _tsBox = function(label, value, color) {
-          return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">' +
-            '<span style="font-size:' + _fs(0.95) + ';font-weight:800;color:' + (color || '#fff') + ';font-variant-numeric:tabular-nums;">' + value + '</span>' +
+          return '<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:10px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+            '<span style="font-size:' + _fs(0.95) + ';font-weight:800;color:' + window._spCor((color || '#fff'), 'color') + ';font-variant-numeric:tabular-nums;">' + value + '</span>' +
             '<span style="font-size:' + _fs(0.55) + ';font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">' + label + '</span>' +
           '</div>';
         };
@@ -7097,7 +7099,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           warmupHint = '<div style="text-align:center;font-size:' + _fs(0.55) + ';color:var(--text-muted);opacity:0.7;font-style:italic;">🏃 Aquecimento de ' + _fmtSec(_timeStats.warmupMs) + ' detectado — 1º ponto contado com tempo médio</div>';
         }
         timeStatsSection =
-          '<div style="width:100%;max-width:' + _cardMax + ';padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;gap:8px;">' +
+          '<div style="width:100%;max-width:' + _cardMax + ';padding:10px 12px;border-radius:12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;flex-direction:column;gap:8px;">' +
             '<div style="text-align:center;font-size:' + _fs(0.6) + ';font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;">⏱ Tempo</div>' +
             '<div style="display:flex;align-items:stretch;gap:6px;">' +
               _tsBox('Duração', _timeStats.totalMs ? _fmtSec(_timeStats.totalMs) : '—', '#fff') +
@@ -7155,12 +7157,12 @@ window._openLiveScoring = function(tId, matchId, opts) {
         var animId = 'mom-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
 
         momentumSection =
-          '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(10px,2vh,14px) clamp(8px,1.5vw,12px);border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.10);display:flex;flex-direction:column;gap:8px;">' +
+          '<div style="width:100%;max-width:' + _cardMax + ';padding:clamp(10px,2vh,14px) clamp(8px,1.5vw,12px);border-radius:14px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.10));display:flex;flex-direction:column;gap:8px;">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px;">' +
-              '<div style="font-size:' + _fs(0.6) + ';font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1.5px;">📈 Momentum da Partida</div>' +
+              '<div style="font-size:' + _fs(0.6) + ';font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:1.5px;">📈 Momentum da Partida</div>' +
               '<div style="display:flex;align-items:center;gap:8px;">' +
                 '<div style="font-size:' + _fs(0.58) + ';color:var(--text-muted);font-weight:600;">' + pts.length + ' pts</div>' +
-                '<button id="mom-replay-btn" style="padding:3px 8px;border-radius:6px;font-size:' + _fs(0.6) + ';font-weight:700;border:1px solid rgba(251,191,36,0.35);cursor:pointer;background:rgba(251,191,36,0.1);color:#fbbf24;">↻ Replay</button>' +
+                '<button id="mom-replay-btn" style="padding:3px 8px;border-radius:6px;font-size:' + _fs(0.6) + ';font-weight:700;border:1px solid rgba(251,191,36,0.35);cursor:pointer;background:rgba(251,191,36,0.1);color:var(--sp-c-fbbf24,#fbbf24);">↻ Replay</button>' +
               '</div>' +
             '</div>' +
             '<style>' +
@@ -7186,8 +7188,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
               '<text class="' + animId + '-dot" x="' + (parseFloat(endX) + 8) + '" y="' + (parseFloat(p2EndY) + 3) + '" fill="#f87171" font-size="10" font-weight="700" font-family="monospace">' + p2 + '</text>' +
             '</svg>' +
             '<div style="display:flex;align-items:center;justify-content:center;gap:14px;padding:0 4px;font-size:' + _fs(0.6) + ';">' +
-              '<span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;border-radius:2px;background:#3b82f6;"></span><span style="color:#60a5fa;font-weight:700;">' + window._safeHtml(p1Label) + '</span></span>' +
-              '<span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;border-radius:2px;background:#ef4444;"></span><span style="color:#f87171;font-weight:700;">' + window._safeHtml(p2Label) + '</span></span>' +
+              '<span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;border-radius:2px;background:#3b82f6;"></span><span style="color:var(--sp-c-60a5fa,#60a5fa);font-weight:700;">' + window._safeHtml(p1Label) + '</span></span>' +
+              '<span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;border-radius:2px;background:#ef4444;"></span><span style="color:var(--sp-c-f87171,#f87171);font-weight:700;">' + window._safeHtml(p2Label) + '</span></span>' +
             '</div>' +
           '</div>';
       }
@@ -7226,7 +7228,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           ? '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(236,72,153,0.07);border:1px solid rgba(236,72,153,0.18);cursor:pointer;">' +
               '<div style="display:flex;align-items:center;gap:6px;">' +
                 '<span style="font-size:' + _fs(0.9) + ';">⚤</span>' +
-                '<span style="font-size:' + _fs(0.72) + ';font-weight:700;color:#f472b6;">Duplas Mistas</span>' +
+                '<span style="font-size:' + _fs(0.72) + ';font-weight:700;color:var(--sp-c-f472b6,#f472b6);">Duplas Mistas</span>' +
               '</div>' +
               '<span class="toggle-switch toggle-sm" style="flex-shrink:0;">' +
                 '<input type="checkbox" id="chk-stats-mixed" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._statsToggleMixed(this)" />' +
@@ -7249,7 +7251,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           _fimActs.style.display = 'flex';
           _fimActs.innerHTML =
             '<button onclick="window._liveStatsClose()" style="flex:0 0 auto;padding:7px 14px;border-radius:10px;' +
-              'border:1px solid rgba(239,68,68,0.45);cursor:pointer;background:rgba(239,68,68,0.14);color:#f87171;' +
+              'border:1px solid rgba(239,68,68,0.45);cursor:pointer;background:rgba(239,68,68,0.14);color:var(--sp-c-f87171,#f87171);' +
               'font-size:' + _fs(0.82) + ';font-weight:800;-webkit-tap-highlight-color:transparent;">✕ Encerrar</button>' +
             '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:0 0 auto;padding:7px 16px;' +
               'border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);' +
@@ -7293,7 +7295,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
           '<div style="display:flex;gap:8px;width:100%;">' +
             '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="flex:1;padding:14px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 20px rgba(16,185,129,0.4);">🔄 Iniciar</button>' +
             '<button onclick="window._liveScoreShareCasual()" title="Compartilhar resultado" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:#25d366;color:white;box-shadow:0 4px 20px rgba(37,211,102,0.3);">📤</button>' +
-            /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);">✕</button>' +
+            /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="window._liveStatsClose()" title="Encerrar" style="flex:0 0 auto;padding:14px 16px;border-radius:12px;font-size:' + _fs(0.95) + ';font-weight:800;border:none;cursor:pointer;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:rgba(255,255,255,0.7);">✕</button>' +
           '</div>';
       }
 
@@ -7319,7 +7321,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // desfeito; a regravação do resultado corrigido é coberta dentro do próprio
       // _liveScoreUndoLastPoint (rearme de _resultSaved + id estável do histórico).
       var undoSection = (Array.isArray(state._undoSnapshots) && state._undoSnapshots.length > 0)
-        ? '<button onclick="window._liveScoreUndoLastPoint()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0;border:none;border-radius:10px;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;font-size:' + _fs(0.78) + ';font-weight:700;-webkit-tap-highlight-color:transparent;">↶ Desfazer último ponto</button>'
+        ? '<button onclick="window._liveScoreUndoLastPoint()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0;border:none;border-radius:10px;cursor:pointer;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:#D5D5E5;font-size:' + _fs(0.78) + ';font-weight:700;-webkit-tap-highlight-color:transparent;">↶ Desfazer último ponto</button>'
         : '';
       container.innerHTML =
         // ⚠️ SEM `env(safe-area-inset-top)` AQUI. Quem reserva a ilha é o próprio
@@ -7328,7 +7330,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         // vão morto entre o cabeçalho e o conteúdo, que o Android não tinha porque a
         // regra é gated em `sp-ios`. Mesma armadilha da reserva do Desfazer: a
         // safe-area tem UM dono, e aqui ele é o overlay.
-        '<div style="flex-shrink:0;padding:8px 1rem 8px;display:flex;flex-direction:column;gap:8px;background:#0a0e1a;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+        '<div style="flex-shrink:0;padding:8px 1rem 8px;display:flex;flex-direction:column;gap:8px;background:#0a0e1a;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
           restartSection +
           undoSection +
         '</div>' +
@@ -7504,7 +7506,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     var finishBtn = '';
     if (!useSets) {
       finishBtn = '<div style="padding:0 1rem;flex-shrink:0;margin-top:auto;padding-bottom:1rem;"><button class="live-vol" onclick="window._liveScoreFinish()" style="width:100%;padding:20px;border-radius:16px;font-size:1.15rem;font-weight:800;border:2px solid rgba(16,185,129,0.35);cursor:pointer;min-height:64px;' +
-        'background:rgba(16,185,129,0.12);color:#10b981;">Encerrar Partida</button></div>';
+        'background:rgba(16,185,129,0.12);color:var(--sp-c-10b981,#10b981);">Encerrar Partida</button></div>';
     }
 
     // ── FULLSCREEN LAYOUT ──
@@ -7809,10 +7811,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // dele"). 8px é o menor valor que separa os dois sem devolver o vão morto.
     var _UNDO_GAP = 8;
     var _undoBar = (!state.isFinished)
-      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:rgba(255,255,255,0.06);color:#D5D5E5;box-sizing:border-box;padding:' + _UNDO_PAD + 'px 0 ' + _UNDO_BOT + 'px;font-size:' + Math.round(_UNDO_ICO * 0.78) + 'px;line-height:1;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
+      ? '<button onclick="window._liveScoreUndoLastPoint()" style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;border:none;cursor:pointer;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:#D5D5E5;box-sizing:border-box;padding:' + _UNDO_PAD + 'px 0 ' + _UNDO_BOT + 'px;font-size:' + Math.round(_UNDO_ICO * 0.78) + 'px;line-height:1;font-weight:700;-webkit-tap-highlight-color:transparent;">' +
         '<svg viewBox="0 0 24 24" style="width:' + _UNDO_ICO + 'px;height:' + _UNDO_ICO + 'px;flex:0 0 auto;" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>Desfazer</button>'
       : '';
-    var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + labelClr + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
+    var _gameLabelRow = gameLabel ? '<div style="flex:0 0 auto;text-align:center;font-size:clamp(0.65rem,2vw,0.8rem);font-weight:700;color:' + window._spCor(labelClr, 'color') + ';text-transform:uppercase;letter-spacing:2px;padding:2px 0;">' + gameLabel + '</div>' : '';
     var _portFinishRow = finishBtn; finishBtn = '';
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -8011,7 +8013,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       while (f < fTeto && _lsW(pnCurto, f + 1, 700) <= util) f++;
       while (f > 10 && _lsW(pnCurto, f, 700) > util) f--;
       var avatar = '<span class="live-av-wrap" style="display:inline-flex;flex:0 0 auto;">' + _liveAvatarHtml(pn, av) + '</span>';
-      var nome = '<span onclick="window._liveEditName(' + team + ',' + idx + ')" class="ls-name" style="cursor:pointer;font-size:' + f + 'px;font-weight:' + (serving ? 800 : 700) + ';color:' + (serving ? '#fbbf24' : _lsNameClr(team)) + ';white-space:nowrap;line-height:1.1;">' + window._safeHtml(pnCurto) + '</span>';
+      var nome = '<span onclick="window._liveEditName(' + team + ',' + idx + ')" class="ls-name" style="cursor:pointer;font-size:' + f + 'px;font-weight:' + (serving ? 800 : 700) + ';color:' + window._spCor((serving ? '#fbbf24' : _lsNameClr(team)), 'color') + ';white-space:nowrap;line-height:1.1;">' + window._safeHtml(pnCurto) + '</span>';
       var bola = '';
       if (serving) {
         var drag = _canDragServe ? ' draggable="true" data-serve-ball="true"' : '';
@@ -8032,19 +8034,19 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var blocoNomes =
         '<div style="width:' + sz.nomeW + 'px;flex:0 0 ' + sz.nomeW + 'px;min-width:0;overflow:hidden;align-self:center;height:' + sz.gamesH + 'px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:' + (mirror ? 'flex-end' : 'flex-start') + ';">' + rows + '</div>';
       var placaGames =
-        '<div class="ls-games-plate" style="flex:1 1 0;min-width:0;align-self:center;height:' + sz.gamesH + 'px;padding:0 ' + sz.RESP + 'px;background:' + LIVE_ICE + ';border:1px solid ' + LIVE_ICE_EDGE + ';border-radius:' + Math.round(14 * _lsK) + 'px;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:' + Math.round(sz.gamePx * 0.10) + 'px;">' +
-          (setsArr.length ? '<span style="display:flex;flex-direction:column;line-height:1.02;font-weight:900;opacity:0.5;font-size:' + sz.setPx + 'px;color:' + c + ';' + _lsStroke(sz.setPx, c) + '">' +
+        '<div class="ls-games-plate" style="flex:1 1 0;min-width:0;align-self:center;height:' + sz.gamesH + 'px;padding:0 ' + sz.RESP + 'px;background:' + window._spCor(LIVE_ICE, 'background') + ';border:1px solid ' + window._spCor(LIVE_ICE_EDGE, 'borda') + ';border-radius:' + Math.round(14 * _lsK) + 'px;box-sizing:border-box;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:' + Math.round(sz.gamePx * 0.10) + 'px;">' +
+          (setsArr.length ? '<span style="display:flex;flex-direction:column;line-height:1.02;font-weight:900;opacity:0.5;font-size:' + sz.setPx + 'px;color:' + window._spCor(c, 'color') + ';' + _lsStroke(sz.setPx, c) + '">' +
             setsArr.map(function(v) { return '<span>' + v + '</span>'; }).join('') + '</span>' : '') +
-          '<span class="ls-g-num" style="font-size:' + sz.gamePx + 'px;font-weight:900;color:' + c + ';' + _lsStroke(sz.gamePx, c) + 'font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + _lsGamesFor(team) + '</span>' +
+          '<span class="ls-g-num" style="font-size:' + sz.gamePx + 'px;font-weight:900;color:' + window._spCor(c, 'color') + ';' + _lsStroke(sz.gamePx, c) + 'font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + _lsGamesFor(team) + '</span>' +
         '</div>';
       var tag = state.isFinished ? 'div' : 'button';
       var act = state.isFinished ? '' : 'onclick="window._liveScorePoint(' + team + ')" ontouchstart="this.style.transform=\'scale(0.97)\'" ontouchend="this.style.transform=\'\'"';
       var placaPonto =
-        '<' + tag + ' class="ls-score-half" ' + act + ' style="width:100%;height:' + sz.pontoH + 'px;border:1px solid ' + LIVE_ICE_EDGE + ';cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + LIVE_ICE + ';border-radius:' + Math.round(16 * _lsK) + 'px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:' + sz.RESP + 'px;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
-          '<span class="ls-plate-num" style="font-size:' + sz.corpoP + 'px;font-weight:900;color:' + c + ';' + _lsStroke(sz.corpoP, c) + 'font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + (team === 1 ? p1Display : p2Display) + '</span>' +
+        '<' + tag + ' class="ls-score-half" ' + act + ' style="width:100%;height:' + sz.pontoH + 'px;border:1px solid ' + window._spCor(LIVE_ICE_EDGE, 'borda') + ';cursor:' + (state.isFinished ? 'default' : 'pointer') + ';background:' + window._spCor(LIVE_ICE, 'background') + ';border-radius:' + Math.round(16 * _lsK) + 'px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:' + sz.RESP + 'px;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:transform 0.08s;">' +
+          '<span class="ls-plate-num" style="font-size:' + sz.corpoP + 'px;font-weight:900;color:' + window._spCor(c, 'color') + ';' + _lsStroke(sz.corpoP, c) + 'font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap;">' + (team === 1 ? p1Display : p2Display) + '</span>' +
         '</' + tag + '>';
       return '<div class="court-side" data-court-side="' + (mirror ? 'right' : 'left') + '" style="' + boxStyle +
-        'box-sizing:border-box;display:flex;flex-direction:column;gap:' + sz.GAP + 'px;background:' + _lsTint(team) + ';border:1px solid ' + _lsEdge(team) + ';border-radius:' + Math.round(18 * _lsK) + 'px;padding:' + Math.round(10 * _lsK) + 'px;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
+        'box-sizing:border-box;display:flex;flex-direction:column;gap:' + sz.GAP + 'px;background:' + window._spCor(_lsTint(team), 'background') + ';border:1px solid ' + window._spCor(_lsEdge(team), 'borda') + ';border-radius:' + Math.round(18 * _lsK) + 'px;padding:' + Math.round(10 * _lsK) + 'px;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:transform 0.15s,opacity 0.15s;">' +
         '<div style="display:flex;gap:' + sz.GAP + 'px;height:' + sz.banda + 'px;">' +
           (mirror ? placaGames + blocoNomes : blocoNomes + placaGames) +
         '</div>' + placaPonto +
@@ -8274,7 +8276,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         e.preventDefault();
         if (!_courtDragGhost) {
           _courtDragGhost = document.createElement('div');
-          _courtDragGhost.style.cssText = 'position:fixed;z-index:200000;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.4);pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:white;';
+          _courtDragGhost.style.cssText = 'position:fixed;z-index:200000;width:60px;height:60px;border-radius:50%;background:var(--sp-g-255-255-255-02,rgba(255,255,255,0.2));border:2px solid var(--sp-b-255-255-255-04,rgba(255,255,255,0.4));pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:white;';
           _courtDragGhost.textContent = '⇄';
           document.body.appendChild(_courtDragGhost);
         }
@@ -8586,9 +8588,9 @@ window._openLiveScoring = function(tId, matchId, opts) {
         ? '<img src="' + window._safeHtml(s.friend.photoURL) + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1.5px solid rgba(251,191,36,0.4);" onerror="this.style.display=\'none\'">'
         : '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:13px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml((s.friend.displayName || '?')[0].toUpperCase()) + '</div>';
       var btnHtml = s.pending
-        ? '<span style="padding:7px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;flex-shrink:0;">⏳ Aguardando</span>'
-        : '<button onclick="window._suggestCasualLink(' + s.slotIndex + ',\'' + s.friend.uid.replace(/'/g, "\\'") + '\')" style="padding:7px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;flex-shrink:0;white-space:nowrap;">🤝 Sugerir vínculo</button>';
-      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">' +
+        ? '<span style="padding:7px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);color:var(--sp-c-fbbf24,#fbbf24);flex-shrink:0;">⏳ Aguardando</span>'
+        : '<button onclick="window._suggestCasualLink(' + s.slotIndex + ',\'' + s.friend.uid.replace(/'/g, "\\'") + '\')" style="padding:7px 12px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.35);color:var(--sp-c-fbbf24,#fbbf24);flex-shrink:0;white-space:nowrap;">🤝 Sugerir vínculo</button>';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
         photo +
         '<div style="flex:1;min-width:0;">' +
           // Nome digitado na partida (em cima) — pode truncar, costuma ser curto
@@ -8602,7 +8604,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     }).join('');
     slot.innerHTML =
       '<div style="padding:12px;border-radius:14px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.20);display:flex;flex-direction:column;gap:8px;">' +
-        '<div style="display:flex;align-items:center;gap:6px;font-size:0.62rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1.2px;">🤝 Vincular jogadores</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;font-size:0.62rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:1.2px;">🤝 Vincular jogadores</div>' +
         '<div style="font-size:0.68rem;color:var(--text-muted);line-height:1.4;">Esses nomes podem ser amigos seus já cadastrados. Sugerir vínculo envia uma notificação pra eles confirmarem — só após confirmação a partida conta nas estatísticas deles.</div>' +
         '<div style="display:flex;flex-direction:column;gap:6px;">' + rowsHtml + '</div>' +
       '</div>';
@@ -8818,7 +8820,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       banner.innerHTML =
         '<div style="background:rgba(251,191,36,0.12);border:1.5px solid rgba(251,191,36,0.45);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
           '<div style="font-size:2rem;margin-bottom:10px;">⏳</div>' +
-          '<div style="color:#fbbf24;font-weight:800;font-size:1.1rem;margin-bottom:8px;">Aguardando confirmação</div>' +
+          '<div style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;font-size:1.1rem;margin-bottom:8px;">Aguardando confirmação</div>' +
           '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">O outro jogador precisa confirmar o encerramento.</div>' +
         '</div>' +
         '<div id="close-pending-initiator-btns" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">' +
@@ -8843,7 +8845,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       banner.innerHTML =
         '<div style="background:rgba(239,68,68,0.1);border:1.5px solid rgba(239,68,68,0.4);border-radius:20px;padding:28px 32px;text-align:center;max-width:320px;width:100%;box-sizing:border-box;">' +
           '<div style="font-size:2rem;margin-bottom:10px;">🚪</div>' +
-          '<div style="color:#f87171;font-weight:800;font-size:1.1rem;margin-bottom:8px;">' + _safeName + ' quer encerrar</div>' +
+          '<div style="color:var(--sp-c-f87171,#f87171);font-weight:800;font-size:1.1rem;margin-bottom:8px;">' + _safeName + ' quer encerrar</div>' +
           '<div style="color:rgba(255,255,255,0.65);font-size:0.87rem;line-height:1.5;">Confirme para todos voltarem à sala de espera da partida.</div>' +
         '</div>' +
         '<div style="display:flex;gap:12px;">' +
@@ -10113,7 +10115,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       var _titleTxt = (_isKing && typeof window._genderWord === 'function')
         ? window._genderWord(_kGender, 'Rei', 'Rainha')
         : cls.title;
-      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:' + cls.bg + ';border:1px solid ' + cls.border + ';width:100%;box-sizing:border-box;">' +
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:' + window._spCor(cls.bg, 'background') + ';border:1px solid ' + window._spCor(cls.border, 'borda') + ';width:100%;box-sizing:border-box;">' +
         '<span style="font-size:1.5rem;flex-shrink:0;">' + rankEmoji + '</span>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:0.95rem;font-weight:800;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(p.name) + '</div>' +
@@ -10121,7 +10123,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '</div>' +
         '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;">' +
           _iconHtml +
-          '<span style="font-size:0.65rem;font-weight:700;color:' + cls.color + ';text-transform:uppercase;letter-spacing:0.04em;">' + _titleTxt + '</span>' +
+          '<span style="font-size:0.65rem;font-weight:700;color:' + window._spCor(cls.color, 'color') + ';text-transform:uppercase;letter-spacing:0.04em;">' + _titleTxt + '</span>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -10141,7 +10143,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // próxima partida.
     var _rrMixedRow = _canShowMixedToggle()
       ? '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(236,72,153,0.07);border:1px solid rgba(236,72,153,0.18);cursor:pointer;">' +
-          '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">⚤</span><span style="font-size:0.72rem;font-weight:700;color:#f472b6;">Duplas Mistas</span></div>' +
+          '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">⚤</span><span style="font-size:0.72rem;font-weight:700;color:var(--sp-c-f472b6,#f472b6);">Duplas Mistas</span></div>' +
           '<span class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="chk-stats-mixed" ' + (_mixedDoublesEnabled ? 'checked' : '') + ' onchange="window._statsToggleMixed(this)" /><span class="toggle-slider"></span></span>' +
         '</label>'
       : '';
@@ -10151,23 +10153,23 @@ window._openLiveScoring = function(tId, matchId, opts) {
         '<div style="display:flex;flex-direction:column;gap:10px;width:100%;">' +
           // Cabeçalho: Ajustar / Resetar / Fechar
           '<div id="live-score-header-actions" style="display:flex;gap:6px;align-items:center;justify-content:flex-end;">' +
-            '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
-            '<button class="live-vol-sm" onclick="window._liveStatsClose()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
+            '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:var(--sp-c-fbbf24,#fbbf24);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
+            '<button class="live-vol-sm" onclick="window._liveStatsClose()" style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:var(--text-bright);border-radius:8px;padding:6px 10px;font-size:0.7rem;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
           '</div>' +
           '<div style="display:flex;align-items:center;justify-content:center;gap:8px;">' +
             '<span style="font-size:1.3rem;">👑</span>' +
-            '<span style="font-size:1.1rem;font-weight:900;color:#f59e0b;">Resultado Final · Rei/Rainha</span>' +
+            '<span style="font-size:1.1rem;font-weight:900;color:var(--sp-c-f59e0b,#f59e0b);">Resultado Final · Rei/Rainha</span>' +
           '</div>' +
           cardsHtml +
           '<button id="live-restart-btn" onclick="window._liveScoreGoToSetup()" style="width:100%;padding:11px;border-radius:12px;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 16px rgba(16,185,129,0.35);margin-top:2px;">🔄 Iniciar</button>' +
           // Toggles da próxima partida
           '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.18);cursor:pointer;">' +
-            '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">🔀</span><span style="font-size:0.72rem;font-weight:700;color:#fbbf24;">Sortear Duplas</span></div>' +
+            '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">🔀</span><span style="font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);">Sortear Duplas</span></div>' +
             '<span class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="chk-stats-shuffle" ' + (autoShuffle ? 'checked' : '') + ' onchange="window._statsToggleShuffle(this)" /><span class="toggle-slider"></span></span>' +
           '</label>' +
           _rrMixedRow +
           '<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:10px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);cursor:pointer;">' +
-            '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">👑</span><span style="font-size:0.72rem;font-weight:700;color:#f59e0b;">Rei/Rainha</span></div>' +
+            '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:0.9rem;">👑</span><span style="font-size:0.72rem;font-weight:700;color:var(--sp-c-f59e0b,#f59e0b);">Rei/Rainha</span></div>' +
             '<span class="toggle-switch toggle-sm" style="flex-shrink:0;"><input type="checkbox" id="chk-stats-rr" checked onchange="window._statsToggleReiRainha(this)" /><span class="toggle-slider"></span></span>' +
           '</label>' +
         '</div>';
@@ -10828,7 +10830,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
   var _hdrCtx = isCasual
     ? casualTitle
     : ((t && t.name) ? (t.name + (matchLabel ? ' · ' + matchLabel : '')) : matchLabel);
-  var headerHtml = '<div style="position:relative;background:' + headerBg + ';padding:' + headerPadTop + ' ' + headerPadX + ' ' + headerPadY + ' max(12px, env(safe-area-inset-left, 0px));display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;gap:4px;">' +
+  var headerHtml = '<div style="position:relative;background:' + window._spCor(headerBg, 'background') + ';padding:' + headerPadTop + ' ' + headerPadX + ' ' + headerPadY + ' max(12px, env(safe-area-inset-left, 0px));display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));flex-shrink:0;gap:4px;">' +
     // Left: AO VIVO + match info.
     // flex:1 1 auto + min-width:0 = ENCOLHE. Era `flex:0 0 auto` (não encolhe): com nome
     // de torneio/partida comprido este bloco empurrava o grupo de botões pra fora da tela
@@ -10839,14 +10841,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // ⚠️ Reproduzindo, o selo NÃO pode dizer "AO VIVO": a partida já acabou, e um
       // rótulo de tempo real em cima de um jogo antigo é a tela afirmando algo falso —
       // ainda mais neste caso, em que a apresentação é idêntica à da partida de verdade.
-      // ⚠️ O âmbar vem da CLASSE `.stat-accent`, NUNCA de `style="color:#fbbf24"`.
+      // ⚠️ O âmbar vem da CLASSE `.stat-accent`, NUNCA de `style="color:var(--sp-c-fbbf24,#fbbf24)"`.
       // Este cabeçalho é SUPERFÍCIE INVERTIDA (gradiente escuro nos DOIS temas), e o
       // remap de contraste do tema claro age só sobre `style` INLINE: escrito inline,
       // o #fbbf24 virava #92400e e dava 2,96:1 de marrom sobre fundo escuro — medido
       // no navegador. Vindo de classe ele fica fora do remap, que é o caminho canônico
       // pra texto sobre tarja escura (components.css, v1.8.78).
       '<span style="font-size:1rem;flex:0 0 auto;">' + (_replay ? '▶️' : '📡') + '</span>' +
-      '<span' + (_replay ? ' class="stat-accent"' : '') + ' style="font-size:0.78rem;font-weight:800;' + (_replay ? '' : 'color:#f87171;') + 'line-height:1;flex:0 0 auto;letter-spacing:0.02em;">' + (_replay ? 'REPLAY' : 'AO VIVO') + '</span>' +
+      '<span' + (_replay ? ' class="stat-accent"' : '') + ' style="font-size:0.78rem;font-weight:800;' + (_replay ? '' : 'color:var(--sp-c-f87171,#f87171);') + 'line-height:1;flex:0 0 auto;letter-spacing:0.02em;">' + (_replay ? 'REPLAY' : 'AO VIVO') + '</span>' +
       '<span style="color:rgba(255,255,255,0.28);line-height:1;flex:0 0 auto;font-size:0.7rem;">|</span>' +
       '<span style="font-size:0.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1;">' + window._safeHtml(_hdrCtx) + '</span>' +
     '</div>' +
@@ -10864,8 +10866,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
       // v1.6.88: `min-height:0` + `line-height:1` — sem isso a regra global
       // `@media(max-width:767px){button{min-height:44px}}` inflava a barra pra 61px
       // no retrato, independente do padding.
-      '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:8px;padding:5px 10px;font-size:0.7rem;line-height:1;min-height:0;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
-      '<button class="live-vol-sm" onclick="window._closeLiveScoring()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:8px;padding:5px 10px;font-size:0.7rem;line-height:1;min-height:0;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
+      '<button class="live-vol-sm" onclick="window._liveScoreReset()" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:var(--sp-c-fbbf24,#fbbf24);border-radius:8px;padding:5px 10px;font-size:0.7rem;line-height:1;min-height:0;font-weight:600;cursor:pointer;">↺ Resetar</button>' +
+      '<button class="live-vol-sm" onclick="window._closeLiveScoring()" style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:var(--text-bright);border-radius:8px;padding:5px 10px;font-size:0.7rem;line-height:1;min-height:0;font-weight:600;cursor:pointer;">✕ Fechar</button>' +
     '</div>' +
   '</div>';
 
@@ -10966,7 +10968,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     function row(key, label, cssVar) {
       var pct = Math.round((_liveScorePrefs[key] || 1) * 100);
       return '<div style="margin-bottom:12px;">' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.9);font-weight:600;margin-bottom:5px;"><span>' + label + '</span><span id="lss-val-' + key + '" style="color:#fbbf24;font-weight:800;">' + pct + '%</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:rgba(255,255,255,0.9);font-weight:600;margin-bottom:5px;"><span>' + label + '</span><span id="lss-val-' + key + '" style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;">' + pct + '%</span></div>' +
         '<input type="range" min="10" max="400" step="5" value="' + pct + '" data-lss-key="' + key + '" data-lss-var="' + cssVar + '" style="width:100%;accent-color:#fbbf24;height:26px;" />' +
       '</div>';
     }
@@ -10975,10 +10977,10 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // Outer: quase-transparente e pointer-events:none → toques fora fecham pelo botão
     // ou caem no placar (para ver mudanças em tempo real)
     panel.style.cssText = 'position:fixed;inset:0;z-index:100012;background:transparent;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;';
-    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);border:1px solid rgba(255,255,255,0.18);border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
+    panel.innerHTML = '<div style="pointer-events:all;background:rgba(10,14,26,0.72);border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));border-radius:18px 18px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom));width:100%;max-width:480px;box-shadow:0 -8px 32px rgba(0,0,0,0.6);max-height:calc(100% - 10px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;">Ajustar</div>' +
-        /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
+        /* x-canon-exempt: fechar modal/overlay — não é cancelar/remover; pendente decisão do dono */ '<button onclick="document.getElementById(\'live-size-settings\').remove()" style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));color:rgba(255,255,255,0.75);font-size:1rem;cursor:pointer;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>' +
       '</div>' +
       row('scoreScale', 'Games', '--live-score-scale') +
       row('nameScale', 'Nomes', '--live-name-scale') +
@@ -10986,14 +10988,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
       row('plateScale', 'Placar', '--live-plate-scale') +
       row('btnScale', 'Botões', '--live-btn-scale') +
       // Toggle Fixar lados
-      '<div style="margin:6px 0 12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);">' +
+      '<div style="margin:6px 0 12px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">' +
           '<div style="font-size:0.82rem;color:rgba(255,255,255,0.9);font-weight:600;">Fixar lados</div>' +
           '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="lss-fixsides-input"' + (_liveScorePrefs.fixSides ? ' checked' : '') + ' onchange="window._liveScoreToggleFixSides()"><span class="toggle-slider"></span></label>' +
         '</div>' +
         '<div style="font-size:0.66rem;color:rgba(255,255,255,0.45);line-height:1.35;margin-top:5px;">Desativado: o sacador fica sempre à esquerda. Ativado: lados fixos.</div>' +
       '</div>' +
-      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:2px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.55);border-radius:10px;padding:10px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar (100%)</button>' +
+      '<button onclick="window._liveScoreResetSizes()" style="width:100%;margin-top:2px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:rgba(255,255,255,0.55);border-radius:10px;padding:10px;font-size:0.8rem;font-weight:600;cursor:pointer;">Restaurar (100%)</button>' +
     '</div>';
     document.body.appendChild(panel);
     panel.querySelectorAll('input[type=range]').forEach(function(inp) {
@@ -11616,8 +11618,8 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _rBar.style.cssText = 'flex:0 0 auto;z-index:20;' +
       'display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;' +
       'padding:8px max(10px,env(safe-area-inset-left,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-right,0px));' +
-      'background:rgba(15,23,42,0.92);border-top:1px solid rgba(255,255,255,0.08);';
-    var _btnCss = 'border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.10);' +
+      'background:rgba(15,23,42,0.92);border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));';
+    var _btnCss = 'border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.10));' +
       'color:#fff;border-radius:9px;padding:6px 11px;font-size:0.72rem;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;';
     _rBar.innerHTML =
       '<button id="lr-exit" style="' + _btnCss + '">← Voltar</button>' +
@@ -11934,7 +11936,7 @@ window._openScanQR = function() {
     // max(env, 44px) garante o afastamento. Sobre a câmera, o extra no Android/web é inócuo.
     '<div style="position:absolute;top:0;left:0;right:0;padding:max(env(safe-area-inset-top,0px),44px) 16px 16px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,rgba(0,0,0,0.7),transparent);z-index:2;">' +
       '<div style="color:#fff;font-size:0.95rem;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,0.5);">Aponte para o QR code</div>' +
-      '<button id="scan-qr-close-btn" aria-label="Fechar" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:1.2rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;">×</button>' +
+      '<button id="scan-qr-close-btn" aria-label="Fechar" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.45);border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));color:#fff;font-size:1.2rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;">×</button>' +
     '</div>' +
 
     // Center viewfinder — 4 cantos brancos como iOS scanner
@@ -11948,16 +11950,16 @@ window._openScanQR = function() {
 
     // Bottom — botão pra entrada manual de código (link discreto)
     '<div style="position:absolute;bottom:0;left:0;right:0;padding:24px 16px env(safe-area-inset-bottom,24px);display:flex;flex-direction:column;align-items:center;gap:12px;background:linear-gradient(0deg,rgba(0,0,0,0.7),transparent);z-index:2;">' +
-      '<button id="scan-qr-manual-btn" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:22px;padding:10px 22px;font-size:0.88rem;font-weight:600;cursor:pointer;">⌨️ Digitar código</button>' +
+      '<button id="scan-qr-manual-btn" style="background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));color:#fff;border-radius:22px;padding:10px 22px;font-size:0.88rem;font-weight:600;cursor:pointer;">⌨️ Digitar código</button>' +
     '</div>' +
 
     // Manual code dialog (hidden inicialmente)
     '<div id="scan-qr-manual-overlay" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:3;align-items:center;justify-content:center;padding:1.5rem;">' +
       '<div style="background:var(--bg-darker,#1a1a2e);border-radius:18px;padding:24px;max-width:360px;width:100%;">' +
         '<div style="font-size:1.1rem;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;">Digite o código da sala</div>' +
-        '<input type="text" id="scan-qr-code-input" placeholder="Ex: ABC123" maxlength="8" style="width:100%;box-sizing:border-box;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.06);border:2px solid rgba(168,85,247,0.3);color:#fff;font-size:1.3rem;font-weight:800;letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none;font-family:monospace;margin-bottom:14px;" onfocus="this.style.borderColor=\'rgba(168,85,247,0.7)\'" onblur="this.style.borderColor=\'rgba(168,85,247,0.3)\'" />' +
+        '<input type="text" id="scan-qr-code-input" placeholder="Ex: ABC123" maxlength="8" style="width:100%;box-sizing:border-box;padding:14px 16px;border-radius:12px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:2px solid rgba(168,85,247,0.3);color:#fff;font-size:1.3rem;font-weight:800;letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none;font-family:monospace;margin-bottom:14px;" onfocus="this.style.borderColor=\'rgba(168,85,247,0.7)\'" onblur="this.style.borderColor=\'rgba(168,85,247,0.3)\'" />' +
         '<div style="display:flex;gap:8px;">' +
-          '<button id="scan-qr-manual-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-size:0.95rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
+          '<button id="scan-qr-manual-cancel-btn" style="flex:1;padding:14px;border-radius:12px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:var(--sp-c-ef4444,#ef4444);font-size:0.95rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
           '<button id="scan-qr-go-btn" style="flex:1;padding:14px;border-radius:12px;background:linear-gradient(135deg,#a855f7,#7c3aed);border:none;color:white;font-size:0.95rem;font-weight:700;cursor:pointer;">Entrar</button>' +
         '</div>' +
       '</div>' +
@@ -12245,7 +12247,7 @@ window._openScanQRNative = function() {
       return;
     }
     var msg = reason || 'Não consegui detectar o QR code na foto.';
-    var inputHtml = '<div style="margin-top:14px;"><input type="text" id="_qr-manual-input" placeholder="Ex: ABC123" maxlength="8" style="width:100%;box-sizing:border-box;padding:14px;border-radius:10px;background:rgba(255,255,255,0.06);border:2px solid rgba(168,85,247,0.3);color:#fff;font-size:1.2rem;font-weight:800;letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none;font-family:monospace;"></div>';
+    var inputHtml = '<div style="margin-top:14px;"><input type="text" id="_qr-manual-input" placeholder="Ex: ABC123" maxlength="8" style="width:100%;box-sizing:border-box;padding:14px;border-radius:10px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:2px solid rgba(168,85,247,0.3);color:#fff;font-size:1.2rem;font-weight:800;letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none;font-family:monospace;"></div>';
     (window.showAlertDialog || showAlertDialog)('Digite o código da sala', msg + inputHtml, function() {
       var v = document.getElementById('_qr-manual-input');
       if (!v) return;
@@ -12699,7 +12701,7 @@ window._openCasualMatch = function(restoreOpts) {
     if (count <= 1) return ''; // Only the creator — nothing to show yet
 
     var h = '<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:12px;padding:10px 12px;">' +
-      '<div style="font-size:0.72rem;font-weight:600;color:#22c55e;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
+      '<div style="font-size:0.72rem;font-weight:600;color:var(--sp-c-22c55e,#22c55e);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">' +
         '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;animation:casualPulse 1.5s ease-in-out infinite;"></span>' +
         _t('casual.inRoom', {count: count, total: totalNeeded}) +
       '</div>' +
@@ -12710,11 +12712,11 @@ window._openCasualMatch = function(restoreOpts) {
       var isMe = myUid && pp.uid === myUid;
       var isHost = pp.uid === (cu ? cu.uid : '');
       h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;margin-bottom:3px;' +
-        'background:' + (isMe ? 'rgba(34,197,94,0.06)' : 'transparent') + ';">' +
+        'background:' + window._spCor((isMe ? 'rgba(34,197,94,0.06)' : 'transparent'), 'background') + ';">' +
         _avatarHtml(pp, 28) +
         '<div style="font-size:0.82rem;font-weight:600;color:var(--text-bright);flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;">' + window._safeHtml(pp.displayName || _t('casual.playerFallback')) +
-          (isHost ? ' <span style="font-size:0.65rem;color:#fbbf24;">👑</span>' : '') +
-          (isMe ? ' <span style="font-size:0.62rem;color:#22c55e;">(' + _t('casual.you') + ')</span>' : '') +
+          (isHost ? ' <span style="font-size:0.65rem;color:var(--sp-c-fbbf24,#fbbf24);">👑</span>' : '') +
+          (isMe ? ' <span style="font-size:0.62rem;color:var(--sp-c-22c55e,#22c55e);">(' + _t('casual.you') + ')</span>' : '') +
         '</div>' +
         '<span style="font-size:0.75rem;">✅</span>' +
       '</div>';
@@ -12786,7 +12788,7 @@ window._openCasualMatch = function(restoreOpts) {
     // em coluna menor que isso somada ao toggle.
     function _setupToggle(emoji, titulo, dica, bg, bd, cor, ligado, acao) {
       return '<div title="' + window._safeHtml(dica) + '" style="display:flex;align-items:center;justify-content:space-between;' +
-          'gap:10px;padding:8px 12px;border-radius:12px;background:' + bg + ';border:1px solid ' + bd + ';min-width:0;">' +
+          'gap:10px;padding:8px 12px;border-radius:12px;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(bd, 'borda') + ';min-width:0;">' +
           '<div style="display:flex;align-items:center;gap:8px;flex:1 1 0;min-width:0;">' +
             '<span style="font-size:1rem;flex-shrink:0;">' + emoji + '</span>' +
             '<span style="display:block;min-width:0;font-size:0.85rem;font-weight:700;color:var(--text-bright);' +
@@ -12819,7 +12821,7 @@ window._openCasualMatch = function(restoreOpts) {
     // Coach toggle — inline com o label de participantes (só se logado)
     var coachToggleHtml = cu ?
       '<div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">' +
-        '<span style="font-size:0.65rem;font-weight:600;color:' + (_coachMode ? '#22c55e' : 'var(--text-muted)') + ';white-space:nowrap;">🎽 Técnico</span>' +
+        '<span style="font-size:0.65rem;font-weight:600;color:' + window._spCor((_coachMode ? '#22c55e' : 'var(--text-muted)'), 'color') + ';white-space:nowrap;">🎽 Técnico</span>' +
         '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#22c55e;">' +
           '<input type="checkbox" ' + (_coachMode ? 'checked' : '') + ' onchange="window._casualToggleCoachMode(this.checked)">' +
           '<span class="toggle-slider"></span>' +
@@ -12853,15 +12855,15 @@ window._openCasualMatch = function(restoreOpts) {
       if (_fromProfile) {
         return '<span data-gender-slot="' + ci + '" ' +
           'title="' + title + '" aria-label="' + title + '" ' +
-          'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + bg + ';' +
-          'border:1px solid ' + bdr + ';color:' + clr + ';font-size:0.95rem;font-weight:800;' +
+          'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + window._spCor(bg, 'background') + ';' +
+          'border:1px solid ' + window._spCor(bdr, 'borda') + ';color:' + window._spCor(clr, 'color') + ';font-size:0.95rem;font-weight:800;' +
           'display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1;cursor:default;">' + sym + '</span>';
       }
       return '<button type="button" data-gender-slot="' + ci + '" class="' + pulseClass.trim() + '" ' +
         'onclick="event.stopPropagation();window._casualSetSlotGender(' + ci + ')" ' +
         'title="' + title + '" aria-label="' + title + '" ' +
-        'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + bg + ';' +
-        'border:1px solid ' + bdr + ';color:' + clr + ';font-size:0.95rem;font-weight:800;' +
+        'style="width:26px;height:26px;min-width:26px;border-radius:50%;background:' + window._spCor(bg, 'background') + ';' +
+        'border:1px solid ' + window._spCor(bdr, 'borda') + ';color:' + window._spCor(clr, 'color') + ';font-size:0.95rem;font-weight:800;' +
         'display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;flex-shrink:0;' +
         'transition:background 0.15s,transform 0.15s;-webkit-tap-highlight-color:transparent;line-height:1;" ' +
         'onmouseover="this.style.transform=\'scale(1.1)\'" ' +
@@ -12881,7 +12883,7 @@ window._openCasualMatch = function(restoreOpts) {
         // Coach mode: ocultar todos os avatares — todos os slots ficam livres para edição
         if (_coachMode) return '';
         if (pp.photoURL) {
-          return '<img src="' + window._safeHtml(pp.photoURL) + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1.5px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\'">';
+          return '<img src="' + window._safeHtml(pp.photoURL) + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1.5px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));" onerror="this.style.display=\'none\'">';
         }
         return '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;flex-shrink:0;">' + window._safeHtml((pp.displayName || 'J')[0].toUpperCase()) + '</div>';
       }
@@ -13006,9 +13008,9 @@ window._openCasualMatch = function(restoreOpts) {
         // Autocomplete só em slots editáveis (não registrados, não vinculados, não coach)
         var _acInput = (_isRegCard || _isLinkedCard) ? '' : 'window._casualSlotAutocomplete(this,' + ci + ');';
         return '<div style="position:relative;" data-casual-ac-wrapper="' + ci + '">' +
-          '<div data-casual-idx="' + ci + '"' + (isDraggable ? ' draggable="true"' : '') + ' style="display:flex;align-items:center;gap:6px;padding:8px 8px;border-radius:12px;background:' + bg + ';border:1px solid ' + bdr + ';box-sizing:border-box;min-width:0;overflow:hidden;transition:transform 0.15s,border-color 0.2s,background 0.2s;' + dragStyle + '">' +
+          '<div data-casual-idx="' + ci + '"' + (isDraggable ? ' draggable="true"' : '') + ' style="display:flex;align-items:center;gap:6px;padding:8px 8px;border-radius:12px;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(bdr, 'borda') + ';box-sizing:border-box;min-width:0;overflow:hidden;transition:transform 0.15s,border-color 0.2s,background 0.2s;' + dragStyle + '">' +
           _leftEl +
-          '<textarea id="' + inputIds[ci] + '" ' + _readonlyAttr + 'rows="1" placeholder="' + inputPlaceholders[ci] + '" oninput="window._syncCasualSetupFromInput && window._syncCasualSetupFromInput();window._autosizeCasualInput && window._autosizeCasualInput(this);window._equalizeCasualCards && window._equalizeCasualCards();' + _acInput + '" style="' + _inputStyle + _regExtraStyle + 'color:' + textClr + ';">' + window._safeHtml(_textareaVal) + '</textarea>' +
+          '<textarea id="' + inputIds[ci] + '" ' + _readonlyAttr + 'rows="1" placeholder="' + inputPlaceholders[ci] + '" oninput="window._syncCasualSetupFromInput && window._syncCasualSetupFromInput();window._autosizeCasualInput && window._autosizeCasualInput(this);window._equalizeCasualCards && window._equalizeCasualCards();' + _acInput + '" style="' + _inputStyle + _regExtraStyle + 'color:' + window._spCor(textClr, 'color') + ';">' + window._safeHtml(_textareaVal) + '</textarea>' +
           _genderIconHtml(ci) +
           '</div>' +
         '</div>';
@@ -13028,7 +13030,7 @@ window._openCasualMatch = function(restoreOpts) {
         }
         var _chainBtn = '<button type="button" onclick="window._casualResetTeams()" title="' + _t('casual.breakTeams') + '" aria-label="' + _t('casual.breakTeams') + '" ' +
           'style="margin:4px auto;display:flex;align-items:center;justify-content:center;width:40px;height:28px;' +
-          'border-radius:14px;border:1px dashed rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);' +
+          'border-radius:14px;border:1px dashed rgba(255,255,255,0.18);background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));' +
           'cursor:pointer;font-size:0.95rem;line-height:1;color:var(--text-muted);transition:all 0.18s;' +
           '-webkit-tap-highlight-color:transparent;padding:0;" ' +
           'onmouseover="this.style.background=\'rgba(239,68,68,0.15)\';this.style.borderColor=\'rgba(239,68,68,0.45)\';this.style.color=\'#f87171\';this.style.transform=\'scale(1.08)\'" ' +
@@ -13125,7 +13127,7 @@ window._openCasualMatch = function(restoreOpts) {
           '<span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">·</span>' +
           '<span style="font-size:0.72rem;color:var(--text-muted);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(_configSummary()) + '</span>' +
         '</div>' +
-        '<div style="color:#818cf8;font-size:1.1rem;flex-shrink:0;">⚙️</div>' +
+        '<div style="color:var(--sp-c-818cf8,#818cf8);font-size:1.1rem;flex-shrink:0;">⚙️</div>' +
       '</div>' +
 
       // Toggles: Sortear, Misto (doubles only)
@@ -13144,14 +13146,14 @@ window._openCasualMatch = function(restoreOpts) {
           // Room code + Convidar row
           '<div style="display:flex;align-items:center;gap:8px;">' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="font-size:0.6rem;font-weight:600;color:#a855f7;text-transform:uppercase;letter-spacing:1px;">' + _t('casual.yourRoom') + '</div>' +
-              '<div style="font-size:1.25rem;font-weight:900;letter-spacing:5px;color:#fbbf24;font-family:monospace;">' + window._safeHtml(_sessionRoomCode) + '</div>' +
+              '<div style="font-size:0.6rem;font-weight:600;color:var(--sp-c-a855f7,#a855f7);text-transform:uppercase;letter-spacing:1px;">' + _t('casual.yourRoom') + '</div>' +
+              '<div style="font-size:1.25rem;font-weight:900;letter-spacing:5px;color:var(--sp-c-fbbf24,#fbbf24);font-family:monospace;">' + window._safeHtml(_sessionRoomCode) + '</div>' +
             '</div>' +
             '<button class="btn btn-cyan btn-micro" onclick="window._casualInvite()" style="font-size:0.7rem;white-space:nowrap;flex-shrink:0;">📲 ' + _t('casual.invite') + '</button>' +
           '</div>' +
           // Join room input row — input left, button right-aligned, same height (44px matches mobile button min-height)
           '<div style="display:flex;gap:4px;align-items:stretch;min-height:44px;">' +
-            '<input type="text" id="casual-join-code" placeholder="' + _t('casual.joinRoomPlaceholder') + '" maxlength="6" style="flex:1;min-width:0;min-height:44px;padding:0 8px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-bright);font-size:0.8rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;outline:none;font-family:monospace;text-align:center;box-sizing:border-box;" />' +
+            '<input type="text" id="casual-join-code" placeholder="' + _t('casual.joinRoomPlaceholder') + '" maxlength="6" style="flex:1;min-width:0;min-height:44px;padding:0 8px;border-radius:8px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:var(--text-bright);font-size:0.8rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;outline:none;font-family:monospace;text-align:center;box-sizing:border-box;" />' +
             '<button class="btn btn-purple btn-micro" onclick="window._casualJoinRoom()" style="font-size:0.72rem;padding:0 14px;white-space:nowrap;flex-shrink:0;">' + _t('casual.join') + '</button>' +
           '</div>' +
         '</div>' +
@@ -13221,11 +13223,11 @@ window._openCasualMatch = function(restoreOpts) {
       var nameWeight = win ? '700' : '600';
       var realNames = players.filter(function(nm) { return nm != null; });
       var namesHtml = (realNames.length ? realNames : ['—']).map(function(nm) {
-        return '<div style="font-size:0.73rem;font-weight:' + nameWeight + ';color:' + nameColor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3;">' + window._safeHtml(nm) + '</div>';
+        return '<div style="font-size:0.73rem;font-weight:' + nameWeight + ';color:' + window._spCor(nameColor, 'color') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.3;">' + window._safeHtml(nm) + '</div>';
       }).join('');
       return '<div style="' + st + '">' +
         '<div style="flex:1;overflow:hidden;min-width:0;">' + namesHtml + '</div>' +
-        (score ? '<span style="font-weight:800;font-size:0.85rem;color:' + (win ? '#4ade80' : 'var(--text-muted)') + ';font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:4px;align-self:center;">' + window._safeHtml(score) + '</span>' : '') +
+        (score ? '<span style="font-weight:800;font-size:0.85rem;color:' + window._spCor((win ? '#4ade80' : 'var(--text-muted)'), 'color') + ';font-variant-numeric:tabular-nums;flex-shrink:0;padding-left:4px;align-self:center;">' + window._safeHtml(score) + '</span>' : '') +
       '</div>';
     }
 
@@ -13289,17 +13291,17 @@ window._openCasualMatch = function(restoreOpts) {
       //
       // Agora o recuo mora na classe `.sp-row-lost`, e o tema claro o resolve com COR
       // legível em vez de transparência. O escuro fica idêntico ao que era.
-      var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.2);border-left:3px solid rgba(255,255,255,0.08);';
-      var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:rgba(0,0,0,0.25);border-left:3px solid rgba(99,102,241,0.5);';
+      var lRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));border-left:3px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));';
+      var oRow = 'padding:5px 6px;border-radius:7px;display:flex;justify-content:space-between;align-items:flex-start;background:var(--sp-g-0-0-0-025,rgba(0,0,0,0.25));border-left:3px solid rgba(99,102,241,0.5);';
       var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
       var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;
 
       cardsHtml +=
         '<button onclick="window._casualOpenPastMatch(\'' + safeRoomCode + '\')" ' +
-          'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
+          'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.10));color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
           'onmouseover="this.style.background=\'rgba(251,191,36,0.07)\';this.style.borderColor=\'rgba(251,191,36,0.30)\'" ' +
           'onmouseout="this.style.background=\'rgba(255,255,255,0.04)\';this.style.borderColor=\'rgba(255,255,255,0.10)\'">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;border-bottom:1px solid rgba(255,255,255,0.07);padding-bottom:4px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;border-bottom:1px solid var(--sp-b-255-255-255-007,rgba(255,255,255,0.07));padding-bottom:4px;">' +
             '<span style="font-size:0.72rem;">' + icon + '</span>' +
             '<span style="font-size:0.57rem;color:var(--text-muted);font-weight:600;">' + window._safeHtml(dateStr || '—') + '</span>' +
           '</div>' +
@@ -13871,7 +13873,7 @@ window._openCasualMatch = function(restoreOpts) {
           var initLetter = (s.displayName || '?')[0].toUpperCase();
           var avatarHtml = s.photoURL
             ? '<img src="' + window._safeHtml(s.photoURL) + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">'
-            : '<div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.7rem;color:#a5b4fc;">' + window._safeHtml(initLetter) + '</div>';
+            : '<div style="width:26px;height:26px;border-radius:50%;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.7rem;color:var(--sp-c-a5b4fc,#a5b4fc);">' + window._safeHtml(initLetter) + '</div>';
           item.innerHTML = avatarHtml + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + window._safeHtml(s.displayName || '') + '</span>';
           item.onmouseover = function() { this.style.background = 'rgba(99,102,241,0.15)'; };
           item.onmouseout = function() { this.style.background = ''; };
@@ -13956,17 +13958,16 @@ window._openCasualMatch = function(restoreOpts) {
     var btnsHtml = options.map(function(o) {
       var isCur = current === o.value || (current == null && o.value == null);
       return '<button data-gv="' + (o.value === null ? '__null__' : o.value) + '" ' +
-        'style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:12px;background:' +
-        (isCur ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)') + ';' +
-        'border:1px solid ' + (isCur ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)') + ';' +
-        'color:' + o.color + ';font-size:1rem;font-weight:700;cursor:pointer;text-align:left;width:100%;">' +
+        'style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:12px;background:' + window._spCor((isCur ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)'), 'background') + ';' +
+        'border:1px solid ' + window._spCor((isCur ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'), 'borda') + ';' +
+        'color:' + window._spCor(o.color, 'color') + ';font-size:1rem;font-weight:700;cursor:pointer;text-align:left;width:100%;">' +
         o.label + '</button>';
     }).join('');
     ov.innerHTML =
       '<div style="background:var(--bg-darker,#0f172a);border-radius:18px;padding:22px;max-width:340px;width:100%;">' +
         '<div style="font-size:1.05rem;font-weight:800;color:#fff;margin-bottom:14px;text-align:center;">Gênero do jogador</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' + btnsHtml + '</div>' +
-        '<button id="_gender-picker-cancel" style="width:100%;padding:12px;border-radius:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-size:0.88rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
+        '<button id="_gender-picker-cancel" style="width:100%;padding:12px;border-radius:10px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);color:var(--sp-c-ef4444,#ef4444);font-size:0.88rem;font-weight:700;cursor:pointer;">Cancelar</button>' +
       '</div>';
     document.body.appendChild(ov);
     function _close() { try { ov.remove(); } catch(e) {} }
@@ -14049,9 +14050,9 @@ window._openCasualMatch = function(restoreOpts) {
       var csActive = csp.key === selectedSport;
       cfgSportBtns += '<button onclick="window._casualSelectSport(\'' + csp.key.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="' +
         'padding:8px 14px;border-radius:10px;font-size:0.82rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;' +
-        'border:2px solid ' + (csActive ? '#fbbf24' : 'rgba(255,255,255,0.12)') + ';' +
-        'background:' + (csActive ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)') + ';' +
-        'color:' + (csActive ? '#fbbf24' : 'var(--text-muted)') + ';font-weight:' + (csActive ? '700' : '500') + ';' +
+        'border:2px solid ' + window._spCor((csActive ? '#fbbf24' : 'rgba(255,255,255,0.12)'), 'borda') + ';' +
+        'background:' + window._spCor((csActive ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.04)'), 'background') + ';' +
+        'color:' + window._spCor((csActive ? '#fbbf24' : 'var(--text-muted)'), 'color') + ';font-weight:' + (csActive ? '700' : '500') + ';' +
         '">' + csp.icon + ' ' + csp.label + '</button>';
     }
 
@@ -14086,7 +14087,7 @@ window._openCasualMatch = function(restoreOpts) {
             '<div style="display:flex;gap:4px;">' +
               [1,2,3].map(function(n) {
                 var active = (cfg.setsToWin || 1) === n;
-                return '<button onclick="window._casualSetCfg(\'setsToWin\',' + n + ')" style="width:36px;height:36px;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;border:1px solid ' + (active ? '#818cf8' : 'rgba(255,255,255,0.12)') + ';background:' + (active ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)') + ';color:' + (active ? '#818cf8' : 'var(--text-muted)') + ';">' + n + '</button>';
+                return '<button onclick="window._casualSetCfg(\'setsToWin\',' + n + ')" style="width:36px;height:36px;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;border:1px solid ' + window._spCor((active ? '#818cf8' : 'rgba(255,255,255,0.12)'), 'borda') + ';background:' + window._spCor((active ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)'), 'background') + ';color:' + window._spCor((active ? '#818cf8' : 'var(--text-muted)'), 'color') + ';">' + n + '</button>';
               }).join('') +
             '</div>' +
           '</div>' +
@@ -14096,7 +14097,7 @@ window._openCasualMatch = function(restoreOpts) {
             '<div style="display:flex;gap:4px;">' +
               [4,6,8,11].map(function(n) {
                 var active = (cfg.gamesPerSet || 6) === n;
-                return '<button onclick="window._casualSetCfg(\'gamesPerSet\',' + n + ')" style="width:36px;height:36px;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;border:1px solid ' + (active ? '#818cf8' : 'rgba(255,255,255,0.12)') + ';background:' + (active ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)') + ';color:' + (active ? '#818cf8' : 'var(--text-muted)') + ';">' + n + '</button>';
+                return '<button onclick="window._casualSetCfg(\'gamesPerSet\',' + n + ')" style="width:36px;height:36px;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;border:1px solid ' + window._spCor((active ? '#818cf8' : 'rgba(255,255,255,0.12)'), 'borda') + ';background:' + window._spCor((active ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)'), 'background') + ';color:' + window._spCor((active ? '#818cf8' : 'var(--text-muted)'), 'color') + ';">' + n + '</button>';
               }).join('') +
             '</div>' +
           '</div>' +
@@ -14104,8 +14105,8 @@ window._openCasualMatch = function(restoreOpts) {
           '<div style="display:flex;align-items:center;justify-content:space-between;">' +
             '<span style="font-size:0.82rem;color:var(--text-bright);">' + _t('casual.counting') + '</span>' +
             '<div style="display:flex;gap:4px;">' +
-              '<button onclick="window._casualSetCfg(\'countingType\',\'tennis\')" style="padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;border:1px solid ' + (cfg.countingType === 'tennis' ? '#818cf8' : 'rgba(255,255,255,0.12)') + ';background:' + (cfg.countingType === 'tennis' ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)') + ';color:' + (cfg.countingType === 'tennis' ? '#818cf8' : 'var(--text-muted)') + ';">15-30-40</button>' +
-              '<button onclick="window._casualSetCfg(\'countingType\',\'numeric\')" style="padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;border:1px solid ' + (cfg.countingType !== 'tennis' ? '#818cf8' : 'rgba(255,255,255,0.12)') + ';background:' + (cfg.countingType !== 'tennis' ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)') + ';color:' + (cfg.countingType !== 'tennis' ? '#818cf8' : 'var(--text-muted)') + ';">1-2-3</button>' +
+              '<button onclick="window._casualSetCfg(\'countingType\',\'tennis\')" style="padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;border:1px solid ' + window._spCor((cfg.countingType === 'tennis' ? '#818cf8' : 'rgba(255,255,255,0.12)'), 'borda') + ';background:' + window._spCor((cfg.countingType === 'tennis' ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)'), 'background') + ';color:' + window._spCor((cfg.countingType === 'tennis' ? '#818cf8' : 'var(--text-muted)'), 'color') + ';">15-30-40</button>' +
+              '<button onclick="window._casualSetCfg(\'countingType\',\'numeric\')" style="padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;border:1px solid ' + window._spCor((cfg.countingType !== 'tennis' ? '#818cf8' : 'rgba(255,255,255,0.12)'), 'borda') + ';background:' + window._spCor((cfg.countingType !== 'tennis' ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.04)'), 'background') + ';color:' + window._spCor((cfg.countingType !== 'tennis' ? '#818cf8' : 'var(--text-muted)'), 'color') + ';">1-2-3</button>' +
             '</div>' +
           '</div>' +
           // Vantagem (AD), ganhar-por-2 e o comportamento de EMPATE (tie-break) são REGRA DA
@@ -14353,7 +14354,7 @@ window._openCasualMatch = function(restoreOpts) {
       var needed = Math.max(0, 2 - cnt);
       btn.disabled = true;
       btn.onclick = null;
-      btn.style.cssText = 'background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.45);color:#fbbf24;border-radius:10px;padding:7px 14px;font-size:0.82rem;font-weight:800;cursor:default;box-shadow:none;flex-shrink:0;white-space:nowrap;-webkit-tap-highlight-color:transparent;';
+      btn.style.cssText = 'background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.45);color:var(--sp-c-fbbf24,#fbbf24);border-radius:10px;padding:7px 14px;font-size:0.82rem;font-weight:800;cursor:default;box-shadow:none;flex-shrink:0;white-space:nowrap;-webkit-tap-highlight-color:transparent;';
       btn.textContent = needed > 0 ? ('⏳ Aguardando +' + needed) : '⏳ Iniciando…';
     } else if (cnt > 0) {
       btn.textContent = _t('casual.start') + ' (' + cnt + ' pronto' + (cnt > 1 ? 's' : '') + ')';
@@ -14502,27 +14503,27 @@ window._openCasualMatch = function(restoreOpts) {
 
     qrOv.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:400px;">' +
-        '<div style="font-size:1.3rem;font-weight:800;color:#38bdf8;margin-bottom:3px;">📲 ' + _t('casual.invitePlayers') + '</div>' +
+        '<div style="font-size:1.3rem;font-weight:800;color:var(--sp-c-38bdf8,#38bdf8);margin-bottom:3px;">📲 ' + _t('casual.invitePlayers') + '</div>' +
         '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:clamp(0.8rem,3vh,1.5rem);">' + _t('casual.inviteInstructions') + '</div>' +
         // QR code — centered
         '<img src="' + window._safeHtml(qrImgUrl) + '" alt="QR Code" style="width:min(70vw,280px);height:min(70vw,280px);border-radius:14px;margin-bottom:clamp(0.6rem,2vh,1rem);" />' +
         // Room code
-        '<div style="font-size:clamp(1.8rem,7vw,2.5rem);font-weight:900;letter-spacing:8px;color:#fbbf24;font-family:monospace;margin-bottom:4px;">' + window._safeHtml(roomCode) + '</div>' +
+        '<div style="font-size:clamp(1.8rem,7vw,2.5rem);font-weight:900;letter-spacing:8px;color:var(--sp-c-fbbf24,#fbbf24);font-family:monospace;margin-bottom:4px;">' + window._safeHtml(roomCode) + '</div>' +
         '<div style="font-size:0.65rem;color:var(--text-muted);word-break:break-all;margin-bottom:clamp(0.6rem,2vh,1rem);">' + window._safeHtml(casualUrl) + '</div>' +
         // Share buttons
         '<div style="display:flex;gap:8px;margin-bottom:8px;width:100%;max-width:320px;">' +
-          '<button onclick="navigator.clipboard.writeText(\'' + casualUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\');if(typeof showNotification===\'function\')showNotification(_t(\'casual.linkCopied\'),\'\',\'success\');" style="flex:1;padding:12px;border-radius:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);font-size:0.82rem;font-weight:600;cursor:pointer;">📋 ' + _t('casual.copyLink') + '</button>' +
-          '<a href="https://wa.me/?text=' + encodeURIComponent(_t('casual.whatsappMsg', {sport: sportLabel, code: roomCode, url: casualUrl})) + '" target="_blank" rel="noopener" style="flex:1;padding:12px;border-radius:10px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-size:0.82rem;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;">💬 WhatsApp</a>' +
+          '<button onclick="navigator.clipboard.writeText(\'' + casualUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\');if(typeof showNotification===\'function\')showNotification(_t(\'casual.linkCopied\'),\'\',\'success\');" style="flex:1;padding:12px;border-radius:10px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:var(--text-bright);font-size:0.82rem;font-weight:600;cursor:pointer;">📋 ' + _t('casual.copyLink') + '</button>' +
+          '<a href="https://wa.me/?text=' + encodeURIComponent(_t('casual.whatsappMsg', {sport: sportLabel, code: roomCode, url: casualUrl})) + '" target="_blank" rel="noopener" style="flex:1;padding:12px;border-radius:10px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.3);color:var(--sp-c-25d366,#25d366);font-size:0.82rem;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;">💬 WhatsApp</a>' +
         '</div>' +
         // Imprimir flyer da partida casual (v2.3.54)
-        '<button onclick="window._openInvitePrint({kind:\'casual\',url:\'' + casualUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',title:\'' + String(sportLabel).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',subtitle:\'Código da sala: ' + roomCode.replace(/'/g, "\\'") + '\'})" style="width:100%;max-width:320px;padding:12px;border-radius:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);font-size:0.82rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🖨️ Imprimir convite</button>' +
+        '<button onclick="window._openInvitePrint({kind:\'casual\',url:\'' + casualUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',title:\'' + String(sportLabel).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',subtitle:\'Código da sala: ' + roomCode.replace(/'/g, "\\'") + '\'})" style="width:100%;max-width:320px;padding:12px;border-radius:10px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:var(--text-bright);font-size:0.82rem;font-weight:600;cursor:pointer;margin-bottom:8px;">🖨️ Imprimir convite</button>' +
         // Convidar amigos da scoreplace via notificação — mais direto que
         // WhatsApp pra quem já usa o app. Throttle: desabilita após 1 clique.
         (cu && Array.isArray(cu.friends) && cu.friends.length > 0
           ? '<button id="casual-notify-friends-btn" onclick="window._casualNotifyFriends(\'' + roomCode.replace(/'/g, "\\'") + '\', \'' + sportLabel.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" style="width:100%;max-width:320px;padding:12px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);border:none;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;margin-bottom:clamp(0.6rem,2vh,1rem);">👥 Avisar meus ' + cu.friends.length + ' amigo' + (cu.friends.length === 1 ? '' : 's') + ' do scoreplace</button>'
           : '<div style="width:100%;max-width:320px;margin-bottom:clamp(0.6rem,2vh,1rem);"></div>') +
         // Back button
-        '<button onclick="var ov=document.getElementById(\'casual-qr-overlay\');if(ov)ov.remove();" style="padding:12px 28px;border-radius:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);font-size:0.88rem;font-weight:600;cursor:pointer;">← ' + _t('casual.back') + '</button>' +
+        '<button onclick="var ov=document.getElementById(\'casual-qr-overlay\');if(ov)ov.remove();" style="padding:12px 28px;border-radius:12px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:var(--text-bright);font-size:0.88rem;font-weight:600;cursor:pointer;">← ' + _t('casual.back') + '</button>' +
       '</div>';
 
     document.body.appendChild(qrOv);
@@ -15059,8 +15060,8 @@ window._openCasualMatch = function(restoreOpts) {
         // reliably — inline JS strings go through new Function() which can fail
         // silently when the attribute value is ambiguous after HTML encoding.
         onClickOverride: function() { window._casualSetupClose && window._casualSetupClose(); },
-        middleHtml: '<div style="flex:1;display:flex;align-items:center;gap:8px;justify-content:center;"><span style="font-size:1rem;">⚡</span><span style="font-size:0.95rem;font-weight:800;color:#38bdf8;">' + _t('casual.title') + '</span></div>',
-        rightHtml: '<button id="casual-header-start" onclick="window._casualReadyClick()" style="background:linear-gradient(135deg,#10b981,#059669);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:10px;padding:7px 16px;font-size:0.85rem;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(16,185,129,0.35);-webkit-tap-highlight-color:transparent;flex-shrink:0;">' + _t('casual.start') + '</button>'
+        middleHtml: '<div style="flex:1;display:flex;align-items:center;gap:8px;justify-content:center;"><span style="font-size:1rem;">⚡</span><span style="font-size:0.95rem;font-weight:800;color:var(--sp-c-38bdf8,#38bdf8);">' + _t('casual.title') + '</span></div>',
+        rightHtml: '<button id="casual-header-start" onclick="window._casualReadyClick()" style="background:linear-gradient(135deg,#10b981,#059669);border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));color:#fff;border-radius:10px;padding:7px 16px;font-size:0.85rem;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(16,185,129,0.35);-webkit-tap-highlight-color:transparent;flex-shrink:0;">' + _t('casual.start') + '</button>'
       })
     : '<div></div>';
   overlay.innerHTML = _chdr +
@@ -15842,22 +15843,22 @@ window._renderCasualJoin = function(container, roomCode) {
       _setBody(
         '<div style="text-align:center;padding:2rem 1rem;max-width:500px;margin:0 auto;">' +
           '<div style="font-size:2.5rem;margin-bottom:0.5rem;">🏆</div>' +
-          '<div style="font-size:1.2rem;font-weight:800;color:#fbbf24;margin-bottom:0.3rem;">' + _t('casual.closed') + '</div>' +
+          '<div style="font-size:1.2rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:0.3rem;">' + _t('casual.closed') + '</div>' +
           '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1.5rem;">' + _safe(sportName) + '</div>' +
           '<div style="background:var(--bg-darker);border-radius:14px;padding:1.2rem;margin-bottom:1rem;">' +
             '<div style="display:flex;justify-content:center;align-items:center;gap:1rem;margin-bottom:0.8rem;">' +
               '<div style="text-align:center;flex:1;">' +
-                '<div style="font-size:0.95rem;font-weight:700;color:' + (winnerTeam === 1 ? '#22c55e' : 'var(--text-bright)') + ';">' + _safe(players.filter(function(p){return p.team===1;}).map(function(p){return p.name;}).join(' / ')) + '</div>' +
+                '<div style="font-size:0.95rem;font-weight:700;color:' + window._spCor((winnerTeam === 1 ? '#22c55e' : 'var(--text-bright)'), 'color') + ';">' + _safe(players.filter(function(p){return p.team===1;}).map(function(p){return p.name;}).join(' / ')) + '</div>' +
                 '<div style="font-size:0.7rem;color:var(--text-muted);">' + _t('casual.team', {n: '1'}) + '</div>' +
               '</div>' +
               '<div style="font-size:1.5rem;font-weight:900;color:var(--text-muted);">vs</div>' +
               '<div style="text-align:center;flex:1;">' +
-                '<div style="font-size:0.95rem;font-weight:700;color:' + (winnerTeam === 2 ? '#22c55e' : 'var(--text-bright)') + ';">' + _safe(players.filter(function(p){return p.team===2;}).map(function(p){return p.name;}).join(' / ')) + '</div>' +
+                '<div style="font-size:0.95rem;font-weight:700;color:' + window._spCor((winnerTeam === 2 ? '#22c55e' : 'var(--text-bright)'), 'color') + ';">' + _safe(players.filter(function(p){return p.team===2;}).map(function(p){return p.name;}).join(' / ')) + '</div>' +
                 '<div style="font-size:0.7rem;color:var(--text-muted);">' + _t('casual.team', {n: '2'}) + '</div>' +
               '</div>' +
             '</div>' +
-            '<div style="font-size:1.3rem;font-weight:800;color:#38bdf8;letter-spacing:1px;">' + _safe(result.summary || '') + '</div>' +
-            (winnerTeam !== 0 ? '<div style="font-size:0.82rem;color:#22c55e;margin-top:0.4rem;font-weight:600;">🏆 ' + _safe(winnerLabel) + '</div>' : '') +
+            '<div style="font-size:1.3rem;font-weight:800;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:1px;">' + _safe(result.summary || '') + '</div>' +
+            (winnerTeam !== 0 ? '<div style="font-size:0.82rem;color:var(--sp-c-22c55e,#22c55e);margin-top:0.4rem;font-weight:600;">🏆 ' + _safe(winnerLabel) + '</div>' : '') +
           '</div>' +
           '<button class="btn btn-primary" onclick="window.location.hash=\'#dashboard\';" style="margin-top:0.5rem;">' + _t('casual.goToDashboard') + '</button>' +
         '</div>'
@@ -16049,7 +16050,7 @@ window._renderCasualJoin = function(container, roomCode) {
       html =
         '<div style="text-align:center;padding:0.5rem 1rem 1rem;max-width:500px;margin:0 auto;">' +
           '<div style="font-size:1.8rem;margin-bottom:0.25rem;line-height:1;">⚡</div>' +
-          '<div style="font-size:1.15rem;font-weight:800;color:#38bdf8;margin-bottom:0.15rem;">' + _t('casual.title') + '</div>' +
+          '<div style="font-size:1.15rem;font-weight:800;color:var(--sp-c-38bdf8,#38bdf8);margin-bottom:0.15rem;">' + _t('casual.title') + '</div>' +
           '<div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:0.2rem;">' + _safe(sportName) + (match.isDoubles ? ' · ' + _t('casual.doubles') : ' · ' + _t('casual.single')) + '</div>' +
           '<div style="font-size:0.76rem;color:var(--text-muted);margin-bottom:0.8rem;">' + _t('casual.createdBy', {name: _safe(creatorName)}) + '</div>';
 
@@ -16082,17 +16083,17 @@ window._renderCasualJoin = function(container, roomCode) {
         var isMe = myUid && pp.uid === myUid;
         var isHost = pp.uid === match.createdBy;
         var avatarH = pp.photoURL ?
-          '<img src="' + _safe(pp.photoURL) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
+          '<img src="' + _safe(pp.photoURL) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
           '<div style="display:none;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);align-items:center;justify-content:center;font-size:0.85rem;color:white;font-weight:700;flex-shrink:0;">' + _safe((pp.displayName || 'J')[0].toUpperCase()) + '</div>' :
           '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:white;font-weight:700;flex-shrink:0;">' + _safe((pp.displayName || 'J')[0].toUpperCase()) + '</div>';
         html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;margin-bottom:6px;' +
-          'background:' + (isMe ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)') + ';' +
-          'border:1px solid ' + (isMe ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.08)') + ';">' +
+          'background:' + window._spCor((isMe ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.04)'), 'background') + ';' +
+          'border:1px solid ' + window._spCor((isMe ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.08)'), 'borda') + ';">' +
           avatarH +
           '<div style="flex:1;text-align:left;">' +
             '<div style="font-size:0.88rem;font-weight:700;color:var(--text-bright);">' + _safe(pp.displayName || _t('casual.playerFallback')) +
-              (isMe ? ' <span style="color:#22c55e;font-size:0.68rem;">(' + _t('casual.you') + ')</span>' : '') +
-              (isHost ? ' <span style="color:#fbbf24;font-size:0.68rem;">👑</span>' : '') +
+              (isMe ? ' <span style="color:var(--sp-c-22c55e,#22c55e);font-size:0.68rem;">(' + _t('casual.you') + ')</span>' : '') +
+              (isHost ? ' <span style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.68rem;">👑</span>' : '') +
             '</div>' +
           '</div>' +
           (isMe && !isHost ? '<button class="btn btn-danger btn-micro" onclick="window._casualLeaveMatch()" style="font-size:0.7rem;white-space:nowrap;">' + _t('casual.leave') + '</button>' : '<div style="font-size:1rem;">✅</div>') +
@@ -16127,10 +16128,10 @@ window._renderCasualJoin = function(container, roomCode) {
       for (var _gi = 0; _gi < _guestsToShow; _gi++) {
         var _g = _namedGuests[_gi];
         var _gAvH = _g.photoURL ?
-          '<img src="' + _safe(_g.photoURL) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,0.15);" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
+          '<img src="' + _safe(_g.photoURL) + '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
           '<div style="display:none;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#64748b,#475569);align-items:center;justify-content:center;font-size:0.85rem;color:white;font-weight:700;flex-shrink:0;">' + _safe((_g.name || 'J')[0].toUpperCase()) + '</div>' :
           '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#64748b,#475569);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:white;font-weight:700;flex-shrink:0;">' + _safe((_g.name || 'J')[0].toUpperCase()) + '</div>';
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;margin-bottom:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);">' +
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;margin-bottom:6px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
           _gAvH +
           '<div style="flex:1;text-align:left;">' +
             '<div style="font-size:0.88rem;font-weight:700;color:var(--text-bright);">' + _safe(_g.name) +
@@ -16143,8 +16144,8 @@ window._renderCasualJoin = function(container, roomCode) {
       // Slots realmente vazios (totalNeeded - logados - guests nomeados)
       var _emptySlots = _slotsLeft - _guestsToShow;
       for (var j = 0; j < _emptySlots; j++) {
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;margin-bottom:6px;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);">' +
-          '<div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--text-muted);flex-shrink:0;">?</div>' +
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;margin-bottom:6px;background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border:1px dashed rgba(255,255,255,0.1);">' +
+          '<div style="width:36px;height:36px;border-radius:50%;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--text-muted);flex-shrink:0;">?</div>' +
           '<div style="flex:1;text-align:left;">' +
             '<div style="font-size:0.82rem;color:var(--text-muted);">' + _t('casual.waitingPlayer') + '</div>' +
           '</div>' +
@@ -16169,16 +16170,16 @@ window._renderCasualJoin = function(container, roomCode) {
           var chips = team.map(function(mp) {
             var avH;
             if (mp.photoURL) {
-              avH = '<img src="' + _safe(mp.photoURL) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1.5px solid ' + clr + ';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
+              avH = '<img src="' + _safe(mp.photoURL) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1.5px solid ' + window._spCor(clr, 'borda') + ';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
                 '<div style="display:none;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);align-items:center;justify-content:center;font-size:0.7rem;color:white;font-weight:700;flex-shrink:0;">' + _safe((mp.name || 'J')[0].toUpperCase()) + '</div>';
             } else {
               avH = '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:white;font-weight:700;flex-shrink:0;">' + _safe((mp.name || 'J')[0].toUpperCase()) + '</div>';
             }
-            return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,0.04);">' + avH +
-              '<span style="font-size:0.8rem;font-weight:700;color:' + clr + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(mp.name || '—') + '</span></div>';
+            return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));">' + avH +
+              '<span style="font-size:0.8rem;font-weight:700;color:' + window._spCor(clr, 'color') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(mp.name || '—') + '</span></div>';
           }).join('');
-          return '<div style="flex:1;min-width:0;padding:10px;border-radius:12px;background:' + bg + ';border:1px solid ' + bdr + ';display:flex;flex-direction:column;gap:5px;">' +
-            '<div style="font-size:0.55rem;font-weight:800;color:' + clr + ';text-transform:uppercase;letter-spacing:1px;text-align:center;">' + _t('casual.team', {n: team === t1 ? '1' : '2'}) + '</div>' +
+          return '<div style="flex:1;min-width:0;padding:10px;border-radius:12px;background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(bdr, 'borda') + ';display:flex;flex-direction:column;gap:5px;">' +
+            '<div style="font-size:0.55rem;font-weight:800;color:' + window._spCor(clr, 'color') + ';text-transform:uppercase;letter-spacing:1px;text-align:center;">' + _t('casual.team', {n: team === t1 ? '1' : '2'}) + '</div>' +
             chips +
           '</div>';
         };
@@ -16197,7 +16198,7 @@ window._renderCasualJoin = function(container, roomCode) {
         html += '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:10px 12px;margin-bottom:0.6rem;display:flex;align-items:center;gap:10px;text-align:left;">' +
           '<div style="font-size:1.2rem;flex-shrink:0;">✅</div>' +
           '<div>' +
-            '<div style="font-size:0.82rem;color:#22c55e;font-weight:700;">' + _t('casual.youreIn') + '</div>' +
+            '<div style="font-size:0.82rem;color:var(--sp-c-22c55e,#22c55e);font-weight:700;">' + _t('casual.youreIn') + '</div>' +
             '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:1px;">' + _t('casual.waitOrganizerStart') + (_effectiveCount < totalNeeded ? ' (' + _t(totalNeeded - _effectiveCount > 1 ? 'casual.slotsLeft' : 'casual.slotLeft', {n: totalNeeded - _effectiveCount}) + ')' : '') + '</div>' +
           '</div>' +
         '</div>';

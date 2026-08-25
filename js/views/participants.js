@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ─── Participants View ────────────────────────────────────────────────────────
 var _t = window._t || function(k) { return k; };
 
@@ -514,7 +516,7 @@ window._rollCallBarHtml = function (tId, mode) {
   var tIdS = String(tId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   var dot = function (key, dotC, bg, bd, fg, count, label) {
     var a = (cf === key);
-    return '<button type="button" class="btn" title="' + label + ' (' + count + ')" onclick="event.stopPropagation();window._setCheckInFilter(\'' + tIdS + '\',\'' + key + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:0.8rem;font-weight:800;cursor:pointer;line-height:1;flex-shrink:0;background:' + (a ? bg : 'rgba(255,255,255,0.04)') + ';border:1px solid ' + (a ? bd : 'rgba(255,255,255,0.12)') + ';color:' + (a ? fg : 'var(--text-main)') + ';"><span style="width:9px;height:9px;border-radius:50%;background:' + dotC + ';flex-shrink:0;display:inline-block;"></span>' + count + '</button>';
+    return '<button type="button" class="btn" title="' + label + ' (' + count + ')" onclick="event.stopPropagation();window._setCheckInFilter(\'' + tIdS + '\',\'' + key + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:0.8rem;font-weight:800;cursor:pointer;line-height:1;flex-shrink:0;background:' + window._spCor((a ? bg : 'rgba(255,255,255,0.04)'), 'background') + ';border:1px solid ' + window._spCor((a ? bd : 'rgba(255,255,255,0.12)'), 'borda') + ';color:' + window._spCor((a ? fg : 'var(--text-main)'), 'color') + ';"><span style="width:9px;height:9px;border-radius:50%;background:' + window._spCor(dotC, 'background') + ';flex-shrink:0;display:inline-block;"></span>' + count + '</button>';
   };
   return '<div id="rollcall-bar" data-rc-mode="' + (mode || 'rollcall') + '" style="display:flex;align-items:center;gap:6px;margin-top:8px;margin-bottom:4px;flex-wrap:wrap;">'
     + dot('all', '#60a5fa', 'rgba(96,165,250,0.22)', 'rgba(96,165,250,0.6)', '#93c5fd', total, 'Todos')
@@ -522,7 +524,7 @@ window._rollCallBarHtml = function (tId, mode) {
     + dot('pending', '#a78bfa', 'rgba(167,139,250,0.22)', 'rgba(167,139,250,0.6)', '#c4b5fd', pending, 'Aguardando')
     + dot('absent', '#ef4444', 'rgba(239,68,68,0.22)', 'rgba(239,68,68,0.6)', '#f87171', abs, 'W.O.')
     + '<div title="' + present + ' de ' + total + ' presentes" style="flex:1;min-width:50px;height:9px;border-radius:6px;overflow:hidden;display:flex;background:rgba(167,139,250,0.35);"><div style="width:' + pct + '%;background:linear-gradient(90deg,#10b981,#4ade80);transition:width 0.3s;"></div></div>'
-    + '<span style="font-size:0.76rem;color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
+    + '<span style="font-size:0.76rem;color:var(--sp-c-94a3b8,#94a3b8);font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
     + '</div>';
 };
 
@@ -1046,15 +1048,15 @@ window._showAbsenteeResolutionDialog = function (tId, present, absentees, procee
         '<div style="font-size:1.05rem;font-weight:800;color:var(--text-color);">Sortear entre os presentes</div>' +
       '</div>' +
       '<div style="padding:1.1rem 1.25rem;color:var(--text-muted);font-size:0.9rem;line-height:1.55;">' +
-        '<p style="margin:0 0 8px;"><b style="color:#4ade80;">' + present.length + '</b> presente(s) entrarão no sorteio.</p>' +
-        '<p style="margin:0 0 6px;"><b style="color:#f87171;">' + absentees.length + '</b> não confirmaram presença:</p>' +
+        '<p style="margin:0 0 8px;"><b style="color:var(--sp-c-4ade80,#4ade80);">' + present.length + '</b> presente(s) entrarão no sorteio.</p>' +
+        '<p style="margin:0 0 6px;"><b style="color:var(--sp-c-f87171,#f87171);">' + absentees.length + '</b> não confirmaram presença:</p>' +
         '<p style="margin:0;font-size:0.82rem;opacity:0.85;">' + preview + '</p>' +
         '<p style="margin:12px 0 0;font-weight:700;color:var(--text-color);">O que fazer com os ausentes?</p>' +
       '</div>' +
       '<div style="padding:0 1.25rem 1.25rem;display:flex;flex-direction:column;gap:8px;">' +
-        '<button id="absres-waitlist" class="btn hover-lift" style="background:rgba(251,191,36,0.18);color:#fbbf24;border:1px solid rgba(251,191,36,0.5);font-weight:800;padding:11px;border-radius:10px;">🕐 Enviar à Lista de Espera</button>' +
-        '<button id="absres-dq" class="btn hover-lift" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.5);font-weight:800;padding:11px;border-radius:10px;">🚫 Desclassificar</button>' +
-        '<button id="absres-cancel" class="btn" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);padding:10px;border-radius:10px;">Cancelar</button>' +
+        '<button id="absres-waitlist" class="btn hover-lift" style="background:rgba(251,191,36,0.18);color:var(--sp-c-fbbf24,#fbbf24);border:1px solid rgba(251,191,36,0.5);font-weight:800;padding:11px;border-radius:10px;">🕐 Enviar à Lista de Espera</button>' +
+        '<button id="absres-dq" class="btn hover-lift" style="background:rgba(239,68,68,0.15);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.5);font-weight:800;padding:11px;border-radius:10px;">🚫 Desclassificar</button>' +
+        '<button id="absres-cancel" class="btn" style="background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);font-weight:700;border:1px solid rgba(239,68,68,0.45);padding:10px;border-radius:10px;">Cancelar</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(dialog);
@@ -1352,13 +1354,13 @@ window._rollCallPresenceCtx = function (t, opts) {
         var wo = (!mc && !blu && isOrg)
           ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _rcEntry + "', '" + _puid + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.68rem', extraStyle: 'min-height:0;height:24px;line-height:1;' })
           : '';
-        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>' +
+        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + window._spCor(color, 'color') + ';white-space:nowrap;">' + label + '</span>' +
           '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _onc + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _onc + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _rcEntry + '\', \'' + _puid + '\');"><span class="toggle-slider"></span></label>' + wo;
       } else {
         var l2 = mc ? 'Presente' : (blu ? 'Confirmado' : 'Ausente');
         var c2 = mc ? _txt('present', 'solo') : (blu ? _txt('confirmed', 'solo') : _txt('absent', 'solo'));
         var ic = mc ? '✅' : (blu ? '🟡' : '🔵');
-        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + c2 + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
+        rowHtml = '<span style="font-size:0.74rem;font-weight:800;color:' + window._spCor(c2, 'color') + ';white-space:nowrap;">' + ic + ' ' + l2 + '</span>';
       }
       return { skip: false, styleExtra: styleExtra, rowHtml: rowHtml };
     },
@@ -1377,14 +1379,14 @@ window._rollCallPresenceCtx = function (t, opts) {
       var color = mc ? _txt('present', 'pair') : (blu ? _txt('confirmed', 'pair') : _txt('absent', 'pair'));
       if (!active) {
         var ic = mc ? '✅' : (blu ? '🟡' : '🔵');
-        return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
+        return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;' + (right ? 'justify-content:flex-end;' : '') + '"><span style="font-size:0.7rem;font-weight:800;color:' + window._spCor(color, 'color') + ';white-space:nowrap;">' + ic + ' ' + label + '</span></div>' };
       }
       var _e = keyName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       var _oncM = mc ? _tgl('present', 'pair') : (blu ? _tgl('confirmed', 'pair') : _tgl('absent', 'pair'));
       var wo = (!mc && !blu && isOrg && woScope === 'individual')
         ? window._woBtnHtml("event.stopPropagation(); window._markAbsent('" + t.id + "', '" + _e + "', '" + _mUidEsc + "');", !abs, { label: abs ? 'Reverter' : '', size: 'btn-micro', fontSize: '0.66rem', extraStyle: 'min-height:0;height:22px;line-height:1;' })
         : '';
-      var word = '<span style="font-size:0.7rem;font-weight:800;color:' + color + ';white-space:nowrap;">' + label + '</span>';
+      var word = '<span style="font-size:0.7rem;font-weight:800;color:' + window._spCor(color, 'color') + ';white-space:nowrap;">' + label + '</span>';
       var toggle = '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + _oncM + ';--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:' + _oncM + ';flex-shrink:0;" onclick="event.stopPropagation();"><input type="checkbox" ' + ((mc || blu) ? 'checked' : '') + ' onclick="event.stopPropagation(); window._toggleCheckIn(\'' + t.id + '\', \'' + _e + '\', \'' + _mUidEsc + '\');"><span class="toggle-slider"></span></label>';
       var inner = right ? (wo + toggle + word) : (word + toggle + wo);
       return { present: mc, absent: abs, html: '<div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;' + (right ? 'justify-content:flex-end;' : '') + '" onclick="event.stopPropagation();">' + inner + '</div>' };
@@ -1721,7 +1723,7 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
        || p.email || _T('participants.participant', { n: idx + 1 }));
   var isTeam = !!window._entryTeamMembers(p);
   var _isOrgP = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, pName, p);
-  var _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.95rem;line-height:1;">⭐</span>' : '';
+  var _orgStar = _isOrgP ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.95rem;line-height:1;">⭐</span>' : '';
 
   // Presença via factory compartilhado (rowHtml = Presente/Ausente·toggle·W.O.; styleExtra
   // = fundo verde/vermelho; skip = filtro presente/ausente/aguardando). Caminho ÚNICO.
@@ -1802,23 +1804,23 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     for (var _si = 0; _si < _nmSkillCats.length; _si++) { var _sk = _nmSkillCats[_si]; if (_nmCatStr === _sk || _nmCatStr.endsWith(' ' + _sk)) { _nmCurrentSkill = _sk; break; } }
     if (isOrg && !_isStandbyEntry) {
       var _nmOpts = _nmSkillCats.map(function (sk) { return '<option value="' + sk + '" ' + (_nmCurrentSkill === sk ? 'selected' : '') + '>' + sk + '</option>'; }).join('');
-      _nmSkillHtml = '<select onchange="event.stopPropagation();window._setParticipantSkillCategory(\'' + t.id + '\',\'' + safeP + '\',this.value,\'' + _cardUid + '\')" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ' + (!_nmCurrentSkill ? 'selected' : '') + '>— nível</option>' + _nmOpts + '</select>';
+      _nmSkillHtml = '<select onchange="event.stopPropagation();window._setParticipantSkillCategory(\'' + t.id + '\',\'' + safeP + '\',this.value,\'' + _cardUid + '\')" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:4px;"><option value="" ' + (!_nmCurrentSkill ? 'selected' : '') + '>— nível</option>' + _nmOpts + '</select>';
     }
   }
 
   var dragProps = '', _vipBtn = '', _delBtn = '', _splitBtn = '', undoMergeBtn = '';
   if (isOrg && p && typeof p === 'object' && p._mergedFrom) {
-    undoMergeBtn = '<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" onclick="event.stopPropagation(); window._undoMergeParticipant(\'' + t.id + '\', \'' + safeP + '\');">↩️</button>';
+    undoMergeBtn = '<button class="btn btn-micro" title="Desfazer mesclagem" style="background: rgba(251,191,36,0.12); color: var(--sp-c-fbbf24,#fbbf24); border: 1px dashed rgba(251,191,36,0.5);" onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'none\'" onclick="event.stopPropagation(); window._undoMergeParticipant(\'' + t.id + '\', \'' + safeP + '\');">↩️</button>';
   }
   if (isOrg && !_isStandbyEntry) {
     dragProps = 'draggable="true" ondragstart="window.handleDragStart(event, ' + idx + ', \'' + t.id + '\')" ondragend="window.handleDragEnd(event)" ondragover="window.handleDragOver(event)" ondragenter="window.handleDragEnter(event)" ondragleave="window.handleDragLeave(event)" ondrop="window.handleDropTeam(event, ' + idx + ')"';
     if (!drawDone) {
-      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + (isVip ? '#fbbf24' : '#a3842a') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">💎 VIP</button>';
+      _vipBtn = '<button class="btn btn-micro" title="' + (isVip ? _T('tourn.removeVip') : _T('tourn.markVip')) + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;flex-shrink:0;background: ' + (isVip ? 'linear-gradient(135deg,rgba(234,179,8,0.35),rgba(251,191,36,0.25))' : 'rgba(234,179,8,0.08)') + '; color: ' + window._spCor((isVip ? '#fbbf24' : '#a3842a'), 'color') + '; border: 1px ' + (isVip ? 'solid' : 'dashed') + ' ' + (isVip ? 'rgba(251,191,36,0.6)' : 'rgba(234,179,8,0.3)') + ';" onclick="event.stopPropagation(); window._toggleVip(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">💎 VIP</button>';
       // Este ✕ é da ENTRADA inteira (dupla sai inteira) → NÃO manda uid de membro: mandar
       // p.uid (que numa dupla é o uid do p1) tiraria só uma pessoa e deixaria a outra.
       _delBtn = '<button type="button" class="cancel-x-btn" title="' + _T('btn.remove') + '" style="--cx-size:22px;" onclick="event.stopPropagation(); window.removeParticipantFunction(\'' + t.id + '\', \'' + safeP + '\', \'' + _cardUid + '\');">✕</button>';
       if (window._entryTeamMembers(p)) {
-        _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: #38bdf8; border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
+        _splitBtn = '<button class="btn btn-micro" title="' + _T('participants.splitTeam') + '" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.7rem;font-weight:800;flex-shrink:0;background: rgba(14,165,233,0.1); color: var(--sp-c-38bdf8,#38bdf8); border: 1px dashed #0ea5e9;" onclick="event.stopPropagation(); window.splitParticipantFunction(\'' + t.id + '\', \'' + safeP + '\');">✂️</button>';
       }
     }
   }
@@ -2383,7 +2385,7 @@ function renderParticipants(container, tournamentId) {
       const safeName = ind.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
       // v2.7.37: estrela do organizador (sempre) + pin no topo (data-part-org).
       const _isOrgPC = (typeof window._isOrgPlayer === 'function') && window._isOrgPlayer(t, ind.name, _nameToParticipant[ind.name]);
-      const _orgStarC = _isOrgPC ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:#fbbf24;font-size:0.9rem;line-height:1;">⭐</span>' : '';
+      const _orgStarC = _isOrgPC ? '<span title="Organizador" aria-label="Organizador" style="flex-shrink:0;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.9rem;line-height:1;">⭐</span>' : '';
 
       // Build sub-info with presence dots (3 states: green=presente, red=ausente, gray=aguardando)
       // `name` é a CHAVE (o rótulo gravado no jogo — é por ele que presença/ausência são
@@ -2395,7 +2397,7 @@ function renderParticipants(container, tournamentId) {
         const dotColor = p ? '#10b981' : a ? '#ef4444' : '#64748b';
         const textColor = p ? '#4ade80' : a ? '#f87171' : '#94a3b8';
         const _txt = window._safeHtml(disp || name);
-        return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.66rem;color:${textColor};">${_txt}</span></span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:2px;"><span style="width:5px;height:5px;border-radius:50%;background:${window._spCor(dotColor, 'background')};display:inline-block;flex-shrink:0;"></span><span style="font-size:0.66rem;color:${window._spCor(textColor, 'color')};">${_txt}</span></span>`;
       };
 
       // Standby puro (ainda não substituiu ninguém) = sem parceiro/jogo/adversário
@@ -2477,7 +2479,7 @@ function renderParticipants(container, tournamentId) {
       }
 
       const matchLabel = (!isStandbyPure && ind.matchNum) ? `Jogo ${ind.matchNum}` : '';
-      const standbyLabel = ind.isStandby ? '<span style="font-weight:700;color:#fbbf24;opacity:0.8;">Lista de Espera</span>' : '';
+      const standbyLabel = ind.isStandby ? '<span style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);opacity:0.8;">Lista de Espera</span>' : '';
 
       // Matchup cells (used in the card-level grid, where the player name sits
       // on the same row as team 1 / "vs"). Team 2 lives inside teamsCell on its
@@ -2516,7 +2518,7 @@ function renderParticipants(container, tournamentId) {
       const isAbsentStandby = isStandby && isAbsent;
       // v2.7.42: switch e palavra SEPARADOS (pra montar "Ausente [toggle] W.O." numa linha).
       const _toggleSwitch = `<label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;${isAbsentStandby ? 'opacity:0.35;cursor:not-allowed;pointer-events:none;' : ''}" onclick="event.stopPropagation();"><input type="checkbox" ${mc ? 'checked' : ''} ${isAbsentStandby ? 'disabled' : `onclick="event.stopPropagation(); window._toggleCheckIn('${tId}', '${safeName}', '${String(ind.uid || '').replace(/'/g, "\\'")}');"`}><span class="toggle-slider"></span></label>`;
-      const _presenceWord = `<span style="font-size:0.68rem;font-weight:700;color:${mc ? '#4ade80' : '#94a3b8'};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
+      const _presenceWord = `<span style="font-size:0.68rem;font-weight:700;color:${window._spCor(mc ? '#4ade80' : '#94a3b8', 'color')};white-space:nowrap;">${mc ? 'Presente' : 'Ausente'}</span>`;
 
       // W.O. button — marca W.O. / reverte W.O.
       // Standby players use simple toggle; active participants always go through the
@@ -2540,14 +2542,14 @@ function renderParticipants(container, tournamentId) {
       // não deve aparecer no parceiro presente nem em quem simplesmente não
       // fez check-in. A partida ter wo:true é info de resultado do jogo, não
       // de status individual do jogador.
-      const woBadge = isAbsent ? `<div style="font-size:0.66rem;font-weight:800;height:22px;line-height:22px;padding:0 10px;border-radius:7px;background:rgba(239,68,68,0.15);color:#f87171;flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>` : '';
+      const woBadge = isAbsent ? `<div style="font-size:0.66rem;font-weight:800;height:22px;line-height:22px;padding:0 10px;border-radius:7px;background:rgba(239,68,68,0.15);color:var(--sp-c-f87171,#f87171);flex-shrink:0;border:1px solid rgba(239,68,68,0.3);">W.O.</div>` : '';
 
       // Colors: 3 estados + standby amarelo
       // v2.2.0: isWO (match-level) removido dos visuais — só isAbsent torna o card
       // vermelho/riscado. Antes, todo jogador no lado perdedor de um W.O. ficava
       // vermelho, mesmo estando Presente ou apenas sem check-in.
       const presenceDotColor = mc ? '#10b981' : isAbsent ? '#3b82f6' : '#64748b';  // CANON: ausente=azul
-      const presenceDot = `<span style="width:8px;height:8px;border-radius:50%;background:${presenceDotColor};display:inline-block;flex-shrink:0;"></span>`;
+      const presenceDot = `<span style="width:8px;height:8px;border-radius:50%;background:${window._spCor(presenceDotColor, 'background')};display:inline-block;flex-shrink:0;"></span>`;
       const nameColor = isStandby ? '#fbbf24' : (mc ? window._presenceTextColor('present','solo') : isAbsent ? window._presenceTextColor('absent','solo') : 'var(--text-bright)');
       const cardBg = isStandby
         ? (mc ? 'rgba(251,191,36,0.12)' : isAbsent ? 'rgba(59,130,246,0.10)' : 'rgba(251,191,36,0.06)')
@@ -2563,7 +2565,7 @@ function renderParticipants(container, tournamentId) {
         (ind.teamName ? window._entryHasVip(t, ind.teamName) : false);
       const vipTag = isVipPlayer ? '<span style="background:linear-gradient(135deg,#eab308,#fbbf24);color:#1a1a2e;font-size:0.55rem;font-weight:900;padding:1px 5px;border-radius:3px;letter-spacing:0.5px;flex-shrink:0;">💎 VIP</span>' : '';
       // v2.7.40: botão VIP ao lado do W.O. — SÓ pro organizador (toggle marca/desmarca).
-      const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}','${ind.uid || ''}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)'};color:${isVipPlayer ? '#fbbf24' : '#d4a72a'};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
+      const _vipBtnC = isOrg ? `<button type="button" class="btn btn-micro" onclick="event.stopPropagation();window._toggleVip('${tId}','${safeName}','${ind.uid || ''}')" title="${isVipPlayer ? 'Remover VIP' : 'Marcar VIP'}" style="min-height:0;height:24px;line-height:1;padding:0 9px;font-size:0.66rem;font-weight:800;border-radius:7px;flex-shrink:0;background:${window._spCor(isVipPlayer ? 'linear-gradient(135deg,rgba(234,179,8,0.4),rgba(251,191,36,0.28))' : 'rgba(234,179,8,0.1)', 'background')};color:${window._spCor(isVipPlayer ? '#fbbf24' : '#d4a72a', 'color')};border:1px ${isVipPlayer ? 'solid rgba(251,191,36,0.65)' : 'dashed rgba(234,179,8,0.4)'};">💎 VIP</button>` : '';
       // ── v1.9.97 · CAMADA 3: REGISTRAR O CONTATO DE QUEM O SMS NÃO ALCANÇA ────
       // Caso Leila Arida (20/ago/2026): pediu o código, o Google entregou o SMS à
       // operadora (HTTP 200) e nada chegou no aparelho — sem saída, ela ficava fora da
@@ -2593,7 +2595,7 @@ function renderParticipants(container, tournamentId) {
             'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
             'title="Sem contato — clique para registrar o celular" ' +
             'style="min-height:0;height:24px;line-height:1;padding:0 10px;font-size:0.66rem;font-weight:800;' +
-            'border-radius:7px;flex-shrink:0;background:rgba(245,158,11,0.12);color:#fbbf24;' +
+            'border-radius:7px;flex-shrink:0;background:rgba(245,158,11,0.12);color:var(--sp-c-fbbf24,#fbbf24);' +
             'border:1px dashed rgba(245,158,11,0.45);">\uD83D\uDCF1 contato</button>';
         } else if (!_profTel || _profTel.omitPhone !== true) {
           // AÇÃO — o balãozinho abre a conversa no WhatsApp. wa.me é o único caminho:
@@ -2604,15 +2606,15 @@ function renderParticipants(container, tournamentId) {
           // Âmbar quando o número foi digitado por um organizador (ninguém confirmou por SMS),
           // verde quando a própria pessoa confirmou. A cor é a única diferença — o gesto é o mesmo.
           var _waCor = _telOrg
-            ? 'rgba(245,158,11,0.16);color:#fcd34d;border:1px solid rgba(245,158,11,0.45)'
-            : 'rgba(37,211,102,0.14);color:#4ade80;border:1px solid rgba(37,211,102,0.40)';
+            ? 'rgba(245,158,11,0.16);color:var(--sp-c-fcd34d,#fcd34d);border:1px solid rgba(245,158,11,0.45)'
+            : 'rgba(37,211,102,0.14);color:var(--sp-c-4ade80,#4ade80);border:1px solid rgba(37,211,102,0.40)';
           _telBtnC = '<a href="https://wa.me/' + _waNum + '" target="_blank" rel="noopener" ' +
             'onclick="event.stopPropagation();" ' +
             'title="' + window._safeHtml('Falar com ' + (ind.name || 'este jogador') + ' no WhatsApp' +
               (_telOrg ? ' (número registrado pela organização, não confirmado por SMS)' : '')) + '" ' +
             'style="min-height:0;height:24px;width:30px;line-height:1;padding:0;font-size:0.8rem;' +
             'display:inline-flex;align-items:center;justify-content:center;text-decoration:none;' +
-            'border-radius:7px;flex-shrink:0;background:' + _waCor + ';">\uD83D\uDCAC</a>';
+            'border-radius:7px;flex-shrink:0;background:' + window._spCor(_waCor, 'background') + ';">\uD83D\uDCAC</a>';
         }
         // 2.0.50: quem JA tem celular mas ainda nao tem letzplay tambem precisa de um
         // caminho -- sem isto o organizador so alcancava o @ pela pendencia do telefone.
@@ -2622,7 +2624,7 @@ function renderParticipants(container, tournamentId) {
             'onclick="event.stopPropagation();window._orgSetContactPhone(\'' + tId + '\',\'' + window._safeHtml(ind.uid) + '\',\'' + safeName + '\')" ' +
             'title="Sem letzplay \u2014 clique para registrar o @ da pessoa" ' +
             'style="min-height:0;height:24px;line-height:1;padding:0 10px;font-size:0.66rem;font-weight:800;' +
-            'border-radius:7px;flex-shrink:0;background:rgba(125,211,252,0.10);color:#7dd3fc;' +
+            'border-radius:7px;flex-shrink:0;background:rgba(125,211,252,0.10);color:var(--sp-c-7dd3fc,#7dd3fc);' +
             'border:1px dashed rgba(125,211,252,0.45);">\uD83C\uDFBE letzplay</button>';
         }
       }
@@ -2653,7 +2655,7 @@ function renderParticipants(container, tournamentId) {
         }
       }
       const jogoInline = matchLabel
-        ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;margin-left:6px;">${matchLabel}</span>`
+        ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;margin-left:6px;">${matchLabel}</span>`
         : '';
       // v2.2.0: strikethrough só quando isAbsent (player em t.absent) —
       // não quando isWO (match-level). Parceiro presente não deve ter riscado.
@@ -2663,17 +2665,17 @@ function renderParticipants(container, tournamentId) {
       const _niUid = ind.uid || '';
       const _niUidAttr = _niUid ? ` data-uid-name="${window._safeHtml(_niUid)}"` : '';
       const _niDisp = _niUid ? window._safeHtml(window._displayName(_niUid, ind.name)) : _safeName;
-      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${nameColor};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
-      const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
+      const _nameRow = `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;"><span${_niUidAttr} style="font-weight:600;font-size:0.92rem;color:${window._spCor(nameColor, 'color')};line-height:1.18;word-break:break-word;${isAbsent ? 'text-decoration:line-through;text-decoration-color:rgba(248,113,113,0.4);' : ''}${isOrg ? 'cursor:text;' : ''}" ${isOrg ? `onclick="event.stopPropagation();window._editParticipantName('${tId}','${safeName}')" title="Clique para editar"` : ''}>${_niDisp}</span>${_orgStarC}${isStandby ? presenceDot : ''}</div>`;
+      const _jogoTop = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;">${matchLabel}</span>` : '';
       // Faixa do jogo FULL-WIDTH abaixo do header (libera largura pros nomes dos times).
       let _matchStrip = '';
       if (isWOOrphan && ind.woMeta) {
         const _woNameSafe = (ind.woMeta.partner || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const _woMatchNum = ind.woMeta.matchNum || '?';
-        _matchStrip = `<div style="font-size:0.68rem;color:#f87171;margin-top:6px;font-weight:600;">❌ W.O. — Estava no Jogo ${_woMatchNum}${_woNameSafe ? ` com <span style="color:#94a3b8;font-weight:500;">${_woNameSafe}</span>` : ''}</div>`;
+        _matchStrip = `<div style="font-size:0.68rem;color:var(--sp-c-f87171,#f87171);margin-top:6px;font-weight:600;">❌ W.O. — Estava no Jogo ${_woMatchNum}${_woNameSafe ? ` com <span style="color:var(--sp-c-94a3b8,#94a3b8);font-weight:500;">${_woNameSafe}</span>` : ''}</div>`;
       } else if (teamLine || opponentLine) {
         // v2.7.43: "vs" na linha do 1º time, "Jogo N" alinhado à direita na linha do 2º.
-        var _jR = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${_jogoColor};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;flex-shrink:0;">${matchLabel}</span>` : '';
+        var _jR = matchLabel ? `<span style="font-weight:${_jogoWeight};color:${window._spCor(_jogoColor, 'color')};opacity:${_jogoOpacity};font-size:0.72rem;white-space:nowrap;flex-shrink:0;">${matchLabel}</span>` : '';
         var _row = function (line, right) {
           // v2.7.44: font-size + line-height tight no container (antes herdava 16px →
           // caixas de linha de ~25px e os times ficavam longe). Volta à distância apertada.
@@ -2705,7 +2707,7 @@ function renderParticipants(container, tournamentId) {
           // aparece no badge de meta (gênero · nível · idade) abaixo do nome —
           // não duplica como pill read-only pra não-org.
           const _ciOpts = _ciSkillCats.map(sk => `<option value="${sk}" ${_ciCurrentSkill === sk ? 'selected' : ''}>${sk}</option>`).join('');
-          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value,'${ind.uid || ''}')" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:0;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
+          _ciSkillHtml = `<select onchange="event.stopPropagation();window._setParticipantSkillCategory('${tId}','${_ciNameSafe}',this.value,'${ind.uid || ''}')" onclick="event.stopPropagation()" style="font-size:0.68rem;font-weight:700;padding:1px 4px;border-radius:6px;background:rgba(99,102,241,0.18);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.35);cursor:pointer;margin-top:0;"><option value="" ${!_ciCurrentSkill ? 'selected' : ''}>— nível</option>${_ciOpts}</select>`;
         }
       }
 
@@ -2741,9 +2743,9 @@ function renderParticipants(container, tournamentId) {
       const _riGlow = mc ? 'box-shadow:0 0 0 1px rgba(16,185,129,0.45),0 4px 10px rgba(0,0,0,0.12);' : 'box-shadow:0 4px 10px rgba(0,0,0,0.1);';
       const _riDim = isAbsent ? 'opacity:0.62;' : (isWOOrphan ? 'opacity:0.75;' : '');
       const _riNum = (typeof _ciOrder === 'number' && _ciOrder !== 9999) ? (_ciOrder + 1) : '';
-      const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
+      const _riWoBadge = isWOOrphan ? '<div style="font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:8px;background:rgba(239,68,68,0.18);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.35);">W.O.</div>' : woBadge;
       return `
-        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${_riGrad};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
+        <div class="participant-card" data-part-card="1" data-panel-card="1" data-card-key="${String(ind.uid || ind.name || '').replace(/"/g, '&quot;')}" data-part-org="${_isOrgPC ? '1' : '0'}" data-part-vip="${isVipPlayer ? '1' : '0'}" data-part-standby="${isStandby ? '1' : '0'}" data-part-name="${(ind.name || '').toLowerCase().replace(/"/g, '&quot;')}" data-part-inactive="${_ciInactive}" data-part-gender="${_ciGender}" data-part-skill="${String(_ciSkillVal).replace(/"/g, '&quot;')}" data-part-order="${_ciOrder}" style="background:${window._spCor(_riGrad, 'background')};border:${_riBorder};border-radius:12px;padding:12px;position:relative;overflow:hidden;${_riGlow}${_riDim}transition:all 0.2s;">
             ${(typeof window._enrollNumberBadge === 'function') ? window._enrollNumberBadge(_riNum, 'right') : ''}
             <div style="position:relative;z-index:1;">
                 <!-- HEADER: avatar + nome + estrela (Jogo N foi pro match strip, na linha do 2º time) -->
@@ -2840,7 +2842,7 @@ function renderParticipants(container, tournamentId) {
     var pct = total > 0 ? Math.round(present / total * 100) : 0;
     function dot(key, dotC, bg, bd, fg, count, label) {
       var a = (currentFilter === key);
-      return '<button type="button" class="btn" title="' + label + ' (' + count + ')" onclick="event.stopPropagation();window._setCheckInFilter(\'' + tId + '\',\'' + key + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:0.8rem;font-weight:800;cursor:pointer;line-height:1;flex-shrink:0;background:' + (a ? bg : 'rgba(255,255,255,0.04)') + ';border:1px solid ' + (a ? bd : 'rgba(255,255,255,0.12)') + ';color:' + (a ? fg : 'var(--text-main)') + ';"><span style="width:9px;height:9px;border-radius:50%;background:' + dotC + ';flex-shrink:0;display:inline-block;"></span>' + count + '</button>';
+      return '<button type="button" class="btn" title="' + label + ' (' + count + ')" onclick="event.stopPropagation();window._setCheckInFilter(\'' + tId + '\',\'' + key + '\')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:0.8rem;font-weight:800;cursor:pointer;line-height:1;flex-shrink:0;background:' + window._spCor((a ? bg : 'rgba(255,255,255,0.04)'), 'background') + ';border:1px solid ' + window._spCor((a ? bd : 'rgba(255,255,255,0.12)'), 'borda') + ';color:' + window._spCor((a ? fg : 'var(--text-main)'), 'color') + ';"><span style="width:9px;height:9px;border-radius:50%;background:' + window._spCor(dotC, 'background') + ';flex-shrink:0;display:inline-block;"></span>' + count + '</button>';
     }
     return '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;margin-bottom:4px;flex-wrap:wrap;">'
       + dot('all', '#60a5fa', 'rgba(96,165,250,0.22)', 'rgba(96,165,250,0.6)', '#93c5fd', total, 'Todos')
@@ -2848,7 +2850,7 @@ function renderParticipants(container, tournamentId) {
       + dot('pending', '#a78bfa', 'rgba(167,139,250,0.22)', 'rgba(167,139,250,0.6)', '#c4b5fd', pending, 'Aguardando')
       + dot('absent', '#ef4444', 'rgba(239,68,68,0.22)', 'rgba(239,68,68,0.6)', '#f87171', absent, 'W.O.')
       + '<div title="' + present + ' de ' + total + ' presentes" style="flex:1;min-width:50px;height:9px;border-radius:6px;overflow:hidden;display:flex;background:rgba(167,139,250,0.35);"><div style="width:' + pct + '%;background:linear-gradient(90deg,#10b981,#4ade80);transition:width 0.3s;"></div></div>'
-      + '<span style="font-size:0.76rem;color:#94a3b8;font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
+      + '<span style="font-size:0.76rem;color:var(--sp-c-94a3b8,#94a3b8);font-weight:700;white-space:nowrap;flex-shrink:0;">' + present + '/' + total + ' · ' + pct + '%</span>'
     + '</div>';
   }
   // v1.3.48: barra pela FONTE ÚNICA global (window._rollCallBarHtml) — reconta por UID e é a
@@ -2868,7 +2870,7 @@ function renderParticipants(container, tournamentId) {
   // ── "Iniciar Torneio" banner (after draw, before start) ──
   const startBanner = (isOrg && drawDone && !t.tournamentStarted && !(window._hasAnyMatchResult && window._hasAnyMatchResult(t))) ? `
     <div style="margin-bottom:1.5rem;padding:20px;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(5,150,105,0.1));border:2px solid rgba(16,185,129,0.4);border-radius:16px;text-align:center;">
-        <p style="color:#94a3b8;font-size:0.85rem;margin-bottom:12px;">${_t('participants.drawDoneMsg')}</p>
+        <p style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;margin-bottom:12px;">${_t('participants.drawDoneMsg')}</p>
         <button class="btn btn-success btn-cta hover-lift" onclick="window._startTournament('${tId}')">
             ▶ ${_t('participants.startTournament')}
         </button>
@@ -2878,7 +2880,7 @@ function renderParticipants(container, tournamentId) {
   const startedBadge = t.tournamentStarted ? `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;">
         <span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;"></span>
-        <span style="font-size:0.85rem;font-weight:700;color:#4ade80;">${_t('participants.inProgressBadge')}</span>
+        <span style="font-size:0.85rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);">${_t('participants.inProgressBadge')}</span>
     </div>` : '';
 
   // Ready matches banner (check-in: jogos prontos para chamar)
@@ -2922,7 +2924,7 @@ function renderParticipants(container, tournamentId) {
           '</div>',
           rightHtml: '<div style="display:flex;gap:4px;flex-shrink:0;">' +
             '<span class="badge badge-info" style="font-size:0.65rem;">' + ((window._formatLabel && t.format) ? window._formatLabel(t) : (t.format || _t('participants.defaultFormat'))) + '</span>' +
-            '<span class="badge" style="background:rgba(255,255,255,0.1);color:var(--text-muted);font-size:0.65rem;">' + individualCount + '</span>' +
+            '<span class="badge" style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));color:var(--text-muted);font-size:0.65rem;">' + individualCount + '</span>' +
           '</div>',
           belowHtml: (checkInControls || rollCallControls)
         })
@@ -2938,7 +2940,7 @@ function renderParticipants(container, tournamentId) {
         ${cardsStr}
       </div>
     ` : `
-      <div style="text-align:center;padding:3rem;background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:16px;">
+      <div style="text-align:center;padding:3rem;background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));border:1px dashed rgba(255,255,255,0.1);border-radius:16px;">
         <p class="text-muted">Nenhum inscrito ainda.</p>
       </div>
     `}
@@ -3101,7 +3103,7 @@ window._orgSetContactPhone = function (tId, uid, nome) {
           'placeholder="' + window._safeHtml(_placeholder) + '" value="' + window._safeHtml(_valorInicial) + '" ' +
           'style="flex:1;min-width:0;font-size:1rem;letter-spacing:0.5px;">' +
       '</div>' +
-      '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:9px 11px;font-size:0.76rem;color:#fbbf24;">' +
+      '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:9px 11px;font-size:0.76rem;color:var(--sp-c-fbbf24,#fbbf24);">' +
         'Fica registrado que <b>você</b> colocou este número, e ' + window._safeHtml(nome || 'a pessoa') + ' recebe um aviso. ' +
         'Ele vale só para <b>contato</b> — não serve para entrar no app nem para recuperar senha; para isso ela precisa confirmar por SMS.' +
       '</div>') +
@@ -3264,10 +3266,10 @@ window._ppoOrgContactHtml = function (t, uid, prof, nome) {
        'value="' + _sh(lzAtual ? '@' + lzAtual : '') + '" style="width:100%;box-sizing:border-box;font-size:0.9rem;margin-top:6px;">');
   var btn = (verificado && lzProprio) ? '' :
     '<button type="button" class="btn btn-outline btn-sm" onclick="window._ppoOrgContactSave(\'' + _sh(t.id) + '\',\'' + _sh(uid) + '\',\'' + _sh(nome || '') + '\',\'' + _sh(lzAtual) + '\',' + (verificado ? 'false' : 'true') + ')" ' +
-    'style="margin-top:8px;font-size:0.76rem;padding:6px 16px;color:#4ade80;border-color:rgba(16,185,129,0.4);">💾 Registrar como organizador</button>';
+    'style="margin-top:8px;font-size:0.76rem;padding:6px 16px;color:var(--sp-c-4ade80,#4ade80);border-color:rgba(16,185,129,0.4);">💾 Registrar como organizador</button>';
 
   return '<div id="ppo-org-contact" style="margin:10px auto 0;max-width:340px;text-align:left;background:rgba(245,158,11,0.06);border:1px dashed rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;">' +
-    '<div style="font-size:0.68rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📱 Contato (organizador)</div>' +
+    '<div style="font-size:0.68rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📱 Contato (organizador)</div>' +
     telHtml + lzHtml + btn +
     '<div style="font-size:0.66rem;color:var(--text-muted);margin-top:6px;line-height:1.35;">Vai pro perfil com a marca de que <b>você</b> registrou; a pessoa é avisada e pode corrigir.</div>' +
   '</div>';

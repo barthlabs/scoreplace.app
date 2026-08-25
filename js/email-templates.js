@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ─── Email Templates: HTML email generators for Firestore "Trigger Email" ──
 // Client-side only. Returns HTML strings written to the 'mail' collection.
 // The email body carries the actual notification content, not a generic
@@ -71,7 +73,7 @@
   }
 
   function _header(heading) {
-    return '<tr><td style="padding:24px 32px;text-align:center;background:' + BRAND_COLOR + ';">' +
+    return '<tr><td style="padding:24px 32px;text-align:center;background:' + window._spCor(BRAND_COLOR, 'background') + ';">' +
       '<div style="font-size:2rem;line-height:1;margin-bottom:6px;">' + heading.icon + '</div>' +
       '<h1 style="margin:0;font-size:1.15rem;font-weight:700;color:#fff;letter-spacing:0.2px;">' + _escape(heading.title) + '</h1>' +
       '<p style="margin:6px 0 0;font-size:0.78rem;color:rgba(255,255,255,0.85);">scoreplace.app</p>' +
@@ -80,8 +82,8 @@
 
   function _footer() {
     return '<tr><td style="padding:20px 32px;text-align:center;border-top:1px solid #374151;">' +
-      '<p style="margin:0 0 8px;font-size:0.75rem;color:' + MUTED_COLOR + ';">scoreplace.app — Jogue em outro nível</p>' +
-      '<p style="margin:0;font-size:0.72rem;color:' + MUTED_COLOR + ';">Para desativar e-mails, abra o app, toque no seu perfil e desligue "E-mail" em Canais de notificação.</p>' +
+      '<p style="margin:0 0 8px;font-size:0.75rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';">scoreplace.app — Jogue em outro nível</p>' +
+      '<p style="margin:0;font-size:0.72rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';">Para desativar e-mails, abra o app, toque no seu perfil e desligue "E-mail" em Canais de notificação.</p>' +
     '</td></tr>';
   }
 
@@ -91,7 +93,7 @@
     // gradiente (claro→escuro) + borda inferior mais escura (a "base"). Fallback
     // sólido pra clientes sem gradiente (Outlook).
     return '<table cellpadding="0" cellspacing="0" border="0" style="margin:24px auto 8px;"><tr>' +
-      '<td style="background:' + BRAND_COLOR + ';background:linear-gradient(180deg,#5b9af8 0%,#3b82f6 55%,#2563eb 100%);border-bottom:4px solid #1e40af;border-radius:12px;padding:14px 32px;box-shadow:0 4px 12px rgba(37,99,235,0.35);">' +
+      '<td style="background:' + window._spCor(BRAND_COLOR, 'background') + ';background:linear-gradient(180deg,#5b9af8 0%,#3b82f6 55%,#2563eb 100%);border-bottom:4px solid #1e40af;border-radius:12px;padding:14px 32px;box-shadow:0 4px 12px rgba(37,99,235,0.35);">' +
       '<a href="' + _escape(url) + '" style="display:inline-block;color:#ffffff;text-decoration:none;font-weight:800;font-size:1rem;letter-spacing:0.2px;text-shadow:0 1px 1px rgba(0,0,0,0.25);">' + _escape(text) + '</a>' +
     '</td></tr></table>';
   }
@@ -100,7 +102,7 @@
     var bodyText = data.message ? _messageToHtml(data.message) : '';
     var tournamentLine = '';
     if (data.tournamentName) {
-      tournamentLine = '<p style="margin:0 0 14px;font-size:0.82rem;color:' + MUTED_COLOR + ';letter-spacing:0.3px;text-transform:uppercase;font-weight:600;">' +
+      tournamentLine = '<p style="margin:0 0 14px;font-size:0.82rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';letter-spacing:0.3px;text-transform:uppercase;font-weight:600;">' +
         '🏆 ' + _escape(data.tournamentName) + '</p>';
     }
 
@@ -110,7 +112,7 @@
       if (data.player1 || data.player2 || data.score1 != null || data.score2 != null) {
         var scoreLine = _escape(data.player1 || '?') + ' <b>' + _escape(String(data.score1 != null ? data.score1 : 0)) +
           '</b> × <b>' + _escape(String(data.score2 != null ? data.score2 : 0)) + '</b> ' + _escape(data.player2 || '?');
-        extra += '<div style="margin-top:14px;padding:14px 16px;background:rgba(59,130,246,0.1);border-left:3px solid ' + BRAND_COLOR + ';border-radius:6px;font-size:1rem;font-weight:500;">' + scoreLine + '</div>';
+        extra += '<div style="margin-top:14px;padding:14px 16px;background:rgba(59,130,246,0.1);border-left:3px solid ' + window._spCor(BRAND_COLOR, 'borda') + ';border-radius:6px;font-size:1rem;font-weight:500;">' + scoreLine + '</div>';
       }
       if (data.winner) {
         extra += '<p style="margin:12px 0 0;font-size:0.92rem;">🏅 Vencedor: <b>' + _escape(data.winner) + '</b></p>';
@@ -145,7 +147,7 @@
         } catch(e) {}
       }
       if (_metaParts.length) {
-        extra += '<p style="margin:0 0 14px;font-size:0.88rem;color:' + MUTED_COLOR + ';">' + _metaParts.join(' &nbsp;·&nbsp; ') + '</p>';
+        extra += '<p style="margin:0 0 14px;font-size:0.88rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';">' + _metaParts.join(' &nbsp;·&nbsp; ') + '</p>';
       }
 
       // Bloco dos jogos do jogador — cada jogo: rótulo + TIME (linha) / vs / ADVERSÁRIO (linha)
@@ -157,14 +159,14 @@
           return s;
         };
         var _gamesHtml = _pMatches.map(function(pm) {
-          return '<div style="margin-bottom:10px;padding:13px 16px;background:rgba(59,130,246,0.15);border-left:3px solid ' + BRAND_COLOR + ';border-radius:6px;">' +
-            '<p style="margin:0 0 6px;font-size:0.74rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">' + _escape(pm.label || 'Seu jogo') + '</p>' +
-            '<p style="margin:0;font-size:1.02rem;font-weight:600;color:#f3f4f6;">' + _hl(pm.p1) + '</p>' +
-            '<p style="margin:3px 0;font-size:0.78rem;color:' + MUTED_COLOR + ';font-weight:400;">vs</p>' +
-            '<p style="margin:0;font-size:1.02rem;font-weight:600;color:#f3f4f6;">' + _hl(pm.p2) + '</p>' +
+          return '<div style="margin-bottom:10px;padding:13px 16px;background:rgba(59,130,246,0.15);border-left:3px solid ' + window._spCor(BRAND_COLOR, 'borda') + ';border-radius:6px;">' +
+            '<p style="margin:0 0 6px;font-size:0.74rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">' + _escape(pm.label || 'Seu jogo') + '</p>' +
+            '<p style="margin:0;font-size:1.02rem;font-weight:600;color:var(--sp-c-f3f4f6,#f3f4f6);">' + _hl(pm.p1) + '</p>' +
+            '<p style="margin:3px 0;font-size:0.78rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';font-weight:400;">vs</p>' +
+            '<p style="margin:0;font-size:1.02rem;font-weight:600;color:var(--sp-c-f3f4f6,#f3f4f6);">' + _hl(pm.p2) + '</p>' +
           '</div>';
         }).join('');
-        extra += '<p style="margin:0 0 8px;font-size:0.78rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">' +
+        extra += '<p style="margin:0 0 8px;font-size:0.78rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">' +
           (_pMatches.length > 1 ? 'Seus jogos nesta rodada' : 'Seu jogo') + '</p>' + _gamesHtml;
       }
 
@@ -176,12 +178,12 @@
         var _allRows = _drawLines.reduce(function(acc, line, i) {
           var isMe = !!_myNums[i + 1];
           var rowStyle = isMe
-            ? 'padding:8px 10px;border-radius:5px;margin-bottom:3px;background:rgba(59,130,246,0.08);font-weight:600;font-size:0.88rem;color:#f3f4f6;'
-            : 'padding:8px 10px;border-radius:5px;margin-bottom:3px;font-size:0.88rem;color:#d1d5db;';
+            ? 'padding:8px 10px;border-radius:5px;margin-bottom:3px;background:rgba(59,130,246,0.08);font-weight:600;font-size:0.88rem;color:var(--sp-c-f3f4f6,#f3f4f6);'
+            : 'padding:8px 10px;border-radius:5px;margin-bottom:3px;font-size:0.88rem;color:var(--sp-c-d1d5db,#d1d5db);';
           return acc + '<div style="' + rowStyle + '">' + _escape(line) + '</div>';
         }, '');
         extra += '<div style="margin-top:6px;">' +
-          '<p style="margin:0 0 6px;font-size:0.78rem;color:' + MUTED_COLOR + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">Todos os Jogos da Rodada</p>' +
+          '<p style="margin:0 0 6px;font-size:0.78rem;color:' + window._spCor(MUTED_COLOR, 'color') + ';text-transform:uppercase;font-weight:700;letter-spacing:0.4px;">Todos os Jogos da Rodada</p>' +
           _allRows +
         '</div>';
       }
@@ -190,9 +192,9 @@
     var ctaText = data.ctaText || (data.tournamentUrl ? 'Ver no scoreplace.app' : '');
     var ctaUrl = data.tournamentUrl || data.ctaUrl || '';
 
-    return '<tr><td style="padding:28px 32px;color:' + TEXT_COLOR + ';">' +
+    return '<tr><td style="padding:28px 32px;color:' + window._spCor(TEXT_COLOR, 'color') + ';">' +
       tournamentLine +
-      (bodyText ? '<p style="margin:0;font-size:1rem;line-height:1.55;color:#f3f4f6;">' + bodyText + '</p>' : '') +
+      (bodyText ? '<p style="margin:0;font-size:1rem;line-height:1.55;color:var(--sp-c-f3f4f6,#f3f4f6);">' + bodyText + '</p>' : '') +
       extra +
       (ctaText && ctaUrl ? _ctaButton(ctaText, ctaUrl) : '') +
     '</td></tr>';
@@ -202,7 +204,7 @@
     var heading = _heading(type);
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
       '<body style="margin:0;padding:0;background:#0b0f19;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">' +
-      '<table cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:20px auto;background:' + BG_COLOR + ';border-radius:12px;overflow:hidden;border:1px solid #1f2937;">' +
+      '<table cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;margin:20px auto;background:' + window._spCor(BG_COLOR, 'background') + ';border-radius:12px;overflow:hidden;border:1px solid #1f2937;">' +
       _header(heading) + _body(type, data) + _footer() +
       '</table></body></html>';
   }

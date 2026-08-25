@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — Notificações (View + Badge)
 // ========================================
@@ -255,7 +257,7 @@ function renderNotifications(container) {
         var _waBg = _waIsMatch ? '#25D366' : '#3b82f6';
         var _waLbl = _waIsMatch ? '💬 Seu grupo de whats de jogo' : '💬 Entrar no grupo geral oficial do torneio';
         actionHtml = '<div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap:wrap;">' +
-          '<button class="btn btn-sm" style="background:' + _waBg + '; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); window.open(\'' + safeWaLink + '\',\'_blank\'); _markNotifRead(\'' + safeNotifId + '\')">' + _waLbl + '</button>' +
+          '<button class="btn btn-sm" style="background:' + window._spCor(_waBg, 'background') + '; color:#fff; border:none; padding:6px 16px; font-size:0.78rem; font-weight:700;" onclick="event.stopPropagation(); window.open(\'' + safeWaLink + '\',\'_blank\'); _markNotifRead(\'' + safeNotifId + '\')">' + _waLbl + '</button>' +
           (n.tournamentId ? '<button class="btn btn-sm" style="background: var(--primary-color); color: #fff; border: none; padding: 6px 14px; font-size: 0.78rem; font-weight: 600;" onclick="event.stopPropagation(); window.location.hash=\'#tournaments/' + safeTournamentId + '\'; _markNotifRead(\'' + safeNotifId + '\')">' + (_t('notif.viewTournament') || 'Ver torneio') + '</button>' : '') +
         '</div>';
       } else if (n.tournamentId && n.type !== 'tournament_deleted') {
@@ -352,14 +354,14 @@ function renderNotifications(container) {
       var _autoRead = isUnread && !_pedeDecisao;
       return '<div class="card" data-notif-id="' + window._safeHtml(n._id || '') + '"' +
         (_autoRead ? ' data-notif-autoread="1"' : '') +
-        ' style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + accentColor + ';' +
+        ' style="padding: 1rem; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; border-left: 4px solid ' + window._spCor(accentColor, 'borda') + ';' +
         (isUnread ? ' background: rgba(37, 99, 235, 0.05);' : ' opacity: 0.62;') + '" ' +
         (isUnread ? 'onclick="_markNotifRead(\'' + safeNotifIdOnclick + '\', this)"' : '') + '>' +
         '<div style="font-size: 1.5rem; flex-shrink: 0; line-height: 1;">' + icon + '</div>' +
         '<div style="flex: 1; min-width: 0;">' +
           '<div style="font-size: 0.9rem; color: var(--text-bright); font-weight: ' + (isUnread ? '600' : '400') + '; white-space: pre-line;">' + safeMessage + '</div>' +
           '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
-            '<span style="display:inline-flex;align-items:center;gap:3px;color:' + accentColor + ';font-weight:700;">' + _lvlMeta.emoji + ' ' + _lvlMeta.label + '</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:3px;color:' + window._spCor(accentColor, 'color') + ';font-weight:700;">' + _lvlMeta.emoji + ' ' + _lvlMeta.label + '</span>' +
             '<span style="opacity:0.45;">·</span><span>' + timeAgo + '</span>' +
           '</div>' +
           actionHtml +
@@ -381,7 +383,7 @@ function renderNotifications(container) {
     var _read = _g.antigas;
     var html = '';
     if (_unread.length > 0) {
-      html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#60a5fa;margin:0 0 8px 2px;">' + _g.rotulo + '</div>';
+      html += '<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--sp-c-60a5fa,#60a5fa);margin:0 0 8px 2px;">' + _g.rotulo + '</div>';
       html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">' + _unread.map(_renderNotifCard).join('') + '</div>';
     }
     if (_read.length > 0) {
@@ -398,7 +400,7 @@ function renderNotifications(container) {
     // antigas, que inflariam o total e fariam o botão aparecer no fim da coleção.
     if (recentes.length >= window._NOTIF_PAGE) {
       html += '<div style="text-align:center;padding:1.25rem 0 0.5rem;">' +
-        '<button onclick="window._notifLoadMore()" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' +
+        '<button onclick="window._notifLoadMore()" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' +
         (_t('dashboard.loadMore', { count: '' }) || 'Carregar mais') + '</button></div>';
     }
 

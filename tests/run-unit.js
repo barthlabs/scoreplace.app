@@ -30,6 +30,14 @@ const SUITES = [
   // layout.css e matou 11 regras — entre elas a safe-area do PWA (cabeçalho invadindo
   // relógio/ilha) e o @media mobile inteiro. Mesma classe do <script> sem fechamento.
   'tests/css-nao-perde-regra.test.js',
+  // ⭐ A cor vive na TABELA (css/paleta.css), não no seletor. As ~1.943 regras
+  // [style*="cor"] custavam 1.194ms de recálculo numa tela de 5.117 elementos; 18ms
+  // depois. Este teste impede o padrão de voltar.
+  'tests/cor-vive-na-tabela-nao-no-seletor.test.js',
+  // ⭐ SÓ 2 temas (escuro e claro). sunset/ocean saíram da escolha na v2.6.27 e o código
+  // deles ficou até a 2.0.94 — código morto não é só peso, ele MENTE (me fez reportar
+  // "3 temas" ao dono).
+  'tests/so-existem-dois-temas.test.js',
   // Mesma classe, no HTML: uma <div> sem fechar não dá erro de sintaxe — ANINHA o resto
   // dentro dela. Na 2.0.10 o </div> do #gender-ratio-box foi apagado, #tiebreaker-section
   // foi parar dentro do #fase1-box, e o reorder do setup passou a tentar enfiar o pai

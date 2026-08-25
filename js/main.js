@@ -18,7 +18,7 @@ function setupHelpModal() {
       content: '<p>O <b>scoreplace.app</b> funciona como um <b>aplicativo</b> no seu celular ou computador — basta adicionar o ícone à tela inicial. Sem App Store, sem download — abre direto no navegador, mas com cara de app: <b>tela cheia, ícone próprio, abre rápido</b> e funciona até offline (cache local).</p>' +
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">📱 iPhone / iPad — Safari</div>' +
-          '<p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 8px;"><b>⚠️ Tem que ser pelo Safari</b>. No iPhone, o Chrome <b>não consegue</b> instalar PWAs (limitação da Apple) — abra <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:3px;">scoreplace.app</code> no Safari pra esse passo-a-passo funcionar.</p>' +
+          '<p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 8px;"><b>⚠️ Tem que ser pelo Safari</b>. No iPhone, o Chrome <b>não consegue</b> instalar PWAs (limitação da Apple) — abra <code style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));padding:1px 5px;border-radius:3px;">scoreplace.app</code> no Safari pra esse passo-a-passo funcionar.</p>' +
           '<ol style="padding-left:20px;margin:6px 0;">' +
             '<li>Abra <b>scoreplace.app</b> no <b>Safari</b> (não em Navegação Privativa)</li>' +
             '<li>Toque no ícone <b>Compartilhar</b> <span style="display:inline-block;border:1px solid currentColor;border-radius:4px;padding:0 5px;margin:0 2px;vertical-align:middle;font-size:0.75rem;">⬆</span> na barra de baixo:' +
@@ -77,7 +77,7 @@ function setupHelpModal() {
         '<div style="font-size:0.7rem; color:var(--text-muted); opacity:0.6; margin-top:4px;">Fase Beta — funcionalidades estáveis, dados persistem.</div>' +
         '</div>' +
         '<div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px 14px; margin-bottom:1rem;">' +
-        '<div style="font-weight:700; font-size:0.85rem; color:#10b981; margin-bottom:6px;">🚀 App em Beta</div>' +
+        '<div style="font-weight:700; font-size:0.85rem; color:var(--sp-c-10b981,#10b981); margin-bottom:6px;">🚀 App em Beta</div>' +
         '<p style="font-size:0.78rem; color:var(--text-main); line-height:1.6; margin:0;">Saímos do alpha em 29 de Abril, 2026. Funcionalidades estáveis, dados persistem. Bugs ainda podem aparecer — seu feedback nos ajuda a melhorar.</p>' +
         '</div>' +
         '<div style="text-align:center; margin-bottom:1rem;">' +
@@ -121,7 +121,7 @@ function setupHelpModal() {
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:12px;">' +
           '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">Passo 1: Fazer Login</div>' +
           '<p>Clique no botão <b>"Entrar"</b> no canto superior direito da tela.</p>' +
-          '<p style="font-weight:600;color:#34d399;margin-top:8px;">Forma mais rápida: Google</p>' +
+          '<p style="font-weight:600;color:var(--sp-c-34d399,#34d399);margin-top:8px;">Forma mais rápida: Google</p>' +
           '<ol style="padding-left:20px;margin:6px 0;">' +
             '<li>Clique no botão <b>"Entrar com Google"</b> (botão branco grande no topo)</li>' +
             '<li>Uma janela do Google vai abrir. <b>Escolha sua conta</b> Google (ou digite seu e-mail Google)</li>' +
@@ -395,7 +395,7 @@ function setupHelpModal() {
         '<p><b>Torneios próximos</b> — Baseado na sua localização (perfil). Avisado quando abrem inscrições perto.</p>' +
         '<p><b>Amizade e co-organização</b> — Pedidos de amizade e convites para co-organizar aparecem nas notificações. Aceite ou recuse diretamente.</p>' +
         '<p><b>Presença de amigos (🗓️ plan / 📡 check-in)</b> — Dois tipos de aviso quando um amigo se mexe num local. <b>Planejando (🗓️):</b> "Fulano vai jogar X em Y às HH:mm. Quer ir junto?" — botão "🏢 Ver local". <b>Check-in imediato (📡, vermelho):</b> "Fulano chegou em Y pra jogar X agora. Vem junto!" — botão "📡 Vou também". Check-in tem throttle: 1 notificação por venue+modalidade+dia pra evitar spam quando o usuário faz/refaz check-in várias vezes.</p>' +
-        '<p><b>Níveis</b> — <span style="color:#ef4444;">Fundamentais</span> (inscrição, dia do torneio), <span style="color:#f59e0b;">Importantes</span> (alterações, 2 dias antes), <span style="color:#60a5fa;">Gerais</span> (7 dias antes, comunicados, proximidade, presença de amigos).</p>' +
+        '<p><b>Níveis</b> — <span style="color:var(--sp-c-ef4444,#ef4444);">Fundamentais</span> (inscrição, dia do torneio), <span style="color:var(--sp-c-f59e0b,#f59e0b);">Importantes</span> (alterações, 2 dias antes), <span style="color:var(--sp-c-60a5fa,#60a5fa);">Gerais</span> (7 dias antes, comunicados, proximidade, presença de amigos).</p>' +
         '<p><b>Push</b> — Notificações push no navegador (requer permissão). Funcionam mesmo com o app fechado.</p>' +
         '<p><b>Ações inline</b> — Convites (amizade, co-host, transferência de host) permitem aceitar/recusar direto da notificação. Avisos com <code>tournamentId</code> têm botão "Ver torneio" / "Ver chaveamento". <code>presence_plan</code> e <code>presence_checkin</code> levam pro venue. <code>casual_invite</code> (⚡) leva direto pra sala da partida casual.</p>'
     },
@@ -733,13 +733,13 @@ function setupHelpModal() {
       title: _t('help.shortcuts'),
       icon: '⌨️',
       content: '<div style="display:grid;grid-template-columns:80px 1fr;gap:8px 16px;font-size:0.85rem;">' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">Ctrl+K</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Abrir busca rápida global</span>' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">/</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Abrir busca rápida</span>' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">D</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Ir para Dashboard</span>' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">E</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Ir para Pessoas (explorar jogadores e torneios)</span>' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">N</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Criar novo torneio</span>' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">?</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Abrir/fechar esta ajuda</span>' +
-        '<kbd style="background:rgba(255,255,255,0.1);padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">ESC</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Fechar modal atual</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">Ctrl+K</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Abrir busca rápida global</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">/</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Abrir busca rápida</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">D</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Ir para Dashboard</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">E</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Ir para Pessoas (explorar jogadores e torneios)</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">N</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Criar novo torneio</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">?</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Abrir/fechar esta ajuda</span>' +
+        '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 8px;border-radius:6px;text-align:center;font-family:monospace;color:var(--text-bright);font-size:0.8rem;">ESC</kbd><span style="color:var(--text-main);display:flex;align-items:center;">Fechar modal atual</span>' +
         '</div>' +
         '<p style="font-size:0.78rem;color:var(--text-muted);margin-top:12px;">Os atalhos funcionam quando nenhum campo de texto está focado.</p>' +
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-top:12px;">' +
@@ -756,18 +756,18 @@ function setupHelpModal() {
       icon: '💚',
       content: '<p>O scoreplace.app é <b>gratuito</b>. Todo o desenvolvimento, infra (Firebase, Sentry, Cloud Functions, hospedagem) e manutenção é mantido pelo criador do app.</p>' +
         '<div style="background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.25);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#25d366;margin-bottom:8px;">💬 Fale com o Desenvolvedor (WhatsApp)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-25d366,#25d366);margin-bottom:8px;">💬 Fale com o Desenvolvedor (WhatsApp)</div>' +
           '<p>Botão verde <b>"Fale com o Desenvolvedor"</b> ao lado do <b>Ler QR Code</b> no dashboard (e logo abaixo do nome do torneio, pra organizadores). É a sua <b>linha direta</b> com o desenvolvedor do scoreplace.app pelo WhatsApp.</p>' +
           '<p>Tem dúvida, crítica ou sugestão? Achou algo que não funcionou como esperava? Precisa de ajuda com algo no app? <b>Fale conosco</b> — estamos em versão beta e queremos muito te ouvir!</p>' +
         '</div>' +
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#10b981;margin-bottom:8px;">💚 Apoie via PIX</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-10b981,#10b981);margin-bottom:8px;">💚 Apoie via PIX</div>' +
           '<p>Página: <b>Apoie</b> (botão verde no dashboard ou rota <code>#support</code>).</p>' +
           '<p>Lá tem o QR Code PIX e a chave copia-e-cola (CNPJ). Qualquer valor ajuda — estimulou a evolução do app, conta como contribuição voluntária.</p>' +
           '<p style="font-size:0.78rem;color:var(--text-muted);">Não tem assinatura recorrente nem cobrança automática. Você decide quando e quanto contribuir.</p>' +
         '</div>' +
         '<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#a78bfa;margin-bottom:8px;">⭐ Plano Pro (R$ 19,90/mês)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-a78bfa,#a78bfa);margin-bottom:8px;">⭐ Plano Pro (R$ 19,90/mês)</div>' +
           '<p>Pra quem organiza muitos torneios ou dirige um clube cadastrado:</p>' +
           '<p>• Torneios ilimitados (free tem limite de 3 ativos simultâneos)<br>' +
             '• Até 64 participantes por torneio (free: 32)<br>' +
@@ -777,7 +777,7 @@ function setupHelpModal() {
           '<p>Botão "🚀 Pro" no dashboard abre checkout Stripe seguro. Cancela a qualquer momento.</p>' +
         '</div>' +
         '<div style="background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#fb923c;margin-bottom:8px;">📩 Reportar Bugs ou Sugestões</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-fb923c,#fb923c);margin-bottom:8px;">📩 Reportar Bugs ou Sugestões</div>' +
           '<p>Botão <b>"Reportar Problema ou Sugestão"</b> na seção Sobre deste manual. Abre seu app de e-mail com:</p>' +
           '<p>• Versão atual do app<br>' +
             '• Seu nome/email<br>' +
@@ -786,12 +786,12 @@ function setupHelpModal() {
           '<p style="font-size:0.78rem;color:var(--text-muted);">Bugs com screenshot resolvem 10x mais rápido. Print do problema + descrição do que esperava acontecer = ouro.</p>' +
         '</div>' +
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#818cf8;margin-bottom:8px;">📲 Convidar amigos</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-818cf8,#818cf8);margin-bottom:8px;">📲 Convidar amigos</div>' +
           '<p>Botão <b>"Convidar"</b> no dashboard ou rota <code>#invite</code>. QR Code do app + link curto pra compartilhar via WhatsApp, Instagram, SMS.</p>' +
           '<p>Quando alguém entra pelo link e cria uma conta, você ganha amizade automática (combinada com torneios e presenças).</p>' +
         '</div>' +
         '<div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px;margin-top:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#60a5fa;margin-bottom:8px;">📜 Privacidade e Termos</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-60a5fa,#60a5fa);margin-bottom:8px;">📜 Privacidade e Termos</div>' +
           '<p>Páginas <code>#privacy</code> e <code>#terms</code> (links no rodapé da landing).</p>' +
           '<p>Em <b>fase Beta</b> os dados persistem — torneios, partidas, presenças, perfis ficam salvos. No primeiro login você precisa marcar checkbox aceitando os termos. Conformidade LGPD em andamento (revisão jurídica formal pendente pra v1.0 estável).</p>' +
         '</div>'
@@ -805,7 +805,7 @@ function setupHelpModal() {
 
         // ── Global / Topbar ──
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#818cf8;margin-bottom:8px;">🔝 Barra Superior (7)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-818cf8,#818cf8);margin-bottom:8px;">🔝 Barra Superior (7)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Login</b> — Faça login para criar e gerenciar torneios<br>' +
             '• <b>Menu ☰</b> — Abra o menu para navegar pelo app<br>' +
@@ -819,7 +819,7 @@ function setupHelpModal() {
 
         // ── Strategic ──
         '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#fbbf24;margin-bottom:8px;">💡 Apoie / Pro (4)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:8px;">💡 Apoie / Pro (4)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Apoie (Dashboard)</b> — PIX mantém a plataforma gratuita<br>' +
             '• <b>Pro (Dashboard)</b> — Torneios ilimitados, logo, Modo TV sem marca<br>' +
@@ -830,7 +830,7 @@ function setupHelpModal() {
 
         // ── Dashboard ──
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#34d399;margin-bottom:8px;">📊 Dashboard (15)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-34d399,#34d399);margin-bottom:8px;">📊 Dashboard (15)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>+ Novo Torneio</b> — Crie em menos de 1 minuto<br>' +
             '• <b>Filtro Todos</b> — Veja todos os torneios de uma vez<br>' +
@@ -851,7 +851,7 @@ function setupHelpModal() {
 
         // ── Tournament Detail: Participant ──
         '<div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#60a5fa;margin-bottom:8px;">🏆 Detalhe do Torneio — Participante (6)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-60a5fa,#60a5fa);margin-bottom:8px;">🏆 Detalhe do Torneio — Participante (6)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Convidar</b> — WhatsApp, QR Code, link<br>' +
             '• <b>Inscrever-se</b> — Organizador notificado automaticamente<br>' +
@@ -864,7 +864,7 @@ function setupHelpModal() {
 
         // ── Tournament Detail: Organizer ──
         '<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#a855f7;margin-bottom:8px;">🛠️ Ferramentas do Organizador (17)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-a855f7,#a855f7);margin-bottom:8px;">🛠️ Ferramentas do Organizador (17)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Editar</b> — Local, datas, formato, categorias<br>' +
             '• <b>Comunicar</b> — Mensagens para todos os inscritos<br>' +
@@ -888,7 +888,7 @@ function setupHelpModal() {
 
         // ── Create Tournament ──
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#f59e0b;margin-bottom:8px;">➕ Criar/Editar Torneio (32)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:8px;">➕ Criar/Editar Torneio (32)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Esporte</b> — Padrões de pontuação por modalidade<br>' +
             '• <b>Formato</b> — Eliminatória, Dupla, Fase de Grupos, Pontos Corridos<br>' +
@@ -927,7 +927,7 @@ function setupHelpModal() {
 
         // ── Invite Modal ──
         '<div style="background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#22d3ee;margin-bottom:8px;">👥 Modal de Convite (5)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-22d3ee,#22d3ee);margin-bottom:8px;">👥 Modal de Convite (5)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Amigos</b> — Convidar da plataforma com um clique<br>' +
             '• <b>WhatsApp</b> — Link direto para grupos<br>' +
@@ -939,7 +939,7 @@ function setupHelpModal() {
 
         // ── Power of 2 + Incomplete Teams ──
         '<div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#f87171;margin-bottom:8px;">🔢 Painéis de Resolução (10)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-f87171,#f87171);margin-bottom:8px;">🔢 Painéis de Resolução (10)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Nash (P2)</b> — Cores indicam equilíbrio: verde=melhor<br>' +
             '• <b>Reabrir (P2)</b> — Completar potência de 2<br>' +
@@ -956,7 +956,7 @@ function setupHelpModal() {
 
         // ── Poll ──
         '<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#c084fc;margin-bottom:8px;">📊 Enquete (3)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-c084fc,#c084fc);margin-bottom:8px;">📊 Enquete (3)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Prazo</b> — Encerramento automático<br>' +
             '• <b>Opções</b> — Marcar e ver Nash<br>' +
@@ -966,7 +966,7 @@ function setupHelpModal() {
 
         // ── GSM ──
         '<div style="background:rgba(236,72,153,0.06);border:1px solid rgba(236,72,153,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#ec4899;margin-bottom:8px;">🎾 Pontuação GSM (8)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-ec4899,#ec4899);margin-bottom:8px;">🎾 Pontuação GSM (8)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Sets para vencer</b> — 1 a 5 (amador vs profissional)<br>' +
             '• <b>Games por set</b> — 6 (tênis), 11 (mesa), 25 (vôlei)<br>' +
@@ -981,7 +981,7 @@ function setupHelpModal() {
 
         // ── Partida Casual ──
         '<div style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#38bdf8;margin-bottom:8px;">📡 Partida Casual (8)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-38bdf8,#38bdf8);margin-bottom:8px;">📡 Partida Casual (8)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Partida Casual</b> — Jogue sem criar torneio<br>' +
             '• <b>Esporte</b> — Pontuação ajustada por modalidade<br>' +
@@ -996,7 +996,7 @@ function setupHelpModal() {
 
         // ── Bracket ──
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#818cf8;margin-bottom:8px;">🏅 Chaveamento / Classificação (15)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-818cf8,#818cf8);margin-bottom:8px;">🏅 Chaveamento / Classificação (15)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Zoom</b> — Slider + arraste para navegar<br>' +
             '• <b>Imprimir</b> — Para colar na parede do evento<br>' +
@@ -1018,7 +1018,7 @@ function setupHelpModal() {
 
         // ── Check-in ──
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#34d399;margin-bottom:8px;">✅ Participantes / Check-in (8)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-34d399,#34d399);margin-bottom:8px;">✅ Participantes / Check-in (8)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>VIP</b> — Prioridade no cabeçamento<br>' +
             '• <b>Remover</b> — Excluir participante<br>' +
@@ -1033,7 +1033,7 @@ function setupHelpModal() {
 
         // ── Pre-draw ──
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#f59e0b;margin-bottom:8px;">🎲 Pré-Sorteio (3)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:8px;">🎲 Pré-Sorteio (3)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Confirmar sorteio</b> — Gerar chaveamento<br>' +
             '• <b>Renomear categoria</b> — Antes do sorteio<br>' +
@@ -1043,7 +1043,7 @@ function setupHelpModal() {
 
         // ── Explore ──
         '<div style="background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#22d3ee;margin-bottom:8px;">👥 Pessoas / Explorar (2)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-22d3ee,#22d3ee);margin-bottom:8px;">👥 Pessoas / Explorar (2)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Busca / Outros usuários</b> — Encontrar por nome, cidade ou esporte<br>' +
             '• <b>Pedido de amizade</b> — Conectar para convites e presença futura' +
@@ -1052,7 +1052,7 @@ function setupHelpModal() {
 
         // ── Notifications ──
         '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#fbbf24;margin-bottom:8px;">🔔 Notificações (2)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:8px;">🔔 Notificações (2)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Aceitar co-organização</b> — Convite para organizar junto<br>' +
             '• <b>Aceitar amizade</b> — Trocar convites de torneio' +
@@ -1061,7 +1061,7 @@ function setupHelpModal() {
 
         // ── Profile ──
         '<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#c084fc;margin-bottom:8px;">👤 Perfil (6)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-c084fc,#c084fc);margin-bottom:8px;">👤 Perfil (6)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Gênero</b> — Atribuição automática de categorias<br>' +
             '• <b>Idioma</b> — 🇧🇷 Português / 🇺🇸 English<br>' +
@@ -1074,7 +1074,7 @@ function setupHelpModal() {
 
         // ── Venues (descoberta) ──
         '<div style="background:rgba(14,165,233,0.06);border:1px solid rgba(14,165,233,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#38bdf8;margin-bottom:8px;">🏢 Descobrir Locais (8)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-38bdf8,#38bdf8);margin-bottom:8px;">🏢 Descobrir Locais (8)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Local</b> — Cidade, bairro ou endereço (geocoder)<br>' +
             '• <b>GPS</b> — Usa localização precisa do dispositivo<br>' +
@@ -1089,7 +1089,7 @@ function setupHelpModal() {
 
         // ── Venue Detail Modal ──
         '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#a5b4fc;margin-bottom:8px;">📍 Modal do Local (6)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-a5b4fc,#a5b4fc);margin-bottom:8px;">📍 Modal do Local (6)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Estou aqui agora</b> — Check-in inline sem navegar<br>' +
             '• <b>Planejar ida</b> — Dialog de agendamento auto-aberto<br>' +
@@ -1102,7 +1102,7 @@ function setupHelpModal() {
 
         // ── Presence ──
         '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#fbbf24;margin-bottom:8px;">🗓️ Presença (7)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:8px;">🗓️ Presença (7)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Local</b> — Dropdown combina perfil + torneios<br>' +
             '• <b>Pills de modalidade</b> — Seleção múltipla<br>' +
@@ -1116,7 +1116,7 @@ function setupHelpModal() {
 
         // ── Dashboard Widgets ──
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#34d399;margin-bottom:8px;">📊 Widgets da Dashboard (6)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-34d399,#34d399);margin-bottom:8px;">📊 Widgets da Dashboard (6)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Meus locais</b> — Check-in em 1 tap nos venues preferidos<br>' +
             '• <b>Amigos no local</b> — Até 6 amigos com presença ativa hoje<br>' +
@@ -1129,7 +1129,7 @@ function setupHelpModal() {
 
         // ── My Venues / Tournament Calendar / Notif CTAs ──
         '<div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:12px;margin-bottom:10px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#a78bfa;margin-bottom:8px;">🔗 Integrações (5)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-a78bfa,#a78bfa);margin-bottom:8px;">🔗 Integrações (5)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Cadastrar local</b> — Autocomplete do Google Places<br>' +
             '• <b>Reivindicar propriedade</b> — Tag oficial<br>' +
@@ -1141,7 +1141,7 @@ function setupHelpModal() {
 
         // ── Meta ──
         '<div style="background:rgba(107,114,128,0.06);border:1px solid rgba(107,114,128,0.15);border-radius:10px;padding:12px;">' +
-          '<div style="font-weight:700;font-size:0.85rem;color:#9ca3af;margin-bottom:8px;">ℹ️ Meta (1)</div>' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--sp-c-9ca3af,#9ca3af);margin-bottom:8px;">ℹ️ Meta (1)</div>' +
           '<p style="margin:0;font-size:0.8rem;line-height:1.7;">' +
             '• <b>Sobre as dicas</b> — Como desativar e reativar no Perfil' +
           '</p>' +
@@ -1188,10 +1188,10 @@ function setupHelpModal() {
           if (typeof closeModal === 'function') closeModal('modal-help');
         },
         belowHtml: '<input type="text" id="help-search-input" placeholder="Buscar no manual..." style="width:100%;box-sizing:border-box;margin-top:10px;padding:10px 14px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-darker);color:var(--text-color);font-size:0.85rem;outline:none;" oninput="window._filterHelpSections(this.value)">',
-        extraStyle: 'position:sticky;top:0;z-index:2;background:var(--bg-card,var(--bg-darker));padding:12px 1.25rem 12px;border-bottom:1px solid rgba(255,255,255,0.06);'
+        extraStyle: 'position:sticky;top:0;z-index:2;background:var(--bg-card,var(--bg-darker));padding:12px 1.25rem 12px;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));'
       })
     : // Fallback se _renderBackHeader ainda não tiver carregado (defesa).
-      ('<div style="position:sticky;top:0;z-index:2;background:var(--bg-card,var(--bg-darker));padding:12px 1.25rem;border-bottom:1px solid rgba(255,255,255,0.06);">' +
+      ('<div style="position:sticky;top:0;z-index:2;background:var(--bg-card,var(--bg-darker));padding:12px 1.25rem;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));">' +
         '<button class="btn btn-outline btn-sm" onclick="if(typeof closeModal===\'function\')closeModal(\'modal-help\');">← Voltar</button>' +
         '<h2 style="display:inline-block;margin:0 1rem;">Central de Ajuda</h2>' +
         '<input type="text" id="help-search-input" placeholder="Buscar no manual..." style="width:100%;margin-top:10px;padding:10px 14px;" oninput="window._filterHelpSections(this.value)">' +
@@ -1367,13 +1367,13 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
         <div class="form-group" style="margin-bottom:1.25rem;">
           <label class="form-label">${(window._t || function(k){return k;})('quickCreate.sportLabel')}</label>
           <div id="qc-sport-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" class="qc-sport-btn qc-sport-active" data-sport="🎾 Beach Tennis" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:600;">${(window._sportIcon && window._sportIcon('Beach Tennis')) || '🎾'} Beach Tennis</button>
-            <button type="button" class="qc-sport-btn" data-sport="🥒 Pickleball" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Pickleball')) || '🥒'} Pickleball</button>
-            <button type="button" class="qc-sport-btn" data-sport="🎾 Tênis" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis')) || '🎾'} Tênis</button>
-            <button type="button" class="qc-sport-btn" data-sport="🏓 Tênis de Mesa" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis de Mesa')) || '🏓'} Tênis de Mesa</button>
-            <button type="button" class="qc-sport-btn" data-sport="🏸 Padel" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Padel')) || '🏸'} Padel</button>
-            <button type="button" class="qc-sport-btn" data-sport="🏐 Vôlei de Praia" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Vôlei de Praia')) || '🏐'} Vôlei de Praia</button>
-            <button type="button" class="qc-sport-btn" data-sport="⚽ Futevôlei" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Futevôlei')) || '⚽'} Futevôlei</button>
+            <button type="button" class="qc-sport-btn qc-sport-active" data-sport="🎾 Beach Tennis" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">${(window._sportIcon && window._sportIcon('Beach Tennis')) || '🎾'} Beach Tennis</button>
+            <button type="button" class="qc-sport-btn" data-sport="🥒 Pickleball" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Pickleball')) || '🥒'} Pickleball</button>
+            <button type="button" class="qc-sport-btn" data-sport="🎾 Tênis" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis')) || '🎾'} Tênis</button>
+            <button type="button" class="qc-sport-btn" data-sport="🏓 Tênis de Mesa" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis de Mesa')) || '🏓'} Tênis de Mesa</button>
+            <button type="button" class="qc-sport-btn" data-sport="🏸 Padel" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Padel')) || '🏸'} Padel</button>
+            <button type="button" class="qc-sport-btn" data-sport="🏐 Vôlei de Praia" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Vôlei de Praia')) || '🏐'} Vôlei de Praia</button>
+            <button type="button" class="qc-sport-btn" data-sport="⚽ Futevôlei" onclick="window._qcSelectSport(this)" style="padding:8px 14px;border-radius:10px;font-size:0.85rem;cursor:pointer;transition:all 0.15s;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Futevôlei')) || '⚽'} Futevôlei</button>
           </div>
           <select class="form-control" id="quick-create-sport" style="display:none;">
             <option>🎾 Beach Tennis</option>
@@ -1410,7 +1410,7 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
     var btns = document.querySelectorAll('#qc-sport-buttons .qc-sport-btn');
     btns.forEach(function(b) {
       b.classList.remove('qc-sport-active');
-      b.style.border = '2px solid rgba(255,255,255,0.18)';
+      b.style.border = '2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18))';
       b.style.background = 'rgba(255,255,255,0.06)';
       b.style.color = 'var(--text-main)';
     });
@@ -1861,7 +1861,7 @@ window._showInstallInstructions = function () {
       '<b>1.</b> Toque no <b>Compartilhar</b> <span style="display:inline-block;border:1px solid currentColor;border-radius:4px;padding:0 5px;margin:0 2px;vertical-align:middle;">⬆</span> (barra de baixo do Safari; no iOS 17+ pode estar nos <b>•••</b> à direita, ou no <b>"Aa"</b> ao lado do endereço).<br><br>' +
       '<b>2.</b> Role e toque em <b>"Adicionar à Tela de Início"</b>.<br><br>' +
       '<b>3.</b> Toque em <b>Adicionar</b>. O ícone aparece na tela inicial.<br><br>' +
-      '<span style="color:#fbbf24;font-size:0.82rem;">💡 Dica: <b>instale primeiro e entre depois</b> — assim você fica logado no app e não precisa entrar de novo. (Não funciona em aba Privada.)</span>';
+      '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.82rem;">💡 Dica: <b>instale primeiro e entre depois</b> — assim você fica logado no app e não precisa entrar de novo. (Não funciona em aba Privada.)</span>';
   } else if (isAndroid) {
     title = '📲 Instalar no Android';
     steps = 'Toque nos <b>três pontinhos ⋮</b> no canto superior direito do Chrome → <b>"Instalar app"</b> (ou <b>"Adicionar à tela inicial"</b>).';
@@ -1874,7 +1874,7 @@ window._showInstallInstructions = function () {
   ov.id = 'sp-install-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10060;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = '<div style="background:var(--bg-card,#1a2235);color:var(--text-main,#fff);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.5);box-sizing:border-box;">' +
-    '<div style="font-size:1.1rem;font-weight:800;color:#fbbf24;margin-bottom:10px;">' + title + '</div>' +
+    '<div style="font-size:1.1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:10px;">' + title + '</div>' +
     '<div style="font-size:0.9rem;line-height:1.6;">' + steps + '</div>' +
     '<button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="var o=document.getElementById(\'sp-install-overlay\');if(o)o.remove();">Entendi</button>' +
     '</div>';
@@ -2116,7 +2116,7 @@ window._showAndroidInstallBanner = function() {
       '<div style="display:flex;align-items:center;gap:10px;">' +
         '<div style="flex-shrink:0;font-size:1.5rem;line-height:1;">📲</div>' +
         '<div style="flex:1;min-width:0;line-height:1.35;">' +
-          '<div style="font-weight:700;color:#fbbf24;margin-bottom:2px;">Adicionar à tela de início?</div>' +
+          '<div style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:2px;">Adicionar à tela de início?</div>' +
           '<div style="color:var(--text-main, #cbd5e1);font-size:0.76rem;">Abre em tela cheia, sem barra de endereço. Recebe notificações e funciona offline.</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">' +
@@ -2173,7 +2173,7 @@ window._showAndroidInstallBanner = function() {
         '<div style="display:flex;align-items:flex-start;gap:10px;">' +
           '<div style="flex-shrink:0;font-size:1.2rem;line-height:1;margin-top:2px;">' + opts.icon + '</div>' +
           '<div style="flex:1;min-width:0;line-height:1.4;">' +
-            '<div style="font-weight:700;color:#fbbf24;margin-bottom:2px;">' + opts.title + '</div>' +
+            '<div style="font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:2px;">' + opts.title + '</div>' +
             '<div style="color:var(--text-main);font-size:0.76rem;">' + opts.body + '</div>' +
           '</div>' +
           '<button data-dismiss-key="' + key + '" style="flex-shrink:0;background:transparent;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>' +
@@ -2309,7 +2309,7 @@ window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
     '<div style="padding:16px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:10px;">' +
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
     '<input type="text" id="quick-search-input" placeholder="Buscar torneios, jogadores..." style="flex:1;background:transparent;border:none;color:var(--text-bright);font-size:1.05rem;outline:none;" autocomplete="off">' +
-    '<kbd style="font-size:0.65rem;color:var(--text-muted);background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);">ESC</kbd>' +
+    '<kbd style="font-size:0.65rem;color:var(--text-muted);background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));padding:3px 8px;border-radius:4px;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">ESC</kbd>' +
     '</div>' +
     '<div id="quick-search-results" style="max-height:360px;overflow-y:auto;padding:8px;"></div>';
 
@@ -2527,16 +2527,16 @@ window._log("scoreplace.app v" + (window.SCOREPLACE_VERSION || '?') + " Iniciali
   });
 
   // Show keyboard shortcuts hint in help modal
-  window._keyboardShortcutsHtml = '<div style="margin-top:1rem;padding:12px;background:rgba(255,255,255,0.05);border-radius:10px;">' +
+  window._keyboardShortcutsHtml = '<div style="margin-top:1rem;padding:12px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border-radius:10px;">' +
     '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">⌨️ Atalhos de Teclado</div>' +
     '<div style="display:grid;grid-template-columns:60px 1fr;gap:4px 12px;font-size:0.78rem;">' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">Ctrl+K</kbd><span style="color:var(--text-muted);">Busca rápida</span>' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">/</kbd><span style="color:var(--text-muted);">Busca rápida</span>' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">D</kbd><span style="color:var(--text-muted);">Dashboard</span>' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">E</kbd><span style="color:var(--text-muted);">Explorar torneios</span>' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">N</kbd><span style="color:var(--text-muted);">Novo torneio</span>' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">?</kbd><span style="color:var(--text-muted);">Ajuda</span>' +
-    '<kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">ESC</kbd><span style="color:var(--text-muted);">Fechar modal</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">Ctrl+K</kbd><span style="color:var(--text-muted);">Busca rápida</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">/</kbd><span style="color:var(--text-muted);">Busca rápida</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">D</kbd><span style="color:var(--text-muted);">Dashboard</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">E</kbd><span style="color:var(--text-muted);">Explorar torneios</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">N</kbd><span style="color:var(--text-muted);">Novo torneio</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">?</kbd><span style="color:var(--text-muted);">Ajuda</span>' +
+    '<kbd style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:2px 6px;border-radius:4px;text-align:center;font-family:monospace;color:var(--text-bright);">ESC</kbd><span style="color:var(--text-muted);">Fechar modal</span>' +
     '</div></div>';
 })();
 

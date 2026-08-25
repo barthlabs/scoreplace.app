@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // v0.16.93/94: handler de click no card de torneio na dashboard. Detecta
 // se o click veio de dentro de um elemento que NÃO deve disparar navegação
 // (ex: toggle Liga ativado/desativado, botão de inscrever, etc.) e ignora.
@@ -107,10 +109,10 @@ window._buildAnalyticsSection = function _buildAnalyticsSection(organizados) {
     '<div style="margin-top:8px;padding:16px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;">' +
       // Stat cards row
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">' +
-        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + total + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.totalTournaments') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + uniqueCount + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.uniqueParticipants') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + avgParts + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.avgParticipants') + '</div></div>' +
-        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--primary-color);">' + bestMonthLabel + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.bestMonth') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));">' + total + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.totalTournaments') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));">' + uniqueCount + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.uniqueParticipants') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));">' + avgParts + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.avgParticipants') + '</div></div>' +
+        '<div class="stat-box"><div style="font-size:calc(var(--sp-u) * 1.6);font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));">' + bestMonthLabel + '</div><div style="font-size:0.78rem;color:var(--text-muted);">' + t('analytics.bestMonth') + '</div></div>' +
       '</div>' +
       // Bar charts
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
@@ -715,20 +717,13 @@ function renderDashboard(container) {
     // dark de verdade. Sunset agora é light cream desde v0.17.25 — gradients
     // antigos (brown-950) ficaram quebrados; corrigidos pra cream warm.
     var _theme = (document.documentElement.getAttribute('data-theme') || 'dark');
-    var _isLight = (_theme === 'light' || _theme === 'sunset');
+    var _isLight = (_theme === 'light');
     let bgGradient;
     if (_theme === 'light') {
       bgGradient = 'linear-gradient(135deg, #e2e8f0 0%, #f1f5f9 100%)';
       if (isParticipating) bgGradient = 'linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%)';
       else if (isOrg) bgGradient = 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)';
-    } else if (_theme === 'sunset') {
-      bgGradient = 'linear-gradient(135deg, #fdf6e3 0%, #f7e5cb 100%)';
-      if (isParticipating) bgGradient = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
-      else if (isOrg) bgGradient = 'linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)';
-    } else if (_theme === 'ocean') {
-      bgGradient = 'linear-gradient(135deg, #1c3d5e 0%, #173352 100%)';
-      if (isParticipating) bgGradient = 'linear-gradient(135deg, #0c4a6e 0%, #0e3a52 100%)';
-      else if (isOrg) bgGradient = 'linear-gradient(135deg, #1e3a5f 0%, #1a2f4d 100%)';
+    
     } else {
       bgGradient = 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)';
       if (isParticipating) bgGradient = 'linear-gradient(135deg, #0f3a36 0%, #0d2826 100%)';
@@ -789,7 +784,7 @@ function renderDashboard(container) {
     const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || _leE === 'standby' || _leE === 'expand');
     let enrollBtnHtml = '';
     if (_isInStandby && !isFinished) {
-      enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
+      enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: var(--sp-c-fbbf24,#fbbf24); text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
     } else if (isParticipating && canEnroll) {
       // v1.7.24 — O GRUPO GERAL DO TORNEIO SAIU DAQUI (ordem do dono). Ele ficava
       // colado no "Desinscrever-se", verde, e era o ÚNICO botão de WhatsApp que o
@@ -801,9 +796,9 @@ function renderDashboard(container) {
     } else if (!isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-success hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._dashEnroll('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>`;
     } else if (isParticipating && !canEnroll && !isFinished) {
-      enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: #fef08a; text-transform: uppercase; letter-spacing: 0.5px;">${_t('enroll.enrolled')} ✓</div>`;
+      enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: var(--sp-c-fef08a,#fef08a); text-transform: uppercase; letter-spacing: 0.5px;">${_t('enroll.enrolled')} ✓</div>`;
     } else if (isFinished && (isParticipating || isOrg)) {
-      enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.12); padding: 3px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">🏆 ${isOrg ? _t('dashboard.youOrganized') : _t('dashboard.youParticipated')}</div>`;
+      enrollBtnHtml = `<div style="font-size: 0.65rem; font-weight: 700; color: var(--sp-c-fbbf24,#fbbf24); text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.12); padding: 3px 10px; border-radius: 10px; border: 1px solid rgba(251,191,36,0.25);">🏆 ${isOrg ? _t('dashboard.youOrganized') : _t('dashboard.youParticipated')}</div>`;
     }
 
     const _isFav = typeof window._isFavorite === 'function' && window._isFavorite(t.id);
@@ -817,7 +812,7 @@ function renderDashboard(container) {
     const _pReadFg = _rb ? _rb.fg : '#f1f5f9';
     const _pReadBd = _rb ? _rb.border : 'rgba(255,255,255,0.12)';
     return `
-        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs}${_isOpenEnrollment(t) ? ' data-open-enrollment="1"' : ''} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + bgGradient + ';'} color: ${_cardTextColor}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" >
+        <div class="card mb-3${venuePhotoBg ? ' card-has-photo' : ''}"${vphotoAttrs}${_isOpenEnrollment(t) ? ' data-open-enrollment="1"' : ''} data-search-blob="${window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '')}" style="position: relative; overflow: hidden; ${venuePhotoBg ? venuePhotoBg : 'background: ' + window._spCor(bgGradient, 'background') + ';'} color: ${window._spCor(_cardTextColor, 'color')}; border: 1px solid ${_isLight ? 'rgba(0,0,0,0.08)' : 'transparent'}; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,${_isLight ? '0.06' : '0.1'}); cursor: pointer; transition: transform 0.2s;" onclick="window._dashCardClick(event, '${t.id}')" >
           ${isOrg ? `
              <div style="position: absolute; bottom: 6px; right: 8px; opacity: 0.9; pointer-events: none;" title="${window._genderWord ? window._genderWord(window.AppStore && window.AppStore.currentUser, 'Organizador', 'Organizadora') : 'Organizador'}">
                <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(251,191,36,0.95)"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -841,7 +836,7 @@ function renderDashboard(container) {
                <div style="display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; margin-left: auto;">
                   <div id="dash-regstatus-${t.id}"
                        ${isAberto && t.registrationLimit ? `data-regdeadline-tid="${t.id}" data-regdeadline-ts="${new Date(t.registrationLimit).getTime()}"` : ''}
-                       style="color: ${statusColor}; background: ${statusBg}; padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: ${statusFontWeight}; white-space: nowrap;">
+                       style="color: ${window._spCor(statusColor, 'color')}; background: ${window._spCor(statusBg, 'background')}; padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: ${statusFontWeight}; white-space: nowrap;">
                     ${statusText}
                   </div>
                </div>
@@ -869,9 +864,9 @@ function renderDashboard(container) {
                       style="margin:0;font-size:1.5rem;font-weight:800;color:white;line-height:1.2;flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-word;">
                     ${window._safeHtml(t.name)}
                   </h4>
-                  <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)'};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '❤️' : '♡'}</span>
+                  <span data-fav-id="${t.id}" onclick="window._toggleFavorite('${t.id}', event)" title="${_isFav ? _t('fav.remove') : _t('fav.add')}" style="font-size:1.4rem;cursor:pointer;flex-shrink:0;color:${window._spCor(_isFav ? '#f43f5e' : 'rgba(255,255,255,0.4)', 'color')};transition:color 0.2s;line-height:1;margin-top:2px;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">${_isFav ? '❤️' : '♡'}</span>
                 </div>
-                ${_finDurStr ? `<div style="font-size:0.78rem;color:#fbbf24;font-weight:600;margin-top:4px;">⏱️ durou ${_finDurStr}</div>` : ''}
+                ${_finDurStr ? `<div style="font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;margin-top:4px;">⏱️ durou ${_finDurStr}</div>` : ''}
                 ${/* v2.8.67: enquete ativa → botão brilhante abaixo do nome */ ''}
                 ${(typeof window._opButtonHtml === 'function') ? window._opButtonHtml(t) : ''}
               </div>
@@ -879,7 +874,7 @@ function renderDashboard(container) {
 
             ${t.venueName ? `
             <!-- Local -->
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; margin-top: -0.8rem; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:6px 10px;max-width:100%;' : 'opacity: 0.6;'}">
                <span style="font-size: 1rem;">📍</span>
                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${window._safeHtml(t.venueName)}</span>
             </div>
@@ -887,7 +882,7 @@ function renderDashboard(container) {
 
             <!-- Below Name: Calendário + Data + badge contextual (HOJE/AMANHÃ/Em Xd) + logo do local à direita (v4.0.19) -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
+            <div style="display: ${_pReadBg ? 'inline-flex' : 'flex'}; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; ${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border-radius:10px;padding:7px 11px;align-self:flex-start;' : 'opacity: 0.8;'} flex-wrap: wrap;">
                ${datesGridHtml}
                ${(() => {
                  // Badge de início — aparece em torneios ativos (nao encerrados)
@@ -916,7 +911,7 @@ function renderDashboard(container) {
                    var _bg = _pReadBg ? _solid : (_solid + '2e');
                    var _color = _pReadBg ? '#fff' : _solid;
                    var _bd = _pReadBg ? _solid : (_solid + '55');
-                   return '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;background:' + _bg + ';color:' + _color + ';border:1px solid ' + _bd + ';white-space:nowrap;">' + _label + '</span>';
+                   return '<span style="font-size:0.68rem;font-weight:700;padding:2px 8px;border-radius:10px;background:' + window._spCor(_bg, 'background') + ';color:' + window._spCor(_color, 'color') + ';border:1px solid ' + window._spCor(_bd, 'borda') + ';white-space:nowrap;">' + _label + '</span>';
                  } catch(e) { return ''; }
                })()}
             </div>
@@ -979,7 +974,7 @@ function renderDashboard(container) {
               var _rgb2 = _next.color === '#f59e0b' ? '245,158,11' : _next.color === '#10b981' ? '16,185,129' : '139,92,246';
               var _rbCt2 = (typeof window._photoReadBox === 'function') ? window._photoReadBox() : { bg: 'rgba(0,0,0,0.5)', fg: '#f1f5f9', border: 'rgba(255,255,255,0.12)' };
               var _ctColor2 = _rbCt2.fg; // SEMPRE tarja escura + texto claro → legível em qualquer tema/foto
-              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + _rbCt2.bg + ';border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
+              return '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 14px;background:' + window._spCor(_rbCt2.bg, 'background') + ';border:1px solid rgba(' + _rgb2 + ',0.55);border-radius:12px;">' +
                 '<span style="font-size:1.3rem;">' + _next.icon + '</span>' +
                 '<span style="font-size:0.85rem;font-weight:700;color:' + _ctColor2 + ' !important;">' + _next.label + '</span>' +
                 '<span data-countdown-target="' + _next.ts + '" style="margin-left:auto;font-size:1.1rem;font-weight:900;color:' + _ctColor2 + ' !important;font-variant-numeric:tabular-nums;letter-spacing:0.3px;white-space:nowrap;flex-shrink:0;">' + _countdownText + '</span>' +
@@ -998,7 +993,7 @@ function renderDashboard(container) {
             })()}
 
             <!-- Linha separadora -->
-            <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 1.8rem 0;"></div>
+            <div style="height: 1px; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); margin: 1.8rem 0;"></div>
 
             <!-- Bottom Section -->
             <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; ${_pReadBg ? '' : 'opacity: 0.75;'}">
@@ -1006,7 +1001,7 @@ function renderDashboard(container) {
                <!-- Stats Column -->
                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                    <div style="display: flex; flex-direction: row; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
-                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';' : ''}">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👤</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
@@ -1014,7 +1009,7 @@ function renderDashboard(container) {
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statEnrolled')}</span>
                        </div>
                        ${teamCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';' : ''}">
+                       <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👥</span>
                              <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
@@ -1035,7 +1030,7 @@ function renderDashboard(container) {
                              tarja escura. Opacidade 0.8→0.95: o branco dos irmãos aguenta 0.8, o
                              âmbar rebaixado não. */''}
                        ${_standbyCount > 0 ? `
-                       <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.45);${_pReadBg ? 'background:'+_pReadBg+';color:'+_pReadFg+' !important;' : ''}">
+                       <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.45);${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">⏱️</span>
                              <span class="stat-accent" style="font-size: 1.4rem; font-weight: 800; line-height: 1;">${_standbyCount}</span>
@@ -1050,7 +1045,7 @@ function renderDashboard(container) {
                <!-- Configuração Completa do Torneio (dinâmica, por formato) -->
                ${(typeof window._buildTournamentConfigBox === 'function')
                  ? window._buildTournamentConfigBox(t, { bg: _pReadBg || '', open: false })
-                 : `<div class="info-box" ${_pReadBg ? 'style="background:'+_pReadBg+';color:'+_pReadFg+' !important;border:1px solid '+_pReadBd+';"' : ''}>
+                 : `<div class="info-box" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
                   <div><strong>${_t('dashboard.labelFormat')}:</strong> ${window._formatLabel ? window._formatLabel(t) : t.format}</div>
                   <div><strong>${_t('dashboard.labelAccess')}:</strong> ${publicText}</div>
                </div>`}
@@ -1072,8 +1067,8 @@ function renderDashboard(container) {
                   _html += '<span style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7;">' + _t('dashboard.labelProgress') + '</span>';
                   _html += '<span style="font-size: 0.7rem; font-weight: 700;">' + _prog.pct + '%</span>';
                   _html += '</div>';
-                  _html += '<div style="width: 100%; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">';
-                  _html += '<div style="width: ' + _prog.pct + '%; height: 100%; background: ' + _barColor + '; border-radius: 3px;"></div>';
+                  _html += '<div style="width: 100%; height: 5px; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); border-radius: 3px; overflow: hidden;">';
+                  _html += '<div style="width: ' + _prog.pct + '%; height: 100%; background: ' + window._spCor(_barColor, 'background') + '; border-radius: 3px;"></div>';
                   _html += '</div></div>';
                 }
               }
@@ -1103,8 +1098,8 @@ function renderDashboard(container) {
                   _html += '<div style="font-weight:900;font-size:1.15rem;color:var(--text-bright);letter-spacing:0.02em;">ENQUETE</div>';
                   _html += '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:1px;">' + _pStatusText + ' · ' + _pVotes + '/' + _pTotal + ' ' + _t('dashboard.votes') + '</div>';
                   _html += '</div></div>';
-                  _html += '<div style="text-align:center;background:rgba(0,0,0,0.2);padding:6px 14px;border-radius:10px;">';
-                  _html += '<div style="font-size:1.4rem;font-weight:900;color:#a5b4fc;line-height:1;font-variant-numeric:tabular-nums;">' + _pTimeStr + '</div>';
+                  _html += '<div style="text-align:center;background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));padding:6px 14px;border-radius:10px;">';
+                  _html += '<div style="font-size:1.4rem;font-weight:900;color:var(--sp-c-a5b4fc,#a5b4fc);line-height:1;font-variant-numeric:tabular-nums;">' + _pTimeStr + '</div>';
                   _html += '<div style="font-size:0.55rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">' + _t('dashboard.remaining') + '</div>';
                   _html += '</div></div>';
                   _html += '<div style="margin-top:8px;font-size:0.65rem;color:var(--text-muted);opacity:0.7;">' + _t('enroll.suspended') + '</div>';
@@ -1412,9 +1407,9 @@ function renderDashboard(container) {
       return '<div id="dash-profile-nudge" style="background:linear-gradient(135deg,rgba(239,68,68,0.13),rgba(239,68,68,0.05));border:1px solid rgba(239,68,68,0.4);border-radius:14px;padding:14px 16px;margin-bottom:1rem;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">' +
           '<span style="font-size:1.6rem;flex-shrink:0;line-height:1;">👤</span>' +
           '<div style="flex:1;min-width:220px;">' +
-            '<div style="font-weight:800;color:#fca5a5;font-size:0.92rem;line-height:1.2;">Adicione seu nome ao perfil</div>' +
+            '<div style="font-weight:800;color:var(--sp-c-fca5a5,#fca5a5);font-size:0.92rem;line-height:1.2;">Adicione seu nome ao perfil</div>' +
             '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:4px;line-height:1.45;">' +
-              'Sem um nome no perfil, você aparece como <b style="color:#fca5a5;font-family:monospace;">' + window._safeHtml(_fallbackShown || 'sem nome') + '</b> nos torneios e rankings. ' +
+              'Sem um nome no perfil, você aparece como <b style="color:var(--sp-c-fca5a5,#fca5a5);font-family:monospace;">' + window._safeHtml(_fallbackShown || 'sem nome') + '</b> nos torneios e rankings. ' +
               'Coloque seu nome para que os outros jogadores te reconheçam.' +
             '</div>' +
           '</div>' +
@@ -1464,8 +1459,8 @@ function renderDashboard(container) {
         '<span style="font-size:1.6rem;flex-shrink:0;line-height:1;">🎯</span>' +
         '<div style="flex:1;min-width:220px;">' +
           '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;line-height:1.2;">Complete seu perfil ' + timeLabel + '</div>' +
-          '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px;line-height:1.35;">' + filled + ' de ' + total + ' campos preenchidos · faltam <b style="color:#fbbf24;">' + window._safeHtml(missStr) + '</b></div>' +
-          '<div style="margin-top:7px;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">' +
+          '<div style="font-size:0.76rem;color:var(--text-muted);margin-top:3px;line-height:1.35;">' + filled + ' de ' + total + ' campos preenchidos · faltam <b style="color:var(--sp-c-fbbf24,#fbbf24);">' + window._safeHtml(missStr) + '</b></div>' +
+          '<div style="margin-top:7px;height:5px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border-radius:3px;overflow:hidden;">' +
             '<div style="height:100%;background:linear-gradient(90deg,#fbbf24,#f59e0b);width:' + pct + '%;transition:width 0.4s ease;border-radius:3px;"></div>' +
           '</div>' +
         '</div>' +
@@ -1514,7 +1509,7 @@ function renderDashboard(container) {
         + '</div></div>';
     }).join('');
     return '<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.25);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">'
-      + '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;">🤝 Convites de Dupla (' + items.length + ')</h3>'
+      + '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);letter-spacing:0.04em;text-transform:uppercase;">🤝 Convites de Dupla (' + items.length + ')</h3>'
       + '<div style="display:flex;flex-direction:column;gap:8px;">' + rows + '</div></div>';
   }
 
@@ -1559,8 +1554,8 @@ function renderDashboard(container) {
       var _sf = window._safeHtml || function(s) { return String(s || ''); };
       function markMe(name) {
         return _isMe(name)
-          ? '<b style="color:#e2e8f0;">' + _sf(name) + '</b> <span style="color:#a5b4fc;font-size:0.72em;">(você)</span>'
-          : '<span style="color:#94a3b8;">' + _sf(name) + '</span>';
+          ? '<b style="color:var(--sp-c-e2e8f0,#e2e8f0);">' + _sf(name) + '</b> <span style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72em;">(você)</span>'
+          : '<span style="color:var(--sp-c-94a3b8,#94a3b8);">' + _sf(name) + '</span>';
       }
       function formatTeam(raw) {
         var names = String(raw || '').split(/\s*\/\s*/).filter(Boolean);
@@ -1568,7 +1563,7 @@ function renderDashboard(container) {
       }
       var side1 = formatTeam(p1raw);
       var side2 = formatTeam(p2raw);
-      return side1 + ' <span style="color:#64748b;margin:0 6px;font-weight:500;">vs.</span> ' + side2;
+      return side1 + ' <span style="color:var(--sp-c-64748b,#64748b);margin:0 6px;font-weight:500;">vs.</span> ' + side2;
     }
 
     var pendingForMe = [];   // m.pendingResult e sou time adversário (preciso agir)
@@ -1628,14 +1623,14 @@ function renderDashboard(container) {
           'onclick="event.stopPropagation();try{sessionStorage.setItem(\'sp_scrollToGroup\',\'' +
             String(_grpK).replace(/'/g, '') + '\')}catch(e){}" ' +
           'style="flex-shrink:0;margin-left:auto;align-self:center;font-size:0.62rem;font-weight:700;' +
-          'text-decoration:none;color:#7dd3fc;background:rgba(125,211,252,0.14);' +
+          'text-decoration:none;color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);' +
           'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:3px 9px;line-height:1.2;' +
           'text-transform:none;letter-spacing:0;white-space:nowrap;">Ir para o torneio ›</a>'
         : '';
       return '<div ' + (attr || '') + ' style="' + (inline ? '' : 'grid-column:1/-1;') + 'margin:' + (inline ? '0 0 2px' : '6px 0 -2px') + ';min-width:0;">' +
-        '<div style="border-left:3px solid ' + cor + ';padding-left:8px;display:flex;align-items:center;gap:8px;">' +
+        '<div style="border-left:3px solid ' + window._spCor(cor, 'borda') + ';padding-left:8px;display:flex;align-items:center;gap:8px;">' +
           '<div style="min-width:0;flex:1;">' +
-          '<div style="color:' + cor + ';font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;' +
+          '<div style="color:' + window._spCor(cor, 'color') + ';font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;' +
             'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sf(grupo) + '</div>' +
           (tName ? '<div style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:uppercase;' +
             'letter-spacing:0.03em;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
@@ -1656,7 +1651,7 @@ function renderDashboard(container) {
     // opaco e sombra próprios. Desenho é UM só; o que muda é onde ele mora.
     function _verMaisTag(id, colapsado, extra) {
       return '<span id="' + id + '"' + ((extra && extra.attrs) || '') + ' style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
-        'color:#7dd3fc;background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
+        'color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
         'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;' +
         ((extra && extra.style) || '') + '">' +
         (colapsado ? 'ver mais' : 'ver menos') + '</span>';
@@ -1666,7 +1661,7 @@ function renderDashboard(container) {
     function _verMaisRodape(id, onclick, texto) {
       return '<p style="margin:8px 0 0;text-align:center;">' +
         '<span id="' + id + '" onclick="' + onclick + '" style="display:inline-block;cursor:pointer;user-select:none;' +
-        'font-size:0.7rem;font-weight:700;color:#7dd3fc;background:rgba(125,211,252,0.14);' +
+        'font-size:0.7rem;font-weight:700;color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);' +
         'border:1px solid rgba(125,211,252,0.45);border-radius:999px;padding:4px 12px;line-height:1.2;">' +
         texto + '</span></p>';
     }
@@ -1960,7 +1955,7 @@ function renderDashboard(container) {
       // couberem. O que sai daqui e o mesmo de antes (1 coluna): o 1o paint e o fallback.
       html += '<style>#meus-resultados-section[data-mr-collapsed="1"] #meus-resultados-body > *:not([data-mr-first]){display:none !important;}' +
         '#meus-resultados-section[data-mr-collapsed="1"] [data-mr-first] [data-sp-extra]{display:none !important;}</style>';
-      html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:#a5b4fc;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+      html += '<h3 onclick="window._toggleMyResultsCollapse()" style="margin:0;font-size:0.85rem;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '🏅 Seus últimos resultados' +
         (_mrTotalCards > 1 ? _verMaisTag('mr-toggle-tag', _mrCollapsed) : '') +
         '</h3>';
@@ -2128,23 +2123,23 @@ function renderDashboard(container) {
         var _cor = isMe ? '#f1f5f9' : '#94a3b8';
         var _peso = isMe ? '700' : '500';
         var _interno = '<span' + _uidAttr + '>' + _sf(_disp) + '</span>' +
-          (isMe ? ' <span style="font-size:0.65em;color:#818cf8;font-weight:800;">(você)</span>' : '');
+          (isMe ? ' <span style="font-size:0.65em;color:var(--sp-c-818cf8,#818cf8);font-weight:800;">(você)</span>' : '');
         if (!_geoMini) {
           return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl +
-            '<span style="font-size:0.8rem;font-weight:' + _peso + ';color:' + _cor + ';">' + _interno + '</span></div>';
+            '<span style="font-size:0.8rem;font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + '</span></div>';
         }
         var nameEl = '<div class="sp-mc-box" style="--sp-box-h:' + _geoMini.boxH + 'rem">' +
           '<span class="sp-name-fit sp-mc-nm" data-fit-group="' + _grupoMini + '"' +
           ' data-maxrem="' + _geoMini.maxRem + '" data-minrem="' + _geoMini.minRem + '"' +
-          ' style="font-weight:' + _peso + ';color:' + _cor + ';">' + _interno + '</span></div>';
+          ' style="font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + '</span></div>';
         return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl + nameEl + '</div>';
       }
       // Time: jogadores EMPILHADOS verticalmente (um em cima do outro)
       function _teamHtml(teamStr, uids) {
         // v3.1.26: lado "a definir" (TBD/vazio) — placeholder discreto, sem avatar.
         if (!teamStr || teamStr === 'TBD') {
-          return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:#64748b;font-style:italic;font-size:0.82rem;">' +
-            '<span style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px dashed rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9rem;font-style:normal;">⏳</span>' +
+          return '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;color:var(--sp-c-64748b,#64748b);font-style:italic;font-size:0.82rem;">' +
+            '<span style="width:28px;height:28px;border-radius:50%;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px dashed rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.9rem;font-style:normal;">⏳</span>' +
             '<span>a definir</span></div>';
         }
         var parts = String(teamStr).split(/\s*\/\s*/).filter(Boolean);
@@ -2158,9 +2153,9 @@ function renderDashboard(container) {
       var _p1Uids = (Array.isArray(item.m.team1Uids) && item.m.team1Uids.length) ? item.m.team1Uids : (item.m.p1Uid ? [item.m.p1Uid] : null);
       var _p2Uids = (Array.isArray(item.m.team2Uids) && item.m.team2Uids.length) ? item.m.team2Uids : (item.m.p2Uid ? [item.m.p2Uid] : null);
 
-      var rowStyle = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);margin-bottom:4px;';
-      var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 6px;-moz-appearance:textfield;';
-      var scorePlaceholder = '<div style="width:52px;height:30px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#475569;flex-shrink:0;">0</div>';
+      var rowStyle = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));margin-bottom:4px;';
+      var scoreInputStyle = 'width:52px;text-align:center;font-size:0.95rem;font-weight:700;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));color:var(--text-bright);border-radius:6px;padding:4px 6px;-moz-appearance:textfield;';
+      var scorePlaceholder = '<div style="width:52px;height:30px;border-radius:6px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:#475569;flex-shrink:0;">0</div>';
 
       // opts.pendingScores = {p1, p2} → mostra placar âmbar read-only (estado pendente)
       // opts.headerBtns → HTML dos botões no header (substitui Ao Vivo + Confirmar)
@@ -2174,7 +2169,7 @@ function renderDashboard(container) {
 
       // ⭐ 2.0.35: o TAMANHO do número sai da classe canônica (.sp-mc-num → --sp-num-fs), a
       // mesma do card da chave. Aqui sobra só o que é DESTE estado: âmbar e itálico.
-      var pendingScoreStyle = 'color:#fbbf24;font-style:italic;flex-shrink:0;';
+      var pendingScoreStyle = 'color:var(--sp-c-fbbf24,#fbbf24);font-style:italic;flex-shrink:0;';
 
       // ⚠️ CAMPOS DO TIE-BREAK também aqui. Este card já chamava _highlightWinner no oninput,
       // mas NUNCA renderizava `tb1-`/`tb2-` — e a função começa com `if (tb1El && tb2El)`, ou
@@ -2241,14 +2236,14 @@ function renderDashboard(container) {
       return '<div style="flex:1 1 18.75rem;min-width:0;max-width:100%;display:flex;flex-direction:column;gap:0.6rem;">' +
         (opts.hideFaseHeader ? '' :
           '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<h4 style="color:' + faseColor + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + faseColor + ';padding-left:8px;flex:1;">' +
+            '<h4 style="color:' + window._spCor(faseColor, 'color') + ';font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;margin:0;border-left:3px solid ' + window._spCor(faseColor, 'borda') + ';padding-left:8px;flex:1;">' +
               (faseLower.indexOf('final') !== -1 ? '🏆 ' : '') + _sf(faseStr) +
               '<span style="font-weight:400;color:var(--text-muted);font-size:0.65rem;margin-left:6px;">' + _sf(item.tName) + '</span>' +
             '</h4>' +
           '</div>') +
-        '<div id="card-' + mId + '" style="background:' + cardBgStr + ';border:2px solid ' + cardBorderStr + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
-          '<div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
-            '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
+        '<div id="card-' + mId + '" style="background:' + window._spCor(cardBgStr, 'background') + ';border:2px solid ' + window._spCor(cardBorderStr, 'borda') + ';border-radius:12px;padding:14px;box-shadow:' + cardShadow + ';">' +
+          '<div class="btn-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:8px;gap:8px;flex-wrap:wrap;">' +
+            '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;flex-shrink:0;display:inline-flex;align-items:center;">' + (item.m.isMonarch ? '<span style="font-size:1.05rem;line-height:1;margin-right:5px;">👑</span>' : '') + _sf(_monarchBoxLabel || opts.boxLabelOverride || matchLabel) + '</span>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;min-width:0;margin-left:auto;">' +
               '<div id="header-btns-' + mId + '" style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">' + finalHeaderBtns + '</div>' +
               goToBtn +
@@ -2264,10 +2259,10 @@ function renderDashboard(container) {
     // ── Aguardando minha aprovação ──
     if (pendingForMe.length > 0) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
-      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
+      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.04em;">⏳ Aguardando sua aprovação (' + pendingForMe.length + ')</p>';
       _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
-      var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
+      var _pendTag = '<span style="font-size:0.58rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:0.03em;flex-shrink:0;">PENDENTE</span>';
       var _btnStyle = function(r,g,b) { return 'border:1px solid rgba('+r+','+g+','+b+',0.4);color:rgba('+r+','+g+','+b+',1);border-radius:6px;padding:2px 7px;font-size:0.65rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;background:rgba('+r+','+g+','+b+',0.15);'; };
       pendingForMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
@@ -2298,16 +2293,16 @@ function renderDashboard(container) {
     // ── Resultado proposto aguardando adversário ──
     if (pendingByMe.length > 0) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
-      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
+      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;letter-spacing:0.04em;">🕐 Aguardando confirmação do adversário (' + pendingByMe.length + ')</p>';
       _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
-      var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
+      var _pendTag2 = '<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;">PENDENTE</span>';
       pendingByMe.forEach(function(item) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
         var mid = String(item.m.id || '');
         var btns = _pendTag2 +
-          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#a78bfa;border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
+          '<button data-pending-action="edit" data-tid="' + _sf(item.tId) + '" data-mid="' + _sf(mid) + '" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:var(--sp-c-a78bfa,#a78bfa);border-radius:6px;padding:3px 8px;font-size:0.7rem;font-weight:700;cursor:pointer;margin-left:4px;">✏️ Editar</button>';
         html += '<div data-mr-card="1"' + _spCard() + ' style="min-width:0;">' + _miniBracketCard(item, false, {
           pendingScores: {p1: s1, p2: s2},
           headerBtns: btns,
@@ -2322,10 +2317,10 @@ function renderDashboard(container) {
     // ── Em disputa — aguardando organizador (Fase 4) ──
     if (disputedMatches.length > 0) {
       html += '<div' + _mrBlockAttrs() + ' style="margin-bottom:10px;">';
-      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
+      html += '<p style="margin:0 0 8px;font-size:0.72rem;font-weight:700;color:var(--sp-c-f87171,#f87171);text-transform:uppercase;letter-spacing:0.04em;">🚨 Em disputa — aguardando organizador (' + disputedMatches.length + ')</p>';
       _spReset();
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">';
-      var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:#f87171;background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
+      var _dispTag = '<span style="font-size:0.6rem;font-weight:800;color:var(--sp-c-f87171,#f87171);background:rgba(239,68,68,0.15);padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">EM DISPUTA</span>';
       disputedMatches.forEach(function(item) {
         var pr = item.m.pendingResult || {};
         var s1 = pr.scoreP1, s2 = pr.scoreP2;
@@ -2392,10 +2387,10 @@ function renderDashboard(container) {
 
       // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
       _upHtml += '<div id="proximos-jogos-section" style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.18);border-radius:14px;padding:14px 16px;margin-bottom:1rem;">';
-      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:#38bdf8;letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Seu próximo jogo</h3>';
+      _upHtml += '<h3 style="margin:0 0 12px;font-size:0.85rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);letter-spacing:0.04em;text-transform:uppercase;display:flex;align-items:center;gap:8px;">⚔️ Seu próximo jogo</h3>';
       _upHtml += '<div style="border-left:3px solid #818cf8;padding-left:10px;margin-bottom:10px;">' +
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
-        (_metaStr ? '<div style="color:#a5b4fc;font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
+        (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
       '</div>';
       _upHtml += _miniBracketCard(_ng, _ngEntry.canLaunch, { hideFaseHeader: true, boxLabelOverride: _boxU });
       _upHtml += '</div>'; // fecha #proximos-jogos-section
@@ -2493,7 +2488,7 @@ function renderDashboard(container) {
           var _posCol = _fp === 1 ? '#fbbf24' : _fp === 2 ? '#cbd5e1' : _fp === 3 ? '#d97706' : '#94a3b8';
           // v2.0.3: mais destaque — "2º lugar" + medalha, sem "Você terminou em",
           // fonte ~2x maior.
-          _posBadge = '<div style="font-size:1.45rem;font-weight:900;color:' + _posCol + ';margin:4px 0 8px;display:flex;align-items:center;gap:8px;line-height:1.1;">' +
+          _posBadge = '<div style="font-size:1.45rem;font-weight:900;color:' + window._spCor(_posCol, 'color') + ';margin:4px 0 8px;display:flex;align-items:center;gap:8px;line-height:1.1;">' +
             '<span>' + _fp + 'º lugar</span>' +
             '<span style="font-size:1.6rem;">' + _posMedal + '</span></div>';
         }
@@ -2509,12 +2504,12 @@ function renderDashboard(container) {
         var _body = _posBadge +
           '<div onclick="window.location.hash=\'#bracket/' + _esc2(item.tId) + '\'" style="cursor:pointer;background:var(--bg-card);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">' +
             // Header: label + badge resultado
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:5px;">' +
-              '<span style="font-size:0.7rem;font-weight:700;color:#38bdf8;text-transform:uppercase;">' + _sf(_boxLabel) + '</span>' +
-              '<span style="font-size:0.75rem;font-weight:800;color:' + resultColor + ';">' + resultLabel + '</span>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding-bottom:5px;">' +
+              '<span style="font-size:0.7rem;font-weight:700;color:var(--sp-c-38bdf8,#38bdf8);text-transform:uppercase;">' + _sf(_boxLabel) + '</span>' +
+              '<span style="font-size:0.75rem;font-weight:800;color:' + window._spCor(resultColor, 'color') + ';">' + resultLabel + '</span>' +
             '</div>' +
             // P1 row com placar
-            '<div style="' + rowStyle2 + (p1IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:rgba(255,255,255,0.02);') + 'justify-content:space-between;">' +
+            '<div style="' + rowStyle2 + (p1IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
               (function(){
                 var parts3 = String(m2.p1||'').split(/\s*\/\s*/).filter(Boolean);
                 var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
@@ -2525,16 +2520,16 @@ function renderDashboard(container) {
                   var isMe3=_isMe(n);
                   var _u3=(Array.isArray(m2.team1Uids)&&m2.team1Uids[_pi])||'';
                   var av3=window._personAvatarHtml(_u3, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:'+(isMe3?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:' + window._spCor((isMe3?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:var(--sp-c-818cf8,#818cf8);">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:'+_corPlacar2(p1IsWinner)+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
+                var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p1IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
                 return ph+sc3;
               })() +
             '</div>' +
             '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
             // P2 row com placar
-            '<div style="' + rowStyle2 + (p2IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:rgba(255,255,255,0.02);') + 'justify-content:space-between;">' +
+            '<div style="' + rowStyle2 + (p2IsWinner ? 'background:rgba(16,185,129,0.12);border-left:3px solid #10b981;' : 'background:var(--sp-g-255-255-255-002,rgba(255,255,255,0.02));') + 'justify-content:space-between;">' +
               (function(){
                 var parts4 = String(m2.p2||'').split(/\s*\/\s*/).filter(Boolean);
                 var ph = '<div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">';
@@ -2545,10 +2540,10 @@ function renderDashboard(container) {
                   var isMe4=_isMe(n);
                   var _u4=(Array.isArray(m2.team2Uids)&&m2.team2Uids[_pi])||'';
                   var av4=window._personAvatarHtml(_u4, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:'+(isMe4?'#f1f5f9':'#94a3b8')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:#818cf8;">(você)</span>':'')+'</span></div>';
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:' + window._spCor((isMe4?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:var(--sp-c-818cf8,#818cf8);">(você)</span>':'')+'</span></div>';
                 });
                 ph+='</div>';
-                var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:'+_corPlacar2(p2IsWinner)+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';
+                var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p2IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';
                 return ph+sc4;
               })() +
             '</div>' +
@@ -2703,7 +2698,7 @@ function renderDashboard(container) {
         return '<div data-nov-card="1"' + _spCard() + ' style="min-width:0;">' +
           (_quando
             ? '<div data-nov-quando="1" style="display:flex;justify-content:flex-end;margin-bottom:5px;padding:0 2px;">' +
-                '<span style="font-size:0.64rem;color:#64748b;font-weight:600;">' + _sf(_quando) + '</span>' +
+                '<span style="font-size:0.64rem;color:var(--sp-c-64748b,#64748b);font-weight:600;">' + _sf(_quando) + '</span>' +
               '</div>'
             : '') + _card +
         '</div>';
@@ -2802,7 +2797,7 @@ function renderDashboard(container) {
         '</div>';
       }
       _novHtml += '<h3 id="nov-h3" onclick="window._toggleNovidadesCollapse()" style="margin:0;' +
-        'font-size:0.85rem;font-weight:700;color:#fbbf24;letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
+        'font-size:0.85rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);letter-spacing:0.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:8px;user-select:none;" title="Mostrar/ocultar">' +
         '📣 Novidades no seu torneio' +
         // ⚠️ O CALÇO. A pílula saiu do fluxo do cabeçalho (foi pro trilho sticky), então o
         // título passou a correr POR BAIXO dela — medido na tela estreita: "NOVIDADES NO SEU
@@ -2872,7 +2867,7 @@ function renderDashboard(container) {
       _novHtml += '</div>';
       // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
       if (_novTotal > _NOV_MAX) {
-        _novHtml += '<p data-nov-extra="1" style="margin:8px 0 0;font-size:0.68rem;color:#64748b;text-align:center;">' +
+        _novHtml += '<p data-nov-extra="1" style="margin:8px 0 0;font-size:0.68rem;color:var(--sp-c-64748b,#64748b);text-align:center;">' +
           'mostrando os ' + _NOV_MAX + ' mais recentes de ' + _novTotal + '</p>';
       }
       if (_novList.length > 1) {
@@ -3051,7 +3046,7 @@ function renderDashboard(container) {
       const _bottom = _allRunning.filter(function(t) { return !_runsThisWeek(t); }).sort(sortByRecency);
       const _sectionHtml = function(title, items, marginTop) {
         return '<div style="' + (marginTop ? 'margin-top:1.25rem;' : 'margin-bottom:1.25rem;') + '">' +
-            '<div style="font-weight:800;font-size:0.95rem;color:#10b981;margin-bottom:0.6rem;border-left:3px solid #10b981;padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' +
+            '<div style="font-weight:800;font-size:0.95rem;color:var(--sp-c-10b981,#10b981);margin-bottom:0.6rem;border-left:3px solid #10b981;padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' +
             _renderTGroup(items) +
           '</div>';
       };
@@ -3083,7 +3078,7 @@ function renderDashboard(container) {
       filtered = filtered.filter(function(t) { return !_awaitIds.has(String(t.id)); });
       awaitingStartHtml =
         '<div style="margin-bottom:1.25rem;">' +
-          '<div style="font-weight:800;font-size:0.95rem;color:#f59e0b;margin-bottom:0.6rem;border-left:3px solid #f59e0b;padding-left:10px;">⏳ Sorteados — aguardando início <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _awaitList.length + ')</span></div>' +
+          '<div style="font-weight:800;font-size:0.95rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:0.6rem;border-left:3px solid #f59e0b;padding-left:10px;">⏳ Sorteados — aguardando início <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _awaitList.length + ')</span></div>' +
           _renderTGroup(_awaitList) +
         '</div>';
     }
@@ -3103,7 +3098,7 @@ function renderDashboard(container) {
         filtered = filtered.filter(function(t) { return !(_favSet.has(String(t.id)) && t.status !== 'finished'); });
         favoritesBandHtml =
           '<div style="margin-bottom:1.25rem;">' +
-            '<div style="font-weight:800;font-size:0.95rem;color:#fb7185;margin-bottom:0.6rem;border-left:3px solid #fb7185;padding-left:10px;">❤️ Favoritos <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _favList.length + ')</span></div>' +
+            '<div style="font-weight:800;font-size:0.95rem;color:var(--sp-c-fb7185,#fb7185);margin-bottom:0.6rem;border-left:3px solid #fb7185;padding-left:10px;">❤️ Favoritos <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + _favList.length + ')</span></div>' +
             _renderTGroup(_favList) +
           '</div>';
       }
@@ -3218,7 +3213,7 @@ function renderDashboard(container) {
       ? visibleActive.map(t => renderTournamentCard(t, '')).join('')
       : _vazioHtml;
     if (activeList.length > visibleActive.length) {
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: activeList.length - visibleActive.length}) + '</button></div>';
     }
   } else {
     // When viewing "encerrados" filter, sort user's tournaments first
@@ -3273,7 +3268,7 @@ function renderDashboard(container) {
             '<button class="btn hover-lift" onclick="if(typeof window._openCasualMatch===\'function\')window._openCasualMatch()" style="background:linear-gradient(135deg,#38bdf8,#0ea5e9);color:#fff;border:none;font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">⚡ Partida Casual</button>' +
             '<button class="btn hover-lift" onclick="if(typeof openModal===\'function\')openModal(\'modal-quick-create\')" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">🏆 Criar torneio</button>' +
             '<button class="btn hover-lift" title="Procure lugares para seus jogos e marque presença" onclick="window.location.hash=\'#place\'" style="background:linear-gradient(135deg,#FFD700,#DAA520);color:#1a0f00;border:none;font-weight:800;padding:10px 18px;font-size:0.85rem;border-radius:10px;">📍 Presença</button>' +
-            '<button class="btn hover-lift" onclick="window.location.hash=\'#explore\'" style="background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">👥 Encontrar amigos</button>' +
+            '<button class="btn hover-lift" onclick="window.location.hash=\'#explore\'" style="background:rgba(99,102,241,0.2);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.4);font-weight:700;padding:10px 18px;font-size:0.85rem;border-radius:10px;">👥 Encontrar amigos</button>' +
           '</div>' +
           '<div style="margin-top:1.25rem;font-size:0.78rem;color:var(--text-muted);">Dica: se já existe um torneio público na sua cidade, ele vai aparecer aqui automaticamente.</div>' +
         '</div>';
@@ -3281,11 +3276,11 @@ function renderDashboard(container) {
       filteredHtml = (runningBandHtml || runningBottomHtml || favoritesBandHtml || awaitingStartHtml) ? '' : '<div style="text-align:center;padding:2rem;color:var(--text-muted);opacity:0.6;">' + _t('tournament.emptyState') + '</div>';
     }
     if (_sortedFiltered.length > visibleItems.length) {
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._dashPage=(window._dashPage||1)+1;window._dashRerender();" class="btn hover-lift" style="background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('dashboard.loadMore', {count: _sortedFiltered.length - visibleItems.length}) + '</button></div>';
     } else if (curFilter === 'abertos' && window.AppStore && window.AppStore._publicDiscoveryHasMore) {
       // When viewing the public discovery feed and the client has rendered
       // everything loaded, offer to fetch the next server page via cursor.
-      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._loadMoreDiscovery()" class="btn hover-lift" style="background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">🔍 ' + _t('dashboard.discoverMore') + '</button></div>';
+      filteredHtml += '<div style="grid-column:1/-1;text-align:center;padding:1rem;"><button onclick="window._loadMoreDiscovery()" class="btn hover-lift" style="background:rgba(16,185,129,0.15);color:var(--sp-c-6ee7b7,#6ee7b7);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:10px 28px;font-weight:600;font-size:0.85rem;cursor:pointer;">🔍 ' + _t('dashboard.discoverMore') + '</button></div>';
     }
     // Seção de encerrados para filtros organizados/participando (v2.2.7)
   }
@@ -3337,7 +3332,7 @@ function renderDashboard(container) {
       var statusBadgeBgRgb = statusColor === '#4ade80' ? '16,185,129' : statusColor === '#60a5fa' ? '96,165,250' : '148,163,184';
       // A linha compacta é um <a> de verdade (o href navega sozinho); aqui só entra o
       // "Abrindo o torneio…" — a espera depois do toque é a MESMA do card grande.
-      return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + _rowBg + ';border:1px solid ' + _rowBd + ';text-decoration:none;color:inherit;transition:background 0.2s;" onclick="event.preventDefault();if(window._navTorneioComAviso)window._navTorneioComAviso(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', event);else window.location.hash=\'#tournaments/' + t.id + '\';" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
+      return '<a href="#tournaments/' + t.id + '" class="compact-row" data-search-blob="' + window._safeHtml(window._tournamentSearchBlob ? window._tournamentSearchBlob(t) : '') + '" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:' + window._spCor(_rowBg, 'background') + ';border:1px solid ' + window._spCor(_rowBd, 'borda') + ';text-decoration:none;color:inherit;transition:background 0.2s;" onclick="event.preventDefault();if(window._navTorneioComAviso)window._navTorneioComAviso(\'' + String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\', event);else window.location.hash=\'#tournaments/' + t.id + '\';" onmouseover="this.style.background=\'' + _rowBgH + '\'" onmouseout="this.style.background=\'' + _rowBg + '\'">' +
         // 1.9.50: `src` vazio + marca — o hidratador põe a base64 depois que a linha
         // existe. Antes, cada linha carregava até 111 KB de texto dentro do HTML.
         (window._tourLogoSrc(t) ? '<img data-tlogo-tid="' + window._safeHtml(String(t.id)) + '" alt="" class="compact-logo" style="width:36px;height:36px;border-radius:' + window._tournamentLogoRadius(t) + ';object-fit:cover;flex-shrink:0;">' : '<div class="compact-logo" style="width:36px;height:36px;border-radius:8px;background:rgba(99,102,241,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">' + (getSportIcon(t.sport)) + '</div>') +
@@ -3353,9 +3348,9 @@ function renderDashboard(container) {
           '<div class="compact-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
             (t.isSandbox ? '<span style="font-size:0.62rem;font-weight:700;padding:2px 6px;border-radius:5px;background:#b91c1c;color:#fff;letter-spacing:0.5px;white-space:nowrap;">🧪 SB</span>' : '') +
             '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + pCount + '</span>' +
-            (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + (prog.pct === 100 ? '#10b981' : '#f59e0b') + ';">' + prog.pct + '%</span>' : '') +
-            '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + statusColor + ';white-space:nowrap;">' + statusText + '</span>' +
-            (isOrg ? '<span style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,0.15);color:#fbbf24;">' + _t('auth.orgShort') + '</span>' : '') +
+            (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + window._spCor((prog.pct === 100 ? '#10b981' : '#f59e0b'), 'color') + ';">' + prog.pct + '%</span>' : '') +
+            '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + window._spCor(statusColor, 'color') + ';white-space:nowrap;">' + statusText + '</span>' +
+            (isOrg ? '<span style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);">' + _t('auth.orgShort') + '</span>' : '') +
           '</div>' +
         '</div>' +
       '</a>';
@@ -3418,7 +3413,7 @@ function renderDashboard(container) {
     // fica CENTRALIZADA — que foi exatamente o motivo de a v0.17.50 ter saído do
     // grid auto-fit, onde o item órfão colava à esquerda. `min-width:80px` segue
     // como piso: em tela muito estreita o wrap cai pra 2 sozinho.
-    return `<div style="flex:1 1 calc((100% - 1rem) / 3);min-width:80px;background:${active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)'};padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
+    return `<div style="flex:1 1 calc((100% - 1rem) / 3);min-width:80px;background:${window._spCor(active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)', 'background')};padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
       <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
       <span style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
       <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};${_corta}">${label}</h3>
@@ -3578,7 +3573,7 @@ function renderDashboard(container) {
     var pct = Math.round(w / total * 100);
     return {
       display: String(total),
-      subtitle: '<span style="color:#22c55e;">' + w + 'V</span> · <span style="color:#ef4444;">' + l + 'D</span> · ' + pct + '%',
+      subtitle: '<span style="color:var(--sp-c-22c55e,#22c55e);">' + w + 'V</span> · <span style="color:var(--sp-c-ef4444,#ef4444);">' + l + 'D</span> · ' + pct + '%',
       title: w + 'V · ' + l + 'D · ' + pct + '% aproveitamento — clique pra ver detalhes'
     };
   }
@@ -3751,15 +3746,15 @@ function renderDashboard(container) {
                Sem isso, o texto não quebrava E era cortado pelo overflow:hidden.
                Combinação completa: display:block; width:100%; white-space:normal
                + overflow:hidden no botão (defense-in-depth). -->
-          <button class="btn btn-cta hover-lift" id="btn-casual-match" data-ensina style="background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
+          <button class="btn btn-cta hover-lift" id="btn-casual-match" data-ensina style="background:linear-gradient(135deg,#38bdf8,#0ea5e9); color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid var(--sp-b-255-255-255-035,rgba(255,255,255,0.35)); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(typeof window._openCasualMatch==='function')window._openCasualMatch();">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">⚡</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.casualMatch')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" data-ensina style="background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
+          <button class="btn btn-cta hover-lift" id="btn-create-tournament-in-box" data-ensina style="background: #1e40af; color: #ffffff; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 700; border-radius: 14px; border: 1px solid var(--sp-b-255-255-255-035,rgba(255,255,255,0.35)); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#1e40af'" onclick="if(typeof openModal==='function')openModal('modal-quick-create');">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">🏆</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">${_t('dashboard.newTournament')}</span>
           </button>
-          <button class="btn btn-cta hover-lift" id="btn-place" data-ensina title="Procure lugares para seus jogos e marque presença" style="background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid rgba(255,255,255,0.35); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(window._marcarFamiliaridade)window._marcarFamiliaridade('presenca'); window.location.hash='#place'">
+          <button class="btn btn-cta hover-lift" id="btn-place" data-ensina title="Procure lugares para seus jogos e marque presença" style="background:linear-gradient(135deg,#FFD700,#DAA520); color: #1a0f00; flex:1;min-width:0; min-height: calc(var(--sp-u) * 5.6); font-size: calc(var(--sp-u) * 1.05); font-weight: 800; border-radius: 14px; border: 1px solid var(--sp-b-255-255-255-035,rgba(255,255,255,0.35)); letter-spacing: 0.02em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;overflow:hidden;" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter=''" onclick="if(window._marcarFamiliaridade)window._marcarFamiliaridade('presenca'); window.location.hash='#place'">
             <span style="font-size:calc(var(--sp-u) * 1.9);line-height:1;">📍</span>
             <span style="line-height:1.15;text-align:center;width:100%;display:block;white-space:normal;">Presença</span>
           </button>
@@ -3769,16 +3764,16 @@ function renderDashboard(container) {
              saiu por ora (volta quando reativarmos o plano Pro). -->
         <!-- Linha: Convidar + Pessoas -->
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center;">
-          <button id="btn-invite-app" data-ensina class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="background: #7c3aed; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">✉️ ${_t('invite.inviteFriends')}</button>
-          <button id="btn-people" data-ensina class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
+          <button id="btn-invite-app" data-ensina class="btn btn-shine hover-lift" title="${_t('invite.appQrTitle')}" style="background: #7c3aed; color: #fff; border: 1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3)); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#invite'">✉️ ${_t('invite.inviteFriends')}</button>
+          <button id="btn-people" data-ensina class="btn btn-shine hover-lift" title="Encontre jogadores e expanda sua rede" style="background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; border: 1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3)); font-size: 0.92rem; font-weight: 600; padding: 0 20px; height: 54px; border-radius: 12px;" onclick="window.location.hash='#explore'">👥 ${_t('dashboard.people') || 'Pessoas'}</button>
         </div>
         <!-- Linha: Ler QR Code + Fale com o Desenvolvedor -->
         <div style="display:flex;justify-content:center;gap:10px;width:100%;flex-wrap:wrap;">
-          <button id="btn-scan-qr" data-ensina class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid rgba(255,255,255,0.3);font-size:0.92rem;font-weight:700;height:58px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;gap:9px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
+          <button id="btn-scan-qr" data-ensina class="btn btn-shine hover-lift" aria-label="Ler QR Code" title="Leia um QR code para entrar em uma partida casual ou em um torneio" style="background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));font-size:0.92rem;font-weight:700;height:58px;padding:0 18px;border-radius:14px;display:inline-flex;align-items:center;gap:9px;letter-spacing:0.01em;" onclick="if(typeof window._openScanQR==='function')window._openScanQR();">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0;"><rect x="3" y="3" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5.4" y="5.4" width="2.2" height="2.2" rx="0.4"/><rect x="14" y="3" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="16.4" y="5.4" width="2.2" height="2.2" rx="0.4"/><rect x="3" y="14" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="5.4" y="16.4" width="2.2" height="2.2" rx="0.4"/><rect x="13.5" y="13.5" width="2" height="2" rx="0.3"/><rect x="17.5" y="13.5" width="2" height="2" rx="0.3"/><rect x="15.5" y="15.5" width="2" height="2" rx="0.3"/><rect x="19.5" y="15.6" width="1.5" height="1.5" rx="0.3"/><rect x="13.5" y="17.5" width="2" height="2" rx="0.3"/><rect x="17.5" y="17.5" width="2" height="2" rx="0.3"/><rect x="19.5" y="19.5" width="1.5" height="1.5" rx="0.3"/></svg>
             <span style="display:flex;flex-direction:column;line-height:1.08;text-align:left;white-space:nowrap;"><span>Ler</span><span>QR Code</span></span>
           </button>
-          ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'height:58px;padding:0 18px;font-size:0.92rem;letter-spacing:0.01em;border:1px solid rgba(255,255,255,0.25);' }) : ''}
+          ${(typeof window._devWhatsAppBtnHtml === 'function') ? window._devWhatsAppBtnHtml({ twoLine: true, extra: 'height:58px;padding:0 18px;font-size:0.92rem;letter-spacing:0.01em;border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));' }) : ''}
         </div>
         <!-- Linha: Apoie -->
         <!-- 1.9.91 — o "Baixar na App Store" SAIU daqui. Ordem do dono: "na herobox
@@ -3792,7 +3787,7 @@ function renderDashboard(container) {
              (Sem crases neste comentário: ele mora DENTRO de um template literal, onde a
              crase fecha a string e o texto vira código — trava própria pega isso.) -->
         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: -2px;">
-          <button id="btn-support-pix" class="btn hover-lift" title="${_t('common.support')}" style="background: #047857; color: #fff; border: 1px solid rgba(255,255,255,0.3); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window.location.hash='#support'">💚 ${_t('common.support')}</button>
+          <button id="btn-support-pix" class="btn hover-lift" title="${_t('common.support')}" style="background: #047857; color: #fff; border: 1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3)); font-size: 0.78rem; font-weight: 600; padding: 0 14px; height: 34px; border-radius: 9px; opacity: 0.9;" onclick="window.location.hash='#support'">💚 ${_t('common.support')}</button>
         </div>
       </div>
 
@@ -3937,9 +3932,9 @@ function renderDashboard(container) {
         if (!items || items.length === 0) return '';
         var _cards = _renderTGroup(items);
         if (collapsed) {
-          return '<details style="margin-top:1rem;"' + _dashDetailsAttr('scoreplace_dash_sec_' + title.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24), false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.92rem;color:' + color + ';padding:8px 0;user-select:none;">' + title + ' (' + items.length + ')</summary><div style="margin-top:0.75rem;">' + _cards + '</div></details>';
+          return '<details style="margin-top:1rem;"' + _dashDetailsAttr('scoreplace_dash_sec_' + title.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 24), false) + '><summary style="cursor:pointer;font-weight:700;font-size:0.92rem;color:' + window._spCor(color, 'color') + ';padding:8px 0;user-select:none;">' + title + ' (' + items.length + ')</summary><div style="margin-top:0.75rem;">' + _cards + '</div></details>';
         }
-        return '<div style="margin-top:1.25rem;"><div style="font-weight:800;font-size:0.95rem;color:' + color + ';margin-bottom:0.5rem;border-left:3px solid ' + color + ';padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' + _cards + '</div>';
+        return '<div style="margin-top:1.25rem;"><div style="font-weight:800;font-size:0.95rem;color:' + window._spCor(color, 'color') + ';margin-bottom:0.5rem;border-left:3px solid ' + window._spCor(color, 'borda') + ';padding-left:10px;">' + title + ' <span style="font-weight:500;color:var(--text-muted);font-size:0.78rem;">(' + items.length + ')</span></div>' + _cards + '</div>';
       };
       return '<div style="margin-top:0.5rem;">' +
         _interestNote +
@@ -4778,7 +4773,7 @@ function _hydrateCasualLinkWidget() {
         var safeId = (n._id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var organizer = _safe(n.senderName || n.senderEmail || 'O organizador');
         var roomBadge = n.casualRoomCode
-          ? ' · <span style="font-family:monospace;color:#fbbf24;letter-spacing:1px;font-size:0.78rem;">' + _safe(n.casualRoomCode) + '</span>'
+          ? ' · <span style="font-family:monospace;color:var(--sp-c-fbbf24,#fbbf24);letter-spacing:1px;font-size:0.78rem;">' + _safe(n.casualRoomCode) + '</span>'
           : '';
 
         return '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;' +
@@ -4786,7 +4781,7 @@ function _hydrateCasualLinkWidget() {
           'border:1px solid rgba(251,191,36,0.45);border-radius:14px;flex-wrap:wrap;">' +
           '<span style="font-size:1.4rem;flex-shrink:0;margin-top:2px;">🤝</span>' +
           '<div style="flex:1;min-width:180px;">' +
-            '<div style="font-weight:800;color:#fbbf24;font-size:0.92rem;margin-bottom:4px;">Você jogou esta partida?</div>' +
+            '<div style="font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.92rem;margin-bottom:4px;">Você jogou esta partida?</div>' +
             '<div style="font-size:0.82rem;color:var(--text-bright);margin-bottom:10px;line-height:1.45;">' +
               organizer + ' sugeriu que <b>' + guestName + '</b>' + sportLabel + roomBadge +
               ' era você. Confirme para vincular as estatísticas ao seu perfil.' +
@@ -4800,7 +4795,7 @@ function _hydrateCasualLinkWidget() {
               '</button>' +
               '<button onclick="window._dashConfirmCasualLink(\'' + safeId + '\', false)" ' +
                 'style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);' +
-                'color:#f87171;border-radius:8px;padding:7px 16px;font-size:0.8rem;font-weight:700;cursor:pointer;">' +
+                'color:var(--sp-c-f87171,#f87171);border-radius:8px;padding:7px 16px;font-size:0.8rem;font-weight:700;cursor:pointer;">' +
                 '❌ Não, era outra pessoa' +
               '</button>' +
             '</div>' +
@@ -4878,7 +4873,7 @@ function _hydrateMyActivePresenceWidget() {
         '<span style="font-size:1.2rem;flex-shrink:0;">⚡</span>' +
         '<div style="flex:1;min-width:150px;">' +
           '<div style="font-weight:700;color:var(--text-bright);font-size:0.88rem;">Partida casual em andamento</div>' +
-          '<div style="font-size:0.72rem;color:var(--text-muted);">Sala <b style="color:#38bdf8;font-family:monospace;letter-spacing:1px;">' + _safe(cu.activeCasualRoom) + '</b> · continue de onde parou</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted);">Sala <b style="color:var(--sp-c-38bdf8,#38bdf8);font-family:monospace;letter-spacing:1px;">' + _safe(cu.activeCasualRoom) + '</b> · continue de onde parou</div>' +
         '</div>' +
         '<button onclick="window.location.hash=\'#casual/' + safeRoom + '\'" style="background:linear-gradient(135deg,#38bdf8,#0ea5e9);border:none;color:#fff;border-radius:8px;padding:6px 14px;font-size:0.78rem;font-weight:700;cursor:pointer;">⚡ Voltar</button>' +
       '</div>';
@@ -5084,14 +5079,14 @@ function _hydrateFriendsPresenceWidget() {
       var bg = hasFriends ? 'var(--bg-card)' : 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(59,130,246,0.08))';
       var border = hasFriends ? 'var(--border-color)' : 'rgba(99,102,241,0.25)';
       box.innerHTML =
-        '<div style="background:' + bg + ';border:1px solid ' + border + ';border-radius:14px;padding:12px 14px;">' +
+        '<div style="background:' + window._spCor(bg, 'background') + ';border:1px solid ' + window._spCor(border, 'borda') + ';border-radius:14px;padding:12px 14px;">' +
           '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
             (hasFriends ? '<span style="font-size:1.1rem;opacity:0.65;">👥</span>' : '') +
             '<div style="flex:1;min-width:200px;">' +
               '<div style="font-size:' + (hasFriends ? '0.82rem' : '0.92rem') + ';color:var(--text-bright);font-weight:' + (hasFriends ? '600' : '700') + ';">' + msgTitle + '</div>' +
               '<div style="font-size:' + (hasFriends ? '0.72rem' : '0.78rem') + ';color:var(--text-muted);margin-top:2px;">' + msgSub + '</div>' +
             '</div>' +
-            '<a href="' + ctaHref + '" style="font-size:0.78rem;color:var(--primary-color);text-decoration:none;font-weight:600;white-space:nowrap;">' + ctaText + '</a>' +
+            '<a href="' + ctaHref + '" style="font-size:0.78rem;color:var(--sp-c-var-primary-color-,var(--primary-color));text-decoration:none;font-weight:600;white-space:nowrap;">' + ctaText + '</a>' +
           '</div>' +
         '</div>';
       return;
@@ -5230,7 +5225,7 @@ function _hydrateFriendsPresenceWidget() {
           '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:linear-gradient(135deg,rgba(16,185,129,0.18),rgba(16,185,129,0.06));border:1px solid rgba(16,185,129,0.4);border-radius:10px;">' +
             '<span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;flex-shrink:0;"></span>' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 Você está em <span style="color:#10b981;">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
+              '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📍 Você está em <span style="color:var(--sp-c-10b981,#10b981);">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
               '<div style="font-size:0.7rem;color:var(--text-muted);">expira em <b data-countdown-target="' + endsAt + '">…</b></div>' +
             '</div>' +
             '<button type="button" class="cancel-x-btn" onclick="window._dashCancelPresence(\'' + docId + '\')" style="--cx-size:24px;" title="Sair do local">✕</button>' +
@@ -5249,8 +5244,8 @@ function _hydrateFriendsPresenceWidget() {
           '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.35);border-radius:10px;">' +
             '<span style="font-size:1rem;flex-shrink:0;">🗓️</span>' +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Você estará em <span style="color:#a5b4fc;">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
-              (p._tournName ? '<div style="font-size:0.7rem;color:#fbbf24;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 ' + _safe(p._tournName) + '</div>' : '') +
+              '<div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Você estará em <span style="color:var(--sp-c-a5b4fc,#a5b4fc);">' + pVenue + '</span>' + (pSports ? ' <span style="font-weight:500;color:var(--text-muted);">· ' + _safe(pSports) + '</span>' : '') + '</div>' +
+              (p._tournName ? '<div style="font-size:0.7rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🏆 ' + _safe(p._tournName) + '</div>' : '') +
               '<div style="font-size:0.7rem;color:var(--text-muted);">' + _safe(dayLabel) + ' às <b>' + _safe(hhmm) + '</b></div>' +
             '</div>' +
             '<button type="button" class="cancel-x-btn" onclick="window._dashCancelPresence(\'' + docId + '\')" style="--cx-size:24px;" title="Cancelar plano">✕</button>' +

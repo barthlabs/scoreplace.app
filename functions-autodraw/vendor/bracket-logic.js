@@ -5437,8 +5437,8 @@ window._renderPendingDrawPreview = function (t) {
     html += '<div style="font-weight:700;color:var(--text-bright);margin:10px 0 4px;font-size:0.85rem;">Rodada ' + (round.round || ri + 1) + '</div>';
     if (Array.isArray(round.monarchGroups) && round.monarchGroups.length) {
       round.monarchGroups.forEach(function (g) {
-        html += '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px;margin-bottom:6px;">' +
-          '<div style="font-size:0.78rem;font-weight:700;color:#22d3ee;margin-bottom:4px;">' + esc(g.name || '') + '</div>';
+        html += '<div style="background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border-radius:8px;padding:8px 10px;margin-bottom:6px;">' +
+          '<div style="font-size:0.78rem;font-weight:700;color:var(--sp-c-22d3ee,#22d3ee);margin-bottom:4px;">' + esc(g.name || '') + '</div>';
         (g.matches || []).forEach(function (m) {
           html += '<div style="font-size:0.78rem;color:var(--text-main);">' + esc(m.p1) + ' <span style="opacity:0.55;">×</span> ' + esc(m.p2) + '</div>';
         });
@@ -5463,14 +5463,14 @@ window._renderPendingDrawBanner = function (t) {
   var esc = window._safeHtml || function (s) { return String(s == null ? '' : s); };
   var preview = window._renderPendingDrawPreview ? window._renderPendingDrawPreview(t) : '';
   return '<div style="border:2px solid #f59e0b;background:rgba(245,158,11,0.10);border-radius:14px;padding:14px 16px;margin:0 0 1rem;">' +
-    '<div style="font-size:1rem;font-weight:800;color:#fbbf24;margin-bottom:4px;">🔒 Sorteio em revisão — só você vê</div>' +
+    '<div style="font-size:1rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">🔒 Sorteio em revisão — só você vê</div>' +
     '<div style="font-size:0.82rem;color:var(--text-main);line-height:1.45;margin-bottom:10px;">O sorteio foi realizado mas <b>não foi publicado</b> e <b>ninguém foi notificado</b>. Confira a chave abaixo. Se estiver tudo certo, clique <b>Publicar</b> — aí sim vai a público e os participantes são avisados. Se houver erro, clique <b>Anular</b>.</div>' +
     '<details style="margin-bottom:10px;"><summary style="cursor:pointer;font-weight:700;color:var(--text-bright);font-size:0.85rem;">👁️ Ver a chave sorteada</summary>' +
       '<div style="margin-top:8px;max-height:380px;overflow:auto;">' + preview + '</div>' +
     '</details>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<button class="btn btn-outline" style="color:#f87171;border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
-      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid rgba(255,255,255,0.3);font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
+      '<button class="btn btn-outline" style="color:var(--sp-c-f87171,#f87171);border-color:rgba(248,113,113,0.5);" onclick="event.stopPropagation(); window._annulPendingDraw(\'' + esc(t.id) + '\')">✕ Anular</button>' +
+      '<button class="btn btn-shine" style="background:#10b981;color:#fff;border:1px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));font-weight:700;" onclick="event.stopPropagation(); window._publishPendingDraw(\'' + esc(t.id) + '\')">🚀 Publicar sorteio</button>' +
     '</div>' +
   '</div>';
 };

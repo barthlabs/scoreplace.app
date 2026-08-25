@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ========================================
 // scoreplace.app — Firebase Auth + Firestore Init
 // ========================================
@@ -31,11 +33,11 @@
     var fg = '#fbbf24';
     document.documentElement.style.background = bg;
     var showStatus = function(emoji, title, subtitle, isError) {
-      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + window._spCor(bg, 'background') + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
         '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
-        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
-        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
-        (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar e pedir novo link</a>' : '') +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + window._spCor((isError ? '#ef4444' : fg), 'color') + ';">' + title + '</div>' +
+        (subtitle ? '<div style="font-size:0.85rem;color:var(--sp-c-94a3b8,#94a3b8);max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
+        (isError ? '<a href="/" style="margin-top:8px;color:' + window._spCor(fg, 'color') + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + window._spCor(fg, 'borda') + ';padding:8px 18px;border-radius:8px;">Voltar e pedir novo link</a>' : '') +
         '</div>';
     };
     showStatus('🎾',
@@ -178,12 +180,12 @@
     var bg = '#0f172a', fg = '#10b981';
     document.documentElement.style.background = bg;
     var showStatus = function(emoji, title, subtitle, isError, extraHtml) {
-      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + window._spCor(bg, 'background') + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
         '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
-        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
-        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:360px;line-height:1.5;">' + subtitle + '</div>' : '') +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + window._spCor((isError ? '#ef4444' : fg), 'color') + ';">' + title + '</div>' +
+        (subtitle ? '<div style="font-size:0.85rem;color:var(--sp-c-94a3b8,#94a3b8);max-width:360px;line-height:1.5;">' + subtitle + '</div>' : '') +
         (extraHtml || '') +
-        '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Ir pro app</a>' +
+        '<a href="/" style="margin-top:8px;color:' + window._spCor(fg, 'color') + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + window._spCor(fg, 'borda') + ';padding:8px 18px;border-radius:8px;">Ir pro app</a>' +
         '</div>';
     };
     showStatus('🔗', 'Unindo suas contas...', 'Confirmando e juntando seus dados numa conta só');
@@ -237,11 +239,11 @@
     var fg = '#10b981'; // verde do app (o link vem por E-MAIL, não WhatsApp)
     document.documentElement.style.background = bg;
     var showStatus = function(emoji, title, subtitle, isError) {
-      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + bg + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
+      document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:' + window._spCor(bg, 'background') + ';color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;flex-direction:column;gap:14px;padding:24px;text-align:center;">' +
         '<div style="font-size:2.4rem;line-height:1;">' + emoji + '</div>' +
-        '<div style="font-size:1.05rem;font-weight:700;color:' + (isError ? '#ef4444' : fg) + ';">' + title + '</div>' +
-        (subtitle ? '<div style="font-size:0.85rem;color:#94a3b8;max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
-        (isError ? '<a href="/" style="margin-top:8px;color:' + fg + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + fg + ';padding:8px 18px;border-radius:8px;">Voltar ao início</a>' : '') +
+        '<div style="font-size:1.05rem;font-weight:700;color:' + window._spCor((isError ? '#ef4444' : fg), 'color') + ';">' + title + '</div>' +
+        (subtitle ? '<div style="font-size:0.85rem;color:var(--sp-c-94a3b8,#94a3b8);max-width:340px;line-height:1.5;">' + subtitle + '</div>' : '') +
+        (isError ? '<a href="/" style="margin-top:8px;color:' + window._spCor(fg, 'color') + ';font-size:0.85rem;text-decoration:none;border:1px solid ' + window._spCor(fg, 'borda') + ';padding:8px 18px;border-radius:8px;">Voltar ao início</a>' : '') +
         '</div>';
     };
 
@@ -1182,7 +1184,7 @@ function _sendPhoneCodeNative(phoneE164) {
   var _finishFail = function (msg) {
     window._phoneLoginInFlight = false;
     var n = document.getElementById('phone-step-sms-note');
-    if (n) n.innerHTML = '<span style="color:#fbbf24;font-size:0.72rem;">⚠️ ' + (msg || 'SMS indisponível agora — use o link do WhatsApp acima.') + '</span>';
+    if (n) n.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.72rem;">⚠️ ' + (msg || 'SMS indisponível agora — use o link do WhatsApp acima.') + '</span>';
   };
 
   // Limpa listeners de tentativas anteriores antes de registrar de novo.
@@ -1199,7 +1201,7 @@ function _sendPhoneCodeNative(phoneE164) {
         }
       };
       var n = document.getElementById('phone-step-sms-note');
-      if (n) n.innerHTML = '<span style="color:#10b981;font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
+      if (n) n.innerHTML = '<span style="color:var(--sp-c-10b981,#10b981);font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
     });
     // Android: auto-retrieval do SMS → já vem o código, preenche e confirma sozinho.
     FA.addListener('phoneVerificationCompleted', function (event) {
@@ -2018,7 +2020,7 @@ window._entrarOfferPhoneResetHtml = function(email, maskedPhone) {
   var lead = bad
     ? '⚠️ Esse provedor costuma <b>segurar</b> nosso e-mail.'
     : 'Não chegou?';
-  return '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.12);">' +
+  return '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));">' +
       '<div style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;margin-bottom:8px;">' +
         lead + ' Redefina pelo celular <b>' + esc(maskedPhone) + '</b> — você recebe um código por <b>SMS</b>.' +
       '</div>' +
@@ -2374,9 +2376,9 @@ function handleEmailLinkLogin() {
             '<div style="font-size:1.05rem;font-weight:800;color:var(--text-bright);margin-bottom:0.5rem;">Link enviado!</div>' +
             '<p style="font-size:0.88rem;color:var(--text-color);margin:0 0 1rem 0;">Enviamos um link de acesso pra <b>' + safeEmail + '</b>. Clique no link do e-mail pra entrar.</p>' +
             '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:10px;padding:10px 12px;margin-bottom:0.75rem;text-align:left;">' +
-              '<div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:4px;">⚠️ Não chegou? Cheque o spam.</div>' +
+              '<div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">⚠️ Não chegou? Cheque o spam.</div>' +
               '<div style="font-size:0.76rem;color:var(--text-muted);line-height:1.45;">' +
-                'Primeira vez geralmente cai lá. O remetente é <code style="background:rgba(255,255,255,0.06);padding:1px 4px;border-radius:3px;font-size:0.72rem;">scoreplace.app@gmail.com</code>. ' +
+                'Primeira vez geralmente cai lá. O remetente é <code style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));padding:1px 4px;border-radius:3px;font-size:0.72rem;">scoreplace.app@gmail.com</code>. ' +
                 'Adicione aos contatos pra próximas vezes não cair no spam.' +
               '</div>' +
             '</div>' +
@@ -2668,7 +2670,7 @@ function handlePhoneLogin() {
     window._phoneLoginInFlight = false;
     window._warn && window._warn('[phoneLogin] reCAPTCHA init falhou:', e && (e.message || e));
     var _n0 = document.getElementById('phone-step-sms-note');
-    if (_n0) _n0.innerHTML = '<span style="color:#ef4444;font-size:0.72rem;">⚠️ Não foi possível enviar o SMS neste navegador. Entre com seu e-mail, ou tente pelo Safari/Chrome.</span>';
+    if (_n0) _n0.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);font-size:0.72rem;">⚠️ Não foi possível enviar o SMS neste navegador. Entre com seu e-mail, ou tente pelo Safari/Chrome.</span>';
     showNotification('Não deu pra enviar o SMS', 'Este navegador bloqueou a verificação. Entre com seu e-mail, ou tente por outro navegador.', 'error');
     return;
   }
@@ -2683,7 +2685,7 @@ function handlePhoneLogin() {
       window._phoneLoginInFlight = false;
       window._phoneConfirmationResult = confirmationResult;
       var n = document.getElementById('phone-step-sms-note');
-      if (n) n.innerHTML = '<span style="color:#10b981;font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
+      if (n) n.innerHTML = '<span style="color:var(--sp-c-10b981,#10b981);font-size:0.72rem;">✅ Código enviado por SMS — digite acima.</span>';
     })
     .catch(function(error) {
       window._error('Phone sign-in (SMS) error:', error);
@@ -2710,7 +2712,7 @@ function handlePhoneLogin() {
         toastMsg = 'Não foi possível enviar o SMS. Tente de novo ou entre com seu e-mail.';
       }
       var note = document.getElementById('phone-step-sms-note');
-      if (note) note.innerHTML = '<span style="color:#ef4444;font-size:0.72rem;">' + smsMsg + '</span>';
+      if (note) note.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);font-size:0.72rem;">' + smsMsg + '</span>';
       showNotification('Não deu pra enviar o SMS', toastMsg, 'error');
     });
 }
@@ -3195,7 +3197,7 @@ window._suggestCreatePassword = function(email) {
           '<input type="password" id="cp-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar senha" class="form-control" style="font-size:0.9rem;padding-right:44px;" minlength="6" required>' +
           window._pwdEyeBtn('cp-confirm') +
         '</div>' +
-        '<div id="cp-error" style="font-size:0.78rem;color:#f87171;margin-bottom:10px;display:none;"></div>' +
+        '<div id="cp-error" style="font-size:0.78rem;color:var(--sp-c-f87171,#f87171);margin-bottom:10px;display:none;"></div>' +
         '<button type="submit" id="cp-submit" class="btn btn-primary" style="width:100%;font-size:0.9rem;padding:10px;">Criar senha</button>' +
       '</form>' +
       '<div style="text-align:center;margin-top:12px;">' +
@@ -3282,7 +3284,7 @@ function handlePasswordReset() {
     '<input type="email" id="reset-email-input" class="form-control" placeholder="seu@email.com" value="' + (loginEmail.replace(/"/g,'&quot;')) + '" style="font-size:0.88rem;margin-bottom:8px;" autocomplete="email">' +
     '<div style="display:flex;gap:8px;">' +
       '<button onclick="window._doPasswordReset()" class="btn btn-primary" style="flex:1;font-size:0.85rem;padding:8px 12px;">Enviar link</button>' +
-      '<button onclick="document.getElementById(\'reset-password-panel\').remove()" class="btn" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--text-muted);font-size:0.85rem;padding:8px 12px;">Cancelar</button>' +
+      '<button onclick="document.getElementById(\'reset-password-panel\').remove()" class="btn" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));color:var(--text-muted);font-size:0.85rem;padding:8px 12px;">Cancelar</button>' +
     '</div>' +
     '<div id="reset-status" style="margin-top:8px;font-size:0.78rem;"></div>';
 
@@ -3301,7 +3303,7 @@ window._doPasswordReset = function() {
   var email = inp ? inp.value.trim() : '';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     var statusEl = document.getElementById('reset-status');
-    if (statusEl) statusEl.innerHTML = '<span style="color:#f87171;">Digite um e-mail válido.</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-f87171,#f87171);">Digite um e-mail válido.</span>';
     return;
   }
 
@@ -3328,7 +3330,7 @@ window._doPasswordReset = function() {
             '<div style="padding:4px 0;">' +
               '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:6px;">👋 Use o ' + provLabel + ' para entrar</div>' +
               '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">Sua conta foi criada com o ' + provLabel + ' — não tem senha. Clique abaixo para entrar:</div>' +
-              '<button onclick="document.getElementById(\'reset-password-panel\').remove();' + (socialProvider === 'google.com' ? 'handleGoogleLogin&&handleGoogleLogin()' : '') + '" class="btn" style="width:100%;background:#fff;color:#1a1a2e;font-weight:700;font-size:0.88rem;padding:10px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.15);box-shadow:0 2px 8px rgba(0,0,0,0.3);">' +
+              '<button onclick="document.getElementById(\'reset-password-panel\').remove();' + (socialProvider === 'google.com' ? 'handleGoogleLogin&&handleGoogleLogin()' : '') + '" class="btn" style="width:100%;background:#fff;color:#1a1a2e;font-weight:700;font-size:0.88rem;padding:10px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));box-shadow:0 2px 8px rgba(0,0,0,0.3);">' +
                 (socialProvider === 'google.com' ? googleSvg : '🔐') +
                 'Entrar com ' + provLabel +
               '</button>' +
@@ -3363,9 +3365,9 @@ function _sendPasswordResetEmail(email) {
           '<div style="font-size:1.4rem;margin-bottom:6px;">✅</div>' +
           '<div style="font-weight:700;color:var(--text-bright);font-size:0.9rem;margin-bottom:4px;">Link enviado!</div>' +
           '<div style="font-size:0.78rem;color:var(--text-muted);">Verifique <b>' + email + '</b> (e a caixa de <b>spam/lixo eletrônico</b>).<br>Clique no link do e-mail para criar sua nova senha.</div>' +
-          '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
+          '<button onclick="document.getElementById(\'reset-password-panel\').remove()" style="margin-top:10px;background:none;border:none;color:var(--sp-c-var-primary-color-,var(--primary-color));cursor:pointer;font-size:0.8rem;text-decoration:underline;">Fechar</button>' +
           // v2.4.97: caminho alternativo por celular (e-mail não chega no UOL/Hotmail).
-          '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));"></div></div>' +
           '<div style="font-size:0.74rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Redefina pelo seu <b>celular cadastrado</b> — recebe um código por SMS.</div>' +
           '<button onclick="window._resetPhoneStart(\'' + _safeResetEmail + '\')" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.88rem;font-weight:800;padding:11px;">📱 Redefinir por celular</button>' +
         '</div>';
@@ -3383,7 +3385,7 @@ function _sendPasswordResetEmail(email) {
     } else if (code === 'auth/too-many-requests') {
       msg = 'Muitas tentativas. Aguarde alguns minutos.';
     }
-    if (statusEl2) statusEl2.innerHTML = '<span style="color:#f87171;">' + msg + '</span>';
+    if (statusEl2) statusEl2.innerHTML = '<span style="color:var(--sp-c-f87171,#f87171);">' + msg + '</span>';
   };
   // Fallback: remetente padrão do Firebase (pode cair no spam de Hotmail/Outlook).
   var _nativeReset = function() {
@@ -3471,8 +3473,8 @@ window._resetPhoneStart = function(email) {
     '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);margin-bottom:4px;">📱 Redefinir por celular</div>' +
     '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Digite o celular <b>cadastrado nesta conta</b>. Você recebe um código por <b>SMS</b>.</div>' +
     '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:6px;">' +
-      '<span style="display:flex;align-items:center;padding:0 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.9rem;font-weight:700;color:var(--text-bright);white-space:nowrap;">🇧🇷 +55</span>' +
-      '<input id="reset-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" oninput="window._resetPhoneMask(this)" style="flex:1;min-width:0;box-sizing:border-box;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);font-size:1rem;" />' +
+      '<span style="display:flex;align-items:center;padding:0 10px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;font-size:0.9rem;font-weight:700;color:var(--text-bright);white-space:nowrap;">🇧🇷 +55</span>' +
+      '<input id="reset-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" oninput="window._resetPhoneMask(this)" style="flex:1;min-width:0;box-sizing:border-box;padding:11px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright);font-size:1rem;" />' +
     '</div>' +
     '<div id="reset-phone-preview" style="font-size:0.74rem;color:var(--text-muted);min-height:16px;margin-bottom:10px;">Formato: (11) 99999-8888</div>' +
     '<button id="reset-phone-send-btn" onclick="window._resetPhoneSend()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-weight:800;font-size:0.88rem;padding:11px;margin-bottom:8px;">Enviar código</button>' +
@@ -3490,21 +3492,21 @@ window._resetPhoneSend = function() {
   var email = window._resetPhoneEmail || '';
   var raw = inp ? inp.value.trim() : '';
   var digits = raw.replace(/\D/g, '');
-  if (!email) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">E-mail não informado. Volte e digite seu e-mail.</span>'; return; }
+  if (!email) { if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">E-mail não informado. Volte e digite seu e-mail.</span>'; return; }
   if (digits.length < 10) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Digite DDD + número (ex: 11 99999-8888).</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Digite DDD + número (ex: 11 99999-8888).</span>';
     if (inp) inp.focus();
     return;
   }
   var phoneE164 = (typeof window._normalizePhoneE164 === 'function')
     ? window._normalizePhoneE164(raw, '55')
     : ('+55' + digits);
-  if (!phoneE164) { if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Número inválido. Confira o DDD + número.</span>'; return; }
+  if (!phoneE164) { if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Número inválido. Confira o DDD + número.</span>'; return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Verificando o celular…</span>';
 
-  if (!firebase.functions) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Serviço indisponível. Tente o link no e-mail.</span>'; if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; } return; }
+  if (!firebase.functions) { if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">Serviço indisponível. Tente o link no e-mail.</span>'; if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; } return; }
 
   firebase.functions().httpsCallable('sendPasswordResetPhone')({ email: email, phone: phoneE164 })
     .then(function(res) {
@@ -3515,7 +3517,7 @@ window._resetPhoneSend = function() {
         else if (d.reason === 'phone-mismatch') msg = 'Esse celular não confere com o cadastrado nesta conta.';
         else if (d.reason === 'no-account') msg = 'Não encontramos uma conta com esse e-mail.';
         else if (d.reason === 'bad-phone') msg = 'Número inválido. Confira o DDD + número.';
-        if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">' + msg + '</span>';
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">' + msg + '</span>';
         if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; }
         return;
       }
@@ -3525,7 +3527,7 @@ window._resetPhoneSend = function() {
     })
     .catch(function(err) {
       window._warn && window._warn('[resetPhone] send falhou:', err && (err.code || err.message));
-      if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Erro ao enviar. Tente novamente.</span>';
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">Erro ao enviar. Tente novamente.</span>';
       if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; }
     });
 };
@@ -3559,9 +3561,9 @@ window._resetShowCodeStep = function(phoneE164) {
   if (!panel) return;
   panel.innerHTML =
     '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);margin-bottom:4px;">🔑 Digite o código</div>' +
-    '<div style="font-size:0.8rem;color:#25d366;font-weight:700;margin-bottom:8px;">' + (window._safeHtml ? window._safeHtml(phoneE164 || '') : (phoneE164 || '')) + '</div>' +
+    '<div style="font-size:0.8rem;color:var(--sp-c-25d366,#25d366);font-weight:700;margin-bottom:8px;">' + (window._safeHtml ? window._safeHtml(phoneE164 || '') : (phoneE164 || '')) + '</div>' +
     '<div style="font-size:0.74rem;color:var(--text-muted);margin-bottom:10px;line-height:1.45;">Enviamos um código por <b>SMS</b>. Digite ele abaixo pra redefinir sua senha.</div>' +
-    '<input id="reset-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);font-size:1.3rem;font-weight:800;margin-bottom:10px;" />' +
+    '<input id="reset-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:11px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright);font-size:1.3rem;font-weight:800;margin-bottom:10px;" />' +
     '<button id="reset-code-verify-btn" onclick="window._resetPhoneVerify()" class="btn btn-success btn-block" style="font-size:0.9rem;font-weight:800;padding:11px;margin-bottom:8px;">✅ Confirmar</button>' +
     '<div id="reset-code-status" style="min-height:18px;font-size:0.74rem;margin-bottom:6px;"></div>' +
     '<div style="text-align:center;">' +
@@ -3577,7 +3579,7 @@ window._resetPhoneVerify = function() {
   var email = window._resetPhoneEmail || '';
   var code = ci ? ci.value.replace(/\D/g, '') : '';
   if (code.length !== 6) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">O código tem 6 dígitos.</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">O código tem 6 dígitos.</span>';
     if (ci) ci.focus();
     return;
   }
@@ -3586,7 +3588,7 @@ window._resetPhoneVerify = function() {
 
   var _fail = function(msg) {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
     if (ci) { ci.focus(); ci.select && ci.select(); }
   };
 
@@ -3642,21 +3644,21 @@ window._resetShowNewPassword = function(email) {
   ov.id = 'reset-newpwd-overlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:100060;background:var(--bg-darker,#0a0e1a);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;box-sizing:border-box;';
   ov.innerHTML =
-    '<div style="max-width:380px;width:100%;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="max-width:380px;width:100%;background:var(--bg-card,#0f172a);border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:18px;padding:26px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="font-size:2.2rem;text-align:center;margin-bottom:6px;">🔒</div>' +
       '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);text-align:center;margin-bottom:6px;">Defina sua nova senha</div>' +
       '<div style="font-size:0.82rem;color:var(--text-muted);text-align:center;margin-bottom:16px;word-break:break-all;">' + (window._safeHtml ? window._safeHtml(email || '') : (email || '')) + '</div>' +
       '<form id="reset-newpwd-form" autocomplete="on" onsubmit="event.preventDefault();window._resetSaveNewPassword()">' +
         '<input type="email" name="email" autocomplete="username" value="' + safeEmail + '" readonly style="display:none;">' +
         '<div style="position:relative;margin-bottom:10px;">' +
-          '<input type="password" id="reset-newpwd" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;padding-right:44px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+          '<input type="password" id="reset-newpwd" name="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;padding-right:44px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
           window._pwdEyeBtn('reset-newpwd') +
         '</div>' +
         '<div style="position:relative;margin-bottom:12px;">' +
-          '<input type="password" id="reset-newpwd-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar nova senha" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;padding-right:44px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
+          '<input type="password" id="reset-newpwd-confirm" name="password-confirm" autocomplete="new-password" placeholder="Confirmar nova senha" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;padding-right:44px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright,#fff);font-size:0.95rem;">' +
           window._pwdEyeBtn('reset-newpwd-confirm') +
         '</div>' +
-        '<div id="reset-newpwd-error" style="font-size:0.78rem;color:#f87171;margin-bottom:10px;display:none;"></div>' +
+        '<div id="reset-newpwd-error" style="font-size:0.78rem;color:var(--sp-c-f87171,#f87171);margin-bottom:10px;display:none;"></div>' +
         '<button type="submit" id="reset-newpwd-btn" class="btn btn-success btn-block" style="font-size:0.95rem;font-weight:800;padding:13px;">Salvar e entrar</button>' +
       '</form>' +
     '</div>';
@@ -3899,28 +3901,28 @@ window._showEmailVerificationGate = function(email, name) {
     // A tela pede o código; o celular fica como rede de segurança (sempre funciona).
     _middle =
       '<div style="font-size:0.84rem;color:var(--text-muted);line-height:1.5;margin-bottom:12px;">Digite o <b>código de 6 dígitos</b> que enviamos por e-mail (texto simples — chega melhor no Hotmail/Outlook/UOL).</div>' +
-      '<input id="gate-email-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" oninput="this.value=this.value.replace(/\\D/g,\'\').slice(0,6)" onkeydown="if(event.key===\'Enter\')window._gateVerifyCode()" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:0.35em;font-size:1.5rem;font-weight:800;padding:12px;margin-bottom:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright);">' +
+      '<input id="gate-email-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" oninput="this.value=this.value.replace(/\\D/g,\'\').slice(0,6)" onkeydown="if(event.key===\'Enter\')window._gateVerifyCode()" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:0.35em;font-size:1.5rem;font-weight:800;padding:12px;margin-bottom:8px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright);">' +
       '<div id="gate-email-code-status" style="font-size:0.78rem;min-height:1.1em;margin-bottom:8px;"></div>' +
       '<button onclick="window._gateVerifyCode()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:8px;">✅ Confirmar</button>' +
-      '<button onclick="window._gateResendCode(this)" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:14px;">📨 Reenviar código</button>' +
-      '<div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">não recebeu o código?</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+      '<button onclick="window._gateResendCode(this)" class="btn btn-block" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));color:var(--text-bright);font-size:0.82rem;font-weight:700;padding:9px;margin-bottom:14px;">📨 Reenviar código</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;"><div style="flex:1;height:1px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));"></div><span style="font-size:0.72rem;color:var(--text-muted);">não recebeu o código?</span><div style="flex:1;height:1px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));"></div></div>' +
       '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Confirme pelo <b>celular</b> — você recebe um código por SMS.</div>' +
       _phoneBtn;
   } else {
     _middle =
       '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:18px;">Abra seu e-mail e clique em <b>Confirmar minha conta</b>. Enquanto não confirmar, você não pode usar o scoreplace.app. <span style="opacity:0.8;">(confira também a caixa de spam)</span></div>' +
       '<button onclick="window._checkEmailVerified()" class="btn btn-success btn-block" style="font-size:0.98rem;font-weight:800;padding:13px;margin-bottom:10px;">✅ Já confirmei</button>' +
-      '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
-      '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:rgba(255,255,255,0.12);"></div></div>' +
+      '<button onclick="window._resendVerifyEmail()" class="btn btn-block" style="background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));color:var(--text-bright);font-size:0.88rem;font-weight:700;padding:11px;margin-bottom:10px;">📨 Reenviar e-mail</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px;"><div style="flex:1;height:1px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));"></div><span style="font-size:0.72rem;color:var(--text-muted);">ou</span><div style="flex:1;height:1px;background:var(--sp-g-255-255-255-012,rgba(255,255,255,0.12));"></div></div>' +
       '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;margin-bottom:10px;">Não chegou o e-mail? Confirme pelo seu celular — recebe um código por SMS.</div>' +
       _phoneBtn;
   }
   ov.innerHTML =
-    '<div style="max-width:420px;width:100%;text-align:center;background:var(--bg-card,#0f172a);border:1px solid rgba(255,255,255,0.12);border-radius:18px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
+    '<div style="max-width:420px;width:100%;text-align:center;background:var(--bg-card,#0f172a);border:1px solid var(--sp-b-255-255-255-012,rgba(255,255,255,0.12));border-radius:18px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +
       '<div style="font-size:2.6rem;margin-bottom:8px;">📬</div>' +
       '<div style="font-size:1.2rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:8px;">Confirme seu e-mail</div>' +
       '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">' + (_bad ? 'Enviamos um código de confirmação para' : 'Enviamos um link de confirmação para') + '</div>' +
-      '<div style="font-size:0.95rem;font-weight:700;color:#fbbf24;margin-bottom:14px;word-break:break-all;">' + _safeEm + '</div>' +
+      '<div style="font-size:0.95rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:14px;word-break:break-all;">' + _safeEm + '</div>' +
       _middle +
       _logoutBtn +
     '</div>';
@@ -3946,8 +3948,8 @@ window._gatePhoneStart = function() {
     // depende da Meta. Ver [[project_whatsapp_meta_2fa_block]].
     '<div style="font-size:0.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;">Digite seu número com DDD. Você recebe um código por <b>SMS</b>.</div>' +
     '<div style="display:flex;gap:8px;align-items:stretch;margin-bottom:12px;">' +
-      '<span style="display:flex;align-items:center;padding:0 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.2);border-radius:10px;font-size:0.95rem;font-weight:700;color:var(--text-bright);">🇧🇷 +55</span>' +
-      '<input id="gate-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" style="flex:1;min-width:0;box-sizing:border-box;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:1rem;" />' +
+      '<span style="display:flex;align-items:center;padding:0 12px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;font-size:0.95rem;font-weight:700;color:var(--text-bright);">🇧🇷 +55</span>' +
+      '<input id="gate-phone-input" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(11) 99999-8888" style="flex:1;min-width:0;box-sizing:border-box;padding:12px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright,#fff);font-size:1rem;" />' +
     '</div>' +
     '<button id="gate-phone-send-btn" onclick="window._gatePhoneSend()" class="btn btn-block" style="background:#25d366;color:#0a1f12;font-size:0.95rem;font-weight:800;padding:12px;margin-bottom:10px;">Enviar código</button>' +
     '<div id="gate-phone-status" style="min-height:18px;font-size:0.74rem;margin-bottom:8px;"></div>' +
@@ -3963,7 +3965,7 @@ window._gatePhoneSend = function() {
   var raw = inp ? inp.value.trim() : '';
   var digits = raw.replace(/\D/g, '');
   if (digits.length < 10) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Digite DDD + número (ex: 11 99999-8888).</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Digite DDD + número (ex: 11 99999-8888).</span>';
     if (inp) inp.focus();
     return;
   }
@@ -3972,14 +3974,14 @@ window._gatePhoneSend = function() {
     ? window._normalizePhoneE164(raw, '55')
     : ('+55' + digits);
   if (!phoneE164 || phoneE164.replace(/\D/g, '').length < 12) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Número inválido. Confira o DDD + número.</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Número inválido. Confira o DDD + número.</span>';
     if (btn) { btn.disabled = false; btn.textContent = 'Enviar código'; }
     if (inp) inp.focus();
     return;
   }
 
   var u = firebase.auth().currentUser;
-  if (!u) { if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">Sessão expirada. Entre de novo.</span>'; return; }
+  if (!u) { if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">Sessão expirada. Entre de novo.</span>'; return; }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Enviando código por SMS...</span>';
@@ -4022,14 +4024,14 @@ window._gateShowCodeStep = function(phoneE164, smsErrCode) {
   var card = document.querySelector('#email-verify-gate > div');
   if (!card) return;
   var smsNote = smsErrCode
-    ? '<div style="font-size:0.72rem;color:#fbbf24;margin-bottom:10px;">Não foi possível enviar o SMS agora. Tente reenviar em alguns instantes.</div>'
+    ? '<div style="font-size:0.72rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:10px;">Não foi possível enviar o SMS agora. Tente reenviar em alguns instantes.</div>'
     : '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;">Enviamos um código por <b>SMS</b>. Digite ele aqui.</div>';
   card.innerHTML =
     '<div style="font-size:2.2rem;margin-bottom:8px;">🔑</div>' +
     '<div style="font-size:1.15rem;font-weight:800;color:var(--text-bright,#fff);margin-bottom:6px;">Digite o código</div>' +
-    '<div style="font-size:0.85rem;color:#25d366;font-weight:700;margin-bottom:12px;">' + window._safeHtml(phoneE164 || '') + '</div>' +
+    '<div style="font-size:0.85rem;color:var(--sp-c-25d366,#25d366);font-weight:700;margin-bottom:12px;">' + window._safeHtml(phoneE164 || '') + '</div>' +
     smsNote +
-    '<input id="gate-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.2);border-radius:10px;color:var(--text-bright,#fff);font-size:1.4rem;font-weight:800;margin-bottom:12px;" />' +
+    '<input id="gate-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:8px;padding:12px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));border-radius:10px;color:var(--text-bright,#fff);font-size:1.4rem;font-weight:800;margin-bottom:12px;" />' +
     '<button id="gate-code-verify-btn" onclick="window._gatePhoneVerify()" class="btn btn-success btn-block" style="font-size:0.95rem;font-weight:800;padding:12px;margin-bottom:10px;">✅ Confirmar</button>' +
     '<div id="gate-code-status" style="min-height:18px;font-size:0.74rem;margin-bottom:8px;"></div>' +
     '<button onclick="window._gatePhoneStart()" style="background:none;border:none;color:var(--text-muted);font-size:0.8rem;cursor:pointer;text-decoration:underline;">← Trocar número</button>';
@@ -4043,7 +4045,7 @@ window._gatePhoneVerify = function() {
   var btn = document.getElementById('gate-code-verify-btn');
   var code = ci ? ci.value.replace(/\D/g, '') : '';
   if (code.length !== 6) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">O código tem 6 dígitos.</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">O código tem 6 dígitos.</span>';
     if (ci) ci.focus();
     return;
   }
@@ -4052,7 +4054,7 @@ window._gatePhoneVerify = function() {
 
   var _fail = function(msg) {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmar'; }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#ef4444;">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">' + (msg || 'Código incorreto. Confira o SMS.') + '</span>';
     if (ci) { ci.focus(); ci.select && ci.select(); }
   };
 
@@ -4127,7 +4129,7 @@ window._gateVerifyCode = function() {
   var inp = document.getElementById('gate-email-code');
   var st = document.getElementById('gate-email-code-status');
   var code = inp ? inp.value.replace(/\D/g, '') : '';
-  var setSt = function(msg, color) { if (st) st.innerHTML = '<span style="color:' + (color || '#fbbf24') + ';">' + msg + '</span>'; };
+  var setSt = function(msg, color) { if (st) st.innerHTML = '<span style="color:' + window._spCor((color || '#fbbf24'), 'color') + ';">' + msg + '</span>'; };
   if (code.length !== 6) { setSt('O código tem 6 dígitos.'); if (inp) inp.focus(); return; }
   if (!firebase.functions) { setSt('Funções indisponíveis. Recarregue a página.', '#ef4444'); return; }
   setSt('⏳ Confirmando…', 'var(--text-muted)');
@@ -4153,11 +4155,11 @@ window._gateResendCode = function(btn) {
   firebase.functions().httpsCallable('sendVerificationCode')({})
     .then(function() {
       if (btn) { btn.textContent = '📨 Reenviar código'; setTimeout(function(){ if (btn) btn.disabled = false; }, 30000); }
-      if (st) st.innerHTML = '<span style="color:#34d399;">Novo código enviado pro seu e-mail.</span>';
+      if (st) st.innerHTML = '<span style="color:var(--sp-c-34d399,#34d399);">Novo código enviado pro seu e-mail.</span>';
     })
     .catch(function(e) {
       if (btn) { btn.disabled = false; btn.textContent = '📨 Reenviar código'; }
-      if (st) st.innerHTML = '<span style="color:#ef4444;">' + ((e && e.message) || 'Não foi possível reenviar.') + '</span>';
+      if (st) st.innerHTML = '<span style="color:var(--sp-c-ef4444,#ef4444);">' + ((e && e.message) || 'Não foi possível reenviar.') + '</span>';
     });
 };
 
@@ -5423,7 +5425,7 @@ async function simulateLoginSuccess(user) {
     if (!cu._profileLoaded) {
       _loadingBanner = document.createElement('div');
       _loadingBanner.id = 'profile-loading-banner';
-      _loadingBanner.style.cssText = 'background:linear-gradient(90deg,rgba(251,191,36,0.18),rgba(251,191,36,0.08));border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:8px 14px;margin:10px 14px 0;display:flex;align-items:center;gap:10px;font-size:0.82rem;color:#fbbf24;font-weight:600;';
+      _loadingBanner.style.cssText = 'background:linear-gradient(90deg,rgba(251,191,36,0.18),rgba(251,191,36,0.08));border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:8px 14px;margin:10px 14px 0;display:flex;align-items:center;gap:10px;font-size:0.82rem;color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;';
       _loadingBanner.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(251,191,36,0.35);border-top-color:#fbbf24;border-radius:50%;animation:spin 0.8s linear infinite;"></span><span>Carregando seu perfil…</span>';
       modalInner.insertBefore(_loadingBanner, modalInner.firstChild);
       if (!document.getElementById('_profile-loading-spin-style')) {
@@ -5919,7 +5921,7 @@ window._showQuickReturnBanner = function() {
     banner.id = 'quick-return-banner';
     banner.style.cssText = 'background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:12px 14px;margin-bottom:16px;';
     banner.innerHTML =
-      '<div style="font-size:0.72rem;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Bem-vindo de volta!</div>' +
+      '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Bem-vindo de volta!</div>' +
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
         avatarHtml +
         '<div style="flex:1;min-width:0;">' +
@@ -6059,7 +6061,7 @@ function setupLoginModal() {
 
           // Linha do "último usado" quando o método é e-mail/senha ou celular (os botões
           // Google/Apple ganham a badge direto — window._applyLastLoginBadge).
-          '<div id="login-lastmethod-hint" style="font-size:0.78rem;color:#6ee7b7;margin-bottom:8px;line-height:1.45;"></div>' +
+          '<div id="login-lastmethod-hint" style="font-size:0.78rem;color:var(--sp-c-6ee7b7,#6ee7b7);margin-bottom:8px;line-height:1.45;"></div>' +
 
           // --- 1. Entrar com 1 clique (email mágico OU SMS — campo único) ---
           // v1.0.22-beta: feedback do user — ter 2 campos (Link Mágico e SMS)
@@ -6103,7 +6105,7 @@ function setupLoginModal() {
               '</div>' +
               // Expansão de cadastro inline (aparece quando a conta não existe)
               '<div id="register-expand" style="display:none;">' +
-                '<div id="register-expand-hint" style="font-size:0.8rem;color:#a5b4fc;margin:8px 0;line-height:1.45;">✨ Não encontramos essa conta — vamos criar a sua. Confirme abaixo:</div>' +
+                '<div id="register-expand-hint" style="font-size:0.8rem;color:var(--sp-c-a5b4fc,#a5b4fc);margin:8px 0;line-height:1.45;">✨ Não encontramos essa conta — vamos criar a sua. Confirme abaixo:</div>' +
                 // v2.5.x: confirmar senha LOGO ABAIXO da senha (campos seguidos);
                 // nome de exibição depois.
                 '<div style="font-size:0.8rem;color:var(--text-bright);margin-bottom:4px;font-weight:600;">Confirmar senha</div>' +
@@ -6169,7 +6171,7 @@ function setupLoginModal() {
           // método (link mágico, SMS, email, Google), usuário implicitamente
           // aceita os termos. Conformidade legal mínima sem modal extra.
           '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color);font-size:0.7rem;color:var(--text-muted);text-align:center;line-height:1.5;">' +
-            'Ao continuar, você concorda com os <a href="#terms" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="color:var(--primary-color);">Termos de Uso</a> e a <a href="#privacy" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="color:var(--primary-color);">Política de Privacidade</a>.' +
+            'Ao continuar, você concorda com os <a href="#terms" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">Termos de Uso</a> e a <a href="#privacy" onclick="document.getElementById(\'modal-login\').classList.remove(\'active\')" style="color:var(--sp-c-var-primary-color-,var(--primary-color));">Política de Privacidade</a>.' +
           '</div>' +
 
         '</div>' +
@@ -6283,14 +6285,14 @@ window._confirmDeleteAccount = function() {
       '</div>' +
       '<div style="padding:1.5rem;text-align:center;">' +
         '<p style="color:var(--text-color);font-size:0.9rem;margin-bottom:0.8rem;line-height:1.6;font-weight:600;">Tem certeza que deseja excluir sua conta?</p>' +
-        '<p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1.2rem;line-height:1.5;">Esta ação é <strong style="color:#ef4444;">irreversível</strong>. Todos os seus dados serão apagados permanentemente:</p>' +
+        '<p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1.2rem;line-height:1.5;">Esta ação é <strong style="color:var(--sp-c-ef4444,#ef4444);">irreversível</strong>. Todos os seus dados serão apagados permanentemente:</p>' +
         '<ul style="text-align:left;color:var(--text-muted);font-size:0.8rem;margin-bottom:1.2rem;padding-left:1.2rem;line-height:1.8;">' +
           '<li>Seu perfil e preferências</li>' +
           '<li>Suas notificações</li>' +
           '<li>Suas inscrições em torneios</li>' +
           '<li>Torneios que você organizou</li>' +
         '</ul>' +
-        '<p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:1rem;">Digite <strong style="color:#ef4444;">EXCLUIR</strong> para confirmar:</p>' +
+        '<p style="color:var(--text-muted);font-size:0.78rem;margin-bottom:1rem;">Digite <strong style="color:var(--sp-c-ef4444,#ef4444);">EXCLUIR</strong> para confirmar:</p>' +
         '<input type="text" id="delete-account-confirm-input" placeholder="Digite EXCLUIR" style="width:100%;padding:10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-dark);color:var(--text-color);font-size:0.9rem;text-align:center;margin-bottom:1rem;box-sizing:border-box;" />' +
         '<div style="display:flex;gap:10px;">' +
           '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'modal-delete-account\').remove()" style="flex:1;">Cancelar</button>' +
@@ -6703,21 +6705,21 @@ window._renderProfileSkillBySport = function() {
     var knobLeft = canRef ? '14px' : '2px';
     var knobBg   = canRef ? '#2dd4bf' : 'rgba(255,255,255,0.4)';
     html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:2px 0;">';
-    html += '<span style="font-size:0.74rem;font-weight:600;color:#fbbf24;min-width:90px;flex:0 0 auto;opacity:0.9;">' + window._safeHtml(sport) + '</span>';
+    html += '<span style="font-size:0.74rem;font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);min-width:90px;flex:0 0 auto;opacity:0.9;">' + window._safeHtml(sport) + '</span>';
     html += '<div style="display:flex;gap:3px;flex-wrap:nowrap;">';
     window._SKILL_PILLS_PROFILE.forEach(function(skill) {
       var active = current === skill;
       var style = active
-        ? 'padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;border:1.5px solid #6366f1;background:rgba(99,102,241,0.22);color:#a5b4fc;font-weight:700;line-height:1;'
-        : 'padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;border:1px solid rgba(255,255,255,0.15);background:transparent;color:var(--text-muted);font-weight:500;line-height:1;';
+        ? 'padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;border:1.5px solid #6366f1;background:rgba(99,102,241,0.22);color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;line-height:1;'
+        : 'padding:3px 8px;border-radius:5px;font-size:0.7rem;cursor:pointer;border:1px solid var(--sp-b-255-255-255-015,rgba(255,255,255,0.15));background:transparent;color:var(--text-muted);font-weight:500;line-height:1;';
       html += '<button type="button" onclick="window._setProfileSkillForSport(\'' + safeS + '\',\'' + skill + '\')" style="' + style + '">' + skill + '</button>';
     });
     html += '</div>';
     // Switch "Arbitrar" NU, alinhado à direita — o rótulo vive no cabeçalho da coluna.
     html += '<span onclick="window._toggleProfileRefereeForSport(\'' + safeS + '\')" title="Posso arbitrar ' + window._safeHtml(sport) + '" style="display:inline-flex;align-items:center;cursor:pointer;flex-shrink:0;user-select:none;margin-left:auto;">';
     html +=   '<span style="position:relative;display:inline-block;width:28px;height:16px;flex-shrink:0;">';
-    html +=     '<span style="position:absolute;inset:0;background:' + trackBg + ';border-radius:8px;transition:background 0.2s;"></span>';
-    html +=     '<span style="position:absolute;top:2px;left:' + knobLeft + ';width:12px;height:12px;background:' + knobBg + ';border-radius:50%;transition:left 0.2s,background 0.2s;"></span>';
+    html +=     '<span style="position:absolute;inset:0;background:' + window._spCor(trackBg, 'background') + ';border-radius:8px;transition:background 0.2s;"></span>';
+    html +=     '<span style="position:absolute;top:2px;left:' + knobLeft + ';width:12px;height:12px;background:' + window._spCor(knobBg, 'background') + ';border-radius:50%;transition:left 0.2s,background 0.2s;"></span>';
     html +=   '</span>';
     html += '</span>';
     html += '</div>';
@@ -7065,7 +7067,7 @@ function setupProfileModal() {
               '<div style="flex:1;min-width:0;">' +
                 '<label for="profile-edit-name" style="display:block;font-size:0.72rem;color:var(--hero-text-soft);font-weight:500;margin-bottom:3px;white-space:normal;">' + _t('profile.labelNameShort') + '</label>' +
                 '<input type="text" id="profile-edit-name" aria-label="' + _t('profile.labelNameShort') + '" class="form-control" style="width:100%;box-sizing:border-box;background:var(--hero-glass-bg);border:1px solid var(--hero-glass-bg);color:var(--hero-text);font-weight:700;font-size:1.02rem;" required oninput="window._refreshProfileAvatarFromName && window._refreshProfileAvatarFromName()">' +
-                '<div id="profile-name-nudge" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;font-size:0.75rem;color:#fbbf24;line-height:1.4;"></div>' +
+                '<div id="profile-name-nudge" style="display:none;margin-top:6px;padding:7px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;font-size:0.75rem;color:var(--sp-c-fbbf24,#fbbf24);line-height:1.4;"></div>' +
               '</div>' +
             '</div>' +
             '<div id="profile-hero-chips" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;"></div>' +
@@ -7084,14 +7086,14 @@ function setupProfileModal() {
           // (via _populateProfileModalFields). Contas com e-mail mostram
           // display + botão "Alterar" que expõe o campo de edição.
           '<span id="hint-share-contact" style="font-size:0.66rem;color:var(--text-muted);opacity:0.85;display:none;margin:0 0 6px;">Ligado (padrão), o contato aparece pros parceiros de jogo. Desligando, ninguém (nem amigos) vê aquele contato no app — você continua recebendo os avisos normalmente, e o grupo de WhatsApp do torneio não expõe telefone de ninguém.</span>' +
-          '<div id="profile-email-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
+          '<div id="profile-email-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
               '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
                 '<span class="pf-logo" style="background:#ea4335;">' + window._platformLogoSvg('email') + '</span>' +
                 '<span id="profile-email-text" style="font-family:var(--font-body);color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
                 '<span id="profile-email-check" title="E-mail verificado" class="pf-check" style="display:none;">✓</span>' +
               '</div>' +
-              '<button type="button" onclick="window._profileShowEmailEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
+              '<button type="button" onclick="window._profileShowEmailEdit()" style="background:transparent;border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
               '<label class="pf-switch" title="Divulgar meu e-mail"><input type="checkbox" id="profile-share-email" checked><span class="tr"></span></label>' +
             '</div>' +
           '</div>' +
@@ -7103,7 +7105,7 @@ function setupProfileModal() {
             '</div>' +
             // v2.5.x: e-mail exige verificação de posse (link de confirmação).
             '<div style="margin-top:6px;">' +
-              '<button type="button" onclick="window._profileVerifyEmail && window._profileVerifyEmail()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">✉️ Verificar e vincular</button>' +
+              '<button type="button" onclick="window._profileVerifyEmail && window._profileVerifyEmail()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">✉️ Verificar e vincular</button>' +
               '<span style="font-size:0.66rem;color:var(--text-muted);opacity:0.8;display:block;margin-top:4px;">Enviamos um link de confirmação pro novo e-mail. Ele vira seu login quando você clicar.</span>' +
               '<div id="profile-email-otp" style="display:none;margin-top:8px;font-size:0.78rem;"></div>' +
             '</div>' +
@@ -7113,21 +7115,21 @@ function setupProfileModal() {
             // alinhado à direita; a EDIÇÃO (DDI menor + número + Verificar) fica
             // escondida atrás do Alterar (e aberta por padrão pra quem não tem celular).
             '<div class="form-group" style="margin-bottom: 6px;">' +
-              '<div id="profile-phone-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
+              '<div id="profile-phone-display" style="display:none;margin:0 0 0.5rem 0;padding:8px 12px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));border-radius:8px;font-size:0.82rem;color:var(--text-muted);">' +
                 '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
                   '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">' +
                     '<span class="pf-logo" style="background:#25d366;">' + window._platformLogoSvg('whatsapp') + '</span>' +
                     '<span id="profile-phone-text" style="font-family:var(--font-body);color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
                     '<span id="profile-phone-check" title="Celular verificado" class="pf-check" style="display:none;">✓</span>' +
                   '</div>' +
-                  '<button type="button" onclick="window._profileShowPhoneEdit()" style="background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
+                  '<button type="button" onclick="window._profileShowPhoneEdit()" style="background:transparent;border:1px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));color:var(--text-muted);padding:3px 10px;border-radius:6px;font-size:0.72rem;cursor:pointer;white-space:nowrap;flex-shrink:0;line-height:1.4;">Alterar</button>' +
                   '<label class="pf-switch" title="Divulgar meu celular"><input type="checkbox" id="profile-share-phone" checked><span class="tr"></span></label>' +
                 '</div>' +
               '</div>' +
               // v1.9.97 — CAMADA 3: número posto pelo ORGANIZADOR. A pessoa precisa
               // saber por que existe um telefone aqui que ela não digitou — e que ele
               // serve só pra contato até ela confirmar por SMS.
-              '<div id="profile-phone-org-note" style="display:none;margin-top:6px;font-size:0.7rem;line-height:1.45;color:#fbbf24;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.28);border-radius:8px;padding:7px 9px;"></div>' +
+              '<div id="profile-phone-org-note" style="display:none;margin-top:6px;font-size:0.7rem;line-height:1.45;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.28);border-radius:8px;padding:7px 9px;"></div>' +
               '<div id="profile-phone-edit-wrap" style="display:none;">' +
               '<label class="form-label" style="font-size: 0.75rem;">' + _t('profile.labelWhatsApp') + '</label>' +
               '<div style="display: flex; gap: 6px; align-items: center;">' +
@@ -7135,7 +7137,7 @@ function setupProfileModal() {
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-edit-phone" class="form-control" style="flex: 1; min-width: 0; box-sizing: border-box;" placeholder="(11) 9999-8888" data-digits="" oninput="window._profilePhoneMaskInput && window._profilePhoneMaskInput(this)">' +
-                '<button type="button" id="profile-phone-verify-btn" onclick="if(this.disabled)return; window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
+                '<button type="button" id="profile-phone-verify-btn" onclick="if(this.disabled)return; window._profileVerifyPhone && window._profileVerifyPhone()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
               '</div>' +
               // v2.5.x: verificação de posse do celular. Adicionar/trocar exige
               // confirmar por SMS/WhatsApp; se o número já for de outra conta, une
@@ -7180,7 +7182,7 @@ function setupProfileModal() {
             '<div id="profile-linked-emails" style="margin-bottom:6px;display:flex;flex-direction:column;gap:4px;"></div>' +
             '<div style="display:flex;gap:8px;align-items:center;">' +
               '<input type="email" id="profile-link-email-input" class="form-control" placeholder="outro@email.com" autocomplete="off" style="flex:1;min-width:0;box-sizing:border-box;font-size:0.85rem;">' +
-              '<button type="button" onclick="window._profileSendEmailLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 10px;border-radius:8px;font-size:0.78rem;cursor:pointer;white-space:nowrap;line-height:1.4;">Verificar</button>' +
+              '<button type="button" onclick="window._profileSendEmailLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);padding:6px 10px;border-radius:8px;font-size:0.78rem;cursor:pointer;white-space:nowrap;line-height:1.4;">Verificar</button>' +
             '</div>' +
             '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;margin-top:4px;display:block;">Você receberá um link de verificação nesse e-mail. Clicando, ele será vinculado à sua conta.</span>' +
           '</div>' +
@@ -7198,7 +7200,7 @@ function setupProfileModal() {
                   countryOpts +
                 '</select>' +
                 '<input type="tel" id="profile-link-phone-input" class="form-control" placeholder="(11) 99999-8888" data-digits="" style="flex:1;min-width:0;box-sizing:border-box;" oninput="this.setAttribute(\'data-digits\', this.value.replace(/\\D/g,\'\'));">' +
-                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
+                '<button type="button" onclick="window._profileVerifyPhone && window._profileVerifyPhone({linked:true})" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);color:var(--sp-c-a5b4fc,#a5b4fc);padding:6px 12px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">Verificar</button>' +
               '</div>' +
               '<div style="margin-top:6px;">' +
                 '<span style="font-size:0.65rem;color:var(--text-muted);opacity:0.7;display:block;margin-top:4px;">Confirme por SMS. O número vira mais um login da sua conta (com a sua senha).</span>' +
@@ -7438,7 +7440,7 @@ function setupProfileModal() {
                   'oninput="window._applyUiScale&&window._applyUiScale(window._uiPctToScale(this.value)); var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=this.value+\'%\';" ' +
                   'onchange="window._setUiScale&&window._setUiScale(window._uiPctToScale(this.value));">' +
                 '<span style="font-size:1.1rem;color:var(--text-muted);line-height:1;">A</span>' +
-                '<span id="profile-ui-scale-val" style="font-size:0.78rem;font-weight:800;color:var(--primary-color);min-width:44px;text-align:right;">100%</span>' +
+                '<span id="profile-ui-scale-val" style="font-size:0.78rem;font-weight:800;color:var(--sp-c-var-primary-color-,var(--primary-color));min-width:44px;text-align:right;">100%</span>' +
               '</div>' +
               '<button type="button" onclick="var d=document.getElementById(\'profile-ui-scale\'); if(d)d.value=100; var l=document.getElementById(\'profile-ui-scale-val\'); if(l)l.textContent=\'100%\'; window._setUiScale&&window._setUiScale(window._UI_SCALE_BASE);" style="margin-top:8px;background:transparent;border:1px solid var(--border-color);color:var(--text-muted);font-size:0.72rem;padding:5px 12px;border-radius:8px;cursor:pointer;">↺ Restaurar padrão (100%)</button>' +
             '</div>' +
@@ -7468,8 +7470,8 @@ function setupProfileModal() {
               '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
                 '<label class="form-label" style="font-size: 0.8rem; font-weight: 600; margin: 0; flex-shrink: 0;">' + _t('profile.language') + '</label>' +
                 '<div style="display:flex;gap:6px;flex-shrink:0;" id="profile-lang-flags">' +
-                  '<button type="button" onclick="if(typeof window._setLang===\'function\'){window._setLang(\'pt\');document.querySelectorAll(\'#profile-lang-flags button\').forEach(function(b){b.style.opacity=\'0.4\';b.style.transform=\'scale(1)\';b.style.boxShadow=\'none\'});this.style.opacity=\'1\';this.style.transform=\'scale(1.15)\';this.style.boxShadow=\'0 0 8px rgba(251,191,36,0.4)\'}" style="font-size:1.4rem;background:none;border:2px solid ' + (window._lang === 'pt' ? '#fbbf24' : 'transparent') + ';border-radius:8px;padding:3px 6px;cursor:pointer;opacity:' + (window._lang === 'pt' ? '1' : '0.4') + ';transform:scale(' + (window._lang === 'pt' ? '1.15' : '1') + ');transition:all 0.2s;' + (window._lang === 'pt' ? 'box-shadow:0 0 8px rgba(251,191,36,0.4)' : '') + '" title="Português">🇧🇷</button>' +
-                  '<button type="button" onclick="if(typeof window._setLang===\'function\'){window._setLang(\'en\');document.querySelectorAll(\'#profile-lang-flags button\').forEach(function(b){b.style.opacity=\'0.4\';b.style.transform=\'scale(1)\';b.style.boxShadow=\'none\'});this.style.opacity=\'1\';this.style.transform=\'scale(1.15)\';this.style.boxShadow=\'0 0 8px rgba(251,191,36,0.4)\'}" style="font-size:1.4rem;background:none;border:2px solid ' + (window._lang === 'en' ? '#fbbf24' : 'transparent') + ';border-radius:8px;padding:3px 6px;cursor:pointer;opacity:' + (window._lang === 'en' ? '1' : '0.4') + ';transform:scale(' + (window._lang === 'en' ? '1.15' : '1') + ');transition:all 0.2s;' + (window._lang === 'en' ? 'box-shadow:0 0 8px rgba(251,191,36,0.4)' : '') + '" title="English">🇺🇸</button>' +
+                  '<button type="button" onclick="if(typeof window._setLang===\'function\'){window._setLang(\'pt\');document.querySelectorAll(\'#profile-lang-flags button\').forEach(function(b){b.style.opacity=\'0.4\';b.style.transform=\'scale(1)\';b.style.boxShadow=\'none\'});this.style.opacity=\'1\';this.style.transform=\'scale(1.15)\';this.style.boxShadow=\'0 0 8px rgba(251,191,36,0.4)\'}" style="font-size:1.4rem;background:none;border:2px solid ' + window._spCor((window._lang === 'pt' ? '#fbbf24' : 'transparent'), 'borda') + ';border-radius:8px;padding:3px 6px;cursor:pointer;opacity:' + (window._lang === 'pt' ? '1' : '0.4') + ';transform:scale(' + (window._lang === 'pt' ? '1.15' : '1') + ');transition:all 0.2s;' + (window._lang === 'pt' ? 'box-shadow:0 0 8px rgba(251,191,36,0.4)' : '') + '" title="Português">🇧🇷</button>' +
+                  '<button type="button" onclick="if(typeof window._setLang===\'function\'){window._setLang(\'en\');document.querySelectorAll(\'#profile-lang-flags button\').forEach(function(b){b.style.opacity=\'0.4\';b.style.transform=\'scale(1)\';b.style.boxShadow=\'none\'});this.style.opacity=\'1\';this.style.transform=\'scale(1.15)\';this.style.boxShadow=\'0 0 8px rgba(251,191,36,0.4)\'}" style="font-size:1.4rem;background:none;border:2px solid ' + window._spCor((window._lang === 'en' ? '#fbbf24' : 'transparent'), 'borda') + ';border-radius:8px;padding:3px 6px;cursor:pointer;opacity:' + (window._lang === 'en' ? '1' : '0.4') + ';transform:scale(' + (window._lang === 'en' ? '1.15' : '1') + ');transition:all 0.2s;' + (window._lang === 'en' ? 'box-shadow:0 0 8px rgba(251,191,36,0.4)' : '') + '" title="English">🇺🇸</button>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -7581,7 +7583,7 @@ function setupProfileModal() {
     };
 
     // ─── Profile Theme Buttons ──────────────────────────────────────────────
-    var _themeColors = { dark: '#6366f1', light: '#f59e0b', sunset: '#ef4444', ocean: '#0ea5e9' };
+    var _themeColors = { dark: '#6366f1', light: '#f59e0b' }  // só 2 temas (js/theme.js);
 
     window._setProfileTheme = function(theme) {
       document.documentElement.setAttribute('data-theme', theme);
@@ -7613,7 +7615,7 @@ function setupProfileModal() {
         var color = _themeColors[val] || '#6366f1';
         btn.style.background = isActive ? color : 'transparent';
         btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
-        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.border = isActive ? ('2px solid ' + window._spCor(color, 'borda')) : '1.5px solid var(--border-color)';
         btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
         btn.style.fontWeight = isActive ? '700' : '500';
       });
@@ -7647,7 +7649,7 @@ function setupProfileModal() {
         var color = _statsVisColors[v] || '#6366f1';
         btn.style.background = isActive ? color : 'transparent';
         btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
-        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.border = isActive ? ('2px solid ' + window._spCor(color, 'borda')) : '1.5px solid var(--border-color)';
         btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
         btn.style.fontWeight = isActive ? '700' : '500';
       });
@@ -7797,7 +7799,7 @@ function setupProfileModal() {
         var color = _liveAlertsColors[v] || '#6366f1';
         btn.style.background = isActive ? color : 'transparent';
         btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
-        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.border = isActive ? ('2px solid ' + window._spCor(color, 'borda')) : '1.5px solid var(--border-color)';
         btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
         btn.style.fontWeight = isActive ? '700' : '500';
       });
@@ -7814,7 +7816,7 @@ function setupProfileModal() {
         var color = _presenceVisColors[v] || '#6366f1';
         btn.style.background = isActive ? color : 'transparent';
         btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
-        btn.style.border = isActive ? ('2px solid ' + color) : '1.5px solid var(--border-color)';
+        btn.style.border = isActive ? ('2px solid ' + window._spCor(color, 'borda')) : '1.5px solid var(--border-color)';
         btn.style.boxShadow = isActive ? ('0 0 10px ' + color + '40') : 'none';
         btn.style.fontWeight = isActive ? '700' : '500';
       });
@@ -8034,7 +8036,7 @@ function setupProfileModal() {
         var secondary = loc.name && loc.address ? loc.address : '';
         var hasGoogle = !!loc.placeId;
         var badge = hasGoogle
-          ? '<span style="font-size:0.55rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#10b981;padding:1px 5px;border-radius:6px;font-weight:700;flex-shrink:0;" title="Local do Google — ficha completa">📍 Google</span>'
+          ? '<span style="font-size:0.55rem;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:var(--sp-c-10b981,#10b981);padding:1px 5px;border-radius:6px;font-weight:700;flex-shrink:0;" title="Local do Google — ficha completa">📍 Google</span>'
           : '';
         var titleAttr = window._safeHtml((primary || '') + (secondary ? '\n' + secondary : ''));
         return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;">' +
@@ -8119,7 +8121,7 @@ function setupProfileModal() {
         try { await google.maps.importLibrary('places'); _profilePlacesLib = true; } catch(e) {}
       }
       if (!_profilePlacesLib) {
-        sugBox.innerHTML = '<div style="padding:10px 14px;color:#94a3b8;font-size:0.8rem;">Carregando API do Google...</div>';
+        sugBox.innerHTML = '<div style="padding:10px 14px;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.8rem;">Carregando API do Google...</div>';
         sugBox.style.display = 'block';
         return;
       }
@@ -8134,7 +8136,7 @@ function setupProfileModal() {
         var result = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
         var suggestions = result.suggestions || [];
         if (suggestions.length === 0) {
-          sugBox.innerHTML = '<div style="padding:10px 14px;color:#94a3b8;font-size:0.8rem;">Nenhum resultado encontrado</div>';
+          sugBox.innerHTML = '<div style="padding:10px 14px;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.8rem;">Nenhum resultado encontrado</div>';
           sugBox.style.display = 'block';
           return;
         }
@@ -8147,7 +8149,7 @@ function setupProfileModal() {
           var secondary = pred.secondaryText ? pred.secondaryText.text : '';
 
           var item = document.createElement('div');
-          item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.06);transition:background 0.15s;';
+          item.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));transition:background 0.15s;';
           item.innerHTML = '<div style="color:var(--text-bright);font-size:0.85rem;font-weight:500;">📍 ' + window._safeHtml(main) + '</div>' +
             (secondary ? '<div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px;">' + window._safeHtml(secondary) + '</div>' : '');
 
@@ -8165,7 +8167,7 @@ function setupProfileModal() {
         sugBox.style.display = 'block';
       } catch (e) {
         window._warn('[profile-map] search error:', e);
-        sugBox.innerHTML = '<div style="padding:10px 14px;color:#f87171;font-size:0.8rem;">' + _t('auth.locationSearchError', {msg: window._safeHtml(e.message || 'API indisponível')}) + '</div>';
+        sugBox.innerHTML = '<div style="padding:10px 14px;color:var(--sp-c-f87171,#f87171);font-size:0.8rem;">' + _t('auth.locationSearchError', {msg: window._safeHtml(e.message || 'API indisponível')}) + '</div>';
         sugBox.style.display = 'block';
       }
     }
@@ -8440,30 +8442,30 @@ function setupProfileModal() {
           return firebase.functions().httpsCallable('requestEmailMerge')({ email: email }).then(function(r) {
             var rd = (r && r.data) || {};
             if (rd.ok && rd.sent) {
-              if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link para <b>' + window._safeHtml(email) + '</b>. Abra e toque em <b>Unir minhas contas</b> — suas duas contas viram uma só (mantendo a mais antiga). Você <b>não</b> precisa entrar na outra conta; depois é só entrar com e-mail OU celular.</span>';
+              if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-6ee7b7,#6ee7b7);">✅ Enviamos um link para <b>' + window._safeHtml(email) + '</b>. Abra e toque em <b>Unir minhas contas</b> — suas duas contas viram uma só (mantendo a mais antiga). Você <b>não</b> precisa entrar na outra conta; depois é só entrar com e-mail OU celular.</span>';
             } else if (rd.reason === 'same-account') {
               if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">Esse e-mail já é desta conta.</span>';
             } else if (rd.reason === 'no-account') {
               // Não existe conta com esse e-mail → só vincula como login novo.
               return fu.verifyBeforeUpdateEmail(email).then(function() {
-                if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login.</span>';
+                if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-6ee7b7,#6ee7b7);">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login.</span>';
               });
             } else {
-              if (statusEl) statusEl.innerHTML = '<span style="color:#fca5a5;">Não foi possível enviar o link agora. Tente de novo.</span>';
+              if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fca5a5,#fca5a5);">Não foi possível enviar o link agora. Tente de novo.</span>';
             }
           });
         }
         return fu.verifyBeforeUpdateEmail(email).then(function() {
-          if (statusEl) statusEl.innerHTML = '<span style="color:#6ee7b7;">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login. Até lá, seu e-mail atual continua valendo.</span>';
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-6ee7b7,#6ee7b7);">✅ Enviamos um link de confirmação para <b>' + window._safeHtml(email) + '</b>. Abra e confirme — ele vira seu login. Até lá, seu e-mail atual continua valendo.</span>';
         });
       }).catch(function(err) {
         var code = err && err.code;
         if (code === 'auth/requires-recent-login') {
-          if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Por segurança, saia e entre de novo antes de trocar o e-mail.</span>';
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Por segurança, saia e entre de novo antes de trocar o e-mail.</span>';
         } else if (code === 'auth/email-already-in-use') {
-          if (statusEl) statusEl.innerHTML = '<span style="color:#fbbf24;">Esse e-mail já pertence a outra conta. Pra unir, use o celular na conta que quer manter.</span>';
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fbbf24,#fbbf24);">Esse e-mail já pertence a outra conta. Pra unir, use o celular na conta que quer manter.</span>';
         } else {
-          if (statusEl) statusEl.innerHTML = '<span style="color:#fca5a5;">Não foi possível: ' + window._safeHtml(String((err && (err.message || err.code)) || 'erro')) + '</span>';
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--sp-c-fca5a5,#fca5a5);">Não foi possível: ' + window._safeHtml(String((err && (err.message || err.code)) || 'erro')) + '</span>';
         }
       });
     };
@@ -8584,7 +8586,7 @@ function setupProfileModal() {
         } else {
           try { clearInterval(window._profilePhoneResendTimer); } catch (e) {}
           el.innerHTML = '<span onclick="window._profileVerifyPhone(window._profilePhoneLastOpts || {})" ' +
-            'style="color:#a5b4fc;font-weight:700;cursor:pointer;text-decoration:underline;">🔄 Reenviar o código por SMS</span>' +
+            'style="color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;cursor:pointer;text-decoration:underline;">🔄 Reenviar o código por SMS</span>' +
             window._profilePhoneHelpHtml();
         }
         left--;
@@ -8693,7 +8695,7 @@ function setupProfileModal() {
         try { FAp.setLanguageCode({ languageCode: 'pt-BR' }); } catch (e) {}
         var _failN = function (msg) {
           window._profilePhoneLogAttempt('send-failed', msg);
-          if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(window._profilePhoneErrText(msg)) + '</div>' + window._profilePhoneHelpHtml();
+          if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-fca5a5,#fca5a5);font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(window._profilePhoneErrText(msg)) + '</div>' + window._profilePhoneHelpHtml();
         };
         FAp.removeAllListeners().then(function () {
           FAp.addListener('phoneCodeSent', function (ev) {
@@ -8759,7 +8761,7 @@ function setupProfileModal() {
         var c = document.getElementById(ctx.codeId); if (c) { try { c.focus(); } catch(e){} }
       }).catch(function(err) {
         window._profilePhoneLogAttempt('send-failed', err);
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(window._profilePhoneErrText(err)) + '</div>' + window._profilePhoneHelpHtml();
+        if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-fca5a5,#fca5a5);font-size:0.78rem;">Não foi possível enviar o código: ' + window._safeHtml(window._profilePhoneErrText(err)) + '</div>' + window._profilePhoneHelpHtml();
       });
     };
 
@@ -8770,7 +8772,7 @@ function setupProfileModal() {
       var survivor = window._profilePhoneSurvivor;
       var phoneUid = phoneUser.uid;
       if (phoneUid === survivor) {
-        if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.8rem;">✅ Esse celular já é desta conta.</div>';
+        if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-6ee7b7,#6ee7b7);font-size:0.8rem;">✅ Esse celular já é desta conta.</div>';
         try { sapp.auth().signOut(); } catch(e){}
         return Promise.resolve();
       }
@@ -8806,13 +8808,13 @@ function setupProfileModal() {
             }
           }
         } catch (e) {}
-        if (otpEl) otpEl.innerHTML = '<div style="color:#6ee7b7;font-size:0.82rem;">' +
+        if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-6ee7b7,#6ee7b7);font-size:0.82rem;">' +
           (merged ? '✅ Contas unidas e celular vinculado! Atualizando…' : '✅ Celular verificado e vinculado! Atualizando…') + '</div>';
         setTimeout(function() { window.location.reload(); }, 1600);
       }
       function fail(msg) {
         try { sapp.auth().signOut(); } catch(e){}
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg || 'erro')) + '</div>';
+        if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-fca5a5,#fca5a5);font-size:0.78rem;">Não foi possível vincular/unir: ' + window._safeHtml(String(msg || 'erro')) + '</div>';
       }
       function errMsg(r) { return (r && r._error && (r._error.message || r._error.status)) || 'erro'; }
 
@@ -8861,7 +8863,7 @@ function setupProfileModal() {
       // saiu com o canal — e não custa nada ao merge: o proofIdToken sempre veio
       // do SMS. Ver project_whatsapp_meta_2fa_block.
       if (!window._profilePhoneConfirmation) {
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">O código não chegou a ser enviado. Feche e tente de novo.</div>';
+        if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-fca5a5,#fca5a5);font-size:0.78rem;">O código não chegou a ser enviado. Feche e tente de novo.</div>';
         return;
       }
       window._profilePhoneConfirmation.confirm(code).then(function(result) {
@@ -8869,8 +8871,8 @@ function setupProfileModal() {
         return window._profilePhoneMergeFromSecondary(result.user, otpEl);
       }).catch(function(err) {
         window._profilePhoneLogAttempt('code-failed', err);
-        if (otpEl) otpEl.innerHTML = '<div style="color:#fca5a5;font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>' +
-          '<div style="margin-top:8px;"><span onclick="window._profileVerifyPhone(window._profilePhoneLastOpts || {})" style="color:#a5b4fc;font-weight:700;cursor:pointer;text-decoration:underline;font-size:0.78rem;">🔄 Reenviar o código</span></div>';
+        if (otpEl) otpEl.innerHTML = '<div style="color:var(--sp-c-fca5a5,#fca5a5);font-size:0.78rem;">Código inválido ou expirado. Tente de novo.</div>' +
+          '<div style="margin-top:8px;"><span onclick="window._profileVerifyPhone(window._profilePhoneLastOpts || {})" style="color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;cursor:pointer;text-decoration:underline;font-size:0.78rem;">🔄 Reenviar o código</span></div>';
       });
     };
 
@@ -9131,7 +9133,7 @@ window._profileHydrateNameConflict = function () {
         box.style.display = '';
         box.innerHTML =
           '<div style="background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.35);border-radius:10px;padding:10px 12px;">' +
-            '<div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:4px;">👤 Existe outra conta com o seu nome</div>' +
+            '<div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">👤 Existe outra conta com o seu nome</div>' +
             '<div style="font-size:0.75rem;color:var(--text-muted);line-height:1.45;">' +
               (contato
                 ? 'Ela está cadastrada com ' + window._safeHtml(contato) + '. '
@@ -9261,9 +9263,9 @@ window._profileHydrateNameConflict = function () {
         var sub = have[pid].email || have[pid].phoneNumber || '';
         // v1.9.67: logo oficial à esquerda + selo-bolinha verde à direita (mock aprovado).
         var logoBg = pid === 'google.com' ? '#fff' : (pid === 'apple.com' ? '#000' : (pid === 'phone' ? '#30d158' : '#5856d6'));
-        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:' + m.bg + ';border:1px solid ' + m.bd + ';">' +
-          '<span class="pf-logo" style="background:' + logoBg + ';">' + window._platformLogoSvg(pid) + '</span>' +
-          '<span style="font-weight:700;font-size:0.82rem;color:' + m.fg + ';flex-shrink:0;">' + window._safeHtml(m.label) + '</span>' +
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:' + window._spCor(m.bg, 'background') + ';border:1px solid ' + window._spCor(m.bd, 'borda') + ';">' +
+          '<span class="pf-logo" style="background:' + window._spCor(logoBg, 'background') + ';">' + window._platformLogoSvg(pid) + '</span>' +
+          '<span style="font-weight:700;font-size:0.82rem;color:' + window._spCor(m.fg, 'color') + ';flex-shrink:0;">' + window._safeHtml(m.label) + '</span>' +
           (sub ? '<span style="font-size:0.72rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">' + window._safeHtml(sub) + '</span>' : '') +
           '<span class="pf-check" title="Vinculado" style="margin-left:auto;">✓</span>' +
         '</div>';
@@ -9274,7 +9276,7 @@ window._profileHydrateNameConflict = function () {
         if (have[pid]) return;
         var m = _PROV_META[pid];
         html += '<button type="button" id="profile-link-' + pid.split('.')[0] + '" onclick="window._profileLinkProvider(\'' + pid + '\')" ' +
-          'style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:transparent;border:1px dashed ' + m.bd + ';color:' + m.fg + ';font-weight:700;font-size:0.82rem;cursor:pointer;text-align:left;width:100%;">' +
+          'style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:transparent;border:1px dashed ' + m.bd + ';color:' + window._spCor(m.fg, 'color') + ';font-weight:700;font-size:0.82rem;cursor:pointer;text-align:left;width:100%;">' +
           '<span style="flex-shrink:0;">➕</span><span>Vincular ' + window._safeHtml(m.label) + '</span>' +
         '</button>';
       });
@@ -9286,7 +9288,7 @@ window._profileHydrateNameConflict = function () {
       if (!el) return;
       var c = kind === 'ok' ? '#6ee7b7' : (kind === 'err' ? '#fca5a5' : 'var(--text-muted)');
       el.style.display = 'block';
-      el.innerHTML = '<span style="color:' + c + ';">' + window._safeHtml(text) + '</span>';
+      el.innerHTML = '<span style="color:' + window._spCor(c, 'color') + ';">' + window._safeHtml(text) + '</span>';
     }
 
     // Constrói a credencial do provedor SEM trocar a sessão atual.
@@ -9545,17 +9547,17 @@ window._profileHydrateNameConflict = function () {
           message: {
             subject: 'Confirme seu e-mail no scoreplace.app',
             html:
-              '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:#e2e8f0;border-radius:12px;">' +
+              '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:var(--sp-c-e2e8f0,#e2e8f0);border-radius:12px;">' +
               '<div style="text-align:center;margin-bottom:24px;">' +
                 '<img src="https://scoreplace.app/icons/icon-192.svg" width="48" height="48" style="border-radius:10px;">' +
-                '<h2 style="color:#fbbf24;margin:12px 0 4px;">scoreplace.app</h2>' +
+                '<h2 style="color:var(--sp-c-fbbf24,#fbbf24);margin:12px 0 4px;">scoreplace.app</h2>' +
               '</div>' +
               '<p style="font-size:1rem;margin-bottom:8px;">Olá!</p>' +
-              '<p style="color:#94a3b8;margin-bottom:20px;">Clique no botão abaixo para confirmar que <b style="color:#e2e8f0;">' + email + '</b> é seu e-mail e vinculá-lo à sua conta.</p>' +
+              '<p style="color:var(--sp-c-94a3b8,#94a3b8);margin-bottom:20px;">Clique no botão abaixo para confirmar que <b style="color:var(--sp-c-e2e8f0,#e2e8f0);">' + email + '</b> é seu e-mail e vinculá-lo à sua conta.</p>' +
               '<div style="text-align:center;margin:24px 0;">' +
                 '<a href="' + verifyUrl + '" style="background:#6366f1;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;display:inline-block;">Confirmar e-mail</a>' +
               '</div>' +
-              '<p style="font-size:0.8rem;color:#64748b;text-align:center;">Este link expira em 24 horas. Se você não solicitou isso, ignore este e-mail.</p>' +
+              '<p style="font-size:0.8rem;color:var(--sp-c-64748b,#64748b);text-align:center;">Este link expira em 24 horas. Se você não solicitou isso, ignore este e-mail.</p>' +
               '</div>'
           }
         });

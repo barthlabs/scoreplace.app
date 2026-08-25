@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // weather.js — previsão do tempo do LOCAL do torneio (v1.8.78)
 //
 // Pedido do dono (15/ago/2026, com print do detalhe do torneio):
@@ -168,7 +170,7 @@
   function _pillChuva(p) {
     if (!p) return '';
     var cor = p >= 60 ? '#60a5fa' : '#94a3b8';
-    return '<span style="font-size:0.62rem;font-weight:700;color:' + cor + ';white-space:nowrap;">💧' + p + '%</span>';
+    return '<span style="font-size:0.62rem;font-weight:700;color:' + window._spCor(cor, 'color') + ';white-space:nowrap;">💧' + p + '%</span>';
   }
 
   window._weatherWidgetHtml = function (r, size, local) {
@@ -186,10 +188,10 @@
     // é daquele endereço, e sem dizer de onde ela é o número fica solto (pedido do dono).
     // `overflow-wrap:anywhere` porque nome de local também traz token que não quebra.
     h += '<div style="margin-bottom:8px;">' +
-      '<div style="font-size:0.65rem;font-weight:800;color:#60a5fa;text-transform:uppercase;' +
+      '<div style="font-size:0.65rem;font-weight:800;color:var(--sp-c-60a5fa,#60a5fa);text-transform:uppercase;' +
         'letter-spacing:0.06em;">🌤️ Previsão do tempo</div>' +
       (local
-        ? '<div style="font-size:0.7rem;font-weight:600;color:#cbd5e1;margin-top:2px;' +
+        ? '<div style="font-size:0.7rem;font-weight:600;color:var(--sp-c-cbd5e1,#cbd5e1);margin-top:2px;' +
           'overflow-wrap:anywhere;line-height:1.25;">📍 ' + _sf(local) + '</div>'
         : '') +
       '</div>';
@@ -200,10 +202,10 @@
       '<div style="min-width:0;flex:1;">' +
         '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">' +
           '<span style="font-size:' + (lg ? '1.6rem' : '1.35rem') + ';font-weight:800;color:var(--text-bright);line-height:1;">' + r.agora.temp + '°</span>' +
-          '<span style="font-size:0.66rem;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:0.06em;">agora</span>' +
+          '<span style="font-size:0.66rem;font-weight:700;color:var(--sp-c-60a5fa,#60a5fa);text-transform:uppercase;letter-spacing:0.06em;">agora</span>' +
         '</div>' +
-        '<div style="font-size:0.76rem;color:#cbd5e1;text-transform:capitalize;margin-top:2px;">' + _sf(r.agora.desc) + '</div>' +
-        '<div style="font-size:0.68rem;color:#94a3b8;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">' +
+        '<div style="font-size:0.76rem;color:var(--sp-c-cbd5e1,#cbd5e1);text-transform:capitalize;margin-top:2px;">' + _sf(r.agora.desc) + '</div>' +
+        '<div style="font-size:0.68rem;color:var(--sp-c-94a3b8,#94a3b8);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">' +
           '<span>💧 ' + r.agora.umidade + '%</span><span>💨 ' + r.agora.vento + ' km/h</span>' +
           (r.agora.chuva ? '<span>🌧️ ' + r.agora.chuva + '%</span>' : '') +
         '</div>' +
@@ -212,12 +214,12 @@
     // HOJE
     if (r.hoje) {
       h += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:8px;' +
-        'border-top:1px solid rgba(255,255,255,0.08);">' +
-        '<span style="font-size:0.7rem;font-weight:800;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.06em;min-width:42px;">hoje</span>' +
+        'border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+        '<span style="font-size:0.7rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);text-transform:uppercase;letter-spacing:0.06em;min-width:42px;">hoje</span>' +
         _img(r.hoje.icon, 30) +
         '<span style="font-size:0.8rem;font-weight:700;color:var(--text-bright);">' +
           (r.hoje.min != null ? r.hoje.min + '°' : '—') + ' / ' + (r.hoje.max != null ? r.hoje.max + '°' : '—') + '</span>' +
-        '<span style="flex:1;min-width:0;font-size:0.72rem;color:#cbd5e1;text-transform:capitalize;overflow:hidden;' +
+        '<span style="flex:1;min-width:0;font-size:0.72rem;color:var(--sp-c-cbd5e1,#cbd5e1);text-transform:capitalize;overflow:hidden;' +
           'text-overflow:ellipsis;white-space:nowrap;">' + _sf(r.hoje.desc) + '</span>' +
         _pillChuva(r.hoje.chuva) +
       '</div>';
@@ -225,16 +227,16 @@
 
     // PRÓXIMOS DIAS
     if (r.dias && r.dias.length) {
-      h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);">' +
-        '<div style="font-size:0.62rem;font-weight:700;color:#94a3b8;text-transform:uppercase;' +
+      h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+        '<div style="font-size:0.62rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;' +
         'letter-spacing:0.06em;margin-bottom:5px;">próximos dias</div>';
       r.dias.forEach(function (d) {
         h += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">' +
-          '<span style="font-size:0.72rem;font-weight:700;color:#cbd5e1;text-transform:capitalize;min-width:42px;">' + _sf(d.nome) + '</span>' +
+          '<span style="font-size:0.72rem;font-weight:700;color:var(--sp-c-cbd5e1,#cbd5e1);text-transform:capitalize;min-width:42px;">' + _sf(d.nome) + '</span>' +
           _img(d.icon, 26) +
           '<span style="font-size:0.75rem;font-weight:600;color:var(--text-bright);">' +
             (d.min != null ? d.min + '°' : '—') + ' / ' + (d.max != null ? d.max + '°' : '—') + '</span>' +
-          '<span style="flex:1;min-width:0;font-size:0.7rem;color:#94a3b8;text-transform:capitalize;overflow:hidden;' +
+          '<span style="flex:1;min-width:0;font-size:0.7rem;color:var(--sp-c-94a3b8,#94a3b8);text-transform:capitalize;overflow:hidden;' +
             'text-overflow:ellipsis;white-space:nowrap;">' + _sf(d.desc) + '</span>' +
           _pillChuva(d.chuva) +
         '</div>';

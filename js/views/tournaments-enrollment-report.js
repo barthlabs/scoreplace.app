@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // scoreplace.app — v1.3.0-beta: Análise de Inscritos
 // Modal pro organizador entender como os inscritos se distribuem nas
 // categorias configuradas (gênero × habilidade × idade), receber sugestão
@@ -590,9 +592,9 @@
     }
 
     var html = '<div style="background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.18); border-radius:12px; padding:14px 16px; margin-bottom:14px;">';
-    html += '<p style="margin:0 0 10px;font-size:0.74rem;color:#a855f7;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📊 Visão Geral</p>';
+    html += '<p style="margin:0 0 10px;font-size:0.74rem;color:var(--sp-c-a855f7,#a855f7);font-weight:700;text-transform:uppercase;letter-spacing:1px;">📊 Visão Geral</p>';
     html += '<div style="font-size:0.95rem;color:var(--text-bright);font-weight:700;margin-bottom:8px;">' + totalEnrolled + ' inscrito' + (totalEnrolled === 1 ? '' : 's') +
-      (totalWaitlist > 0 ? '<span style="font-size:0.72rem;font-weight:600;color:#fbbf24;margin-left:8px;">+ ' + totalWaitlist + ' na lista de espera</span>' : '') + '</div>';
+      (totalWaitlist > 0 ? '<span style="font-size:0.72rem;font-weight:600;color:var(--sp-c-fbbf24,#fbbf24);margin-left:8px;">+ ' + totalWaitlist + ' na lista de espera</span>' : '') + '</div>';
 
     // Gender row (totals)
     html += '<div style="margin-bottom:10px;"><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">Por gênero</div>';
@@ -771,13 +773,13 @@
 
     if (uniqueCats.length === 0) {
       return '<div style="background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.18); border-radius:12px; padding:14px 16px; margin-bottom:14px;">' +
-        '<p style="margin:0 0 8px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Distribuição por Categoria</p>' +
+        '<p style="margin:0 0 8px;font-size:0.74rem;color:var(--sp-c-818cf8,#818cf8);font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Distribuição por Categoria</p>' +
         '<p style="font-size:0.85rem;color:var(--text-muted);margin:0;">Sem categorias configuradas e sem dados suficientes nos perfis dos inscritos pra derivar categorias automaticamente.</p>' +
         '</div>';
     }
 
     var html = '<div style="background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.18); border-radius:12px; padding:14px 16px; margin-bottom:14px;">';
-    html += '<p style="margin:0 0 4px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Distribuição por Categoria' + (derivedSource ? ' <span style="color:var(--text-muted);font-weight:500;text-transform:none;letter-spacing:0;font-size:0.66rem;">(sugeridas pelos perfis)</span>' : '') + '</p>';
+    html += '<p style="margin:0 0 4px;font-size:0.74rem;color:var(--sp-c-818cf8,#818cf8);font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Distribuição por Categoria' + (derivedSource ? ' <span style="color:var(--text-muted);font-weight:500;text-transform:none;letter-spacing:0;font-size:0.66rem;">(sugeridas pelos perfis)</span>' : '') + '</p>';
     var subtxt = derivedSource
       ? 'Categorias derivadas automaticamente dos perfis dos inscritos (gênero × habilidade do perfil + idade computada da data de nascimento). Configure manualmente em ✏️ Editar → Categorias do Torneio se quiser fixar quais valem.'
       : 'Cada linha = 1 categoria, no formato do torneio (' + _esc(String(t.format || '—')) + '). O tempo é orientativo (' + (parseInt(t.gameDuration) || 30) + 'min/partida, ' + Math.max(parseInt(t.courtCount) || 1, 1) + ' quadra' + ((Math.max(parseInt(t.courtCount) || 1, 1) > 1) ? 's' : '') + ')' + ((typeof window._isLigaFormat === 'function' && window._isLigaFormat(t)) ? ' — na Liga, é por rodada' : '') + '. Inscritos podem aparecer em mais de uma categoria.';
@@ -794,7 +796,7 @@
       items.forEach(function (it) {
         var sugg = _suggestForCount(it.count, t);
         var bgColor = sugg.color || '#64748b';
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;margin-top:4px;flex-wrap:wrap;">';
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));border-radius:8px;margin-top:4px;flex-wrap:wrap;">';
         // Cat name + count
         html += '<div style="display:flex;align-items:center;gap:8px;min-width:140px;flex:0 0 auto;">';
         html += '<span style="padding:3px 10px;background:rgba(' + (b === 'Misto' ? '168,85,247' : (b === 'Fem' ? '236,72,153' : (b === 'Masc' ? '59,130,246' : '148,163,184'))) + ',0.15);border:1px solid rgba(' + (b === 'Misto' ? '168,85,247' : (b === 'Fem' ? '236,72,153' : (b === 'Masc' ? '59,130,246' : '148,163,184'))) + ',0.30);border-radius:6px;font-size:0.78rem;color:var(--text-bright);font-weight:600;">' + _esc(it.displayCat) + '</span>';
@@ -802,7 +804,7 @@
         html += '<span style="font-size:0.7rem;color:var(--text-muted);">inscrito' + (it.count === 1 ? '' : 's') + '</span>';
         html += '</div>';
         // Format suggestion
-        html += '<div style="flex:1;min-width:180px;font-size:0.78rem;color:' + bgColor + ';font-weight:600;">' + _esc(sugg.format) + '</div>';
+        html += '<div style="flex:1;min-width:180px;font-size:0.78rem;color:' + window._spCor(bgColor, 'color') + ';font-weight:600;">' + _esc(sugg.format) + '</div>';
         // Duration
         html += '<div style="font-size:0.78rem;color:var(--text-bright);font-weight:700;flex:0 0 auto;">' + (sugg.matches > 0 ? '⏱ ' + _fmtDuration(sugg.durationMin) + (sugg.perRound ? '/rodada' : '') : '—') + '</div>';
         html += '</div>';
@@ -849,16 +851,16 @@
     html += '<hr style="border:none;border-top:1px solid rgba(148,163,184,0.15);margin:6px 0;">';
     html += '<div style="font-weight:600;color:var(--text-bright);">Por inscrito:</div>';
     rows.forEach(function (r, i) {
-      html += '<div style="padding:6px 8px;background:rgba(0,0,0,0.15);border-radius:6px;font-family:monospace;font-size:0.68rem;line-height:1.4;">';
+      html += '<div style="padding:6px 8px;background:var(--sp-g-0-0-0-015,rgba(0,0,0,0.15));border-radius:6px;font-family:monospace;font-size:0.68rem;line-height:1.4;">';
       html += '<div><b>#' + (i + 1) + ' ' + _esc(r.name) + '</b></div>';
       // v1.3.24-beta: indica se uid veio direto do participantObj ou foi
       // resgatado via email/displayName lookup. Resgate = bug de enrollment
       // que perdeu uid mas a pessoa tem perfil real.
       var uidSource = '';
       if (r.resolvedVia === 'email') {
-        uidSource = ' <span style="color:#22d3ee;font-weight:600;">⚙ resgatado via email lookup</span>';
+        uidSource = ' <span style="color:var(--sp-c-22d3ee,#22d3ee);font-weight:600;">⚙ resgatado via email lookup</span>';
       } else if (r.resolvedVia === 'displayName') {
-        uidSource = ' <span style="color:#22d3ee;font-weight:600;">⚙ resgatado via displayName lookup</span>';
+        uidSource = ' <span style="color:var(--sp-c-22d3ee,#22d3ee);font-weight:600;">⚙ resgatado via displayName lookup</span>';
       }
       html += '<div>uid: <code>' + _esc(r.uid || '(sem uid)') + '</code>' + uidSource + '</div>';
       var p = parts[i];
@@ -885,15 +887,15 @@
         var noTerms = prof.acceptedTerms !== true;
         var stragglerFlag = '';
         if (isPreBeta && noTerms) {
-          stragglerFlag = ' <span style="color:#fbbf24;font-weight:600;">🕰️ alpha-leftover (pre-beta + sem aceite)</span>';
+          stragglerFlag = ' <span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">🕰️ alpha-leftover (pre-beta + sem aceite)</span>';
         } else if (isPreBeta) {
-          stragglerFlag = ' <span style="color:#fbbf24;font-weight:600;">🕰️ pré-beta (perfil pode estar stale)</span>';
+          stragglerFlag = ' <span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">🕰️ pré-beta (perfil pode estar stale)</span>';
         } else if (noTerms) {
-          stragglerFlag = ' <span style="color:#fbbf24;font-weight:600;">⚠️ sem aceite de termos</span>';
+          stragglerFlag = ' <span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">⚠️ sem aceite de termos</span>';
         }
         html += '<div>profile.meta: createdAt=<code>' + _esc(createdAt || '—') + '</code> acceptedTerms=<code>' + _esc(prof.acceptedTerms === true ? 'true' : 'false') + '</code> acceptedTermsAt=<code>' + _esc(prof.acceptedTermsAt || '—') + '</code>' + stragglerFlag + '</div>';
       } else {
-        html += '<div style="color:#f87171;">profile: NÃO carregado (uid não bate, doc não existe, ou rules block)</div>';
+        html += '<div style="color:var(--sp-c-f87171,#f87171);">profile: NÃO carregado (uid não bate, doc não existe, ou rules block)</div>';
       }
       html += '<div>resolvido: gender=<code>' + _esc(r.gender || '—') + '</code> age=<code>' + _esc(r.age != null ? r.age : '—') + '</code> effectiveSkills=<code>' + _esc(JSON.stringify(r.effectiveSkills || [])) + '</code></div>';
       html += '<div>missing: <code>' + _esc(JSON.stringify(r.missing)) + '</code></div>';
@@ -940,7 +942,7 @@
     } else {
       gBadge = (gl && gMap[gl])
         ? '<span style="font-size:0.68rem;font-weight:700;color:rgb(' + gMap[gl].c + ');background:rgba(' + gMap[gl].c + ',0.14);border-radius:6px;padding:2px 7px;">' + gMap[gl].l + '</span>'
-        : '<span style="font-size:0.68rem;font-weight:600;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
+        : '<span style="font-size:0.68rem;font-weight:600;color:var(--sp-c-94a3b8,#94a3b8);background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">? Sem gên.</span>';
     }
     var _catsList = (isOrg && typeof window._getTournamentCategories === 'function' && _liveState && _liveState.t)
       ? (window._getTournamentCategories(_liveState.t) || []) : [];
@@ -955,14 +957,14 @@
       if (isOrg) {
         var cOpt = function (v, lbl) { return '<option value="' + _esc(v) + '"' + (curCat === v ? ' selected' : '') + '>' + _esc(lbl) + '</option>'; };
         skills = '<select title="Editar categoria do inscrito" onchange="window._erStageCategory(' + r.order + ',this.value)" ' +
-          'style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
+          'style="font-size:0.68rem;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;-webkit-appearance:none;appearance:none;">' +
           cOpt('', 'sem categoria ✎') +
           _catsList.map(function (c) { return cOpt(c, (window._displayCategoryName ? window._displayCategoryName(c) : c)); }).join('') +
           '</select>';
       } else {
         skills = (r.effectiveSkills && r.effectiveSkills.length > 0)
-          ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:#a5b4fc;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
-          : '<span style="font-size:0.68rem;color:#94a3b8;background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
+          ? r.effectiveSkills.map(function (s) { return '<span style="font-size:0.68rem;font-weight:700;color:var(--sp-c-a5b4fc,#a5b4fc);background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 7px;">' + _esc(s) + '</span>'; }).join('')
+          : '<span style="font-size:0.68rem;color:var(--sp-c-94a3b8,#94a3b8);background:rgba(148,163,184,0.12);border-radius:6px;padding:2px 7px;">sem hab.</span>';
       }
     }
     // v2.8.63: categoria única (skills vazio) → reserva o espaço do seletor de categoria
@@ -972,13 +974,13 @@
     // v2.4.33: mostra a CATEGORIA por idade que a pessoa entraria (ex.: "50+"),
     // nunca a idade real (privacidade). Sem categoria de idade no torneio → nada.
     var ageBadge = (r.ageBuckets && r.ageBuckets.length > 0)
-      ? '<span style="font-size:0.68rem;font-weight:700;color:#fbbf24;background:rgba(245,158,11,0.12);border-radius:6px;padding:2px 7px;">' + _esc(r.ageBuckets[0]) + '</span>'
+      ? '<span style="font-size:0.68rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(245,158,11,0.12);border-radius:6px;padding:2px 7px;">' + _esc(r.ageBuckets[0]) + '</span>'
       : '';
     var _mod = !!(pe && Object.keys(pe).length > 0); // card com mudança não-salva
-    var _cBorder = _mod ? '1px solid rgba(245,158,11,0.6)' : '1px solid rgba(255,255,255,0.08)';
+    var _cBorder = _mod ? '1px solid rgba(245,158,11,0.6)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
     var _cBg = _mod ? 'rgba(245,158,11,0.07)' : 'rgba(255,255,255,0.02)';
-    var _modDot = _mod ? '<span title="alteração não salva" style="color:#fbbf24;font-size:0.9rem;line-height:1;flex-shrink:0;">●</span>' : '';
-    return '<div style="padding:8px 10px;border:' + _cBorder + ';border-radius:10px;background:' + _cBg + ';">' +
+    var _modDot = _mod ? '<span title="alteração não salva" style="color:var(--sp-c-fbbf24,#fbbf24);font-size:0.9rem;line-height:1;flex-shrink:0;">●</span>' : '';
+    return '<div style="padding:8px 10px;border:' + _cBorder + ';border-radius:10px;background:' + window._spCor(_cBg, 'background') + ';">' +
       '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);min-width:24px;flex-shrink:0;">#' + r.order + '</span>' +
         '<span style="flex:1;min-width:0;font-size:0.84rem;font-weight:600;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc(r.name) + '</span>' +
@@ -986,7 +988,7 @@
         // mistura aos inscritos e o organizador atribui categoria achando que ela já
         // está no torneio — ela está na FILA, e só entra quando fechar grupo ou assumir
         // um W.O. A etiqueta é o que separa "editável" de "já jogando".
-        (r._wl ? '<span title="Está na lista de espera — ainda não entrou no torneio" style="flex-shrink:0;font-size:0.58rem;font-weight:800;color:#fbbf24;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:5px;padding:1px 5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;">espera</span>' : '') + _modDot +
+        (r._wl ? '<span title="Está na lista de espera — ainda não entrou no torneio" style="flex-shrink:0;font-size:0.58rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);border-radius:5px;padding:1px 5px;letter-spacing:0.3px;text-transform:uppercase;white-space:nowrap;">espera</span>' : '') + _modDot +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding-left:32px;">' + gBadge + skills + ageBadge + '</div>' +
     '</div>';
@@ -1449,12 +1451,12 @@
     // posição, trilha, LP) e uma 6ª viraria confete. RK é um chip com borda.
     if (qual === 'rk') {
       return '<span title="lançado como ranking no letzplay" aria-label="lançado como ranking" style="' + base +
-        'color:#cbd5e1;font-weight:800;font-size:0.66rem;letter-spacing:0.4px;' +
+        'color:var(--sp-c-cbd5e1,#cbd5e1);font-weight:800;font-size:0.66rem;letter-spacing:0.4px;' +
         'border:1px solid rgba(203,213,225,0.45);border-radius:4px;padding:0 3px;line-height:1.35;">RK</span>';
     }
     if (qual === 'lp') {
       return '<span title="letzplay" aria-label="letzplay" style="' + base +
-        'color:' + _LZ_C_LP + ';font-weight:800;font-size:0.74rem;letter-spacing:0.4px;">LP</span>';
+        'color:' + window._spCor(_LZ_C_LP, 'color') + ';font-weight:800;font-size:0.74rem;letter-spacing:0.4px;">LP</span>';
     }
     // scoreplace: o pódio da identidade (icons/logo-podium.svg) desenhado inline, pra não
     // custar requisição por linha nem depender de <img> que falha em silêncio.
@@ -1661,9 +1663,9 @@
       var h = '<div style="padding:2px 0;">' +
               (_rank ? _lzSelo('rk') + ' ' : '') + _lzSelo('lp') + ' ' +
               (L.lido ? '' : '⏳ ');
-      if (L.lido && L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      if (L.lido && L.data) h += '<span style="color:' + window._spCor(_LZ_C_DATA, 'color') + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
       h += '<span' + (L.lido ? '' : ' style="opacity:0.6;"') + '>' + _esc(L.nome) + '</span>';
-      if (L.cat) h += ' · <span style="color:' + _LZ_C_CAT + ';font-weight:700;">' + _esc(L.cat) + '</span>';
+      if (L.cat) h += ' · <span style="color:' + window._spCor(_LZ_C_CAT, 'color') + ';font-weight:700;">' + _esc(L.cat) + '</span>';
       // A COLOCAÇÃO É SEMPRE GERAL — nunca "GRUPO 03 · 2º de 3".
       // Ordem do dono: _"não interessa grupo x, yº de tantos. só importa a classificação
       // geral. sempre. nem que seja por faixa se não for personalizada como num ranking."_
@@ -1677,7 +1679,7 @@
         h += L.pos.chave
           // Pódio (1º/2º/3º) sai em âmbar com medalha; faixa e fase saem em cinza, porque
           // "5º/7º (quartas)" é informação e não conquista.
-          ? (' · <span style="color:' + (L.pos.podio ? _LZ_C_POS : _LZ_C_GRUPO) +
+          ? (' · <span style="color:' + window._spCor((L.pos.podio ? _LZ_C_POS : _LZ_C_GRUPO), 'color') +
              ';font-weight:' + (L.pos.podio ? '800' : '600') + ';">' +
              (L.pos.podio ? _lzMedalhaPos(L.pos.posMin) + ' ' : '') + _esc(L.pos.rotulo) + '</span>' +
              // COM QUEM. Em torneio de duplas a colocação é DA DUPLA — omitir o parceiro
@@ -1688,17 +1690,17 @@
              // `duplaVariavel` e aqui se diz isso — nomear um seria nomear o último com
              // quem se jogou, que é o defeito que o dono pegou na própria linha.
              (L.pos.duplaVariavel
-               ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">dupla variável</span>'
-               : L.pos.parceiro ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' +
+               ? ' <span style="color:' + window._spCor(_LZ_C_GRUPO, 'color') + ';opacity:.85;">dupla variável</span>'
+               : L.pos.parceiro ? ' <span style="color:' + window._spCor(_LZ_C_GRUPO, 'color') + ';opacity:.85;">com ' +
                 _esc(L.pos.parceiro) + '</span>' : ''))
           : L.pos.semPontuacao
           // tabela zerada: a posição existe no HTML deles mas não significa nada. Diz o que
           // é, em cinza, em vez de emprestar um pódio a um ranking sem lançamento nenhum.
-          ? (' · <span style="color:' + _LZ_C_GRUPO + ';font-weight:600;">sem pontuação lançada</span>')
+          ? (' · <span style="color:' + window._spCor(_LZ_C_GRUPO, 'color') + ';font-weight:600;">sem pontuação lançada</span>')
           // RANKING: posição na tabela inteira — é classificação geral por definição.
-          : (' · <span style="color:' + _LZ_C_POS + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>');
+          : (' · <span style="color:' + window._spCor(_LZ_C_POS, 'color') + ';font-weight:800;">' + _lzMedalha(L.pos.pos) + ' ' + L.pos.pos + 'º</span>');
       }
-      if (L.trilha) h += ' · <span style="color:' + _LZ_C_TRILHA + ';">' + _esc(L.trilha) + '</span>';
+      if (L.trilha) h += ' · <span style="color:' + window._spCor(_LZ_C_TRILHA, 'color') + ';">' + _esc(L.trilha) + '</span>';
       if (!L.lido) h += ' · <span style="opacity:0.5;">ainda não lido</span>';
       // ── LINHA LIDA E MUDA: DIZER POR QUÊ ──────────────────────────────────────
       // Reação do dono (12/ago/2026) na linha do "TORNEIO RP 2026 - 10 anos":
@@ -2087,9 +2089,9 @@
           : '<span>' + _esc(c.nome) + '</span>';
         var _pares = Object.keys(c.pares || {});
         var duplaHtml = _pares.length > 1
-          ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">dupla variável</span>'
+          ? ' <span style="color:' + window._spCor(_LZ_C_GRUPO, 'color') + ';opacity:.85;">dupla variável</span>'
           : _pares.length === 1
-          ? ' <span style="color:' + _LZ_C_GRUPO + ';opacity:.85;">com ' + _esc(_pares[0]) + '</span>'
+          ? ' <span style="color:' + window._spCor(_LZ_C_GRUPO, 'color') + ';opacity:.85;">com ' + _esc(_pares[0]) + '</span>'
           : '';
         // A COLOCAÇÃO, que faltava. Relato do dono: a linha do "Duplas Mistas Sorteadas"
         // vinha muda enquanto as do letzplay ao lado traziam "5º/8º". Sai do resolvedor
@@ -2113,7 +2115,7 @@
         // Pódio em âmbar com medalha, resto em cinza — colocação fora do pódio é informação,
         // não conquista (mesma gramática da linha irmã).
         var posHtml = _plc
-          ? ' · <span style="color:' + (_plc.pos <= 3 ? _LZ_C_POS : _LZ_C_GRUPO) + ';font-weight:' +
+          ? ' · <span style="color:' + window._spCor((_plc.pos <= 3 ? _LZ_C_POS : _LZ_C_GRUPO), 'color') + ';font-weight:' +
             (_plc.pos <= 3 ? '800' : '600') + ';">' +
             (_plc.pos <= 3 ? _lzMedalhaPos(_plc.pos) + ' ' : '') +
             _plc.pos + 'º</span>'
@@ -2122,7 +2124,7 @@
         // letzplay (ver _lzSelo e o topo do builder de lá). O 🏆 saiu: ele era idêntico ao
         // das linhas do letzplay e, numa lista intercalada, não distinguia origem nenhuma.
         var h = '<div style="padding:2px 0;">' + _lzSelo('sp') + ' ' +
-          (data ? '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
+          (data ? '<span style="color:' + window._spCor(_LZ_C_DATA, 'color') + ';font-variant-numeric:tabular-nums;">' + _esc(data) + '</span> · ' : '') +
           nomeHtml + posHtml + duplaHtml + '</div>';
         (liga ? linhasR : linhasT).push({ ts: c.ts, h: h });
       });
@@ -2215,7 +2217,7 @@
         ? window._spLetzplayPrecisaDesktop()
         : /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
       if (movel) { caixa.innerHTML = ''; return; }
-      caixa.innerHTML = '<div style="font-size:0.82rem;color:#fbbf24;line-height:1.45;margin:0 0 9px;' +
+      caixa.innerHTML = '<div style="font-size:0.82rem;color:var(--sp-c-fbbf24,#fbbf24);line-height:1.45;margin:0 0 9px;' +
         'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.32);border-radius:9px;padding:9px 11px;">' +
         (temAlguma
           ? ('⚠️ <b>Extensão desatualizada</b> — você está com a <b>v' + _esc(melhor) + '</b> e a busca precisa da <b>v' +
@@ -2244,7 +2246,7 @@
           var _b = 'display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:10px;' +
             'font-size:0.8rem;font-weight:800;text-decoration:none;white-space:nowrap;';
           var _pri = _b + 'background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1205;border:1px solid rgba(245,158,11,0.6);';
-          var _sec = _b + 'background:rgba(255,255,255,0.06);color:#fbbf24;border:1px solid rgba(251,191,36,0.45);';
+          var _sec = _b + 'background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--sp-c-fbbf24,#fbbf24);border:1px solid rgba(251,191,36,0.45);';
           var _linha = function (h) { return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">' + h + '</div>'; };
           var _nota = function (t) { return '<div style="margin-top:10px;font-size:0.78rem;opacity:0.9;line-height:1.45;">' + t + '</div>'; };
           if (!window.SP_EXT_STORE_URL) {
@@ -2386,10 +2388,10 @@
       var placar = (g.myScore != null && g.oppScore != null) ? (g.myScore + '–' + g.oppScore) : null;
       var advs = (g.oppNames && g.oppNames.length ? g.oppNames : g.oppHandles || []).filter(Boolean).join(' / ');
       var h = '<div style="padding:2px 0;">' + (venceu ? '✅ ' : (perdeu ? '❌ ' : '• '));
-      if (L.data) h += '<span style="color:' + _LZ_C_DATA + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
-      if (placar) h += '<span style="color:' + (venceu ? '#2dd4a0' : (perdeu ? '#f87171' : _LZ_C_POS)) + ';font-weight:800;font-variant-numeric:tabular-nums;">' + _esc(placar) + '</span> · ';
+      if (L.data) h += '<span style="color:' + window._spCor(_LZ_C_DATA, 'color') + ';font-variant-numeric:tabular-nums;">' + _esc(L.data) + '</span> · ';
+      if (placar) h += '<span style="color:' + window._spCor((venceu ? '#2dd4a0' : (perdeu ? '#f87171' : _LZ_C_POS)), 'color') + ';font-weight:800;font-variant-numeric:tabular-nums;">' + _esc(placar) + '</span> · ';
       if (advs) h += '<span>vs ' + _esc(advs) + '</span>';
-      if (g.competition) h += ' · <span style="color:' + _LZ_C_CAT + ';">' + _esc(g.competition) + '</span>';
+      if (g.competition) h += ' · <span style="color:' + window._spCor(_LZ_C_CAT, 'color') + ';">' + _esc(g.competition) + '</span>';
       return h + '</div>';
     }).join('') + (corte ? '<div style="opacity:0.6;padding:6px 0;">… e mais ' + (lin.length - LIM) + ' jogo(s) — o acervo completo está gravado.</div>' : '');
   };
@@ -2825,7 +2827,7 @@
       // card mostra) — indexar rótulo velho faz a busca achar quem a tela não mostra, que
       // foi exatamente o defeito da busca da chave na 1.7.47.
       return '<div draggable="true" data-er-person="' + _esc(r.name || '') + '" ondragstart="window._erMxDragStart(event,' + r.order + ')"' + click + ' ' +
-        'style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + nameCol + ';border:1px solid ' + border + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
+        'style="cursor:' + (canOpen ? 'pointer' : 'grab') + ';font-size:0.74rem;font-weight:600;padding:4px 7px;border-radius:6px;min-width:0;background:var(--bg-card,rgba(0,0,0,0.25));color:' + window._spCor(nameCol, 'color') + ';border:1px solid ' + window._spCor(border, 'borda') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + tip + '">' + _esc(r.name || '(sem nome)') + '</div>';
     }
     function cardGrid(arr) {
       // minmax(0,...) e o que impede o estouro: com min-width:auto o nome longo
@@ -2850,8 +2852,8 @@
       // chave levou a 1.6.87 pra corrigir. `data-er-total` guarda o número REAL pra que a
       // contagem do título vire "(x de N)" enquanto o filtro está ligado e não minta.
       return '<div data-er-box="1" data-er-total="' + arr.length + '" ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + (genderKey || '') + '\',\'' + sk + '\')" ' +
-        'style="border:1.5px solid ' + tint + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;min-width:0;"><span style="font-size:14px;font-weight:800;color:' + color + ';min-width:0;">' + label + ' <span data-er-count style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
+        'style="border:1.5px solid ' + window._spCor(tint, 'borda') + ';border-radius:10px;padding:8px 10px;background:var(--bg-darker,rgba(0,0,0,0.15));">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;min-width:0;"><span style="font-size:14px;font-weight:800;color:' + window._spCor(color, 'color') + ';min-width:0;">' + label + ' <span data-er-count style="opacity:0.7;font-weight:700;">(' + arr.length + ')</span></span>' + btn + '</div>' +
         cardGrid(arr) + '</div>';
     }
     // Cabeçalho do gênero (drop = só gênero) + botão criar categoria por gênero.
@@ -2861,7 +2863,7 @@
             (genderOn ? 'Desativar' : 'Ativar') + ' as categorias Feminino e Masculino')
         : '';
       return '<div ondragover="window._erMxOver(event)" ondrop="window._erMxDrop(event,\'' + gKey + '\',\'\')" ' +
-        'style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:17px;font-weight:800;color:' + color + ';border-bottom:2px solid ' + color + ';padding-bottom:6px;">' +
+        'style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:17px;font-weight:800;color:' + window._spCor(color, 'color') + ';border-bottom:2px solid ' + window._spCor(color, 'borda') + ';padding-bottom:6px;">' +
         '<span>' + icon + ' ' + name + ' <span style="opacity:0.8;font-size:15px;">(' + tot + ')</span></span>' + btn + '</div>';
     }
     var femCol = '#ec4899', mascCol = '#3b82f6';
@@ -2883,7 +2885,7 @@
     // aparecia solto no canto inferior, longe do que ele controla.
     var mistoStrip = '<div style="margin-bottom:10px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid rgba(168,85,247,0.55);border-radius:12px;padding:10px 12px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
-        '<span style="font-size:17px;font-weight:800;color:#a855f7;min-width:0;">⚥ Misto' +
+        '<span style="font-size:17px;font-weight:800;color:var(--sp-c-a855f7,#a855f7);min-width:0;">⚥ Misto' +
           (mistoOn ? ' <span style="opacity:0.8;font-size:15px;">(' + total + ')</span>' : '') + '</span>' +
         createToggle('window._erToggleGenderMisto(\'' + tIdEsc + '\',this)', mistoOn,
           (mistoOn ? 'Desativar' : 'Ativar') + ' a categoria Misto') +
@@ -2905,7 +2907,7 @@
     if (semTotal) {
       var semInner = groups.map(function (sk) { return catBox('', sk, semG[sk], '#8592a6', 'rgba(133,146,166,0.45)'); }).join('');
       semSection = '<div style="margin-top:14px;background:var(--bg-darker,rgba(0,0,0,0.18));border:1.5px solid #8592a6;border-radius:12px;padding:10px 12px;">' +
-        '<div style="font-size:17px;font-weight:800;color:#8592a6;border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
+        '<div style="font-size:17px;font-weight:800;color:var(--sp-c-8592a6,#8592a6);border-bottom:2px solid #8592a6;padding-bottom:6px;margin-bottom:8px;">? Sem gênero <span style="opacity:0.8;font-size:15px;">(' + semTotal + ')</span> — arraste pra Feminino ou Masculino</div>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:9px;">' + semInner + '</div></div>';
     }
     return catsBox + totalBar + mistoStrip + grid + semSection;
@@ -3407,7 +3409,7 @@
            // O @ ABRE O PERFIL DELA no letzplay. Antes só a leitura navegava a aba
            // compartilhada, então quem só queria conferir a fonte não tinha caminho nenhum.
            '(<a href="https://letzplay.me/' + encodeURIComponent(tg.handle) + '" target="_blank" rel="noopener" ' +
-           'style="color:#7dd3fc;text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
+           'style="color:var(--sp-c-7dd3fc,#7dd3fc);text-decoration:none;font-weight:700;">@' + _esc(tg.handle) + ' ↗</a>) no letzplay.</div>')
         : ('<div style="font-size:0.8rem;">Jogos de <b>' + _esc(tg.name) + '</b> no scoreplace. ' +
            '<span style="color:var(--text-muted);">Sem histórico do letzplay — a pessoa não tem o @ indicado no perfil.</span></div>'));
     var btnLabel = '📚 Puxar histórico completo';
@@ -3480,21 +3482,21 @@
       _montarAbas();
       var incompleto = (gY && gX < gY) || (imp.partialReason != null);
       if (incompleto) {
-        body += '<div style="font-size:0.8rem;color:#fbbf24;">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
+        body += '<div style="font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);">Perfil INCOMPLETO — puxe de novo pra continuar de onde parou (o que já veio está gravado).</div>';
         btnLabel = '▶️ Continuar de onde parou';
       }
       // POR QUE ESTÁ ROXO. 100% capturado não é o mesmo que lido pelo motor atual — e sem
       // dizer isso a tela parece contraditória ("estou com 100%, por que continua roxo?").
       var _velho = !_lzTemIds(imp) || !_lzMotorAtual(imp), _antigo = !_lzFresco(imp);
       if (_velho || _antigo) {
-        body += '<div style="font-size:0.8rem;color:#a78bfa;margin-top:6px;line-height:1.45;">' +
+        body += '<div style="font-size:0.8rem;color:var(--sp-c-a78bfa,#a78bfa);margin-top:6px;line-height:1.45;">' +
           (_velho
             ? 'Este histórico foi lido pelo <b>motor antigo</b> — por isso o nome fica violeta mesmo em 100%. Puxe de novo pra ele contar como verificado.'
             : 'Leitura com mais de 3 meses — o nome fica violeta até ser puxada de novo.') +
           '</div>';
       }
       body += (lu ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Última atualização: <b>' + lu.label + '</b>' +
-        (_velho ? ' <span style="color:#a78bfa;">(motor antigo)</span>' : '') + '</div>' : '');
+        (_velho ? ' <span style="color:var(--sp-c-a78bfa,#a78bfa);">(motor antigo)</span>' : '') + '</div>' : '');
     } else {
       // SEM HISTÓRICO DO LETZPLAY as abas continuam existindo — elas é que trazem os jogos
       // do scoreplace (torneio e casual), que são registro nosso e não dependem de
@@ -3565,7 +3567,7 @@
     // mostrando o MESMO número do letzplay, não há mais divergência pra justificar — e
     // texto que explica uma diferença que não existe mais só semeia dúvida.)
     if (!_podePuxar() && _temLz) {
-      body += '<div style="font-size:0.8rem;color:#fbbf24;margin-top:8px;line-height:1.45;' +
+      body += '<div style="font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);margin-top:8px;line-height:1.45;' +
         'background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:9px;padding:8px 10px;">' +
         '🖥️ <b>Aqui não dá pra puxar.</b> Quem lê o letzplay é a extensão do Chrome, na sua sessão — ' +
         'e ela só roda no computador. Abra esta mesma tela no desktop com a extensão instalada ' +
@@ -3602,7 +3604,7 @@
           headerHtml:
             '<button type="button" onclick="window._lzFecharDialogo()" ' +
             'style="padding:8px 12px;border-radius:9px;cursor:pointer;font-size:0.78rem;font-weight:700;' +
-            'border:1px solid var(--border-color,rgba(255,255,255,0.15));background:rgba(255,255,255,0.08);' +
+            'border:1px solid var(--border-color,rgba(255,255,255,0.15));background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));' +
             'color:var(--text-main,#e8ecf3);white-space:nowrap;">← Voltar</button>' +
             // Sem letzplay não há o que puxar — o botão sumiria de qualquer jeito no
             // primeiro clique (a leitura precisa do @). Melhor não oferecer.
@@ -4052,7 +4054,7 @@
           }
           html += '<div style="font-weight:800;margin:8px 0 3px;">Jogos gerais</div>';
           html += '<div>' + (rep.pagesRead >= rep.maxPage ? '✅' : '⏳') + ' páginas lidas: <b>' + rep.pagesRead + ' de ' + rep.maxPage + '</b> · jogos gravados: <b>' + rep.games + (rep.declared ? (' de ' + rep.declared) : '') + '</b></div>';
-          html += '<div style="margin-top:10px;color:#fbbf24;">▶️ Clique no nome de novo mais tarde — continuo <b>de onde parei</b> (nada se perde).</div>';
+          html += '<div style="margin-top:10px;color:var(--sp-c-fbbf24,#fbbf24);">▶️ Clique no nome de novo mais tarde — continuo <b>de onde parei</b> (nada se perde).</div>';
           html += '</div>';
           window.showAlertDialog('⏸️ ' + who + ' — relatório da leitura', html);
         }
@@ -4133,11 +4135,11 @@
     window._lzScanCtx = { tId: t.id, targets: targets, byUid: byUid };
     var scanBtn = '';
     // Legenda (todos os rótulos) — código de cor da verificação.
-    function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + c + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + c + ';"></span>' + txt + '</span>'; }
+    function leg(c, txt) { return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:' + window._spCor(c, 'color') + ';"><span style="width:11px;height:11px;border-radius:50%;background:' + window._spCor(c, 'background') + ';"></span>' + txt + '</span>'; }
     var legend = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">' +
       leg(_LZ_COL.red, 'deve subir') + leg(_LZ_COL.yellow, 'pode subir') + leg(_LZ_COL.blue, 'rebaixar') + leg(_LZ_COL.green, 'coerente') + leg(_LZ_COL.violet, 'autorizado') + leg(_LZ_COL.white, 'não autorizou') +
       '</div>';
-    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo. <b style="color:var(--text-secondary,#c8cdd6);">Clique</b> num nome <span style="color:' + _LZ_COL.violet + ';font-weight:700;">autorizado</span> pra puxar o histórico do letzplay dele (um por vez); pare o mouse em cima pra ver a última atualização.</div>' : '';
+    var hint = _isOrg ? '<div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;">Arraste um nome pro box de gênero (atribui gênero) ou pra uma categoria dentro dele (atribui gênero + categoria). Salve no topo. <b style="color:var(--text-secondary,#c8cdd6);">Clique</b> num nome <span style="color:' + window._spCor(_LZ_COL.violet, 'color') + ';font-weight:700;">autorizado</span> pra puxar o histórico do letzplay dele (um por vez); pare o mouse em cima pra ver a última atualização.</div>' : '';
     // Barra Cancelar/Salvar — STICKY no topo (abaixo do cabeçalho fixo), aparece só
     // quando há alteração pendente (drag de gênero/categoria).
     // Cancelar/Salvar vive na barra Voltar (rightHtml, em _renderPage) — não aqui.
@@ -4213,7 +4215,7 @@
       : '';
 
     return '<div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:12px;padding:14px 16px;margin-bottom:14px;">' +
-      '<p style="margin:0 0 10px;font-size:0.74rem;color:#818cf8;font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Inscritos <span id="er-inscritos-count" style="color:var(--text-muted);font-weight:600;"></span></p>' +
+      '<p style="margin:0 0 10px;font-size:0.74rem;color:var(--sp-c-818cf8,#818cf8);font-weight:700;text-transform:uppercase;letter-spacing:1px;">📋 Inscritos <span id="er-inscritos-count" style="color:var(--text-muted);font-weight:600;"></span></p>' +
       (_isOrgList ? '<p style="margin:-4px 0 10px;font-size:0.68rem;color:var(--text-muted);">Edite gênero e categoria de quantos quiser e clique em <b>Salvar alterações</b> no fim.</p>' : '') +
       (typeof window._inscritosFilterBar === 'function'
         ? window._inscritosFilterBar({ stateKey: 'enrollReport', searchId: 'er-search', sortId: 'er-sort', genderId: 'er-gender', skillId: 'er-skill', onChange: 'window._erRenderInscritos()', skillCategories: (t.skillCategories || []) })
@@ -4380,7 +4382,7 @@
       // continua NO TEXTO e com link. Regra do dono: "loja sempre e zip enquanto a loja
       // não tiver a versão atualizada" — os dois, nunca um no lugar do outro.
       ? 'A <b>v' + _LZ_MIN_EXT + '</b> ainda está em revisão na ' +
-        (storeUrl ? '<a href="' + _esc(storeUrl) + '" target="_blank" rel="noopener" style="color:#fbbf24;font-weight:700;">Chrome Web Store</a>'
+        (storeUrl ? '<a href="' + _esc(storeUrl) + '" target="_blank" rel="noopener" style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">Chrome Web Store</a>'
                   : '<b>Chrome Web Store</b>') + ' (leva alguns dias). ' +
         'Até sair por lá, baixe o <b>zip</b> e carregue em <code>chrome://extensions</code> com o ' +
         '<b>Modo do desenvolvedor</b> ligado. Quando a loja publicar, o Chrome volta a atualizar sozinho.'
@@ -4392,7 +4394,7 @@
     // a mesma instrução duas vezes.
     if (!viaZip && versaoAtual && _zip) {
       corpo += '<br><br><span style="opacity:0.75;font-size:0.9em;">A loja pode levar alguns dias pra publicar a v' +
-        _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:#fbbf24;font-weight:700;">' +
+        _LZ_MIN_EXT + '. Se ainda não estiver lá, <a href="' + _esc(_zip) + '" download style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;">' +
         'baixe o zip</a> e carregue em <code>chrome://extensions</code> (Modo do desenvolvedor).</span>';
     }
 

@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // opinion-poll.js — Enquete do organizador (v3.1.44 — multi-seção + canonização)
 // Ferramenta GENÉRICA de enquete (pergunta + opções) que os inscritos votam.
 // Separada do "poll de resolução" (t.polls[] em tournaments-draw-prep.js, que resolve
@@ -245,7 +247,7 @@
       // o id ao re-salvar — sem isso, editar a enquete regenerava todos os ids e os
       // votos viravam órfãos (apareciam zerados). Opção nova fica sem o attr → gera id.
       '<input type="text" class="op-opt-input"' + (optId ? ' data-opt-id="' + _esc(optId) + '"' : '') + ' value="' + _esc(text || '') + '" placeholder="Texto da opção" maxlength="80" ' +
-      'style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:9px 11px;color:var(--text-bright,#f1f5f9);font-size:0.9rem;box-sizing:border-box;">' +
+      'style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:8px;padding:9px 11px;color:var(--text-bright,#f1f5f9);font-size:0.9rem;box-sizing:border-box;">' +
       '<button type="button" class="cancel-x-btn" onclick="this.closest(\'.op-opt-row\').remove()" title="Remover opção" style="--cx-size:20px;">✕</button>' +
     '</div>';
   }
@@ -259,7 +261,7 @@
   };
 
   function _sectionToggleHtml(on) {
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:10px;margin-top:10px;">' +
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:10px;margin-top:10px;">' +
       '<div style="min-width:0;"><div style="font-weight:700;color:var(--text-bright);font-size:0.84rem;">Permitir mais de uma opção</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Ligado: marca várias. Desligado: escolha única.</div></div>' +
       '<label class="toggle-switch" style="--toggle-on-bg:#8b5cf6;--toggle-on-glow:rgba(139,92,246,0.3);--toggle-on-border:#8b5cf6;flex-shrink:0;"><input type="checkbox" class="op-sec-multi"' + (on ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
     '</div>';
@@ -275,9 +277,9 @@
       '<div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:8px;">' +
         '<button type="button" class="cancel-x-btn" onclick="window._opRemoveSection(this)" title="Remover pergunta" style="--cx-size:20px;">✕</button>' +
       '</div>' +
-      '<input type="text" class="op-sec-q" value="' + _esc((sec && sec.question) || '') + '" placeholder="Pergunta da seção" maxlength="140" style="width:100%;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:10px;padding:10px 12px;color:#f59e0b;font-weight:800;font-size:0.97rem;box-sizing:border-box;margin-bottom:10px;">' +
+      '<input type="text" class="op-sec-q" value="' + _esc((sec && sec.question) || '') + '" placeholder="Pergunta da seção" maxlength="140" style="width:100%;background:var(--bg-darker,#0b1220);border:1px solid var(--sp-b-255-255-255-014,rgba(255,255,255,0.14));border-radius:10px;padding:10px 12px;color:var(--sp-c-f59e0b,#f59e0b);font-weight:800;font-size:0.97rem;box-sizing:border-box;margin-bottom:10px;">' +
       '<div class="op-sec-opts">' + optsHtml + '</div>' +
-      '<button type="button" onclick="window._opAddOption(this)" style="width:100%;background:rgba(99,102,241,0.12);border:1px dashed rgba(99,102,241,0.45);color:#a5b4fc;font-weight:700;border-radius:9px;padding:8px;font-size:0.83rem;cursor:pointer;">＋ opção</button>' +
+      '<button type="button" onclick="window._opAddOption(this)" style="width:100%;background:rgba(99,102,241,0.12);border:1px dashed rgba(99,102,241,0.45);color:var(--sp-c-a5b4fc,#a5b4fc);font-weight:700;border-radius:9px;padding:8px;font-size:0.83rem;cursor:pointer;">＋ opção</button>' +
       _sectionToggleHtml(!!(sec && sec.multiSelect)) +
     '</div>';
   }
@@ -322,7 +324,7 @@
     var sectionsHtml = secs.map(function (s) { return _sectionBlock(s); }).join('');
     var hasVotes = editing && poll.votes && Object.keys(poll.votes).some(function (u) { return _opHasVotedAny(poll, u); });
     var _tg = function (id, on, label, desc) {
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:12px;margin-top:8px;">' +
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--border-color,rgba(255,255,255,0.1));border-radius:12px;margin-top:8px;">' +
         '<div style="min-width:0;"><div style="font-weight:700;color:var(--text-bright);font-size:0.86rem;">' + label + '</div><div style="font-size:0.74rem;color:var(--text-muted);margin-top:2px;">' + desc + '</div></div>' +
         '<label class="toggle-switch" style="--toggle-on-bg:#8b5cf6;--toggle-on-glow:rgba(139,92,246,0.3);--toggle-on-border:#8b5cf6;flex-shrink:0;"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '><span class="toggle-slider"></span></label>' +
       '</div>';
@@ -333,14 +335,14 @@
       // ao rolar (o container do overlay é o scroller; top:0 gruda nele). z-index alto
       // pra ficar acima dos blocos de seção.
       '<div style="position:sticky;top:0;z-index:10;padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
-        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
+        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);font-weight:700;border:1px solid rgba(239,68,68,0.45);">Cancelar</button>' +
         '<span style="font-weight:800;color:#fff;font-size:0.95rem;">📊 ' + (editing ? 'Editar enquete' : 'Nova enquete') + '</span>' +
         '<button type="button" onclick="' + saveCall + '" class="btn btn-sm" style="background:#fff;color:#4338ca;font-weight:800;border:none;">' + (editing ? 'Salvar' : 'Criar') + '</button>' +
       '</div>' +
       '<div style="padding:1rem 1.1rem;">' +
-        (hasVotes ? '<div style="font-size:0.74rem;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:9px;padding:8px 10px;margin-bottom:12px;">⚠️ Esta enquete já tem votos. Mudar/remover opções descarta os votos dados nelas.</div>' : '') +
+        (hasVotes ? '<div style="font-size:0.74rem;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:9px;padding:8px 10px;margin-bottom:12px;">⚠️ Esta enquete já tem votos. Mudar/remover opções descarta os votos dados nelas.</div>' : '') +
         '<div id="op-sections-box">' + sectionsHtml + '</div>' +
-        '<button type="button" onclick="window._opAddSection()" style="width:100%;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:#34d399;font-weight:800;border-radius:11px;padding:11px;font-size:0.9rem;cursor:pointer;margin-bottom:14px;">＋ adicionar seção</button>' +
+        '<button type="button" onclick="window._opAddSection()" style="width:100%;background:rgba(16,185,129,0.12);border:1px dashed rgba(16,185,129,0.5);color:var(--sp-c-34d399,#34d399);font-weight:800;border-radius:11px;padding:11px;font-size:0.9rem;cursor:pointer;margin-bottom:14px;">＋ adicionar seção</button>' +
         _tg('op-hide', editing ? !!poll.hideResultsUntilVote : true, 'Ocultar resultados até votar', 'O inscrito só vê os votos depois de votar (não influencia).') +
       '</div>';
     _overlay('op-create-overlay', html);
@@ -510,12 +512,12 @@
       // WIZARD: progresso "Pergunta N de M" + barrinhas (verde=votada, roxo=atual).
       if (_wizSec && sec.id === _wizSec.id) {
         body += '<div style="margin-bottom:13px;">' +
-          '<div style="font-size:0.72rem;font-weight:800;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">' +
+          '<div style="font-size:0.72rem;font-weight:800;color:var(--sp-c-a5b4fc,#a5b4fc);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">' +
             (_editingAll ? ('✏️ Alterando · Pergunta ' + (_wizIdx + 1) + ' de ' + secs.length) : (_wizIsEdit ? '✏️ Alterando' : ('Pergunta ' + (_wizIdx + 1) + ' de ' + secs.length))) + '</div>' +
           '<div style="display:flex;gap:5px;">' + secs.map(function (_s, _i) {
             var done = _opHasVotedSection(poll, _s.id, uid);
             var col = (_i === _wizIdx) ? '#8b5cf6' : (done ? '#34d399' : 'rgba(255,255,255,0.12)');
-            return '<div style="flex:1;height:5px;border-radius:3px;background:' + col + ';transition:background 0.3s;"></div>';
+            return '<div style="flex:1;height:5px;border-radius:3px;background:' + window._spCor(col, 'background') + ';transition:background 0.3s;"></div>';
           }).join('') + '</div>' +
         '</div>';
       }
@@ -525,11 +527,11 @@
       // (visão de resultados, se já votou algo) → abre o wizard por TODAS as perguntas.
       var _showAlterAll = (si === 0) && !_wizSec && canVote && secs.some(function (s) { return _opHasVotedSection(poll, s.id, uid); });
       var _alterAllBtn = _showAlterAll
-        ? '<button type="button" onclick="window._opEditAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:6px 12px;font-size:0.8rem;">✏️ Alterar</button>'
+        ? '<button type="button" onclick="window._opEditAll(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(139,92,246,0.12);color:var(--sp-c-a78bfa,#a78bfa);border:1px solid rgba(139,92,246,0.4);font-weight:700;border-radius:10px;padding:6px 12px;font-size:0.8rem;">✏️ Alterar</button>'
         : '';
       body += '<div id="op-vsec-' + _esc(sec.id) + '" style="margin-bottom:18px;scroll-margin-top:170px;' + (si > 0 ? 'padding-top:16px;border-top:1px solid var(--border-color);' : '') + '">' +
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:3px;">' +
-          '<div style="flex:1;min-width:0;font-weight:900;font-size:1.02rem;color:#f59e0b;">' + _esc(sec.question) + '</div>' + _alterAllBtn +
+          '<div style="flex:1;min-width:0;font-weight:900;font-size:1.02rem;color:var(--sp-c-f59e0b,#f59e0b);">' + _esc(sec.question) + '</div>' + _alterAllBtn +
         '</div>' +
         '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:11px;">' + (sec.multiSelect ? 'Marque ✅ no que você quer e 🚫 no que não quer' : 'Escolha uma opção') + (poll.hideResultsUntilVote && !voted && !poll.closed ? ' · resultados após votar' : '') + '</div>';
 
@@ -541,8 +543,8 @@
             '<span style="font-weight:' + (mine ? '800' : '600') + ';">' + (mine ? '✓ ' : '') + _esc(o.text) + '</span>' +
             '<span style="color:var(--text-muted);font-weight:700;">' + c + ' · ' + pct + '%</span>' +
           '</div>' +
-          '<div style="height:9px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden;">' +
-            '<div style="height:100%;width:' + pct + '%;background:' + (mine ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#6366f1,#8b5cf6)') + ';border-radius:6px;transition:width 0.3s;"></div>' +
+          '<div style="height:9px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border-radius:6px;overflow:hidden;">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + window._spCor((mine ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#6366f1,#8b5cf6)'), 'background') + ';border-radius:6px;transition:width 0.3s;"></div>' +
           '</div></div>';
       };
       // v3.1.68: barra de resultado DUPLA (multiSelect) — ✅ quero (verde) + ❌ não quero (vermelho).
@@ -553,7 +555,7 @@
         var _line = function (icon, pct, cnt, grad) {
           return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' +
             '<span style="font-size:0.72rem;width:16px;flex-shrink:0;text-align:center;">' + icon + '</span>' +
-            '<div style="flex:1;height:7px;background:rgba(255,255,255,0.08);border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + grad + ';border-radius:5px;transition:width 0.3s;"></div></div>' +
+            '<div style="flex:1;height:7px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + window._spCor(grad, 'background') + ';border-radius:5px;transition:width 0.3s;"></div></div>' +
             '<span style="font-size:0.74rem;color:var(--text-muted);font-weight:700;min-width:54px;text-align:right;flex-shrink:0;">' + cnt + ' · ' + pct + '%</span>' +
           '</div>';
         };
@@ -592,7 +594,7 @@
       // v4.5.101: SEM botão "Alterar" por seção — há UM único botão no topo (direita da 1ª
       // pergunta, _opEditAll) que re-vota todas. Aqui só o indicador "✓ Você votou · N".
       if (!votingMode && voted && !poll.closed) {
-        body += '<div style="font-size:0.78rem;color:#34d399;font-weight:700;margin-top:6px;">✓ Você votou · ' + total + ' voto(s)</div>';
+        body += '<div style="font-size:0.78rem;color:var(--sp-c-34d399,#34d399);font-weight:700;margin-top:6px;">✓ Você votou · ' + total + ' voto(s)</div>';
       }
       body += '</div>';
     });
@@ -606,16 +608,16 @@
     if (isOrg && !_wizSec) {
       var _cellStyle = 'border-radius:10px;padding:10px;font-size:0.82rem;font-weight:700;';
       var _cells =
-        '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:#a5b4fc;border:1px solid rgba(99,102,241,0.45);">✏️ Editar</button>' +
-        '<button type="button" onclick="window._opOpenTally(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(16,185,129,0.14);color:#34d399;border:1px solid rgba(16,185,129,0.45);">👁️ Ver votos</button>';
+        '<button type="button" onclick="window._opOpenEditor(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(99,102,241,0.16);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.45);">✏️ Editar</button>' +
+        '<button type="button" onclick="window._opOpenTally(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(16,185,129,0.14);color:var(--sp-c-34d399,#34d399);border:1px solid rgba(16,185,129,0.45);">👁️ Ver votos</button>';
       if (!poll.closed) {
         // Re-notificar: cinza "Notificados" durante as 24h de cooldown (lê republishedAt).
         var _repubLast = poll.republishedAt ? Date.parse(poll.republishedAt) : 0;
         var _repubRest = _repubLast ? (24 * 3600000 - (Date.now() - _repubLast)) : 0;
         _cells += (_repubRest > 0)
-          ? '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border-color);opacity:0.6;cursor:not-allowed;">✅ Notificados</button>'
-          : '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(245,158,11,0.16);color:#fbbf24;border:1px solid rgba(245,158,11,0.5);">📣 Re-notificar</button>';
-        _cells += '<button type="button" onclick="window._opClose(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(239,68,68,0.16);color:#f87171;border:1px solid rgba(239,68,68,0.45);">🔒 Encerrar</button>';
+          ? '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));color:var(--text-muted);border:1px solid var(--border-color);opacity:0.6;cursor:not-allowed;">✅ Notificados</button>'
+          : '<button type="button" onclick="window._opRepublish(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(245,158,11,0.16);color:var(--sp-c-fbbf24,#fbbf24);border:1px solid rgba(245,158,11,0.5);">📣 Re-notificar</button>';
+        _cells += '<button type="button" onclick="window._opClose(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="' + _cellStyle + 'background:rgba(239,68,68,0.16);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.45);">🔒 Encerrar</button>';
       }
       _orgTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);">' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' + _cells + '</div>' +
@@ -644,7 +646,7 @@
         ? (_isLastStepT ? '✅ Salvar' : '✅ Salvar e continuar →')
         : (_wizIsEdit ? '✅ Salvar' : (_isLastStepT ? '✅ Confirmar' : '✅ Confirmar e continuar →'));
       var _cancelBtn = (_wizIsEdit || _wizVoted)
-        ? '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid var(--border-color);font-weight:800;border-radius:11px;padding:12px 16px;font-size:0.9rem;">↩️ Cancelar</button>'
+        ? '<button type="button" onclick="window._opOpenVote(\'' + _attr(t.id) + '\',\'' + _attr(poll.id) + '\')" class="btn" style="flex:0 0 auto;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted);border:1px solid var(--border-color);font-weight:800;border-radius:11px;padding:12px 16px;font-size:0.9rem;">↩️ Cancelar</button>'
         : '';
       _wizTop = '<div style="padding:10px 1rem;border-bottom:1px solid var(--border-color);background:var(--bg-card,#0f172a);display:flex;gap:8px;align-items:stretch;">' +
         _cancelBtn +
@@ -660,7 +662,7 @@
       '<div style="position:sticky;top:0;z-index:4;border-radius:16px 16px 0 0;">' +
         '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#4338ca,#6d28d9);border-radius:16px 16px 0 0;">' +
           '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📊 Enquete</span>' +
-          '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">← Voltar</button>' +
+          '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:#fff;border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));">← Voltar</button>' +
         '</div>' +
         _wizTop +
         _voteTop +
@@ -939,7 +941,7 @@
       var wa = (window._opWa && window._opWa[uid]) ? window._opWa[uid] : null;
       var sty, baseTitle;
       if (isNo) { sty = 'background:#dc2626;border:1px solid #ef4444;color:#fff;font-weight:700;'; baseTitle = 'Marcou 🚫 (não quer)'; }
-      else if (isMinority) { sty = 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.45);color:#ef4444;font-weight:700;'; baseTitle = 'Não votou na opção da maioria'; }
+      else if (isMinority) { sty = 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.45);color:var(--sp-c-ef4444,#ef4444);font-weight:700;'; baseTitle = 'Não votou na opção da maioria'; }
       else { sty = 'background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:var(--text-bright);font-weight:600;'; baseTitle = ''; }
       var title = wa ? ('Tocar pra mandar WhatsApp pra ' + nm) : baseTitle;
       var click = wa ? (' onclick="window._opWaVoter(\'' + String(uid).replace(/'/g, "\\'") + '\')"') : '';
@@ -964,7 +966,7 @@
       optYes.forEach(function (vs, oi) { if (vs.length > maxN) { maxN = vs.length; majIdx = oi; } });
       if (maxN === 0) majIdx = -1;
       body += '<div style="margin-bottom:18px;' + (si > 0 ? 'padding-top:14px;border-top:1px solid var(--border-color);' : '') + '">' +
-        '<div style="font-weight:900;font-size:0.98rem;color:#f59e0b;margin-bottom:10px;">' + _esc(sec.question) + '</div>';
+        '<div style="font-weight:900;font-size:0.98rem;color:var(--sp-c-f59e0b,#f59e0b);margin-bottom:10px;">' + _esc(sec.question) + '</div>';
       sec.options.forEach(function (o, oi) {
         var yesV = optYes[oi], noV = optNo[oi];
         var isMaj = (oi === majIdx);
@@ -977,7 +979,7 @@
           ? 'margin-bottom:11px;border:2px solid rgba(16,185,129,0.65);background:rgba(16,185,129,0.08);border-radius:10px;padding:8px 10px;'
           : 'margin-bottom:11px;' + altStyle + 'border-radius:10px;padding:8px 10px;';
         var countLabel = sec.multiSelect
-          ? ('<span style="color:#34d399;font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:#f87171;font-weight:700;">· 🚫 ' + noV.length + '</span>')
+          ? ('<span style="color:var(--sp-c-34d399,#34d399);font-weight:700;">✅ ' + yesV.length + '</span> <span style="color:var(--sp-c-f87171,#f87171);font-weight:700;">· 🚫 ' + noV.length + '</span>')
           : ('<span style="color:var(--text-muted);font-weight:600;">· ' + yesV.length + '</span>');
         var chips = '';
         // v4.0.x: votante ✅ que NÃO está entre os votantes da opção vencedora (majIdx)
@@ -1004,7 +1006,7 @@
     var missing = Object.keys(info).filter(function (u) { return !voted[u]; });
     if (missing.length) {
       body += '<div style="padding-top:14px;border-top:1px solid var(--border-color);">' +
-        '<div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:8px;">⏳ Ainda não votaram (' + missing.length + ')</div>' +
+        '<div style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:8px;">⏳ Ainda não votaram (' + missing.length + ')</div>' +
         // v3.1.56: NÃO passar nameChip direto pro .map — o 2º arg do map é o ÍNDICE, que
         // a nameChip lia como "excluded" e pintava de vermelho a partir do 2º. Não-votantes
         // são sempre normais.
@@ -1014,7 +1016,7 @@
     var html =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
         '<span style="font-weight:800;color:#fff;font-size:0.92rem;">👁️ Votos (nominal)</span>' +
-        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
+        '<button type="button" onclick="window._opCloseOverlay()" class="btn btn-sm" style="background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));color:#fff;border:1px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));">Fechar</button>' +
       '</div>' +
       '<div style="padding:1rem 1.1rem;">' + body + '</div>';
     _overlay('op-tally-overlay', html);

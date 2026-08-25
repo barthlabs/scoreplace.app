@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // tournaments-draw-prep.js — Draw preparation, polls & resolution (extracted from tournaments.js)
 
 (function() {
@@ -285,12 +287,12 @@ window._showGroupsConfigPanel = function(tId) {
         var html = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:32px;margin:auto 0;border:1px solid rgba(59,130,246,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
             '<div style="background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#3b82f6 100%);padding:12px 1.5rem;display:flex;align-items:center;gap:12px;flex-shrink:0;">' +
                 '<span style="font-size:1.5rem;">🏟️</span>' +
-                '<div><h3 style="margin:0;color:#dbeafe;font-size:1.1rem;font-weight:900;">' + _t('predraw.groupsTitle') + '</h3>' +
-                '<p style="margin:2px 0 0;color:#93c5fd;font-size:0.75rem;">' + N + ' ' + unitLabel + ' — ' + _t('predraw.chooseDistribution') + '</p></div>' +
+                '<div><h3 style="margin:0;color:var(--sp-c-dbeafe,#dbeafe);font-size:1.1rem;font-weight:900;">' + _t('predraw.groupsTitle') + '</h3>' +
+                '<p style="margin:2px 0 0;color:var(--sp-c-93c5fd,#93c5fd);font-size:0.75rem;">' + N + ' ' + unitLabel + ' — ' + _t('predraw.chooseDistribution') + '</p></div>' +
             '</div>' +
             // v3.0.x: barra de botões FIXA (flex-shrink:0 → nunca é cortada por scroll),
             // Cancelar + Sortear (verde) lado a lado, logo após o box do título.
-            '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.5rem;background:var(--bg-card,#1e293b);border-bottom:1px solid rgba(255,255,255,0.08);">' +
+            '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.5rem;background:var(--bg-card,#1e293b);border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
                 '<button onclick="window._cancelGroupsConfig(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
                 '<button id="grp-panel-confirm-btn" onclick="window._drawBtnBusy&&window._drawBtnBusy(this); window._grpPanelConfirm(\'' + tIdSafe + '\')" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">🎲 Sortear grupos</button>' +
             '</div>' +
@@ -312,8 +314,8 @@ window._showGroupsConfigPanel = function(tId) {
         html += '</div>';
         html += '<input type="range" min="0" max="' + (_grpCands.length - 1) + '" step="1" value="' + _grpIdx + '" oninput="window._grpPanelSetGroup(this.value)" style="width:100%;accent-color:#3b82f6;margin:2px 0;">';
         var sup = _grpSuplentes(c);
-        html += '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);margin-top:4px;">' + _grpSizesLabel(c) + (sup > 0 ? ' · <span style="color:#f59e0b;">' + sup + ' suplente' + (sup > 1 ? 's' : '') + '</span>' : '') + '</div>';
-        html += '<div style="text-align:center;font-size:0.72rem;color:#cbd5e1;margin-top:4px;font-weight:600;">⚔️ ' + _grpMatches(c) + ' partidas · ⏱️ ' + _formatDuration(_grpDuration(c)) + '</div>';
+        html += '<div style="text-align:center;font-size:0.74rem;color:var(--text-muted);margin-top:4px;">' + _grpSizesLabel(c) + (sup > 0 ? ' · <span style="color:var(--sp-c-f59e0b,#f59e0b);">' + sup + ' suplente' + (sup > 1 ? 's' : '') + '</span>' : '') + '</div>';
+        html += '<div style="text-align:center;font-size:0.72rem;color:var(--sp-c-cbd5e1,#cbd5e1);margin-top:4px;font-weight:600;">⚔️ ' + _grpMatches(c) + ' partidas · ⏱️ ' + _formatDuration(_grpDuration(c)) + '</div>';
 
         // Toggle "grupos de mesmo tamanho" — mesma opção da config do torneio.
         html += '<div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;">' +
@@ -323,14 +325,14 @@ window._showGroupsConfigPanel = function(tId) {
 
         // Avançam (potência de 2) com +/-
         var advNote = (adv % c.g === 0) ? ('≈ ' + (adv / c.g) + ' por grupo') : ('os melhores ' + Math.max(1, Math.floor(adv / c.g)) + '/grupo + repescagem até ' + adv);
-        html += '<div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid rgba(255,255,255,0.1);">';
+        html += '<div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">';
         html += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;text-align:center;">Quantos avançam para a eliminatória (potência de 2):</div>';
         html += '<div style="display:flex;align-items:center;justify-content:center;gap:18px;">';
-        html += '<button onclick="window._grpPanelStepAdv(-1)"' + (_advIdx <= 0 ? ' disabled' : '') + ' style="width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#fff;font-size:1.4rem;font-weight:800;cursor:pointer;' + (_advIdx <= 0 ? 'opacity:0.3;' : '') + '">−</button>';
-        html += '<div style="text-align:center;min-width:80px;"><div style="font-size:2.2rem;font-weight:950;color:#4ade80;line-height:1;">' + adv + '</div><div style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">avançam</div></div>';
-        html += '<button onclick="window._grpPanelStepAdv(1)"' + (_advIdx >= _grpAdv.length - 1 ? ' disabled' : '') + ' style="width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);color:#fff;font-size:1.4rem;font-weight:800;cursor:pointer;' + (_advIdx >= _grpAdv.length - 1 ? 'opacity:0.3;' : '') + '">+</button>';
+        html += '<button onclick="window._grpPanelStepAdv(-1)"' + (_advIdx <= 0 ? ' disabled' : '') + ' style="width:42px;height:42px;border-radius:50%;border:2px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:#fff;font-size:1.4rem;font-weight:800;cursor:pointer;' + (_advIdx <= 0 ? 'opacity:0.3;' : '') + '">−</button>';
+        html += '<div style="text-align:center;min-width:80px;"><div style="font-size:2.2rem;font-weight:950;color:var(--sp-c-4ade80,#4ade80);line-height:1;">' + adv + '</div><div style="font-size:0.66rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">avançam</div></div>';
+        html += '<button onclick="window._grpPanelStepAdv(1)"' + (_advIdx >= _grpAdv.length - 1 ? ' disabled' : '') + ' style="width:42px;height:42px;border-radius:50%;border:2px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:#fff;font-size:1.4rem;font-weight:800;cursor:pointer;' + (_advIdx >= _grpAdv.length - 1 ? 'opacity:0.3;' : '') + '">+</button>';
         html += '</div>';
-        html += '<div style="text-align:center;font-size:0.72rem;color:#93c5fd;margin-top:8px;">' + advNote + '</div>';
+        html += '<div style="text-align:center;font-size:0.72rem;color:var(--sp-c-93c5fd,#93c5fd);margin-top:8px;">' + advNote + '</div>';
         html += '</div>';
 
         html += '</div></div>';
@@ -451,7 +453,7 @@ window._showRemainderPanel = function(tId, info, t) {
                 '<button type="button" class="rem-opt" data-opt="flex" onclick="window._selectRemainderOption(\'flex\')" style="border-color:rgba(34,197,94,0.35);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">⚖️</span>' +
                     '<div>' +
-                        '<div style="font-weight:800;font-size:0.88rem;color:#4ade80;">Flexibilizar equilíbrio</div>' +
+                        '<div style="font-weight:800;font-size:0.88rem;color:var(--sp-c-4ade80,#4ade80);">Flexibilizar equilíbrio</div>' +
                         '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _flexDesc + '</div>' +
                     '</div>' +
                 '</button>';
@@ -475,12 +477,12 @@ window._showRemainderPanel = function(tId, info, t) {
         // Sticky top bar — título em cima (sem cortar), ações numa linha ABAIXO.
         // v1.2.51: os botões NÃO podem truncar a descrição; ficam embaixo dela. Padrão
         // canônico mantido: Cancelar (vermelho) à esquerda, Confirmar (verde) à direita.
-        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;flex-direction:column;gap:9px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#7c3aed 100%);padding:10px 1.25rem;display:flex;flex-direction:column;gap:9px;border-bottom:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:1.3rem;flex-shrink:0;">👥</span>' +
                 '<div>' +
-                    '<h3 style="margin:0;color:#ede9fe;font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + (_manualPair ? 'Participantes sem dupla' : _t('predraw.remainderTitle')) + '</h3>' +
-                    '<p style="margin:2px 0 0;color:#c4b5fd;font-size:0.72rem;">' + (_manualPair ? (remCount + ' sem dupla · ' + teamsFormed + ' equipe' + (teamsFormed > 1 ? 's' : '') + ' formada' + (teamsFormed > 1 ? 's' : '')) : _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')})) + '</p>' +
+                    '<h3 style="margin:0;color:var(--sp-c-ede9fe,#ede9fe);font-size:1rem;font-weight:900;letter-spacing:-0.02em;">' + (_manualPair ? 'Participantes sem dupla' : _t('predraw.remainderTitle')) + '</h3>' +
+                    '<p style="margin:2px 0 0;color:var(--sp-c-c4b5fd,#c4b5fd);font-size:0.72rem;">' + (_manualPair ? (remCount + ' sem dupla · ' + teamsFormed + ' equipe' + (teamsFormed > 1 ? 's' : '') + ' formada' + (teamsFormed > 1 ? 's' : '')) : _t('predraw.remainderSubtitle', {label: remLabel, p: (remCount > 1 ? 'm' : '')})) + '</p>' +
                 '</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">' +
@@ -493,30 +495,30 @@ window._showRemainderPanel = function(tId, info, t) {
         // Info summary
         '<div style="background:linear-gradient(135deg,#4c1d95 0%,#7c3aed 100%);padding:0.9rem 1.25rem;">' +
             '<div style="display:flex;gap:0.6rem;flex-wrap:wrap;">' +
-                '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
-                    '<div style="font-size:1.4rem;font-weight:900;color:#a78bfa;line-height:1;">' + teamsFormed + '</div>' +
-                    '<div style="font-size:0.62rem;color:#c4b5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblTeamsFormed + '</div>' +
+                '<div style="flex:1;min-width:90px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border-radius:12px;padding:8px 10px;text-align:center;">' +
+                    '<div style="font-size:1.4rem;font-weight:900;color:var(--sp-c-a78bfa,#a78bfa);line-height:1;">' + teamsFormed + '</div>' +
+                    '<div style="font-size:0.62rem;color:var(--sp-c-c4b5fd,#c4b5fd);margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblTeamsFormed + '</div>' +
                 '</div>' +
-                '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
-                    '<div style="font-size:1.4rem;font-weight:900;color:#f59e0b;line-height:1;">' + remCount + '</div>' +
-                    '<div style="font-size:0.62rem;color:#fcd34d;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblRemainder + '</div>' +
+                '<div style="flex:1;min-width:90px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border-radius:12px;padding:8px 10px;text-align:center;">' +
+                    '<div style="font-size:1.4rem;font-weight:900;color:var(--sp-c-f59e0b,#f59e0b);line-height:1;">' + remCount + '</div>' +
+                    '<div style="font-size:0.62rem;color:var(--sp-c-fcd34d,#fcd34d);margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _lblRemainder + '</div>' +
                 '</div>' +
-                '<div style="flex:1;min-width:90px;background:rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;text-align:center;">' +
-                    '<div style="font-size:1.4rem;font-weight:900;color:#60a5fa;line-height:1;">' + (info.totalPeople != null ? info.totalPeople : _totalPlayers) + '</div>' +
-                    '<div style="font-size:0.62rem;color:#93c5fd;margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.totalEnrolled') + '</div>' +
+                '<div style="flex:1;min-width:90px;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));border-radius:12px;padding:8px 10px;text-align:center;">' +
+                    '<div style="font-size:1.4rem;font-weight:900;color:var(--sp-c-60a5fa,#60a5fa);line-height:1;">' + (info.totalPeople != null ? info.totalPeople : _totalPlayers) + '</div>' +
+                    '<div style="font-size:0.62rem;color:var(--sp-c-93c5fd,#93c5fd);margin-top:3px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + _t('predraw.totalEnrolled') + '</div>' +
                 '</div>' +
             '</div>' +
         '</div>' +
         // Options
         '<div style="padding:0.85rem 1.25rem 1.1rem;">' +
-            '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _lblWhatToDo + '</h4>' +
+            '<h4 style="margin:0 0 0.5rem;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.68rem;text-transform:uppercase;letter-spacing:1.8px;font-weight:700;">' + _lblWhatToDo + '</h4>' +
             // v1.2.48: toggle do MÉTODO DO CORTE (quem sai pra fechar a chave). Texto claro:
             // "Corte: Sorteio Geral" (aleatório entre todos) ↔ "Corte: Cronológico" (os
             // últimos a se inscrever saem primeiro). Vale pra Lista de Espera e Exclusão.
-            '<div id="remainder-cut-toggle-wrap" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.08);margin-bottom:9px;transition:opacity .15s;opacity:0.4;pointer-events:none;">' +
+            '<div id="remainder-cut-toggle-wrap" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border-radius:10px;border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));margin-bottom:9px;transition:opacity .15s;opacity:0.4;pointer-events:none;">' +
                 '<div style="flex:1;min-width:0;">' +
-                    '<div id="remainder-toggle-title" style="font-weight:800;color:#ede9fe;font-size:0.82rem;">Corte: Sorteio Geral</div>' +
-                    '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:#c4b5fd;margin-top:2px;line-height:1.35;">Quem sai é sorteado aleatoriamente entre todos os inscritos.</div>' +
+                    '<div id="remainder-toggle-title" style="font-weight:800;color:var(--sp-c-ede9fe,#ede9fe);font-size:0.82rem;">Corte: Sorteio Geral</div>' +
+                    '<div id="remainder-toggle-desc" style="font-size:0.7rem;color:var(--sp-c-c4b5fd,#c4b5fd);margin-top:2px;line-height:1.35;">Quem sai é sorteado aleatoriamente entre todos os inscritos.</div>' +
                 '</div>' +
                 '<label class="toggle-switch" style="flex-shrink:0;"><input type="checkbox" id="remainder-random-toggle" checked onchange="var ti=document.getElementById(\'remainder-toggle-title\');var d=document.getElementById(\'remainder-toggle-desc\');if(ti)ti.textContent=this.checked?\'Corte: Sorteio Geral\':\'Corte: Cronológico\';if(d)d.textContent=this.checked?\'Quem sai é sorteado aleatoriamente entre todos os inscritos.\':\'Os últimos a se inscrever saem primeiro.\';"><span class="toggle-slider"></span></label>' +
             '</div>' +
@@ -527,7 +529,7 @@ window._showRemainderPanel = function(tId, info, t) {
                 '<button type="button" class="rem-opt" data-opt="reopen" onclick="window._selectRemainderOption(\'reopen\')" style="border-color:rgba(59,130,246,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">↩️</span>' +
                     '<div>' +
-                        '<div style="font-weight:800;font-size:0.88rem;color:#60a5fa;">' + _t('predraw.p2PollReopenTitle') + '</div>' +
+                        '<div style="font-weight:800;font-size:0.88rem;color:var(--sp-c-60a5fa,#60a5fa);">' + _t('predraw.p2PollReopenTitle') + '</div>' +
                         '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.reopenRemainderDesc', {label: (remCount > 1 ? _t('predraw.remainderTeamMany') : _t('predraw.remainderTeamOne'))}) + '</div>' +
                     '</div>' +
                 '</button>' +
@@ -535,7 +537,7 @@ window._showRemainderPanel = function(tId, info, t) {
                 '<button type="button" class="rem-opt" data-opt="standby" onclick="window._selectRemainderOption(\'standby\')" style="border-color:rgba(168,85,247,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">⏱️</span>' +
                     '<div>' +
-                        '<div style="font-weight:800;font-size:0.88rem;color:#c084fc;">' + _t('predraw.waitlistTitle') + '</div>' +
+                        '<div style="font-weight:800;font-size:0.88rem;color:var(--sp-c-c084fc,#c084fc);">' + _t('predraw.waitlistTitle') + '</div>' +
                         '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.standbyRemainderDesc', {label: remLabel}) + '</div>' +
                     '</div>' +
                 '</button>' +
@@ -543,7 +545,7 @@ window._showRemainderPanel = function(tId, info, t) {
                 '<button type="button" class="rem-opt" data-opt="exclusion" onclick="window._selectRemainderOption(\'exclusion\')" style="border-color:rgba(239,68,68,0.3);">' +
                     '<span style="font-size:1.3rem;flex-shrink:0;">🚫</span>' +
                     '<div>' +
-                        '<div style="font-weight:800;font-size:0.88rem;color:#f87171;">' + _t('predraw.exclusionTitle') + '</div>' +
+                        '<div style="font-weight:800;font-size:0.88rem;color:var(--sp-c-f87171,#f87171);">' + _t('predraw.exclusionTitle') + '</div>' +
                         '<div style="font-size:0.72rem;color:rgba(255,255,255,0.6);margin-top:2px;line-height:1.3;">' + _t('predraw.exclusionRemainderDesc', {label: remLabel}) + '</div>' +
                     '</div>' +
                 '</button>' +
@@ -720,7 +722,7 @@ window._showRemovalSubChoice = function(tId, mode, info) {
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:500px;border-radius:24px;border:1px solid rgba(251,191,36,0.2);box-shadow:0 30px 100px rgba(0,0,0,0.7);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
         // Sticky top bar with Voltar button
-        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,' + _gradStart + ' 0%,' + _gradEnd + ' 100%);padding:12px 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,' + _gradStart + ' 0%,' + _gradEnd + ' 100%);padding:12px 1.5rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:10px;">' +
                 '<span style="font-size:1.3rem;">' + (isStandby ? '⏱️' : '🚫') + '</span>' +
                 '<div>' +
@@ -728,17 +730,17 @@ window._showRemovalSubChoice = function(tId, mode, info) {
                     '<p style="margin:2px 0 0;color:rgba(255,255,255,0.7);font-size:0.72rem;">' + subtitle + '</p>' +
                 '</div>' +
             '</div>' +
-            '<button onclick="document.getElementById(\'removal-subchoice-panel\').remove();window.showUnifiedResolutionPanel(\'' + tIdSafe + '\')" style="background:rgba(0,0,0,0.25);color:#fff;border:2px solid rgba(255,255,255,0.3);padding:8px 20px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(255,255,255,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(255,255,255,0.3)\'">' + _t('predraw.backBtn') + '</button>' +
+            '<button onclick="document.getElementById(\'removal-subchoice-panel\').remove();window.showUnifiedResolutionPanel(\'' + tIdSafe + '\')" style="background:var(--sp-g-0-0-0-025,rgba(0,0,0,0.25));color:#fff;border:2px solid var(--sp-b-255-255-255-03,rgba(255,255,255,0.3));padding:8px 20px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;" onmouseover="this.style.background=\'rgba(0,0,0,0.4)\';this.style.borderColor=\'rgba(255,255,255,0.5)\'" onmouseout="this.style.background=\'rgba(0,0,0,0.25)\';this.style.borderColor=\'rgba(255,255,255,0.3)\'">' + _t('predraw.backBtn') + '</button>' +
         '</div>' +
         // Scrollable content
         '<div style="overflow-y:auto;flex:1;padding:1.5rem 2rem;">' +
             '<div style="display:flex;flex-direction:column;gap:12px;">' +
-                '<button onclick="window._executeRemoval(\'' + tIdSafe + '\',\'' + mode + '\',\'random\')" style="background:rgba(168,85,247,0.1);border:2px solid rgba(168,85,247,0.3);border-radius:16px;padding:16px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(168,85,247,0.6)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'rgba(168,85,247,0.3)\';this.style.transform=\'\'">' +
-                    '<div style="font-weight:800;font-size:0.95rem;color:#c084fc;">' + _t('predraw.removalRandTitle') + '</div>' +
+                '<button onclick="window._executeRemoval(\'' + tIdSafe + '\',\'' + mode + '\',\'random\')" style="background:rgba(168,85,247,0.1);border:2px solid rgba(168,85,247,0.3);border-radius:16px;padding:16px;cursor:pointer;text-align:left;color:var(--sp-c-e2e8f0,#e2e8f0);transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(168,85,247,0.6)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'rgba(168,85,247,0.3)\';this.style.transform=\'\'">' +
+                    '<div style="font-weight:800;font-size:0.95rem;color:var(--sp-c-c084fc,#c084fc);">' + _t('predraw.removalRandTitle') + '</div>' +
                     '<div style="font-size:0.78rem;color:rgba(255,255,255,0.6);margin-top:4px;">' + _t('predraw.randomSubtitle', {n: removeCount, s: (removeCount > 1 ? 's' : '')}) + '</div>' +
                 '</button>' +
-                '<button onclick="window._executeRemoval(\'' + tIdSafe + '\',\'' + mode + '\',\'last\')" style="background:rgba(251,191,36,0.1);border:2px solid rgba(251,191,36,0.3);border-radius:16px;padding:16px;cursor:pointer;text-align:left;color:#e2e8f0;transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(251,191,36,0.6)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'rgba(251,191,36,0.3)\';this.style.transform=\'\'">' +
-                    '<div style="font-weight:800;font-size:0.95rem;color:#fbbf24;">' + _t('predraw.removalLastTitle') + '</div>' +
+                '<button onclick="window._executeRemoval(\'' + tIdSafe + '\',\'' + mode + '\',\'last\')" style="background:rgba(251,191,36,0.1);border:2px solid rgba(251,191,36,0.3);border-radius:16px;padding:16px;cursor:pointer;text-align:left;color:var(--sp-c-e2e8f0,#e2e8f0);transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(251,191,36,0.6)\';this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.borderColor=\'rgba(251,191,36,0.3)\';this.style.transform=\'\'">' +
+                    '<div style="font-weight:800;font-size:0.95rem;color:var(--sp-c-fbbf24,#fbbf24);">' + _t('predraw.removalLastTitle') + '</div>' +
                     '<div style="font-size:0.78rem;color:rgba(255,255,255,0.6);margin-top:4px;">' + (isStandby ? _t('predraw.lastStandbySubtitle', {n: removeCount, s: (removeCount > 1 ? 's' : '')}) : _t('predraw.lastExclusionSubtitle', {n: removeCount, s: (removeCount > 1 ? 's' : '')})) + '</div>' +
                 '</button>' +
             '</div>' +
@@ -936,19 +938,19 @@ window._showInactivePhasePanel = function(tId, inativos){
     document.body.style.overflow = 'hidden';
     function _optCard(choice, icon, title, desc, accent){
         return '<button onclick="window._spinButton&&window._spinButton(this,\'Aplicando…\'); window._resolvePhaseInactives(\'' + tIdSafe + '\', \'' + choice + '\')" ' +
-            'style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.04);border:1.5px solid ' + accent + ';border-radius:14px;padding:13px 15px;margin-bottom:10px;cursor:pointer;transition:all 0.15s;" ' +
+            'style="display:block;width:100%;text-align:left;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1.5px solid ' + window._spCor(accent, 'borda') + ';border-radius:14px;padding:13px 15px;margin-bottom:10px;cursor:pointer;transition:all 0.15s;" ' +
             'onmouseover="this.style.background=\'rgba(255,255,255,0.09)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
             '<div style="font-size:0.98rem;font-weight:800;color:var(--text-bright,#f8fafc);margin-bottom:3px;">' + icon + ' ' + title + '</div>' +
             '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.45;">' + desc + '</div>' +
         '</button>';
     }
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
-        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;">😴</span>' +
                 '<div style="min-width:0;">' +
-                    '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Participantes inativos</h3>' +
-                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">' + _n + (_n === 1 ? ' participante desativou' : ' participantes desativaram') + ' a participação e não jogaram esta fase</p>' +
+                    '<h3 style="margin:0;color:var(--sp-c-fef3c7,#fef3c7);font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Participantes inativos</h3>' +
+                    '<p style="margin:2px 0 0;color:var(--sp-c-fde68a,#fde68a);font-size:0.75rem;opacity:0.9;">' + _n + (_n === 1 ? ' participante desativou' : ' participantes desativaram') + ' a participação e não jogaram esta fase</p>' +
                 '</div>' +
             '</div>' +
         '</div>' +
@@ -1018,34 +1020,34 @@ window._showPhasePromotePanel = function(tId) {
         var role = (i === 0) ? 'top' : (i === _lastI ? 'bottom' : '');
         var _now = l.size, _aft = _afterSize(i);
         var badge = _odd(_now)
-            ? '<span style="font-size:0.68rem;color:#fca5a5;font-weight:700;margin-left:8px;">ímpar — 1 sem adversário</span>'
-            : '<span style="font-size:0.68rem;color:#6ee7b7;font-weight:700;margin-left:8px;">par ✓</span>';
-        var arrow = role === 'top' ? '<span style="color:#6ee7b7;font-weight:900;font-size:0.72rem;">▲ recebe 1</span>'
-                  : role === 'bottom' ? '<span style="color:#fca5a5;font-weight:900;font-size:0.72rem;">▼ cede 1</span>' : '';
+            ? '<span style="font-size:0.68rem;color:var(--sp-c-fca5a5,#fca5a5);font-weight:700;margin-left:8px;">ímpar — 1 sem adversário</span>'
+            : '<span style="font-size:0.68rem;color:var(--sp-c-6ee7b7,#6ee7b7);font-weight:700;margin-left:8px;">par ✓</span>';
+        var arrow = role === 'top' ? '<span style="color:var(--sp-c-6ee7b7,#6ee7b7);font-weight:900;font-size:0.72rem;">▲ recebe 1</span>'
+                  : role === 'bottom' ? '<span style="color:var(--sp-c-fca5a5,#fca5a5);font-weight:900;font-size:0.72rem;">▼ cede 1</span>' : '';
         var change = (_aft !== _now)
-            ? '<span style="font-size:0.9rem;color:var(--text-muted,#94a3b8);"> → </span><span style="font-size:1.3rem;font-weight:900;color:#6ee7b7;">' + _aft + '</span>'
+            ? '<span style="font-size:0.9rem;color:var(--text-muted,#94a3b8);"> → </span><span style="font-size:1.3rem;font-weight:900;color:var(--sp-c-6ee7b7,#6ee7b7);">' + _aft + '</span>'
             : '';
-        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:11px 14px;margin-bottom:8px;">' +
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:1px solid rgba(251,191,36,0.25);border-radius:12px;padding:11px 14px;margin-bottom:8px;">' +
             '<div style="min-width:0;"><span style="font-weight:800;color:var(--text-bright,#f8fafc);font-size:0.95rem;">' + window._safeHtml(l.label || l.dest || '') + '</span>' + badge + '</div>' +
-            '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span style="font-size:1.3rem;font-weight:900;color:#fbbf24;">' + _now + '</span>' + change + arrow + '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><span style="font-size:1.3rem;font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);">' + _now + '</span>' + change + arrow + '</div>' +
         '</div>';
     }
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:560px;border-radius:28px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;display:flex;flex-direction:column;max-height:90%;">' +
-        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<div style="background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:14px 1.4rem;border-bottom:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;">⬆️</span>' +
                 '<div style="min-width:0;">' +
-                    '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Promover linha?</h3>' +
-                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">As linhas estão ímpares — 1 equipe fica sem adversário. Promover deixa tudo par.</p>' +
+                    '<h3 style="margin:0;color:var(--sp-c-fef3c7,#fef3c7);font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Promover linha?</h3>' +
+                    '<p style="margin:2px 0 0;color:var(--sp-c-fde68a,#fde68a);font-size:0.75rem;opacity:0.9;">As linhas estão ímpares — 1 equipe fica sem adversário. Promover deixa tudo par.</p>' +
                 '</div>' +
             '</div>' +
         '</div>' +
         '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
-            '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.55;margin-bottom:14px;">A melhor dupla da linha de baixo sobe pra de cima (cima +1, baixo −1). Todas as linhas ficam <strong style="color:#6ee7b7;">pares</strong> → todo mundo tem adversário, gastando menos BYE/repescagem. Depois você resolve a potência de 2 de cada uma com os números já ajustados.</div>' +
+            '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.55;margin-bottom:14px;">A melhor dupla da linha de baixo sobe pra de cima (cima +1, baixo −1). Todas as linhas ficam <strong style="color:var(--sp-c-6ee7b7,#6ee7b7);">pares</strong> → todo mundo tem adversário, gastando menos BYE/repescagem. Depois você resolve a potência de 2 de cada uma com os números já ajustados.</div>' +
             _lines.map(function(l, i){ return _lineRow(l, i); }).join('') +
             '<button onclick="window._spinButton&&window._spinButton(this,\'…\'); window._phasePromoteApply(\'' + tIdSafe + '\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:13px 16px;border-radius:12px;font-weight:800;font-size:0.92rem;cursor:pointer;">⬆️ Promover — deixar tudo par</button>' +
-            '<button onclick="window._phasePromoteSkip(\'' + tIdSafe + '\')" style="width:100%;margin-top:10px;background:rgba(255,255,255,0.06);color:var(--text-bright,#f8fafc);border:1.5px solid rgba(255,255,255,0.2);padding:12px 16px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;">Não promover — resolver com BYE/repescagem</button>' +
+            '<button onclick="window._phasePromoteSkip(\'' + tIdSafe + '\')" style="width:100%;margin-top:10px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-bright,#f8fafc);border:1.5px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));padding:12px 16px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;">Não promover — resolver com BYE/repescagem</button>' +
             '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:#dc2626;color:#fff;border:none;padding:10px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;">✕ Cancelar</button>' +
         '</div>' +
     '</div>';
@@ -1130,18 +1132,18 @@ window._showLateConfrontosPanel = function(tId) {
     };
     overlay.innerHTML =
       '<div style="background:#0f1729;border:1px solid #1e293b;border-radius:16px;max-width:560px;width:100%;max-height:92%;overflow-y:auto;padding:1.5rem;">' +
-        '<div style="font-size:1.15rem;font-weight:800;color:#f1f5f9;margin-bottom:6px;">🔓 Inscrições abertas — novos confrontos</div>' +
-        '<div style="font-size:0.9rem;color:#94a3b8;line-height:1.5;margin-bottom:1.1rem;">A chave está equilibrada agora, mas as inscrições continuam abertas. ' +
+        '<div style="font-size:1.15rem;font-weight:800;color:var(--sp-c-f1f5f9,#f1f5f9);margin-bottom:6px;">🔓 Inscrições abertas — novos confrontos</div>' +
+        '<div style="font-size:0.9rem;color:var(--sp-c-94a3b8,#94a3b8);line-height:1.5;margin-bottom:1.1rem;">A chave está equilibrada agora, mas as inscrições continuam abertas. ' +
           'Quando um novo time entrar <b>depois do sorteio</b>, ele desbalanceia a chave. Escolha desde já como o sistema resolve:</div>' +
         '<button onclick="window._lateConfrontosPick(\'repescagem\')" style="display:block;width:100%;text-align:left;background:linear-gradient(135deg,#16a34a,#15803d);border:none;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#fff;cursor:pointer;">' +
           '<div style="font-weight:800;font-size:0.98rem;">🔁 Repescagem <span style="opacity:0.85;font-weight:600;">(recomendado)</span></div>' +
           '<div style="font-size:0.82rem;opacity:0.92;margin-top:3px;line-height:1.4;">O novo time entra na 1ª rodada contra o <b>derrotado mais bem colocado</b>. Quando uma rodada fica ímpar, puxa outro repescado — <b>todos jogam</b>, sem folga.</div>' +
         '</button>' +
-        '<button onclick="window._lateConfrontosPick(\'bye\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #475569;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:#e2e8f0;cursor:pointer;">' +
+        '<button onclick="window._lateConfrontosPick(\'bye\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #475569;border-radius:12px;padding:14px 16px;margin-bottom:10px;color:var(--sp-c-e2e8f0,#e2e8f0);cursor:pointer;">' +
           '<div style="font-weight:800;font-size:0.98rem;">⏭️ BYE (folga)</div>' +
           '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Quando uma rodada fica ímpar, o melhor colocado <b>folga</b> (avança sem jogar) em vez de puxar repescado. Aplicado sempre.</div>' +
         '</button>' +
-        '<button onclick="window._lateConfrontosPick(\'standby\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px 16px;margin-bottom:14px;color:#e2e8f0;cursor:pointer;">' +
+        '<button onclick="window._lateConfrontosPick(\'standby\')" style="display:block;width:100%;text-align:left;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px 16px;margin-bottom:14px;color:var(--sp-c-e2e8f0,#e2e8f0);cursor:pointer;">' +
           '<div style="font-weight:800;font-size:0.98rem;">📋 Lista de espera (suplentes)</div>' +
           '<div style="font-size:0.82rem;opacity:0.85;margin-top:3px;line-height:1.4;">Novos times NÃO entram na chave — ficam como suplentes e só assumem numa desistência/W.O.</div>' +
         '</button>' +
@@ -1551,7 +1553,7 @@ window.showUnifiedResolutionPanel = function(tId) {
 
             // Top row: Recomendado badge (left) + Exclude ✕ (right)
             var topRow = '<div style="display:flex;justify-content:space-between;align-items:center;min-height:22px;">';
-            topRow += isBest ? '<span style="background:rgba(34,197,94,0.2);color:#4ade80;padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;text-transform:uppercase;">' + _t('predraw.nashRecommended') + '</span>' : '<span></span>';
+            topRow += isBest ? '<span style="background:rgba(34,197,94,0.2);color:var(--sp-c-4ade80,#4ade80);padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:800;text-transform:uppercase;">' + _t('predraw.nashRecommended') + '</span>' : '<span></span>';
             // v1.2.41: ✕ CANÔNICO (.cancel-x-btn) num <span>, NÃO <button> — o CARD da opção
             // (html += '<button id="unif-opt-...') já é um <button>, e <button> dentro de
             // <button> é HTML INVÁLIDO: o parser fecha o de fora ao ver o de dentro e o resto
@@ -1564,16 +1566,16 @@ window.showUnifiedResolutionPanel = function(tId) {
             // v4.0.52: estimativa de tempo POR opção (dinâmica, dados do torneio + local)
             var _ed = window._unifiedEstData && window._unifiedEstData[o.key];
             var _estPill = _ed
-                ? '<span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:rgba(16,185,129,0.16);color:#6ee7b7;">⏱️ ~' + _ed.fmt + '</span>'
+                ? '<span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:rgba(16,185,129,0.16);color:var(--sp-c-6ee7b7,#6ee7b7);">⏱️ ~' + _ed.fmt + '</span>'
                 : '';
             var _selOn = (window._unifiedSel === o.key);
             // clique SELECIONA (não aplica); o Confirmar no topo aplica.
-            html += '<button id="unif-opt-' + o.key + '" data-ukey="' + o.key + '" style="background:' + c.bg + ';border:2px solid ' + c.border + ';box-shadow:' + c.glow + ';outline:' + (_selOn ? '3px solid #fbbf24' : 'none') + ';outline-offset:1px;border-radius:16px;padding:12px 16px;cursor:pointer;transition:all 0.25s;text-align:center;color:#e2e8f0;display:flex;flex-direction:column;gap:6px;overflow:hidden;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.filter=\'brightness(1.12)\'" onmouseout="this.style.transform=\'\';this.style.filter=\'\'" onclick="window._selectUnifiedOption(\'' + o.key + '\')">' +
+            html += '<button id="unif-opt-' + o.key + '" data-ukey="' + o.key + '" style="background:' + window._spCor(c.bg, 'background') + ';border:2px solid ' + window._spCor(c.border, 'borda') + ';box-shadow:' + c.glow + ';outline:' + (_selOn ? '3px solid #fbbf24' : 'none') + ';outline-offset:1px;border-radius:16px;padding:12px 16px;cursor:pointer;transition:all 0.25s;text-align:center;color:var(--sp-c-e2e8f0,#e2e8f0);display:flex;flex-direction:column;gap:6px;overflow:hidden;" onmouseover="this.style.transform=\'translateY(-2px)\';this.style.filter=\'brightness(1.12)\'" onmouseout="this.style.transform=\'\';this.style.filter=\'\'" onclick="window._selectUnifiedOption(\'' + o.key + '\')">' +
                 topRow +
                 '<div style="font-size:1.8rem;line-height:1;">' + o.icon + '</div>' +
                 '<div style="font-weight:800;font-size:0.95rem;color:#fff;">' + o.title + '</div>' +
                 '<div style="font-size:0.75rem;color:rgba(255,255,255,0.65);line-height:1.4;">' + o.desc + '</div>' +
-                '<div style="margin-top:auto;padding-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;"><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:' + c.pillBg + ';color:' + c.pill + ';">Nash ' + pct + '%</span>' + _estPill + '</div>' +
+                '<div style="margin-top:auto;padding-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;"><span style="display:inline-block;padding:3px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;background:' + window._spCor(c.pillBg, 'background') + ';color:' + window._spCor(c.pill, 'color') + ';">Nash ' + pct + '%</span>' + _estPill + '</div>' +
             '</button>';
         });
 
@@ -1581,9 +1583,9 @@ window.showUnifiedResolutionPanel = function(tId) {
         const excludedOptions = allOptions.filter(function(o) { return excludedKeys.indexOf(o.key) !== -1; });
         if (excludedOptions.length > 0) {
             html += '<div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">';
-            html += '<span style="font-size:0.7rem;color:#64748b;margin-right:4px;line-height:28px;">' + _t('predraw.excluded') + '</span>';
+            html += '<span style="font-size:0.7rem;color:var(--sp-c-64748b,#64748b);margin-right:4px;line-height:28px;">' + _t('predraw.excluded') + '</span>';
             excludedOptions.forEach(function(o) {
-                html += '<button onclick="event.stopPropagation();window._restoreUnifiedOption(\'' + o.key + '\')" style="background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.1);border-radius:8px;padding:4px 12px;color:#64748b;font-size:0.72rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(255,255,255,0.3)\';this.style.color=\'#94a3b8\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.1)\';this.style.color=\'#64748b\'">' + o.icon + ' ' + o.title + ' ↩</button>';
+                html += '<button onclick="event.stopPropagation();window._restoreUnifiedOption(\'' + o.key + '\')" style="background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px dashed rgba(255,255,255,0.1);border-radius:8px;padding:4px 12px;color:var(--sp-c-64748b,#64748b);font-size:0.72rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor=\'rgba(255,255,255,0.3)\';this.style.color=\'#94a3b8\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.1)\';this.style.color=\'#64748b\'">' + o.icon + ' ' + o.title + ' ↩</button>';
             });
             html += '</div>';
         }
@@ -1629,30 +1631,30 @@ window.showUnifiedResolutionPanel = function(tId) {
             var _sm = Math.ceil(_sg / Math.max(1, window._unifiedCourts)) * window._unifiedDur;
             var _sf = window._unifiedFmtMin ? window._unifiedFmtMin(_sm) : (Math.round(_sm / 60) + 'h');
             var _rw = _sx > 1 ? 'rodadas' : 'rodada';
-            var _stepBtn = 'width:38px;height:38px;border-radius:10px;border:2px solid rgba(254,243,199,0.4);background:rgba(0,0,0,0.3);color:#fef3c7;font-size:1.4rem;font-weight:900;cursor:pointer;line-height:1;flex-shrink:0;';
+            var _stepBtn = 'width:38px;height:38px;border-radius:10px;border:2px solid rgba(254,243,199,0.4);background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));color:var(--sp-c-fef3c7,#fef3c7);font-size:1.4rem;font-weight:900;cursor:pointer;line-height:1;flex-shrink:0;';
             el.innerHTML =
-                '<div style="font-weight:900;color:#fbbf24;font-size:0.92rem;margin-bottom:7px;">' + ((window._unifiedSummary && window._unifiedSummary.swiss) ? window._unifiedSummary.swiss.title : 'Formato Suíço') + '</div>' +
+                '<div style="font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.92rem;margin-bottom:7px;">' + ((window._unifiedSummary && window._unifiedSummary.swiss) ? window._unifiedSummary.swiss.title : 'Formato Suíço') + '</div>' +
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
                     '<button onclick="window._unifiedSwissStep(-1)" title="Menos uma rodada" style="' + _stepBtn + '">−</button>' +
-                    '<div style="min-width:52px;height:38px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border:2px solid rgba(254,243,199,0.3);border-radius:10px;"><span style="font-size:1.5rem;font-weight:950;color:#fff;line-height:1;">' + _sx + '</span></div>' +
+                    '<div style="min-width:52px;height:38px;display:flex;align-items:center;justify-content:center;background:var(--sp-g-0-0-0-035,rgba(0,0,0,0.35));border:2px solid rgba(254,243,199,0.3);border-radius:10px;"><span style="font-size:1.5rem;font-weight:950;color:#fff;line-height:1;">' + _sx + '</span></div>' +
                     '<button onclick="window._unifiedSwissStep(1)" title="Mais uma rodada" style="' + _stepBtn + '">+</button>' +
-                    '<span style="font-size:0.92rem;color:#fde68a;font-weight:600;margin-left:2px;">' + _rw + '</span>' +
+                    '<span style="font-size:0.92rem;color:var(--sp-c-fde68a,#fde68a);font-weight:600;margin-left:2px;">' + _rw + '</span>' +
                 '</div>' +
-                '<div style="font-size:0.8rem;color:#fef3c7;line-height:1.55;">' + _sx + ' ' + _rw + ' de Suíço para classificar para as eliminatórias <b>(chave de ' + (window._unifiedSwissLo || '?') + ')</b></div>' +
-                '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + _sf + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + _sg + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>';
+                '<div style="font-size:0.8rem;color:var(--sp-c-fef3c7,#fef3c7);line-height:1.55;">' + _sx + ' ' + _rw + ' de Suíço para classificar para as eliminatórias <b>(chave de ' + (window._unifiedSwissLo || '?') + ')</b></div>' +
+                '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:var(--sp-c-6ee7b7,#6ee7b7);font-size:0.95rem;">⏱️ ~' + _sf + '</span><span style="opacity:0.8;font-size:0.72rem;color:var(--sp-c-e2e8f0,#e2e8f0);">(' + _sg + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>';
             return;
         }
         var d = (window._unifiedSummary && window._unifiedSummary[key]) || null;
         var ed = window._unifiedEstData && window._unifiedEstData[key];
         var estLine = ed
-            ? '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:#6ee7b7;font-size:0.95rem;">⏱️ ~' + ed.fmt + '</span><span style="opacity:0.8;font-size:0.72rem;color:#e2e8f0;">(' + ed.games + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>'
-            : '<div style="margin-top:7px;font-size:0.76rem;color:#e2e8f0;opacity:0.8;">⏱️ A estimativa depende da configuração após esta opção.</div>';
+            ? '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-weight:800;color:var(--sp-c-6ee7b7,#6ee7b7);font-size:0.95rem;">⏱️ ~' + ed.fmt + '</span><span style="opacity:0.8;font-size:0.72rem;color:var(--sp-c-e2e8f0,#e2e8f0);">(' + ed.games + ' jogos · ' + window._unifiedCourts + ' quadra' + (window._unifiedCourts > 1 ? 's' : '') + ' · ' + window._unifiedDur + ' min/jogo)</span></div>'
+            : '<div style="margin-top:7px;font-size:0.76rem;color:var(--sp-c-e2e8f0,#e2e8f0);opacity:0.8;">⏱️ A estimativa depende da configuração após esta opção.</div>';
         // NOME da opção no topo + passos (processo → chave) + estimativa
         var title = d ? d.title : '';
         var linesHtml = (d && d.lines) ? d.lines.map(function(l, i) { return (i > 0 ? '<span style="opacity:0.4;margin:0 5px;">→</span>' : '') + l; }).join('') : '';
         el.innerHTML =
-            '<div style="font-weight:900;color:#fbbf24;font-size:0.92rem;margin-bottom:4px;">' + title + '</div>' +
-            '<div style="font-size:0.78rem;color:#fef3c7;line-height:1.55;">' + linesHtml + '</div>' +
+            '<div style="font-weight:900;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.92rem;margin-bottom:4px;">' + title + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--sp-c-fef3c7,#fef3c7);line-height:1.55;">' + linesHtml + '</div>' +
             estLine;
     };
     // v4.0.70: − / + do nº de rodadas do Suíço; recalcula o detalhe + estimativa.
@@ -1742,7 +1744,7 @@ window.showUnifiedResolutionPanel = function(tId) {
     if (_phaseCtx && Array.isArray(_phaseCtx.lines) && _phaseCtx.lines.length) {
         _linesHeader = '<div style="text-align:center;margin-bottom:14px;">' +
             _phaseCtx.lines.map(function (l) {
-                return '<div style="font-size:1.05rem;font-weight:900;color:#fde68a;line-height:1.45;letter-spacing:-0.01em;">' + window._safeHtml(l.label) + ' (' + l.size + ')</div>';
+                return '<div style="font-size:1.05rem;font-weight:900;color:var(--sp-c-fde68a,#fde68a);line-height:1.45;letter-spacing:-0.01em;">' + window._safeHtml(l.label) + ' (' + l.size + ')</div>';
             }).join('') +
         '</div>';
     }
@@ -1750,37 +1752,37 @@ window.showUnifiedResolutionPanel = function(tId) {
     // v4.0.66: 3 BOXES — inferior (esq, menor) · ATUAIS (centro, destaque) · superior (dir, menor)
     gaugeHtml = _linesHeader + '<div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:8px;align-items:stretch;">' +
         '<div style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.35);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;">' +
-            '<div style="font-size:0.56rem;color:#86efac;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeInferior') + '</div>' +
-            '<div style="font-size:1.5rem;font-weight:900;color:#4ade80;line-height:1.15;">' + info.loP2 + '</div>' +
-            '<div style="font-size:0.6rem;color:#86efac;">' + _loSub + '</div>' +
-            '<div style="font-size:0.56rem;color:#f87171;margin-top:3px;font-weight:700;">' + _t('predraw.gaugeOver', {n: _excessCount, unit: _unitLabel}) + '</div>' +
+            '<div style="font-size:0.56rem;color:var(--sp-c-86efac,#86efac);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeInferior') + '</div>' +
+            '<div style="font-size:1.5rem;font-weight:900;color:var(--sp-c-4ade80,#4ade80);line-height:1.15;">' + info.loP2 + '</div>' +
+            '<div style="font-size:0.6rem;color:var(--sp-c-86efac,#86efac);">' + _loSub + '</div>' +
+            '<div style="font-size:0.56rem;color:var(--sp-c-f87171,#f87171);margin-top:3px;font-weight:700;">' + _t('predraw.gaugeOver', {n: _excessCount, unit: _unitLabel}) + '</div>' +
         '</div>' +
         '<div style="background:rgba(251,191,36,0.15);border:2px solid rgba(251,191,36,0.55);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;box-shadow:0 0 18px rgba(251,191,36,0.18);">' +
-            '<div style="font-size:2.6rem;font-weight:950;color:#fbbf24;line-height:1;">' + info.effectiveTeams + '</div>' +
-            '<div style="font-size:0.62rem;color:#fde68a;text-transform:uppercase;font-weight:800;margin-top:2px;letter-spacing:0.4px;">' + _centerLabel + '</div>' +
-            (info.isTeam ? '<div style="font-size:0.58rem;color:#fde68a;opacity:0.85;">' + _centerSub + '</div>' : '') +
+            '<div style="font-size:2.6rem;font-weight:950;color:var(--sp-c-fbbf24,#fbbf24);line-height:1;">' + info.effectiveTeams + '</div>' +
+            '<div style="font-size:0.62rem;color:var(--sp-c-fde68a,#fde68a);text-transform:uppercase;font-weight:800;margin-top:2px;letter-spacing:0.4px;">' + _centerLabel + '</div>' +
+            (info.isTeam ? '<div style="font-size:0.58rem;color:var(--sp-c-fde68a,#fde68a);opacity:0.85;">' + _centerSub + '</div>' : '') +
         '</div>' +
         '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.35);border-radius:16px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;justify-content:center;">' +
-            '<div style="font-size:0.56rem;color:#93c5fd;text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeSuperior') + '</div>' +
-            '<div style="font-size:1.5rem;font-weight:900;color:#60a5fa;line-height:1.15;">' + info.hiP2 + '</div>' +
-            '<div style="font-size:0.6rem;color:#93c5fd;">' + _hiSub + '</div>' +
-            '<div style="font-size:0.56rem;color:#38bdf8;margin-top:3px;font-weight:700;">' + _t('predraw.gaugeMissing', {n: _missingCount, unit: _unitLabel}) + '</div>' +
+            '<div style="font-size:0.56rem;color:var(--sp-c-93c5fd,#93c5fd);text-transform:uppercase;letter-spacing:0.4px;font-weight:700;">' + _t('predraw.gaugeSuperior') + '</div>' +
+            '<div style="font-size:1.5rem;font-weight:900;color:var(--sp-c-60a5fa,#60a5fa);line-height:1.15;">' + info.hiP2 + '</div>' +
+            '<div style="font-size:0.6rem;color:var(--sp-c-93c5fd,#93c5fd);">' + _hiSub + '</div>' +
+            '<div style="font-size:0.56rem;color:var(--sp-c-38bdf8,#38bdf8);margin-top:3px;font-weight:700;">' + _t('predraw.gaugeMissing', {n: _missingCount, unit: _unitLabel}) + '</div>' +
         '</div>' +
     '</div>';
 
     overlay.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:94%;max-width:800px;border-radius:32px;margin:auto 0;border:1px solid rgba(251,191,36,0.2);box-shadow:0 40px 120px rgba(0,0,0,0.8);overflow:hidden;animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);display:flex;flex-direction:column;max-height:90%;">' +
         // Sticky top bar with cancel button
-        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:12px 1.5rem;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">' +
+        '<div style="position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#78350f 0%,#92400e 50%,#b45309 100%);padding:12px 1.5rem;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;">' +
             '<div style="display:flex;align-items:center;gap:12px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;">⚙️</span>' +
                 '<div style="min-width:0;">' +
-                    '<h3 style="margin:0;color:#fef3c7;font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">' + _t('predraw.adjustTitle') + '</h3>' +
-                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.75rem;opacity:0.9;">' + _t('predraw.detectedPrefix') + issuesText + '</p>' +
+                    '<h3 style="margin:0;color:var(--sp-c-fef3c7,#fef3c7);font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">' + _t('predraw.adjustTitle') + '</h3>' +
+                    '<p style="margin:2px 0 0;color:var(--sp-c-fde68a,#fde68a);font-size:0.75rem;opacity:0.9;">' + _t('predraw.detectedPrefix') + issuesText + '</p>' +
                 '</div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;">' +
                 '<button onclick="window._cancelUnifiedPanel(\'' + tIdSafe + '\')" style="flex:1;background:#dc2626;color:#fff;border:none;padding:9px 14px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'#b91c1c\'" onmouseout="this.style.background=\'#dc2626\'">' + _t('predraw.cancelBtn') + '</button>' +
-                '<button onclick="window._spinButton&&window._spinButton(this,\'Confirmando…\'); window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
+                '<button onclick="window._spinButton&&window._spinButton(this,\'Confirmando…\'); window._handleUnifiedOption(\'' + tIdSafe + '\', window._unifiedSel)" style="flex:2;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));padding:9px 14px;border-radius:12px;font-weight:800;font-size:0.85rem;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 16px rgba(34,197,94,0.35);" onmouseover="this.style.filter=\'brightness(1.1)\'" onmouseout="this.style.filter=\'\'">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
         // Scrollable content
@@ -1799,8 +1801,8 @@ window.showUnifiedResolutionPanel = function(tId) {
         // barra de filtros/busca canônica. Fica fora da seção com padding pra encostar.
         '<div id="unified-detail" style="position:sticky;top:0;z-index:6;background:#1f2433;border-bottom:1px solid rgba(251,191,36,0.32);box-shadow:0 6px 14px rgba(0,0,0,0.4);padding:11px 2.5rem;"></div>' +
         '<div style="padding:1.25rem 2.5rem 2.5rem;">' +
-            '<h4 style="margin:0 0 0.5rem;color:#94a3b8;font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;font-weight:700;">' + _t('predraw.selectStrategy') + '</h4>' +
-            '<p style="margin:0 0 1rem;font-size:0.7rem;color:#64748b;line-height:1.5;">' + _t('predraw.nashColorLegend') + '</p>' +
+            '<h4 style="margin:0 0 0.5rem;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.75rem;text-transform:uppercase;letter-spacing:2px;font-weight:700;">' + _t('predraw.selectStrategy') + '</h4>' +
+            '<p style="margin:0 0 1rem;font-size:0.7rem;color:var(--sp-c-64748b,#64748b);line-height:1.5;">' + _t('predraw.nashColorLegend') + '</p>' +
             '<div id="unified-options-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;">' +
                 window._renderUnifiedOptions([]) +
             '</div>' +
@@ -1931,12 +1933,12 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     // que o dono quer por padrão; senão, Ajuste manual.
     window._soloSel = (solos.length >= 2) ? 'flex' : 'manual';
     var chips = solos.map(function (p) {
-        return '<span style="display:inline-block;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:#fde68a;border-radius:999px;padding:5px 12px;font-size:0.82rem;font-weight:600;">' + esc(window._soloNameOf(p)) + '</span>';
+        return '<span style="display:inline-block;background:rgba(251,191,36,0.14);border:1px solid rgba(251,191,36,0.4);color:var(--sp-c-fde68a,#fde68a);border-radius:999px;padding:5px 12px;font-size:0.82rem;font-weight:600;">' + esc(window._soloNameOf(p)) + '</span>';
     }).join(' ');
     // opções SELECIONÁVEIS (clique destaca; o Confirmar no topo aplica)
     var opt = function (key, icon, title, desc, accent) {
         var on = (window._soloSel === key);
-        return '<button id="solo-opt-' + key + '" data-solokey="' + key + '" onclick="window._soloSelect(\'' + key + '\')" style="text-align:left;background:rgba(255,255,255,0.04);border:2px solid ' + accent + '55;outline:' + (on ? '3px solid #fbbf24' : 'none') + ';outline-offset:1px;border-radius:14px;padding:14px 16px;cursor:pointer;color:#e2e8f0;transition:all 0.2s;display:flex;gap:12px;align-items:flex-start;" onmouseover="this.style.background=\'rgba(255,255,255,0.08)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
+        return '<button id="solo-opt-' + key + '" data-solokey="' + key + '" onclick="window._soloSelect(\'' + key + '\')" style="text-align:left;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:2px solid ' + window._spCor(accent, 'borda') + '55;outline:' + (on ? '3px solid #fbbf24' : 'none') + ';outline-offset:1px;border-radius:14px;padding:14px 16px;cursor:pointer;color:var(--sp-c-e2e8f0,#e2e8f0);transition:all 0.2s;display:flex;gap:12px;align-items:flex-start;" onmouseover="this.style.background=\'rgba(255,255,255,0.08)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
             '<span style="font-size:1.6rem;line-height:1;flex-shrink:0;">' + icon + '</span>' +
             '<span><span style="display:block;font-weight:800;font-size:0.95rem;color:#fff;">' + title + '</span>' +
             '<span style="display:block;font-size:0.78rem;color:var(--text-muted,#94a3b8);margin-top:3px;line-height:1.4;">' + desc + '</span></span>' +
@@ -1947,19 +1949,19 @@ window._showSoloResolutionPanel = function (tId, isAberto) {
     ov.id = 'solo-resolution-panel';
     ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
     ov.innerHTML = '<div style="background:var(--bg-card,#1e293b);width:95%;max-width:560px;max-height:90%;overflow-y:auto;border-radius:24px;border:1px solid rgba(251,191,36,0.25);box-shadow:0 40px 120px rgba(0,0,0,0.8);">' +
-        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid rgba(255,255,255,0.1);">' +
+        '<div style="position:sticky;top:0;z-index:2;background:linear-gradient(135deg,#78350f,#b45309);padding:14px 1.5rem 16px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">' +
             // título (linha própria, sem botões competindo → "N sem dupla" não quebra)
             '<div style="display:flex;align-items:center;gap:11px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;line-height:1;">⚠️</span>' +
                 '<div style="min-width:0;flex:1;">' +
-                    '<h3 style="margin:0;color:#fef3c7;font-size:1.15rem;font-weight:900;line-height:1.15;white-space:nowrap;">' + solos.length + ' sem dupla</h3>' +
-                    '<p style="margin:2px 0 0;color:#fde68a;font-size:0.78rem;opacity:0.92;">Escolha uma opção abaixo e confirme</p>' +
+                    '<h3 style="margin:0;color:var(--sp-c-fef3c7,#fef3c7);font-size:1.15rem;font-weight:900;line-height:1.15;white-space:nowrap;">' + solos.length + ' sem dupla</h3>' +
+                    '<p style="margin:2px 0 0;color:var(--sp-c-fde68a,#fde68a);font-size:0.78rem;opacity:0.92;">Escolha uma opção abaixo e confirme</p>' +
                 '</div>' +
             '</div>' +
             // botões ABAIXO do título, MESMA altura/largura (box-sizing + min-height + borda iguais; flex:1)
             '<div style="display:flex;gap:10px;">' +
                 '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:#dc2626;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:0.92rem;line-height:1;cursor:pointer;">' + _t('predraw.cancelBtn') + '</button>' +
-                '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid rgba(255,255,255,0.25);border-radius:12px;font-weight:800;font-size:0.92rem;line-height:1;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
+                '<button onclick="window._soloConfirm(\'' + tIdSafe + '\', ' + ab + ')" style="flex:1;box-sizing:border-box;min-height:46px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:2px solid var(--sp-b-255-255-255-025,rgba(255,255,255,0.25));border-radius:12px;font-weight:800;font-size:0.92rem;line-height:1;cursor:pointer;box-shadow:0 6px 16px rgba(34,197,94,0.35);">' + _t('predraw.confirmBtn') + '</button>' +
             '</div>' +
         '</div>' +
         '<div style="padding:1.25rem 1.5rem;">' +
@@ -2150,30 +2152,30 @@ window.showDissolveTeamsPanel = function (tId) {
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99999;display:flex;align-items:center;justify-content:center;';
 
     overlay.innerHTML = `
-        <div style="background:var(--bg-card,#1e293b);width:96%;max-width:900px;height:85%;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
-            <div style="padding:1.5rem 2rem;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;">
+        <div style="background:var(--bg-card,#1e293b);width:96%;max-width:900px;height:85%;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));">
+            <div style="padding:1.5rem 2rem;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-bottom:1px solid var(--sp-b-255-255-255-005,rgba(255,255,255,0.05));display:flex;justify-content:space-between;align-items:center;">
                 <div>
                     <h3 style="margin:0;color:white;">${_t('predraw.reallocTitle')}</h3>
-                    <p style="margin:4px 0 0;color:#94a3b8;font-size:0.85rem;">${_t('predraw.reallocDesc')}</p>
+                    <p style="margin:4px 0 0;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;">${_t('predraw.reallocDesc')}</p>
                 </div>
-                <button onclick="document.getElementById('dissolve-panel').remove()" style="background:rgba(255,255,255,0.05);border:none;color:white;padding:8px 15px;border-radius:10px;cursor:pointer;">${_t('predraw.reallocClose')}</button>
+                <button onclick="document.getElementById('dissolve-panel').remove()" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));border:none;color:white;padding:8px 15px;border-radius:10px;cursor:pointer;">${_t('predraw.reallocClose')}</button>
             </div>
 
             <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:2rem;overflow:hidden;">
                 <!-- Coluna 1: Times Incompletos -->
                 <div style="display:flex;flex-direction:column;gap:15px;overflow-y:auto;padding-right:10px;">
-                    <h4 style="margin:0;font-size:0.8rem;color:#f87171;text-transform:uppercase;letter-spacing:1px;">${_t('predraw.incompleteTeamsList')}</h4>
+                    <h4 style="margin:0;font-size:0.8rem;color:var(--sp-c-f87171,#f87171);text-transform:uppercase;letter-spacing:1px;">${_t('predraw.incompleteTeamsList')}</h4>
                     <div id="incomplete-list-dnd" style="display:flex;flex-direction:column;gap:12px;"></div>
                 </div>
 
                 <!-- Coluna 2: Todos os Participantes / Pool -->
                 <div style="display:flex;flex-direction:column;gap:15px;overflow-y:auto;padding-right:10px;">
-                    <h4 style="margin:0;font-size:0.8rem;color:#60a5fa;text-transform:uppercase;letter-spacing:1px;">${_t('predraw.allParticipantsList')}</h4>
+                    <h4 style="margin:0;font-size:0.8rem;color:var(--sp-c-60a5fa,#60a5fa);text-transform:uppercase;letter-spacing:1px;">${_t('predraw.allParticipantsList')}</h4>
                     <div id="full-list-dnd" style="display:flex;flex-direction:column;gap:8px;"></div>
                 </div>
             </div>
 
-            <div style="padding:1.5rem 2rem;background:rgba(255,255,255,0.03);border-top:1px solid rgba(255,255,255,0.05);display:flex;justify-content:flex-end;gap:15px;">
+            <div style="padding:1.5rem 2rem;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border-top:1px solid var(--sp-b-255-255-255-005,rgba(255,255,255,0.05));display:flex;justify-content:flex-end;gap:15px;">
                 <button onclick="window._saveDissolveResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:#2563eb;color:white;border:none;padding:12px 25px;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:0 10px 20px rgba(37,99,235,0.3);">🧩 Dissolver times incompletos</button>
             </div>
         </div>
@@ -2193,8 +2195,8 @@ window.showDissolveTeamsPanel = function (tId) {
             <div style="background:rgba(239,68,68,0.05);border:1px dashed rgba(239,68,68,0.3);border-radius:12px;padding:1rem;">
                 <div style="font-weight:700;color:white;margin-bottom:8px;font-size:0.9rem;">${window._safeHtml(it.name)}</div>
                 <div style="display:flex;flex-wrap:wrap;gap:5px;">
-                    ${it.members.map(m => `<span style="background:rgba(255,255,255,0.1);padding:4px 10px;border-radius:6px;font-size:0.8rem;color:#e2e8f0;">${window._safeHtml(m)}</span>`).join('')}
-                    <span style="border:1px dashed #94a3b8;padding:4px 10px;border-radius:6px;font-size:0.8rem;color:#94a3b8;">${_t('predraw.openSlot')}</span>
+                    ${it.members.map(m => `<span style="background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:4px 10px;border-radius:6px;font-size:0.8rem;color:var(--sp-c-e2e8f0,#e2e8f0);">${window._safeHtml(m)}</span>`).join('')}
+                    <span style="border:1px dashed #94a3b8;padding:4px 10px;border-radius:6px;font-size:0.8rem;color:var(--sp-c-94a3b8,#94a3b8);">${_t('predraw.openSlot')}</span>
                 </div>
             </div>
         `).join('');
@@ -2202,9 +2204,9 @@ window.showDissolveTeamsPanel = function (tId) {
         fullList.innerHTML = participants.map((p, idx) => {
             const name = typeof p === 'string' ? p : (p.displayName || p.name || '');
             return `
-                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);padding:10px 15px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-size:0.9rem;color:#e2e8f0;">${window._safeHtml(name)}</span>
-                    <span style="color:#94a3b8;font-size:0.75rem;">ID: ${idx}</span>
+                <div style="background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));padding:10px 15px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:0.9rem;color:var(--sp-c-e2e8f0,#e2e8f0);">${window._safeHtml(name)}</span>
+                    <span style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.75rem;">ID: ${idx}</span>
                 </div>
             `;
         }).join('');
@@ -2537,8 +2539,8 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
 
     var optionsHtml = pollOptions.map(function(opt) {
         var isNash = (opt.key === nashRec);
-        var nashBadge = isNash ? '<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:0.6rem;font-weight:800;background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);margin-left:6px;vertical-align:middle;">⚖️ Nash</span>' : '';
-        return '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all 0.2s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.06)\'" onmouseleave="this.style.background=\'rgba(255,255,255,0.03)\'">' +
+        var nashBadge = isNash ? '<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:0.6rem;font-weight:800;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);border:1px solid rgba(16,185,129,0.3);margin-left:6px;vertical-align:middle;">⚖️ Nash</span>' : '';
+        return '<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));cursor:pointer;transition:all 0.2s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.06)\'" onmouseleave="this.style.background=\'rgba(255,255,255,0.03)\'">' +
             '<label class="toggle-switch toggle-sm" style="margin-top:3px;--toggle-on-bg:#6366f1;--toggle-on-glow:rgba(99,102,241,0.3);--toggle-on-border:#6366f1;"><input type="checkbox" checked value="' + opt.key + '"><span class="toggle-slider"></span></label>' +
             '<div style="flex:1;">' +
             '<div style="font-weight:700;font-size:0.9rem;color:var(--text-bright);">' + opt.icon + ' ' + opt.title + nashBadge + '</div>' +
@@ -2552,38 +2554,38 @@ window._showPollCreationDialog = function(tId, context, pollOptions) {
         '<div style="display:flex;align-items:center;gap:15px;">' +
         '<span style="font-size:2.5rem;">🗳️</span>' +
         '<div>' +
-        '<h3 style="margin:0;color:#e0e7ff;font-size:1.25rem;font-weight:800;">' + _t('predraw.pollCreateTitle') + '</h3>' +
-        '<p style="margin:4px 0 0;color:#a5b4fc;font-size:0.85rem;">' + _t('predraw.pollCreateSubtitle') + '</p>' +
+        '<h3 style="margin:0;color:var(--sp-c-e0e7ff,#e0e7ff);font-size:1.25rem;font-weight:800;">' + _t('predraw.pollCreateTitle') + '</h3>' +
+        '<p style="margin:4px 0 0;color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.85rem;">' + _t('predraw.pollCreateSubtitle') + '</p>' +
         '</div>' +
         '</div>' +
         '</div>' +
 
         '<div style="padding:1.5rem 2rem;">' +
         '<div style="margin-bottom:1.25rem;">' +
-        '<label style="font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">' + _t('predraw.pollOptionsLabel') + '</label>' +
+        '<label style="font-size:0.75rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;letter-spacing:1px;">' + _t('predraw.pollOptionsLabel') + '</label>' +
         '<p style="font-size:0.7rem;color:var(--text-muted);margin:4px 0 10px;">' + _t('predraw.pollOptionsHint') + '</p>' +
         '<div id="poll-options-list" style="display:flex;flex-direction:column;gap:8px;">' + optionsHtml + '</div>' +
         '</div>' +
 
         '<div style="margin-bottom:1.25rem;">' +
-        '<label style="font-size:0.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">' + _t('predraw.pollDeadlineLabel') + '</label>' +
+        '<label style="font-size:0.75rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;letter-spacing:1px;">' + _t('predraw.pollDeadlineLabel') + '</label>' +
         '<div style="display:flex;gap:12px;margin-top:8px;">' +
         '<div style="flex:1;">' +
         '<label style="font-size:0.7rem;color:var(--text-muted);">' + _t('predraw.pollHoursLabel') + '</label>' +
-        '<input type="number" id="poll-deadline-hours" value="48" min="1" max="168" style="width:100%;padding:10px;border-radius:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:var(--text-bright);font-size:1rem;font-weight:700;text-align:center;">' +
+        '<input type="number" id="poll-deadline-hours" value="48" min="1" max="168" style="width:100%;padding:10px;border-radius:10px;background:var(--sp-g-0-0-0-03,rgba(0,0,0,0.3));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));color:var(--text-bright);font-size:1rem;font-weight:700;text-align:center;">' +
         '</div>' +
         '<div style="display:flex;align-items:flex-end;padding-bottom:10px;color:var(--text-muted);font-size:0.85rem;">' + _t('predraw.pollHoursUnit') + '</div>' +
         '</div>' +
         '</div>' +
 
         '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:12px;padding:12px;margin-bottom:1rem;">' +
-        '<div style="font-size:0.75rem;font-weight:700;color:#4ade80;margin-bottom:4px;">' + _t('predraw.pollNashTitle') + '</div>' +
+        '<div style="font-size:0.75rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin-bottom:4px;">' + _t('predraw.pollNashTitle') + '</div>' +
         '<div style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;">' + _t('predraw.pollNashExplain') + '</div>' +
         '</div>' +
         '</div>' +
 
-        '<div style="padding:1rem 2rem 1.5rem;display:flex;justify-content:flex-end;gap:12px;border-top:1px solid rgba(255,255,255,0.05);">' +
-        '<button id="poll-cancel-btn" style="background:transparent;color:#94a3b8;border:2px solid rgba(148,163,184,0.2);padding:10px 20px;border-radius:12px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('predraw.cancelLabel') + '</button>' +
+        '<div style="padding:1rem 2rem 1.5rem;display:flex;justify-content:flex-end;gap:12px;border-top:1px solid var(--sp-b-255-255-255-005,rgba(255,255,255,0.05));">' +
+        '<button id="poll-cancel-btn" style="background:transparent;color:var(--sp-c-94a3b8,#94a3b8);border:2px solid rgba(148,163,184,0.2);padding:10px 20px;border-radius:12px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('predraw.cancelLabel') + '</button>' +
         '<button id="poll-create-btn" style="background:linear-gradient(135deg,#6366f1,#818cf8);color:white;border:none;padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;box-shadow:0 8px 20px rgba(99,102,241,0.3);">' + _t('predraw.pollCreateBtn') + '</button>' +
         '</div>' +
         '</div>';
@@ -2736,18 +2738,18 @@ window._showPollVotingDialog = function(tId, pollId) {
     // Countdown string
     var countdownStr = '';
     if (isPollClosed) {
-        countdownStr = '<span style="color:#f87171;font-weight:700;">' + _t('predraw.closed') + '</span>';
+        countdownStr = '<span style="color:var(--sp-c-f87171,#f87171);font-weight:700;">' + _t('predraw.closed') + '</span>';
     } else {
         var hrs = Math.floor(remaining / 3600000);
         var mins = Math.floor((remaining % 3600000) / 60000);
         var secs = Math.floor((remaining % 60000) / 1000);
-        countdownStr = '<span style="color:#fbbf24;font-weight:700;" id="poll-countdown">' + hrs + 'h ' + mins + 'm ' + secs + 's</span>';
+        countdownStr = '<span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;" id="poll-countdown">' + hrs + 'h ' + mins + 'm ' + secs + 's</span>';
     }
 
     // Build options HTML
     var optionsHtml = poll.options.map(function(opt) {
         var isMyVote = (userVote === opt.key);
-        var nashBadge = opt.isNash ? '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:800;background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);margin-left:6px;">' + _t('predraw.pollNashRec') + '</span>' : '';
+        var nashBadge = opt.isNash ? '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:800;background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);border:1px solid rgba(16,185,129,0.3);margin-left:6px;">' + _t('predraw.pollNashRec') + '</span>' : '';
 
         // Before voting: just show options and descriptions (no counts)
         // After voting or closed: show counts and own vote
@@ -2756,14 +2758,14 @@ window._showPollVotingDialog = function(tId, pollId) {
             var count = voteCounts[opt.key] || 0;
             var pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
             voteInfo = '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">' +
-                '<div style="flex:1;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">' +
-                '<div style="height:100%;background:' + (isMyVote ? '#6366f1' : 'rgba(255,255,255,0.2)') + ';border-radius:3px;width:' + pct + '%;transition:width 0.5s;"></div>' +
+                '<div style="flex:1;height:6px;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));border-radius:3px;overflow:hidden;">' +
+                '<div style="height:100%;background:' + window._spCor((isMyVote ? '#6366f1' : 'rgba(255,255,255,0.2)'), 'background') + ';border-radius:3px;width:' + pct + '%;transition:width 0.5s;"></div>' +
                 '</div>' +
                 '<span style="font-size:0.75rem;color:var(--text-muted);font-weight:700;min-width:50px;text-align:right;">' + count + ' (' + pct + '%)</span>' +
                 '</div>';
         }
 
-        var myVoteBadge = isMyVote ? '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:800;background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);margin-left:6px;">' + _t('predraw.pollMyVote') + '</span>' : '';
+        var myVoteBadge = isMyVote ? '<span style="display:inline-block;padding:1px 6px;border-radius:6px;font-size:0.6rem;font-weight:800;background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.3);margin-left:6px;">' + _t('predraw.pollMyVote') + '</span>' : '';
 
         var borderColor = isMyVote ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)';
         var bgColor = isMyVote ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)';
@@ -2772,7 +2774,7 @@ window._showPollVotingDialog = function(tId, pollId) {
         var clickHandler = isPollClosed ? '' : ' onclick="window._castPollVote(\'' + tId + '\',\'' + pollId + '\',\'' + safeOptionKey + '\')"';
         var cursor = isPollClosed ? 'default' : 'pointer';
 
-        return '<div class="poll-vote-option" style="padding:14px;border-radius:14px;background:' + bgColor + ';border:1.5px solid ' + borderColor + ';cursor:' + cursor + ';transition:all 0.2s;"' + clickHandler + '>' +
+        return '<div class="poll-vote-option" style="padding:14px;border-radius:14px;background:' + window._spCor(bgColor, 'background') + ';border:1.5px solid ' + window._spCor(borderColor, 'borda') + ';cursor:' + cursor + ';transition:all 0.2s;"' + clickHandler + '>' +
             '<div style="display:flex;align-items:center;gap:8px;">' +
             '<span style="font-size:1.3rem;">' + opt.icon + '</span>' +
             '<div style="flex:1;">' +
@@ -2792,12 +2794,12 @@ window._showPollVotingDialog = function(tId, pollId) {
         '<div style="display:flex;align-items:center;gap:12px;">' +
         '<span style="font-size:2rem;">🗳️</span>' +
         '<div>' +
-        '<h3 style="margin:0;color:#e0e7ff;font-size:1.15rem;font-weight:800;">' + _t('predraw.pollDialogTitle', {ctx: contextLabel}) + '</h3>' +
-        '<p style="margin:4px 0 0;color:#a5b4fc;font-size:0.8rem;">' + _t('predraw.pollDialogSubtitle', {suffix: isPollClosed ? _t('predraw.pollDialogClosedSuffix') : ''}) + '</p>' +
+        '<h3 style="margin:0;color:var(--sp-c-e0e7ff,#e0e7ff);font-size:1.15rem;font-weight:800;">' + _t('predraw.pollDialogTitle', {ctx: contextLabel}) + '</h3>' +
+        '<p style="margin:4px 0 0;color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.8rem;">' + _t('predraw.pollDialogSubtitle', {suffix: isPollClosed ? _t('predraw.pollDialogClosedSuffix') : ''}) + '</p>' +
         '</div>' +
         '</div>' +
         '<div style="text-align:right;">' +
-        '<div style="font-size:0.65rem;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.5px;">' + _t('predraw.pollTimeLeft') + '</div>' +
+        '<div style="font-size:0.65rem;color:var(--sp-c-a5b4fc,#a5b4fc);text-transform:uppercase;letter-spacing:0.5px;">' + _t('predraw.pollTimeLeft') + '</div>' +
         '<div style="font-size:1rem;margin-top:2px;">' + countdownStr + '</div>' +
         '</div>' +
         '</div>' +
@@ -2809,8 +2811,8 @@ window._showPollVotingDialog = function(tId, pollId) {
         (hasVoted ? '<p style="font-size:0.75rem;color:var(--text-muted);margin-top:1rem;text-align:center;font-style:italic;">' + _t('predraw.pollChangeVoteNote', {suffix: isPollClosed ? '' : _t('predraw.pollChangeVoteSuffix')}) + '</p>' : '') +
         '</div>' +
 
-        '<div style="padding:1rem 2rem 1.5rem;display:flex;justify-content:flex-end;border-top:1px solid rgba(255,255,255,0.05);">' +
-        '<button onclick="document.getElementById(\'poll-voting-dialog\').remove();document.body.style.overflow=\'\';" style="background:transparent;color:#94a3b8;border:2px solid rgba(148,163,184,0.2);padding:10px 20px;border-radius:12px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('predraw.pollClose') + '</button>' +
+        '<div style="padding:1rem 2rem 1.5rem;display:flex;justify-content:flex-end;border-top:1px solid var(--sp-b-255-255-255-005,rgba(255,255,255,0.05));">' +
+        '<button onclick="document.getElementById(\'poll-voting-dialog\').remove();document.body.style.overflow=\'\';" style="background:transparent;color:var(--sp-c-94a3b8,#94a3b8);border:2px solid rgba(148,163,184,0.2);padding:10px 20px;border-radius:12px;font-weight:600;font-size:0.85rem;cursor:pointer;">' + _t('predraw.pollClose') + '</button>' +
         '</div>' +
         '</div>';
 
@@ -3024,7 +3026,7 @@ window._renderPollBanner = function(t) {
     var statusText = hasVoted ? _t('predraw.pollVoted') : _t('predraw.pollWaiting');
 
     var closeBtn = isOrganizer
-        ? '<button onclick="event.stopPropagation();window._closePollEarly(\'' + t.id + '\',\'' + activePoll.id + '\')" style="background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:8px 14px;border-radius:10px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollCloseEarly') + '</button>'
+        ? '<button onclick="event.stopPropagation();window._closePollEarly(\'' + t.id + '\',\'' + activePoll.id + '\')" style="background:rgba(239,68,68,0.15);color:var(--sp-c-f87171,#f87171);border:1px solid rgba(239,68,68,0.3);padding:8px 14px;border-radius:10px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollCloseEarly') + '</button>'
         : '';
 
     return '<div style="background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.08));border:2px solid rgba(99,102,241,0.4);border-radius:20px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;box-shadow:0 4px 20px rgba(99,102,241,0.1);">' +
@@ -3037,8 +3039,8 @@ window._renderPollBanner = function(t) {
         '</div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:10px;">' +
-        '<div style="text-align:center;background:rgba(0,0,0,0.2);padding:8px 16px;border-radius:12px;">' +
-        '<div style="font-size:1.6rem;font-weight:900;color:#a5b4fc;line-height:1;font-variant-numeric:tabular-nums;">' + timeStr + '</div>' +
+        '<div style="text-align:center;background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));padding:8px 16px;border-radius:12px;">' +
+        '<div style="font-size:1.6rem;font-weight:900;color:var(--sp-c-a5b4fc,#a5b4fc);line-height:1;font-variant-numeric:tabular-nums;">' + timeStr + '</div>' +
         '<div style="font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">' + _t('predraw.pollRemaining') + '</div>' +
         '</div>' +
         '</div>' +
@@ -3082,9 +3084,9 @@ window._renderClosedPollBanner = function(t, poll) {
         ? '<button onclick="window._applyPollResult(\'' + t.id + '\',\'' + poll.id + '\')" style="background:linear-gradient(135deg,#10b981,#34d399);color:white;border:none;padding:8px 18px;border-radius:10px;font-weight:700;font-size:0.8rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollApply') + '</button>'
         : '';
     var reopenBtn = isOrganizer
-        ? '<button onclick="window._reopenPoll(\'' + t.id + '\',\'' + poll.id + '\')" style="background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);padding:8px 14px;border-radius:10px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollReopenBtn') + '</button>'
+        ? '<button onclick="window._reopenPoll(\'' + t.id + '\',\'' + poll.id + '\')" style="background:rgba(99,102,241,0.15);color:var(--sp-c-a5b4fc,#a5b4fc);border:1px solid rgba(99,102,241,0.3);padding:8px 14px;border-radius:10px;font-weight:700;font-size:0.78rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollReopenBtn') + '</button>'
         : '';
-    var viewBtn = '<button onclick="window._showPollVotingDialog(\'' + t.id + '\',\'' + poll.id + '\')" style="background:rgba(255,255,255,0.05);color:var(--text-bright);border:1px solid rgba(255,255,255,0.1);padding:8px 14px;border-radius:10px;font-weight:600;font-size:0.8rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollViewDetails') + '</button>';
+    var viewBtn = '<button onclick="window._showPollVotingDialog(\'' + t.id + '\',\'' + poll.id + '\')" style="background:var(--sp-g-255-255-255-005,rgba(255,255,255,0.05));color:var(--text-bright);border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.1));padding:8px 14px;border-radius:10px;font-weight:600;font-size:0.8rem;cursor:pointer;white-space:nowrap;">' + _t('predraw.pollViewDetails') + '</button>';
 
     return '<div style="background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(16,185,129,0.05));border:2px solid rgba(16,185,129,0.35);border-radius:20px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;box-shadow:0 4px 20px rgba(16,185,129,0.08);">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">' +
@@ -3092,7 +3094,7 @@ window._renderClosedPollBanner = function(t, poll) {
         '<div style="width:48px;height:48px;background:linear-gradient(135deg,#10b981,#34d399);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">✅</div>' +
         '<div>' +
         '<div style="font-weight:900;font-size:1.25rem;color:var(--text-bright);letter-spacing:0.02em;">' + _t('predraw.pollClosedBannerTitle') + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">' + _t('predraw.pollResultPrefix') + '<strong style="color:#4ade80;">' + winnerTitle + '</strong> (' + pct + '% · ' + winnerCount + '/' + totalVotes + ' ' + _t('predraw.votesLabel') + ')</div>' +
+        '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">' + _t('predraw.pollResultPrefix') + '<strong style="color:var(--sp-c-4ade80,#4ade80);">' + winnerTitle + '</strong> (' + pct + '% · ' + winnerCount + '/' + totalVotes + ' ' + _t('predraw.votesLabel') + ')</div>' +
         '</div>' +
         '</div>' +
         '</div>' +
@@ -3343,43 +3345,43 @@ window._showReopenPanel = function (tId, info) {
     overlay.id = 'reopen-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:1rem;';
     overlay.innerHTML = `
-        <div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:20px;width:100%;max-width:480px;box-shadow:0 25px 60px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.08);margin:auto 0;">
+        <div style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);border-radius:20px;width:100%;max-width:480px;box-shadow:0 25px 60px rgba(0,0,0,0.5);border:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));margin:auto 0;">
             <div style="padding:2rem 2.5rem 1.5rem;">
                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem;">
                     <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🔓</div>
                     <div>
-                        <h3 style="margin:0;color:#f1f5f9;font-size:1.2rem;font-weight:700;">${_t('predraw.reopenPanelTitle')}</h3>
-                        <p style="margin:2px 0 0;color:#64748b;font-size:0.85rem;">${_t('predraw.reopenPanelWaiting')}</p>
+                        <h3 style="margin:0;color:var(--sp-c-f1f5f9,#f1f5f9);font-size:1.2rem;font-weight:700;">${_t('predraw.reopenPanelTitle')}</h3>
+                        <p style="margin:2px 0 0;color:var(--sp-c-64748b,#64748b);font-size:0.85rem;">${_t('predraw.reopenPanelWaiting')}</p>
                     </div>
                 </div>
 
                 <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-                        <span style="color:#94a3b8;font-size:0.85rem;">${info.teamSize > 1 ? _t('predraw.reopenCurrentTeams') : _t('predraw.reopenCurrentParts')}</span>
-                        <span style="color:#f1f5f9;font-weight:700;font-size:1.1rem;">${_rpCount}</span>
+                        <span style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;">${info.teamSize > 1 ? _t('predraw.reopenCurrentTeams') : _t('predraw.reopenCurrentParts')}</span>
+                        <span style="color:var(--sp-c-f1f5f9,#f1f5f9);font-weight:700;font-size:1.1rem;">${_rpCount}</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-                        <span style="color:#94a3b8;font-size:0.85rem;">${_t('predraw.reopenNextPow2')}</span>
-                        <span style="color:#3b82f6;font-weight:700;font-size:1.1rem;">${_rpHi}</span>
+                        <span style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;">${_t('predraw.reopenNextPow2')}</span>
+                        <span style="color:var(--sp-c-3b82f6,#3b82f6);font-weight:700;font-size:1.1rem;">${_rpHi}</span>
                     </div>
                     <div style="border-top:1px solid rgba(59,130,246,0.15);padding-top:0.75rem;display:flex;justify-content:space-between;align-items:center;">
-                        <span style="color:#94a3b8;font-size:0.85rem;">${_t('predraw.reopenMissing')}</span>
-                        <span style="color:#fbbf24;font-weight:800;font-size:1.3rem;">${info.missing}</span>
+                        <span style="color:var(--sp-c-94a3b8,#94a3b8);font-size:0.85rem;">${_t('predraw.reopenMissing')}</span>
+                        <span style="color:var(--sp-c-fbbf24,#fbbf24);font-weight:800;font-size:1.3rem;">${info.missing}</span>
                     </div>
                 </div>
 
-                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1rem;" id="reopen-autoclose-label">
+                <div style="background:var(--sp-g-255-255-255-003,rgba(255,255,255,0.03));border:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));border-radius:12px;padding:1rem;" id="reopen-autoclose-label">
                     <div class="toggle-row" style="padding:0;">
                         <div class="toggle-row-label"><div>
-                            <div style="color:#e2e8f0;font-weight:600;font-size:0.95rem;">${_t('predraw.autoCloseLabel', {n: _rpHi})}</div>
-                            <div style="color:#64748b;font-size:0.8rem;margin-top:4px;">${_t('predraw.autoCloseDesc', {n: _rpHi})}</div>
+                            <div style="color:var(--sp-c-e2e8f0,#e2e8f0);font-weight:600;font-size:0.95rem;">${_t('predraw.autoCloseLabel', {n: _rpHi})}</div>
+                            <div style="color:var(--sp-c-64748b,#64748b);font-size:0.8rem;margin-top:4px;">${_t('predraw.autoCloseDesc', {n: _rpHi})}</div>
                         </div></div>
                         <label class="toggle-switch"><input type="checkbox" id="reopen-autoclose-cb" checked><span class="toggle-slider"></span></label>
                     </div>
                 </div>
             </div>
 
-            <div style="padding:1.25rem 2.5rem 1.75rem;display:flex;gap:12px;justify-content:flex-end;background:rgba(0,0,0,0.1);border-top:1px solid rgba(255,255,255,0.05);border-radius:0 0 20px 20px;">
+            <div style="padding:1.25rem 2.5rem 1.75rem;display:flex;gap:12px;justify-content:flex-end;background:var(--sp-g-0-0-0-01,rgba(0,0,0,0.1));border-top:1px solid var(--sp-b-255-255-255-005,rgba(255,255,255,0.05));border-radius:0 0 20px 20px;">
                 <button onclick="window._cancelDrawResolution('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" style="background:#dc2626;color:#fff;border:none;padding:10px 24px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">${_t('predraw.reopenBack')}</button>
                 <button onclick="window._confirmReopen('${String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${_rpHi})" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;padding:10px 28px;border-radius:12px;font-weight:700;font-size:0.9rem;cursor:pointer;box-shadow:0 4px 15px rgba(59,130,246,0.3);transition:all 0.2s;">${_t('predraw.reopenConfirm')}</button>
             </div>
@@ -3826,12 +3828,12 @@ window._showVagasDrawPanel = function (tId) {
     overlay.id = 'vagas-draw-panel';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10035;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.7);overflow-y:auto;';
     var _row = function(label, val, color) {
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;">' +
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border-radius:8px;margin-bottom:6px;">' +
             '<span style="font-size:0.82rem;color:var(--text-muted);">' + label + '</span>' +
-            '<span style="font-size:1.05rem;font-weight:800;color:' + (color || 'var(--text-color)') + ';">' + val + '</span></div>';
+            '<span style="font-size:1.05rem;font-weight:800;color:' + window._spCor((color || 'var(--text-color)'), 'color') + ';">' + val + '</span></div>';
     };
     var bodyMsg = allFit
-        ? '<div style="font-size:0.82rem;color:#34d399;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;">Há ' + entities + ' ' + unit + ' inscritos e ' + slots + ' vagas — <b>todos entram</b>. Nada vai pra lista de espera.</div>'
+        ? '<div style="font-size:0.82rem;color:var(--sp-c-34d399,#34d399);background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;">Há ' + entities + ' ' + unit + ' inscritos e ' + slots + ' vagas — <b>todos entram</b>. Nada vai pra lista de espera.</div>'
         : '<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">O sorteio define uma ordem aleatória. As primeiras <b>' + slots + '</b> ' + unit + ' entram; as outras <b>' + waitlistPreview + '</b> vão pra lista de espera nessa ordem.' + (vipCount > 0 ? ' VIPs entram garantidos.' : '') + '</div>';
     overlay.innerHTML =
         '<div style="background:var(--bg-card,#161b2e);border:1px solid rgba(167,139,250,0.3);border-radius:16px;max-width:440px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">' +

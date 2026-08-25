@@ -36,6 +36,11 @@ const SRC = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments.js'), 'u
 
 // Carrega os helpers REAIS extraídos do arquivo (não uma réplica).
 const W = {};
+// ⭐ 2.0.94 — a tabela de cor (js/paleta-tabela.js) não existe aqui: este teste extrai
+// um TRECHO do arquivo, então a linha de guarda que o topo do arquivo tem fica de fora.
+// Identidade devolve a cor crua, que é o comportamento anterior à tabela — que é o que
+// este teste afirma.
+W._spCor = function (c) { return c; };
 ['_waitlistStatBoxHtml', '_waitlistStatBoxStyle', '_statRowPhoto'].forEach(function (nome) {
   const marca = 'window.' + nome + ' = function';
   const i = SRC.indexOf(marca);

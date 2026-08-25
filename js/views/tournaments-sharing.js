@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // ── Sharing & Export Functions ──
 var _t = window._t || function(k) { return k; };
 // Fim do TORNEIO (última fase). t.endDate cru é o fim da fase INICIAL — mentiria em multifase.
@@ -233,14 +235,14 @@ window.renderInvitePage = function(container) {
     container.innerHTML = hdr +
       '<div style="padding:1rem;text-align:center;max-width:400px;margin:0 auto;">' +
       '<p style="margin:0 0 1rem;font-size:0.85rem;color:var(--text-muted,#94a3b8);">' + window._safeHtml(desc) + '</p>' +
-      '<div style="background:' + (isLight ? '#ffffff' : '#1a1e2e') + ';border-radius:16px;padding:16px;display:inline-block;margin-bottom:1rem;">' +
+      '<div style="background:' + window._spCor((isLight ? '#ffffff' : '#1a1e2e'), 'background') + ';border-radius:16px;padding:16px;display:inline-block;margin-bottom:1rem;">' +
         '<img id="qr-code-img" src="' + (isLight ? qrImageUrlLight : qrImageUrl) + '" alt="QR Code" style="width:280px;height:280px;border-radius:8px;" onerror="this.parentElement.innerHTML=\'<p style=color:#ef4444;font-size:0.85rem;>Erro ao gerar QR Code. Verifique sua conexão.</p>\'">' +
       '</div>' +
       '<p style="margin:0 0 1rem;font-size:0.78rem;color:var(--text-muted,#94a3b8);word-break:break-all;">' + window._safeHtml(url) + '</p>' +
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
-        '<button onclick="(function(u){navigator.clipboard.writeText(u).then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');}).catch(function(){try{var i=document.createElement(\'input\');i.value=u;document.body.appendChild(i);i.select();document.execCommand(\'copy\');document.body.removeChild(i);if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');}catch(e){if(typeof showNotification===\'function\')showNotification(\'Link\',u,\'info\');}});}(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'))" id="invite-copy-btn" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 ' + window._safeHtml(copyLabel) + '</button>' +
-        '<button onclick="window._downloadAppInviteQR()" id="invite-download-btn" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 ' + window._safeHtml(dlLabel) + '</button>' +
-        '<button onclick="window._openInvitePrint({kind:\'app\',url:\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'})" id="invite-print-btn" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ ' + window._safeHtml(printLabel) + '</button>' +
+        '<button onclick="(function(u){navigator.clipboard.writeText(u).then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');}).catch(function(){try{var i=document.createElement(\'input\');i.value=u;document.body.appendChild(i);i.select();document.execCommand(\'copy\');document.body.removeChild(i);if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');}catch(e){if(typeof showNotification===\'function\')showNotification(\'Link\',u,\'info\');}});}(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'))" id="invite-copy-btn" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:var(--sp-c-60a5fa,#60a5fa);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 ' + window._safeHtml(copyLabel) + '</button>' +
+        '<button onclick="window._downloadAppInviteQR()" id="invite-download-btn" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 ' + window._safeHtml(dlLabel) + '</button>' +
+        '<button onclick="window._openInvitePrint({kind:\'app\',url:\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\'})" id="invite-print-btn" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:var(--sp-c-c4b5fd,#c4b5fd);border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ ' + window._safeHtml(printLabel) + '</button>' +
       '</div>' +
       '</div>';
     if (typeof window._reflowChrome === 'function') window._reflowChrome();
@@ -303,10 +305,10 @@ window._buildFaseBMatchCardHtml = function(result, tId) {
     var isWinner = hasWinner && result.winner === name;
     var isAbsent = isWo && woAbsentSide === sideKey;
     var bg = isWinner ? 'rgba(16,185,129,0.12)' : 'transparent';
-    var bd = isWinner ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.08)';
+    var bd = isWinner ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';
     var col = isAbsent ? 'var(--text-muted,#94a3b8)' : 'var(--text-bright)';
-    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;background:' + bg + ';border:' + bd + ';">' +
-      '<span style="font-weight:700;font-size:0.95rem;color:' + col + ';' + (isAbsent ? 'text-decoration:line-through;' : '') + '">' + (isWinner ? '🏆 ' : '') + esc(name) + (isAbsent ? ' <span style="font-size:0.72rem;opacity:0.8;">(ausente)</span>' : '') + '</span>' +
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;background:' + window._spCor(bg, 'background') + ';border:' + bd + ';">' +
+      '<span style="font-weight:700;font-size:0.95rem;color:' + window._spCor(col, 'color') + ';' + (isAbsent ? 'text-decoration:line-through;' : '') + '">' + (isWinner ? '🏆 ' : '') + esc(name) + (isAbsent ? ' <span style="font-size:0.72rem;opacity:0.8;">(ausente)</span>' : '') + '</span>' +
       '</div>';
   }
 
@@ -318,10 +320,10 @@ window._buildFaseBMatchCardHtml = function(result, tId) {
     '<div style="text-align:center;margin-bottom:6px;font-size:0.82rem;color:var(--text-muted,#94a3b8);font-weight:600;">📋 ' + esc(tName) + (rLabel ? ' · ' + esc(rLabel) : '') + '</div>' +
     '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:16px;padding:16px;">' +
       _side(p1, 'p1') + scoreBlock + _side(p2, 'p2') +
-      '<div style="text-align:center;margin-top:12px;font-size:0.85rem;font-weight:700;color:' + statusColor + ';">' + status + '</div>' +
+      '<div style="text-align:center;margin-top:12px;font-size:0.85rem;font-weight:700;color:' + window._spCor(statusColor, 'color') + ';">' + status + '</div>' +
     '</div>' +
     '<div style="text-align:center;margin-top:14px;">' +
-      '<a href="#tournaments/' + esc(String(tId)) + '" style="display:inline-block;font-size:0.85rem;font-weight:700;color:#818cf8;text-decoration:none;padding:8px 16px;border:1px solid rgba(129,140,248,0.35);border-radius:10px;">Ir para o torneio →</a>' +
+      '<a href="#tournaments/' + esc(String(tId)) + '" style="display:inline-block;font-size:0.85rem;font-weight:700;color:var(--sp-c-818cf8,#818cf8);text-decoration:none;padding:8px 16px;border:1px solid rgba(129,140,248,0.35);border-radius:10px;">Ir para o torneio →</a>' +
     '</div>' +
     '</div>';
 };
@@ -352,13 +354,13 @@ window.renderMatchPage = function(container, tId, matchId) {
     if (!result) {
       body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted,#94a3b8);">' +
         'Este jogo ainda não tem ficha própria.' +
-        '<div style="margin-top:12px;"><a href="#tournaments/' + (window._safeHtml ? window._safeHtml(String(tId)) : tId) + '" style="color:#818cf8;font-weight:700;text-decoration:none;">Abrir o torneio →</a></div></div>';
+        '<div style="margin-top:12px;"><a href="#tournaments/' + (window._safeHtml ? window._safeHtml(String(tId)) : tId) + '" style="color:var(--sp-c-818cf8,#818cf8);font-weight:700;text-decoration:none;">Abrir o torneio →</a></div></div>';
       return;
     }
     body.innerHTML = window._buildFaseBMatchCardHtml(result, tId);
   }).catch(function(e) {
     var body = document.getElementById('fase-b-match-body');
-    if (body) body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:#ef4444;">Erro ao carregar o jogo.</div>';
+    if (body) body.innerHTML = '<div style="text-align:center;padding:2.5rem 1rem;color:var(--sp-c-ef4444,#ef4444);">Erro ao carregar o jogo.</div>';
     if (window._error) window._error('renderMatchPage', e);
   });
 };
@@ -409,16 +411,16 @@ window._showQRCode = function(tournamentId) {
     modal.style.cssText = 'background:var(--bg-card,#1e2235);border-radius:20px;padding:2rem;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);position:relative;';
 
     modal.innerHTML = '' +
-      '<button onclick="document.getElementById(\'qr-modal-overlay\').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:1.8rem;cursor:pointer;line-height:1;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;">&times;</button>' +
+      '<button onclick="document.getElementById(\'qr-modal-overlay\').remove()" style="position:absolute;top:12px;right:12px;background:var(--sp-g-255-255-255-015,rgba(255,255,255,0.15));border:none;color:#fff;font-size:1.8rem;cursor:pointer;line-height:1;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;">&times;</button>' +
       '<h3 style="margin:0 0 0.5rem;font-size:1.2rem;color:var(--text-bright,#fff);">QR Code do Torneio</h3>' +
       '<p style="margin:0 0 1rem;font-size:0.85rem;color:var(--text-muted,#94a3b8);word-break:break-all;">' + safeN + '</p>' +
-      '<div style="background:' + (isLight ? '#ffffff' : '#1a1e2e') + ';border-radius:16px;padding:16px;display:inline-block;margin-bottom:1rem;">' +
+      '<div style="background:' + window._spCor((isLight ? '#ffffff' : '#1a1e2e'), 'background') + ';border-radius:16px;padding:16px;display:inline-block;margin-bottom:1rem;">' +
         '<img id="qr-code-img" src="' + (isLight ? qrImageUrlLight : qrImageUrl) + '" alt="QR Code" style="width:280px;height:280px;border-radius:8px;" onerror="this.parentElement.innerHTML=\'<p style=color:#ef4444;font-size:0.85rem;>Erro ao gerar QR Code. Verifique sua conexão.</p>\'">' +
       '</div>' +
       '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
-        '<button onclick="navigator.clipboard.writeText(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\').then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');})" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 Copiar Link</button>' +
-        '<button onclick="window._downloadQRCode(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:#4ade80;border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 Baixar QR</button>' +
-        '<button onclick="window._openTournamentInvitePrint(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:#c4b5fd;border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ Imprimir</button>' +
+        '<button onclick="navigator.clipboard.writeText(\'' + url.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\').then(function(){if(typeof showNotification===\'function\')showNotification(window._t(\'share.copied\'),window._t(\'share.copiedLinkMsg\'),\'success\');})" class="btn btn-sm hover-lift" style="background:rgba(59,130,246,0.15);color:var(--sp-c-60a5fa,#60a5fa);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">📋 Copiar Link</button>' +
+        '<button onclick="window._downloadQRCode(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(16,185,129,0.15);color:var(--sp-c-4ade80,#4ade80);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">💾 Baixar QR</button>' +
+        '<button onclick="window._openTournamentInvitePrint(\'' + t.id + '\')" class="btn btn-sm hover-lift" style="background:rgba(139,92,246,0.15);color:var(--sp-c-c4b5fd,#c4b5fd);border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:8px 16px;font-size:0.8rem;font-weight:500;cursor:pointer;">🖨️ Imprimir</button>' +
       '</div>';
 
     overlay.appendChild(modal);
@@ -840,7 +842,7 @@ function _buildFlyerPrintHtml(o) {
       return '<div class="app-line ' + cls + '">' + esc(l) + '</div>';
     }).join('');
   } else if (o.kind === 'casual') {
-    heading = '<div style="font-size:' + cpx(10, 2.6, 15) + 'px;font-weight:700;color:#0891b2;letter-spacing:1px;text-transform:uppercase;margin-bottom:' + mpx + 'px;">⚡ Partida Casual</div>' +
+    heading = '<div style="font-size:' + cpx(10, 2.6, 15) + 'px;font-weight:700;color:var(--sp-c-0891b2,#0891b2);letter-spacing:1px;text-transform:uppercase;margin-bottom:' + mpx + 'px;">⚡ Partida Casual</div>' +
               (o.title ? '<div style="font-size:' + cpx(14, 4.6, 26) + 'px;font-weight:800;color:#0f172a;line-height:1.15;">' + esc(o.title) + '</div>' : '');
     sub = o.subtitle ? '<div style="font-size:' + cpx(9, 2.4, 13) + 'px;color:#475569;margin-top:' + Math.round(PW * 0.02) + 'px;white-space:pre-line;">' + esc(o.subtitle) + '</div>' : '';
   } else {

@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 // scoreplace.app — Trophies View
 // v1.0.0-beta
 //
@@ -29,13 +31,13 @@
   function _tierStyle(tier) {
     var c = (window.TROPHY_TIER_COLORS || {})[tier];
     if (!c) return '';
-    return 'background:' + c.bg + ';border:1px solid ' + c.border + ';box-shadow:0 0 8px ' + c.glow + ';';
+    return 'background:' + window._spCor(c.bg, 'background') + ';border:1px solid ' + window._spCor(c.border, 'borda') + ';box-shadow:0 0 8px ' + c.glow + ';';
   }
 
   function _tierTextStyle(tier) {
     var c = (window.TROPHY_TIER_COLORS || {})[tier];
     if (!c) return '';
-    return 'color:' + c.text + ';font-weight:700;';
+    return 'color:' + window._spCor(c.text, 'color') + ';font-weight:700;';
   }
 
   // ─── Renderiza card de troféu individual ─────────────────────────────────
@@ -148,7 +150,7 @@
       '</div>' +
       '<div class="milestone-progress">' +
         '<div class="milestone-bar-bg">' +
-          '<div class="milestone-bar-fill" style="width:' + pct + '%;background:' + barColor + ';"></div>' +
+          '<div class="milestone-bar-fill" style="width:' + pct + '%;background:' + window._spCor(barColor, 'background') + ';"></div>' +
         '</div>' +
         '<div class="milestone-progress-text">' +
           currentValue + ' / ' + nextThreshold +
@@ -175,7 +177,7 @@
       var meStyle = isMe ? 'background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);' : '';
       html += '<li class="trophy-ranking-item" style="' + meStyle + '">' +
         '<span class="trophy-ranking-pos">' + medal + '</span>' +
-        '<span class="trophy-ranking-name">' + _s(e.name) + (isMe ? ' <span style="color:var(--primary-color);">(você)</span>' : '') + '</span>' +
+        '<span class="trophy-ranking-name">' + _s(e.name) + (isMe ? ' <span style="color:var(--sp-c-var-primary-color-,var(--primary-color));">(você)</span>' : '') + '</span>' +
         '<span class="trophy-ranking-value">' + e.value + '</span>' +
       '</li>';
     });
@@ -269,7 +271,7 @@
         : '<span style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:#fff;flex-shrink:0;">' + initial + '</span>';
       var btnStyle = isActive
         ? 'display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;font-size:0.78rem;font-weight:600;cursor:pointer;'
-        : 'display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,0.06);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.78rem;font-weight:600;cursor:pointer;';
+        : 'display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-muted);border:1px solid var(--border-color);font-size:0.78rem;font-weight:600;cursor:pointer;';
       var safeName = _s(f.name || '');
       var safeUid = _s(f.uid);
       return '<button onclick="window._trophyCompareSelectFriend(\'' + safeUid + '\')" style="' + btnStyle + '">'
@@ -283,15 +285,15 @@
     var statsHtml =
       '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-bottom:16px;text-align:center;">' +
         '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:12px 8px;">' +
-          '<div style="font-size:1.5rem;font-weight:800;color:#10b981;">' + selected.onlyMe.length + '</div>' +
+          '<div style="font-size:1.5rem;font-weight:800;color:var(--sp-c-10b981,#10b981);">' + selected.onlyMe.length + '</div>' +
           '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Só você</div>' +
         '</div>' +
         '<div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:12px;padding:12px 8px;">' +
-          '<div style="font-size:1.5rem;font-weight:800;color:#6366f1;">' + selected.both.length + '</div>' +
+          '<div style="font-size:1.5rem;font-weight:800;color:var(--sp-c-6366f1,#6366f1);">' + selected.both.length + '</div>' +
           '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Em comum</div>' +
         '</div>' +
         '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:12px;padding:12px 8px;">' +
-          '<div style="font-size:1.5rem;font-weight:800;color:#fbbf24;">' + selected.onlyFriend.length + '</div>' +
+          '<div style="font-size:1.5rem;font-weight:800;color:var(--sp-c-fbbf24,#fbbf24);">' + selected.onlyFriend.length + '</div>' +
           '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Só ' + friendFirstName + '</div>' +
         '</div>' +
       '</div>';
@@ -303,7 +305,7 @@
         + ids.slice(0, 12).map(function(id) {
           var t = window.TROPHY_CATALOG_BY_ID && window.TROPHY_CATALOG_BY_ID[id];
           if (!t) return '';
-          return '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:20px;background:' + accentColor + ';font-size:0.72rem;font-weight:600;color:var(--text-bright);">'
+          return '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:20px;background:' + window._spCor(accentColor, 'background') + ';font-size:0.72rem;font-weight:600;color:var(--text-bright);">'
             + t.icon + ' <span>' + _s(t.title) + '</span>'
             + '</span>';
         }).join('')
@@ -315,19 +317,19 @@
     var sectionsHtml =
       (selected.onlyFriend.length > 0
         ? '<div style="margin-bottom:16px;">' +
-            '<p style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin:0 0 8px;">⭐ ' + friendFirstName + ' tem, você ainda não</p>' +
+            '<p style="font-size:0.8rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin:0 0 8px;">⭐ ' + friendFirstName + ' tem, você ainda não</p>' +
             _trophyChips(selected.onlyFriend, 'rgba(251,191,36,0.1)', '') +
           '</div>'
         : '') +
       (selected.onlyMe.length > 0
         ? '<div style="margin-bottom:16px;">' +
-            '<p style="font-size:0.8rem;font-weight:700;color:#10b981;margin:0 0 8px;">✅ Você tem, ' + friendFirstName + ' ainda não</p>' +
+            '<p style="font-size:0.8rem;font-weight:700;color:var(--sp-c-10b981,#10b981);margin:0 0 8px;">✅ Você tem, ' + friendFirstName + ' ainda não</p>' +
             _trophyChips(selected.onlyMe, 'rgba(16,185,129,0.1)', '') +
           '</div>'
         : '') +
       (selected.both.length > 0
         ? '<div style="margin-bottom:0;">' +
-            '<p style="font-size:0.8rem;font-weight:700;color:#6366f1;margin:0 0 8px;">🤝 Vocês dois conquistaram</p>' +
+            '<p style="font-size:0.8rem;font-weight:700;color:var(--sp-c-6366f1,#6366f1);margin:0 0 8px;">🤝 Vocês dois conquistaram</p>' +
             _trophyChips(selected.both, 'rgba(99,102,241,0.1)', '') +
           '</div>'
         : '');
@@ -392,7 +394,7 @@
           '<div class="trophy-xp-rank">' +
             '<span style="font-size:2rem;">' + rankInfo.icon + '</span>' +
             '<div>' +
-              '<div style="font-size:1.1rem;font-weight:800;color:' + rankInfo.color + ';">' + rankInfo.label + ' · Nível ' + level + '</div>' +
+              '<div style="font-size:1.1rem;font-weight:800;color:' + window._spCor(rankInfo.color, 'color') + ';">' + rankInfo.label + ' · Nível ' + level + '</div>' +
               '<div style="font-size:0.82rem;color:var(--text-muted);">' + xp + ' XP total</div>' +
             '</div>' +
           '</div>' +

@@ -1,3 +1,5 @@
+/* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
+if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
 // ─── "Você já está inscrito com outra conta?" ────────────────────────────────
 // A detecção roda no SERVIDOR (enrollParticipant devolve `dupSuspect`) e chega aqui já
@@ -2009,7 +2011,7 @@ window._buildLigaActiveToggleHtml = function(t) {
   // liga-toggle-state-label no text span permite update in-place pelo
   // _toggleLigaActive sem re-render do view (sem scroll jump).
   var STOP = 'onclick="event.stopPropagation();"';
-  return '<span data-liga-toggle-tid="' + safeTid + '" class="liga-toggle-pill" style="display:inline-flex;align-items:center;gap:7px;flex-shrink:0;background:' + pillBg + ';border-radius:999px;padding:4px 9px 4px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.18);" ' + STOP + ' ' +
+  return '<span data-liga-toggle-tid="' + safeTid + '" class="liga-toggle-pill" style="display:inline-flex;align-items:center;gap:7px;flex-shrink:0;background:' + window._spCor(pillBg, 'background') + ';border-radius:999px;padding:4px 9px 4px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.18);" ' + STOP + ' ' +
     'title="' + window._safeHtml(titleAttr) + '">' +
     '<span class="liga-toggle-state-label" style="font-size:0.88rem;font-weight:700;color:#fff;white-space:nowrap;" ' + STOP + '>' + stateLabel + '</span>' +
     '<label class="toggle-switch toggle-sm" style="flex-shrink:0;" ' + STOP + '>' +
@@ -2055,7 +2057,7 @@ window._addParticipantWithAutocomplete = function(tId, isLate, onConfirm) {
           '<button type="button" class="cancel-x-btn" title="Limpar" onclick="window._apClear()" style="--cx-size:18px;">✕</button>' +
         '</div>' +
         '<div style="display:flex;gap:8px;margin-top:14px;">' +
-          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:#ef4444;font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
+          '<button onclick="document.getElementById(\'add-participant-overlay\').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.45);background:rgba(239,68,68,0.10);color:var(--sp-c-ef4444,#ef4444);font-weight:700;cursor:pointer;font-size:0.85rem;">Cancelar</button>' +
           '<button id="ap-confirm" onclick="window._apConfirm()" disabled style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#06b6d4,#0891b2);color:#fff;font-weight:700;font-size:0.88rem;cursor:not-allowed;opacity:0.4;transition:opacity 0.2s;">Adicionar</button>' +
         '</div>' +
       '</div>' +

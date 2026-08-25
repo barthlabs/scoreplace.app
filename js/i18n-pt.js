@@ -2056,7 +2056,7 @@ window._translations['pt'] = {
   'predraw.exclusionExcessFallback': 'participantes',
   'predraw.excludeOptionTitle': 'Excluir esta opção',
   'predraw.detectedPrefix': 'Detectado: ',
-  'predraw.nashColorLegend': 'Cores indicam equilíbrio de Nash: <span style="color:#22c55e;">■</span> melhor (verde) → <span style="color:#ef4444;">■</span> menor (vermelho). Clique ✕ para excluir uma opção e recalcular.',
+  'predraw.nashColorLegend': 'Cores indicam equilíbrio de Nash: <span style="color:var(--sp-c-22c55e,#22c55e);">■</span> melhor (verde) → <span style="color:var(--sp-c-ef4444,#ef4444);">■</span> menor (vermelho). Clique ✕ para excluir uma opção e recalcular.',
   // Draw-prep: top-level reopen panel
   'predraw.reopenTopTeamsCur': 'Times atuais: {n} ({p} participantes)',
   'predraw.reopenTopPartsCur': 'Inscritos atuais: {n}',
@@ -2081,7 +2081,7 @@ window._translations['pt'] = {
   'predraw.incompleteFormed': 'Times Formados',
   'predraw.incompletePossible': 'Times Possíveis',
   'predraw.incompleteNoTeam': 'Sem Time',
-  'predraw.incompleteBody': '<strong style="color:#fbbf24;">{n} participante{s}</strong> não conseguirá{a} formar um time completo. O que fazer com {ele}?',
+  'predraw.incompleteBody': '<strong style="color:var(--sp-c-fbbf24,#fbbf24);">{n} participante{s}</strong> não conseguirá{a} formar um time completo. O que fazer com {ele}?',
   'predraw.incompleteAnonymous': 'Os nomes não são revelados para não influenciar a decisão.',
   'predraw.itdStandby': 'Lista de Espera',
   'predraw.itdStandbyDesc': 'Os participantes sem time vão para a lista de espera e podem substituir ausentes.',
