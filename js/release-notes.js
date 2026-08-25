@@ -84,6 +84,11 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.64 ───────────────────────────────────────────
+        // Print do dono no JOGO 92 do Confra: aprovou pelo feed, o app confirmou,
+        // a tela não mudou — e depois o pendente tinha sumido. Corrida: o
+        // carregamento do servidor substituía o array e matava a aprovação otimista.
+        '<li><b>✅ Confirmar um placar pela tela inicial agora muda a tela na hora:</b> ao confirmar pelo feed, o app avisava que aprovou mas o jogo continuava aparecendo como <b>pendente</b> — e só ao entrar no torneio é que aparecia confirmado. Agora a tela é redesenhada quando a gravação volta do servidor (e, se a gravação falhar, o jogo volta a dizer <b>pendente</b> em vez de mentir que resolveu).</li>' +
         // ── ciclo 2.0.63 ───────────────────────────────────────────
         // A CAUSA RAIZ dos 3 dias, achada com profiler sobre a chave REAL do Confra:
         // _sideBelongsToUser varria os 111 inscritos a CADA lado de jogo (1.020×/render)

@@ -2560,11 +2560,44 @@ window._approveResult = function(tId, matchId) {
   // torneio os jogos seguiam PENDENTES. Aprovar dentro do torneio funcionou.
   // Agora o aviso é consequência da gravação, não enfeite do clique.
   // Ver [[feedback_try_catch_nao_pega_promessa]] e [[feedback_proof_lives_in_the_data_not_in_a_stamp]].
+  // ── ⭐ A TELA SE REDESENHA DEPOIS QUE A GRAVAÇÃO VOLTA (2.0.64) ───────────────
+  // Relato do dono (24/ago, aprovando pelo feed da tela inicial): _"disse que
+  // aprovou, mas não mostra e depois não tem mais o que aprovar."_ Os três
+  // sintomas são UMA corrida:
+  //   1. a aprovação é otimista no objeto LOCAL e pede repintura (450ms);
+  //   2. nesse meio-tempo um carregamento do servidor SUBSTITUI o array inteiro
+  //      (`AppStore.tournaments = …`, store.js) — com o estado de ANTES da
+  //      gravação, porque ela ainda não tinha chegado lá. A mutação otimista
+  //      morre e a repintura pinta o card AINDA PENDENTE;
+  //   3. os snapshots seguintes já trazem o aprovado, MAS a dashboard só repinta
+  //      por assinatura de CONJUNTO (ids), que não muda ao aprovar um placar —
+  //      então a tela fica congelada no pendente até navegar. Ao navegar, o
+  //      estado fresco aparece: "não tem mais o que aprovar".
+  // Conserto: repintar TAMBÉM quando a gravação CONFIRMA (e quando falha) — é
+  // ação do dedo, que o cânone autoriza a repintar sem passar pelo gate.
+  // Ver [[project_consenso_vive_tambem_na_dashboard]] e [[project_dashboard_no_rerender]].
+  var _redesenhar = function () {
+    // ⚠️ E ANTES DE REDESENHAR, CURA O DADO LOCAL. Um carregamento que já estava
+    // EM VOO quando a gravação terminou chega com o estado de ANTES e substitui o
+    // array inteiro — repintar em cima disso pintaria o pendente de novo (é o
+    // sintoma que estamos consertando). Então: se o objeto local voltou a ter a
+    // proposta, re-aplica a aprovação nele. É o MESMO que o `commitTournamentTx`
+    // faz no doc fresco do servidor — aqui só se espelha na memória.
+    try {
+      var t2 = window._findTournamentById(tId);
+      var m2 = t2 && _findMatch(t2, matchId);
+      if (m2 && m2.pendingResult && typeof window._applyApprovedResult === 'function') {
+        window._applyApprovedResult(t2, matchId, pr);
+      }
+    } catch (e) {}
+    try { _rerenderBracket(tId, matchId); } catch (e) {}
+  };
   var _avisarOk = function () {
     if (_ctx.kind === 'elim') showNotification('✅ Resultado aprovado', m.winner + ' avança!', 'success');
     else showNotification('✅ Resultado aprovado', _ctx.draw ? _t('bui.draw') : _t('bui.matchWon', {winner: _ctx.winner}), 'success');
     // Som: resultado confirmado fora do placar ao vivo → fanfarra do "Set".
     if (window._sound) window._sound('set');
+    _redesenhar();
   };
   // A tela local já mostra o resultado aplicado (otimista). Se a gravação falhar, a
   // pessoa PRECISA saber que o jogo continua pendente — senão ela vai embora achando
@@ -2574,6 +2607,9 @@ window._approveResult = function(tId, matchId) {
     if (typeof window._captureException === 'function') {
       window._captureException(err, { area: 'approveResult', tournamentId: tId, matchId: matchId });
     } else if (window._error) { window._error('[approveResult] falhou', err); }
+    // a tela mostrava o aprovado OTIMISTA; se não gravou, ela tem que voltar a
+    // dizer PENDENTE — senão a pessoa vai embora achando que resolveu (1.9.56)
+    _redesenhar();
   };
 
   var _logMsg = 'Resultado aprovado: ' + m.p1 + ' ' + s1 + ' × ' + s2 + ' ' + m.p2 + (m.draw ? ' — Empate' : ' — Vencedor: ' + m.winner);
