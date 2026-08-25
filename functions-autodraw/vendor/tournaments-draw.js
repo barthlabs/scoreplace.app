@@ -2807,6 +2807,21 @@ window.generateDrawFunction = function (tId) {
             Object.keys(t).forEach(function (k) { delete t[k]; });
             Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
             if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_eH) {} }
+            // ⭐ 2.0.75 · GRADE ESTIMADA. Pedido do dono: em torneio de 1 a 3 dias o sistema
+            // CALCULA a data/hora de cada jogo e GRAVA (não é sugestão só de tela) — gravar é
+            // o que faz a data aparecer em todo lugar que já mostra data, inclusive nas
+            // "📣 Novidades no seu torneio", sem caminho de render novo. O carimbo é
+            // `scheduledKind:'estimate'`, e a invariante do schedule-poll garante que data
+            // combinada por gente nunca é pisada por um recálculo.
+            // Roda AQUI porque é o primeiro ponto em que a chave existe no `t` (o estado
+            // autoritativo do servidor acabou de entrar), e ANTES do #bracket.
+            // ⚠️ Dentro de try/catch de propósito: o sorteio JÁ aconteceu no servidor — uma
+            // falha ao estimar não pode derrubar a tela nem o toast do que deu certo.
+            try {
+              if (typeof window._schAplicarGrade === 'function' && window._schAplicarGrade(t) > 0) {
+                Promise.resolve(window.FirestoreDB && window.FirestoreDB.saveTournament(t)).catch(function (_eS) {});
+              }
+            } catch (_eGrade) {}
             try { window.AppStore._saveToCache(); } catch (_eC) {}
             if (document.getElementById('final-review-panel')) { document.getElementById('final-review-panel').remove(); document.body.style.overflow = ''; }
             if (window._clearDrawDecisions) window._clearDrawDecisions(tId); // v1.3.93: sorteio efetivou → zera o pacote de decisões (próximo sorteio começa limpo)

@@ -1,4 +1,8 @@
-/* OS DOIS CHIPS DO RODAPÉ DO CARD — "📅 Combinar jogo" e "💬 grupo de whats"
+/* OS DOIS CHIPS DO RODAPÉ DO CARD — "📅 Propor datas" e "💬 grupo de whats"
+ *
+ * ⚠️ O botão se chamava "Combinar jogo(s)" até a 2.0.75 — o dono renomeou pra "Propor
+ * datas". As asserções abaixo casam pelo nome NOVO; o nome velho só sobrevive nesta
+ * nota, pra quem for procurar por ele no git.
  *
  * POR QUE ESTE TESTE EXISTE (ago/2026): relato de REGRESSÃO na 1.7.76 — o
  * participante teria perdido os balõezinhos e o botão do grupo de WhatsApp nos
@@ -60,11 +64,11 @@ let t = mkLiga();
 let m = t.rounds[0].matches[0];
 comUsuario(t, { uid: 'u1', displayName: 'J1', email: 'j1@x.com' });
 
-ok(!!W._schCardChip(t, m), 'o chip "Combinar jogo" aparece pro jogador do confronto na rodada atual');
+ok(!!W._schCardChip(t, m), 'o chip "Propor datas" aparece pro jogador do confronto na rodada atual');
 ok(!!W._waGrpCardChip(t, m), 'o chip do grupo de WhatsApp aparece pro jogador do confronto na rodada atual');
 
 const cardHtml = W.renderMatchCard(m, true, t.id, 1);
-ok(/Combinar/i.test(cardHtml), 'o card RENDERIZADO traz o "Combinar jogo" (fiação _cardFooterChips viva)');
+ok(/Propor/i.test(cardHtml), 'o card RENDERIZADO traz o "Propor datas" (fiação _cardFooterChips viva)');
 // SEM link ainda, o rótulo é a AÇÃO ("Criar grupo dos seus jogos"); "de whats de
 // jogo" só entra depois que o grupo existe (v1.7.24). Travo os DOIS estados.
 ok(/Criar grupo/i.test(cardHtml), 'o card RENDERIZADO traz o botão de CRIAR o grupo (ainda sem link)');
@@ -80,22 +84,22 @@ ok(/_waGrpOpenLink\(/.test(cardLink), 'com link, o clique ABRE o grupo direto (_
 // ─── cenário 2: os recortes do gate que DEVEM esconder ────────────────────────
 // (a) não sou jogador deste confronto
 const outro = t.rounds[0].matches[1];
-ok(!W._schCardChip(t, outro), 'no jogo dos OUTROS o "Combinar" não aparece');
+ok(!W._schCardChip(t, outro), 'no jogo dos OUTROS o "Propor datas" não aparece');
 ok(!W._waGrpCardChip(t, outro), 'no jogo dos OUTROS o botão de grupo não aparece');
 
 // (b) jogo já decidido
 let tFim = mkLiga(); tFim.rounds[0].matches[0].winner = 'J1';
 comUsuario(tFim, { uid: 'u1', displayName: 'J1' });
-ok(!W._schCardChip(tFim, tFim.rounds[0].matches[0]), 'jogo com resultado não oferece "Combinar"');
+ok(!W._schCardChip(tFim, tFim.rounds[0].matches[0]), 'jogo com resultado não oferece "Propor datas"');
 ok(!W._waGrpCardChip(tFim, tFim.rounds[0].matches[0]), 'jogo com resultado não oferece grupo');
 
-// (c) quem desligou WhatsApp no perfil perde SÓ o chip do grupo — o "Combinar
+// (c) quem desligou WhatsApp no perfil perde SÓ o chip do grupo — o "Propor datas"
 //     jogo" é enquete DENTRO do app e não depende do WhatsApp. Os dois gates são
 //     independentes NESTE eixo; juntá-los tiraria a enquete de quem só não quer zap.
 t = mkLiga(); m = t.rounds[0].matches[0];
 comUsuario(t, { uid: 'u1', displayName: 'J1', notifyWhatsApp: false });
 ok(!W._waGrpCardChip(t, m), 'notifyWhatsApp:false esconde o botão do grupo');
-ok(!!W._schCardChip(t, m), 'notifyWhatsApp:false NÃO esconde o "Combinar jogo" (enquete é dentro do app)');
+ok(!!W._schCardChip(t, m), 'notifyWhatsApp:false NÃO esconde o "Propor datas" (enquete é dentro do app)');
 
 // ─── cenário 3: Rei/Rainha — o chip é ÚNICO por GRUPO, não por jogo ───────────
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, '_confra-monarch-fixture.json'), 'utf8'));
@@ -115,7 +119,7 @@ const tM = {
   }]
 };
 comUsuario(tM, { uid: puids[0], displayName: players[0] });
-ok(!!W._schGroupChip(tM, gms), 'Rei/Rainha: o "Combinar jogos" aparece no cabeçalho do MEU grupo');
+ok(!!W._schGroupChip(tM, gms), 'Rei/Rainha: o "Propor datas" aparece no cabeçalho do MEU grupo');
 ok(!!W._waGrpGroupChip(tM, gms), 'Rei/Rainha: o botão do grupo aparece no cabeçalho do MEU grupo');
 ok(!W._waGrpCardChip(tM, gms[0]), 'Rei/Rainha: o chip por JOGO é suprimido (é 1 por grupo, senão viram 3 iguais)');
 
@@ -157,10 +161,10 @@ ok(/SEU GRUPO/i.test(htmlRenomeado),
 // de propostas era irmão solto dentro do botão inline-flex e ALARGAVA o chip,
 // empurrando o "editar" do grupo de whats — virou pilha alinhada à esquerda com
 // o badge na linha de baixo, e o <br> saiu. O invariante desta asserção — quem
-// trocou o nome NÃO perde o "Combinar jogos" — segue travado, agora casando pela
+// trocou o nome NÃO perde o "Propor datas" — segue travado, agora casando pela
 // AÇÃO única do chip (_schOpenGroup) + o rótulo, que sobrevivem a layout novo.
-ok(/_schOpenGroup/.test(htmlRenomeado) && /Combinar/.test(htmlRenomeado),
-  'quem trocou o nome NÃO perde o "Combinar jogos"');
+ok(/_schOpenGroup/.test(htmlRenomeado) && /Propor/.test(htmlRenomeado),
+  'quem trocou o nome NÃO perde o "Propor datas"');
 ok(/Criar grupo|de whats de jogo/i.test(htmlRenomeado),
   'quem trocou o nome NÃO perde o botão do grupo de whats');
 

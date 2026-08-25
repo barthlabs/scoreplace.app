@@ -34,7 +34,7 @@
 //    DISTRIBUIÇÃO (só inscrito/jogador vê o botão), não o acesso. A trava real é
 //    "Aprovar novos membros", do lado do WhatsApp — por isso a gente ENSINA.
 //
-// GATE do nível JOGO = FONTE ÚNICA no schedule-poll.js. O "📅 Combinar jogo" é o
+// GATE do nível JOGO = FONTE ÚNICA no schedule-poll.js. O "📅 Propor datas" é o
 // IRMÃO deste botão (mesmo slot, mesma intenção, mesma regra de quem vê). NUNCA
 // reimplementar a regra aqui — as duas divergiriam e o dono veria um botão sem o
 // outro no mesmo card.
@@ -186,7 +186,7 @@
   // ─── chips ────────────────────────────────────────────────────────────────────
   // Label em DUAS LINHAS (<br>) de propósito: botão de 2 palavras numa linha só fica
   // largo e é o primeiro a ser empurrado pra linha de baixo, sozinho. Quebrado, ele
-  // fica estreito e cabe junto dos outros. Mesmo shape do irmão "📅 Combinar<br>jogos"
+  // fica estreito e cabe junto dos outros. Mesmo shape do irmão "📅 Propor<br>datas"
   // (padding 4px 9px + line-height 1.05 + centro) pra os dois ficarem gêmeos.
   // RAIO CANÔNICO 10px (o mesmo de `.btn` em components.css). `.btn-micro` traz 6px — medido no
   // navegador: 6px aqui contra 10px em TODO botão do app, e o chip ficava visivelmente menos

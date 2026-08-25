@@ -447,7 +447,7 @@ window._notifCta = function(type, td) {
   if (t === 'live_score_started' && td.liveId) return { label: '👀 Assistir ao vivo', url: base + '/#live/' + String(td.liveId) };
   if (t === 'friend_request') return { label: 'Responder', url: base + '/#notifications' };
   if (t === 'poll' && tUrl) return { label: '📊 Responder enquete', url: tUrl };
-  if (t === 'schedule' && tId) return { label: '📅 Combinar jogo', url: base + '/#bracket/' + tId };
+  if (t === 'schedule' && tId) return { label: '📅 Propor datas', url: base + '/#bracket/' + tId };
   if (tUrl) return { label: 'Ver torneio', url: tUrl };
   return { label: 'Abrir scoreplace', url: base };
 };

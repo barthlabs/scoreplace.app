@@ -84,6 +84,19 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.76 ───────────────────────────────────────────
+        // Quatro frases do dono (25/ago): renomear "Combinar jogos" pra "Propor datas";
+        // o botão mostra a data definida INCLUSIVE nas Novidades; o organizador aponta
+        // direto; e em torneio de 1 a 3 dias o sistema calcula e sugere como ESTIMADA.
+        // Decisão dele: a estimativa GRAVA (não é só sugestão de tela) — é o que faz a
+        // data aparecer em todo lugar sem caminho de render novo. O que separa uma data
+        // estimada de uma marcada por gente é a ORIGEM, e o sistema nunca pisa na segunda.
+        '<li><b>📅 "Combinar jogos" virou "Propor datas" — e o torneio já nasce com horários:</b> em torneios de até 3 dias o app <b>calcula a data e a hora de cada jogo</b> assim que a chave é sorteada, respeitando o número de quadras, a duração da partida e a janela do torneio — e sabendo que ninguém joga em duas quadras ao mesmo tempo (nos grupos de Rei/Rainha os três jogos ficam em horários diferentes, como acontece de verdade). Esses horários aparecem com um <b>≈</b> e o aviso de que são <b>estimados</b>. O <b>organizador pode apontar a data e a hora direto</b> em qualquer jogo, e o que ele aponta vale — as propostas daquele jogo se encerram. E o horário já definido aparece agora <b>também nas "📣 Novidades no seu torneio"</b> e nos grupos que não são o seu: antes, num torneio de grupos, a data simplesmente não aparecia fora da tela da chave.</li>' +
+        // ── ciclo 2.0.75 ───────────────────────────────────────────
+        // O painel que decide bye/repescagem/espera/exclusão contava a repescagem de
+        // eliminatória simples com fórmula própria, diferente da árvore que o sorteio
+        // monta. MEDIDO: divergia em 272 dos 298 valores de N entre 3 e 300.
+        '<li><b>🔢 A previsão do painel de resolução passa a bater com o sorteio:</b> na hora de escolher entre folga, repescagem, lista de espera ou exclusão, o painel mostra quantos jogos e quanto tempo cada opção custa — e no caso da <b>repescagem</b> ele prometia mais jogos do que o sorteio de fato gera (com 33 inscritos, 48 contra os 37 reais: quase um terço a mais de tempo). Agora a conta vem do próprio motor que monta a chave, então é o mesmo número dos dois lados.</li>' +
         // ── ciclo 2.0.72 — REVERSÃO ────────────────────────────────
         // ⚠️ SEM item pro usuário, e é DECISÃO: esta versão DESFAZ 2.0.69/70/71 e volta
         // ao código da 2.0.68, que o dono aprovou ("a versão mais aceitável que

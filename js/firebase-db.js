@@ -661,7 +661,11 @@ window.FirestoreDB = {
           // ⚠️ NÃO cobre o slot reescrito (a substituição por W.O. desfeita, caso 3 da
           // medição): os dois lados escrevem o MESMO campo com dado igualmente válido e
           // não há como saber qual é o mais novo sem versionar o jogo. Fica anotado.
-          var _ADITIVOS = ['waGroup', 'schedule', 'scheduledAt', 'scheduledBy'];
+          // 'scheduledKind' (2.0.75) entra junto com os irmãos: é a ORIGEM da data
+          // (estimate/organizer/consensus) e viaja SEMPRE com o scheduledAt. Fora daqui,
+          // um save atrasado devolveria a data sem a origem — e a grade estimada, que só
+          // pode sobrescrever 'estimate', passaria a achar que tudo foi combinado.
+          var _ADITIVOS = ['waGroup', 'schedule', 'scheduledAt', 'scheduledBy', 'scheduledKind'];
           // índice COMPLETO do banco (o de cima só tem quem tem placar) + onde cada um mora
           var _ondeMora = {};
           var _idxAll = {};

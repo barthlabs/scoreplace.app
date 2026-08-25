@@ -1,4 +1,8 @@
-// schedule-poll.js — "Combinar jogos" (agendamento POR JOGO) — Frente F (v3.1.46)
+// schedule-poll.js — "Propor datas" (agendamento POR JOGO) — Frente F (v3.1.46)
+// ⚠️ O botão se chamava "Combinar jogos" até a 2.0.75; o dono renomeou pra "Propor
+// datas" porque o que ele faz é PROPOR data/hora — e porque agora há três origens pra
+// uma data (estimativa do sistema, organizador, consenso), não só o "combinar" entre
+// jogadores. Nomes internos (_sch*, m.schedule) ficaram como estão de propósito.
 //
 // Deixa os JOGADORES de cada confronto da RODADA ATUAL combinarem quando jogar,
 // dentro da janela da rodada, e ao haver consenso AGENDAR o jogo (grava data/hora
@@ -159,7 +163,7 @@
     return ids;
   }
   function _schIsCurrentRoundMatch(t, m) { return !!(m && m.id != null && _currentRoundIdSet(t)[m.id]); }
-  // Exposto pro wa-group.js (botão "💬 Criar grupo", irmão do "📅 Combinar jogo"
+  // Exposto pro wa-group.js (botão "💬 Criar grupo", irmão do "📅 Propor datas"
   // no mesmo rodapé do card). O gate de quem vê os dois TEM que ser o mesmo —
   // fonte única aqui, nunca reimplementado lá.
   window._schIsCurrentRoundMatch = _schIsCurrentRoundMatch;
@@ -292,7 +296,7 @@
       if (o.kind === 'date') {
         if (uids.every(function (u) { return (votes[u] || {})[o.id] === 1; })) {
           var iso = _schResolveISO(o, t);
-          if (iso) { s.scheduledOptId = o.id; s.scheduledWd = null; m.scheduledAt = iso; m.scheduledBy = (_cu() || {}).uid || ''; _schMirrorToGroup(t, m); return true; }
+          if (iso) { s.scheduledOptId = o.id; s.scheduledWd = null; m.scheduledAt = iso; m.scheduledBy = (_cu() || {}).uid || ''; m.scheduledKind = 'consensus'; _schMirrorToGroup(t, m); return true; }
         }
       } else {
         var wds = (o.weekdays || []).slice().sort(function (a, b) { return a - b; });
@@ -302,7 +306,7 @@
           var di = _schResolveDayISO(o.time, wd, t);
           if (di && (!best || di < best)) { best = di; bestWd = wd; }
         });
-        if (best) { s.scheduledOptId = o.id; s.scheduledWd = bestWd; m.scheduledAt = best; m.scheduledBy = (_cu() || {}).uid || ''; _schMirrorToGroup(t, m); return true; }
+        if (best) { s.scheduledOptId = o.id; s.scheduledWd = bestWd; m.scheduledAt = best; m.scheduledBy = (_cu() || {}).uid || ''; m.scheduledKind = 'consensus'; _schMirrorToGroup(t, m); return true; }
       }
     }
     return false;
@@ -312,7 +316,7 @@
   function _schMirrorToGroup(t, m0) {
     if (!_schGroupMode || String(m0.id) !== _schGroupMode) return;
     _schGroupMatches(t, m0).forEach(function (sm) {
-      if (sm && sm !== m0) { sm.scheduledAt = m0.scheduledAt; sm.scheduledBy = m0.scheduledBy; }
+      if (sm && sm !== m0) { sm.scheduledAt = m0.scheduledAt; sm.scheduledBy = m0.scheduledBy; sm.scheduledKind = m0.scheduledKind; }
     });
   }
 
@@ -355,19 +359,193 @@
   function _close(id) { var o = document.getElementById(id); if (o) o.remove(); }
   window._schCloseOverlay = function () { _close('sch-overlay'); _close('sch-org-overlay'); };
 
+  // ═══ GRADE ESTIMADA — o sistema calcula a data/hora dos jogos (2.0.75) ════════
+  // Pedido do dono (25/ago/2026): _"em torneios de 1/3 dias as datas horas sao
+  // calculadas e sugeridas pelo sistema como estimadas"_ — e, na decisão dele, ela
+  // GRAVA (m.scheduledAt) já no sorteio. Gravar é o que faz a data aparecer em TODO
+  // lugar que já mostra data, inclusive nas "📣 Novidades no seu torneio" da
+  // dashboard, sem inventar caminho de render nenhum.
+  //
+  // O que separa uma data ESTIMADA de uma COMBINADA é `m.scheduledKind`:
+  //     'estimate'  → conta do sistema        (rótulo "estimada", âmbar)
+  //     'organizer' → o organizador apontou   (verde — manda em tudo)
+  //     'consensus' → os jogadores fecharam   (verde — como sempre foi)
+  // ⛔ INVARIANTE: só 'estimate' pode ser sobrescrita por um novo cálculo. Data que
+  // gente combinou NUNCA é pisada pelo sistema. É essa linha que deixa o recálculo
+  // ser seguro de rodar quantas vezes for.
+  //
+  // POR QUE SÓ ATÉ 3 DIAS: num torneio de fim de semana a grade é do organizador —
+  // todo mundo está no local e joga quando chamam. Acima disso (Confra, ligas de
+  // meses) quem decide são os jogadores, e é pra isso que a enquete existe; carimbar
+  // uma data de sistema ali seria afirmar horário que ninguém marcou.
+  var _MIN = 60000;
+
+  // 'YYYY-MM-DD' ou 'YYYY-MM-DDTHH:MM' — o form grava as duas formas (create-tournament
+  // monta `startDateStr + 'T' + startTimeStr` só quando há hora).
+  function _dtParts(s, hmPadrao) {
+    var str = String(s || ''), ymd = str.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+    var hm = (str.charAt(10) === 'T' && /^\d{2}:\d{2}/.test(str.slice(11, 16))) ? str.slice(11, 16) : hmPadrao;
+    return { ymd: ymd, hm: hm };
+  }
+  // Offset BRT na mão, igual ao resto do módulo (_optIso, _schWindow): o app inteiro
+  // ancora horário em America/Sao_Paulo, e o Brasil não tem horário de verão desde 2019.
+  function _ms(ymd, hm) { return new Date(ymd + 'T' + hm + ':00-03:00').getTime(); }
+  function _addDias(ymd, n) {
+    var d = new Date(ymd + 'T12:00:00-03:00');
+    d.setUTCDate(d.getUTCDate() + n);
+    return _brtYmd(d.getTime());
+  }
+
+  // Os DIAS do torneio, com a janela de cada um. Dia 1 começa na hora do startDate;
+  // os seguintes na MESMA hora do dia. O último termina na hora do endDate.
+  window._schJanelaTorneio = function (t) {
+    t = t || {};
+    var ini = _dtParts(t.startDate, '09:00');
+    if (!ini) return null;
+    var fim = _dtParts(t.endDate, '22:00');
+    if (!fim || fim.ymd < ini.ymd) fim = { ymd: ini.ymd, hm: (t.endDate ? '22:00' : '22:00') };
+    var dias = [], ymd = ini.ymd, guarda = 0;
+    while (guarda++ < 8) {
+      var ehUltimo = (ymd === fim.ymd);
+      var iniMs = _ms(ymd, ini.hm);
+      var fimMs = _ms(ymd, ehUltimo ? fim.hm : '22:00');
+      // Janela invertida/vazia (ex.: começa 09:00 e "termina" 08:00 no mesmo dia):
+      // não dá pra jogar em tempo negativo. Abre 12h a partir do início.
+      if (fimMs <= iniMs) fimMs = iniMs + 12 * 60 * _MIN;
+      dias.push({ ymd: ymd, iniMs: iniMs, fimMs: fimMs });
+      if (ehUltimo) break;
+      ymd = _addDias(ymd, 1);
+    }
+    return { dias: dias, iniHm: ini.hm, fimHm: fim.hm };
+  };
+
+  // Plano PURO: devolve { slots: [{matchId, ms, iso, dia, onda}], slotMin, quadras,
+  // dias, cabe } sem tocar em nada. Testável sem DOM e sem Firebase.
+  //
+  // A regra de paralelismo tem DUAS metades e as duas importam:
+  //   1. jogos da MESMA rodada podem ser simultâneos — um por quadra;
+  //   2. …MENOS quando dividem jogador. Rei/Rainha é exatamente esse caso: os 3 jogos
+  //      de um grupo são os MESMOS 4 uids, e ninguém joga em duas quadras ao mesmo
+  //      tempo. Sem esta metade, um grupo do Confra "aconteceria" todo às 09:00.
+  window._schGradeEstimada = function (t) {
+    try {
+      t = t || {};
+      var jan = window._schJanelaTorneio(t);
+      if (!jan || !jan.dias.length || jan.dias.length > 3) return null;
+      var quadras = Math.max(1, parseInt(t.courtCount, 10) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 1);
+      var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
+      var jogos = (all || []).filter(function (m) {
+        return m && !m.isBye && !m.isSitOut && !m.winner;
+      });
+      if (!jogos.length) return null;
+
+      // agrupa por (fase, rodada) preservando a ordem em que apareceram
+      var chaves = [], porChave = {};
+      jogos.forEach(function (m) {
+        var f = (m.phaseIndex != null) ? m.phaseIndex : (t.currentPhaseIndex || 0);
+        var r = (m.round == null) ? 0 : m.round;
+        var k = f + '|' + r;
+        if (!porChave[k]) { porChave[k] = { fase: f, rodada: r, ms: [] }; chaves.push(k); }
+        porChave[k].ms.push(m);
+      });
+      chaves.sort(function (a, b) {
+        var A = porChave[a], B = porChave[b];
+        return (A.fase - B.fase) || (A.rodada - B.rodada);
+      });
+
+      var slots = [], diaIdx = 0, cursor = jan.dias[0].iniMs, onda = 0, estourou = false;
+      chaves.forEach(function (k) {
+        var bloco = porChave[k];
+        var slotMin = window._minutosDaPartida(t, window._faseDoTorneio(t, bloco.fase)) || 30;
+        // monta as ONDAS desta rodada: guloso, primeira onda que tem quadra livre E
+        // nenhum jogador em comum.
+        var ondas = [];
+        bloco.ms.forEach(function (m) {
+          var uids = _schMatchUids(t, m);
+          var alvo = null;
+          for (var i = 0; i < ondas.length; i++) {
+            var o = ondas[i];
+            if (o.jogos.length >= quadras) continue;
+            var conflita = uids.some(function (u) { return o.uids[u]; });
+            if (!conflita) { alvo = o; break; }
+          }
+          if (!alvo) { alvo = { jogos: [], uids: {} }; ondas.push(alvo); }
+          alvo.jogos.push(m);
+          uids.forEach(function (u) { alvo.uids[u] = 1; });
+        });
+        ondas.forEach(function (o) {
+          // cabe no dia corrente? senão pula pro próximo (se houver)
+          if (cursor + slotMin * _MIN > jan.dias[diaIdx].fimMs) {
+            if (diaIdx + 1 < jan.dias.length) { diaIdx++; cursor = jan.dias[diaIdx].iniMs; }
+            else { estourou = true; } // sem dia sobrando: segue em frente no último e AVISA
+          }
+          o.jogos.forEach(function (m) {
+            slots.push({ matchId: String(m.id), ms: cursor, iso: new Date(cursor).toISOString(), dia: diaIdx, onda: onda });
+          });
+          cursor += slotMin * _MIN;
+          onda++;
+        });
+      });
+      return {
+        slots: slots, quadras: quadras, dias: jan.dias.length,
+        cabe: !estourou, fimMs: cursor,
+        // slotMin da 1ª fase — só informativo (cada fase tem o seu, ver o loop acima)
+        slotMin: window._minutosDaPartida(t, window._faseDoTorneio(t, (jogos[0] && jogos[0].phaseIndex) || 0)) || 30
+      };
+    } catch (e) { return null; }
+  };
+
+  // GRAVA o plano nos jogos. Devolve quantos carimbou. Nunca toca em data combinada
+  // por gente (kind 'organizer'/'consensus') — a invariante do topo desta seção.
+  // Jogo legado com scheduledAt e SEM kind é tratado como combinado: veio de antes
+  // desta régua existir, e o único jeito de ter data lá era alguém ter combinado.
+  window._schAplicarGrade = function (t) {
+    var plano = window._schGradeEstimada(t);
+    if (!plano || !plano.slots.length) return 0;
+    var n = 0;
+    plano.slots.forEach(function (s) {
+      var m = _schFindMatch(t, s.matchId);
+      if (!m) return;
+      if (m.scheduledAt && m.scheduledKind !== 'estimate') return; // combinado manda
+      if (m.scheduledAt === s.iso && m.scheduledKind === 'estimate') return; // já está lá
+      m.scheduledAt = s.iso;
+      m.scheduledBy = '';
+      m.scheduledKind = 'estimate';
+      n++;
+    });
+    return n;
+  };
+
   // ─── chip / botão no card ──────────────────────────────────────────────────────
+  // Pílula da data já definida. Verde = gente marcou (organizador ou consenso);
+  // âmbar com "≈" = conta do sistema (grade estimada). Cor NUNCA é o único sinal —
+  // o "≈" e o title dizem a mesma coisa em texto, pra quem não distingue as duas.
+  function _chipData(iso, kind) {
+    var est = (kind === 'estimate');
+    var cor = est ? '245,158,11' : '16,185,129';
+    var txt = est ? '#fbbf24' : '#34d399';
+    var tit = est ? 'Horário estimado pelo sistema — muda quando o organizador aponta ou os jogadores combinam' : 'Horário definido';
+    return '<span title="' + tit + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + cor + ',0.14);border:1px solid rgba(' + cor + ',0.45);color:' + txt + ';font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + (est ? '≈ ' : '') + _esc(_fmtDateTime(iso)) + '</span>';
+  }
+  window._schChipData = _chipData;
+
   window._schCardChip = function (t, m) {
     try {
       if (!t || !m) return '';
-      // Rei/Rainha: o "Combinar jogos" é ÚNICO por GRUPO (no cabeçalho do grupo,
-      // via _schGroupChip) — não um por jogo. Suprime o chip por card aqui.
-      if (m.isMonarch) return '';
       // v1.2.2: retorna elemento PURO (sem wrapper próprio), igual ao _schGroupChip.
       // Quem centraliza é o rodapé do card (_cardFooterChips em bracket.js), que agora
       // divide a linha com o "💬 Criar grupo" (wa-group.js). Único call site.
-      if (m.scheduledAt) {
-        return '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.78rem;border-radius:999px;padding:5px 12px;">📅 ' + _esc(_fmtDateTime(m.scheduledAt)) + '</span>';
-      }
+      // ⚠️ v2.0.75 · A DATA VEM ANTES DE QUALQUER SUPRESSÃO — inclusive a do Rei/Rainha.
+      // O `if (m.isMonarch) return ''` era a PRIMEIRA linha desta função, e o efeito
+      // colateral é que um jogo de grupo nunca mostrava a data fora da tela da chave:
+      // quem a mostrava era o botão do GRUPO (_schGroupChip), que mora no cabeçalho do
+      // grupo — e as "📣 Novidades no seu torneio" da dashboard renderizam o CARD
+      // (renderMatchCard), não o cabeçalho. Pedido do dono: a data aparece no botão
+      // _inclusive nas novidades_. A supressão do monarch continua valendo pra AÇÃO
+      // (propor é único por grupo); ela só não vale mais pra INFORMAÇÃO.
+      if (m.scheduledAt) return _chipData(m.scheduledAt, m.scheduledKind);
+      if (m.isMonarch) return '';
       if (m.winner || m.isBye || m.isSitOut) return '';
       if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
       var cu = _cu(); if (!cu || !cu.uid) return '';
@@ -378,7 +556,7 @@
       // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
       return '<button class="btn btn-micro btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
         'style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;">' +
-        '📅 Combinar jogo' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
+        '📅 Propor datas' + (n ? ' <span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
         '</button>';
     } catch (e) { return ''; }
   };
@@ -459,13 +637,20 @@
     try {
       if (!t || !Array.isArray(groupMatches) || !groupMatches.length) return '';
       var m0 = _schGroupFirst(groupMatches); if (!m0) return '';
-      var cu = _cu(); if (!cu || !cu.uid) return '';
-      if (!_schUserIsPlayer(t, m0, cu)) return '';
-      var schedISO = m0.scheduledAt || ((groupMatches.find(function (m) { return m && m.scheduledAt; }) || {}).scheduledAt);
+      var _comData = m0.scheduledAt ? m0 : (groupMatches.find(function (m) { return m && m.scheduledAt; }) || null);
+      var schedISO = _comData && _comData.scheduledAt;
+      // ⚠️ v2.0.75 · A DATA vem ANTES do gate de "sou jogador deste grupo". O gate
+      // continua valendo pra AÇÃO (só quem joga propõe), mas a data definida é
+      // informação do torneio — quem olha o grupo de fora tem que ver quando ele joga.
+      // Mesmo motivo do irmão _schCardChip: sem isto, a data sumia fora da chave.
       var open = 'event.stopPropagation(); window._schOpenGroup(\'' + _attr(t.id) + '\',\'' + _attr(m0.id) + '\')';
       if (schedISO) {
-        return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.14);border:1px solid rgba(16,185,129,0.45);color:#34d399;font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">📅 ' + _esc(_fmtDateTime(schedISO)) + '</button>';
+        var _est = (_comData.scheduledKind === 'estimate');
+        var _c = _est ? '245,158,11' : '16,185,129', _tx = _est ? '#fbbf24' : '#34d399';
+        return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" title="' + (_est ? 'Horário estimado pelo sistema' : 'Horário definido') + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + _c + ',0.14);border:1px solid rgba(' + _c + ',0.45);color:' + _tx + ';font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">📅 ' + (_est ? '≈ ' : '') + _esc(_fmtDateTime(schedISO)) + '</button>';
       }
+      var cu = _cu(); if (!cu || !cu.uid) return '';
+      if (!_schUserIsPlayer(t, m0, cu)) return '';
       if (!_schIsCurrentRoundMatch(t, m0)) return '';
       if (groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
       var n = (m0.schedule && Array.isArray(m0.schedule.options)) ? m0.schedule.options.length : 0;
@@ -480,8 +665,8 @@
       var _badge = n ? '<span style="background:rgba(255,255,255,0.25);border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '';
       return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;">' +
         '<span style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">' +
-          '<span>📅 Combinar</span>' +
-          '<span style="display:inline-flex;align-items:center;gap:5px;">jogos' + _badge + '</span>' +
+          '<span>📅 Propor</span>' +
+          '<span style="display:inline-flex;align-items:center;gap:5px;">datas' + _badge + '</span>' +
         '</span></button>';
     } catch (e) { return ''; }
   };
@@ -519,6 +704,62 @@
     }).join('');
   }
 
+  // ── ORGANIZADOR APONTA A DATA DIRETO (2.0.75) ─────────────────────────────────
+  // Decisão do dono: _"o organizador pode apontar direto a data/hora"_, e quando ele
+  // aponta, VALE A DELE — a enquete daquele jogo fecha. Não é um atalho pro consenso;
+  // é a autoridade de quem monta a grade (num torneio de 1 dia é ele quem sabe qual
+  // quadra vaga às 14h). Ele desfaz e a enquete volta a valer — o caminho de volta é
+  // o MESMO _schUnconfirm que os jogadores já usam, não um segundo jeito de desfazer.
+  function _brtHm(ms) {
+    try { return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }); }
+    catch (e) { return '17:00'; }
+  }
+  // Rótulo da ORIGEM da data. Existe porque as três origens não valem a mesma coisa:
+  // a estimada o sistema pode recalcular, as outras duas não.
+  function _origemLabel(kind) {
+    if (kind === 'estimate') return '≈ estimado pelo sistema';
+    if (kind === 'organizer') return 'definido pelo organizador';
+    return 'combinado pelos jogadores';
+  }
+  function _orgBloco(t, m) {
+    var ms = m.scheduledAt ? new Date(m.scheduledAt).getTime() : NaN;
+    var ymd = isNaN(ms) ? (_dtParts(t.startDate, '09:00') || {}).ymd || _brtYmd(Date.now()) : _brtYmd(ms);
+    var hm = isNaN(ms) ? ((_dtParts(t.startDate, '09:00') || {}).hm || '09:00') : _brtHm(ms);
+    return '<div style="margin-top:14px;background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.35);border-radius:12px;padding:12px;">' +
+      '<div style="font-size:0.78rem;font-weight:800;color:#60a5fa;margin-bottom:2px;">🛠️ Organizador</div>' +
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:9px;">Apontar a data/hora aqui DEFINE o jogo na hora e encerra as propostas. Dá pra desfazer.</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:9px;">' +
+        '<input type="date" id="sch-org-date" value="' + _esc(ymd) + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+        '<input type="time" id="sch-org-time" value="' + _esc(hm) + '" style="width:96px;flex-shrink:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
+      '</div>' +
+      '<button type="button" onclick="window._schOrgDefinir(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;font-weight:800;border:none;border-radius:10px;padding:10px;font-size:0.85rem;">📌 Definir data e hora</button>' +
+    '</div>';
+  }
+
+  // Grava a data do organizador. `kind='organizer'` é o que faz a enquete colapsar
+  // (o render já colapsa em cima de m.scheduledAt) e o que impede a grade estimada de
+  // sobrescrever depois — ver a INVARIANTE na seção da grade.
+  window._schOrgDefinir = function (tId, matchId) {
+    var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    var m = _schFindMatch(t, matchId); if (!m) return;
+    var d = document.getElementById('sch-org-date'), h = document.getElementById('sch-org-time');
+    var ymd = d && d.value, hm = (h && h.value) || '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || '')) || !/^\d{2}:\d{2}$/.test(String(hm))) {
+      if (typeof showNotification === 'function') showNotification('Data inválida', 'Escolha a data e a hora.', 'warning');
+      return;
+    }
+    var ms = _ms(ymd, hm);
+    if (isNaN(ms)) { if (typeof showNotification === 'function') showNotification('Data inválida', 'Não consegui ler essa data.', 'warning'); return; }
+    var prev = { schedule: JSON.parse(JSON.stringify(m.schedule || {})), scheduledAt: m.scheduledAt, scheduledBy: m.scheduledBy, scheduledKind: m.scheduledKind };
+    m.scheduledAt = new Date(ms).toISOString();
+    m.scheduledBy = (_cu() || {}).uid || '';
+    m.scheduledKind = 'organizer';
+    _schMirrorToGroup(t, m);
+    _saveSchedule(t, m, prev, true);
+    window._schCloseOverlay();
+    if (typeof showNotification === 'function') showNotification('📌 Definido', 'Jogo marcado pra ' + _fmtDateTime(m.scheduledAt) + '.', 'success');
+  };
+
   function _renderMatch(t, m) {
     var cu = _cu();
     var uid = cu && cu.uid;
@@ -529,7 +770,7 @@
     var sched = m.scheduledAt ? (m.schedule || {}) : _ensureSchedule(m);
     // modo GRUPO Rei/Rainha: m é o m0 portador; mesmos 4 jogadores nos 3 jogos.
     var groupMode = !!(_schGroupMode && String(m.id) === _schGroupMode);
-    var titleTxt = groupMode ? '📅 Combinar jogos' : '📅 Combinar jogo';
+    var titleTxt = '📅 Propor datas';
     var header =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
         '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-weight:700;">‹ Voltar</button>' +
@@ -552,10 +793,16 @@
         '<div style="padding:1.1rem;">' + matchLine +
           '<div style="margin-top:14px;text-align:center;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:18px;">' +
             '<div style="font-size:2rem;line-height:1;">📅</div>' +
-            '<div style="font-weight:900;font-size:1.1rem;color:#34d399;margin-top:8px;">' + (groupMode ? 'Jogos combinados' : 'Jogo combinado') + '</div>' +
+            '<div style="font-weight:900;font-size:1.1rem;color:#34d399;margin-top:8px;">' + (groupMode ? 'Jogos marcados' : 'Jogo marcado') + '</div>' +
             '<div style="font-size:0.95rem;color:var(--text-bright);margin-top:4px;">' + _esc(_fmtDateTime(m.scheduledAt)) + '</div>' +
+            // A ORIGEM em texto: estimada pelo sistema ≠ marcada por gente. Sem isto o
+            // jogador não tem como saber se aquele horário é combinado ou chute do app.
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:5px;">' + _esc(_origemLabel(m.scheduledKind)) + '</div>' +
           '</div>' +
-          (canUndo ? '<button type="button" onclick="window._schUnconfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;">↩️ Desfazer combinação</button>' : '') +
+          // Desfazer: quem joga desfaz o que foi combinado/estimado. O organizador não
+          // precisa deste botão — ele reaponta direto no bloco abaixo (e pode limpar ali).
+          (canUndo ? '<button type="button" onclick="window._schUnconfirm(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" class="btn" style="width:100%;margin-top:12px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;border-radius:11px;padding:9px;font-size:0.82rem;">↩️ Desfazer</button>' : '') +
+          (isOrg ? _orgBloco(t, m) : '') +
         '</div>';
       _overlay('sch-overlay', header + body);
       return;
@@ -670,7 +917,7 @@
 
     var addHtml = isPlayer ? (
       '<div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border-color);">' +
-        '<div style="font-size:0.78rem;font-weight:800;color:#34d399;margin-bottom:8px;">Combinar até ' + _esc(_fmtDateTime(win.endMs)) + '</div>' +
+        '<div style="font-size:0.78rem;font-weight:800;color:#34d399;margin-bottom:8px;">Propor até ' + _esc(_fmtDateTime(win.endMs)) + '</div>' +
         // data + hora
         '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
           '<input type="date" id="sch-date" min="' + minD + '" max="' + maxD + '" style="flex:1;min-width:0;background:var(--bg-darker,#0b1220);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:8px;color:var(--text-bright);font-size:0.85rem;box-sizing:border-box;">' +
@@ -690,8 +937,8 @@
     ) : (isOrg ? '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);text-align:center;">Você não joga este confronto — acompanhando como organizador.</div>' : '');
 
     var body = '<div style="padding:1rem 1.1rem;">' + matchLine +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin:2px 0 12px;">Quem joga propõe horários e marca o que consegue. Quando todos derem ✅ no mesmo, o jogo é combinado.</div>' +
-      optsHtml + addHtml + '</div>';
+      '<div style="font-size:0.72rem;color:var(--text-muted);margin:2px 0 12px;">Quem joga propõe horários e marca o que consegue. Quando todos derem ✅ no mesmo, o jogo é marcado.</div>' +
+      optsHtml + addHtml + (isOrg ? _orgBloco(t, m) : '') + '</div>';
     _overlay('sch-overlay', header + body);
   }
 
@@ -717,7 +964,7 @@
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
       _crCache = null;
     }).catch(function (err) {
-      m.schedule = prevClone.schedule; m.scheduledAt = prevClone.scheduledAt; m.scheduledBy = prevClone.scheduledBy;
+      m.schedule = prevClone.schedule; m.scheduledAt = prevClone.scheduledAt; m.scheduledBy = prevClone.scheduledBy; m.scheduledKind = prevClone.scheduledKind;
       _schMirrorToGroup(t, m); // reverte também o espelho nos jogos do grupo
       var _msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Não foi possível registrar no servidor (' + _msg + ').', 'error');
@@ -862,7 +1109,7 @@
       if (swd != null) { if (s.dayVotes[cu.uid] && s.dayVotes[cu.uid][oid]) { delete s.dayVotes[cu.uid][oid][swd]; } }
       else { if (s.votes[cu.uid]) delete s.votes[cu.uid][oid]; }
     }
-    s.scheduledOptId = null; s.scheduledWd = null; m.scheduledAt = ''; m.scheduledBy = '';
+    s.scheduledOptId = null; s.scheduledWd = null; m.scheduledAt = ''; m.scheduledBy = ''; m.scheduledKind = '';
     _schMirrorToGroup(t, m); // espelha o "desfeito" nos outros jogos do grupo
     _saveSchedule(t, m, prev, false);
   };
@@ -884,15 +1131,45 @@
     if (!rows) rows = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:14px 0;">Sem jogos na rodada atual.</div>';
     var header =
       '<div style="padding:0.85rem 1rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-color);background:linear-gradient(135deg,#065f46,#047857);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:2;">' +
-        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Combinar jogos</span>' +
+        '<span style="font-weight:800;color:#fff;font-size:0.92rem;">📅 Propor datas</span>' +
         '<button type="button" onclick="window._schCloseOverlay()" class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Fechar</button>' +
       '</div>';
+    // Botão da grade: só aparece quando o torneio CABE na régua (até 3 dias). Em torneio
+    // longo não há grade a calcular — ali quem marca são os jogadores, e oferecer o botão
+    // seria prometer uma conta que não vai acontecer.
+    var _plano = window._schGradeEstimada(t);
+    var _gradeBtn = _plano ? (
+      '<button type="button" onclick="window._schRecalcularGrade(\'' + _attr(t.id) + '\')" class="btn" style="width:100%;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:#fbbf24;font-weight:800;border-radius:11px;padding:10px;font-size:0.85rem;margin-bottom:10px;">🧮 Recalcular horários estimados</button>' +
+      '<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;margin-bottom:12px;">' + _plano.slots.length + ' jogo(s) · ' + _plano.quadras + ' quadra(s) · ' + _plano.dias + ' dia(s)' +
+        (_plano.cabe ? '' : ' · ⚠️ não cabe na janela do torneio') + '. Datas já marcadas por você ou pelos jogadores não são tocadas.</div>'
+    ) : '';
     var body = '<div style="padding:1rem 1.1rem;">' +
-      '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">Os jogadores de cada confronto combinam o horário entre eles, dentro do prazo da rodada. Toque num jogo pra acompanhar.</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">Toque num jogo pra apontar a data/hora, ou pra acompanhar o que os jogadores propuseram.</div>' +
+      _gradeBtn +
       rows +
       '<button type="button" onclick="window._schNotifyRound(\'' + _attr(t.id) + '\')" class="btn btn-shine" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:800;border:none;border-radius:11px;padding:11px;font-size:0.9rem;margin-top:6px;">📣 Notificar jogadores da rodada</button>' +
     '</div>';
     _overlay('sch-org-overlay', header + body);
+  };
+
+  // Recalcula e grava a grade estimada. Idempotente: rodar duas vezes seguidas não muda
+  // nada. Serve pro dia em que a 1ª rodada atrasa e o resto da grade tem que andar junto —
+  // que é o preço conhecido de GRAVAR a estimativa em vez de recalculá-la a cada render.
+  window._schRecalcularGrade = function (tId) {
+    var t = _findT(tId); if (!t || !_isOrg(t)) return;
+    var n = window._schAplicarGrade(t);
+    if (!n) {
+      if (typeof showNotification === 'function') showNotification('Nada a mudar', 'Os horários estimados já estão em dia.', 'info');
+      return;
+    }
+    _save(t).then(function () {
+      _crCache = null;
+      window._schCloseOverlay();
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+      if (typeof showNotification === 'function') showNotification('🧮 Grade atualizada', n + ' jogo(s) com horário estimado.', 'success');
+    }).catch(function (err) {
+      if (typeof showNotification === 'function') showNotification('⚠️ Não salvou', 'Não foi possível gravar a grade (' + String((err && (err.code || err.message)) || 'tente novamente') + ').', 'error');
+    });
   };
 
   window._schNotifyRound = function (tId) {

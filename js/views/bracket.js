@@ -4816,7 +4816,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 }
 
 // Rodapé do card: as ações de PARTICIPANTE sobre o próprio jogo, lado a lado.
-// Hoje são duas irmãs — "📅 Combinar jogo" (enquete de horário dentro do app) e
+// Hoje são duas irmãs — "📅 Propor datas" (enquete de horário dentro do app) e
 // "💬 Criar/Abrir grupo" (o grupo do WhatsApp onde o jogo é de fato combinado).
 // Não são redundantes: a enquete decide o horário com dado estruturado; o grupo é
 // a conversa. Ambas obedecem ao MESMO gate (jogador do confronto, rodada atual,
@@ -6377,22 +6377,29 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           var _monarchBadge = '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;">👑 ' + window._safeHtml(_monarchTitle) + '</span>';
           var _ligaCtrl = (typeof window._ligaGroupControlsHtml === 'function') ? window._ligaGroupControlsHtml(t, currentRound - 1, g) : '';
           // Header do grupo (pedido do dono, jul/2026): no GRUPO DO USUÁRIO → [W.O.]
-          // [Cheguei] [Combinar jogos]; nos DEMAIS grupos → só o W.O. (que os próprios
+          // [Cheguei] [Propor datas]; nos DEMAIS grupos → só o W.O. (que os próprios
           // gates de _ligaGroupControlsHtml/_woClaimChip limitam a membros do grupo +
-          // organizador). "Combinar jogos" e o "Cheguei" único são do MEU grupo.
+          // organizador). O "Cheguei" único é do MEU grupo.
           // W.O. CONFIRMADO (g.woAbsent setado): o ESTADO (pill "levou W.O." + Reverter /
           // Convidar outro / Jogador X) sai da linha de botões e vai numa LINHA PRÓPRIA
           // logo abaixo dela — a linha de botões fica limpa.
           var _grpArrivedL = (typeof window._monGroupArrivedBtn === 'function') ? window._monGroupArrivedBtn(t, g.matches, gDone) : '';
-          var _schGrpBtn = (isMyGroup && typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
+          // ⭐ 2.0.75 — A DATA DEFINIDA APARECE EM TODO GRUPO; a AÇÃO continua sendo de quem joga.
+          // Mesma forma do conserto do WhatsApp logo abaixo (2.0.57): o gate `isMyGroup`
+          // vivia AQUI, no call site, então pros outros grupos a função nem era chamada e a
+          // data não tinha como aparecer — nem pro organizador, que precisa ver a grade
+          // inteira. Quem decide o que o botão mostra é o módulo (_schGroupChip): data
+          // definida → pílula pra qualquer um; sem data → botão "Propor datas" só pra quem
+          // joga aquele grupo. Aqui só se para de esconder.
+          var _schGrpBtn = (typeof window._schGroupChip === 'function') ? window._schGroupChip(t, g.matches) : '';
           // ⭐ 2.0.57 — O CHIP DO WHATSAPP APARECE EM TODO GRUPO PRO ORGANIZADOR.
           // Ordem do dono (24/ago/2026): _"faltam os botões do whatsapp dos grupos de jogos
           // para os organizadores poderem criar os grupos e entrar nos grupos"_. O gate
           // `isMyGroup` escondia o chip em TODOS os grupos que não fossem o dele — e o
           // organizador quase nunca joga o grupo que precisa montar. Quem decide o que o
           // botão mostra continua sendo o módulo (wa-group.js, `_podeGerirJogo`): aqui só
-          // se para de esconder. O irmão "Combinar jogos" segue restrito ao meu grupo — o
-          // dono pediu o do WhatsApp, e enquete é negociação entre quem joga.
+          // se para de esconder. O irmão "Propor datas" seguiu o MESMO caminho na 2.0.75
+          // (a data pra todos, a proposta só pra quem joga).
           var _waPodeGerir = isMyGroup || !!(typeof window._isUserOrgOrCoHost === 'function' &&
             window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
           var _waGrpBtn = (_waPodeGerir && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';

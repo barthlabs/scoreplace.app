@@ -319,6 +319,11 @@ const SUITES = [
   // call site é guardado por `typeof === 'function'`). Nasceu de um relato de
   // regressão na 1.7.76 que a medição não confirmou — o que faltava era o teste.
   'tests/chips-do-card-do-jogo.test.js',
+  // "Propor datas" (2.0.75, ex-"Combinar jogos"): a grade que o sistema CALCULA e GRAVA
+  // em torneio de 1 a 3 dias, a origem da data (estimate/organizer/consensus) e a
+  // ⛔ invariante que segura tudo — recálculo do sistema NUNCA pisa em data que gente
+  // marcou. Cobre também o buraco do Rei/Rainha, que aparecia SEM data nas Novidades.
+  'tests/grade-estimada-e-propor-datas.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
