@@ -112,7 +112,19 @@ function render(tours) {
   const fn = new Function('window', 'document', 'localStorage', 'participacoes',
     'with (window) { ' + extraiBuildMyResults(SRC) + ' return _buildMyResultsHtml; }'
   )(W, W.document, W.localStorage, tours);
-  return fn();
+  const _h = fn();
+  // ⭐ 2.0.82 — o extra da seção de novidades passou a nascer só no clique
+  // (ordem do dono: "não carregar tudo antes que alguém clicasse no mostrar
+  // mais"). Ele fica em `window._novExtraPend`. Este teste confere ORDEM e
+  // MARCAÇÃO do conteúdo COMPLETO, então devolve o guardado pra dentro da
+  // seção — mesma coisa que o usuário vê ao abrir. ⛔ A seção segue FECHADA:
+  // a asserção F1 mede o texto do convite, que só existe fechada.
+  const _pend = W._novExtraPend || '';
+  if (!_pend) return _h;
+  const _iMr = _h.indexOf('id="meus-resultados-section"');
+  const _iNov = _h.indexOf('id="novidades-section"');
+  if (_iMr > _iNov && _iNov >= 0) return _h.slice(0, _iMr) + _pend + _h.slice(_iMr);
+  return _h + _pend;
 }
 const HTML = render([TOUR]);
 function secaoNov(h) { const i = h.indexOf('id="novidades-section"'); const j = h.indexOf('id="meus-resultados-section"'); return i < 0 ? '' : (j > i ? h.slice(i, j) : h.slice(i)); }

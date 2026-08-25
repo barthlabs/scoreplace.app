@@ -2777,10 +2777,38 @@ function renderDashboard(container) {
         if (_can) _novGIdx[_key] = _novGroups.length;
         _novGroups.push({ grupo: _fp.group, tName: it.tName, tId: it.tId, items: [{ it: it, jogo: _fp.jogo }] });
       });
+      // ── ⭐ O ESCONDIDO NEM NASCE (2.0.82) ──────────────────────────────────
+      // Ordem do dono: _"tem o mostrar mais nos 2. poderia não carregar tudo antes
+      // que alguém clicasse no mostrar mais."_ E ele está certo: recolhida, esta
+      // seção montava os 15 resultados e deixava 14 em `display:none` esperando um
+      // clique que quase nunca vem. MEDIDO na tela dele (1 torneio): a seção sozinha
+      // era 639 dos 921 elementos do documento — 69% da tela inicial, invisível.
+      // Agora o extra vira TEXTO guardado em memória e só entra no DOM ao abrir.
+      // ⛔ O texto guardado é o MESMO que era gerado antes — nada muda na tela
+      // depois de expandir; o que muda é QUANDO ele passa a existir.
+      var _novVis = '', _novExt = '';
+      var _guarda = function (html) {
+        // `_spCards` é incrementado DENTRO de _spCard/_spFull enquanto o pedaço é
+        // gerado: se antes de gerar já havia card, este pedaço é dos escondidos.
+        if (_novAntes > 0) _novExt += html; else _novVis += html;
+      };
+      var _novAntes = 0;
       _novGroups.forEach(function(g) {
-        _novHtml += _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"' + _spFull(), false, g.tId);
-        g.items.forEach(function(u) { _novHtml += _novCard(u.it); });
+        _novAntes = _spCards;
+        _guarda(_grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"' + _spFull(), false, g.tId));
+        g.items.forEach(function(u) { _novAntes = _spCards; _guarda(_novCard(u.it)); });
       });
+      _novHtml += _novVis;
+      // ⚠️ Só guarda pra depois quando a seção NASCE recolhida. Aberta, tudo entra
+      // agora — senão a tela abriria faltando conteúdo.
+      // ⛔ O TOTAL PASSA A VIR DAQUI, NÃO DO DOM. `_spSyncCollapsePreview` contava
+      // `[data-nov-card]` dentro da grade pra escrever o "ver mais (N)" — e com o
+      // extra fora do DOM esse número viraria 0 e o convite mentiria. A suíte pegou
+      // isso na hora (novidades-grade-ordem / previa-fechada-preenche-a-linha).
+      // Contado no TEXTO gerado: vale com a seção aberta ou fechada.
+      window._novTotalCards = ((_novVis + _novExt).match(/data-nov-card/g) || []).length;
+      if (_novCollapsed) { window._novExtraPend = _novExt; }
+      else { _novHtml += _novExt; window._novExtraPend = ''; }
       _novHtml += '</div>';
       // teto DECLARADO — seção que corta em silêncio faz o usuário achar que viu tudo
       if (_novTotal > _NOV_MAX) {
@@ -4364,7 +4392,13 @@ window._spSyncCollapsePreview = function() {
     var novSec = document.getElementById('novidades-section');
     var novGrid = document.getElementById('novidades-grid');
     if (novSec && novGrid) {
-      var novTotal = novGrid.querySelectorAll('[data-nov-card]').length;
+      // ⛔ O TOTAL VEM DO RENDER, NÃO DO DOM (2.0.82). Desde que o conteúdo escondido
+      // passou a nascer só no clique, contar `[data-nov-card]` na grade daria 1 e o
+      // convite prometeria "ver mais (0)". `_novTotalCards` é contado no texto
+      // gerado — inclui o que ainda está guardado. Fallback no DOM pra render antigo.
+      var novTotal = (typeof window._novTotalCards === 'number')
+        ? window._novTotalCards
+        : novGrid.querySelectorAll('[data-nov-card]').length;
       var novShown = _spFitGrid(novGrid, novSec.getAttribute('data-nov-collapsed') === '1');
       _spSyncHint(novSec, 'data-nov-collapsed', 'nov-toggle-tag', 'novidades-hint',
         Math.max(0, novTotal - novShown), true);
@@ -4444,6 +4478,19 @@ window._toggleNovidadesCollapse = function() {
     var _topoM = sec.getBoundingClientRect().top;
     _grudado = _railM ? (_railM.getBoundingClientRect().top - _topoM > 24) : (_topoM < 0);
   } catch (e) {}
+  // ── ⭐ O ESCONDIDO ENTRA AGORA (2.0.82) ─────────────────────────────────────
+  // A seção nasce só com o que aparece; o resto ficou como TEXTO em memória
+  // (`_novExtraPend`). Ao ABRIR, ele entra no DOM — uma vez só. Ordem do dono:
+  // "poderia não carregar tudo antes que alguém clicasse no mostrar mais".
+  // ⛔ ANTES de trocar o atributo: o CSS revela pelo atributo, e o conteúdo tem
+  // que já estar lá quando isso acontece, senão a seção abre vazia e preenche
+  // depois — que é exatamente o defeito que estamos perseguindo.
+  if (!willCollapse && window._novExtraPend) {
+    try {
+      var _grid = document.getElementById('novidades-grid');
+      if (_grid) { _grid.insertAdjacentHTML('beforeend', window._novExtraPend); window._novExtraPend = ''; }
+    } catch (e) {}
+  }
   sec.setAttribute('data-nov-collapsed', willCollapse ? '1' : '0');
   // v1.9.64: a contagem do convite saiu daqui — quem a escreve é `_spSyncCollapsePreview`,
   // que primeiro MEDE quantos cards cabem na linha. Duas contas para o mesmo número era o

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.81';
+window.SCOREPLACE_VERSION = '2.0.82';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -101,6 +101,33 @@ try {
         } catch (e) {}
         try { foto.nos = document.getElementsByTagName('*').length; } catch (e) {}
         try { foto.snaps = window._snapCount || 0; } catch (e) {}
+        // ── ⭐ ONDE ESTÃO OS NÓS (2.0.82) ────────────────────────────────────
+        // ⛔ `nos=4232` sozinho não decide nada, e me levou a uma conclusão ERRADA:
+        // montei a medição com 28 cards de torneio e concluí "a página é grande
+        // demais". O dono cortou na hora — a tela DELE tem 1 card de novidades, 1
+        // de últimos resultados e 1 torneio. Ou seja: MENOS cards que o meu teste e
+        // o DOBRO de elementos. O peso não é o que eu supus, e contar o total nunca
+        // ia revelar isso.
+        // Aqui a foto passa a dizer QUAIS subárvores concentram os nós. Barato: uma
+        // varredura rasa nos filhos do <body> e do #view-container, sem recursão.
+        try {
+          var _cand = [];
+          var _push = function (el) {
+            if (!el || !el.getElementsByTagName) return;
+            var q = el.getElementsByTagName('*').length;
+            if (q < 40) return;
+            var nome = (el.id ? '#' + el.id : '') ||
+              ('.' + String(el.className || '').split(' ').filter(Boolean).slice(0, 2).join('.')) ||
+              el.tagName;
+            _cand.push({ n: String(nome).slice(0, 28), q: q });
+          };
+          var _b = document.body;
+          if (_b) { for (var _i = 0; _i < _b.children.length; _i++) _push(_b.children[_i]); }
+          var _vc = document.getElementById('view-container');
+          if (_vc) { for (var _j = 0; _j < _vc.children.length; _j++) _push(_vc.children[_j]); }
+          _cand.sort(function (a, b) { return b.q - a.q; });
+          foto.onde = _cand.slice(0, 4).map(function (x) { return x.n + '=' + x.q; }).join(' ');
+        } catch (e) {}
         // ── ⭐ QUEM SUJOU A TELA POR ÚLTIMO (1.9.98) ──────────────────────────
         // O PONTO CEGO QUE SOBROU depois de timers, observers e rolagem entrarem
         // no rastro: um callback pode ser BARATO e ainda assim custar caro. Ele
@@ -159,7 +186,8 @@ try {
                 ' · nos=' + (foto.nos || '?') + ' anim=' + (foto.anim != null ? foto.anim : '?') +
                 ' snaps=' + (foto.snaps || 0) + ' busca=' + (window._discoveryFetches || 0) +
                 ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum') +
-                (_tre ? ' · trechos: ' + _tre : ' · trechos: nenhum'),
+                (_tre ? ' · trechos: ' + _tre : ' · trechos: nenhum') +
+                (foto.onde ? ' · onde: ' + foto.onde : ''),
                 'warning');
             }
           }

@@ -161,7 +161,20 @@ function render(tours, opts) {
   const fn = new Function('window', 'document', 'localStorage', 'participacoes',
     'with (window) { ' + body + ' return _buildMyResultsHtml; }'
   )(W, W.document, W.localStorage, tours);
-  return fn();
+  const _h = fn();
+  // ⭐ 2.0.82 — o extra das novidades passa a nascer só no clique (ordem do dono:
+  // "não carregar tudo antes que alguém clicasse no mostrar mais"); ele fica em
+  // `window._novExtraPend`. Esta suíte confere ORDEM, AGRUPAMENTO e ausência de
+  // repetição do conteúdo COMPLETO — o mesmo que a pessoa vê ao abrir. Então o
+  // guardado volta pra DENTRO da seção, na ordem em que foi gerado.
+  // ⛔ A seção segue no estado que o teste pediu: o que muda é só QUANDO o
+  // conteúdo entra no DOM, nunca qual conteúdo é.
+  const _pend = W._novExtraPend || '';
+  if (!_pend) return _h;
+  const _iMr = _h.indexOf('id="meus-resultados-section"');
+  const _iNov = _h.indexOf('id="novidades-section"');
+  if (_iMr > _iNov && _iNov >= 0) return _h.slice(0, _iMr) + _pend + _h.slice(_iMr);
+  return _h + _pend;
 }
 
 function bloco(html, id) {

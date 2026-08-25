@@ -84,6 +84,19 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.82 ───────────────────────────────────────────
+        // Ordem do dono: "tem o mostrar mais nos 2. poderia não carregar tudo antes
+        // que alguém clicasse no mostrar mais." MEDIDO na forma da tela dele (1
+        // torneio): a seção de novidades era 639 dos 921 elementos do documento —
+        // 69% da tela inicial, invisível, esperando um clique que quase nunca vem.
+        // Agora: documento 921 → 337 elementos; com 6 torneios, 54 KB de HTML
+        // deixam de ser construídos a cada desenho.
+        // ⚠️ Só NOVIDADES nesta leva. "Seus últimos resultados" é montado ao longo
+        // de ~630 linhas com blocos intercalados — mesma ideia, risco diferente,
+        // leva própria. Junto: a telemetria de travada passa a dizer ONDE estão os
+        // nós (`onde:`), porque contar o total me levou a uma conclusão ERRADA sobre
+        // o tamanho da página.
+        '<li><b>⚡ A tela inicial nasce mais leve:</b> a caixa de <b>novidades</b> montava todos os avisos de uma vez e escondia quase todos, esperando você clicar em "mostrar mais". Agora ela monta só o que aparece — o resto é criado no momento em que você abre. Na prática o app passa a desenhar cerca de <b>um terço</b> dos elementos que desenhava, e nada muda no que você vê.</li>' +
         // ── ciclo 2.0.81 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário: instrumentação, zero mudança de tela.
         // ⛔ DOIS defeitos DO INSTRUMENTO, não do app:
