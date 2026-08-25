@@ -67,20 +67,37 @@ const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboar
      'e ele é incrementado no ponto onde a busca REALMENTE dispara');
 }
 
-// ── ④ não vira enxurrada: no máximo 3 avisos por sessão ─────────────────────
+// ── ④ a cota é por JANELA DE TEMPO, não por sessão ──────────────────────────
+// ⛔ ERA por sessão, e no PWA/tela-de-início a sessão dura DIAS. MEDIDO em
+// 25/ago: o dono testou, os 3 avisos saíram às 14:07, e nas horas seguintes ele
+// voltou a relatar corte com ZERO evento novo. Cota vencida lida como "não
+// reproduziu" quase me fez trocar de hipótese.
 {
   const i = store.indexOf("'scroll-trav: '");
-  const volta = store.slice(Math.max(0, i - 500), i);
+  const volta = store.slice(Math.max(0, i - 1500), i);
   ok(/_travScrollN/.test(volta) && /<=\s*3/.test(volta),
-     '⛔ no máximo 3 avisos por sessão — telemetria não pode virar a própria enxurrada');
+     'no máximo 3 avisos por janela — telemetria não pode virar a própria enxurrada');
+  ok(/_travScrollT/.test(volta) && /600000/.test(volta),
+     '⛔ e a cota REARMA a cada 10 min — senão um teste novo nunca produz dado novo');
   ok(/foto\.dur\s*>\s*500/.test(volta),
      'e só reporta travada acima de 500ms (ruído de rolagem normal fica fora)');
+}
+
+// ── ④b o aviso leva os TRECHOS caros (o fim do "quem: nenhum") ──────────────
+{
+  const i = store.indexOf("'scroll-trav: '");
+  const msg = store.slice(i, i + 900);
+  ok(/trechos/.test(msg),
+     '⭐ o aviso leva os trechos caros do momento — é o que substitui "quem: nenhum" por um NOME');
+  const volta = store.slice(Math.max(0, i - 700), i);
+  ok(/window\._trechos/.test(volta) && /\.dur/.test(volta),
+     'e cada trecho vai com a DURAÇÃO (nome sem número não decide nada)');
 }
 
 // ── ⑤ só reporta quando a rolagem foi RECENTE ────────────────────────────────
 {
   const i = store.indexOf("'scroll-trav: '");
-  const volta = store.slice(Math.max(0, i - 500), i);
+  const volta = store.slice(Math.max(0, i - 1600), i);
   ok(/_spUltimaRolagemT/.test(volta) && /1200/.test(volta),
      'a travada só conta como "ao rolar" se houve rolagem há menos de 1,2s');
 }

@@ -84,6 +84,20 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.81 ───────────────────────────────────────────
+        // ⚠️ SEM item pro usuário: instrumentação, zero mudança de tela.
+        // ⛔ DOIS defeitos DO INSTRUMENTO, não do app:
+        // ① a cota de avisos era 3 por SESSÃO — e no PWA/tela-de-início a sessão
+        //    dura DIAS. O dono testou, os 3 saíram às 14:07, e nas horas seguintes
+        //    ele voltou a relatar corte com ZERO evento novo. Li isso como "não
+        //    reproduziu" e quase troquei de hipótese por causa de cota vencida.
+        //    Agora rearma a cada 10 min.
+        // ② o aviso não levava os TRECHOS caros. Com o assíncrono já visível desde
+        //    a 2.0.80, é isso que substitui o eterno "quem: nenhum" por nome+duração.
+        // Registrado junto: a hipótese `resize`→`_reflowChrome` foi MEDIDA e
+        // DESCARTADA (0,0ms por resize no DOM real; os 149ms de uma primeira
+        // medição eram artefato de forçar valores diferentes — o `_setVar` já
+        // compara antes de escrever).
         // ── ciclo 2.0.80 ───────────────────────────────────────────
         // ⚠️ SEM item pro usuário, e é DECISÃO: 100% instrumentação, zero mudança de
         // tela. Conserta um PONTO CEGO do próprio instrumento: `async () => x()`

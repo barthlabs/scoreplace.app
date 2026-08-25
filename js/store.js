@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.80';
+window.SCOREPLACE_VERSION = '2.0.81';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -134,12 +134,32 @@ try {
         try {
           var _rolouAgora = window._spUltimaRolagemT || 0;
           if (foto.dur > 500 && (Date.now() - _rolouAgora) < 1200) {
+            // ⛔ A COTA É POR JANELA DE TEMPO, NÃO POR SESSÃO (2.0.81).
+            // Era `<= 3` por sessão — e no PWA/tela-de-início a SESSÃO NÃO ACABA
+            // quando o app é fechado: ela dura dias. MEDIDO: o dono testou, os 3
+            // avisos saíram às 14:07, e nas horas seguintes ele voltou a relatar
+            // corte e NENHUM evento novo chegou. Eu quase troquei de hipótese por
+            // causa de uma cota vencida, não por ausência do defeito.
+            // 3 a cada 10 min: não vira enxurrada, e teste novo sempre dá dado novo.
+            var _agoraQ = Date.now();
+            if (!window._travScrollT || (_agoraQ - window._travScrollT) > 600000) {
+              window._travScrollT = _agoraQ; window._travScrollN = 0;
+            }
             window._travScrollN = (window._travScrollN || 0) + 1;
             if (window._travScrollN <= 3 && typeof window._captureMessage === 'function') {
+              // `trechos` = os callbacks caros do momento, agora INCLUINDO os
+              // assíncronos (prefixo `~`, 2.0.80). É o campo que substitui o
+              // eterno "quem: nenhum" por um nome com duração.
+              var _tre = '';
+              try {
+                _tre = (window._trechos || []).slice(-3)
+                  .map(function (x) { return x.nome + '=' + Math.round(x.dur) + 'ms'; }).join(' | ');
+              } catch (eT) {}
               window._captureMessage('scroll-trav: ' + foto.dur + 'ms · ' + (window._spDirRolagem || '?') +
                 ' · nos=' + (foto.nos || '?') + ' anim=' + (foto.anim != null ? foto.anim : '?') +
                 ' snaps=' + (foto.snaps || 0) + ' busca=' + (window._discoveryFetches || 0) +
-                ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum'),
+                ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum') +
+                (_tre ? ' · trechos: ' + _tre : ' · trechos: nenhum'),
                 'warning');
             }
           }
