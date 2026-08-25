@@ -170,6 +170,25 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // ── ⭐ RESUMO DO TORNEIO (25/ago/2026) ────────────────────────────────────
+    // Documento LEVE que a tela inicial lê no lugar do torneio inteiro (medido:
+    // 343 KB → 28 KB na base real). É DERIVADO: escrito SÓ pela Cloud Function
+    // `tournamentSummary`, nunca pelo cliente — por isso `allow write: if false`.
+    // A LEITURA espelha exatamente a do torneio: público é legível por todos;
+    // privado, só por quem está autenticado; e o SANDBOX do dev só por quem está
+    // no memberUids dele (mesma regra do doc completo, senão o resumo vazaria o
+    // que o documento esconde). [[project_sandbox_tournament]]
+    match /tournaments_summary/{tournamentId} {
+      allow read: if (
+        (resource.data.get('isSandbox', false) != true
+          && ((resource.data.isPublic == true) || (request.auth != null)))
+        || (resource.data.get('isSandbox', false) == true
+          && request.auth != null
+          && (request.auth.uid in resource.data.get('memberUids', [])))
+      );
+      allow write: if false;   // só a Cloud Function (admin SDK ignora regras)
+    }
+
     match /tournaments/{tournamentId} {
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll
