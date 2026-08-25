@@ -88,4 +88,58 @@
   window._gsmNoAdLockedMap = function () {
     var out = {}; Object.keys(RULES).forEach(function (s) { if (!RULES[s].advantageRule) out[s] = true; }); return out;
   };
+
+  // ══ DURAÇÃO DA PARTIDA — o valor configurado é POR SET ═══════════════════════
+  // 25/ago/2026, o dono corrigindo a própria especificação: "é tempo por set e o
+  // rei/rainha é 3x o tempo atual; eu disse lá atrás partida quando deveria ter
+  // dito set". `gameDuration` SEMPRE significou minutos por SET — o app é que o
+  // somava como se fosse a partida inteira, dando a set único e a melhor de 3 o
+  // mesmo tempo. ⛔ Não derivar `gameDuration ÷ sets` para "não mexer nos torneios
+  // que já existem": isso congelaria o número errado. O valor gravado já é por set.
+  //
+  // Mora AQUI, e não nos 9 lugares que calculam horário/previsão, porque formato
+  // de partida tem fonte única e a regra é POR FASE.
+
+  // Sets esperados de um "melhor de (2k−1)". Números do dono: 1 set → 1,0 ·
+  // melhor de 3 → 2,5 · melhor de 5 → 4,5. Entre jogadores iguais a média teórica
+  // do melhor de 5 é ~4,1; 4,5 é conservador de propósito — previsão que erra pra
+  // menos faz o organizador estourar o horário da quadra.
+  function setsEsperadosDe(setsToWin) {
+    var k = parseInt(setsToWin, 10);
+    if (!(k > 0)) return null;
+    return k === 1 ? 1 : (2 * k - 1) - 0.5;
+  }
+  window._setsEsperadosDe = setsEsperadosDe;
+
+  // ⛔🔴 REI/RAINHA NÃO É "3 SETS" AQUI — e essa é a pegadinha da regra inteira.
+  // O dono pediu "Rei/Rainha = 3× o tempo atual", e ele está certo sobre o GRUPO:
+  // um grupo de 4 ocupa a quadra por 3 sets. Mas o motor não guarda um jogo de 3
+  // sets — ele guarda TRÊS JOGOS de 1 set (as três combinações de dupla).
+  // MEDIDO no Confra ao vivo (25/ago/2026): 34 grupos × 3 jogos = os 112 jogos da
+  // rodada, e todo jogo disputado tem `sets` de tamanho 1 (ex.: 3×6 em um set só).
+  // Multiplicar a PARTIDA por 3 triplicaria um total que já está triplicado.
+  // Por isso não existe caso especial: `setsToWin` (da fase, senão da modalidade)
+  // responde certo pros dois — Rei/Rainha cai em 1 set porque É 1 set.
+  window._setsEsperadosDaFase = function (t, fase) {
+    t = t || {};
+    var n = (fase && fase.scoring) ? setsEsperadosDe(fase.scoring.setsToWin) : null;
+    if (n != null) return n;
+    // Fase sem `scoring` — metade dos torneios da base. Cai na modalidade.
+    return setsEsperadosDe(RULES[t.sport] && RULES[t.sport].setsToWin) || 1;
+  };
+
+  // Minutos de UMA partida da fase. Chamada e aquecimento são POR PARTIDA
+  // (acontecem uma vez); só o tempo de jogo multiplica pelos sets.
+  window._minutosDaPartida = function (t, fase) {
+    t = t || {};
+    return (parseInt(t.gameDuration, 10) || 30) * window._setsEsperadosDaFase(t, fase)
+      + (parseInt(t.callTime, 10) || 0)
+      + (parseInt(t.warmupTime, 10) || 0);
+  };
+
+  // A fase de índice i, ou `null` (torneio sem `phases` → a modalidade decide).
+  window._faseDoTorneio = function (t, i) {
+    var fs = (t && Array.isArray(t.phases)) ? t.phases : [];
+    return fs[i || 0] || null;
+  };
 })();

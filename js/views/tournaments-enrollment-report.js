@@ -140,7 +140,12 @@
   // contínua → estimativa POR RODADA (Rei/Rainha = grupos de 4; padrão = duplas).
   // Tempo é orientativo (usa gameDuration/courtCount; defaults 30min/1 quadra).
   function _suggestForCount(n, t) {
-    var gameDur = parseInt(t && t.gameDuration) || 30;
+    // v2.0.74: `gameDuration` é POR SET — a partida da fase INICIAL vale
+    // `× sets esperados` (Rei/Rainha 3, melhor de 3 → 2,5). Régua em sport-rules.js.
+    // ⚠️ Aqui NÃO entram chamada/aquecimento de propósito: este número é orientativo
+    // (ver o comentário acima). Só a multiplicação por sets foi corrigida.
+    var gameDur = (parseInt(t && t.gameDuration) || 30)
+      * window._setsEsperadosDaFase(t, window._faseDoTorneio(t, 0));
     var courts = Math.max(parseInt(t && t.courtCount) || 1, 1);
     if (n < 2) return { format: '— insuficiente', desc: 'Precisa de pelo menos 2 inscritos.', matches: 0, durationMin: 0, color: '#64748b' };
 

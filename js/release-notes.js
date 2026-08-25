@@ -91,6 +91,16 @@ window._RELEASE_NOTES_HTML = (function () {
         // travando, toque exigindo dezenas de tentativas. Não há nada NOVO a anunciar:
         // o que o usuário vê é exatamente o que a 2.0.68 já entregava. Os itens que as
         // levas revertidas anunciavam saem junto (ver commit).
+        // ── ciclo 2.0.74 ───────────────────────────────────────────
+        // DUAS correções do dono na mesma régua da previsão de duração:
+        // ① "é tempo por SET e não por partida — eu disse lá atrás partida quando
+        //    deveria ter dito set". O rótulo do formulário dizia "Duração Média do
+        //    Jogo" e era a origem do erro: set único e melhor de 3 ganhavam o mesmo
+        //    tempo. ⛔ NÃO virou "Rei/Rainha × 3": MEDIDO no Confra ao vivo, o motor
+        //    guarda TRÊS jogos de 1 set por grupo, então o 3× já está na contagem.
+        // ② "sabemos que esses jogos ocorrerão, então o tempo tem que estar alocado".
+        //    A eliminatória não sorteada valia ZERO: Confra previa 9h para ~25h30.
+        '<li><b>⏱️ A previsão de duração passa a valer:</b> o tempo que você configura agora é <b>por set</b> — uma partida melhor de 3 conta ~2,5 sets e uma melhor de 5 conta ~4,5, em vez de todas valerem o mesmo. E a previsão passa a somar o <b>torneio inteiro</b>: as fases que ainda não foram sorteadas entram pelos jogos que certamente vão acontecer, calculados pelo mesmo motor que monta as chaves (com repescagem e folga no lugar certo). Antes elas valiam zero, e a conta só aparecia inteira depois do sorteio — tarde demais pra saber se o torneio cabia no dia.</li>' +
         // ── ciclo 2.0.73 ───────────────────────────────────────────
         // UMA linha, escolhida por não encostar no caminho do toque. MEDIDO no
         // aparelho do dono: tap 4014ms de ATRASO DE ENTRADA + read spike de 276

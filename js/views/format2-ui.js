@@ -224,6 +224,18 @@
     if (e.scoring && e.scoring.type) return e.scoring;
     return (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
   }
+  // v2.0.74: `tourn-game-duration` é o tempo POR SET (ver sport-rules.js). Aqui o
+  // torneio ainda está no FORMULÁRIO, então o formato de cada fase vem do form:
+  // a classificatória de `_gsmReadHidden()`, a eliminatória de `_elimEffScoring`.
+  // As duas podem ser diferentes — é o caso do dono (Rei/Rainha depois melhor de 3).
+  function _minPartidaForm(gi, scoring) {
+    var porSet = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10)
+      || (gi && gi.t && gi.t.gameDuration) || 30;
+    return Math.round(porSet * (window._setsEsperadosDe(scoring && scoring.setsToWin) || 1));
+  }
+  function _scoringInicial() {
+    return (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+  }
   // Qual preset ACENDE. Com formato próprio, o critério é o do próprio objeto. HERDANDO, quem
   // decide é a MESMA função que acende o bloco do form (_gsmDetectPreset) — dois critérios pro
   // mesmo formato acenderiam botões diferentes nos dois blocos.
@@ -422,15 +434,19 @@
       q = Math.min(q, gi.units);
       if (q >= 2) elimGames = (q - 1) + (cfg.eliminatoria.terceiro ? 1 : 0);
     }
-    var gd = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10) || (gi.t && gi.t.gameDuration) || 30;
     var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
+    // ⛔ grupos e eliminatória podem ter formatos DIFERENTES: cada metade usa o
+    // tempo da SUA partida em vez de um minuto único pro total.
+    var gdG = _minPartidaForm(gi, _scoringInicial());
+    var gdE = _minPartidaForm(gi, _elimEffScoring(cfg.eliminatoria || {}));
     var totalGames = Math.round(groupGames + elimGames);
-    var mins = Math.ceil(totalGames * gd / Math.max(1, cc));
+    var mins = Math.ceil((Math.round(groupGames) * gdG + Math.round(elimGames) * gdE) / Math.max(1, cc));
     var hh = Math.floor(mins / 60), mm = mins % 60;
     var timeStr = hh > 0 ? (hh + 'h' + (mm ? ' ' + mm + 'min' : '')) : (mm + 'min');
+    var gdTxt = (gdG === gdE) ? (gdG + 'min') : (gdG + '/' + gdE + 'min');
     return '<div style="margin-top:8px;font-size:0.78rem;color:#a5b4fc;background:rgba(99,102,241,0.08);border-radius:8px;padding:9px 11px;line-height:1.5;">' +
       '👥 <b>' + gi.people + '</b> inscritos' + (gi.isDupla ? (' → <b>' + gi.units + '</b> duplas') : '') +
-      ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gd + 'min · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
+      ' · ⏱️ ~<b>' + timeStr + '</b> de jogos <span style="opacity:0.8;">(' + totalGames + ' jogos · ' + gdTxt + ' · ' + cc + ' quadra' + (cc > 1 ? 's' : '') + ')</span></div>';
   }
   // Resumo da eliminatória (abaixo do slider de classificados): pessoas/equipes, jogos, tempo.
   function _elimSummary(cfg) {
@@ -450,7 +466,8 @@
     var teams = Math.max(0, q);
     var people = teams * (isDupla ? 2 : 1);
     var games = (teams >= 2) ? (teams - 1) + (cfg.eliminatoria.terceiro ? 1 : 0) : 0;
-    var gd = parseInt((document.getElementById('tourn-game-duration') || {}).value, 10) || (gi.t && gi.t.gameDuration) || 30;
+    // v2.0.74: tempo POR SET × sets da partida DESTA fase (a eliminatória).
+    var gd = _minPartidaForm(gi, _elimEffScoring(cfg.eliminatoria || {}));
     var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
     var mins = Math.ceil(games * gd / Math.max(1, cc));
     var hh = Math.floor(mins / 60), mm = mins % 60;

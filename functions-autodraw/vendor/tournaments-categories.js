@@ -710,13 +710,17 @@ window._buildTimeEstimation = function(t, opts) {
   if (isLigaFmt) return '';
 
   var format = t.format || 'Eliminatórias';
-  var gameDur = parseInt(t.gameDuration) || 30; // minutos por partida
-  var callTime = parseInt(t.callTime) || 0;
-  var warmupTime = parseInt(t.warmupTime) || 0;
   var courts = Math.max(parseInt(t.courtCount) || 1, 1);
-  var slotTime = gameDur + callTime + warmupTime; // tempo total por slot (partida + chamada + aquecimento)
   var intervalBetween = 5; // intervalo entre slots no mesmo court (min)
-  var timePerSlot = slotTime + intervalBetween;
+  // v2.0.74: `gameDuration` é o tempo POR SET (régua única `_minutosDaPartida`, em
+  // sport-rules.js). A partida vale `× sets esperados` do formato, e cada FASE tem o
+  // seu — por isso são DOIS tempos de slot e não um. Torneio de fase única usa o
+  // mesmo nos dois e a conta não muda de forma.
+  function _slotDaFase(i) {
+    return window._minutosDaPartida(t, window._faseDoTorneio(t, i)) + intervalBetween;
+  }
+  var timePerSlot = _slotDaFase(0);                                    // classificatória
+  var timePerSlotElim = (window._isMultiPhase && window._isMultiPhase(t)) ? _slotDaFase(1) : timePerSlot;
 
   // Número de partidas por formato
   function calcMatches(n, fmt) {
@@ -788,7 +792,7 @@ window._buildTimeEstimation = function(t, opts) {
       var elimMin = 0;
       for (var er = 0; er < elimRounds; er++) {
         var mInR = Math.ceil(qual / Math.pow(2, er + 1));
-        elimMin += Math.ceil(mInR / courts) * timePerSlot;
+        elimMin += Math.ceil(mInR / courts) * timePerSlotElim; // ← formato da fase 2
       }
       return groupMin + elimMin + 15; // +15 intervalo entre fases
     }

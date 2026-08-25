@@ -671,17 +671,47 @@ window._tournamentPlayableFromTs = function (t) {
   if (!_cands.length) return null;
   return Math.max.apply(null, _cands);
 };
+// v2.0.74: DUAS correções, ambas do dono, na mesma régua.
+//
+// ① O tempo configurado é POR SET (`_minutosDaPartida`, em sport-rules.js) e cada
+//    FASE tem o seu formato: melhor de 3 não dura o mesmo que set único. Logo a conta
+//    é FASE A FASE, não "total de jogos × um tempo só".
+// ② ⛔ A previsão é do TORNEIO INTEIRO — fase que ainda NÃO foi sorteada entra pelos
+//    jogos PLANEJADOS. Palavras do dono: _"por mais que não se saiba quem ocupará os
+//    slots, sabemos que esses jogos ocorrerão, então o tempo tem que estar alocado"_ ·
+//    _"isso é fundamental num torneio, principalmente de 1 dia/3 dias"_.
+//    Antes eu somava só o materializado: no Confra a eliminatória valia ZERO e a
+//    previsão dava 9h para um torneio de ~23h. E o número saltava 57% no dia do
+//    sorteio — quando nada tinha mudado de verdade.
+//
+// ⛔ O plano NÃO é recalculado aqui: usa os MESMOS primitivos de
+// `window._tournamentGamesPlan` (materializado → motor real). Uma segunda tabela de
+// fórmulas é exatamente o que já divergiu em 4 lugares neste repo.
 window._estimateTournamentMinutes = function(t) {
-  var prog = window._getTournamentProgress(t);
-  var totalMatches = prog.total || 0;
-  if (totalMatches < 1) return 0;
-  var gameDur = parseInt(t.gameDuration) || 30;
-  var callTime = parseInt(t.callTime) || 0;
-  var warmupTime = parseInt(t.warmupTime) || 0;
+  if (!t) return 0;
   var courts = Math.max(parseInt(t.courtCount) || 1, 1);
-  var timePerSlot = gameDur + callTime + warmupTime + 5;
-  var slots = Math.ceil(totalMatches / courts);
-  return slots * timePerSlot;
+  var INTERVALO = 5; // entre partidas na mesma quadra
+  var tempoDe = function (fase, n) {
+    return Math.ceil(n / courts) * (window._minutosDaPartida(t, fase) + INTERVALO);
+  };
+
+  if (!window._isMultiPhase(t)) {
+    // Fase única: Liga planeja todas as rodadas agendadas; o resto é o que existe.
+    var lp = window._ligaTournamentProgress(t);
+    var n1 = lp ? lp.totalPlanned : (window._getTournamentProgress(t).total || 0);
+    return (n1 > 0) ? tempoDe(window._faseDoTorneio(t, 0), n1) : 0;
+  }
+
+  var phases = t.phases, curIdx = t.currentPhaseIndex || 0, min = 0;
+  for (var i = 0; i < phases.length; i++) {
+    // Jogo que EXISTE manda sempre — inclusive numa fase acima do índice corrente
+    // (sorteada mas ainda não "aberta"). Só na falta dele é que se planeja: o motor
+    // real simula a próxima fase; a 3ª em diante só ao materializar a anterior.
+    var n = _materializedPhaseGames(t, i);
+    if (!(n > 0) && i > curIdx) n = _simulatePhaseGames(t, i) || 0;
+    if (n > 0) min += tempoDe(phases[i], n);
+  }
+  return min;
 };
 // v2.3.8: progresso do TORNEIO INTEIRO para Liga (todas as rodadas planejadas).
 // Diferente de _getTournamentProgress, que conta só as rodadas que JÁ existem.
@@ -1211,8 +1241,9 @@ window._buildProgressInner = function(t) {
         } else { plannedEnd = _cfgEndMs; _schedEndReal = true; }
       }
       else {
-        var _gdMp = parseInt(t.gameDuration) || 30, _ctMp = parseInt(t.callTime) || 0, _wuMp = parseInt(t.warmupTime) || 0;
-        var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = _gdMp + _ctMp + _wuMp + 5;
+        // v2.0.74: tempo é POR SET — a partida desta FASE (`_ph`) pode ser 3 sets
+        // (Rei/Rainha) ou 2,5 (melhor de 3). Régua única em sport-rules.js.
+        var _crtMp = Math.max(parseInt(t.courtCount) || 1, 1), _slotMp = window._minutosDaPartida(t, _ph) + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_rTotal / _crtMp) * _slotMp * 60000;
         _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }
@@ -1272,8 +1303,8 @@ window._buildProgressInner = function(t) {
         } else { plannedEnd = _cfgEL; _schedEndReal = true; }
       }
       else {
-        var _gdL = parseInt(t.gameDuration) || 30, _ctL = parseInt(t.callTime) || 0, _wuL = parseInt(t.warmupTime) || 0;
-        var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = _gdL + _ctL + _wuL + 5;
+        // v2.0.74: tempo é POR SET — a partida desta fase (`_phL`). Ver sport-rules.js.
+        var _crtL = Math.max(parseInt(t.courtCount) || 1, 1), _slotL = window._minutosDaPartida(t, _phL) + 5;
         plannedEnd = (schedStart || actualStart || Date.now()) + Math.ceil(_pr.total / _crtL) * _slotL * 60000;
         _schedEndReal = false;   // estimado por tempo de quadra → sem regressiva
       }

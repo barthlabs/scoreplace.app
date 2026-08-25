@@ -169,6 +169,8 @@ const SUITES = [
   'tests/realce-do-toque-chega-a-pintar.test.js',
   'tests/nome-nasce-cabendo-nao-cortado.test.js',
   'tests/resumo-do-torneio.test.js',
+  'tests/duracao-por-set.test.js',
+  'tests/previsao-conta-fase-nao-sorteada.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

@@ -159,11 +159,10 @@ window._showGroupsConfigPanel = function(tId) {
     // User: 'seria muito interessante diz quantas partidas e previsão de
     // duração total do torneio de forma dinâmica a cada vez que uma opção
     // é selecionada.'
-    var _gameDur = parseInt(t.gameDuration) || 30;
-    var _callT = parseInt(t.callTime) || 0;
-    var _warmT = parseInt(t.warmupTime) || 0;
+    // v2.0.74: o tempo configurado é POR SET — a partida da fase que está sendo
+    // sorteada pode ter 1, 2,5, 3 ou 4,5 sets. Régua única em sport-rules.js.
     var _courts = Math.max(parseInt(t.courtCount) || 1, 1);
-    var _slotMin = _gameDur + _callT + _warmT + 5; // +5min intervalo
+    var _slotMin = window._minutosDaPartida(t, window._faseDoTorneio(t, t.currentPhaseIndex || 0)) + 5; // +5min intervalo
 
     // Conta partidas pra uma config específica
     function _matchesForConfig(c) {
@@ -1286,7 +1285,8 @@ window.showUnifiedResolutionPanel = function(tId) {
     // (atualiza a estimativa); o Confirmar no topo APLICA. Vale tanto pra inscrição
     // quanto pra transição de fase (info via _phaseResToInfo) — uma lógica só.
     window._unifiedSel = null; // re-seleciona o recomendado a cada abertura
-    var _uDur = parseInt(t.gameDuration) || 30;
+    // v2.0.74: POR SET — a partida desta fase, não o valor cru. Ver sport-rules.js.
+    var _uDur = window._minutosDaPartida(t, window._faseDoTorneio(t, t.currentPhaseIndex || 0));
     var _uCourts = parseInt(t.courtCount) || (Array.isArray(t.courtNames) ? t.courtNames.length : 0) || 2;
     var _uIsDouble = (t.format || '').indexOf('Dupla') !== -1;
     var _uGamesFor = function(key) {

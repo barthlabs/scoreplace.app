@@ -3654,11 +3654,23 @@ function setupCreateTournamentModal() {
   // v2.6.68: núcleo da estimativa extraído — parametrizado por formato/modo/monarch/
   // grupos/N, pra ser reusado pela Fase 1 E por cada fase extra (mesma lógica).
   // slot/courts/categorias (K) são do TORNEIO (compartilhados); o resto vem da fase.
+  // Sets esperados da fase INICIAL enquanto o torneio está no formulário: o formato
+  // mora nos campos ocultos do bloco #gsm-section (`_gsmReadHidden`), que é a mesma
+  // fonte que o jogo vai ler depois. Régua de sets: `_setsEsperadosDe` (sport-rules).
+  function _setsDaFaseInicial() {
+    var sc = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+    return window._setsEsperadosDe(sc && sc.setsToWin) || 1;
+  }
+
   window._buildPhaseEstimate = function (o) {
     o = o || {};
     var call = o.call || 0, warm = o.warm || 0, dur = o.dur || 0;
     var courts = Math.max(o.courts || 1, 1);
-    var slot = call + warm + dur; // minutos por slot de partida
+    // v2.0.74: `dur` é o tempo POR SET (rótulo do form: "Duração Média do Set").
+    // A partida vale × sets esperados do formato desta fase; chamada e aquecimento
+    // acontecem UMA vez por partida. Régua de sets: sport-rules.js.
+    var sets = o.sets > 0 ? o.sets : 1;
+    var slot = call + warm + Math.round(dur * sets); // minutos por slot de partida
     var fmt = o.fmt || 'elim_simples';
     var drawMode = o.drawMode || 'sorteio';
     var K = Math.max(o.K || 1, 1);
@@ -3814,6 +3826,9 @@ function setupCreateTournamentModal() {
     }
     ladder.innerHTML = window._buildPhaseEstimate({
       call: iv('tourn-call-time', 0), warm: iv('tourn-warmup-time', 0), dur: iv('tourn-game-duration', 0),
+      // sets esperados do formato da fase INICIAL (campos ocultos do form = a fonte
+      // única que o jogo vai usar). Sem isso a escada trata melhor de 3 como 1 set.
+      sets: _setsDaFaseInicial(),
       courts: iv('tourn-court-count', 1), fmt: gv('select-formato') || 'elim_simples', drawMode: gv('draw-mode') || 'sorteio',
       K: K, ageCats: ageCats, N: N, isReal: isReal,
       unitLbl: (teamSize >= 2 ? 'equipes' : 'inscritos'),
@@ -3830,7 +3845,13 @@ function setupCreateTournamentModal() {
   window._gruposFmtMin = function (m) { var h = Math.floor(m / 60), mm = Math.round(m % 60); if (h > 0 && mm > 0) return h + 'h' + (mm < 10 ? '0' : '') + mm; if (h > 0) return h + 'h'; return mm + 'min'; };
   window._gruposEstLine = function (c) {
     var gi = function (id, d) { var e = document.getElementById(id); var v = e ? parseInt(e.value, 10) : NaN; return isNaN(v) ? d : v; };
-    var slot = gi('tourn-call-time', 5) + gi('tourn-warmup-time', 5) + gi('tourn-game-duration', 30);
+    // v2.0.74: `tourn-game-duration` é o tempo POR SET — a partida multiplica pelos
+    // sets do formato da fase (fonte única: sport-rules.js). Aqui é a fase INICIAL,
+    // cujo formato mora nos campos ocultos do form (`_gsmReadHidden`).
+    var _scIni = (typeof window._gsmReadHidden === 'function') ? window._gsmReadHidden() : null;
+    var _setsIni = window._setsEsperadosDe(_scIni && _scIni.setsToWin) || 1;
+    var slot = gi('tourn-call-time', 5) + gi('tourn-warmup-time', 5)
+      + Math.round(gi('tourn-game-duration', 30) * _setsIni);
     var courts = Math.max(gi('tourn-court-count', 1), 1);
     var teamSize = gi('tourn-team-size', 1);
     var comb = function (n) { return n * (n - 1) / 2; }; // round-robin: jogos = C(n,2)
