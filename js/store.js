@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.66';
+window.SCOREPLACE_VERSION = '2.0.67';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -588,7 +588,6 @@ window._preloadUserProfiles = function (uids) {
         snap.forEach(function (doc) {
           var d = doc.data() || {};
           vistos[doc.id] = 1;
-          window._bumpProfileEpoch();
           window._userProfileCache[doc.id] = {
             displayName: d.displayName || d.name || '', email: d.email || '', phone: d.phone || '',
             photoURL: d.photoURL || '', gender: d.gender || '',
@@ -614,6 +613,13 @@ window._preloadUserProfiles = function (uids) {
         }
       }).then(function () {
         _lotou = true; clearTimeout(_prazoLote);
+        // ⚠️ UMA vez por LOTE, nunca por documento (2.0.67). Bump por documento
+        // fazia a época subir ~111 vezes durante a hidratação, e quem memoiza
+        // conferindo a época (o índice do _sideBelongsToUser) RECONSTRUÍA a cada
+        // chamada — MEDIDO: o render voltava de 29ms para 172ms, ou seja o
+        // conserto da 2.0.63 era anulado justamente enquanto os nomes chegam,
+        // que é quando a tela mais trava. Um lote = uma invalidação.
+        window._bumpProfileEpoch();
         lote.forEach(function (uid) {
           if (window._userProfilePending[uid] === _minhas[uid]) delete window._userProfilePending[uid];
           if (_resolvers[uid]) { try { _resolvers[uid](); } catch (e) {} _resolvers[uid] = null; }
@@ -625,7 +631,6 @@ window._preloadUserProfiles = function (uids) {
   toLoad.forEach(function (uid) {
     var pr = db.collection('users').doc(uid).get().then(function (s) {
       var d = (s && s.exists) ? (s.data() || {}) : {};
-      window._bumpProfileEpoch();
       window._userProfileCache[uid] = {
         displayName: d.displayName || d.name || '',
         email: d.email || '',
@@ -645,6 +650,7 @@ window._preloadUserProfiles = function (uids) {
         try { window._captureMessage('preload user falhou: ' + ((e && e.code) || (e && e.message) || e), 'warning'); } catch (e2) {}
       }
     }).then(function () {
+      window._bumpProfileEpoch();   // uma vez por perfil resolvido, não por escrita
       if (window._userProfilePending[uid] === _guarda) delete window._userProfilePending[uid];
     });
     // mesmo prazo do lote: get() pendurado não pode virar promessa-cadáver

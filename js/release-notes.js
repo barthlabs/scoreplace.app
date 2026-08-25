@@ -84,6 +84,12 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.67 ───────────────────────────────────────────
+        // Sentry do aparelho do dono: travada de 20.434ms. Causa: a "época" do cache
+        // de perfis subia a CADA perfil (~111x), e o índice da 2.0.63 se reconstruía a
+        // cada chamada durante a hidratação — MEDIDO: render 29ms → 172ms. Um lote =
+        // uma invalidação.
+        '<li><b>🧊 O travamento ao abrir/ocultar um card acabou:</b> enquanto os nomes dos jogadores chegavam do servidor, uma otimização interna se desfazia e refazia milhares de vezes — e a tela ficava congelada, às vezes por dezenas de segundos, sem responder a nada. Corrigido.</li>' +
         // ── ciclo 2.0.66 ───────────────────────────────────────────
         // O "scroll cortado" de dias: MEDIDO no HTML real da chave do Confra, no motor
         // do Safari — 324 de 324 nomes (100%) nasciam CORTADOS (texto 17px em caixa de
