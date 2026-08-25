@@ -1261,6 +1261,43 @@ function renderDashboard(container) {
   window._setDashSearch = function(val) {
     window._dashSearch = val || '';
     if (typeof window._applyDashSearchInPlace === 'function') window._applyDashSearchInPlace();
+    if (typeof window._buscaNoServidor === 'function') window._buscaNoServidor(window._dashSearch);
+  };
+
+  // ⭐ 2.0.91 — A BUSCA VAI AO SERVIDOR quando a tela não tem a resposta.
+  // Filtrar o que já está desenhado nunca acha torneio antigo, de outra cidade ou que
+  // a pessoa não participa — ele simplesmente nunca chegou ao aparelho. O resumo
+  // (~2 KB) torna a consulta barata: o que voltar entra na vitrine e o filtro de
+  // sempre passa a enxergá-lo.
+  // ⚠️ ESPERA de 320ms: sem isso seria uma consulta POR TECLA digitada.
+  // ⛔ Resultado NUNCA some com o que já estava: entra por id, sem duplicar.
+  var _buscaTimer = null, _buscaUltima = '';
+  window._buscaNoServidor = function (q) {
+    var termo = String(q || '').trim();
+    clearTimeout(_buscaTimer);
+    if (termo.length < 3) return;
+    if (termo === _buscaUltima) return;
+    _buscaTimer = setTimeout(function () {
+      _buscaUltima = termo;
+      var DB = window.FirestoreDB;
+      if (!DB || typeof DB.buscarTorneios !== 'function') return;
+      DB.buscarTorneios(termo).then(function (achados) {
+        if (!achados || !achados.length) return;
+        // a pessoa já pode ter mudado a busca enquanto a consulta viajava
+        if (String(window._dashSearch || '').trim() !== termo) return;
+        var A = window.AppStore; if (!A) return;
+        if (!Array.isArray(A.publicDiscovery)) A.publicDiscovery = [];
+        var tem = {};
+        (A.tournaments || []).forEach(function (t) { if (t && t.id != null) tem[String(t.id)] = 1; });
+        A.publicDiscovery.forEach(function (t) { if (t && t.id != null) tem[String(t.id)] = 1; });
+        var novos = achados.filter(function (t) { return t && t.id != null && !tem[String(t.id)]; });
+        if (!novos.length) return;
+        A.publicDiscovery = A.publicDiscovery.concat(novos);
+        window._log('[busca] servidor trouxe', novos.length, 'torneio(s) que não estavam na tela');
+        if (typeof window._dashRerender === 'function') window._dashRerender({ compact: true });
+        if (typeof window._applyDashSearchInPlace === 'function') window._applyDashSearchInPlace();
+      }).catch(function (e) { window._warn('[busca] servidor falhou:', e && e.message); });
+    }, 320);
   };
   window._applyDashLocation = function(loc) {
     window._dashLocation = (window._dashLocation === loc) ? '' : loc;
@@ -1297,6 +1334,9 @@ function renderDashboard(container) {
     } else if (typeof window._applyDashSearchInPlace === 'function') {
       window._applyDashSearchInPlace();
     }
+    // a barra canônica também vai ao servidor — senão buscar por ela acharia menos
+    // que buscar pelo outro caminho, e "menos" aqui quer dizer "não achou".
+    if (typeof window._buscaNoServidor === 'function') window._buscaNoServidor(q);
   };
   // v0.16.73: removidos handlers _dashForceFetchDiscovery e
   // _dashDiagnoseTournaments (v0.16.60-61) — eram acionados por botões do
@@ -4287,12 +4327,58 @@ window._tournamentSearchBlob = function(t) {
   }
   return parts.join(' ').toLowerCase();
 };
+// ⭐ 2.0.91 — BUSCAR É PEDIR PRA VER. Ordem do dono: _"as buscas e filtro precisam
+// voltar a funcionar… achava, mas não mostrava, e achar e não mostrar é não achar"_.
+//
+// ⛔ A CAUSA, e ela era literal: esta função revela o que casou com
+// `card.style.display = ''`. Só que as seções RECOLHIDAS escondem com
+// `display:none !important` (novidades, últimos resultados) — e `!important` GANHA do
+// estilo em linha. A busca marcava o card como encontrado e o CSS seguia escondendo.
+// Achava e não mostrava.
+// E desde que as seções passaram a nascer sob demanda (2.0.82/86/88), o que casa pode
+// nem estar no DOM.
+//
+// Então buscar agora faz três coisas, nesta ordem:
+//   ① MONTA o que estava guardado (novidades, últimos resultados);
+//   ② ABRE as seções recolhidas — buscar é pedir pra ver, e seção fechada é a regra
+//     que estava vencendo a busca;
+//   ③ só então filtra.
+// Ao limpar a busca, o estado de aberto/fechado volta ao que a pessoa tinha escolhido.
+function _buscaAbreTudo(abrir) {
+  try {
+    // ① o guardado entra no DOM (senão o card nem existe pra ser achado)
+    if (abrir) {
+      var g = document.getElementById('novidades-grid');
+      if (g && window._novExtraPend) { g.insertAdjacentHTML('beforeend', window._novExtraPend); window._novExtraPend = ''; }
+      var b = document.getElementById('meus-resultados-body');
+      if (b && window._mrExtraPend) { b.insertAdjacentHTML('beforeend', window._mrExtraPend); window._mrExtraPend = ''; }
+    }
+    // ② abre (ou devolve) as seções. ⛔ O estado ESCOLHIDO pela pessoa é guardado na
+    // 1ª busca e devolvido ao limpar — buscar não pode reorganizar a tela dela.
+    [['novidades-section', 'data-nov-collapsed'], ['meus-resultados-section', 'data-mr-collapsed']]
+      .forEach(function (par) {
+        var sec = document.getElementById(par[0]);
+        if (!sec) return;
+        if (abrir) {
+          if (sec.getAttribute('data-sp-antes-busca') == null) {
+            sec.setAttribute('data-sp-antes-busca', sec.getAttribute(par[1]) || '0');
+          }
+          sec.setAttribute(par[1], '0');
+        } else if (sec.getAttribute('data-sp-antes-busca') != null) {
+          sec.setAttribute(par[1], sec.getAttribute('data-sp-antes-busca'));
+          sec.removeAttribute('data-sp-antes-busca');
+        }
+      });
+  } catch (e) { if (window._warn) window._warn('[busca abre tudo]', e); }
+}
+
 window._applyDashSearchInPlace = function() {
   var docEl = document.scrollingElement || document.documentElement;
   var keepY = docEl.scrollTop;
   var q = (window._dashSearch || '').trim().toLowerCase();
   var root = document.getElementById('view-container');
   if (!root) return;
+  _buscaAbreTudo(!!q);
   root.querySelectorAll('[data-search-blob]').forEach(function(card){
     var hit = !q || (card.getAttribute('data-search-blob') || '').indexOf(q) !== -1;
     card.style.display = hit ? '' : 'none';

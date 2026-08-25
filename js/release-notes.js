@@ -84,6 +84,15 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.91 ───────────────────────────────────────────
+        // Ordem do dono: "achava, mas não mostrava — e achar e não mostrar é não
+        // achar". Eram DUAS falhas: ① a busca revelava com `style.display=''` e as
+        // seções recolhidas escondiam com `display:none !important`, que GANHA do
+        // estilo em linha; ② o filtro só olhava os cartões JÁ DESENHADOS, então
+        // torneio antigo/de outra cidade era INENCONTRÁVEL — nunca chegou ao
+        // aparelho. Agora buscar MONTA e ABRE o que esconde, e consulta o resumo no
+        // servidor por `tokens` e `nameLower` (sem acento).
+        '<li><b>🔎 A busca acha de verdade — e mostra o que achou:</b> antes ela só procurava entre os torneios que já estavam na tela, e quando encontrava algo dentro de uma seção fechada o resultado continuava escondido. Agora ela procura <b>no servidor</b>, encontra torneios antigos ou de outros locais que nem tinham sido carregados, e abre o que estiver no caminho para você ver o que foi encontrado.</li>' +
         // ── ciclo 2.0.90 ───────────────────────────────────────────
         // ⭐ A VITRINE PARA DE BAIXAR O TORNEIO INTEIRO. MEDIDO na base real:
         // documento do Confra 236 KB → resumo 11 KB; base toda 421 KB → 62 KB (85%).

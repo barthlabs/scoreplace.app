@@ -182,6 +182,7 @@ const SUITES = [
   'tests/chave-monta-os-demais-grupos-ao-abrir.test.js',
   'tests/traducao-do-torneio-nao-perde-nada.test.js',
   'tests/cartao-do-resumo-e-igual-ao-completo.test.js',
+  'tests/busca-acha-e-mostra.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

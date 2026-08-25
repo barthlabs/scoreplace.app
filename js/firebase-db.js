@@ -1967,6 +1967,45 @@ window.FirestoreDB = {
   // finished). Usado pelo dashboard pra mostrar 4 categorias separadas:
   // (a) inscrições abertas, (b) em andamento, (c) inscrições encerradas sem
   // sorteio, (d) encerrados. Categorização vai pra client-side.
+  // ⭐ 2.0.91 — BUSCA NO SERVIDOR. Ordem do dono: "as buscas e filtro precisam voltar
+  // a funcionar… achava, mas não mostrava, e achar e não mostrar é não achar".
+  // A busca da tela inicial só filtrava os cartões JÁ DESENHADOS: torneio antigo, de
+  // outra cidade ou que a pessoa não participa era INENCONTRÁVEL — não por estar
+  // escondido, mas por nunca ter chegado ao aparelho.
+  // O resumo (`tournaments_summary`) já carrega `nameLower` e `tokens` SEM ACENTO
+  // exatamente pra isto. Duas consultas baratas, sobre documentos de ~2 KB:
+  //   · `tokens array-contains` → casa PALAVRA inteira ("confra", "clinica")
+  //   · `nameLower` por FAIXA   → casa PREFIXO ("conf" acha "Confra")
+  // ⛔ Ambas são índice de campo ÚNICO: o Firestore cria sozinho, sem migração.
+  async buscarTorneios(q, limite) {
+    if (!this.db) return [];
+    var termo = String(q || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (termo.length < 3) return [];      // 1-2 letras casaria com meio banco
+    var lim = Math.max(1, Math.min(40, limite || 20));
+    var achados = {};
+    var colher = function (snap) {
+      snap.forEach(function (doc) {
+        var d = doc.data(); if (!d) return;
+        d._docId = doc.id; if (!d.id) d.id = doc.id;
+        achados[String(d.id)] = d;
+      });
+    };
+    try {
+      var col = this.db.collection('tournaments_summary');
+      var r = await Promise.all([
+        col.where('tokens', 'array-contains', termo).limit(lim).get().catch(function () { return { forEach: function () {} }; }),
+        col.where('nameLower', '>=', termo).where('nameLower', '<=', termo + '\uf8ff').limit(lim).get().catch(function () { return { forEach: function () {} }; })
+      ]);
+      r.forEach(colher);
+      try { if (window._noteFsReads) window._noteFsReads(Object.keys(achados).length, 'busca-torneios'); } catch (e) {}
+    } catch (e) {
+      window._warn('[busca] falhou:', e && e.message);
+      return [];
+    }
+    return Object.keys(achados).map(function (k) { return achados[k]; });
+  },
+
   async loadAllPublicTournaments(opts) {
     if (!this.db) return { tournaments: [], nextCursor: null, hasMore: false };
     opts = opts || {};
