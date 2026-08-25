@@ -1305,7 +1305,11 @@ function setupHelpModal() {
 
 }
 window.setupHelpModal = setupHelpModal;
-setupHelpModal();
+// ⛔ 2.0.84 — NÃO se constrói no arranque. MEDIDO no aparelho do dono:
+// #modal-help sozinho = 1.609 elementos, contra 567 do app VISÍVEL. Ele nasce
+// agora quando alguém manda abrir (porta única: `_garanteModal` em js/ui.js) ou
+// quando a rota #help precisa dele (logo abaixo, que já checava a ausência).
+// `setupHelpModal` já é idempotente (sai cedo se o modal existir).
 
 // v1.3.11-beta: page-route #help. Move o .modal já construído pelo
 // setupHelpModal pro view-container, com back-header padronizado.
@@ -1696,17 +1700,17 @@ function _safeSetup(name) {
 
 if (typeof setupUI === 'function') { try { setupUI(); } catch (e) { window._warn('[main.js] setupUI threw:', e); } }
 
-if (typeof setupCreateTournamentModal === 'function') {
-  try { setupCreateTournamentModal(); } catch (e) { window._warn('[main.js] setupCreateTournamentModal threw:', e); }
-} else { _safeSetup('setupCreateTournamentModal'); }
+// ⛔ 2.0.84 — #modal-create-tournament (835 elementos) sai do arranque: nasce ao
+// abrir, pela porta única `_garanteModal` (js/ui.js). A própria
+// `setupCreateTournamentModal` já sai cedo se o modal existir.
 
 if (typeof setupLoginModal === 'function') {
   try { setupLoginModal(); } catch (e) { window._warn('[main.js] setupLoginModal threw:', e); }
 } else { _safeSetup('setupLoginModal'); }
 
-if (typeof setupProfileModal === 'function') {
-  try { setupProfileModal(); } catch (e) { window._warn('[main.js] setupProfileModal threw:', e); }
-} else { _safeSetup('setupProfileModal'); }
+// ⛔ 2.0.84 — #modal-profile (327 elementos) sai do arranque: nasce ao abrir,
+// pela porta única `_garanteModal` (js/ui.js). A rota #profile e a troca de
+// idioma (i18n.js) já reconstroem sozinhas quando precisam.
 // v0.16.42: setupResultModal/setupEnrollModal removidos — ambos arquivos eram
 // dead code (result-modal deprecated v0.4.0; enroll-modal sem callers reais).
 

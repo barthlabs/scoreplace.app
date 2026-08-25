@@ -177,6 +177,7 @@ const SUITES = [
   'tests/instrumento-enxerga-callback-assincrono.test.js',
   'tests/novidades-so-monta-o-que-aparece.test.js',
   'tests/perfilador-tem-dois-niveis.test.js',
+  'tests/janela-so-nasce-quando-chamada.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

@@ -19,7 +19,42 @@ function setupUI() {
   // UI Handlers setup complete
 }
 
+// ══ ⭐ JANELA SÓ EXISTE QUANDO É CHAMADA (2.0.84) ════════════════════════════
+// Ordem do dono, e ele estava certo: "nada que não estiver visível deve ser
+// carregado" · "é o tipo de coisa que deveria carregar apenas quando chamado".
+//
+// MEDIDO NO APARELHO DELE (Sentry, 2.0.83, travada de 3.766ms rolando pra cima):
+//   nos=3645 · onde: #modal-help=1609  #modal-create-tournament=835
+//                    #app=567          #modal-profile=327
+// O aplicativo VISÍVEL tinha 567 elementos e as três janelas FECHADAS somavam
+// 2.771 — **76% do documento era janela que ninguém abriu**. Elas nasciam no
+// arranque (main.js) e ficavam com `opacity:0`, o que NÃO as tira do layout nem
+// da pintura (não é `display:none`); e cada `.modal-overlay` ainda carrega
+// `backdrop-filter: blur(4px)` em tela cheia — três desfoques permanentes.
+//
+// As três JÁ tinham guarda de "só constrói se não existir"; o que faltava era
+// parar de construir no arranque. Aqui é a porta única: quem manda abrir constrói
+// na hora, se ainda não existir.
+// ⛔ Não é lista de conveniência: modal que entrar aqui SEM guarda de idempotência
+// na própria `setupX` seria reconstruído a cada abertura.
+var _MODAIS_SOB_DEMANDA = {
+  'modal-help': 'setupHelpModal',
+  'modal-profile': 'setupProfileModal',
+  'modal-create-tournament': 'setupCreateTournamentModal'
+};
+function _garanteModal(modalId) {
+  try {
+    if (!modalId || document.getElementById(modalId)) return;
+    var nome = _MODAIS_SOB_DEMANDA[modalId];
+    if (nome && typeof window[nome] === 'function') window[nome]();
+  } catch (e) {
+    if (window._warn) window._warn('[modal sob demanda] ' + modalId + ' falhou:', e);
+  }
+}
+window._garanteModal = _garanteModal;
+
 function openModal(modalId) {
+  _garanteModal(modalId);            // ⭐ constrói agora, se ainda não existir
   const modal = document.getElementById(modalId);
   if (modal) {
     // v0.17.92: ao abrir modal-login, cancela timer de signout pendente

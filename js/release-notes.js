@@ -84,6 +84,17 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.84 ───────────────────────────────────────────
+        // ⭐ A RESPOSTA DA INVESTIGAÇÃO INTEIRA, e veio do aparelho do dono. Sentry,
+        // release 2.0.83, travada de 3.766ms rolando pra cima:
+        //   nos=3645 · onde: #modal-help=1609 #modal-create-tournament=835
+        //                    #app=567 #modal-profile=327
+        // O app VISÍVEL tinha 567 elementos; as 3 janelas FECHADAS somavam 2.771 —
+        // 76% do documento era janela que ninguém abriu. Construídas no arranque, com
+        // `opacity:0` (que NÃO tira do layout nem da pintura) e `backdrop-filter:
+        // blur(4px)` em tela cheia, cada uma. Ordem dele: "nada que não estiver
+        // visível deve ser carregado". Agora nascem ao abrir (porta única em ui.js).
+        '<li><b>⚡ O aplicativo para de carregar o que você não abriu:</b> as janelas de <b>ajuda</b>, <b>criar torneio</b> e <b>perfil</b> eram montadas assim que o app abria e ficavam escondidas o tempo todo — juntas, elas eram <b>três quartos de tudo</b> que existia na tela, invisíveis, e cada uma mantinha um efeito de desfoque de tela cheia sempre ligado. Agora cada uma só é criada no instante em que você a abre.</li>' +
         // ── ciclo 2.0.83 ───────────────────────────────────────────
         // ⛔ DESFAZ PESO QUE EU MESMO PUS. O perfilador era tudo-ou-nada e ficou
         // DIAS ligado no aparelho do dono — inclusive a parte cara, que embrulha
