@@ -91,6 +91,11 @@ window._RELEASE_NOTES_HTML = (function () {
         // travando, toque exigindo dezenas de tentativas. Não há nada NOVO a anunciar:
         // o que o usuário vê é exatamente o que a 2.0.68 já entregava. Os itens que as
         // levas revertidas anunciavam saem junto (ver commit).
+        // ── ciclo 2.0.73 ───────────────────────────────────────────
+        // UMA linha, escolhida por não encostar no caminho do toque. MEDIDO no
+        // aparelho do dono: tap 4014ms de ATRASO DE ENTRADA + read spike de 276
+        // leituras em 10s na mesma janela.
+        '<li><b>⚡ A tela para de engasgar ao ocultar, desocultar e abrir os ocultados:</b> cada um desses gestos redesenha a lista — e, quando a vitrine de torneios públicos estava vazia, o app rebuscava <b>tudo</b> do servidor a cada redesenho. Em segundos isso virava centenas de consultas, e era isso que fazia o toque demorar a responder. Agora a busca respeita um intervalo mínimo, sem deixar de ser rápida quando a tela está sem nada.</li>' +
         // ── ciclo 2.0.71 ───────────────────────────────────────────
         // MEDIDO no aparelho do dono: read spike de 276 leituras em 10s
         // (load-all-public=180) + travadas de 1,2s a 4,5s + toque com 4s de atraso.

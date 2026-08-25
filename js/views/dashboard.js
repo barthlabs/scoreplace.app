@@ -4032,7 +4032,23 @@ function renderDashboard(container) {
   if (window.AppStore && typeof window.AppStore.loadPublicDiscovery === 'function') {
     var _curLen = (window.AppStore.publicDiscovery || []).length;
     var _lastFetch = window.AppStore._publicDiscoveryLastFetch || 0;
-    var _force = _curLen === 0; // sem dados = sempre re-fetch, sem throttle
+    // ── ⛔ "SEM THROTTLE" VIRAVA ENXURRADA (2.0.73) ─────────────────────────
+    // ESTA É A ÚNICA MUDANÇA DA LEVA, de propósito: ela NÃO encosta no caminho do
+    // toque — mexer lá foi o que obrigou a reversão das levas 69-71.
+    // MEDIDO no aparelho do dono: `tap: 4014/793ms` — QUATRO SEGUNDOS de atraso de
+    // ENTRADA, isto é, o toque esperando a thread; e, na MESMA janela,
+    // `Firestore read spike ~27,6/s em 10s (276 leituras, load-all-public=180)`.
+    // A CAUSA: com a descoberta vazia, `_curLen === 0` removia o intervalo mínimo
+    // por completo — então TODA renderização da dashboard (e ocultar, desocultar e
+    // expandir SÃO renderizações) disparava a busca INTEIRA dos públicos. Cada
+    // gesto virava ~180 leituras + parse + snapshot na thread principal, que é
+    // justamente o que faz o toque esperar e a rolagem cortar.
+    // A intenção original FICA ("sem dados = busca logo, o Nelson não vê NADA"):
+    // vazio segue mais agressivo que o normal — 5s contra 15s. Sai só o "sem
+    // intervalo nenhum", que transformava repetição de tela em enxurrada.
+    // ⚠️ COMO SABER SE FUNCIONOU, sem instrumento novo: o rastro `tap:` JÁ reporta
+    // o atraso de entrada. Era 4014ms — se cair, esta era a causa.
+    var _force = _curLen === 0 && (Date.now() - _lastFetch > 5000);
     if (_force || Date.now() - _lastFetch > 15000) {
       window.AppStore._publicDiscoveryLastFetch = Date.now();
       window._log('[Discovery v0.16.60] re-fetch disparado', { curLen: _curLen, force: _force, msSinceLast: Date.now() - _lastFetch });
