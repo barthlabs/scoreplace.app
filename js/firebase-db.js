@@ -2046,6 +2046,9 @@ window.FirestoreDB = {
           if (!d) return;
           d._docId = doc.id;
           if (!d.id) d.id = doc.id;
+          // ⭐ sentinela: se alguém pedir jogo/inscrito a este documento leve, o app
+          // avisa com o rastro de quem pediu (ver `_marcaResumo` em store.js).
+          if (typeof window._marcaResumo === 'function') window._marcaResumo(d);
           tournaments.push(d);
         });
         _viaResumo = tournaments.length > 0;

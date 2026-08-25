@@ -183,6 +183,7 @@ const SUITES = [
   'tests/traducao-do-torneio-nao-perde-nada.test.js',
   'tests/cartao-do-resumo-e-igual-ao-completo.test.js',
   'tests/busca-acha-e-mostra.test.js',
+  'tests/resumo-avisa-quem-pede-pesado.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

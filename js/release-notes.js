@@ -84,6 +84,15 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.92 ───────────────────────────────────────────
+        // ⚠️ SEM item pro usuário: é rede de proteção da migração, zero mudança de
+        // tela. Desde a 2.0.90 a vitrine entrega o documento LEVE. MEDIDO: 41 lugares
+        // leem matches/rounds/participants a partir de AppStore.tournaments —
+        // a maioria de um torneio já ABERTO (portanto completo), mas auditar 41
+        // sítios por LEITURA é como se erra: basta um caminho raro escapar.
+        // Agora o resumo AVISA (com o rastro de quem pediu) em vez de eu adivinhar.
+        // ⛔ A sentinela devolve `undefined` — o mesmo que devolveria sem ela. Não
+        // preenche, não busca, não bloqueia: é medição.
         // ── ciclo 2.0.91 ───────────────────────────────────────────
         // Ordem do dono: "achava, mas não mostrava — e achar e não mostrar é não
         // achar". Eram DUAS falhas: ① a busca revelava com `style.display=''` e as

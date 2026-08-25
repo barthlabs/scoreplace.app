@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.91';
+window.SCOREPLACE_VERSION = '2.0.92';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -9893,6 +9893,51 @@ window._findTournamentById = function (tId) {
 //
 // Callback (não Promise) de propósito: os call sites são handlers de clique, e transformar
 // `enrollCurrentUser` em async mudaria o contrato de ~10 chamadores.
+// ══ ⭐ DETECTOR: quem pede campo PESADO a um RESUMO? (2.0.92) ════════════════
+// Desde a 2.0.90 a vitrine entrega o documento LEVE (`_resumo: true`). Ele tem o que o
+// CARTÃO mostra e NÃO tem jogos, inscritos nem histórico — quem abre o torneio troca
+// pelo completo (`_ensureTournamentLoaded`).
+//
+// ⚠️ MEDIDO: 41 lugares no app leem `matches`/`rounds`/`participants` a partir de
+// `AppStore.tournaments`/`publicDiscovery`. A maioria é `find(id)` de um torneio que já
+// foi aberto (e portanto é o completo), mas AUDITAR 41 SÍTIOS POR LEITURA é justamente
+// como se erra: basta um caminho raro escapar.
+//
+// Então o app AVISA em vez de eu adivinhar: o resumo ganha sentinelas nos campos
+// pesados. Ler um deles devolve o MESMO que devolveria sem isto (`undefined` — o campo
+// não existe no resumo, e a maioria dos leitores já trata com `Array.isArray()`), mas
+// reporta UMA vez por campo, com o rastro de quem pediu.
+// ⛔ Não muda comportamento: nada é preenchido, nada é bloqueado. É medição.
+var _resumoAvisos = {};
+window._marcaResumo = function (t) {
+  if (!t || t._resumo !== true || t.__sentinela) return t;
+  try {
+    Object.defineProperty(t, '__sentinela', { value: true, enumerable: false });
+    ['matches', 'rounds', 'participants', 'history', 'standings', 'groups'].forEach(function (campo) {
+      if (Object.prototype.hasOwnProperty.call(t, campo)) return;   // o resumo trouxe: deixa
+      Object.defineProperty(t, campo, {
+        enumerable: false, configurable: true,
+        get: function () {
+          try {
+            var chave = campo;
+            if (!_resumoAvisos[chave]) {
+              _resumoAvisos[chave] = 1;
+              var onde = '';
+              try { onde = (new Error()).stack.split('\n').slice(2, 5).join(' | ').slice(0, 220); } catch (e) {}
+              if (window._captureMessage) {
+                window._captureMessage('resumo-pediu-pesado: ' + campo + ' · ' + onde, 'warning');
+              }
+              if (window._warn) window._warn('[resumo] pediram `' + campo + '` de um documento leve:', onde);
+            }
+          } catch (e) {}
+          return undefined;   // exatamente o que devolveria sem a sentinela
+        }
+      });
+    });
+  } catch (e) {}
+  return t;
+};
+
 window._ensureTournamentLoaded = function (tId, cb) {
   var local = window._findTournamentById(tId);
   // ⭐ 2.0.90 — RESUMO NÃO SERVE PRA ABRIR. A lista passou a receber o documento
