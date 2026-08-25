@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.86';
+window.SCOREPLACE_VERSION = '2.0.87';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -4469,19 +4469,46 @@ window._spLoaderKeyframes = function () {
     // SEM a thread principal: a barra continua andando enquanto o JS está preso.
     // Linear de propósito: o texto usa a MESMA fórmula linear, então os dois nunca
     // divergem. 4% → 95% em 9s; os 100% só vêm de _spLoaderFinish.
-    '@keyframes sp-loader-creep{from{transform:scaleX(0.04)}to{transform:scaleX(0.95)}}';
+    '@keyframes sp-loader-creep{from{transform:scaleX(0.04)}to{transform:scaleX(0.95)}}' +
+    // ⭐ O NÚMERO TAMBÉM É CSS (2.0.87). Relato do dono: "a barra sobe legal, mas
+    // o número fica em 4% e daí pula para 100%". Não era defeito do número: a
+    // barra é `transform` (compositor, roda SEM a thread) e o número era escrito
+    // por um setInterval — com a thread presa, ele simplesmente não rodava. O
+    // número congelado ERA a medida do travamento.
+    // ⛔ Testado no WebKit antes de escolher: `@property` + `counter()` NÃO anima
+    // (medido por diferença de pixel, 3 fotos idênticas em 3s). Odômetro em
+    // `steps()` anima. Por isso é uma coluna de números, e não um contador.
+    '@keyframes sp-loader-odo{from{transform:translateY(0)}to{transform:translateY(-' + ((_SP_ODO_N - 1) * _SP_ODO_H) + 'px)}}';
   document.head.appendChild(style);
 };
 // A duração do creep vive aqui pra JS e CSS nunca discordarem.
 window._SP_LOADER_CREEP_MS = 9000;
+// Passos do odômetro do %: 20 números de 4% a 95% (de ~5 em 5). Poucos elementos
+// de propósito — a campanha inteira desta semana foi tirar nó do DOM.
+var _SP_ODO_N = 20, _SP_ODO_H = 20;
 
 // A BARRA canônica — a mesma pílula 3D laranja do boot loader, com o % por cima.
 // `largura` deixa a barra acompanhar telas pequenas (slot de card) sem virar outra barra.
+// A coluna do odômetro: 4% → 95%, um por linha, altura fixa (é ela que a animação
+// desloca em passos). ⛔ altura da linha = _SP_ODO_H, senão o número sai cortado.
+window._spOdoNumeros = function () {
+  var out = '', h = _SP_ODO_H;
+  for (var i = 0; i < _SP_ODO_N; i++) {
+    var v = Math.round(4 + i * (95 - 4) / (_SP_ODO_N - 1));
+    out += '<div style="height:' + h + 'px;line-height:' + h + 'px;">' + v + '%</div>';
+  }
+  return out;
+};
+
 window._spLoaderBarHtml = function (largura) {
   var w = largura || '300px';
   return '<div class="sp-loader-bar" data-sp-prog="4" style="position:relative;width:' + w + ';max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
       '<div class="sp-loader-fill" style="position:absolute;top:2px;bottom:2px;left:2px;right:2px;transform-origin:left center;transform:scaleX(0.04);animation:sp-loader-creep 9s linear forwards;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
-      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:#fbe6c4;text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;">4%</div>' +
+      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:#fbe6c4;text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;overflow:hidden;">' +
+        '<div class="sp-loader-odo" style="animation:sp-loader-odo ' + (window._SP_LOADER_CREEP_MS / 1000) + 's steps(' + (_SP_ODO_N - 1) + ') forwards;">' +
+          window._spOdoNumeros() +
+        '</div>' +
+      '</div>' +
     '</div>';
 };
 
@@ -4506,7 +4533,10 @@ window._spLoaderTick = function () {
       var b = barras[i];
       // a barra JÁ está sendo movida pelo compositor; aqui não se toca nela.
       b.setAttribute('data-sp-prog', String(p));
-      var t = b.querySelector('.sp-loader-pct');  if (t) t.textContent = Math.round(p) + '%';
+      // ⛔ 2.0.87 — o TEXTO não é mais escrito aqui: quem desenha o número é o
+      // odômetro em CSS, que anda mesmo com a thread presa (era esse o defeito:
+      // barra subindo e número parado em 4%). Este relógio só mantém o
+      // `data-sp-prog`, que é o que outros pontos leem.
     }
   }, 140);
 };
@@ -4527,7 +4557,10 @@ window._spLoaderFinish = function (raiz) {
         f.style.animation = 'none';
         f.style.transform = 'scaleX(1)';
       }
-      var t = barras[i].querySelector('.sp-loader-pct');  if (t) t.textContent = '100%';
+      // 100% crava DE VERDADE: mata a animação do odômetro e troca a coluna por
+      // um número só — senão o `forwards` seguraria em 95% sobre uma barra cheia.
+      var t = barras[i].querySelector('.sp-loader-pct');
+      if (t) { t.style.overflow = 'visible'; t.textContent = '100%'; }
     }
   } catch (e) {}
 };

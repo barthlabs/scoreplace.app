@@ -84,6 +84,16 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.87 ───────────────────────────────────────────
+        // Relato do dono: "a barra sobe legal, mas o número fica em 4% e daí pula
+        // pra 100%". ⭐ NÃO era defeito do número — era MEDIDA do defeito: a barra é
+        // `transform` (compositor, roda sem a thread) e o número era escrito por um
+        // setInterval de 140ms. Com a thread presa o carregamento inteiro, ele nunca
+        // rodava. O número congelado era o termômetro.
+        // ⛔ TESTADO NO WEBKIT ANTES DE ESCOLHER: `@property` + `counter()` não anima
+        // (3 fotos idênticas em 3s, comparadas por pixel). Odômetro em `steps()`
+        // anima — por isso é uma coluna de 20 números, não um contador.
+        '<li><b>📊 O número acompanha a barra de carregamento:</b> o percentual ficava parado em 4% e saltava para 100% no fim. Agora ele sobe junto com a barra, porque passou a ser desenhado do mesmo jeito que ela — sem depender do aplicativo estar livre para atualizá-lo.</li>' +
         // ── ciclo 2.0.86 ───────────────────────────────────────────
         // MEDIDO no aparelho do dono, agora na tela de DETALHE do torneio:
         //   nos=8061 · onde: #app=7870 #inline-bracket-container=6157
