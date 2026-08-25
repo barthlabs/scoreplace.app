@@ -84,6 +84,14 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.69 ───────────────────────────────────────────
+        // Dois relatos do dono na melhor versão até agora ("não perca isso"):
+        // (1) feedback do toque só no 3º/4º clique — REPRODUZIDO no WebKit: a guarda
+        //     de inércia bloqueava o REALCE (ela é sobre navegação, não sobre feedback);
+        // (2) torneio ocultado "teima em voltar" — mesma corrida do aprovar: o perfil
+        //     em voo sobrescrevia a lista local com a do servidor.
+        '<li><b>👆 O card responde no PRIMEIRO toque, mesmo logo depois de rolar:</b> quando você rolava a lista e tocava num torneio, os primeiros toques não davam sinal nenhum — só o terceiro ou quarto. Agora o card acende sempre que você encosta nele; e encostar só para parar a rolagem continua não abrindo nada.</li>' +
+        '<li><b>🙈 Torneio ocultado não volta mais sozinho:</b> ao ocultar, a lista podia ser sobrescrita pela versão que o servidor ainda tinha e o torneio reaparecia. Agora a sua escolha é preservada até o servidor confirmá-la — vale também para <b>favoritar</b>, que tinha o mesmo problema.</li>' +
         // ── ciclo 2.0.68 ───────────────────────────────────────────
         // Auditoria da minha própria leva de 4 dias: `sp-abrindo` era aceso e NUNCA
         // apagado (card esmaecido pra sempre + nó destacado preso). Verificado no
