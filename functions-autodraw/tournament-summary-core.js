@@ -80,6 +80,33 @@ function buildSummary(t, id, H) {
   return {
     id: String(id || t.id || ''),
 
+    // ── ⭐ O QUE O CARTÃO AINDA PEDIA DO DOCUMENTO INTEIRO (2.0.90) ──────────
+    // MEDIDO: dos 33 campos que `renderTournamentCard` lê, 20 já estavam aqui.
+    // Estes fecham a conta e são o que permite a LISTA parar de baixar o torneio
+    // completo — 236 KB do Confra pra desenhar duas linhas.
+    // ⛔ `_resumo` é a MARCA: quem precisa do torneio de verdade (a tela de
+    // detalhe) reconhece por ela e vai buscar o documento completo.
+    _resumo: true,
+    categories: _arr(t.categories).map(function (c) { return String(c || ''); }),
+    organizerEmail: String(t.organizerEmail || ''),
+    venuePhotoUrl: String(t.venuePhotoUrl || ''),
+    finishNotifiedAt: t.finishNotifiedAt || null,
+    // co-organizadores ATIVOS, com o mesmo formato que o cartão espera
+    coHosts: _arr(t.coHosts).filter(function (c) { return c && c.status === 'active'; })
+      .map(function (c) { return { uid: String(c.uid || ''), status: 'active' }; }),
+    // "estou inscrito?" / "estou na espera?" — o cartão decide o botão com isso.
+    // ⛔ uids, nunca nomes: identidade é uid neste app.
+    participantUids: _arr(t.participants).map(function (p) {
+      return String((p && (p.uid || p.p1Uid)) || '');
+    }).filter(Boolean),
+    standbyUids: _arr(t.standbyParticipants).concat(_arr(t.waitlist)).map(function (p) {
+      return String((p && (p.uid || p.p1Uid)) || '');
+    }).filter(Boolean),
+    // enquetes: vão INTEIRAS. MEDIDO: zero torneios em produção têm enquete, e o
+    // cartão desenha os detalhes dela — resumir seria fazer a enquete sumir da tela
+    // por economia de zero byte.
+    polls: _arr(t.polls),
+
     // ── identidade e exibição ──────────────────────────────────────────────
     name: nome,
     sport: esporte,

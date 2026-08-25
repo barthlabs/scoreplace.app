@@ -440,6 +440,18 @@ function initRouter() {
             var _pintouTorneio = false;
             var _pintaUmaVez = function () {
               if (_pintouTorneio) return; _pintouTorneio = true;
+              // ⭐ 2.0.90 — O DOCUMENTO COMPLETO ANTES DE PINTAR.
+              // A LISTA passou a receber o resumo (`_resumo: true`, ~11 KB no Confra
+              // contra 236 KB) — o suficiente pro CARTÃO e insuficiente pra tela de
+              // detalhe, que precisa de jogos, inscritos e histórico.
+              // `_ensureTournamentLoaded` devolve na hora quando o completo já está em
+              // memória (caso comum: os torneios do usuário), e só vai ao banco quando
+              // o que há é resumo. ⛔ Sem isto, abrir um torneio da vitrine mostraria
+              // chave e inscritos vazios.
+              if (typeof window._ensureTournamentLoaded === 'function' && cleanParam) {
+                window._ensureTournamentLoaded(cleanParam, function () { _pintaTorneio(); });
+                return;
+              }
               _pintaTorneio();
             };
             // ── ⭐ O TIMEOUT DE 120ms ROUBAVA A PINTURA QUE ELE DEVIA PROTEGER (2.0.62)

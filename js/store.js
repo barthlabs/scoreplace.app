@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.89';
+window.SCOREPLACE_VERSION = '2.0.90';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -9895,6 +9895,12 @@ window._findTournamentById = function (tId) {
 // `enrollCurrentUser` em async mudaria o contrato de ~10 chamadores.
 window._ensureTournamentLoaded = function (tId, cb) {
   var local = window._findTournamentById(tId);
+  // ⭐ 2.0.90 — RESUMO NÃO SERVE PRA ABRIR. A lista passou a receber o documento
+  // LEVE (`_resumo: true`, ~11 KB no Confra contra 236 KB), que tem o que o CARTÃO
+  // mostra e não tem jogos, inscritos nem histórico. Quem chega aqui quer o torneio
+  // de VERDADE — então um resumo conta como "não carregado" e vai buscar o completo.
+  // ⛔ Sem esta linha, abrir um torneio da vitrine mostraria chave vazia.
+  if (local && local._resumo === true) local = null;
   if (local) { cb(local); return; }
   var DB = window.FirestoreDB;
   if (!DB || typeof DB.loadTournamentById !== 'function') { cb(null); return; }
@@ -9904,11 +9910,23 @@ window._ensureTournamentLoaded = function (tId, cb) {
     // Uma segunda busca pode ter resolvido enquanto a leitura estava em voo — nunca
     // duplicar: quem chegou primeiro é a referência viva que a tela já pode estar usando.
     var jaTem = window._findTournamentById(tId);
-    if (jaTem) { cb(jaTem); return; }
+    if (jaTem && jaTem._resumo !== true) { cb(jaTem); return; }
     var A = window.AppStore;
     if (A) {
-      if (!Array.isArray(A.publicDiscovery)) A.publicDiscovery = [];
-      A.publicDiscovery.push(t);
+      // ⭐ 2.0.90 — o completo SUBSTITUI o resumo, no lugar dele. Empurrar pro fim
+      // deixaria os dois na lista, e `_findTournamentById` (que devolve o PRIMEIRO)
+      // continuaria entregando o leve — a tela abriria vazia pra sempre.
+      var trocou = false;
+      [A.tournaments, A.publicDiscovery].forEach(function (arr) {
+        if (!Array.isArray(arr)) return;
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i] && String(arr[i].id) === String(tId)) { arr[i] = t; trocou = true; }
+        }
+      });
+      if (!trocou) {
+        if (!Array.isArray(A.publicDiscovery)) A.publicDiscovery = [];
+        A.publicDiscovery.push(t);
+      }
     }
     cb(t);
   }).catch(function (e) {

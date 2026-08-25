@@ -84,6 +84,16 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.90 ───────────────────────────────────────────
+        // ⭐ A VITRINE PARA DE BAIXAR O TORNEIO INTEIRO. MEDIDO na base real:
+        // documento do Confra 236 KB → resumo 11 KB; base toda 421 KB → 62 KB (85%).
+        // A consulta trazia até 51 documentos COMPLETOS — com jogos, inscritos e
+        // histórico — pra desenhar cartões de duas linhas.
+        // ⛔ Provado igual: contagens, progresso, 'já sorteou' e o BOTÃO de inscrição
+        // batem 28/28 torneios e 191/191 combinações pessoa×torneio
+        // (tests/cartao-do-resumo-e-igual-ao-completo.test.js).
+        // Abrir um torneio troca o resumo pelo documento completo antes de pintar.
+        '<li><b>⚡ A tela inicial deixa de baixar torneios inteiros:</b> para desenhar cada cartão, o aplicativo carregava o torneio completo — todos os jogos, todos os inscritos, todo o histórico. Agora carrega só o resumo de cada um, <b>85% mais leve</b>, e busca o torneio inteiro apenas quando você abre. O que aparece na tela é exatamente o mesmo.</li>' +
         // ── ciclo 2.0.89 ───────────────────────────────────────────
         // ⛔🔴 A CAUSA DAS TRAVADAS PERIÓDICAS, e ela era um RELÓGIO. MEDIDO no
         // aparelho do dono com o carimbo de tempo: 3270ms/pra-cima aos 45s, 1014ms

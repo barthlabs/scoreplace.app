@@ -726,6 +726,28 @@ window._cardTemChave = function (t) {
     || (Array.isArray(t.groups) && t.groups.length > 0);
 };
 
+// ⭐ 2.0.90 — "estou inscrito?" e "estou na espera?" também aceitam o RESUMO.
+// A lista deixa de baixar o torneio inteiro (236 KB do Confra pra desenhar duas
+// linhas), e o resumo carrega `participantUids`/`standbyUids` em vez das listas.
+// ⛔ Comparação por UID, nunca por nome — identidade neste app é uid
+// ([[feedback_uid_controls_everything_name_only_ficticio]]). Com o documento
+// completo, delega pras funções de sempre: mesmo resultado, zero regressão.
+window._cardSouInscrito = function (t, cu) {
+  if (!t || !cu) return false;
+  if (Array.isArray(t.participantUids)) return t.participantUids.indexOf(String(cu.uid || '')) !== -1;
+  return (typeof window._isUserEnrolledInTournament === 'function')
+    ? !!window._isUserEnrolledInTournament(cu, t) : false;
+};
+
+window._cardSouEspera = function (t, cu) {
+  if (!t || !cu) return false;
+  if (Array.isArray(t.standbyUids)) return t.standbyUids.indexOf(String(cu.uid || '')) !== -1;
+  if (typeof window._userMatchesParticipant !== 'function') return false;
+  var casa = function (p) { return window._userMatchesParticipant(cu, p); };
+  return (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(casa))
+    || (Array.isArray(t.waitlist) && t.waitlist.some(casa));
+};
+
 // v2.0.74: DUAS correções, ambas do dono, na mesma régua.
 //
 // ① O tempo configurado é POR SET (`_minutosDaPartida`, em sport-rules.js) e cada

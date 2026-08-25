@@ -1984,18 +1984,49 @@ window.FirestoreDB = {
       // client-side. Custo: paginação por cursor não funciona temporaria-
       // mente (volume alpha é baixo, aceitável). Quando crescer a base,
       // backfill `createdAt` em todos os docs e voltar pro orderBy server-side.
-      var q = this.db.collection('tournaments')
-        .where('isPublic', '==', true)
-        .limit(limit + 1);
-      var snap = await q.get();
-      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-public'); } catch (e) {}
+      // ⭐ 2.0.90 — A VITRINE LÊ O RESUMO, NÃO O TORNEIO INTEIRO.
+      // MEDIDO na base real: o documento do Confra tem 236 KB; o resumo dele, 11 KB.
+      // Na base toda, 421 KB → 62 KB (85% menos). Esta consulta trazia até 51
+      // documentos COMPLETOS — jogos, inscritos e histórico — pra desenhar cartões de
+      // duas linhas. Ver docs/ARQUITETURA-DE-DADOS.md.
+      // ⛔ O resumo vem marcado com `_resumo: true`: quem ABRE o torneio troca pelo
+      // documento completo (`_ensureTournamentLoaded`), e a tela de detalhe não muda.
+      // ⚠️ REDE: se a coleção de resumo vier vazia (regra, backfill em falta, projeto
+      // novo), cai no caminho ANTIGO. Vitrine vazia por causa de migração seria pior
+      // que vitrine pesada.
       var tournaments = [];
-      snap.forEach(function(doc) {
-        var d = doc.data();
-        if (!d) return;
-        d._docId = doc.id;
-        tournaments.push(d);
-      });
+      var _viaResumo = false;
+      try {
+        var qs = this.db.collection('tournaments_summary')
+          .where('isPublic', '==', true)
+          .limit(limit + 1);
+        var snapS = await qs.get();
+        try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'load-all-public-resumo'); } catch (e) {}
+        snapS.forEach(function (doc) {
+          var d = doc.data();
+          if (!d) return;
+          d._docId = doc.id;
+          if (!d.id) d.id = doc.id;
+          tournaments.push(d);
+        });
+        _viaResumo = tournaments.length > 0;
+      } catch (eR) {
+        window._warn('[vitrine] resumo indisponível, caindo no caminho antigo:', eR && eR.message);
+      }
+
+      if (!_viaResumo) {
+        var q = this.db.collection('tournaments')
+          .where('isPublic', '==', true)
+          .limit(limit + 1);
+        var snap = await q.get();
+        try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-public'); } catch (e) {}
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          if (!d) return;
+          d._docId = doc.id;
+          tournaments.push(d);
+        });
+      }
       // Sort client-side por createdAt desc. Docs sem createdAt vão pro fim.
       tournaments.sort(function(a, b) {
         var aT = a.createdAt ? new Date(a.createdAt).getTime() : 0;

@@ -697,22 +697,14 @@ function renderDashboard(container) {
     // para detectar inscrição. A lógica inline anterior pulava duplas
     // (indexOf(' / ') return false) causando "Inscrever-se" em vez de
     // "Desinscrever-se" para participantes de torneios em dupla.
-    let isParticipating = false;
-    if (t.participants && window.AppStore.currentUser) {
-      isParticipating = typeof window._isUserEnrolledInTournament === 'function'
-        ? window._isUserEnrolledInTournament(window.AppStore.currentUser, t)
-        : false;
-    }
+    // 2.0.90: pelo acessador — aceita o RESUMO (participantUids) ou o documento
+    // completo, com o mesmo resultado. Ver _cardSouInscrito em tournaments-utils.js.
+    let isParticipating = window._cardSouInscrito(t, window.AppStore.currentUser);
 
     // v2.1.5: detecta se o usuário está na lista de espera (standby/waitlist)
     // Usa _userMatchesParticipant centralizado para consistência com detalhes.
-    let _isInStandby = false;
-    if (window.AppStore.currentUser && typeof window._userMatchesParticipant === 'function') {
-      const _cuStb = window.AppStore.currentUser;
-      const _matchStb = p => window._userMatchesParticipant(_cuStb, p);
-      _isInStandby = (Array.isArray(t.standbyParticipants) && t.standbyParticipants.some(_matchStb)) ||
-                     (Array.isArray(t.waitlist) && t.waitlist.some(_matchStb));
-    }
+    // 2.0.90: idem — resumo (standbyUids) ou documento completo.
+    let _isInStandby = window._cardSouEspera(t, window.AppStore.currentUser);
 
     // Card gradients adaptam ao tema via CSS variables
     // v0.17.32: dark themes (Noturno/Oceano) precisam de gradients DARK pros
