@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.78';
+window.SCOREPLACE_VERSION = '2.0.79';
 
 // ── RASTRO DE LONG TASKS (1.9.75) — pro "toque sem feedback" ter culpado ─────
 // O relato do TestFlight ("a tela carregando demora 2-3s pra aparecer") só se
@@ -33,6 +33,27 @@ window._medirTrecho = function (nome, fn) {
 // não pra cobrar pedágio no caminho quente de quem só quer usar o app.
 // Liga com `?perf=1` na URL (persiste em localStorage); desliga com `?perf=0`.
 // `_medirTrecho` e os anéis continuam existindo — vazios custam nada.
+//
+// ⭐ CARIMBO + DIREÇÃO DA ROLAGEM (restaurado na 2.0.79). Isto existiu na 2.0.70 e
+// foi embora junto na reversão da 2.0.72 — que reverteu a leva INTEIRA, inclusive a
+// parte que só media. E a instrumentação era a única coisa daquela leva que estava
+// certa: é dela que vieram os únicos números reais que temos do defeito de rolagem
+// (`scroll-trav: 4708ms · pra-cima` no iPhone do dono, 25/ago). Sem ela, o relato
+// "corte ao rolar pra cima" não chega a ninguém — o dono rola, não toca em nada, e
+// o episódio se perde.
+// Custo: dois números num ouvinte passivo. ⛔ Zero mudança de tela.
+window._spUltimaRolagemT = 0;
+window._spDirRolagem = '?';
+try {
+  var _spYant = 0;
+  document.addEventListener('scroll', function () {
+    var y = window.scrollY || window.pageYOffset || 0;
+    window._spDirRolagem = (y < _spYant) ? 'pra-cima' : 'pra-baixo';
+    _spYant = y;
+    window._spUltimaRolagemT = Date.now();
+  }, { passive: true, capture: true });
+} catch (e) {}
+
 var _SP_PERF = false;
 try {
   var _q = String(location.search || '') + String(location.hash || '');
@@ -97,6 +118,32 @@ try {
         } catch (e) {}
         window._travadas.push(foto);
         if (window._travadas.length > 15) window._travadas.shift();
+        // ── ⭐ TRAVADA DURANTE A ROLAGEM SE REPORTA SOZINHA (2.0.70, restaurada em 2.0.79)
+        // Buraco de instrumentação que já custou dias de adivinhação: as travadas só
+        // viajavam pro Sentry DENTRO do relatório de TOQUE. O dono relata "corte ao
+        // rolar pra cima" — e se ele rola e não toca em nada, o episódio não chega a
+        // ninguém. Foi assim que finalmente medimos, em 25/ago: 4.708ms e 4.461ms
+        // PRA CIMA contra 976ms e 1.235ms pra baixo. O "pior pra cima" dele é real.
+        //
+        // ⚠️ TODOS os episódios até hoje saíram com `quem: nenhum` — nenhum trecho
+        // instrumentado do app estava rodando. As pistas de `ultimo=` apontam pra
+        // FORA: `handleDelayElapsed()` e `Mu:schedule` são da fila assíncrona do SDK
+        // do Firestore. É por isso que `snaps` (snapshots em voo) e `busca` (buscas
+        // de descoberta em voo) viajam junto — sem eles a próxima medição volta a
+        // dizer "nenhum" e nada avança.
+        try {
+          var _rolouAgora = window._spUltimaRolagemT || 0;
+          if (foto.dur > 500 && (Date.now() - _rolouAgora) < 1200) {
+            window._travScrollN = (window._travScrollN || 0) + 1;
+            if (window._travScrollN <= 3 && typeof window._captureMessage === 'function') {
+              window._captureMessage('scroll-trav: ' + foto.dur + 'ms · ' + (window._spDirRolagem || '?') +
+                ' · nos=' + (foto.nos || '?') + ' anim=' + (foto.anim != null ? foto.anim : '?') +
+                ' snaps=' + (foto.snaps || 0) + ' busca=' + (window._discoveryFetches || 0) +
+                ' · ultimo=' + ((window._ultimoCallback && window._ultimoCallback.nome) || 'nenhum'),
+                'warning');
+            }
+          }
+        } catch (eSc) {}
       }
     }, 150);
   })();

@@ -4051,6 +4051,12 @@ function renderDashboard(container) {
     var _force = _curLen === 0 && (Date.now() - _lastFetch > 5000);
     if (_force || Date.now() - _lastFetch > 15000) {
       window.AppStore._publicDiscoveryLastFetch = Date.now();
+      // Contador de buscas de descoberta disparadas na sessão. Viaja junto na
+      // telemetria de travada (`busca=` em store.js): foi ele que mostrou, em
+      // 25/ago, que havia 2 buscas EM VOO durante uma travada de 4,7s ao rolar.
+      // ⛔ Sem ele o campo reportaria 0 sempre — número que mente é pior que campo
+      // ausente. Restaurado junto com a instrumentação de rolagem (2.0.79).
+      window._discoveryFetches = (window._discoveryFetches || 0) + 1;
       window._log('[Discovery v0.16.60] re-fetch disparado', { curLen: _curLen, force: _force, msSinceLast: Date.now() - _lastFetch });
       window.AppStore.loadPublicDiscovery().then(function() {
         var newLen = (window.AppStore.publicDiscovery || []).length;

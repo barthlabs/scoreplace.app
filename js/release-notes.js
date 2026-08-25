@@ -84,6 +84,20 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:#fde68a; font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.79 ───────────────────────────────────────────
+        // ⚠️ SEM item pro usuário, e é DECISÃO: 100% instrumentação, zero mudança
+        // de tela. Restaura o aviso de travada DURANTE A ROLAGEM (com direção), que
+        // nasceu na 2.0.70 e foi levado junto na reversão da 2.0.72 — a reversão
+        // pegou a leva inteira, inclusive a parte que só MEDIA e estava certa.
+        // Desde então, nenhum episódio de rolagem chegou ao Sentry, e a dor nº 2 do
+        // dono ("rolar cortado, pior pra cima") ficou sem instrumento.
+        // O que ela já provou no iPhone dele (25/ago, releases 2.0.70/71): 4.708ms e
+        // 4.461ms PRA CIMA contra 976ms e 1.235ms pra baixo — o "pior pra cima" é
+        // real e medido. E `ultimo=handleDelayElapsed()` / `Mu:schedule` apontam a
+        // fila assíncrona do SDK do Firestore, ou seja: a travada nasce FORA do
+        // código do app, que é por que todo episódio sai com `quem: nenhum`.
+        // Junto volta o contador `_discoveryFetches` — sem ele o campo `busca=`
+        // reportaria 0 sempre, e número que mente é pior que campo ausente.
         // ── ciclo 2.0.78 ───────────────────────────────────────────
         // MEDIDO no render REAL da tela inicial (28 torneios da base): 8.959
         // resoluções de nome por desenho, 54% de toda a CPU (_memberUidByName 25,6%
