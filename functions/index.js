@@ -34,7 +34,6 @@ const _mergeSweep = require("./merge-sweep-core");
 const _profileMerge = require("./profile-merge-core");
 const _uidSweep = require("./uid-sweep");
 const _mergeCols = require("./merge-collections-core");
-const _tourSummary = require("./tournament-summary-core");
 const _dupPerson = require("./duplicate-person-core");
 
 // v1.8.38 — RARIDADE DO TOKEN, em UM lugar só (os dois caminhos de detecção usam este).
@@ -6217,46 +6216,6 @@ exports.fixMergedParticipants = onRequest(
 // domínio nosso. Enquanto o SMTP da extensão for o Gmail, essas contas provavelmente
 // NÃO recebem. Registrar domínio/remetente é ação do dono; enviamos mesmo assim.
 const _accountEmail = require("./account-email-core.js");
-// ── ⭐ RESUMO DO TORNEIO — o documento leve que a TELA INICIAL lê ─────────────
-// DESENHO (ordem do dono, 25/ago/2026): _"na dashboard precisamos da versão
-// reduzida sempre e clicando no torneio traz os detalhes. esse sempre foi o
-// desenho."_ A implementação tinha derivado: a tela inicial baixa o documento
-// INTEIRO de cada torneio pra desenhar um cartão.
-// MEDIDO na base real: 343 KB → 28 KB (91,7% menor); o maior torneio, 44 KB → 1,9 KB.
-//
-// ⛔ O RESUMO É DERIVADO, NUNCA FONTE DA VERDADE. Quem manda é `tournaments/{id}`;
-//    o resumo é regenerado INTEIRO a cada mudança relevante, então divergência se
-//    corrige sozinha na escrita seguinte.
-// ⚠️ `summaryMudou` é o que impede escrita a cada ponto de um jogo AO VIVO: só
-//    regrava quando muda algo que o cartão mostra (nome, contagem, progresso…).
-//    Sem ele, um torneio em andamento geraria uma escrita por placar.
-// A regra do core é PURA e tem teste no `npm test` (tests/resumo-do-torneio.test.js).
-exports.tournamentSummary = onDocumentWritten(
-  { document: "tournaments/{tournamentId}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
-  async (event) => {
-    try {
-      const id = event.params.tournamentId;
-      const db = admin.firestore();
-      const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
-      const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
-
-      // torneio apagado → resumo some junto (senão a tela mostraria fantasma)
-      if (!depois) {
-        await db.collection("tournaments_summary").doc(id).delete().catch(() => {});
-        return;
-      }
-      // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
-      if (antes && !_tourSummary.summaryMudou(antes, depois, id)) return;
-
-      const resumo = _tourSummary.buildSummary(depois, id);
-      if (!resumo) return;
-      await db.collection("tournaments_summary").doc(id).set(resumo);
-    } catch (e) {
-      console.error("[tournamentSummary] falhou", event.params && event.params.tournamentId, e);
-    }
-  }
-);
-
 exports.accountSummaryEmail = onDocumentWritten(
   { document: "users/{uid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
   async (event) => {

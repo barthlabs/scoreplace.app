@@ -51,52 +51,30 @@ function _tokens(partes) {
 }
 
 function _arr(x) { return Array.isArray(x) ? x : []; }
-function _uidsDe(lista) {
-  var out = [], vistos = Object.create(null);
-  _arr(lista).forEach(function (p) {
-    var u = p && typeof p === 'object' ? (p.uid || p.p1Uid || p.p2Uid) : null;
-    if (u && !vistos[u]) { vistos[u] = 1; out.push(String(u)); }
-    if (p && typeof p === 'object' && Array.isArray(p.participants)) {
-      p.participants.forEach(function (s) {
-        var su = s && s.uid;
-        if (su && !vistos[su]) { vistos[su] = 1; out.push(String(su)); }
-      });
-    }
-  });
-  return out;
-}
 
-// progresso: quantos jogos já têm resultado, de quantos existem. É o que o cartão
-// desenha hoje via `_getTournamentProgress(t)` — que varre rounds/groups/matches.
-function _progresso(t) {
-  var total = 0, feitos = 0;
-  function conta(m) {
-    if (!m || m.bye) return;
-    total++;
-    if (m.winner || m.draw || m.scoreP1 != null || (Array.isArray(m.sets) && m.sets.length)) feitos++;
-  }
-  _arr(t.matches).forEach(conta);
-  _arr(t.rounds).forEach(function (r) { _arr(r && r.matches).forEach(conta); });
-  _arr(t.groups).forEach(function (g) { _arr(g && g.matches).forEach(conta); });
-  _arr(t.phases).forEach(function (f) {
-    _arr(f && f.rounds).forEach(function (r) { _arr(r && r.matches).forEach(conta); });
-    _arr(f && f.groups).forEach(function (g) { _arr(g && g.matches).forEach(conta); });
-  });
-  return { total: total, feitos: feitos, pct: total ? Math.round(feitos * 100 / total) : 0 };
-}
 
+// ⛔ AQUI NÃO SE REIMPLEMENTA REGRA. Os derivados (progresso, competidores, espera)
+// vêm das MESMAS funções que a tela usa, injetadas em `H`. MEDIDO em 25/ago/2026:
+// a primeira versão deste arquivo calculava por conta própria e DIVERGIA do app em
+// 10 dos 28 torneios da base real — Confra 143 competidores contra 146, "Misto
+// FUTVOLEI" com progresso 0/7 contra 12/19. Número errado no cartão é pior que
+// cartão lento, e é exatamente a armadilha da "segunda versão da regra" que este
+// projeto já pagou caro. Sem `H`, os campos derivados saem NULL — nunca chutados.
 /**
  * Constrói o resumo de um torneio. PURO: mesma entrada, mesma saída.
  * @param {object} t documento completo de `tournaments/{id}`
  * @param {string} id id do documento
  * @returns {object|null}
  */
-function buildSummary(t, id) {
+function buildSummary(t, id, H) {
   if (!t || typeof t !== 'object') return null;
+  H = H || {};
+  var prog = (typeof H.progress === 'function') ? (H.progress(t) || null) : null;
+  var comp = (typeof H.competitors === 'function') ? (H.competitors(t) || null) : null;
+  var espera = (typeof H.waitlistPeople === 'function') ? H.waitlistPeople(t) : null;
   var nome = String(t.name || '').trim();
   var local = String(t.venueName || t.venue || '').trim();
   var esporte = String(t.sport || '').trim();
-  var prog = _progresso(t);
   var participantes = _arr(t.participants);
 
   return {
@@ -138,14 +116,17 @@ function buildSummary(t, id) {
     }).filter(Boolean).slice(0, 24),
 
     // ── CONTAGENS E PROGRESSO: o cálculo sai do aparelho e vem pra cá ─────
+    // contagens CRUAS (não são regra: é tamanho de lista)
     participantsCount: participantes.length,
-    competitorsCount: _uidsDe(participantes).length,
-    waitlistCount: _arr(t.waitlist).length,
     standbyCount: _arr(t.standbyParticipants).length,
-    matchesTotal: prog.total,
-    matchesDone: prog.feitos,
-    progressPct: prog.pct,
-    hasDraw: !!(prog.total > 0),
+    // ── DERIVADOS: vêm das funções do APP (H). Sem elas, NULL — nunca chute ──
+    competitorsCount: comp ? comp.people : null,   // _countCompetitors(t).people
+    teamsCount: comp ? comp.teams : null,          // _countCompetitors(t).teams
+    waitlistCount: (espera != null) ? espera : null, // _waitlistPeopleCount(t)
+    matchesTotal: prog ? prog.total : null,        // _getTournamentProgress(t).total
+    matchesDone: prog ? prog.completed : null,
+    progressPct: prog ? prog.pct : null,
+    hasDraw: prog ? (prog.total > 0) : null,
 
     // ── mídia: SÓ URL. ⛔ jamais logoData/coverPhotoData (base64) ──────────
     coverUrl: String(t.coverUrl || ''),
@@ -173,12 +154,23 @@ var CAMPOS_QUE_IMPORTAM = [
  * placar/mexida que não altera nada do que a tela inicial mostra — sem isto, um
  * torneio ao vivo geraria escrita a cada ponto.
  */
-function summaryMudou(antes, depois, id) {
-  var a = buildSummary(antes, id);
-  var b = buildSummary(depois, id);
+function summaryMudou(antes, depois, id, H) {
+  var a = buildSummary(antes, id, H);
+  var b = buildSummary(depois, id, H);
   if (!a && !b) return false;
   if (!a || !b) return true;
   return JSON.stringify(a) !== JSON.stringify(b);
 }
 
-module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };
+/** Monta `H` a partir do `window` do shim (servidor) ou do navegador (teste).
+ *  ⛔ Se alguma função faltar, o campo correspondente sai NULL — de propósito. */
+function helpersDe(win) {
+  win = win || (typeof window !== 'undefined' ? window : null) || {};
+  var H = {};
+  if (typeof win._getTournamentProgress === 'function') H.progress = function (t) { return win._getTournamentProgress(t); };
+  if (typeof win._countCompetitors === 'function') H.competitors = function (t) { return win._countCompetitors(t); };
+  if (typeof win._waitlistPeopleCount === 'function') H.waitlistPeople = function (t) { return win._waitlistPeopleCount(t); };
+  return H;
+}
+
+module.exports = { buildSummary: buildSummary, summaryMudou: summaryMudou, helpersDe: helpersDe, CAMPOS_QUE_IMPORTAM: CAMPOS_QUE_IMPORTAM };

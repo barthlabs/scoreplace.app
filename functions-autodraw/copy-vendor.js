@@ -25,6 +25,12 @@ const FILES = [
   'gender-ratio-core.js',      // proporção de gênero do sorteio equilibrado (o motor chama no servidor)
   'sport-rules.js',            // window.SPORT_RULES — dep de format2 (allowsSingles/teamSize)
   'tournaments-utils.js',      // _isLigaFormat, _calcNextDrawDate
+  // _countCompetitors/_waitlistPeopleCount — as contagens que o CARTÃO mostra. O
+  // resumo (tournamentSummary) TEM que usar estas, não uma cópia: medido em
+  // 25/ago/2026, uma reimplementação divergia em 10 dos 28 torneios da base real.
+  // Tem DOM, mas só dentro de funções que o servidor nunca chama (mesma regra do
+  // tournaments-draw.js; conferido no load).
+  'tournaments.js',
   'tournaments-categories.js', // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
   'format2.js',                // FORMAT2.normalize/compileToPhases — CONFIGURADOR canônico (fmt2 → phases)
   'bracket-model.js',          // _appendCanonicalColumn

@@ -16,7 +16,16 @@
 const path = require('path');
 const { execSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
-const { buildSummary } = require(path.join(ROOT, 'functions', 'tournament-summary-core.js'));
+// ⛔ os derivados saem das funções do APP (mesmo shim que a Cloud Function usa),
+// nunca de uma cópia — medido: reimplementação divergia em 10 dos 28 torneios.
+require(path.join(ROOT, 'functions-autodraw', 'draw-core.js'));
+const M = require(path.join(ROOT, 'functions-autodraw', 'tournament-summary-core.js'));
+const _H = M.helpersDe(globalThis.window);
+if (!_H.progress || !_H.competitors || !_H.waitlistPeople) {
+  console.error('✗ shim sem os helpers do app — abortando (não grava número chutado)');
+  process.exit(1);
+}
+const buildSummary = function (t, id) { return M.buildSummary(t, id, _H); };
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const APPLY = process.argv.includes('--apply');

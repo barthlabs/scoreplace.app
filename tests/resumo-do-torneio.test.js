@@ -20,7 +20,14 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { buildSummary, summaryMudou } = require('../functions/tournament-summary-core.js');
+const M = require('../functions-autodraw/tournament-summary-core.js');
+// ⛔ OS DERIVADOS VÊM DAS FUNÇÕES DO APP, não de uma cópia. O harness de render
+// carrega o código real da tela; é dele que saem `_countCompetitors`,
+// `_waitlistPeopleCount` e `_getTournamentProgress`.
+const HARNESS = require('./render-harness');
+const helpers = M.helpersDe(HARNESS.window);
+const buildSummary = function (t, id) { return M.buildSummary(t, id, helpers); };
+const summaryMudou = function (a, b, id) { return M.summaryMudou(a, b, id, helpers); };
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -104,6 +111,41 @@ ok(buildSummary(null, 'x') === null, 'documento vazio devolve null (não inventa
      'na base inteira o resumo é ' + (100 - res / comp * 100).toFixed(1) + '% menor (' +
      Math.round(comp / 1024) + ' KB → ' + Math.round(res / 1024) + ' KB)');
   ok(maior / 1024 < 8, 'e o MAIOR resumo da base fica em ' + (maior / 1024).toFixed(1) + ' KB');
+}
+
+// ── ⑧ ⛔ O TESTE QUE IMPEDE A "SEGUNDA VERSÃO DA REGRA" ──────────────────────
+// MEDIDO em 25/ago/2026: a primeira versão do core calculava os derivados por conta
+// própria e DIVERGIA do app em 10 dos 28 torneios da base real (Confra 143 contra
+// 146 competidores; "Misto FUTVOLEI" 0/7 contra 12/19 de progresso). Número errado
+// no cartão é pior que cartão lento. Aqui o resumo é conferido CONTRA AS FUNÇÕES DO
+// PRÓPRIO APP, torneio por torneio — se alguém reimplementar, o teste acusa.
+{
+  const arr = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'prod-tournaments.json'), 'utf8'));
+  const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
+  const W = HARNESS.window;
+  let batem = 0; const divergentes = [];
+  lista.forEach(function (x) {
+    const r = buildSummary(x, x.id || x._docId);
+    const p = W._getTournamentProgress(x);
+    const c = W._countCompetitors(x);
+    const e = W._waitlistPeopleCount(x);
+    const igual = r.matchesTotal === p.total && r.matchesDone === p.completed && r.progressPct === p.pct
+      && r.competitorsCount === c.people && r.teamsCount === c.teams && r.waitlistCount === e;
+    if (igual) batem++; else if (divergentes.length < 3) divergentes.push((x.name || '').slice(0, 24));
+  });
+  ok(batem === lista.length,
+     '⛔ os derivados do resumo batem EXATAMENTE com o que o app calcula, nos ' +
+     lista.length + ' torneios da base real (' + batem + '/' + lista.length + ')' +
+     (divergentes.length ? ' — divergem: ' + divergentes.join(' · ') : ''));
+}
+
+// ── ⑨ sem os helpers, o resumo NÃO chuta número ─────────────────────────────
+{
+  const cru = M.buildSummary(t, t.id, {});   // nenhum helper injetado
+  ok(cru.competitorsCount === null && cru.progressPct === null && cru.waitlistCount === null,
+     '⛔ sem as funções do app, os derivados saem NULL — melhor não ter número do que ter errado');
+  ok(cru.participantsCount === (t.participants || []).length,
+     '(mas contagem CRUA, que é só tamanho de lista, continua valendo)');
 }
 
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' ' + pass + ' ok, ' + fail + ' falha(s)');

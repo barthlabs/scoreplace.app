@@ -167,6 +167,9 @@ require('./vendor/persist-core.js');            // _cleanUndefined + _computeAdm
                                                 // tem de sair pela MESMA regra do cliente)
 require('./vendor/sport-rules.js');             // SPORT_RULES — dep de format2 (allowsSingles/teamSize)
 require('./vendor/tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
+require('./vendor/tournaments.js');             // _countCompetitors/_waitlistPeopleCount — as
+                                                // contagens que o CARTÃO mostra. O resumo TEM que
+                                                // usar ESTAS (medido: cópia divergia em 10/28).
 require('./vendor/tournaments-categories.js');  // _displayCategoryName, _sortCategoriesBySkillOrder, _getParticipantCategories, _participantInCategory
 require('./vendor/format2.js');                 // FORMAT2.normalize/compileToPhases (precisa de SPORT_RULES)
 require('./vendor/bracket-model.js');           // _appendCanonicalColumn

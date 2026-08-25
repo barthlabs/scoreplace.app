@@ -1,5 +1,5 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -7,6 +7,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 // v1.7.35: rebase do sorteio (o servidor não sobrescreve o que aconteceu na quadra
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
+const _tourSummary = require('./tournament-summary-core.js');
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
 // categorias, folgas, desempate) carregada via shim Node. Substitui o stub 1×1
@@ -1527,3 +1528,65 @@ exports.sendPushNotification = onDocumentCreated('users/{userId}/notifications/{
     }
   }
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐ RESUMO DO TORNEIO — o documento leve que a TELA INICIAL lê, sempre em dia
+//
+// DESENHO (ordem do dono, 25/ago/2026): _"na dashboard precisamos da versão
+// reduzida sempre e clicando no torneio traz os detalhes. esse sempre foi o
+// desenho."_ A implementação tinha derivado: a tela inicial baixava o documento
+// INTEIRO de cada torneio (chave, inscritos, placares, histórico) pra desenhar um
+// cartão. MEDIDO na base real: 420 KB → 44 KB (89,6% menor).
+//
+// ⛔ POR QUE ESTA FUNÇÃO MORA NO CODEBASE DO AUTODRAW, e não no principal:
+// é AQUI que existe o shim com o código REAL da tela (`draw-core.js` monta o
+// `window` e carrega o vendor). Os números do cartão — competidores, espera,
+// progresso — saem das MESMAS funções que o app usa
+// (`_countCompetitors`, `_waitlistPeopleCount`, `_getTournamentProgress`).
+// MEDIDO em 25/ago/2026: uma reimplementação minha divergia em 10 dos 28 torneios
+// da base real (Confra 143 contra 146 competidores; "Misto FUTVOLEI" 0/7 contra
+// 12/19 de progresso). Número errado no cartão é pior que cartão lento.
+// Com os helpers do app: 28 de 28 batem exatamente.
+//
+// ⚠️ EM TEMPO REAL, e sem escrever à toa: o gatilho é `onDocumentWritten`, então o
+// resumo acompanha qualquer mudança no ato — mas `summaryMudou` compara o resumo
+// ANTES e DEPOIS e só grava quando muda algo que o cartão mostra. Sem isso, um
+// torneio ao vivo geraria uma escrita de resumo a cada ponto marcado.
+// ⛔ O resumo é DERIVADO, nunca fonte da verdade: é regenerado INTEIRO a cada
+// mudança relevante, então qualquer divergência se corrige na escrita seguinte.
+// ══════════════════════════════════════════════════════════════════════════════
+exports.tournamentSummary = onDocumentWritten(
+  { document: 'tournaments/{tournamentId}', region: 'us-central1', memory: '512MiB', timeoutSeconds: 120 },
+  async (event) => {
+    const id = event.params && event.params.tournamentId;
+    try {
+      const db = getFirestore();
+      const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
+      const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
+
+      // torneio apagado → o resumo some junto (senão a tela mostraria fantasma)
+      if (!depois) {
+        await db.collection('tournaments_summary').doc(id).delete().catch(() => {});
+        return;
+      }
+
+      // as funções do APP, do shim. Sem elas o resumo sairia com os derivados
+      // NULOS — melhor não ter número do que ter número errado.
+      const H = _tourSummary.helpersDe(drawWindow);
+      if (!H.progress || !H.competitors || !H.waitlistPeople) {
+        console.error('[tournamentSummary] shim sem os helpers do app — resumo NÃO gravado', id);
+        return;
+      }
+
+      // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
+      if (antes && !_tourSummary.summaryMudou(antes, depois, id, H)) return;
+
+      const resumo = _tourSummary.buildSummary(depois, id, H);
+      if (!resumo) return;
+      await db.collection('tournaments_summary').doc(id).set(resumo);
+    } catch (e) {
+      console.error('[tournamentSummary] falhou', id, e);
+    }
+  }
+);
