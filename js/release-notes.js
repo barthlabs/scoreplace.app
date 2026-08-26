@@ -84,6 +84,23 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.99 ───────────────────────────────────────────
+        // ⭐ O HISTÓRICO É UM LOG — E A CHAVE DELE ERA A COISA QUE A PODA MOVE.
+        // Medindo o peso dos documentos de hoje (não o número que eu anotei ontem):
+        // Confra 245 KB, 4,2× até o teto de 1 MB. `rounds` 105 KB (43%), `history`
+        // 37 KB (15%). ⭐ E `history` é o ÚNICO campo que cresce PRA SEMPRE: `rounds`
+        // para quando o torneio acaba, o log não. Por isso ele vem primeiro.
+        // ⛔ Mas o espelho chaveava cada evento por POSIÇÃO (`'h' + _idx`), e posição é
+        // exatamente o que muda quando se poda. Podar o Confra pras últimas 30 faria o
+        // diff ver `h0..h29` com conteúdo NOVO e `h30..h217` AUSENTES ⇒ reescreveria 30
+        // linhas erradas e APAGARIA 188. O log inteiro, destruído pela economia de 37 KB.
+        // Achado LENDO o gatilho antes de mexer, não depois.
+        // ⇒ A chave passa a sair do CONTEÚDO (data + mensagem) e o espelho de histórico
+        // SÓ CRESCE — log de auditoria não se apaga. `_idx` continua indo junto: chave é
+        // QUEM, índice é ONDE; o bug nasceu de usar um como o outro.
+        // ⛔ Jogos e inscritos CONTINUAM podendo ser apagados: sumir dali é informação
+        // real (jogo removido, inscrito que saiu), e não apagar deixaria fantasma na tela.
+        // Nada muda na tela nesta leva — é a chave que passa a aguentar a poda que vem.
         // ── ciclo 2.0.98 ───────────────────────────────────────────
         // ⭐ O FECHO DE RODADA SAIU DO CLIENTE — EM TODO FORMATO.
         // Ordem do dono: _"o certo é tudo rodar em CF só sendo disparado pelo client

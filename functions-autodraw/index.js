@@ -1634,8 +1634,15 @@ function _diffEspelho(antes, depois, chaveDe) {
   return { gravar, apagar };
 }
 
-async function _espelhaColecao(db, id, nome, antes, depois, chaveDe) {
-  const { gravar, apagar } = _diffEspelho(antes, depois, chaveDe);
+/* `soDeixaCrescer`: o espelho ACRESCENTA e nunca apaga. É o modo certo pro HISTÓRICO,
+ * que é um log de auditoria — linha escrita não some, e o documento pode ser podado sem
+ * que o espelho perca o que foi podado (é justamente pra isso que a poda existe).
+ * ⛔ NÃO usar em `matches`/`participants`: lá o desaparecimento é informação real (jogo
+ * removido, inscrito que saiu) e não apagar deixaria fantasma na tela. */
+async function _espelhaColecao(db, id, nome, antes, depois, chaveDe, soDeixaCrescer) {
+  const d0 = _diffEspelho(antes, depois, chaveDe);
+  const gravar = d0.gravar;
+  const apagar = soDeixaCrescer ? [] : d0.apagar;
   if (!gravar.length && !apagar.length) return { gravados: 0, apagados: 0, total: (depois || []).length };
   const col = db.collection('tournaments').doc(id).collection(nome);
   let lote = db.batch(), n = 0;
@@ -1693,7 +1700,15 @@ exports.tournamentMirror = onDocumentWritten(
 
       const r1 = await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
       const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants, (p) => 'p' + p._idx);
-      const r3 = await _espelhaColecao(db, id, 'history', pAntes.history, pDepois.history, (h) => 'h' + h._idx);
+      /* ⛔ O HISTÓRICO ERA ESPELHADO POR POSIÇÃO — e posição é o que a poda muda.
+   * Medido antes de mexer: Confra com 218 eventos no doc e 218 no espelho. Podar o doc
+   * pras últimas 30 faria este diff ver `h0..h29` com conteúdo NOVO e `h30..h217`
+   * ausentes ⇒ reescrevia 30 linhas erradas e APAGAVA 188. O log inteiro, destruído pela
+   * economia de 37 KB. Agora a chave sai do CONTEÚDO (`_k`, ver chaveDoEvento no
+   * split-core) e o espelho SÓ CRESCE. `_idx` segue no registro: chave é QUEM, índice é
+   * ONDE — o bug nasceu de usar um como o outro. */
+  const r3 = await _espelhaColecao(db, id, 'history', pAntes.history, pDepois.history,
+    (h) => (h._k || ('h' + h._idx)), true);
 
       if (r1.gravados || r1.apagados || r2.gravados || r2.apagados || r3.gravados || r3.apagados) {
         console.log('[tournamentMirror]', id,

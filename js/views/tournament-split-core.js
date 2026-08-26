@@ -36,6 +36,42 @@
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
 
+  /* ── CHAVE DURÁVEL DO EVENTO DE HISTÓRICO ──────────────────────────────────────
+   * O histórico é um LOG: só cresce, e cada linha é imutável depois de escrita.
+   * Mesmo assim ele era espelhado por POSIÇÃO (`'h' + _idx`), e posição é justamente
+   * a coisa que muda quando o log é podado.
+   *
+   * ⛔ O ESTRAGO QUE ISSO CAUSARIA (medido antes de mexer, não descoberto depois):
+   * o Confra tem 218 eventos no documento e 218 no espelho. Podar o documento para as
+   * últimas 30 faria `_espelhaColecao` ver `h0..h29` com CONTEÚDO NOVO (as 30 últimas) e
+   * `h30..h217` AUSENTES — ou seja, reescreveria as 30 primeiras linhas erradas e
+   * APAGARIA as outras 188. O histórico inteiro, destruído pela poda que existia pra
+   * economizar 37 KB.
+   *
+   * ⇒ A chave passa a sair do CONTEÚDO (data + mensagem), que é o que não muda de lugar.
+   * ⚠️ Limite conhecido e aceito: dois eventos com a MESMA mensagem no MESMO milissegundo
+   * colidem e viram uma linha só. `date` é ISO com milissegundo e as mensagens carregam
+   * nome próprio — na prática não acontece; e perder uma linha repetida é infinitamente
+   * menos grave que perder 188.
+   * ⛔ `_idx` CONTINUA indo junto: é ele que `remontar` usa pra devolver a ORDEM. A chave
+   * diz QUEM é a linha; o índice diz ONDE ela fica. São coisas diferentes e o bug nasceu
+   * de usar uma como a outra.
+   */
+  function chaveDoEvento(ev) {
+    var d = (ev && ev.date != null) ? String(ev.date) : '';
+    var m = (ev && ev.message != null) ? String(ev.message) : '';
+    var txt = d + '|' + m;
+    // hash de 32 bits (FNV-1a) — determinístico, sem depender de lib. O par
+    // (tamanho + hash) reduz colisão sem precisar de criptografia: isto é chave de
+    // documento, não assinatura.
+    var h = 0x811c9dc5;
+    for (var i = 0; i < txt.length; i++) {
+      h ^= txt.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return 'h' + txt.length.toString(36) + '-' + h.toString(36);
+  }
+
   // Chave estável do jogo dentro do torneio. Usa o `id` quando existe (é o que o app
   // usa em toda parte); sem id, deriva da POSIÇÃO — determinístico e reversível.
   function chaveDoJogo(m, loc) {
@@ -124,7 +160,13 @@
     PESADOS.forEach(function (campo) {
       var v = config[campo];
       if (Array.isArray(v)) {
-        saida[campo] = v.map(function (item, i) { return { _idx: i, item: _clone(item) }; });
+        saida[campo] = v.map(function (item, i) {
+          var _reg = { _idx: i, item: _clone(item) };
+          // só o histórico ganha chave por conteúdo — `participants` é chaveado por uid
+          // do lado de fora e não é podado. Ver chaveDoEvento().
+          if (campo === 'history') _reg._k = chaveDoEvento(item);
+          return _reg;
+        });
         config[campo] = [];
       } else if (v && typeof v === 'object') {
         // forma de MAPA (alguns docs legados guardam participants como objeto)
@@ -251,6 +293,7 @@
   }
 
   var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo,
+              chaveDoEvento: chaveDoEvento,
               jogosQueMudaram: jogosQueMudaram,
               PESADOS: PESADOS, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
