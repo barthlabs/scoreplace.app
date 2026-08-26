@@ -3458,7 +3458,7 @@ window.finishTournament = function(tId) {
             if (window._sound) window._sound('campeao');
             // Compute final standings for Swiss/Liga
             if (Array.isArray(t.rounds) && t.rounds.length > 0 && typeof window._computeStandings === 'function') {
-                t.standings = window._computeStandings(t);
+                window._poeStandings(t);
             }
             window.AppStore.logAction(tId, 'Torneio encerrado manualmente');
             window.AppStore.sync();

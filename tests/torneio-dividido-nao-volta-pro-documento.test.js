@@ -39,7 +39,9 @@ ok(/'participants', 'history'/.test(antesDoSet),
 ok(/function _gravaTorneio\(tx, ref, tDepois, tAntes\)/.test(cf), 'as CFs têm um gravador único');
 ok(/function _leTorneio\(tx, ref, tId\)/.test(cf), 'e um leitor único que MONTA das subcoleções');
 const iG = cf.indexOf('function _gravaTorneio(');
-const grava = cf.slice(iG, iG + 2200);
+// ⛔ ANCORA NO FIM DA FUNÇÃO, não numa janela de N caracteres: já me pegou cinco vezes.
+// Um comentário a mais empurra o código pra fora da janela e o teste 'falha' sem regressão.
+const grava = cf.slice(iG, cf.indexOf('\nfunction ', iG + 10));
 ok(/jogosQueMudaram/.test(grava),
   '⭐ só os jogos que MUDARAM são escritos — é o ponto inteiro (um ponto toca ~1 KB)');
 ok(/tx\.delete\(col\.doc/.test(grava), 'e jogo que sumiu é apagado — ali sumir é informação real');

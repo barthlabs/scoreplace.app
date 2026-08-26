@@ -75,3 +75,22 @@ for (const f of FILES) {
   console.log(`[copy-vendor] ${f} (${fs.statSync(dst).size} bytes)`);
 }
 console.log(`[copy-vendor] ✓ ${copied} arquivos sincronizados em vendor/`);
+
+/* ── O TRADUTOR TAMBÉM VAI PRO functions/ (2.0.120) ───────────────────────────
+ * ⛔ MEDIDO: `functions/index.js` tinha ZERO menção à divisão (`grep -c` = 0). O
+ * `enrollParticipant` mora lá e fazia `tx.get(docRef)` → `computeEnroll(snap.data(), …)`.
+ * Num torneio DIVIDIDO o campo `participants` do documento é `[]`, então ele conferia
+ * lotação e duplicata contra uma lista VAZIA e gravava o novo inscrito num campo que a
+ * leitura (`montarDoBanco`) sobrescreve com a subcoleção. A pessoa sumia.
+ * Não chegou a acontecer: medido no Confra, 148 uids no doc = 148 docs em `inscritos` e
+ * `participants: []` — ninguém se inscreveu depois da divisão.
+ * ⭐ A regra da chave do inscrito (`chaveDoInscrito`) NÃO pode ser reescrita lá: duas
+ * cópias divergem, e divergir numa chave é gravar o registro de A por cima do de B.
+ * Por isso o arquivo viaja — mesma fonte, dois destinos. */
+const OUT_FN = path.resolve(__dirname, '..', 'functions', 'vendor');
+const SO_FUNCTIONS = ['tournament-split-core.js'];
+if (!fs.existsSync(OUT_FN)) fs.mkdirSync(OUT_FN, { recursive: true });
+for (const f of SO_FUNCTIONS) {
+  fs.copyFileSync(path.join(SRC_DIR, f), path.join(OUT_FN, f));
+  console.log(`[copy-vendor] functions/vendor/${f}`);
+}

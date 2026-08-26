@@ -2911,7 +2911,7 @@ window._revertWO = function(tId, matchId) {
         t.rounds[m.roundIndex].status = 'active';
       }
       if (typeof window._computeStandings === 'function' && Array.isArray(t.rounds) && t.rounds.length) {
-        try { t.standings = window._computeStandings(t); } catch (_e) {}
+        try { window._poeStandings(t); } catch (_e) {}
       }
       // Reabre o torneio se este jogo o havia encerrado.
       if (t.status === 'finished') {

@@ -173,8 +173,13 @@ function fakeDb(conteudo, opts) {
     // ⛔ "o servidor limpa" não pode ser promessa: tem que estar escrito no gatilho.
     if (doServidor.length) {
       const cf = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
-      const i = cf.indexOf('tournamentMirror');
-      const trecho = i >= 0 ? cf.slice(i, i + 4000) : '';
+      // ⛔ ANCORA NO `exports.`, não no nome solto: a palavra aparece em COMENTÁRIO antes
+      // do gatilho, e o indexOf pegava o comentário — recortando a região errada do arquivo.
+      const i = cf.indexOf('exports.tournamentMirror');
+      // ⛔ ANCORA NO FIM DO GATILHO, não numa janela de N caracteres: um comentário a mais
+      // empurra o código pra fora e o teste 'falha' sem que nada tenha regredido.
+      const _fim = i >= 0 ? cf.indexOf('\nexports.', i + 10) : -1;
+      const trecho = i >= 0 ? cf.slice(i, _fim > i ? _fim : undefined) : '';
       ok(/after && event\.data\.after\.exists\) \? .* : null|apagado/.test(trecho),
         'o gatilho trata o torneio APAGADO (é ele que limpa o que o cliente não pode)');
       ok(/lote\.delete\(d\.ref\)/.test(trecho),

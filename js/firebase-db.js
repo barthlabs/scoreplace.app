@@ -237,6 +237,19 @@ window.FirestoreDB = {
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
     this._foldMonarchGroups(cleanData); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
+    // ── CLASSIFICAÇÃO É DERIVADA: NÃO VAI PRO BANCO (2.0.120) ──────────────────
+    // MEDIDO: `standings` estava gravado em 2 dos 39 torneios — 120 linhas, TODAS zeradas e
+    // NENHUMA com uid. No Confra eram 12,5 KB, 16% do documento, dizendo "0 jogo disputado"
+    // num torneio com 115 jogos. O cálculo sobre os mesmos dados dá 103 linhas, 95 com jogo
+    // e 103 com uid. Guardar um derivado é guardar uma segunda versão da verdade, e foi essa
+    // que apodreceu — ela nascia de um `_computeStandings` rodado antes dos jogos chegarem.
+    // Agora a leitura passa por `window._standingsDoTorneio`, que recusa responder sem os
+    // jogos em vez de devolver uma tabela zerada.
+    // ⚠️ `merge:true` PRESERVA o campo ausente: omitir aqui para de reescrever e para de
+    // trafegar, mas NÃO apaga o que já está gravado. Quem apaga é
+    // `scripts/apagar-standings-do-doc.js`, rodado uma vez.
+    // [[project_teto_do_documento_e_arquitetura_de_dados]] [[project_cache_pinta_mas_nao_decide]]
+    delete cleanData.standings;
     // ── IMAGEM NÃO VIAJA JUNTO COM PLACAR (1.9.49) ──────────────────────────────
     // MEDIDO nos documentos de produção: `logoData` + `coverPhotoData` são 62% do peso
     // de todos os torneios (602 KB de 966 KB). Num doc o par chega a 305 KB de 311 KB —

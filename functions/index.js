@@ -65,6 +65,7 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
   return out;
 }
 const _enrollCore = require("./enroll-core");
+const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
@@ -2724,11 +2725,23 @@ exports.enrollParticipant = onCall(
       }
     } catch (e) { console.error("[enrollParticipant] porta de duplicata falhou (fail-open):", e && e.message); }
 
+    /* ── TORNEIO DIVIDIDO: O ELENCO MORA FORA DO DOCUMENTO (2.0.120) ────────────
+     * ⛔ Aqui era `computeEnroll(snap.data(), …)` direto. Num torneio dividido o campo
+     * `participants` do doc é `[]` — o elenco está na subcoleção `inscritos`. Então a
+     * conferência de LOTAÇÃO e de DUPLICATA rodava contra lista vazia (deixaria entrar
+     * quem já estava dentro e ignoraria o limite de vagas), e o `tx.update` gravava o
+     * novo inscrito num campo que a leitura sobrescreve com a subcoleção: a pessoa
+     * entrava e sumia. Medido no Confra antes do conserto: 148 uids no doc, 148 docs em
+     * `inscritos`, `participants: []` — ainda não tinha acontecido com ninguém.
+     * ⚠️ `hidratar` roda ANTES de qualquer escrita: transação do Firestore lê tudo
+     * primeiro. E ela LANÇA se uma parte não vier — decidir vaga com elenco vazio é pior
+     * que falhar. [[project_teto_do_documento_e_arquitetura_de_dados]] */
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const r = _enrollCore.computeEnroll(snap.data(), participantObj, extraUpdates, nowMs);
-      if (r.updateData) tx.update(docRef, r.updateData);
+      const _dados = await _splitParts.hidratar(tx, docRef, snap.data());
+      const r = _enrollCore.computeEnroll(_dados, participantObj, extraUpdates, nowMs);
+      if (r.updateData) _splitParts.gravar(tx, docRef, _dados, r.updateData);
       return r;
     });
 
@@ -2929,7 +2942,9 @@ exports.deenrollParticipant = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const t = snap.data();
+      // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
+      // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
+      const t = await _splitParts.hidratar(tx, docRef, snap.data());
       // Permissão: cada um sai de si mesmo; o organizador/co-host tira qualquer um.
       const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
       const isOrg = _isTournamentOrgCaller(t, callerUid);
@@ -2937,7 +2952,7 @@ exports.deenrollParticipant = onCall(
         throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
       }
       const r = _enrollCore.computeDeenroll(t, userUid);
-      if (r.updateData) tx.update(docRef, r.updateData);
+      if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
     });
 
@@ -3000,7 +3015,9 @@ exports.formPair = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const t = snap.data();
+      // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
+      // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
+      const t = await _splitParts.hidratar(tx, docRef, snap.data());
       // Permissão: o organizador/co-host forma qualquer dupla; senão, o próprio (aceite de
       // convite) só pode formar dupla que INCLUA o seu uid.
       const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
@@ -3009,7 +3026,7 @@ exports.formPair = onCall(
         throw new HttpsError("permission-denied", "só o organizador ou um dos dois da dupla podem formá-la");
       }
       const r = _pairCore.computeFormPair(t, opts);
-      if (r.updateData) tx.update(docRef, r.updateData);
+      if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
     });
 
@@ -3045,7 +3062,9 @@ exports.splitPair = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const t = snap.data();
+      // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
+      // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
+      const t = await _splitParts.hidratar(tx, docRef, snap.data());
       const r = _pairCore.computeSplitPair(t, opts);
       // Permissão: organizador/co-host desfaz qualquer dupla; senão, um MEMBRO da dupla.
       const isOrg = _isTournamentOrgCaller(t, callerUid, callerEmail);
@@ -3053,7 +3072,7 @@ exports.splitPair = onCall(
       if (!isOrg && !isMember) {
         throw new HttpsError("permission-denied", "só o organizador ou um membro da dupla podem desfazê-la");
       }
-      if (r.updateData) tx.update(docRef, r.updateData);
+      if (r.updateData) _splitParts.gravar(tx, docRef, t, r.updateData);
       return r;
     });
 
@@ -3114,7 +3133,9 @@ exports.respondHostInvite = onCall(
     const out = await db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
-      const t = snap.data();
+      // Torneio DIVIDIDO: o elenco mora na subcoleção. Hidrata ANTES de decidir —
+      // sem isto as regras rodam contra `participants: []`. Ver functions/split-parts.js.
+      const t = await _splitParts.hidratar(tx, docRef, snap.data());
       const r = _coHostCore.computeRespondHostInvite(t, callerUid, inviteType, action);
       if (r.outcome !== "applied" || !r.updateData) return r;
 
@@ -3130,7 +3151,7 @@ exports.respondHostInvite = onCall(
         );
       }
       upd.updatedAt = new Date().toISOString();
-      tx.update(docRef, upd);
+      _splitParts.gravar(tx, docRef, t, upd);
       return r;
     });
 
@@ -6949,14 +6970,18 @@ exports.propagateDisplayName = onDocumentWritten(
         await db.runTransaction(async (tx) => {
           const snap = await tx.get(d.ref);            // relê DENTRO da transação
           if (!snap.exists) return;
-          const t = snap.data();
+          // ⛔ Torneio DIVIDIDO: o elenco e os jogos moram em subcoleções, e no documento
+          // os campos ficam `[]`. Sem hidratar, `planRename` não acharia UM slot sequer e
+          // o rótulo velho ficaria pra sempre — falha silenciosa, `r.total` = 0.
+          // Hidrata ANTES de qualquer escrita (a transação lê tudo primeiro).
+          const t = await _splitParts.hidratar(tx, d.ref, snap.data());
           const r = _renameProp.planRename(t, uid, novo);
           if (!r.total) return;
           // escrita SELETIVA: só os campos de topo que o plano tocou — nunca o doc
           // inteiro (outra aba pode ter lançado placar no meio).
           const patch = {};
           _renameProp.camposTocados(r.mudancas).forEach((c) => { patch[c] = t[c]; });
-          tx.update(d.ref, patch);
+          _splitParts.gravar(tx, d.ref, t, patch);
           tocados++; slots += r.total;
           if (r.avisos && r.avisos.length) {
             console.warn("[propagateDisplayName] arrays desalinhados em " + d.id + ": " + JSON.stringify(r.avisos));

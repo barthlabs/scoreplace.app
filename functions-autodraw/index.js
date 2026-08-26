@@ -398,14 +398,35 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
   }
   const _clone = (x) => JSON.parse(JSON.stringify(x));
   const pDepois = _tSplit.dividir(_clone(b.persist));
-  const pAntes = tAntes ? _tSplit.dividir(_clone(tAntes)) : { matches: [], participants: [], history: [] };
+  // ⛔ sem torneio anterior, TODA parte é "vazia antes" — derivado de PESADOS + matches,
+  // porque citar três nomes aqui à mão faria a quarta parte parecer nova a cada gravação.
+  const _vazio = { matches: [] };
+  (_tSplit.PESADOS || []).forEach((k) => { _vazio[k] = []; });
+  const pAntes = tAntes ? _tSplit.dividir(_clone(tAntes)) : _vazio;
 
-  if (fora.indexOf('matches') !== -1) {
-    const d = _tSplit.jogosQueMudaram(pAntes.matches, pDepois.matches);
-    const col = ref.collection(_tSplit.colecaoDaParte('matches'));
-    d.mudaram.forEach((m) => tx.set(col.doc(String(m._chave)), m));
-    d.sumiram.forEach((m) => tx.delete(col.doc(String(m._chave))));
-  }
+  /* ── TODA PARTE DIVIDIDA É GRAVADA — A LISTA MANDA, NÃO O NOME ESCRITO À MÃO ──
+   * ⛔ MEDIDO (26/ago/2026): aqui só existia o ramo de `matches`. Para o Confra, cujo
+   * marcador diz ['matches','participants','opponentHistory'], isso significava que
+   * `dividir` ESVAZIAVA participants e opponentHistory do documento e ninguém escrevia a
+   * subcoleção — o `tx.set(ref, pDepois.config)` gravava a config sem eles. E o espelho
+   * (`tournamentMirror`) PULA justamente as partes divididas, corretamente, porque o
+   * documento não as tem mais. Ou seja: nenhuma alteração que o servidor fizesse no elenco
+   * persistia. Não sangrou ainda só porque ninguém entrou nem saiu depois da divisão —
+   * medido: 148 uids no doc, 148 docs em `inscritos`, zero divergência.
+   * ⭐ Agora deriva de `fora`. Campo novo no marcador passa a ser gravado sem que ninguém
+   * precise lembrar deste ponto — que é exatamente o que a lista à mão nunca garantiu.
+   * A chave sai de `chaveDoRegistro` (uma regra, não um mapa por parte). */
+  fora.forEach((nome) => {
+    const d = _tSplit.jogosQueMudaram(pAntes[nome] || [], pDepois[nome] || []);
+    const col = ref.collection(_tSplit.colecaoDaParte(nome));
+    const _ch = (x) => {
+      const k = _tSplit.chaveDoRegistro(x);
+      if (!k) throw new Error('[fase2] registro sem chave em "' + nome + '" — recuso gravar sem identidade');
+      return k;
+    };
+    d.mudaram.forEach((m) => tx.set(col.doc(_ch(m)), m));
+    d.sumiram.forEach((m) => tx.delete(col.doc(_ch(m))));
+  });
   // devolve pro documento tudo que NÃO está no marcador (dividir tira os três sempre)
   // ⛔ deriva de PESADOS — ver a nota gêmea em firebase-db.saveTournament.
   (_tSplit.PESADOS || ['participants', 'history']).forEach((k) => {
@@ -442,6 +463,15 @@ function _applyWriteBoundary(data) {
 
   const clean = w._cleanUndefined(data);
   w._foldMonarchGroups(clean); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
+  // ── CLASSIFICAÇÃO É DERIVADA: NÃO VAI PRO BANCO (2.0.120) ────────────────────
+  // Gêmea da nota em firebase-db.saveTournament. MEDIDO: 120 linhas gravadas em 2 torneios,
+  // todas zeradas e nenhuma com uid — 12,5 KB (16%) do documento do Confra afirmando "0 jogo
+  // disputado" num torneio com 115 jogos. O cálculo sobre o mesmo dado dá 95 pessoas com jogo.
+  // ⚠️ Aqui a gravação é `tx.set` (substituição, não merge), então tirar daqui APAGA de
+  // verdade — ao contrário do cliente, que só para de reescrever.
+  // O payload do `pendingDraw` (mais abaixo) já lida com a ausência: quem lê é
+  // `if (pd.standings)`, e sem ele a tela calcula pela porta `_standingsDoTorneio`.
+  delete clean.standings;
   // Storage é só-uid: quem TEM perfil vivo não leva nome gravado (o display resolve por uid).
   // Guest e uid órfão MANTÊM o nome — é a única identidade que têm.
   let persist = clean;

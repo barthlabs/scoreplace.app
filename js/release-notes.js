@@ -84,6 +84,35 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.120 ────────────────────────
+        // ⭐ NADA MAIS SOBRE A CLASSIFICAÇÃO DO TORNEIO FICA GUARDADO — ela é DERIVADA.
+        // MEDIDO: `standings` estava gravado em 2 dos 39 torneios, 120 linhas ao todo,
+        // TODAS zeradas e NENHUMA com uid. No Confra eram 110 linhas, 12,5 KB, 16% do
+        // documento, dizendo "0 jogo disputado" num torneio com 115 jogos. O cálculo sobre
+        // exatamente o mesmo dado dá 103 linhas, 95 com jogo e 103 com uid.
+        // COMO NASCE: `_computeStandings` lê os jogos de `t.rounds[].matches`; num torneio
+        // dividido eles moram numa subcoleção e enquanto não chegam o array está vazio —
+        // calcular ali devolve uma tabela zerada COM CARA DE RESPOSTA. Sete sítios faziam
+        // `t.standings = _computeStandings(t)`; bastava um rodar cedo demais.
+        // Agora há UMA porta (`_standingsDoTorneio`) que devolve `null` — "ainda não sei" —
+        // em vez de zero, e o campo não viaja mais pro banco. Doc do Confra: 78,9 → 66,4 KB.
+        //
+        // ⛔⛔ E O BURACO SÉRIO QUE ISSO DESTAPOU, este sim capaz de perder gente:
+        // `functions/index.js` não tinha UMA menção à divisão (`grep -c` = 0). O
+        // `enrollParticipant` mora lá e fazia `computeEnroll(snap.data(), …)`. Num torneio
+        // dividido `participants` no documento é `[]` — o elenco está na subcoleção. Então
+        // ① lotação e duplicata eram conferidas contra lista VAZIA (deixaria entrar quem já
+        // estava dentro e ignoraria o limite de vagas) e ② o novo inscrito era gravado num
+        // campo que a LEITURA sobrescreve com a subcoleção: entrava e sumia, sem erro.
+        // Valia para SEIS portas: inscrever, desinscrever, formar dupla, desfazer dupla,
+        // responder convite de co-organizador e propagar mudança de nome. A sexta eu tinha
+        // esquecido — quem achou foi a varredura que o próprio teste faz no arquivo, e ela
+        // fica lá cobrando a próxima.
+        // ⭐ NINGUÉM FOI PERDIDO, e é medição que autoriza a frase: 148 uids no doc, 148
+        // docs em `inscritos`, `participants: []` — ninguém se inscreveu entre a divisão e
+        // o conserto.
+        // ⛔ E o gravador do servidor só escrevia a subcoleção `matches`: qualquer outra
+        // parte dividida era esvaziada do documento e nunca escrita. Agora deriva da lista.
         // ── ciclo 2.0.119 ────────────────────────
         // ⭐ A CLASSIFICAÇÃO DE UM GRUPO FECHADO PAROU DE IR E VOLTAR.
         // Relato do dono: "quando jogamos eu estava em 3º e a Livia em 4º. depois de

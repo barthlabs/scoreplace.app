@@ -786,6 +786,61 @@ window._tbBirthByName = function(t) {
 window._tbParseBirth = _tbParseBirth;
 
 window._computeStandings = _computeStandings; // expose globally for finishTournament
+// ── A CLASSIFICAÇÃO DO TORNEIO É DERIVADA — E TEM UMA PORTA SÓ ───────────────
+// ⛔ MEDIDO em produção (26/ago/2026): `t.standings` estava gravado em 2 dos 39 torneios,
+// 120 linhas ao todo, TODAS zeradas e NENHUMA com uid. No Confra eram 110 linhas (12,5 KB,
+// 16% do documento) dizendo 0 jogo disputado — enquanto o cálculo sobre os mesmos dados dá
+// 103 linhas, 95 com jogo e 103 com uid. Não era cache desatualizado: era cadáver.
+//
+// ⭐ COMO O CADÁVER NASCE, e é isto que esta porta impede: `_computeStandings` lê os jogos de
+// `t.rounds[].matches`. Num torneio DIVIDIDO esses jogos moram numa subcoleção, e enquanto
+// não chegam o array está vazio — calcular ali devolve uma tabela inteira zerada, com cara
+// de resposta legítima. Alguém calculou nesse instante e GRAVOU. Sete sítios diferentes
+// faziam `t.standings = _computeStandings(t)`; bastava um deles rodar cedo demais.
+//
+// A porta devolve `null` — "ainda não sei" — em vez de `[]` ou de uma tabela zerada.
+// `null` ≠ `[]`: vazio é uma AFIRMAÇÃO (não tem ninguém), e afirmar isso sem os jogos é
+// mentir. [[project_cache_pinta_mas_nao_decide]] [[feedback_no_load_fallback]]
+function _jogosFaltando(t) {
+  if (!t) return false;
+  if (t._faltamPesados) return true;                 // o enxerto já sabe que não achou
+  var esperado = (typeof t._nJogos === 'number') ? t._nJogos : null;
+  if (esperado == null) return false;                // torneio inteiro: não há o que esperar
+  var tem = ((t.matches || []).length);
+  (t.rounds || []).forEach(function (r) {
+    if (!r) return;
+    tem += ((r.matches || []).length);
+    (r.monarchGroups || []).forEach(function (g) {
+      if (!g) return;
+      tem += ((g.matches || []).length);
+      (g.rounds || []).forEach(function (rr) { tem += (((rr && rr.matches) || []).length); });
+    });
+  });
+  return tem < esperado;
+}
+window._jogosFaltando = _jogosFaltando;
+
+// A ÚNICA porta de leitura da classificação do TORNEIO. Devolve `null` se os jogos ainda
+// não chegaram — quem chama decide o que mostrar, mas ninguém recebe zero como se fosse fato.
+function _standingsDoTorneio(t) {
+  if (!t) return null;
+  if (_jogosFaltando(t)) return null;
+  try { return _computeStandings(t); } catch (e) { return null; }
+}
+window._standingsDoTorneio = _standingsDoTorneio;
+
+// A ÚNICA porta de ESCRITA em memória. Substitui os 7 `t.standings = _computeStandings(t)`
+// espalhados (bracket-logic ×5, bracket-ui, tournaments-draw-prep). Não grava zero por cima
+// de nada: sem os jogos, deixa como está.
+// ⚠️ E `standings` NÃO vai mais pro banco — é derivado (ver firebase-db.saveTournament).
+function _poeStandings(t) {
+  if (!t) return null;
+  var st = _standingsDoTorneio(t);
+  if (st) t.standings = st;
+  return t.standings || null;
+}
+window._poeStandings = _poeStandings;
+
 function _computeStandings(t, category) {
   const scoreMap = {};
 
@@ -1656,7 +1711,7 @@ function _advanceWinner(t, completedMatch) {
     const round = (t.rounds || [])[completedMatch.roundIndex];
     if (round && (round.matches || []).every(m => m.winner || m.isBye || m.isSitOut)) {
       round.status = 'complete';
-      t.standings = _computeStandings(t);
+      _poeStandings(t);
     }
   }
 
@@ -3393,7 +3448,7 @@ window._applyRoundCloseToTournament = function (t, roundIdx) {
   if (!round) return null;
   round.status = 'complete';
   if (!round.completedAt) round.completedAt = Date.now();
-  t.standings = _computeStandings(t);
+  _poeStandings(t);
 
   var isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   var maxRounds = t.swissRounds || 99;
@@ -3578,7 +3633,7 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
   // v2.3.17: marca a conclusão da rodada (último ponto/jogo lançado) — usado
   // como "Final real" na barra de progresso da rodada.
   if (!t.rounds[roundIdx].completedAt) t.rounds[roundIdx].completedAt = Date.now();
-  t.standings = _computeStandings(t);
+  _poeStandings(t);
 
   const isSuico = t.format === 'Suíço Clássico' || t.classifyFormat === 'swiss' || t.currentStage === 'swiss';
   const maxRounds = t.swissRounds || 99;
@@ -5500,7 +5555,7 @@ function _healPrematureLigaRounds(t) {
     removed = true;
   }
   if (removed && typeof _computeStandings === 'function') {
-    t.standings = _computeStandings(t);
+    _poeStandings(t);
   }
   return removed;
 }
@@ -5519,7 +5574,7 @@ function _healSitOutWinners(t) {
     });
   });
   if (changed && typeof _computeStandings === 'function') {
-    try { t.standings = _computeStandings(t); } catch (e) {}
+    try { _poeStandings(t); } catch (e) {}
   }
   return changed;
 }

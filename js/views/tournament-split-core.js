@@ -355,15 +355,33 @@
    * cada save — exatamente o que estamos evitando. (Foi o que fez 30 dos 39 torneios
    * "divergirem" na primeira conferência do espelho.)
    */
+  /* ── A CHAVE DE QUALQUER REGISTRO DE PARTE — UMA REGRA SÓ ────────────────────
+   * `dividir` produz dois formatos de registro: o do jogo, que traz `_chave` (conteúdo +
+   * lugar), e o das demais partes, que traz `_k` (conteúdo) e `_idx` (posição).
+   * ⛔ Cada escritor vinha decidindo isso por conta própria — um usava `m._chave`, outro
+   * `p._k || ('p' + p._idx)`, e o `jogosQueMudaram` só sabia ler `_chave`. Parte cuja
+   * chave ele não reconhecia saía do diff INTEIRA e em silêncio.
+   * ⭐ `_idx` é o ÚLTIMO recurso e vem marcado: posição não é identidade, e usá-la como
+   * chave é o estrago que quase apagou 188 dos 218 eventos do Confra.
+   */
+  function chaveDoRegistro(reg) {
+    if (!reg || typeof reg !== 'object') return null;
+    if (reg._chave) return String(reg._chave);
+    if (reg._k) return String(reg._k);
+    if (reg._idx !== undefined && reg._idx !== null) return 'i' + String(reg._idx);
+    return null;
+  }
+
   function jogosQueMudaram(antes, depois) {
     var idx = {};
-    _arr(antes).forEach(function (m) { if (m && m._chave) idx[m._chave] = m; });
+    _arr(antes).forEach(function (m) { var k = chaveDoRegistro(m); if (k) idx[k] = m; });
     var mudaram = [], sumiram = [];
     var vistos = {};
     _arr(depois).forEach(function (m) {
-      if (!m || !m._chave) return;
-      vistos[m._chave] = 1;
-      var b = idx[m._chave];
+      var k = chaveDoRegistro(m);
+      if (!k) return;
+      vistos[k] = 1;
+      var b = idx[k];
       if (!b || !iguais(b, m)) mudaram.push(m);
     });
     Object.keys(idx).forEach(function (k) { if (!vistos[k]) sumiram.push(idx[k]); });
@@ -411,7 +429,7 @@
     return Promise.resolve().then(proxima);
   }
 
-  var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo,
+  var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo, chaveDoRegistro: chaveDoRegistro,
               chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
               chaveDoApontamento: chaveDoApontamento,
               colecaoDaParte: colecaoDaParte, montarDoBanco: montarDoBanco,
