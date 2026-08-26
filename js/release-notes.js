@@ -64,6 +64,30 @@ window._RELEASE_NOTES_HTML = (function () {
     //   deploy) e nao carrega funcionalidade. A trava pegou ESSE commit, nao uma
     //   omissao — e a conferencia fica registrada aqui em vez de virar um "toque"
     //   vazio no arquivo so pra passar.
+    // ⚠️ 2.0.130 NÃO ganha item, e é DECISÃO. Ela zera as 48 janelas de tempo fixas dos
+    // testes (fixtures), ou seja mexe SÓ em tests/ — zero mudança de tela, zero
+    // comportamento novo para quem joga. A trava (check-release-notes) pega OMISSÃO e não
+    // sabe julgar isso; a justificativa fica aqui, para o próximo leitor não achar que faltou.
+    // ── v2.1 ─────────────────────────────────────────────────────────────────
+    // Promove o ciclo 2.0.5 → 2.0.130 (125 patches) ao minor unificado que vai às lojas.
+    // O motivo desta ida NÃO é polimento: entre a 2.0.4 (publicada na App Store em 21/ago)
+    // e hoje, os dados do torneio SAÍRAM do documento único (inscritos, jogos, histórico e
+    // classificação viraram registros próprios). O app da loja não conhece esse desenho —
+    // quem está com a 2.0.4 no iPhone lê um torneio que o banco não guarda mais desse jeito.
+    // Mesma lição da 1.7.35: quando o formato do dado muda, a ida à loja É o conserto.
+    // Os itens abaixo são consolidados por tema, como manda a convenção do arquivo.
+    '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
+      '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">🎾 v2.1 — O aplicativo volta a andar junto com o site, e o celular ficou muito mais rápido <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">(Agosto, 2026)</span></div>' +
+      '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        '<li><b>📲 O aplicativo estava para trás — e agora alcançou o site:</b> os torneios passaram a guardar inscritos, jogos e histórico separadamente, e a versão anterior do aplicativo ainda esperava tudo junto. Resultado: torneio que abria vazio ou pela metade no iPhone. Esta versão entende o desenho novo. <b>Se você usa o aplicativo, atualize.</b></li>' +
+        '<li><b>⚡ A lentidão do celular tinha causa, e ela foi medida:</b> a tela inicial fazia 8.959 buscas de nome para desenhar uma vez; agora faz 491. O recálculo de cor caiu de 1.391ms para 20ms. Telas que não estão abertas deixaram de ser construídas. Rolar a lista, abrir a chave e voltar ficaram visivelmente mais leves.</li>' +
+        '<li><b>📂 Torneio grande parou de travar:</b> a tela inicial passou a ler um resumo do torneio em vez do torneio inteiro, e a chave nasce com o seu grupo primeiro. Torneios com dezenas de grupos abrem sem a espera que existia antes.</li>' +
+        '<li><b>🔄 O aplicativo podia ficar preso numa versão antiga:</b> havia um defeito que segurava o conteúdo guardado no aparelho e impedia a atualização de chegar. Corrigido — e com uma trava para não acontecer de novo.</li>' +
+        '<li><b>🎾 Lançar placar sem sinal não perde mais o resultado:</b> o placar entra numa fila e é aplicado sozinho assim que a conexão volta.</li>' +
+        '<li><b>⚖️ Classificação mais firme:</b> grupo que terminou tem a classificação congelada e para de ir e voltar; quem saiu por W.O. passa a mostrar onde joga agora; e o 3º lugar voltou ao pódio.</li>' +
+        '<li><b>🔒 Privacidade:</b> os e-mails dos participantes saíram do documento de leitura pública do torneio.</li>' +
+      '</ul>' +
+    '</div>' +
     // ── v2.0 ─────────────────────────────────────────────────────────────────
     // ⚠️ Os commits `iOS 2.0 (build 200)` e `iOS 2.0.1 (build 201)` NÃO ganham item, e é
     // DECISÃO — a mesma dos dois. Eles são só o número:
