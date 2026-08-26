@@ -92,7 +92,11 @@ const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
   ok(r._resumo === true, '⛔ o resumo vem marcado com `_resumo: true`');
   const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
   const i = store.indexOf('window._ensureTournamentLoaded = function');
-  const corpo = store.slice(i, i + 1800);
+  // ⚠️ JANELA LARGA DE PROPÓSITO. Ela era 1800 e quebrou na 2.0.97: a função ganhou a
+  // recusa do que vem do CACHE (`_doCache`) + o comentário que explica por quê, e o
+  // `arr[i] = t;` saiu da janela. O teste acusou "o completo não substitui o resumo"
+  // quando ele substitui — recorte curto reprova código certo.
+  const corpo = store.slice(i, i + 3500);
   ok(/local\._resumo === true.*local = null/s.test(corpo),
      '⭐ e um resumo conta como "não carregado" — abrir vai buscar o documento completo');
   ok(/arr\[i\] = t;/.test(corpo),

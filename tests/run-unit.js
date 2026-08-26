@@ -206,6 +206,13 @@ const SUITES = [
   // Resultados" (2.0.86) deixava o botão de aprovar sem ouvinte: aparecia e o clique
   // não fazia NADA — sem erro, sem aviso, sem Sentry. Travou o jogo 63 do Confra.
   'tests/botao-inserido-depois-continua-clicavel.test.js',
+  // ⛔ E A REGRA GERAL: ninguém liga CLIQUE elemento a elemento. Vale pro app inteiro —
+  // montagem preguiçosa e redesenho matam esse padrão, e ele falha em SILÊNCIO.
+  'tests/clique-nao-se-liga-por-elemento.test.js',
+  // ⛔ ABRIR O TORNEIO BUSCA O FRESCO. "Não é resumo" nunca quis dizer "está atualizado":
+  // o cache entrega documento COMPLETO de até 24h, e ele passava no teste de "já carregado".
+  // Sintoma: aprovou o placar, abriu de novo e estava pendente; reiniciar corrigia.
+  'tests/abrir-torneio-nao-usa-o-cache.test.js',
   // ⭐ A dashboard é o CÍRCULO da pessoa; o Explorar abre a plataforma.
   'tests/dashboard-mostra-o-meu-circulo.test.js',
   // ⛔ A modalidade gravada é o valor CANÔNICO — o emoji é rótulo. O botão padronizava

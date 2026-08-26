@@ -4182,7 +4182,9 @@ function renderDashboard(container) {
    * Com delegação o ouvinte mora no CONTAINER e vale pra qualquer botão que exista agora
    * ou venha a existir. Some a classe inteira do problema — e ela ia voltar em toda seção
    * que eu tornasse preguiçosa. */
-  if (!container.__spPendDelegado) {
+  // guarda pela FUNÇÃO (mesma razão da delegação em tournaments-categories.js): o
+  // container em teste headless costuma ser um objeto de mentira, sem addEventListener.
+  if (container && typeof container.addEventListener === 'function' && !container.__spPendDelegado) {
     container.__spPendDelegado = true;
     container.addEventListener('click', function (e) {
       var alvo = e && e.target;

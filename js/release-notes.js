@@ -84,6 +84,32 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.97 ───────────────────────────────────────────
+        // ⛔ ABRIR O TORNEIO VOLTAVA COM DADO VELHO. Relato do dono, logo depois de
+        // aprovar um placar: _"pelo que vejo foi aprovado, mas quando abri de novo não
+        // estava. Mas daí reiniciei e estava. inconsistência no load que não deveria
+        // acontecer"_.
+        // CAUSA: `_ensureTournamentLoaded` decidia buscar assim — "é um resumo? busco;
+        // senão, já está carregado". Só que `_loadFromCache` enche a memória com
+        // documentos COMPLETOS de até 24h atrás, e um completo velho PASSA nesse teste.
+        // Abrir pintava o estado de ANTES da aprovação; reiniciar corrigia porque o cache
+        // já tinha sido trocado.
+        // ⛔ Eram DUAS perguntas respondidas pelo mesmo teste: "tem os dados?" e "os dados
+        // são atuais?". Agora o que vem do cache é marcado, e ABRIR exige o fresco. O
+        // cache segue pintando a lista na hora — ele só deixou de decidir o que a pessoa vê.
+        //
+        // ⛔ E O PADRÃO QUE TRAVOU O JOGO 63 NÃO PODE VOLTAR EM LUGAR NENHUM.
+        // Auditei os 14 pontos do app que ligavam clique elemento a elemento. O gerenciador
+        // de categorias não estava quebrado — mas só porque alguém lembrava de RELIGAR a
+        // cada `innerHTML = …`, em 5 pontos, com os mesmos 3 botões duplicados em dois
+        // lugares. Depender de lembrar É o bug. Viraram UMA delegação (e as duas pontas,
+        // uma só). Trava geral: tests/clique-nao-se-liga-por-elemento (varre o app inteiro).
+        //
+        // + removidas 91 linhas mortas de `_setupServeDragDrop`: função sem NENHUM
+        // chamador, procurando um atributo (`data-serve-idx`) que o app nunca emite.
+        // Apagada em vez de mantida: função sem chamador é decoy, e decoy faz o próximo
+        // leitor consertar o lugar errado — foi o que me atrasou no jogo 63.
+        // SEM item pro usuário: um conserto de frescor e dois preventivos.
         // ── ciclo 2.0.96 ───────────────────────────────────────────
         // ⛔ O BOTÃO QUE APARECE E NÃO FAZ NADA. Relato do dono: _"não consigo
         // aprovar o jogo 63 … o botão aparece, mas clicando nada acontece.

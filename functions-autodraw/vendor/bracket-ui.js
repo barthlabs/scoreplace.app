@@ -6450,97 +6450,14 @@ window._openLiveScoring = function(tId, matchId, opts) {
     _liveSetServer(sel.team, sel.idx);
   };
 
-  function _setupServeDragDrop() {
-    var cards = document.querySelectorAll('[data-serve-idx]');
-    if (!cards.length) return;
-
-    // Desktop drag
-    cards.forEach(function(card) {
-      card.addEventListener('dragstart', function(e) {
-        _serveDragIdx = parseInt(card.getAttribute('data-serve-idx'));
-        card.style.opacity = '0.4';
-        e.dataTransfer.effectAllowed = 'move';
-      });
-      card.addEventListener('dragend', function() {
-        card.style.opacity = '1';
-        _serveDragIdx = null;
-        document.querySelectorAll('[data-serve-idx]').forEach(function(c) { c.style.transform = ''; });
-      });
-      card.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        if (_serveDragIdx === null) return;
-        var tgt = parseInt(card.getAttribute('data-serve-idx'));
-        if (tgt !== _serveDragIdx) card.style.transform = 'scale(1.04)';
-      });
-      card.addEventListener('dragleave', function() { card.style.transform = ''; });
-      card.addEventListener('drop', function(e) {
-        e.preventDefault();
-        card.style.transform = '';
-        if (_serveDragIdx === null) return;
-        var tgt = parseInt(card.getAttribute('data-serve-idx'));
-        if (tgt !== _serveDragIdx) {
-          var src = _serveDragIdx;
-          _serveDragIdx = null;
-          _applyServeDrag(src, tgt);
-        }
-      });
-    });
-
-    // Touch drag (mobile)
-    var _touchIdx = null;
-    cards.forEach(function(card) {
-      card.addEventListener('touchstart', function(e) {
-        _touchIdx = parseInt(card.getAttribute('data-serve-idx'));
-        card.style.opacity = '0.6';
-      }, { passive: true });
-      card.addEventListener('touchmove', function(e) {
-        if (_touchIdx === null) return;
-        e.preventDefault();
-        if (!_serveDragGhost) {
-          _serveDragGhost = card.cloneNode(true);
-          _serveDragGhost.style.cssText = 'position:fixed;z-index:200000;opacity:0.85;pointer-events:none;width:' + card.offsetWidth + 'px;box-shadow:0 8px 30px rgba(0,0,0,0.5);border-radius:12px;';
-          document.body.appendChild(_serveDragGhost);
-        }
-        var t = e.touches[0];
-        _serveDragGhost.style.left = (t.clientX - 40) + 'px';
-        _serveDragGhost.style.top = (t.clientY - 20) + 'px';
-        document.querySelectorAll('[data-serve-idx]').forEach(function(c) { c.style.transform = ''; });
-        var el = document.elementFromPoint(t.clientX, t.clientY);
-        var targ = el;
-        while (targ) {
-          if (targ.dataset && targ.dataset.serveIdx !== undefined) {
-            var ti = parseInt(targ.dataset.serveIdx);
-            if (ti !== _touchIdx) targ.style.transform = 'scale(1.04)';
-            break;
-          }
-          targ = targ.parentElement;
-        }
-      }, { passive: false });
-      card.addEventListener('touchend', function(e) {
-        card.style.opacity = '1';
-        if (_serveDragGhost) { _serveDragGhost.remove(); _serveDragGhost = null; }
-        document.querySelectorAll('[data-serve-idx]').forEach(function(c) { c.style.transform = ''; });
-        if (_touchIdx === null) return;
-        var t = e.changedTouches[0];
-        var el = document.elementFromPoint(t.clientX, t.clientY);
-        var targ = el;
-        while (targ) {
-          if (targ.dataset && targ.dataset.serveIdx !== undefined) {
-            var ti = parseInt(targ.dataset.serveIdx);
-            if (ti !== _touchIdx) {
-              var src = _touchIdx;
-              _touchIdx = null;
-              _applyServeDrag(src, ti);
-              return;
-            }
-            break;
-          }
-          targ = targ.parentElement;
-        }
-        _touchIdx = null;
-      });
-    });
-  }
+  /* ⛔ AQUI MORAVA `_setupServeDragDrop` (~91 linhas) — REMOVIDA na 2.0.96.
+   * Ela ligava arrastar-e-soltar em `[data-serve-idx]` pra reordenar o sacador, e:
+   *   · NUNCA era chamada (nenhum call site no app inteiro);
+   *   · o atributo `data-serve-idx` que ela procurava NUNCA é emitido.
+   * Ou seja: nem o gancho existia. A escolha do sacador acontece por outro caminho,
+   * que funciona (ver `_liveSetServer`, logo acima).
+   * Apagada em vez de virar no-op: função sem chamador é DECOY, e decoy faz o próximo
+   * leitor consertar o lugar errado — foi assim que perdi tempo no jogo 63. */
 
   // Confirm the proposed order
   window._liveConfirmServeOrder = function() {

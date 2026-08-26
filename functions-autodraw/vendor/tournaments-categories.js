@@ -5,6 +5,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 (function() {
 var _t = window._t || function(k) { return k; };
 
+// Qual torneio o gerenciador de categorias está mostrando. A delegação de cliques (mais
+// abaixo) lê daqui em vez de receber o id em cada botão — os botões são montados em DOIS
+// lugares e nenhum deles carrega `data-tid`.
+// ⛔ DECLARADO AQUI, e não junto da delegação: lá ele ficaria DEPOIS dos três pontos que o
+// atribuem. Funcionava por içamento do `var`, e é exatamente o tipo de coisa que o próximo
+// leitor lê errado.
+var _catMgrTid = null;
+
 // ========== Category enrollment helpers ==========
 // Maps user gender to tournament gender category codes
 window._userGenderToCatCodes = function(userGender) {
@@ -1246,29 +1254,12 @@ window.renderCategoryManagerPage = function(container, tId) {
             uncatHtml +
             '</div>';
 
+        _catMgrTid = tId;   // a delegação lê daqui qual torneio está aberto
         container.innerHTML = pageHtml;
         _attachCatManagerDragDrop(tId);
         if (typeof window._reflowChrome === 'function') window._reflowChrome();
 
-        // Attach click handlers for unmerge buttons
-        var unmergeBtns = document.querySelectorAll('.cat-unmerge-btn');
-        unmergeBtns.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                var catName = btn.getAttribute('data-unmerge-cat');
-                _unmergeCategoryAction(tId, catName);
-            });
-        });
-
-        // Attach click handlers for delete category buttons (empty categories only)
-        var deleteBtns = document.querySelectorAll('.cat-delete-btn');
-        deleteBtns.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                var catName = btn.getAttribute('data-cat');
-                if (typeof window._deleteEmptyCategory === 'function') window._deleteEmptyCategory(tId, catName);
-            });
-        });
+        // (os cliques vivem na delegação única — ver _catMgrTid)
     };
 
     // ---- Detail view: participants in a specific category ----
@@ -1339,18 +1330,10 @@ window.renderCategoryManagerPage = function(container, tId) {
 
         var el = document.getElementById(detailModalId);
         if (el) el.remove();
+        _catMgrTid = tId;
         document.body.insertAdjacentHTML('beforeend', detailHtml);
 
-        // Attach click handlers for remove-from-category buttons
-        var removeBtns = document.querySelectorAll('.cat-remove-participant-btn');
-        removeBtns.forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                var pIdx = parseInt(btn.getAttribute('data-pidx'), 10);
-                var cat = btn.getAttribute('data-cat');
-                _removeParticipantFromCategory(tId, pIdx, cat);
-            });
-        });
+        // (os cliques vivem na delegação única — ver _catMgrTid)
     };
 
     // v2.4.29: ao abrir, limpa categorias mortas/abandonadas dos participantes
@@ -1517,23 +1500,58 @@ window._hydrateInlineCatMgr = function(tId) {
     // so we use the value captured synchronously at drop time when available.
     var _savedScrollY = (_catMgrDropScrollY !== null ? _catMgrDropScrollY : 0) || window.scrollY || window.pageYOffset || 0;
     _catMgrDropScrollY = null;
+    _catMgrTid = tId;   // a delegação lê daqui qual torneio está aberto
     container.innerHTML = window._buildInlineCatMgrHTML(tId);
     if (_savedScrollY > 0) window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
     _attachCatManagerDragDrop(tId);
 
-    container.querySelectorAll('.cat-unmerge-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            _unmergeCategoryAction(tId, btn.getAttribute('data-unmerge-cat'));
-        });
-    });
-    container.querySelectorAll('.cat-delete-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (typeof window._deleteEmptyCategory === 'function') window._deleteEmptyCategory(tId, btn.getAttribute('data-cat'));
-        });
-    });
+    // (os cliques vivem na delegação única — ver _catMgrTid)
 };
+
+
+/* ══ OS CLIQUES DO GERENCIADOR DE CATEGORIAS, POR DELEGAÇÃO (2.0.96) ═══════════
+ *
+ * Eram CINCO pontos ligando `addEventListener` botão a botão — e os mesmos três botões
+ * apareciam em DOIS lugares (o gerenciador de página e o embutido), cada um com sua
+ * cópia da ligação. Funcionava porque, a cada `container.innerHTML = …`, alguém lembrava
+ * de religar na linha seguinte.
+ *
+ * ⛔ DEPENDER DE LEMBRAR É O BUG. Foi exatamente isso que travou o jogo 63 do Confra
+ * (25/ago): a dashboard ligava clique no render, a seção passou a ser montada depois, e
+ * o botão de aprovar nasceu morto — aparecia e o clique não fazia NADA, sem erro, sem
+ * aviso, sem Sentry. Aqui ninguém quebrou ainda; a diferença é que agora não dá mais.
+ *
+ * Com delegação no `document`, botão que exista agora ou venha a existir funciona — e as
+ * duas pontas passam a ser UMA ([[feedback_unify_dual_entry_points]]).
+ */
+(function () {
+  // ⛔ o guarda é pela FUNÇÃO, não pela existência do objeto: os testes headless montam um
+  // `document` de mentira com só o que usam (getElementById, querySelector…), e checar
+  // `typeof document === 'undefined'` passava direto e quebrava a carga do arquivo inteiro.
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  if (document.__spCatMgrDelegado) return;
+  document.__spCatMgrDelegado = true;
+  document.addEventListener('click', function (e) {
+    var alvo = e && e.target;
+    if (!alvo || !alvo.closest) return;
+    var tId = _catMgrTid;
+    if (!tId) return;
+    var btn;
+    if ((btn = alvo.closest('.cat-unmerge-btn'))) {
+      e.stopPropagation();
+      _unmergeCategoryAction(tId, btn.getAttribute('data-unmerge-cat'));
+    } else if ((btn = alvo.closest('.cat-delete-btn'))) {
+      e.stopPropagation();
+      if (typeof window._deleteEmptyCategory === 'function') {
+        window._deleteEmptyCategory(tId, btn.getAttribute('data-cat'));
+      }
+    } else if ((btn = alvo.closest('.cat-remove-participant-btn'))) {
+      e.stopPropagation();
+      _removeParticipantFromCategory(tId, parseInt(btn.getAttribute('data-pidx'), 10),
+                                     btn.getAttribute('data-cat'));
+    }
+  });
+})();
 
 // Scroll position captured synchronously at drop time so _hydrateInlineCatMgr
 // can restore it even if the browser resets scroll during the 100ms async gap.

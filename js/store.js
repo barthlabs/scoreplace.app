@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.96';
+window.SCOREPLACE_VERSION = '2.0.97';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -9947,6 +9947,9 @@ window._ensureTournamentLoaded = function (tId, cb) {
   // de VERDADE — então um resumo conta como "não carregado" e vai buscar o completo.
   // ⛔ Sem esta linha, abrir um torneio da vitrine mostraria chave vazia.
   if (local && local._resumo === true) local = null;
+  // ⛔ E O QUE VEIO DO CACHE TAMBÉM NÃO SERVE PRA ABRIR (ver `_doCache` em _loadFromCache):
+  // ele é um retrato de até 24h atrás, e "não é resumo" nunca quis dizer "está atualizado".
+  if (local && local._doCache === true) local = null;
   if (local) { cb(local); return; }
   var DB = window.FirestoreDB;
   if (!DB || typeof DB.loadTournamentById !== 'function') { cb(null); return; }
@@ -9956,7 +9959,7 @@ window._ensureTournamentLoaded = function (tId, cb) {
     // Uma segunda busca pode ter resolvido enquanto a leitura estava em voo — nunca
     // duplicar: quem chegou primeiro é a referência viva que a tela já pode estar usando.
     var jaTem = window._findTournamentById(tId);
-    if (jaTem && jaTem._resumo !== true) { cb(jaTem); return; }
+    if (jaTem && jaTem._resumo !== true && jaTem._doCache !== true) { cb(jaTem); return; }
     var A = window.AppStore;
     if (A) {
       // ⭐ 2.0.90 — o completo SUBSTITUI o resumo, no lugar dele. Empurrar pro fim
@@ -10081,6 +10084,17 @@ window.AppStore = {
         } else {
           this.tournaments = _cached;
         }
+        /* ⛔ O QUE VEIO DO CACHE É RÁPIDO, NÃO É FRESCO — e a diferença tem sintoma.
+         * Relato do dono (25/ago/2026), depois de aprovar um placar: _"pelo que vejo foi
+         * aprovado, mas quando abri de novo não estava. Mas daí reiniciei e estava.
+         * inconsistência no load que não deveria acontecer"_.
+         * CAUSA: `_ensureTournamentLoaded` trata "não é resumo" como "já carregado" e
+         * devolve o objeto de memória SEM buscar. Um documento COMPLETO vindo do cache
+         * (de até 24h atrás) satisfaz esse teste — então abrir o torneio pintava o estado
+         * de ANTES da aprovação, e só um reinício (com o cache já trocado) corrigia.
+         * A marca resolve sem perder o cache: ele segue pintando a lista na hora, e ABRIR
+         * o torneio passa a buscar o fresco. Some quando o completo chega e substitui. */
+        this.tournaments.forEach(function (t) { if (t) t._doCache = true; });
         // v4.4.69 Rei/Rainha: o cache guarda grupos só com matchIds — reidrata
         // group.matches como refs de round.matches antes de qualquer consumidor.
         if (typeof window._hydrateMonarchGroups === 'function') {
