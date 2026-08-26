@@ -54,7 +54,18 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
    * limite"_. Com só os jogos fora, o teto tinha ido de 4,2× pra 7,5× — mas continuava
    * teto: medido, 556 B por inscrito ⇒ o documento RECUSA a partir de ~1.780 pessoas.
    * `participants` sozinho eram 256 B disso, o maior custo por pessoa. */
-  const FORA = ['matches', 'participants'];
+  /* ⛔ INSCRITOS FORA DO SALTO — POR ORA. Descoberto no canário (torneio real encerrado),
+   * e o ensaio NÃO pegaria porque o torneio de ensaio nasce limpo:
+   * `tournaments/{id}/participants` JÁ É USADA por outro espelho, com esquema DIFERENTE —
+   * o roster (id = uid puro, dado cru) contra o meu (id = `_k`, `{_idx,_k,item}`).
+   * Medido: 13 documentos onde deviam ser 8. `remontar` devolveu o certo por SORTE (os
+   * intrusos não têm `_idx` e caíram fora do mapa) — e "funcionou por sorte" não é
+   * critério pra mexer no elenco de um torneio.
+   * ⇒ Os inscritos só saem quando tiverem SUBCOLEÇÃO PRÓPRIA. Dois esquemas no mesmo
+   * lugar é o tipo de coisa que passa despercebida até o dia em que um deles muda.
+   * ⚠️ E isto NÃO adia o objetivo do dono ("não tem que ter limite"): é o passo seguinte,
+   * com nome de coleção próprio, não uma desistência. */
+  const FORA = ['matches'];
 
   let t = doc.data(); t.id = String(ID);
 
