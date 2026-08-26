@@ -376,6 +376,53 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
  * Dar clique aos dois faria o toque disparar o dela E subir pro summary — dois toggles, e
  * o botão parecendo morto. Foi exatamente a bronca que as Novidades levaram na 2.0.44.
  */
+/* ── ONDE ESSA PESSOA JOGA AGORA ──────────────────────────────────────────────────
+ * Pedido do dono (26/ago), com a Carol Moresco de exemplo: ela entrou no Grupo A por um
+ * W.O. da Denise, tomou W.O., se reativou, foi pra espera e caiu num grupo NOVO. Na
+ * classificação do Grupo A ela continua listada (e tem que continuar — é o registro do que
+ * aconteceu ali), mas quem busca o nome dela precisa VER que ela está em outro lugar:
+ * _"numa busca você encontra o nome dela, mas vê que ela foi para outro grupo"_.
+ *
+ * ⛔ POR uid, nunca por nome (cânone do dono) — e o nome só pra quem não tem uid, que é o
+ * inscrito digitado pelo organizador. Casar por nome aqui erraria dos dois lados: homônimo
+ * pega o grupo do outro, e quem se renomeia perde a indicação.
+ * ⛔ E IGNORA O GRUPO DE ONDE ESTAMOS OLHANDO: dizer "(R1 Grupo A)" dentro do próprio
+ * Grupo A não informa nada — a indicação só existe quando ela MUDOU de lugar.
+ * ⚠️ Varre da ÚLTIMA rodada pra primeira: o que interessa é onde ela joga AGORA, não a
+ * primeira vez que apareceu.
+ */
+window._grupoAtualDoJogador = function (t, uid, nome, ignorarGrupo) {
+  if (!t || (!uid && !nome)) return '';
+  var alvoU = uid ? String(uid) : '';
+  var alvoN = (!alvoU && nome) ? String(nome).trim().toLowerCase() : '';
+  var rounds = Array.isArray(t.rounds) ? t.rounds : [];
+  for (var i = rounds.length - 1; i >= 0; i--) {
+    var r = rounds[i] || {};
+    var ms = r.matches || [];
+    for (var j = 0; j < ms.length; j++) {
+      var m = ms[j]; if (!m) continue;
+      var achou = false;
+      if (alvoU) {
+        var us = [].concat(m.team1Uids || [], m.team2Uids || [],
+                           m.p1Uid ? [m.p1Uid] : [], m.p2Uid ? [m.p2Uid] : []);
+        achou = us.some(function (u) { return String(u) === alvoU; });
+      } else {
+        var ns = [].concat(m.team1 || [], m.team2 || [],
+                           [m.p1, m.p2].filter(Boolean));
+        achou = ns.some(function (n) { return String(n).trim().toLowerCase() === alvoN; });
+      }
+      if (!achou) continue;
+      var gi = (m.groupIdx != null) ? m.groupIdx : ((m.monarchGroup != null) ? m.monarchGroup : null);
+      if (gi == null) continue;
+      var gs = r.monarchGroups || [];
+      var nm = (gs[gi] && gs[gi].name) ? String(gs[gi].name) : '';
+      if (!nm || (ignorarGrupo && nm === ignorarGrupo)) continue;
+      return nm;
+    }
+  }
+  return '';
+};
+
 window._demaisJogosCss = function () {
   return '<style>' +
     'details[data-dj] > summary [data-dj-fixa]{display:inline-block;}' +
@@ -6532,6 +6579,23 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 var _presDot = _isPres
                   ? '<span title="Presente no local" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 4px rgba(34,197,94,0.7);margin-right:5px;vertical-align:middle;"></span>'
                   : '';
+                /* ⭐ (Grupo onde ela joga AGORA). Só pra quem saiu por W.O. daqui e
+                 * REAPARECEU em outro grupo — é o caso da Carol: saiu do Grupo A, se
+                 * reativou, foi pra espera e caiu num grupo novo. Quem busca o nome dela
+                 * acha a linha aqui (ela tem que continuar aparecendo: é o registro do que
+                 * aconteceu) e vê, na mesma linha, pra onde ela foi.
+                 * ⚠️ COR DOS 1º–4º, não a vermelha do nome: o vermelho conta o que
+                 * aconteceu AQUI; a indicação conta ONDE ela está. Duas informações
+                 * diferentes não podem sair na mesma cor.
+                 * ⛔ Por uid — nome só pra quem não tem uid (inscrito digitado pelo org). */
+                var _grupoNovoTag = '';
+                if ((_isRed || _isAmb) && typeof window._grupoAtualDoJogador === 'function') {
+                  var _gNovo = window._grupoAtualDoJogador(t, (s.uid || s.p1Uid || ''), s.name, g.name);
+                  if (_gNovo) {
+                    _grupoNovoTag = ' <span style="font-size:0.66rem;font-weight:600;color:var(--text-bright);" ' +
+                      'title="Joga agora em ' + window._safeHtml(_gNovo) + '">(' + window._safeHtml(_gNovo) + ')</span>';
+                  }
+                }
                 var _woTag = (_isRed || _isAmb)
                   ? ' <span style="font-size:0.58rem;font-weight:900;color:' + window._spCor((_isRed ? '#f87171' : '#fbbf24'), 'color') + ';border:1px solid ' + window._spCor((_isRed ? 'rgba(239,68,68,0.5)' : 'rgba(251,191,36,0.5)'), 'borda') + ';border-radius:5px;padding:0 5px;vertical-align:middle;">W.O.</span>'
                   : '';
@@ -6559,7 +6623,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                   : '';
                 return '<tr' + _woBuscaLinha + ' style="border-top:1px solid var(--sp-b-255-255-255-006,rgba(255,255,255,0.06));' + _clsGreen + '">' +
                   '<td style="padding:3px 6px;color:var(--text-muted);font-weight:700;">' + _pos + 'º</td>' +
-                  '<td style="padding:3px 6px;color:' + window._spCor(_nmColor, 'color') + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
+                  /* ⭐ (Grupo onde ela joga AGORA) — ver `_grupoAtualDoJogador`.
+                   * Só pra quem saiu por W.O. e REAPARECEU em outro grupo. A cor é a dos
+                   * 1º–4º (`--text-bright`), não a vermelha do nome: o vermelho conta o que
+                   * aconteceu AQUI, e a indicação conta onde ela está — duas informações
+                   * diferentes não podem ter a mesma cor. */
+                  '<td style="padding:3px 6px;color:' + window._spCor(_nmColor, 'color') + ';">' + (_md ? _md + ' ' : '') + _presDot + _gstNameHtml(s) + _woTag + _grupoNovoTag + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, _gst, s, { groupDone: gDone }) : '') + (typeof window._contactPersonIconHtml === 'function' ? window._contactPersonIconHtml(t, s.uid, s.name, { sameGroup: _gHasMe }) : '') + '</td>' +
                   (_advPtsOn ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, g.category || '') : '') + ' style="padding:3px 6px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-weight:700;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + (typeof s.points === 'number' ? s.points : 0) + '</td>' : '') +
                   '<td style="padding:3px 6px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + (s.wins || 0) + '</td>' +
                   '<td style="padding:3px 6px;text-align:center;color:var(--text-muted);">' + (_sld >= 0 ? '+' : '') + _sld + '</td>' +

@@ -407,7 +407,8 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
     d.sumiram.forEach((m) => tx.delete(col.doc(String(m._chave))));
   }
   // devolve pro documento tudo que NÃO está no marcador (dividir tira os três sempre)
-  ['participants', 'history'].forEach((k) => {
+  // ⛔ deriva de PESADOS — ver a nota gêmea em firebase-db.saveTournament.
+  (_tSplit.PESADOS || ['participants', 'history']).forEach((k) => {
     if (fora.indexOf(k) === -1 && b.persist[k] !== undefined) pDepois.config[k] = b.persist[k];
   });
   pDepois.config._semPesados = fora;
@@ -1872,7 +1873,7 @@ exports.tournamentMirror = onDocumentWritten(
         // pode APAGAR, não por quem pode escrever.
         // ⚠️ pelo NOME DA COLEÇÃO, não da parte — senão a limpeza deixaria `inscritos`
         // órfão e apagaria `participants`, que é de outro dono.
-        for (const nome of ['matches', 'inscritos', 'history', 'resultQueue', 'participants']) {
+        for (const nome of ['matches', 'inscritos', 'history', 'opponentHistory', 'resultQueue', 'participants']) {
           const col = db.collection('tournaments').doc(id).collection(nome);
           const snap = await col.get();
           let lote = db.batch(), n = 0;

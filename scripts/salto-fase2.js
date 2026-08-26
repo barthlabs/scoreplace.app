@@ -71,7 +71,11 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
    * `tournaments/{id}/participants` já tem dono — o espelho de roster, esquema diferente,
    * 13 documentos onde deviam ser 8. ⇒ Agora vão pra `inscritos`, coleção nova, sem dono.
    * Ver `colecaoDaParte` no split-core: o nome da coleção é decidido num lugar só. */
-  const FORA = ['matches', 'participants'];
+  /* ⭐ `opponentHistory` ENTROU (26/ago): era o maior do que sobrava crescendo com gente
+   * (94 B por inscrito). ⚠️ E ele NÃO podia ser apagado — medido: dos 215 pares guardados
+   * no Confra, 74 não aparecem mais nos jogos. Carrega história que os jogos já não contam.
+   * ⛔ `standings` segue fora: tem a classificação CONGELADA, dado com valor jurídico. */
+  const FORA = ['matches', 'participants', 'opponentHistory'];
 
   let t = doc.data(); t.id = String(ID);
 
@@ -111,7 +115,8 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   const _configPraGravar = (p) => {
     const c = JSON.parse(JSON.stringify(p.config));
     delete c._semPesados; delete c._nJogos;   // recolocados abaixo, com o valor de AGORA
-    ['participants', 'history'].forEach((k) => {
+    // ⛔ deriva de PESADOS — lista à mão aqui esqueceria um campo novo em silêncio.
+    (S.PESADOS || ['participants', 'history']).forEach((k) => {
       if (FORA.indexOf(k) === -1 && t[k] !== undefined) c[k] = JSON.parse(JSON.stringify(t[k]));
     });
     // ⛔ `memberUids` FICA no documento de propósito: é ele que o ouvinte ao vivo consulta

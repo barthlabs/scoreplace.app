@@ -35,6 +35,9 @@ const jogosDe = (t) => { const o = []; (t.rounds || []).forEach((r) => (r.matche
     creatorUid: DEV_UID || 'ensaio-dev', memberUids: DEV_UID ? [DEV_UID] : [],
     participants: [{ uid: 'p1', name: 'Um' }, { uid: 'p2', name: 'Dois' },
                    { p1Name: 'Tri', p2Name: 'Quatro', name: 'Tri / Quatro' }],
+    // ⚠️ com PAR QUE NÃO APARECE NOS JOGOS de propósito: é o caso que provou que
+    // `opponentHistory` não pode ser recalculado (74 pares assim no Confra real).
+    opponentHistory: { _default_: { 'uid:p1|||uid:p2': 2, 'uid:sumiu|||uid:tambem': 1 } },
     history: [{ date: new Date().toISOString(), message: 'Torneio Criado' }],
     rounds: [{ round: 1, matches: [
       { id: 'e-m1', p1: 'Um', p2: 'Dois', winner: 'Um', scoreP1: 6, scoreP2: 3 },
@@ -85,6 +88,10 @@ const jogosDe = (t) => { const o = []; (t.rounds || []).forEach((r) => (r.matche
   ok(jogosDe(montado).length === 2 && jogosDe(montado).filter((m) => m.winner).length === 1,
     '   com os 2 jogos e o placar de volta');
   ok((montado.participants || []).length === 3, '   e os 3 inscritos');
+  ok(JSON.stringify((montado.opponentHistory || {})._default_) ===
+     JSON.stringify({ 'uid:p1|||uid:p2': 2, 'uid:sumiu|||uid:tambem': 1 }),
+    '⭐ e o `opponentHistory` INTEIRO — inclusive o par que não aparece em jogo nenhum, ' +
+    'que é justamente o que o recálculo perderia');
 
   // ── ④ o gatilho de espelho NÃO pode apagar a subcoleção ──────────────────
   await ref.update({ _ensaioToque: Date.now() });     // acorda o gatilho

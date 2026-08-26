@@ -1084,7 +1084,12 @@ window.FirestoreDB = {
       try {
         var _p = window._tSplit.dividir(JSON.parse(JSON.stringify(cleanData)));
         if (_p && _p.config) {
-          ['participants', 'history'].forEach(function (k) {
+          /* ⛔ DERIVA DE `PESADOS`, não de lista escrita à mão. `dividir` extrai TODOS os
+           * campos pesados por natureza; quem não está no marcador tem que VOLTAR pro
+           * documento, senão a gravação o zera. Escrever a lista aqui à mão já custou três
+           * incidentes num dia — e no dia em que um campo novo entrar em PESADOS, este
+           * ponto esqueceria dele em silêncio. */
+          (S.PESADOS || ['participants', 'history']).forEach(function (k) {
             if (_fora.indexOf(k) === -1 && cleanData[k] !== undefined) _p.config[k] = cleanData[k];
           });
           _p.config._semPesados = _fora;

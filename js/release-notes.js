@@ -84,6 +84,24 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.117 ──────────────────────────────────────────
+        // ⭐ QUEM SAIU POR W.O. AGORA DIZ ONDE JOGA. Pedido do dono, com a Carol Moresco de
+        // exemplo: ela entrou no Grupo A por um W.O. da Denise, tomou W.O., se reativou,
+        // foi pra espera e caiu num grupo novo. "Numa busca você encontra o nome dela, mas
+        // vê que ela foi para outro grupo."
+        // ⭐ A linha dela CONTINUA no Grupo A — é o registro do que aconteceu ali, e sumir
+        // com ela seria apagar história. O que muda é que a linha passa a dizer PRA ONDE.
+        // ⚠️ Na cor dos 1º–4º, não na vermelha do nome: o vermelho conta o que aconteceu
+        // AQUI, a indicação conta ONDE ela está — duas informações diferentes não saem na
+        // mesma cor. E por uid, com o nome valendo só pra inscrito digitado pelo org.
+        // Conferido no Confra real: Carol → R1 Grupo I2, e mais dois que formaram o mesmo
+        // grupo novo; os 7 que não reapareceram ficam sem indicação.
+        //
+        // ⭐ E `opponentHistory` saiu do documento (94 B por inscrito, o maior do que
+        // sobrava). ⚠️ Ele NÃO podia ser apagado e recalculado: medido no Confra, dos 215
+        // pares guardados, 74 não aparecem mais nos jogos (substituição, W.O., quem saiu) e
+        // o recálculo inventaria 66 que não existem. Ele carrega história que os jogos já
+        // não contam — apagar quebraria o anti-repetição do sorteio.
         // ── ciclo 2.0.116 ──────────────────────────────────────────
         // ⭐ O "VER MENOS" AGORA FICA MESMO NA TELA A ROLAGEM INTEIRA.
         // Queixa do dono: "tem que rolar junto com a sessão durante toda a rolagem pra

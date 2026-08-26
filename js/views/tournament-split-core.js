@@ -31,7 +31,16 @@
   // Campos que saem do documento e viram subcoleção. ⛔ `standings` NÃO entra aqui:
   // ele é DERIVADO e vai ser recalculado no servidor (fase 3) — sair antes disso
   // quebraria a classificação congelada, que é dado com valor jurídico no torneio.
-  var PESADOS = ['participants', 'history'];
+  /* ⭐ `opponentHistory` ENTROU (26/ago): 94 B por inscrito, o maior do que sobrava no
+   * documento. ⚠️ E ele NÃO pode ser apagado e recalculado — MEDIDO no Confra: dos 215
+   * pares guardados, 74 NÃO aparecem nos jogos de hoje (substituição, W.O., gente que
+   * saiu) e o recálculo inventaria 66 que não existem. Ou seja ele carrega história que os
+   * jogos já não contam; apagar quebraria o anti-repetição do sorteio.
+   * ⇒ Sai do documento, mas continua existindo. Quem escreve nele é só o motor de sorteio
+   * (`_recordOpponentHistory`), que roda na CF.
+   * ⛔ `standings` continua FORA desta lista: ele é derivado, mas carrega a classificação
+   * CONGELADA — dado com valor jurídico no torneio. Sai por último e com prova própria. */
+  var PESADOS = ['participants', 'history', 'opponentHistory'];
 
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }

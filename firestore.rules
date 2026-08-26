@@ -355,6 +355,20 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      /* ─── HISTÓRICO DE ADVERSÁRIOS: LEITURA ──────────────────────────────
+       * `tournaments/{id}/opponentHistory/{categoria}` — quem já jogou com quem, usado
+       * pelo sorteio pra NÃO repetir dupla. ⚠️ Não é derivado descartável: medido no
+       * Confra, 74 dos 215 pares não aparecem mais nos jogos (substituição, W.O., quem
+       * saiu). Sem esta regra o Firestore nega por omissão e o sorteio perde o passado.
+       * ⛔ Escrita é da CF (o motor de sorteio roda lá), nunca do cliente. */
+      match /opponentHistory/{categoria} {
+        function parentTo() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTo().isPublic == true);
+        allow write: if false;
+      }
+
       /* ─── INSCRITOS DIVIDIDOS: LEITURA ────────────────────────────────────
        * `tournaments/{id}/inscritos/{k}` é onde o elenco passa a viver quando sai do
        * documento. ⛔ E o nome NÃO é `participants` de propósito: essa já tem dono — o
