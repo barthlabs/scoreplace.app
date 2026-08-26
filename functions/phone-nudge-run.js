@@ -25,6 +25,9 @@ const core = require('./phone-nudge-core');
 // como constante escondida: `appConfig/phoneNudge.tournamentIds` troca sem deploy.
 const DEFAULT_TOURNAMENTS = ['tour_1780009816637'];
 const DEFAULTS = {
+  // ⛔ `pausada` desliga a rotina INTEIRA (campanha + consolidado). `enabled` só alterna
+  // ensaio/envio — ver a nota em runPhoneNudge sobre por que os dois existem.
+  pausada: false,
   enabled: false,
   tournamentIds: DEFAULT_TOURNAMENTS,
   reportTo: core.REPORT_TO,
@@ -273,8 +276,24 @@ async function runOne(db, tournamentId, nowMs, cfg) {
 }
 
 async function runPhoneNudge(db, nowMs, overrides) {
+  const cfg0 = Object.assign({}, DEFAULTS, await readConfig(db), overrides || {});
+  /* ⛔ DESLIGA TUDO — inclusive o consolidado do dono.
+   * Ordem do dono (26/ago): _"pode parar com a campanha de email cobrando o celular na
+   * confra e com o email de relatorio sobre isso"_.
+   * ⚠️ E `enabled: false` NÃO bastava: ele só liga o modo ensaio — a rotina segue rodando,
+   * segue gravando leva e o CONSOLIDADO sai do mesmo jeito (ele é enviado fora dessa
+   * condição, de propósito, pra dar visibilidade durante o ensaio). Desligar só o `enabled`
+   * teria parado metade do que ele pediu, e a metade que continuaria chegando na caixa
+   * dele é justamente a que ele nomeou.
+   * ⇒ `pausada: true` sai ANTES de tudo: sem varredura, sem leva gravada, sem e-mail
+   * nenhum. `ensureLeva1` também fica pra trás — não há por que escrever nada.
+   * ⭐ Reversível numa linha, sem deploy: `appConfig/phoneNudge.pausada = false`. */
+  if (cfg0.pausada === true) {
+    console.log('[phoneNudge] PAUSADA por appConfig/phoneNudge.pausada — nada enviado, nada gravado.');
+    return [{ pausada: true }];
+  }
   await ensureLeva1(db);
-  const cfg = Object.assign({}, DEFAULTS, await readConfig(db), overrides || {});
+  const cfg = cfg0;
   const ids = Array.isArray(cfg.tournamentIds) && cfg.tournamentIds.length
     ? cfg.tournamentIds : DEFAULT_TOURNAMENTS;
   const out = [];

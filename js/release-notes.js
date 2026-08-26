@@ -84,6 +84,23 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.114 ──────────────────────────────────────────
+        // ⭐ O "VER MAIS" APARECE COM A SEÇÃO FECHADA — eu tinha feito só metade.
+        // O dono pediu "o mesmo ver mais/ver menos das Novidades" e eu entreguei só o
+        // "ver menos" flutuante: FECHADA, a seção continuava com o `▸ Demais jogos da
+        // rodada (N)` cru. E era o estado FECHADO que ele estava olhando.
+        // ⭐ Agora os dois se revezam pelo `[open]` do próprio <details> — sem listener,
+        // sem re-render, e sem um segundo lugar guardando "está aberto?" pra discordar do
+        // primeiro. Cada estado tem UM controle visível, com texto fixo.
+        // ⛔ A pílula do cabeçalho NÃO tem clique próprio: ela mora dentro do <summary>,
+        // que já alterna — clique nos dois faria o toque disparar o dela E subir, dois
+        // toggles, e o botão parecendo morto (a bronca que as Novidades levaram na 2.0.44).
+        //
+        // ⛔ E A COBRANÇA DE CELULAR DA CONFRA FOI PARADA (ordem do dono), campanha E
+        // relatório. ⚠️ Desligar só o `enabled` NÃO bastava: ele apenas liga o modo ensaio
+        // — a rotina seguiria rodando e o consolidado sairia igual, porque ele é enviado
+        // fora dessa condição. Ou seja, pararia metade, e a metade que continuaria
+        // chegando na caixa dele é justo a que ele nomeou. A chave nova sai ANTES de tudo.
         // ── ciclo 2.0.113 ──────────────────────────────────────────
         // ⭐ O 3º LUGAR VOLTOU AO PÓDIO — e quase voltou ERRADO.
         // Relato do dono no BT Corpus Christi: "no pódio não aparece o 3º lugar e deveria".

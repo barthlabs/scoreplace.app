@@ -81,5 +81,37 @@ ok(chamadasTrilho === 2, '⭐ os DOIS "Demais jogos" (Liga e Rei/Rainha) têm o 
 ok((br.match(/typeof window\._demaisJogosTrilho === 'function'/g) || []).length === 2,
   '⛔ e as duas chamadas são GUARDADAS — render que explode é pior que botão que falta');
 
+// ── ⑤ OS DOIS ESTADOS — eu tinha entregue SÓ UM ─────────────────────────────
+/* O dono pediu "o mesmo ver mais/ver menos da sessão de novidades" e eu entreguei só o
+ * "ver menos" flutuante. FECHADA, a seção continuava com o `▸ Demais jogos da rodada (N)`
+ * cru, sem pílula nenhuma — e é justamente o estado FECHADO que ele estava olhando:
+ * _"é no detalhe do torneio o ver mais/ver menos"_.
+ * ⭐ Os dois se revezam pelo `[open]` do próprio `<details>`: sem listener, sem re-render,
+ * e sem um SEGUNDO lugar guardando "está aberto?" pra discordar do primeiro. */
+ok(/window\._demaisJogosPilulaFixa = function/.test(br), '⭐ existe a pílula do estado FECHADO');
+const iFixa = br.indexOf('window._demaisJogosPilulaFixa = function');
+const fixa = br.slice(iFixa, br.indexOf('\n};', iFixa));
+ok(/_spVerMaisTag\('', true,/.test(fixa),
+  "   e ela nasce COLAPSADA (diz 'ver mais') — texto fixo, sem nada pra sincronizar");
+ok(!/onclick/.test(fixa),
+  '⛔ e SEM onclick próprio: ela mora dentro do `<summary>`, que já alterna. Clique nos dois ' +
+  'faria o toque disparar o dela E subir pro summary — DOIS toggles, e o botão parecendo morto ' +
+  '(foi a bronca que as Novidades levaram na 2.0.44)');
+
+const iCss = br.indexOf('window._demaisJogosCss = function');
+ok(iCss > 0, 'e o CSS que reveza os dois');
+const css = br.slice(iCss, br.indexOf('\n};', iCss));
+ok(/details\[data-dj\]\[open\] > summary \[data-dj-fixa\]\{display:none/.test(css),
+  '⭐ ABERTA: a pílula do cabeçalho some…');
+ok(/details\[data-dj\]:not\(\[open\]\) \[data-dj-trilho\]\{display:none !important/.test(css),
+  '⭐ …e FECHADA: o trilho some — cada estado tem UM controle visível');
+ok(/!important/.test(css),
+  '⚠️ com `!important`: o trilho carrega `display:flex` INLINE e o inline vence a folha ' +
+  '(mesma armadilha medida que as Novidades documentam duas vezes)');
+
+ok((br.match(/_demaisJogosPilulaFixa\(\)/g) || []).length === 2,
+  '⭐ e a pílula fechada está nos DOIS expansores, como o trilho');
+ok((br.match(/data-dj[ >'"]/g) || []).length >= 2, 'os `<details>` carregam a marca que o CSS usa');
+
 console.log((fail ? '✗' : '✓') + ' ver-menos-acompanha-a-rolagem: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

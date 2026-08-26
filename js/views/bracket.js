@@ -447,6 +447,39 @@ function _applyMyMatchesFilter() {
  * ⛔ Aqui o `<details>` já esconde o conteúdo quando fecha — não precisa da dança de dois
  * elementos que as Novidades fazem por CSS. O "ver mais" continua sendo o próprio summary.
  */
+/* ── O PADRÃO DAS NOVIDADES TEM DOIS ESTADOS, E EU TINHA FEITO SÓ UM ──────────────
+ * O dono pediu "o mesmo ver mais/ver menos da sessão de novidades" e eu entreguei só o
+ * "ver menos" flutuante — FECHADA, a seção continuava com o `▸ Demais jogos da rodada (N)`
+ * cru, sem pílula nenhuma. E é justamente o estado fechado que ele estava olhando:
+ * _"é no detalhe do torneio o ver mais/ver menos"_.
+ *
+ * ⭐ Os dois se revezam por CSS no `[open]` do próprio `<details>` — sem listener, sem
+ * re-render, e sem um segundo lugar guardando "está aberto?" pra discordar do primeiro:
+ *   • FECHADA → a pílula do cabeçalho aparece, dizendo "ver mais", parada;
+ *   • ABERTA  → ela some e o trilho sticky assume, dizendo "ver menos", viajando.
+ * Cada uma tem texto FIXO — não há dois lugares dizendo a mesma coisa e divergindo.
+ * ⛔ Sem `onclick` na pílula do cabeçalho: ela mora DENTRO do `<summary>`, que JÁ alterna.
+ * Dar clique aos dois faria o toque disparar o dela E subir pro summary — dois toggles, e
+ * o botão parecendo morto. Foi exatamente a bronca que as Novidades levaram na 2.0.44.
+ */
+window._demaisJogosCss = function () {
+  return '<style>' +
+    'details[data-dj] > summary [data-dj-fixa]{display:inline-block;}' +
+    'details[data-dj][open] > summary [data-dj-fixa]{display:none;}' +
+    // `!important` porque o trilho carrega `display:flex` INLINE e o inline vence a folha —
+    // mesma armadilha, medida, que as Novidades documentam duas vezes.
+    'details[data-dj]:not([open]) [data-dj-trilho]{display:none !important;}' +
+    '</style>';
+};
+
+window._demaisJogosPilulaFixa = function () {
+  if (typeof window._spVerMaisTag !== 'function') return '';
+  return window._spVerMaisTag('', true, {
+    attrs: ' data-dj-fixa',
+    style: 'cursor:pointer;user-select:none;'
+  });
+};
+
 window._demaisJogosTrilho = function () {
   var pilula = (typeof window._spVerMaisTag === 'function')
     ? window._spVerMaisTag('', false, {
@@ -455,7 +488,7 @@ window._demaisJogosTrilho = function () {
       })
     : '';
   if (!pilula) return '';
-  return '<div style="position:sticky;top:var(--scroll-anchor,120px);height:0;' +
+  return '<div data-dj-trilho style="position:sticky;top:var(--scroll-anchor,120px);height:0;' +
     'margin-bottom:calc(0.84rem + 8px);z-index:6;display:flex;justify-content:flex-end;' +
     'pointer-events:none;">' + pilula + '</div>';
 };
@@ -6690,9 +6723,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             _detailsOpen = (_otherGroups.length >= window._CHAVE_LOTE_MIN) ? '' : ' open';
           }
           ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
-            '<details' + _detailsOpen + ' ontoggle="window._demaisJogosAoAbrir(this)">' +
+            (typeof window._demaisJogosCss === 'function' ? window._demaisJogosCss() : '') +
+            '<details data-dj' + _detailsOpen + ' ontoggle="window._demaisJogosAoAbrir(this)">' +
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
                 '<span>' + _otherSummary + '</span>' +
+                (typeof window._demaisJogosPilulaFixa === 'function' ? window._demaisJogosPilulaFixa() : '') +
               '</summary>' +
               // ⚠️ guardado: os harnesses carregam TRECHOS deste arquivo e o global pode
               // ainda não existir. Sem botão é degradação aceitável; explodir o render não é.
@@ -6763,9 +6798,11 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
              * remedir o alvo pousa ATRÁS da barra — foi o mesmo tropeço do scroll pro
              * grupo. E `block:'start'` com `scrollMarginTop` é o padrão canônico daqui. */
             ligaOtherMatchesHtml = `<div class="card" style="margin-bottom:1rem;">
-              <details open ontoggle="window._demaisJogosAoAbrir(this)">
+              ${typeof window._demaisJogosCss === 'function' ? window._demaisJogosCss() : ''}
+              <details data-dj open ontoggle="window._demaisJogosAoAbrir(this)">
                 <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                   <span>▸ Demais jogos da rodada (${otherIdx.length})</span>
+                  ${typeof window._demaisJogosPilulaFixa === 'function' ? window._demaisJogosPilulaFixa() : ''}
                 </summary>
                 ${typeof window._demaisJogosTrilho === 'function' ? window._demaisJogosTrilho() : ''}
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:1rem;">${otherHtml}</div>
