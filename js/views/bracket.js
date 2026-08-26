@@ -6737,7 +6737,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // ganho evaporaria). Não adiou ⇒ segue aberto, como sempre foi.
             _detailsOpen = (_otherGroups.length >= window._CHAVE_LOTE_MIN) ? '' : ' open';
           }
-          ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
+          /* ⛔ `overflow:visible` NESTE CARD — É O QUE FAZ O "VER MENOS" FUNCIONAR.
+             * MEDIDO no navegador, na página real: `.card` computa `overflow-x: hidden`, e
+             * pela especificação um eixo diferente de `visible` transforma o elemento em
+             * CONTAINER DE ROLAGEM no outro eixo. Com isso o `position:sticky` do trilho se
+             * ancora no CARD (que tem a altura do próprio conteúdo) em vez da página: ele
+             * não tem pra onde viajar e some junto. Era exatamente a queixa do dono — "não
+             * serve pra nada". Nas Novidades o trilho não mora num `.card`; por isso lá
+             * sempre funcionou.
+             * ⚠️ Inline pra vencer a folha, e SÓ nos cards que têm o `<details>`: o clipe do
+             * `.card` segura transbordo horizontal, e aqui dentro é grade com margem. */
+            ligaOtherMatchesHtml = '<div class="card" data-dj-card style="margin-bottom:1rem;overflow:visible;">' +
             (typeof window._demaisJogosCss === 'function' ? window._demaisJogosCss() : '') +
             '<details data-dj' + _detailsOpen + ' ontoggle="window._demaisJogosAoAbrir(this)">' +
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
@@ -6812,7 +6822,17 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
              * `--scroll-anchor` (topbar + back-header + barra sticky de busca), e sem
              * remedir o alvo pousa ATRÁS da barra — foi o mesmo tropeço do scroll pro
              * grupo. E `block:'start'` com `scrollMarginTop` é o padrão canônico daqui. */
-            ligaOtherMatchesHtml = `<div class="card" style="margin-bottom:1rem;">
+            /* ⛔ `overflow:visible` NESTE CARD — É O QUE FAZ O "VER MENOS" FUNCIONAR.
+             * MEDIDO no navegador, na página real: `.card` computa `overflow-x: hidden`, e
+             * pela especificação um eixo diferente de `visible` transforma o elemento em
+             * CONTAINER DE ROLAGEM no outro eixo. Com isso o `position:sticky` do trilho se
+             * ancora no CARD (que tem a altura do próprio conteúdo) em vez da página: ele
+             * não tem pra onde viajar e some junto. Era exatamente a queixa do dono — "não
+             * serve pra nada". Nas Novidades o trilho não mora num `.card`; por isso lá
+             * sempre funcionou.
+             * ⚠️ Inline pra vencer a folha, e SÓ nos cards que têm o `<details>`: o clipe do
+             * `.card` segura transbordo horizontal, e aqui dentro é grade com margem. */
+            ligaOtherMatchesHtml = `<div class="card" data-dj-card style="margin-bottom:1rem;overflow:visible;">
               ${typeof window._demaisJogosCss === 'function' ? window._demaisJogosCss() : ''}
               <details data-dj open ontoggle="window._demaisJogosAoAbrir(this)">
                 <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">

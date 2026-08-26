@@ -84,6 +84,19 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.116 ──────────────────────────────────────────
+        // ⭐ O "VER MENOS" AGORA FICA MESMO NA TELA A ROLAGEM INTEIRA.
+        // Queixa do dono: "tem que rolar junto com a sessão durante toda a rolagem pra
+        // ficar sempre visível senão não serve pra nada". Estava certo — e a causa NÃO era
+        // o trilho: era o CARD em volta.
+        // ⛔ MEDIDO no navegador, na página real: `.card` computa `overflow-x: hidden`, e
+        // pela especificação um eixo diferente de `visible` transforma o elemento em
+        // CONTAINER DE ROLAGEM no outro eixo. O sticky passava a se ancorar no CARD (altura
+        // do próprio conteúdo) em vez da página — sem distância pra viajar, sumia junto.
+        //   SEM overflow:visible → topo da pílula: 140 · −260 · −760 · −1260 · −1760  ✗
+        //   COM overflow:visible → topo da pílula: 122 · 122 · 122 · 122 · 122        ✓
+        // ⭐ Nas Novidades o trilho não mora num `.card` — por isso lá sempre funcionou, e
+        // por isso copiar o CSS do trilho não bastava: o que decidia estava no ANCESTRAL.
         // ── ciclo 2.0.115 ──────────────────────────────────────────
         // ⛔ O "VER MAIS/VER MENOS" NUNCA TEVE CHANCE DE APARECER — e eu tinha dito duas
         // vezes que estava pronto. As funções dele estavam escritas DENTRO de outra função

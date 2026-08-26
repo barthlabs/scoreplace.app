@@ -154,5 +154,31 @@ ok((br.match(/data-dj[ >'"]/g) || []).length >= 2, 'os `<details>` carregam a ma
   }
 }
 
+// ── ⑦ ⛔ O CARD NÃO PODE CLIPAR — foi ISTO que fez o botão "não servir pra nada"
+/* Queixa do dono: _"o ver menos tem que rolar junto com a sessão durante toda a rolagem
+ * para ficar sempre visível senão não serve pra nada"_. Ele estava certo, e a causa não
+ * era o trilho: era o CARD em volta.
+ *
+ * ⛔ MEDIDO NO NAVEGADOR, na página real: `.card` computa `overflow-x: hidden` — e pela
+ * especificação, um eixo diferente de `visible` transforma o elemento em CONTAINER DE
+ * ROLAGEM no outro eixo. Com isso o `position:sticky` do trilho passa a se ancorar no
+ * CARD (que tem exatamente a altura do conteúdo) em vez da página: não sobra distância
+ * pra ele viajar, e ele some junto com a rolagem.
+ *
+ * A medição, com 60 cards dentro, rolando 0→2400px:
+ *   SEM `overflow:visible` → topo da pílula: 140 · −260 · −760 · −1260 · −1760 · −2260  ✗
+ *   COM `overflow:visible` → topo da pílula: 122 · 122 · 122 · 122 · 122 · 122          ✓
+ *
+ * ⭐ Nas Novidades o trilho não mora num `.card` — por isso lá sempre funcionou, e por isso
+ * copiar o CSS do trilho não bastava: o que fazia diferença estava no ANCESTRAL.
+ * ⚠️ Só nos cards que têm o `<details>`: o clipe do `.card` existe pra segurar transbordo
+ * horizontal, e aqui dentro é grade de cards com margem. */
+const cardsDj = (br.match(/class="card" data-dj-card style="[^"]*overflow:visible/g) || []).length;
+ok(cardsDj === 2,
+  '⛔ os DOIS cards que contêm o `<details>` levam `overflow:visible` (achei ' + cardsDj + ') — ' +
+  'sem isso o sticky se ancora no card e o "ver menos" some com a rolagem');
+ok(!/data-dj-card[^>]*style="margin-bottom:1rem;"/.test(br),
+  '   e nenhum deles ficou com o estilo antigo, que clipava');
+
 console.log((fail ? '✗' : '✓') + ' ver-menos-acompanha-a-rolagem: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

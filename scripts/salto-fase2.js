@@ -93,7 +93,13 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
     try { montado = await S.montarDoBanco(JSON.parse(JSON.stringify(t)), _leDoBanco(ref)); }
     catch (e) { morre('não consegui MONTAR o torneio já dividido (' + e.message + ') — não vou estender às cegas'); }
     montado.id = String(ID);
+    /* ⛔ OS DOIS CAMPOS DE MARCAÇÃO SAEM JUNTOS. Eu limpava só `_semPesados` e esquecia
+     * `_nJogos` — e aí o "original" contra o qual a prova compara carregava um campo que a
+     * config recém-gravada não tem, e a trava abortava dizendo que as subcoleções não
+     * remontavam. Não era o dado: era o meu marcador entrando na conta como se fosse dado.
+     * ⭐ Ambos são recolocados no passo ④ com o valor de AGORA. */
     delete montado._semPesados;
+    delete montado._nJogos;
     t = montado;
     console.log('  ⭐ já dividido em [' + jaFora.join(', ') + '] — montado do banco pra estender em [' + faltam.join(', ') + ']');
   }
@@ -210,7 +216,21 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   // ⭐ remonta com a config QUE VAI SER GRAVADA e as partes LIDAS DE VOLTA do banco — é a
   // única forma de a prova valer pro que vai pro ar.
   const remontado = S.remontar(Object.assign({ config: _configPraGravar(partes) }, lidosPorParte));
-  if (!remontado || !S.iguais(remontado, t)) morre('as subcoleções NÃO remontam o original (' + contagem.join(' · ') + ')');
+  if (!remontado || !S.iguais(remontado, t)) {
+    /* ⛔ Falhar dizendo só "não bate" obriga a investigar do zero toda vez — e este é um
+     * script que roda com o dono esperando. Diga O QUE não bate: é a diferença entre um
+     * alarme e um diagnóstico. (O ensaio já fazia isso; o salto não, e me custou uma volta.) */
+    const ks = [...new Set([...Object.keys(t), ...Object.keys(remontado || {})])].sort();
+    for (const k of ks) {
+      const a = JSON.stringify(S.canonico ? S.canonico(t[k]) : t[k]);
+      const b = JSON.stringify(S.canonico ? S.canonico((remontado || {})[k]) : (remontado || {})[k]);
+      if (a === b) continue;
+      console.error('   ✗ ' + k);
+      console.error('      original: ' + String(a).slice(0, 200));
+      console.error('      montado : ' + String(b).slice(0, 200));
+    }
+    morre('as subcoleções NÃO remontam o original (' + contagem.join(' · ') + ')');
+  }
   console.log('  ✓ ' + contagem.join(' · ') + ' nas subcoleções, e remontar DELAS devolve o original byte a byte');
 
   // ── ④ só agora, o único passo destrutivo ─────────────────────────────────
