@@ -84,6 +84,25 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.121 ────────────────────────
+        // 🧱 BASE, sem efeito visível: a lista do que PODE morar fora do documento passou a
+        // incluir `checkedIn`, `woClaims`, `woLog` e `categoryNotifications` — os campos que
+        // ainda crescem com o número de pessoas (medido no Confra: 4,1 + 5,6 + 4,3 + 2,9 KB).
+        // ⚠️ Estar na lista NÃO tira nada de lugar nenhum: quem decide é o marcador de cada
+        // torneio, e nenhum torneio pediu esses quatro. A suíte `lista-de-pesados-nao-vaza`
+        // existe só pra provar isso — o passo entre "extraiu" e "devolveu ao documento" é
+        // exatamente onde dado some sem erro e sem log.
+        // ⭐ E a chave de cada parte virou REGRA (`chaveDaParte`), não uma cadeia de `if`.
+        // Cadeia de `if` não falha quando um campo novo entra: cai no `else` e o registro sai
+        // chaveado por POSIÇÃO — o mesmo estrago que quase apagou 188 dos 218 eventos do
+        // Confra. Agora todo campo tem resposta explícita.
+        // Provado contra os 39 torneios REAIS: `remontar(dividir(t)) === t` em 39 de 39.
+        //
+        // ⛔ POR QUE OS QUATRO AINDA NÃO SAÍRAM: todos são escritos PELO CLIENTE, e o cliente
+        // não tem permissão de escrever subcoleção — nunca teve, por decisão. Tirar um campo
+        // do documento antes de existir porta no servidor repetiria, quatro vezes, o buraco
+        // que a 2.0.120 acabou de fechar na inscrição. A ordem do dono para o próximo passo é
+        // clara: "tudo em CF apenas disparado pelo cliente".
         // ── ciclo 2.0.120 ────────────────────────
         // ⭐ NADA MAIS SOBRE A CLASSIFICAÇÃO DO TORNEIO FICA GUARDADO — ela é DERIVADA.
         // MEDIDO: `standings` estava gravado em 2 dos 39 torneios, 120 linhas ao todo,

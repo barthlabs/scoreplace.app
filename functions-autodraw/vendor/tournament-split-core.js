@@ -40,7 +40,21 @@
    * (`_recordOpponentHistory`), que roda na CF.
    * ⛔ `standings` continua FORA desta lista: ele é derivado, mas carrega a classificação
    * CONGELADA — dado com valor jurídico no torneio. Sai por último e com prova própria. */
-  var PESADOS = ['participants', 'history', 'opponentHistory'];
+  /* ── O QUE PODE MORAR FORA DO DOCUMENTO ───────────────────────────────────────
+   * ⭐ O critério é UM: entra aqui tudo que CRESCE — com gente ou com evento. O teto de
+   * 1 MB do Firestore não é lentidão, é RECUSA: passou, o banco não grava mais. Enquanto
+   * um campo linear no número de inscritos morar no documento, existe um número de pessoas
+   * a partir do qual o torneio simplesmente para.
+   * ⚠️ Estar nesta lista NÃO divide nada: `dividir` extrai por natureza, e os dois
+   * escritores devolvem pro documento tudo que não estiver no `_semPesados` daquele
+   * torneio. Quem opta é o marcador, por torneio.
+   * ⛔ E antes de pôr um torneio pra fora numa parte nova, TODO escritor tem que hidratar
+   * — ver [[project_dividir_exige_todo_escritor_ciente]]: seis portas do `functions/`
+   * decidiam com o elenco vazio porque a leitura foi construída antes da escrita. */
+  var PESADOS = ['participants', 'history', 'opponentHistory',
+                 'checkedIn',              // mapa uid → quando chegou: LINEAR nas pessoas
+                 'woClaims', 'woLog',      // rastro de W.O.: cresce com o evento
+                 'categoryNotifications']; // apontamentos de categoria: idem
 
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
@@ -183,6 +197,26 @@
     } catch (e) { return null; }
   }
 
+  /* ── A CHAVE DE CADA PARTE É UMA REGRA, NÃO UM MAPA POR PARTE ─────────────────
+   * ⛔ Aqui havia um `if (campo === 'history') … else if (campo === 'participants') …`.
+   * Cadeia assim NÃO FALHA quando um campo novo entra: ela cai no `else` e o registro sai
+   * chaveado por POSIÇÃO — que é exatamente o estrago que quase apagou 188 dos 218 eventos
+   * do Confra. Errar em silêncio é pior que errar alto.
+   * ⭐ Agora todo campo tem uma resposta explícita, e o que não tem identidade própria
+   * devolve `null` — o registro fica só com `_idx`, e `chaveDoRegistro` marca isso com o
+   * prefixo `i`. Chave é QUEM; índice é ONDE.
+   */
+  function chaveDaParte(campo, item) {
+    if (campo === 'history') return chaveDoEvento(item);
+    if (campo === 'participants') return chaveDoInscrito(item);
+    if (campo === 'categoryNotifications') return chaveDoApontamento(item);
+    if (!item || typeof item !== 'object') return null;   // escalar: o _idx já é a identidade
+    // `woLog` carrega `id` próprio ("wo-0-R1_Grupo_A-<uid>-0") — identidade de verdade.
+    if (item.id) return 'i' + _hashDe(String(item.id));
+    // `woClaims` e afins: sem id, a identidade é o CONTEÚDO. Mesmo espírito do histórico.
+    return 'h' + _hashDe(JSON.stringify(item));
+  }
+
   function dividir(t) {
     if (!t || typeof t !== 'object') return null;
     var config = _clone(t);
@@ -241,8 +275,7 @@
           var _reg = { _idx: i, item: _clone(item) };
           // só o histórico ganha chave por conteúdo — `participants` é chaveado por uid
           // do lado de fora e não é podado. Ver chaveDoEvento().
-          if (campo === 'history') _reg._k = chaveDoEvento(item);
-          else if (campo === 'participants') _reg._k = chaveDoInscrito(item);
+          _reg._k = chaveDaParte(campo, item);
           return _reg;
         });
         config[campo] = [];
@@ -429,7 +462,7 @@
     return Promise.resolve().then(proxima);
   }
 
-  var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo, chaveDoRegistro: chaveDoRegistro,
+  var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo, chaveDoRegistro: chaveDoRegistro, chaveDaParte: chaveDaParte,
               chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
               chaveDoApontamento: chaveDoApontamento,
               colecaoDaParte: colecaoDaParte, montarDoBanco: montarDoBanco,
