@@ -84,6 +84,23 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.126 ────────────────────────
+        // 🩹 O CELULAR ESTAVA PRESO 33 VERSÕES ATRÁS. Relato do dono, com print: no PWA do
+        // Safari o Confra mostrava "0 INSCRITOS" e "você não está inscrito" — sendo ele o
+        // ORGANIZADOR — enquanto no desktop estava tudo normal.
+        // ⛔ NÃO ERA O DADO: o resumo tinha 148 inscritos e o documento estava coerente.
+        // A CAUSA: `CACHE_NAME` do service worker estava em 'scoreplace-v2.0.92' com o app
+        // na 2.0.125. `git log -S` devolvia UM commit — o que criou o arquivo. Nunca foi
+        // bumpado, não havia script que bumpasse e não havia trava que conferisse, apesar de
+        // o próprio sw.js comentar, como PREMISSA, que ele "muda a cada versão".
+        // ⭐ E por que só no celular: todos os scripts têm `?v=` e trocam com a versão —
+        // `/index.html` é o ÚNICO sem query. Ele casa EXATO no cache e vem do velho,
+        // trazendo junto os `?v=` antigos de TODOS os outros. O desktop, numa aba comum,
+        // revalida o index com o servidor e pega o novo. O PWA não.
+        // ⇒ O aparelho rodava código antigo sobre o dado de HOJE: o elenco mudou de lugar
+        // (subcoleção), e o código velho não sabia buscá-lo. Daí o zero.
+        // Agora o nome do cache sai da VERSÃO, no mesmo passo que gera o version.txt — o que
+        // roda em todo bump/deploy — e uma trava reprova a divergência.
         // ── ciclo 2.0.125 ────────────────────────
         // 🕸️ A REDE DO ENXERTO PASSA A DERIVAR DA LISTA. O ouvinte do DOCUMENTO entrega o
         // torneio com as partes divididas VAZIAS — é assim que elas ficam lá. Aceitar isso

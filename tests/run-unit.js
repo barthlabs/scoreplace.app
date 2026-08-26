@@ -150,6 +150,7 @@ const SUITES = [
   'tests/porta-unica-de-escrita-fina.test.js',
   'tests/ouvinte-das-partes-divididas.test.js',
   'tests/grupo-e-documento.test.js',
+  'tests/sw-cache-name-acompanha-a-versao.test.js',
   'tests/identidade-e-uid-nunca-email.test.js',
   // ⛔ A máscara do celular do perfil mora no MARKUP (2.0.54, caso Vanessa) —
   // addEventListener se perde em re-render e deixava campo cru + Verificar apagado.

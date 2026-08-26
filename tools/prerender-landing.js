@@ -237,6 +237,29 @@ async function main() {
       if (vm && vm[1]) {
         fs.writeFileSync(path.join(ROOT, 'version.txt'), vm[1], 'utf8');
         console.log('[prerender] ✓ version.txt = ' + vm[1]);
+
+        /* ── O NOME DO CACHE DO SW SAI DA VERSÃO (2.0.126) ────────────────────
+         * ⛔ MEDIDO: `CACHE_NAME` estava em 'scoreplace-v2.0.92' com o app na 2.0.125 —
+         * NUNCA foi bumpado desde que o arquivo nasceu (`git log -S` = 1 commit), sem
+         * script e sem trava, apesar de o próprio sw.js comentar que ele "muda a cada
+         * versão". Premissa falsa vale menos que nenhuma.
+         * O estrago é específico do PWA: `/index.html` é o ÚNICO arquivo servido sem
+         * `?v=`, então ele casa EXATO no cache e vem do velho — trazendo junto os `?v=`
+         * antigos de TODOS os scripts. O aparelho fica preso numa versão anterior à do
+         * desktop, e a diferença aparece como dado errado na tela (elenco vazio,
+         * "você não está inscrito") quando na verdade o banco está certo.
+         * ⭐ Aqui, e não à mão: este passo roda em TODO bump/deploy, igual ao version.txt.
+         * [[project_sw_top_level_blocks_first_paint]] [[project_pwa_auto_update]] */
+        try {
+          const swPath = path.join(ROOT, 'sw.js');
+          const swSrc = fs.readFileSync(swPath, 'utf8');
+          const alvo = "var CACHE_NAME = 'scoreplace-v" + vm[1] + "';";
+          const novoSw = swSrc.replace(/var CACHE_NAME = 'scoreplace-v[^']*';/, alvo);
+          if (novoSw !== swSrc) {
+            fs.writeFileSync(swPath, novoSw, 'utf8');
+            console.log('[prerender] ✓ sw.js CACHE_NAME = scoreplace-v' + vm[1]);
+          }
+        } catch (e) { console.warn('[prerender] CACHE_NAME falhou:', e && e.message); }
       } else {
         console.warn('[prerender] SCOREPLACE_VERSION não encontrado em store.js — version.txt não gerado');
       }
