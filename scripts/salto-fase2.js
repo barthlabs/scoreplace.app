@@ -49,14 +49,55 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   const ref = db.collection('tournaments').doc(String(ID));
   const doc = await ref.get();
   if (!doc.exists) morre('torneio ' + ID + ' não existe');
-  const t = doc.data(); t.id = String(ID);
-  if (Array.isArray(t._semPesados) && t._semPesados.indexOf('matches') !== -1) {
-    console.log('já dividido — nada a fazer'); process.exit(0);
+  /* ⭐ INSCRITOS SAEM JUNTO (2.0.108). Ordem do dono, e ele está certo: _"se cada torneio
+   * é um doc, cada jogo é um doc pendurado no torneio e cada inscrito é outro doc, não tem
+   * limite"_. Com só os jogos fora, o teto tinha ido de 4,2× pra 7,5× — mas continuava
+   * teto: medido, 556 B por inscrito ⇒ o documento RECUSA a partir de ~1.780 pessoas.
+   * `participants` sozinho eram 256 B disso, o maior custo por pessoa. */
+  const FORA = ['matches', 'participants'];
+
+  let t = doc.data(); t.id = String(ID);
+
+  /* ⭐ ESTENDER UM TORNEIO JÁ DIVIDIDO (2.0.108). Antes isto dizia "já dividido, nada a
+   * fazer" olhando só `matches` — e aí não dava pra tirar os INSCRITOS depois, que é
+   * justamente o que faltava pro documento parar de crescer com gente.
+   * ⛔ E pra estender é obrigatório MONTAR primeiro: o documento de um torneio dividido não
+   * tem os jogos. Dividir o doc cru geraria um "original" sem jogo nenhum, a prova de
+   * remontagem passaria (é igual a si mesma) e os jogos ficariam órfãos na subcoleção,
+   * fora do que o app monta. Montar antes é o que faz a prova valer contra o TORNEIO, não
+   * contra o pedaço dele que sobrou no documento. */
+  const jaFora = Array.isArray(t._semPesados) ? t._semPesados : [];
+  const faltam = FORA.filter((k) => jaFora.indexOf(k) === -1);
+  if (!faltam.length) { console.log('já dividido em [' + jaFora.join(', ') + '] — nada a fazer'); process.exit(0); }
+  if (jaFora.length) {
+    const partesJa = { config: JSON.parse(JSON.stringify(t)) };
+    for (const nome of jaFora) {
+      const sub = await ref.collection(nome).get();
+      partesJa[nome] = sub.docs.map((d) => d.data());
+    }
+    const montado = S.remontar(partesJa);
+    if (!montado) morre('não consegui MONTAR o torneio já dividido — não vou estender às cegas');
+    montado.id = String(ID);
+    delete montado._semPesados;
+    t = montado;
+    console.log('  ⭐ já dividido em [' + jaFora.join(', ') + '] — montado do banco pra estender em [' + faltam.join(', ') + ']');
   }
   const jog = jogosDe(t);
   console.log('═══ ' + (t.name || ID));
   console.log('  AGORA: ' + kb(t) + ' · ' + jog.length + ' jogos (' + comPlacar(jog) + ' com placar) · ' +
     ((t.participants || []).length) + ' inscritos · ' + ((t.history || []).length) + ' eventos');
+
+  const _configPraGravar = (p) => {
+    const c = JSON.parse(JSON.stringify(p.config));
+    delete c._semPesados; delete c._nJogos;   // recolocados abaixo, com o valor de AGORA
+    ['participants', 'history'].forEach((k) => {
+      if (FORA.indexOf(k) === -1 && t[k] !== undefined) c[k] = JSON.parse(JSON.stringify(t[k]));
+    });
+    // ⛔ `memberUids` FICA no documento de propósito: é ele que o ouvinte ao vivo consulta
+    // (`array-contains`) pra saber quais torneios são meus. Numa subcoleção, essa consulta
+    // deixa de existir e a tela inicial não tem como se montar. São 31 B por pessoa.
+    return c;
+  };
 
   // ── ② a prova que autoriza dividir ───────────────────────────────────────
   /* ⛔ ARMADILHA QUE A TRAVA PEGOU (26/ago, na 1ª tentativa real):
@@ -68,14 +109,6 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
    * gravação — e a conferência tem que usar a MESMA forma, senão ela aprova a coisa errada.
    * (É a mesma proteção que `_gravaTorneio` e `saveTournament` já tinham; o script de
    * migração não tinha, e foi a prova de remontar que gritou.) */
-  const FORA = ['matches'];
-  const _configPraGravar = (p) => {
-    const c = JSON.parse(JSON.stringify(p.config));
-    ['participants', 'history'].forEach((k) => {
-      if (FORA.indexOf(k) === -1 && t[k] !== undefined) c[k] = JSON.parse(JSON.stringify(t[k]));
-    });
-    return c;
-  };
   const partes = S.dividir(JSON.parse(JSON.stringify(t)));
   const volta = S.remontar(JSON.parse(JSON.stringify(partes)));
   if (!volta || !S.iguais(volta, t)) morre('remontar(dividir(t)) NÃO devolveu o original — este torneio NÃO pode ser dividido');
@@ -114,17 +147,34 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   await guarda('', t, 'documento vivo, no segundo antes da transferência');
   if (orig) await guarda('__original', orig, 'PITR ' + PITR + ' (não passa por código de manutenção)');
 
-  // ── ③ a subcoleção, e a prova de que ela remonta o original ──────────────
-  const col = ref.collection('matches');
-  let lote = db.batch(), n = 0;
-  for (const m of partes.matches) { lote.set(col.doc(String(m._chave)), m); if (++n >= 400) { await lote.commit(); lote = db.batch(); n = 0; } }
-  if (n) await lote.commit();
-  const lidos = await col.get();
-  // ⭐ remonta com a config QUE VAI SER GRAVADA (com elenco e histórico dentro) e os jogos
-  // LIDOS DE VOLTA do banco — é a única forma de a prova valer pro que vai pro ar.
-  const remontado = S.remontar({ config: _configPraGravar(partes), matches: lidos.docs.map((d) => d.data()) });
-  if (!remontado || !S.iguais(remontado, t)) morre('a subcoleção NÃO remonta o original (' + lidos.size + ' jogos lidos)');
-  console.log('  ✓ ' + lidos.size + ' jogos na subcoleção, e remontar DELA devolve o original byte a byte');
+  // ── ③ as subcoleções, e a prova de que elas remontam o original ─────────
+  /* ⭐ Uma parte de cada vez, e cada uma chaveada pelo que a IDENTIFICA: jogo por
+   * `_chave`, inscrito por `_k` (uid → uids da dupla → nome, cânone do dono).
+   * ⛔ NUNCA por posição — foi a armadilha que quase destruiu o histórico. */
+  const CHAVE = { matches: (x) => x._chave, participants: (x) => x._k, history: (x) => x._k };
+  const lidosPorParte = {};
+  const contagem = [];
+  for (const nome of FORA) {
+    const col = ref.collection(nome);
+    let lote = db.batch(), n = 0;
+    for (const item of (partes[nome] || [])) {
+      lote.set(col.doc(String(CHAVE[nome](item))), item);
+      if (++n >= 400) { await lote.commit(); lote = db.batch(); n = 0; }
+    }
+    if (n) await lote.commit();
+    const snapP = await col.get();
+    lidosPorParte[nome] = snapP.docs.map((d) => d.data());
+    if (snapP.size !== (partes[nome] || []).length) {
+      morre(nome + ': escrevi ' + (partes[nome] || []).length + ' e li ' + snapP.size +
+            ' — chave repetida engoliu registro. NÃO vou dividir.');
+    }
+    contagem.push(snapP.size + ' ' + nome);
+  }
+  // ⭐ remonta com a config QUE VAI SER GRAVADA e as partes LIDAS DE VOLTA do banco — é a
+  // única forma de a prova valer pro que vai pro ar.
+  const remontado = S.remontar(Object.assign({ config: _configPraGravar(partes) }, lidosPorParte));
+  if (!remontado || !S.iguais(remontado, t)) morre('as subcoleções NÃO remontam o original (' + contagem.join(' · ') + ')');
+  console.log('  ✓ ' + contagem.join(' · ') + ' nas subcoleções, e remontar DELAS devolve o original byte a byte');
 
   // ── ④ só agora, o único passo destrutivo ─────────────────────────────────
   const config = _configPraGravar(partes);

@@ -391,9 +391,12 @@
           .get()
           .then(function(snap) { snap.forEach(function(doc) { _cMap[doc.id] = true; }); })
           .catch(function() {});
-        var _cEmail = (cu.email)
+        /* ⛔ POR UID (cânone do dono, 26/ago). Buscar por `organizerEmail` achava torneio
+         * de quem TEVE aquele e-mail e NÃO achava nada de quem entrou por telefone —
+         * essas pessoas simplesmente não ganhavam o troféu de organizador. */
+        var _cEmail = (cu.uid)
           ? db.collection('tournaments')
-              .where('organizerEmail', '==', cu.email)
+              .where('creatorUid', '==', cu.uid)
               .get()
               .then(function(snap) { snap.forEach(function(doc) { _cMap[doc.id] = true; }); })
               .catch(function() {})

@@ -81,6 +81,39 @@
     return 'm' + loc.mi;
   }
 
+  /* ── CHAVE DURÁVEL DA INSCRIÇÃO ────────────────────────────────────────────────
+   * Mesma história do histórico, e o mesmo estrago se eu deixar como estava: o espelho
+   * chaveia inscrito por POSIÇÃO (`'p' + _idx`), e posição muda quando alguém sai do meio
+   * da lista — aí o diff reescreve todo mundo depois dele com o conteúdo errado.
+   *
+   * ⭐ A ORDEM DE PREFERÊNCIA É O CÂNONE DO DONO (26/ago): _"sempre por uid a menos que
+   * seja digitado por organizador e nao tenha uid"_.
+   *   ① `uid` — a identidade de verdade.
+   *   ② dupla: os dois uids, na ordem em que estão (p1 e p2 são posições do time, não
+   *      ordem alfabética — trocar mudaria QUEM joga de cada lado).
+   *   ③ só então o NOME, e só pra quem não tem uid nenhum: são as 75 de 240 entradas
+   *      digitadas pelo organizador, que existem só pelo nome. É a exceção dele, e ela é
+   *      legítima — sem ela essas pessoas não teriam chave nenhuma.
+   * ⚠️ Consequência aceita do ③: renomear um inscrito fictício muda a chave dele, e o
+   * espelho trata como "saiu um, entrou outro". Pro dado é a mesma coisa (o registro é o
+   * nome); e é infinitamente melhor que a posição, que muda sem ninguém ter feito nada.
+   */
+  function chaveDoInscrito(p) {
+    if (!p || typeof p !== 'object') return 'x';
+    if (p.uid) return 'u' + String(p.uid);
+    if (p.p1Uid || p.p2Uid) return 'd' + String(p.p1Uid || '-') + '_' + String(p.p2Uid || '-');
+    var nomes = [p.name, p.displayName, p.p1Name, p.p2Name]
+      .concat((Array.isArray(p.participants) ? p.participants : [])
+        .map(function (x) { return x && (x.displayName || x.name); }))
+      .filter(Boolean).join('|');
+    var h = 0x811c9dc5;
+    for (var i = 0; i < nomes.length; i++) {
+      h ^= nomes.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return 'n' + nomes.length.toString(36) + '-' + h.toString(36);
+  }
+
   /** Divide o documento em { config, matches, participants, history }. */
   /* QUEM JOGA ESTE JOGO, no próprio documento do jogo.
    *
@@ -165,6 +198,7 @@
           // só o histórico ganha chave por conteúdo — `participants` é chaveado por uid
           // do lado de fora e não é podado. Ver chaveDoEvento().
           if (campo === 'history') _reg._k = chaveDoEvento(item);
+          else if (campo === 'participants') _reg._k = chaveDoInscrito(item);
           return _reg;
         });
         config[campo] = [];
@@ -293,7 +327,7 @@
   }
 
   var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo,
-              chaveDoEvento: chaveDoEvento,
+              chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
               jogosQueMudaram: jogosQueMudaram,
               PESADOS: PESADOS, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

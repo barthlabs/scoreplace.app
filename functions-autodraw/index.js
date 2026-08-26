@@ -1927,7 +1927,16 @@ exports.tournamentMirror = onDocumentWritten(
       const r1 = _pulaJogos
         ? { gravados: 0, apagados: 0, total: 0 }
         : await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
-      const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants, (p) => 'p' + p._idx);
+  /* ⛔ INSCRITO CHAVEADO POR IDENTIDADE, NÃO POR POSIÇÃO (2.0.108).
+   * Era `'p' + _idx`. Quando alguém sai do MEIO da lista, todos os índices depois dele
+   * andam — e o diff via cada um deles como "mudou", reescrevendo o registro de A por
+   * cima do de B. Mesma família do estrago que a poda do histórico ia causar.
+   * ⭐ A chave segue o cânone do dono: uid → uids da dupla → nome (só pra quem NÃO tem
+   * uid, que são as 75 de 240 entradas digitadas pelo organizador).
+   * ⚠️ E aqui o espelho PODE apagar: inscrito que sai da lista saiu de verdade — ao
+   * contrário do histórico, sumir daqui é informação, não poda. */
+  const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants,
+    (p) => (p._k || ('p' + p._idx)));
       /* ⛔ O HISTÓRICO ERA ESPELHADO POR POSIÇÃO — e posição é o que a poda muda.
    * Medido antes de mexer: Confra com 218 eventos no doc e 218 no espelho. Podar o doc
    * pras últimas 30 faria este diff ver `h0..h29` com conteúdo NOVO e `h30..h217`

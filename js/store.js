@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.107';
+window.SCOREPLACE_VERSION = '2.0.108';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -9225,8 +9225,11 @@ window._recoverWipedAdminEmails = function() {
     // Só age quando adminEmails está ausente ou vazio E o usuário é o organizador
     var adminList = Array.isArray(t.adminEmails) ? t.adminEmails : [];
     if (adminList.length > 0) return; // já está OK
-    var orgEmail = (t.organizerEmail || t.creatorEmail || '').toLowerCase();
-    if (orgEmail !== myEmail) return; // só o dono recupera
+    /* ⛔ SÓ UID. Esta recuperação CONCEDE admin (`adminEmails`) — e o portão dela era
+     * "o e-mail do torneio é igual ao meu". Ou seja: quem tivesse a string recuperava
+     * poder de organizador sobre o torneio de outro. É o pior dos casos que sobraram.
+     * ⚠️ E ela também escapou da varredura por guardar o campo numa variável. */
+    if (!cu.uid || !t.creatorUid || t.creatorUid !== cu.uid) return; // só o DONO recupera
 
     // Recomputa usando os mesmos helpers de firebase-db.js
     // v1.2.2: só adminEmails — memberEmails saiu do schema (membro é uid, via memberUids).
@@ -10656,7 +10659,19 @@ window.AppStore = {
      * vazio: quem pinta precisa poder dizer "ainda não carregou" ≠ "não tem jogo".
      */
     function _enxertaJogos(novo, velho) {
-      if (!novo || !Array.isArray(novo._semPesados) || novo._semPesados.indexOf('matches') === -1) return novo;
+      if (!novo || !Array.isArray(novo._semPesados) || !novo._semPesados.length) return novo;
+      /* ⭐ INSCRITOS TAMBÉM (2.0.108). Quando `participants` saiu do documento, o ouvinte
+       * passou a entregar torneio com a lista VAZIA — e aí some o elenco de todas as telas,
+       * não só a chave. Mesma família do desastre dos jogos, e mais visível ainda.
+       * ⛔ Aqui é substituição direta (a lista é uma só), não junção rodada a rodada.
+       * ⚠️ E só quando o documento traz vazio: se ele TEM lista, ele é o fresco e manda. */
+      if (novo._semPesados.indexOf('participants') !== -1 && velho) {
+        if ((!Array.isArray(novo.participants) || !novo.participants.length) &&
+            Array.isArray(velho.participants) && velho.participants.length) {
+          novo.participants = velho.participants;
+        }
+      }
+      if (novo._semPesados.indexOf('matches') === -1) return novo;
       var achou = false;
       var _puxa = function (destino, origem) {
         if (!destino || !origem) return;
@@ -11816,9 +11831,14 @@ window.AppStore = {
   isCreator(tournament) {
     if (!this.currentUser) return false;
     // v2.8.79: uid primeiro (robusto pra criador com conta por telefone/sem email).
-    if (this.currentUser.uid && tournament.creatorUid && tournament.creatorUid === this.currentUser.uid) return true;
-    var creator = tournament.creatorEmail || tournament.organizerEmail;
-    return !!(creator && this.currentUser.email && creator === this.currentUser.email);
+    /* ⛔ SÓ UID (cânone do dono, 26/ago). Aqui havia queda pra `creatorEmail ||
+     * organizerEmail === meu e-mail` — quem apresentasse a string virava CRIADOR.
+     * ⭐ Medido: 39 de 39 admins da base cobertos por uid, 0 torneios sem `creatorUid`
+     * (scripts/conferir-admin-por-uid.js). Não salvava ninguém.
+     * ⚠️ Esta escapou da minha primeira varredura porque guardava o campo numa VARIÁVEL
+     * antes de comparar — a busca por `creatorEmail ===` não a via. */
+    return !!(this.currentUser.uid && tournament.creatorUid &&
+              tournament.creatorUid === this.currentUser.uid);
   },
 
   getVisibleTournaments() {
@@ -12048,10 +12068,8 @@ window._isOrgParticipant = function (t, p) {
   var uids = [p.uid || '', p.p1Uid || '', p.p2Uid || ''].filter(Boolean);
   var emails = [p.email, p.p1Email, p.p2Email].map(function (e) { return String(e || '').toLowerCase(); }).filter(Boolean);
   if (t.creatorUid && uids.indexOf(t.creatorUid) >= 0) return true;
-  var cE = String(t.creatorEmail || '').toLowerCase();
-  var oE = String(t.organizerEmail || '').toLowerCase();
-  if (cE && emails.indexOf(cE) >= 0) return true;
-  if (oE && emails.indexOf(oE) >= 0) return true;
+  // ⛔ e-mail saiu (cânone do dono): a estrela de organizador ia pra quem tivesse a string.
+  if (Array.isArray(t.adminUids) && uids.some(function (u) { return t.adminUids.indexOf(u) >= 0; })) return true;
   if (Array.isArray(t.coHosts)) {
     for (var i = 0; i < t.coHosts.length; i++) {
       var ch = t.coHosts[i];
@@ -12082,8 +12100,8 @@ window._isOrgPlayer = function (t, playerName, pObj) {
   }
   email = String(email || '').toLowerCase();
   if (uid && t.creatorUid && uid === t.creatorUid) return true;
-  var cE = String(t.creatorEmail || '').toLowerCase(), oE = String(t.organizerEmail || '').toLowerCase();
-  if (email && (email === cE || email === oE)) return true;
+  // ⛔ e-mail saiu (cânone do dono) — ver isCreator/_isOrgParticipant, mesma razão.
+  if (uid && Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) >= 0) return true;
   if (Array.isArray(t.coHosts)) {
     for (var j = 0; j < t.coHosts.length; j++) {
       var c = t.coHosts[j];

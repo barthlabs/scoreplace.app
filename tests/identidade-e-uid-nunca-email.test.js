@@ -84,5 +84,40 @@ ok(/!uid && t\.winner === \(cu\.displayName/.test(tro),
 ok(!/t\.winner === cu\.email/.test(semComentario(tro)),
   '⛔ mas o caminho por e-mail saiu');
 
+// ── ⑤ A VARREDURA ESTREITA QUE ME ENGANOU DUAS VEZES ────────────────────────
+/* ⚠️ A primeira versão deste teste procurava `creatorEmail ===` e deu tudo verde — mas
+ * QUATRO pontos guardavam o campo numa VARIÁVEL antes de comparar (`var cE = t.creatorEmail
+ * … if (email === cE)`), e um deles CONCEDIA admin. Buscar pela forma exata da comparação
+ * não é buscar: é procurar o jeito que eu imaginei que estaria escrito.
+ * ⇒ A trava passa a ser: nestes arquivos, o campo de e-mail NÃO PODE APARECER em código —
+ * nem pra guardar em variável. Ler `t.creatorEmail` pra QUALQUER coisa é suspeito o
+ * bastante pra exigir uma exceção explícita e comentada. */
+ok(!/\b(creatorEmail|organizerEmail|adminEmails)\b/.test(semComentario(leia('firestore.rules'))),
+  '⛔ firestore.rules não menciona campo de e-mail em código nenhum');
+/* ⚠️ Em `functions-autodraw` o campo ainda APARECE — mas só sendo MANTIDO
+ * (`_computeAdminEmails`, campo derivado que a UI exibe) e devolvido num payload de erro.
+ * Manter ≠ decidir. A trava aqui é que ele não apareça perto de um `if`/comparação. */
+{
+  const src = semComentario(leia('functions-autodraw/index.js'));
+  src.split('\n').forEach((linha, i) => {
+    if (!/\b(creatorEmail|organizerEmail|adminEmails)\b/.test(linha)) return;
+    ok(!/(if\s*\(|===|!==|indexOf\(|includes\()/.test(linha),
+      '⛔ functions-autodraw:' + (i + 1) + ' usa e-mail numa DECISÃO: ' + linha.trim().slice(0, 70));
+  });
+}
+// e nas CONSULTAS: buscar torneio por e-mail acha o de quem TEVE aquele e-mail, e não acha
+// nada de quem entrou por telefone.
+for (const arq of ['functions/index.js', 'js/trophies.js']) {
+  const src = semComentario(leia(arq));
+  ok(!/where\(\s*["']organizerEmail["']/.test(src),
+    '⛔ ' + arq + ' não CONSULTA torneio por organizerEmail');
+}
+// o portão da "recuperação" de adminEmails: ela CONCEDE poder, então tem que ser por uid
+const st = semComentario(leia('js/store.js'));
+ok(/t\.creatorUid !== cu\.uid\) return/.test(st),
+  '⭐ a recuperação de adminEmails (que CONCEDE admin) é portada por creatorUid, não por e-mail');
+ok(!/var creator = tournament\.creatorEmail/.test(st),
+  '⛔ isCreator não guarda creatorEmail em variável pra comparar depois');
+
 console.log((fail ? '✗' : '✓') + ' identidade-e-uid-nunca-email: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

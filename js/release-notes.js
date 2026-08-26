@@ -84,6 +84,28 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.108 ──────────────────────────────────────────
+        // ⛔ "CABE 7,5× MAIS" AINDA É LIMITE. O dono cortou a conversa: _"não tem que ter
+        // limite. o que cabe 7,5x mais? não deveria ter limite para a quantidade de
+        // participantes"_ — e depois desenhou: _"se cada torneio é um doc, cada jogo é um
+        // doc pendurado no torneio e cada inscrito é outro doc, não tem limite"_.
+        // Ele está certo e eu tinha parado no meio: tirar os JOGOS empurrou o teto de 4,2×
+        // pra 7,5×, mas o documento continuava crescendo com GENTE. Medido: 556 B por
+        // inscrito ⇒ o Firestore RECUSA o torneio a partir de ~1.780 pessoas. Teto é teto.
+        // ⇒ Os INSCRITOS saem do documento (256 B dos 556 — o maior custo por pessoa).
+        //
+        // ⚠️ MESMA ARMADILHA DO HISTÓRICO, e eu quase repeti: o espelho chaveava inscrito
+        // por POSIÇÃO (`'p' + _idx`). Quando alguém sai do MEIO da lista, todos os índices
+        // depois dele andam — e o diff reescreve o registro de A por cima do de B.
+        // ⭐ A chave nova segue o cânone do dono: uid → uids da dupla → NOME, e o nome só
+        // pra quem não tem uid — que são 75 das 240 entradas, as duplas digitadas pelo
+        // organizador, que existem só pelo nome. A exceção dele é o que salva essas.
+        // ⛔ E aqui o espelho PODE apagar: inscrito que sai da lista saiu de verdade —
+        // ao contrário do histórico, sumir daqui é informação, não poda.
+        // + A rede do ouvinte passou a enxertar INSCRITOS também: sem isso o elenco sumia
+        //   de todas as telas, não só a chave.
+        // + O salto aprendeu a ESTENDER torneio já dividido — montando do banco antes, ou
+        //   a prova de remontagem passaria contra o pedaço que sobrou no documento.
         // ── ciclo 2.0.107 ──────────────────────────────────────────
         // ⛔ IDENTIDADE É UID — E-MAIL E NOME SAÍRAM DE TODA DECISÃO.
         // Cânone do dono: "nada por nome ou email, sempre por uid a menos que seja digitado

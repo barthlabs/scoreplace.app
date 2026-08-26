@@ -4670,9 +4670,14 @@ async function _computeBackfillStats(db, uid, userData) {
     ] : []),
 
     // Tournaments created
-    ...(email ? [
+      /* ⛔ CONSULTA POR UID (cânone do dono, 26/ago). `organizerEmail` como chave de busca
+       * tem dois defeitos: (a) acha torneio de quem TEVE aquele e-mail um dia, e (b) não
+       * acha nada de quem entrou por telefone (sem e-mail). `creatorUid` existe em 39 de
+       * 39 torneios da base — medido. `organizerUid` fica na lista por precaução mas NÃO
+       * existe em torneio nenhum (0 de 39). */
+    ...(uid ? [
       db.collection("tournaments")
-        .where("organizerEmail", "==", email)
+        .where("creatorUid", "==", uid)
         .get()
         .then((snap) => { stats.tournamentsCreated = snap.size; })
         .catch(() => {})
@@ -5152,7 +5157,8 @@ exports.deleteAccount = onCall(
       for (const q of [
         db.collection("tournaments").where("creatorUid", "==", uid),
         db.collection("tournaments").where("organizerUid", "==", uid),
-        ...(email ? [db.collection("tournaments").where("organizerEmail", "==", email)] : []),
+        // ⛔ a consulta por `organizerEmail` saiu (cânone do dono): achava torneio de quem
+        // TEVE aquele e-mail e não achava nada de quem entrou por telefone.
         db.collection("tournaments").where("memberUids", "array-contains", uid),
       ]) {
         try { (await q.get()).docs.forEach(add); } catch (e) {}
@@ -5172,7 +5178,7 @@ exports.deleteAccount = onCall(
     for (const q of [
       db.collection("tournaments").where("creatorUid", "==", uid),
       db.collection("tournaments").where("organizerUid", "==", uid),
-      ...(email ? [db.collection("tournaments").where("organizerEmail", "==", email)] : []),
+      // ⛔ idem: `organizerEmail` saiu daqui. uid é a identidade.
     ]) {
       try { (await q.get()).docs.forEach((d) => organizados.set(d.id, d.ref)); } catch (e) {}
     }
