@@ -2676,9 +2676,21 @@ function _addCategoryNotification(t, participant, category) {
     // Initialize notifications array if needed
     if (!t.categoryNotifications) t.categoryNotifications = [];
 
+    /* ⛔ O E-MAIL NÃO ENTRA AQUI (2.0.102) ────────────────────────────────────────
+     * O documento do torneio é lido SEM LOGIN quando `isPublic == true` — conferido
+     * contra o Firestore de produção em 26/ago: `GET .../tournaments/{id}` sem cabeçalho
+     * de autenticação devolveu HTTP 200 e 61 e-mails. E regra do Firestore NÃO esconde
+     * campo: a leitura é o documento inteiro ou nada. Ou seja, a única forma de o e-mail
+     * não vazar é ele não estar aqui.
+     * `categoryNotifications` sozinho respondia por 84 ocorrências / 60 e-mails distintos
+     * — de longe a maior fonte, e a mais fácil: o próprio comentário acima diz que
+     * `targetUid` é a chave canônica e o e-mail é só fallback de doc legado.
+     * O registro CONTINUA sendo criado (o dono desligou a tela em 31/jul mas mandou
+     * guardar o histórico: "voltaremos a isso depois") — só não carrega mais o e-mail.
+     * ⚠️ Quem tem uid é identificado por uid; quem não tem fica pelo nome, que já
+     * aparece na lista de inscritos do mesmo documento — não acrescenta exposição. */
     t.categoryNotifications.push({
         targetUid: pUid,
-        targetEmail: pEmail,
         targetName: participant.displayName || participant.name || '',
         category: category,
         source: participant.categorySource || 'organizador',

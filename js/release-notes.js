@@ -84,6 +84,27 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.102 ──────────────────────────────────────────
+        // ⛔ ACHADO OLHANDO PESO, NÃO SEGURANÇA: o documento do torneio é lido SEM LOGIN
+        // quando `isPublic == true`, e ele carregava E-MAIL de participante.
+        // Conferido contra produção, não deduzido da regra: `GET .../tournaments/{id}`
+        // sem cabeçalho de autenticação → HTTP 200, 429 KB, 61 e-mails.
+        // Varredura dos 38 torneios públicos: 90 e-mails distintos.
+        // ⭐ E NÃO EXISTE CONSERTO PELA REGRA: o Firestore entrega o documento INTEIRO ou
+        // nada — não há "esconde só este campo". Quem precisa ficar escondido não mora
+        // num doc público. O defeito não é a regra (a vitrine é pública de propósito), é
+        // o e-mail estar ali.
+        // Esta leva fecha a MAIOR e mais segura fonte: `categoryNotifications[].targetEmail`
+        // — 84 ocorrências, 60 e-mails, num registro cujo próprio código diz que o uid é a
+        // chave canônica e o e-mail é fallback de doc legado.
+        // ⭐ E a migração TROCA em vez de apagar: 82 dos 84 registros eram legados e não
+        // tinham uid; medido, 59 dos 60 e-mails resolvem pra um uid da base. Então o
+        // e-mail vira uid e nada se perde. O registro continua (o dono desligou a tela em
+        // 31/jul mas mandou guardar: "voltaremos a isso depois").
+        // ⏳ NÃO FECHA TUDO: `organizerEmail` / `creatorEmail` / `adminEmails` participam
+        // de AUTORIZAÇÃO, e `participants[].email` de identidade legada. Mexer nelas sem
+        // cuidado tranca gente pra fora do próprio torneio. Leva própria, com decisão do
+        // dono — e está NOMEADO no script pra ninguém achar que acabou.
         // ── ciclo 2.0.101 ──────────────────────────────────────────
         // ⭐ O GRUPO DE WHATS DO JOGO VOLTOU A SER 1 LINK PEQUENO.
         // O dono viu a medição e cortou o assunto: "é só um link porra. link do grupo" ·
