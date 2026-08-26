@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.102';
+window.SCOREPLACE_VERSION = '2.0.103';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10307,12 +10307,21 @@ window.AppStore = {
     // lançar (resultEntry por fase, lado do jogador por uid, fase da negociação) e aplica
     // com a MESMA _applyResultToTournament sobre o doc fresco.
     //
-    // QUEDA AUTOMÁTICA, e é deliberada: QUALQUER falha — CF indisponível, rede, ou até
-    // recusa — cai no caminho local de sempre. O pior caso vira exatamente o comportamento
-    // de hoje, então o ciclo de lançamento por participante não pode regredir por causa
-    // desta estreia. A CF ainda NÃO é autoridade (as rules seguem deixando o participante
-    // escrever `matches` direto, pro app de loja antigo continuar lançando placar na
-    // quadra) — então cair no local não perde segurança que exista hoje.
+    // ⛔ A QUEDA DEIXOU DE SER O MOTOR LOCAL (2.0.103). Era: qualquer falha caía no motor
+    // do cliente. Ordem do dono: _"imagina diferentes clientes com diferentes versões
+    // encerrando as rodadas e gerando a seguinte cada um com um código. de forma alguma.
+    // tudo na cf"_. E a justificativa que estava escrita aqui — "pro app de loja antigo
+    // continuar lançando placar na quadra" — está VENCIDA: conferido no git, TODO build
+    // nativo desde o 2.0.3 já chama a CF.
+    //
+    // ⚠️ MAS TIRAR A QUEDA SEM MAIS NADA TERIA UM CUSTO que o argumento não cobria: o
+    // caminho local escreve no Firestore, que tem FILA OFFLINE; uma CF chamável não tem.
+    // Numa quadra sem sinal, chamada falha na hora e escrita comum ESPERA.
+    // ⇒ A queda agora é a FILA: grava a INTENÇÃO (escrita comum, que o SDK entrega sozinho
+    // quando a rede volta) e o gatilho `applyQueuedResult` APLICA no servidor, com a mesma
+    // função da porta chamável. Nenhum cliente deriva avanço de chave, e nada se perde.
+    // ⚠️ O preço, dito na tela: sem sinal o placar fica salvo mas a CHAVE NÃO AVANÇA até o
+    // sinal voltar. Prometer "pronto" quando o servidor ainda não viu seria pior.
     // Ver [[project_result_launch_cf_evaluation]] §5.
     var _viaCF = false;
     if (typeof window._callApplyMatchResult === 'function') {
@@ -10346,13 +10355,36 @@ window.AppStore = {
         if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ') — caindo no caminho local');
       }
     }
-    var r = _viaCF ? true : await this.commitTournamentTx(tournamentId, function (freshT) {
-      window._applyResultToTournament(freshT, matchId, payload);
-      if (logMessage) {
-        if (!Array.isArray(freshT.history)) freshT.history = [];
-        freshT.history.push({ date: new Date().toISOString(), message: logMessage });
+    // ⛔ AQUI ficava `commitTournamentTx(... window._applyResultToTournament ...)` — o motor
+    // do CLIENTE aplicando e gravando o torneio inteiro. É exatamente o que a ordem do dono
+    // proíbe, e é o que impede os jogos de saírem do documento (enquanto o cliente escreve
+    // o torneio, ele precisa de permissão de escrita nele).
+    var r = true;
+    if (!_viaCF) {
+      var _cu = this.currentUser || {};
+      var _ok = false;
+      try {
+        _ok = await window.FirestoreDB.enfileirarPlacar(tournamentId, matchId, payload,
+          logMessage || '', { uid: _cu.uid, email: _cu.email || '' });
+      } catch (_eF) { _ok = false; }
+      if (_ok) {
+        // Falhar em SILÊNCIO é o que custou o jogo 63. A pessoa precisa saber que o placar
+        // está guardado E que a chave só anda quando a conexão voltar — são duas coisas
+        // diferentes, e prometer a segunda agora seria mentira.
+        try {
+          showNotification('Placar guardado',
+            'Sem conexão com o servidor agora. Ele entra sozinho quando a internet voltar — a chave só avança lá.',
+            'warning');
+        } catch (_eN) {}
+      } else {
+        try {
+          showNotification('Não consegui lançar o placar',
+            'Não deu pra falar com o servidor nem guardar pra depois. Confira a conexão e tente de novo.',
+            'error');
+        } catch (_eN2) {}
+        r = false;
       }
-    });
+    }
     // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado no doc
     // do jogo (tournaments/{id}/results/{matchId}). ADDITIVE — o doc do torneio segue
     // autoritativo na leitura; a virada pra subdoc-only é a Fase B. Best-effort: falha

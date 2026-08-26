@@ -144,6 +144,12 @@ function fakeDb(conteudo, opts) {
      * `tournaments/{id}/matches` é espelhada pelo gatilho `tournamentMirror` (admin SDK).
      * Pôr essa na lista do cliente não conserta nada: ele leva permission-denied.
      * Então a exigência se divide, e nenhuma das duas metades pode ficar sem dono. */
+    /* ⚠️ 2.0.103 — O QUE DECIDE É QUEM PODE **APAGAR**, não quem pode escrever.
+     * A fila do placar (`resultQueue`) quebrou a suposição antiga: o cliente CRIA nela
+     * (é o ponto — a intenção precisa caber na fila offline dele), mas a regra nega
+     * `delete`, porque o item é o RECIBO do que a pessoa mandou. Classificando por
+     * "escreve?", ela caía na lista do cliente — que levaria permission-denied na hora
+     * de limpar. Limpeza é sobre APAGAR. */
     const escritaNegada = function (sub) {
       const i = dentro.indexOf('match /' + sub + '/{');
       if (i < 0) return false;
@@ -151,7 +157,10 @@ function fakeDb(conteudo, opts) {
       // escrita é negada (o cliente dispara, a CF escreve). Com 900 o `allow write: if
       // false` ficava fora do recorte e o teste dizia que a subcoleção era do cliente.
       const bloco = dentro.slice(i, i + 2600);
-      return /allow write:\s*if false/.test(bloco.slice(0, bloco.indexOf('\n      }') + 1));
+      const corpo = bloco.slice(0, bloco.indexOf('\n      }') + 1);
+      return /allow write:\s*if false/.test(corpo)
+          || /allow update, delete:\s*if false/.test(corpo)
+          || /allow delete:\s*if false/.test(corpo);
     };
     const doServidor = [];
     subs.forEach(function (s) {

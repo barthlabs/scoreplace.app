@@ -706,6 +706,38 @@ exports.splitLatePair = onCall(async (request) => {
 // participante escrever `matches` direto (é o que mantém o app de loja antigo funcionando
 // — ele não chama esta CF e não tem auto-update). Fechar essa porta é passo SEPARADO, só
 // quando o piso das lojas alcançar. Ver [[project_result_launch_cf_evaluation]] §5.
+/* ── O MIOLO DO LANÇAMENTO DE PLACAR, EM UM LUGAR SÓ ───────────────────────────────
+ * Duas portas chegam aqui: a CHAMADA direta (`applyMatchResult`, quando há sinal) e a
+ * FILA (`applyQueuedResult`, quando não havia). ⛔ Elas NÃO podem ter cada uma a sua
+ * aplicação — divergir é exatamente o problema que a fila existe pra resolver, e a ordem
+ * do dono é clara: _"imagina diferentes clientes com diferentes versões... de forma
+ * alguma. tudo na cf"_. Duas versões DENTRO da CF seria o mesmo defeito, um andar acima.
+ * Devolve { ok, outcome, tournament } ou { ok:false, reason } — recusa é resposta
+ * legítima ("o outro time já lançou"), não falha de infra.
+ */
+async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage) {
+  const ref = db.collection('tournaments').doc(tId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return { ok: false, reason: 'not-found' };
+    const t = snap.data(); t.id = tId;
+    _enrichParticipantsFromProfiles(t);
+    // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
+    if (!_isTournamentParticipant(t, ator.uid, ator.email) && !_isTournamentAdmin(t, ator.uid, ator.email)) {
+      return { ok: false, reason: 'permission-denied' };
+    }
+    try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
+    const res = applyResultFn(t, {
+      matchId: matchId, payload: payload, actor: { uid: ator.uid, email: ator.email || '' },
+      logMessage: logMessage
+    });
+    if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
+    const b = _applyWriteBoundary(t);
+    tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+    return { ok: true, outcome: res.outcome, tournament: b.clean };
+  });
+}
+
 exports.applyMatchResult = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
   const email = request.auth && request.auth.token && request.auth.token.email;
@@ -736,30 +768,12 @@ exports.applyMatchResult = onCall(async (request) => {
 
   let out;
   try {
-    out = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const t = snap.data(); t.id = tId;
-      _enrichParticipantsFromProfiles(t);
-      // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
-      if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
-        throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
-      }
-      try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
-
-      const res = applyResultFn(t, {
-        matchId: matchId, payload: payload, actor: { uid: uid, email: email || '' },
-        logMessage: logMessage
-      });
-      // RECUSA é resposta legítima (não é falha de infra): devolve o motivo pro cliente
-      // mostrar o diálogo certo ("o outro time já lançou", "só o organizador nesta fase").
-      if (!res || !res.ok) {
-        return { ok: false, reason: (res && res.reason) || 'apply-failed' };
-      }
-      const b = _applyWriteBoundary(t);
-      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
-      return { ok: true, outcome: res.outcome, tournament: b.clean };
-    });
+    // MESMO miolo que a fila usa — ver _aplicaPlacarNaTransacao.
+    out = await _aplicaPlacarNaTransacao(db, tId, matchId, payload, { uid, email }, logMessage);
+    if (!out.ok && out.reason === 'permission-denied') {
+      throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, matchId, uid });
+    }
+    if (!out.ok && out.reason === 'not-found') throw new HttpsError('not-found', 'Torneio não encontrado.');
   } catch (e) {
     if (e instanceof HttpsError) throw e;
     console.error(`applyMatchResult EXPLODIU em ${tId}/${matchId} (uid ${uid}):`, e && e.stack || e);
@@ -770,6 +784,86 @@ exports.applyMatchResult = onCall(async (request) => {
     (out.ok ? out.outcome : 'recusado(' + out.reason + ')'));
   return out;
 });
+
+/* ── A FILA DO PLACAR: sem sinal, a intenção espera; a CF é que aplica ─────────────
+ *
+ * O PROBLEMA QUE ELA RESOLVE. A ordem do dono é "tudo na cf" — e ele está certo: cliente
+ * derivando avanço de chave é versão diferente gerando estado diferente. Mas tirar a
+ * queda pro cliente sem mais nada teria um custo que o argumento dele não cobria: o
+ * caminho local escreve no Firestore, que tem FILA OFFLINE (`enablePersistence` — "saves
+ * sobrevivem a fechar o app"). Uma CF chamável NÃO tem: sem sinal, falha na hora. Numa
+ * quadra com sinal ruim isso é a diferença entre o placar entrar e não entrar.
+ *
+ * ⭐ A saída atende os dois: o cliente grava uma INTENÇÃO — escrita comum de Firestore,
+ * que o SDK enfileira e entrega sozinho quando o sinal volta — e QUEM APLICA é a CF.
+ * Nenhum cliente calcula avanço de chave nunca mais, e nada se perde sem sinal.
+ * ⚠️ O custo, dito na cara: sem sinal o placar fica SALVO mas a chave NÃO AVANÇA até o
+ * sinal voltar. É o preço de não deixar o cliente derivar — e é o que o dono escolheu.
+ *
+ * ⛔ O ATOR VEM DO DOCUMENTO E É CONFERIDO CONTRA A REGRA, não confiado. A regra exige
+ * `actorUid == request.auth.uid` na criação: ninguém enfileira em nome de outro. Aqui a
+ * autorização é refeita do zero sobre o doc FRESCO, igual à porta chamável.
+ *
+ * ⭐ IDEMPOTÊNCIA: a CF chamável pode ter APLICADO e a resposta ter se perdido na volta —
+ * o cliente, sem saber, enfileira. Aplicar duas vezes é o pior erro possível num placar.
+ * Duas travas: (1) o id do documento da fila é derivado da intenção pelo cliente, então
+ * reenviar a MESMA intenção grava no MESMO doc e o gatilho roda uma vez só; (2) o motor
+ * (`applyResultFn`) recusa sozinho quando o jogo já tem aquele resultado — e recusa é
+ * resposta legítima, não erro.
+ */
+exports.applyQueuedResult = onDocumentCreated(
+  { document: 'tournaments/{tournamentId}/resultQueue/{itemId}', region: 'us-central1', timeoutSeconds: 120 },
+  async (event) => {
+    const tId = event.params && event.params.tournamentId;
+    const itemId = event.params && event.params.itemId;
+    const snap = event.data;
+    if (!snap || !snap.exists) return;
+    const item = snap.data() || {};
+    const db = getFirestore();
+
+    const marca = async (campos) => {
+      // ⛔ `merge` e NUNCA apagar o item: ele é o recibo do que a pessoa mandou. Se a
+      // aplicação falhar, é por ele que dá pra saber o que se perdeu — apagar seria
+      // repetir o erro de "registrar numa lista que o próximo passo apaga".
+      try { await snap.ref.set(Object.assign({ processedAt: Date.now() }, campos), { merge: true }); }
+      catch (e) { console.error('[filaPlacar] não consegui marcar', tId, itemId, e); }
+    };
+
+    if (typeof applyResultFn !== 'function' || !drawWindow) {
+      console.error('[filaPlacar]', tId, itemId, '⛔ motor indisponível — item FICA na fila, não marcado');
+      return;  // sem marcar: um redeploy e o reprocessamento manual ainda alcançam
+    }
+    const matchId = String(item.matchId || '').trim();
+    const actorUid = String(item.actorUid || '').trim();
+    if (!matchId || !actorUid || !item.payload) {
+      await marca({ status: 'invalido', reason: 'faltou matchId, actorUid ou payload' });
+      return;
+    }
+
+    let out;
+    try {
+      const pre = await db.collection('tournaments').doc(tId).get();
+      if (!pre.exists) { await marca({ status: 'recusado', reason: 'not-found' }); return; }
+      await _preloadDrawNames(pre.data());   // nome vivo por uid (o motor pode avançar)
+      out = await _aplicaPlacarNaTransacao(db, tId, matchId, item.payload,
+        { uid: actorUid, email: item.actorEmail || '' }, item.logMessage || '');
+    } catch (e) {
+      console.error('[filaPlacar] EXPLODIU', tId, itemId, e && e.stack || e);
+      await marca({ status: 'erro', reason: String((e && e.message) || e).slice(0, 300) });
+      return;
+    }
+
+    if (out.ok) {
+      console.log(`[filaPlacar] ${tId}/${matchId} por ${actorUid} — ${out.outcome} (enfileirado ${item.at || '?'})`);
+      await marca({ status: 'aplicado', outcome: out.outcome });
+    } else {
+      // Recusa do MOTOR é resposta legítima — inclusive "já lançado", que é o caso normal
+      // de idempotência quando a porta chamável tinha aplicado e a resposta se perdeu.
+      console.log(`[filaPlacar] ${tId}/${matchId} por ${actorUid} — recusado(${out.reason})`);
+      await marca({ status: 'recusado', reason: out.reason });
+    }
+  }
+);
 
 exports.closeRound = onCall(async (request) => {
   const uid = request.auth && request.auth.uid;
@@ -1663,7 +1757,11 @@ exports.tournamentMirror = onDocumentWritten(
 
       // torneio apagado ⇒ o espelho some junto (senão sobra fantasma no banco novo)
       if (!depois) {
-        for (const nome of ['matches', 'participants', 'history']) {
+        // ⭐ `resultQueue` entra aqui e NÃO na lista do cliente: ele pode CRIAR intenção
+        // (é o ponto da fila) mas a regra nega `delete` — o item é recibo do que a pessoa
+        // mandou. Quem pode apagar é quem tem admin SDK. Quem limpa é decidido por quem
+        // pode APAGAR, não por quem pode escrever.
+        for (const nome of ['matches', 'participants', 'history', 'resultQueue']) {
           const col = db.collection('tournaments').doc(id).collection(nome);
           const snap = await col.get();
           let lote = db.batch(), n = 0;

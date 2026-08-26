@@ -2196,6 +2196,63 @@ window.FirestoreDB = {
     return t;
   },
 
+  /* ── ENFILEIRA A INTENÇÃO DE PLACAR (2.0.103) ─────────────────────────────────
+   * Chamada quando a CF `applyMatchResult` NÃO respondeu (rede, CF fora, aparelho sem
+   * sinal na quadra). Antes disso a queda era o MOTOR LOCAL — e o dono proibiu:
+   * _"imagina diferentes clientes com diferentes versões encerrando as rodadas e gerando
+   * a seguinte cada um com um código. de forma alguma. tudo na cf"_.
+   *
+   * ⭐ POR QUE UMA ESCRITA COMUM, E NÃO OUTRA CHAMADA. `enablePersistence` está ligado —
+   * o log do boot diz "persistência offline ATIVA: saves sobrevivem a fechar o app". Uma
+   * escrita de Firestore sem sinal NÃO falha: o SDK enfileira e entrega sozinho quando a
+   * rede volta, mesmo que o app tenha sido fechado no meio. Uma CF chamável não tem nada
+   * disso — falha na hora. Por isso a intenção vai por escrita, e quem APLICA é o gatilho
+   * `applyQueuedResult`, no servidor, com a MESMA função da porta chamável.
+   *
+   * ⭐ O ID SAI DA INTENÇÃO, não é sorteado: reenviar a mesma coisa cai no MESMO documento
+   * e o gatilho roda uma vez só. A CF chamável pode ter aplicado e a resposta ter se
+   * perdido na volta — nesse caso o cliente enfileira sem saber, e aplicar placar DUAS
+   * vezes é o pior erro possível aqui. (2ª trava: o motor recusa sozinho quando o jogo já
+   * tem aquele resultado, e recusa é resposta legítima.)
+   *
+   * ⛔ NÃO devolve promessa de que o servidor aplicou — devolve que a intenção FOI ACEITA
+   * localmente. É por isso que quem chama avisa "vai entrar quando a conexão voltar" em
+   * vez de "pronto": prometer o que não aconteceu é pior que avisar que falta.
+   */
+  async enfileirarPlacar(tournamentId, matchId, payload, logMessage, actor) {
+    if (!this.db || !tournamentId || !matchId || !actor || !actor.uid) return false;
+    var _hash = function (txt) {
+      var h = 0x811c9dc5;
+      for (var i = 0; i < txt.length; i++) { h ^= txt.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+      return h.toString(36);
+    };
+    var corpo = JSON.stringify({ m: String(matchId), p: payload, l: logMessage || '' });
+    var id = String(matchId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) + '-' +
+             String(actor.uid).slice(0, 8) + '-' + _hash(corpo);
+    var item = {
+      matchId: String(matchId),
+      payload: payload,
+      logMessage: logMessage || '',
+      actorUid: String(actor.uid),
+      actorEmail: actor.email || '',
+      at: Date.now(),
+      appVersion: (typeof window !== 'undefined' && window.SCOREPLACE_VERSION) || ''
+    };
+    // ⚠️ SEM await no set: offline ele SÓ resolve quando a rede voltar (pode ser horas), e
+    // esperar aqui travaria a tela na quadra — que é justamente o caso que isto atende.
+    // O SDK já persistiu localmente quando `set` retorna o objeto; a promessa é a
+    // confirmação do SERVIDOR, e essa a gente não espera de propósito.
+    try {
+      this.db.collection('tournaments').doc(String(tournamentId))
+        .collection('resultQueue').doc(id).set(item)
+        .catch(function (e) { if (window._warn) window._warn('[filaPlacar] servidor recusou a intenção', e); });
+      return true;
+    } catch (e) {
+      if (window._error) window._error('[filaPlacar] não consegui enfileirar', e);
+      return false;
+    }
+  },
+
   /* ── O LOG INTEIRO, QUANDO O DOCUMENTO SÓ TEM A CAUDA ──────────────────────────
    * O histórico é o único campo do torneio que cresce PRA SEMPRE (`rounds` para quando o
    * torneio acaba; o log não). Medido em 26/ago: 37 KB dos 245 KB do Confra. Por isso a

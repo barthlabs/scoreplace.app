@@ -84,6 +84,33 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.103 ──────────────────────────────────────────
+        // ⭐ O ÚLTIMO LUGAR ONDE O CLIENTE CALCULAVA PLACAR FECHOU.
+        // `commitResultTx` tentava a CF e, em QUALQUER falha, caía no MOTOR LOCAL — que
+        // aplica o placar e DERIVA O AVANÇO DA CHAVE no aparelho. É exatamente o que o
+        // dono proibiu no fecho de rodada, e a justificativa escrita no código ("pro app
+        // de loja antigo lançar placar na quadra") estava VENCIDA: conferido no git, todo
+        // build nativo desde o 2.0.3 já chama a CF.
+        // ⚠️ Mas tirar a queda sem mais nada teria um custo que o argumento não cobria: o
+        // caminho local escreve no Firestore, que tem FILA OFFLINE ("saves sobrevivem a
+        // fechar o app"); CF chamável não tem — sem sinal, falha na hora. Numa quadra com
+        // sinal ruim é a diferença entre o placar entrar e não entrar.
+        // ⇒ A queda virou FILA: o app grava a INTENÇÃO (escrita comum, que o SDK entrega
+        // sozinho quando a rede volta) e o gatilho `applyQueuedResult` APLICA no servidor
+        // — com a MESMA função da porta chamável, num miolo só. Duas aplicações divergem,
+        // que é justamente o problema que isto resolve.
+        // ⚠️ O preço, dito na tela e não escondido: sem sinal o placar fica GUARDADO mas a
+        // CHAVE NÃO AVANÇA até a conexão voltar. Prometer "pronto" seria mentira.
+        // ⛔ A intenção é IMUTÁVEL e só se cria em nome próprio (`actorUid ==
+        // request.auth.uid`); a autorização de verdade é refeita no servidor sobre o doc
+        // fresco. O item nunca é apagado: é o recibo do que a pessoa mandou.
+        // ⭐ Idempotente: o id sai do conteúdo da intenção, então reenviar cai no mesmo
+        // documento e o gatilho roda uma vez — a CF pode ter aplicado e a resposta ter se
+        // perdido na volta, e lançar placar duas vezes é o pior erro possível aqui.
+        //
+        // ⭐ E ISSO DESTRAVA A ARQUITETURA: era a escrita do cliente no documento do
+        // torneio que obrigava as rules a deixarem o participante escrever nele. Com o
+        // placar fora do cliente, os jogos (97 KB, 45% do doc) podem sair do documento.
         // ── ciclo 2.0.102 ──────────────────────────────────────────
         // ⛔ ACHADO OLHANDO PESO, NÃO SEGURANÇA: o documento do torneio é lido SEM LOGIN
         // quando `isPublic == true`, e ele carregava E-MAIL de participante.

@@ -308,6 +308,38 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // ─── FILA DO PLACAR: a intenção espera o sinal, a CF é que aplica ─────
+      // O cliente NUNCA mais deriva avanço de chave (ordem do dono: "tudo na cf"). Mas
+      // uma CF chamável não tem fila offline e o Firestore tem — numa quadra sem sinal,
+      // chamada falha na hora e escrita comum ESPERA e entrega sozinha. Então o cliente
+      // grava aqui uma INTENÇÃO ("quero lançar este placar") e o gatilho
+      // `applyQueuedResult` aplica no servidor, com a MESMA função da porta chamável.
+      //
+      // ⛔ `create` SÓ EM NOME PRÓPRIO: `actorUid == request.auth.uid`. Sem isso qualquer
+      // inscrito enfileiraria placar se passando por outro — e a CF confia neste campo
+      // pra autorizar. É a única coisa que esta regra precisa garantir; TODO o resto
+      // (pode lançar este jogo? é a fase certa? o outro time já lançou?) é conferido na
+      // CF sobre o doc fresco, que é onde regra de negócio se testa e se loga.
+      // ⛔ `update`/`delete` NEGADOS: o item é RECIBO do que a pessoa mandou. Se pudesse
+      // ser editado depois de criado, o gatilho leria uma coisa e teria disparado por
+      // outra. Quem carimba o desfecho é a CF (admin SDK, não passa por regra).
+      // ⭐ O id do documento é derivado da INTENÇÃO pelo cliente: reenviar a mesma
+      // intenção cai no mesmo doc e o gatilho roda uma vez só.
+      match /resultQueue/{itemId} {
+        function parentTq() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.matchId is string
+          && request.resource.data.matchId.size() > 0
+          && request.resource.data.payload is map
+          && (isTournamentParticipant(parentTq()) || isTournamentAdmin(parentTq())
+              || isTournamentAdminByUid(parentTq()));
+        allow update, delete: if false;
+      }
+
       // ─── HISTÓRICO ESPELHADO: LEITURA, PRA AGUENTAR A PODA ────────────────
       // `tournaments/{id}/history/{k}` é onde o log de auditoria vive INTEIRO. O
       // documento do torneio tem teto de 1 MB e o histórico é o único campo que cresce
