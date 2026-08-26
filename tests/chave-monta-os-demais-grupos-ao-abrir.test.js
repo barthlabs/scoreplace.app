@@ -20,6 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -32,7 +33,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.j
 {
   ok(/window\._chaveGuardaLote = function \(montar\)/.test(src), 'existe o cofre de lotes da chave');
   const i = src.indexOf('window._chaveGuardaLote = function');
-  const corpo = src.slice(i, i + 400);
+  const corpo = _R.ateOFim(src, i);
   ok(/window\._chaveLotes\[id\] = montar;/.test(corpo),
      '⛔ guarda a FUNÇÃO que monta — guardar a string pronta deixaria o custo de montar ' +
      '500 KB de HTML no caminho de abertura, que é o que trava o toque');
@@ -63,7 +64,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.j
 {
   ok(/window\._chaveMontaTudo = function/.test(src), 'existe a porta que monta todos os lotes');
   const i = src.indexOf('window._bracketApplyFilter = function');
-  const topo = src.slice(i, i + 1400);
+  const topo = _R.ateOFim(src, i);
   ok(/_chaveMontaTudo\(\)/.test(topo),
      '⭐ o filtro monta tudo ANTES de decidir visibilidade');
   const iM = topo.indexOf('_chaveMontaTudo()');
@@ -78,7 +79,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.j
 {
   const i = src.indexOf('window._chaveLigaLotes = function');
   // janela ampliada em 2.0.89: `monta` cresceu ao passar a injetar em fatias.
-  const corpo = src.slice(i, i + 3000);
+  const corpo = _R.ateOFim(src, i);
   ok(/delete window\._chaveLotes\[id\];/.test(corpo),
      '⛔ o lote é apagado do cofre ao montar — abrir e fechar não pode duplicar grupo');
   ok(/if \(det\.open\) \{ monta\(\); return; \}/.test(corpo),

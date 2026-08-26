@@ -14,6 +14,7 @@
 // auto-confronto (self@lower) — quem saía ficava sem destino e quem subia seguia vivo na
 // inferior. Ver [[project_repechage_selfmatch_systemic]].
 const H = require('./render-harness');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const W = H.sandbox;
 const A = W._chavesAdapter;
 
@@ -381,7 +382,7 @@ console.log('\n── renderBracket chama a reavaliação (source) ──');
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket.js'), 'utf8');
   const i = src.indexOf('function renderBracket(');
   ok(i !== -1, 'renderBracket existe');
-  const corpo = src.slice(i, i + 12000);
+  const corpo = _R.ateOFim(src, i);
   ok(corpo.indexOf('_reassignBestLosersToRepechage') !== -1,
     'renderBracket chama _reassignBestLosersToRepechage (sem isto, a chave só se corrige no próximo resultado)');
 })();

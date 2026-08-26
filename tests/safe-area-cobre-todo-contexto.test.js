@@ -32,6 +32,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -143,7 +144,7 @@ CONTEXTOS.forEach((ctx) => {
   ok(i > 0, 'achou _reflowChrome');
   // A função é longa (comentários extensos) — vai até a próxima atribuição em window.
   const fim = store.indexOf('\nwindow.', i + 10);
-  const corpo = store.slice(i, fim > 0 ? fim : i + 14000);
+  const corpo = _R.ateOFim(store, i);
   ok(/getBoundingClientRect\(\)\.height/.test(corpo), 'ele MEDE a altura real da topbar');
   ok(/bh\.style\.top\s*=/.test(corpo), 'e reposiciona o back-header por essa medida');
 }

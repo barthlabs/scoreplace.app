@@ -20,6 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -46,7 +47,7 @@ const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboar
   ok(/scroll-trav:/.test(store), '⭐ a travada durante a rolagem manda aviso próprio (`scroll-trav`)');
   const i = store.indexOf("'scroll-trav: '");
   ok(i > 0, 'o aviso é montado em store.js');
-  const msg = store.slice(i, i + 600);
+  const msg = _R.ateSairDoBloco(store, i);
   ok(/_spDirRolagem/.test(msg), 'o aviso leva a DIREÇÃO');
   ok(/foto\.nos|nos=/.test(msg), 'leva o tamanho do DOM (`nos`)');
   ok(/snaps=/.test(msg), 'leva os snapshots em voo (`snaps`)');
@@ -86,7 +87,7 @@ const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboar
 // ── ④b o aviso leva os TRECHOS caros (o fim do "quem: nenhum") ──────────────
 {
   const i = store.indexOf("'scroll-trav: '");
-  const msg = store.slice(i, i + 900);
+  const msg = _R.ateSairDoBloco(store, i);
   ok(/trechos/.test(msg),
      '⭐ o aviso leva os trechos caros do momento — é o que substitui "quem: nenhum" por um NOME');
   const volta = store.slice(Math.max(0, i - 700), i);
@@ -105,7 +106,7 @@ const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboar
 // ── ⑥ ⛔ é MEDIÇÃO: não pode mexer na tela ───────────────────────────────────
 {
   const i = store.indexOf("'scroll-trav: '");
-  const bloco = store.slice(Math.max(0, i - 900), i + 700);
+  const bloco = _R.ateSairDoBloco(store, Math.max(0, i - 900));
   ok(!/innerHTML|classList|style\.|appendChild|removeChild/.test(bloco),
      '⛔ o bloco não toca no DOM — instrumentação que muda a tela deixa de ser instrumentação');
   ok(/try\s*\{/.test(bloco) && /catch/.test(bloco),

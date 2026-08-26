@@ -12,6 +12,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -34,7 +35,7 @@ sec(function () {
   // compara DENTRO da própria expressão do innerHTML (o nome da seção também aparece
   // antes, noutra função — comparar com o 1º indexOf global daria falso negativo)
   const _iShell = SRC.indexOf('container.innerHTML = hdr + _mxBar');
-  const _trecho = SRC.slice(_iShell, _iShell + 900);
+  const _trecho = _R.ateOFim(SRC, _iShell);
   ok(_trecho.indexOf('_mxBar') < _trecho.indexOf('_renderCategoriesSection'), 'e vem ANTES da matriz');
 });
 

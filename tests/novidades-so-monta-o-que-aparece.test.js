@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const HARNESS = require('./render-harness');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const W = HARNESS.window;
 
 ['views/tournaments-categories.js', 'views/schedule-poll.js', 'views/wa-group.js', 'views/dashboard.js']
@@ -104,7 +105,7 @@ function desenha(n) {
 {
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');
   const i = src.indexOf('window._toggleNovidadesCollapse = function');
-  const corpo = src.slice(i, i + 2600);
+  const corpo = _R.ateOFim(src, i);
   const iInj = corpo.indexOf('_novExtraPend');
   const iAttr = corpo.indexOf("setAttribute('data-nov-collapsed'");
   ok(iInj > 0 && iAttr > 0 && iInj < iAttr,

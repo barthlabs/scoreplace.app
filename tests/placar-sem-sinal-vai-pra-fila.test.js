@@ -17,6 +17,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -29,7 +30,7 @@ const rules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
 // ── ① o motor local SAIU do caminho de placar ───────────────────────────────
 const i = store.indexOf('async commitResultTx(');
 ok(i > 0, 'commitResultTx existe');
-const bloco = store.slice(i, i + 5200);
+const bloco = _R.ateSairDoBloco(store, i);
 ok(!/commitTournamentTx\([^)]*function \(freshT\)[\s\S]{0,200}_applyResultToTournament/.test(bloco),
   '⭐ o motor do CLIENTE não aplica mais placar — era ele que derivava avanço de chave');
 ok(/enfileirarPlacar\(/.test(bloco),
@@ -61,12 +62,12 @@ ok(/function _aplicaPlacarNaTransacao/.test(cf),
 const iQ = cf.indexOf('exports.applyQueuedResult');
 const iC = cf.indexOf('exports.applyMatchResult');
 ok(iQ > 0 && iC > 0, 'as duas portas existem');
-ok(/_aplicaPlacarNaTransacao\(/.test(cf.slice(iQ, iQ + 4000)) &&
-   /_aplicaPlacarNaTransacao\(/.test(cf.slice(iC, iC + 3000)),
+ok(/_aplicaPlacarNaTransacao\(/.test(_R.ateAProxima(cf, iQ, '\nexports.')) &&
+   /_aplicaPlacarNaTransacao\(/.test(_R.ateAProxima(cf, iC, '\nexports.')),
   '⛔ e as DUAS chamam ele — duas aplicações divergem, que é o bug que a fila existe pra evitar');
 ok(/runTransaction/.test(cf.slice(cf.indexOf('function _aplicaPlacarNaTransacao'), cf.indexOf('function _aplicaPlacarNaTransacao') + 2000)),
   'aplica em transação sobre o doc fresco');
-const q = cf.slice(iQ, iQ + 4200);
+const q = _R.ateAProxima(cf, iQ, '\nexports.');
 ok(/_isTournamentParticipant|_isTournamentAdmin/.test(cf.slice(cf.indexOf('function _aplicaPlacarNaTransacao'), cf.indexOf('function _aplicaPlacarNaTransacao') + 2000)),
   '⛔ e REFAZ a autorização no servidor — o campo do documento não é confiado, é conferido');
 ok(/merge: true/.test(q) && !/\.delete\(\)/.test(q),
@@ -75,7 +76,7 @@ ok(/merge: true/.test(q) && !/\.delete\(\)/.test(q),
 // ── ⑤ a regra: só criar, só em nome próprio ─────────────────────────────────
 const iR = rules.indexOf('match /resultQueue/{itemId}');
 ok(iR > 0, 'a fila tem regra');
-const r = rules.slice(iR, iR + 1200);
+const r = _R.ateSairDoBloco(rules, iR);
 ok(/request\.resource\.data\.actorUid == request\.auth\.uid/.test(r),
   '⭐ ninguém enfileira em nome de outro — a CF confia neste campo pra autorizar');
 ok(/allow update, delete: if false/.test(r),

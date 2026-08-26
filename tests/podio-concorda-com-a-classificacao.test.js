@@ -18,6 +18,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -50,7 +51,7 @@ ok(/isThirdPlace: true/.test(src),
 
 const i = iCls;
 ok(i > 0, 'a derivação existe');
-const bloco = src.slice(i, i + 700);
+const bloco = _R.ateOFim(src, i);
 
 ok(/!thirdPlace &&/.test(bloco),
   '⭐ só entra quando NÃO houve disputa de 3º — havendo, o resultado em quadra manda');

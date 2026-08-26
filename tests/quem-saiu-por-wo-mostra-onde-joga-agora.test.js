@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -63,7 +64,7 @@ ok(onde(duasRodadas, 'p', 'P', 'R1 Grupo A') === 'R2 Grupo C',
 // ── a fiação na linha da classificação ──────────────────────────────────────
 ok(/_grupoNovoTag/.test(src), 'a linha da classificação usa a indicação');
 const iTag = src.indexOf('var _grupoNovoTag');
-const bloco = src.slice(iTag, iTag + 900);
+const bloco = _R.ateOFim(src, iTag);
 ok(/\(_isRed \|\| _isAmb\)/.test(bloco),
   '⭐ só pra quem saiu por W.O. — não vira poluição nas linhas normais');
 ok(/color:var\(--text-bright\)/.test(bloco),

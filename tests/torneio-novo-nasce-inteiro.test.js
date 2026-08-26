@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -27,7 +28,7 @@ const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'u
 // ── ① a criação põe o marcador ──────────────────────────────────────────────
 const i = store.indexOf('tourData = Object.assign({');
 ok(i > 0, 'o caminho de CRIAÇÃO existe (separado do de edição)');
-const criacao = store.slice(i, i + 700);
+const criacao = _R.ateOFim(store, i);
 /* ⛔⛔ REVERTIDO NO MESMO DIA, com o app quebrado na mão do dono:
  *   "não mostra os meus jogos apenas a classificação" · "jogos já jogados perdidos".
  * (No banco nada se perdeu — conferido contra os dois backups: 115 jogos, 72 placares,

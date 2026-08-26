@@ -25,6 +25,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'bracket-ui.js'), 'utf8');
 
 let pass = 0, fail = 0;
@@ -35,7 +36,7 @@ console.log('──── aprovar no feed: a tela muda, e continua mudada ──
 const i = src.indexOf('window._approveResult = function(tId, matchId) {');
 ok(i > 0, 'achou o _approveResult');
 const fim = src.indexOf('\nwindow._contestResult', i);
-const corpo = src.slice(i, fim > 0 ? fim : i + 12000);
+const corpo = _R.ateOFim(src, i);
 
 // 1) existe o redesenho pós-gravação, e ele é chamado nos DOIS desfechos
 ok(/var _redesenhar = function \(\) \{/.test(corpo),
@@ -69,7 +70,7 @@ ok(posCura > 0 && posPinta > 0 && posCura < posPinta,
 
 // 4) o caminho da dashboard segue sendo o do cânone (ação do dedo não passa pelo gate)
 const iRer = src.indexOf('function _rerenderBracket(tId, anchorMatchId) {');
-const corpoRer = src.slice(iRer, iRer + 2200);
+const corpoRer = _R.ateOFim(src, iRer);
 ok(/_dashPedirRepintura\('acao-no-card'\)/.test(corpoRer),
    'na dashboard a repintura entra como AÇÃO DO DEDO (sem o gate de assinatura de conjunto)');
 

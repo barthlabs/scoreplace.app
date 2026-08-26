@@ -20,6 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -33,7 +34,7 @@ const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf
   ok(/_marcaFimAssinc/.test(store), 'existe a marcação de fim de callback assíncrono');
   const i = store.indexOf('var _r = fn.apply(this, arguments);');
   ok(i > 0, 'o embrulho guarda o retorno do callback antes de devolvê-lo');
-  const bloco = store.slice(i, i + 1400);
+  const bloco = _R.ateSairDoBloco(store, i);
   ok(/typeof _r\.then === 'function'/.test(bloco),
      'e só observa quando o retorno é uma PROMESSA (callback comum não paga nada)');
   ok(/return _r;/.test(bloco),

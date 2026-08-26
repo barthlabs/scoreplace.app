@@ -21,6 +21,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
@@ -309,7 +310,7 @@ sec(function () {
 sec(function () {
   const src = fs.readFileSync(path.join(ROOT, 'js', 'notifications.js'), 'utf8');
   const i = src.indexOf('function showAlertDialog');
-  const corpo = src.slice(i, i + 4000);
+  const corpo = _R.ateSairDoBloco(src, i);
   ok(/max-height:\s*92%/.test(corpo), 'o card do alert precisa de max-height — senão o rodapé sai do viewport');
   ok(/overflow-y:\s*auto/.test(corpo), 'o CORPO do alert precisa rolar');
   ok(corpo.indexOf('flex-direction: column') !== -1, 'coluna flex: cabeçalho e botão fixos, corpo rolando');

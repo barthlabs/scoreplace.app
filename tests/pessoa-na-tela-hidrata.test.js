@@ -23,6 +23,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let falhas = 0;
 const ok = (nome, cond, extra) => {
@@ -65,7 +66,7 @@ function corpoDaFuncao(src, nome) {
   const i = src.indexOf('function ' + nome + '(');
   if (i < 0) return null;
   const j = src.indexOf('\n        }', i);          // fim do bloco no nível de indentação
-  return j > i ? src.slice(i, j) : src.slice(i, i + 6000);
+  return j > i ? src.slice(i, j) : _R.ateOFim(src, i);
 }
 ['_buildOrgCard', '_buildPendingOrgCard'].forEach((fn) => {
   const corpo = corpoDaFuncao(tourn, fn);

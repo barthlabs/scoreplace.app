@@ -32,6 +32,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
@@ -41,7 +42,7 @@ const CSS = fs.readFileSync(path.join(ROOT, 'css', 'components.css'), 'utf8');
 
 // o trecho que monta o campo de busca da barra canônica
 const i0 = STORE.indexOf("var _clr = \"window._fbClearSearch('\"");
-const BLOCO = STORE.slice(i0, i0 + 2600);
+const BLOCO = _R.ateOFim(STORE, i0);
 ok(i0 > 0, '0. o bloco do campo de busca da barra canônica foi encontrado');
 
 // ═══════════════════════════════════════════════════════════════════════════

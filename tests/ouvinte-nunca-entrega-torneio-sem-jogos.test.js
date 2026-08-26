@@ -20,6 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -84,7 +85,7 @@ const iA = src.indexOf('function _aplicaSnapTorneios(');
 // (ela faltava e quebrou produção em 26/ago). Com 4000 o `tournaments.push` caía fora do
 // recorte e o teste dizia que a ordem estava errada. Mesmo tropeço de recorte curto que já
 // aconteceu duas vezes neste projeto.
-const bloco = src.slice(iA, iA + 9000);
+const bloco = _R.ateOFim(src, iA);
 ok(/_enxertaJogos\(data, _emMemoria\)/.test(bloco), 'o ouvinte chama a rede');
 ok(/store\.tournaments \|\| \[\]\)\.find/.test(bloco),
   '⭐ e enxerta do objeto MONTADO no store, não de `_prevParsed` — o parse anterior tem o mesmo buraco');

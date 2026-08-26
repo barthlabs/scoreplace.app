@@ -42,6 +42,7 @@
 const fs = require('fs');
 const path = require('path');
 const H = require('./render-harness');   // store.js + bracket.js REAIS
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const W = H.sandbox;
 
 const ROOT = path.join(__dirname, '..');
@@ -323,7 +324,7 @@ ok(/id="mr-toggle-tag"[^>]*color:(?:var\(--sp-c-7dd3fc,)?#7dd3fc/.test(ABERTA),
   // MESMA língua; se continuasse mexendo em display, brigaria com o CSS.
   const i = SRC.indexOf("var _mrSec = document.getElementById('meus-resultados-section')");
   ok(i > 0, 'G5 — o auto-expand da pendência foi migrado pro atributo');
-  const trecho = SRC.slice(i, i + 600);
+  const trecho = _R.ateOFim(SRC, i);
   ok(trecho.indexOf("setAttribute('data-mr-collapsed', '0')") !== -1,
     'G6 — havendo pendência, o auto-expand abre pelo atributo');
   ok(!/_mrBody\.style\.display/.test(SRC),

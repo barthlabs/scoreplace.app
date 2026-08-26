@@ -7,6 +7,7 @@
  * ficava violeta depois de uma leitura que deu certo.
  */
 const fs = require('fs'), path = require('path'), vm = require('vm');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const src = fs.readFileSync(path.join(__dirname, '..', 'extension', 'content.js'), 'utf8');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -35,7 +36,10 @@ ok(ms[0].oppNames.join('/') === 'Ana/Bia', 'e os adversários também');
 // a chave de dedup usa o id — sem ele, a mesma partida vira duas
 const k = src.indexOf('function _gameKey');
 const ctx2 = {}; vm.createContext(ctx2);
-vm.runInContext(src.slice(k, src.indexOf('\n', src.indexOf('}', k + 200))) + '\nthis.__k = _gameKey;', ctx2);
+/* ⛔ Aqui o `+ 200` era o PONTO DE PARTIDA da busca pelo `}` — outra forma do mesmo
+ * defeito: presume que a chave de fechamento está a pelo menos 200 caracteres. A
+ * função encolhe, o `}` encontrado é outro, e o teste passa a avaliar código errado. */
+vm.runInContext(_R.ateOFim(src, k) + '\nthis.__k = _gameKey;', ctx2);
 if (ctx2.__k) {
   ok(ctx2.__k({ lzId: '77' }) === 'lz77', 'a identidade da partida é o id do letzplay');
   ok(ctx2.__k(ms[0]) === 'lz10004859', 'e o jogo reconstruído mantém essa identidade');

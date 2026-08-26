@@ -46,6 +46,7 @@
 const fs = require('fs');
 const path = require('path');
 const H = require('./render-harness');   // store.js + bracket.js REAIS
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const W = H.sandbox;
 
 const ROOT = path.join(__dirname, '..');
@@ -371,9 +372,9 @@ if (TEM_MEDICAO) (function () {
   // O render tem que chamar a medição no MESMO task do innerHTML — senão o usuário chega
   // a ver o estado de 1 coluna piscando antes de a linha encher.
   const i = SRC.indexOf('container.innerHTML = html;');
-  ok(i > 0 && SRC.slice(i, i + 500).indexOf('_spSyncCollapsePreview()') !== -1,
+  ok(i > 0 && _R.ateOFim(SRC, i).indexOf('_spSyncCollapsePreview()') !== -1,
     'H3 — a medição roda logo depois do innerHTML (sem piscar o estado de 1 coluna)');
-  ok(i > 0 && SRC.slice(i, i + 500).indexOf('_spWatchPreviewWidth()') !== -1,
+  ok(i > 0 && _R.ateOFim(SRC, i).indexOf('_spWatchPreviewWidth()') !== -1,
     'H4 — e o observador de largura é (re)ligado a cada render');
 })();
 

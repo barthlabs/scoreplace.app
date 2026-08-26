@@ -27,6 +27,7 @@
 const fs = require('fs');
 const path = require('path');
 const H = require('./render-harness');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const W = H.sandbox;
 
 const ROOT = path.join(__dirname, '..');
@@ -168,7 +169,7 @@ const ZE  = { uid: 'u-ze', displayName: 'Zé Ninguém', email: 'ze@x.com' };
   ok(/container\.addEventListener\('click'/.test(SRC) && /closest\('\[data-pending-action\]'\)/.test(SRC),
      'o despachante da dashboard cobre TODO o container por delegação — inclusive o que entra depois');
   const i = SRC.indexOf("action === 'edit'");
-  ok(i > -1 && SRC.slice(i, i + 400).indexOf('sp_pendingEdit') > -1,
+  ok(i > -1 && _R.ateOFim(SRC, i).indexOf('sp_pendingEdit') > -1,
      'e no Editar ele carimba `sp_pendingEdit` e navega (fora da chave não há DOM pra editar)');
 })();
 
@@ -241,7 +242,7 @@ const ZE  = { uid: 'u-ze', displayName: 'Zé Ninguém', email: 'ze@x.com' };
   // e o editar do feed NAVEGA — nunca abre a edição in-place na tela inicial
   ok(/data-pending-action="goedit"/.test(SRC) === false, '[como] o `goedit` nasce no card, não no HTML da dashboard');
   const iGo = SRC.indexOf("action === 'goedit'");
-  ok(iGo > -1 && SRC.slice(iGo, iGo + 1200).indexOf("window.location.hash = '#bracket/'") > -1,
+  ok(iGo > -1 && _R.ateOFim(SRC, iGo).indexOf("window.location.hash = '#bracket/'") > -1,
      '[como] e o despachante LEVA pro torneio (a edição in-place é da tela da chave)');
 })();
 

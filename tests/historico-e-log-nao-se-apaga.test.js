@@ -25,6 +25,7 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 const H = require(path.join(ROOT, 'tests', 'render-harness'));
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const W = H.window;
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournament-split-core.js'), 'utf8'),
                 H.sandbox, { filename: 'tournament-split-core.js' });
@@ -66,7 +67,7 @@ ok(S.iguais(volta, t), 'remontar(dividir(t)) === t — a divisão segue reversí
 const src = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
 const iH = src.indexOf("_espelhaColecao(db, id, 'history'");
 ok(iH > 0, 'o gatilho espelha o histórico');
-const chamadaH = src.slice(iH, iH + 260);
+const chamadaH = _R.ateOFim(src, iH);
 ok(/_k\b/.test(chamadaH), 'e chaveia pelo CONTEÚDO (`_k`), não por `h + _idx`');
 ok(/,\s*true\s*\)/.test(chamadaH), '⭐ com soDeixaCrescer = true: log de auditoria NÃO se apaga');
 
@@ -148,7 +149,7 @@ const mApt = /TETO_APT = (\d+), ALVO_APT = (\d+)/.exec(src);
 ok(mApt && Number(mApt[2]) < Number(mApt[1]),
   '   com alvo menor que o teto — podar até o próprio teto podaria a cada apontamento novo');
 const iPodaApt = src.indexOf('TETO_APT');
-const podaApt = src.slice(iPodaApt, iPodaApt + 1500);
+const podaApt = _R.ateOFim(src, iPodaApt);
 ok(/runTransaction/.test(podaApt) && /tx\.get\(/.test(podaApt),
   '⛔ e a poda relê o documento em TRANSAÇÃO — update cego engoliria o apontamento feito no meio');
 ok(/slice\(-ALVO_APT\)/.test(podaApt), '⭐ guarda a CAUDA: o que sai é o mais velho, já espelhado');

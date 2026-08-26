@@ -18,6 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -111,7 +112,7 @@ ok(ctx.store.tournaments[0].rounds[0].matches.length === 1 && montados.length ==
 // ── ⑤ a busca de verdade existe, e é uma por torneio ────────────────────────
 ok(/_montaPesadosQueFaltam\(ids\)/.test(src), 'a busca existe no AppStore');
 const iM = src.indexOf('async _montaPesadosQueFaltam(ids)');
-const busca = src.slice(iM, iM + 2600);
+const busca = _R.ateOFim(src, iM);
 ok(/_montandoPesados\[id\]\) continue/.test(busca),
   '⛔ uma busca por torneio de cada vez — torneio ao vivo ecoa o tempo todo e viraria dezenas de buscas do mesmo dado');
 ok(/Object\.keys\(montado\)\.forEach/.test(busca),

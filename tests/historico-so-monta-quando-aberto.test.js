@@ -16,6 +16,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -61,7 +62,7 @@ ok(i > 0, 'a função do histórico existe');
   ok(!/var allEventsHtml/.test(src),
      '⛔ e a string pronta que era montada a cada render deixou de existir');
   const iM = src.indexOf('function montaCauda()');
-  ok(/if \(!hasMore\) return '';/.test(src.slice(iM, iM + 200)),
+  ok(/if \(!hasMore\) return '';/.test(_R.ateOFim(src, iM)),
      'sem cauda, devolve vazio sem varrer nada');
 }
 

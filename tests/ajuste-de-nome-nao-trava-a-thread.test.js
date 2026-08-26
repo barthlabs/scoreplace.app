@@ -40,6 +40,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
 
 let pass = 0, fail = 0;
@@ -77,7 +78,7 @@ ok(/window\._fitNames\(root, \(retry \|\| 0\) \+ 1\); \}, 220\)/.test(src), 'e f
 
 // 4. fatias com corrida rAF × timeout e trava de uma vez
 const iLo = src.indexOf('var _lote = function (fila, aoFim) {');
-const lo = src.slice(iLo, iLo + 1200);
+const lo = _R.ateOFim(src, iLo);
 ok(/if \(seguiu\) return; seguiu = true;/.test(lo), 'a fatia seguinte tem trava de uma-vez-só');
 ok(/requestAnimationFrame\(_segue\);[\s\S]{0,60}setTimeout\(_segue, 16\)/.test(lo),
    'e corre rAF × timeout (rAF não dispara em aba de fundo)');

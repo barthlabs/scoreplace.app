@@ -25,6 +25,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -51,7 +52,7 @@ const store = fs.readFileSync(path.join(root, 'js', 'store.js'), 'utf8');
 (function () {
   ok(store.indexOf('function _pintarFotoNoCard') > -1, '_pintarFotoNoCard existe (fonte única da pintura)');
   const i = store.indexOf('function _pintarFotoNoCard');
-  const corpo = store.slice(i, i + 700);
+  const corpo = _R.ateOFim(store, i);
   ok(/setProperty\('background-image', imagem, 'important'\)/.test(corpo), 'a foto é pintada com !important (não depende da ordem em que o marcador chega)');
   ok(corpo.indexOf("setAttribute('data-vphoto-on', '1')") > -1, 'e liga o marcador `data-vphoto-on` — é ele que o CSS lê');
   // nenhum hidratador pode voltar a pintar "na mão"

@@ -32,6 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 const ROOT = path.join(__dirname, '..');
 const STORE = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
@@ -157,7 +158,7 @@ async function cenarioSemGenero() {
 (function () {
   const i = STORE.indexOf("_currentView === 'tournaments'");
   ok(i > 0, 'o gate de assinatura do detalhe existe no store.js');
-  const bloco = STORE.slice(i, i + 700);
+  const bloco = _R.ateOFim(STORE, i);
   ok(/_tournamentDetailSig/.test(bloco) && /return;/.test(bloco),
     'e ele RETORNA sem renderizar quando a assinatura não muda — por isso o rótulo tem que se curar sozinho');
 })();

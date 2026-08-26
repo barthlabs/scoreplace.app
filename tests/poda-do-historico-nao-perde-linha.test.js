@@ -17,6 +17,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -35,7 +36,7 @@ ok(!/history\s*=\s*[^;]*slice\(-/.test(db.slice(0, db.indexOf('carregarHistorico
   '⛔ e o CLIENTE não poda: lá existe a proteção que RECONSTRÓI histórico encolhido');
 
 // ── ② transação, e só a ponta velha ─────────────────────────────────────────
-const bloco = cf.slice(iPoda - 200, iPoda + 1800);
+const bloco = _R.oBlocoQueContem(cf, iPoda);
 ok(/runTransaction/.test(bloco),
   '⛔ a poda roda em TRANSAÇÃO — update cego engoliria o placar lançado no meio');
 ok(/tx\.get\(/.test(bloco), 'e RELÊ o documento dentro dela (senão a transação não serve de nada)');

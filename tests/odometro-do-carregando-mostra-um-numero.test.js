@@ -19,6 +19,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -28,7 +29,7 @@ const src = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
 // ── a janela alinha no TOPO ─────────────────────────────────────────────────
 const iPct = src.indexOf('class="sp-loader-pct"');
 ok(iPct > 0, 'a janela do % existe');
-const pct = src.slice(iPct, iPct + 400);
+const pct = _R.ateOFim(src, iPct);
 ok(/align-items:flex-start/.test(pct),
   '⭐ a coluna encosta no TOPO da janela — centralizar a põe em meia célula');
 ok(!/align-items:center/.test(pct),
@@ -50,7 +51,7 @@ ok(/steps\(' \+ \(_SP_ODO_N - 1\)/.test(src),
 
 // a célula tem altura E line-height iguais a H — senão o número sai cortado dentro dela
 const iOdo = src.indexOf('window._spOdoNumeros = function');
-const odo = src.slice(iOdo, iOdo + 600);
+const odo = _R.ateOFim(src, iOdo);
 ok(/height:' \+ h \+ 'px;line-height:' \+ h \+ 'px/.test(odo),
   '⛔ altura e line-height da célula saem do MESMO H — divergir corta o número dentro dela');
 

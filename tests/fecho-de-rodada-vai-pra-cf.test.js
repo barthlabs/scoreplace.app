@@ -15,6 +15,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 
 let pass = 0, fail = 0;
@@ -58,7 +59,7 @@ ok(/window\._avisoDoFechoDeRodada = function/.test(src),
                                               src.indexOf('_avisoDoFechoDeRodada = function') + 2600)),
     'o aviso cobre o desfecho "' + b + '" (rotear sem ele faria a tela mudar em silêncio)');
 });
-const rota = src.slice(i, i + 2200);
+const rota = _R.ateSairDoBloco(src, i);
 ok(/_avisoDoFechoDeRodada\(t, d\.branch\)/.test(rota),
   'e o caminho da CF usa o desfecho que o SERVIDOR devolveu');
 

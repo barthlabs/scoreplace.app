@@ -25,6 +25,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('  ✗', m); } };
@@ -93,14 +94,14 @@ const store = ler('js/store.js');
    ['_ensureBootOverlay', 'o splash de fallback']].forEach(([fn, oque]) => {
     const i = store.indexOf('window.' + fn + ' = function');
     ok(i > 0, 'achou ' + fn);
-    const corpo = store.slice(i, i + 4200);
+    const corpo = _R.ateOFim(store, i);
     ok(/_spLoaderBodyHtml\(/.test(corpo), oque + ' monta o corpo único');
     ok(!/scoreplace-ball-spin 1\.2s linear infinite;">'\s*\+\s*(ballSvg|_ball)/.test(corpo),
        oque + ' não tem mais cópia local do desenho da bola');
   });
   // Terminar em "73%" lê como corte no meio — o 100% antes de sair é obrigatório.
   const h = store.indexOf('window._hideLoading = function');
-  ok(h > 0 && /_spLoaderFinish\(/.test(store.slice(h, h + 900)),
+  ok(h > 0 && /_spLoaderFinish\(/.test(_R.ateOFim(store, h)),
      '_hideLoading crava 100% antes de tirar a tela');
 }
 

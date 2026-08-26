@@ -16,6 +16,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
@@ -139,7 +140,7 @@ sec(function () {
   ok(row.indexOf('data-my-match="1"') !== -1, 'e de data-my-match=1 — "Só meus jogos" filtra JOGOS, não pode sumir com quem está de fora');
   // chips da lista de espera
   const iW = src.indexOf('_waitBoxHtml = ');
-  const wbox = src.slice(iW, iW + 3000);
+  const wbox = _R.ateOFim(src, iW);
   ok(wbox.indexOf('data-players=') !== -1, 'os chips da LISTA DE ESPERA também precisam de data-players');
   // o filtro continua sendo o mesmo (não duplicamos lógica de busca)
   ok(src.indexOf("querySelectorAll('[data-players]')") !== -1, 'o filtro segue varrendo [data-players] — uma lógica só');

@@ -20,6 +20,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -79,7 +80,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8'
   ok(ultimaSentinela > ultimoFundo || ultimoFundo === -1,
      '⛔ o relato de travada NÃO está dentro de um bloco de nível FUNDO');
   const iSent = src.indexOf('window._travadas = []');
-  const gate = src.slice(iSent, iSent + 200);
+  const gate = _R.ateOFim(src, iSent);
   ok(/if \(!_SP_PERF\) return;/.test(gate),
      '⭐ a sentinela segue no nível LEVE — duração, direção e nós continuam chegando');
 }
@@ -89,7 +90,7 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8'
 {
   const i = src.indexOf('_spUltimaRolagemT = 0');
   ok(i > 0, 'o carimbo de direção existe');
-  const bloco = src.slice(i, i + 500);
+  const bloco = _R.ateOFim(src, i);
   ok(/passive:\s*true/.test(bloco), 'e o ouvinte é passivo');
   const iPerf = src.indexOf('var _SP_PERF = false, _SP_FUNDO = false;');
   ok(i < iPerf, 'o carimbo vem ANTES do gate — vale em qualquer nível, custa dois números');

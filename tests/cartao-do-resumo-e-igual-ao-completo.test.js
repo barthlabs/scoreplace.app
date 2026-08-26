@@ -16,6 +16,7 @@ const path = require('path');
 const HARNESS = require('./render-harness');
 const W = HARNESS.window;
 const M = require('../functions-autodraw/tournament-summary-core.js');
+const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
@@ -96,7 +97,7 @@ const lista = Array.isArray(arr) ? arr : (arr.tournaments || []);
   // recusa do que vem do CACHE (`_doCache`) + o comentário que explica por quê, e o
   // `arr[i] = t;` saiu da janela. O teste acusou "o completo não substitui o resumo"
   // quando ele substitui — recorte curto reprova código certo.
-  const corpo = store.slice(i, i + 3500);
+  const corpo = _R.ateOFim(store, i);
   ok(/local\._resumo === true.*local = null/s.test(corpo),
      '⭐ e um resumo conta como "não carregado" — abrir vai buscar o documento completo');
   ok(/arr\[i\] = t;/.test(corpo),
