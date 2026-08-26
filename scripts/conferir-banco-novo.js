@@ -16,7 +16,7 @@
  */
 const path = require('path');
 const { execSync } = require('child_process');
-const S = require(path.join(__dirname, '..', 'functions-autodraw', 'tournament-split-core.js'));
+const S = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();

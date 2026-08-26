@@ -137,11 +137,41 @@ function fakeDb(conteudo, opts) {
     const re = /match \/(\w+)\/\{/g;
     let m;
     while ((m = re.exec(dentro.slice(0, dentro.indexOf('\n    }')))) !== null) subs.push(m[1]);
+    /* ⭐ 2.0.96 — QUEM LIMPA DEPENDE DE QUEM ESCREVE.
+     * Este teste nasceu quando toda subcoleção era do CLIENTE, e a regra era simples:
+     * está nas regras ⇒ tem que estar na lista de limpeza do cliente.
+     * A Fase 2 trouxe subcoleção que o cliente NÃO ESCREVE (`allow write: if false`) —
+     * `tournaments/{id}/matches` é espelhada pelo gatilho `tournamentMirror` (admin SDK).
+     * Pôr essa na lista do cliente não conserta nada: ele leva permission-denied.
+     * Então a exigência se divide, e nenhuma das duas metades pode ficar sem dono. */
+    const escritaNegada = function (sub) {
+      const i = dentro.indexOf('match /' + sub + '/{');
+      if (i < 0) return false;
+      const bloco = dentro.slice(i, i + 900);
+      return /allow write:\s*if false/.test(bloco.slice(0, bloco.indexOf('\n      }') + 1));
+    };
+    const doServidor = [];
     subs.forEach(function (s) {
+      if (escritaNegada(s)) { doServidor.push(s); return; }
       ok(DB._tournamentSubcollections.indexOf(s) >= 0,
         'subcoleção "' + s + '" das regras está na lista de limpeza (senão vira órfão novo)');
     });
     ok(subs.length >= 2, 'achou as subcoleções nas regras (' + subs.join(', ') + ')');
+
+    // ⛔ "o servidor limpa" não pode ser promessa: tem que estar escrito no gatilho.
+    if (doServidor.length) {
+      const cf = fs.readFileSync(path.join(__dirname, '..', 'functions-autodraw', 'index.js'), 'utf8');
+      const i = cf.indexOf('tournamentMirror');
+      const trecho = i >= 0 ? cf.slice(i, i + 4000) : '';
+      ok(/after && event\.data\.after\.exists\) \? .* : null|apagado/.test(trecho),
+        'o gatilho trata o torneio APAGADO (é ele que limpa o que o cliente não pode)');
+      ok(/lote\.delete\(d\.ref\)/.test(trecho),
+        'e apaga os documentos do espelho de verdade — senão "o servidor limpa" é só promessa');
+      doServidor.forEach(function (s) {
+        ok(DB._tournamentSubcollections.indexOf(s) < 0,
+          'subcoleção "' + s + '" NÃO entra na lista do cliente (ele não escreve nela; levaria permission-denied)');
+      });
+    }
   }
 
 

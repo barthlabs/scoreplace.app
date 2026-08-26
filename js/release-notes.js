@@ -84,6 +84,48 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.96 ───────────────────────────────────────────
+        // ⛔ O BOTÃO QUE APARECE E NÃO FAZ NADA. Relato do dono: _"não consigo
+        // aprovar o jogo 63 … o botão aparece, mas clicando nada acontece.
+        // organizador clicando. imagina o participante."_
+        // CAUSA — e é minha, da 2.0.86: a seção "Meus Resultados" virou de montagem
+        // PREGUIÇOSA (o que passa do 2º bloco só entra no DOM ao abrir a seção). O
+        // despachante de cliques rodava UMA vez, no render, ligando addEventListener
+        // em cada botão EXISTENTE. Botão inserido depois nascia MORTO: aparece, está
+        // habilitado, e o clique não faz nada.
+        // ⛔ E SEM SINAL: sem erro, sem aviso, sem nada no Sentry. A investigação não
+        // achava a falha porque não havia falha — havia SILÊNCIO. Queimei uma rodada
+        // de hipóteses (permissão, resumo da 2.0.95, migração de cor) olhando o que o
+        // clique FAZ, quando o problema era o clique NÃO CHEGAR.
+        // Agora é DELEGAÇÃO: o ouvinte mora no container e vale pra botão que exista
+        // agora ou venha a existir. Some a classe inteira — ela ia voltar em toda
+        // seção que virasse preguiçosa. A montagem preguiçosa fica (é o ganho).
+        //
+        // ⭐ A DASHBOARD É O SEU CÍRCULO. Ordem do dono: _"apenas torneios organizados
+        // ou participando, ou em locais favoritos, ou de amigos. um botão explorar
+        // mostraria tudo"_ · _"se entrar com convite, mesmo que não tenha nada disso,
+        // aparece"_ · _"e continua podendo ocultar os torneios"_.
+        // ⛔ MODALIDADE FAVORITA FICOU DE FORA, e foram os NÚMEROS que decidiram: com
+        // ela a régua mostrava 35 de 39 e trazia de volta 31 dos 36 torneios que o dono
+        // tinha ocultado À MÃO (34 dos 39 são Beach Tennis, a preferida dele).
+        // Modalidade diz que ESPORTE interessa, não que o torneio é do mundo da pessoa;
+        // ela é filtro DENTRO do Explorar. Com a régua estrita: 4 na dashboard, 39 na
+        // plataforma. O botão Explorar fica ao lado do toggle "Lista" e carrega o TOTAL
+        // da plataforma — o dono pediu esse número sempre visível.
+        //
+        // ⛔ A MODALIDADE GRAVADA VOLTOU A SER O VALOR CANÔNICO. Ordem do dono: _"por
+        // isso que não deixo as pessoas escreverem livremente as modalidades. usam
+        // botões que devem padronizar isso sempre"_ — e o botão padronizava a string
+        // ERRADA: `<option>🎾 Beach Tennis</option>` não tinha `value`, então o valor
+        // ERA o texto, emoji incluído. MEDIDO: 6 grafias pra 4 modalidades
+        // ("Beach Tennis"=27 e "🎾 Beach Tennis"=7 como se fossem coisas diferentes).
+        // Corrigido nos dois caminhos de criação; 9 documentos normalizados por
+        // scripts/normalizar-modalidade.js. O emoji continua no RÓTULO.
+        //
+        // FASE 2a (inerte): o leitor aprendeu a montar o torneio das SUBCOLEÇÕES quando
+        // o documento disser `_semPesados`. Nada muda enquanto nenhum documento disser —
+        // é o que vai permitir tirar os jogos do documento torneio a torneio, sem
+        // release, e é isso que remove o TETO de 1 MB. Ver docs/FASE2-JOGOS-EM-SUBCOLECAO.
         // ── ciclo 2.0.95 ───────────────────────────────────────────
         // "MEUS TORNEIOS" LÊ O ÍNDICE, não o torneio inteiro.
         // A tela desenha CARTÕES — e cartão não usa jogos, inscritos nem histórico.

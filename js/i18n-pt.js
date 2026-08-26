@@ -15,6 +15,11 @@ window._translations['pt'] = {
   'dashboard.welcomeGreeting': '{greeting},',
   'dashboard.welcomeName': '{name}!',
   'dashboard.newTournament': 'Novo Torneio',
+  // ⭐ 2.0.96 — a lista padrao da dashboard e o CIRCULO da pessoa (organizo/participo,
+  // convite, local favorito ou de amigo), nao a plataforma inteira. O rotulo 'Todos'
+  // passaria a mentir: mostraria 4 de 39. 'Explorar' e quem abre a plataforma toda.
+  'dashboard.filterForYou': 'Pra Você',
+  'dashboard.filterExplore': 'Explorar',
   'dashboard.filterAll': 'Todos',
   'dashboard.filterOrganized': 'Organizados',
   'dashboard.filterParticipating': 'Participando',

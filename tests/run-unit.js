@@ -198,6 +198,19 @@ const SUITES = [
   // O risco tem nome — torneio sem resumo SOME da lista — então a rede (cai no caminho
   // antigo) e a sentinela são obrigatórias, e é isso que o teste trava.
   'tests/meus-torneios-le-o-indice.test.js',
+  // ⭐ FASE 2a — o leitor sabe montar o torneio das SUBCOLEÇÕES. Ainda não muda nada:
+  // enquanto o documento carregar os jogos, é dele que saem. É o que permite tirar os
+  // jogos do documento torneio a torneio, sem release — e é isso que remove o TETO de 1 MB.
+  'tests/abrir-torneio-monta-das-subcolecoes.test.js',
+  // ⛔ O BOTÃO QUE NASCE DEPOIS DO RENDER (2.0.96). A montagem preguiçosa de "Meus
+  // Resultados" (2.0.86) deixava o botão de aprovar sem ouvinte: aparecia e o clique
+  // não fazia NADA — sem erro, sem aviso, sem Sentry. Travou o jogo 63 do Confra.
+  'tests/botao-inserido-depois-continua-clicavel.test.js',
+  // ⭐ A dashboard é o CÍRCULO da pessoa; o Explorar abre a plataforma.
+  'tests/dashboard-mostra-o-meu-circulo.test.js',
+  // ⛔ A modalidade gravada é o valor CANÔNICO — o emoji é rótulo. O botão padronizava
+  // a string errada e a base tinha 6 grafias pra 4 modalidades.
+  'tests/modalidade-e-valor-canonico.test.js',
   // nome não é cortado na tela
   'tests/nome-nunca-e-cortado.test.js',
   // repescagem: melhor derrotado pelos critérios do organizador

@@ -2153,12 +2153,58 @@ window.FirestoreDB = {
   // Fetch one tournament by id — used by direct/invite links when the
   // tournament isn't in the scoped load (e.g. public tournament the user
   // hasn't joined yet).
+  /* ── FASE 2a · O LEITOR SABE MONTAR O TORNEIO DAS SUBCOLEÇÕES ───────────────────
+   *
+   * Ainda NÃO muda nada: enquanto o documento carregar os jogos, é dele que eles saem.
+   * Isto existe pra que o passo seguinte (tirar os jogos do documento, que é o que
+   * REMOVE O TETO de 1 MB) possa acontecer torneio a torneio, sem release nenhum: basta
+   * o documento passar a dizer `_semPesados: ['matches']` e este leitor assume.
+   *
+   * ⛔ O GATILHO É O MARCADOR, NUNCA A AUSÊNCIA. Torneio recém-criado também não tem
+   * jogo — se eu disparasse por "não tem rounds", ele iria buscar subcoleção vazia e o
+   * torneio abriria vazio. Ausência não é a mesma coisa que "mudou de lugar".
+   *
+   * ⚠️ E ISTO CUSTA LEITURA: o documento é 1 leitura; a subcoleção de jogos do Confra são
+   * 112. A troca vale porque ABRIR acontece às vezes e LANÇAR PLACAR acontece o tempo
+   * todo (hoje cada placar reescreve e ecoa 238 KB pra toda tela aberta). Por isso só o
+   * que a tela precisa é buscado — `history` fica no documento até ter motivo pra sair.
+   * Ver docs/FASE2-JOGOS-EM-SUBCOLECAO.md.
+   */
+  async _montaDeSubcolecoes(id, config, quais) {
+    var S = (typeof window !== 'undefined') ? window._tSplit : null;
+    if (!S || typeof S.remontar !== 'function') {
+      window._error('[fase2] falta o tradutor (_tSplit) — o torneio abriria sem jogos');
+      return config;
+    }
+    var ref = this.db.collection('tournaments').doc(String(id));
+    var partes = { config: config };
+    var lidos = 0;
+    for (var i = 0; i < quais.length; i++) {
+      var nome = quais[i];
+      var snap = await ref.collection(nome).get();
+      lidos += snap.size;
+      var arr = [];
+      snap.forEach(function (d) { var v = d.data(); if (v) arr.push(v); });
+      partes[nome] = arr;
+    }
+    try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}
+    var t = S.remontar(partes);
+    if (!t) {
+      window._error('[fase2] remontar falhou em ' + id + ' — devolvendo o documento cru');
+      return config;
+    }
+    return t;
+  },
+
   async loadTournamentById(id) {
     if (!this.db || !id) return null;
     try {
       var doc = await this.db.collection('tournaments').doc(String(id)).get();
       if (!doc.exists) return null;
       var _t = doc.data();
+      // o documento diz o que saiu dele; enquanto não disser nada, nada muda
+      var _fora = Array.isArray(_t._semPesados) ? _t._semPesados : null;
+      if (_fora && _fora.length) _t = await this._montaDeSubcolecoes(id, _t, _fora);
       // Rei/Rainha: o doc traz grupos só com matchIds — reidrata group.matches como refs.
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_t); } catch (_hmErr) {}
       return _t;

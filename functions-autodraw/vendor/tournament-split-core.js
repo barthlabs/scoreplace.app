@@ -186,7 +186,39 @@
   }
   function iguais(a, b) { return JSON.stringify(canonico(a)) === JSON.stringify(canonico(b)); }
 
+  /* ── FASE 2b · O QUE MUDOU, E SÓ ISSO ──────────────────────────────────────────
+   *
+   * É esta função que faz um placar custar ~925 B em vez de 238 KB: comparada a foto
+   * dos jogos como estavam ao ABRIR, ela devolve só os que mudaram (e os que sumiram).
+   *
+   * ⭐ E CONSERTA UMA CLASSE INTEIRA DE BUG. As 8 proteções de `saveTournament` existem
+   * porque o cliente manda o TORNEIO INTEIRO — um save atrasado sobrescreve o que ele
+   * não sabia que mudou (medido: destruía rodada nova, jogo de entrada tardia, link do
+   * grupo, horário combinado e substituição por W.O.). Escrevendo só o que mudou, o save
+   * atrasado deixa de poder apagar o que não tocou. Por construção, não por mais um guard.
+   *
+   * ⛔ Compara pelo CANÔNICO: o Firestore não preserva ordem de chave, então `{a,b}` e
+   * `{b,a}` são o MESMO jogo. Comparar o JSON cru marcaria os 112 jogos como mudados a
+   * cada save — exatamente o que estamos evitando. (Foi o que fez 30 dos 39 torneios
+   * "divergirem" na primeira conferência do espelho.)
+   */
+  function jogosQueMudaram(antes, depois) {
+    var idx = {};
+    _arr(antes).forEach(function (m) { if (m && m._chave) idx[m._chave] = m; });
+    var mudaram = [], sumiram = [];
+    var vistos = {};
+    _arr(depois).forEach(function (m) {
+      if (!m || !m._chave) return;
+      vistos[m._chave] = 1;
+      var b = idx[m._chave];
+      if (!b || !iguais(b, m)) mudaram.push(m);
+    });
+    Object.keys(idx).forEach(function (k) { if (!vistos[k]) sumiram.push(idx[k]); });
+    return { mudaram: mudaram, sumiram: sumiram };
+  }
+
   var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo,
+              jogosQueMudaram: jogosQueMudaram,
               PESADOS: PESADOS, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (raiz) { raiz._tSplit = api; }

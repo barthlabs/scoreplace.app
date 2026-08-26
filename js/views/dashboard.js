@@ -1225,6 +1225,77 @@ function renderDashboard(container) {
     var arr = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw.trim() ? raw.split(/[,;]/) : []);
     return arr.map(function (s) { return cleanSportName(s); }).filter(Boolean);
   }
+  /* ══ A DASHBOARD É O SEU CÍRCULO (2.0.96) ═════════════════════════════════════
+   *
+   * Ordem do dono (25/ago/2026): _"apenas torneios organizados ou participando, ou em
+   * locais favoritos, ou de amigos. por enquanto é isso. um botão explorar mostraria tudo
+   * o que existe na plataforma"_ — e, na sequência: _"se entrar com convite, mesmo que
+   * não tenha nada disso, aparece"_.
+   *
+   * ⛔ MODALIDADE FAVORITA NÃO ENTRA — e essa foi a decisão que os números mudaram.
+   * A regra com modalidade parecia a certa, mas MEDIDA na base real ela mostrava 35 de
+   * 39 e trazia de volta 31 dos 36 torneios que o dono tinha ocultado À MÃO. Motivo:
+   * 34 dos 39 torneios são Beach Tennis, que é a modalidade favorita dele — "modalidade
+   * favorita" hoje é quase "tudo". Modalidade diz que ESPORTE interessa, não que aquele
+   * torneio é do mundo da pessoa; ela é filtro DENTRO do Explorar.
+   * Com esta régua: 4 de 39 na dashboard, e nenhum dos ocultados volta.
+   *
+   * ⚠️ O CONVITE PASSA POR CIMA DE TUDO. Quem chegou por link quer VER aquele torneio —
+   * esconder o que a pessoa acabou de abrir seria o app contradizendo o próprio link.
+   */
+  function _dashLocaisFavoritos() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var raw = (cu && Array.isArray(cu.preferredLocations)) ? cu.preferredLocations : [];
+    return raw.map(function (p) {
+      return _dashChaveLocal(p && (p.name || p.label));
+    }).filter(Boolean);
+  }
+  /* O local vem escrito de dois jeitos: o perfil guarda "Clube X — Av. Tal, 60" e o
+   * torneio guarda "Clube X, São Paulo". Comparar cru dá ZERO casamento (medido).
+   * A chave é o nome ANTES do travessão/vírgula, sem acento e sem pontuação. */
+  function _dashChaveLocal(v) {
+    return String(v == null ? '' : v)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .split('\u2014')[0].split(',')[0]
+      .replace(/[^a-zA-Z0-9 ]/g, '').trim().toLowerCase();
+  }
+  function _dashAmigos() {
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var raw = (cu && Array.isArray(cu.friends)) ? cu.friends : [];
+    var out = {};
+    raw.forEach(function (f) {
+      var uid = (typeof f === 'string') ? f : (f && (f.uid || f.id));
+      if (uid) out[String(uid)] = 1;
+    });
+    return out;
+  }
+  window._ehDoMeuCirculo = function (t, ctx) {
+    if (!t) return false;
+    ctx = ctx || {};
+    var cu = window.AppStore && window.AppStore.currentUser;
+    var uid = cu && cu.uid;
+    // ① convite: passa por cima de tudo
+    var conv = (window.AppStore && window.AppStore._invitedTournamentIds) || [];
+    if (conv.indexOf(String(t.id)) !== -1) return true;
+    if (!uid) return true;                       // deslogado não tem círculo: vê a plataforma
+    // ② organizo ou participo
+    if (String(t.creatorUid || '') === String(uid)) return true;
+    if (Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1) return true;
+    if (Array.isArray(t.coHosts) && t.coHosts.some(function (c) {
+      return c && String(c.uid || c) === String(uid);
+    })) return true;
+    // ③ em local favorito
+    var locais = ctx.locais || _dashLocaisFavoritos();
+    if (locais.length) {
+      var v = _dashChaveLocal(t.venueName || t.venue);
+      if (v && locais.some(function (x) { return x && (v.indexOf(x) !== -1 || x.indexOf(v) !== -1); })) return true;
+    }
+    // ④ de amigo
+    var amigos = ctx.amigos || _dashAmigos();
+    if (t.creatorUid && amigos[String(t.creatorUid)]) return true;
+    return false;
+  };
+
   function _persistDashSport(v) {
     window._dashSport = v || '';
     try { localStorage.setItem('scoreplace_dashSport', window._dashSport); } catch (e) {}
@@ -2907,6 +2978,10 @@ function renderDashboard(container) {
   };
   const _dashDateKey = function(t){ var d = t.startDate || t.registrationLimit || t.endDate; var ms = d ? new Date(d).getTime() : 0; return isNaN(ms) ? 0 : ms; };
 
+  // EXPLORAR: o modo em que a régua do círculo é desligada e a plataforma inteira
+  // aparece. É um MODO, não um filtro a mais — por isso mora ao lado de curFilter.
+  const _explorando = (curFilter === 'explorar');
+
   // ── v1.8.89: TODOS / INSCRIÇÕES ABERTAS / ENCERRADOS = A PLATAFORMA INTEIRA ──
   // Ordem do dono: "aqui deve ser todos os que tem na plataforma, mesmo encerrados,
   // mesmo ocultos e mesmo de outros organizadores" — e, na sequência, o mesmo para
@@ -2943,6 +3018,12 @@ function renderDashboard(container) {
   // ocultados"), então contá-los não promete nada que a tela não entregue. O que
   // não pode é o pill dizer 3 quando existem 16 — o rótulo é "Todos".
   const _todosCount = _poolPlataforma.length;
+  /* ⭐ 2.0.96 — quantos são DO SEU CÍRCULO. O pill padrão passa a contar isto; o total da
+   * plataforma continua na tela, no pill Explorar (ordem do dono: "na dashboard deve
+   * aparecer o número total de torneios na plataforma"). Assim a pessoa vê "4 pra você ·
+   * 39 na plataforma" e sabe que o resto está a um toque. */
+  const _circCtx = { locais: _dashLocaisFavoritos(), amigos: _dashAmigos() };
+  const _circuloCount = _poolPlataforma.filter(function (t) { return window._ehDoMeuCirculo(t, _circCtx); }).length;
   const _abertosCount = _poolPlataforma.filter(_isOpenEnrollment).length;
   const _encerradosPillCount = _poolPlataforma.filter(t => t && t.status === 'finished').length;
 
@@ -2979,6 +3060,19 @@ function renderDashboard(container) {
       if (!seen.has(t.id)) { seen.add(t.id); filtered.push(t); }
     });
     _poolVisivel.forEach(t => { if (t && !seen.has(t.id)) { seen.add(t.id); filtered.push(t); } });
+    /* ⭐ 2.0.96 — A LISTA PADRÃO É O CÍRCULO DA PESSOA, não a plataforma inteira.
+     * Ver `_ehDoMeuCirculo`: organizo/participo, convite, local favorito ou de amigo.
+     * O EXPLORAR (`curFilter === 'explorar'`) desliga esta régua e mostra tudo — é lá
+     * que a pessoa filtra como quiser (modalidade, local, data).
+     * ⛔ Só a lista PADRÃO é filtrada. Os pills explícitos (organizados, participando,
+     * favoritos, encerrados, abertos) são pedido direto da pessoa: cortar ali seria a
+     * tela contradizendo o botão que ela acabou de apertar.
+     * ⛔ E OCULTAR CONTINUA VALENDO por cima disto (`_poolVisivel` já vem sem os ocultos,
+     * e a seção "Torneios ocultados" segue no fim) — ordem do dono. */
+    if (!_explorando) {
+      const _ctxCirc = { locais: _dashLocaisFavoritos(), amigos: _dashAmigos() };
+      filtered = filtered.filter(function (t) { return window._ehDoMeuCirculo(t, _ctxCirc); });
+    }
     filtered.sort(sortByDate);
   }
 
@@ -3800,7 +3894,7 @@ function renderDashboard(container) {
            pill mantém leitura consistente. -->
       <!-- Tournament filter pills (clickable — apply filter to list) -->
       <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
-        ${_fStyle('todos', '📋', _todosCount, _t('dashboard.filterAll'))}
+        ${_fStyle('todos', '📋', _circuloCount, _t('dashboard.filterForYou'))}
         ${_fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized'))}
         ${_fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating'))}
         ${_fStyle('abertos', '🗓️', _abertosCount, _t('dashboard.filterOpen'))}
@@ -3861,6 +3955,21 @@ function renderDashboard(container) {
 
     <!-- v2.8.43: toggle "Lista" (desligado=cards padrão / ligado=lista) — substitui os 2 botões -->
     <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:0.75rem;">
+      <!-- ⭐ 2.0.96 · EXPLORAR — a lista padrão é o CÍRCULO da pessoa (organizo/participo,
+           convite, local favorito ou de amigo); aqui ela abre a plataforma inteira e filtra
+           como quiser. O número é o TOTAL da plataforma, que o dono pediu sempre visível:
+           assim a tela diz "4 pra você · 39 lá fora" em vez de parecer app vazio.
+           Fica À ESQUERDA do toggle Lista por ordem do dono ("explorar ao lado do toggle
+           lista") — e é botão, não pill de filtro: ele muda o ESCOPO, não a fatia. -->
+      <button type="button" onclick="window._applyDashFilter('${_explorando ? 'todos' : 'explorar'}')"
+        title="${_explorando ? 'Voltar pros seus torneios' : 'Ver todos os torneios da plataforma'}"
+        style="margin-right:auto;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;cursor:pointer;
+               font-size:0.8rem;font-weight:700;white-space:nowrap;
+               border:1px solid ${_explorando ? '#6366f1' : window._spCor('rgba(255,255,255,0.18)', 'borda')};
+               background:${_explorando ? 'rgba(99,102,241,0.18)' : window._spCor('rgba(255,255,255,0.06)', 'background')};
+               color:${_explorando ? '#c7d2fe' : 'var(--text-main)'};">
+        🔎 ${_t('dashboard.filterExplore')} <span style="opacity:0.75;font-weight:600;">${_todosCount}</span>
+      </button>
       <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted);user-select:none;">☰ ${_t('dashboard.compact') || 'Lista'}</span>
       <label class="toggle-switch" style="--toggle-on-bg:#6366f1;" title="Ver em lista (desligado = cards)"><input type="checkbox" ${window._dashView === 'compact' ? 'checked' : ''} onchange="window._setDashView(this.checked ? 'compact' : 'cards')"><span class="toggle-slider"></span></label>
     </div>
@@ -4057,10 +4166,28 @@ function renderDashboard(container) {
     }
   }, 350);
 
-  // Botões de resultado pendente — event listeners via JS (evita parsing issues
-  // de onclick em HTML gerado dinamicamente em mobile Safari)
-  container.querySelectorAll('[data-pending-action]').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
+  /* Botões de resultado pendente — listener via JS (evita parsing issues de onclick em
+   * HTML gerado dinamicamente no Safari mobile).
+   *
+   * ⛔ DELEGAÇÃO, NÃO UM OUVINTE POR BOTÃO — e isto foi um bug de produção.
+   * Relato do dono (25/ago/2026): _"não consigo aprovar o jogo 63 … o botão aparece, mas
+   * clicando nada acontece. organizador clicando. imagina o participante."_
+   * CAUSA: desde a 2.0.86 a seção "Meus Resultados" é montada PREGUIÇOSA — o que passa do
+   * 2º bloco fica guardado em `window._mrExtraPend` e só entra no DOM quando a pessoa abre
+   * a seção (ou busca). Este trecho rodava UMA vez, no render, e ligava o clique só nos
+   * botões que existiam NAQUELE instante. Todo botão inserido depois nascia morto: aparece,
+   * está habilitado, e o clique não faz nada — sem erro, sem aviso, sem nada no Sentry.
+   * Foi por isso que a investigação não achava falha: não havia falha, havia SILÊNCIO.
+   *
+   * Com delegação o ouvinte mora no CONTAINER e vale pra qualquer botão que exista agora
+   * ou venha a existir. Some a classe inteira do problema — e ela ia voltar em toda seção
+   * que eu tornasse preguiçosa. */
+  if (!container.__spPendDelegado) {
+    container.__spPendDelegado = true;
+    container.addEventListener('click', function (e) {
+      var alvo = e && e.target;
+      var btn = (alvo && alvo.closest) ? alvo.closest('[data-pending-action]') : null;
+      if (!btn || !container.contains(btn)) return;
       e.stopPropagation();
       var action = btn.getAttribute('data-pending-action');
       var tId = btn.getAttribute('data-tid');
@@ -4087,7 +4214,7 @@ function renderDashboard(container) {
         window._approveResult(tId, mId);
       }
     });
-  });
+  }
 
   // Show/hide Pro button based on plan (element is now inside hero box)
   var proBtn = document.getElementById('btn-upgrade-pro');

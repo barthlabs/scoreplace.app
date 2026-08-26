@@ -8,7 +8,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
-const _tSplit = require('./tournament-split-core.js');
+const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
 // categorias, folgas, desempate) carregada via shim Node. Substitui o stub 1×1

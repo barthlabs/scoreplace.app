@@ -18,6 +18,11 @@ const OUT_DIR = path.resolve(__dirname, 'vendor');
 
 // Ordem não importa pra cópia; o draw-core carrega na ordem certa.
 const FILES = [
+  // ⭐ FASE 2 — o tradutor documento ⇄ subcoleções. Mora aqui (js/views/) porque agora
+  // os DOIS lados usam: o gatilho `tournamentMirror` DIVIDE, e o app REMONTA ao abrir um
+  // torneio cujos jogos já saíram do documento. Duas cópias divergiriam, e a regra do
+  // módulo é `remontar(dividir(t)) === t` — divergir aqui é perder jogo na tela.
+  'tournament-split-core.js',
   'identity-core.js',
   'persist-core.js',          // _participantUids, _memberUidByName, _idMap*, _entryHasVip (cânone uid)
   'waitlist-core.js',          // _getWaitlist/_removeFromWaitlist/_nameForms/_sanitizeWaitlistVsGroups

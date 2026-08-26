@@ -76,6 +76,21 @@ continuar valendo, jogo a jogo.
 simultâneos; com jogos separados eles deixam de colidir (melhor) — mas o que dependia da
 serialização precisa ser reexaminado.
 
+#### ⭐ O que a 2b **conserta de graça** (descoberto ao ler as proteções)
+`saveTournament` tem **8 proteções** contra save do passado — PLACAR, CHAVE, LISTA,
+ESCALAÇÃO, REGISTRO, CO-ORGANIZAÇÃO... Todas existem pela MESMA razão: o cliente manda o
+**torneio inteiro**, então um save atrasado sobrescreve o que ele não sabia que mudou.
+O comentário do código conta o estrago medido: _"o save atrasado do organizador destruía
+CINCO coisas: a rodada 2 recém-criada, um jogo de entrada tardia, o link do grupo de
+WhatsApp, o horário combinado e a substituição por W.O."_
+
+Com jogo em documento próprio, **o cliente escreve só o que MUDOU** — e um save atrasado
+deixa de poder apagar o que ele não tocou. A classe inteira de bug some por construção,
+não por mais uma proteção.
+
+⛔ Mas as proteções NÃO saem junto: elas continuam valendo pro que segue no documento
+(elenco, chave, co-organização). Sair delas é outro passo, com outra prova.
+
 ### 2c — TIRAR os jogos do documento
 Script único, depois que nada mais lê `rounds`/`matches` do documento.
 É o passo que **remove o teto**. O gatilho `tournamentMirror` inverte (ou sai).

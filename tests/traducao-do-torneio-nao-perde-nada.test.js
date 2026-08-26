@@ -22,7 +22,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const S = require('../functions-autodraw/tournament-split-core.js');
+const S = require('../js/views/tournament-split-core.js');
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };

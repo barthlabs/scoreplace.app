@@ -1,0 +1,94 @@
+/* A DASHBOARD MOSTRA O MEU CÍRCULO — E O EXPLORAR MOSTRA TUDO (2.0.96)
+ * node tests/dashboard-mostra-o-meu-circulo.test.js
+ *
+ * Ordem do dono (25/ago/2026): _"apenas torneios organizados ou participando, ou em locais
+ * favoritos, ou de amigos. por enquanto é isso. um botão explorar mostraria tudo o que
+ * existe na plataforma"_ · _"se entrar com convite, mesmo que não tenha nada disso,
+ * aparece"_ · _"e continua podendo ocultar os torneios"_ · _"na dashboard deve aparecer o
+ * número total de torneios na plataforma"_.
+ *
+ * ⛔ MODALIDADE FAVORITA FICOU DE FORA, e foram os NÚMEROS que decidiram: a régua com
+ * modalidade mostrava 35 de 39 e trazia de volta 31 dos 36 torneios que o dono já tinha
+ * ocultado à mão — porque 34 dos 39 são Beach Tennis, a modalidade preferida dele.
+ * "Modalidade favorita" hoje é quase "tudo"; ela é filtro DENTRO do Explorar.
+ */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const ROOT = path.join(__dirname, '..');
+
+let pass = 0, fail = 0;
+function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
+
+// carrega só a régua, do arquivo real (sem DOM)
+const src = fs.readFileSync(path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
+const ini = src.indexOf('function _dashLocaisFavoritos()');
+const fim = src.indexOf('function _persistDashSport(');
+ok(ini > 0 && fim > ini, 'achei o bloco da régua no dashboard.js');
+const sandbox = { window: {}, console };
+sandbox.window.AppStore = { currentUser: null, _invitedTournamentIds: [] };
+vm.createContext(sandbox);
+vm.runInContext(src.slice(ini, fim), sandbox, { filename: 'regua' });
+const circulo = sandbox.window._ehDoMeuCirculo;
+ok(typeof circulo === 'function', 'a régua está exposta como window._ehDoMeuCirculo');
+
+const EU = 'eu';
+sandbox.window.AppStore.currentUser = {
+  uid: EU,
+  preferredLocations: [{ label: 'Clube Paineiras do Morumby — Av. Dr. Alberto Penteado, 60' }],
+  preferredSports: ['Beach Tennis'],
+  friends: ['amigo1', { uid: 'amigo2' }]
+};
+
+const t = (o) => Object.assign({ id: 'x', sport: 'Beach Tennis' }, o);
+
+// ── ENTRA ────────────────────────────────────────────────────────────────────
+ok(circulo(t({ creatorUid: EU })), 'organizo → entra');
+ok(circulo(t({ memberUids: ['outro', EU] })), 'participo → entra');
+ok(circulo(t({ coHosts: [{ uid: EU }] })), 'co-organizo → entra');
+ok(circulo(t({ creatorUid: 'amigo1' })), 'criado por amigo (uid solto) → entra');
+ok(circulo(t({ creatorUid: 'amigo2' })), 'criado por amigo (objeto com uid) → entra');
+// o local vem escrito diferente nos dois lados — é o caso real, e casar cru dava ZERO
+ok(circulo(t({ creatorUid: 'estranho', venueName: 'Clube Paineiras do Morumby, São Paulo' })),
+  'em local favorito → entra (o perfil grava "— Av. …" e o torneio grava ", São Paulo")');
+
+// ── NÃO ENTRA ────────────────────────────────────────────────────────────────
+ok(!circulo(t({ creatorUid: 'estranho', venueName: 'Arena Qualquer, Fortaleza' })),
+  'de estranho, em local que não é meu → NÃO entra, mesmo sendo da minha modalidade');
+ok(!circulo(t({ creatorUid: 'estranho' })), 'de estranho e sem local → NÃO entra');
+ok(!circulo(t({ creatorUid: 'estranho', sport: 'Beach Tennis' })),
+  '⛔ modalidade favorita NÃO é passe de entrada (era o que trazia de volta 31 dos 36 ocultados)');
+
+// ── CONVITE PASSA POR CIMA DE TUDO ───────────────────────────────────────────
+sandbox.window.AppStore._invitedTournamentIds = ['conv1'];
+ok(circulo(t({ id: 'conv1', creatorUid: 'estranho', venueName: 'Arena Qualquer', sport: 'Padel' })),
+  'quem chegou por CONVITE vê o torneio, mesmo sem nada em comum');
+
+// ── deslogado vê a plataforma (não tem círculo) ──────────────────────────────
+sandbox.window.AppStore.currentUser = null;
+ok(circulo(t({ creatorUid: 'estranho' })), 'deslogado não tem círculo: vê tudo');
+
+// ── a tela: pill do círculo + pill Explorar com o TOTAL ──────────────────────
+ok(/_fStyle\('todos', '📋', _circuloCount/.test(src),
+  'o pill padrão conta o CÍRCULO (não a plataforma — senão diria 39 e mostraria 4)');
+// O Explorar é BOTÃO ao lado do toggle "Lista" (ordem do dono: "explorar ao lado do
+// toggle lista"), não um pill de filtro — ele muda o ESCOPO da lista, não a fatia dela.
+ok(/_applyDashFilter\('\$\{_explorando \? 'todos' : 'explorar'\}'\)/.test(src),
+  'o botão Explorar alterna entre o círculo e a plataforma');
+ok(/🔎 \$\{_t\('dashboard.filterExplore'\)\} <span[^>]*>\$\{_todosCount\}/.test(src),
+  'e mostra o TOTAL da plataforma nele (ordem do dono: o total sempre visível)');
+ok(/margin-right:auto/.test(src.slice(src.indexOf('EXPLORAR — a lista padrão'), src.indexOf('EXPLORAR — a lista padrão') + 1800)),
+  'e fica na mesma linha do toggle Lista, empurrado pra ponta oposta');
+ok(/const _explorando = \(curFilter === 'explorar'\)/.test(src), 'existe o modo explorar');
+ok(/if \(!_explorando\) \{[\s\S]{0,400}_ehDoMeuCirculo/.test(src),
+  'a régua só corta FORA do explorar');
+// ocultar continua valendo
+ok(/_poolVisivel/.test(src) && /Torneios ocultados|_hidSet/.test(src),
+  'ocultar segue valendo por cima do círculo (ordem do dono)');
+// e os pills explícitos não são cortados
+const bloco = src.slice(src.indexOf("if (curFilter === 'organizados')"), src.indexOf("// Apply secondary filters"));
+ok(!/_ehDoMeuCirculo/.test(bloco.slice(0, bloco.indexOf('} else {'))),
+  'os pills explícitos (organizados/participando/favoritos/encerrados) NÃO são cortados pela régua');
+
+console.log((fail ? '✗' : '✓') + ' dashboard-mostra-o-meu-circulo: ' + pass + ' ok, ' + fail + ' falhas');
+process.exit(fail ? 1 : 0);

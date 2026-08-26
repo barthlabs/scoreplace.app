@@ -66,6 +66,12 @@ if (codPools && codCont) {
   const _hidSet = {};
   base.filter(t => t._oculto).forEach(t => { _hidSet[t.id] = 1; });
   const _isOpenEnrollment = t => !!(t && t.status === 'open');
+  // ⭐ 2.0.96 — a fatia dos contadores agora inclui o do CÍRCULO (a lista padrão deixou de
+  // ser a plataforma inteira). As dependências dele entram aqui: o teste continua sobre os
+  // PILLS, e o que ele protege é justamente que os pills sigam contando a PLATAFORMA.
+  const _dashLocaisFavoritos = () => [];
+  const _dashAmigos = () => ({});
+  const window = { _ehDoMeuCirculo: () => true };
 
   const r = eval('(function(){' + codPools + '\n' + codCont + '\nreturn {' +
     'plataforma:_poolPlataforma.length, visivel:_poolVisivel.length,' +
@@ -75,7 +81,13 @@ if (codPools && codCont) {
   ok(r.visivel === 10, 'o pool da LISTA tira os 6 ocultos — deu ' + r.visivel);
 
   // os NÚMEROS dos pills: a plataforma inteira, ocultos incluídos.
-  ok(r.todos === 16, 'pill "Todos" conta a plataforma (16), não o pool do usuário — deu ' + r.todos);
+  ok(r.todos === 16, 'o TOTAL da plataforma segue 16, e é ele que o botão Explorar mostra — deu ' + r.todos);
+  // ⛔ o total NÃO pode passar a contar o círculo: o dono pediu o número da plataforma
+  // sempre visível ("na dashboard deve aparecer o número total de torneios na plataforma").
+  ok(/_todosCount = _poolPlataforma\.length/.test(src),
+     'o total continua saindo do pool da PLATAFORMA, não do círculo');
+  ok(/_circuloCount = _poolPlataforma\.filter/.test(src),
+     'e o círculo tem contagem PRÓPRIA, medida sobre a mesma plataforma');
   ok(r.abertos === 11, 'pill "Inscrições abertas" inclui os abertos OCULTOS (11) — deu ' + r.abertos);
   ok(r.encerrados === 3, 'pill "Encerrados" inclui o encerrado OCULTO (3) — deu ' + r.encerrados);
 
@@ -88,8 +100,20 @@ if (codPools && codCont) {
 // Sem isto, alguém "conserta" só o cálculo e o pill segue lendo a variável velha —
 // que é literalmente o bug da 1.8.89.
 (function () {
-  ok(/_fStyle\('todos',\s*'📋',\s*_todosCount,/.test(src),
-    'o pill "Todos" lê _todosCount (e não allUnique.length)');
+  /* ⭐ 2.0.96 — O PILL PADRÃO CONTA O CÍRCULO; O TOTAL FOI PRO BOTÃO EXPLORAR.
+   * A lista padrão deixou de ser a plataforma inteira (ordem do dono: "apenas torneios
+   * organizados ou participando, ou em locais favoritos, ou de amigos"). Com isso o
+   * rótulo "Todos" passaria a MENTIR — mostraria 4 de 39 —, então ele virou "Pra Você"
+   * e conta o círculo. O número da PLATAFORMA continua na tela, no botão Explorar, que
+   * é onde o dono pediu que ele ficasse sempre visível.
+   * O que este bloco protege segue de pé: o número exibido tem que vir da variável
+   * CALCULADA, não de um `allUnique.length` recalculado na mão — que é o bug da 1.8.89. */
+  ok(/_fStyle\('todos',\s*'📋',\s*_circuloCount,/.test(src),
+    'o pill padrão lê _circuloCount (a lista que ele representa é o círculo)');
+  ok(/\$\{_todosCount\}/.test(src),
+    'e o TOTAL da plataforma continua exibido — no botão Explorar (ordem do dono)');
+  ok(!/allUnique\.length[^;]*_fStyle|_fStyle\([^)]*allUnique\.length/.test(src),
+    'nenhum pill voltou a contar por `allUnique.length` (o bug da 1.8.89)');
   ok(/_fStyle\('abertos',\s*'🗓️',\s*_abertosCount,/.test(src),
     'o pill "Inscrições abertas" lê _abertosCount (e não abertosParaVoce.length)');
   ok(/_encerradosPillCount\s*>\s*0\s*\?\s*_fStyle\('encerrados',\s*'🏆',\s*_encerradosPillCount,/.test(src),

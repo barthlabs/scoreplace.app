@@ -268,6 +268,30 @@ service cloud.firestore {
         allow delete: if request.auth != null && isAdminOf(parentT());
       }
 
+      // ─── FASE 2 · OS JOGOS FORA DO DOCUMENTO ──────────────────────────────
+      // O documento do torneio tem TETO: o Firestore recusa acima de 1 MB, e o Confra já
+      // está em 238 KB (os jogos são 101 KB disso). Tirar os jogos do documento é o que
+      // remove o teto — e pra isso o cliente precisa PODER LER a subcoleção.
+      //
+      // ⛔ ISTO NÃO ABRE NADA DE NOVO: `tournaments/{id}/matches` contém EXATAMENTE os
+      // mesmos jogos que já estão no documento, e o documento já é legível por este mesmo
+      // público. É paridade de leitura, não exposição nova.
+      //
+      // ⛔ ESCRITA CONTINUA NEGADA AO CLIENTE. Quem escreve aqui é o gatilho
+      // `tournamentMirror` (admin SDK, não passa por regra). A escrita pelo cliente é a
+      // Fase 2b e exige uma coisa que o documento espelhado AINDA NÃO TEM: `playerUids`
+      // no topo, gravado por caminho de confiança (sorteio/avanço) — é ele que permite a
+      // regra "só quem joga ESTE jogo escreve, e não pode se auto-incluir", igual à de
+      // `results` logo acima. Sem `playerUids`, liberar update aqui seria liberar pra
+      // qualquer inscrito mexer em qualquer jogo.
+      match /matches/{matchId} {
+        function parentTm() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTm().isPublic == true);
+        allow write: if false;
+      }
+
       // ─── Busca ativa letzplay do organizador (anti-gato) ───────────────────
       // tournaments/{id}/letzplayScans/{uid} — o organizador varre o PERFIL
       // PÚBLICO letzplay dos inscritos que autorizaram (categoria/nível) via a

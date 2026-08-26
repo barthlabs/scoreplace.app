@@ -218,23 +218,32 @@ function setupCreateTournamentModal() {
                 <div class="form-group full-width">
                   <label class="form-label">${_t('create.sportLabel')}</label>
                   <!-- Hidden select for backward compatibility -->
+                  <!-- ⛔ 2.0.96 · O EMOJI É ROTULO, NUNCA VALOR. Estas opcoes nao tinham atributo value,
+     entao o valor ERA o texto — com o emoji — e era isso que ia pro banco. MEDIDO na base
+     real: "Beach Tennis" (27) e "(emoji) Beach Tennis" (7) convivendo como se fossem
+     modalidades DIFERENTES, o que quebra todo filtro por modalidade. Ordem do dono:
+     _"por isso que nao deixo as pessoas escreverem livremente as modalidades. usam botoes
+     que devem padronizar isso sempre"_ — o botao padronizava a string ERRADA.
+     O valor canonico e o de window.SPORT_LIST (js/views/sport-rules.js).
+     ⛔ SEM CRASE NESTE COMENTARIO: ele vive dentro de template literal; crase aqui
+     derruba a tela inteira (ja aconteceu — feedback_crase_em_template_literal). -->
                   <select class="form-control" id="select-sport" onchange="window._onSportChange()" style="display:none;">
-                    <option>🎾 Beach Tennis</option>
-                    <option>🥒 Pickleball</option>
-                    <option>🎾 Tênis</option>
-                    <option>🏓 Tênis de Mesa</option>
-                    <option>🏸 Padel</option>
-                    <option>🏐 Vôlei de Praia</option>
-                    <option>⚽ Futevôlei</option>
+                    <option value="Beach Tennis">🎾 Beach Tennis</option>
+                    <option value="Pickleball">🥒 Pickleball</option>
+                    <option value="Tênis">🎾 Tênis</option>
+                    <option value="Tênis de Mesa">🏓 Tênis de Mesa</option>
+                    <option value="Padel">🏸 Padel</option>
+                    <option value="Vôlei de Praia">🏐 Vôlei de Praia</option>
+                    <option value="Futevôlei">⚽ Futevôlei</option>
                   </select>
                   <div id="sport-buttons" style="display:flex;gap:6px;flex-wrap:wrap;">
-                    <button type="button" class="sport-btn sport-btn-active" data-sport="🎾 Beach Tennis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">${(window._sportIcon && window._sportIcon('Beach Tennis')) || '🎾'} Beach Tennis</button>
-                    <button type="button" class="sport-btn" data-sport="🥒 Pickleball" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Pickleball')) || '🥒'} Pickleball</button>
-                    <button type="button" class="sport-btn" data-sport="🎾 Tênis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis')) || '🎾'} Tênis</button>
-                    <button type="button" class="sport-btn" data-sport="🏓 Tênis de Mesa" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis de Mesa')) || '🏓'} Tênis de Mesa</button>
-                    <button type="button" class="sport-btn" data-sport="🏸 Padel" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Padel')) || '🏸'} Padel</button>
-                    <button type="button" class="sport-btn" data-sport="🏐 Vôlei de Praia" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Vôlei de Praia')) || '🏐'} Vôlei de Praia</button>
-                    <button type="button" class="sport-btn" data-sport="⚽ Futevôlei" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Futevôlei')) || '⚽'} Futevôlei</button>
+                    <button type="button" class="sport-btn sport-btn-active" data-sport="Beach Tennis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid #fbbf24;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);font-weight:600;">${(window._sportIcon && window._sportIcon('Beach Tennis')) || '🎾'} Beach Tennis</button>
+                    <button type="button" class="sport-btn" data-sport="Pickleball" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Pickleball')) || '🥒'} Pickleball</button>
+                    <button type="button" class="sport-btn" data-sport="Tênis" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis')) || '🎾'} Tênis</button>
+                    <button type="button" class="sport-btn" data-sport="Tênis de Mesa" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Tênis de Mesa')) || '🏓'} Tênis de Mesa</button>
+                    <button type="button" class="sport-btn" data-sport="Padel" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Padel')) || '🏸'} Padel</button>
+                    <button type="button" class="sport-btn" data-sport="Vôlei de Praia" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Vôlei de Praia')) || '🏐'} Vôlei de Praia</button>
+                    <button type="button" class="sport-btn" data-sport="Futevôlei" onclick="window._selectSport(this)" style="padding:6px 12px;border-radius:10px;font-size:0.8rem;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:2px solid var(--sp-b-255-255-255-018,rgba(255,255,255,0.18));background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-main);font-weight:500;">${(window._sportIcon && window._sportIcon('Futevôlei')) || '⚽'} Futevôlei</button>
                   </div>
                 </div>
               </div>

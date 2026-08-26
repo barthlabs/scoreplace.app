@@ -149,8 +149,17 @@ const ZE  = { uid: 'u-ze', displayName: 'Zé Ninguém', email: 'ze@x.com' };
 
 // ─── 5) O DESPACHANTE EXISTE E COBRE O FEED ────────────────────────────────────────────
 (function () {
-  ok(/container\.querySelectorAll\('\[data-pending-action\]'\)/.test(SRC),
-     'o despachante da dashboard varre TODO o container — inclusive os cards do feed');
+  /* ⛔ 2.0.96 — O DESPACHANTE VIROU DELEGAÇÃO, e a mudança tem nome: varrer o container
+   * uma vez (`querySelectorAll(...).forEach(addEventListener)`) só alcança o que existe
+   * NO RENDER. Desde que "Meus Resultados" ficou preguiçoso (2.0.86), o botão de aprovar
+   * entra no DOM DEPOIS — e nascia morto: aparecia e o clique não fazia nada, sem erro,
+   * sem aviso, sem Sentry. Foi o jogo 63 do Confra travado.
+   * A intenção do teste continua a mesma (o despachante cobre o feed inteiro); o que muda
+   * é que agora ele cobre também o que ainda não existe. */
+  ok(!/container\.querySelectorAll\('\[data-pending-action\]'\)\.forEach/.test(SRC),
+     'NÃO voltou a ligar um ouvinte por botão (mata o botão que entra depois)');
+  ok(/container\.addEventListener\('click'/.test(SRC) && /closest\('\[data-pending-action\]'\)/.test(SRC),
+     'o despachante da dashboard cobre TODO o container por delegação — inclusive o que entra depois');
   const i = SRC.indexOf("action === 'edit'");
   ok(i > -1 && SRC.slice(i, i + 400).indexOf('sp_pendingEdit') > -1,
      'e no Editar ele carimba `sp_pendingEdit` e navega (fora da chave não há DOM pra editar)');
