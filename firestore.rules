@@ -383,6 +383,30 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      /* ─── PRESENÇA E RASTRO DE W.O. DIVIDIDOS: LEITURA (2.0.123) ────────────
+       * Mesmos termos das outras partes: o cliente LÊ, e só a CF escreve (admin SDK
+       * passa por cima das regras). Sem a regra o Firestore nega por omissão e a tela
+       * abre sem presença — o mesmo modo de falhar que o elenco teve.
+       * ⛔ `allow write: if false` NÃO é excesso de zelo: a porta de escrita é
+       * `aplicarNoTorneio`, que confere quem pode mexer em quê. Deixar o cliente
+       * escrever aqui seria contornar a tabela de permissão inteira.
+       * [[project_porta_unica_de_escrita_cf]] */
+      match /checkedIn/{quemId} {
+        function parentTp() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTp().isPublic == true);
+        allow write: if false;
+      }
+      match /woClaims/{claimId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+      match /woLog/{logId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+
       /* ─── INSCRITOS DIVIDIDOS: LEITURA ────────────────────────────────────
        * `tournaments/{id}/inscritos/{k}` é onde o elenco passa a viver quando sai do
        * documento. ⛔ E o nome NÃO é `participants` de propósito: essa já tem dono — o

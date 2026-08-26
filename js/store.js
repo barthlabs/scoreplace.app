@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.122';
+window.SCOREPLACE_VERSION = '2.0.123';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11871,66 +11871,103 @@ window.AppStore = {
    * ⛔ E ele NÃO substitui a busca: a busca traz o todo uma vez; o ouvinte traz o delta.
    * Um sem o outro deixa a tela ou vazia ou parada.
    */
-  ouvirJogosDoTorneio(tournamentId) {
+  /* ── OUVIR AS PARTES QUE MORAM FORA DO DOCUMENTO ─────────────────────────────
+   * O `onSnapshot` do app é no DOCUMENTO. Campo que saiu pra subcoleção não chega por ele —
+   * precisa do próprio ouvinte. Era só pros jogos, com o nome 'matches' escrito à mão; agora
+   * deriva de `_semPesados`, que é quem sabe o que ESTE torneio guarda fora.
+   *
+   * ⛔ MAS NÃO OUVE TUDO, e a razão é custo: abrir o torneio JÁ busca todas as partes
+   * (`montarDoBanco`). Um ouvinte por parte pagaria essa leitura DE NOVO na primeira entrega
+   * — o Firestore manda tudo como 'added'. No Confra seria reler 148 inscritos e o histórico
+   * inteiro a cada abertura, sem que nada disso mude enquanto a tela está aberta.
+   * ⇒ Ouve só o que MUDA COM A TELA ABERTA: os jogos (placar sendo lançado) e a presença
+   * (chamada acontecendo na quadra). O resto chega na abertura e basta.
+   * [[project_dividir_exige_todo_escritor_ciente]] [[project_porta_unica_de_escrita_cf]] */
+
+  ouvirJogosDoTorneio(tournamentId) { return this.ouvirPartesDoTorneio(tournamentId); },
+
+  _partesQueMudamAoVivo() { return ['matches', 'checkedIn']; },
+
+  ouvirPartesDoTorneio(tournamentId) {
     var id = String(tournamentId || '');
     if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
     if (this._jogosSub && this._jogosSub.id === id) return;   // já ouvindo este
     this.pararDeOuvirJogos();
     var t = (this.tournaments || []).find(function (x) { return x && String(x.id) === id; });
-    // torneio inteiro não tem subcoleção pra ouvir — o doc já traz tudo
-    if (!t || !Array.isArray(t._semPesados) || t._semPesados.indexOf('matches') === -1) return;
-    var self = this;
-    try {
-      var _col = (window._tSplit && typeof window._tSplit.colecaoDaParte === 'function')
-        ? window._tSplit.colecaoDaParte('matches') : 'matches';
-      var un = window.FirestoreDB.db.collection('tournaments').doc(id).collection(_col)
-        .onSnapshot(function (snap) {
-          var mudou = 0;
-          try {
-            var S = window._tSplit;
-            if (!S || typeof S.remontar !== 'function') return;
-            var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });
-            if (!vivo) return;
-            // ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a pena.
-            // Na PRIMEIRA entrega o Firestore manda tudo como 'added' — e tudo bem, é a
-            // mesma leitura que a busca faria; o ganho está nas entregas seguintes.
-            /* ⚠️ ESTE remontar É DIFERENTE dos outros, e por isso não usa `montarDoBanco`:
-             * ali a gente LÊ o banco; aqui o banco ENTREGA um delta. Mas as partes que o
-             * torneio tem continuam sendo as que `_semPesados` nomeia — só a de jogos vem
-             * do delta; as demais já estão no objeto vivo e são preservadas. */
-            var partes = { config: JSON.parse(JSON.stringify(vivo)), matches: [] };
-            snap.forEach(function (d) { var v = d.data(); if (v) partes.matches.push(v); });
-            mudou = snap.docChanges().length;
-            if (!mudou) return;
-            var montado = S.remontar(partes);
-            if (!montado) return;
-            // escreve NO LUGAR — telas guardam o objeto; trocar a referência as deixaria
-            // com o de antes. Mesmo motivo da busca e do `_ensureTournamentLoaded`.
-            Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
-            delete vivo._faltamPesados;
-            try { if (window._noteFsReads) window._noteFsReads(mudou, 'jogos-delta'); } catch (e) {}
-          } catch (e) {
-            if (window._error) window._error('[fase2] ouvinte de jogos de ' + id, e);
-            return;
-          }
-          if (typeof window._softRefreshView === 'function') window._softRefreshView();
-        }, function (err) {
-          if (window._warn) window._warn('[fase2] ouvinte de jogos caiu em ' + id, err);
-        });
-      this._jogosSub = { id: id, un: un };
-    } catch (e) {
-      if (window._error) window._error('[fase2] não consegui ouvir os jogos de ' + id, e);
-    }
+    var fora = (t && Array.isArray(t._semPesados)) ? t._semPesados : [];
+    if (!fora.length) return;      // torneio inteiro: o doc já traz tudo
+    var S = window._tSplit;
+    if (!S || typeof S.remontar !== 'function') return;
+    var alvos = this._partesQueMudamAoVivo().filter(function (n) { return fora.indexOf(n) !== -1; });
+    if (!alvos.length) return;
+
+    var self = this, uns = [];
+    alvos.forEach(function (nome) {
+      try {
+        var _col = (typeof S.colecaoDaParte === 'function') ? S.colecaoDaParte(nome) : nome;
+        var un = window.FirestoreDB.db.collection('tournaments').doc(id).collection(_col)
+          .onSnapshot(function (snap) {
+            try {
+              var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+              if (!vivo) return;
+              /* ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a
+               * pena. Na PRIMEIRA entrega o Firestore manda tudo como 'added' — e tudo bem,
+               * é a mesma leitura que a busca faria; o ganho está nas entregas seguintes. */
+              var mudou = snap.docChanges().length;
+              if (!mudou) return;
+              var regs = [];
+              snap.forEach(function (d) { var v = d.data(); if (v) regs.push(v); });
+              if (!regs.length) {
+                /* ⛔ O SNAPSHOT É A VERDADE: parte vazia é parte VAZIA, não "sem notícia".
+                 * `remontar` protege quem não recebeu registro nenhum (nunca apaga) —
+                 * proteção certa pra uma LEITURA, errada pra um ouvinte. Apagar a última
+                 * presença tem que esvaziar a presença na tela, senão a marca fica pra
+                 * sempre. A forma (mapa ou lista) vem do que já está vivo. */
+                vivo[nome] = Array.isArray(vivo[nome]) ? [] : {};
+              } else {
+                /* ⚠️ ESTE remontar é DIFERENTE do `montarDoBanco`: ali a gente LÊ o banco;
+                 * aqui o banco ENTREGA um delta. Só a parte ouvida vem do snapshot; as
+                 * demais já estão no objeto vivo e são preservadas. */
+                var partes = { config: JSON.parse(JSON.stringify(vivo)) };
+                partes[nome] = regs;
+                var montado = S.remontar(partes);
+                if (!montado) return;
+                // escreve NO LUGAR — telas guardam o objeto; trocar a referência as deixaria
+                // com o de antes. Mesmo motivo da busca e do `_ensureTournamentLoaded`.
+                Object.keys(montado).forEach(function (kk) { vivo[kk] = montado[kk]; });
+              }
+              if (nome === 'matches') delete vivo._faltamPesados;
+              try { if (window._noteFsReads) window._noteFsReads(mudou, nome + '-delta'); } catch (e) {}
+            } catch (e) {
+              if (window._error) window._error('[fase2] ouvinte de ' + nome + ' de ' + id, e);
+              return;
+            }
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+          }, function (err) {
+            if (window._warn) window._warn('[fase2] ouvinte de ' + nome + ' caiu em ' + id, err);
+          });
+        uns.push(un);
+      } catch (e) {
+        if (window._error) window._error('[fase2] não consegui ouvir ' + nome + ' de ' + id, e);
+      }
+    });
+    if (uns.length) this._jogosSub = { id: id, uns: uns };
   },
 
   /* ⛔ Soltar ao sair é obrigatório: assinatura esquecida continua baixando delta de um
-   * torneio que ninguém está olhando, e some da conta de custo por não dar erro nenhum. */
+   * torneio que ninguém está olhando, e some da conta de custo por não dar erro nenhum.
+   * ⚠️ São VÁRIAS assinaturas agora (uma por parte) — soltar só a primeira deixaria as
+   * outras vivas, que é o mesmo vazamento com cara de conserto. */
   pararDeOuvirJogos() {
-    if (this._jogosSub && typeof this._jogosSub.un === 'function') {
-      try { this._jogosSub.un(); } catch (e) {}
+    var sub = this._jogosSub;
+    if (sub) {
+      var lista = Array.isArray(sub.uns) ? sub.uns : (typeof sub.un === 'function' ? [sub.un] : []);
+      lista.forEach(function (u) { try { if (typeof u === 'function') u(); } catch (e) {} });
     }
     this._jogosSub = null;
   },
+
+
 
   async _montaPesadosQueFaltam(ids) {
     if (!Array.isArray(ids) || !ids.length) return;

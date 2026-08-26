@@ -84,6 +84,22 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.123 ────────────────────────
+        // 👂 O OUVINTE DAS PARTES QUE MORAM FORA. O `onSnapshot` do app é no DOCUMENTO —
+        // campo que saiu pra subcoleção não chega por ele. O ouvinte existia só pros jogos,
+        // com o nome 'matches' escrito à mão; agora deriva de `_semPesados`.
+        // ⛔ MAS NÃO OUVE TUDO, e a razão é custo: abrir o torneio JÁ busca todas as partes,
+        // e um ouvinte por parte pagaria essa leitura DE NOVO na primeira entrega (o
+        // Firestore manda tudo como 'added'). No Confra seria reler 148 inscritos e o
+        // histórico a cada abertura, sem que nada disso mude com a tela aberta. Ouve o que
+        // muda ao vivo: os jogos (placar sendo lançado) e a presença (chamada na quadra).
+        // ⛔ E parte VAZIA agora esvazia de verdade: `remontar` nunca apaga o que não recebeu
+        // — proteção certa pra uma LEITURA, errada pra um OUVINTE. Sem isso, apagar a última
+        // presença deixaria a marca na tela pra sempre.
+        // ⚠️ E soltar TODAS as assinaturas ao sair: são várias agora (uma por parte), e
+        // soltar só a primeira é o mesmo vazamento com cara de conserto.
+        // Regras do banco: `checkedIn`, `woClaims` e `woLog` ganharam LEITURA. Escrita do
+        // cliente segue negada — quem escreve é a porta da 2.0.122, que confere permissão.
         // ── ciclo 2.0.122 ────────────────────────
         // 🚪 A PORTA ÚNICA DE ESCRITA FINA NO TORNEIO. Ordem do dono: _"tudo em CF apenas
         // disparado pelo cliente"_. `exports.aplicarNoTorneio` + a tabela de permissão em
