@@ -84,6 +84,24 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.101 ──────────────────────────────────────────
+        // ⭐ O GRUPO DE WHATS DO JOGO VOLTOU A SER 1 LINK PEQUENO.
+        // O dono viu a medição e cortou o assunto: "é só um link porra. link do grupo" ·
+        // "cada grupo de jogo tem 1 link pequeno para o grupo do whats". Ele tinha razão.
+        // Medido nos 48 jogos com grupo (13,0 KB): notifyLog 34% · LINK 21% · byUid 14% ·
+        // byName 9% · notifiedAt 9% · at 7% · notifyCount 5%. O link era 21% — os outros
+        // 79% eram registro SOBRE o link, e triplicado, porque o objeto inteiro era
+        // copiado nos 3 jogos de cada grupo (16 links distintos para 48 jogos).
+        // Agora: o PORTADOR guarda o registro (é dele que os diálogos leem — "Fulano já
+        // criou um grupo aqui, substituir?"), e os irmãos carregam só `{ link }`, que é o
+        // que o botão "Abrir grupo" lê. 13,0 → 4,7 KB.
+        //
+        // ⚠️ E ISTO QUASE SAIU ERRADO. Minha primeira busca por quem lê `notifyLog` veio
+        // TRUNCADA e eu conclui "ninguém lê" — cheguei a escrever o delete geral. Lê sim:
+        // `tournaments-org-tools` lê `t.waGroup.notifyLog`, o grupo do TORNEIO, que
+        // alimenta o relatório "Convites do grupo" em Comunicados. Só o do JOGO é morto.
+        // Apagar os dois teria matado um relatório que funciona pra economizar bytes de
+        // outro lugar. ⛔ Busca truncada não é busca — é palpite com aparência de prova.
         // ── ciclo 2.0.100 ──────────────────────────────────────────
         // ⭐ A PODA DO HISTÓRICO — o campo que crescia PRA SEMPRE agora tem freio.
         // Simulado no documento REAL antes de ligar: Confra 218 → 80 eventos, 138 saem,

@@ -154,7 +154,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!sm || sm === m0) return;
       // Espelha os DOIS sentidos: criar/trocar copia, apagar APAGA. Sem o delete,
       // apagar no m0 deixaria os jogos irmãos com o link morto (o chip lê por match).
-      if (m0.waGroup) sm.waGroup = m0.waGroup; else delete sm.waGroup;
+      //
+      // ⭐ E COPIA SÓ O LINK. Ordem do dono (26/ago): _"cada grupo de jogo tem 1 link
+      // pequeno para o grupo do whats"_. Antes o objeto INTEIRO era copiado pros 3 jogos
+      // do grupo — quem criou, quando, quantos avisos, o log de avisos —, e medido no
+      // Confra isso dava 13 KB dos 105 KB dos jogos, sendo o LINK só 21% deles: 79% era
+      // registro SOBRE o link, triplicado.
+      // O registro (byUid/byName/at/notifiedAt/notifyCount) fica no PORTADOR (m0), que é
+      // quem os diálogos leem — `ctx.target` em groupMode É o m0, então nada na tela muda.
+      if (m0.waGroup) sm.waGroup = { link: m0.waGroup.link }; else delete sm.waGroup;
     });
   }
 
@@ -693,9 +701,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     var cu = _cu(); var now = Date.now();
     wg.notifiedAt = now;
     wg.notifyCount = (wg.notifyCount || 0) + 1;
-    if (!Array.isArray(wg.notifyLog)) wg.notifyLog = [];
-    wg.notifyLog.unshift({ at: now, byUid: (cu && cu.uid) || '', byName: (cu && (cu.displayName || cu.name)) || '' });
-    if (wg.notifyLog.length > 20) wg.notifyLog = wg.notifyLog.slice(0, 20);
+    /* ⛔ `notifyLog` SÓ NO GRUPO DO TORNEIO (2.0.101) ─────────────────────────────
+     * O relatório "📱 Convites do grupo do WhatsApp" (tournaments-org-tools) lê
+     * `t.waGroup.notifyLog` — o grupo do TORNEIO. Nunca o do jogo.
+     * ⚠️ Eu quase apaguei os dois: a primeira busca que fiz truncou a saída e eu conclui
+     * "ninguém lê". Lê sim — só que o outro. Escopo errado teria matado um relatório que
+     * funciona pra economizar bytes de outro lugar.
+     * No JOGO ele é peso morto: escrito a cada aviso, 20 entradas, × 3 jogos por grupo,
+     * e nenhuma tela abre. Medido no Confra: 4,5 KB — 34% de todo o `waGroup`.
+     * O que a tela do jogo mostra é `notifiedAt` + `notifyCount`, que ficam nos dois. */
+    if (ctx.scope === 'tournament') {
+      if (!Array.isArray(wg.notifyLog)) wg.notifyLog = [];
+      wg.notifyLog.unshift({ at: now, byUid: (cu && cu.uid) || '', byName: (cu && (cu.displayName || cu.name)) || '' });
+      if (wg.notifyLog.length > 20) wg.notifyLog = wg.notifyLog.slice(0, 20);
+    } else {
+      delete wg.notifyLog;
+    }
     if (ctx.groupMode) _mirror(ctx);
     try { _save(ctx.t).catch(function () {}); } catch (e) {}
   }

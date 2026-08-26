@@ -130,6 +130,7 @@ const SUITES = [
   'tests/todos-os-wos-do-grupo-indicados.test.js',
   'tests/wo-fica-no-grupo-onde-aconteceu.test.js',
   'tests/nome-do-grupo-de-whats-diz-qual-grupo.test.js',
+  'tests/grupo-de-whats-e-um-link-pequeno.test.js',
   // ⛔ A máscara do celular do perfil mora no MARKUP (2.0.54, caso Vanessa) —
   // addEventListener se perde em re-render e deixava campo cru + Verificar apagado.
   'tests/mascara-do-celular-mora-no-markup.test.js',
