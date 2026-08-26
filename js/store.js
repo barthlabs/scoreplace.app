@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.105';
+window.SCOREPLACE_VERSION = '2.0.106';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10674,7 +10674,15 @@ window.AppStore = {
           for (var g = 0; g < novo.groups.length; g++) _puxa(novo.groups[g], velho.groups[g]);
         }
       }
-      if (!achou) novo._faltamPesados = true;   // "ainda não carregou" ≠ "não tem jogo"
+      /* ⭐ O DOCUMENTO DIZ QUANTOS JOGOS MORAM FORA (`_nJogos`), e é isso que separa
+       * "torneio que ainda não sorteou" de "torneio cujos jogos a tela não buscou". Os
+       * dois pintam vazio; só um é honesto. Antes eu marcava `_faltamPesados` sempre que
+       * não achasse nada em memória — o que acusava falsamente TODO torneio novo, que
+       * legitimamente não tem jogo. Sem o número não dá pra distinguir; com ele é trivial.
+       * ⚠️ Documento velho (sem `_nJogos`) cai no comportamento antigo, que é o seguro. */
+      var _esperados = (typeof novo._nJogos === 'number') ? novo._nJogos : null;
+      if (_esperados === 0) delete novo._faltamPesados;          // não tem jogo MESMO
+      else if (!achou) novo._faltamPesados = true;               // tem, e não está aqui
       else delete novo._faltamPesados;
       return novo;
     }
@@ -11905,9 +11913,22 @@ window.AppStore = {
       this.tournaments[_idx].id = id;
       tourData = this.tournaments[_idx];
     } else {
+      /* ⭐ TORNEIO NOVO NASCE NO FORMATO NOVO (2.0.106) ────────────────────────────
+       * Antes todo torneio nascia com os jogos DENTRO do documento e só era dividido
+       * depois, à mão. Isso deixava o caminho novo sendo exercitado por 1 torneio contra
+       * 38 — e caminho que é exceção apodrece: qualquer mudança futura quebra o raro em
+       * silêncio, porque a suíte e o uso real martelam o comum.
+       * ⭐ E nascer dividido é o caso MAIS SEGURO que existe: torneio novo não tem jogo
+       * nenhum, então não há o que mover nem o que perder. Ele já sorteia direto no lugar
+       * certo — a CF grava os jogos na subcoleção pela mesma porta do Confra.
+       * ⚠️ `_nJogos: 0` vai junto e é o que diz à tela "não tem jogo MESMO" em vez de
+       * "não carregou ainda" — sem ele, todo torneio recém-criado seria acusado de
+       * incompleto. Ver a rede em _enxertaJogos. */
       tourData = Object.assign({
         id: id,
         createdAt: new Date().toISOString(),
+        _semPesados: ['matches'],
+        _nJogos: 0,
         // Default status='open' pra que torneios novos apareçam no feed público de
         // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
         status: 'open',

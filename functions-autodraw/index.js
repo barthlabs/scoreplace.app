@@ -411,6 +411,12 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
     if (fora.indexOf(k) === -1 && b.persist[k] !== undefined) pDepois.config[k] = b.persist[k];
   });
   pDepois.config._semPesados = fora;
+  /* ⭐ QUANTOS jogos moram fora. Sem este número, "o documento não tem jogo" é ambíguo:
+   * pode ser torneio que ainda não sorteou (zero jogos MESMO) ou torneio dividido cujos
+   * jogos a tela ainda não buscou. Os dois pintam igual — vazio — e só um deles é honesto.
+   * Confundir os dois é como se apaga a chave de todo mundo. Com o número, a tela sabe
+   * dizer "ainda não carregou" ≠ "não tem jogo". */
+  if (fora.indexOf('matches') !== -1) pDepois.config._nJogos = (pDepois.matches || []).length;
   tx.set(ref, pDepois.config);
   return b;
 }

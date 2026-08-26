@@ -84,6 +84,21 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.106 ──────────────────────────────────────────
+        // ⭐ TORNEIO NOVO NASCE NO FORMATO NOVO, e os antigos vão junto.
+        // Depois do Confra, o caminho novo era exercitado por 1 torneio contra 38.
+        // ⛔ Caminho que é EXCEÇÃO apodrece: a suíte e o uso real martelam o comum, e o
+        // raro quebra em silêncio — e a exceção ser justo o torneio ao vivo com 148
+        // pessoas é o pior arranjo possível. Consistência aqui não é estética: é o que faz
+        // o defeito aparecer num torneio pequeno em vez de no grande.
+        // ⭐ E nascer dividido é o caso MAIS seguro: torneio novo não tem jogo nenhum, não
+        // há o que mover nem o que perder. Dos 38 antigos, 30 também não têm.
+        //
+        // ⚠️ E FECHEI UMA AMBIGUIDADE que viraria armadilha: "documento sem jogo" pode ser
+        // "ainda não sorteou" (zero jogos MESMO) ou "dividido e a tela não buscou". Os dois
+        // pintam vazio e só um é honesto. Agora o documento diz `_nJogos` — quantos moram
+        // fora —, e sem esse número todo torneio recém-criado seria acusado de incompleto.
+        // Documento dividido antes desta versão cai no comportamento antigo, que é o seguro.
         // ── ciclo 2.0.105 ──────────────────────────────────────────
         // ⭐ AS TRÊS PORTAS QUE DEVOLVERIAM OS JOGOS PRO DOCUMENTO, FECHADAS.
         // Depois que os jogos saem do doc, o objeto em MEMÓRIA continua tendo eles (a rede

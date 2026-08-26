@@ -1088,6 +1088,9 @@ window.FirestoreDB = {
             if (_fora.indexOf(k) === -1 && cleanData[k] !== undefined) _p.config[k] = cleanData[k];
           });
           _p.config._semPesados = _fora;
+          // quantos jogos moram fora — ver a nota em _gravaTorneio (CF): sem o número,
+          // "sem jogo no doc" é ambíguo entre "não sorteou" e "não carregou ainda".
+          if (_fora.indexOf('matches') !== -1) _p.config._nJogos = (_p.matches || []).length;
           cleanData = _p.config;
         }
       } catch (_eD) {
