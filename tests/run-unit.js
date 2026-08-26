@@ -213,6 +213,11 @@ const SUITES = [
   // o cache entrega documento COMPLETO de até 24h, e ele passava no teste de "já carregado".
   // Sintoma: aprovou o placar, abriu de novo e estava pendente; reiniciar corrigia.
   'tests/abrir-torneio-nao-usa-o-cache.test.js',
+  // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
+  'tests/jogo-espelhado-diz-quem-joga.test.js',
+  // ⭐ E o FECHO DE RODADA vai pra CF em todo formato — pré-requisito da trava das rules
+  // (09/set/2026): enquanto o cliente gera a rodada seguinte, fechar a rule quebra o ciclo.
+  'tests/fecho-de-rodada-vai-pra-cf.test.js',
   // ⭐ A dashboard é o CÍRCULO da pessoa; o Explorar abre a plataforma.
   'tests/dashboard-mostra-o-meu-circulo.test.js',
   // ⛔ A modalidade gravada é o valor CANÔNICO — o emoji é rótulo. O botão padronizava

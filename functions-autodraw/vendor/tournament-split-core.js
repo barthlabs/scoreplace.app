@@ -46,6 +46,30 @@
   }
 
   /** Divide o documento em { config, matches, participants, history }. */
+  /* QUEM JOGA ESTE JOGO, no próprio documento do jogo.
+   *
+   * É este campo que sustenta a regra por jogo em firestore.rules — "só quem joga ESTE
+   * jogo escreve, e não pode se auto-incluir" —, o mesmo desenho que `results` já usa.
+   * Sem ele, liberar escrita na subcoleção seria liberar qualquer inscrito a mexer em
+   * qualquer jogo.
+   *
+   * ⛔ A DERIVAÇÃO NÃO É REIMPLEMENTADA AQUI: chama `window._matchPlayerUids`
+   * (js/views/bracket-logic.js), a mesma que o cliente usa pra autorizar lançamento.
+   * Duas versões divergem — hoje mesmo três bugs saíram disso.
+   * ⚠️ Se ela não estiver carregada (harness mínimo), o campo simplesmente não vai:
+   * documento sem `playerUids` continua legível e só não é escrevível por jogador, que é
+   * o comportamento seguro.
+   */
+  function _uidsDoJogo(t, m) {
+    var fn = (raiz && raiz._matchPlayerUids) ||
+             (typeof window !== 'undefined' && window._matchPlayerUids) || null;
+    if (typeof fn !== 'function') return null;
+    try {
+      var u = fn(t, m);
+      return (Array.isArray(u) && u.length) ? u.map(String) : null;
+    } catch (e) { return null; }
+  }
+
   function dividir(t) {
     if (!t || typeof t !== 'object') return null;
     var config = _clone(t);
@@ -56,7 +80,10 @@
       if (!r || typeof r !== 'object') return;
       _arr(r.matches).forEach(function (m, mi) {
         var loc = { tipo: 'rounds', ri: ri, mi: mi };
-        matches.push({ _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) });
+        var _pu = _uidsDoJogo(t, m);
+        var _reg = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
+        if (_pu) _reg.playerUids = _pu;
+        matches.push(_reg);
       });
       // ⛔ o array fica VAZIO, não some: a rodada tem outros campos (format, status,
       // round, monarchGroups) e a AUSÊNCIA de `matches` não é o mesmo que vazio.
@@ -66,7 +93,10 @@
     // ── 2. jogos de t.matches[] ───────────────────────────────────────────────
     _arr(config.matches).forEach(function (m, mi) {
       var loc = { tipo: 'matches', mi: mi };
-      matches.push({ _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) });
+      var _pu2 = _uidsDoJogo(t, m);
+      var _reg2 = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
+      if (_pu2) _reg2.playerUids = _pu2;
+      matches.push(_reg2);
     });
     if (Array.isArray(config.matches)) config.matches = [];
 
@@ -79,7 +109,10 @@
           if (!r || typeof r !== 'object') return;
           _arr(r.matches).forEach(function (m, mi) {
             var loc = { tipo: 'phaseRounds', fase: String(fase), ri: ri, mi: mi };
-            matches.push({ _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) });
+            var _pu = _uidsDoJogo(t, m);
+        var _reg = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
+        if (_pu) _reg.playerUids = _pu;
+        matches.push(_reg);
           });
           if (Array.isArray(r.matches)) r.matches = [];
         });

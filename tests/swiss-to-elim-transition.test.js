@@ -65,7 +65,16 @@ function eq(a, b, m) { ok(a === b, m + ' (esperado ' + JSON.stringify(b) + ', ve
   sb.AppStore.tournaments = [t];
 
   ok((t.matches || []).length === 0, 'antes: sem chave de eliminatória');
-  sb._closeRound('swx', 0, 's2'); // fecha a última rodada suíça = dispara a transição
+  /* ⛔ ESTE TESTE PROVA O MOTOR DA TRANSIÇÃO, NÃO O CAMINHO ATÉ ELE.
+   * Desde a 2.0.98 o fecho de rodada NÃO roda mais no cliente em formato nenhum — ordem do
+   * dono: _"nada no client side… tudo na cf"_, porque cliente velho gerando a rodada
+   * seguinte com motor velho é a divergência que a CF existe pra eliminar.
+   * Então o teste chama o MOTOR direto — as duas mutações puras que TANTO a CF quanto o
+   * cliente chamavam. É o que ele sempre quis provar; antes ele chegava lá pelo fluxo, e o
+   * fluxo mudou de dono. O ROTEAMENTO é coberto por tests/fecho-de-rodada-vai-pra-cf. */
+  var _branch = sb.window._applyRoundCloseToTournament(t, 0);
+  eq(_branch, 'transition', 'o desfecho do fecho é a TRANSIÇÃO (é ele que a CF devolve)');
+  sb.window._applySwissEliminationTransition(t, 0);
 
   eq(t.currentStage, 'elimination', 'transicionou pra fase eliminatória');
   ok(Array.isArray(t.matches) && t.matches.length > 0, 'CHAVE MONTADA: t.matches populado (veio ' + (t.matches || []).length + ')');

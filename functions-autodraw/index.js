@@ -1673,6 +1673,24 @@ exports.tournamentMirror = onDocumentWritten(
       // certo: espelho vazio precisa nascer inteiro.
       const pAntes = antes ? _tSplit.dividir(antes) : { matches: [], participants: [], history: [] };
 
+      /* ⛔ `playerUids` NÃO PODE FALTAR EM SILÊNCIO (Fase 2b).
+       * É ele que sustenta a regra "só quem joga ESTE jogo escreve" — sem o campo, o
+       * participante leva permission-denied e o jogo só anda pelo organizador. A derivação
+       * vem de `window._matchPlayerUids` (vendor/bracket-logic, carregado pelo draw-core
+       * no topo deste arquivo) — e esse require está num try/catch que SEGUE em frente se
+       * falhar. Ou seja: dá pra espelhar 115 jogos sem o campo e não perceber.
+       * Aqui a ausência vira LINHA DE LOG. Hoje (25/ago) três defeitos custaram caro
+       * justamente por falharem sem deixar rastro. */
+      const _comUid = pDepois.matches.filter((m) => Array.isArray(m.playerUids) && m.playerUids.length).length;
+      const _jogaveis = pDepois.matches.filter((m) => {
+        const j = m && m.jogo;
+        return j && !j.isBye && !j.isSitOut && j.p1 && j.p2 && j.p1 !== 'BYE' && j.p2 !== 'BYE' && j.p1 !== 'TBD';
+      }).length;
+      if (_jogaveis && !_comUid) {
+        console.error('[tournamentMirror]', id, '⛔ NENHUM jogo com playerUids em', _jogaveis,
+          'jogáveis — a derivação não carregou (vendor/bracket-logic). A escrita por jogador fica NEGADA.');
+      }
+
       const r1 = await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
       const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants, (p) => 'p' + p._idx);
       const r3 = await _espelhaColecao(db, id, 'history', pAntes.history, pDepois.history, (h) => 'h' + h._idx);
@@ -1680,6 +1698,7 @@ exports.tournamentMirror = onDocumentWritten(
       if (r1.gravados || r1.apagados || r2.gravados || r2.apagados || r3.gravados || r3.apagados) {
         console.log('[tournamentMirror]', id,
           'jogos', r1.gravados + '/' + r1.total, '(-' + r1.apagados + ')',
+          'comUid', _comUid + '/' + _jogaveis,
           'inscritos', r2.gravados + '/' + r2.total, '(-' + r2.apagados + ')',
           'histórico', r3.gravados + '/' + r3.total, '(-' + r3.apagados + ')');
       }

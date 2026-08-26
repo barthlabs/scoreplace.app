@@ -147,7 +147,10 @@ function fakeDb(conteudo, opts) {
     const escritaNegada = function (sub) {
       const i = dentro.indexOf('match /' + sub + '/{');
       if (i < 0) return false;
-      const bloco = dentro.slice(i, i + 900);
+      // ⚠️ janela LARGA: a regra de `matches` ganhou o comentário que explica por que a
+      // escrita é negada (o cliente dispara, a CF escreve). Com 900 o `allow write: if
+      // false` ficava fora do recorte e o teste dizia que a subcoleção era do cliente.
+      const bloco = dentro.slice(i, i + 2600);
       return /allow write:\s*if false/.test(bloco.slice(0, bloco.indexOf('\n      }') + 1));
     };
     const doServidor = [];

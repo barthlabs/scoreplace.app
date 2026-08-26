@@ -84,6 +84,32 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.98 ───────────────────────────────────────────
+        // ⭐ O FECHO DE RODADA SAIU DO CLIENTE — EM TODO FORMATO.
+        // Ordem do dono: _"o certo é tudo rodar em CF só sendo disparado pelo client
+        // side"_ e, quando eu pus uma queda pro caminho local: _"errado. nada no client
+        // side. imagina diferentes clientes com diferentes versões encerrando as rodadas
+        // e gerando a seguinte cada um com um código. de forma alguma. tudo na cf"_.
+        // Ele está certo: fallback local SOA prudente e é o oposto — recria a divergência
+        // de versão que a CF existe pra eliminar, e só nos momentos de FALHA, que é quando
+        // ninguém está olhando. ⛔ NÃO FECHAR é melhor que fechar ERRADO: a rodada fica
+        // aberta, a pessoa é AVISADA e tenta de novo. (Silêncio é pior — foi o que custou
+        // o jogo 63 hoje.)
+        // Até aqui só o Suíço multifase roteava; nos demais o CLIENTE gerava a rodada
+        // seguinte e a gravava. A CF já era genérica (mesma mutação canônica), então não
+        // houve motor novo — só parar de restringir. E o AVISO do fecho virou fonte única
+        // derivada do desfecho, senão rotear faria a tela mudar em silêncio.
+        // ⚠️ Efeito colateral aceito: com app VELHO, encerrar rodada para de funcionar em
+        // vez de funcionar diferente. É a escolha certa, e é por isso que a trava das
+        // rules (09/set/2026) exige conferir o piso das lojas antes.
+        //
+        // + `playerUids` em cada jogo espelhado (123/123 semeados): é o insumo de
+        // AUTORIZAÇÃO da CF de escrita. A derivação MUDOU DE CASA (store.js →
+        // bracket-logic, que é vendorizado) em vez de ser reimplementada — hoje três bugs
+        // saíram de lógica duplicada que divergiu em silêncio.
+        // + A regra de `tournaments/{id}/matches` fecha a escrita do cliente, com o porquê
+        // ESCRITO nela (pra ninguém "consertar" abrindo).
+        // + O gatilho AVISA se nenhum jogo sair com playerUids, em vez de espelhar vazio.
         // ── ciclo 2.0.97 ───────────────────────────────────────────
         // ⛔ ABRIR O TORNEIO VOLTAVA COM DADO VELHO. Relato do dono, logo depois de
         // aprovar um placar: _"pelo que vejo foi aprovado, mas quando abri de novo não

@@ -288,6 +288,22 @@ service cloud.firestore {
         function parentTm() {
           return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
         }
+        // ⛔ O CLIENTE NÃO ESCREVE AQUI. NUNCA.
+        // Ordem do dono (25/ago/2026): _"o certo é tudo rodar em CF só sendo disparado
+        // pelo client side"_ — e é a mesma coisa que ele pediu quando desenhou a
+        // arquitetura: _"cada card desenhado de forma leve, puxando as informações que vão
+        // nele, com os BOTÕES QUE DISPARAM FUNÇÕES NO SERVIDOR"_.
+        //
+        // Eu tinha escrito aqui um `allow update` por jogador (espelhando `results`).
+        // Funcionava, mas contradiz o princípio: coloca a AUTORIZAÇÃO em dois lugares —
+        // nesta regra e no cliente — e regra de segurança é o pior lugar pra manter lógica
+        // de negócio (não dá pra testar junto, não dá pra logar, e diverge em silêncio,
+        // que foi a causa de três bugs em 25/ago).
+        //
+        // O caminho de escrita é a Cloud Function: ela confere quem chamou contra
+        // `playerUids` do jogo (campo derivado por caminho de confiança), grava com o
+        // admin SDK — que não passa por regra — e é a ÚNICA porta. `playerUids` continua
+        // sendo gravado: ele deixou de ser insumo DESTA regra e virou insumo da CF.
         allow read: if (request.auth != null) || (parentTm().isPublic == true);
         allow write: if false;
       }

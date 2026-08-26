@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.97';
+window.SCOREPLACE_VERSION = '2.0.98';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10529,38 +10529,15 @@ window.AppStore = {
   // usado como `playerUids` do doc de resultado (a regra do Firestore libera a
   // escrita do participante DAQUELE jogo por este roster). Caminho de confiança:
   // quem escreve o roster é o SORTEIO/AVANÇO (admin), nunca o participante.
+  /* ⭐ 2.0.98 — A DERIVAÇÃO MUDOU DE CASA: `window._matchPlayerUids` agora mora em
+   * js/views/bracket-logic.js, junto de `_slotUids`, porque o SERVIDOR também precisa
+   * dela (o gatilho grava `playerUids` em cada jogo espelhado, e é esse campo que
+   * permite a regra "só quem joga ESTE jogo escreve"). bracket-logic é vendorizado;
+   * store.js não é.
+   * ⛔ NÃO reimplementei do outro lado. Hoje mesmo três bugs vieram de lógica duplicada
+   * que divergiu (tabela de borda, casamento por grafia, nome de token). Uma casa só. */
   _matchPlayerUids: function (t, m) {
-    if (!t || !m) return [];
-    var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-    var _uidsOf = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
-    // Identidade CANÔNICA do slot por uid (v4.5.74) — o slot carrega o(s) uid(s)
-    // via _setSlot; o nome (m.p1) é só cache de display. Ler o uid direto resolve
-    // homônimo certo (nome igual, uids distintos) e sobrevive a nome divergente
-    // (o reconcile de nome foi removido em v4.5.73). É uid-first, NOME fallback:
-    // slot sem uid (guest/informal ou rodada LEGADA sorteada antes do trabalho de
-    // uid) cai no match por nome pra não parar de autorizar jogos antigos.
-    var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
-    var seen = {};
-    ['p1', 'p2'].forEach(function (side) {
-      var entry = m[side];
-      if (!entry || entry === 'TBD' || entry === 'BYE') return;
-      // 1) IDENTIDADE ESTRUTURAL do slot (uid) — team*Uids → p*Uid → team*Obj.
-      if (_slot) {
-        var su = _slot(m, side);
-        if (su && su.length) { su.forEach(function (u) { if (u) seen[u] = 1; }); return; }
-      }
-      // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
-      // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
-      var p = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === entry; });
-      if (p) { _uidsOf(p).forEach(function (u) { if (u) seen[u] = 1; }); return; }
-      // 2b) dupla cujo slot mostra "A / B" mas cada membro é participante solo
-      var members = entry.indexOf('/') !== -1 ? entry.split('/').map(function (n) { return n.trim(); }) : [entry];
-      members.forEach(function (nm) {
-        var mp = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === nm; });
-        if (mp) _uidsOf(mp).forEach(function (u) { if (u) seen[u] = 1; });
-      });
-    });
-    return Object.keys(seen);
+    return (typeof window._matchPlayerUids === 'function') ? window._matchPlayerUids(t, m) : [];
   },
 
   // Semeia os docs de resultado (subcoleção results) a partir da ESTRUTURA atual:

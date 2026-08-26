@@ -1349,6 +1349,50 @@ function _setSlot(m, side, uids, obj) {
     if (obj) m.team2Obj = obj;
   }
 }
+/* QUEM JOGA ESTE JOGO — a lista de uids do confronto.
+ *
+ * Mora AQUI (e não no store.js) porque os dois lados precisam: o cliente autoriza o
+ * lançamento de placar, e o SERVIDOR grava `playerUids` em cada jogo espelhado — é esse
+ * campo que sustenta a regra "só quem joga ESTE jogo escreve, e não pode se auto-incluir"
+ * (firestore.rules). bracket-logic é vendorizado pro servidor; store.js não é.
+ *
+ * ⛔ UMA CASA SÓ. Não reimplementar do outro lado: em 25/ago/2026 três bugs saíram de
+ * lógica duplicada que divergiu em silêncio.
+ */
+window._matchPlayerUids = function (t, m) {
+  if (!t || !m) return [];
+  var parts = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+  var _uidsOf = (typeof window._participantUids === 'function') ? window._participantUids : function (p) { return (p && p.uid) ? [p.uid] : []; };
+  // Identidade CANÔNICA do slot por uid (v4.5.74) — o slot carrega o(s) uid(s)
+  // via _setSlot; o nome (m.p1) é só cache de display. Ler o uid direto resolve
+  // homônimo certo (nome igual, uids distintos) e sobrevive a nome divergente
+  // (o reconcile de nome foi removido em v4.5.73). É uid-first, NOME fallback:
+  // slot sem uid (guest/informal ou rodada LEGADA sorteada antes do trabalho de
+  // uid) cai no match por nome pra não parar de autorizar jogos antigos.
+  var _slot = (typeof window._slotUids === 'function') ? window._slotUids : null;
+  var seen = {};
+  ['p1', 'p2'].forEach(function (side) {
+    var entry = m[side];
+    if (!entry || entry === 'TBD' || entry === 'BYE') return;
+    // 1) IDENTIDADE ESTRUTURAL do slot (uid) — team*Uids → p*Uid → team*Obj.
+    if (_slot) {
+      var su = _slot(m, side);
+      if (su && su.length) { su.forEach(function (u) { if (u) seen[u] = 1; }); return; }
+    }
+    // 2) fallback POR NOME — só quando o slot NÃO tem uid (guest/legado).
+    // 2a) casa a ENTRADA inteira (solo ou dupla registrada como "A / B")
+    var p = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === entry; });
+    if (p) { _uidsOf(p).forEach(function (u) { if (u) seen[u] = 1; }); return; }
+    // 2b) dupla cujo slot mostra "A / B" mas cada membro é participante solo
+    var members = entry.indexOf('/') !== -1 ? entry.split('/').map(function (n) { return n.trim(); }) : [entry];
+    members.forEach(function (nm) {
+      var mp = parts.find(function (pp) { return typeof pp === 'object' && (pp.displayName || pp.name || '') === nm; });
+      if (mp) _uidsOf(mp).forEach(function (u) { if (u) seen[u] = 1; });
+    });
+  });
+  return Object.keys(seen);
+};
+
 window._slotUids = _slotUids;
 
 // ⛔ GRUPO QUE TERMINOU TEM A CLASSIFICAÇÃO CONGELADA NA HORA.
@@ -3231,6 +3275,44 @@ window._applyDrawDeltaToTournament = function (freshT, changed, deleted, opts) {
 // nem side-effects (notificações/render). Rodada DENTRO de commitTournamentTx sobre o
 // estado FRESCO. Idempotente: só gera a próxima se ainda não existir (retry/concorrência).
 // Retorna: 'transition' | 'pureSwissFinish' | 'ligaScheduled' | 'nextRound' | null.
+/* O AVISO DO FECHO DE RODADA, derivado do DESFECHO — não do caminho.
+ *
+ * `_applyRoundCloseToTournament` devolve o desfecho ('nextRound', 'transition',
+ * 'pureSwissFinish', 'phaseComplete', 'ligaScheduled'). Quem fecha pelo SERVIDOR recebe o
+ * mesmo desfecho na resposta da CF — então o aviso na tela pode sair do mesmo lugar, em
+ * vez de existir só no caminho local.
+ * ⛔ Isto existe porque rotear o fecho pra CF SEM ele perderia avisos que a pessoa espera
+ * ("Suíço encerrado — N classificados", "Nova rodada — N jogos"): a tela mudaria em
+ * silêncio. Tudo é derivado do `t` JÁ FECHADO, então serve pros dois caminhos.
+ */
+window._avisoDoFechoDeRodada = function (t, branch) {
+  if (!t || !branch) return;
+  var _n = function (k, fb) { try { var v = window._t && window._t(k); return (v && v !== k) ? v : fb; } catch (e) { return fb; } };
+  var _msg = function (k, fb, vars) {
+    try { var v = window._t && window._t(k, vars); if (v && v !== k) return v; } catch (e) {}
+    return fb;
+  };
+  var ultima = (t.rounds || [])[(t.rounds || []).length - 1] || {};
+  var nJogos = (ultima.matches || []).filter(function (m) { return m && !m.isBye && !m.isSitOut; }).length;
+  if (branch === 'phaseComplete') {
+    showNotification(_n('bui.swissClassifDone', 'Classificatória concluída'),
+      _n('bui.swissClassifDoneMsg', 'Todos jogaram — avance para a eliminatória quando quiser.'), 'success');
+  } else if (branch === 'transition') {
+    showNotification(_n('bui.swissFinished', 'Suíço encerrado'),
+      _msg('bui.swissFinishedMsg', (t.p2TargetCount || 0) + ' classificado(s) pra eliminatória',
+           { n: t.p2TargetCount || 0, format: t.format || 'Eliminatória' }), 'success');
+  } else if (branch === 'pureSwissFinish') {
+    showNotification(_n('bui.swissFinishedRounds', 'Suíço encerrado'),
+      _msg('bui.swissFinishedRoundsMsg', 'Todas as rodadas foram jogadas.', { n: t.swissRounds || (t.rounds || []).length }), 'success');
+  } else if (branch === 'nextRound') {
+    showNotification(_n('bui.newRound', 'Nova rodada'),
+      _msg('bui.newRoundMsg', 'Rodada ' + (t.rounds || []).length + ' com ' + nJogos + ' jogo(s).',
+           { n: (t.rounds || []).length, count: nJogos }), 'success');
+  }
+  // 'ligaScheduled': o aviso do agendamento sai do próprio fluxo da Liga (data/hora), que
+  // depende de estado que não vem no desfecho — segue no caminho de lá.
+};
+
 window._applyRoundCloseToTournament = function (t, roundIdx) {
   var round = (t.rounds || [])[roundIdx];
   if (!round) return null;
@@ -3339,7 +3421,7 @@ window._closeRound = function (tId, roundIdx, anchorMatchId, resultCtx) {
   _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx);
 };
 
-function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
+function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal) {
   // Guard: only close the most recent round. A stale call (from a duplicate
   // auto-close path, e.g. _saveResultInline + render-time safety net both
   // dispatching for the same round) would otherwise advance the next-round
@@ -3357,7 +3439,30 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
   var _curIdxDC = t.currentPhaseIndex || 0;
   var isMultiPhaseSwiss = (t.classifyFormat === 'swiss' || t.currentStage === 'swiss')
     && Array.isArray(t.phases) && t.phases.length > _curIdxDC + 1;
-  if (isMultiPhaseSwiss && typeof window._callCloseRound === 'function') {
+  /* ⭐ 2.0.98 — O FECHO DE RODADA VAI PRA CF EM TODO FORMATO.
+   * Ordem do dono (25/ago/2026): _"o certo é tudo rodar em CF só sendo disparado pelo
+   * client side"_. Até aqui só o Suíço multifase roteava; nos demais o CLIENTE gerava a
+   * rodada seguinte e a gravava — e é justamente isso que obriga as rules a deixarem o
+   * participante escrever o torneio (ele CRESCE `t.rounds` legitimamente).
+   * ⛔ Enquanto isso rodar no cliente, fechar as rules QUEBRA o ciclo de rodadas. Rotear
+   * é o pré-requisito da trava marcada pra 09/set/2026.
+   * A CF já era genérica (`closeRoundCore` → `_applyRoundCloseToTournament`, a MESMA
+   * mutação canônica): não foi preciso motor novo, só parar de restringir aqui.
+   * ⚠️ O caminho local segue abaixo como REDE pra cliente velho (nativo não tem
+   * auto-update). Ele sai quando a trava entrar. */
+  /* ⛔ SEM CF, NÃO FECHA. `_forcarLocal` existe SÓ pros testes que exercitam o motor da
+   * transição — nunca pra produção. Em produção o caminho local abaixo é inalcançável, e
+   * é assim que tem que ser: rodada gerada pelo cliente é rodada gerada por uma versão
+   * qualquer do app. Ele some quando a trava das rules entrar (09/set/2026). */
+  if (typeof window._callCloseRound !== 'function' && !_forcarLocal) {
+    if (window._error) window._error('[closeRound] CF indisponível — o fecho NÃO roda no cliente');
+    try {
+      showNotification('Não consegui encerrar a rodada',
+        'Atualize o aplicativo e tente de novo.', 'error');
+    } catch (e) {}
+    return;
+  }
+  if (!_forcarLocal) {
     window.AppStore.logAction(tId, `Rodada ${roundIdx + 1} encerrada`);
     window._callCloseRound({ tournamentId: String(tId), roundIdx: roundIdx, resultCtx: resultCtx || null })
       .then(function (_res) {
@@ -3368,13 +3473,28 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx) {
           Object.keys(d.tournament).forEach(function (k) { t[k] = d.tournament[k]; });
           if (typeof window._hydrateMonarchGroups === 'function') { try { window._hydrateMonarchGroups(t); } catch (_e) {} }
           try { window.AppStore._saveToCache(); } catch (_e) {}
+          // o desfecho vem do servidor; o aviso é o MESMO do caminho local (fonte única)
+          try { window._avisoDoFechoDeRodada(t, d.branch); } catch (_e) {}
         }
         // noop (d.ok===false: outro fechou primeiro / rodada não fechou) → o listener reconcilia.
         if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
       })
       .catch(function (err) {
         window._lastSaveError = { tournamentId: tId, area: 'closeRound', code: (err && err.code) || '', message: (err && err.message) || String(err) };
-        if (typeof window._rerenderBracket === 'function') window._rerenderBracket(tId, anchorMatchId);
+        /* ⛔ NÃO EXISTE QUEDA PRO CLIENTE. Ordem do dono (25/ago/2026):
+         *   _"nada no client side. imagina diferentes clientes com diferentes versões
+         *    encerrando as rodadas e gerando a seguinte cada um com um código. de forma
+         *    alguma. tudo na cf"_.
+         * Eu tinha posto um fallback local aqui "pra não travar a quadra" — e ele recria
+         * EXATAMENTE a divergência que a CF existe pra eliminar: um cliente velho geraria
+         * a rodada seguinte com o motor velho, e o torneio passa a ter duas verdades.
+         * NÃO FECHAR é melhor que fechar ERRADO: a rodada continua aberta e a pessoa
+         * tenta de novo. O que não pode é falhar em silêncio — daí o aviso. */
+        if (window._warn) window._warn('[closeRound] CF falhou (' + ((err && err.code) || '?') + ')');
+        try {
+          showNotification('Não consegui encerrar a rodada',
+            'A rodada continua aberta. Confira a conexão e tente de novo.', 'error');
+        } catch (e2) {}
       });
     return;
   }
