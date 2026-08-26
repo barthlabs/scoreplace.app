@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.124';
+window.SCOREPLACE_VERSION = '2.0.125';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10669,47 +10669,86 @@ window.AppStore = {
      * ⚠️ Sem nada em memória, o torneio é marcado `_faltamPesados` em vez de passar por
      * vazio: quem pinta precisa poder dizer "ainda não carregou" ≠ "não tem jogo".
      */
+    /* ── A REDE: O QUE MORA FORA NÃO SOME QUANDO O DOCUMENTO CHEGA ───────────────
+     * O ouvinte do DOCUMENTO entrega o torneio com as partes divididas VAZIAS — é assim que
+     * elas ficam lá. Se a gente aceitar isso por cima do objeto vivo, some da tela o que já
+     * tinha sido buscado.
+     * ⛔ ISTO JÁ QUEBROU PRODUÇÃO (2.0.109, com torneio AO VIVO): eu construí a rede pro
+     * re-render e esqueci a BUSCA. E a rede em si citava `participants` e `matches` pelo
+     * NOME — ao pôr os GRUPOS pra fora eu quebraria de novo, agora apagando a chave inteira,
+     * porque não havia ramo pra eles.
+     * ⭐ Agora deriva de `_semPesados`. Parte nova fica coberta sem ninguém lembrar daqui.
+     * ⚠️ E a regra é sempre a mesma: o documento só manda quando TEM o dado. Vazio no
+     * documento não é "esvaziou", é "mora fora e não veio nesta entrega".
+     * [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]] */
     function _enxertaJogos(novo, velho) {
       if (!novo || !Array.isArray(novo._semPesados) || !novo._semPesados.length) return novo;
-      /* ⭐ INSCRITOS TAMBÉM (2.0.108). Quando `participants` saiu do documento, o ouvinte
-       * passou a entregar torneio com a lista VAZIA — e aí some o elenco de todas as telas,
-       * não só a chave. Mesma família do desastre dos jogos, e mais visível ainda.
-       * ⛔ Aqui é substituição direta (a lista é uma só), não junção rodada a rodada.
-       * ⚠️ E só quando o documento traz vazio: se ele TEM lista, ele é o fresco e manda. */
-      if (novo._semPesados.indexOf('participants') !== -1 && velho) {
-        if ((!Array.isArray(novo.participants) || !novo.participants.length) &&
-            Array.isArray(velho.participants) && velho.participants.length) {
-          novo.participants = velho.participants;
-        }
-      }
-      if (novo._semPesados.indexOf('matches') === -1) return novo;
-      var achou = false;
-      var _puxa = function (destino, origem) {
-        if (!destino || !origem) return;
-        if (!Array.isArray(destino.matches) || !destino.matches.length) {
-          if (Array.isArray(origem.matches) && origem.matches.length) { destino.matches = origem.matches; achou = true; }
-        }
+      var fora = novo._semPesados;
+      var _vazio = function (x) {
+        if (Array.isArray(x)) return !x.length;
+        if (x && typeof x === 'object') return !Object.keys(x).length;
+        return x === undefined || x === null;
       };
+      var _cheio = function (x) { return !_vazio(x); };
+
+      // ① CAMPOS DE TOPO (participants, history, opponentHistory, checkedIn, …):
+      //    a lista/mapa é um só, então é substituição direta.
       if (velho) {
-        // rodada é APPEND-ONLY: o índice i é estável entre os dois objetos.
-        if (Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
-          for (var i = 0; i < novo.rounds.length; i++) _puxa(novo.rounds[i], velho.rounds[i]);
-        }
-        _puxa(novo, velho);
-        if (Array.isArray(novo.groups) && Array.isArray(velho.groups)) {
-          for (var g = 0; g < novo.groups.length; g++) _puxa(novo.groups[g], velho.groups[g]);
+        fora.forEach(function (nome) {
+          if (nome === 'matches' || nome === 'grupos') return;   // aninhados: ② e ③
+          if (_vazio(novo[nome]) && _cheio(velho[nome])) novo[nome] = velho[nome];
+        });
+      }
+
+      // ② GRUPOS, aninhados em rounds[] — rodada é APPEND-ONLY, o índice é estável.
+      var achouG = false;
+      if (velho && fora.indexOf('grupos') !== -1 &&
+          Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
+        for (var gi = 0; gi < novo.rounds.length; gi++) {
+          var rn = novo.rounds[gi], rv = velho.rounds[gi];
+          if (!rn || !rv) continue;
+          if (_vazio(rn.monarchGroups) && _cheio(rv.monarchGroups)) { rn.monarchGroups = rv.monarchGroups; achouG = true; }
         }
       }
-      /* ⭐ O DOCUMENTO DIZ QUANTOS JOGOS MORAM FORA (`_nJogos`), e é isso que separa
-       * "torneio que ainda não sorteou" de "torneio cujos jogos a tela não buscou". Os
-       * dois pintam vazio; só um é honesto. Antes eu marcava `_faltamPesados` sempre que
-       * não achasse nada em memória — o que acusava falsamente TODO torneio novo, que
+
+      // ③ JOGOS, aninhados em rounds[]/groups[]/topo.
+      var achou = false;
+      if (fora.indexOf('matches') !== -1) {
+        var _puxa = function (destino, origem) {
+          if (!destino || !origem) return;
+          if (!Array.isArray(destino.matches) || !destino.matches.length) {
+            if (Array.isArray(origem.matches) && origem.matches.length) { destino.matches = origem.matches; achou = true; }
+          }
+        };
+        if (velho) {
+          if (Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
+            for (var i = 0; i < novo.rounds.length; i++) _puxa(novo.rounds[i], velho.rounds[i]);
+          }
+          _puxa(novo, velho);
+          if (Array.isArray(novo.groups) && Array.isArray(velho.groups)) {
+            for (var g = 0; g < novo.groups.length; g++) _puxa(novo.groups[g], velho.groups[g]);
+          }
+        }
+      }
+
+      /* ⭐ O DOCUMENTO DIZ QUANTOS moram fora (`_nJogos`, `_nGrupos`), e é isso que separa
+       * "torneio que ainda não sorteou" de "torneio cujas partes a tela não buscou". Os dois
+       * pintam vazio; só um é honesto. Antes eu marcava `_faltamPesados` sempre que não
+       * achasse nada em memória — o que acusava falsamente TODO torneio novo, que
        * legitimamente não tem jogo. Sem o número não dá pra distinguir; com ele é trivial.
-       * ⚠️ Documento velho (sem `_nJogos`) cai no comportamento antigo, que é o seguro. */
-      var _esperados = (typeof novo._nJogos === 'number') ? novo._nJogos : null;
-      if (_esperados === 0) delete novo._faltamPesados;          // não tem jogo MESMO
-      else if (!achou) novo._faltamPesados = true;               // tem, e não está aqui
-      else delete novo._faltamPesados;
+       * ⚠️ Documento velho (sem os contadores) cai no comportamento antigo, que é o seguro.
+       * ⛔ E FALTA É FALTA DE QUALQUER UMA: chave sem grupo é tão quebrada quanto sem jogo. */
+      var falta = false;
+      if (fora.indexOf('matches') !== -1) {
+        var _nJ = (typeof novo._nJogos === 'number') ? novo._nJogos : null;
+        if (_nJ !== 0 && !achou) falta = true;
+      }
+      if (fora.indexOf('grupos') !== -1) {
+        var _nG = (typeof novo._nGrupos === 'number') ? novo._nGrupos : null;
+        var temG = (novo.rounds || []).some(function (r) { return r && _cheio(r.monarchGroups); });
+        if (_nG !== 0 && !achouG && !temG) falta = true;
+      }
+      if (falta) novo._faltamPesados = true; else delete novo._faltamPesados;
       return novo;
     }
 

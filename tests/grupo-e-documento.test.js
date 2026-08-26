@@ -101,5 +101,61 @@ ok('⛔ o servidor idem', /dividir\(_clone\(b\.persist\), fora\)/.test(cf) &&
 ok('  → inclusive no lado ANTES do diff (senão tudo pareceria novo a cada gravação)',
   /dividir\(_clone\(tAntes\), fora\)/.test(cf));
 
+// ── ⑤ A REDE: o documento chegando não pode apagar o que já está na tela ─────
+/* ⛔ ESTE É O MODO DE FALHAR DA 2.0.109, em que eu quebrei produção com torneio AO VIVO. O
+ * ouvinte do DOCUMENTO entrega o torneio com as partes divididas VAZIAS — é assim que elas
+ * ficam lá. Aceitar isso por cima do objeto vivo apaga da tela o que já foi buscado.
+ * E a rede citava `participants` e `matches` pelo NOME: ao pôr os GRUPOS pra fora eu
+ * quebraria de novo, agora apagando a CHAVE inteira. Agora ela deriva de `_semPesados`. */
+console.log('\n──── a rede do enxerto ────');
+const vm = require('vm');
+const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
+const iE = store.indexOf('    function _enxertaJogos(novo, velho) {');
+const corpoE = store.slice(iE, store.indexOf('\n    }\n', iE) + 6);
+const ctx = { window: {} }; vm.createContext(ctx);
+vm.runInContext(corpoE + '\nthis.F = _enxertaJogos;', ctx);
+const enxerta = ctx.F;
+
+const vivo = () => ({
+  id: 't1', _semPesados: ['matches', 'grupos', 'participants'], _nJogos: 1, _nGrupos: 2,
+  participants: [{ uid: 'uA' }, { uid: 'uB' }],
+  rounds: [{ matches: [{ id: 'm1' }], monarchGroups: [grupo('R1 Grupo A', ['A'], ['uA']), grupo('R1 Grupo B', ['B'], ['uB'])] }]
+});
+// o que o ouvinte do DOCUMENTO entrega num torneio dividido: tudo vazio
+const doDoc = () => ({
+  id: 't1', _semPesados: ['matches', 'grupos', 'participants'], _nJogos: 1, _nGrupos: 2,
+  name: 'nome novo', participants: [],
+  rounds: [{ matches: [], monarchGroups: [] }]
+});
+
+const r = enxerta(doDoc(), vivo());
+ok('⛔ os GRUPOS não somem quando o documento chega vazio',
+  (r.rounds[0].monarchGroups || []).length === 2,
+  'sem este ramo a chave apagaria inteira na primeira entrega — o desastre da 2.0.109');
+ok('  → os jogos também não', (r.rounds[0].matches || []).length === 1);
+ok('  → nem o elenco', (r.participants || []).length === 2);
+ok('⭐ e o que o documento REALMENTE traz manda (ele é o fresco)', r.name === 'nome novo');
+ok('⭐ nada em falta ⇒ sem a marca de "faltando"', !r._faltamPesados);
+
+// ⛔ Primeira entrega, SEM nada em memória: tem que acusar a falta, não fingir que está vazio.
+const r2 = enxerta(doDoc(), null);
+ok('⛔ sem objeto vivo, a falta é ACUSADA (não se pinta vazio como se fosse fato)',
+  r2._faltamPesados === true,
+  'chave sem grupo é tão quebrada quanto sem jogo — falta de qualquer parte é falta');
+
+// ⭐ Torneio que legitimamente não tem grupo nem jogo: os contadores dizem ZERO.
+const zerado = enxerta(Object.assign(doDoc(), { _nJogos: 0, _nGrupos: 0 }), null);
+ok('⭐ contador ZERO ⇒ não tem MESMO, e não se acusa falta',
+  !zerado._faltamPesados,
+  '"não sorteou ainda" e "não carregou" pintam igual; só o número separa');
+
+// ⭐ A rede cobre parte que eu ainda nem movi — é o ponto de derivar da lista.
+const comPresenca = enxerta(
+  { id: 't', _semPesados: ['checkedIn'], checkedIn: {}, rounds: [] },
+  { id: 't', checkedIn: { uA: 123 } });
+ok('⭐ e cobre `checkedIn` sem ninguém ter escrito um ramo pra ele',
+  comPresenca.checkedIn && comPresenca.checkedIn.uA === 123,
+  'derivar da lista é o que faz a parte seguinte já nascer coberta');
+
 console.log(falhas === 0 ? '\n✅ grupo-e-documento: OK' : '\n❌ ' + falhas + ' falha(s)');
 process.exit(falhas === 0 ? 0 : 1);

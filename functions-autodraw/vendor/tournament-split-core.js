@@ -56,6 +56,14 @@
                  'woClaims', 'woLog',      // rastro de W.O.: cresce com o evento
                  'categoryNotifications']; // apontamentos de categoria: idem
 
+  /* ⭐ TODA parte que pode morar fora do documento, num lugar só.
+   * `PESADOS` são as de campo de topo (o laço genérico de `dividir` dá conta). `matches` e
+   * `grupos` são estruturais: moram ANINHADAS em `rounds[]` e voltam pelo `_loc`, então têm
+   * laço próprio e nunca entraram em PESADOS.
+   * ⛔ Quem precisa saber "isto pode sair do documento?" tem que perguntar a `PARTES`, não
+   * a `PESADOS` — foi essa confusão que fez a trava do rito recusar `grupos`. */
+  var PARTES = PESADOS.concat(['matches', 'grupos']);
+
   function _arr(x) { return Array.isArray(x) ? x : []; }
   function _clone(x) { return x === undefined ? undefined : JSON.parse(JSON.stringify(x)); }
 
@@ -530,7 +538,7 @@
               chaveDoApontamento: chaveDoApontamento,
               colecaoDaParte: colecaoDaParte, chaveDoGrupo: chaveDoGrupo, montarDoBanco: montarDoBanco,
               jogosQueMudaram: jogosQueMudaram,
-              PESADOS: PESADOS, canonico: canonico, iguais: iguais };
+              PESADOS: PESADOS, PARTES: PARTES, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (raiz) { raiz._tSplit = api; }
 })(typeof window !== 'undefined' ? window : null);

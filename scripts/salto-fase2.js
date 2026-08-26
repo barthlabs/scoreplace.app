@@ -86,10 +86,13 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   })();
   const FORA = _pArg || ['matches', 'participants', 'opponentHistory'];
   {
-    const naoPesados = FORA.filter((k) => (S.PESADOS || []).indexOf(k) === -1 && k !== 'matches');
-    if (naoPesados.length) {
-      console.error('⛔ não é parte pesada: ' + naoPesados.join(', ') +
-        '  (PESADOS = ' + (S.PESADOS || []).join(', ') + ')');
+    /* ⛔ Pergunta a `PARTES`, não a `PESADOS`: `matches` e `grupos` moram aninhados em
+     * `rounds[]` e nunca entraram em PESADOS — perguntar à lista errada recusa uma parte
+     * legítima, que foi o que aconteceu na primeira tentativa com `grupos`. */
+    const naoSaem = FORA.filter((k) => (S.PARTES || []).indexOf(k) === -1);
+    if (naoSaem.length) {
+      console.error('⛔ não é parte que possa sair do documento: ' + naoSaem.join(', ') +
+        '  (PARTES = ' + (S.PARTES || []).join(', ') + ')');
       process.exit(1);
     }
   }
@@ -122,6 +125,7 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
      * ⭐ Ambos são recolocados no passo ④ com o valor de AGORA. */
     delete montado._semPesados;
     delete montado._nJogos;
+    delete montado._nGrupos;   // gêmeo do _nJogos — mesma razão da nota acima
     t = montado;
     console.log('  ⭐ já dividido em [' + jaFora.join(', ') + '] — montado do banco pra estender em [' + faltam.join(', ') + ']');
   }
@@ -153,7 +157,10 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
    * gravação — e a conferência tem que usar a MESMA forma, senão ela aprova a coisa errada.
    * (É a mesma proteção que `_gravaTorneio` e `saveTournament` já tinham; o script de
    * migração não tinha, e foi a prova de remontar que gritou.) */
-  const partes = S.dividir(JSON.parse(JSON.stringify(t)));
+  /* ⭐ PEDE SÓ O QUE VAI PRA FORA (2.0.124). Sem a lista, `dividir` extrai tudo — e o que
+   * não estivesse em FORA sairia do config sem ninguém devolver. Com a lista, o que não foi
+   * pedido nunca sai. */
+  const partes = S.dividir(JSON.parse(JSON.stringify(t)), FORA);
   const volta = S.remontar(JSON.parse(JSON.stringify(partes)));
   if (!volta || !S.iguais(volta, t)) morre('remontar(dividir(t)) NÃO devolveu o original — este torneio NÃO pode ser dividido');
   console.log('  ✓ remontar(dividir(t)) === t');
