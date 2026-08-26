@@ -1180,19 +1180,25 @@ window.FirestoreDB = {
   // nível do campo, sem read-modify-write. Ver [[project_concurrency_safe_saves]].
   // `sets`/`dels` = arrays de {map, key}. Ex.: sets [{map:'checkedIn', key:'uid1'}].
   async setPresenceFields(tournamentId, sets, dels) {
-    if (!this.ensureDb()) throw new Error('Firestore not initialized');
-    var FieldValue = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) || null;
-    var FieldPath = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldPath) || null;
-    if (!FieldValue || !FieldPath) throw new Error('FieldValue/FieldPath indisponível');
-    var ref = this.db.collection('tournaments').doc(String(tournamentId));
-    // FieldPath com segmentos evita QUALQUER problema de escaping (nome com ponto, etc.)
-    var args = [];
-    (sets || []).forEach(function (o) { if (o && o.map && o.key) args.push(new FieldPath(o.map, String(o.key)), o.value); });
-    (dels || []).forEach(function (o) { if (o && o.map && o.key) args.push(new FieldPath(o.map, String(o.key)), FieldValue.delete()); });
-    if (!args.length) return true;
-    await ref.update.apply(ref, args);
+    /* ── AGORA QUEM ESCREVE É A CF; O CLIENTE DISPARA (2.0.122) ──────────────────
+     * Ordem do dono: _"tudo em CF apenas disparado pelo cliente"_.
+     * ⛔ O motivo não é estilo: presença é um campo que PRECISA sair do documento (mapa
+     * uid→instante, linear no número de pessoas — 4,1 KB no Confra e crescendo), e o
+     * cliente não tem permissão de escrever subcoleção. Enquanto ele escrevesse aqui, o
+     * campo não podia sair. [[project_dividir_exige_todo_escritor_ciente]]
+     * ⭐ E NÃO SE PERDE o que foi medido na 1.7.x: a CF continua fazendo update por
+     * CAMPO (`checkedIn.<uid>`), sem read-modify-write e sem transação no torneio —
+     * marcar UMA presença nunca volta a reescrever o torneio inteiro. Quando o campo
+     * estiver na subcoleção, cada marca vira UM documento: contenção zero.
+     * A forma de `sets`/`dels` não mudou: [{map, key, value}]. */
+    var ops = [];
+    (sets || []).forEach(function (o) { if (o && o.map && o.key) ops.push({ parte: o.map, chave: String(o.key), valor: (o.value === undefined ? true : o.value) }); });
+    (dels || []).forEach(function (o) { if (o && o.map && o.key) ops.push({ parte: o.map, chave: String(o.key), valor: null }); });
+    if (!ops.length) return true;
+    await this._callFn('aplicarNoTorneio', { tournamentId: String(tournamentId), ops: ops });
     return true;
   },
+
 
   async mutateTournament(tournamentId, mutatorFn, options) {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');

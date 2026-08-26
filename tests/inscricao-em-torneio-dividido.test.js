@@ -125,6 +125,14 @@ const docDividido = { id: 't1', name: 'Torneio', _semPesados: ['participants'], 
     const tras = linhas.slice(Math.max(0, n - 12), n).join('\n');
     if (!/collection\("tournaments"\)/.test(tras)) return;
     if (/_splitParts\.hidratar/.test(l)) return;
+    /* ⛔ EXCEÇÃO ESTREITA E MEDIDA: ler o documento só pra AUTORIZAR não precisa hidratar.
+     * `creatorUid`, `adminUids` e `coHosts` nunca moram fora, e hidratar ali seria pagar
+     * leitura de subcoleção à toa em toda checagem de permissão.
+     * A exceção NÃO é um comentário mágico: ela só vale se o trecho adiante não tocar em
+     * nenhuma parte que pode viver fora. Guarda que grita à toa vira guarda ignorado —
+     * mas guarda que se cala por declaração não guarda nada. */
+    const adiante = linhas.slice(n, n + 30).join('\n');
+    if (!/\b(participants|history|opponentHistory|rounds|matches|standings)\b/.test(adiante)) return;
     cruas.push((n + 1) + ': ' + l.trim());
   });
   ok('⛔ NENHUMA transação sobre o torneio decide a partir do snap.data() cru',

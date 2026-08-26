@@ -84,6 +84,25 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.122 ────────────────────────
+        // 🚪 A PORTA ÚNICA DE ESCRITA FINA NO TORNEIO. Ordem do dono: _"tudo em CF apenas
+        // disparado pelo cliente"_. `exports.aplicarNoTorneio` + a tabela de permissão em
+        // `functions/partes-permissao.js` (allowlist: campo fora da lista é NEGADO).
+        // ⛔ POR QUE PRECISA EXISTIR: o teto de 1 MB só cai movendo dado pra fora do
+        // documento, e o cliente NÃO tem permissão de escrever subcoleção — nunca teve, por
+        // decisão da 1.7.98. Enquanto um campo for escrito pelo cliente ele não pode sair.
+        // ⛔ E POR QUE ELA NÃO ABRE TRANSAÇÃO: marcar UMA presença já reescreveu o torneio
+        // inteiro dentro de uma transação, e sob contenção elas se atropelam — medido na
+        // 1.7.x: update por CAMPO 25/25, transação do doc inteiro com falhas; a marca
+        // aparecia na tela e o snapshot seguinte a removia. A porta mantém a escrita fina:
+        // campo ainda no doc vai por FieldPath; campo já fora vira UM documento.
+        // ⭐ A PORTA ENTRA ANTES DO CAMPO SAIR — o inverso do que quebrou produção na
+        // 2.0.109, quando construí a rede de re-render e esqueci a busca.
+        // ⚠️ Um defeito meu que o próprio teste pegou: a tabela exigia FORMATO de uid na
+        // chave, e isso reprovava quem NÃO TEM CONTA — que é chaveado pelo nome digitado
+        // pelo organizador, com espaço e acento. Virou checagem de id de documento.
+        // Autoriza TODAS as operações antes de abrir o lote: autorizar dentro do laço
+        // deixaria metade aplicada quando a outra metade é negada.
         // ── ciclo 2.0.121 ────────────────────────
         // 🧱 BASE, sem efeito visível: a lista do que PODE morar fora do documento passou a
         // incluir `checkedIn`, `woClaims`, `woLog` e `categoryNotifications` — os campos que

@@ -66,6 +66,8 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
 }
 const _enrollCore = require("./enroll-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
+const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
+const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
@@ -2923,6 +2925,92 @@ exports.dismissDuplicateAccount = onCall(
     return { ok: true, dispensado: true };
   }
 );
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * A PORTA ÚNICA DE ESCRITA FINA NO TORNEIO  (2.0.122)
+ * Ordem do dono: _"tudo em CF apenas disparado pelo cliente"_.
+ *
+ * ⛔ POR QUE ELA PRECISA EXISTIR: o teto de 1 MB só cai movendo dado pra fora do
+ * documento, e o cliente NÃO tem permissão de escrever subcoleção — nunca teve, por
+ * decisão da 1.7.98 (quem espelha é a CF). Enquanto um campo for escrito pelo cliente, ele
+ * não pode sair do documento: sairia e as escrituras cairiam no vazio, que foi exatamente
+ * o buraco que a 2.0.120 fechou na inscrição.
+ *
+ * ⛔ E POR QUE ELA NÃO ABRE TRANSAÇÃO NO TORNEIO: marcar UMA presença já reescreveu o
+ * torneio inteiro dentro de uma transação, e sob contenção elas se atropelam — medido:
+ * update por CAMPO 25/25, transação do doc inteiro com falhas. A marca aparecia na tela e
+ * o snapshot seguinte a removia. Aqui cada operação toca UM registro:
+ *   • campo ainda no documento  → update por FieldPath (`checkedIn.<uid>`), sem
+ *     read-modify-write, exatamente como o cliente fazia;
+ *   • campo já em subcoleção    → escreve UM documento. Sem contenção nenhuma.
+ * A leitura do torneio é um `get` simples, só pra autorizar — não participa da escrita.
+ *
+ * A tabela de quem-pode-o-quê mora em functions/partes-permissao.js: campo novo é LINHA
+ * nova, não um `if` a mais aqui dentro. É allowlist — o que não está lá é negado.
+ * [[project_dividir_exige_todo_escritor_ciente]] [[project_presenca_explicit_only]]
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+exports.aplicarNoTorneio = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const tournamentId = String((request.data && request.data.tournamentId) || "");
+    const ops = (request.data && Array.isArray(request.data.ops)) ? request.data.ops : [];
+    if (!tournamentId) throw new HttpsError("invalid-argument", "sem tournamentId");
+    if (!ops.length) return { aplicadas: 0, negadas: [] };
+    if (ops.length > 200) throw new HttpsError("invalid-argument", "no máximo 200 operações por chamada");
+
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    const snap = await docRef.get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = snap.data();
+    const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+
+    /* ⛔ AUTORIZA TUDO ANTES DE ESCREVER QUALQUER COISA. Autorizar no meio do laço deixaria
+     * metade aplicada quando a segunda metade é negada — e "metade aplicada" é um estado
+     * que ninguém pediu e que a tela não sabe representar. */
+    const negadas = [];
+    ops.forEach((op, i) => {
+      const r = _partesPerm.autoriza(t, callerUid, op);
+      if (!r.ok) negadas.push({ i, parte: (op && op.parte) || null, motivo: r.motivo });
+    });
+    if (negadas.length) {
+      console.warn("[aplicarNoTorneio]", tournamentId, callerUid, "negadas:", JSON.stringify(negadas));
+      throw new HttpsError("permission-denied", negadas[0].motivo);
+    }
+
+    const FieldPath = admin.firestore.FieldPath;
+    const FieldValue = admin.firestore.FieldValue;
+    const lote = db.batch();
+    /* ⛔ UM lote não pode tocar o MESMO documento duas vezes. Por isso os campos que ainda
+     * moram no doc são acumulados e viram UMA chamada de update com todos os pares
+     * caminho/valor — nunca um update por operação. */
+    const paresDoDoc = [];
+    let n = 0;
+    ops.forEach((op) => {
+      const parte = String(op.parte);
+      const chave = String(op.chave);
+      const apagar = (op.valor === null || op.valor === undefined);
+      if (fora.indexOf(parte) !== -1) {
+        // já mora fora: UM documento na subcoleção da parte. Zero contenção.
+        const ref = docRef.collection(_tSplitFn.colecaoDaParte(parte)).doc(chave);
+        if (apagar) lote.delete(ref);
+        else lote.set(ref, { _idx: chave, _k: chave, item: op.valor });
+      } else {
+        // ainda no documento: update por FieldPath (`checkedIn.<uid>`) — o mesmo que o
+        // cliente fazia, sem read-modify-write, pra não reintroduzir a contenção medida.
+        paresDoDoc.push(new FieldPath(parte, chave), apagar ? FieldValue.delete() : op.valor);
+      }
+      n++;
+    });
+    paresDoDoc.push(new FieldPath('updatedAt'), new Date().toISOString());
+    lote.update.apply(lote, [docRef].concat(paresDoDoc));
+    await lote.commit();
+    return { aplicadas: n, negadas: [] };
+  }
+);
+
 
 exports.deenrollParticipant = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
