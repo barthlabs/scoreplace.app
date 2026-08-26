@@ -448,6 +448,16 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
    * dividido cujos grupos a tela ainda não buscou. Os dois pintam igual — vazio — e só um
    * deles é honesto. Confundir os dois é apagar a chave de todo mundo. */
   if (fora.indexOf('grupos') !== -1) pDepois.config._nGrupos = (pDepois.grupos || []).length;
+  /* ⭐ QUANTOS de CADA parte moram fora. Antes eram dois campos soltos (`_nJogos`,
+   * `_nGrupos`) e a conta do que falta só perguntava por eles — `participants` ficava de
+   * fora, e um cache quente com os jogos fazia o app concluir "não falta nada" e NUNCA
+   * buscar o elenco. Foi o "0 INSCRITOS" no PWA do dono.
+   * Agora deriva da lista: parte nova entra no contador sem ninguém lembrar deste ponto.
+   * ⚠️ `_nJogos`/`_nGrupos` continuam sendo gravados — documento já no ar é lido por app
+   * já instalado, e tirar o campo quebraria quem ainda não atualizou. */
+  pDepois.config._nPartes = fora.reduce((acc, nome) => {
+    acc[nome] = (pDepois[nome] || []).length; return acc;
+  }, {});
   tx.set(ref, pDepois.config);
   return b;
 }

@@ -126,6 +126,7 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
     delete montado._semPesados;
     delete montado._nJogos;
     delete montado._nGrupos;   // gêmeo do _nJogos — mesma razão da nota acima
+    delete montado._nPartes;   // idem — marcador não pode entrar na prova como se fosse dado
     t = montado;
     console.log('  ⭐ já dividido em [' + jaFora.join(', ') + '] — montado do banco pra estender em [' + faltam.join(', ') + ']');
   }

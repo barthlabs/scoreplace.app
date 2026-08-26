@@ -84,6 +84,26 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.128 ────────────────────────
+        // ⭐⭐ A CAUSA DE VERDADE do "0 INSCRITOS" no celular do dono — e eu tinha publicado
+        // DUAS versões atrás da causa errada antes de achar esta.
+        // ⛔ NÃO era o dado (resumo com 148, documento coerente) e NÃO era a versão (o
+        // problema continuou na 2.0.127, recém-publicada).
+        // A conta de "o que falta buscar" só perguntava por `matches` — e depois `grupos`.
+        // `participants` NUNCA entrava. No celular o cache local JÁ TINHA os jogos: o enxerto
+        // os encontrava, a conta concluía "não falta nada", `_faltamPesados` era APAGADO e a
+        // busca do elenco NUNCA disparava. Elenco vazio pra sempre, e o organizador lendo
+        // "você não está inscrito". No desktop o cache estava frio, a busca rodou uma vez e
+        // encheu. Era cache quente satisfazendo METADE da pergunta.
+        // ⭐ Agora a conta percorre `_semPesados` — parte nova entra sem ninguém lembrar
+        // dali. E ela diz O QUE falta (`_faltaOQue`), pra o próximo defeito não ser
+        // adivinhação. Os escritores gravam `_nPartes` (quantos de CADA parte moram fora), e
+        // `memberUids` serve de testemunha pra curar os documentos que já existem.
+        // ⚠️ E os testes me pegaram no meio: eu tinha feito "sem prova, não acusa" pra TODAS
+        // as partes, o que seria regressão nas estruturais — documento dividido antes de
+        // existir `_nJogos` nunca mais buscaria os jogos e o torneio abriria SEM CHAVE.
+        // Ninguém divide um torneio vazio: pra `matches`/`grupos`, estar no marcador e não
+        // ter em memória JÁ é prova.
         // ── ciclo 2.0.127 ────────────────────────
         // 🔒 A TRAVA, no lugar que dói: o DEPLOY. Ordem do dono: _"faz uma trava pra essa
         // merda nunca mais acontecer"_. A suíte já conferia o CACHE_NAME, mas suíte não

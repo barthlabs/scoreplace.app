@@ -1118,6 +1118,16 @@ window.FirestoreDB = {
            * dividido cujos grupos a tela ainda não buscou. Os dois pintam igual — vazio — e só um
            * deles é honesto. Confundir os dois é apagar a chave de todo mundo. */
           if (_fora.indexOf('grupos') !== -1) _p.config._nGrupos = (_p.grupos || []).length;
+          /* ⭐ QUANTOS de CADA parte moram fora. Antes eram dois campos soltos (`_nJogos`,
+           * `_nGrupos`) e a conta do que falta só perguntava por eles — `participants` ficava de
+           * fora, e um cache quente com os jogos fazia o app concluir "não falta nada" e NUNCA
+           * buscar o elenco. Foi o "0 INSCRITOS" no PWA do dono.
+           * Agora deriva da lista: parte nova entra no contador sem ninguém lembrar deste ponto.
+           * ⚠️ `_nJogos`/`_nGrupos` continuam sendo gravados — documento já no ar é lido por app
+           * já instalado, e tirar o campo quebraria quem ainda não atualizou. */
+          _p.config._nPartes = _fora.reduce(function (acc, nome) {
+            acc[nome] = ((_p[nome] || []).length); return acc;
+          }, {});
           cleanData = _p.config;
         }
       } catch (_eD) {

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.127';
+window.SCOREPLACE_VERSION = '2.0.128';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10731,24 +10731,61 @@ window.AppStore = {
         }
       }
 
-      /* ⭐ O DOCUMENTO DIZ QUANTOS moram fora (`_nJogos`, `_nGrupos`), e é isso que separa
-       * "torneio que ainda não sorteou" de "torneio cujas partes a tela não buscou". Os dois
-       * pintam vazio; só um é honesto. Antes eu marcava `_faltamPesados` sempre que não
-       * achasse nada em memória — o que acusava falsamente TODO torneio novo, que
-       * legitimamente não tem jogo. Sem o número não dá pra distinguir; com ele é trivial.
-       * ⚠️ Documento velho (sem os contadores) cai no comportamento antigo, que é o seguro.
-       * ⛔ E FALTA É FALTA DE QUALQUER UMA: chave sem grupo é tão quebrada quanto sem jogo. */
-      var falta = false;
-      if (fora.indexOf('matches') !== -1) {
-        var _nJ = (typeof novo._nJogos === 'number') ? novo._nJogos : null;
-        if (_nJ !== 0 && !achou) falta = true;
-      }
-      if (fora.indexOf('grupos') !== -1) {
-        var _nG = (typeof novo._nGrupos === 'number') ? novo._nGrupos : null;
-        var temG = (novo.rounds || []).some(function (r) { return r && _cheio(r.monarchGroups); });
-        if (_nG !== 0 && !achouG && !temG) falta = true;
-      }
-      if (falta) novo._faltamPesados = true; else delete novo._faltamPesados;
+      /* ── FALTA É FALTA DE QUALQUER PARTE — E A PERGUNTA É A LISTA ────────────────
+       * ⛔ ISTO ESTAVA ERRADO E CUSTOU DUAS VERSÕES ATRÁS DA CAUSA ERRADA. A conta só
+       * perguntava por `matches` (e depois `grupos`). `participants` NUNCA entrava.
+       * O ESTRAGO, relatado pelo dono no PWA do Safari: o celular já tinha os JOGOS no
+       * cache local, o enxerto os encontrava (`achou = true`), a conta concluía "não falta
+       * nada", `_faltamPesados` era APAGADO — e a busca do elenco NUNCA disparava. Elenco
+       * vazio pra sempre: "0 INSCRITOS" num torneio com 148 e "você não está inscrito" pro
+       * próprio organizador. No desktop o cache estava frio, a busca rodou uma vez e encheu.
+       * Não era versão nem dado: era o cache quente satisfazendo metade da pergunta.
+       *
+       * ⭐ Agora percorre `_semPesados`. Parte nova entra na conta sem ninguém lembrar daqui.
+       * A pergunta por parte é: "está vazio em memória E eu tenho motivo pra crer que
+       * deveria ter algo?" O motivo, em ordem:
+       *   ① o CONTADOR gravado pelo escritor (`_nPartes`, `_nJogos`, `_nGrupos`) — se diz
+       *      zero, está vazio DE VERDADE e não se busca nada;
+       *   ② uma TESTEMUNHA no próprio documento, pra curar os docs que já existem sem
+       *      contador: `memberUids` prova que há elenco mesmo com `participants: []`;
+       *   ③ sem contador nem testemunha, NÃO acusa — melhor não buscar do que buscar em
+       *      laço a cada snapshot de um torneio que legitimamente não tem aquela parte. */
+      var _conta = function (nome) {
+        if (novo._nPartes && typeof novo._nPartes[nome] === 'number') return novo._nPartes[nome];
+        if (nome === 'matches' && typeof novo._nJogos === 'number') return novo._nJogos;
+        if (nome === 'grupos' && typeof novo._nGrupos === 'number') return novo._nGrupos;
+        return null;
+      };
+      var _testemunha = function (nome) {
+        // `memberUids` é denormalizado NO DOCUMENTO e cobre inscritos + espera: se ele tem
+        // gente, `participants: []` em memória só pode ser parte que não chegou.
+        if (nome === 'participants') return (novo.memberUids || []).length > 0;
+        return false;
+      };
+      var _temEmMemoria = function (nome) {
+        if (nome === 'matches') return achou || (novo.rounds || []).some(function (r) { return r && _cheio(r.matches); }) || _cheio(novo.matches);
+        if (nome === 'grupos') return achouG || (novo.rounds || []).some(function (r) { return r && _cheio(r.monarchGroups); });
+        return _cheio(novo[nome]);
+      };
+      var falta = false, _oQueFalta = [];
+      fora.forEach(function (nome) {
+        if (_temEmMemoria(nome)) return;
+        var n = _conta(nome);
+        if (n === 0) return;                       // vazio DE VERDADE
+        /* ⛔ SEM CONTADOR, quem decide é a NATUREZA da parte — e os testes me pegaram aqui:
+         * eu tinha feito "sem prova, não acusa" pra TODAS, e isso é regressão nas
+         * estruturais. Documento dividido antes de existir `_nJogos` nunca mais buscaria os
+         * jogos, e o torneio abriria SEM CHAVE — o desastre da 2.0.109 de novo.
+         * ⭐ `matches` e `grupos` são estruturais: ninguém divide um torneio vazio, então
+         * "está no marcador e não tenho em memória" JÁ é prova. Acusa, que é o seguro.
+         * ⭐ As de topo (elenco, histórico, presença) podem ser legitimamente vazias — ali,
+         * sem contador nem testemunha, acusar viraria busca em laço a cada snapshot. */
+        var _estrutural = (nome === 'matches' || nome === 'grupos');
+        if (n === null && !_estrutural && !_testemunha(nome)) return;
+        falta = true; _oQueFalta.push(nome);
+      });
+      if (falta) { novo._faltamPesados = true; novo._faltaOQue = _oQueFalta; }
+      else { delete novo._faltamPesados; delete novo._faltaOQue; }
       return novo;
     }
 
