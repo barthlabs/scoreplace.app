@@ -397,12 +397,16 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
     throw new Error('[fase2] tradutor indisponível — recuso gravar torneio dividido');
   }
   const _clone = (x) => JSON.parse(JSON.stringify(x));
-  const pDepois = _tSplit.dividir(_clone(b.persist));
+  /* ⭐ PEDE SÓ O QUE O MARCADOR DIZ (2.0.124). Antes `dividir` extraía TUDO e quem grava
+   * tinha que lembrar de devolver o que não foi pedido — devolução que já esqueceu uma
+   * parte quatro vezes aqui. Passando a lista, o que não foi pedido nunca sai: não há o
+   * que devolver, logo não há o que esquecer. */
+  const pDepois = _tSplit.dividir(_clone(b.persist), fora);
   // ⛔ sem torneio anterior, TODA parte é "vazia antes" — derivado de PESADOS + matches,
   // porque citar três nomes aqui à mão faria a quarta parte parecer nova a cada gravação.
   const _vazio = { matches: [] };
   (_tSplit.PESADOS || []).forEach((k) => { _vazio[k] = []; });
-  const pAntes = tAntes ? _tSplit.dividir(_clone(tAntes)) : _vazio;
+  const pAntes = tAntes ? _tSplit.dividir(_clone(tAntes), fora) : _vazio;
 
   /* ── TODA PARTE DIVIDIDA É GRAVADA — A LISTA MANDA, NÃO O NOME ESCRITO À MÃO ──
    * ⛔ MEDIDO (26/ago/2026): aqui só existia o ramo de `matches`. Para o Confra, cujo
@@ -439,6 +443,11 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
    * Confundir os dois é como se apaga a chave de todo mundo. Com o número, a tela sabe
    * dizer "ainda não carregou" ≠ "não tem jogo". */
   if (fora.indexOf('matches') !== -1) pDepois.config._nJogos = (pDepois.matches || []).length;
+  /* ⭐ QUANTOS GRUPOS moram fora — gêmeo do `_nJogos`, e pelo mesmo motivo: sem o número,
+   * "o documento não tem grupo" é ambíguo entre torneio que ainda não sorteou e torneio
+   * dividido cujos grupos a tela ainda não buscou. Os dois pintam igual — vazio — e só um
+   * deles é honesto. Confundir os dois é apagar a chave de todo mundo. */
+  if (fora.indexOf('grupos') !== -1) pDepois.config._nGrupos = (pDepois.grupos || []).length;
   tx.set(ref, pDepois.config);
   return b;
 }

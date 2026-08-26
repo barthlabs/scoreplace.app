@@ -1095,7 +1095,11 @@ window.FirestoreDB = {
     var _fora = Array.isArray(cleanData._semPesados) ? cleanData._semPesados : null;
     if (_fora && _fora.length && window._tSplit && typeof window._tSplit.dividir === 'function') {
       try {
-        var _p = window._tSplit.dividir(JSON.parse(JSON.stringify(cleanData)));
+        /* ⭐ PEDE SÓ O QUE O MARCADOR DIZ (2.0.124). Antes `dividir` extraía TUDO e quem grava
+         * tinha que lembrar de devolver o que não foi pedido — devolução que já esqueceu uma
+         * parte quatro vezes aqui. Passando a lista, o que não foi pedido nunca sai: não há o
+         * que devolver, logo não há o que esquecer. */
+        var _p = window._tSplit.dividir(JSON.parse(JSON.stringify(cleanData)), _fora);
         if (_p && _p.config) {
           /* ⛔ DERIVA DE `PESADOS`, não de lista escrita à mão. `dividir` extrai TODOS os
            * campos pesados por natureza; quem não está no marcador tem que VOLTAR pro
@@ -1109,6 +1113,11 @@ window.FirestoreDB = {
           // quantos jogos moram fora — ver a nota em _gravaTorneio (CF): sem o número,
           // "sem jogo no doc" é ambíguo entre "não sorteou" e "não carregou ainda".
           if (_fora.indexOf('matches') !== -1) _p.config._nJogos = (_p.matches || []).length;
+          /* ⭐ QUANTOS GRUPOS moram fora — gêmeo do `_nJogos`, e pelo mesmo motivo: sem o número,
+           * "o documento não tem grupo" é ambíguo entre torneio que ainda não sorteou e torneio
+           * dividido cujos grupos a tela ainda não buscou. Os dois pintam igual — vazio — e só um
+           * deles é honesto. Confundir os dois é apagar a chave de todo mundo. */
+          if (_fora.indexOf('grupos') !== -1) _p.config._nGrupos = (_p.grupos || []).length;
           cleanData = _p.config;
         }
       } catch (_eD) {

@@ -64,10 +64,10 @@ function gravar(tx, ref, antes, updateData) {
   const doc = Object.assign({}, updateData || {});
   if (!fora.length) { if (Object.keys(doc).length) tx.update(ref, doc); return; }
 
-  const pAntes = S.dividir(JSON.parse(JSON.stringify(antes)));
+  const pAntes = S.dividir(JSON.parse(JSON.stringify(antes)), fora);
   fora.forEach((nome) => {
     if (!(nome in doc)) return;                       // esta gravação não mexe nesta parte
-    const depois = S.dividir({ [nome]: doc[nome] });
+    const depois = S.dividir({ [nome]: doc[nome] }, [nome]);
     delete doc[nome];                                 // não vai pro documento
     const d = S.jogosQueMudaram(pAntes[nome] || [], depois[nome] || []);
     const col = ref.collection(S.colecaoDaParte(nome));

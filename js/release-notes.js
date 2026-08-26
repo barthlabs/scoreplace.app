@@ -84,6 +84,27 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.124 ────────────────────────
+        // 🗂️ O GRUPO VIRA DOCUMENTO. Arquitetura na palavra do dono: "cada torneio é um doc,
+        // cada jogo é um doc pendurado no torneio e cada inscrito é outro doc". O grupo é da
+        // mesma família — container de jogo — e era o MAIOR termo que ainda crescia com
+        // gente: MEDIDO no Confra, 35 grupos = 22,2 KB, 153 B por inscrito (retrato
+        // congelado 5,9 KB, uids 4,2, ids de jogo 3,6, nomes 2,3).
+        // ⛔ E não dá pra derivar dos jogos: `classifCongelada` é a ordem PUBLICADA (que não
+        // se reescreve), e `playersUids`/`woAbsent`/`rosterAt` não estão em jogo nenhum.
+        // ⛔ A chave é RODADA + NOME, nunca a posição: grupo some do meio e todos os índices
+        // depois dele andam — gravaria o retrato de A por cima do de B. O LUGAR viaja
+        // separado, em `_loc`, porque o Firestore entrega por id e id aqui é hash.
+        //
+        // ⛔⛔ E O ERRO QUE EU IA REPETIR, pego antes de gravar qualquer coisa: `dividir`
+        // extraía TUDO e quem grava tinha que lembrar de devolver o que o marcador não
+        // pediu. O Confra está dividido só em matches/participants/opponentHistory — a
+        // próxima gravação teria mandado `monarchGroups: []` pro documento e APAGADO os 35
+        // grupos, sem erro e sem log. Essa devolução já esqueceu uma parte quatro vezes
+        // aqui. ⭐ Agora `dividir` extrai SÓ O QUE SE PEDE: o que não foi pedido nunca sai,
+        // então não há o que devolver — logo não há o que esquecer.
+        // VERIFICADO contra os 39 torneios REAIS: ida e volta idêntica em 39/39, 35 grupos
+        // todos com identidade de verdade (nenhum caiu na posição) e zero colisão de chave.
         // ── ciclo 2.0.123 ────────────────────────
         // 👂 O OUVINTE DAS PARTES QUE MORAM FORA. O `onSnapshot` do app é no DOCUMENTO —
         // campo que saiu pra subcoleção não chega por ele. O ouvinte existia só pros jogos,

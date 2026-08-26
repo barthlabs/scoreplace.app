@@ -383,6 +383,19 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      /* ─── GRUPOS DIVIDIDOS: LEITURA (2.0.124) ──────────────────────────────
+       * `tournaments/{id}/grupos/{k}` é onde o grupo passa a viver quando sai do
+       * documento — 22,2 KB no Confra, o maior termo que ainda crescia com gente.
+       * Sem esta regra o Firestore nega por omissão e a CHAVE abre sem grupo nenhum.
+       * ⛔ Escrita é da CF (admin SDK), nunca do cliente. */
+      match /grupos/{grupoId} {
+        function parentTg() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTg().isPublic == true);
+        allow write: if false;
+      }
+
       /* ─── PRESENÇA E RASTRO DE W.O. DIVIDIDOS: LEITURA (2.0.123) ────────────
        * Mesmos termos das outras partes: o cliente LÊ, e só a CF escreve (admin SDK
        * passa por cima das regras). Sem a regra o Firestore nega por omissão e a tela

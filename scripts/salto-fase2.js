@@ -75,7 +75,25 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
    * (94 B por inscrito). ⚠️ E ele NÃO podia ser apagado — medido: dos 215 pares guardados
    * no Confra, 74 não aparecem mais nos jogos. Carrega história que os jogos já não contam.
    * ⛔ `standings` segue fora: tem a classificação CONGELADA, dado com valor jurídico. */
-  const FORA = ['matches', 'participants', 'opponentHistory'];
+  /* ⭐ A LISTA VIRA PARÂMETRO (2.0.123). Ela já mudou três vezes, e cada mudança era editar
+   * este arquivo — o que faz o rito de hoje não ser reproduzível amanhã. Agora:
+   *   --partes matches,participants,opponentHistory,checkedIn
+   * ⛔ E o que se pede TEM que ser pesado por natureza: pedir um campo fora de `PESADOS`
+   * faria `dividir` não extrair nada, o marcador mentir e a leitura devolver vazio. */
+  const _pArg = (() => {
+    const k = process.argv.indexOf('--partes');
+    return (k > 0 && process.argv[k + 1]) ? String(process.argv[k + 1]).split(',').map((x) => x.trim()).filter(Boolean) : null;
+  })();
+  const FORA = _pArg || ['matches', 'participants', 'opponentHistory'];
+  {
+    const naoPesados = FORA.filter((k) => (S.PESADOS || []).indexOf(k) === -1 && k !== 'matches');
+    if (naoPesados.length) {
+      console.error('⛔ não é parte pesada: ' + naoPesados.join(', ') +
+        '  (PESADOS = ' + (S.PESADOS || []).join(', ') + ')');
+      process.exit(1);
+    }
+  }
+  console.log('partes a manter fora: [' + FORA.join(', ') + ']');
 
   let t = doc.data(); t.id = String(ID);
 

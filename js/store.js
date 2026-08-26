@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.123';
+window.SCOREPLACE_VERSION = '2.0.124';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11886,7 +11886,7 @@ window.AppStore = {
 
   ouvirJogosDoTorneio(tournamentId) { return this.ouvirPartesDoTorneio(tournamentId); },
 
-  _partesQueMudamAoVivo() { return ['matches', 'checkedIn']; },
+  _partesQueMudamAoVivo() { return ['matches', 'grupos', 'checkedIn']; },
 
   ouvirPartesDoTorneio(tournamentId) {
     var id = String(tournamentId || '');

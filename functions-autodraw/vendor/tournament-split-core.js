@@ -217,12 +217,46 @@
     return 'h' + _hashDe(JSON.stringify(item));
   }
 
-  function dividir(t) {
-    if (!t || typeof t !== 'object') return null;
-    var config = _clone(t);
-    var matches = [];
+  /* ── CHAVE DURÁVEL DO GRUPO ───────────────────────────────────────────────────
+   * O grupo é um CONTAINER de jogos, e o dono descreveu a arquitetura assim: _"cada jogo é
+   * um doc pendurado no torneio e cada inscrito é outro doc"_. Grupo é a mesma família.
+   * MEDIDO no Confra: 35 grupos ocupam 22,2 KB do documento — 153 B por inscrito, o maior
+   * termo que ainda cresce com gente (retrato congelado 5,9 KB, uids 4,2, ids de jogo 3,6,
+   * nomes 2,3).
+   * ⛔ A CHAVE NÃO PODE SER A POSIÇÃO. Grupo some do meio (fase que reagrupa, W.O. que
+   * dissolve) e todos os índices depois dele andam — o diff veria cada um como "mudou" e
+   * gravaria o retrato de A por cima do de B. É a mesma família do estrago que quase apagou
+   * 188 dos 218 eventos do histórico. [[feedback_chave_de_espelho_nunca_e_posicao]]
+   * ⭐ A identidade é RODADA + NOME ("R1 Grupo Q") — o nome é estável e único dentro da
+   * rodada, e é por ele que as pessoas se referem ao grupo. Sem nome, cai nos UIDS de quem
+   * joga nele, que é a identidade real do grupo; só em último caso na posição, e aí marcada.
+   */
+  function chaveDoGrupo(g, loc) {
+    var ri = (loc && typeof loc.ri === 'number') ? loc.ri : 0;
+    if (g && g.name) return 'g' + _hashDe(ri + '|' + String(g.name));
+    var us = (g && Array.isArray(g.playersUids)) ? g.playersUids.slice().sort() : [];
+    if (us.length) return 'g' + _hashDe(ri + '|' + us.join(','));
+    var ps = (g && Array.isArray(g.players)) ? g.players.slice().sort() : [];
+    if (ps.length) return 'g' + _hashDe(ri + '|' + ps.join(','));
+    return 'gi' + ri + '-' + ((loc && loc.gi) || 0);   // sem identidade: posição, e MARCADA
+  }
 
-    // ── 1. jogos de t.rounds[].matches ────────────────────────────────────────
+  /* `apenas` (opcional) limita o que sai do documento.
+   * ⛔ SEM ELE, `dividir` extrai TUDO — e aí quem grava precisa lembrar de devolver o que o
+   * marcador não pediu. Essa devolução já esqueceu uma parte quatro vezes neste projeto, e
+   * ao acrescentar `grupos` eu estava prestes a repetir: o Confra está dividido só em
+   * matches/participants/opponentHistory, então a próxima gravação teria mandado
+   * `monarchGroups: []` pro documento e apagado os 35 grupos — sem erro e sem log.
+   * ⭐ Com `apenas`, o que não foi pedido NUNCA sai do config: não há o que devolver, logo
+   * não há o que esquecer. Quem chama sem lista (o espelho) segue querendo tudo. */
+  function dividir(t, apenas) {
+    if (!t || typeof t !== 'object') return null;
+    var _lista = Array.isArray(apenas) ? apenas : null;
+    var _quer = function (nome) { return !_lista || _lista.indexOf(nome) !== -1; };
+    var config = _clone(t);
+    var matches = [], grupos = [];
+
+    if (_quer('matches')) // ── 1. jogos de t.rounds[].matches ────────────────────────────────────────
     _arr(config.rounds).forEach(function (r, ri) {
       if (!r || typeof r !== 'object') return;
       _arr(r.matches).forEach(function (m, mi) {
@@ -237,18 +271,32 @@
       if (Array.isArray(r.matches)) r.matches = [];
     });
 
+    /* ── 1b. GRUPOS de t.rounds[].monarchGroups ─────────────────────────────────
+     * Sai INTEIRO pra subcoleção `grupos`. O que o grupo guarda não é derivável dos jogos:
+     * `classifCongelada` (a ordem PUBLICADA, que não se reescreve), `playersUids`,
+     * `woAbsent`/`woDest`, `rosterAt`. Derivar seria inventar. */
+    if (_quer('grupos')) _arr(config.rounds).forEach(function (r, ri) {
+      if (!r || typeof r !== 'object' || !Array.isArray(r.monarchGroups)) return;
+      r.monarchGroups.forEach(function (g, gi) {
+        var loc = { tipo: 'grupos', ri: ri, gi: gi };
+        grupos.push({ _chave: chaveDoGrupo(g, loc), _loc: loc, grupo: _clone(g) });
+      });
+      // ⛔ VAZIO, não ausente: a rodada tem outros campos, e "não tem grupo" ≠ "não veio".
+      r.monarchGroups = [];
+    });
+
     // ── 2. jogos de t.matches[] ───────────────────────────────────────────────
-    _arr(config.matches).forEach(function (m, mi) {
+    if (_quer('matches')) _arr(config.matches).forEach(function (m, mi) {
       var loc = { tipo: 'matches', mi: mi };
       var _pu2 = _uidsDoJogo(t, m);
       var _reg2 = { _chave: chaveDoJogo(m, loc), _loc: loc, jogo: _clone(m) };
       if (_pu2) _reg2.playerUids = _pu2;
       matches.push(_reg2);
     });
-    if (Array.isArray(config.matches)) config.matches = [];
+    if (_quer('matches') && Array.isArray(config.matches)) config.matches = [];
 
     // ── 3. jogos de t.phaseRounds{fase}.rounds[].matches ──────────────────────
-    if (config.phaseRounds && typeof config.phaseRounds === 'object') {
+    if (_quer('matches') && config.phaseRounds && typeof config.phaseRounds === 'object') {
       Object.keys(config.phaseRounds).forEach(function (fase) {
         var ph = config.phaseRounds[fase];
         if (!ph || !Array.isArray(ph.rounds)) return;
@@ -267,8 +315,9 @@
     }
 
     // ── 4. inscritos e histórico ──────────────────────────────────────────────
-    var saida = { config: config, matches: matches };
+    var saida = { config: config, matches: matches, grupos: grupos };
     PESADOS.forEach(function (campo) {
+      if (!_quer(campo)) { saida[campo] = []; return; }
       var v = config[campo];
       if (Array.isArray(v)) {
         saida[campo] = v.map(function (item, i) {
@@ -331,6 +380,20 @@
         if (!r) return;
         if (!Array.isArray(r.matches)) r.matches = [];
         r.matches[m._loc.mi] = _clone(m.jogo);
+      });
+
+    /* ── GRUPOS DE VOLTA ────────────────────────────────────────────────────────
+     * ⛔ Pela POSIÇÃO gravada em `_loc`, nunca pela ordem em que os documentos chegaram: o
+     * Firestore entrega por id, e id aqui é hash. Sem `_loc.gi` o Grupo Q apareceria onde
+     * estava o Grupo A. Chave diz QUEM, `_loc` diz ONDE. */
+    _arr(partes.grupos)
+      .filter(function (x) { return x && x._loc && x._loc.tipo === 'grupos'; })
+      .slice().sort(function (x, y) { return (x._loc.ri - y._loc.ri) || (x._loc.gi - y._loc.gi); })
+      .forEach(function (x) {
+        var r = _arr(t.rounds)[x._loc.ri];
+        if (!r) return;
+        if (!Array.isArray(r.monarchGroups)) r.monarchGroups = [];
+        r.monarchGroups[x._loc.gi] = _clone(x.grupo);
       });
 
     PESADOS.forEach(function (campo) {
@@ -465,7 +528,7 @@
   var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo, chaveDoRegistro: chaveDoRegistro, chaveDaParte: chaveDaParte,
               chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
               chaveDoApontamento: chaveDoApontamento,
-              colecaoDaParte: colecaoDaParte, montarDoBanco: montarDoBanco,
+              colecaoDaParte: colecaoDaParte, chaveDoGrupo: chaveDoGrupo, montarDoBanco: montarDoBanco,
               jogosQueMudaram: jogosQueMudaram,
               PESADOS: PESADOS, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
