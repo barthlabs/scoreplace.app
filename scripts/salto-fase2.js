@@ -177,14 +177,24 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   /* ⭐ Uma parte de cada vez, e cada uma chaveada pelo que a IDENTIFICA: jogo por
    * `_chave`, inscrito por `_k` (uid → uids da dupla → nome, cânone do dono).
    * ⛔ NUNCA por posição — foi a armadilha que quase destruiu o histórico. */
-  const CHAVE = { matches: (x) => x._chave, participants: (x) => x._k, history: (x) => x._k };
+  /* ⛔ UMA REGRA, NÃO UM MAPA POR PARTE. Aqui havia
+   *     { matches: x=>x._chave, participants: x=>x._k, history: x=>x._k }
+   * — e no dia em que `opponentHistory` entrou, ele não estava na lista: `CHAVE[nome] is
+   * not a function`, com os backups já gravados e o salto morrendo no meio. (O canário
+   * passou por SORTE: a lista dele estava vazia, então a função nunca foi chamada — e
+   * "passou porque não rodou" é o pior tipo de verde.)
+   * ⚠️ É a QUARTA vez hoje que uma lista escrita à mão esquece uma parte.
+   * ⭐ A chave de um registro é sempre a mesma pergunta, na mesma ordem: `_chave` (jogo,
+   * derivada do id/posição), `_k` (identidade — evento, inscrito) ou `_idx` (mapa, onde a
+   * própria chave do mapa É o índice). Parte nova entra sem tocar aqui. */
+  const CHAVE = (x) => String(x._chave || x._k || x._idx);
   const lidosPorParte = {};
   const contagem = [];
   for (const nome of FORA) {
     const col = ref.collection(S.colecaoDaParte(nome));
     let lote = db.batch(), n = 0;
     for (const item of (partes[nome] || [])) {
-      lote.set(col.doc(String(CHAVE[nome](item))), item);
+      lote.set(col.doc(CHAVE(item)), item);
       if (++n >= 400) { await lote.commit(); lote = db.batch(); n = 0; }
     }
     if (n) await lote.commit();
@@ -198,7 +208,7 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
      * chave fora deste conjunto é resíduo de formato antigo, por definição.
      * ⛔ NUNCA fazer isto com `history`: lá o espelho tem LEGITIMAMENTE mais do que o
      * documento (é o que foi podado), e apagar o excedente seria destruir o log. */
-    const esperadas = new Set((partes[nome] || []).map((x) => String(CHAVE[nome](x))));
+    const esperadas = new Set((partes[nome] || []).map(CHAVE));
     if (nome !== 'history') {
       const tudo = await col.get();
       const sobrando = tudo.docs.filter((d) => !esperadas.has(d.id));
