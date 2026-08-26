@@ -84,6 +84,27 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.112 ──────────────────────────────────────────
+        // ⭐ "VER MENOS" QUE ACOMPANHA A ROLAGEM em "Demais jogos da rodada" — o mesmo das
+        // Novidades, reusando a pílula E as armadilhas já pagas lá (sticky de altura zero,
+        // `--scroll-anchor` em vez de px, margem POSITIVA pra pílula não passar da base).
+        // No print do dono são 102 jogos: pra fechar era preciso rolar tudo de volta.
+        // E fechar VOLTA pro cabeçalho — senão resolver o "não precisa voltar lá de cima"
+        // criaria um "e agora onde eu estou".
+        //
+        // ⭐ E o ENSAIO DA DIVISÃO (scripts/ensaio-divisao.js): o ciclo inteiro num torneio
+        // de mentira, no banco de verdade — dividir, montar pelo caminho do app, acordar o
+        // gatilho, voltar atrás. É o que NÃO existia hoje de manhã, e por isso o defeito só
+        // apareceu com o dono abrindo o app no meio do Confra ao vivo.
+        // ⛔ E ele pegou TRÊS defeitos que teste unitário nenhum pegaria:
+        //   ① a subcoleção guardava documentos de chave ANTIGA junto com os novos —
+        //      2 escritos, 4 lidos: o dobro do elenco chegaria na tela;
+        //   ② o gatilho de espelho APAGAVA os inscritos (eu tinha travado só os jogos —
+        //      mesmo estrago, campo diferente, no campo que eu acabara de mover);
+        //   ③ a VOLTA restaurava só os jogos e devolvia o torneio sem o elenco — e ela é o
+        //      caminho de EMERGÊNCIA, o pior lugar possível pra ter um esquecimento.
+        // ⇒ As três travas passaram a ser derivadas do MARCADOR, nunca de lista escrita à
+        // mão: lista à mão foi exatamente o que esqueceu `participants` das três vezes.
         // ── ciclo 2.0.111 ──────────────────────────────────────────
         // ⭐ ABRIR "DEMAIS JOGOS DA RODADA" PÁRA NO PRIMEIRO, não no último.
         // Relato do dono: "ao expandir os demais jogos da rodada está indo para o último.

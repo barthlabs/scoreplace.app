@@ -1727,6 +1727,11 @@ function renderDashboard(container) {
         ((extra && extra.style) || '') + '">' +
         (colapsado ? 'ver mais' : 'ver menos') + '</span>';
     }
+    /* ⭐ MESMA PÍLULA EM QUALQUER LUGAR (2.0.112). A chave das rodadas também precisou dela
+     * ("Demais jogos da rodada"), e o próprio comentário acima conta o que acontece quando
+     * o desenho é recriado: _"o ver menos ficou com uma aparência diferente"_.
+     * Exportar em vez de copiar é o que garante que corrigir aqui corrige lá. */
+    window._spVerMaisTag = _verMaisTag;
     // O convite do RODAPÉ é o MESMO controle, então usa o MESMO desenho — só centralizado
     // e com a contagem, que é a informação que o cabeçalho não carrega.
     function _verMaisRodape(id, onclick, texto) {

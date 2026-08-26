@@ -47,14 +47,28 @@ const morre = (m) => { console.error('\n⛔ ' + m + '\n   NADA foi alterado.'); 
     if (!Array.isArray(config._semPesados) || config._semPesados.indexOf('matches') === -1) {
       console.log('este torneio não está dividido — nada a desfazer'); process.exit(0);
     }
-    const viva = await ref.collection('matches').get();
-    if (!viva.size) morre('a subcoleção está VAZIA — não vou gravar torneio sem jogo por cima.\n' +
-                          '   Se isto é esperado, use --do-backup (e leia o aviso).');
-    inteiro = S.remontar({ config: JSON.parse(JSON.stringify(config)), matches: viva.docs.map((d) => d.data()) });
+    /* ⛔ TODAS as partes que saíram, não só os jogos.
+     * O ENSAIO pegou isto: a volta remontava só `matches` e devolvia o torneio SEM os
+     * inscritos — e a volta é o caminho de EMERGÊNCIA, o pior lugar possível pra ter um
+     * esquecimento. Quem usa isto está com o app quebrado e não vai conferir campo a campo.
+     * ⇒ A lista sai do próprio `_semPesados` do documento, nunca de uma lista minha. */
+    const partes = { config: JSON.parse(JSON.stringify(config)) };
+    const cont = [];
+    for (const nome of config._semPesados) {
+      const sub = await ref.collection(nome).get();
+      partes[nome] = sub.docs.map((d) => d.data());
+      cont.push(sub.size + ' ' + nome);
+    }
+    if (!(partes.matches || []).length && config._semPesados.indexOf('matches') !== -1) {
+      morre('a subcoleção de jogos está VAZIA — não vou gravar torneio sem jogo por cima.\n' +
+            '   Se isto é esperado, use --do-backup (e leia o aviso).');
+    }
+    inteiro = S.remontar(partes);
     if (!inteiro) morre('remontar falhou — não vou gravar nada');
-    fonte = 'SUBCOLEÇÃO viva (' + viva.size + ' jogos)';
+    fonte = 'SUBCOLEÇÕES vivas (' + cont.join(' · ') + ')';
   }
   delete inteiro._semPesados;
+  delete inteiro._nJogos;      // só faz sentido dividido
   inteiro.id = String(ID);
 
   const nJogos = (S.dividir(JSON.parse(JSON.stringify(inteiro))).matches || []).length;

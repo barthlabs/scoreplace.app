@@ -53,19 +53,35 @@ ok(!/tx\.set\(ref, b\.persist\)/.test(cf.slice(cf.indexOf('exports.'))),
 
 // ── ③ o gatilho, que é o mais perigoso ──────────────────────────────────────
 const iM = cf.indexOf('exports.tournamentMirror');
-const mir = cf.slice(iM, iM + 6000);
-ok(/_pulaJogos = true/.test(mir),
-  '⭐ o gatilho reconhece torneio dividido');
-ok(/_pulaJogos\s*\?\s*\{ gravados: 0/.test(mir),
-  '⛔ e NÃO espelha jogos nesse caso — ele veria "nenhum jogo" e APAGARIA a cópia viva');
-ok(/_semPesados/.test(mir), 'pelo MARCADOR, nunca pela ausência');
+/* ⚠️ RECORTE ATÉ O FIM DA FUNÇÃO, não por número de caracteres. Janela cravada já mordeu
+ * QUATRO vezes neste repositório: basta um comentário novo pra empurrar a linha procurada
+ * pra fora e o teste passar a afirmar o contrário do que existe. Aqui o fim é o próximo
+ * `exports.` — determinístico e imune a comentário. */
+const _fimMir = cf.indexOf('\nexports.', iM + 10);
+const mir = cf.slice(iM, _fimMir > 0 ? _fimMir : cf.length);
+/* ⭐ A TRAVA É DERIVADA DO MARCADOR, não de uma lista escrita à mão — e isso NÃO é
+ * elegância: eu tinha travado só `matches`, e o ENSAIO (scripts/ensaio-divisao.js) pegou
+ * que, ao dividir também os INSCRITOS, o gatilho via `participants: []` no documento,
+ * concluía "não há mais ninguém" e APAGAVA a subcoleção. O elenco sumia. Mesmo estrago,
+ * campo diferente, e eu tinha acabado de escrever o aviso pro outro campo. */
+ok(/_pulados = Array\.isArray\(depois\._semPesados\)/.test(mir),
+  '⭐ o gatilho lê do MARCADOR quais partes saíram — nunca de uma lista minha');
+ok(/const _pula = \(nome\) =>/.test(mir), 'e decide por parte');
+['matches', 'participants', 'history'].forEach((parte) => {
+  ok(new RegExp("_pula\\('" + parte + "'\\)").test(mir),
+    "⛔ `" + parte + "` é pulado quando saiu do doc — senão o espelho apaga a cópia VIVA");
+});
 
 // ── ④ a volta existe, e foi escrita ANTES do salto ──────────────────────────
 ok(fs.existsSync(path.join(ROOT, 'scripts', 'desfazer-divisao.js')),
   '⭐ a volta existe — volta escrita no susto é volta que não funciona');
 const volta = fs.readFileSync(path.join(ROOT, 'scripts', 'desfazer-divisao.js'), 'utf8');
-ok(/subcoleção está VAZIA/.test(volta),
+ok(/subcoleção de jogos está VAZIA/.test(volta),
   '⛔ e ela se recusa a gravar torneio sem jogo por cima do vivo');
+ok(/for \(const nome of config\._semPesados\)/.test(volta),
+  '⭐ e a VOLTA restaura TODAS as partes que saíram, lendo do marcador — ela remontava só ' +
+  'os jogos e devolvia o torneio sem os inscritos. A volta é o caminho de EMERGÊNCIA: ' +
+  'quem a usa está com o app quebrado e não vai conferir campo a campo.');
 
 console.log((fail ? '✗' : '✓') + ' torneio-dividido-nao-volta-pro-documento: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

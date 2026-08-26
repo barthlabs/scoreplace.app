@@ -162,11 +162,33 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
       if (++n >= 400) { await lote.commit(); lote = db.batch(); n = 0; }
     }
     if (n) await lote.commit();
+
+    /* ⛔ LIMPA O QUE SOBROU DE CHAVE VELHA — o ensaio pegou isto antes de produção.
+     * A subcoleção já existia: o gatilho de espelho vinha escrevendo os inscritos com
+     * chave POSICIONAL (`p0`, `p1`). O salto escreve com chave por IDENTIDADE (`uu1`) —
+     * e as duas convivem no mesmo lugar. Resultado medido: escrevi 2, li 4. Remontar
+     * veria QUATRO inscritos onde existem dois, e o dobro do elenco chegaria na tela.
+     * ⭐ Aqui a verdade é o que acabou de ser escrito: o documento é a fonte, e qualquer
+     * chave fora deste conjunto é resíduo de formato antigo, por definição.
+     * ⛔ NUNCA fazer isto com `history`: lá o espelho tem LEGITIMAMENTE mais do que o
+     * documento (é o que foi podado), e apagar o excedente seria destruir o log. */
+    const esperadas = new Set((partes[nome] || []).map((x) => String(CHAVE[nome](x))));
+    if (nome !== 'history') {
+      const tudo = await col.get();
+      const sobrando = tudo.docs.filter((d) => !esperadas.has(d.id));
+      if (sobrando.length) {
+        let l2 = db.batch(), n2 = 0;
+        for (const d of sobrando) { l2.delete(d.ref); if (++n2 >= 400) { await l2.commit(); l2 = db.batch(); n2 = 0; } }
+        if (n2) await l2.commit();
+        console.log('  ⚠️ ' + nome + ': ' + sobrando.length + ' documento(s) de chave ANTIGA removido(s) da subcoleção');
+      }
+    }
+
     const snapP = await col.get();
     lidosPorParte[nome] = snapP.docs.map((d) => d.data());
     if (snapP.size !== (partes[nome] || []).length) {
       morre(nome + ': escrevi ' + (partes[nome] || []).length + ' e li ' + snapP.size +
-            ' — chave repetida engoliu registro. NÃO vou dividir.');
+            ' — a subcoleção não bate com o documento. NÃO vou dividir.');
     }
     contagem.push(snapP.size + ' ' + nome);
   }
@@ -179,6 +201,9 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   // ── ④ só agora, o único passo destrutivo ─────────────────────────────────
   const config = _configPraGravar(partes);
   config._semPesados = FORA;
+  // ⭐ quantos jogos moram fora — é o que separa "não sorteou" de "não carregou" na tela.
+  // Sem ele, todo torneio dividido é acusado de incompleto (e o vazio de verdade também).
+  if (FORA.indexOf('matches') !== -1) config._nJogos = (partes.matches || []).length;
   await ref.set(config);
   const conf = (await ref.get()).data();
   console.log('  ✓ documento dividido: ' + kb(t) + ' → ' + kb(conf) +

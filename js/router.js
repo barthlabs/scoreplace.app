@@ -331,6 +331,15 @@ function initRouter() {
     // render vire uma tela que DIZ o que aconteceu, com o erro no Sentry e um caminho
     // de volta. Tela preta muda deixa de ser um desfecho possível.
     try {
+    /* ⛔ SOLTA O OUVINTE DE JOGOS AO SAIR DO TORNEIO — em UM lugar, antes do despacho.
+   * Espalhar `pararDeOuvirJogos()` por cada `case` seria garantir que uma rota nova
+   * amanhã esqueça e deixe a assinatura viva pra sempre. A rota do torneio re-liga logo
+   * abaixo; qualquer outra fica sem, que é o certo. */
+  try {
+    if (window.AppStore && typeof window.AppStore.pararDeOuvirJogos === 'function'
+        && view !== 'tournaments') window.AppStore.pararDeOuvirJogos();
+  } catch (_eSolta) {}
+
     switch (view) {
       case '':
       case 'dashboard':
@@ -378,6 +387,21 @@ function initRouter() {
         break;
       case 'tournament':
       case 'tournaments':
+        /* ⭐ O OUVINTE DOS JOGOS SEGUE A TELA ABERTA (2.0.112).
+         * É aqui que a divisão passa a VALER: com a chave aberta, um ponto de placar
+         * entrega o jogo que mudou (~1 KB) em vez do torneio inteiro (214 KB) — e esse eco
+         * é pago por TODA tela aberta na quadra, não só pela de quem lançou.
+         * ⛔ SÓ O ABERTO: um ouvinte por torneio da lista seriam dezenas de assinaturas
+         * vivas o tempo todo — trocar peso por custo é o erro que este trabalho já cometeu
+         * duas vezes. E `ouvirJogosDoTorneio` sai sozinho se o torneio não estiver dividido.
+         * ⛔ E soltar ao sair: assinatura esquecida continua baixando delta de um torneio
+         * que ninguém olha, e não dá erro nenhum pra denunciar. */
+        try {
+          if (window.AppStore && typeof window.AppStore.ouvirJogosDoTorneio === 'function') {
+            if (cleanParam) window.AppStore.ouvirJogosDoTorneio(String(cleanParam));
+            else window.AppStore.pararDeOuvirJogos();
+          }
+        } catch (_eOuv) {}
         if (cleanParam) {
           // Scroll-pro-meu-jogo (CANÔNICO): captura a NAVEGAÇÃO aqui — síncrono, no momento
           // do route, onde _isSoftRefresh é confiável. Token DURÁVEL (não é resetado em

@@ -420,6 +420,61 @@ function _applyMyMatchesFilter() {
  * (lote adiado). Rolar antes de ele existir ancora na altura velha.
  * ⛔ Só na ABERTURA: fechar não mexe na rolagem — a pessoa está olhando o que está acima.
  */
+/* ── "VER MENOS" QUE ACOMPANHA A ROLAGEM, EM "DEMAIS JOGOS DA RODADA" ─────────────
+ * Pedido do dono (26/ago): _"aqui podíamos aplicar o mesmo ver mais/ver menos da sessão de
+ * novidades da dashboard. o ver menos acompanha a rolagem para não precisar voltar lá de
+ * baixo para cima se viu o que queria."_ No print dele são **102 jogos**: pra fechar era
+ * preciso rolar a lista inteira de volta até o cabeçalho.
+ *
+ * ⭐ REUSA O QUE JÁ EXISTE, incluindo as armadilhas já pagas nas Novidades:
+ *  • TRILHO de altura ZERO (não empurra nada) com `position:sticky` — o alcance de um
+ *    sticky é o BOX DO PAI, então ele viaja do topo ao fim do `<details>` e para onde a
+ *    seção acaba. Não é `fixed`: fora da seção o botão não existe.
+ *  • `top: var(--scroll-anchor)`, NUNCA px cravado — com número fixo metade da pílula some
+ *    sob a barra sticky de busca. [[project_sticky_vertical_usa_scroll_anchor]]
+ *  • `margin-bottom` do tamanho da pílula: caixa de altura 0 chega até a base do pai e a
+ *    pílula, desenhada dali pra baixo, sairia POR FORA. A margem sobe o limite exatamente
+ *    uma pílula. ⛔ Margem NEGATIVA não serve — ela ESTENDE o retângulo e a pílula torna a
+ *    passar (foi a 1ª tentativa nas Novidades, medida).
+ *  • `pointer-events:none` no trilho pra não roubar o toque dos cards por baixo; só a
+ *    pílula recebe clique.
+ *  • A pílula é `window._spVerMaisTag` — a MESMA das Novidades. Recriar o desenho aqui é o
+ *    que já rendeu a bronca _"o ver menos ficou com uma aparência diferente"_.
+ *
+ * ⭐ E FECHAR VOLTA PRO CABEÇALHO: quem clica "ver menos" no fim de 102 jogos ficaria, com
+ * a lista recolhida, num ponto muito abaixo de onde a seção existe. Sem isso, resolver o
+ * "não precisa voltar lá de cima" criaria um "e agora onde eu estou".
+ * ⛔ Aqui o `<details>` já esconde o conteúdo quando fecha — não precisa da dança de dois
+ * elementos que as Novidades fazem por CSS. O "ver mais" continua sendo o próprio summary.
+ */
+window._demaisJogosTrilho = function () {
+  var pilula = (typeof window._spVerMaisTag === 'function')
+    ? window._spVerMaisTag('', false, {
+        attrs: ' onclick="window._demaisJogosFechar(this)" title="Recolher"',
+        style: 'pointer-events:auto;cursor:pointer;user-select:none;align-self:flex-start;'
+      })
+    : '';
+  if (!pilula) return '';
+  return '<div style="position:sticky;top:var(--scroll-anchor,120px);height:0;' +
+    'margin-bottom:calc(0.84rem + 8px);z-index:6;display:flex;justify-content:flex-end;' +
+    'pointer-events:none;">' + pilula + '</div>';
+};
+
+window._demaisJogosFechar = function (el) {
+  var det = el && el.closest ? el.closest('details') : null;
+  if (!det) return;
+  det.open = false;
+  var s = det.querySelector('summary');
+  if (!s) return;
+  try {
+    if (typeof window._reflowChrome === 'function') window._reflowChrome();
+    s.style.scrollMarginTop = 'var(--scroll-anchor, 0px)';
+    // ⚠️ INSTANTÂNEO, não `smooth`: a lista some no mesmo quadro e animar uma rolagem
+    // rumo a um ponto que acabou de encolher dá o pulo tremido que o sticky já causava.
+    s.scrollIntoView({ block: 'start' });
+  } catch (e) {}
+};
+
 window._demaisJogosAoAbrir = function (el) {
   if (!el || !el.open) return;
   var alvo = el.querySelector('summary');
@@ -6639,6 +6694,9 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
                 '<span>' + _otherSummary + '</span>' +
               '</summary>' +
+              // ⚠️ guardado: os harnesses carregam TRECHOS deste arquivo e o global pode
+              // ainda não existir. Sem botão é degradação aceitável; explodir o render não é.
+              (typeof window._demaisJogosTrilho === 'function' ? window._demaisJogosTrilho() : '') +
               '<div style="margin-top:1rem;">' + _otherInner + '</div>' +
             '</details>' +
           '</div>';
@@ -6709,6 +6767,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
                 <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                   <span>▸ Demais jogos da rodada (${otherIdx.length})</span>
                 </summary>
+                ${typeof window._demaisJogosTrilho === 'function' ? window._demaisJogosTrilho() : ''}
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:1rem;">${otherHtml}</div>
               </details>
             </div>`;

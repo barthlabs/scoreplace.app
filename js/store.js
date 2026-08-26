@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.111';
+window.SCOREPLACE_VERSION = '2.0.112';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11848,6 +11848,73 @@ window.AppStore = {
    * enxerta e `_faltamPesados` não volta. Se o torneio for embora e voltar, a marca some
    * junto com ele. Limpar aqui reabriria a porta pro laço de buscas.
    */
+  /* ── O OUVINTE DA SUBCOLEÇÃO DO TORNEIO ABERTO ────────────────────────────────
+   * ⭐ É AQUI QUE MORA O GANHO DE VERDADE da divisão. Sem ele, tirar os jogos do documento
+   * só troca de lugar: quem está com a chave aberta continua recebendo o eco do documento
+   * a cada mudança. Com ele, um ponto de placar entrega **o jogo que mudou** (~1 KB) em
+   * vez do torneio inteiro (214 KB) — e isso é pago por TODA tela aberta na quadra.
+   *
+   * ⛔ SÓ O TORNEIO ABERTO. Um ouvinte por torneio da lista seria dezenas de assinaturas
+   * abertas o tempo todo — trocaria peso por custo, que é o erro que este trabalho já
+   * cometeu duas vezes (a 1ª versão do gatilho de espelho e a busca dentro do laço).
+   * ⛔ E ele NÃO substitui a busca: a busca traz o todo uma vez; o ouvinte traz o delta.
+   * Um sem o outro deixa a tela ou vazia ou parada.
+   */
+  ouvirJogosDoTorneio(tournamentId) {
+    var id = String(tournamentId || '');
+    if (!id || !window.FirestoreDB || !window.FirestoreDB.db) return;
+    if (this._jogosSub && this._jogosSub.id === id) return;   // já ouvindo este
+    this.pararDeOuvirJogos();
+    var t = (this.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+    // torneio inteiro não tem subcoleção pra ouvir — o doc já traz tudo
+    if (!t || !Array.isArray(t._semPesados) || t._semPesados.indexOf('matches') === -1) return;
+    var self = this;
+    try {
+      var un = window.FirestoreDB.db.collection('tournaments').doc(id).collection('matches')
+        .onSnapshot(function (snap) {
+          var mudou = 0;
+          try {
+            var S = window._tSplit;
+            if (!S || typeof S.remontar !== 'function') return;
+            var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });
+            if (!vivo) return;
+            // ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a pena.
+            // Na PRIMEIRA entrega o Firestore manda tudo como 'added' — e tudo bem, é a
+            // mesma leitura que a busca faria; o ganho está nas entregas seguintes.
+            var partes = { config: JSON.parse(JSON.stringify(vivo)), matches: [] };
+            snap.forEach(function (d) { var v = d.data(); if (v) partes.matches.push(v); });
+            mudou = snap.docChanges().length;
+            if (!mudou) return;
+            var montado = S.remontar(partes);
+            if (!montado) return;
+            // escreve NO LUGAR — telas guardam o objeto; trocar a referência as deixaria
+            // com o de antes. Mesmo motivo da busca e do `_ensureTournamentLoaded`.
+            Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
+            delete vivo._faltamPesados;
+            try { if (window._noteFsReads) window._noteFsReads(mudou, 'jogos-delta'); } catch (e) {}
+          } catch (e) {
+            if (window._error) window._error('[fase2] ouvinte de jogos de ' + id, e);
+            return;
+          }
+          if (typeof window._softRefreshView === 'function') window._softRefreshView();
+        }, function (err) {
+          if (window._warn) window._warn('[fase2] ouvinte de jogos caiu em ' + id, err);
+        });
+      this._jogosSub = { id: id, un: un };
+    } catch (e) {
+      if (window._error) window._error('[fase2] não consegui ouvir os jogos de ' + id, e);
+    }
+  },
+
+  /* ⛔ Soltar ao sair é obrigatório: assinatura esquecida continua baixando delta de um
+   * torneio que ninguém está olhando, e some da conta de custo por não dar erro nenhum. */
+  pararDeOuvirJogos() {
+    if (this._jogosSub && typeof this._jogosSub.un === 'function') {
+      try { this._jogosSub.un(); } catch (e) {}
+    }
+    this._jogosSub = null;
+  },
+
   async _montaPesadosQueFaltam(ids) {
     if (!Array.isArray(ids) || !ids.length) return;
     if (!window.FirestoreDB || typeof window.FirestoreDB._montaDeSubcolecoes !== 'function') {

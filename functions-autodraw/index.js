@@ -1744,7 +1744,7 @@ exports.tournamentSummary = onDocumentWritten(
     try {
       const db = getFirestore();
       const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
-      let _pulaJogos = false;
+      let _pulados = [];
       const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
 
       // torneio apagado → o resumo some junto (senão a tela mostraria fantasma)
@@ -1897,9 +1897,13 @@ exports.tournamentMirror = onDocumentWritten(
        * agora" e APAGARIA a subcoleção inteira. Que é justamente onde os jogos passaram a
        * viver: o espelho deixa de ser cópia e vira a fonte VIVA, escrita pelas CFs.
        * Seria o gatilho apagando o dado de verdade por achar que estava limpando cópia. */
-      if (Array.isArray(depois._semPesados) && depois._semPesados.indexOf('matches') !== -1) {
-        _pulaJogos = true;
-      }
+      /* ⛔ E VALE PRA QUALQUER PARTE QUE TENHA SAÍDO, não só os jogos.
+       * Eu tinha travado só `matches` — e o ENSAIO pegou o resto antes de produção: ao
+       * dividir também os INSCRITOS, o gatilho viu o documento com `participants: []`,
+       * concluiu "não há mais ninguém" e APAGOU a subcoleção inteira. O elenco sumia.
+       * Mesmo estrago, campo diferente, e eu tinha acabado de escrever o aviso pro outro.
+       * ⇒ A trava passa a ser derivada do MARCADOR, não de uma lista minha. */
+      _pulados = Array.isArray(depois._semPesados) ? depois._semPesados : [];
       const pDepois = _tSplit.dividir(depois);
       if (!pDepois) return;
       // ⚠️ Sem `antes` (torneio novo, ou 1ª passada) o diff grava TUDO — que é o
@@ -1919,12 +1923,13 @@ exports.tournamentMirror = onDocumentWritten(
         const j = m && m.jogo;
         return j && !j.isBye && !j.isSitOut && j.p1 && j.p2 && j.p1 !== 'BYE' && j.p2 !== 'BYE' && j.p1 !== 'TBD';
       }).length;
-      if (_jogaveis && !_comUid && !_pulaJogos) {
+      if (_jogaveis && !_comUid && !_pula('matches')) {
         console.error('[tournamentMirror]', id, '⛔ NENHUM jogo com playerUids em', _jogaveis,
           'jogáveis — a derivação não carregou (vendor/bracket-logic). A escrita por jogador fica NEGADA.');
       }
 
-      const r1 = _pulaJogos
+      const _pula = (nome) => _pulados.indexOf(nome) !== -1;
+      const r1 = _pula('matches')
         ? { gravados: 0, apagados: 0, total: 0 }
         : await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
   /* ⛔ INSCRITO CHAVEADO POR IDENTIDADE, NÃO POR POSIÇÃO (2.0.108).
@@ -1935,8 +1940,10 @@ exports.tournamentMirror = onDocumentWritten(
    * uid, que são as 75 de 240 entradas digitadas pelo organizador).
    * ⚠️ E aqui o espelho PODE apagar: inscrito que sai da lista saiu de verdade — ao
    * contrário do histórico, sumir daqui é informação, não poda. */
-  const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants,
-    (p) => (p._k || ('p' + p._idx)));
+  const r2 = _pula('participants')
+    ? { gravados: 0, apagados: 0, total: 0 }
+    : await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants,
+        (p) => (p._k || ('p' + p._idx)));
       /* ⛔ O HISTÓRICO ERA ESPELHADO POR POSIÇÃO — e posição é o que a poda muda.
    * Medido antes de mexer: Confra com 218 eventos no doc e 218 no espelho. Podar o doc
    * pras últimas 30 faria este diff ver `h0..h29` com conteúdo NOVO e `h30..h217`
@@ -1955,7 +1962,14 @@ exports.tournamentMirror = onDocumentWritten(
    * (`_montaDeSubcolecoes` → `remontar`) ainda ordenar por `_idx`. É o próximo passo. */
   const _hist = (pDepois.history || []).map((h) => ({ _k: h._k, item: h.item }));
   const _histAntes = (pAntes.history || []).map((h) => ({ _k: h._k, item: h.item }));
-  const r3 = await _espelhaColecao(db, id, 'history', _histAntes, _hist, (h) => h._k, true);
+  /* ⛔ E o histórico também PULA quando sai do documento. Hoje ele não sai (não está em
+   * `_semPesados`) — mas o dia em que sair, o doc vem com `history: []`, o espelho é a
+   * única cópia e este diff passaria por cima dele. `soDeixaCrescer` impede o APAGAR, não
+   * o gravar por cima. Deixar isto pra "quando for a hora" é como o `participants` ficou
+   * de fora e o ensaio pegou o elenco sumindo. */
+  const r3 = _pula('history')
+    ? { gravados: 0, apagados: 0, total: 0 }
+    : await _espelhaColecao(db, id, 'history', _histAntes, _hist, (h) => h._k, true);
 
       /* ── A PODA: a cauda do log sai do DOCUMENTO, depois de estar no espelho ──────
        * O doc do torneio tem teto de 1 MB e `history` é o único campo que cresce PRA
