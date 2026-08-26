@@ -84,6 +84,22 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.111 ──────────────────────────────────────────
+        // ⭐ ABRIR "DEMAIS JOGOS DA RODADA" PÁRA NO PRIMEIRO, não no último.
+        // Relato do dono: "ao expandir os demais jogos da rodada está indo para o último.
+        // o certo seria ficar no primeiro."
+        // ⛔ E não havia script NENHUM ali — o pulo é a ANCORAGEM DE ROLAGEM do navegador:
+        // ao abrir o <details> ele escolhe um elemento ABAIXO da expansão e o mantém parado
+        // na tela, empurrando a vista pro FIM do conteúdo que acabou de entrar. Quanto mais
+        // jogos, mais longe o pulo. "Não fizemos nada" não é defesa: o navegador faz sozinho.
+        // ⭐ Ancora no CABEÇALHO da seção, não no primeiro card — senão a pessoa não sabe
+        // em que seção pousou. Com a margem de `--scroll-anchor` e re-medindo o chrome
+        // antes, senão o alvo pousa atrás da barra sticky.
+        // ⚠️ Dois quadros de espera: no Rei/Rainha o conteúdo é MONTADO na hora da abertura
+        // (lote adiado), e rolar antes de ele existir ancora na altura velha.
+        // ⛔ Fechar não mexe na rolagem — a pessoa está olhando o que está acima.
+        // + Uma função para os DOIS expansores (Liga e Rei/Rainha); o handler copiado no
+        //   atributo viraria duas versões que divergem.
         // ── ciclo 2.0.110 ──────────────────────────────────────────
         // ⭐ A BUSCA QUE FALTAVA — a peça cuja ausência quebrou produção hoje de manhã.
         // O ouvinte ao vivo é síncrono e roda a cada eco de QUALQUER torneio; buscar lá

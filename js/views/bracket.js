@@ -402,6 +402,40 @@ function _applyMyMatchesFilter() {
   // ([data-group-box], que tem scroll-margin-top pros headers sticky). _bracketPendingScroll
   // é setado só na entrada (via _inRouterRender) e consumido aqui quando os cards existem —
   // não dispara em re-render (regra de scroll estável).
+/* ── ABRIR "DEMAIS JOGOS" PÁRA NO PRIMEIRO, NÃO NO ÚLTIMO ──────────────────────────
+ * Relato do dono (26/ago): _"ao expandir os demais jogos da rodada está indo para o
+ * último. o certo seria ficar no primeiro."_
+ *
+ * ⛔ NÃO HAVIA SCRIPT NENHUM ALI — o pulo é a ANCORAGEM DE ROLAGEM do navegador: ao abrir
+ * o `<details>`, ele escolhe um elemento ABAIXO da expansão e o mantém parado na tela, o
+ * que empurra a vista pro FIM do conteúdo que acabou de entrar. Quanto mais jogos, mais
+ * longe o pulo. Quem abre "demais jogos" quer ver o PRIMEIRO.
+ *
+ * ⭐ Ancora no SUMMARY, não no primeiro card: o cabeçalho "Demais jogos da rodada (N)" tem
+ * que ficar visível, senão a pessoa não sabe em que seção pousou.
+ * ⚠️ `_reflowChrome()` ANTES de rolar — o `scroll-margin-top` sai de `--scroll-anchor`
+ * (topbar + back-header + barra sticky de busca). Sem remedir, o alvo pousa ATRÁS da barra;
+ * foi exatamente o tropeço do scroll pro grupo. [[project_sticky_vertical_usa_scroll_anchor]]
+ * ⚠️ E dois quadros de espera: no Rei/Rainha o conteúdo é montado NA HORA da abertura
+ * (lote adiado). Rolar antes de ele existir ancora na altura velha.
+ * ⛔ Só na ABERTURA: fechar não mexe na rolagem — a pessoa está olhando o que está acima.
+ */
+window._demaisJogosAoAbrir = function (el) {
+  if (!el || !el.open) return;
+  var alvo = el.querySelector('summary');
+  if (!alvo) return;
+  var rola = function () {
+    try {
+      if (typeof window._reflowChrome === 'function') window._reflowChrome();
+      alvo.style.scrollMarginTop = 'var(--scroll-anchor, 0px)';
+      alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {}
+  };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { requestAnimationFrame(rola); });
+  } else { setTimeout(rola, 32); }
+};
+
   if (window._bracketPendingScroll) {
     window._bracketPendingScroll = null;
     // SCROLL VISÍVEL (smooth — "tem que ver scrollando", pedido do dono) e à prova da
@@ -6601,7 +6635,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             _detailsOpen = (_otherGroups.length >= window._CHAVE_LOTE_MIN) ? '' : ' open';
           }
           ligaOtherMatchesHtml = '<div class="card" style="margin-bottom:1rem;">' +
-            '<details' + _detailsOpen + '>' +
+            '<details' + _detailsOpen + ' ontoggle="window._demaisJogosAoAbrir(this)">' +
               '<summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">' +
                 '<span>' + _otherSummary + '</span>' +
               '</summary>' +
@@ -6658,8 +6692,20 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             const myLabel = myIdx.length === 1 ? 'Seu jogo' : 'Seus jogos';
             // Stash the "other matches" in a separate card that the Liga branch of
             // the final return interposes AFTER the standings table.
+            /* ⛔ EXPANDIR IA PARAR NO ÚLTIMO JOGO (relato do dono, 26/ago).
+             * Não havia script nenhum aqui — é a ANCORAGEM DE ROLAGEM do navegador: ao
+             * abrir o `<details>`, ele escolhe um elemento ABAIXO da expansão e o mantém
+             * parado na tela, o que empurra a vista pro FIM do conteúdo que acabou de
+             * entrar. Quem abre "demais jogos" quer ver o PRIMEIRO.
+             * ⇒ `ontoggle` só na ABERTURA (fechar não mexe em nada), e ancorando no
+             * SUMMARY — não no primeiro card: o cabeçalho "Demais jogos da rodada" tem
+             * que ficar visível, senão a pessoa não sabe em que seção pousou.
+             * ⚠️ `_reflowChrome()` ANTES de rolar: o `scroll-margin-top` sai de
+             * `--scroll-anchor` (topbar + back-header + barra sticky de busca), e sem
+             * remedir o alvo pousa ATRÁS da barra — foi o mesmo tropeço do scroll pro
+             * grupo. E `block:'start'` com `scrollMarginTop` é o padrão canônico daqui. */
             ligaOtherMatchesHtml = `<div class="card" style="margin-bottom:1rem;">
-              <details open>
+              <details open ontoggle="window._demaisJogosAoAbrir(this)">
                 <summary style="cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem;font-size:0.9rem;font-weight:600;color:var(--text-muted);">
                   <span>▸ Demais jogos da rodada (${otherIdx.length})</span>
                 </summary>
