@@ -1873,7 +1873,7 @@ exports.tournamentMirror = onDocumentWritten(
         // pode APAGAR, não por quem pode escrever.
         // ⚠️ pelo NOME DA COLEÇÃO, não da parte — senão a limpeza deixaria `inscritos`
         // órfão e apagaria `participants`, que é de outro dono.
-        for (const nome of ['matches', 'inscritos', 'history', 'opponentHistory', 'resultQueue', 'participants']) {
+        for (const nome of ['matches', 'inscritos', 'history', 'opponentHistory', 'categoryNotifications', 'resultQueue', 'participants']) {
           const col = db.collection('tournaments').doc(id).collection(nome);
           const snap = await col.get();
           let lote = db.batch(), n = 0;
@@ -1987,6 +1987,47 @@ exports.tournamentMirror = onDocumentWritten(
        * nova e a tela deixaria de ir buscar o resto. Com o contador, total = podados +
        * o que está no doc, e isso continua certo sozinho.
        */
+      /* ── APONTAMENTOS DE CATEGORIA: espelho completo + cauda no documento ─────────
+       * Mesmo desenho do histórico, e pelo mesmo motivo: é um LOG que só cresce, e o
+       * CLIENTE escreve nele (`_addCategoryNotification` faz push). Tirar do documento
+       * faria o apontamento novo se perder na próxima gravação — foi por isso que o
+       * histórico também ficou com cauda em vez de sair inteiro.
+       * ⚠️ A tela que lia isto está DESLIGADA desde 31/jul (ordem do dono: _"por ora isso
+       * não funciona e não ajuda"_), mas ele mandou GUARDAR o registro. Guardar é o que
+       * este espelho faz; o documento fica só com a cauda.
+       * ⭐ Chave por CONTEÚDO (pra quem, quando, qual categoria) — e marcar como LIDO não
+       * muda a chave, então é o MESMO documento que se atualiza, não um novo. */
+      const _apts = Array.isArray(depois.categoryNotifications) ? depois.categoryNotifications : [];
+      const _aptsAntes = (antes && Array.isArray(antes.categoryNotifications)) ? antes.categoryNotifications : [];
+      const _regApt = (a) => ({ _k: _tSplit.chaveDoApontamento(a), item: a });
+      const r4 = (!_apts.length && !_aptsAntes.length)
+        ? { gravados: 0, apagados: 0, total: 0 }
+        : await _espelhaColecao(db, id, 'categoryNotifications',
+            _aptsAntes.map(_regApt), _apts.map(_regApt), (x) => x._k, true);
+
+      const TETO_APT = 40, ALVO_APT = 20;
+      if (_apts.length > TETO_APT) {
+        try {
+          const cortados = await db.runTransaction(async (tx) => {
+            const fresco = await tx.get(db.collection('tournaments').doc(id));
+            if (!fresco.exists) return 0;
+            const d2 = fresco.data() || {};
+            const arr = Array.isArray(d2.categoryNotifications) ? d2.categoryNotifications : [];
+            if (arr.length <= TETO_APT) return 0;
+            const cauda = arr.slice(-ALVO_APT);
+            tx.update(fresco.ref, {
+              categoryNotifications: cauda,
+              categoryNotificationsPodados: (Number(d2.categoryNotificationsPodados) || 0) + (arr.length - cauda.length)
+            });
+            return arr.length - cauda.length;
+          });
+          if (cortados) {
+            console.log('[tournamentMirror]', id, 'apontamentos de categoria PODADOS:', cortados,
+              '(ficaram', ALVO_APT + '); o log inteiro segue no espelho');
+          }
+        } catch (eA) { console.error('[tournamentMirror] poda dos apontamentos falhou', id, eA); }
+      }
+
       const TETO_HIST = 120, ALVO_HIST = 80;
       if ((pDepois.history || []).length > TETO_HIST) {
         try {

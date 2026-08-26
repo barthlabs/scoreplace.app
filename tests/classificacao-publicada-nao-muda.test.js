@@ -132,6 +132,87 @@ ok('  → e congelar nunca pode derrubar o lançamento do placar',
 ok('  → o desvio de jogo de GRUPO continua existindo (é por isso que o gancho não é o _advanceWinner)',
   /\} else if \(isGroupMatch\) \{/.test(corpoApply));
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// O CONGELADOR TEM QUE ENXERGAR O JOGO ONDE ELE REALMENTE ESTÁ
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⛔ MEDIDO no Confra real (26/ago/2026): o congelador procurava os jogos só em `g.matches`
+// e `g.rounds[].matches`. No Confra os 115 jogos moram em `t.rounds[0].matches`, cada um
+// apontando o grupo pelo campo `monarchGroup`. Ele achava ZERO jogos nos 35 grupos, caía no
+// `return` e não gravava nada — sem erro, sem log.
+// A conta antes do conserto: 24 grupos realmente fechados, 18 com retrato (todos gravados
+// pelo OUTRO caminho, o avanço de fase) e 6 fechados SEM retrato, recalculados a cada tela.
+// Depois: 18 → 24.
+//
+// Ordem do dono: _"os congelamentos são fundamentais para não mudar nenhuma classificação
+// antes de corrigirmos os critérios de desempate que não estavam funcionando corretamente.
+// depois de corrigidos, jogos jogados depois não devem mais precisar do congelamento."_
+// Ou seja: o retrato é uma CATRACA sobre o passado. Ela não pode ter ponto cego.
+console.log('\n──── o congelador enxerga o jogo onde ele está ────');
+
+function jogo(gi, t1, t2, venc, n) {
+  return { id: 'm' + gi + '-' + n, isMonarch: true, monarchGroup: gi, roundIndex: 0,
+           team1: t1, team2: t2, winner: venc, scoreP1: 6, scoreP2: 3, _gameNum: n };
+}
+// A FORMA DO CONFRA: jogos na RODADA, grupo declarado dentro do jogo.
+const tConfra = {
+  tiebreakers: ['saldo_pontos', 'vitorias'],
+  rounds: [{
+    name: 'R1',
+    matches: [
+      jogo(0, ['A'], ['B'], 'A', 1), jogo(0, ['A'], ['C'], 'A', 2), jogo(0, ['B'], ['C'], 'B', 3),
+      jogo(1, ['D'], ['E'], 'D', 4)   // grupo 1 com um jogo só, decidido
+    ],
+    monarchGroups: [
+      { name: 'R1 Grupo A', players: ['A', 'B', 'C'], playersUids: ['uA', 'uB', 'uC'] },
+      { name: 'R1 Grupo B', players: ['D', 'E'], playersUids: ['uD', 'uE'] }
+    ]
+  }]
+};
+W._congelaGruposEncerrados(tConfra);
+const gA = tConfra.rounds[0].monarchGroups[0], gB = tConfra.rounds[0].monarchGroups[1];
+ok('⛔ grupo cujos jogos moram na RODADA (forma do Confra) CONGELA',
+  Array.isArray(gA.classifCongelada) && gA.classifCongelada.length === 3,
+  'era exatamente esta a cegueira: 6 grupos fechados do Confra sem retrato nenhum');
+ok('  → e o retrato guarda o uid, não só o nome',
+  !!(gA.classifCongelada && gA.classifCongelada[0] && gA.classifCongelada[0].uid));
+ok('  → o segundo grupo da mesma rodada também', Array.isArray(gB.classifCongelada));
+ok('  → e cada grupo pegou SÓ os seus jogos (A não herdou o jogo do B)',
+  gA.classifCongelada.map(function (x) { return x.name; }).sort().join('') === 'ABC');
+
+// ⛔ ÍNDICE DE GRUPO SE REPETE ENTRE FASES — juntar por índice sem olhar a rodada
+// misturaria o Grupo A da Fase 1 com o Grupo A da Fase 2.
+const tDuasFases = {
+  tiebreakers: ['saldo_pontos'],
+  rounds: [
+    { name: 'R1', matches: [jogo(0, ['A'], ['B'], 'A', 1)],
+      monarchGroups: [{ name: 'R1 Grupo A', players: ['A', 'B'], playersUids: ['uA', 'uB'] }] },
+    { name: 'R2', matches: [Object.assign(jogo(0, ['C'], ['D'], 'C', 2), { roundIndex: 1 })],
+      monarchGroups: [{ name: 'R2 Grupo A', players: ['C', 'D'], playersUids: ['uC', 'uD'] }] }
+  ]
+};
+W._congelaGruposEncerrados(tDuasFases);
+const nomes = function (g) { return (g.classifCongelada || []).map(function (x) { return x.name; }).sort().join(''); };
+ok('⛔ mesmo índice de grupo em fases diferentes NÃO se mistura',
+  nomes(tDuasFases.rounds[0].monarchGroups[0]) === 'AB' &&
+  nomes(tDuasFases.rounds[1].monarchGroups[0]) === 'CD',
+  'R1 ficou "' + nomes(tDuasFases.rounds[0].monarchGroups[0]) + '" e R2 "' + nomes(tDuasFases.rounds[1].monarchGroups[0]) + '"');
+
+// ⛔ A CATRACA SÓ ANDA PRA FRENTE: grupo com jogo pendente não congela, e retrato que já
+// existe nunca se regrava — nem quando a régua melhora.
+const tPendente = {
+  tiebreakers: ['saldo_pontos'],
+  rounds: [{ matches: [jogo(0, ['A'], ['B'], 'A', 1), Object.assign(jogo(0, ['A'], ['C'], null, 2), { winner: null, scoreP1: null, scoreP2: null })],
+             monarchGroups: [{ name: 'G', players: ['A', 'B', 'C'], playersUids: ['uA', 'uB', 'uC'] }] }]
+};
+W._congelaGruposEncerrados(tPendente);
+ok('  → grupo com jogo PENDENTE não congela (ainda não há o que desmentir)',
+  !Array.isArray(tPendente.rounds[0].monarchGroups[0].classifCongelada));
+const jaTem = { name: 'X', players: ['A', 'B'], playersUids: ['uA', 'uB'],
+                classifCongelada: [{ name: 'B', uid: 'uB' }, { name: 'A', uid: 'uA' }] };
+W._congelaGruposEncerrados({ tiebreakers: ['saldo_pontos'], rounds: [{ matches: [jogo(0, ['A'], ['B'], 'A', 1)], monarchGroups: [jaTem] }] });
+ok('⛔ retrato que JÁ EXISTE nunca se regrava — nem com a régua nova dizendo outra coisa',
+  jaTem.classifCongelada[0].name === 'B');
+
 console.log(falhas === 0
   ? '\n✅ classificacao-publicada-nao-muda: OK'
   : '\n❌ classificacao-publicada-nao-muda: ' + falhas + ' falha(s)');

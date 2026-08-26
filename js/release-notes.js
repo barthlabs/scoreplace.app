@@ -84,6 +84,37 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.119 ────────────────────────
+        // ⭐ A CLASSIFICAÇÃO DE UM GRUPO FECHADO PAROU DE IR E VOLTAR.
+        // Relato do dono: "quando jogamos eu estava em 3º e a Livia em 4º. depois de
+        // arrumarmos algumas coisas essas posições se inverteram. agora voltou a ser como
+        // foi logo quando jogamos". E a consequência, na palavra dele: "não muda quem
+        // avança. muda duplas e quem segue na competição por qual caminho".
+        // Eram DUAS falhas, e nenhuma delas no critério de desempate:
+        // ① A ENTRADA não era canônica. `Object.values(stats)` devolve na ordem em que as
+        //   chaves entraram no objeto, e `stats` é remontado de fontes diferentes conforme a
+        //   tela. `Array.prototype.sort` é ESTÁVEL — então num empate que atravessa todos os
+        //   critérios quem decide é a ordem de chegada. Agora a entrada é ordenada por uid
+        //   antes de comparar. MEDIDO: as 24 permutações da entrada dão UMA saída só.
+        //   ⛔ A tentação era desempatar dentro do comparador — e teria sido errado: o
+        //   `Math.random` já saiu dali um dia e o arquivo carrega desde então a invariante
+        //   "sem o mapa de ordem o critério é neutro, nunca volta a sortear na hora".
+        // ② O CONGELAMENTO estava CEGO. Grupo que fecha tem a ordem gravada em
+        //   `classifCongelada`, mas o congelador procurava os jogos em `g.matches` /
+        //   `g.rounds[].matches` — e no Confra os 115 jogos moram em `t.rounds[0].matches`,
+        //   apontando o grupo pelo campo `monarchGroup`. Achava zero e desistia no `return`,
+        //   sem erro e sem log. MEDIDO no torneio real: 35 grupos, 24 fechados, 18 com
+        //   retrato (todos gravados pelo OUTRO caminho, o avanço de fase) e 6 fechados SEM
+        //   retrato, recalculados a cada tela. Depois do conserto: 18 → 24.
+        //   ⭐ A correção não foi somar mais um lugar na lista à mão — essa lista já esqueceu
+        //   uma parte quatro vezes neste projeto. A regra do índice do grupo estava copiada
+        //   em 4 arquivos; virou UMA função (`_jogosDoGrupo`), e o congelador passou a
+        //   enxergar o que a tela enxerga.
+        // ✅ PROVA de que a régua já estava certa: nos 18 grupos que tinham retrato, a
+        // ordem calculada hoje bate com a publicada em 18 de 18. A catraca não segura mais
+        // diferença nenhuma — virou seguro, como o dono previu: "depois de corrigidos,
+        // jogos jogados depois não devem mais precisar do congelamento".
+        '<li><b>\uD83D\uDD12 A classifica\u00e7\u00e3o de um grupo que j\u00e1 fechou n\u00e3o muda mais:</b> em grupos onde duas pessoas empatavam em tudo, a ordem entre elas podia trocar de uma tela para outra \u2014 e voltar. Nada de errado com os crit\u00e9rios de desempate: o que variava era a ordem em que os jogadores chegavam para serem comparados. Agora essa ordem \u00e9 sempre a mesma, e a classifica\u00e7\u00e3o de todo grupo encerrado fica registrada no momento em que fecha. O que j\u00e1 foi publicado n\u00e3o se reescreve.</li>' +
         // ── ciclo 2.0.118 ──────────────────────────────────────────
         // ⭐ O % DA BARRA DE CARREGANDO PAROU DE SAIR CORTADO EM DOIS.
         // Relato do dono: "aparece 2 números % um em cima do outro cortado dentro da barra".

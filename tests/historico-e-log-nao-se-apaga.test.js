@@ -124,5 +124,36 @@ const regSrc = src.slice(src.indexOf('const _hist ='), src.indexOf('const r3 =')
 ok(!/_idx/.test(regSrc),
   '⛔ o registro espelhado do histórico NÃO leva `_idx` — o índice anda com a poda');
 
+// ── ⑥ OS APONTAMENTOS DE CATEGORIA SEGUEM A MESMA RECEITA ──────────────────
+/* Mesmo desenho, mesmo motivo: é LOG que só cresce, e o CLIENTE escreve nele
+ * (`_addCategoryNotification` faz push). Tirar do documento faria o apontamento novo se
+ * perder na próxima gravação — por isso cauda no doc + log inteiro no espelho, igual ao
+ * histórico. A tela que o lia está desligada desde 31/jul, mas o dono mandou GUARDAR.
+ * ⭐ E a chave não muda quando o apontamento é marcado como LIDO: é o mesmo apontamento
+ * se atualizando, não um novo. Chave que muda com o estado duplicaria o log inteiro. */
+ok(typeof S.chaveDoApontamento === 'function', 'o tradutor sabe chavear apontamento');
+const _apt = { targetUid: 'u1', timestamp: 1780763061739, category: 'Masc TOP 500', read: false };
+ok(S.chaveDoApontamento(_apt) === S.chaveDoApontamento(Object.assign({}, _apt, { read: true })),
+  '⭐ marcar como LIDO não muda a chave — senão o log dobraria de tamanho a cada leitura');
+ok(S.chaveDoApontamento(_apt) !== S.chaveDoApontamento(Object.assign({}, _apt, { targetUid: 'u2' })),
+  '   e pessoas diferentes têm chaves diferentes');
+
+const iApt = src.indexOf("_espelhaColecao(db, id, 'categoryNotifications'");
+ok(iApt > 0, 'o gatilho espelha os apontamentos');
+const chamadaApt = src.slice(iApt, src.indexOf(');', iApt) + 2);
+ok(/,\s*true\)/.test(chamadaApt.replace(/\s+/g, ' ')) || /, true\)/.test(chamadaApt),
+  '⭐ com soDeixaCrescer — log de apontamento também não se apaga');
+ok(/TETO_APT = (\d+), ALVO_APT = (\d+)/.test(src), 'e o documento fica só com a cauda');
+const mApt = /TETO_APT = (\d+), ALVO_APT = (\d+)/.exec(src);
+ok(mApt && Number(mApt[2]) < Number(mApt[1]),
+  '   com alvo menor que o teto — podar até o próprio teto podaria a cada apontamento novo');
+const iPodaApt = src.indexOf('TETO_APT');
+const podaApt = src.slice(iPodaApt, iPodaApt + 1500);
+ok(/runTransaction/.test(podaApt) && /tx\.get\(/.test(podaApt),
+  '⛔ e a poda relê o documento em TRANSAÇÃO — update cego engoliria o apontamento feito no meio');
+ok(/slice\(-ALVO_APT\)/.test(podaApt), '⭐ guarda a CAUDA: o que sai é o mais velho, já espelhado');
+ok(/categoryNotificationsPodados/.test(podaApt),
+  '⭐ e conta quantos saíram — cumulativo, como no histórico');
+
 console.log((fail ? '✗' : '✓') + ' historico-e-log-nao-se-apaga: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

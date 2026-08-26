@@ -355,6 +355,20 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      /* ─── APONTAMENTOS DE CATEGORIA: LEITURA ─────────────────────────────
+       * `tournaments/{id}/categoryNotifications/{k}` — o log de "atribuí categoria a
+       * fulano". A tela que o lia está DESLIGADA desde 31/jul, mas o dono mandou guardar
+       * o registro; o documento fica só com a cauda e o log inteiro vive aqui.
+       * ⚠️ Sem regra o Firestore nega por omissão — e o dia em que a tela voltar, ela
+       * abriria vazia sem ninguém entender por quê. */
+      match /categoryNotifications/{apontamentoId} {
+        function parentTc() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if request.auth != null;
+        allow write: if false;
+      }
+
       /* ─── HISTÓRICO DE ADVERSÁRIOS: LEITURA ──────────────────────────────
        * `tournaments/{id}/opponentHistory/{categoria}` — quem já jogou com quem, usado
        * pelo sorteio pra NÃO repetir dupla. ⚠️ Não é derivado descartável: medido no

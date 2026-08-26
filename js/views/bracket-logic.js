@@ -263,7 +263,32 @@ window._computeMonarchStandings = function(group, t, category) {
   // e a Liga já honravam `t.tiebreakers`, o Rei/Rainha não. MEDIDO: o Confra configura
   // `confronto_direto → saldo_pontos → vitorias → buchholz → …`, e nada disso era aplicado.
   // Sem configuração (ou sem `t`), cai na cadeia padrão — nada muda pra quem nunca mexeu.
-  var _linhas = Object.values(stats);
+  /* ⛔ A ENTRADA DO `sort` TEM QUE SER CANÔNICA — foi ela que fez a posição balançar.
+   * Relato do dono (26/ago): _"quando jogamos eu estava em 3º e a Livia em 4º. depois de
+   * arrumarmos algumas coisas essas posições se inverteram. agora voltou a ser como foi"_ —
+   * e a consequência, na palavra dele: _"muda duplas e quem segue na competição por qual
+   * caminho"_.
+   *
+   * A CAUSA: `Object.values(stats)` devolve na ordem em que as chaves entraram no objeto —
+   * e `stats` é remontado de fontes diferentes conforme a tela (o `standings` gravado, o
+   * recálculo dos jogos, o elenco). `Array.prototype.sort` é ESTÁVEL: quando dois empatam
+   * em TODOS os critérios, quem decide é essa ordem de chegada. Ela muda, a posição vira.
+   * ⭐ MEDIDO no grupo dele: Erika venceu os 3 jogos; ele, Livia e Loraine venceram 1 cada;
+   * no saldo Loraine +1 e ELE e a LIVIA empatam em −3 com 1 vitória. Ou seja os dois só se
+   * separam no ÚLTIMO critério — são exatamente o par que balançava.
+   *
+   * ⇒ O conserto é a ENTRADA, não o comparador. Ordenar as linhas por uma chave estável
+   * ANTES de comparar faz a estabilidade do `sort` significar alguma coisa: empate total
+   * passa a cair sempre no mesmo lado.
+   * ⛔ E NÃO é um critério novo: os critérios continuam neutros quando não têm dado — a
+   * invariante "sem o mapa de ordem o critério é neutro, nunca volta a sortear na hora"
+   * (de quando o `Math.random` saiu daqui) segue valendo palavra por palavra. O que muda é
+   * que a lista deixa de chegar embaralhada.
+   */
+  var _linhas = Object.values(stats).sort(function (x, y) {
+    var kx = String((x && (x.uid || x.name)) || ''), ky = String((y && (y.uid || y.name)) || '');
+    return kx < ky ? -1 : kx > ky ? 1 : 0;
+  });
   var _cfgTb = (t && Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
   if (!_cfgTb || typeof window._standingsCompareConfig !== 'function') {
     return _linhas.sort(function (a, b) { return window._standingsCompare(a, b, _adv); });
@@ -1414,24 +1439,74 @@ window._slotUids = _slotUids;
 // NÃO o `_advanceWinner`, que jogo de grupo nem chama (bracket-ui:1659 desvia grupo pro
 // `_checkGroupRoundComplete`).
 // [[project_criterios_desempate_canone]]
+// ── ONDE MORAM OS JOGOS DE UM GRUPO — UM CAMINHO SÓ ──────────────────────────
+// ⛔ MEDIDO no Confra REAL (26/ago): este congelador estava CEGO. Ele procurava os jogos em
+// `g.matches` e `g.rounds[].matches` — e no Confra os 115 jogos moram em
+// `t.rounds[0].matches`, cada um dizendo a que grupo pertence pelo campo `monarchGroup`.
+// Resultado: `reais.length === 0` nos 35 grupos, o `return` logo abaixo, e ZERO retratos
+// gravados. Sem erro, sem log — falhava em silêncio.
+// A conta medida: 35 grupos, 24 REALMENTE fechados, 18 com retrato (gravados pelo OUTRO
+// caminho, o avanço de fase em phases-engine) e 6 fechados SEM retrato — recalculados a cada
+// tela. É o balanço que o dono relatou: _"depois de arrumarmos algumas coisas essas posições
+// se inverteram. agora voltou a ser como foi logo quando jogamos"_.
+//
+// ⭐ A correção NÃO é somar mais um lugar na lista à mão — essa lista à mão já esqueceu uma
+// parte quatro vezes neste projeto. É a mesma leitura servir a todo mundo. A regra do índice
+// do grupo já estava copiada em 4 arquivos (phases-engine:1561, schedule-poll:577,
+// wa-group:178, bracket:415); aqui ela vira UMA função e o congelador passa a enxergar
+// exatamente o que a tela enxerga.
+// [[project_classificacao_publicada_congela]] [[project_criterios_desempate_canone]]
+function _indiceDoGrupoNoJogo(m) {
+  if (!m) return null;
+  if (m.groupIdx != null) return m.groupIdx;
+  if (m.monarchGroup != null) return m.monarchGroup;
+  if (m.group != null) return m.group;
+  return null;
+}
+window._indiceDoGrupoNoJogo = _indiceDoGrupoNoJogo;
+
+// Os jogos do grupo `gi` da rodada `r` (índice `ri`), venham de onde vierem: de dentro do
+// próprio grupo, da rodada, ou da lista do torneio.
+// ⛔ O ESCOPO É A RODADA: índice de grupo se repete entre fases, e juntar por índice sem
+// olhar a rodada misturaria o Grupo A da Fase 1 com o Grupo A da Fase 2.
+function _jogosDoGrupo(t, r, ri, g, gi) {
+  var vistos = {}, saida = [];
+  function poe(m) {
+    if (!m) return;
+    var k = m.id || (String(m.p1) + '|' + String(m.p2) + '|' + String(m._gameNum));
+    if (vistos[k]) return;
+    vistos[k] = 1; saida.push(m);
+  }
+  ((g && g.matches) || []).forEach(poe);
+  ((g && g.rounds) || []).forEach(function (rr) { ((rr && rr.matches) || []).forEach(poe); });
+  ((r && r.matches) || []).forEach(function (m) { if (_indiceDoGrupoNoJogo(m) === gi) poe(m); });
+  var umaRodadaSo = ((t && t.rounds) || []).length <= 1;
+  ((t && t.matches) || []).forEach(function (m) {
+    if (_indiceDoGrupoNoJogo(m) !== gi) return;
+    if (m.roundIndex != null) { if (m.roundIndex === ri) poe(m); }
+    else if (umaRodadaSo) poe(m);       // sem rodada declarada só é seguro num torneio de 1
+  });
+  return saida;
+}
+window._jogosDoGrupo = _jogosDoGrupo;
+
 function _congelaGruposEncerrados(t) {
   if (!t) return;
-  var gs = (t.rounds || []).reduce(function (a, r) {
-    return a.concat((r && Array.isArray(r.monarchGroups)) ? r.monarchGroups : []);
-  }, []);
-  gs.forEach(function (g) {
-    if (!g || Array.isArray(g.classifCongelada)) return;       // idempotente: nunca regrava
-    var ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat((r && r.matches) || []); }, []));
-    var reais = ms.filter(function (m) { return m && !m.isSitOut && !m.isBye; });
-    if (!reais.length) return;
-    // TODO jogo real do grupo precisa estar decidido — senão ainda não há o que congelar.
-    if (!reais.every(function (m) { return !!(m.winner || m.scoreP1 != null); })) return;
-    try {
-      var st = window._computeMonarchStandings({ players: g.players || [], playersUids: g.playersUids || [], matches: ms }, t, g.category || null) || [];
-      if (!st.length) return;
-      g.classifCongelada = st.map(function (x) { return { name: (x && x.name) || '', uid: (x && x.uid) || null }; });
-      g.classifCongeladaAt = new Date().toISOString();
-    } catch (e) { /* congelar nunca pode derrubar o lançamento de um placar */ }
+  (t.rounds || []).forEach(function (r, ri) {
+    ((r && r.monarchGroups) || []).forEach(function (g, gi) {
+      if (!g || Array.isArray(g.classifCongelada)) return;      // idempotente: nunca regrava
+      var ms = _jogosDoGrupo(t, r, ri, g, gi);
+      var reais = ms.filter(function (m) { return m && !m.isSitOut && !m.isBye; });
+      if (!reais.length) return;
+      // TODO jogo real do grupo precisa estar decidido — senão ainda não há o que congelar.
+      if (!reais.every(function (m) { return !!(m.winner || m.scoreP1 != null); })) return;
+      try {
+        var st = window._computeMonarchStandings({ players: g.players || [], playersUids: g.playersUids || [], matches: ms }, t, g.category || null) || [];
+        if (!st.length) return;
+        g.classifCongelada = st.map(function (x) { return { name: (x && x.name) || '', uid: (x && x.uid) || null }; });
+        g.classifCongeladaAt = new Date().toISOString();
+      } catch (e) { /* congelar nunca pode derrubar o lançamento de um placar */ }
+    });
   });
 }
 window._congelaGruposEncerrados = _congelaGruposEncerrados;

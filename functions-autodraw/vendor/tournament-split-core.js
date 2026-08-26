@@ -66,6 +66,25 @@
    * diz QUEM é a linha; o índice diz ONDE ela fica. São coisas diferentes e o bug nasceu
    * de usar uma como a outra.
    */
+  /* ⭐ UM HASH SÓ pra toda chave-por-conteúdo. Cada uma escolhe QUE campos a
+   * identificam; a aritmética é a mesma. Repetir o laço em cada chave é como duas delas
+   * passam a discordar sem ninguém ver. */
+  function _hashDe(txt) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < txt.length; i++) {
+      h ^= txt.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return txt.length.toString(36) + '-' + h.toString(36);
+  }
+
+  /* Chave do apontamento de categoria. Identificam-no: PRA QUEM, QUANDO e QUAL categoria.
+   * Medido no Confra: 82 registros, 82 chaves distintas — nenhuma colisão. */
+  function chaveDoApontamento(a) {
+    if (!a || typeof a !== 'object') return 'x';
+    return 'c' + _hashDe([a.targetUid || a.targetName || '', a.timestamp || '', a.category || ''].join('|'));
+  }
+
   function chaveDoEvento(ev) {
     var d = (ev && ev.date != null) ? String(ev.date) : '';
     var m = (ev && ev.message != null) ? String(ev.message) : '';
@@ -394,6 +413,7 @@
 
   var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo,
               chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
+              chaveDoApontamento: chaveDoApontamento,
               colecaoDaParte: colecaoDaParte, montarDoBanco: montarDoBanco,
               jogosQueMudaram: jogosQueMudaram,
               PESADOS: PESADOS, canonico: canonico, iguais: iguais };
