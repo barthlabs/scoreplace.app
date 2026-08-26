@@ -1749,10 +1749,42 @@ exports.tournamentSummary = onDocumentWritten(
         return;
       }
 
-      // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
-      if (antes && !_tourSummary.summaryMudou(antes, depois, id, H)) return;
+      /* ⛔ TORNEIO DIVIDIDO: O RESUMO SAIRIA ZERADO (regressão medida em 26/ago).
+       * `buildSummary` deriva do DOCUMENTO. Com os jogos fora dele, o Confra passou de
+       * `105 jogos · 72 feitos · 69%` pra `0/0/0` — a barra de progresso da tela inicial
+       * zerada pra todo mundo. Não é número errado por arredondamento: é a tela dizendo
+       * que um torneio com 72 placares não começou.
+       * ⇒ Monta das subcoleções ANTES de resumir. Custa uma leitura da subcoleção por
+       * gravação do torneio; o resumo é o que a tela inicial inteira lê.
+       *
+       * ⛔ E O PORTÃO TAMBÉM: `summaryMudou` compara os dois DOCUMENTOS. Com o progresso
+       * fora do documento, ele nunca veria progresso mudar e o resumo congelaria no
+       * primeiro valor — pior que zerado, porque parece certo. Com o marcador posto o
+       * portão sai do caminho e o resumo é refeito sempre. */
+      let paraResumo = depois;
+      const _fora = Array.isArray(depois._semPesados) ? depois._semPesados : null;
+      if (_fora && _fora.length) {
+        try {
+          const partes = { config: JSON.parse(JSON.stringify(depois)) };
+          for (const nome of _fora) {
+            const sub = await db.collection('tournaments').doc(id).collection(nome).get();
+            partes[nome] = sub.docs.map((d) => d.data());
+          }
+          const montado = _tSplit.remontar(partes);
+          if (!montado) throw new Error('remontar devolveu vazio');
+          paraResumo = montado;
+        } catch (eM) {
+          // ⛔ Resumir o doc cru aqui gravaria 0/0/0 por cima do resumo bom. Não gravar
+          // deixa o resumo ANTERIOR de pé, que é velho mas verdadeiro.
+          console.error('[tournamentSummary]', id, '⛔ não montei das subcoleções — resumo NÃO regravado', eM);
+          return;
+        }
+      } else if (antes && !_tourSummary.summaryMudou(antes, depois, id, H)) {
+        // nada que o cartão mostra mudou → não regrava (economia real em torneio ao vivo)
+        return;
+      }
 
-      const resumo = _tourSummary.buildSummary(depois, id, H);
+      const resumo = _tourSummary.buildSummary(paraResumo, id, H);
       if (!resumo) return;
       await db.collection('tournaments_summary').doc(id).set(resumo);
     } catch (e) {

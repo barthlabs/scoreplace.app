@@ -59,11 +59,28 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
     ((t.participants || []).length) + ' inscritos · ' + ((t.history || []).length) + ' eventos');
 
   // ── ② a prova que autoriza dividir ───────────────────────────────────────
+  /* ⛔ ARMADILHA QUE A TRAVA PEGOU (26/ago, na 1ª tentativa real):
+   * `dividir` extrai os TRÊS pesados — jogos, inscritos E histórico —, e `partes.config`
+   * volta com `participants: []` e `history: []`. Gravar essa config crua teria APAGADO
+   * os 148 inscritos e o histórico do documento. Os jogos estavam perfeitos (115/115
+   * idênticos); o que não batia era o elenco.
+   * ⇒ Só `matches` sai. O que NÃO está no marcador volta pra config antes de qualquer
+   * gravação — e a conferência tem que usar a MESMA forma, senão ela aprova a coisa errada.
+   * (É a mesma proteção que `_gravaTorneio` e `saveTournament` já tinham; o script de
+   * migração não tinha, e foi a prova de remontar que gritou.) */
+  const FORA = ['matches'];
+  const _configPraGravar = (p) => {
+    const c = JSON.parse(JSON.stringify(p.config));
+    ['participants', 'history'].forEach((k) => {
+      if (FORA.indexOf(k) === -1 && t[k] !== undefined) c[k] = JSON.parse(JSON.stringify(t[k]));
+    });
+    return c;
+  };
   const partes = S.dividir(JSON.parse(JSON.stringify(t)));
   const volta = S.remontar(JSON.parse(JSON.stringify(partes)));
   if (!volta || !S.iguais(volta, t)) morre('remontar(dividir(t)) NÃO devolveu o original — este torneio NÃO pode ser dividido');
   console.log('  ✓ remontar(dividir(t)) === t');
-  console.log('  documento depois: ' + kb(partes.config) + '  (de ' + kb(t) + ')');
+  console.log('  documento depois: ' + kb(_configPraGravar(partes)) + '  (de ' + kb(t) + ')   ⬅ com elenco e histórico DENTRO');
 
   // ── o original do PASSADO, pra conferir que a manutenção de hoje não mudou o que importa
   let orig = null;
@@ -103,13 +120,15 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   for (const m of partes.matches) { lote.set(col.doc(String(m._chave)), m); if (++n >= 400) { await lote.commit(); lote = db.batch(); n = 0; } }
   if (n) await lote.commit();
   const lidos = await col.get();
-  const remontado = S.remontar({ config: JSON.parse(JSON.stringify(partes.config)), matches: lidos.docs.map((d) => d.data()) });
+  // ⭐ remonta com a config QUE VAI SER GRAVADA (com elenco e histórico dentro) e os jogos
+  // LIDOS DE VOLTA do banco — é a única forma de a prova valer pro que vai pro ar.
+  const remontado = S.remontar({ config: _configPraGravar(partes), matches: lidos.docs.map((d) => d.data()) });
   if (!remontado || !S.iguais(remontado, t)) morre('a subcoleção NÃO remonta o original (' + lidos.size + ' jogos lidos)');
   console.log('  ✓ ' + lidos.size + ' jogos na subcoleção, e remontar DELA devolve o original byte a byte');
 
   // ── ④ só agora, o único passo destrutivo ─────────────────────────────────
-  const config = JSON.parse(JSON.stringify(partes.config));
-  config._semPesados = ['matches'];
+  const config = _configPraGravar(partes);
+  config._semPesados = FORA;
   await ref.set(config);
   const conf = (await ref.get()).data();
   console.log('  ✓ documento dividido: ' + kb(t) + ' → ' + kb(conf) +
