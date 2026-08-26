@@ -24,6 +24,8 @@ const APLICAR = process.argv.indexOf('--aplicar') !== -1;
 const DO_BACKUP = process.argv.indexOf('--do-backup') !== -1;
 const ID = process.argv[2];
 const kb = (v) => (Buffer.byteLength(JSON.stringify(v) || '', 'utf8') / 1024).toFixed(1) + ' KB';
+const _leDoBanco = (ref) => async (colecao) =>
+  (await ref.collection(colecao).get()).docs.map((d) => d.data());
 const morre = (m) => { console.error('\n⛔ ' + m + '\n   NADA foi alterado.'); process.exit(1); };
 
 (async () => {
@@ -52,10 +54,12 @@ const morre = (m) => { console.error('\n⛔ ' + m + '\n   NADA foi alterado.'); 
      * inscritos — e a volta é o caminho de EMERGÊNCIA, o pior lugar possível pra ter um
      * esquecimento. Quem usa isto está com o app quebrado e não vai conferir campo a campo.
      * ⇒ A lista sai do próprio `_semPesados` do documento, nunca de uma lista minha. */
-    const partes = { config: JSON.parse(JSON.stringify(config)) };
+    // ⭐ MESMO caminho único do app (montarDoBanco): a volta tem que montar EXATAMENTE
+    // como a tela monta, senão ela "restaura" uma coisa e o app mostra outra.
     const cont = [];
+    const partes = { config: JSON.parse(JSON.stringify(config)) };
     for (const nome of config._semPesados) {
-      const sub = await ref.collection(nome).get();
+      const sub = await ref.collection(S.colecaoDaParte(nome)).get();
       partes[nome] = sub.docs.map((d) => d.data());
       cont.push(sub.size + ' ' + nome);
     }
@@ -63,8 +67,8 @@ const morre = (m) => { console.error('\n⛔ ' + m + '\n   NADA foi alterado.'); 
       morre('a subcoleção de jogos está VAZIA — não vou gravar torneio sem jogo por cima.\n' +
             '   Se isto é esperado, use --do-backup (e leia o aviso).');
     }
-    inteiro = S.remontar(partes);
-    if (!inteiro) morre('remontar falhou — não vou gravar nada');
+    try { inteiro = await S.montarDoBanco(JSON.parse(JSON.stringify(config)), _leDoBanco(ref)); }
+    catch (e) { morre('não consegui montar (' + e.message + ') — não vou gravar nada'); }
     fonte = 'SUBCOLEÇÕES vivas (' + cont.join(' · ') + ')';
   }
   delete inteiro._semPesados;

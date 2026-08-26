@@ -2203,29 +2203,31 @@ window.FirestoreDB = {
    * Ver docs/FASE2-JOGOS-EM-SUBCOLECAO.md.
    */
   async _montaDeSubcolecoes(id, config, quais) {
+    // ⭐ UM CAMINHO SÓ: quem sabe quais partes existem, em que coleção cada uma mora e o
+    // que fazer quando falta é `montarDoBanco` (split-core, vendorizado). Aqui fica só o
+    // que de fato é DAQUI: como se lê uma coleção com o SDK do cliente.
     var S = (typeof window !== 'undefined') ? window._tSplit : null;
-    if (!S || typeof S.remontar !== 'function') {
+    if (!S || typeof S.montarDoBanco !== 'function') {
       window._error('[fase2] falta o tradutor (_tSplit) — o torneio abriria sem jogos');
-      return config;
+      throw new Error('tradutor indisponível');
     }
     var ref = this.db.collection('tournaments').doc(String(id));
-    var partes = { config: config };
     var lidos = 0;
-    for (var i = 0; i < quais.length; i++) {
-      var nome = quais[i];
-      var snap = await ref.collection(nome).get();
-      lidos += snap.size;
-      var arr = [];
-      snap.forEach(function (d) { var v = d.data(); if (v) arr.push(v); });
-      partes[nome] = arr;
+    try {
+      var t = await S.montarDoBanco(config, async function (colecao) {
+        var snap = await ref.collection(colecao).get();
+        lidos += snap.size;
+        var arr = []; snap.forEach(function (d) { var v = d.data(); if (v) arr.push(v); });
+        return arr;
+      });
+      try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}
+      return t;
+    } catch (e) {
+      // ⛔ NÃO devolver o config cru: config cru é torneio SEM JOGOS, e entregar isso em
+      // silêncio foi o que pintou chave vazia pra todo mundo em 26/ago.
+      window._error('[fase2] não consegui montar ' + id, e);
+      throw e;
     }
-    try { if (window._noteFsReads) window._noteFsReads(lidos, 'abrir-torneio-subcolecao'); } catch (e) {}
-    var t = S.remontar(partes);
-    if (!t) {
-      window._error('[fase2] remontar falhou em ' + id + ' — devolvendo o documento cru');
-      return config;
-    }
-    return t;
   },
 
   /* ── ENFILEIRA A INTENÇÃO DE PLACAR (2.0.103) ─────────────────────────────────

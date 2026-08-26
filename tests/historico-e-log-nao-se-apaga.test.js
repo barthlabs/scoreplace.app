@@ -70,7 +70,14 @@ const chamadaH = src.slice(iH, iH + 260);
 ok(/_k\b/.test(chamadaH), 'e chaveia pelo CONTEÚDO (`_k`), não por `h + _idx`');
 ok(/,\s*true\s*\)/.test(chamadaH), '⭐ com soDeixaCrescer = true: log de auditoria NÃO se apaga');
 
-const chamadaM = src.slice(src.indexOf("_espelhaColecao(db, id, 'matches'"), src.indexOf("_espelhaColecao(db, id, 'participants'"));
+/* ⚠️ O FIM DO RECORTE NÃO PODE SER O NOME DA COLEÇÃO SEGUINTE. Era
+ * `indexOf("_espelhaColecao(db, id, 'participants'")` — e no dia em que os inscritos
+ * ganharam coleção própria (`inscritos`, porque `participants` já tinha dono), essa
+ * âncora sumiu, o recorte virou o arquivo inteiro e o teste passou a afirmar o contrário
+ * do que existe. Quinta vez que recorte frágil morde neste repositório.
+ * ⇒ Ancora no FIM DA PRÓPRIA CHAMADA, que não depende de quem vem depois. */
+const _iM = src.indexOf("_espelhaColecao(db, id, 'matches'");
+const chamadaM = src.slice(_iM, src.indexOf(');', _iM) + 2);
 ok(!/,\s*true\s*\)/.test(chamadaM),
   '⛔ mas JOGOS continuam podendo ser apagados — sumir do doc ali é informação real');
 

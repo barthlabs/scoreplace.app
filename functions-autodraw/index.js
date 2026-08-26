@@ -371,23 +371,17 @@ async function _leTorneio(tx, ref, tId) {
   const snap = await tx.get(ref);
   if (!snap.exists) return null;
   const t = snap.data(); t.id = tId;
-  const fora = Array.isArray(t._semPesados) ? t._semPesados : null;
-  if (!fora || !fora.length) return t;
-  if (!_tSplit || typeof _tSplit.remontar !== 'function') {
-    // ⛔ Sem o tradutor eu devolveria um torneio SEM JOGOS e o motor gravaria em cima.
-    // Explodir aqui é infinitamente melhor: a transação inteira aborta e nada se perde.
-    throw new Error('[fase2] tradutor indisponível — recuso montar torneio dividido');
-  }
-  const partes = { config: t };
-  for (const nome of fora) {
-    const s = await tx.get(ref.collection(nome));
-    partes[nome] = s.docs.map((d) => d.data());
-  }
-  const montado = _tSplit.remontar(partes);
-  if (!montado) throw new Error('[fase2] remontar falhou em ' + tId);
+  // ⭐ UM CAMINHO SÓ (ver montarDoBanco no split-core). O que é daqui: ler coleção DENTRO
+  // da transação — e transação exige todas as leituras antes de qualquer escrita, que é
+  // por isso que esta função existe separada do gravador.
+  const montado = await _tSplit.montarDoBanco(t, async (colecao) => {
+    const s = await tx.get(ref.collection(colecao));
+    return s.docs.map((d) => d.data());
+  });
   montado.id = tId;
   return montado;
 }
+
 
 /* Grava o torneio respeitando o que saiu do documento. Devolve o mesmo `{persist, clean}`
  * de sempre, pra quem chama seguir devolvendo `clean` ao cliente sem saber de nada disto.
@@ -408,7 +402,7 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
 
   if (fora.indexOf('matches') !== -1) {
     const d = _tSplit.jogosQueMudaram(pAntes.matches, pDepois.matches);
-    const col = ref.collection('matches');
+    const col = ref.collection(_tSplit.colecaoDaParte('matches'));
     d.mudaram.forEach((m) => tx.set(col.doc(String(m._chave)), m));
     d.sumiram.forEach((m) => tx.delete(col.doc(String(m._chave))));
   }
@@ -1777,14 +1771,10 @@ exports.tournamentSummary = onDocumentWritten(
       const _fora = Array.isArray(depois._semPesados) ? depois._semPesados : null;
       if (_fora && _fora.length) {
         try {
-          const partes = { config: JSON.parse(JSON.stringify(depois)) };
-          for (const nome of _fora) {
-            const sub = await db.collection('tournaments').doc(id).collection(nome).get();
-            partes[nome] = sub.docs.map((d) => d.data());
-          }
-          const montado = _tSplit.remontar(partes);
-          if (!montado) throw new Error('remontar devolveu vazio');
-          paraResumo = montado;
+          // ⭐ mesmo caminho único do leitor — aqui fora de transação
+          paraResumo = await _tSplit.montarDoBanco(JSON.parse(JSON.stringify(depois)),
+            async (colecao) => (await db.collection('tournaments').doc(id).collection(colecao).get())
+              .docs.map((d) => d.data()));
         } catch (eM) {
           // ⛔ Resumir o doc cru aqui gravaria 0/0/0 por cima do resumo bom. Não gravar
           // deixa o resumo ANTERIOR de pé, que é velho mas verdadeiro.
@@ -1880,7 +1870,9 @@ exports.tournamentMirror = onDocumentWritten(
         // (é o ponto da fila) mas a regra nega `delete` — o item é recibo do que a pessoa
         // mandou. Quem pode apagar é quem tem admin SDK. Quem limpa é decidido por quem
         // pode APAGAR, não por quem pode escrever.
-        for (const nome of ['matches', 'participants', 'history', 'resultQueue']) {
+        // ⚠️ pelo NOME DA COLEÇÃO, não da parte — senão a limpeza deixaria `inscritos`
+        // órfão e apagaria `participants`, que é de outro dono.
+        for (const nome of ['matches', 'inscritos', 'history', 'resultQueue', 'participants']) {
           const col = db.collection('tournaments').doc(id).collection(nome);
           const snap = await col.get();
           let lote = db.batch(), n = 0;
@@ -1942,7 +1934,7 @@ exports.tournamentMirror = onDocumentWritten(
    * contrário do histórico, sumir daqui é informação, não poda. */
   const r2 = _pula('participants')
     ? { gravados: 0, apagados: 0, total: 0 }
-    : await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants,
+    : await _espelhaColecao(db, id, _tSplit.colecaoDaParte('participants'), pAntes.participants, pDepois.participants,
         (p) => (p._k || ('p' + p._idx)));
       /* ⛔ O HISTÓRICO ERA ESPELHADO POR POSIÇÃO — e posição é o que a poda muda.
    * Medido antes de mexer: Confra com 218 eventos no doc e 218 no espelho. Podar o doc

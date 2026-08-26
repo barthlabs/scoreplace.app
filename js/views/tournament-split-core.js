@@ -81,6 +81,22 @@
     return 'm' + loc.mi;
   }
 
+  /* ── EM QUE SUBCOLEÇÃO CADA PARTE MORA ────────────────────────────────────────
+   * ⛔ POR QUE ISTO NÃO É "o nome da parte": `tournaments/{id}/participants` JÁ TEM DONO —
+   * o espelho de roster (id do doc = uid puro, dado CRU), escrito pela CF desde antes desta
+   * arquitetura existir. Dividir os inscritos pra lá botou DOIS ESQUEMAS no mesmo lugar:
+   * medido num torneio real, 13 documentos onde deviam existir 8, e `remontar` devolveu o
+   * certo POR SORTE (os intrusos não têm `_idx` e caíram fora do mapa). "Funcionou por
+   * sorte" não é critério pra mexer no elenco de um torneio.
+   * ⇒ Os inscritos vão pra `inscritos`, que não tem dono nenhum. O roster continua onde
+   * está, intacto — não estou migrando ele, estou saindo do caminho dele.
+   * ⭐ E o mapeamento vive AQUI, num lugar só: hoje sete caminhos precisam saber disso
+   * (leitor do app, leitor da CF, gravador da CF, gatilho, salto, volta, ensaio) e lista
+   * escrita à mão já esqueceu `participants` TRÊS vezes hoje.
+   */
+  var COLECAO_DA_PARTE = { participants: 'inscritos' };
+  function colecaoDaParte(nome) { return COLECAO_DA_PARTE[nome] || nome; }
+
   /* ── CHAVE DURÁVEL DA INSCRIÇÃO ────────────────────────────────────────────────
    * Mesma história do histórico, e o mesmo estrago se eu deixar como estava: o espelho
    * chaveia inscrito por POSIÇÃO (`'p' + _idx`), e posição muda quando alguém sai do meio
@@ -326,8 +342,50 @@
     return { mudaram: mudaram, sumiram: sumiram };
   }
 
+  /* ── ⭐ MONTAR O TORNEIO DO BANCO — O CAMINHO ÚNICO ────────────────────────────
+   * Pergunta do dono (26/ago): _"por que 7 caminhos? não deveria ser 1 caminho único
+   * canônico?"_ — e ele está certo. Eu tinha SEIS cópias da mesma operação: leitor do app,
+   * leitor da CF, montagem do resumo, salto, volta e ensaio. Todas faziam a mesma coisa:
+   * ler as partes que `_semPesados` nomeia e chamar `remontar`.
+   *
+   * ⛔ E CÓPIA NÃO É CAMINHO — é lugar pra esquecer. Hoje mesmo a mesma lista escrita à
+   * mão esqueceu `participants` TRÊS vezes: o gatilho apagou o elenco, a volta devolveu o
+   * torneio sem ele, e o meu conferidor não viu nem um nem outro.
+   *
+   * ⭐ O que de fato DIFERE entre os seis é só COMO SE LÊ UMA COLEÇÃO: o SDK do cliente, o
+   * admin, e o admin dentro de uma transação. Isso é uma linha, não um caminho. Então ela
+   * entra por parâmetro e todo o resto — quais partes, em que coleção cada uma mora, o que
+   * fazer quando falta — vive AQUI, num lugar só.
+   *
+   * `lerColecao(nomeDaColecao)` devolve (ou promete) a lista de documentos daquela coleção.
+   * Devolve o torneio montado, ou lança — ⛔ NUNCA devolve o config cru: config cru é um
+   * torneio sem jogos, e devolver isso em silêncio foi exatamente o que pintou chave vazia
+   * pra todo mundo em 26/ago.
+   */
+  function montarDoBanco(config, lerColecao) {
+    if (!config) throw new Error('[split] montarDoBanco: sem config');
+    var fora = Array.isArray(config._semPesados) ? config._semPesados : null;
+    if (!fora || !fora.length) return Promise.resolve(config);   // inteiro: nada a montar
+    var partes = { config: config };
+    var i = 0;
+    function proxima() {
+      if (i >= fora.length) {
+        var t = remontar(partes);
+        if (!t) throw new Error('[split] remontar devolveu vazio — recuso entregar torneio incompleto');
+        return t;
+      }
+      var nome = fora[i++];
+      return Promise.resolve(lerColecao(colecaoDaParte(nome), nome)).then(function (docs) {
+        partes[nome] = docs || [];
+        return proxima();
+      });
+    }
+    return Promise.resolve().then(proxima);
+  }
+
   var api = { dividir: dividir, remontar: remontar, chaveDoJogo: chaveDoJogo,
               chaveDoEvento: chaveDoEvento, chaveDoInscrito: chaveDoInscrito,
+              colecaoDaParte: colecaoDaParte, montarDoBanco: montarDoBanco,
               jogosQueMudaram: jogosQueMudaram,
               PESADOS: PESADOS, canonico: canonico, iguais: iguais };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

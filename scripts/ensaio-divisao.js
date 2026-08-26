@@ -65,12 +65,9 @@ const jogosDe = (t) => { const o = []; (t.rounds || []).forEach((r) => (r.matche
   /* ⭐ Monta TODAS as partes que saíram, exatamente como `_montaDeSubcolecoes` faz no app —
    * lendo o próprio `_semPesados` em vez de eu cravar 'matches' aqui. Foi assim que este
    * ensaio pegou que os INSCRITOS também tinham saído e o meu conferidor não sabia. */
-  const partesLidas = { config: JSON.parse(JSON.stringify(doc)) };
-  for (const nome of doc._semPesados) {
-    const sub = await ref.collection(nome).get();
-    partesLidas[nome] = sub.docs.map((d) => d.data());
-  }
-  const montado = S.remontar(partesLidas);
+  // ⭐ MESMO caminho único do app — o ensaio só vale se montar como a tela monta.
+  const montado = await S.montarDoBanco(JSON.parse(JSON.stringify(doc)),
+    async (colecao) => (await ref.collection(colecao).get()).docs.map((d) => d.data()));
   delete montado._semPesados; delete montado._nJogos;
   if (!montado || !S.iguais(montado, original)) {
     // ⛔ Falhar dizendo só "não bate" me obrigaria a investigar do zero toda vez. O ensaio
@@ -106,7 +103,7 @@ const jogosDe = (t) => { const o = []; (t.rounds || []).forEach((r) => (r.matche
   ok(S.iguais(volta, original), '   e o documento voltou IDÊNTICO ao original');
 
   if (!MANTER) {
-    for (const sub of ['matches', 'participants', 'history']) {
+    for (const sub of ['matches', 'inscritos', 'history', 'participants']) {
       const s2 = await ref.collection(sub).get();
       const lote = db.batch(); s2.docs.forEach((d) => lote.delete(d.ref));
       if (s2.size) await lote.commit();

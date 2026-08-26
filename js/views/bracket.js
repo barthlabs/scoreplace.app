@@ -321,104 +321,18 @@ function _pintarEmEtapas(container, leve, geraPesado, depois) {
 // teste tem rAF/timeout de mentira. Então: rAF E timeout, o que vier primeiro roda
 // (a trava `feito` garante uma vez só), mais a porta de descarga síncrona
 // `_flushBracketPaint` pra quem precisa da chave inteira AGORA (testes, export).
-function _agendarPasso(fn) {
-  var feito = false;
-  var _uma = function () {
-    if (feito) return; feito = true;
-    var ix = _pendentes.indexOf(_uma); if (ix >= 0) _pendentes.splice(ix, 1);
-    fn();
-  };
-  _pendentes.push(_uma);
-  try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_uma); } catch (e) {}
-  try { if (typeof setTimeout === 'function') setTimeout(_uma, 48); } catch (e) {}
-}
-// Descarga síncrona: pinta AGORA o que estiver pendente. É o que o teste headless usa
-// (lá rAF e setTimeout são de mentira) e é a rede pra qualquer caminho que precise da
-// chave inteira no mesmo instante.
-var _pendentes = [];
-window._flushBracketPaint = function () {
-  while (_pendentes.length) { var f = _pendentes.shift(); try { f(); } catch (e) {} }
-};
-
-// ── ALVO DA ROLAGEM DE ENTRADA — UMA definição só ────────────────────────────
-// Usado pelo scroll (_goMine) E pelo laço que re-afirma a posição (_reafirmar). Eram DUAS
-// cópias da mesma escolha: toda regra nova precisava ser escrita nos dois lugares, e a que
-// ficasse pra trás desfazia a outra (foi assim que o passe fixo de 1400ms já desmanchou uma
-// rolagem certa). [[feedback_unify_dual_entry_points]]
-function _alvoDeEntrada() {
-  // 0) Fase concluída + organizador → o banner "🏆 Avançar" está no topo e é a próxima ação
-  //    dele. (Antes só o _goMine conhecia esta regra; o laço media outro elemento e brigava.)
-  var _adv = document.getElementById('phase-advance-banner');
-  if (_adv) return _adv;
-  // 1) GRUPO PEDIDO — quem chegou pelo "Ir para o torneio" de um grupo específico (dashboard)
-  //    quer AQUELE grupo, não o seu. Não encontrado (re-sorteio, fase avançada) → não insiste.
-  var _p = null;
-  try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
-  if (_p) {
-    var _g = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
-    if (_g) return _g;
-  }
-  // 2) O SEU GRUPO. Ordem do dono (21/ago/2026): _"quando a pessoa entra nos detalhes do
-  //    torneio ela precisa ir direto para o topo do seu grupo. o seu grupo e seu nome deve
-  //    estar na tela de cara."_ Vale mesmo SEM jogo pendente — grupo sorteado e ainda sem
-  //    confronto, rodada já jogada, W.O.: o grupo continua sendo o lugar dele na competição.
-  //    Antes o alvo era o JOGO dele; sem jogo pendente a tela não rolava nada e ele caía no
-  //    topo do torneio. Com várias rodadas (Rei/Rainha) ele aparece em VÁRIOS grupos: fica
-  //    com o primeiro que ainda tem jogo dele pendente; se não houver, o ÚLTIMO — a rodada
-  //    mais recente, que é onde a história dele está.
-  var _meus = document.querySelectorAll('[data-my-group="1"]');
-  if (_meus && _meus.length) {
-    for (var i = 0; i < _meus.length; i++) {
-      if (_meus[i].querySelector && _meus[i].querySelector('[data-my-pending="1"]')) return _meus[i];
-    }
-    return _meus[_meus.length - 1];
-  }
-  // 3) Sem grupo (eliminatória, chave): o próximo jogo dele — subindo pro box do grupo
-  //    quando o card mora dentro de um.
-  var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
-  if (!_mine) return null;
-  return (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
-}
-
-// Exposta pra ser COBRADA por teste (tests/entrar-no-torneio-cai-no-meu-grupo.test.js):
-// a ordem de prioridade é regra de produto do dono, não detalhe interno.
-window._bracketEntryTarget = _alvoDeEntrada;
-
-function _applyMyMatchesFilter() {
-  // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
-  // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
-  if (typeof window._wirePlaceholderDnD === 'function') { try { window._wirePlaceholderDnD(); } catch (e) {} }
-  if (typeof window._wireLateJoinPairDnD === 'function') { try { window._wireLateJoinPairDnD(); } catch (e) {} }
-  var cards = document.querySelectorAll('[data-my-match]');
-  if (!cards.length) return;
-  // v1.6.86: quem decide o `display` dos cards é UMA função só — `_bracketApplyFilter`,
-  // que avalia "Só meus jogos" E a busca juntas e esconde também os containers que ficam
-  // vazios (box de grupo, coluna de rodada). Antes este loop escrevia `display=''` em todo
-  // card do usuário e DESFAZIA a busca ativa (e deixava o box do grupo de pé sem jogos).
-  window._bracketApplyFilter();
-  // Ao ENTRAR no bracket (navegação, não re-render), rola pro TOPO do PRÓXIMO jogo do
-  // usuário (1º card PENDENTE dele na ordem do DOM = cronológica; fallback: 1º jogo dele).
-  // Se o jogo mora num GRUPO (Rei/Rainha / Fase de Grupos), rola pro TOPO DO GRUPO
-  // ([data-group-box], que tem scroll-margin-top pros headers sticky). _bracketPendingScroll
-  // é setado só na entrada (via _inRouterRender) e consumido aqui quando os cards existem —
-  // não dispara em re-render (regra de scroll estável).
-/* ── ABRIR "DEMAIS JOGOS" PÁRA NO PRIMEIRO, NÃO NO ÚLTIMO ──────────────────────────
- * Relato do dono (26/ago): _"ao expandir os demais jogos da rodada está indo para o
- * último. o certo seria ficar no primeiro."_
- *
- * ⛔ NÃO HAVIA SCRIPT NENHUM ALI — o pulo é a ANCORAGEM DE ROLAGEM do navegador: ao abrir
- * o `<details>`, ele escolhe um elemento ABAIXO da expansão e o mantém parado na tela, o
- * que empurra a vista pro FIM do conteúdo que acabou de entrar. Quanto mais jogos, mais
- * longe o pulo. Quem abre "demais jogos" quer ver o PRIMEIRO.
- *
- * ⭐ Ancora no SUMMARY, não no primeiro card: o cabeçalho "Demais jogos da rodada (N)" tem
- * que ficar visível, senão a pessoa não sabe em que seção pousou.
- * ⚠️ `_reflowChrome()` ANTES de rolar — o `scroll-margin-top` sai de `--scroll-anchor`
- * (topbar + back-header + barra sticky de busca). Sem remedir, o alvo pousa ATRÁS da barra;
- * foi exatamente o tropeço do scroll pro grupo. [[project_sticky_vertical_usa_scroll_anchor]]
- * ⚠️ E dois quadros de espera: no Rei/Rainha o conteúdo é montado NA HORA da abertura
- * (lote adiado). Rolar antes de ele existir ancora na altura velha.
- * ⛔ Só na ABERTURA: fechar não mexe na rolagem — a pessoa está olhando o que está acima.
+/* ⛔⛔ ESTAS QUATRO FUNÇÕES MORAM NO TOPO DO ARQUIVO, E ISSO NÃO É ESTILO.
+ * Eu as tinha escrito ancorando num `if (window._bracketPendingScroll)` — que vive DENTRO
+ * de outra função. Resultado: elas só passariam a existir se aquela função rodasse, e ela
+ * não roda no caminho normal. MEDIDO no navegador, na versão publicada:
+ *   _spVerMaisTag: function ✓ · _demaisJogosTrilho: undefined ⛔ · _demaisJogosPilulaFixa:
+ *   undefined ⛔ · _demaisJogosCss: undefined ⛔
+ * Ou seja o botão nunca teve chance de aparecer — e o guard `typeof … === 'function'` que
+ * eu pus pros harnesses ENGOLIU isso em silêncio, pela SEGUNDA vez no mesmo dia.
+ * ⚠️ É exatamente o mesmo erro que eu tinha acabado de consertar no dashboard (a pílula
+ * presa dentro de `renderDashboard`) e repeti aqui uma hora depois, no arquivo do lado.
+ * ⇒ Função que a marcação chama tem que existir no CARREGAMENTO. Se ela está indentada
+ * dentro de outra, ela não existe.
  */
 /* ── "VER MENOS" QUE ACOMPANHA A ROLAGEM, EM "DEMAIS JOGOS DA RODADA" ─────────────
  * Pedido do dono (26/ago): _"aqui podíamos aplicar o mesmo ver mais/ver menos da sessão de
@@ -523,6 +437,107 @@ window._demaisJogosAoAbrir = function (el) {
     requestAnimationFrame(function () { requestAnimationFrame(rola); });
   } else { setTimeout(rola, 32); }
 };
+
+function _agendarPasso(fn) {
+  var feito = false;
+  var _uma = function () {
+    if (feito) return; feito = true;
+    var ix = _pendentes.indexOf(_uma); if (ix >= 0) _pendentes.splice(ix, 1);
+    fn();
+  };
+  _pendentes.push(_uma);
+  try { if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_uma); } catch (e) {}
+  try { if (typeof setTimeout === 'function') setTimeout(_uma, 48); } catch (e) {}
+}
+// Descarga síncrona: pinta AGORA o que estiver pendente. É o que o teste headless usa
+// (lá rAF e setTimeout são de mentira) e é a rede pra qualquer caminho que precise da
+// chave inteira no mesmo instante.
+var _pendentes = [];
+window._flushBracketPaint = function () {
+  while (_pendentes.length) { var f = _pendentes.shift(); try { f(); } catch (e) {} }
+};
+
+// ── ALVO DA ROLAGEM DE ENTRADA — UMA definição só ────────────────────────────
+// Usado pelo scroll (_goMine) E pelo laço que re-afirma a posição (_reafirmar). Eram DUAS
+// cópias da mesma escolha: toda regra nova precisava ser escrita nos dois lugares, e a que
+// ficasse pra trás desfazia a outra (foi assim que o passe fixo de 1400ms já desmanchou uma
+// rolagem certa). [[feedback_unify_dual_entry_points]]
+function _alvoDeEntrada() {
+  // 0) Fase concluída + organizador → o banner "🏆 Avançar" está no topo e é a próxima ação
+  //    dele. (Antes só o _goMine conhecia esta regra; o laço media outro elemento e brigava.)
+  var _adv = document.getElementById('phase-advance-banner');
+  if (_adv) return _adv;
+  // 1) GRUPO PEDIDO — quem chegou pelo "Ir para o torneio" de um grupo específico (dashboard)
+  //    quer AQUELE grupo, não o seu. Não encontrado (re-sorteio, fase avançada) → não insiste.
+  var _p = null;
+  try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
+  if (_p) {
+    var _g = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
+    if (_g) return _g;
+  }
+  // 2) O SEU GRUPO. Ordem do dono (21/ago/2026): _"quando a pessoa entra nos detalhes do
+  //    torneio ela precisa ir direto para o topo do seu grupo. o seu grupo e seu nome deve
+  //    estar na tela de cara."_ Vale mesmo SEM jogo pendente — grupo sorteado e ainda sem
+  //    confronto, rodada já jogada, W.O.: o grupo continua sendo o lugar dele na competição.
+  //    Antes o alvo era o JOGO dele; sem jogo pendente a tela não rolava nada e ele caía no
+  //    topo do torneio. Com várias rodadas (Rei/Rainha) ele aparece em VÁRIOS grupos: fica
+  //    com o primeiro que ainda tem jogo dele pendente; se não houver, o ÚLTIMO — a rodada
+  //    mais recente, que é onde a história dele está.
+  var _meus = document.querySelectorAll('[data-my-group="1"]');
+  if (_meus && _meus.length) {
+    for (var i = 0; i < _meus.length; i++) {
+      if (_meus[i].querySelector && _meus[i].querySelector('[data-my-pending="1"]')) return _meus[i];
+    }
+    return _meus[_meus.length - 1];
+  }
+  // 3) Sem grupo (eliminatória, chave): o próximo jogo dele — subindo pro box do grupo
+  //    quando o card mora dentro de um.
+  var _mine = document.querySelector('[data-my-pending="1"]') || document.querySelector('[data-my-match="1"]');
+  if (!_mine) return null;
+  return (typeof _mine.closest === 'function' && _mine.closest('[data-group-box]')) || _mine;
+}
+
+// Exposta pra ser COBRADA por teste (tests/entrar-no-torneio-cai-no-meu-grupo.test.js):
+// a ordem de prioridade é regra de produto do dono, não detalhe interno.
+window._bracketEntryTarget = _alvoDeEntrada;
+
+function _applyMyMatchesFilter() {
+  // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
+  // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
+  if (typeof window._wirePlaceholderDnD === 'function') { try { window._wirePlaceholderDnD(); } catch (e) {} }
+  if (typeof window._wireLateJoinPairDnD === 'function') { try { window._wireLateJoinPairDnD(); } catch (e) {} }
+  var cards = document.querySelectorAll('[data-my-match]');
+  if (!cards.length) return;
+  // v1.6.86: quem decide o `display` dos cards é UMA função só — `_bracketApplyFilter`,
+  // que avalia "Só meus jogos" E a busca juntas e esconde também os containers que ficam
+  // vazios (box de grupo, coluna de rodada). Antes este loop escrevia `display=''` em todo
+  // card do usuário e DESFAZIA a busca ativa (e deixava o box do grupo de pé sem jogos).
+  window._bracketApplyFilter();
+  // Ao ENTRAR no bracket (navegação, não re-render), rola pro TOPO do PRÓXIMO jogo do
+  // usuário (1º card PENDENTE dele na ordem do DOM = cronológica; fallback: 1º jogo dele).
+  // Se o jogo mora num GRUPO (Rei/Rainha / Fase de Grupos), rola pro TOPO DO GRUPO
+  // ([data-group-box], que tem scroll-margin-top pros headers sticky). _bracketPendingScroll
+  // é setado só na entrada (via _inRouterRender) e consumido aqui quando os cards existem —
+  // não dispara em re-render (regra de scroll estável).
+/* ── ABRIR "DEMAIS JOGOS" PÁRA NO PRIMEIRO, NÃO NO ÚLTIMO ──────────────────────────
+ * Relato do dono (26/ago): _"ao expandir os demais jogos da rodada está indo para o
+ * último. o certo seria ficar no primeiro."_
+ *
+ * ⛔ NÃO HAVIA SCRIPT NENHUM ALI — o pulo é a ANCORAGEM DE ROLAGEM do navegador: ao abrir
+ * o `<details>`, ele escolhe um elemento ABAIXO da expansão e o mantém parado na tela, o
+ * que empurra a vista pro FIM do conteúdo que acabou de entrar. Quanto mais jogos, mais
+ * longe o pulo. Quem abre "demais jogos" quer ver o PRIMEIRO.
+ *
+ * ⭐ Ancora no SUMMARY, não no primeiro card: o cabeçalho "Demais jogos da rodada (N)" tem
+ * que ficar visível, senão a pessoa não sabe em que seção pousou.
+ * ⚠️ `_reflowChrome()` ANTES de rolar — o `scroll-margin-top` sai de `--scroll-anchor`
+ * (topbar + back-header + barra sticky de busca). Sem remedir, o alvo pousa ATRÁS da barra;
+ * foi exatamente o tropeço do scroll pro grupo. [[project_sticky_vertical_usa_scroll_anchor]]
+ * ⚠️ E dois quadros de espera: no Rei/Rainha o conteúdo é montado NA HORA da abertura
+ * (lote adiado). Rolar antes de ele existir ancora na altura velha.
+ * ⛔ Só na ABERTURA: fechar não mexe na rolagem — a pessoa está olhando o que está acima.
+ */
+
 
   if (window._bracketPendingScroll) {
     window._bracketPendingScroll = null;

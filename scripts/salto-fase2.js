@@ -40,6 +40,8 @@ const ID = argv.find((a) => !a.startsWith('--') && argv[argv.indexOf(a) - 1] !==
 const iP = argv.indexOf('--pitr');
 const PITR = iP >= 0 ? argv[iP + 1] : '2026-08-26T03:00:00Z';
 const kb = (v) => (Buffer.byteLength(JSON.stringify(v) || '', 'utf8') / 1024).toFixed(1) + ' KB';
+const _leDoBanco = (ref) => async (colecao) =>
+  (await ref.collection(colecao).get()).docs.map((d) => d.data());
 const morre = (m) => { console.error('\n⛔ ABORTADO: ' + m + '\n   O documento segue INTACTO — nada foi destruído.'); process.exit(1); };
 const jogosDe = (t) => { const o = []; (t.rounds || []).forEach((r) => (r.matches || []).forEach((m) => m && o.push(m))); (t.matches || []).forEach((m) => m && o.push(m)); (t.groups || []).forEach((g) => (g.matches || []).forEach((m) => m && o.push(m))); return o; };
 const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 != null)).length;
@@ -65,7 +67,11 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
    * lugar é o tipo de coisa que passa despercebida até o dia em que um deles muda.
    * ⚠️ E isto NÃO adia o objetivo do dono ("não tem que ter limite"): é o passo seguinte,
    * com nome de coleção próprio, não uma desistência. */
-  const FORA = ['matches'];
+  /* ⭐ INSCRITOS VOLTAM AO SALTO (26/ago, fim do dia). Eles tinham saído porque
+   * `tournaments/{id}/participants` já tem dono — o espelho de roster, esquema diferente,
+   * 13 documentos onde deviam ser 8. ⇒ Agora vão pra `inscritos`, coleção nova, sem dono.
+   * Ver `colecaoDaParte` no split-core: o nome da coleção é decidido num lugar só. */
+  const FORA = ['matches', 'participants'];
 
   let t = doc.data(); t.id = String(ID);
 
@@ -81,13 +87,11 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   const faltam = FORA.filter((k) => jaFora.indexOf(k) === -1);
   if (!faltam.length) { console.log('já dividido em [' + jaFora.join(', ') + '] — nada a fazer'); process.exit(0); }
   if (jaFora.length) {
-    const partesJa = { config: JSON.parse(JSON.stringify(t)) };
-    for (const nome of jaFora) {
-      const sub = await ref.collection(nome).get();
-      partesJa[nome] = sub.docs.map((d) => d.data());
-    }
-    const montado = S.remontar(partesJa);
-    if (!montado) morre('não consegui MONTAR o torneio já dividido — não vou estender às cegas');
+    // ⭐ MESMO caminho único que o app usa (montarDoBanco) — se ele monta diferente do
+    // que a tela vai montar, a prova de igualdade não prova nada.
+    let montado = null;
+    try { montado = await S.montarDoBanco(JSON.parse(JSON.stringify(t)), _leDoBanco(ref)); }
+    catch (e) { morre('não consegui MONTAR o torneio já dividido (' + e.message + ') — não vou estender às cegas'); }
     montado.id = String(ID);
     delete montado._semPesados;
     t = montado;
@@ -166,7 +170,7 @@ const comPlacar = (l) => l.filter((m) => m && (m.winner || m.sets || m.scoreP1 !
   const lidosPorParte = {};
   const contagem = [];
   for (const nome of FORA) {
-    const col = ref.collection(nome);
+    const col = ref.collection(S.colecaoDaParte(nome));
     let lote = db.batch(), n = 0;
     for (const item of (partes[nome] || [])) {
       lote.set(col.doc(String(CHAVE[nome](item))), item);

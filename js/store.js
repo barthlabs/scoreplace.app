@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.114';
+window.SCOREPLACE_VERSION = '2.0.115';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11870,7 +11870,9 @@ window.AppStore = {
     if (!t || !Array.isArray(t._semPesados) || t._semPesados.indexOf('matches') === -1) return;
     var self = this;
     try {
-      var un = window.FirestoreDB.db.collection('tournaments').doc(id).collection('matches')
+      var _col = (window._tSplit && typeof window._tSplit.colecaoDaParte === 'function')
+        ? window._tSplit.colecaoDaParte('matches') : 'matches';
+      var un = window.FirestoreDB.db.collection('tournaments').doc(id).collection(_col)
         .onSnapshot(function (snap) {
           var mudou = 0;
           try {
@@ -11881,6 +11883,10 @@ window.AppStore = {
             // ⚠️ `docChanges` e não o snapshot inteiro: é o delta que faz isto valer a pena.
             // Na PRIMEIRA entrega o Firestore manda tudo como 'added' — e tudo bem, é a
             // mesma leitura que a busca faria; o ganho está nas entregas seguintes.
+            /* ⚠️ ESTE remontar É DIFERENTE dos outros, e por isso não usa `montarDoBanco`:
+             * ali a gente LÊ o banco; aqui o banco ENTREGA um delta. Mas as partes que o
+             * torneio tem continuam sendo as que `_semPesados` nomeia — só a de jogos vem
+             * do delta; as demais já estão no objeto vivo e são preservadas. */
             var partes = { config: JSON.parse(JSON.stringify(vivo)), matches: [] };
             snap.forEach(function (d) { var v = d.data(); if (v) partes.matches.push(v); });
             mudou = snap.docChanges().length;

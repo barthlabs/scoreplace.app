@@ -355,6 +355,21 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      /* ─── INSCRITOS DIVIDIDOS: LEITURA ────────────────────────────────────
+       * `tournaments/{id}/inscritos/{k}` é onde o elenco passa a viver quando sai do
+       * documento. ⛔ E o nome NÃO é `participants` de propósito: essa já tem dono — o
+       * espelho de roster (id = uid, dado cru), de antes desta arquitetura. Dividir pra lá
+       * botou dois esquemas no mesmo lugar e deu 13 documentos onde deviam ser 8.
+       * Sem esta regra o Firestore nega por omissão e o torneio abre SEM ELENCO.
+       * ⛔ Escrita é da CF (admin SDK), nunca do cliente. */
+      match /inscritos/{inscritoId} {
+        function parentTi() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTi().isPublic == true);
+        allow write: if false;
+      }
+
       // ─── HISTÓRICO ESPELHADO: LEITURA, PRA AGUENTAR A PODA ────────────────
       // `tournaments/{id}/history/{k}` é onde o log de auditoria vive INTEIRO. O
       // documento do torneio tem teto de 1 MB e o histórico é o único campo que cresce

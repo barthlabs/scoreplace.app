@@ -84,6 +84,24 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.115 ──────────────────────────────────────────
+        // ⛔ O "VER MAIS/VER MENOS" NUNCA TEVE CHANCE DE APARECER — e eu tinha dito duas
+        // vezes que estava pronto. As funções dele estavam escritas DENTRO de outra função
+        // (`_applyMyMatchesFilter`), que não roda no caminho normal. Medido no navegador,
+        // na versão JÁ PUBLICADA: `_demaisJogosTrilho: undefined`.
+        // ⚠️ É o MESMO erro que eu tinha acabado de consertar no dashboard uma hora antes
+        // (a pílula presa dentro de `renderDashboard`) e repeti no arquivo do lado.
+        // ⚠️ E as duas vezes o guard `typeof … === 'function'` — que existe pros harnesses —
+        // ENGOLIU o defeito: a marcação chamava, recebia string vazia, e o botão sumia
+        // CALADO. Guard que engole também engole o que você precisava ver.
+        // ⇒ Função que a marcação chama tem que existir no CARREGAMENTO. E o teste novo
+        // carrega os arquivos num sandbox e EXIGE que as cinco existam — provado que ele
+        // pega: devolvendo as definições pra dentro da outra função, ele falha.
+        // ⭐ Também: UM CAMINHO ÚNICO pra montar torneio do banco. Eram SEIS cópias da
+        // mesma operação (leitor do app, leitor da CF, resumo, salto, volta, ensaio) — e
+        // cópia não é caminho, é lugar pra esquecer: a mesma lista à mão esqueceu os
+        // inscritos TRÊS vezes num dia. E os inscritos ganharam coleção PRÓPRIA, porque
+        // `participants` já tinha outro dono.
         // ── ciclo 2.0.114 ──────────────────────────────────────────
         // ⭐ O "VER MAIS" APARECE COM A SEÇÃO FECHADA — eu tinha feito só metade.
         // O dono pediu "o mesmo ver mais/ver menos das Novidades" e eu entreguei só o

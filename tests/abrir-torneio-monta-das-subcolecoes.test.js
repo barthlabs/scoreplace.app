@@ -44,10 +44,26 @@ ok(!/!_t\.rounds|rounds\s*===\s*undefined/.test(fn),
   'NÃO dispara por ausência de rounds (torneio novo também não tem jogo e abriria vazio)');
 ok(/_montaDeSubcolecoes/.test(db), 'existe o montador');
 const mont = db.slice(db.indexOf('async _montaDeSubcolecoes'), db.indexOf('async _montaDeSubcolecoes') + 1600);
-ok(/remontar/.test(mont), 'e ele usa `remontar` do tradutor — não uma reimplementação');
+/* ⭐ UM CAMINHO SÓ (26/ago, pergunta do dono: _"por que 7 caminhos? não deveria ser 1
+ * caminho único canônico?"_). Eram SEIS cópias da mesma operação — ler as partes que
+ * `_semPesados` nomeia e remontar: leitor do app, leitor da CF, resumo, salto, volta e
+ * ensaio. Cópia não é caminho, é lugar pra esquecer: a mesma lista à mão esqueceu
+ * `participants` TRÊS vezes num dia (o gatilho apagou o elenco, a volta devolveu o torneio
+ * sem ele, e o conferidor não viu nem um nem outro).
+ * ⇒ `montarDoBanco(config, lerColecao)` no split-core. O que difere de verdade entre os
+ * seis é só COMO SE LÊ UMA COLEÇÃO (SDK do cliente × admin × dentro de transação) — e isso
+ * é uma linha, que entra por parâmetro. */
+ok(/montarDoBanco/.test(mont), '⭐ o montador usa o CAMINHO ÚNICO — não uma cópia da montagem');
+ok(!/S\.remontar\(/.test(mont), '   e não chama `remontar` por fora dele');
 ok(/_noteFsReads/.test(mont), 'e contabiliza as leituras (a Fase 2 troca 1 leitura por N — isso tem que ser visível)');
-ok(/devolvendo o documento cru|return config/.test(mont),
-  'se o tradutor faltar ou remontar falhar, devolve o documento — nunca um torneio pela metade');
+/* ⛔ E O CONTRATO DE FALHA MUDOU, PRA MELHOR. Antes: "se falhar, devolve o documento cru".
+ * ⚠️ Documento cru de um torneio dividido é um torneio SEM JOGOS — e devolver isso em
+ * silêncio foi EXATAMENTE o que pintou chave vazia pra todo mundo em 26/ago. A tela não
+ * tem como saber que aquilo é um erro: ela pinta um torneio que "não tem jogo".
+ * ⇒ Agora ele EXPLODE. Quem chama trata; ninguém recebe meia verdade parecendo verdade. */
+ok(/throw e;/.test(mont),
+  '⛔ falha LANÇA — devolver o documento cru é entregar torneio sem jogos parecendo torneio vazio');
+ok(!/return config;/.test(mont), '   e nunca devolve o config cru');
 
 // ── a volta é FIEL: é a propriedade que autoriza tudo ────────────────────────
 const S = require(CANON);

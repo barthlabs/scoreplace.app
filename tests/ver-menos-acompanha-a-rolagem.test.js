@@ -113,5 +113,46 @@ ok((br.match(/_demaisJogosPilulaFixa\(\)/g) || []).length === 2,
   '⭐ e a pílula fechada está nos DOIS expansores, como o trilho');
 ok((br.match(/data-dj[ >'"]/g) || []).length >= 2, 'os `<details>` carregam a marca que o CSS usa');
 
+// ── ⑥ ⛔ AS FUNÇÕES EXISTEM NO CARREGAMENTO? ───────────────────────────────
+/* ⛔ ESTE É O TESTE QUE FALTAVA, e a ausência dele custou DUAS entregas erradas seguidas
+ * pro dono, no mesmo dia:
+ *   ① a pílula presa dentro de `renderDashboard` — quem abria um torneio direto não tinha
+ *      botão nenhum ("cadê o ver mais/ver menos?");
+ *   ② uma hora depois, no arquivo do lado, as funções do trilho presas dentro de
+ *      `_applyMyMatchesFilter` — que não roda no caminho normal. MEDIDO no navegador, na
+ *      versão JÁ PUBLICADA: `_demaisJogosTrilho: undefined`.
+ * ⚠️ E as duas vezes o guard `typeof … === 'function'` (que existe pros harnesses) ENGOLIU
+ * o defeito: a marcação chamava, recebia '', e o botão sumia CALADO. Guard que engole
+ * também engole o que você precisava ver.
+ * ⇒ A trava não é "a função está escrita" — é "ela EXISTE depois que o script carrega".
+ * Escrita dentro de outra função, ela não existe. */
+{
+  const sandbox = {
+    window: {}, document: {
+      addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; },
+      getElementById() { return null; }, body: {},
+      createElement() { return { style: {}, classList: { add() {}, remove() {} }, appendChild() {} }; }
+    },
+    navigator: { userAgent: '' }, localStorage: { getItem() { return null; }, setItem() {} },
+    requestAnimationFrame: (f) => f(), setTimeout: (f) => f(), console: { log() {}, warn() {}, error() {} }
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  ['js/views/dashboard.js', 'js/views/bracket.js'].forEach((f) => {
+    try { vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sandbox, { filename: f }); }
+    catch (e) { /* estes arquivos fazem muita coisa no load; o que importa é o que sobrou em window */ }
+  });
+  ['_spVerMaisTag', '_demaisJogosCss', '_demaisJogosTrilho', '_demaisJogosPilulaFixa', '_demaisJogosAoAbrir']
+    .forEach((n) => {
+      ok(typeof sandbox.window[n] === 'function',
+        '⛔ `window.' + n + '` EXISTE assim que o script carrega (presa dentro de outra função, ela não existe)');
+    });
+  if (typeof sandbox.window._demaisJogosPilulaFixa === 'function') {
+    const p = sandbox.window._demaisJogosPilulaFixa();
+    ok(/data-dj-fixa/.test(p) && /ver mais/.test(p),
+      '⭐ e a pílula fechada sai de verdade, dizendo "ver mais" — não string vazia');
+  }
+}
+
 console.log((fail ? '✗' : '✓') + ' ver-menos-acompanha-a-rolagem: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
