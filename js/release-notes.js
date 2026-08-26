@@ -84,6 +84,12 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.127 ────────────────────────
+        // 🔒 A TRAVA, no lugar que dói: o DEPLOY. Ordem do dono: _"faz uma trava pra essa
+        // merda nunca mais acontecer"_. A suíte já conferia o CACHE_NAME, mas suíte não
+        // impede PUBLICAR. Agora `deploy-hosting.sh` aborta antes de subir um byte, no mesmo
+        // ponto em que o cache-buster já era barrado, e diz o que fazer.
+        // PROVADO em isolamento: com o cache divergente sai 1 e explica; batendo, sai 0.
         // ── ciclo 2.0.126 ────────────────────────
         // 🩹 O CELULAR ESTAVA PRESO 33 VERSÕES ATRÁS. Relato do dono, com print: no PWA do
         // Safari o Confra mostrava "0 INSCRITOS" e "você não está inscrito" — sendo ele o

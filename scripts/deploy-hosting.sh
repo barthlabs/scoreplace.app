@@ -119,6 +119,37 @@ else
   exit 1
 fi
 
+# ── TRAVA DURA: O CACHE DO SW TEM QUE SER O DA VERSÃO ─────────────────────────
+# ⛔ ISTO JÁ ACONTECEU, e ficou 33 VERSÕES sem ninguém ver (2.0.92 → 2.0.125). O dono abriu
+# o PWA no celular e viu "0 INSCRITOS" num torneio com 148, sendo ele o organizador; no
+# desktop, tudo normal. O banco estava CERTO.
+# Todos os scripts têm `?v=` e trocam com a versão. `/index.html` é o ÚNICO servido sem
+# query: ele casa EXATO no cache do service worker e, se o nome do cache não muda, vem do
+# VELHO — trazendo junto os `?v=` antigos de TODOS os scripts. O aparelho passa a rodar
+# código antigo sobre o dado de hoje, e a tela mente com cara de dado errado.
+# ⚠️ A suíte também confere isto, mas suíte não impede PUBLICAR. Aqui impede: aborta antes
+# de subir um byte, que é o mesmo lugar onde o cache-buster já era barrado.
+VER_APP="$(sed -n "s/.*SCOREPLACE_VERSION *= *'\([^']*\)'.*/\1/p" js/store.js | head -1)"
+VER_SW="$(sed -n "s/.*CACHE_NAME *= *'scoreplace-v\([^']*\)'.*/\1/p" sw.js | head -1)"
+if [[ -z "$VER_APP" || -z "$VER_SW" ]]; then
+  echo "✗ não consegui ler a versão (app='$VER_APP' sw='$VER_SW') — não publico às cegas."
+  exit 1
+fi
+if [[ "$VER_APP" != "$VER_SW" ]]; then
+  echo
+  echo "✗ CACHE_NAME do service worker DIVERGE da versão do app."
+  echo "    js/store.js SCOREPLACE_VERSION = $VER_APP"
+  echo "    sw.js       CACHE_NAME         = scoreplace-v$VER_SW"
+  echo
+  echo "  O QUE ISSO CAUSA: index.html é o único arquivo sem ?v=. Com o cache velho, o PWA"
+  echo "  carrega o index ANTIGO e, com ele, os ?v= antigos de todos os scripts — o celular"
+  echo "  fica preso numa versão anterior à do desktop e a tela mostra dado errado."
+  echo
+  echo "  CONSERTO:  npm run prerender     (ele sincroniza, no mesmo passo do version.txt)"
+  exit 1
+fi
+echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
+
 # ── 3-5. cópia limpa + carimbo ───────────────────────────────────────────────
 DEST="${TMPDIR:-/tmp}/sp-deploy-$$"
 rm -rf "$DEST"; mkdir -p "$DEST"
