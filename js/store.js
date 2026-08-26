@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.108';
+window.SCOREPLACE_VERSION = '2.0.109';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11947,8 +11947,19 @@ window.AppStore = {
       tourData = Object.assign({
         id: id,
         createdAt: new Date().toISOString(),
-        _semPesados: ['matches'],
-        _nJogos: 0,
+        /* ⛔ DESLIGADO em 26/ago, MESMO DIA em que foi ligado, com o app quebrado em
+         * produção na mão do dono: "não mostra os meus jogos apenas a classificação".
+         *
+         * A CAUSA: eu construí a REDE do ouvinte (que enxerta os jogos que já estão em
+         * MEMÓRIA) e nunca construí a BUSCA. No primeiro carregamento não há memória — e
+         * o carregamento inicial vem pelo ouvinte, não pelo `loadTournamentById` que eu
+         * tinha ensinado a montar. Resultado: torneio chega sem jogos e ninguém vai buscar.
+         * ⛔ Eu tinha ESCRITO essa rede como "a rede antes do salto" e me convenci de que
+         * ela cobria o caso. Ela cobre o RE-render; não cobre o primeiro.
+         *
+         * ⚠️ NÃO RELIGAR sem: (1) o ouvinte da subcoleção do torneio ABERTO, e (2) uma
+         * busca no primeiro carregamento — provados num torneio de verdade, não em teste.
+         * Ver [[project_backup_antes_da_transferencia]]. */
         // Default status='open' pra que torneios novos apareçam no feed público de
         // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
         status: 'open',

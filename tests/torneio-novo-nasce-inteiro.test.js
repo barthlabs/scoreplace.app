@@ -28,9 +28,24 @@ const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'u
 const i = store.indexOf('tourData = Object.assign({');
 ok(i > 0, 'o caminho de CRIAÇÃO existe (separado do de edição)');
 const criacao = store.slice(i, i + 700);
-ok(/_semPesados: \['matches'\]/.test(criacao), '⭐ torneio novo nasce dividido');
-ok(/_nJogos: 0/.test(criacao),
-  '⛔ e com a contagem ZERO — sem ela a tela acusaria todo torneio novo de "não carregou"');
+/* ⛔⛔ REVERTIDO NO MESMO DIA, com o app quebrado na mão do dono:
+ *   "não mostra os meus jogos apenas a classificação" · "jogos já jogados perdidos".
+ * (No banco nada se perdeu — conferido contra os dois backups: 115 jogos, 72 placares,
+ * 148 inscritos, idênticos. O que quebrou foi a TELA não conseguir montar.)
+ *
+ * A CAUSA: eu construí a REDE do ouvinte — que enxerta os jogos que já estão em MEMÓRIA —
+ * e nunca construí a BUSCA. No PRIMEIRO carregamento não há memória, e o carregamento
+ * inicial vem pelo ouvinte, não pelo `loadTournamentById` que eu tinha ensinado a montar.
+ * Torneio chega sem jogos e ninguém vai buscar.
+ * ⛔ E eu tinha escrito essa rede chamando-a de "a rede antes do salto", convencido de que
+ * cobria o caso. Ela cobre o RE-render. Não cobre o primeiro.
+ *
+ * ⭐ O QUE ESTE TESTE TRANCA AGORA: torneio novo nasce INTEIRO. Só volta a nascer dividido
+ * quando existirem (1) o ouvinte da subcoleção do torneio ABERTO e (2) a busca no primeiro
+ * carregamento — provados num torneio de verdade, não em teste. */
+ok(!/_semPesados: \['matches'\]/.test(criacao),
+  '⛔ torneio novo NÃO nasce dividido — a busca no 1º carregamento não existe');
+ok(!/_nJogos: 0/.test(criacao), '   (nem a contagem, que só faz sentido dividido)');
 
 // ── ② o número é mantido por quem grava ─────────────────────────────────────
 ok(/_nJogos = \(pDepois\.matches \|\| \[\]\)\.length/.test(cf),
@@ -45,10 +60,12 @@ const ctx = { store: { tournaments: [] } }; vm.createContext(ctx);
 vm.runInContext(corpo + '\nthis.f = _enxertaJogos;', ctx);
 const enxerta = ctx.f;
 
+// a rede em si CONTINUA correta e vale a pena manter provada — ela é pré-requisito de
+// quando isto voltar. `_nJogos` desfaz o empate entre "não sorteou" e "não carregou".
 const novo = { id: 'n1', _semPesados: ['matches'], _nJogos: 0, rounds: [], matches: [] };
 const r1 = enxerta(JSON.parse(JSON.stringify(novo)), null);
 ok(!r1._faltamPesados,
-  '⭐ torneio NOVO (0 jogos, nada em memória) NÃO é acusado de incompleto');
+  '⭐ com _nJogos:0, "não tem jogo" não é confundido com "não carregou"');
 
 const cheio = { id: 'c1', _semPesados: ['matches'], _nJogos: 12,
                 rounds: [{ round: 1, matches: [] }], matches: [] };
@@ -65,5 +82,5 @@ const velho = { id: 'v1', _semPesados: ['matches'], rounds: [{ round: 1, matches
 ok(enxerta(JSON.parse(JSON.stringify(velho)), null)._faltamPesados === true,
   '⚠️ documento SEM `_nJogos` (dividido antes desta versão) cai no comportamento antigo, que é o seguro');
 
-console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-dividido: ' + pass + ' ok, ' + fail + ' falhas');
+console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-inteiro: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);
