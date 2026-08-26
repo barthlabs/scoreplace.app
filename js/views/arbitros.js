@@ -172,7 +172,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           // Fallback uid-first (criador por uid antes do e-mail) — só usado se
           // AppStore.isOrganizer não existir; espelha store.js isOrganizer.
           : ((cu.uid && t.creatorUid && t.creatorUid === cu.uid) ||
-             (cu.email && (t.organizerEmail === cu.email || t.creatorEmail === cu.email)));
+             false);   // ⛔ e-mail NÃO identifica organizador (cânone do dono) — só uid, acima
         if (!isOrg) {
           document.getElementById('arbitros-content').innerHTML =
             '<div style="color:var(--sp-c-f87171,#f87171);font-size:0.85rem;">Somente o organizador pode gerenciar árbitros.</div>';

@@ -349,14 +349,21 @@
               // displayName/email exato → parceiro de dupla perdia a vitória e homônimos
               // recebiam errado.
               var _wParts = Array.isArray(t.participants) ? t.participants : [];
-              if (t.winner && (_sideNameBelongsToUid(_wParts, t.winner, uid) || t.winner === cu.email || (!uid && t.winner === (cu.displayName || '')))) wins++;
+              // ⛔ O caminho por E-MAIL saiu (cânone do dono, 26/ago: "nada por nome ou
+              // email, sempre por uid a menos que seja digitado por organizador e nao tenha
+              // uid"). `t.winner === cu.email` dava a vitória a quem tivesse a string.
+              // ⭐ O por NOME FICA — mas só pra quem não tem uid, que é exatamente a
+              // exceção que o dono abriu (inscrito fictício, digitado pelo organizador).
+              if (t.winner && (_sideNameBelongsToUid(_wParts, t.winner, uid) ||
+                               (!uid && t.winner === (cu.displayName || '')))) wins++;
               // v3.0.x: vitórias em partidas + pódios computados de verdade (por UID)
               matchesWon += _countUserMatchWinsInTournament(t, uid);
               if (_userPodiumedInTournament(t, uid)) podiums++;
             }
             // Torneios com ≥10 inscritos que o user organizou — uid-first
             // (creatorUid), organizerEmail/uid só fallback legado.
-            if (t.creatorUid === uid || t.organizerEmail === cu.email || t.organizerEmail === uid) {
+            // ⛔ só uid. (O `organizerEmail === uid` daqui comparava e-mail com uid — nunca casava.)
+            if (t.creatorUid === uid || (Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) !== -1)) {
               var count = (t.participants && t.participants.length) || 0;
               if (count >= 10) withTenPlus++;
             }

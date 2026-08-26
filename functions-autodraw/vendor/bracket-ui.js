@@ -414,10 +414,12 @@ function _isUserOrgOrCoHost(t, user) {
   // é campo do torneio. CO-HOST saiu daqui (jul/2026): co-host é identificado SÓ por uid,
   // igual às Firestore rules (isTournamentAdmin usa creatorUid/adminUids e mais nada).
   // Ver [[project_cohost_invite_cf_uid_only]].
-  if (email) {
-    if (t.organizerEmail === email) return true;
-    if (t.creatorEmail === email) return true;
-  }
+  /* ⛔ AQUI HAVIA O ÚLTIMO FALLBACK POR E-MAIL, e ele era o pior: dava true pra quem
+   * apresentasse `organizerEmail`/`creatorEmail` iguais. O comentário acima já dizia que
+   * co-host saiu por esse motivo em jul/2026 — o organizador tinha ficado.
+   * Cânone do dono (26/ago): "organizador sempre por uid".
+   * ⭐ Medido antes de tirar: 39 e-mails de admin na base, 39 cobertos por uid, 0 torneios
+   * sem creatorUid (scripts/conferir-admin-por-uid.js). Não salvava ninguém. */
   return false;
 }
 

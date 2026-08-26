@@ -84,6 +84,24 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.107 ──────────────────────────────────────────
+        // ⛔ IDENTIDADE É UID — E-MAIL E NOME SAÍRAM DE TODA DECISÃO.
+        // Cânone do dono: "nada por nome ou email, sempre por uid a menos que seja digitado
+        // por organizador e nao tenha uid. organizador sempre por uid."
+        // Isto é segurança, não estilo: e-mail é uma STRING que a pessoa apresenta. Quem
+        // tivesse `organizerEmail` igual ganhava as ferramentas do ORGANIZADOR — e e-mail
+        // muda, se repete, e quem perde o acesso a ele não perde a conta.
+        // ⭐ MEDIDO ANTES DE TIRAR: 39 e-mails de admin na base, 39 cobertos por uid, 0
+        // torneios sem `creatorUid`. Os caminhos por e-mail não salvavam ninguém.
+        // ⚠️ As `firestore.rules` já eram uid puro desde jul/2026 — as CFs e o cliente é que
+        // ficaram para trás. E nas CFs é PIOR: elas rodam com admin SDK e não passam por
+        // regra nenhuma. Eu tinha até afirmado que a regra lia `adminEmails`; estava errado.
+        // + `_isTournamentAdmin` nem RECEBE e-mail: a assinatura impede reintroduzir.
+        // + 7 blocos soltos de "isOrg" nas CFs principais apontam pra UMA porta.
+        // + Duas estatísticas contavam por nome/e-mail: `t.organizerUid` (que NÃO existe em
+        //   torneio nenhum — 0 de 39) e vencedor por nome. Trocados por creatorUid/winnerUid.
+        // ⭐ A EXCEÇÃO DO DONO FICA: inscrito digitado pelo organizador não tem uid, e é só
+        // pelo nome que ele existe.
         // ── ciclo 2.0.106 ──────────────────────────────────────────
         // ⭐ TORNEIO NOVO NASCE NO FORMATO NOVO, e os antigos vão junto.
         // Depois do Confra, o caminho novo era exercitado por 1 torneio contra 38.

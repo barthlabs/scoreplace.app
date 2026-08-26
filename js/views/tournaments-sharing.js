@@ -302,7 +302,17 @@ window._buildFaseBMatchCardHtml = function(result, tId) {
 
   var woAbsentSide = result.woAbsentSide; // 'p1' | 'p2'
   function _side(name, sideKey) {
-    var isWinner = hasWinner && result.winner === name;
+    /* ⭐ Vencedor por UID quando o jogo tem o carimbo (desde a 2.0.1: "o vencedor deixa de
+     * ser um NOME"). O nome fica de fallback — e é a exceção legítima do cânone: inscrito
+     * digitado pelo organizador não tem uid, e é só pelo nome que ele existe.
+     * ⚠️ Sem isto, dois xarás no mesmo torneio acendiam o lado errado no card. */
+    var _wu = Array.isArray(result.winnerUids) ? result.winnerUids
+      : (result.winnerUid ? [result.winnerUid] : null);
+    var _sideUids = (sideKey === 'p1' ? result.team1Uids : result.team2Uids);
+    var isWinner = hasWinner && (
+      (_wu && Array.isArray(_sideUids) && _sideUids.length
+        ? _sideUids.some(function (u) { return _wu.indexOf(u) !== -1; })
+        : result.winner === name));
     var isAbsent = isWo && woAbsentSide === sideKey;
     var bg = isWinner ? 'rgba(16,185,129,0.12)' : 'transparent';
     var bd = isWinner ? '1px solid rgba(16,185,129,0.4)' : '1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08))';

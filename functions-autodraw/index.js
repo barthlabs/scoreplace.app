@@ -298,19 +298,27 @@ function _ligaSeasonEnded(t, now) {
 // função protege o RPC — a CF grava com Admin SDK (bypassa rules), então sem isto
 // qualquer autenticado sortearia o torneio de qualquer um. Os 4 caminhos são os mesmos,
 // na mesma ordem. Se mudar lá, muda aqui.
-function _isTournamentAdmin(t, uid, email) {
+/* ⛔ SÓ UID. Ordem do dono (26/ago): _"nada por nome ou email, sempre por uid a menos que
+ * seja digitado por organizador e nao tenha uid. organizador sempre por uid."_
+ *
+ * Aqui existiam mais dois caminhos: (3) `adminEmails` e (4) recuperação por
+ * `organizerEmail`. Os dois davam poder de ORGANIZADOR a quem apresentasse uma string de
+ * e-mail igual — e e-mail não identifica ninguém: muda, se repete, e a pessoa que perde o
+ * acesso ao e-mail não perde a conta (e vice-versa).
+ *
+ * ⭐ MEDIDO ANTES DE TIRAR (scripts/conferir-admin-por-uid.js): 39 e-mails de admin na base
+ * inteira, **39 cobertos por uid**, e **ZERO** torneios sem `creatorUid`. Ou seja os dois
+ * caminhos não salvavam ninguém — só abriam porta. As `firestore.rules` já eram uid puro
+ * desde jul/2026; a CF é que tinha ficado para trás, e ficar para trás aqui é pior:
+ * a CF roda com admin SDK e NÃO passa por regra nenhuma.
+ * ⚠️ Se um dia um admin legítimo só existir por e-mail, o conserto é dar uid a ele
+ * (`adminUids`), NUNCA reabrir a porta. */
+function _isTournamentAdmin(t, uid) {
   if (!t || !uid) return false;
-  const mail = String(email || '').toLowerCase();
-  // (1) creatorUid — mais confiável, imutável.
+  // (1) creatorUid — o dono, imutável.
   if (typeof t.creatorUid === 'string' && t.creatorUid === uid) return true;
   // (2) adminUids — co-hosts ativos por UID (cobre co-host com email '' / conta por telefone).
   if (Array.isArray(t.adminUids) && t.adminUids.length > 0 && t.adminUids.indexOf(uid) !== -1) return true;
-  // (3) adminEmails — backward compat + co-hosts com email.
-  const hasAdminEmails = Array.isArray(t.adminEmails) && t.adminEmails.length > 0;
-  if (mail && hasAdminEmails && t.adminEmails.indexOf(mail) !== -1) return true;
-  // (4) recovery — adminEmails vazio/ausente → organizerEmail (bug v1.6.66 apagava o campo).
-  if (mail && !hasAdminEmails && typeof t.organizerEmail === 'string'
-      && t.organizerEmail.toLowerCase() === mail) return true;
   return false;
 }
 
@@ -319,16 +327,14 @@ function _isTournamentAdmin(t, uid, email) {
 // só pela closeRound — o fecho de rodada é disparado por quem salva o ÚLTIMO placar, que num
 // resultEntry='players' é um PARTICIPANTE, não só admin. Seguro pq a CF computa o passo
 // DETERMINÍSTICO do doc fresco (o caller só dispara o passo canônico). Ver project_uid_primary_identity.
-function _isTournamentParticipant(t, uid, email) {
+/* ⛔ SÓ UID, pelo mesmo cânone. O fallback por `memberEmails` (quando `memberUids` estava
+ * vazio) existia pra doc legado — e hoje `memberUids` é recomputado em TODO save, no
+ * cliente e aqui (`_applyWriteBoundary`). Um doc sem `memberUids` e com `memberEmails` não
+ * existe mais na base; e se aparecesse, deixar entrar por e-mail seria deixar entrar quem
+ * tem a string, não quem é a pessoa. */
+function _isTournamentParticipant(t, uid) {
   if (!t || !uid) return false;
-  if (Array.isArray(t.memberUids) && t.memberUids.length > 0) {
-    return t.memberUids.indexOf(uid) !== -1;
-  }
-  const mail = String(email || '').toLowerCase();
-  if (mail && Array.isArray(t.memberEmails)) {
-    return t.memberEmails.some(function (e) { return String(e || '').toLowerCase() === mail; });
-  }
-  return false;
+  return Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1;
 }
 
 // Espelha o LIMITE DE PERSISTÊNCIA de FirestoreDB.mutateTournament (firebase-db.js:297) —
@@ -504,7 +510,7 @@ exports.drawRound = onCall(async (request) => {
   // dado advisory de display; o autoDraw faz igual).
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentAdmin(pre.data(), uid, email)) {
+  if (!_isTournamentAdmin(pre.data(), uid)) {
     const _p = pre.data();
     throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear.',
       { tId, uid, email: email || '(sem email)', creatorUid: _p.creatorUid,
@@ -527,7 +533,7 @@ exports.drawRound = onCall(async (request) => {
 
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
     // pode ter perdido o acesso (transferência de organização / co-host removido).
-    if (!_isTournamentAdmin(t, uid, email)) {
+    if (!_isTournamentAdmin(t, uid)) {
       throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador pode sortear (doc fresco).', { tId, uid });
     }
 
@@ -615,7 +621,7 @@ exports.integrateLateEntries = onCall(async (request) => {
   const ref = db.collection('tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentAdmin(pre.data(), uid, email)) {
+  if (!_isTournamentAdmin(pre.data(), uid)) {
     throw _drawFail('permission-denied', 'Só o organizador ou um co-organizador integra tardios.', { tId, uid });
   }
   await _preloadDrawNames(pre.data()); // nome vivo por uid antes de formar duplas/rótulos
@@ -626,7 +632,7 @@ exports.integrateLateEntries = onCall(async (request) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
-      if (!_isTournamentAdmin(t, uid, email)) {
+      if (!_isTournamentAdmin(t, uid)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       }
       // Rei/Rainha: o doc fresco traz grupos só com matchIds — hidrata ANTES do motor.
@@ -693,7 +699,7 @@ exports.formLatePair = onCall(async (request) => {
   const ref = db.collection('tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentAdmin(pre.data(), uid, email)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador forma duplas.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador forma duplas.', { tId, uid });
   await _preloadDrawNames(pre.data());
 
   let out;
@@ -702,7 +708,7 @@ exports.formLatePair = onCall(async (request) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
-      if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
       const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
@@ -732,7 +738,7 @@ exports.splitLatePair = onCall(async (request) => {
   const ref = db.collection('tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentAdmin(pre.data(), uid, email)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador desfaz duplas.', { tId, uid });
+  if (!_isTournamentAdmin(pre.data(), uid)) throw _drawFail('permission-denied', 'Só o organizador ou co-organizador desfaz duplas.', { tId, uid });
   await _preloadDrawNames(pre.data());
 
   let out;
@@ -741,7 +747,7 @@ exports.splitLatePair = onCall(async (request) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
-      if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
+      if (!_isTournamentAdmin(t, uid)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
       const res = splitLatePairFn(t, { id1: id1, id2: id2 });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
@@ -797,7 +803,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
     const _tAntes = _antesDoMotor(t);
     _enrichParticipantsFromProfiles(t);
     // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
-    if (!_isTournamentParticipant(t, ator.uid, ator.email) && !_isTournamentAdmin(t, ator.uid, ator.email)) {
+    if (!_isTournamentParticipant(t, ator.uid) && !_isTournamentAdmin(t, ator.uid)) {
       return { ok: false, reason: 'permission-denied' };
     }
     try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
@@ -833,7 +839,7 @@ exports.applyMatchResult = onCall(async (request) => {
   const ref = db.collection('tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentParticipant(pre.data(), uid, email) && !_isTournamentAdmin(pre.data(), uid, email)) {
+  if (!_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) {
     throw _drawFail('permission-denied', 'Só quem está no torneio pode lançar placar.',
       { tId, matchId, uid, email: email || '(sem email)' });
   }
@@ -955,7 +961,7 @@ exports.closeRound = onCall(async (request) => {
   const ref = db.collection('tournaments').doc(tId);
   const pre = await ref.get();
   if (!pre.exists) throw _drawFail('not-found', 'Torneio não encontrado.', { tId, uid });
-  if (!_isTournamentParticipant(pre.data(), uid, email) && !_isTournamentAdmin(pre.data(), uid, email)) {
+  if (!_isTournamentParticipant(pre.data(), uid) && !_isTournamentAdmin(pre.data(), uid)) {
     throw _drawFail('permission-denied', 'Só um participante ou o organizador fecha a rodada.', { tId, uid, email: email || '(sem email)' });
   }
   await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor gera a próxima rodada e lê nomes)
@@ -967,7 +973,7 @@ exports.closeRound = onCall(async (request) => {
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
       const _tAntes = _antesDoMotor(t);
       // Re-checa authz sobre o doc FRESCO (acesso pode ter mudado entre o read de fora e a txn).
-      if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
+      if (!_isTournamentParticipant(t, uid) && !_isTournamentAdmin(t, uid)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       }
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }

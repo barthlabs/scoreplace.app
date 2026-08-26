@@ -2275,10 +2275,7 @@ exports.setParticipantsGender = onCall(
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-      (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir gênero");
 
     let written = 0; const skipped = [];
@@ -2325,10 +2322,7 @@ exports.setParticipantsProfile = onCall(
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-      (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode atribuir perfil");
 
     let written = 0; const skipped = [];
@@ -2938,10 +2932,7 @@ exports.deenrollParticipant = onCall(
       const t = snap.data();
       // Permissão: cada um sai de si mesmo; o organizador/co-host tira qualquer um.
       const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-      const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-        (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-        (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-        (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+      const isOrg = _isTournamentOrgCaller(t, callerUid);
       if (userUid !== callerUid && !isOrg) {
         throw new HttpsError("permission-denied", "só a própria pessoa ou o organizador podem desinscrever");
       }
@@ -2967,12 +2958,27 @@ exports.deenrollParticipant = onCall(
 // Deploy:  firebase deploy --only functions:formPair,functions:splitPair
 const _pairCore = require("./pair-core");
 
-function _isTournamentOrgCaller(t, callerUid, callerEmail) {
-  const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-  return (t.creatorUid && t.creatorUid === callerUid) ||
-    (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-    (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-    (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+/* ⛔ SÓ UID — a porta ÚNICA de "quem é organizador" nas CFs principais.
+ * Ordem do dono (26/ago): _"nada por nome ou email, sempre por uid a menos que seja
+ * digitado por organizador e nao tenha uid. organizador sempre por uid."_
+ *
+ * Saíram daqui três caminhos por e-mail (`creatorEmail`, `organizerEmail`, `adminEmails`).
+ * Todos davam poder de ORGANIZADOR a quem apresentasse uma string igual — e e-mail não
+ * identifica ninguém: muda, se repete, e quem perde o acesso ao e-mail não perde a conta.
+ * ⭐ MEDIDO ANTES DE TIRAR (scripts/conferir-admin-por-uid.js): 39 e-mails de admin na base
+ * inteira, **39 cobertos por uid**, **0** torneios sem `creatorUid`. Não salvavam ninguém.
+ * As `firestore.rules` já eram uid puro desde jul/2026 — as CFs é que ficaram para trás,
+ * e aqui é pior: CF roda com admin SDK e não passa por regra nenhuma.
+ * ⚠️ Admin legítimo que só exista por e-mail se conserta dando UID a ele (`adminUids`),
+ * NUNCA reabrindo a porta.
+ * ⚠️ `callerEmail` continua no argumento de propósito: 6 dos 8 chamadores passavam e-mail
+ * e mudar a assinatura junto esconderia se algum deles ainda depende disso. */
+function _isTournamentOrgCaller(t, callerUid) {
+  if (!t || !callerUid) return false;
+  if (t.creatorUid && t.creatorUid === callerUid) return true;
+  if (Array.isArray(t.adminUids) && t.adminUids.indexOf(callerUid) !== -1) return true;
+  const ch = Array.isArray(t.coHosts) ? t.coHosts : [];
+  return ch.some((c) => c && c.uid === callerUid && (c.status === 'active' || c.status === 'accepted'));
 }
 
 exports.formPair = onCall(
@@ -3160,10 +3166,7 @@ exports.applyLetzplayScans = onCall(
     if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
     const t = tSnap.data();
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
-    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-      (callerEmail && adminEmails.indexOf(callerEmail) !== -1);
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode aplicar a busca letzplay");
 
     // letzplay é Beach Tennis — mesma constante do cliente (_selfPopulateFromLetzplayScan).
@@ -3265,11 +3268,7 @@ exports.sendOrgCommunication = onCall(
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
     const coHostUids = Array.isArray(t.coHosts)
       ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
-    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-      (callerEmail && adminEmails.indexOf(callerEmail) !== -1) ||
-      (coHostUids.indexOf(callerUid) !== -1);
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode comunicar os inscritos");
 
     const fullMsg = '📢 Comunicado do organizador — "' + (t.name || "") + '": ' + rawMessage;
@@ -3497,11 +3496,7 @@ exports.getCommunicationStats = onCall(
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
     const coHostUids = Array.isArray(t.coHosts)
       ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
-    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-      (callerEmail && adminEmails.indexOf(callerEmail) !== -1) ||
-      (coHostUids.indexOf(callerUid) !== -1);
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode ver os comunicados");
 
     const cSnap = await db.collection("tournaments").doc(tournamentId)
@@ -3616,11 +3611,7 @@ exports.listCommunications = onCall(
     const adminEmails = Array.isArray(t.adminEmails) ? t.adminEmails.map((e) => String(e).toLowerCase()) : [];
     const coHostUids = Array.isArray(t.coHosts)
       ? t.coHosts.filter((c) => c && c.status === "active").map((c) => String(c.uid || "")) : [];
-    const isOrg = (t.creatorUid && t.creatorUid === callerUid) ||
-      (t.creatorEmail && String(t.creatorEmail).toLowerCase() === callerEmail) ||
-      (t.organizerEmail && String(t.organizerEmail).toLowerCase() === callerEmail) ||
-      (callerEmail && adminEmails.indexOf(callerEmail) !== -1) ||
-      (coHostUids.indexOf(callerUid) !== -1);
+    const isOrg = _isTournamentOrgCaller(t, callerUid);
     if (!isOrg) throw new HttpsError("permission-denied", "só o organizador pode ver os comunicados");
 
     const snap = await db.collection("tournaments").doc(tournamentId)
@@ -4651,13 +4642,25 @@ async function _computeBackfillStats(db, uid, userData) {
             }
             // Vitória só conta em torneios com >= 4 participantes (anti-fraude)
             if (_isTournamentQualified(t)) {
-              const displayName = userData.displayName || "";
-              if (t.winner && (t.winner === displayName || t.winner === email)) {
+              /* ⛔ SÓ UID (cânone do dono, 26/ago). Isto contava vitória comparando o
+               * campeão por NOME ou por E-MAIL — dois xarás dividiam troféu, e quem
+               * trocasse o nome perdia o dele. `winnerUid`/`winnerUids` já são carimbados
+               * no jogo desde a 2.0.1 ("o vencedor deixa de ser um NOME").
+               * ⚠️ Medido: ZERO torneios têm `t.winner` hoje, então este ramo já não
+               * disparava pra ninguém — trocar não tira troféu de ninguém. */
+              const _wUids = Array.isArray(t.winnerUids) ? t.winnerUids
+                : (t.winnerUid ? [t.winnerUid] : []);
+              if (_wUids.indexOf(uid) !== -1) {
                 stats.tournamentWins++;
               }
             }
             // Organizer with 10+ participants
-            if (t.organizerEmail === email || t.organizerUid === uid) {
+            /* ⛔ SÓ UID. ⚠️ E aqui `t.organizerUid` NÃO EXISTE em torneio nenhum
+             * (medido: 0 de 39) — ou seja o único caminho que funcionava de verdade era o
+             * e-mail, e tirar sem trocar zeraria a conquista pra todo mundo.
+             * O campo que existe é `creatorUid` (39 de 39) + `adminUids`. */
+            if (t.creatorUid === uid ||
+                (Array.isArray(t.adminUids) && t.adminUids.indexOf(uid) !== -1)) {
               const count = (t.participants && t.participants.length) || 0;
               if (count >= 10) stats.tournamentsWithTenPlus++;
             }

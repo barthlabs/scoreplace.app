@@ -281,7 +281,8 @@ function _computeSharedInfo(user, myEmail, myName, myUid) {
   for (var i = 0; i < tournaments.length; i++) {
     var t = tournaments[i];
     var parts = Array.isArray(t.participants) ? t.participants : [];
-    var hasMe = (myUid && t.creatorUid === myUid) || (myEmail && t.organizerEmail === myEmail) || parts.some(function(p) {
+    // ⛔ só uid: e-mail não identifica ninguém (cânone do dono)
+    var hasMe = (myUid && t.creatorUid === myUid) || parts.some(function(p) {
       return _participantMatchesUser(p, myEmail, myName, myUid);
     });
     if (!hasMe) continue;
@@ -1018,7 +1019,8 @@ function _renderMyFriends(myUid, friendIds) {
       var sharedCount = 0;
       myTournaments.forEach(function(t) {
         var parts = Array.isArray(t.participants) ? t.participants : [];
-        var hasMe = (_myUid && t.creatorUid === _myUid) || (_myEmail && t.organizerEmail === _myEmail) || parts.some(function(pp) {
+        // ⛔ só uid: e-mail não identifica ninguém (cânone do dono)
+        var hasMe = (_myUid && t.creatorUid === _myUid) || parts.some(function(pp) {
           return _participantMatchesUser(pp, _myEmail, _myName, _myUid);
         });
         var hasFriend = parts.some(function(pp) {

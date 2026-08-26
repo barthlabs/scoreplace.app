@@ -692,7 +692,7 @@ function renderDashboard(container) {
     const _cuIsOrg = window.AppStore.currentUser;
     const isOrg = !!(_cuIsOrg && (
       (t.creatorUid && _cuIsOrg.uid && t.creatorUid === _cuIsOrg.uid) ||
-      (t.organizerEmail && _cuIsOrg.email && t.organizerEmail === _cuIsOrg.email)
+      false   // ⛔ e-mail não identifica organizador (cânone do dono) — o uid acima decide
     ));
 
     // v2.1.95-beta: usa função centralizada (igual ao detalhe do torneio)
@@ -3262,7 +3262,7 @@ function renderDashboard(container) {
         var myFinished = finishedList.filter(function(t) {
           if (!_cu) return false;
           if (_cu.uid && t.creatorUid && t.creatorUid === _cu.uid) return true;
-          if (t.organizerEmail && t.organizerEmail === _cu.email) return true;
+          // ⛔ e-mail não identifica organizador (cânone do dono) — só o uid, acima.
           // v3.0.x (Parte 10 uid sweep): inscrição via helper canônico uid-first + slot-aware
           // (p1Uid/p2Uid). Antes checava só p.uid top-level → o p2 de uma dupla (uid em p2Uid,
           // displayName = só o nome do p1) caía em "outros encerrados" em vez de "seus".
@@ -3316,7 +3316,7 @@ function renderDashboard(container) {
       var _cu2 = window.AppStore.currentUser;
       var _isMine = function(t) {
         if (_cu2.uid && t.creatorUid && t.creatorUid === _cu2.uid) return true;
-        if (t.organizerEmail && t.organizerEmail === _cu2.email) return true;
+        // ⛔ e-mail não identifica organizador (cânone do dono) — só o uid, acima.
         // v3.0.x (Parte 10 uid sweep): uid-first + slot-aware via helper canônico.
         if (typeof window._isUserEnrolledInTournament === 'function') return window._isUserEnrolledInTournament(_cu2, t);
         return false;

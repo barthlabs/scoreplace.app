@@ -112,7 +112,8 @@ window._cloneTournament = function(tournamentId) {
     if (typeof showNotification === 'function') showNotification(_t('org.clonedTitle'), '"' + newT.name + '" ' + _t('org.clonedMsg'), 'success');
     // Navigate to the new tournament
     setTimeout(function() {
-        var newest = window.AppStore.tournaments.find(function(tour) { return tour.name === newT.name && tour.organizerEmail === newT.organizerEmail; });
+        // ⛔ acha o recém-criado por DONO (uid), não por e-mail — mesmo cânone do resto.
+        var newest = window.AppStore.tournaments.find(function(tour) { return tour.name === newT.name && tour.creatorUid === newT.creatorUid; });
         if (newest) {
             window.location.hash = '#tournaments/' + newest.id;
         } else {
