@@ -98,5 +98,36 @@ ok('⭐ o cliente grava `_nPartes` derivando do marcador', /_p\.config\._nPartes
 const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
 ok('⭐ o servidor idem', /pDepois\.config\._nPartes = fora\.reduce/.test(cf));
 
+// ── ABRIR O TORNEIO NÃO PODE ACEITAR OBJETO INCOMPLETO ───────────────────────
+/* ⛔ `_ensureTournamentLoaded` já tratava DUAS formas de estar incompleto — resumo e cache —
+ * e ignorava a terceira: o objeto que veio do ouvinte do DOCUMENTO, que num torneio dividido
+ * chega com elenco e jogos VAZIOS. Não é resumo nem é do cache, então passava direto como
+ * "já carregado" e a tela do DETALHE renderizava em cima dele. Foi assim que o dono,
+ * ORGANIZADOR do Confra, leu "você não está inscrito" no celular.
+ * `loadTournamentById` já busca as subcoleções — bastava deixar de atalhar até ele. */
+console.log('\n──── abrir o torneio exige o torneio inteiro ────');
+const src = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
+const iL = src.indexOf('window._ensureTournamentLoaded = function');
+const corpoL = src.slice(iL, src.indexOf('\n};', iL));
+ok('⛔ resumo não serve pra abrir', /local\._resumo === true\) local = null/.test(corpoL));
+ok('⛔ cache não serve pra abrir', /local\._doCache === true\) local = null/.test(corpoL));
+ok('⛔⛔ e objeto com PARTE FALTANDO também não',
+  /local\._faltamPesados === true\) local = null/.test(corpoL),
+  'sem isto o detalhe abre em cima de `participants: []` e diz "você não está inscrito"');
+const iChk = corpoL.indexOf('_faltamPesados === true');
+const iUso = corpoL.indexOf('if (local) { cb(local); return; }');
+ok('  → e a checagem vem ANTES de entregar o objeto', iChk > 0 && iUso > iChk);
+ok('⭐ e o caminho completo busca as subcoleções',
+  /_montaDeSubcolecoes\(id, _t, _fora\)/.test(fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8')));
+
+// ── o leitor de diagnóstico: medir no aparelho em vez de deduzir de longe ────
+ok('⭐ existe `?diag=1` pra LER o estado no aparelho (no PWA do iOS não há console)',
+  /_diagPartes/.test(src) && /diag=1/.test(src),
+  'três versões atrás da causa errada foi o preço de deduzir de longe');
+ok('  → e ele NÃO roda sem a URL pedir (instrumentação não cobra pedágio)',
+  /if \(typeof window !== 'undefined' && \/\[\?&\]diag=1\//.test(src));
+ok('  → e a falha de busca fica guardada pra ele mostrar',
+  /_falhasDePartes/.test(src));
+
 console.log(falhas === 0 ? '\n✅ cache-quente-nao-esconde-parte-que-falta: OK' : '\n❌ ' + falhas + ' falha(s)');
 process.exit(falhas === 0 ? 0 : 1);

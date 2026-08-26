@@ -84,6 +84,21 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.129 ────────────────────────
+        // ⛔ ABRIR O TORNEIO ACEITAVA OBJETO INCOMPLETO. `_ensureTournamentLoaded` já tratava
+        // DUAS formas de estar incompleto — resumo e cache — e ignorava a terceira: o objeto
+        // que veio do ouvinte do DOCUMENTO, que num torneio dividido chega com elenco e jogos
+        // VAZIOS. Não é resumo nem é do cache, então passava como "já carregado" e a tela do
+        // DETALHE renderizava em cima dele. Foi assim que o dono, ORGANIZADOR do Confra, leu
+        // "você não está inscrito" no celular. `loadTournamentById` já busca as subcoleções —
+        // bastava deixar de atalhar até ele.
+        // ⚠️ E eu tinha consertado só UMA das duas portas: a segunda (a corrida de duas
+        // buscas) fazia a mesma pergunta e ficou de fora. Quem pegou foi a suíte.
+        // ⭐ E ENTROU UM JEITO DE MEDIR NO APARELHO: `?diag=1` imprime, na tela, o que o app
+        // tem em memória (partes que moram fora, quantos inscritos, o que falta, falhas de
+        // busca). No PWA do iOS não há console — sem isso, a alternativa é publicar palpite
+        // atrás de palpite, que foi exatamente o que aconteceu por três versões.
+        // Não cobra pedágio: só roda quando a URL pede, e não mede nada — só imprime.
         // ── ciclo 2.0.128 ────────────────────────
         // ⭐⭐ A CAUSA DE VERDADE do "0 INSCRITOS" no celular do dono — e eu tinha publicado
         // DUAS versões atrás da causa errada antes de achar esta.

@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.128';
+window.SCOREPLACE_VERSION = '2.0.129';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -9953,6 +9953,58 @@ window._marcaResumo = function (t) {
   return t;
 };
 
+/* ── LEITOR DE DIAGNÓSTICO: `?diag=1` ────────────────────────────────────────────
+ * ⛔ POR QUE EXISTE: passei TRÊS versões atrás da causa errada de um defeito que só
+ * aparecia no PWA do celular do dono, deduzindo de longe o que o aparelho estava fazendo.
+ * No iOS não dá pra abrir o console de um PWA. Sem um jeito de LER o estado no aparelho, a
+ * alternativa é publicar palpite atrás de palpite — que foi exatamente o que aconteceu.
+ * ⭐ Isto NÃO cobra pedágio no caminho quente: só roda quando a URL pede, e não mede nada —
+ * apenas imprime o que já está na memória. [[feedback_instrumentacao_nao_pode_cobrar_pedagio]]
+ * Uso: abrir `scoreplace.app/?diag=1` e mandar o print. */
+window._diagPartes = function () {
+  var A = window.AppStore || {};
+  var linhas = ['versão: ' + (window.SCOREPLACE_VERSION || '?'),
+                'modo: ' + (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ? 'PWA' : 'navegador'),
+                'login: ' + ((A.currentUser && A.currentUser.uid) ? A.currentUser.uid.slice(0, 8) + '…' : 'NÃO'),
+                'torneios em memória: ' + ((A.tournaments || []).length)];
+  (A.tournaments || []).forEach(function (t) {
+    if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) return;
+    var nJogos = 0;
+    (t.rounds || []).forEach(function (r) { nJogos += (((r && r.matches) || []).length); });
+    linhas.push('');
+    linhas.push('▸ ' + String(t.name || t.id).slice(0, 34));
+    linhas.push('   fora: [' + t._semPesados.join(', ') + ']');
+    linhas.push('   inscritos em memória: ' + ((t.participants || []).length) +
+                '   memberUids: ' + ((t.memberUids || []).length));
+    linhas.push('   jogos em memória: ' + nJogos + '   _nJogos: ' + (t._nJogos === undefined ? '—' : t._nJogos));
+    linhas.push('   _nPartes: ' + (t._nPartes ? JSON.stringify(t._nPartes) : '—'));
+    linhas.push('   faltam: ' + (t._faltamPesados ? 'SIM ' + JSON.stringify(t._faltaOQue || []) : 'não') +
+                '   resumo: ' + (t._resumo === true ? 'SIM' : 'não') +
+                '   cache: ' + (t._doCache === true ? 'SIM' : 'não'));
+  });
+  var f = (A._falhasDePartes || []);
+  linhas.push('');
+  linhas.push('falhas ao buscar partes: ' + (f.length ? f.join(' | ') : 'nenhuma'));
+  return linhas.join('\n');
+};
+
+if (typeof window !== 'undefined' && /[?&]diag=1/.test(String(window.location && window.location.search || ''))) {
+  setTimeout(function () {
+    try {
+      var d = document.createElement('pre');
+      d.textContent = window._diagPartes();
+      d.style.cssText = 'position:fixed;inset:0;z-index:999999;margin:0;padding:14px;overflow:auto;' +
+        'background:#0b1020;color:#ffffff;font:12px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;';
+      var x = document.createElement('button');
+      x.textContent = 'fechar';
+      x.style.cssText = 'position:fixed;top:8px;right:8px;z-index:1000000;padding:8px 14px;border-radius:8px;' +
+        'border:1px solid #3b4a6b;background:#16203a;color:#ffffff;font-size:13px;';
+      x.onclick = function () { d.remove(); x.remove(); };
+      document.body.appendChild(d); document.body.appendChild(x);
+    } catch (e) {}
+  }, 3500);   // depois do boot: o que interessa é o estado JÁ montado
+}
+
 window._ensureTournamentLoaded = function (tId, cb) {
   var local = window._findTournamentById(tId);
   // ⭐ 2.0.90 — RESUMO NÃO SERVE PRA ABRIR. A lista passou a receber o documento
@@ -9964,6 +10016,16 @@ window._ensureTournamentLoaded = function (tId, cb) {
   // ⛔ E O QUE VEIO DO CACHE TAMBÉM NÃO SERVE PRA ABRIR (ver `_doCache` em _loadFromCache):
   // ele é um retrato de até 24h atrás, e "não é resumo" nunca quis dizer "está atualizado".
   if (local && local._doCache === true) local = null;
+  /* ⛔ E TORNEIO COM PARTE FALTANDO TAMBÉM NÃO SERVE PRA ABRIR (2.0.129).
+   * Esta função já tratava DUAS formas de estar incompleto (resumo e cache) e ignorava a
+   * terceira: o objeto que veio do ouvinte do DOCUMENTO, que num torneio dividido chega com
+   * o elenco e os jogos VAZIOS. Ele não é resumo nem é do cache, então passava direto como
+   * "já carregado" — e a tela do detalhe renderizava em cima dele.
+   * Foi assim que o dono, ORGANIZADOR do Confra, leu "você não está inscrito" no celular:
+   * o objeto em memória tinha `participants: []` e ninguém perguntou se estava inteiro.
+   * ⭐ `loadTournamentById` já busca as subcoleções — bastava deixar de atalhar até ele.
+   * [[feedback_cache_quente_satisfaz_metade_da_pergunta]] */
+  if (local && local._faltamPesados === true) local = null;
   if (local) { cb(local); return; }
   var DB = window.FirestoreDB;
   if (!DB || typeof DB.loadTournamentById !== 'function') { cb(null); return; }
@@ -9973,7 +10035,12 @@ window._ensureTournamentLoaded = function (tId, cb) {
     // Uma segunda busca pode ter resolvido enquanto a leitura estava em voo — nunca
     // duplicar: quem chegou primeiro é a referência viva que a tela já pode estar usando.
     var jaTem = window._findTournamentById(tId);
-    if (jaTem && jaTem._resumo !== true && jaTem._doCache !== true) { cb(jaTem); return; }
+    /* ⛔ A MESMA PERGUNTA DAS TRÊS LINHAS LÁ EM CIMA — e eu tinha consertado só uma das
+     * duas portas. O teste `abrir-torneio-nao-usa-o-cache` pegou: aqui é a corrida (outra
+     * busca resolveu enquanto esta estava em voo), e aceitar um objeto com parte faltando
+     * devolve à tela exatamente o que a busca completa foi evitar.
+     * [[feedback_unify_dual_entry_points]] */
+    if (jaTem && jaTem._resumo !== true && jaTem._doCache !== true && jaTem._faltamPesados !== true) { cb(jaTem); return; }
     var A = window.AppStore;
     if (A) {
       // ⭐ 2.0.90 — o completo SUBSTITUI o resumo, no lugar dele. Empurrar pro fim
@@ -12079,6 +12146,10 @@ window.AppStore = {
           .catch(function (e) {
             // ⛔ Falhar em silêncio aqui é a tela dizendo que o torneio não tem jogo.
             if (window._error) window._error('[fase2] não consegui montar ' + tid, e);
+            // ⭐ guarda pro `?diag=1`: no PWA do iOS não há console, e sem isto a falha some.
+            self._falhasDePartes = (self._falhasDePartes || []);
+            self._falhasDePartes.push(tid.slice(-6) + ': ' + String((e && e.message) || e).slice(0, 90));
+            if (self._falhasDePartes.length > 6) self._falhasDePartes.shift();
             delete self._montandoPesados[tid];   // deixa uma próxima tentativa acontecer
           });
       })(id);

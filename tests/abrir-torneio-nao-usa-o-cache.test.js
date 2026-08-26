@@ -32,8 +32,11 @@ const carrega = src.slice(src.indexOf('_loadFromCache()'), src.indexOf('_loadFro
 ok(/_doCache = true/.test(carrega), 'e a marca é posta DENTRO do _loadFromCache (não em outro lugar)');
 
 // ② abrir recusa tanto o resumo quanto o cache
-const abrir = src.slice(src.indexOf('_ensureTournamentLoaded = function'),
-                        src.indexOf('_ensureTournamentLoaded = function') + 1800);
+/* ⛔ ANCORA NO FIM DA FUNÇÃO, não numa janela de N caracteres. Esta é a SÉTIMA vez que uma
+ * janela fixa reprova um teste sem que nada tenha regredido: bastou um comentário a mais
+ * empurrar a linha pra fora do recorte. Teste que "falha" sem defeito ensina a ignorar teste. */
+const _iAbrir = src.indexOf('_ensureTournamentLoaded = function');
+const abrir = src.slice(_iAbrir, src.indexOf('\n};', _iAbrir));
 ok(/_resumo === true\) local = null/.test(abrir), 'abrir continua recusando o RESUMO');
 ok(/_doCache === true\) local = null/.test(abrir), 'e passa a recusar o que veio do CACHE');
 ok(abrir.indexOf('_doCache === true') < abrir.indexOf('if (local) { cb(local); return; }'),
@@ -42,6 +45,11 @@ ok(abrir.indexOf('_doCache === true') < abrir.indexOf('if (local) { cb(local); r
 // ③ a corrida: quem chegou primeiro só vale se for fresco
 ok(/jaTem\._resumo !== true && jaTem\._doCache !== true/.test(abrir),
   'na corrida de duas buscas, o objeto já presente só serve se NÃO for resumo nem cache');
+/* ⛔ E A TERCEIRA FORMA DE ESTAR INCOMPLETO. Eu tinha consertado só a porta de cima; esta
+ * suíte pegou a de baixo. Aceitar aqui um objeto com parte faltando devolve à tela
+ * exatamente o que a busca completa foi evitar. [[feedback_unify_dual_entry_points]] */
+ok(/jaTem\._faltamPesados !== true/.test(abrir),
+  'e também NÃO serve se faltar parte — as DUAS portas fazem a mesma pergunta');
 
 // ④ o cache não foi desligado — ele é o que pinta a lista na hora
 ok(/_saveToCache\(\)/.test(src) && /localStorage\.setItem\(this\._cacheKey/.test(src),
