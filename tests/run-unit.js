@@ -142,6 +142,7 @@ const SUITES = [
   'tests/ouvinte-de-jogos-segue-a-tela-aberta.test.js',
   'tests/podio-concorda-com-a-classificacao.test.js',
   'tests/quem-saiu-por-wo-mostra-onde-joga-agora.test.js',
+  'tests/odometro-do-carregando-mostra-um-numero.test.js',
   'tests/identidade-e-uid-nunca-email.test.js',
   // ⛔ A máscara do celular do perfil mora no MARKUP (2.0.54, caso Vanessa) —
   // addEventListener se perde em re-render e deixava campo cru + Verificar apagado.

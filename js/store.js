@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.117';
+window.SCOREPLACE_VERSION = '2.0.118';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -4523,7 +4523,18 @@ window._spLoaderBarHtml = function (largura) {
   var w = largura || '300px';
   return '<div class="sp-loader-bar" data-sp-prog="4" style="position:relative;width:' + w + ';max-width:78vw;height:20px;border-radius:999px;padding:2px;box-sizing:border-box;overflow:hidden;margin:0.9rem auto 0;background:linear-gradient(180deg,#828c9a 0%,#b4bcc7 55%,#dfe4ea 100%);box-shadow:inset 0 2px 6px rgba(0,0,0,0.5),inset 0 -1px 1px rgba(255,255,255,0.4),0 1px 1px rgba(255,255,255,0.18);">' +
       '<div class="sp-loader-fill" style="position:absolute;top:2px;bottom:2px;left:2px;right:2px;transform-origin:left center;transform:scaleX(0.04);animation:sp-loader-creep 9s linear forwards;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 46%,rgba(255,255,255,0) 51%),linear-gradient(180deg,#ffb763 0%,#fb9a3c 16%,#f97316 54%,#e8650b 86%,#d65a08 100%);box-shadow:inset 0 1px 1px rgba(255,255,255,0.6),inset 0 -3px 6px rgba(150,55,0,0.45),0 0 10px rgba(249,115,22,0.5);"></div>' +
-      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:var(--sp-c-fbe6c4,#fbe6c4);text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;overflow:hidden;">' +
+      /* ⛔ `align-items:flex-start`, NÃO `center` — e isto é aritmética, não estética.
+       * A coluna do odômetro tem 20 células × 20px = 400px, e a janela tem 20px.
+       * Centralizar uma coluna de 400px numa janela de 20px põe o topo dela em
+       * −(400−20)/2 = **−190px** — e 190 NÃO é múltiplo de 20. A janela cai bem no
+       * meio de duas células: MEDIDO no navegador, aparecia metade do "47%" em cima e
+       * metade do "52%" embaixo, cortados. Era o relato do dono: _"aparece 2 números %
+       * um em cima do outro cortado dentro da barra"_.
+       * ⭐ Com `flex-start` o topo da coluna encosta no topo da janela: o deslocamento
+       * vira 0 e cada passo de 20px cai exatamente numa célula.
+       * ⚠️ E o defeito era CONSTANTE, não intermitente — só passava despercebido
+       * porque a barra vive poucos segundos e o texto cortado parece "animação". */
+      '<div class="sp-loader-pct" style="position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;font-size:0.82rem;font-weight:900;letter-spacing:0.5px;color:var(--sp-c-fbe6c4,#fbe6c4);text-shadow:1px 1px 0 rgba(140,60,0,0.55),-1px -1px 0 rgba(255,255,255,0.18),0 2px 3px rgba(0,0,0,0.45);pointer-events:none;font-variant-numeric:tabular-nums;overflow:hidden;">' +
         '<div class="sp-loader-odo" style="animation:sp-loader-odo ' + (window._SP_LOADER_CREEP_MS / 1000) + 's steps(' + (_SP_ODO_N - 1) + ') forwards;">' +
           window._spOdoNumeros() +
         '</div>' +

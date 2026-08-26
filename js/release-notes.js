@@ -84,6 +84,17 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.118 ──────────────────────────────────────────
+        // ⭐ O % DA BARRA DE CARREGANDO PAROU DE SAIR CORTADO EM DOIS.
+        // Relato do dono: "aparece 2 números % um em cima do outro cortado dentro da barra".
+        // ⛔ A causa é ARITMÉTICA, não estética: a coluna do odômetro tem 20 células de
+        // 20px = 400px, e a janela tem 20px. `align-items:center` põe o topo da coluna em
+        // −(400−20)/2 = −190px — e 190 NÃO é múltiplo de 20. A janela cai bem no meio de
+        // duas células. MEDIDO no navegador, na página publicada: metade do "47%" em cima e
+        // metade do "52%" embaixo. Com `flex-start` o topo encosta em 0 e cada passo de
+        // 20px cai exatamente numa célula (medido: "4% @0", uma só).
+        // ⚠️ E o defeito era CONSTANTE, não intermitente — passava despercebido porque a
+        // barra vive poucos segundos e texto cortado parece "animação".
         // ── ciclo 2.0.117 ──────────────────────────────────────────
         // ⭐ QUEM SAIU POR W.O. AGORA DIZ ONDE JOGA. Pedido do dono, com a Carol Moresco de
         // exemplo: ela entrou no Grupo A por um W.O. da Denise, tomou W.O., se reativou,
