@@ -77,5 +77,45 @@ ok(!/,\s*true\s*\)/.test(chamadaM),
 ok(/soDeixaCrescer \? \[\] : /.test(src),
   'a trava fica na função: quem só cresce simplesmente não monta lista de apagar');
 
+// ── ⑤ A PODA TEM QUE SER INERTE — exercitando o diff REAL do gatilho ────────
+// Não basta "não apaga": se a poda GRAVAR as linhas que não mudaram, o `_idx` delas anda
+// e a ordem no espelho fica ambígua (as podadas viram 0..29 e colidem com as antigas,
+// que guardam 0..187). Medido contra o documento real do Confra antes de consertar:
+// 30 gravações à toa. Por isso `_idx` NÃO vai pro registro espelhado.
+// O diff sai do FONTE do gatilho — se ele mudar, este teste acompanha ou quebra.
+const vmc = require('vm');
+const i0 = src.indexOf('function _diffEspelho');
+ok(i0 > 0, 'o gatilho tem o comparador do espelho');
+const ctx = {}; vmc.createContext(ctx);
+vmc.runInContext(src.slice(i0, src.indexOf('\n}', i0) + 2) + '\nthis.f=_diffEspelho;', ctx);
+const _diff = ctx.f;
+
+const log = []; for (let i = 0; i < 50; i++) log.push(ev(i));
+const tLongo = { id: 't3', name: 'L', history: log, participants: [], rounds: [], matches: [] };
+// o registro que o gatilho espelha: chave + conteúdo, SEM índice
+const reg = (l) => (l || []).map((h) => ({ _k: h._k, item: h.item }));
+const antes = S.dividir(JSON.parse(JSON.stringify(tLongo)));
+const podadoT = JSON.parse(JSON.stringify(tLongo)); podadoT.history = podadoT.history.slice(-10);
+const depois = S.dividir(podadoT);
+
+const rPoda = _diff(reg(antes.history), reg(depois.history), (h) => h._k);
+ok(rPoda.gravar.length === 0,
+  '⭐ podar 50→10 não grava NADA: as 10 que ficaram são idênticas às que já estão lá');
+ok(rPoda.apagar.length === 40, '   (o diff ainda LISTA 40 como ausentes…)');
+
+const rApp = _diff(reg(antes.history), reg(S.dividir(Object.assign({}, tLongo,
+  { history: log.concat([ev(99)]) })).history), (h) => h._k);
+ok(rApp.gravar.length === 1 && rApp.apagar.length === 0,
+  'e um evento novo grava exatamente 1 linha');
+
+// …e é o soDeixaCrescer que transforma esses 40 em zero. A prova de que ele está ligado
+// pro histórico está no teste ④; aqui fica registrado QUANTO ele evita.
+ok(/soDeixaCrescer \? \[\] : /.test(src) && /,\s*true\s*\)/.test(chamadaH),
+  '⛔ …e é soDeixaCrescer que zera os 40 — sem ele, podar 50 eventos apagaria 40 do log');
+
+const regSrc = src.slice(src.indexOf('const _hist ='), src.indexOf('const r3 ='));
+ok(!/_idx/.test(regSrc),
+  '⛔ o registro espelhado do histórico NÃO leva `_idx` — o índice anda com a poda');
+
 console.log((fail ? '✗' : '✓') + ' historico-e-log-nao-se-apaga: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

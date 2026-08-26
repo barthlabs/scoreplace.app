@@ -1707,8 +1707,18 @@ exports.tournamentMirror = onDocumentWritten(
    * economia de 37 KB. Agora a chave sai do CONTEÚDO (`_k`, ver chaveDoEvento no
    * split-core) e o espelho SÓ CRESCE. `_idx` segue no registro: chave é QUEM, índice é
    * ONDE — o bug nasceu de usar um como o outro. */
-  const r3 = await _espelhaColecao(db, id, 'history', pAntes.history, pDepois.history,
-    (h) => (h._k || ('h' + h._idx)), true);
+  /* ⛔ E O `_idx` NÃO VAI PRO ESPELHO DO HISTÓRICO — ele também anda com a poda.
+   * Medido contra o documento real do Confra: com `_idx` no registro, podar 218→30 dava
+   * 30 GRAVAÇÕES de linhas que não mudaram (só o índice tinha mudado) — e, pior, deixava
+   * a ORDEM ambígua: as 30 repodadas viravam _idx 0..29, colidindo com as 188 antigas que
+   * guardam 0..187. Sem o índice, a poda fica INERTE (0 gravações, 0 apagados), que é o
+   * comportamento certo pra um log que só cresce.
+   * A ordem sai de `item.date`, que toda linha carrega e que não muda de lugar nunca.
+   * ⚠️ Por isso `history` NÃO pode entrar em `_semPesados` enquanto o leitor
+   * (`_montaDeSubcolecoes` → `remontar`) ainda ordenar por `_idx`. É o próximo passo. */
+  const _hist = (pDepois.history || []).map((h) => ({ _k: h._k, item: h.item }));
+  const _histAntes = (pAntes.history || []).map((h) => ({ _k: h._k, item: h.item }));
+  const r3 = await _espelhaColecao(db, id, 'history', _histAntes, _hist, (h) => h._k, true);
 
       if (r1.gravados || r1.apagados || r2.gravados || r2.apagados || r3.gravados || r3.apagados) {
         console.log('[tournamentMirror]', id,

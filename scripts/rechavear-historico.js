@@ -39,7 +39,11 @@ const ehPosicional = (k) => /^h\d+$/.test(k);
     hist.forEach((ev, i) => {
       const k = S.chaveDoEvento(ev);
       if (novos.has(k)) colisoes++;
-      novos.set(k, { _idx: i, _k: k, item: JSON.parse(JSON.stringify(ev)) });
+      // ⛔ SEM `_idx`: o índice também anda com a poda. Com ele no registro, podar
+      // 218→30 dava 30 gravações de linhas que não mudaram e deixava a ORDEM ambígua
+      // (as 30 repodadas viram 0..29 e colidem com as 188 antigas, que guardam 0..187).
+      // Sem ele a poda fica INERTE. A ordem sai de `item.date`, que não muda de lugar.
+      novos.set(k, { _k: k, item: JSON.parse(JSON.stringify(ev)) });
     });
     // ② o que o espelho já tem sob chave posicional e o documento NÃO tem mais
     //    (poda antiga, ou evento removido): preserva — log não se apaga.
@@ -48,15 +52,22 @@ const ehPosicional = (k) => /^h\d+$/.test(k);
       const ev = reg.item;
       if (!ev) continue;
       const k = S.chaveDoEvento(ev);
-      if (!novos.has(k)) novos.set(k, { _idx: reg._idx != null ? reg._idx : -1, _k: k, item: ev });
+      if (!novos.has(k)) novos.set(k, { _k: k, item: ev });
     }
 
+    // ⭐ Reescreve também o que JÁ existe mas está fora do formato de hoje: registro com
+    // `_idx` (a 1ª passada gravava) ou sem `_k`. Sem isto o espelho fica metade num
+    // formato e metade no outro — e formato misto é o que morde seis meses depois.
+    const foraDoFormato = new Set(esp.docs
+      .filter((d) => { const r = d.data() || {}; return r._idx !== undefined || !r._k; })
+      .map((d) => d.id));
     const jaTem = new Set(esp.docs.map((d) => d.id));
-    const aEscrever = [...novos.entries()].filter(([k]) => !jaTem.has(k));
+    const aEscrever = [...novos.entries()].filter(([k]) => !jaTem.has(k) || foraDoFormato.has(k));
     console.log((t.name || doc.id).slice(0, 44).padEnd(46) +
       ' doc:' + String(hist.length).padStart(4) +
       '  espelho:' + String(esp.size).padStart(4) +
       '  posicionais:' + String(velhas.length).padStart(4) +
+      '  fora-do-formato:' + String(foraDoFormato.size).padStart(4) +
       '  a escrever:' + String(aEscrever.length).padStart(4));
     if (!APLICAR) { tocados++; continue; }
 
