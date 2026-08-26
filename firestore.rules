@@ -189,6 +189,21 @@ service cloud.firestore {
       allow write: if false;   // só a Cloud Function (admin SDK ignora regras)
     }
 
+    /* ── BACKUP CONGELADO: NINGUÉM LÊ, NINGUÉM ESCREVE ─────────────────────────
+     * `tournaments_backup/{id}` guarda o documento do torneio INTEIRO como ele era antes
+     * de os jogos saírem dele (Fase 2c). Ordem do dono (26/ago): _"precisamos ter aquele
+     * backup no sistema antigo inerte"_.
+     * ⛔ INERTE quer dizer isto: nem o cliente lê, nem o cliente escreve. Só o Admin SDK
+     * (scripts/dividir-jogos.js, scripts/desfazer-divisao.js), que não passa por regra.
+     * Sem regra o Firestore já negaria por omissão — está escrito pra ser uma DECISÃO
+     * visível e não um esquecimento com o mesmo efeito.
+     * ⚠️ E ele carrega o documento cru, que inclui os campos com e-mail que a gente está
+     * tirando do doc público. Mais uma razão pra ninguém alcançar.
+     * Só o dono manda apagar. */
+    match /tournaments_backup/{tournamentId} {
+      allow read, write: if false;
+    }
+
     match /tournaments/{tournamentId} {
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll

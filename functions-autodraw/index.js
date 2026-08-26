@@ -342,6 +342,79 @@ function _isTournamentParticipant(t, uid, email) {
 // sincronizar estado/exibir sem depender de um render. Nunca gravar `clean`, nunca devolver
 // `persist`: trocar os dois re-introduz nome gravado no Firestore (fura o storage só-uid) ou
 // entrega ao cliente entradas sem nome (some da tela).
+/* ── LER E GRAVAR TORNEIO QUE TEVE OS JOGOS TIRADOS DO DOCUMENTO ───────────────────
+ *
+ * O doc do torneio tem teto de 1 MB e `rounds` é 45% do Confra. Tirar os jogos é o que
+ * remove o teto — e o marcador `_semPesados` é o que diz, POR TORNEIO, que já saíram.
+ * ⛔ O gatilho é o MARCADOR, nunca a ausência: torneio recém-criado também não tem jogo.
+ *
+ * ⚠️ CUSTO ASSUMIDO, dito antes de ligar: aplicar um placar passa a custar ~115 leituras
+ * (a subcoleção inteira) em vez de 1. O motor precisa do torneio TODO pra avançar chave e
+ * classificação — não dá pra aplicar placar lendo um jogo só. O que se ganha é do outro
+ * lado e é maior: a ESCRITA cai de 214 KB pra ~1 KB, e o ECO pra cada tela aberta cai
+ * junto. Leitura é barata; eco de 214 KB por ponto é pago por todo mundo na quadra.
+ */
+/* O estado ANTES do motor mexer — é contra ele que `jogosQueMudaram` compara pra saber
+ * quais jogos gravar. Só clona quando vale: torneio inteiro no documento não precisa. */
+function _antesDoMotor(t) {
+  if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) return null;
+  return JSON.parse(JSON.stringify(t));
+}
+
+async function _leTorneio(tx, ref, tId) {
+  const snap = await tx.get(ref);
+  if (!snap.exists) return null;
+  const t = snap.data(); t.id = tId;
+  const fora = Array.isArray(t._semPesados) ? t._semPesados : null;
+  if (!fora || !fora.length) return t;
+  if (!_tSplit || typeof _tSplit.remontar !== 'function') {
+    // ⛔ Sem o tradutor eu devolveria um torneio SEM JOGOS e o motor gravaria em cima.
+    // Explodir aqui é infinitamente melhor: a transação inteira aborta e nada se perde.
+    throw new Error('[fase2] tradutor indisponível — recuso montar torneio dividido');
+  }
+  const partes = { config: t };
+  for (const nome of fora) {
+    const s = await tx.get(ref.collection(nome));
+    partes[nome] = s.docs.map((d) => d.data());
+  }
+  const montado = _tSplit.remontar(partes);
+  if (!montado) throw new Error('[fase2] remontar falhou em ' + tId);
+  montado.id = tId;
+  return montado;
+}
+
+/* Grava o torneio respeitando o que saiu do documento. Devolve o mesmo `{persist, clean}`
+ * de sempre, pra quem chama seguir devolvendo `clean` ao cliente sem saber de nada disto.
+ * ⭐ Só os jogos que MUDARAM são escritos (`jogosQueMudaram`), que é o ponto inteiro: um
+ * ponto de placar toca ~1 KB em vez de reescrever o torneio.
+ * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
+ * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
+function _gravaTorneio(tx, ref, tDepois, tAntes) {
+  const b = _applyWriteBoundary(tDepois);
+  const fora = Array.isArray(tDepois._semPesados) ? tDepois._semPesados : null;
+  if (!fora || !fora.length) { tx.set(ref, b.persist); return b; }
+  if (!_tSplit || typeof _tSplit.dividir !== 'function') {
+    throw new Error('[fase2] tradutor indisponível — recuso gravar torneio dividido');
+  }
+  const _clone = (x) => JSON.parse(JSON.stringify(x));
+  const pDepois = _tSplit.dividir(_clone(b.persist));
+  const pAntes = tAntes ? _tSplit.dividir(_clone(tAntes)) : { matches: [], participants: [], history: [] };
+
+  if (fora.indexOf('matches') !== -1) {
+    const d = _tSplit.jogosQueMudaram(pAntes.matches, pDepois.matches);
+    const col = ref.collection('matches');
+    d.mudaram.forEach((m) => tx.set(col.doc(String(m._chave)), m));
+    d.sumiram.forEach((m) => tx.delete(col.doc(String(m._chave))));
+  }
+  // devolve pro documento tudo que NÃO está no marcador (dividir tira os três sempre)
+  ['participants', 'history'].forEach((k) => {
+    if (fora.indexOf(k) === -1 && b.persist[k] !== undefined) pDepois.config[k] = b.persist[k];
+  });
+  pDepois.config._semPesados = fora;
+  tx.set(ref, pDepois.config);
+  return b;
+}
+
 function _applyWriteBoundary(data) {
   const w = drawWindow;
   if (!w) throw new HttpsError('internal', 'draw-core indisponível');
@@ -441,10 +514,9 @@ exports.drawRound = onCall(async (request) => {
   let out;
   try {
     out = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-    const t = snap.data();
-    t.id = tId;
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+    const _tAntes = _antesDoMotor(t);
     _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/etc. por uid (inscrito grava só uid)
 
     // Re-checa authz sobre o doc FRESCO: entre o read de fora e a transação o organizador
@@ -495,8 +567,7 @@ exports.drawRound = onCall(async (request) => {
     t.history.push({ date: new Date().toISOString(), message: msg });
 
     // v4.1.30: o sorteio LIMPA a presença (drawInitial já zera checkedIn/absent).
-    const b = _applyWriteBoundary(t);
-    tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+    const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
     // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
     // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
@@ -546,9 +617,9 @@ exports.integrateLateEntries = onCall(async (request) => {
   let out;
   try {
     out = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const t = snap.data(); t.id = tId;
+      const t = await _leTorneio(tx, ref, tId);
+      if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid, email)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       }
@@ -579,8 +650,7 @@ exports.integrateLateEntries = onCall(async (request) => {
       // tardio está presente, NÃO entrou, e o organizador precisa saber por quê e o que
       // fazer. Devolver só `changed:false` aqui era silêncio, e silêncio foi o pecado da 1.5.x.
       if (!res.changed) return { ok: true, changed: false, recusas: res.recusas || [] };
-      const b = _applyWriteBoundary(t);
-      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
       // Devolve TODOS os contadores (v1.4.43): faltava `placed`/`repfill`/etc. — o "jogo 5" novo
       // (via _growAdefinir/_placeLateEntriesSurgically volta em `placed`) não aparecia no trace nem
       // disparava o toast, dando a impressão de "não criou" mesmo tendo criado. Todo caminho que muda
@@ -623,15 +693,14 @@ exports.formLatePair = onCall(async (request) => {
   let out;
   try {
     out = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const t = snap.data(); t.id = tId;
+      const t = await _leTorneio(tx, ref, tId);
+      if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
       const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
-      const b = _applyWriteBoundary(t);
-      tx.set(ref, b.persist);
+      const b = _gravaTorneio(tx, ref, t, _tAntes);
       return { ok: true, formed: res.formed, integrated: res.integrated, tournament: b.clean };
     });
   } catch (e) {
@@ -663,15 +732,14 @@ exports.splitLatePair = onCall(async (request) => {
   let out;
   try {
     out = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const t = snap.data(); t.id = tId;
+      const t = await _leTorneio(tx, ref, tId);
+      if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const _tAntes = _antesDoMotor(t);
       if (!_isTournamentAdmin(t, uid, email)) throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
       const res = splitLatePairFn(t, { id1: id1, id2: id2 });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
-      const b = _applyWriteBoundary(t);
-      tx.set(ref, b.persist);
+      const b = _gravaTorneio(tx, ref, t, _tAntes);
       return { ok: true, split: res.split, tournament: b.clean };
     });
   } catch (e) {
@@ -718,9 +786,9 @@ exports.splitLatePair = onCall(async (request) => {
 async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage) {
   const ref = db.collection('tournaments').doc(tId);
   return db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) return { ok: false, reason: 'not-found' };
-    const t = snap.data(); t.id = tId;
+    const t = await _leTorneio(tx, ref, tId);
+    if (!t) return { ok: false, reason: 'not-found' };
+    const _tAntes = _antesDoMotor(t);
     _enrichParticipantsFromProfiles(t);
     // Re-checa sobre o doc FRESCO (acesso pode ter mudado entre o read e a txn).
     if (!_isTournamentParticipant(t, ator.uid, ator.email) && !_isTournamentAdmin(t, ator.uid, ator.email)) {
@@ -732,8 +800,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       logMessage: logMessage
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
-    const b = _applyWriteBoundary(t);
-    tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+    const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
 }
@@ -890,9 +957,9 @@ exports.closeRound = onCall(async (request) => {
   let out;
   try {
     out = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) throw new HttpsError('not-found', 'Torneio não encontrado.');
-      const t = snap.data(); t.id = tId;
+      const t = await _leTorneio(tx, ref, tId);
+      if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
+      const _tAntes = _antesDoMotor(t);
       // Re-checa authz sobre o doc FRESCO (acesso pode ter mudado entre o read de fora e a txn).
       if (!_isTournamentParticipant(t, uid, email) && !_isTournamentAdmin(t, uid, email)) {
         throw _drawFail('permission-denied', 'Sem permissão (doc fresco).', { tId, uid });
@@ -905,8 +972,7 @@ exports.closeRound = onCall(async (request) => {
         // (outro fechou primeiro, ou a rodada não fechou de fato). O cliente reconcilia pelo listener.
         return { ok: false, reason: (res && res.reason) || 'close-failed' };
       }
-      const b = _applyWriteBoundary(t);
-      tx.set(ref, b.persist); // set (sem merge) DENTRO da txn = clobber-free
+      const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
       return { ok: true, branch: res.branch, tournament: b.clean };
     });
   } catch (e) {
@@ -1500,6 +1566,14 @@ async function _formarGruposDaEspera(doc) {
           novos.push({ name: g.name, players: (g.players || []).slice(), uids: (g.playersUids || []).slice() });
         }
       }));
+      // ⚠️ Aqui o torneio veio de uma QUERY (varredura agendada), não de `_leTorneio` —
+      // então ele NÃO está montado. Gravar dividido a partir de um objeto sem os jogos
+      // apagaria a subcoleção. Enquanto esta varredura não ler montado, torneio DIVIDIDO
+      // é pulado: ele entra no grupo pelo caminho normal, e pular é reversível.
+      if (Array.isArray(t._semPesados) && t._semPesados.length) {
+        console.log('[espera→grupo]', doc.id, 'PULADO: torneio dividido e esta varredura ainda lê o doc cru');
+        return { changed: false };
+      }
       const b = _applyWriteBoundary(t);
       tx.set(doc.ref, b.persist);
       return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0, novos: novos, nome: t.name || '' };
@@ -1658,6 +1732,7 @@ exports.tournamentSummary = onDocumentWritten(
     try {
       const db = getFirestore();
       const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
+      let _pulaJogos = false;
       const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
 
       // torneio apagado → o resumo some junto (senão a tela mostraria fantasma)
@@ -1772,6 +1847,15 @@ exports.tournamentMirror = onDocumentWritten(
       }
 
       const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
+      /* ⛔⛔ TORNEIO JÁ DIVIDIDO: O ESPELHO NÃO ENCOSTA NOS JOGOS.
+       * Este gatilho deriva do DOCUMENTO. Quando os jogos saem dele (`_semPesados`), o doc
+       * passa a ter `rounds` com `matches` vazio — e `_espelhaColecao` veria "nenhum jogo
+       * agora" e APAGARIA a subcoleção inteira. Que é justamente onde os jogos passaram a
+       * viver: o espelho deixa de ser cópia e vira a fonte VIVA, escrita pelas CFs.
+       * Seria o gatilho apagando o dado de verdade por achar que estava limpando cópia. */
+      if (Array.isArray(depois._semPesados) && depois._semPesados.indexOf('matches') !== -1) {
+        _pulaJogos = true;
+      }
       const pDepois = _tSplit.dividir(depois);
       if (!pDepois) return;
       // ⚠️ Sem `antes` (torneio novo, ou 1ª passada) o diff grava TUDO — que é o
@@ -1791,12 +1875,14 @@ exports.tournamentMirror = onDocumentWritten(
         const j = m && m.jogo;
         return j && !j.isBye && !j.isSitOut && j.p1 && j.p2 && j.p1 !== 'BYE' && j.p2 !== 'BYE' && j.p1 !== 'TBD';
       }).length;
-      if (_jogaveis && !_comUid) {
+      if (_jogaveis && !_comUid && !_pulaJogos) {
         console.error('[tournamentMirror]', id, '⛔ NENHUM jogo com playerUids em', _jogaveis,
           'jogáveis — a derivação não carregou (vendor/bracket-logic). A escrita por jogador fica NEGADA.');
       }
 
-      const r1 = await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
+      const r1 = _pulaJogos
+        ? { gravados: 0, apagados: 0, total: 0 }
+        : await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);
       const r2 = await _espelhaColecao(db, id, 'participants', pAntes.participants, pDepois.participants, (p) => 'p' + p._idx);
       /* ⛔ O HISTÓRICO ERA ESPELHADO POR POSIÇÃO — e posição é o que a poda muda.
    * Medido antes de mexer: Confra com 218 eventos no doc e 218 no espelho. Podar o doc

@@ -84,6 +84,24 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.105 ──────────────────────────────────────────
+        // ⭐ AS TRÊS PORTAS QUE DEVOLVERIAM OS JOGOS PRO DOCUMENTO, FECHADAS.
+        // Depois que os jogos saem do doc, o objeto em MEMÓRIA continua tendo eles (a rede
+        // do ouvinte enxerta, pra tela não pintar chave vazia). Isso cria um risco novo e
+        // silencioso: qualquer caminho que grave "o torneio inteiro" devolve os jogos.
+        // ① `saveTournament` grava só a CONFIG quando o marcador está posto — e se
+        //    `dividir` falhar, NÃO grava: gravar o objeto inteiro desfaria a divisão calado.
+        // ② As CFs passaram a ler por `_leTorneio` (monta das subcoleções) e gravar por
+        //    `_gravaTorneio` (só os jogos que MUDARAM — um ponto toca ~1 KB em vez de
+        //    reescrever 214 KB). São 6 portas de escrita; uma sozinha fora desfaz tudo.
+        // ③ ⛔ O gatilho de espelho era o mais perigoso: ele deriva do DOCUMENTO, veria
+        //    "nenhum jogo" e APAGARIA a subcoleção — que passou a ser a cópia VIVA. Agora
+        //    ele reconhece o marcador e não encosta nos jogos.
+        // ⚠️ Custo assumido: aplicar placar passa a custar ~115 leituras (o motor precisa
+        // do torneio TODO pra avançar chave). O ganho é maior e do outro lado: a escrita e
+        // o ECO pra cada tela aberta caem de 214 KB pra ~1 KB.
+        // ⛔ E a VOLTA foi escrita ANTES do salto (scripts/desfazer-divisao.js). Volta que
+        // se escreve no susto é volta que não funciona.
         // ── ciclo 2.0.104 ──────────────────────────────────────────
         // 🕸️ A REDE, ANTES DO SALTO. Nada muda hoje — é o que impede um desastre amanhã.
         // O ouvinte ao vivo (`_aplicaSnapTorneios`) é síncrono, roda a CADA eco de

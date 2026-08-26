@@ -1068,6 +1068,35 @@ window.FirestoreDB = {
         }
       }
     } catch (_cfgErr) { /* blindagem best-effort; nunca derruba o save */ }
+    /* ── TORNEIO DIVIDIDO: O CLIENTE NÃO DEVOLVE OS JOGOS PRO DOCUMENTO ───────────
+     * Depois que os jogos saem do doc (`_semPesados`), o objeto em MEMÓRIA continua tendo
+     * eles — a rede do ouvinte enxerta pra tela não pintar chave vazia. Se este save
+     * mandasse o objeto inteiro, os jogos VOLTAVAM pro documento: o teto voltava junto e,
+     * pior, passava a existir duas cópias divergindo (a do doc e a da subcoleção).
+     * ⇒ Grava só a CONFIG. Os jogos não são tocados aqui por ninguém: quem escreve jogo é
+     * a CF, e a regra nega escrita do cliente na subcoleção.
+     * ⭐ E as RODADAS continuam indo (só sem os jogos dentro): nome de grupo, horário e o
+     * resto da config de rodada são editados por aqui e não podem se perder.
+     * ⛔ `participants`/`history` só saem se estiverem NO MARCADOR — `dividir` extrai os
+     * três por natureza, e gravar a config crua dele zeraria o elenco. */
+    var _fora = Array.isArray(cleanData._semPesados) ? cleanData._semPesados : null;
+    if (_fora && _fora.length && window._tSplit && typeof window._tSplit.dividir === 'function') {
+      try {
+        var _p = window._tSplit.dividir(JSON.parse(JSON.stringify(cleanData)));
+        if (_p && _p.config) {
+          ['participants', 'history'].forEach(function (k) {
+            if (_fora.indexOf(k) === -1 && cleanData[k] !== undefined) _p.config[k] = cleanData[k];
+          });
+          _p.config._semPesados = _fora;
+          cleanData = _p.config;
+        }
+      } catch (_eD) {
+        // ⛔ Falhar aqui e gravar o objeto INTEIRO desfaria a divisão em silêncio.
+        // Melhor não gravar: a pessoa tenta de novo e o dado fica como está.
+        if (window._error) window._error('[fase2] não consegui dividir pra gravar ' + docId, _eD);
+        throw _eD;
+      }
+    }
     await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
     // v1.7.98: aqui havia a escrita dupla no espelho (`_mirrorRoster`). Saiu — o cliente
     // NÃO tem permissão nessa subcoleção e nunca teve; quem espelha é a CF. Ver a nota
