@@ -80,7 +80,11 @@ ok(r4.rounds[0].matches.length === 1 && r4.rounds[0].matches[0].id === 'doNovo',
 
 // ── ⑤ e a fiação está no lugar certo ────────────────────────────────────────
 const iA = src.indexOf('function _aplicaSnapTorneios(');
-const bloco = src.slice(iA, iA + 4000);
+// ⚠️ janela LARGA: o ouvinte ganhou o comentário longo que explica por que a BUSCA existe
+// (ela faltava e quebrou produção em 26/ago). Com 4000 o `tournaments.push` caía fora do
+// recorte e o teste dizia que a ordem estava errada. Mesmo tropeço de recorte curto que já
+// aconteceu duas vezes neste projeto.
+const bloco = src.slice(iA, iA + 9000);
 ok(/_enxertaJogos\(data, _emMemoria\)/.test(bloco), 'o ouvinte chama a rede');
 ok(/store\.tournaments \|\| \[\]\)\.find/.test(bloco),
   '⭐ e enxerta do objeto MONTADO no store, não de `_prevParsed` — o parse anterior tem o mesmo buraco');

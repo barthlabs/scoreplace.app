@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.109';
+window.SCOREPLACE_VERSION = '2.0.110';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10703,6 +10703,7 @@ window.AppStore = {
     }
 
     function _aplicaSnapTorneios(snap) {
+        var _paraMontar = [];
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
         // v1.9.81: IDs antes do rebuild — pra detectar torneios REMOVIDOS
         // (deletados pelo organizador, ou usuário removido do torneio). Se o
@@ -10748,6 +10749,20 @@ window.AppStore = {
               return x && String(x.id) === String(data.id);
             });
             data = _enxertaJogos(data, _emMemoria);
+            /* ⛔ A BUSCA — A PEÇA QUE FALTOU E QUEBROU PRODUÇÃO (26/ago).
+             * A rede acima só enxerta o que já está em MEMÓRIA. No PRIMEIRO carregamento
+             * não há memória — e é ESTE ouvinte que carrega, não o `loadTournamentById`
+             * que eu tinha ensinado a montar. Sem isto o torneio entra sem jogos e
+             * NINGUÉM VAI BUSCAR: a tela diz que o torneio não tem jogo.
+             * O dono viu isso no meio do Confra ao vivo. No banco nada se perdeu; na tela
+             * era perda. Ver [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]].
+             *
+             * ⛔ Não dá pra buscar AQUI (a função é síncrona e roda a cada eco de QUALQUER
+             * torneio — seriam ~115 leituras por torneio por eco). Então: MARCA agora,
+             * busca FORA, e repinta quando chegar.
+             * ⚠️ Uma busca por torneio de cada vez (`_montandoPesados`): sem isso, cada eco
+             * durante a busca dispara outra, e um torneio ao vivo ecoa o tempo todo. */
+            if (data && data._faltamPesados) _paraMontar.push(String(data.id));
           }
           _novoParsed[doc.id] = data;
           if (data && data.isSandbox === true && !_devSeesSb) return;
@@ -10757,6 +10772,11 @@ window.AppStore = {
         });
         store._parsedById = _novoParsed;
         store.tournaments = tournaments;
+        // ⭐ e SÓ AGORA (com o store montado) a busca do que falta é disparada — de fora
+        // do laço síncrono, uma de cada vez, e repintando quando chegar.
+        if (_paraMontar.length && typeof store._montaPesadosQueFaltam === 'function') {
+          store._montaPesadosQueFaltam(_paraMontar);
+        }
         // v1.3.82: reaplica a presença otimista pendente sobre os docs frescos ANTES de qualquer
         // render/cache — senão um snapshot stale (pré-write) reverte o que o org acabou de marcar
         // ("aparece/apaga"). Cada intenção some sozinha quando o doc fresco confirma ou em ~15s.
@@ -11815,6 +11835,60 @@ window.AppStore = {
   // bate com o dono do e-mail. Ou seja: não salvava ninguém.
   // Conta recriada (uid novo) se resolve pelo remap/merge — não por porta de e-mail aqui.
   // Ver [[project_uid_identity_canon_locked]] / [[project_account_merge_email]].
+  /* ── A BUSCA DO QUE SAIU DO DOCUMENTO ─────────────────────────────────────────
+   * ⛔ ESTA FUNÇÃO É A QUE FALTAVA e por isso a divisão quebrou produção em 26/ago.
+   * O ouvinte ao vivo é síncrono e roda a cada eco de QUALQUER torneio — buscar lá dentro
+   * seriam ~115 leituras por torneio por eco. Então ele MARCA (`_faltamPesados`) e a busca
+   * acontece aqui: fora do laço, uma por torneio, repintando quando chega.
+   *
+   * ⚠️ UMA DE CADA VEZ POR TORNEIO. Um torneio ao vivo ecoa o tempo todo; sem a trava,
+   * cada eco durante a busca dispara outra e viram dezenas de buscas paralelas do mesmo
+   * dado — exatamente o custo que tirar os jogos do documento existia pra economizar.
+   * ⚠️ E NÃO limpa a trava no fim: enquanto o objeto montado estiver no store, a rede o
+   * enxerta e `_faltamPesados` não volta. Se o torneio for embora e voltar, a marca some
+   * junto com ele. Limpar aqui reabriria a porta pro laço de buscas.
+   */
+  async _montaPesadosQueFaltam(ids) {
+    if (!Array.isArray(ids) || !ids.length) return;
+    if (!window.FirestoreDB || typeof window.FirestoreDB._montaDeSubcolecoes !== 'function') {
+      if (window._error) window._error('[fase2] não há como montar — torneio ficaria sem jogos na tela');
+      return;
+    }
+    this._montandoPesados = this._montandoPesados || {};
+    var self = this;
+    for (var i = 0; i < ids.length; i++) {
+      var id = String(ids[i]);
+      if (this._montandoPesados[id]) continue;
+      this._montandoPesados[id] = true;
+      /* eslint-disable no-loop-func */
+      (function (tid) {
+        var alvo = (self.tournaments || []).find(function (x) { return x && String(x.id) === tid; });
+        if (!alvo || !Array.isArray(alvo._semPesados) || !alvo._semPesados.length) {
+          delete self._montandoPesados[tid]; return;
+        }
+        window.FirestoreDB._montaDeSubcolecoes(tid, alvo, alvo._semPesados)
+          .then(function (montado) {
+            if (!montado) return;
+            // ⭐ escreve NO LUGAR (mesma referência): meia dúzia de telas guardam o objeto,
+            // e trocar a referência deixaria elas com o de antes. Mesmo motivo pelo qual o
+            // completo SUBSTITUI o resumo no lugar em `_ensureTournamentLoaded`.
+            var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === tid; });
+            if (!vivo) return;
+            Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
+            delete vivo._faltamPesados;
+            try { self._saveToCache(); } catch (e) {}
+            if (typeof window._softRefreshView === 'function') window._softRefreshView();
+          })
+          .catch(function (e) {
+            // ⛔ Falhar em silêncio aqui é a tela dizendo que o torneio não tem jogo.
+            if (window._error) window._error('[fase2] não consegui montar ' + tid, e);
+            delete self._montandoPesados[tid];   // deixa uma próxima tentativa acontecer
+          });
+      })(id);
+      /* eslint-enable no-loop-func */
+    }
+  },
+
   isOrganizer(tournament) {
     if (!this.currentUser) return false;
     var uid = this.currentUser.uid;

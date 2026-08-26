@@ -84,6 +84,25 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.110 ──────────────────────────────────────────
+        // ⭐ A BUSCA QUE FALTAVA — a peça cuja ausência quebrou produção hoje de manhã.
+        // O ouvinte ao vivo é síncrono e roda a cada eco de QUALQUER torneio; buscar lá
+        // dentro seriam ~115 leituras por torneio por eco. Então ele MARCA e a busca
+        // acontece fora do laço, UMA por torneio, repintando quando chega.
+        // ⛔ Sem ela, no PRIMEIRO carregamento o torneio dividido entrava sem jogos e
+        // ninguém ia buscar — a tela dizia que o torneio não tem jogo.
+        // ⚠️ Uma de cada vez por torneio: torneio ao vivo ecoa o tempo todo e, sem trava,
+        // cada eco durante a busca dispararia outra — dezenas de buscas do mesmo dado,
+        // que é exatamente o custo que tirar os jogos do doc existia pra economizar.
+        // ⭐ Escreve NO LUGAR (mesma referência) porque meia dúzia de telas guardam o
+        // objeto; trocar a referência as deixaria com o de antes.
+        // ⛔ E falha com BARULHO: falhar calado aqui é a tela mentindo de novo.
+        //
+        // ⚠️ A DIVISÃO SEGUE DESLIGADA. Isto é o pré-requisito (2) de (3). Faltam o
+        // ouvinte da subcoleção do torneio ABERTO e a prova num torneio de verdade.
+        // ⭐ E o teste novo percorre o CAMINHO (snapshot → ouvinte → store → busca), não a
+        // função isolada — foi testar a função isolada que deixou o defeito passar. Provado
+        // que ele pega: removendo a linha da busca, ele falha; recolocando, passa.
         // ── ciclo 2.0.108 ──────────────────────────────────────────
         // ⛔ "CABE 7,5× MAIS" AINDA É LIMITE. O dono cortou a conversa: _"não tem que ter
         // limite. o que cabe 7,5x mais? não deveria ter limite para a quantidade de
