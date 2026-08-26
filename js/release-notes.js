@@ -84,6 +84,33 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.100 ──────────────────────────────────────────
+        // ⭐ A PODA DO HISTÓRICO — o campo que crescia PRA SEMPRE agora tem freio.
+        // Simulado no documento REAL antes de ligar: Confra 218 → 80 eventos, 138 saem,
+        // 245 KB → 222 KB, e as 138 CONFERIDAS UMA A UMA no espelho (0 sem cópia).
+        // Em KB é modesto; o que muda é que o log deixa de crescer sem limite — daqui pra
+        // frente fica preso entre 80 e 120 linhas, dure o torneio o que durar.
+        //
+        // ⭐ A PODA MORA NO SERVIDOR, e por três motivos:
+        // ① só ali dá pra saber que o espelho JÁ TEM o que vai sair — é a linha de cima,
+        //    no mesmo disparo; do cliente eu estaria podando na esperança;
+        // ② o cliente tem uma proteção que RECONSTRÓI histórico encolhido (um save
+        //    atrasado apagando o rastro custou uma tarde) — podar de lá seria brigar com
+        //    ela; ③ é a ordem do dono: "tudo na cf".
+        // ⛔ E EM TRANSAÇÃO, relendo o documento: entre o gatilho e a escrita alguém lança
+        // placar e acrescenta linha, e um update cego engoliria essa linha — seria eu
+        // recriando o bug de save atrasado que o item ② descreve.
+        // ⭐ Só a ponta MAIS VELHA sai; a cauda fica. O que sai foi espelhado faz tempo.
+        //
+        // ⛔ QUEM PODA TEM QUE DEVOLVER. A tela de revisão do sorteio é a única que mostra
+        // o log INTEIRO (rules.js já cortava em 20): ela agora vai buscar o que foi podado
+        // na subcoleção — preguiçosamente, só quando o documento diz que houve poda, e a
+        // falha não derruba nada (a cauda já está pintada). Rastro que some em silêncio é
+        // o oposto de rastro.
+        // + regra nova: a subcoleção de histórico é LEGÍVEL (sem ela o Firestore nega por
+        //   omissão e a busca voltaria vazia); escrita segue só da CF.
+        // + `historyPodados` é CUMULATIVO, não um "total": total ficaria velho na linha
+        //   seguinte e a tela pararia de buscar o resto justo depois de um placar.
         // ── ciclo 2.0.99 ───────────────────────────────────────────
         // ⭐ O HISTÓRICO É UM LOG — E A CHAVE DELE ERA A COISA QUE A PODA MOVE.
         // Medindo o peso dos documentos de hoje (não o número que eu anotei ontem):

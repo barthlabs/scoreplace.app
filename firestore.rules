@@ -308,6 +308,25 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // ─── HISTÓRICO ESPELHADO: LEITURA, PRA AGUENTAR A PODA ────────────────
+      // `tournaments/{id}/history/{k}` é onde o log de auditoria vive INTEIRO. O
+      // documento do torneio tem teto de 1 MB e o histórico é o único campo que cresce
+      // PRA SEMPRE (medido 26/ago: 37 KB dos 245 KB do Confra) — a cauda dele vai ser
+      // podada do documento, e é daqui que a tela busca o que foi podado.
+      // ⛔ Sem esta regra a leitura é NEGADA POR OMISSÃO, e podar faria o log sumir da
+      // tela em silêncio — que é justamente o que não pode acontecer com um rastro de
+      // auditoria (reconstruir o sumiço do Gersom custou uma tarde por falta dele).
+      // Mesma paridade do documento pai: quem vê o torneio vê o log dele.
+      // ⛔ Escrita é da CF (gatilho `tournamentMirror`, admin SDK), nunca do cliente —
+      // mesmo princípio de `matches` logo acima.
+      match /history/{eventoId} {
+        function parentTh() {
+          return get(/databases/$(database)/documents/tournaments/$(tournamentId)).data;
+        }
+        allow read: if (request.auth != null) || (parentTh().isPublic == true);
+        allow write: if false;
+      }
+
       // ─── Busca ativa letzplay do organizador (anti-gato) ───────────────────
       // tournaments/{id}/letzplayScans/{uid} — o organizador varre o PERFIL
       // PÚBLICO letzplay dos inscritos que autorizaram (categoria/nível) via a

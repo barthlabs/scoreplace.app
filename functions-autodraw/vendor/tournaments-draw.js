@@ -1912,6 +1912,15 @@ window._gdConfirm = function(){
   if (typeof ctx.onConfirm === 'function') ctx.onConfirm(ctx.mode, assigned, { ratio: ctx.ratio, locked: ctx.locked });
 };
 
+/* Uma linha do log, um lugar só. A busca preguiçosa do log completo (abaixo) reusa
+ * ESTA função — duas marcações pro mesmo dado divergem, e hoje três bugs saíram disso. */
+window._linhaDoHistorico = function (log) {
+  return '<div style="margin-bottom:5px;display:flex;gap:8px;">' +
+    '<span style="color:var(--sp-c-64748b,#64748b);flex-shrink:0;">[' +
+      new Date(log.date).toLocaleTimeString() + ']</span>' +
+    '<span>' + window._safeHtml(log.message) + '</span></div>';
+};
+
 window.showFinalReviewPanel = function (tId) {
     const t = window._findTournamentById(tId);
     if (!t) return;
@@ -1971,13 +1980,8 @@ window.showFinalReviewPanel = function (tId) {
                 <!-- History / Log -->
                 <div>
                     <h4 style="margin:0 0 6px;color:var(--sp-c-94a3b8,#94a3b8);font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;">${_t('tdraw.resolutionHistory')}</h4>
-                    <div style="background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));border-radius:12px;padding:0.75rem;max-height:100px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:var(--sp-c-cbd5e1,#cbd5e1);">
-                        ${(t.history || []).slice().reverse().map(log => `
-                            <div style="margin-bottom:5px;display:flex;gap:8px;">
-                                <span style="color:var(--sp-c-64748b,#64748b);flex-shrink:0;">[${new Date(log.date).toLocaleTimeString()}]</span>
-                                <span>${window._safeHtml(log.message)}</span>
-                            </div>
-                        `).join('')}
+                    <div id="final-review-history" style="background:var(--sp-g-0-0-0-02,rgba(0,0,0,0.2));border-radius:12px;padding:0.75rem;max-height:100px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:var(--sp-c-cbd5e1,#cbd5e1);">
+                        ${(t.history || []).slice().reverse().map(log => window._linhaDoHistorico(log)).join('')}
                     </div>
                 </div>
             </div>
@@ -1994,6 +1998,31 @@ window.showFinalReviewPanel = function (tId) {
         </div>
     `;
     document.body.appendChild(overlay);
+
+    /* ── O QUE FOI PODADO VOLTA AQUI ──────────────────────────────────────────────
+     * O documento guarda só a CAUDA do log (o campo é o único que cresce pra sempre e o
+     * doc tem teto de 1 MB). Esta é a ÚNICA tela que mostra o log inteiro — `rules.js` já
+     * corta em 20 por conta própria —, então é ela que tem que ir buscar o resto.
+     * ⛔ Sem isto, podar faria o rastro sumir da tela em silêncio, que é o oposto do
+     * motivo de existir um rastro.
+     * ⚠️ Preguiçoso de propósito: só busca quando o documento DIZ que foi podado
+     * (`historyTotal` maior que o que veio), e a falha não derruba nada — a cauda já está
+     * pintada. Torneio não podado não paga leitura nenhuma.
+     */
+    try {
+      // `historyPodados` é CUMULATIVO, não "total": total ficaria velho a cada linha nova
+      // e a tela deixaria de buscar o resto justo depois de um placar. Com o contador,
+      // "existe mais lá fora?" é simplesmente "já podaram alguma vez?".
+      var _podados = Number(t.historyPodados) || 0;
+      if (_podados > 0 && window.FirestoreDB && typeof window.FirestoreDB.carregarHistoricoCompleto === 'function') {
+        window.FirestoreDB.carregarHistoricoCompleto(tId).then(function (todos) {
+          if (!Array.isArray(todos) || !todos.length) return;
+          var box = document.getElementById('final-review-history');
+          if (!box) return;   // painel já fechado
+          box.innerHTML = todos.slice().reverse().map(function (l) { return window._linhaDoHistorico(l); }).join('');
+        });
+      }
+    } catch (_hErr) { /* a cauda já está na tela; log completo é melhoria, não requisito */ }
 };
 
 

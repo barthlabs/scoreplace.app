@@ -216,6 +216,7 @@ const SUITES = [
   // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
   'tests/jogo-espelhado-diz-quem-joga.test.js',
   'tests/historico-e-log-nao-se-apaga.test.js',
+  'tests/poda-do-historico-nao-perde-linha.test.js',
   // ⭐ E o FECHO DE RODADA vai pra CF em todo formato — pré-requisito da trava das rules
   // (09/set/2026): enquanto o cliente gera a rodada seguinte, fechar a rule quebra o ciclo.
   'tests/fecho-de-rodada-vai-pra-cf.test.js',

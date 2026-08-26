@@ -2196,6 +2196,34 @@ window.FirestoreDB = {
     return t;
   },
 
+  /* ── O LOG INTEIRO, QUANDO O DOCUMENTO SÓ TEM A CAUDA ──────────────────────────
+   * O histórico é o único campo do torneio que cresce PRA SEMPRE (`rounds` para quando o
+   * torneio acaba; o log não). Medido em 26/ago: 37 KB dos 245 KB do Confra. Por isso a
+   * cauda dele é podada do documento — e o que foi podado continua inteiro na subcoleção,
+   * que o gatilho mantém em modo "só cresce".
+   *
+   * ⛔ PODAR SEM ISTO SERIA APAGAR DA TELA. Rastro de auditoria que some em silêncio é
+   * exatamente o que custou uma tarde pra reconstruir o sumiço do Gersom. Quem poda tem
+   * que oferecer de volta o que podou.
+   * ⚠️ A ordem sai de `item.date`, NUNCA de índice: índice anda com a poda (foi o defeito
+   * corrigido na 2.0.99b). Ver [[feedback_chave_de_espelho_nunca_e_posicao]].
+   */
+  async carregarHistoricoCompleto(id) {
+    if (!this.db || !id) return null;
+    try {
+      var snap = await this.db.collection('tournaments').doc(String(id)).collection('history').get();
+      var arr = [];
+      snap.forEach(function (d) { var v = d.data(); if (v && v.item) arr.push(v.item); });
+      try { if (window._noteFsReads) window._noteFsReads(snap.size, 'historico-completo'); } catch (e) {}
+      arr.sort(function (a, b) { return String(a && a.date || '').localeCompare(String(b && b.date || '')); });
+      return arr;
+    } catch (e) {
+      // falhar aqui NÃO pode derrubar a tela: ela já mostra a cauda do documento
+      if (window._warn) window._warn('[historico] não consegui buscar o log completo de ' + id, e);
+      return null;
+    }
+  },
+
   async loadTournamentById(id) {
     if (!this.db || !id) return null;
     try {

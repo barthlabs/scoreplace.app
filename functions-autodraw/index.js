@@ -1720,6 +1720,57 @@ exports.tournamentMirror = onDocumentWritten(
   const _histAntes = (pAntes.history || []).map((h) => ({ _k: h._k, item: h.item }));
   const r3 = await _espelhaColecao(db, id, 'history', _histAntes, _hist, (h) => h._k, true);
 
+      /* ── A PODA: a cauda do log sai do DOCUMENTO, depois de estar no espelho ──────
+       * O doc do torneio tem teto de 1 MB e `history` é o único campo que cresce PRA
+       * SEMPRE (medido 26/ago: 37 KB dos 245 KB do Confra; `rounds` para quando o torneio
+       * acaba, o log não).
+       *
+       * ⭐ POR QUE A PODA MORA AQUI, e não no `saveTournament` do cliente:
+       * ① só aqui dá pra saber que o espelho JÁ TEM o que vai ser jogado fora — é a linha
+       *    de cima, no mesmo disparo. No cliente eu estaria podando na esperança;
+       * ② o cliente tem uma proteção que RECONSTRÓI histórico encolhido (um save atrasado
+       *    apagando o rastro custou uma tarde). Podar de lá seria brigar com ela;
+       * ③ é a ordem do dono: _"tudo na cf"_.
+       *
+       * ⛔ EM TRANSAÇÃO, relendo o documento: entre este gatilho e a escrita, alguém pode
+       * ter lançado um placar e acrescentado linha. Um `update` cego com a lista que eu li
+       * lá em cima engoliria essa linha — e seria eu recriando exatamente o bug de save
+       * atrasado que o item ② descreve.
+       * ⭐ E só a PONTA MAIS VELHA sai: as últimas ALVO ficam. O que sai foi espelhado há
+       * muito tempo; o que acabou de chegar está na cauda que fica.
+       *
+       * `historyPodados` é CUMULATIVO em vez de "total": total ficaria velho a cada linha
+       * nova e a tela deixaria de ir buscar o resto. Com o contador, total = podados +
+       * o que está no doc, e isso continua certo sozinho.
+       */
+      const TETO_HIST = 120, ALVO_HIST = 80;
+      if ((pDepois.history || []).length > TETO_HIST) {
+        try {
+          const podados = await db.runTransaction(async (tx) => {
+            const fresco = await tx.get(db.collection('tournaments').doc(id));
+            if (!fresco.exists) return 0;
+            const d = fresco.data() || {};
+            const h = Array.isArray(d.history) ? d.history : [];
+            if (h.length <= TETO_HIST) return 0;        // outro disparo já podou
+            const cauda = h.slice(-ALVO_HIST);
+            const fora = h.length - cauda.length;
+            tx.update(fresco.ref, {
+              history: cauda,
+              historyPodados: (Number(d.historyPodados) || 0) + fora
+            });
+            return fora;
+          });
+          if (podados) {
+            console.log('[tournamentMirror]', id, 'histórico PODADO:', podados,
+              'evento(s) saíram do documento (ficaram', ALVO_HIST + '); o log inteiro segue no espelho');
+          }
+        } catch (ePoda) {
+          // ⛔ Nunca derruba o espelho: sem poda o doc só fica gordo; com espelho quebrado
+          // o log some. A ordem de gravidade é essa.
+          console.error('[tournamentMirror] poda do histórico falhou', id, ePoda);
+        }
+      }
+
       if (r1.gravados || r1.apagados || r2.gravados || r2.apagados || r3.gravados || r3.apagados) {
         console.log('[tournamentMirror]', id,
           'jogos', r1.gravados + '/' + r1.total, '(-' + r1.apagados + ')',
