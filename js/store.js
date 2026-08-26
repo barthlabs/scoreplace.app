@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.103';
+window.SCOREPLACE_VERSION = '2.0.104';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10637,6 +10637,48 @@ window.AppStore = {
     // nenhum': era exatamente este callback, sem nome, pagando doc.data() de TODOS os
     // docs + JSON.stringify do cache inteiro a CADA eco (presença/placar de qualquer
     // participante). Ver as três cirurgias marcadas 1.9.79 dentro dele.
+    /* ── REDE: O OUVINTE NUNCA ENTREGA TORNEIO SEM OS JOGOS ───────────────────────
+     * Quando os jogos saírem do documento (`_semPesados: ['matches']`), este ouvinte —
+     * que é síncrono e roda a CADA eco de QUALQUER torneio — passaria a receber um doc
+     * com `rounds` sem jogo dentro. Ele empurra `doc.data()` direto pro `store` e a tela
+     * pinta em seguida ⇒ **chave vazia pra todo mundo com o app aberto**.
+     *
+     * ⛔ E buscar a subcoleção aqui não é opção: são ~115 leituras POR TORNEIO POR ECO.
+     * Trocaria um problema de peso por um de custo — o mesmo erro que a 1ª versão do
+     * gatilho de espelho cometeu.
+     *
+     * ⇒ A rede: o que já está montado em MEMÓRIA é enxertado na config nova. O documento
+     * manda no que é config (nome, fase, horário); a memória mantém os jogos até o
+     * ouvinte da subcoleção entregar os que mudaram.
+     * ⛔ E o gatilho é o MARCADOR, nunca a ausência: torneio recém-criado também não tem
+     * jogo. Ausência não é "mudou de lugar" — confundir os dois é como se apaga a tela.
+     * ⚠️ Sem nada em memória, o torneio é marcado `_faltamPesados` em vez de passar por
+     * vazio: quem pinta precisa poder dizer "ainda não carregou" ≠ "não tem jogo".
+     */
+    function _enxertaJogos(novo, velho) {
+      if (!novo || !Array.isArray(novo._semPesados) || novo._semPesados.indexOf('matches') === -1) return novo;
+      var achou = false;
+      var _puxa = function (destino, origem) {
+        if (!destino || !origem) return;
+        if (!Array.isArray(destino.matches) || !destino.matches.length) {
+          if (Array.isArray(origem.matches) && origem.matches.length) { destino.matches = origem.matches; achou = true; }
+        }
+      };
+      if (velho) {
+        // rodada é APPEND-ONLY: o índice i é estável entre os dois objetos.
+        if (Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
+          for (var i = 0; i < novo.rounds.length; i++) _puxa(novo.rounds[i], velho.rounds[i]);
+        }
+        _puxa(novo, velho);
+        if (Array.isArray(novo.groups) && Array.isArray(velho.groups)) {
+          for (var g = 0; g < novo.groups.length; g++) _puxa(novo.groups[g], velho.groups[g]);
+        }
+      }
+      if (!achou) novo._faltamPesados = true;   // "ainda não carregou" ≠ "não tem jogo"
+      else delete novo._faltamPesados;
+      return novo;
+    }
+
     function _aplicaSnapTorneios(snap) {
         try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-tournaments'); } catch (e) {}
         // v1.9.81: IDs antes do rebuild — pra detectar torneios REMOVIDOS
@@ -10674,6 +10716,15 @@ window.AppStore = {
           } else {
             data = doc.data();
             _reparseados.push(data);
+          }
+          // ⛔ doc sem os jogos NUNCA entra assim na tela — ver _enxertaJogos.
+          // Enxerta do objeto que JÁ ESTÁ no store (montado), não do parse anterior:
+          // `_prevParsed` é o doc cru e teria o mesmo buraco.
+          if (data && Array.isArray(data._semPesados) && data._semPesados.length) {
+            var _emMemoria = (store.tournaments || []).find(function (x) {
+              return x && String(x.id) === String(data.id);
+            });
+            data = _enxertaJogos(data, _emMemoria);
           }
           _novoParsed[doc.id] = data;
           if (data && data.isSandbox === true && !_devSeesSb) return;

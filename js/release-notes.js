@@ -84,6 +84,21 @@ window._RELEASE_NOTES_HTML = (function () {
     '<div style="margin-bottom:1rem;border:2px solid #fbbf24;border-radius:12px;padding:14px 16px;background:rgba(251,191,36,0.08);">' +
       '<div style="font-weight:800; color:var(--sp-c-fde68a,#fde68a); font-size:1rem; margin-bottom:8px;">\uD83C\uDFBE v2.0 \u2014 Cada fase joga no seu formato, e o aplicativo passa a andar junto com o site <span style=\"color:var(--text-muted); font-weight:400; font-size:0.78rem;\">(Agosto, 2026)</span></div>' +
       '<ul style="margin:0; padding-left:1.1rem; font-size:0.86rem; line-height:1.5; color:var(--text-main);">' +
+        // ── ciclo 2.0.104 ──────────────────────────────────────────
+        // 🕸️ A REDE, ANTES DO SALTO. Nada muda hoje — é o que impede um desastre amanhã.
+        // O ouvinte ao vivo (`_aplicaSnapTorneios`) é síncrono, roda a CADA eco de
+        // QUALQUER torneio e empurra `doc.data()` direto pro store; a tela pinta em
+        // seguida. Com os jogos fora do documento ele passaria a receber `rounds` com
+        // `matches` vazio ⇒ CHAVE VAZIA pra todo mundo com o app aberto. Não é lentidão:
+        // é a tela mentindo que o torneio não tem jogo.
+        // ⛔ E buscar a subcoleção ali não é opção: ~115 leituras POR TORNEIO POR ECO —
+        // trocaria peso por custo, o mesmo erro que a 1ª versão do gatilho cometeu.
+        // ⇒ O que já está montado em MEMÓRIA é enxertado na config nova: o documento manda
+        // no que é config (nome, fase, horário), a memória segura os jogos.
+        // ⛔ O gatilho é o MARCADOR (`_semPesados`), NUNCA a ausência — torneio recém-criado
+        // também não tem jogo, e confundir "não tem" com "mudou de lugar" apaga a tela.
+        // ⚠️ Sem nada em memória, marca `_faltamPesados` em vez de passar por vazio:
+        // "ainda não carregou" ≠ "não tem jogo".
         // ── ciclo 2.0.103 ──────────────────────────────────────────
         // ⭐ O ÚLTIMO LUGAR ONDE O CLIENTE CALCULAVA PLACAR FECHOU.
         // `commitResultTx` tentava a CF e, em QUALQUER falha, caía no MOTOR LOCAL — que
