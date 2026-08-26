@@ -316,6 +316,34 @@ function _reRenderDashKeepScroll() {
   }
 }
 
+/* ── A PÍLULA "ver mais/ver menos" — DEFINIDA NO CARREGAMENTO, NÃO NO RENDER ────────
+ * ⛔ Ela morava DENTRO de `renderDashboard`, e o export junto. Consequência (relato do
+ * dono, 26/ago: _"cadê o ver mais/ver menos?"_): quem abre um TORNEIO sem ter passado
+ * pela dashboard não tem `window._spVerMaisTag` — a chave chamava, o guard devolvia vazio,
+ * e o botão simplesmente não existia. Não dava erro nenhum: sumia calado.
+ * ⚠️ E o guard ESCONDEU o defeito: ele existe pros harnesses de teste, e acabou cobrindo
+ * um caso real. Guard que engole também engole o que você precisava ver.
+ * ⇒ Definida no escopo do arquivo: existe assim que o script carrega, independente de
+ * qual tela abriu primeiro. [[feedback_unify_dual_entry_points]] */
+function _verMaisTag(id, colapsado, extra) {
+  return '<span id="' + id + '"' + ((extra && extra.attrs) || '') + ' style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
+    'color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
+    'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;' +
+    ((extra && extra.style) || '') + '">' +
+    (colapsado ? 'ver mais' : 'ver menos') + '</span>';
+}
+/* ⭐ MESMA PÍLULA EM QUALQUER LUGAR (2.0.112). A chave das rodadas também precisou dela
+ * ("Demais jogos da rodada"), e o próprio comentário acima conta o que acontece quando
+ * o desenho é recriado: _"o ver menos ficou com uma aparência diferente"_.
+ * Exportar em vez de copiar é o que garante que corrigir aqui corrige lá. */
+window._spVerMaisTag = _verMaisTag;
+/* ⚠️ E também sob o nome LOCAL. Os harnesses recortam o corpo de `renderDashboard` e o
+ * rodam dentro de `with (window) { … }` — com a definição içada pra fora do recorte, o
+ * `_verMaisTag(...)` de dentro dele deixou de resolver e QUATRO suítes quebraram.
+ * Um alias no `window` devolve a resolução sem criar uma segunda definição (que era o
+ * problema original: dois desenhos da mesma pílula divergindo). Mesma função, dois nomes. */
+window._verMaisTag = _verMaisTag;
+
 function renderDashboard(container) {
   // v2.8.40: torneios ocultados pelo usuário somem de TODAS as seções (filtro na
   // fonte) e reaparecem só na seção "Torneios ocultados" no fim.
@@ -1720,18 +1748,7 @@ function renderDashboard(container) {
     // sem virar um segundo desenho. Correção do dono, comparando as duas seções: _"o ver
     // menos ficou com uma aparência diferente"_ — a versão flutuante tinha ganhado fundo
     // opaco e sombra próprios. Desenho é UM só; o que muda é onde ele mora.
-    function _verMaisTag(id, colapsado, extra) {
-      return '<span id="' + id + '"' + ((extra && extra.attrs) || '') + ' style="margin-left:auto;flex-shrink:0;font-size:0.7rem;font-weight:700;' +
-        'color:var(--sp-c-7dd3fc,#7dd3fc);background:rgba(125,211,252,0.14);border:1px solid rgba(125,211,252,0.45);' +
-        'border-radius:999px;padding:3px 10px;line-height:1.2;text-transform:none;letter-spacing:0;' +
-        ((extra && extra.style) || '') + '">' +
-        (colapsado ? 'ver mais' : 'ver menos') + '</span>';
-    }
-    /* ⭐ MESMA PÍLULA EM QUALQUER LUGAR (2.0.112). A chave das rodadas também precisou dela
-     * ("Demais jogos da rodada"), e o próprio comentário acima conta o que acontece quando
-     * o desenho é recriado: _"o ver menos ficou com uma aparência diferente"_.
-     * Exportar em vez de copiar é o que garante que corrigir aqui corrige lá. */
-    window._spVerMaisTag = _verMaisTag;
+    // (a pílula `_verMaisTag` mora FORA desta função — ver acima de renderDashboard)
     // O convite do RODAPÉ é o MESMO controle, então usa o MESMO desenho — só centralizado
     // e com a contagem, que é a informação que o cabeçalho não carrega.
     function _verMaisRodape(id, onclick, texto) {

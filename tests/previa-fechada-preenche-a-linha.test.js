@@ -55,6 +55,13 @@ function contar(s, needle) { let n = 0, i = 0; while ((i = s.indexOf(needle, i))
 
 const SRC = fs.readFileSync(process.env.SP_DASHBOARD_SRC || path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
 
+/* ⚠️ A pílula "ver mais/ver menos" foi IÇADA pra fora de `renderDashboard` (26/ago) — presa
+ * lá dentro, ela só existia depois de a dashboard renderizar, e quem abria um TORNEIO
+ * direto ficava sem botão. Este harness recorta o corpo de `renderDashboard`, então o
+ * recorte deixou de conter a definição. Pegamos a REAL do fonte — stub falsificaria o
+ * teste, que afirma a marcação dela. Ver tests/pilula-ver-mais.js. */
+W._verMaisTag = require('./pilula-ver-mais.js')(SRC);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PARTE 1 — o HTML que o build entrega (prévia de 1 coluna + regras de CSS)
 // ═══════════════════════════════════════════════════════════════════════════

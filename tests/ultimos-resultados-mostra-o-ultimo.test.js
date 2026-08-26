@@ -101,6 +101,13 @@ function confra(matches) {
 //   SP_DASHBOARD_SRC=/tmp/dash-antigo.js node tests/ultimos-resultados-mostra-o-ultimo.test.js
 const SRC = fs.readFileSync(process.env.SP_DASHBOARD_SRC || path.join(ROOT, 'js', 'views', 'dashboard.js'), 'utf8');
 
+/* ⚠️ A pílula "ver mais/ver menos" foi IÇADA pra fora de `renderDashboard` (26/ago) — presa
+ * lá dentro, ela só existia depois de a dashboard renderizar, e quem abria um TORNEIO
+ * direto ficava sem botão. Este harness recorta o corpo de `renderDashboard`, então o
+ * recorte deixou de conter a definição. Pegamos a REAL do fonte — stub falsificaria o
+ * teste, que afirma a marcação dela. Ver tests/pilula-ver-mais.js. */
+W._verMaisTag = require('./pilula-ver-mais.js')(SRC);
+
 function extraiBuildMyResults(src) {
   const i = src.indexOf('function _buildMyResultsHtml() {');
   if (i < 0) throw new Error('_buildMyResultsHtml não encontrada em dashboard.js');

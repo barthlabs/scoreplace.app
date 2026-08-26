@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.0.112';
+window.SCOREPLACE_VERSION = '2.0.113';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -12963,20 +12963,66 @@ window._renderPodiumsAndClassif = function (t) {
   }
 
   // ── CONVERGIDO / FASE ÚNICA → 1 pódio geral + 1 classificação geral ──
-  var podium = '', classifMap = null;
+  /* Junta o jogo de 3º (que mora em `t.thirdPlaceMatch`, fora das três casas conhecidas)
+   * à lista de jogos usada pra classificar. Marca `isThirdPlace` no caminho, porque é
+   * assim que o classificador já sabe tratá-lo — e sem a marca ele entraria como jogo
+   * comum e bagunçaria as posições em vez de consertar. */
+  var _comTerceiro = function (tt, ms) {
+    var tpm = tt && tt.thirdPlaceMatch;
+    if (!tpm || !tpm.winner) return ms;
+    var ja = (ms || []).some(function (m) { return m && tpm.id && String(m.id) === String(tpm.id); });
+    if (ja) return ms;
+    var copia = Object.assign({}, tpm, { isThirdPlace: true });
+    return (ms || []).concat([copia]);
+  };
+    var podium = '', classifMap = null;
   var finalMatch = null, thirdPlace = null;
   if (hasGF) {
     finalMatch = fpMatches.filter(function (m) { return (m.bracket || '') === 'grandfinal' && m.winner && !m.isBye; })[0] || null;
     var tpc = fpMatches.filter(function (m) { return (m.bracket || '') === 'thirdplace' && m.winner; })[0];
     if (tpc) thirdPlace = tpc.winner;
-    classifMap = window._classifUnifiedMap(t, fpMatches, tierKeys);
+    classifMap = window._classifUnifiedMap(t, _comTerceiro(t, fpMatches), tierKeys);
   } else if (tierKeys.length >= 1 && fpMatches.some(function (m) { return m.winner; })) {
     var nonThird = fpMatches.filter(function (m) { return !m.isThirdPlace && (m.bracket || '') !== 'thirdplace'; });
     var rs = nonThird.map(function (m) { return m.round == null ? 1 : m.round; });
     if (rs.length) { var maxR = Math.max.apply(null, rs); finalMatch = nonThird.filter(function (m) { return (m.round == null ? 1 : m.round) === maxR && m.winner && !m.isBye; })[0] || null; }
     var tp2 = fpMatches.filter(function (m) { return (m.isThirdPlace || (m.bracket || '') === 'thirdplace') && m.winner; })[0];
     if (tp2) thirdPlace = tp2.winner;
-    classifMap = window._classifMapFromMatches(t, fpMatches);
+    // ⚠️ E a CLASSIFICAÇÃO idem: sem o jogo de 3º ela põe em 3º quem PERDEU por W.O.
+    // (medido no Corpus Christi). O jogo entra na lista antes de classificar.
+    classifMap = window._classifMapFromMatches(t, _comTerceiro(t, fpMatches));
+  }
+  /* ── SEM DISPUTA DE 3º, O 3º VEM DA CLASSIFICAÇÃO — NÃO DE LUGAR NENHUM ──────────
+   * Relato do dono (26/ago, olhando o BT Corpus Christi): _"no pódio não aparece o 3º
+   * lugar e deveria"_.
+   * ⛔ `thirdPlace` só era preenchido por um jogo de disputa de terceiro. A eliminatória
+   * simples não tem esse jogo — os dois perdedores de semifinal ficam empatados —, então
+   * o degrau ficava VAZIO.
+   * ⭐ Mas a CLASSIFICAÇÃO logo abaixo do pódio já resolvia isso e já mostrava o 3º na
+   * tela (medido no Corpus Christi: "Ciça Mange / Olivia"). Ou seja o pódio estava
+   * DISCORDANDO da tabela que está a dois centímetros dele — e discordância entre duas
+   * coisas na mesma tela é pior que informação faltando.
+   * ⇒ Uma fonte só: quando não há jogo de 3º, o degrau sai do MESMO mapa que desenha a
+   * tabela. Havendo o jogo, ele continua mandando (é resultado em quadra, não critério).
+   * [[project_podium_classif_canonical]] */
+  /* ⭐ O JOGO DE 3º MORA NUM QUARTO LUGAR: `t.thirdPlaceMatch` (26/ago).
+   * Eu conhecia três casas de jogo (rounds[].matches, matches, groups[].matches) — e a
+   * disputa de terceiro tem a DELA, um campo de topo. Ela não carrega `isThirdPlace` nem
+   * `bracket:'thirdplace'`, então os dois filtros acima passavam batido e o degrau ficava
+   * vazio. Medido no BT Corpus Christi: o jogo existe, foi ganho por "Fabiana Vieira /
+   * Eduardo Mange", e o pódio não mostrava ninguém.
+   * ⛔ E ISTO VEM ANTES DA CLASSIFICAÇÃO — foi o dono quem pegou: _"Ciça Mange perdeu por
+   * W.O. Fabiana e Eduardo 3º"_. A classificação, sem enxergar este jogo, punha a Ciça em
+   * 3º; o meu palpite pela tabela teria PROMOVIDO quem perdeu por W.O.
+   * ⇒ Resultado em quadra manda sobre critério calculado. Sempre. */
+  if (!thirdPlace && t && t.thirdPlaceMatch && t.thirdPlaceMatch.winner) {
+    thirdPlace = t.thirdPlaceMatch.winner;
+  }
+  if (!thirdPlace && classifMap && typeof classifMap === 'object') {
+    var _terceiros = Object.keys(classifMap).filter(function (n) { return classifMap[n] === 3; });
+    // ⚠️ Só quando a classificação aponta UM. Se ela empatar dois no 3º, escolher um seria
+    // o app inventando um desempate que ninguém jogou.
+    if (_terceiros.length === 1) thirdPlace = _terceiros[0];
   }
   if (finalMatch && typeof window._buildPodiumHtml === 'function') {
     var w1 = finalMatch.winner, w2 = (window._matchWinnerSide(finalMatch) === 1) ? finalMatch.p2 : finalMatch.p1;
