@@ -997,7 +997,11 @@ function _renderSentRequests(myUid, sentIds) {
       // Cancel passa todos os uids do grupo (legacy + atual) pra cancelar
       // ambos de uma vez. Evita user clicar ✕ e ainda aparecer outro card.
       var allUidsArg = group.uids.map(function(u){ return "'" + u.replace(/'/g, "\\'").replace(/\\/g, "\\\\") + "'"; }).join(',');
-      var cancelBtn = '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Cancelando...\'); _cancelFriendRequestMulti([' + allUidsArg + '])" title="' + _t('explore.cancelInviteTitle') + '">✉️ ✕</button>';
+      // ⛔ 2.1.16 — o ✕ CANÔNICO aqui também. Ordem do dono: _"esse cancelar na tela dos
+      // amigos tambem"_. Mesma razão do irmão em _explorePersonActionBtn: o components.css
+      // manda usar window._cancelXBtn e não reintroduzir ✕ solto colorido.
+      var _cancelJs = "event.stopPropagation(); window._spinButton(this, 'Cancelando...'); _cancelFriendRequestMulti([" + allUidsArg + "])";
+      var cancelBtn = window._cancelXBtn(_cancelJs, _t('explore.cancelInviteTitle'), { size: '22px' });
       html += _userCardHtml(u, uid, cancelBtn, 'pending', 'window._openPendingInviteDetail(\'' + safeUid + '\')');
     });
 
@@ -1778,16 +1782,46 @@ function _renderInviteDetailSheet(u) {
 // A tela nova precisa do MESMO card e do MESMO botão de ação. Expor é o oposto de
 // duplicar: se o card mudar (foto, nome em duas linhas, chips de cidade/esporte), muda
 // nos dois lugares de uma vez. Ver a nota em _actionBtnFor.
-window._explorePersonActionBtn = function (u, mySent, myReceived) {
+// Lista de uids dos meus amigos, tolerando as duas formas gravadas (uid solto ou
+// objeto {uid}). Sem isto, "já é meu amigo?" daria false pra quem foi salvo como objeto.
+window._exploreMeusAmigos = function () {
+  var cu = (window.AppStore && window.AppStore.currentUser) || {};
+  var raw = Array.isArray(cu.friends) ? cu.friends : [];
+  return raw.map(function (f) { return (typeof f === 'string') ? f : (f && (f.uid || f.id) || ''); })
+            .filter(Boolean).map(String);
+};
+window._explorePersonActionBtn = function (u, mySent, myReceived, myFriends) {
   var _t = window._t || function (k) { return k; };
   mySent = mySent || []; myReceived = myReceived || [];
+  myFriends = myFriends || window._exploreMeusAmigos();
   var uid = u._docId || u.uid || u.email;
+  var isFriend = myFriends.indexOf(String(uid)) !== -1;
   var isSent = mySent.indexOf(uid) !== -1;
   var isReceived = myReceived.indexOf(uid) !== -1;
   var safeUid = (uid || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
   var btnClass = u._hasShared ? 'btn btn-warning btn-sm hover-lift' : 'btn btn-primary btn-sm hover-lift';
+  // ⛔ 2.1.16 — JÁ É AMIGO: SELO VERDE, NUNCA "CONVIDAR". Ordem do dono: _"no explorar
+  // pessoas, os já amigos devem aparecer ali verdes já como amigos nao com o convidar
+  // (novamente)"_. Na tela de Pessoas os amigos eram REMOVIDOS da lista de desconhecidos
+  // (_dedupeAgainstRelationships), então esta ramificação nunca fez falta lá. A tela
+  // #todas-pessoas mostra TODO MUNDO — e sem este ramo ela oferecia convidar de novo
+  // quem já é amigo, que além de errado é confuso.
+  if (isFriend) {
+    return '<span title="Vocês já são amigos" style="display:inline-flex;align-items:center;gap:5px;' +
+      'font-size:0.72rem;font-weight:800;white-space:nowrap;padding:4px 10px;border-radius:999px;' +
+      'background:rgba(34,197,94,0.14);border:1px solid var(--success-color);color:var(--sp-c-4ade80,#4ade80);">' +
+      '✓ Amigos</span>';
+  }
   if (isSent) {
-    return '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Cancelando...\'); _cancelFriendRequest(\'' + safeUid + '\')" title="' + _t('explore.cancelInviteTitle') + '">✉️ ✕</button>';
+    // ⛔ O ✕ CANÔNICO (círculo vermelho, aro branco, X branco) — window._cancelXBtn.
+    // O components.css avisa em letras maiúsculas: "NUNCA reintroduzir ✕ solto colorido —
+    // usar sempre esta classe ou window._cancelXBtn". Aqui havia um "✉️ ✕" improvisado.
+    // ⛔ SEM FALLBACK: `_cancelXBtn` vive em store.js, que carrega ANTES desta view — um
+    // "senão desenha um ✕ simples" seria justamente o ✕ solto que o cânone proíbe, e o
+    // teste tests/cancel-x-canon.test.js pegou os dois que eu tinha escrito aqui.
+    return window._cancelXBtn(
+      "event.stopPropagation(); window._spinButton(this, 'Cancelando...'); _cancelFriendRequest('" + safeUid + "')",
+      _t('explore.cancelInviteTitle'), { size: '22px' });
   }
   if (isReceived) {
     return '<div style="display:flex;gap:4px;justify-content:center;">' +
@@ -1797,9 +1831,14 @@ window._explorePersonActionBtn = function (u, mySent, myReceived) {
   }
   return '<button class="' + btnClass + '" onclick="event.stopPropagation(); window._spinButton(this, \'Enviando...\'); _sendFriendRequest(\'' + safeUid + '\')">' + _t('explore.invite') + '</button>';
 };
-window._explorePersonCard = function (u, mySent, myReceived) {
+window._explorePersonCard = function (u, mySent, myReceived, myFriends) {
   var uid = u._docId || u.uid || u.email;
   var safeUid = String(uid || '').replace(/'/g, "\\'");
-  return _userCardHtml(u, uid, window._explorePersonActionBtn(u, mySent, myReceived), 'other',
+  myFriends = myFriends || window._exploreMeusAmigos();
+  // variant 'friend' = borda e fundo verdes, os MESMOS da seção "Meus amigos" — o dono
+  // pediu que o amigo apareça "verde já como amigo", e verde tem que querer dizer a mesma
+  // coisa nas duas telas.
+  var variant = (myFriends.indexOf(String(uid)) !== -1) ? 'friend' : 'other';
+  return _userCardHtml(u, uid, window._explorePersonActionBtn(u, mySent, myReceived, myFriends), variant,
     "window._openUserProfile('" + safeUid + "')");
 };

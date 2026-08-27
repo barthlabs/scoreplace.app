@@ -201,6 +201,43 @@ function mkContainer(sb) {
   ok(/data-total-pessoas/.test(exp),
      'e pinta só o número, sem re-renderizar a tela por baixo de quem está lendo');
 
+  // ── ⛔ AMIGO NÃO SE CONVIDA DE NOVO (2.1.16) ──────────────────────────────
+  // Ordem do dono: _"no explorar pessoas, os já amigos devem aparecer ali verdes já como
+  // amigos nao com o convidar (novamente)"_.
+  // Na tela de Pessoas os amigos eram REMOVIDOS da lista de desconhecidos
+  // (_dedupeAgainstRelationships), então esta ramificação nunca fez falta lá. #todas-pessoas
+  // mostra TODO MUNDO — sem o ramo, ela oferecia convidar quem já é amigo.
+  ok(/if \(isFriend\)/.test(exp), 'a ação de pessoa tem um ramo para "já é meu amigo"');
+  ok(/window\._exploreMeusAmigos = /.test(exp),
+     'e a lista de amigos tolera as duas formas gravadas (uid solto ou {uid}) — senão quem ' +
+     'foi salvo como objeto nunca seria reconhecido');
+  // ⚠️ ancorar na FUNÇÃO: existe outro `if (isFriend)` antes, no sheet de perfil
+  // (onde ele oferece "Desfazer amizade"). Medir o trecho errado deixaria a asserção
+  // verde ou vermelha por acidente.
+  const iFn = exp.indexOf('window._explorePersonActionBtn = function');
+  const iFriend = exp.indexOf('if (isFriend)', iFn);
+  const trechoFriend = exp.slice(iFriend, iFriend + 700);
+  ok(/Amigos/.test(trechoFriend) && /success-color/.test(trechoFriend),
+     'o amigo aparece como SELO verde (a mesma cor da seção "Meus amigos")');
+  ok(!/_sendFriendRequest/.test(trechoFriend),
+     '⛔ e não há como convidar de novo quem já é amigo');
+  ok(/var variant = \(myFriends\.indexOf/.test(exp),
+     'o CARD do amigo também fica verde (variant friend) — verde tem que dizer a mesma coisa nas duas telas');
+
+  // ── ⛔ O ✕ É O CANÔNICO, NOS DOIS LUGARES ────────────────────────────────
+  // _"o botao cancelar convite poderia ter o x branco com o circulo vermelho padrao do
+  // app. esse cancelar na tela dos amigos tambem"_. O components.css já mandava:
+  // "NUNCA reintroduzir ✕ solto colorido — usar sempre esta classe ou window._cancelXBtn".
+  const usosCancelX = (exp.match(/window\._cancelXBtn\(/g) || []).length;
+  ok(usosCancelX >= 2,
+     'os DOIS cancelares (tela de amigos e explorar) usam window._cancelXBtn — achei ' + usosCancelX);
+  const codExp = exp.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  ok(codExp.indexOf('✉️ ✕') === -1,
+     '⛔ o "✉️ ✕" improvisado não existe mais em lugar nenhum do explore.js');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
+  ok(/\.cancel-x-btn\s*\{/.test(css) && /background:\s*#dc2626/.test(css),
+     'e a classe canônica é mesmo o círculo vermelho com X branco (não inventei o padrão)');
+
   console.log(pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })();
