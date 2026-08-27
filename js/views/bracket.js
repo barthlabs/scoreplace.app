@@ -4637,8 +4637,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
 
   // Confirm button: only for undecided matches with inputs (no pending state)
+  // ⛔ NASCE ESCONDIDO. Ordem do dono (26/ago/2026, olhando o Grupo D): _"o botao confirmar
+  // poderia aparecer onde esta em cada jogo apenas quando um resultado é escrito e está
+  // pronto para confirmar. quando esta em 0-0 sem botao confirmar (apenas o ao vivo)."_
+  // Antes ele aparecia em TODO jogo ainda não decidido, ao lado do "Ao Vivo", convidando a
+  // gravar um 0-0 que ninguém jogou.
+  // ⚠️ No RENDER os campos estão vazios — não dá pra decidir aqui. Quem revela é
+  // `_syncConfirmBtn` (bracket-ui.js), pendurado no `oninput` que os campos JÁ chamam
+  // (`_highlightWinner`). Gancho existente de propósito: listener novo por elemento morre
+  // no que nasce depois. [[feedback_montagem_preguicosa_mata_o_clique]]
   const headerConfirmBtn = showInputs && !isDecided
-    ? `<button id="confirm-${m.id}" class="btn btn-success btn-micro" onclick="window._saveResultInline('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;">✓ ${_t('bracket.confirm')}</button>`
+    ? `<button id="confirm-${m.id}" data-confirm-for="${_esc(m.id)}" class="btn btn-success btn-micro" onclick="window._saveResultInline('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;display:none;">✓ ${_t('bracket.confirm')}</button>`
     : '';
 
   // Edit button: for decided matches — opens inline inputs for editing.
@@ -4830,8 +4839,13 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   );
   // v2.7.57: botões do header do card no PADRÃO do app (.btn + cor + .btn-micro,
   // sólido com volume) — não mais etiqueta flat com estilo inline.
+  // ⛔ O "Ao Vivo" e o "✓ Confirmar" são um PAR EXCLUDENTE, governado por `_syncConfirmBtn`
+  // (bracket-ui.js). Ordem do dono (26/ago/2026): _"se a pessoa digitar um placar deve
+  // aparecer o confirmar e sumir o ao vivo (o jogo foi feito sem ao vivo)"_ — placar
+  // digitado à mão É a declaração de que ninguém acompanhou ao vivo. Por isso o botão
+  // ganha `id`: sem ele a sincronização não teria como alcançá-lo.
   const liveBtn = (_canScoreLive && !_setsEmCurso)
-    ? `<button class="btn btn-live btn-micro" onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
+    ? `<button id="live-${m.id}" class="btn btn-live btn-micro" onclick="window._openLiveScoring('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.liveScore')}">${_t('bracket.liveBtn')}</button>`
     : '';
 
   // v2.4.1: presença PEER — em torneio onde os JOGADORES lançam o placar

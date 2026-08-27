@@ -1337,7 +1337,33 @@ window._buildManualSet = function (s1, s2, opts) {
   return { sets: [set], setsWonP1: (s1 > s2 ? 1 : 0), setsWonP2: (s2 > s1 ? 1 : 0) };
 };
 
+/* Mostra o "✓ Confirmar" do card SÓ quando há placar escrito nos DOIS lados.
+ * Ordem do dono (26/ago/2026): _"quando esta em 0-0 sem botao confirmar (apenas o ao vivo)"_.
+ * ⚠️ Exige os DOIS campos preenchidos — "pronto pra confirmar", não meio caminho: com um
+ * lado só, confirmar gravaria um placar incompleto. Zero é valor VÁLIDO (6-0 existe), então
+ * o teste é sobre a string estar preenchida, NUNCA sobre o número ser verdadeiro — `!0` é
+ * `true` e engoliria todo 6-0. */
+window._syncConfirmBtn = function (matchId) {
+  try {
+    var btn = document.getElementById('confirm-' + matchId);
+    if (!btn) return;
+    var s1 = document.getElementById('s1-' + matchId);
+    var s2 = document.getElementById('s2-' + matchId);
+    var cheio = function (el) { return !!(el && String(el.value).trim() !== ''); };
+    var escrito = cheio(s1) && cheio(s2);
+    btn.style.display = escrito ? '' : 'none';
+    /* ⛔ E O "AO VIVO" SOME NA MESMA HORA — eles são um PAR EXCLUDENTE.
+     * Ordem do dono: _"se a pessoa digitar um placar deve aparecer o confirmar e sumir o ao
+     * vivo (o jogo foi feito sem ao vivo)"_. Digitar o placar à mão É a declaração de que
+     * ninguém acompanhou ao vivo; deixar os dois lado a lado oferece um caminho que já não
+     * faz sentido. Apagar o que foi digitado devolve o "Ao Vivo" — nada é irreversível. */
+    var live = document.getElementById('live-' + matchId);
+    if (live) live.style.display = escrito ? 'none' : '';
+  } catch (e) {}
+};
+
 window._highlightWinner = function (matchId) {
+  window._syncConfirmBtn(matchId);
   const s1El = document.getElementById(`s1-${matchId}`);
   const s2El = document.getElementById(`s2-${matchId}`);
   if (!s1El || !s2El) return;
