@@ -3960,35 +3960,24 @@ function renderDashboard(container) {
         </div>
       </div>
 
-      <!-- v0.17.50: trocado de grid auto-fit pra flex centralizado.
-           Antes (grid auto-fit minmax 110px): 4 pills em viewport médio
-           viravam 3+1 com a sobrante alinhada à esquerda — visualmente
-           desbalanceado. Agora flex+center+wrap: pills ficam em linha
-           cheia quando cabe, e quando wraps (2+2 ou 3+1), os itens
-           da última linha ficam centralizados. min-width 110px em cada
-           pill mantém leitura consistente. -->
-      <!-- Tournament filter pills (clickable — apply filter to list) -->
-      <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">
-        ${_fStyle('todos', '📋', _circuloCount, _t('dashboard.filterForYou'))}
-        ${_fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized'))}
-        ${_fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating'))}
-        ${_fStyle('abertos', '🗓️', _abertosCount, _t('dashboard.filterOpen'))}
-        ${favoritosCount > 0 ? _fStyle('favoritos', '❤️', favoritosCount, _t('dashboard.filterFavorites')) : ''}
-        ${_encerradosPillCount > 0 ? _fStyle('encerrados', '🏆', _encerradosPillCount, _t('dashboard.filterFinished')) : ''}
-      </div>
-      <!-- v1.0.44-beta: Social/personal stats pills (separadas das de torneio
-           pra não misturar contextos). Usuários = unique participantes
-           encontrados nos torneios visíveis (proxy de "rede no scoreplace").
-           Amigos = cu.friends.length. Partidas = total V/D do match history
-           local (scoreplace_casual_history_v2 + uid match em records). -->
-      <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 0.5rem;">
-        <!-- v1.0.46-beta: Usuários e Partidas usam countDataAttr/subtitleDataAttr
-             pra que o refresh assíncrono possa achar e atualizar os elementos
-             via querySelector quando o Firestore responder. -->
-        ${_statPill('👥', _socialUsersCount, 'Usuários', "window.location.hash='#explore'", 'Total de usuários cadastrados no scoreplace', { countDataAttr: 'data-stat-users-count' })}
-        ${_statPill('🤝', _socialFriendsCount, 'Amigos', "window.location.hash='#explore'", 'Seus amigos no scoreplace')}
-        ${_statPill('⚔️', _socialMatchesDisplay, 'Partidas', _socialMatchesClick, _socialMatchesTitle, { wider: true, labelOnTop: true, subtitle: _socialMatchesSubtitle, dataAttrs: 'data-stat-matches-pill', countDataAttr: 'data-stat-matches-count', subtitleDataAttr: 'data-stat-matches-subtitle' })}
-      </div>
+      <!-- ⛔ 2.1.13 — A SEÇÃO DE NÚMEROS DA HERO BOX SAIU. Ordem do dono (27/ago/2026):
+           _"elimine essa sessao. vamos distribuir isso depois - apenas o que for
+           relevante."_ Eram DOIS blocos irmãos, e os dois foram embora:
+             · os PILLS DE FILTRO (Pra Você / Organizados / Participando / Inscrições
+               Abertas / Favoritos / Encerrados) — clicáveis, aplicavam filtro na lista;
+             · as STAT PILLS sociais (Usuários / Amigos / Partidas) — informativas.
+
+           ⚠️ O QUE ISSO CUSTOU, escrito aqui porque some da tela mas não do produto: os
+           pills eram o ÚNICO caminho pra as fatias "organizados", "participando",
+           "favoritos" e "encerrados". Sem eles, essas visões não têm porta na UI.
+
+           ⭐ POR ISSO A MAQUINARIA FICOU INTEIRA: curFilter, _applyDashFilter,
+           _circuloCount / _abertosCount / _encerradosPillCount e os pools seguem
+           existindo e testados. Redistribuir "apenas o que for relevante" é religar uma
+           porta nova nisso — não reescrever a lógica. Apagar junto teria transformado uma
+           mudança de layout numa perda de funcionalidade difícil de refazer.
+           ⚠️ Sem crases neste comentário: ele mora DENTRO de um template literal, e uma
+           crase aqui fecharia a string do html inteiro. -->
     </div>
 
     <!-- 🔴 Ao vivo agora (1.9.36) — a PRIMEIRA coisa abaixo da hero box, e só existe

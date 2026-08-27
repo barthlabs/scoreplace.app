@@ -108,8 +108,20 @@ if (codPools && codCont) {
    * é onde o dono pediu que ele ficasse sempre visível.
    * O que este bloco protege segue de pé: o número exibido tem que vir da variável
    * CALCULADA, não de um `allUnique.length` recalculado na mão — que é o bug da 1.8.89. */
-  ok(/_fStyle\('todos',\s*'📋',\s*_circuloCount,/.test(src),
-    'o pill padrão lê _circuloCount (a lista que ele representa é o círculo)');
+  /* ⛔ 2.1.13 — OS PILLS SAÍRAM DA TELA (ordem do dono: "elimine essa sessao. vamos
+   * distribuir isso depois - apenas o que for relevante"). As três asserções que cobravam
+   * a FIAÇÃO deles (_fStyle lendo _circuloCount/_abertosCount/_encerradosPillCount) não
+   * têm mais objeto — mas a LIÇÃO que elas guardavam continua valendo pra quando a
+   * informação for redistribuída, então ela virou o par abaixo:
+   *   (a) os contadores seguem CALCULADOS — a maquinaria não foi apagada junto com o
+   *       layout, senão redistribuir viraria reescrever;
+   *   (b) e ninguém pode voltar a contar por `allUnique.length` na mão (o bug da 1.8.89),
+   *       que é a asserção logo adiante e segue de pé. */
+  ok(!/_fStyle\('todos'/.test(src), 'os pills de filtro saíram da hero box');
+  ok(/const _circuloCount = /.test(src) && /const _abertosCount = /.test(src) && /const _encerradosPillCount = /.test(src),
+    '⭐ mas os contadores CONTINUAM calculados — a redistribuição religa uma porta nova, não reescreve a lógica');
+  ok(/window\._applyDashFilter = /.test(src) || /_applyDashFilter/.test(src),
+    'e o aplicador de filtro segue existindo pra ser religado');
   /* ⛔ 2.1.11 — O TOTAL DEIXOU DE SAIR DE `_todosCount`. Esta asserção cobrava
    * `${_todosCount}` no botão, e o número que ele produzia era FALSO: `_poolPlataforma`
    * é o que a dashboard conseguiu carregar (publicDiscovery, assíncrono e filtrado por
@@ -123,10 +135,8 @@ if (codPools && codCont) {
     '⛔ e o contador do pool (que dizia 3) não voltou pro botão');
   ok(!/allUnique\.length[^;]*_fStyle|_fStyle\([^)]*allUnique\.length/.test(src),
     'nenhum pill voltou a contar por `allUnique.length` (o bug da 1.8.89)');
-  ok(/_fStyle\('abertos',\s*'🗓️',\s*_abertosCount,/.test(src),
-    'o pill "Inscrições abertas" lê _abertosCount (e não abertosParaVoce.length)');
-  ok(/_encerradosPillCount\s*>\s*0\s*\?\s*_fStyle\('encerrados',\s*'🏆',\s*_encerradosPillCount,/.test(src),
-    'o pill "Encerrados" lê _encerradosPillCount');
+  // (as duas asserções de fiação dos pills "abertos"/"encerrados" saíram com eles — ver a
+  // nota acima; o que elas protegiam virou o par contadores-vivos + sem-recount-à-mão)
   ok(!/_fStyle\('todos',\s*'📋',\s*allUnique\.length/.test(src),
     'a fonte velha (allUnique.length) não voltou pro pill "Todos"');
   ok(!/_fStyle\('abertos',\s*'🗓️',\s*abertosParaVoce\.length/.test(src),

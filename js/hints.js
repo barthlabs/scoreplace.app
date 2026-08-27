@@ -46,6 +46,17 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     { id: 'help', selector: 'button[onclick*="\'#help\'"], a[href="#help"]', text: 'Dúvidas? Aqui tem o manual completo com todas as funcionalidades!', context: 'global', priority: 5, position: 'bottom' },
     { id: 'quick-search', selector: '.hamburger-btn', text: 'Dica: use Ctrl+K para buscar torneios e jogadores rapidamente!', context: 'global', priority: 3, position: 'bottom', requiresLogin: true },
     { id: 'notifications', selector: 'a[href="#notifications"]', text: 'Fique por dentro! Aqui você recebe avisos de torneios e convites.', context: 'global', priority: 5, position: 'bottom', requiresLogin: true },
+    /* ⛔ 2.1.13 — as 6 dicas de 'hero-filter-*' saíram junto com os pills de filtro da
+     * hero box (ordem do dono: "elimine essa sessao"). Seletor que não existe mais nunca
+     * dispara, e vira ruído que o próximo leitor lê como feature viva.
+     *
+     * ⚠️ ACHADO AO FAZER ISTO, e que vale mais que a limpeza: ESTE ARQUIVO INTEIRO NÃO É
+     * CARREGADO POR NINGUÉM. Nenhum <script> em index.html, nada no sw.js, nenhum import
+     * dinâmico — conferido em 27/ago/2026. Ou seja, o sistema de "Dicas do App" não roda
+     * há tempo indeterminado, embora o CLAUDE.md ainda o descreva como parte da
+     * arquitetura e o perfil ainda ofereça ligar/desligar/resetar dicas (chaves
+     * hints.* em i18n). Não religuei: isso é decisão de produto, não limpeza de layout.
+     * Quando os filtros voltarem, estas dicas voltam com o seletor NOVO — texto no git. */
     { id: 'explore-nav', selector: '#btn-people', text: 'Explore jogadores da comunidade, veja amigos em comum e descubra torneios abertos para inscrição!', context: 'dashboard', priority: 6, position: 'bottom' },
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -60,12 +71,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     // DASHBOARD
     // ═══════════════════════════════════════════════════════════════════════════
     { id: 'new-tournament', selector: '#btn-create-tournament-in-box', text: 'Crie seu próprio torneio! Escolha o esporte, defina o formato e convide os participantes — leva menos de 1 minuto.', context: 'dashboard', priority: 10, position: 'bottom' },
-    { id: 'hero-filter-todos', selector: '[onclick*="_applyDashFilter(\'todos\')"]', text: 'Veja todos os torneios de uma vez — organizados por você e os que participa.', context: 'dashboard', priority: 4, position: 'top', requiresLogin: true },
-    { id: 'hero-filter-organizados', selector: '[onclick*="_applyDashFilter(\'organizados\')"]', text: 'Filtre só os torneios que você organiza. Ideal para gerenciar vários eventos.', context: 'dashboard', priority: 5, position: 'top', requiresLogin: true },
-    { id: 'hero-filter-participando', selector: '[onclick*="_applyDashFilter(\'participando\')"]', text: 'Veja apenas os torneios em que você está inscrito como participante.', context: 'dashboard', priority: 5, position: 'top', requiresLogin: true },
-    { id: 'hero-filter-abertos', selector: '[onclick*="_applyDashFilter(\'abertos\')"]', text: 'Torneios com inscrições abertas para você! Inscreva-se e comece a competir.', context: 'dashboard', priority: 6, position: 'top', requiresLogin: true },
-    { id: 'hero-filter-favoritos', selector: '[onclick*="_applyDashFilter(\'favoritos\')"]', text: 'Seus torneios favoritados ficam aqui. Clique no coração ♥ em qualquer card para favoritar!', context: 'dashboard', priority: 4, position: 'top', requiresLogin: true },
-    { id: 'hero-filter-encerrados', selector: '[onclick*="_applyDashFilter(\'encerrados\')"]', text: 'Reveja torneios encerrados: classificação final, podium e histórico de partidas.', context: 'dashboard', priority: 3, position: 'top', requiresLogin: true },
     { id: 'dashboard-filters', selector: '[data-filter]', text: 'Use os filtros para ver só os torneios que organiza, participa ou favoritou.', context: 'dashboard', priority: 4, position: 'bottom', requiresLogin: true },
     { id: 'dashboard-compact', selector: '[onclick*="_setDashView"]', text: 'Prefere uma visualização mais compacta? Alterne entre cards e lista!', context: 'dashboard', priority: 3, position: 'top' },
     { id: 'dashboard-card-fav', selector: '[data-fav-id]', text: 'Clique no coração ♥ para favoritar um torneio e encontrá-lo mais rápido!', context: 'dashboard', priority: 4, position: 'top' },
