@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.4';
+window.SCOREPLACE_VERSION = '2.1.5';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10427,13 +10427,41 @@ window.AppStore = {
           // Recusa do servidor: registra pra diagnóstico e deixa o caminho local decidir.
           window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
             area: 'applyMatchResult', reason: _d.reason || 'unknown', at: new Date().toISOString() };
-          if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?') + ' — caindo no caminho local');
+          if (window._warn) window._warn('[applyMatchResult] recusou: ' + (_d.reason || '?') + ' — caindo na fila');
+          /* ⛔ RECUSA DO SERVIDOR NÃO PODE PASSAR EM SILÊNCIO. Ordem do dono sobre a queda:
+           * "NÃO FECHAR > fechar ERRADO — mas nunca em silêncio". Só `_warn` significa que
+           * ninguém fica sabendo: foi por isso que passei a noite achando que "nenhum evento
+           * no Sentry" provava que a porta dava conta. Não provava — provava que ninguém
+           * estava olhando. [[feedback_fallback_local_recria_a_divergencia]]
+           * ⚠️ Recusa é ANOMALIA (o servidor examinou e disse não), diferente de falta de
+           * sinal — por isso esta reporta SEMPRE. */
+          if (typeof window._captureException === 'function') {
+            try {
+              window._captureException(new Error('[applyMatchResult] recusou: ' + (_d.reason || 'unknown')),
+                { tournamentId: String(tournamentId), matchId: String(matchId), reason: _d.reason || 'unknown' });
+            } catch (_eS) {}
+          }
         }
       } catch (e) {
         window._lastSaveError = { tournamentId: tournamentId, matchId: matchId,
           area: 'applyMatchResult', code: (e && e.code) || '', message: (e && e.message) || String(e),
           at: new Date().toISOString() };
-        if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ') — caindo no caminho local');
+        if (window._warn) window._warn('[applyMatchResult] falhou (' + ((e && e.code) || '?') + ') — caindo na fila');
+        /* ⚠️ AQUI A COTA IMPORTA, e por isso este ramo FILTRA. Quadra sem sinal é o caso
+         * ESPERADO — a fila existe pra isso (2.0.103) e reportar cada uma queimaria a cota
+         * de telemetria, que já venceu sem eu saber uma vez (2.0.81). Rede fora não é
+         * anomalia; CF quebrada é. Só o que não for rede sobe.
+         * ⛔ Instrumentação não pode cobrar pedágio — este é caminho de ERRO, não o quente.
+         * [[feedback_instrumentacao_nao_pode_cobrar_pedagio]] */
+        var _cod = (e && e.code) || '';
+        var _semRede = (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+                       _cod === 'unavailable' || _cod === 'deadline-exceeded';
+        if (!_semRede && typeof window._captureException === 'function') {
+          try {
+            window._captureException((e instanceof Error) ? e : new Error(String(e)),
+              { area: 'applyMatchResult', tournamentId: String(tournamentId), matchId: String(matchId), code: _cod });
+          } catch (_eS2) {}
+        }
       }
     }
     // ⛔ AQUI ficava `commitTournamentTx(... window._applyResultToTournament ...)` — o motor

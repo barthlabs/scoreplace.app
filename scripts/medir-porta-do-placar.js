@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 /* medir-porta-do-placar.js — POR ONDE os placares realmente entram.
  *
- * POR QUE EXISTE: `commitResultTx` tenta a CF `applyMatchResult` e, em QUALQUER falha,
- * cai no caminho local. A queda só faz `_warn` — não vai pro Sentry. Então "nenhum evento
- * no Sentry" NÃO prova que a CF está dando conta; prova só que ninguém está olhando.
- * ⇒ A prova tem que sair do DADO: quantos placares o banco registrou na janela × quantos
- * a CF disse que aplicou (log). A diferença é o que a queda está carregando hoje — e é
- * exatamente o que quebraria se eu tirasse a queda. [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
+ * ⚠️ ESTE CABEÇALHO ESTAVA VENCIDO E ME ENGANOU (27/ago/2026). Ele dizia que a queda era
+ * "o caminho local", e eu li isso como "o motor do cliente aplica e grava" — passei a
+ * investigar uma divergência que já não existe. **Desde a 2.0.103 a queda é a FILA**:
+ * grava a INTENÇÃO por escrita comum (que o SDK entrega quando a rede volta) e o gatilho
+ * `applyQueuedResult` aplica NO SERVIDOR, com a mesma função da porta chamável. Nenhum
+ * cliente deriva avanço de chave. Ver [[project_fila_do_placar_offline]].
+ * Lição: comentário que descreve o mundo antigo custa mais caro que comentário nenhum.
+ *
+ * POR QUE EXISTE: a entrada na fila era SILENCIOSA (só `_warn`, fora do Sentry) — então
+ * "nenhum evento no Sentry" NÃO provava que a CF estava dando conta; provava que ninguém
+ * estava olhando. ⇒ A prova saía do DADO: quantos placares o banco registrou na janela ×
+ * quantos a CF disse que aplicou (log). [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
+ * ✅ Desde 2.1.5 a recusa do servidor VAI pro Sentry (e o erro que não for de rede também),
+ * então este script deixou de ser o único olho — mas segue valendo como conferência
+ * independente, que é o ponto: não confiar num carimbo só.
  *
  * Uso: node scripts/medir-porta-do-placar.js 2026-08-20 2026-08-25
  */
