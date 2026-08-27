@@ -75,6 +75,12 @@ function mkSandbox(docs, logado) {
   sandbox.window.location = { hash: '#todos-torneios' };
   sandbox._els = els;
   vm.createContext(sandbox);
+  // ⛔ A REGRA DE "INSCRIÇÕES ABERTAS" ENTRA PELO ARQUIVO REAL (waitlist-core.js), nunca
+  // por uma réplica no teste. É a fonte única desde a 1.8.40 — nascida porque a mesma
+  // pergunta tinha SEIS respostas no app. Um stub aqui deixaria a suíte verde sobre uma
+  // sétima resposta, que é exatamente a falha que este projeto já pagou.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'waitlist-core.js'), 'utf8'),
+    sandbox, { filename: 'waitlist-core.js' });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'todos-torneios.js'), 'utf8'),
     sandbox, { filename: 'todos-torneios.js' });
   return sandbox;
@@ -96,12 +102,24 @@ function mkContainer(sandbox) {
   return c;
 }
 
+// ⚠️ `hasDraw:false` é DE PROPÓSITO em quem deve ficar aberto: no resumo é ele que responde
+// "já sorteou?" (ver a nota em _phaseDrawDone). Sem o campo, o resumo não mente mais — mas
+// declarar deixa o cenário explícito em vez de depender de ausência.
 const BASE = [
-  { id: 'a', name: 'Alfa Open',   sport: 'Beach Tennis', venueName: 'Clube A', format: 'Liga',                status: 'active',   isPublic: true,  competitorsCount: 12, startDate: '2026-09-01T10:00' },
-  { id: 'b', name: 'Bravo Cup',   sport: 'Padel',        venueName: 'Clube B', format: 'Eliminatórias Simples', status: 'open',   isPublic: true,  competitorsCount: 8,  startDate: '2026-08-10T10:00' },
-  { id: 'z', name: 'Zulu Finals', sport: 'Beach Tennis', venueName: 'Clube Z', format: 'Liga',                status: 'finished', isPublic: true,  competitorsCount: 4,  startDate: '2026-07-01T10:00' },
-  { id: 'p', name: 'SEGREDO do Fulano', sport: 'Padel',  venueName: 'Casa',    format: 'Liga',                status: 'open',     isPublic: false, competitorsCount: 4 },
-  { id: 's', name: 'SANDBOX do dev',    sport: 'Padel',  venueName: 'Lab',     format: 'Liga',                status: 'open',     isPublic: true,  isSandbox: true }
+  // ── balde 0 · INSCRIÇÕES ABERTAS (ordenadas pelo prazo: quem fecha antes vem antes) ──
+  { id: 'a', name: 'Alfa Open',   sport: 'Beach Tennis', venueName: 'Clube A', format: 'Liga', status: 'open', isPublic: true, hasDraw: false, competitorsCount: 12, registrationLimit: '2099-09-01T10:00' },
+  { id: 'b', name: 'Bravo Cup',   sport: 'Padel', venueName: 'Clube B', format: 'Eliminatórias Simples', status: 'open', isPublic: true, hasDraw: false, competitorsCount: 8, registrationLimit: '2099-08-10T10:00' },
+  // sem prazo de inscrição → cai pro startDate; sem os dois → createdAt (a cascata do dono)
+  { id: 'c', name: 'Charlie Sem Prazo', sport: 'Padel', venueName: 'Clube C', format: 'Liga', status: 'open', isPublic: true, hasDraw: false, startDate: '2099-07-01T10:00' },
+  { id: 'd', name: 'Delta Só Criacao',  sport: 'Padel', venueName: 'Clube D', format: 'Liga', status: 'open', isPublic: true, hasDraw: false, createdAt: '2099-06-01T10:00' },
+  // ── balde 1 · INSCRIÇÕES ENCERRADAS (torneio vivo, mas não dá pra entrar) ──
+  { id: 'f', name: 'Foxtrot Fechado', sport: 'Padel', venueName: 'Clube F', format: 'Eliminatórias Simples', status: 'closed', isPublic: true, hasDraw: true, competitorsCount: 16 },
+  { id: 'g', name: 'Golf Sorteado',   sport: 'Padel', venueName: 'Clube G', format: 'Eliminatórias Simples', status: 'open',   isPublic: true, hasDraw: true, competitorsCount: 16 },
+  // ── balde 2 · TORNEIO ENCERRADO ──
+  { id: 'z', name: 'Zulu Finals', sport: 'Beach Tennis', venueName: 'Clube Z', format: 'Liga', status: 'finished', isPublic: true, hasDraw: true, competitorsCount: 4, startDate: '2026-07-01T10:00' },
+  // ── fora da vitrine ──
+  { id: 'p', name: 'SEGREDO do Fulano', sport: 'Padel', venueName: 'Casa', format: 'Liga', status: 'open', isPublic: false, competitorsCount: 4 },
+  { id: 's', name: 'SANDBOX do dev',    sport: 'Padel', venueName: 'Lab',  format: 'Liga', status: 'open', isPublic: true, isSandbox: true }
 ];
 
 (async () => {
@@ -125,8 +143,8 @@ const BASE = [
      '⛔ o torneio de teste do dev não entra na vitrine');
   ok(/1 privado ocultado/.test(conta),
      'a contagem DIZ "1 privado ocultado" (ordem do dono: indicar quantos ficaram de fora). Veio: ' + conta);
-  ok(/>3<\/b> torneios/.test(conta) || /3<\/b> torneios/.test(conta),
-     'a conta mostra 3 torneios (o sandbox não conta). Veio: ' + conta);
+  ok(/>7<\/b> torneios/.test(conta),
+     'a conta mostra os 7 públicos (privado e sandbox fora). Veio: ' + conta.slice(0, 160));
 
   // ── os DADOS BÁSICOS que o dono pediu, e o nome de formato TRADUZIDO ────────
   ok(html.indexOf('Beach Tennis') !== -1, 'mostra a MODALIDADE');
@@ -141,20 +159,43 @@ const BASE = [
   const nomesNaOrdem = () => (S._els['todos-torn-lista'].innerHTML.match(/>([A-Za-z][^<]*?)<\/span>/g) || [])
     .map(x => x.replace(/[><]|\/span/g, '').trim());
 
+  // ── ⛔ A ORDEM PEDIDA PELO DONO: abertas → fechadas → encerrados ────────────
+  // _"coloque os inscricoes abertas primeiro ordenados cronologicamente (inicio e fim das
+  // inscricoes/criacao do torneio quando nao houver inicio e fim das inscricoes); depois os
+  // com inscricoes encerradas; depois os torneios encerrados"_.
+  const pos = (nome) => S._els['todos-torn-lista'].innerHTML.indexOf(nome);
+  S.window._todosTornAplicarFiltro();
+  ok(pos('Alfa Open') < pos('Foxtrot Fechado'), 'inscrições ABERTAS vêm antes das encerradas');
+  ok(pos('Golf Sorteado') < pos('Zulu Finals'), 'inscrições encerradas vêm antes do torneio ENCERRADO');
+  ok(pos('Zulu Finals') > pos('Alfa Open') && pos('Zulu Finals') > pos('Foxtrot Fechado'),
+     'o torneio encerrado é o último de todos');
+
+  // dentro das abertas: CRONOLÓGICO, com a cascata prazo → início → criação
+  ok(pos('Delta Só Criacao') < pos('Charlie Sem Prazo'), 'cronológico: criação (jun) antes de início (jul)');
+  ok(pos('Charlie Sem Prazo') < pos('Bravo Cup'), 'cronológico: início (jul) antes do prazo (ago)');
+  ok(pos('Bravo Cup') < pos('Alfa Open'), 'cronológico: quem fecha a inscrição antes aparece antes');
+
+  // ⛔ "sorteado" tem que fechar a inscrição MESMO com status 'open' — e no RESUMO isso só
+  // funciona porque _phaseDrawDone passou a ler `hasDraw` (2.1.11). Antes, o resumo dizia
+  // "não sorteado" pra todo mundo e Golf teria ficado no balde das abertas.
+  ok(pos('Golf Sorteado') > pos('Alfa Open'),
+     'torneio já sorteado sai do balde de "inscrições abertas" mesmo com status open');
+
+  // ── a barra ordena DENTRO do balde; ela não desmancha a ordem do dono ───────
   st.sort = 'name-asc'; S.window._todosTornAplicarFiltro();
   let h = S._els['todos-torn-lista'].innerHTML;
-  ok(h.indexOf('Alfa Open') < h.indexOf('Bravo Cup') && h.indexOf('Bravo Cup') < h.indexOf('Zulu Finals'),
-     'A-Z ordena alfabeticamente');
+  ok(h.indexOf('Alfa Open') < h.indexOf('Bravo Cup') && h.indexOf('Bravo Cup') < h.indexOf('Charlie Sem Prazo'),
+     'A-Z ordena alfabeticamente dentro das abertas');
+  ok(h.indexOf('Delta Só Criacao') < h.indexOf('Foxtrot Fechado'),
+     '⛔ e mesmo em A-Z, toda aberta continua antes de qualquer fechada (o balde é primário)');
   st.sort = 'name-desc'; S.window._todosTornAplicarFiltro();
   h = S._els['todos-torn-lista'].innerHTML;
-  ok(h.indexOf('Zulu Finals') < h.indexOf('Alfa Open'), 'Z-A inverte');
+  ok(h.indexOf('Delta Só Criacao') < h.indexOf('Alfa Open'), 'Z-A inverte dentro do balde');
+  ok(h.indexOf('Alfa Open') < h.indexOf('Zulu Finals'),
+     '⛔ nem em Z-A o encerrado sobe pro topo — o pedido do dono vale em todos os estados');
+  st.sort = 'order-asc';
 
-  st.sort = 'order-asc'; S.window._todosTornAplicarFiltro();
-  h = S._els['todos-torn-lista'].innerHTML;
-  ok(h.indexOf('Zulu Finals') < h.indexOf('Bravo Cup') && h.indexOf('Bravo Cup') < h.indexOf('Alfa Open'),
-     '🕒 ordena por data (mais antigo primeiro)');
-
-  st.sort = 'order-desc'; st.search = 'bravo'; S.window._todosTornAplicarFiltro();
+  st.search = 'bravo'; S.window._todosTornAplicarFiltro();
   h = S._els['todos-torn-lista'].innerHTML;
   ok(h.indexOf('Bravo Cup') !== -1 && h.indexOf('Alfa Open') === -1, 'a busca filtra por nome');
   ok(h.indexOf('SEGREDO') === -1, '⛔ nem a busca alcança o privado');

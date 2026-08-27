@@ -110,8 +110,17 @@ if (codPools && codCont) {
    * CALCULADA, não de um `allUnique.length` recalculado na mão — que é o bug da 1.8.89. */
   ok(/_fStyle\('todos',\s*'📋',\s*_circuloCount,/.test(src),
     'o pill padrão lê _circuloCount (a lista que ele representa é o círculo)');
-  ok(/\$\{_todosCount\}/.test(src),
-    'e o TOTAL da plataforma continua exibido — no botão Explorar (ordem do dono)');
+  /* ⛔ 2.1.11 — O TOTAL DEIXOU DE SAIR DE `_todosCount`. Esta asserção cobrava
+   * `${_todosCount}` no botão, e o número que ele produzia era FALSO: `_poolPlataforma`
+   * é o que a dashboard conseguiu carregar (publicDiscovery, assíncrono e filtrado por
+   * memberUids), não a plataforma. MEDIDO em 27/ago: 39 públicos no banco, o pill dizia 3.
+   * Ordem do dono: _"tira a porra do 3. coloca o numero total ali ou deixa sem numero se
+   * nao for possivel"_. Agora vem do total que a tela #todos-torneios apurou de verdade —
+   * e, sem esse valor, o botão fica sem número (a segunda opção que ele deu). */
+  ok(/\$\{_totalPlataformaHtml\}/.test(src),
+    'o número do botão Explorar vem do total apurado pela tela, não do pool da dashboard');
+  ok(!/\$\{_todosCount\}/.test(src),
+    '⛔ e o contador do pool (que dizia 3) não voltou pro botão');
   ok(!/allUnique\.length[^;]*_fStyle|_fStyle\([^)]*allUnique\.length/.test(src),
     'nenhum pill voltou a contar por `allUnique.length` (o bug da 1.8.89)');
   ok(/_fStyle\('abertos',\s*'🗓️',\s*_abertosCount,/.test(src),

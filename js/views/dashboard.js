@@ -3838,6 +3838,23 @@ function renderDashboard(container) {
       })
     : '';
 
+  /* ⛔ 2.1.11 — O NÚMERO DO EXPLORAR: O TOTAL DE VERDADE, OU NENHUM.
+   * Ordem do dono: _"tira a porra do 3. coloca o numero total ali ou deixa sem numero se
+   * nao for possivel"_. Ele estava certo duas vezes — o 3 não era só feio, era FALSO:
+   * `_todosCount` conta `_poolPlataforma`, que é o que ESTA tela carregou
+   * (`publicDiscovery`: carga assíncrona no login, filtrada por memberUids). MEDIDO em
+   * 27/ago: 39 torneios públicos no banco, e o pill dizia 3.
+   * Contar de verdade a cada boot custaria uma consulta, e a agregação `count()` NÃO existe
+   * no firebase-compat 12.17.1 (testado no navegador, contra produção). Então o número vem
+   * de quem já apurou: a tela #todos-torneios guarda o total quando abre.
+   * ⚠️ SEM NÚMERO É UM ESTADO LEGÍTIMO, não um bug — é a segunda opção que o dono deu, e
+   * vale antes da primeira visita à tela. Melhor calar do que dizer 3. */
+  var _totalPlataformaHtml = '';
+  try {
+    var _tp = parseInt(localStorage.getItem('scoreplace_totalPlataforma'), 10);
+    if (_tp > 0) _totalPlataformaHtml = ' <span style="opacity:0.75;font-weight:600;">' + _tp + '</span>';
+  } catch (e) {}
+
   const html = `
     <!-- Header Hero Box -->
     <!-- v0.17.31: cores do hero-box agora vêm de --hero-* tokens (style.css)
@@ -4024,7 +4041,7 @@ function renderDashboard(container) {
                border:1px solid ${_explorando ? '#6366f1' : window._spCor('rgba(255,255,255,0.18)', 'borda')};
                background:${_explorando ? 'rgba(99,102,241,0.18)' : window._spCor('rgba(255,255,255,0.06)', 'background')};
                color:${_explorando ? '#c7d2fe' : 'var(--text-main)'};">
-        🔎 ${_t('dashboard.filterExplore')} <span style="opacity:0.75;font-weight:600;">${_todosCount}</span>
+        🔎 ${_t('dashboard.filterExplore')}${_totalPlataformaHtml}
       </button>
       <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted);user-select:none;">☰ ${_t('dashboard.compact') || 'Lista'}</span>
       <label class="toggle-switch" style="--toggle-on-bg:#6366f1;" title="Ver em lista (desligado = cards)"><input type="checkbox" ${window._dashView === 'compact' ? 'checked' : ''} onchange="window._setDashView(this.checked ? 'compact' : 'cards')"><span class="toggle-slider"></span></label>

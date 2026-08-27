@@ -72,6 +72,15 @@
       E.cortou = out.length > TETO;
       E.torneios = E.cortou ? out.slice(0, TETO) : out;
       E.estado = 'ok';
+      // ⭐ 2.1.11 — GUARDA O TOTAL PRO PILL DA DASHBOARD. Ordem do dono: _"tira a porra do
+      // 3. coloca o numero total ali ou deixa sem numero se nao for possivel"_.
+      // O 3 vinha do pool da própria dashboard (publicDiscovery), que não é a plataforma.
+      // Contar de verdade a cada boot custaria uma consulta — e `count()` de agregação NÃO
+      // existe no firebase-compat 12.17.1 (testado no navegador). Então o número certo é o
+      // que ESTA tela já apurou: ela guarda, o pill lê. Antes da 1ª visita não há número, e
+      // aí o pill fica SEM número — que é a segunda opção que o dono deu, e é honesta:
+      // melhor não dizer nada do que dizer 3.
+      try { localStorage.setItem('scoreplace_totalPlataforma', String(E.torneios.length)); } catch (e) {}
     } catch (e) {
       E.estado = 'erro';
       E.erro = (e && e.code) || 'falhou';
@@ -89,6 +98,33 @@
         E.privados = n;
       } catch (e) { E.privados = 0; }   // sem permissão → não promete número nenhum
     }
+  }
+
+  // ── A ORDEM PADRÃO: quem ainda dá pra entrar vem primeiro (2.1.11) ──────────
+  // Ordem do dono: _"coloque os inscricoes abertas primeiro ordenados cronologicamente
+  // (inicio e fim das inscricoes/criacao do torneio quando nao houver inicio e fim das
+  // inscricoes); depois os com inscricoes encerradas; depois os torneios encerrados"_.
+  //
+  // ⛔ "INSCRIÇÕES ABERTAS" NÃO É REGRA MINHA — é `_enrollmentOpenState` (waitlist-core),
+  // fonte única desde a 1.8.40, criada justamente porque a MESMA pergunta tinha SEIS
+  // respostas diferentes no app. Reescrevê-la aqui seria a sétima. O que precisou mudar
+  // foi outra coisa: `_phaseDrawDone`, de que ela depende, era cego ao resumo (ver a nota
+  // lá) — pro resumo ele dizia "não sorteado" pra todo mundo, e toda a fila viraria balde 0.
+  var ABERTAS = 0, FECHADAS = 1, ENCERRADO = 2;
+  function _balde(t) {
+    if (String(t.status || '') === 'finished') return ENCERRADO;
+    var st = (typeof window._enrollmentOpenState === 'function')
+      ? window._enrollmentOpenState(t) : null;
+    if (st) return st.open ? ABERTAS : FECHADAS;
+    return FECHADAS;   // sem a fonte única carregada, não promete "aberto" a ninguém
+  }
+  // A data que ORDENA o balde de abertas: o prazo de inscrição manda (é o que dá urgência —
+  // quem fecha antes aparece antes); sem prazo, a data de início; sem nenhuma das duas, a
+  // criação do torneio. É a cascata que o dono descreveu.
+  function _quando(t) {
+    var d = t.registrationLimit || t.startDate || t.createdAt;
+    var ms = d ? new Date(d).getTime() : NaN;
+    return isNaN(ms) ? Infinity : ms;   // sem data nenhuma → fim da fila do seu balde
   }
 
   // ── ordenar/filtrar: lê o ESTADO da barra canônica, não o DOM ───────────────
@@ -110,15 +146,25 @@
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       return blob.indexOf(q) !== -1;
     });
-    var sort = st.sort || 'order-desc';
+    var sort = st.sort || 'order-asc';
     var dir = (sort.indexOf('-desc') >= 0) ? -1 : 1;
     var porNome = (sort.indexOf('name') === 0);
-    return arr.sort(function (a, b) {
-      if (porNome) return dir * String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
-      var am = new Date(a.startDate || a.createdAt || 0).getTime() || 0;
-      var bm = new Date(b.startDate || b.createdAt || 0).getTime() || 0;
-      return dir * (am - bm);
-    });
+    // ⛔ O BALDE É SEMPRE O CRITÉRIO PRIMÁRIO — a barra ordena DENTRO dele.
+    // Se a barra pudesse substituir a ordem, o pedido do dono ("abertas primeiro") se
+    // perderia no primeiro clique em A-Z; do jeito que está, ele vale em todos os estados
+    // da tela e a barra segue útil (alfabética/cronológica dentro de cada faixa).
+    return arr.map(function (t, i) { return { t: t, i: i, b: _balde(t), q: _quando(t) }; })
+      .sort(function (x, y) {
+        if (x.b !== y.b) return x.b - y.b;
+        if (porNome) {
+          var c = dir * String(x.t.name || '').localeCompare(String(y.t.name || ''), 'pt-BR', { sensitivity: 'base' });
+          if (c) return c;
+        } else if (x.q !== y.q) {
+          return dir * (x.q - y.q);
+        }
+        return x.i - y.i;   // estável
+      })
+      .map(function (o) { return o.t; });
   }
 
   window._todosTornAplicarFiltro = function () {

@@ -209,6 +209,15 @@ window._clearAllWaitlists = function (t) {
 // espelhado na CF (functions/enroll-core.js). Ver [[project_sitout_vs_waitlist_canon]].
 window._phaseDrawDone = function (t) {
   if (!t) return false;
+  // ⭐ 2.1.11 — O RESUMO TAMBÉM SABE RESPONDER. `tournaments_summary` (2.0.90) não carrega
+  // matches/rounds/groups: perguntar por array a um resumo devolvia SEMPRE false, ou seja
+  // "não sorteado" — e quem depende disto (`_enrollmentOpenState`) concluía "inscrições
+  // abertas" pra torneio que já tem chave. Era a MESMA pergunta que `_cardTemChave` já
+  // sabia responder nos dois formatos: duas implementações, uma delas cega.
+  // ⛔ SEGURO, e foi MEDIDO antes (27/ago): dos 40 documentos completos em `tournaments`,
+  // ZERO têm o campo `hasDraw` — ele existe só no resumo. Então esta linha não muda
+  // resposta nenhuma pro documento completo; ela só deixa o resumo parar de mentir.
+  if (typeof t.hasDraw === 'boolean') return t.hasDraw;
   return (Array.isArray(t.matches) && t.matches.length > 0) ||
          (Array.isArray(t.rounds) && t.rounds.length > 0) ||
          (Array.isArray(t.groups) && t.groups.length > 0);

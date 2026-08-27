@@ -84,8 +84,17 @@ ok(/hash = '#todos-torneios'/.test(src),
   'o botão Explorar ABRE a tela de todos os torneios (não alterna mais o filtro da lista)');
 ok(!/_applyDashFilter\('\$\{_explorando/.test(src),
   'e o modo antigo de alternar o filtro não voltou junto');
-ok(/🔎 \$\{_t\('dashboard.filterExplore'\)\} <span[^>]*>\$\{_todosCount\}/.test(src),
-  'e mostra o TOTAL da plataforma nele (ordem do dono: o total sempre visível)');
+// ⛔ 2.1.11 — O NÚMERO SAIU DO POOL DA DASHBOARD. Esta asserção cobrava `${_todosCount}`,
+// que conta `_poolPlataforma` — e era FALSO: 39 públicos no banco, o pill dizia 3. Ordem do
+// dono: _"tira a porra do 3. coloca o numero total ali ou deixa sem numero se nao for
+// possivel"_. Agora vem do total que a tela #todos-torneios apurou e guardou; sem esse
+// valor, o pill fica SEM número — que é um estado legítimo, não um bug.
+ok(/\$\{_totalPlataformaHtml\}/.test(src),
+  'o número do Explorar vem do total apurado pela tela, não do pool da dashboard');
+ok(/scoreplace_totalPlataforma/.test(src),
+  'e é lido do total guardado (sem ele, o pill não mostra número nenhum)');
+ok(!/_todosCount\}<\/span>/.test(src),
+  '⛔ o contador do pool (que dizia 3) não voltou pro botão');
 ok(/margin-right:auto/.test(src.slice(src.indexOf('EXPLORAR — a lista padrão'), src.indexOf('EXPLORAR — a lista padrão') + 1800)),
   'e fica na mesma linha do toggle Lista, empurrado pra ponta oposta');
 ok(/const _explorando = \(curFilter === 'explorar'\)/.test(src), 'existe o modo explorar');
