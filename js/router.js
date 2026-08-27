@@ -561,6 +561,11 @@ function initRouter() {
       case 'explore':
         renderExplore(viewContainer);
         break;
+      // #todos-torneios — a plataforma inteira, só dados básicos (2.1.10). É o destino do
+      // botão "Explorar" da dashboard, que antes só trocava o filtro da própria lista.
+      case 'todos-torneios':
+        if (typeof window.renderAllTournamentsPage === 'function') window.renderAllTournamentsPage(viewContainer);
+        break;
       case 'notifications':
         // ⭐ 2.0.5: ENTRAR na tela é o único gesto que reclassifica as notificações lidas.
         // Antes, "visita nova" era deduzida da AUSÊNCIA da bandeira de "Carregar mais" — e o

@@ -4006,8 +4006,19 @@ function renderDashboard(container) {
            assim a tela diz "4 pra você · 39 lá fora" em vez de parecer app vazio.
            Fica À ESQUERDA do toggle Lista por ordem do dono ("explorar ao lado do toggle
            lista") — e é botão, não pill de filtro: ele muda o ESCOPO, não a fatia. -->
-      <button type="button" onclick="window._applyDashFilter('${_explorando ? 'todos' : 'explorar'}')"
-        title="${_explorando ? 'Voltar pros seus torneios' : 'Ver todos os torneios da plataforma'}"
+      <!-- ⭐ 2.1.10 — O EXPLORAR VIROU TELA. Ordem do dono: _"esse botao explorar deveria
+           abrir um tela com todos, absolutamente todos os torneios (apenas os dados basicos
+           como nome, modalidade, local etc) com a barra de ordenar e filtrar"_ — depois de
+           constatar que _"como está é absolutamente inutil que nao mostra nada alem do que ja
+           esta na tela"_. Ele estava certo, e o número ao lado provava: dizia 3 num banco com
+           39 torneios públicos (MEDIDO em 27/ago). O modo curFilter === 'explorar' relia o
+           pool da própria dashboard (publicDiscovery, carga assíncrona filtrada por
+           memberUids), então "explorar" mostrava o que já estava na tela. A tela nova
+           (#todos-torneios) BUSCA o que promete.
+           ⚠️ Sem crases neste comentário: ele mora DENTRO de um template literal, e uma
+           crase aqui fecharia a string do html inteiro (foi o que o node --check pegou). -->
+      <button type="button" onclick="window.location.hash = '#todos-torneios'"
+        title="Ver todos os torneios da plataforma"
         style="margin-right:auto;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;cursor:pointer;
                font-size:0.8rem;font-weight:700;white-space:nowrap;
                border:1px solid ${_explorando ? '#6366f1' : window._spCor('rgba(255,255,255,0.18)', 'borda')};

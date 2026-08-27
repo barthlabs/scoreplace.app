@@ -72,9 +72,18 @@ ok(circulo(t({ creatorUid: 'estranho' })), 'deslogado não tem círculo: vê tud
 ok(/_fStyle\('todos', '📋', _circuloCount/.test(src),
   'o pill padrão conta o CÍRCULO (não a plataforma — senão diria 39 e mostraria 4)');
 // O Explorar é BOTÃO ao lado do toggle "Lista" (ordem do dono: "explorar ao lado do
-// toggle lista"), não um pill de filtro — ele muda o ESCOPO da lista, não a fatia dela.
-ok(/_applyDashFilter\('\$\{_explorando \? 'todos' : 'explorar'\}'\)/.test(src),
-  'o botão Explorar alterna entre o círculo e a plataforma');
+// toggle lista"), não um pill de filtro.
+// ⚠️ 2.1.10 — ELE DEIXOU DE ALTERNAR O FILTRO E PASSOU A ABRIR UMA TELA. Esta asserção
+// cobrava o comportamento antigo (`_applyDashFilter('explorar')`), e a troca é DELIBERADA,
+// pedida pelo dono: _"esse botao explorar deveria abrir um tela com todos, absolutamente
+// todos os torneios"_, depois de constatar que _"como está é absolutamente inutil que nao
+// mostra nada alem do que ja esta na tela"_. Ele estava certo — o modo relia o pool da
+// própria dashboard (publicDiscovery), que trazia 3 num banco com 39 públicos. A tela nova
+// (#todos-torneios) busca direto o resumo; ver tests/todos-os-torneios-da-plataforma.js.
+ok(/hash = '#todos-torneios'/.test(src),
+  'o botão Explorar ABRE a tela de todos os torneios (não alterna mais o filtro da lista)');
+ok(!/_applyDashFilter\('\$\{_explorando/.test(src),
+  'e o modo antigo de alternar o filtro não voltou junto');
 ok(/🔎 \$\{_t\('dashboard.filterExplore'\)\} <span[^>]*>\$\{_todosCount\}/.test(src),
   'e mostra o TOTAL da plataforma nele (ordem do dono: o total sempre visível)');
 ok(/margin-right:auto/.test(src.slice(src.indexOf('EXPLORAR — a lista padrão'), src.indexOf('EXPLORAR — a lista padrão') + 1800)),

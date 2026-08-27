@@ -411,6 +411,7 @@ const SUITES = [
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
+  'tests/todos-os-torneios-da-plataforma.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
