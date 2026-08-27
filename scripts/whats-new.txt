@@ -1,0 +1,13 @@
+Esta versão alinha o aplicativo ao site — se você usa o app, atualize.
+
+• O app alcançou o site: os torneios passaram a guardar inscritos, jogos e histórico separadamente, e a versão anterior ainda esperava tudo junto. Torneio podia abrir vazio ou pela metade no iPhone. Corrigido.
+
+• Bem mais rápido: a tela inicial fazia 8.959 buscas de nome para desenhar uma vez; agora faz 491. Torneio grande abre sem a espera de antes, e rolar a lista ficou leve.
+
+• Combinar o dia e a hora do jogo: o botão "Propor datas" aparece no seu grupo e, para quem organiza, em todos os grupos — dá para marcar a data direto. A data marcada fica visível para qualquer pessoa, então dá para saber quando ir assistir.
+
+• Explorar de verdade: uma tela com todos os torneios da plataforma e outra com todas as pessoas, ambas com ordenar, filtrar e buscar. A de pessoas começa por quem joga nos seus locais preferidos.
+
+• Lançar placar não faz mais a tela pular, e o resultado sem sinal entra numa fila e é aplicado sozinho quando a conexão volta.
+
+• Vários acertos de leitura: nomes que cabem inteiros nos cards, listas alinhadas e menos repetição nas telas.
