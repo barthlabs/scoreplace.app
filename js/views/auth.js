@@ -4647,6 +4647,13 @@ async function simulateLoginSuccess(user) {
         var legacyData = legacyDoc.data();
         // Merge legacy data into UID doc (friends, requests, etc.)
         var mergeData = {};
+        // ⛔ 2.1.24 — UNIR SEM RECONCILIAR ERA A FÁBRICA DOS CONVITES FANTASMA.
+        // Eram três arrayUnion independentes, um por campo, e NENHUM comparava com o outro:
+        // quem já era amigo pelo uid e tinha convite pendente pelo doc legado terminava nos
+        // DOIS lugares. MEDIDO em 27/ago/2026: 12 usuários, 11 pares — o dono via os próprios
+        // amigos na lista de "convites pendentes".
+        // A união continua atômica (arrayUnion), e a invariante entra logo depois com um
+        // arrayRemove — ver `_amizadeCore.conviteDeQuemJaEAmigo` no fim deste bloco.
         if (legacyData.friends && legacyData.friends.length > 0) mergeData.friends = firebase.firestore.FieldValue.arrayUnion.apply(null, legacyData.friends);
         if (legacyData.friendRequestsReceived && legacyData.friendRequestsReceived.length > 0) mergeData.friendRequestsReceived = firebase.firestore.FieldValue.arrayUnion.apply(null, legacyData.friendRequestsReceived);
         if (legacyData.friendRequestsSent && legacyData.friendRequestsSent.length > 0) mergeData.friendRequestsSent = firebase.firestore.FieldValue.arrayUnion.apply(null, legacyData.friendRequestsSent);
@@ -4656,6 +4663,25 @@ async function simulateLoginSuccess(user) {
         if (Object.keys(mergeData).length > 0) {
           if (window._realEmailOrEmpty(user.email)) mergeData.email = user.email;
           await window.FirestoreDB.db.collection('users').doc(uid).set(mergeData, { merge: true });
+          // ⛔ A INVARIANTE, logo depois da união: quem está em `friends` sai dos convites.
+          // Escrita SEPARADA de propósito — arrayUnion e arrayRemove não convivem no mesmo
+          // campo na mesma escrita, e arrayRemove é atômico (não sobrescreve convite que
+          // tenha chegado no meio). A união é determinística (perfil atual ∪ legado), então
+          // dá pra calcular quem sai sem reler o documento.
+          try {
+            var _amiz = (window._amizadeCore || {});
+            var _tirar = _amiz.conviteDeQuemJaEAmigo ? _amiz.conviteDeQuemJaEAmigo({
+              friends: _amiz.unirUids((existingProfile || {}).friends, legacyData.friends),
+              friendRequestsSent: _amiz.unirUids((existingProfile || {}).friendRequestsSent, legacyData.friendRequestsSent),
+              friendRequestsReceived: _amiz.unirUids((existingProfile || {}).friendRequestsReceived, legacyData.friendRequestsReceived)
+            }) : [];
+            if (_tirar.length) {
+              await window.FirestoreDB.db.collection('users').doc(uid).set({
+                friendRequestsSent: firebase.firestore.FieldValue.arrayRemove.apply(null, _tirar),
+                friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove.apply(null, _tirar)
+              }, { merge: true });
+            }
+          } catch (_eInv) { window._warn('[merge legado] invariante de amizade:', _eInv); }
         }
         // Update all other users who reference the old email ID in their friends/requests
         var allUsers = await window.FirestoreDB.db.collection('users').get();
@@ -4680,6 +4706,13 @@ async function simulateLoginSuccess(user) {
             updates.friendRequestsReceived = firebase.firestore.FieldValue.arrayUnion(uid);
             batch.update(ref, { friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(user.email) });
             batchCount++;
+          }
+          // ⛔ 2.1.24 — O TERCEIRO TAMBÉM PRECISA DA INVARIANTE. Cada campo acima é tratado
+          // ISOLADO: quem tinha o e-mail antigo em `friends` e o uid novo em `sent` ficava
+          // com o mesmo uid nos dois. Se o uid entra em `friends`, ele sai dos convites.
+          if (updates.friends) {
+            updates.friendRequestsSent = firebase.firestore.FieldValue.arrayRemove(uid);
+            updates.friendRequestsReceived = firebase.firestore.FieldValue.arrayRemove(uid);
           }
           if (Object.keys(updates).length > 0) {
             batch.update(ref, updates);

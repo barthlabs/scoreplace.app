@@ -418,6 +418,7 @@ const SUITES = [
   'tests/ir-para-o-grupo-clicado.test.js',
   'tests/o-checkout-principal-anda-junto.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
+  'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/nota-de-versao-e-cobrada-onde-tem-git.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',

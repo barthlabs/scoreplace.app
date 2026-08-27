@@ -68,6 +68,7 @@ const _enrollCore = require("./enroll-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
+const _amizade = require("./vendor/amizade-core.js"); // a invariante "amigo não é convite pendente"
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
@@ -5929,9 +5930,18 @@ exports.mergePhoneAccount = onCall(
       return out;
     };
     const surv = {};
-    surv.friends = unionArr(newData.friends, oldData.friends).filter(u => u !== callerUid && u !== oldUid);
-    surv.friendRequestsSent = unionArr(newData.friendRequestsSent, oldData.friendRequestsSent).filter(u => u !== callerUid && u !== oldUid);
-    surv.friendRequestsReceived = unionArr(newData.friendRequestsReceived, oldData.friendRequestsReceived).filter(u => u !== callerUid && u !== oldUid);
+    // ⛔ 2.1.24 — UNIR OS TRÊS E RECONCILIAR. Antes eram três uniões INDEPENDENTES: quem já
+    // era amigo por um lado e tinha convite pendente pelo outro terminava nos dois arrays.
+    // MEDIDO na base (27/ago): 12 usuários, 11 pares. `reconciliarAmizade` tira dos convites
+    // quem está em `friends` — e NUNCA mexe em `friends`, que é o estado forte.
+    const _fsd = _amizade.reconciliarAmizade({
+      friends: unionArr(newData.friends, oldData.friends).filter(u => u !== callerUid && u !== oldUid),
+      friendRequestsSent: unionArr(newData.friendRequestsSent, oldData.friendRequestsSent).filter(u => u !== callerUid && u !== oldUid),
+      friendRequestsReceived: unionArr(newData.friendRequestsReceived, oldData.friendRequestsReceived).filter(u => u !== callerUid && u !== oldUid),
+    });
+    surv.friends = _fsd.friends;
+    surv.friendRequestsSent = _fsd.friendRequestsSent;
+    surv.friendRequestsReceived = _fsd.friendRequestsReceived;
     // v1.7.61 — a regra de "o e-mail da conta absorvida vira vínculo" MORAVA AQUI, inline, e
     // só aqui: o caminho comum de fusão (_executeMerge) não tinha equivalente, e por isso a
     // Fabiana saiu de uma fusão sem `linkedEmails`. Agora é UMA função pura, usada pelos dois.
@@ -6002,6 +6012,21 @@ exports.mergePhoneAccount = onCall(
           fu[field] = arr; fChanged = true;
         }
       });
+      // ⛔ 2.1.24 — E RECONCILIA O TERCEIRO. O laço acima trata cada campo ISOLADO: quem
+      // tinha o uid velho em `friends` e o novo em `sent` fica com o mesmo uid nos dois.
+      // Reconcilia sobre o estado FINAL (o que já existia + o que o laço acabou de mudar),
+      // senão a invariante olharia um retrato desatualizado.
+      if (fChanged) {
+        const _rec = _amizade.reconciliarAmizade({
+          friends: fu.friends || d.friends,
+          friendRequestsSent: fu.friendRequestsSent || d.friendRequestsSent,
+          friendRequestsReceived: fu.friendRequestsReceived || d.friendRequestsReceived,
+        });
+        ["friendRequestsSent", "friendRequestsReceived"].forEach(f => {
+          const antes = (fu[f] || d[f] || []).length;
+          if (_rec[f].length !== antes) fu[f] = _rec[f];
+        });
+      }
       if (fChanged) {
         if (!dryRun) fbatch.update(ud.ref, fu);
         report.friendRefsRepointed++; fcount++;
