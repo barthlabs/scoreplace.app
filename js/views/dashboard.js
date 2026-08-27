@@ -2935,10 +2935,24 @@ function renderDashboard(container) {
       // ⛔ O texto guardado é o MESMO que era gerado antes — nada muda na tela
       // depois de expandir; o que muda é QUANDO ele passa a existir.
       var _novVis = '', _novExt = '';
+      // v2.1.1: quantos cards NASCEM na prévia fechada. Era 1 — e por isso Novidades
+      // mostrava UM card mesmo numa tela que cabia três, enquanto "Seus últimos
+      // resultados" enchia a linha. Ordem do dono: _"novidades deve se comportar como
+      // ultimos resultados. tem espaço pra 1 coluna, mostra 1; tem espaço pra 2
+      // colunas, mostra 2; tem espaco pra 3 mostra os 3."_
+      // ⚠️ Quem DECIDE quantos aparecem continua sendo o `_spFitGrid` em tempo de
+      // execução (ele mede a grade e tira o `data-sp-extra` de quem cabe) — aqui só
+      // garantimos que existam candidatos no DOM pra ele revelar. Sem isto a régua
+      // media 1 card e devolvia 1, por mais larga que fosse a tela.
+      // ⛔ NÃO virar "renderiza tudo": a otimização 2.0.82 (o escondido nem nasce) é o
+      // que tirou 639 dos 921 elementos da tela inicial. O teto cobre a linha mais
+      // larga que a grade `minmax(280px,1fr)` alcança e para aí — o resto segue
+      // guardado em `window._novExtraPend` e só entra no DOM ao expandir.
+      var _NOV_PREVIEW_MAX = 4;
       var _guarda = function (html) {
         // `_spCards` é incrementado DENTRO de _spCard/_spFull enquanto o pedaço é
-        // gerado: se antes de gerar já havia card, este pedaço é dos escondidos.
-        if (_novAntes > 0) _novExt += html; else _novVis += html;
+        // gerado: o pedaço é dos escondidos quando o teto da prévia já foi atingido.
+        if (_novAntes >= _NOV_PREVIEW_MAX) _novExt += html; else _novVis += html;
       };
       var _novAntes = 0;
       _novGroups.forEach(function(g) {

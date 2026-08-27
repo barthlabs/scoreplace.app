@@ -3290,8 +3290,15 @@ function renderTournaments(container, tournamentId = null) {
                 // v1.8.78: a previsão do tempo do LOCAL entra logo abaixo do box (pedido do
                 // dono: "abaixo de rodada em andamento"). O slot nasce vazio e é preenchido
                 // pela rede — ver `_hydrateWeatherSlots` (uma requisição por local, cacheada).
-                return ((typeof window._ligaCountdownBoxHtml === 'function') ? window._ligaCountdownBoxHtml(t, 'lg') : '') +
-                       ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
+                // v2.1.1: o BOX de "Fim da rodada / Rodada em andamento" SAIU DAQUI (ordem
+                // do dono, olhando o detalhe do Confra: "podemos eliminar essa sessao...
+                // ela repete as informacoes que estao logo abaixo da previsao do tempo").
+                // O box do PROGRESSO (logo abaixo da previsão) já diz rodada, jogos, % e os
+                // horários da janela — o countdown no topo era a mesma história contada duas
+                // vezes, empurrando a previsão pra baixo. ⚠️ Removido SÓ no DETALHE: o card
+                // do dashboard segue chamando _ligaCountdownBoxHtml(t, 'sm') e lá o box é a
+                // ÚNICA fonte dessa informação (o card não desenha o box de progresso).
+                return ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
               }
 
               // Não-Liga: múltiplos countdowns (inscrições, início, fim)
