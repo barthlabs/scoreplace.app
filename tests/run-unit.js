@@ -415,6 +415,7 @@ const SUITES = [
   'tests/o-voce-nao-volta-pros-cards-de-jogo.test.js',
   'tests/pessoas-amigos-e-explorar.test.js',
   'tests/lancar-placar-nao-rola-a-tela.test.js',
+  'tests/ir-para-o-grupo-clicado.test.js',
   'tests/nota-de-versao-e-cobrada-onde-tem-git.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',

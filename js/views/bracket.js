@@ -527,7 +527,29 @@ function _alvoDeEntrada() {
   var _p = null;
   try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
   if (_p) {
-    var _g = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
+    var _sel = '[data-group-label="' + String(_p).replace(/"/g, '') + '"]';
+    var _g = document.querySelector(_sel);
+    // ⛔ 2.1.22 — O GRUPO PEDIDO PODE AINDA NÃO EXISTIR NO DOM, e era por isso que o
+    // "Ir para o torneio" caía no grupo do usuário. Relato do dono: _"clicando no ir para
+    // o torneio. continua indo para o grupo do usuário. nem aberto fica os demais jogos
+    // da rodada."_
+    // A CAUSA é a otimização da 2.0.88: acima de `_CHAVE_LOTE_MIN` (6) grupos, os que NÃO
+    // são o seu nascem como marcador e só são montados ao abrir. O Confra tem 35. Então
+    // `[data-group-label=…]` do grupo clicado simplesmente não estava no documento, a
+    // busca falhava e o código seguia pro item (2) — "o SEU grupo". Os dois sintomas que
+    // ele relatou saem daí: o destino errado E os "demais jogos" fechados (quem abre a
+    // seção é o ramo abaixo, que nunca era alcançado).
+    // ⚠️ O próprio comentário do lote já avisava: _"grupo fora do DOM não tem âncora
+    // `data-group-box`, e é por ela que a tela rola até um grupo"_ — a nota estava lá, a
+    // consequência para o grupo PEDIDO é que não tinha sido ligada.
+    // ⭐ MONTAR TUDO SÓ AQUI é o ponto: o custo (5.482 elementos no Confra) é pago apenas
+    // quando alguém clicou pedindo um grupo específico — e nesse instante a pessoa está
+    // esperando chegar lá. O caminho comum (entrar no torneio) segue adiando como antes.
+    // `_chaveMontaTudo` é idempotente, então o laço `_reafirmar` chamar de novo é no-op.
+    if (!_g && typeof window._chaveMontaTudo === 'function') {
+      try { window._chaveMontaTudo(document); } catch (e) {}
+      _g = document.querySelector(_sel);
+    }
     if (_g) {
       /* ⭐ CHEGOU PELO "Ir para o torneio": a seção do grupo abre JUNTO. Ordem do dono
        * (26/ago/2026): _"deve ir para o torneio com o mostrar mais aberto parando direto no
@@ -537,6 +559,17 @@ function _alvoDeEntrada() {
        * e ele corrige até o alvo ficar parado em 3 leituras — então a expansão entra na
        * conta em vez de brigar com ela. */
       try {
+        // ⛔ 2.1.22 — ABRE TAMBÉM OS <details> ANCESTRAIS, não só os de dentro.
+        // O grupo pedido quase sempre mora DENTRO do "Demais jogos da rodada" (é o
+        // agrupamento que a 2.0.88 usa pra adiar tudo que não é o seu grupo). Abrir só os
+        // filhos deixava o alvo dentro de uma seção FECHADA: invisível, sem altura, e
+        // `scrollIntoView` num elemento assim não leva a lugar nenhum. Era o segundo
+        // sintoma do dono — _"nem aberto fica os demais jogos da rodada"_.
+        var _pai = _g.parentElement;
+        while (_pai) {
+          if (_pai.tagName === 'DETAILS') _pai.open = true;
+          _pai = _pai.parentElement;
+        }
         var _ds = _g.querySelectorAll ? _g.querySelectorAll('details') : [];
         for (var _di = 0; _di < _ds.length; _di++) _ds[_di].open = true;
       } catch (e) {}

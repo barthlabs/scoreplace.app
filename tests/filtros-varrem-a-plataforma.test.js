@@ -420,8 +420,13 @@ if (codPools && codCont) {
   // tests/entrar-no-torneio-cai-no-meu-grupo.test.js.
   ok(/sessionStorage\.getItem\('sp_scrollToGroup'\)/.test(br),
     'a chave lê o grupo pedido');
-  ok(/querySelector\('\[data-group-label="'/.test(br),
+  ok(/\[data-group-label="/.test(br),
     'e rola pro box daquele rótulo');
+  // ⛔ 2.1.22 — e ele MONTA os lotes adiados antes de desistir. Sem isto a regra existia e
+  // não funcionava: acima de 6 grupos os que não são o seu nascem como marcador (2.0.88),
+  // então o box do grupo PEDIDO nem estava no DOM e o alvo caía no grupo do usuário.
+  ok(/_chaveMontaTudo/.test(br),
+    'e monta os grupos adiados quando o pedido ainda não está no documento');
   // ⚠️ grupo inexistente NÃO pode travar no topo — cai nas regras seguintes
   ok(/encontrado \(re-sorteio, fase avançada\)/i.test(br),
     'grupo não encontrado cai na regra antiga em vez de ficar no topo sem explicação');
