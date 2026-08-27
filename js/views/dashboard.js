@@ -954,27 +954,36 @@ function renderDashboard(container) {
               // Liga: um único countdown excludente (início → próximo sorteio → prazo da
               // rodada → fim da temporada)
               if (_isLiga) {
-                // v1.6.85: FONTE ÚNICA do BOX INTEIRO — window._ligaCountdownBoxHtml
-                // (tournaments-utils.js), o MESMO render do detalhe (tournaments.js). Aqui
-                // só sobra o que é EXCLUSIVO do card: o toggle Liga (sempre à direita,
-                // independente do countdown). Antes o markup era copiado nos dois lugares e
-                // as cópias divergiram — o card caía no render genérico com o evento vazio
-                // da "rodada em andamento" (ts/labelKey/icon = null) e imprimia "null null 0s".
+                // ⛔ 2.1.9 — O BOX "Fim da rodada / Rodada em andamento" SAIU DAQUI TAMBÉM.
+                // Ordem do dono, a SEGUNDA vez: _"mandei tirar esse fim da rodada e rodada em
+                // andamento (box/sessao toda) que esta redundante com a sessao de barras de
+                // progressao que já aparece logo depois da previsao do tempo"_.
+                //
+                // ⚠️ POR QUE ELE VOLTOU — e a causa é um comentário, não um revert. A 2.1.1
+                // tirou o box do DETALHE e escreveu, ali e na mensagem do commit, que "no card
+                // da dashboard ele é a ÚNICA fonte dessa informação (o card não desenha o box
+                // de progresso)". Isso era FALSO: o card chama `_renderTournamentProgress`
+                // umas 50 linhas abaixo, desde a v2.1.52 — o mesmo box de progresso do
+                // detalhe. A meia-remoção nasceu de uma afirmação sobre OUTRO trecho do
+                // arquivo que ninguém conferiu, e o dono viu a redundância de novo.
+                //
+                // É a MESMA classe de erro da 2.1.7 (um comentário em bracket.js afirmava que
+                // o "Propor datas" tinha ganhado a exceção do organizador; não tinha). Duas
+                // levas seguidas: comentário que descreve a INTENÇÃO e é lido como se
+                // descrevesse o CÓDIGO. Aqui o que trava é o teste, não este texto.
+                //
+                // O que fica: o toggle Liga (exclusivo do card) e a previsão do tempo, que o
+                // dono foi procurar em três mensagens na v1.8.82 e quer nesta tela.
                 var _ligaToggleDash = (typeof window._buildLigaActiveToggleHtml === 'function')
                   ? window._buildLigaActiveToggleHtml(t)
                   : '';
                 var _toggleRowDash = _ligaToggleDash
                   ? '<div style="display:flex;justify-content:flex-end;margin-top:6px;" onclick="event.stopPropagation();">' + _ligaToggleDash + '</div>'
                   : '';
-                // com o toggle acima, o box encosta um pouco mais (4px em vez de 10px)
-                var _boxD = (typeof window._ligaCountdownBoxHtml === 'function')
-                  ? window._ligaCountdownBoxHtml(t, 'sm', _toggleRowDash ? '4px' : '10px') : '';
-                if (!_boxD) return _toggleRowDash; // sem countdown → só o toggle (direita)
-                // v1.8.82: a previsão do tempo também AQUI. Ela existia só na tela de
-                // DETALHE, e o dono passou três mensagens procurando por ela na TELA
-                // INICIAL — que é onde ele estava o tempo todo. "Abaixo de rodada em
-                // andamento" quer dizer abaixo DESTE box, em qualquer tela onde ele apareça.
-                return _toggleRowDash + _boxD +
+                // A previsão NÃO depende mais de haver countdown — antes um `if (!_boxD)
+                // return` a derrubava junto quando não havia box. Ela tem gate próprio
+                // (venueLat/venueLon em _weatherSlotHtml), então não sobra caixa vazia.
+                return _toggleRowDash +
                   ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'sm') : '');
               }
 

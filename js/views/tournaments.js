@@ -3295,9 +3295,13 @@ function renderTournaments(container, tournamentId = null) {
                 // ela repete as informacoes que estao logo abaixo da previsao do tempo").
                 // O box do PROGRESSO (logo abaixo da previsão) já diz rodada, jogos, % e os
                 // horários da janela — o countdown no topo era a mesma história contada duas
-                // vezes, empurrando a previsão pra baixo. ⚠️ Removido SÓ no DETALHE: o card
-                // do dashboard segue chamando _ligaCountdownBoxHtml(t, 'sm') e lá o box é a
-                // ÚNICA fonte dessa informação (o card não desenha o box de progresso).
+                // vezes, empurrando a previsão pra baixo.
+                // ⛔ CORREÇÃO 2.1.9 — este comentário dizia "removido SÓ no DETALHE: no card
+                // do dashboard o box é a ÚNICA fonte dessa informação (o card não desenha o
+                // box de progresso)". Era FALSO, e foi ele que segurou a meia-remoção: o card
+                // chama `_renderTournamentProgress` desde a v2.1.52, o MESMO box de progresso
+                // do detalhe. O dono viu a redundância de novo na tela inicial e teve que
+                // mandar tirar duas vezes. Agora o box saiu das DUAS telas.
                 return ((typeof window._weatherSlotHtml === 'function') ? window._weatherSlotHtml(t, 'lg') : '');
               }
 
