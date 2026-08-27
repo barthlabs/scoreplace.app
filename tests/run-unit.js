@@ -149,6 +149,7 @@ const SUITES = [
   'tests/lista-de-pesados-nao-vaza.test.js',
   'tests/porta-unica-de-escrita-fina.test.js',
   'tests/gravacao-so-na-subcolecao-toca-o-doc.test.js',
+  'tests/congelada-viaja-ate-o-render.test.js',
   'tests/ouvinte-das-partes-divididas.test.js',
   'tests/grupo-e-documento.test.js',
   'tests/sw-cache-name-acompanha-a-versao.test.js',

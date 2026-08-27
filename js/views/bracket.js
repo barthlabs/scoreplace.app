@@ -5227,7 +5227,19 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       _stRoster.push({ name: _woMk.p1, uid: (Array.isArray(_wU) ? _wU[0] : _wU) || _woMk.p1Uid || null });
     }
     var _stPlayers = _stRoster.map(function (r) { return r.name; });
-    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: sg.matches }, t, sg.category || null) : [];
+    // ⛔ `classifCongelada` TEM QUE VIAJAR. A lógica do retrato congelado mora DENTRO do
+    // _computeMonarchStandings e lê `group.classifCongelada` — mas todos os chamadores
+    // montavam um OBJETO NOVO com players/playersUids/matches e o campo ficava pra trás.
+    // Efeito: o retrato era GRAVADO e NUNCA LIDO; a tela seguia recalculando pelos critérios.
+    // Passa despercebido enquanto a ordem calculada bate com a congelada — só aparece quando
+    // elas divergem. Medido no Confra (Grupo D, 26/ago): quem JOGOU e perdeu (Fernando,
+    // saldo -6) caía ABAIXO de quem NÃO jogou (Vivian, 0 jogos, saldo 0), que é exatamente
+    // o que o congelamento existe pra impedir. Ordem do dono: _"o fernando que jogou nao
+    // pode ficar pior que a vivian que nao jogou"_.
+    // ⭐ Como foi achado: a MESMA função, com o MESMO dado, devolvia a ordem certa em Node
+    // (onde passei o grupo REAL) e a errada no navegador. A diferença não estava na função —
+    // estava no que chegava nela. [[project_classificacao_publicada_congela]]
+    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: sg.matches, classifCongelada: sg.classifCongelada }, t, sg.category || null) : [];
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
     var matches = (sg.matches || []).filter(function(m) { return !(m.isSitOut && m.sitOutReason === 'wo'); });
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
@@ -6443,8 +6455,10 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               _stRoster.push({ name: _par.absentName, uid: _absUid || null });
             });
             var _stPlayers = _stRoster.map(function (r) { return r.name; });
+            // ⛔ `classifCongelada` viaja junto — ver a nota no outro chamador: sem ela o
+            // retrato congelado é gravado e nunca lido, e a tela recalcula pelos critérios.
             var _gst = window._computeMonarchStandings(
-              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: g.matches },
+              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: g.matches, classifCongelada: g.classifCongelada },
               t, g.category || null) || [];
             // Estado de W.O. na CLASSIFICAÇÃO DO GRUPO (pedido do dono):
             //  • falta APONTADA (claim pending/disputed, ainda não confirmada) → nome ÂMBAR + tag W.O.;

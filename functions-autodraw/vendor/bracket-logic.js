@@ -289,8 +289,34 @@ window._computeMonarchStandings = function(group, t, category) {
     var kx = String((x && (x.uid || x.name)) || ''), ky = String((y && (y.uid || y.name)) || '');
     return kx < ky ? -1 : kx > ky ? 1 : 0;
   });
+  /* ⛔ O RETRATO CONGELADO VALE NOS DOIS CAMINHOS. Ele era montado LÁ EMBAIXO, depois do
+   * `return` antecipado logo abaixo — então torneio SEM `tiebreakers` configurado nunca
+   * honrava `classifCongelada`: a ordem publicada era gravada e a tela seguia recalculando.
+   * Achado em 26/ago/2026 caçando o Grupo D do Confra. [[project_classificacao_publicada_congela]] */
+  var _cong = group && Array.isArray(group.classifCongelada) ? group.classifCongelada : null;
+  var _ordCong = null;
+  if (_cong && _cong.length) {
+    var _posCong = {};
+    _cong.forEach(function (x, i) {
+      if (x && x.uid) _posCong['uid:' + x.uid] = i;
+      if (x && x.name) _posCong['nome:' + x.name] = i;
+    });
+    _ordCong = function (l) {
+      var byUid = (l && l.uid != null) ? _posCong['uid:' + l.uid] : undefined;
+      if (byUid !== undefined) return byUid;
+      var byName = (l && l.name) ? _posCong['nome:' + l.name] : undefined;
+      return (byName !== undefined) ? byName : 9999;      // fora do retrato → fim
+    };
+  }
   var _cfgTb = (t && Array.isArray(t.tiebreakers) && t.tiebreakers.length) ? t.tiebreakers : null;
   if (!_cfgTb || typeof window._standingsCompareConfig !== 'function') {
+    if (_ordCong) {
+      return _linhas.slice().sort(function (a, b) {
+        var d = _ordCong(a) - _ordCong(b);
+        if (d) return d;
+        return window._standingsCompare(a, b, _adv);      // só entre os que o retrato não cobre
+      });
+    }
     return _linhas.sort(function (a, b) { return window._standingsCompare(a, b, _adv); });
   }
   var _opts = {
@@ -333,19 +359,8 @@ window._computeMonarchStandings = function(group, t, category) {
   //
   // As ESTATÍSTICAS continuam vivas (V/D/saldo seguem refletindo os jogos); o que congela é
   // a ORDEM. Quem não está no retrato (entrou depois) vai pro fim, sem furar a ordem antiga.
-  var _cong = group && Array.isArray(group.classifCongelada) ? group.classifCongelada : null;
-  if (_cong && _cong.length) {
-    var _posCong = {};
-    _cong.forEach(function (x, i) {
-      if (x && x.uid) _posCong['uid:' + x.uid] = i;
-      if (x && x.name) _posCong['nome:' + x.name] = i;
-    });
-    var _ordCong = function (l) {
-      var byUid = (l && l.uid != null) ? _posCong['uid:' + l.uid] : undefined;
-      if (byUid !== undefined) return byUid;
-      var byName = (l && l.name) ? _posCong['nome:' + l.name] : undefined;
-      return (byName !== undefined) ? byName : 9999;      // fora do retrato → fim
-    };
+  // (o retrato já foi montado no topo — vale para os dois caminhos)
+  if (_ordCong) {
     return _linhas.slice().sort(function (a, b) {
       var d = _ordCong(a) - _ordCong(b);
       if (d) return d;
