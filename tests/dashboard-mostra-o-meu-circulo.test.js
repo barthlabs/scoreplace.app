@@ -74,7 +74,11 @@ ok(circulo(t({ creatorUid: 'estranho' })), 'deslogado não tem círculo: vê tud
 // não foi tocada: ela segue cortando a lista e o contador segue sendo calculado.
 ok(/const _circuloCount = _poolPlataforma\.filter/.test(src),
   'o contador do círculo continua calculado (a régua é o que este teste guarda, não o pill)');
-ok(!/_fStyle\('todos'/.test(src), 'e o pill que o exibia saiu da hero box');
+// 2.1.23: o pill voltou (ordem do dono), agora compacto — ver a nota em
+// tests/filtros-varrem-a-plataforma.test.js. O que este arquivo guarda é a RÉGUA do
+// círculo, que não mudou.
+ok(/_fStyle\('todos', '📋', _circuloCount/.test(src),
+  'e o pill que o exibe lê o contador do círculo');
 // O Explorar é BOTÃO ao lado do toggle "Lista" (ordem do dono: "explorar ao lado do
 // toggle lista"), não um pill de filtro.
 // ⚠️ 2.1.10 — ELE DEIXOU DE ALTERNAR O FILTRO E PASSOU A ABRIR UMA TELA. Esta asserção
@@ -99,8 +103,10 @@ ok(/scoreplace_totalPlataforma/.test(src),
   'e é lido do total guardado (sem ele, o pill não mostra número nenhum)');
 ok(!/_todosCount\}<\/span>/.test(src),
   '⛔ o contador do pool (que dizia 3) não voltou pro botão');
-ok(/margin-right:auto/.test(src.slice(src.indexOf('EXPLORAR — a lista padrão'), src.indexOf('EXPLORAR — a lista padrão') + 1800)),
-  'e fica na mesma linha do toggle Lista, empurrado pra ponta oposta');
+// 2.1.23: quem ocupa a sobra da linha agora é a FAIXA DE FILTROS (que rola na horizontal),
+// então o Explorar deixou de precisar do `margin-right:auto` — ele é o primeiro item fixo.
+ok(/flex:0 0 auto;display:inline-flex[\s\S]{0,900}filterExplore/.test(src),
+  'o Explorar segue na mesma linha, como item fixo antes da faixa de filtros');
 ok(/const _explorando = \(curFilter === 'explorar'\)/.test(src), 'existe o modo explorar');
 ok(/if \(!_explorando\) \{[\s\S]{0,400}_ehDoMeuCirculo/.test(src),
   'a régua só corta FORA do explorar');

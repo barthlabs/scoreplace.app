@@ -117,7 +117,22 @@ if (codPools && codCont) {
    *       layout, senão redistribuir viraria reescrever;
    *   (b) e ninguém pode voltar a contar por `allUnique.length` na mão (o bug da 1.8.89),
    *       que é a asserção logo adiante e segue de pé. */
-  ok(!/_fStyle\('todos'/.test(src), 'os pills de filtro saíram da hero box');
+  /* ⛔ 2.1.23 — OS FILTROS VOLTARAM, e a asserção anterior ("saíram da hero box") virou
+   * mentira. Eles tinham sumido com o quadro de números (2.1.13, "elimine essa sessao") e
+   * ficaram SEM PORTA na interface — organizados/participando/favoritos/encerrados eram
+   * fatias inalcançáveis. O dono mandou trazer de volta ("faça 1").
+   * ⚠️ Mas em outra FORMA: pílula de uma linha, não o card com emoji grande e número em
+   * 1.3rem que ocupava a hero box. Devolver igual seria desfazer o pedido anterior — o que
+   * ele quis foi o ACESSO, não o painel. É isso que as duas asserções abaixo separam. */
+  ok(/_fStyle\('todos', '📋', _circuloCount/.test(src),
+    'o filtro padrão existe e lê o contador do círculo');
+  // ⚠️ medir DENTRO do _fStyle: o `font-size:1.3rem` ainda existe no _statPill (os números
+  // sociais, órfãos desde a 2.1.13 e guardados pro "distribuir depois"). Olhar o arquivo
+  // inteiro acusaria o vizinho.
+  const _iF = src.indexOf('const _fStyle = (key, emoji, count, label)');
+  const _corpoF = src.slice(_iF, src.indexOf('};', _iF));
+  ok(!/font-size:1\.3rem/.test(_corpoF) && /border-radius:999px/.test(_corpoF),
+    '⛔ e voltou como PÍLULA, não como o card grande da hero box (o que o dono mandou eliminar)');
   ok(/const _circuloCount = /.test(src) && /const _abertosCount = /.test(src) && /const _encerradosPillCount = /.test(src),
     '⭐ mas os contadores CONTINUAM calculados — a redistribuição religa uma porta nova, não reescreve a lógica');
   ok(/window\._applyDashFilter = /.test(src) || /_applyDashFilter/.test(src),

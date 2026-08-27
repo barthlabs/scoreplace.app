@@ -3533,48 +3533,31 @@ function renderDashboard(container) {
   // Cabe agora 3-4 pills por linha em mobile e 6-7 em desktop, dando
   // espaço pra grupo de torneios + grupo de stats sociais sem precisar
   // de scroll horizontal.
+  /* ⛔ 2.1.23 — O FILTRO VOLTOU, MAS COMPACTO. Ordem do dono: primeiro _"elimine essa
+   * sessao"_ (o quadro 3x3 de números no topo), depois _"faça 1"_ — trazer de volta o
+   * acesso às fatias que sumiram com ele (organizados, participando, favoritos,
+   * encerrados), que não tinham OUTRA porta na interface.
+   *
+   * ⚠️ O QUE MUDOU É A FORMA, e é o ponto: o desenho antigo era um CARD por filtro
+   * (emoji grande + número em 1.3rem + rótulo), três por linha, ocupando a hero box
+   * inteira. Foi por isso que ele mandou eliminar. Devolver igual seria desfazer o
+   * pedido anterior — o que ele quis foi o ACESSO, não o painel.
+   * Agora é uma pílula de uma linha: rótulo + contagem discreta, na mesma faixa do
+   * "Explorar" e do toggle Lista, rolando na horizontal quando não couber.
+   *
+   * ⛔ Só aparece filtro com conteúdo (count > 0), exceto o padrão "Pra Você" — pílula
+   * que leva a uma lista vazia é um beco, não um atalho. */
   const _fStyle = (key, emoji, count, label) => {
     const active = curFilter === key;
-    // v1.0.58-beta: só permite wrap em labels com 2+ palavras (espaço presente).
-    // Single-word labels ("Todos", "Organizados", "Participando", "Favoritos",
-    // "Encerrados") mantêm nowrap — não tem como quebrar 1 palavra com sentido.
-    // Labels com espaço ("Inscrições Abertas") ganham white-space:normal pra
-    // quebrar entre palavras quando o pill fica estreito.
-    const _wrapLabel = String(label).indexOf(' ') !== -1;
-    const _ws = _wrapLabel ? 'normal' : 'nowrap';
-    // v1.7.83: com a escala grande (até 1.7) uma palavra só — "Organizados",
-    // "Participando", "Encerrados" — passa da pill e INVADE a vizinha (medido:
-    // +21/+22/+9px em 1.7). Ordem do dono: "nesses 3 casos vamos usar ...".
-    // Reticência aqui é legítima: é RÓTULO DE FILTRO, não nome de pessoa — a
-    // regra da caixa invisível (que reduz a fonte pra não cortar) vale pra
-    // gente, e cortar "Organiz…" não perde identidade de ninguém.
-    const _corta = _wrapLabel ? '' : 'overflow:hidden;text-overflow:ellipsis;max-width:100%;';
-    // v1.7.88 — A PILL CRESCE PRA PREENCHER A LINHA.
-    // Era `flex:0 1 92px`: o `0` PROÍBE crescer, então as pills ficavam travadas
-    // em 92px com sobra de espaço nas duas laterais — e o rótulo cortava ("Organiza…",
-    // "Participa…", "Encerrad…") tendo espaço livre logo ao lado. Print do dono no
-    // celular: "aqui temos espaço para aumentar a largura dos box para nao precisar ...".
-    // `flex:1 1 92px` mantém 92px como base (mesma quantidade de pills por linha) e
-    // deixa cada uma dividir a sobra — o texto passa a caber sem tocar na reticência,
-    // que fica só como rede pra nome muito longo em escala muito grande.
-    // v1.7.96 — TRÊS POR LINHA (3x3 com a linha social de baixo).
-    // Ordem do dono, com o print: "temos 4 box em cima e 2 embaixo. daria para fazer
-    // 3 em cima e 3 embaixo deixando 3x3 sem mexer no ultimo que tem tamanho
-    // diferente. com isso os 4 de cima teriam mais largura e poderiam caber melhor
-    // o texto." Com base 92px cabiam 4 por linha e os rótulos de uma palavra só
-    // ("Organizados", "Participando") batiam na reticência da v1.7.83 — havia
-    // largura disponível, só não estava sendo distribuída.
-    // A base passa a ser UM TERÇO da linha (o gap do container é 0.5rem, então 2
-    // gaps = 1rem). Continua FLEX de propósito, não grid: com 4 ou 5 filtros (a
-    // pill de Favoritos/Encerrados só existe com count > 0) a sobra da última linha
-    // fica CENTRALIZADA — que foi exatamente o motivo de a v0.17.50 ter saído do
-    // grid auto-fit, onde o item órfão colava à esquerda. `min-width:80px` segue
-    // como piso: em tela muito estreita o wrap cai pra 2 sozinho.
-    return `<div style="flex:1 1 calc((100% - 1rem) / 3);min-width:80px;background:${window._spCor(active ? 'var(--hero-pill-active-bg)' : 'var(--hero-pill-inactive-bg)', 'background')};padding:0.55rem 0.45rem;border-radius:10px;border:${active ? '2px solid var(--hero-pill-active-border)' : '1px solid var(--hero-pill-inactive-border)'};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s,border 0.2s;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;${active ? 'box-shadow:0 0 14px var(--hero-pill-glow);transform:translateY(-2px);' : ''}" onclick="window._applyDashFilter('${key}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='${active ? 'translateY(-2px)' : 'none'}';this.style.boxShadow='${active ? '0 0 14px var(--hero-pill-glow)' : 'none'}'">
-      <div style="font-size:1.1rem;margin-bottom:0.55rem;line-height:1;">${emoji}</div>
-      <span style="font-size:1.3rem;font-weight:800;line-height:1;">${count}</span>
-      <h3 style="margin:0.35rem 0 0 0;font-size:0.66rem;font-weight:600;opacity:0.9;line-height:1.15;white-space:${_ws};${_corta}">${label}</h3>
-    </div>`;
+    const _bg = active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.06)';
+    const _bd = active ? '#6366f1' : 'rgba(255,255,255,0.18)';
+    const _fg = active ? '#c7d2fe' : 'var(--text-main)';
+    return `<button type="button" onclick="window._applyDashFilter('${key}')" title="${label}"
+      style="flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;
+             cursor:pointer;font-size:0.74rem;font-weight:700;white-space:nowrap;line-height:1.1;
+             border:1px solid ${window._spCor(_bd, 'borda')};background:${window._spCor(_bg, 'background')};color:${window._spCor(_fg, 'color')};">
+      ${emoji} ${label}<span style="opacity:0.7;font-weight:600;">${count}</span>
+    </button>`;
   };
 
   // v1.0.44-beta: stat pill (não-filtro) — mesmo visual que _fStyle pero
@@ -4043,13 +4026,29 @@ function renderDashboard(container) {
            crase aqui fecharia a string do html inteiro (foi o que o node --check pegou). -->
       <button type="button" onclick="window.location.hash = '#todos-torneios'"
         title="Ver todos os torneios da plataforma"
-        style="margin-right:auto;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;cursor:pointer;
+        style="flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;cursor:pointer;
                font-size:0.8rem;font-weight:700;white-space:nowrap;
                border:1px solid ${_explorando ? '#6366f1' : window._spCor('rgba(255,255,255,0.18)', 'borda')};
                background:${_explorando ? 'rgba(99,102,241,0.18)' : window._spCor('rgba(255,255,255,0.06)', 'background')};
                color:${_explorando ? '#c7d2fe' : 'var(--text-main)'};">
         🔎 ${_t('dashboard.filterExplore')}${_totalPlataformaHtml}
       </button>
+      <!-- ⛔ 2.1.23 — OS FILTROS DE VOLTA, na mesma faixa do Explorar e do toggle Lista.
+           Eles saíram junto com o quadro de números da hero box (2.1.13, "elimine essa
+           sessao") e ficaram SEM PORTA NENHUMA na interface: "organizados",
+           "participando", "favoritos" e "encerrados" viraram fatias inalcançáveis.
+           Aqui voltam como pílulas de uma linha — rótulo + contagem discreta — em vez do
+           card com emoji grande e número em 1.3rem que ocupava a hero box inteira.
+           A faixa ROLA na horizontal: com 6 filtros em tela estreita, quebrar linha
+           empurraria a lista pra baixo, que é o que ele mandou tirar em primeiro lugar. -->
+      <span style="display:flex;gap:5px;overflow-x:auto;flex:1 1 auto;min-width:0;scrollbar-width:none;-ms-overflow-style:none;">
+        ${_fStyle('todos', '📋', _circuloCount, _t('dashboard.filterForYou'))}
+        ${organizadosCount > 0 ? _fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized')) : ''}
+        ${participacoesCount > 0 ? _fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating')) : ''}
+        ${_abertosCount > 0 ? _fStyle('abertos', '🗓️', _abertosCount, _t('dashboard.filterOpen')) : ''}
+        ${favoritosCount > 0 ? _fStyle('favoritos', '❤️', favoritosCount, _t('dashboard.filterFavorites')) : ''}
+        ${_encerradosPillCount > 0 ? _fStyle('encerrados', '🏁', _encerradosPillCount, _t('dashboard.filterFinished')) : ''}
+      </span>
       <span style="font-size:0.82rem;font-weight:600;color:var(--text-muted);user-select:none;">☰ ${_t('dashboard.compact') || 'Lista'}</span>
       <label class="toggle-switch" style="--toggle-on-bg:#6366f1;" title="Ver em lista (desligado = cards)"><input type="checkbox" ${window._dashView === 'compact' ? 'checked' : ''} onchange="window._setDashView(this.checked ? 'compact' : 'cards')"><span class="toggle-slider"></span></label>
     </div>

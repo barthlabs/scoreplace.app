@@ -38,11 +38,19 @@ ok(fs.existsSync(path.join(ROOT, 'scripts', 'check-versao-nativa.js')), 'o gate 
   ok(iGate > 0 && (iBuild === -1 || iGate < iBuild), f + ': e ANTES de construir');
 });
 
-// ── iOS: a versão nativa bate com a web AGORA ───────────────────────────────
+// ── iOS: o formato está no padrão novo (X.Y.Z) e é ÚNICO entre os alvos ─────
+// ⛔ AQUI NÃO SE COBRA O ALINHAMENTO COM A WEB, e isso foi um erro meu de desenho que a
+// própria suíte pegou: a web anda a CADA leva (2.1.22 → 2.1.23 no mesmo dia) e a nativa só
+// anda quando se publica. Cobrar igualdade no `npm test` deixaria a suíte vermelha o tempo
+// todo entre releases — e suíte que vive vermelha para de ser lida.
+// O alinhamento é cobrado onde ele IMPORTA: no ios-archive.sh e no android-release.sh,
+// antes de construir. O que a suíte guarda é o FORMATO (X.Y.Z, não mais X.Y) e que o gate
+// existe, está ligado e reprova de verdade.
 const pbx = fs.readFileSync(path.join(ROOT, 'ios', 'App', 'App.xcodeproj', 'project.pbxproj'), 'utf8');
 const mv = [...new Set([...pbx.matchAll(/MARKETING_VERSION = ([^;]+);/g)].map((m) => m[1].trim()))];
-ok(mv.length === 1 && mv[0] === web,
-   'iOS: MARKETING_VERSION == version.txt (' + web + ') em TODOS os alvos — veio: ' + mv.join(', '));
+ok(mv.length === 1, 'iOS: a MARKETING_VERSION é a MESMA em todos os alvos — veio: ' + mv.join(', '));
+ok(/^\d+\.\d+\.\d+$/.test(mv[0] || ''),
+   '⛔ e está no padrão X.Y.Z da web (era X.Y até 27/ago) — veio: ' + mv[0]);
 const cpv = [...new Set([...pbx.matchAll(/CURRENT_PROJECT_VERSION = ([^;]+);/g)].map((m) => m[1].trim()))];
 ok(cpv.length === 1 && /^\d+$/.test(cpv[0]),
    'e o BUILD é um inteiro único (ele é da Apple, segue independente) — veio: ' + cpv.join(', '));

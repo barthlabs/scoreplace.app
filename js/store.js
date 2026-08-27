@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.22';
+window.SCOREPLACE_VERSION = '2.1.23';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
