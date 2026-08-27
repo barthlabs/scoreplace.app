@@ -251,8 +251,13 @@
   // ── a página (padrão canônico de page-route: back-header + conteúdo) ─────────
   window.renderAllTournamentsPage = function (container) {
     if (!container) return;
+    // ⛔ 2.1.15: SEM `label`. Ordem do dono: _"inves do voltar esta todos os torneios
+    // escrito no botao que deveria ser apenas voltar"_. O `label` do _renderBackHeader é o
+    // TEXTO DO BOTÃO, não o título da tela — passar o nome da página ali fazia o botão
+    // dizer onde você ESTÁ em vez de para onde ele leva. O default já é "Voltar", e o nome
+    // da tela é o <h2> logo abaixo.
     var hdr = (typeof window._renderBackHeader === 'function')
-      ? window._renderBackHeader({ href: '#dashboard', label: 'Todos os torneios' }) : '';
+      ? window._renderBackHeader({ href: '#dashboard' }) : '';
     var barra = (typeof window._inscritosFilterBar === 'function')
       ? window._inscritosFilterBar({
           stateKey: CHAVE, mode: 'tournaments', sticky: true,

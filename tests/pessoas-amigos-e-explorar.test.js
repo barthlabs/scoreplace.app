@@ -168,6 +168,39 @@ function mkContainer(sb) {
      '⛔ a tela nova USA esse card — não reescreve as 3 ramificações de "já convidei / me ' +
      'convidou / posso convidar", que é como duas telas passam a discordar do relacionamento');
 
+  // ── ⛔ AGIR NA TELA EXPLORAR NÃO PODE TELEPORTAR PRA FORA DELA (2.1.15) ────
+  // Bug do dono: _"convidei um novo amigo e voltou pra pagina dos amigos… deveria ficar na
+  // pagina explorar até clicar em voltar"_. `_exploreScrollSafeRender` chamava
+  // renderExplore SEMPRE — ela nasceu quando só havia UMA tela de pessoas, e todas as
+  // ações (convidar/aceitar/rejeitar/cancelar) passam por ela. Com a tela nova usando as
+  // mesmas ações, qualquer clique lá redesenhava Pessoas por cima.
+  ok(/#todas-pessoas/.test(exp.slice(exp.indexOf('_exploreScrollSafeRender = function'),
+                                     exp.indexOf('_exploreScrollSafeRender = function') + 1200)),
+     '⛔ o redesenho pós-ação checa a ROTA antes de decidir o que redesenhar');
+  ok(/_todasPessoasAplicarFiltro\(\)/.test(exp.slice(exp.indexOf('_exploreScrollSafeRender = function'),
+                                                    exp.indexOf('_exploreScrollSafeRender = function') + 1200)),
+     'e em #todas-pessoas ele só reaplica o filtro — sem refazer a busca e sem trocar de tela');
+
+  // ── o botão do cabeçalho diz VOLTAR, não o nome da tela ───────────────────
+  // O `label` do _renderBackHeader é o TEXTO DO BOTÃO. Passar o nome da página ali fazia o
+  // botão dizer onde a pessoa ESTÁ em vez de para onde ele leva.
+  [['todos-torneios.js', '#dashboard'], ['todas-pessoas.js', '#explore']].forEach(function (par) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', par[0]), 'utf8');
+    const m = src.match(/_renderBackHeader\(\{[^}]*\}\)/);
+    ok(!!m && !/label/.test(m[0]),
+       par[0] + ': o back-header vai SEM label — o botão diz "Voltar" (o nome da tela é o <h2>)');
+    ok(!!m && m[0].indexOf(par[1]) !== -1, par[0] + ': e volta pra ' + par[1]);
+  });
+
+  // ── o número do botão aparece na PRIMEIRA visita ──────────────────────────
+  // _"cliquei no explorar e nao tinha o numero ali… e dai apareceu"_. Botão que ganha
+  // número sozinho depois parece defeito. ⚠️ Custa o scan de `users` — mas SÓ quando não
+  // há total guardado, e em segundo plano (a tela já pintou).
+  ok(/if \(!_temTotal && window\.FirestoreDB/.test(exp),
+     'sem total guardado, a tela de Pessoas apura o número em segundo plano');
+  ok(/data-total-pessoas/.test(exp),
+     'e pinta só o número, sem re-renderizar a tela por baixo de quem está lendo');
+
   console.log(pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })();

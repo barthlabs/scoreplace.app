@@ -47,10 +47,12 @@ function renderExplore(container) {
   // #todas-pessoas apurou e guardou; antes da 1ª visita fica SEM número — mesmo desenho
   // (e mesma honestidade) da 2.1.11: melhor calar do que exibir um total de outra fonte.
   var _totalPessoasHtml = '';
+  var _temTotal = false;
   try {
     var _tp = parseInt(localStorage.getItem('scoreplace_totalPessoas'), 10);
-    if (_tp > 0) _totalPessoasHtml = ' <span style="opacity:0.75;font-weight:600;">' + _tp + '</span>';
+    if (_tp > 0) { _totalPessoasHtml = ' <span data-total-pessoas>' + _tp + '</span>'; _temTotal = true; }
   } catch (e) {}
+  if (!_temTotal) _totalPessoasHtml = ' <span data-total-pessoas></span>';
   var _btnExplorar =
     '<div style="display:flex;justify-content:flex-start;margin-bottom:0.75rem;">' +
       '<button type="button" onclick="window.location.hash = \'#todas-pessoas\'" ' +
@@ -59,7 +61,7 @@ function renderExplore(container) {
         'font-size:0.8rem;font-weight:700;white-space:nowrap;' +
         'border:1px solid ' + window._spCor('rgba(255,255,255,0.18)', 'borda') + ';' +
         'background:' + window._spCor('rgba(255,255,255,0.06)', 'background') + ';color:var(--text-main);">' +
-        '🔎 Explorar' + _totalPessoasHtml +
+        '🔎 Explorar<span style="opacity:0.75;font-weight:600;">' + _totalPessoasHtml + '</span>' +
       '</button>' +
     '</div>';
   container.innerHTML =
@@ -100,6 +102,30 @@ function renderExplore(container) {
   window._exploreLastSort = _fbSt.sort || 'name-asc';   // 2.1.14: alfabético por padrão
   window._exploreLastSearch = _fbSt.search || '';
   window._otrosSortMode = (window._exploreLastSort.indexOf('name') === 0 ? 'alpha' : 'date') + (window._exploreLastSort.indexOf('-desc') >= 0 ? '-desc' : '-asc');
+
+  // ⭐ 2.1.15 — O NÚMERO DO BOTÃO APARECE NA PRIMEIRA VISITA. Relato do dono: _"cliquei
+  // no exlorar (em pessoas) e nao tinha o numero ali… e dai apareceu o numero"_. O total
+  // só existia depois de a outra tela ter aberto uma vez, e um botão que ganha número
+  // sozinho depois parece defeito — com razão.
+  // ⚠️ TRADE-OFF DECLARADO: isto traz de volta o scan da coleção `users`, que a 2.1.14
+  // tinha tirado desta tela. Mas SÓ quando ainda não há total guardado (uma vez por
+  // aparelho, na prática) e em SEGUNDO PLANO — a tela já pintou, ninguém espera. E o scan
+  // tem cache de 5min em listInvitableUsers, então clicar em Explorar logo depois não
+  // custa nada a mais: é a mesma leitura que aconteceria de qualquer jeito.
+  if (!_temTotal && window.FirestoreDB && typeof window.FirestoreDB.listInvitableUsers === 'function') {
+    window.FirestoreDB.listInvitableUsers().then(function (todos) {
+      var meu = String(cu.uid || cu.email || '');
+      var n = (todos || []).filter(function (u) {
+        return u && String(u._docId || u.uid || u.email || '') !== meu;
+      }).length;
+      if (!n) return;
+      try { localStorage.setItem('scoreplace_totalPessoas', String(n)); } catch (e) {}
+      // pinta só o número — re-renderizar a tela inteira por causa dele tiraria a pessoa
+      // do lugar onde ela já está lendo.
+      var el = document.querySelector('[data-total-pessoas]');
+      if (el && (window.location.hash || '').indexOf('#explore') === 0) el.textContent = ' ' + n;
+    }).catch(function () {});
+  }
 
   // ⛔ 2.1.14 — NÃO CARREGA MAIS "outros usuários" AQUI. Era um scan de até 2000 docs da
   // coleção `users` toda vez que a tela abria, pra montar uma seção que o dono tirou desta
@@ -1122,8 +1148,24 @@ window._cancelFriendRequestMulti = function(toUids) {
 // v2.1.42: re-render mantendo a posição de scroll — ações de amizade (reenviar,
 // aceitar, recusar, remover) re-renderizam a tela toda; sem isto o usuário perde
 // onde estava (volta pro topo). Restaura o scrollY após o render.
+// ⛔ 2.1.15 — ESTE REDESENHO TEM QUE RESPEITAR A ROTA ATUAL.
+// Bug relatado pelo dono: _"convidei um novo amigo e voltou pra pagina dos amigos…
+// deveria ficar na pagina explorar até clicar em voltar"_.
+// A causa: esta função chamava `renderExplore(container)` sempre — ela nasceu quando só
+// existia UMA tela de pessoas. Com #todas-pessoas (2.1.14) usando as MESMAS ações
+// (convidar / aceitar / rejeitar / cancelar), qualquer clique lá redesenhava a tela de
+// Pessoas por cima: a pessoa era teleportada pra fora do que estava fazendo.
+// ⚠️ E não era só o convite — TODAS as ações passam por aqui, então o conserto é num
+// lugar só, que é o motivo de a função existir.
+// Em #todas-pessoas basta reaplicar o filtro: os estados de convite saem de
+// `cu.friendRequestsSent/Received`, que a ação acabou de atualizar em memória — o card
+// se redesenha com o botão certo, sem refazer a busca e sem perder a rolagem.
 window._exploreScrollSafeRender = function(container) {
   if (!container) return;
+  if ((window.location.hash || '').indexOf('#todas-pessoas') === 0) {
+    if (typeof window._todasPessoasAplicarFiltro === 'function') window._todasPessoasAplicarFiltro();
+    return;
+  }
   var _sy = window.scrollY || document.documentElement.scrollTop || 0;
   renderExplore(container);
   window.scrollTo(0, _sy);
