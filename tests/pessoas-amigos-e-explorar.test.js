@@ -238,6 +238,30 @@ function mkContainer(sb) {
   ok(/\.cancel-x-btn\s*\{/.test(css) && /background:\s*#dc2626/.test(css),
      'e a classe canônica é mesmo o círculo vermelho com X branco (não inventei o padrão)');
 
+  // ── ⛔ CONVITES ACOMPANHAM A LARGURA DOS AMIGOS (2.1.17) ─────────────────
+  // _"o convite pendente deve acompanhar a largura do amigos. numa tela larga cabem 2, 3
+  // ou até 4 colunas"_. Era `flex-direction:column` — uma coluna, card esticado na largura
+  // inteira, logo abaixo de "Meus amigos" que já se dividia em 3. Duas listas de pessoas
+  // na mesma tela com larguras diferentes leem como telas diferentes.
+  const gridsPessoa = (exp.match(/grid-template-columns:repeat\(auto-fill,minmax\(([0-9.]+)rem,1fr\)\)/g) || []);
+  ok(gridsPessoa.length >= 2,
+     'amigos E convites usam grid auto-fill (a tela larga decide 2, 3 ou 4 colunas) — achei ' +
+     gridsPessoa.length);
+  const iSent = exp.indexOf('Aguardando resposta');
+  ok(iSent > 0 && /grid-template-columns:repeat\(auto-fill/.test(exp.slice(iSent, iSent + 900)),
+     '⛔ a seção de convites enviados é GRID, não mais uma coluna só');
+  ok(!/flex-direction:column;gap:6px;">\';\n\n    dedupedGroups/.test(exp),
+     'e a versão em coluna não voltou');
+
+  // ── ⛔ O ✕ DE DESFAZER AMIZADE TAMBÉM É O CANÔNICO ───────────────────────
+  // _"cade o cancelar paaro aqui porra?"_ — ele acabara de ver o círculo vermelho nos
+  // convites e o dos amigos continuava um ✕ cinza com opacity 0.5, quase invisível.
+  const iRemove = exp.indexOf("_removeFriend('");
+  ok(iRemove > 0 && exp.slice(Math.max(0, iRemove - 220), iRemove).indexOf('_cancelXBtn') !== -1,
+     'desfazer amizade usa o ✕ canônico (era um ✕ cinza com opacity 0.5)');
+  ok(!/color:var\(--text-muted\);font-size:0\.88rem;[^"]*opacity:0\.5[^"]*">✕<\/button>/.test(exp),
+     '⛔ e o ✕ pálido não voltou');
+
   console.log(pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })();

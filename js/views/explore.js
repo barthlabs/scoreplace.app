@@ -265,9 +265,12 @@ function _friendCompactCardHtml(u, uid) {
       _nameHtml(_nl.line1, _nl.line2) +
       (subtitle ? '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + window._safeHtml(subtitle) + '</div>' : '') +
     '</div>' +
-    '<button type="button" title="Desfazer amizade" onclick="event.stopPropagation(); _removeFriend(\'' + safeUid + '\')" ' +
-      'onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.5\'" ' +
-      'style="border:none;background:transparent;color:var(--text-muted);font-size:0.88rem;cursor:pointer;line-height:1;padding:2px 4px;opacity:0.5;flex-shrink:0;">✕</button>' +
+    // ⛔ 2.1.17 — O ✕ CANÔNICO TAMBÉM AQUI. Ordem do dono: _"cade o cancelar paaro aqui
+    // porra?"_ — ele acabara de ver o círculo vermelho nos convites e este continuava um
+    // ✕ cinza com opacity 0.5, quase invisível. Desfazer amizade é remoção: mesmo símbolo.
+    // ⚠️ E o teste do cânone NÃO pegava este: ele exigia `onclick` e `>✕<` na MESMA linha,
+    // e aqui o markup estava quebrado em três. O furo foi fechado junto (ver o teste).
+    window._cancelXBtn("event.stopPropagation(); _removeFriend('" + safeUid + "')", 'Desfazer amizade', { size: '20px' }) +
   '</div>';
 }
 
@@ -988,7 +991,15 @@ function _renderSentRequests(myUid, sentIds) {
         '<div style="font-weight:700;font-size:0.88rem;color:var(--sp-c-f59e0b,#f59e0b);text-transform:uppercase;letter-spacing:0.5px;">' + titleLabel + ' (' + dedupedGroups.length + ')</div>' +
       '</div>' +
       '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">Aguardando resposta. Clique em ✕ no card para cancelar.</div>' +
-      '<div style="display:flex;flex-direction:column;gap:6px;">';
+      // ⛔ 2.1.17 — MESMO GRID DOS AMIGOS. Ordem do dono: _"o convite pendente deve
+      // acompanhar a largura do amigos. numa tela larga cabem 2, 3 ou até 4 colunas"_.
+      // Era `flex-direction:column` — UMA coluna, cada card esticado na largura inteira,
+      // enquanto "Meus amigos" logo acima já se dividia em 3. Duas listas de pessoas na
+      // mesma tela com larguras diferentes leem como telas diferentes.
+      // ⚠️ minmax MAIOR que o dos amigos (13rem × 9.7rem) porque este card é HORIZONTAL
+      // (avatar + nome + ação) e o do amigo é compacto: com 9.7rem o botão de ação
+      // espremeria o nome. auto-fill continua decidindo 2, 3 ou 4 colunas pela tela.
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:8px;">';
 
     dedupedGroups.forEach(function(group) {
       var u = group.profile;

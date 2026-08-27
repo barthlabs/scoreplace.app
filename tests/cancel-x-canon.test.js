@@ -45,12 +45,23 @@ const offenders = [];
 files.forEach(function (p) {
   const lines = fs.readFileSync(p, 'utf8').split('\n');
   lines.forEach(function (line, i) {
-    if (line.indexOf('onclick') === -1) return;
+    // ⛔ COMENTÁRIO NÃO RENDERIZA NADA — e sem esta linha o teste se acusa sozinho: a nota
+    // que EXPLICA o cânone cita `onclick` e o glifo entre sinais de maior/menor, e virava
+    // "infração". Regra que pune quem a documenta ensina a não documentar.
+    if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
     // o glifo tem que ser conteúdo de tag: >✕<
     if (!/>\s*[✕×✖]\s*</.test(line)) return;
     // JANELA de 3 linhas (atual + 2 anteriores): o markup às vezes quebra em várias linhas
     // e o class="cancel-x-btn" fica acima do >✕< (ex.: o próprio helper _cancelXBtn).
     const win = lines.slice(Math.max(0, i - 2), i + 1).join('\n');
+    // ⛔ 2.1.17 — O `onclick` É PROCURADO NA JANELA, NÃO SÓ NA LINHA DO GLIFO.
+    // Este teste exigia os dois na MESMA linha, e por isso deixou passar um ✕ solto de
+    // verdade: o botão de "Desfazer amizade" em explore.js tinha o onclick numa linha e o
+    // >✕< duas linhas abaixo. Ele ficou cinza com opacity 0.5 até o dono reclamar
+    // ("cade o cancelar paaro aqui porra?"), com a suíte verde o tempo todo.
+    // ⚠️ A janela já existia — para achar a CLASSE canônica. Procurar a classe em 3 linhas
+    // e o onclick em 1 era a assimetria que abria o furo: markup quebrado escapava.
+    if (win.indexOf('onclick') === -1) return;
     if (win.indexOf('cancel-x-btn') !== -1) return;        // usa o cânone ✓
     if (win.indexOf('x-canon-exempt') !== -1) return;      // exceção declarada ✓
     offenders.push(path.relative(path.join(__dirname, '..'), p) + ':' + (i + 1));
