@@ -1290,12 +1290,17 @@ function renderDashboard(container) {
   /* O local vem escrito de dois jeitos: o perfil guarda "Clube X — Av. Tal, 60" e o
    * torneio guarda "Clube X, São Paulo". Comparar cru dá ZERO casamento (medido).
    * A chave é o nome ANTES do travessão/vírgula, sem acento e sem pontuação. */
+  // ⭐ 2.1.14: exposta como window._chaveLocal — a tela #todas-pessoas compara o local
+  // preferido de OUTRA pessoa com os meus, e precisa da MESMA chave. Sem isto ela teria
+  // um terceiro jeito de normalizar local, e duas telas discordariam sobre "é o mesmo
+  // clube?". A normalização existe porque o dado vem escrito de formas diferentes.
   function _dashChaveLocal(v) {
     return String(v == null ? '' : v)
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .split('\u2014')[0].split(',')[0]
       .replace(/[^a-zA-Z0-9 ]/g, '').trim().toLowerCase();
   }
+  window._chaveLocal = _dashChaveLocal;
   function _dashAmigos() {
     var cu = window.AppStore && window.AppStore.currentUser;
     var raw = (cu && Array.isArray(cu.friends)) ? cu.friends : [];

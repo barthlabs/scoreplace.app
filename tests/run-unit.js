@@ -413,6 +413,8 @@ const SUITES = [
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',
   'tests/o-voce-nao-volta-pros-cards-de-jogo.test.js',
+  'tests/pessoas-amigos-e-explorar.test.js',
+  'tests/nota-de-versao-e-cobrada-onde-tem-git.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',

@@ -2636,9 +2636,15 @@ window.FirestoreDB = {
     // pra lista de convite. Ver memória project_firestore_read_efficiency.
     var _c = window._invitableUsersCache;
     if (_c && (Date.now() - _c.at) < 300000) return _c.data.slice();
+    // ⚠️ 2.1.14 — `preferredLocations` ENTROU AQUI, e é uma decisão de privacidade, não
+    // um campo a mais. A tela #todas-pessoas agrupa por "joga nos meus locais" (ordem do
+    // dono), e pra isso o local preferido do OUTRO precisa chegar ao cliente. O campo não
+    // é EXIBIDO — serve só pra decidir a seção. Ele é da mesma família de `city`, que já
+    // viajava aqui. MEDIDO em 27/ago: 40 dos 259 perfis (15%) têm o campo preenchido.
     var PUBLIC_FIELDS = [
       'displayName', 'displayName_lower', 'email', 'email_lower',
       'photoURL', 'acceptFriendRequests', 'preferredSports', 'city',
+      'preferredLocations',
       'createdAt', 'updatedAt', 'lastSeenAt'
     ];
     var out = [];

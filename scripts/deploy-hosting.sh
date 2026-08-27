@@ -52,6 +52,20 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
+# ── 1.2 a nota de versão cobre o que vai subir? (SÓ AQUI ELA PODE SER COBRADA) ──
+# ⚠️ ESTA TRAVA JÁ EXISTIA no hosting.predeploy — e a metade que importa NUNCA RODAVA LÁ.
+# `check-release-notes.js` tem duas partes: (1) existe entrada da minor? (2) a nota está
+# ATRASADA em relação ao código? A parte 2 precisa de git (`git log -- js/release-notes.js`)
+# e o predeploy roda na CÓPIA EXTRAÍDA em /tmp, que não tem `.git` — o script cai no
+# `if (!ultimoDaNota) return` e passa calado. Ou seja: a trava criada depois de a nota ser
+# esquecida TRÊS vezes era, no caminho da publicação, decorativa.
+# MEDIDO em 27/ago/2026: a 2.1.13 foi ao ar sem nota nenhuma e o deploy não reclamou.
+# Aqui estamos no REPO, com histórico — é o único ponto do fluxo onde a pergunta pode ser
+# respondida. Mesma lição do check-deploy-alignment e do backup-bundle: o que não é gate,
+# não acontece.
+echo "▸ conferindo a nota de versão…"
+node "$RAIZ/scripts/check-release-notes.js" || exit 1
+
 # ── 1.5 snapshot gerado, DENTRO do repo, antes de empurrar ───────────────────
 # index.html (snapshot da landing) e version.txt são DERIVADOS de
 # window.SCOREPLACE_VERSION (store.js). O hosting.predeploy também roda o prerender,

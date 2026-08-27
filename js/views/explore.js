@@ -35,47 +35,78 @@ function renderExplore(container) {
     sortId: 'explore-sort',
     genderId: 'explore-gender',
     skillId: 'explore-skill',
-    sort: 'order-desc',
+    // ⭐ 2.1.14 — ALFABÉTICO POR PADRÃO. Ordem do dono: _"na tela de pessoas apenas os
+    // amigos em ordem alfabetica por padrao (esta cronologica)"_. Faz sentido e é o
+    // oposto do padrão de #todas-pessoas (cronológico): aqui é a SUA lista e você procura
+    // um nome; lá é descoberta, e o que importa é quem apareceu por último.
+    sort: 'name-asc',
     sticky: true,
     onChange: 'window._exploreApplyFilter()'
   });
+  // ⭐ 2.1.14 — BOTÃO EXPLORAR, irmão do de torneios. O número é o total que a tela
+  // #todas-pessoas apurou e guardou; antes da 1ª visita fica SEM número — mesmo desenho
+  // (e mesma honestidade) da 2.1.11: melhor calar do que exibir um total de outra fonte.
+  var _totalPessoasHtml = '';
+  try {
+    var _tp = parseInt(localStorage.getItem('scoreplace_totalPessoas'), 10);
+    if (_tp > 0) _totalPessoasHtml = ' <span style="opacity:0.75;font-weight:600;">' + _tp + '</span>';
+  } catch (e) {}
+  var _btnExplorar =
+    '<div style="display:flex;justify-content:flex-start;margin-bottom:0.75rem;">' +
+      '<button type="button" onclick="window.location.hash = \'#todas-pessoas\'" ' +
+        'title="Ver todas as pessoas do scoreplace" ' +
+        'style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;cursor:pointer;' +
+        'font-size:0.8rem;font-weight:700;white-space:nowrap;' +
+        'border:1px solid ' + window._spCor('rgba(255,255,255,0.18)', 'borda') + ';' +
+        'background:' + window._spCor('rgba(255,255,255,0.06)', 'background') + ';color:var(--text-main);">' +
+        '🔎 Explorar' + _totalPessoasHtml +
+      '</button>' +
+    '</div>';
   container.innerHTML =
     window._renderBackHeader({
       href: '#dashboard'
     }) +
     '<div style="max-width: 800px; margin: 0 auto;">' +
       '<h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-bright);">' + _t('explore.title') + '</h2>' +
+      _btnExplorar +
       _exploreFilterBar +
 
-      // Received friend requests (need my response)
-      '<div id="explore-pending"></div>' +
-
-      // My friends section
+      // ⭐ 2.1.14 — A ORDEM DAS SEÇÕES MUDOU: amigos PRIMEIRO, convites ABAIXO.
+      // Ordem do dono: _"apenas os amigos em ordem alfabetica por padrao e abaixo os
+      // convites ainda nao eceitos"_. Antes os pedidos recebidos abriam a tela — o que faz
+      // sentido quando há um, e enterra a lista de amigos quando não há nenhum.
       '<div id="explore-friends"></div>' +
 
-      // Sent friend requests (waiting on them)
+      // Convites ainda não aceitos: os que EU recebo (respondo) e os que enviei (aguardo).
+      '<div id="explore-pending"></div>' +
       '<div id="explore-sent"></div>' +
 
-      // Unified non-friend, non-invited results
-      '<div id="explore-results"></div>' +
+      // ⛔ #explore-results (os "outros usuários") SAIU DA TELA e virou #todas-pessoas.
+      // O div fica, VAZIO e escondido, porque _exploreFilterAllSections e
+      // _exploreApplyFilter varrem esta lista de ids — tirá-lo daqui exigiria mexer nos
+      // dois, e um id ausente lá vira ramo morto silencioso. Ele nunca é preenchido.
+      '<div id="explore-results" style="display:none;"></div>' +
     '</div>';
 
-  // Render received friend requests, my friends, and sent requests
-  _renderPendingRequests(myUid, myReceived);
+  // Amigos primeiro (é a lista da pessoa), convites depois.
   _renderMyFriends(myUid, myFriends);
+  _renderPendingRequests(myUid, myReceived);
   _renderSentRequests(myUid, mySent);
 
   // v3.0.x: sincroniza estado inicial de sort/busca p/ a detecção de mudança em
   // _exploreApplyFilter (evita refetch/re-render redundante a cada keystroke). A
   // barra canônica chama _exploreApplyFilter via onChange; não há listener manual.
   var _fbSt = (window._filterBarState && window._filterBarState.explorePeople) || {};
-  window._exploreLastSort = _fbSt.sort || 'order-desc';
+  window._exploreLastSort = _fbSt.sort || 'name-asc';   // 2.1.14: alfabético por padrão
   window._exploreLastSearch = _fbSt.search || '';
   window._otrosSortMode = (window._exploreLastSort.indexOf('name') === 0 ? 'alpha' : 'date') + (window._exploreLastSort.indexOf('-desc') >= 0 ? '-desc' : '-asc');
 
-  // Auto-load non-friend users — o filtro (gênero/habilidade/texto) é reaplicado
-  // por _exploreFilterAllSections ao fim de cada render de seção.
-  _performUserSearch(window._exploreLastSearch, myUid, myFriends, mySent, myReceived);
+  // ⛔ 2.1.14 — NÃO CARREGA MAIS "outros usuários" AQUI. Era um scan de até 2000 docs da
+  // coleção `users` toda vez que a tela abria, pra montar uma seção que o dono tirou desta
+  // tela ("apenas os amigos... e abaixo os convites"). Quem explora agora é
+  // #todas-pessoas, e o scan acontece lá — quando a pessoa pede.
+  // O filtro segue funcionando: _exploreFilterAllSections varre as seções que restaram.
+  if (typeof window._exploreFilterAllSections === 'function') window._exploreFilterAllSections();
 
   // v2.3.41: tour de coachmarks da tela Pessoas (idle-driven, self-guardado)
   if (window._coach && typeof window._coach.startExploreTour === 'function') window._coach.startExploreTour();
@@ -681,24 +712,12 @@ function _renderOtrosCards(resultsDiv, users) {
     '<div style="font-weight: 600; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">' + _t('explore.otherUsers') + ' (' + users.length + ')</div>' +
   '</div>';
 
-  // Action-button builder reused by both grouping paths
-  function _actionBtnFor(u) {
-    var uid = u._docId || u.uid || u.email;
-    var isSent = mySent.indexOf(uid) !== -1;
-    var isReceived = myReceived.indexOf(uid) !== -1;
-    var safeUid = (uid || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
-    var useWarning = u._hasShared;
-    var btnClass = useWarning ? 'btn btn-warning btn-sm hover-lift' : 'btn btn-primary btn-sm hover-lift';
-    if (isSent) {
-      return '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Cancelando...\'); _cancelFriendRequest(\'' + safeUid + '\')" title="' + _t('explore.cancelInviteTitle') + '">✉️ ✕</button>';
-    } else if (isReceived) {
-      return '<div style="display: flex; gap: 4px; justify-content: center;">' +
-        '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Rejeitando...\'); _rejectFriend(\'' + safeUid + '\')">' + _t('explore.reject') + '</button>' +
-        '<button class="btn btn-success btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Aceitando...\'); _acceptFriend(\'' + safeUid + '\')">' + _t('explore.accept') + '</button>' +
-      '</div>';
-    }
-    return '<button class="' + btnClass + '" onclick="event.stopPropagation(); window._spinButton(this, \'Enviando...\'); _sendFriendRequest(\'' + safeUid + '\')">' + _t('explore.invite') + '</button>';
-  }
+  // Action-button builder reused by both grouping paths.
+  // ⭐ 2.1.14: o corpo virou `window._explorePersonActionBtn` (fim do arquivo) pra que a
+  // tela #todas-pessoas use o MESMO botão — mesma decisão de "já convidei / me convidou /
+  // posso convidar". Um segundo botão lá teria as mesmas 3 ramificações escritas de novo,
+  // e é assim que duas telas passam a discordar sobre o mesmo relacionamento.
+  function _actionBtnFor(u) { return window._explorePersonActionBtn(u, mySent, myReceived); }
 
   var _lang = (window._lang === 'en' ? 'en-US' : 'pt-BR');
   var _noDateLabel = _t('explore.noEncounterDate');
@@ -1711,3 +1730,34 @@ function _renderInviteDetailSheet(u) {
     '</div>'
   );
 }
+
+
+// ═══ REUSO PELA TELA #todas-pessoas (2.1.14) ═════════════════════════════════
+// A tela nova precisa do MESMO card e do MESMO botão de ação. Expor é o oposto de
+// duplicar: se o card mudar (foto, nome em duas linhas, chips de cidade/esporte), muda
+// nos dois lugares de uma vez. Ver a nota em _actionBtnFor.
+window._explorePersonActionBtn = function (u, mySent, myReceived) {
+  var _t = window._t || function (k) { return k; };
+  mySent = mySent || []; myReceived = myReceived || [];
+  var uid = u._docId || u.uid || u.email;
+  var isSent = mySent.indexOf(uid) !== -1;
+  var isReceived = myReceived.indexOf(uid) !== -1;
+  var safeUid = (uid || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+  var btnClass = u._hasShared ? 'btn btn-warning btn-sm hover-lift' : 'btn btn-primary btn-sm hover-lift';
+  if (isSent) {
+    return '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Cancelando...\'); _cancelFriendRequest(\'' + safeUid + '\')" title="' + _t('explore.cancelInviteTitle') + '">✉️ ✕</button>';
+  }
+  if (isReceived) {
+    return '<div style="display:flex;gap:4px;justify-content:center;">' +
+      '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Rejeitando...\'); _rejectFriend(\'' + safeUid + '\')">' + _t('explore.reject') + '</button>' +
+      '<button class="btn btn-success btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Aceitando...\'); _acceptFriend(\'' + safeUid + '\')">' + _t('explore.accept') + '</button>' +
+    '</div>';
+  }
+  return '<button class="' + btnClass + '" onclick="event.stopPropagation(); window._spinButton(this, \'Enviando...\'); _sendFriendRequest(\'' + safeUid + '\')">' + _t('explore.invite') + '</button>';
+};
+window._explorePersonCard = function (u, mySent, myReceived) {
+  var uid = u._docId || u.uid || u.email;
+  var safeUid = String(uid || '').replace(/'/g, "\\'");
+  return _userCardHtml(u, uid, window._explorePersonActionBtn(u, mySent, myReceived), 'other',
+    "window._openUserProfile('" + safeUid + "')");
+};

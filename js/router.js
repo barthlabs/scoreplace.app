@@ -566,6 +566,10 @@ function initRouter() {
       case 'todos-torneios':
         if (typeof window.renderAllTournamentsPage === 'function') window.renderAllTournamentsPage(viewContainer);
         break;
+      // #todas-pessoas — a irmã de #todos-torneios pro lado das pessoas (2.1.14).
+      case 'todas-pessoas':
+        if (typeof window.renderAllPeoplePage === 'function') window.renderAllPeoplePage(viewContainer);
+        break;
       case 'notifications':
         // ⭐ 2.0.5: ENTRAR na tela é o único gesto que reclassifica as notificações lidas.
         // Antes, "visita nova" era deduzida da AUSÊNCIA da bandeira de "Carregar mais" — e o
