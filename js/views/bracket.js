@@ -520,7 +520,20 @@ function _alvoDeEntrada() {
   try { _p = sessionStorage.getItem('sp_scrollToGroup'); } catch (e) {}
   if (_p) {
     var _g = document.querySelector('[data-group-label="' + String(_p).replace(/"/g, '') + '"]');
-    if (_g) return _g;
+    if (_g) {
+      /* ⭐ CHEGOU PELO "Ir para o torneio": a seção do grupo abre JUNTO. Ordem do dono
+       * (26/ago/2026): _"deve ir para o torneio com o mostrar mais aberto parando direto no
+       * topo do grupo onde clicamos"_. Parar no topo de uma seção FECHADA entrega meia
+       * resposta — quem clicou no grupo quer o grupo, não o convite pra abri-lo.
+       * ⚠️ Abrir ANTES de o laço `_reafirmar` medir é de propósito: expandir muda a altura,
+       * e ele corrige até o alvo ficar parado em 3 leituras — então a expansão entra na
+       * conta em vez de brigar com ela. */
+      try {
+        var _ds = _g.querySelectorAll ? _g.querySelectorAll('details') : [];
+        for (var _di = 0; _di < _ds.length; _di++) _ds[_di].open = true;
+      } catch (e) {}
+      return _g;
+    }
   }
   // 2) O SEU GRUPO. Ordem do dono (21/ago/2026): _"quando a pessoa entra nos detalhes do
   //    torneio ela precisa ir direto para o topo do seu grupo. o seu grupo e seu nome deve
@@ -7635,6 +7648,23 @@ window._bracketNorm = function (s) {
   return String(s == null ? '' : s).toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 };
+/* ── ABRIR/FECHAR O <details> CONFORME A BUSCA ────────────────────────────────────
+ * Extraída como função PURA (recebe o elemento, não vai buscá-lo) porque é aqui que mora
+ * a parte que erra: a CONTABILIDADE de quem foi aberto pela busca. Fechar tudo ao limpar
+ * fecharia também o que a pessoa abriu com a própria mão; não fechar nada deixaria a chave
+ * inteira expandida e desfaria a economia de DOM da 2.0.82/2.0.88.
+ *   buscando=false → devolve ao estado de antes SÓ o que a busca abriu (`fbAutoOpen`)
+ *   buscando=true  → abre quem tem resultado, marcando; não toca em quem já estava aberto
+ * Coberta por tests/busca-abre-o-mostrar-mais.test.js */
+window._fbSyncDetalhe = function (det, nvis, buscando) {
+  if (!det || !det.dataset) return;
+  if (!buscando) {
+    if (det.dataset.fbAutoOpen === '1') { det.open = false; delete det.dataset.fbAutoOpen; }
+    return;
+  }
+  if (nvis > 0 && !det.open) { det.open = true; det.dataset.fbAutoOpen = '1'; }
+};
+
 window._bracketApplyFilter = function () {
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
@@ -7713,7 +7743,14 @@ window._bracketApplyFilter = function () {
     if (!sm) continue;
     var lbl = sm.querySelector('span') || sm;
     if (lbl.dataset.fbTxt === undefined) lbl.dataset.fbTxt = lbl.textContent;
-    if (!q && !onlyMine) { lbl.textContent = lbl.dataset.fbTxt; continue; }
+    if (!q && !onlyMine) {
+      lbl.textContent = lbl.dataset.fbTxt;
+      /* ⭐ Busca limpa: quem foi aberto PELA busca fecha de novo. Só quem ela abriu —
+       * `data-fb-auto-open` — pra não fechar o que a pessoa abriu com a própria mão.
+       * Deixar tudo expandido desfaria a economia de DOM da 2.0.82/2.0.88. */
+      window._fbSyncDetalhe(dets[d], 0, false);
+      continue;
+    }
     var nvis = 0;
     for (var z = 0; z < inside.length; z++) {
       // marcador não é jogo: não entra no "Demais jogos da rodada (N)"
@@ -7721,6 +7758,13 @@ window._bracketApplyFilter = function () {
       if (inside[z].style.display !== 'none') nvis++;
     }
     lbl.textContent = lbl.dataset.fbTxt.replace(/\((\d+)\)\s*$/, '(' + nvis + ')');
+    /* ⭐ ACHAR SEM MOSTRAR É NÃO ACHAR. Ordem do dono (26/ago/2026): _"quando filtrarmos uma
+     * informação deve aparecer a informacao sem precisarmos clicar no mostrar mais"_.
+     * O filtro já revelava o `<details>` (o container deixa de ser `display:none`), mas ele
+     * seguia FECHADO — o resultado existia e continuava invisível, e o contador dizia "(1)"
+     * pra uma lista que não se via. Mesma lição da 2.0.91. [[project_letzplay_scan_stability]]
+     * ⚠️ Marca quem foi aberto pela busca pra saber o que fechar quando ela for limpa. */
+    window._fbSyncDetalhe(dets[d], nvis, true);
   }
   var empty = document.getElementById('bracket-search-empty');
   if (empty) empty.style.display = ((q || onlyMine) && shown === 0) ? 'block' : 'none';

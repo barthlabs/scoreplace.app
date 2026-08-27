@@ -151,6 +151,7 @@ const SUITES = [
   'tests/gravacao-so-na-subcolecao-toca-o-doc.test.js',
   'tests/congelada-viaja-ate-o-render.test.js',
   'tests/confirmar-so-com-placar-escrito.test.js',
+  'tests/busca-abre-o-mostrar-mais.test.js',
   'tests/ouvinte-das-partes-divididas.test.js',
   'tests/grupo-e-documento.test.js',
   'tests/sw-cache-name-acompanha-a-versao.test.js',
