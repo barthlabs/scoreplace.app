@@ -176,13 +176,25 @@
 
   // ── a linha: dados básicos, e só ────────────────────────────────────────────
   function _linha(t) {
+    // ⛔ 2.1.12 · O RÓTULO SAI DO MESMO BALDE QUE ORDENA. Antes ele tinha regra PRÓPRIA
+    // (um encadeado sobre t.status) e ela DISCORDAVA da ordenação — bug que o dono viu na
+    // 2.1.11: _"porque tem 1 inscricoes encerradas e depois mais 2 abertas?"_.
+    // A ordem estava certa; o rótulo é que mentia. MEDIDO nos dois casos do print:
+    // "GUILHERME PASSOS (2)" e "Forte Academia" têm status 'active' + hasDraw true — ou
+    // seja, já sorteados, inscrições fechadas. O encadeado antigo não previa 'active':
+    // caía no `else` e escrevia "Inscrições Abertas" no meio do bloco das fechadas.
+    // ⚠️ E O ERRO ERA O DE SEMPRE — duas fontes pra mesma pergunta, no mesmo card, feito
+    // por mim uma leva depois de consertar exatamente isso em outros três lugares. Agora
+    // é impossível divergir: o rótulo é FUNÇÃO do balde, não uma segunda leitura do doc.
     var st = String(t.status || '');
-    var cor = (st === 'finished') ? '#94a3b8'
-      : (t.tournamentStarted || st === 'in_progress') ? '#4ade80'
-      : (st === 'closed') ? '#fca5a5' : '#60a5fa';
-    var rot = (st === 'finished') ? _t('status.finished')
-      : (t.tournamentStarted || st === 'in_progress') ? _t('status.active')
-      : (st === 'closed') ? _t('status.closed') : _t('status.open');
+    var b = _balde(t);
+    var andando = (t.tournamentStarted || st === 'in_progress');
+    var cor = (b === ENCERRADO) ? '#94a3b8'
+      : (b === ABERTAS) ? '#60a5fa'
+      : (andando ? '#4ade80' : '#fca5a5');
+    var rot = (b === ENCERRADO) ? _t('status.finished')
+      : (b === ABERTAS) ? _t('status.open')
+      : (andando ? _t('status.active') : _t('status.closed'));
     var data = '';
     if (t.startDate) {
       try { data = new Date(t.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: '2-digit' }); } catch (e) {}

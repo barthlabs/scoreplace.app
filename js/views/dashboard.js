@@ -1656,13 +1656,14 @@ function renderDashboard(container) {
       return false;
     }
 
-    // Formata time com "(você)" no nome do usuário atual. Nomes completos, sem abreviação.
-    // Ex: "Nelson Barth (você) / Zilda Quintas vs. Kelly Barth / Rodrigo Barth"
+    // Formata o time destacando o usuário atual pela COR (negrito claro), não por rótulo.
+    // Nomes completos, sem abreviação. Ex: "**Nelson Barth** / Zilda Quintas vs. Kelly …"
     function _formatMatchLine(p1raw, p2raw, inP1) {
       var _sf = window._safeHtml || function(s) { return String(s || ''); };
       function markMe(name) {
+        // 2.1.12: sem "(você)" — o negrito claro já diz quem é (ver a nota em _playerRow).
         return _isMe(name)
-          ? '<b style="color:var(--sp-c-e2e8f0,#e2e8f0);">' + _sf(name) + '</b> <span style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72em;">(você)</span>'
+          ? '<b style="color:var(--sp-c-e2e8f0,#e2e8f0);">' + _sf(name) + '</b>'
           : '<span style="color:var(--sp-c-94a3b8,#94a3b8);">' + _sf(name) + '</span>';
       }
       function formatTeam(raw) {
@@ -2199,8 +2200,11 @@ function renderDashboard(container) {
       // fonte de 0,8rem CRAVADAS, e — o pior — `text-overflow:ellipsis`, ou seja ele
       // CORTAVA o nome. O cânone da caixa invisível diz o contrário: o nome nunca é
       // cortado, a caixa é igual pra todo mundo e a FONTE é que cede.
-      // O markup continua sendo daqui (este card tem "(você)", que a chave não tem); o que
-      // passou a vir de fora são os NÚMEROS. [[project_name_fit_box_canonical]]
+      // O markup continua sendo daqui; o que vem de fora são os NÚMEROS.
+      // (Até a 2.1.11 a justificativa escrita aqui era "este card tem (você), que a chave
+      // não tem" — o rótulo saiu na 2.1.12, então a frase deixou de valer e foi trocada:
+      // comentário que descreve algo que não existe mais é o que faz a próxima leitura
+      // concluir errado.) [[project_name_fit_box_canonical]]
       var _geoMini = (typeof window._cardNomeGeo === 'function') ? window._cardNomeGeo(2) : null;
       // ⛔ O GRUPO É POR LADO, NUNCA POR CARD. Se fosse por card, os dois TIMES entrariam no
       // mesmo grupo e a quebra de um nome do time A forçaria a quebra no time B — que não
@@ -2215,8 +2219,11 @@ function renderDashboard(container) {
         var _av = _geoMini ? _geoMini.avatar : '28px';
         var avatarEl = window._personAvatarHtml(uid || '', name,
           'width:' + _av + ';height:' + _av + ';border-radius:50%;object-fit:cover;flex-shrink:0;');
-        // v4.5.67: nome resolve VIVO por uid. data-uid-name fica no span INTERNO só do
-        // nome (não no externo, senão a hidratação — textContent — apagaria o "(você)").
+        // v4.5.67: nome resolve VIVO por uid, pelo span INTERNO (data-uid-name).
+        // ⚠️ Esse span era interno porque a hidratação escreve textContent e apagaria o
+        // "(você)" que morava ao lado. Sem o rótulo (2.1.12) ele passou a ser o único
+        // conteúdo — mantido assim de propósito: mover o atributo pro span externo mexeria
+        // no alvo do motor de ajuste, e não há ganho nenhum em fazê-lo.
         var _disp = (uid && typeof window._displayName === 'function') ? window._displayName(uid, name) : name;
         var _uidAttr = uid ? (' data-uid-name="' + _sf(uid) + '"') : '';
         // ⛔ SEM `text-overflow:ellipsis` e sem `nowrap` no estilo: quem decide o tamanho é o
@@ -2224,8 +2231,14 @@ function renderDashboard(container) {
         // da classe — o motor conta com isso pra devolver a linha única.
         var _cor = isMe ? '#f1f5f9' : '#94a3b8';
         var _peso = isMe ? '700' : '500';
-        var _interno = '<span' + _uidAttr + '>' + _sf(_disp) + '</span>' +
-          (isMe ? ' <span style="font-size:0.65em;color:var(--sp-c-818cf8,#818cf8);font-weight:800;">(você)</span>' : '');
+        // ⛔ 2.1.12 — O "(você)" SAIU DAQUI. Ordem do dono: _"tira o (voce) daqui. a cor
+        // destacada já identifica o usuário e esse vc esta quebrando o alinhamento dos
+        // boxes"_. Os dois motivos são verdadeiros e o segundo é mecânico: o rótulo entrava
+        // DENTRO da caixa de ajuste (.sp-name-fit), então o motor media "Nome (você)" e
+        // encolhia a FONTE do nome pra caber os dois — o box de quem sou eu ficava com o
+        // nome menor que o dos outros, e a linha desalinhava. Quem identifica é a cor
+        // (#f1f5f9) + o peso 700, que continuam.
+        var _interno = '<span' + _uidAttr + '>' + _sf(_disp) + '</span>';
         if (!_geoMini) {
           return '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' + avatarEl +
             '<span style="font-size:0.8rem;font-weight:' + _peso + ';color:' + window._spCor(_cor, 'color') + ';">' + _interno + '</span></div>';
@@ -2622,7 +2635,7 @@ function renderDashboard(container) {
                   var isMe3=_isMe(n);
                   var _u3=(Array.isArray(m2.team1Uids)&&m2.team1Uids[_pi])||'';
                   var av3=window._personAvatarHtml(_u3, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:' + window._spCor((isMe3?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+(isMe3?' <span style="font-size:0.62em;color:var(--sp-c-818cf8,#818cf8);">(você)</span>':'')+'</span></div>';
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av3+'<span style="font-size:0.78rem;font-weight:'+(isMe3?'700':'400')+';color:' + window._spCor((isMe3?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+'</span></div>';
                 });
                 ph+='</div>';
                 var sc3 = m2.scoreP1 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p1IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(1)+'</div>' : '';
@@ -2642,7 +2655,7 @@ function renderDashboard(container) {
                   var isMe4=_isMe(n);
                   var _u4=(Array.isArray(m2.team2Uids)&&m2.team2Uids[_pi])||'';
                   var av4=window._personAvatarHtml(_u4, n, 'width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0;');
-                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:' + window._spCor((isMe4?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+(isMe4?' <span style="font-size:0.62em;color:var(--sp-c-818cf8,#818cf8);">(você)</span>':'')+'</span></div>';
+                  ph+='<div style="display:flex;align-items:center;gap:6px;">'+av4+'<span style="font-size:0.78rem;font-weight:'+(isMe4?'700':'400')+';color:' + window._spCor((isMe4?'#f1f5f9':'#94a3b8'), 'color')+';">'+_sf(n)+'</span></div>';
                 });
                 ph+='</div>';
                 var sc4 = m2.scoreP2 != null ? '<div class="sp-mc-num" style="color:' + window._spCor(_corPlacar2(p2IsWinner), 'color')+';flex-shrink:0;text-align:right;">'+_placarLado(2)+'</div>' : '';

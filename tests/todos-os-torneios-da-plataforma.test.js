@@ -115,6 +115,10 @@ const BASE = [
   // ── balde 1 · INSCRIÇÕES ENCERRADAS (torneio vivo, mas não dá pra entrar) ──
   { id: 'f', name: 'Foxtrot Fechado', sport: 'Padel', venueName: 'Clube F', format: 'Eliminatórias Simples', status: 'closed', isPublic: true, hasDraw: true, competitorsCount: 16 },
   { id: 'g', name: 'Golf Sorteado',   sport: 'Padel', venueName: 'Clube G', format: 'Eliminatórias Simples', status: 'open',   isPublic: true, hasDraw: true, competitorsCount: 16 },
+  // ⚠️ O CASO EXATO DO BUG DA 2.1.11 (print do dono): status 'active' + já sorteado. O
+  // encadeado antigo do rótulo não previa 'active', caía no else e escrevia "Inscrições
+  // Abertas" — no meio do bloco das fechadas, onde a ordenação corretamente o pôs.
+  { id: 'h', name: 'Hotel Ativo Sorteado', sport: 'Padel', venueName: 'Clube H', format: 'Eliminatórias Simples', status: 'active', isPublic: true, hasDraw: true, competitorsCount: 16 },
   // ── balde 2 · TORNEIO ENCERRADO ──
   { id: 'z', name: 'Zulu Finals', sport: 'Beach Tennis', venueName: 'Clube Z', format: 'Liga', status: 'finished', isPublic: true, hasDraw: true, competitorsCount: 4, startDate: '2026-07-01T10:00' },
   // ── fora da vitrine ──
@@ -143,8 +147,8 @@ const BASE = [
      '⛔ o torneio de teste do dev não entra na vitrine');
   ok(/1 privado ocultado/.test(conta),
      'a contagem DIZ "1 privado ocultado" (ordem do dono: indicar quantos ficaram de fora). Veio: ' + conta);
-  ok(/>7<\/b> torneios/.test(conta),
-     'a conta mostra os 7 públicos (privado e sandbox fora). Veio: ' + conta.slice(0, 160));
+  ok(/>8<\/b> torneios/.test(conta),
+     'a conta mostra os 8 públicos (privado e sandbox fora). Veio: ' + conta.slice(0, 160));
 
   // ── os DADOS BÁSICOS que o dono pediu, e o nome de formato TRADUZIDO ────────
   ok(html.indexOf('Beach Tennis') !== -1, 'mostra a MODALIDADE');
@@ -225,6 +229,31 @@ const BASE = [
   const dash = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'dashboard.js'), 'utf8');
   ok(/hash = '#todos-torneios'/.test(dash),
      'o botão Explorar da dashboard ABRE a tela (antes só trocava o filtro da própria lista)');
+
+  // ── ⛔ O RÓTULO NÃO PODE CONTRADIZER A POSIÇÃO ─────────────────────────────
+  // Esta é a asserção que existe por causa do BUG, não do sintoma: na 2.1.11 o rótulo
+  // tinha regra própria e discordava do balde que ordena. Aqui a checagem é ESTRUTURAL —
+  // varre a lista inteira e exige que "Inscrições Abertas" só apareça antes da primeira
+  // "Inscrições Encerradas". Se alguém reintroduzir uma segunda leitura do status, isto
+  // acusa, mesmo com fixtures diferentes dos de hoje.
+  st.sort = 'order-asc'; st.search = ''; st.sport = 'all';
+  S.window._todosTornAplicarFiltro();
+  const hFinal = S._els['todos-torn-lista'].innerHTML;
+  const rotulos = (hFinal.match(/status\.(open|closed|active|finished)/g) || []);
+  ok(rotulos.length === 8, 'todos os 8 cards têm rótulo — deu ' + rotulos.length);
+  const ultimoAberto = rotulos.lastIndexOf('status.open');
+  const primeiroFechado = rotulos.findIndex(r => r === 'status.closed' || r === 'status.active');
+  ok(primeiroFechado === -1 || ultimoAberto < primeiroFechado,
+     '⛔ nenhum "Inscrições Abertas" aparece DEPOIS de uma inscrição encerrada — o rótulo ' +
+     'e a ordem saem do mesmo balde. Veio: ' + rotulos.join(','));
+  ok(rotulos[rotulos.length - 1] === 'status.finished',
+     'e o último de todos é o torneio encerrado');
+  // o caso do print, nomeado
+  const iH = hFinal.indexOf('Hotel Ativo Sorteado');
+  const rotH = hFinal.slice(iH).match(/status\.(open|closed|active|finished)/);
+  ok(rotH && rotH[0] !== 'status.open',
+     '⛔ torneio com status "active" e já sorteado NÃO pode dizer "Inscrições Abertas" ' +
+     '(era o bug do print). Veio: ' + (rotH && rotH[0]));
 
   console.log(pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
