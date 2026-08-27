@@ -64,6 +64,7 @@ function gravar(tx, ref, antes, updateData) {
   const doc = Object.assign({}, updateData || {});
   if (!fora.length) { if (Object.keys(doc).length) tx.update(ref, doc); return; }
 
+  let mexeu = Object.keys(doc).length > 0;   // campo que fica no doc já é motivo de bump
   const pAntes = S.dividir(JSON.parse(JSON.stringify(antes)), fora);
   fora.forEach((nome) => {
     if (!(nome in doc)) return;                       // esta gravação não mexe nesta parte
@@ -76,9 +77,25 @@ function gravar(tx, ref, antes, updateData) {
       if (!k) throw new Error('[split-parts] registro sem chave em "' + nome + '"');
       return k;
     };
-    d.mudaram.forEach((x) => tx.set(col.doc(ch(x)), x));
-    d.sumiram.forEach((x) => tx.delete(col.doc(ch(x))));
+    d.mudaram.forEach((x) => { tx.set(col.doc(ch(x)), x); mexeu = true; });
+    d.sumiram.forEach((x) => { tx.delete(col.doc(ch(x))); mexeu = true; });
   });
+  /* ⛔ O DOCUMENTO TEM QUE SER TOCADO MESMO QUANDO SÓ A SUBCOLEÇÃO MUDOU.
+   * Antes, uma gravação que mexia SÓ numa parte dividida (o caso do PLACAR) caía aqui com
+   * `doc` vazio — o `delete doc[nome]` acima tinha tirado a única chave — e o `tx.update`
+   * não rodava. Resultado: o jogo ia pra subcoleção e o doc do torneio ficava intacto.
+   * Como `updatedAt` não andava, o `onSnapshot` do DOC não disparava e todo portão de
+   * frescor concluía "nada mudou" — o cliente seguia pintando o cache.
+   * MEDIDO no Confra (26/ago/2026, torneio AO VIVO): doc.updatedAt = 22:24:03, enquanto os
+   * jogos 11/10/12 do Grupo D foram gravados 22:24:23 / :35 / :47. Os três placares estavam
+   * salvos e CERTOS na subcoleção; dois deles a tela mostrava como 0-0 "PRONTO", com botão
+   * de confirmar — a tela inventando um estado que o dado não tinha. Relato do dono:
+   * "os resultados que lancei para o jogo 10 e 12 sumiram".
+   * A porta `aplicarNoTorneio` (functions/index.js) já bumpava o `updatedAt` sempre; esta
+   * não. Duas portas para a mesma subcoleção, uma só ciente. [[feedback_unify_dual_entry_points]]
+   * ⚠️ Só toca o doc se ALGO foi de fato escrito — bump em gravação vazia seria escrita
+   * inventada, e `updatedAt` que anda sozinho quebra quem usa ele como assinatura. */
+  if (mexeu && !('updatedAt' in doc)) doc.updatedAt = new Date().toISOString();
   if (Object.keys(doc).length) tx.update(ref, doc);
 }
 
