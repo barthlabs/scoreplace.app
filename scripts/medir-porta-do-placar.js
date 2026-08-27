@@ -37,9 +37,20 @@ const quando = (m) => {
 (async () => {
   const snap = await db.collection('tournaments').get();
   let comResultado = 0, naJanela = 0, semCarimboDeTempo = 0;
+  /* ⛔ ESTE SCRIPT É CEGO A TORNEIO DIVIDIDO, e cegueira silenciosa numa ferramenta de
+   * MEDIÇÃO é pior que não ter a ferramenta. Ele varre `t.rounds/matches/groups` do
+   * DOCUMENTO; desde a fase 2 os jogos moram na subcoleção `matches` e o documento vem
+   * VAZIO (`_semPesados` inclui 'matches'). MEDIDO em 27/ago/2026: ele reportou 6 placares
+   * numa janela em que o log da CF mostrava 27 aplicados — o Confra inteiro, 115 jogos,
+   * invisível. Quem lesse o número concluiria que a queda pro caminho local estava
+   * carregando 21 placares, e concluiria errado.
+   * Enquanto ele não ler subcoleção, o mínimo é DECLARAR o que ficou de fora.
+   * [[feedback_no_silent_caps]] */
+  let divididos = 0;
   const porTorneio = {};
   snap.forEach((doc) => {
     const t = doc.data() || {};
+    if (Array.isArray(t._semPesados) && t._semPesados.indexOf('matches') !== -1) divididos++;
     for (const m of jogos(t)) {
       const temR = !!(m.result || m.score || m.winner || m.completed);
       if (!temR) continue;
@@ -58,6 +69,13 @@ const quando = (m) => {
   console.log('placares DATADOS dentro da janela: ' + naJanela);
   Object.keys(porTorneio).sort((a, b) => porTorneio[b] - porTorneio[a]).slice(0, 10)
     .forEach((k) => console.log('   ' + String(porTorneio[k]).padStart(4) + '  ' + k));
+  if (divididos) {
+    console.log('\n⛔ ATENÇÃO — ESTE NÚMERO ESTÁ INCOMPLETO.');
+    console.log('   ' + divididos + ' torneio(s) DIVIDIDO(S) ficaram de fora: os jogos deles moram na');
+    console.log('   subcoleção `matches`, e este script só varre o DOCUMENTO. Em 27/ago/2026 ele');
+    console.log('   reportou 6 numa janela em que a CF aplicou 27 — o Confra inteiro invisível.');
+    console.log('   Não conclua nada sobre a queda pro caminho local com este número sozinho.');
+  }
   console.log('\n⇒ compare com o log da CF na MESMA janela:');
   console.log('   npx firebase functions:log --only applyMatchResult -n 1000 | grep -c "— applied"');
   process.exit(0);
