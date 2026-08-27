@@ -118,7 +118,10 @@
       // diferentes larguras"_ — e depois, olhando ESTA tela: _"a mesma coisa aqui"_.
       // A constante mora em explore.js (window._gridPessoas): enquanto o valor viver em mais
       // de um lugar ele volta a divergir, que foi exatamente o erro da 2.1.17.
-      '<div style="' + (window._gridPessoas || 'display:grid;grid-template-columns:repeat(auto-fill,minmax(9.7rem,1fr));gap:8px;') + 'margin-top:8px;">' +
+      // ⛔ SEM FALLBACK: explore.js carrega ANTES desta view (ordem do index.html), e um
+      // valor repetido aqui é exatamente o que faz as listas divergirem — o fallback já
+      // estava com o 9.7rem velho quando o grid subiu pra 15rem na 2.1.20.
+      '<div style="' + window._gridPessoas + 'margin-top:8px;">' +
         arr.map(function (u) { return window._explorePersonCard(u, mySent, myReceived); }).join('') +
       '</div></div>';
   }

@@ -214,13 +214,25 @@ function mkContainer(sb) {
   // ⚠️ ancorar na FUNÇÃO: existe outro `if (isFriend)` antes, no sheet de perfil
   // (onde ele oferece "Desfazer amizade"). Medir o trecho errado deixaria a asserção
   // verde ou vermelha por acidente.
+  // o FONTE sem comentários — várias asserções abaixo perguntam sobre o código, e as notas
+  // que explicam as decisões citam justamente os textos que elas proíbem.
+  const codExp = exp.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const iFn = exp.indexOf('window._explorePersonActionBtn = function');
   const iFriend = exp.indexOf('if (isFriend)', iFn);
-  const trechoFriend = exp.slice(iFriend, iFriend + 700);
-  ok(/Amigos/.test(trechoFriend) && /success-color/.test(trechoFriend),
-     'o amigo aparece como SELO verde (a mesma cor da seção "Meus amigos")');
+  const trechoFriend = exp.slice(iFriend, iFriend + 300);
+  // ⛔ 2.1.20 — O SELO "✓ Amigos" SAIU. Ordem do dono, olhando a tela cheia: _"a cor aqui
+  // ja indica ser amigo (nao coloque essa tag que impede a leitura dos nomes)"_.
+  // Não é volta atrás da 2.1.16: o que ele pediu lá foi que amigo parasse de aparecer com
+  // "Convidar" — isso continua. O que saiu é o rótulo REDUNDANTE, que era um bloco fixo
+  // de ~90px roubando o espaço do nome dentro de um card estreito.
+  ok(/if \(isFriend\) return '';/.test(exp),
+     'amigo não ganha rótulo nenhum — a ação fica vazia e o nome usa a largura toda');
+  // sobre o CÓDIGO, não sobre os comentários: a nota que explica a remoção cita o selo.
+  ok(!/✓ Amigos/.test(codExp), '⛔ o selo não voltou');
   ok(!/_sendFriendRequest/.test(trechoFriend),
-     '⛔ e não há como convidar de novo quem já é amigo');
+     '⛔ e continua não havendo como convidar de novo quem já é amigo');
+  ok(/var variant = \(myFriends\.indexOf/.test(exp),
+     'quem identifica o amigo é a COR do card (variant friend), que segue de pé');
   ok(/var variant = \(myFriends\.indexOf/.test(exp),
      'o CARD do amigo também fica verde (variant friend) — verde tem que dizer a mesma coisa nas duas telas');
 
@@ -231,7 +243,6 @@ function mkContainer(sb) {
   const usosCancelX = (exp.match(/window\._cancelXBtn\(/g) || []).length;
   ok(usosCancelX >= 2,
      'os DOIS cancelares (tela de amigos e explorar) usam window._cancelXBtn — achei ' + usosCancelX);
-  const codExp = exp.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   ok(codExp.indexOf('✉️ ✕') === -1,
      '⛔ o "✉️ ✕" improvisado não existe mais em lugar nenhum do explore.js');
   const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'components.css'), 'utf8');
@@ -319,6 +330,24 @@ function mkContainer(sb) {
   const filtrado = S3.window._exploreSemAmigos(['a1', 'a2', 'x9']);
   ok(filtrado.length === 1 && filtrado[0] === 'x9',
      'a rede tira os amigos e mantém quem tem convite de verdade — inclusive amigo gravado como {uid}. Veio: ' + JSON.stringify(filtrado));
+
+  // ── ⛔ NUNCA CORTAR O NOME (2.1.20) ──────────────────────────────────────
+  // _"nunca deve cortar a porra dos nomes. tem que poder ler"_. MEDIDO no navegador: o
+  // gargalo NÃO era a largura do card, era a AÇÃO. Num card de 295px o par
+  // "Rejeitar"+"Aceitar" em texto ocupava 192px e sobravam ~50px pro nome — e só a seção
+  // de convites recebidos cortava; amigos (ação de 20px) e enviados (22px) cabiam.
+  // Por isso o conserto foi encolher a AÇÃO, não alargar o card de novo.
+  ok(/window\._exploreResponderConviteBtns = /.test(exp),
+     'responder convite é um par de botões redondos (✕ canônico + ✓), num helper único');
+  const usosResp = (exp.match(/_exploreResponderConviteBtns\(safeUid/g) || []).length;
+  ok(usosResp >= 2,
+     'e os DOIS pontos que respondiam convite CHAMAM esse helper — achei ' + usosResp);
+  ok(!/btn btn-success btn-sm[^>]*>' \+ _t\('explore\.accept'\)/.test(exp),
+     '⛔ o par de botões largos em texto não voltou');
+  ok(/minmax\(12rem,1fr\)/.test(exp),
+     'o grid é 12rem — calibrado no navegador para 3 colunas (⚠️ 1rem ≈ 22.1px aqui: o app escala a fonte por área)');
+  ok(/max-width: 900px/.test(exp),
+     '⛔ e o container do #explore tem a MESMA largura do #todas-pessoas — grid igual só dá colunas iguais se o container for igual');
 
   console.log(pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);

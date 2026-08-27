@@ -15,10 +15,46 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // "convites mais largos", era "as duas listas com a MESMA divisão". Largura mínima
 // diferente é exatamente o jeito de garantir que isso não aconteça.
 // ⭐ Por isso virou CONSTANTE: enquanto o valor viver em dois lugares, ele volta a divergir.
-var _GRID_PESSOAS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(9.7rem,1fr));gap:8px;';
+// ⚠️ 2.1.20 — O MÍNIMO SUBIU DE 9.7rem PARA 15rem, e o motivo é LEITURA, não estética.
+// Ordem do dono, olhando 4 colunas: _"porque 4 colunas? nesa largura é 3 para dar pra ler.
+// nunca deve cortar a porra dos nomes. tem que poder ler"_.
+// É este número que decide quantas colunas cabem (auto-fill divide a largura por ele), e
+// ⚠️ E O `rem` AQUI NÃO É 16px: o app escala a fonte por ÁREA
+// ([[project_web_area_scaling_canon]]) — MEDIDO no navegador, 1rem = 22.1px numa janela de
+// 1200px. Então 9.7rem eram 214px (4 colunas apertadas em 900px, nome cortado) e 15rem
+// seriam 331px (2 colunas, largas demais). 12rem ≈ 265px dá as 3 colunas que o dono pediu,
+// com o nome inteiro. Calibrar isto "no olho" em px daria errado — a conta muda junto com
+// a escala.
+// ⛔ Continua sendo UM valor para as quatro listas (2.1.18) — mexer aqui mexe em todas
+// juntas, que é exatamente o ponto.
+var _GRID_PESSOAS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(12rem,1fr));gap:8px;';
 // exposta porque a tela #todas-pessoas (todas-pessoas.js) monta a QUARTA lista de pessoa —
 // e o dono quer as quatro dividindo igual: "qualquer que seja o numero de colunas".
 window._gridPessoas = _GRID_PESSOAS;
+
+// ⛔ 2.1.20 — RESPONDER AO CONVITE EM DOIS BOTÕES REDONDOS, e o motivo é o NOME.
+// Ordem do dono: _"nunca deve cortar a porra dos nomes. tem que poder ler"_.
+// MEDIDO no navegador: num card de 295px, o par "Rejeitar"+"Aceitar" em texto ocupava
+// 192px — sobravam ~50px pro nome, e só a seção de convites RECEBIDOS cortava (amigos e
+// enviados, com ação de 20px, cabiam inteiros). O gargalo era a ação, não a largura do
+// card: por isso a correção é aqui e não em mais uma mudança de grid.
+// ⭐ O ✕ é o CANÔNICO (window._cancelXBtn) — rejeitar é recusar, mesmo símbolo de sempre.
+// O ✓ é o irmão simétrico dele: mesma geometria, verde do sucesso. Sem rótulo visível, mas
+// com title + aria-label, que é o que o leitor de tela usa.
+window._exploreResponderConviteBtns = function (safeUid) {
+  var _t = window._t || function (k) { return k; };
+  var aceitar = '<button type="button" title="' + _t('explore.accept') + '" aria-label="' + _t('explore.accept') + '"' +
+    ' onclick="event.stopPropagation(); window._spinButton(this, \'Aceitando...\'); _acceptFriend(\'' + safeUid + '\')"' +
+    ' style="width:22px;height:22px;min-width:22px;min-height:22px;max-height:22px;padding:0;border-radius:50%;' +
+    'background:var(--success-color);border:2px solid #fff;color:#fff;font-size:0.72rem;font-weight:900;line-height:1;' +
+    'cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;' +
+    'box-shadow:0 0 0 1px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.30);">✓</button>';
+  var rejeitar = window._cancelXBtn(
+    "event.stopPropagation(); window._spinButton(this, 'Rejeitando...'); _rejectFriend('" + safeUid + "')",
+    _t('explore.reject'), { size: '22px' });
+  return '<div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">' + rejeitar + aceitar + '</div>';
+};
+
 
 // ⛔ 2.1.19 — AMIGO NÃO É CONVITE PENDENTE. Ordem do dono: _"amigos nao podem estar como
 // convites pendetes. aceitou, virou amigo, nao tem convite pendente. em nenhuma dessas
@@ -110,7 +146,11 @@ function renderExplore(container) {
     window._renderBackHeader({
       href: '#dashboard'
     }) +
-    '<div style="max-width: 800px; margin: 0 auto;">' +
+    // ⚠️ 2.1.20 — 900px, IGUAL ao da tela #todas-pessoas. Não é capricho: o número de
+    // colunas sai de (largura do container ÷ minmax). Com 800px aqui e 900px lá, o MESMO
+    // grid daria 2 colunas numa tela e 3 na outra — e o dono pediu que as listas de pessoa
+    // se dividissem igual. Grid igual só produz colunas iguais se o container for igual.
+    '<div style="max-width: 900px; margin: 0 auto;">' +
       '<h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-bright);">' + _t('explore.title') + '</h2>' +
       _btnExplorar +
       _exploreFilterBar +
@@ -946,8 +986,7 @@ function _renderPendingRequests(myUid, receivedIds) {
           '<div style="font-size:0.68rem;color:var(--text-muted);margin-top:1px;">' + (window._t || function(k){return k;})('explore.wantsToBeFriend') + '</div>' +
         '</div>' +
         '<div style="display:flex;gap:6px;flex-shrink:0;">' +
-          '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Rejeitando...\'); _rejectFriend(\'' + safeUidPending + '\')">' + (window._t || function(k){return k;})('explore.reject') + '</button>' +
-          '<button class="btn btn-success btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Aceitando...\'); _acceptFriend(\'' + safeUidPending + '\')">' + (window._t || function(k){return k;})('explore.accept') + '</button>' +
+          window._exploreResponderConviteBtns(safeUidPending) +
         '</div>' +
       '</div>';
     });
@@ -1866,12 +1905,18 @@ window._explorePersonActionBtn = function (u, mySent, myReceived, myFriends) {
   // (_dedupeAgainstRelationships), então esta ramificação nunca fez falta lá. A tela
   // #todas-pessoas mostra TODO MUNDO — e sem este ramo ela oferecia convidar de novo
   // quem já é amigo, que além de errado é confuso.
-  if (isFriend) {
-    return '<span title="Vocês já são amigos" style="display:inline-flex;align-items:center;gap:5px;' +
-      'font-size:0.72rem;font-weight:800;white-space:nowrap;padding:4px 10px;border-radius:999px;' +
-      'background:rgba(34,197,94,0.14);border:1px solid var(--success-color);color:var(--sp-c-4ade80,#4ade80);">' +
-      '✓ Amigos</span>';
-  }
+  // ⛔ 2.1.20 — AMIGO NÃO GANHA SELO: A COR JÁ DIZ. Ordem do dono, olhando a tela cheia:
+  // _"a cor aqui ja indica ser amigo (nao coloque essa tag que impede a leitura dos
+  // nomes)"_. Ele está certo, e o custo era MEDÍVEL: o selo "✓ Amigos" é um bloco fixo de
+  // ~90px que não encolhe, dentro de um card de 9.7rem — sobrava tão pouco para o nome que
+  // "Fernando Bernacchi" virava "Fernar Bernac…".
+  // ⚠️ NÃO É VOLTA ATRÁS DA 2.1.16: o que ele pediu lá foi que amigo PARASSE de aparecer
+  // com "Convidar". Isso continua — o que sai é só o rótulo redundante. O card segue verde
+  // (variant 'friend'), e verde já quer dizer amigo nas quatro listas.
+  // ⛔ E devolver string vazia é de propósito: o rodapé de ação de _userCardHtml colapsa
+  // sozinho (flex-shrink:0 sobre conteúdo vazio = largura 0), então o nome fica com a
+  // largura inteira do card.
+  if (isFriend) return '';
   if (isSent) {
     // ⛔ O ✕ CANÔNICO (círculo vermelho, aro branco, X branco) — window._cancelXBtn.
     // O components.css avisa em letras maiúsculas: "NUNCA reintroduzir ✕ solto colorido —
@@ -1884,10 +1929,7 @@ window._explorePersonActionBtn = function (u, mySent, myReceived, myFriends) {
       _t('explore.cancelInviteTitle'), { size: '22px' });
   }
   if (isReceived) {
-    return '<div style="display:flex;gap:4px;justify-content:center;">' +
-      '<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Rejeitando...\'); _rejectFriend(\'' + safeUid + '\')">' + _t('explore.reject') + '</button>' +
-      '<button class="btn btn-success btn-sm" onclick="event.stopPropagation(); window._spinButton(this, \'Aceitando...\'); _acceptFriend(\'' + safeUid + '\')">' + _t('explore.accept') + '</button>' +
-    '</div>';
+    return window._exploreResponderConviteBtns(safeUid);
   }
   return '<button class="' + btnClass + '" onclick="event.stopPropagation(); window._spinButton(this, \'Enviando...\'); _sendFriendRequest(\'' + safeUid + '\')">' + _t('explore.invite') + '</button>';
 };
