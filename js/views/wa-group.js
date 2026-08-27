@@ -135,7 +135,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // jogadores chegam depois), então sem isso a feature não saía do papel na quadra.
   // Não é exceção ao desenho: quem cria o grupo é o dono do WhatsApp que clicou, e o link
   // continua sendo dado do torneio. `_waAllowed` (toggle do perfil) segue mandando nos dois.
+  // ⚠️ 2.1.7 — ESTA REGRA NÃO MORA MAIS AQUI. Ela foi reimplementada neste arquivo e a
+  // cópia divergiu do irmão "📅 Propor datas" por 3 semanas: o WhatsApp ganhou a exceção
+  // do organizador (2.0.57) e a agenda não, então o organizador via um botão e não o
+  // outro no MESMO rodapé. A fonte única é `window._schPodeGerirJogo` (schedule-poll.js),
+  // como o comentário de `_schIsCurrentRoundMatch` sempre mandou. Aqui só se delega — o
+  // fallback existe pro caso de schedule-poll.js não ter carregado, e repete a regra
+  // antiga de propósito (degradar pro gate mais restrito, nunca abrir demais).
   function _podeGerirJogo(t, m, cu) {
+    if (typeof window._schPodeGerirJogo === 'function') return !!window._schPodeGerirJogo(t, m, cu);
     return !!(window._schUserIsPlayer(t, m, cu) || _isOrg(t, cu));
   }
   function _canManage(ctx, cu) {

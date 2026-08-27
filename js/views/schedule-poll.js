@@ -219,6 +219,36 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._schMatchUids = _schMatchUids;
   window._schUserIsPlayer = _schUserIsPlayer;
 
+  // ─── PORTA ÚNICA: quem pode MEXER na agenda de um jogo (2.1.7) ────────────────
+  // Ordem do dono (25/ago/2026): _"o botão de propor agenda deve aparecer em cada grupo
+  // para os membros do grupo apenas e para os organizadores (o botão de todos os grupos)…
+  // a ideia é o organizador poder colocar a data pelos participantes"_.
+  //
+  // ⚠️ ESTA FUNÇÃO EXISTE PORQUE A REGRA JÁ TINHA SIDO REIMPLEMENTADA — e as duas
+  // cópias divergiram em silêncio. O comentário logo acima de _schIsCurrentRoundMatch
+  // manda o contrário: _"o gate de quem vê os dois TEM que ser o mesmo — fonte única
+  // aqui, nunca reimplementado lá"_. Mesmo assim, quando o dono pediu o chip do
+  // WhatsApp pro organizador (2.0.57/2.0.60), a exceção nasceu SÓ do lado do
+  // wa-group.js (`_podeGerirJogo` + o furo do gate de rodada), e o irmão "Propor
+  // datas" ficou com o gate de jogador intacto. Resultado medido no Confra: dos 35
+  // grupos, o dono joga em 1 — e esse 1 já estava todo decidido. Ou seja, NÃO EXISTIA
+  // grupo nenhum onde o botão aparecesse pra ele. Agora os dois entram por aqui.
+  //
+  // ⛔ CO-ORGANIZADOR TEM O MESMO PODER DO ORGANIZADOR — por isso `_isUserOrgOrCoHost`
+  // (creatorUid OU coHosts ativo, só por uid), nunca uma comparação com `creatorUid`.
+  // Ver [[project_cohost_same_power_as_organizer]].
+  function _schEhAdmin(t, user) {
+    return !!(user && user.uid && typeof window._isUserOrgOrCoHost === 'function' &&
+              window._isUserOrgOrCoHost(t, user));
+  }
+  // Quem pode PROPOR/DEFINIR a data: quem joga o confronto, ou quem organiza o torneio.
+  function _schPodeGerirJogo(t, m, user) {
+    if (!user || !user.uid) return false;
+    return !!(_schUserIsPlayer(t, m, user) || _schEhAdmin(t, user));
+  }
+  window._schEhAdmin = _schEhAdmin;
+  window._schPodeGerirJogo = _schPodeGerirJogo;
+
   function _schFindMatch(t, matchId) {
     var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     return (all || []).find(function (m) { return m && String(m.id) === String(matchId); }) || null;
@@ -551,8 +581,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (m.winner || m.isBye || m.isSitOut) return '';
       if (!m.p1 || !m.p2 || m.p1 === 'BYE' || m.p2 === 'BYE' || m.p1 === 'TBD' || m.p2 === 'TBD') return '';
       var cu = _cu(); if (!cu || !cu.uid) return '';
-      if (!_schIsCurrentRoundMatch(t, m)) return '';
-      if (!_schUserIsPlayer(t, m, cu)) return '';
+      // 2.1.7: PORTA ÚNICA — jogador do confronto OU organizador/co-host.
+      if (!_schPodeGerirJogo(t, m, cu)) return '';
+      // O organizador FURA o gate de rodada (espelha wa-group.js): é ele quem monta a
+      // grade ANTES de a rodada abrir. Pro jogador o gate segue valendo — não há o que
+      // combinar num jogo que ainda nem é a vez.
+      if (!_schEhAdmin(t, cu) && !_schIsCurrentRoundMatch(t, m)) return '';
       var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
       // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
       // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
@@ -652,8 +686,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         return '<button type="button" class="btn btn-sm hover-lift" onclick="' + open + '" title="' + (_est ? 'Horário estimado pelo sistema' : 'Horário definido') + '" style="display:inline-flex;align-items:center;gap:5px;background:rgba(' + _c + ',0.14);border:1px solid rgba(' + _c + ',0.45);color:' + window._spCor(_tx, 'color') + ';font-weight:800;font-size:0.72rem;border-radius:8px;padding:4px 10px;">📅 ' + (_est ? '≈ ' : '') + _esc(_fmtDateTime(schedISO)) + '</button>';
       }
       var cu = _cu(); if (!cu || !cu.uid) return '';
-      if (!_schUserIsPlayer(t, m0, cu)) return '';
-      if (!_schIsCurrentRoundMatch(t, m0)) return '';
+      // 2.1.7: PORTA ÚNICA — membro do grupo OU organizador/co-host (que vê em TODOS os
+      // grupos). Era aqui que o botão sumia: o gate só falava de jogador.
+      if (!_schPodeGerirJogo(t, m0, cu)) return '';
+      if (!_schEhAdmin(t, cu) && !_schIsCurrentRoundMatch(t, m0)) return '';
+      // Grupo inteiro decidido = sem botão PRA NINGUÉM, inclusive o organizador. Não é o
+      // bug: não há agenda a marcar pra jogo que já aconteceu. (Difere do WhatsApp de
+      // propósito — o grupo sobrevive ao jogo, a agenda não.)
       if (groupMatches.every(function (m) { return m.winner || m.isBye || m.isSitOut; })) return '';
       var n = (m0.schedule && Array.isArray(m0.schedule.options)) ? m0.schedule.options.length : 0;
       // Azul via INLINE (não .btn-primary — responsive.css força .btn-primary a

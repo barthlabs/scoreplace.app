@@ -6746,8 +6746,12 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
           // `isMyGroup` escondia o chip em TODOS os grupos que não fossem o dele — e o
           // organizador quase nunca joga o grupo que precisa montar. Quem decide o que o
           // botão mostra continua sendo o módulo (wa-group.js, `_podeGerirJogo`): aqui só
-          // se para de esconder. O irmão "Propor datas" seguiu o MESMO caminho na 2.0.75
-          // (a data pra todos, a proposta só pra quem joga).
+          // se para de esconder. ⚠️ CORREÇÃO 2.1.7: este comentário AFIRMAVA que o irmão
+          // "Propor datas" tinha seguido o MESMO caminho na 2.0.75 — e era FALSO. A 2.0.75
+          // liberou só a DATA pra todos; o BOTÃO manteve o gate "só quem joga", então o
+          // organizador nunca o via. Foi um comentário que descrevia a intenção, não o
+          // código, e por isso o bug sobreviveu à leitura. Na 2.1.7 o gate dos dois passou
+          // a ser a mesma função (window._schPodeGerirJogo) — agora a frase é verdade.
           var _waPodeGerir = isMyGroup || !!(typeof window._isUserOrgOrCoHost === 'function' &&
             window._isUserOrgOrCoHost(t, window.AppStore && window.AppStore.currentUser));
           var _waGrpBtn = (_waPodeGerir && typeof window._waGrpGroupChip === 'function') ? window._waGrpGroupChip(t, g.matches) : '';

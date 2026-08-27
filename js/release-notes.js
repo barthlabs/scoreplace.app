@@ -85,6 +85,7 @@ window._RELEASE_NOTES_HTML = (function () {
         '<li><b>🔄 O aplicativo podia ficar preso numa versão antiga:</b> havia um defeito que segurava o conteúdo guardado no aparelho e impedia a atualização de chegar. Corrigido — e com uma trava para não acontecer de novo.</li>' +
         '<li><b>🎾 Lançar placar sem sinal não perde mais o resultado:</b> o placar entra numa fila e é aplicado sozinho assim que a conexão volta.</li>' +
         '<li><b>⚖️ Classificação mais firme:</b> grupo que terminou tem a classificação congelada e para de ir e voltar; quem saiu por W.O. passa a mostrar onde joga agora; e o 3º lugar voltou ao pódio.</li>' +
+        '<li><b>📅 Combinar o dia e a hora do jogo ficou possível de verdade:</b> o botão <b>Propor datas</b> agora aparece no seu grupo (para quem joga) e em <b>todos os grupos</b> para quem organiza — que pode marcar a data direto pelos participantes, inclusive antes de a rodada abrir. E a data já marcada aparece para <b>qualquer pessoa</b>, mesmo quem não joga aquele grupo: dá para saber a que horas é o jogo e ir assistir.</li>' +
         '<li><b>🔒 Privacidade:</b> os e-mails dos participantes saíram do documento de leitura pública do torneio.</li>' +
       '</ul>' +
     '</div>' +
