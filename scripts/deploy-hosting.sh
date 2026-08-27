@@ -133,6 +133,50 @@ else
   exit 1
 fi
 
+# ── 2.5 O CHECKOUT PRINCIPAL ANDA JUNTO ──────────────────────────────────────
+# ⛔ REGRA DO DONO (27/ago/2026), depois de achar o repo dele 16 commits atrás do ar:
+# _"que merda é esse dessa porra de repo nao acompanhar a merda da versao web? ja falei que
+# tudo tem que andar junto"_ · _"e faca disso a porra de uma regra para nunca mais
+# acontecer"_.
+#
+# O QUE ACONTECIA, e é uma armadilha do próprio fluxo de worktrees: uma sessão trabalha em
+# .claude/worktrees/<nome>, empurra pro `main` e publica. O ar fica certo, o `main` fica
+# certo — e o CHECKOUT PRINCIPAL, que é onde o dono abre o projeto e de onde saem os builds
+# NATIVOS, fica parado onde estava. Medido no dia: ar e main em 2.1.22, o repo dele em
+# 2.1.6. Ninguém errou comando; era o comportamento normal, e é exatamente a mesma classe
+# do incidente de 12/ago (produção 1.8.27 com main 1.8.24) que criou o check-deploy-alignment.
+#
+# ⚠️ E o preço é MAIOR que o susto: o build de TestFlight/Play sai do checkout principal.
+# Um repo atrasado empacota uma versão velha com o número novo — o pior tipo de erro,
+# porque a loja diz uma coisa e o app faz outra.
+#
+# ⭐ Por que aqui e automático: o dono já tinha dito "tudo tem que andar junto" e mesmo
+# assim aconteceu — memória não resolve. Este é o único caminho por onde a publicação
+# passa, e neste ponto o `main` acabou de ser atualizado. Fast-forward só: se o principal
+# tiver trabalho próprio, o script AVISA e não decide por ninguém.
+PRINCIPAL="$(git worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
+if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]]; then
+  echo "▸ alinhando o checkout principal ($PRINCIPAL)…"
+  P_BRANCH="$(git -C "$PRINCIPAL" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  P_HEAD="$(git -C "$PRINCIPAL" rev-parse HEAD 2>/dev/null || echo '')"
+  if [[ "$P_BRANCH" != "main" ]]; then
+    echo "  ⚠️  ele está em '$P_BRANCH', não em main — NÃO mexi. Alinhe à mão quando puder:"
+    echo "      git -C \"$PRINCIPAL\" checkout main && git -C \"$PRINCIPAL\" merge --ff-only origin/main"
+  elif [[ -n "$(git -C "$PRINCIPAL" status --porcelain --untracked-files=no)" ]]; then
+    echo "  ⚠️  ele tem alterações não commitadas — NÃO mexi (trabalho de outra sessão não se descarta)."
+    git -C "$PRINCIPAL" status --short --untracked-files=no | head -5
+  elif [[ "$P_HEAD" == "$COMMIT" ]]; then
+    echo "  ✓ já estava em dia"
+  elif [[ $DRY -eq 1 ]]; then
+    echo "  (dry-run: não alinhei)"
+  elif git -C "$PRINCIPAL" merge --ff-only origin/main >/dev/null 2>&1; then
+    echo "  ✓ checkout principal em $(git -C "$PRINCIPAL" rev-parse --short HEAD) (v$(tr -d '[:space:]' < "$PRINCIPAL/version.txt" 2>/dev/null))"
+  else
+    echo "  ⚠️  não deu fast-forward (divergiu?) — alinhe à mão:"
+    echo "      git -C \"$PRINCIPAL\" merge --ff-only origin/main"
+  fi
+fi
+
 # ── TRAVA DURA: O CACHE DO SW TEM QUE SER O DA VERSÃO ─────────────────────────
 # ⛔ ISTO JÁ ACONTECEU, e ficou 33 VERSÕES sem ninguém ver (2.0.92 → 2.0.125). O dono abriu
 # o PWA no celular e viu "0 INSCRITOS" num torneio com 148, sendo ele o organizador; no
