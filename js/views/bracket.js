@@ -5210,9 +5210,15 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       return !!(_cuMName && nm && nm === _cuMName);   // v1.7.78: exato, nunca substring
     });
   }
-  subgroups = subgroups.map(function(sg, i) { return { sg: sg, i: i, me: _sgHasMe(sg) ? 0 : 1 }; })
-    .sort(function(a, b) { return (a.me - b.me) || (a.i - b.i); })
-    .map(function(o) { return o.sg; });
+  // 2.1.8: o desempate entre os DEMAIS grupos deixou de ser "a ordem em que vieram" e
+  // passou a ser a AGENDA (próximos jogos → realizados → sem data). Fonte única em
+  // schedule-poll.js — os 3 pontos que listam grupos chamam a mesma função, senão a
+  // mesma tela mostra ordens diferentes conforme a rota que a desenhou.
+  subgroups = (typeof window._schOrdenarGrupos === 'function')
+    ? window._schOrdenarGrupos(subgroups, { meu: _sgHasMe })
+    : subgroups.map(function(sg, i) { return { sg: sg, i: i, me: _sgHasMe(sg) ? 0 : 1 }; })
+        .sort(function(a, b) { return (a.me - b.me) || (a.i - b.i); })
+        .map(function(o) { return o.sg; });
 
   var _useSetsMonarch = !!(t.scoring && t.scoring.type === 'gsm');
   subgroups.forEach(function(sg, gi) {
@@ -5471,8 +5477,13 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   };
   // Mantém um índice original pra que `groups[gi]` continue mapeando o doc
   // certo após o sort (gi do callback agora é a posição NO ARRAY ORDENADO).
-  const sortedSubgroups = subgroups.map((sg, originalIdx) => ({ sg: sg, originalIdx: originalIdx }))
-    .sort((a, b) => (_subgroupHasMe(a.sg) ? 0 : 1) - (_subgroupHasMe(b.sg) ? 0 : 1));
+  // 2.1.8: mesma ordem por AGENDA dos outros dois pontos (fonte única em schedule-poll.js).
+  // O wrapper com `originalIdx` continua intacto — ele é o que mantém `groups[gi]` apontando
+  // pro doc certo depois do sort, e a numeração global dos jogos segue a ordem ORIGINAL.
+  const _wrapped = subgroups.map((sg, originalIdx) => ({ sg: sg, originalIdx: originalIdx }));
+  const sortedSubgroups = (typeof window._schOrdenarGrupos === 'function')
+    ? window._schOrdenarGrupos(_wrapped, { grupo: (w) => w.sg, meu: _subgroupHasMe })
+    : _wrapped.sort((a, b) => (_subgroupHasMe(a.sg) ? 0 : 1) - (_subgroupHasMe(b.sg) ? 0 : 1));
 
   // v3.0.x: numeração GLOBAL e ESTÁVEL dos jogos — Jogo 1 = 1º jogo da R1 do
   // grupo A, sequencial pela ORDEM ORIGINAL dos grupos (não pela ordem de
@@ -6322,11 +6333,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             return false;
           });
         };
-        var sortedGroups = currentRoundData.monarchGroups.slice().sort(function(a, b) {
-          var aMe = _groupHasMe(a) ? 0 : 1;
-          var bMe = _groupHasMe(b) ? 0 : 1;
-          return aMe - bMe;
-        });
+        // 2.1.8: ordem por AGENDA (fonte única em schedule-poll.js). Vem ANTES dos splits
+        // por categoria e "meus jogos × demais" logo abaixo — os dois filtram preservando
+        // a ordem relativa, então a grade cronológica sobrevive ao recorte deles.
+        var sortedGroups = (typeof window._schOrdenarGrupos === 'function')
+          ? window._schOrdenarGrupos(currentRoundData.monarchGroups, { meu: _groupHasMe })
+          : currentRoundData.monarchGroups.slice().sort(function(a, b) {
+              return (_groupHasMe(a) ? 0 : 1) - (_groupHasMe(b) ? 0 : 1);
+            });
         // v0.16.88: pra Liga + Rei/Rainha, separa grupos do USUÁRIO dos demais
         // pra que a classificação geral apareça ENTRE os dois (depois dos
         // jogos do user, antes dos demais jogos). Pedido do usuário: "nesse

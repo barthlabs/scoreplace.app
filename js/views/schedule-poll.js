@@ -249,6 +249,83 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   window._schEhAdmin = _schEhAdmin;
   window._schPodeGerirJogo = _schPodeGerirJogo;
 
+  // ─── A ORDEM DOS GRUPOS NA TELA: quem joga primeiro, aparece primeiro (2.1.8) ──
+  // Ordem do dono (27/ago/2026): _"os grupos devem ser mostrados em ordem cronológica
+  // mostrando primeiro os proximos eventos (jogos) e depois os já realizados em ordem
+  // alfabetica dos grupos e depois os sem data/hora definida tambem em ordem alfabetica"_.
+  //
+  // Três baldes, nesta ordem:
+  //   0 · TEM data e ainda tem jogo pendente → cronológico (o mais cedo primeiro)
+  //   1 · REALIZADO (todos os jogos decididos) → alfabético
+  //   2 · sem data e não realizado            → alfabético
+  //
+  // ⚠️ "Realizado" é JOGO DECIDIDO, não hora que passou — decisão do dono, e ela tem
+  // consequência prática: um grupo marcado pras 14h que às 15h ninguém jogou continua no
+  // balde 0, e a ordem cronológica o joga pro TOPO. É onde o organizador precisa vê-lo.
+  // Pelo outro critério (hora passou = realizado) o grupo atrasado afundaria no meio dos
+  // concluídos — exatamente o que ele não pode deixar de ver.
+  //
+  // ⚠️ O horário ≈ESTIMADO conta como data (decisão do dono). É a data que a pessoa vê na
+  // tela; ordenar por outra coisa mostraria uma grade que não bate com o que está escrito.
+  // Efeito: em torneio de até 3 dias, onde `_schAplicarGrade` carimba todo jogo, o balde 2
+  // nasce vazio e a tela inteira fica cronológica.
+  //
+  // ⛔ O "SEU GRUPO" CONTINUA NO TOPO, fora destes baldes (v0.16.88, pedido do dono, e
+  // reconfirmado agora). Por isso a ordem entra como CRITÉRIO SECUNDÁRIO nos 3 call sites
+  // — nunca substituindo o `me` que já estava lá.
+  function _schGrupoMatches(g) {
+    if (!g) return [];
+    if (Array.isArray(g.matches) && g.matches.length) return g.matches;
+    var out = [];
+    (Array.isArray(g.rounds) ? g.rounds : []).forEach(function (r) {
+      if (r && Array.isArray(r.matches)) r.matches.forEach(function (m) { out.push(m); });
+    });
+    return out;
+  }
+  // Chave de ordenação de UM grupo: { balde, ms, nome }.
+  function _schGrupoAgenda(g) {
+    var jogaveis = _schGrupoMatches(g).filter(function (m) { return m && !m.isBye && !m.isSitOut; });
+    var nome = String((g && g.name) || '');
+    if (!jogaveis.length) return { balde: 2, ms: Infinity, nome: nome };
+    var realizado = jogaveis.every(function (m) { return !!m.winner; });
+    var quando = Infinity;
+    jogaveis.forEach(function (m) {
+      if (!m.scheduledAt) return;
+      var ms = new Date(m.scheduledAt).getTime();
+      if (!isNaN(ms) && ms < quando) quando = ms;   // o grupo vale pelo seu jogo MAIS CEDO
+    });
+    if (realizado) return { balde: 1, ms: quando, nome: nome };
+    return { balde: (quando === Infinity) ? 2 : 0, ms: quando, nome: nome };
+  }
+  // "Grupo 2" antes de "Grupo 10" — alfabético ingênuo poria o 10 primeiro.
+  function _cmpNome(a, b) {
+    try { return String(a).localeCompare(String(b), 'pt-BR', { numeric: true, sensitivity: 'base' }); }
+    catch (e) { return String(a) < String(b) ? -1 : (String(a) > String(b) ? 1 : 0); }
+  }
+  // Ordena QUALQUER lista de grupos (ou de wrappers em volta deles). Decorate-sort: a
+  // chave sai UMA vez por grupo, não a cada comparação — com 35 grupos são 35 leituras
+  // em vez de ~360, e o dono está com prioridade em desempenho.
+  //   opts.grupo(item) → o grupo dentro do item (default: o próprio item)
+  //   opts.meu(grupo)  → true pro grupo de quem está olhando (vai pro topo)
+  window._schOrdenarGrupos = function (arr, opts) {
+    if (!Array.isArray(arr)) return [];
+    opts = opts || {};
+    var pegaG = opts.grupo || function (x) { return x; };
+    var ehMeu = opts.meu || function () { return false; };
+    return arr.map(function (item, i) {
+      var g = pegaG(item);
+      var k = _schGrupoAgenda(g);
+      return { item: item, i: i, me: ehMeu(g) ? 0 : 1, balde: k.balde, ms: k.ms, nome: k.nome };
+    }).sort(function (x, y) {
+      if (x.me !== y.me) return x.me - y.me;             // ⛔ o SEU grupo primeiro, sempre
+      if (x.balde !== y.balde) return x.balde - y.balde;
+      if (x.balde === 0 && x.ms !== y.ms) return x.ms - y.ms;  // cronológico só no balde 0
+      var c = _cmpNome(x.nome, y.nome);
+      return c || (x.i - y.i);                            // estável: empate mantém a ordem
+    }).map(function (o) { return o.item; });
+  };
+  window._schGrupoAgenda = _schGrupoAgenda;
+
   function _schFindMatch(t, matchId) {
     var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (Array.isArray(t.matches) ? t.matches : []);
     return (all || []).find(function (m) { return m && String(m.id) === String(matchId); }) || null;

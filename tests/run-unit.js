@@ -409,6 +409,7 @@ const SUITES = [
   // marcou. Cobre também o buraco do Rei/Rainha, que aparecia SEM data nas Novidades.
   'tests/grade-estimada-e-propor-datas.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',
+  'tests/grupos-em-ordem-cronologica.test.js',
   'tests/elim-seed.test.js',
   'tests/elim-reirainha-opening.test.js',
   'tests/chave-label-default.test.js',
