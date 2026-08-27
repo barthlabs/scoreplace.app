@@ -10,8 +10,15 @@
 #   scripts/ios-archive.sh            # só arquiva + valida (não exporta)
 #   scripts/ios-archive.sh --export   # arquiva + valida + exporta .ipa pra App Store
 #
-# NÃO faz upload sozinho (ação outward-facing da conta Apple). Ao fim mostra o
-# comando de upload. Assinatura automática (Team 6724SP9XN7).
+# ⚠️ CORREÇÃO (27/ago/2026): este cabeçalho dizia "NÃO faz upload sozinho (ação
+# outward-facing da conta Apple). Ao fim mostra o comando de upload." ERA FALSO — o
+# `scripts/ios-exportOptions.plist` tem `destination = upload`, então o `--export` ARQUIVA,
+# EXPORTA E ENVIA pro App Store Connect numa tacada ("Upload succeeded" no fim do log).
+# Quem lesse o cabeçalho acharia que ainda faltava um passo manual e poderia subir DUAS
+# vezes, ou não conferir o TestFlight achando que nada tinha ido.
+#   scripts/ios-archive.sh            → só arquiva e valida (não envia)
+#   scripts/ios-archive.sh --export   → arquiva, valida, exporta E ENVIA
+# Assinatura automática (Team 6724SP9XN7).
 
 set -euo pipefail
 
@@ -20,6 +27,13 @@ set -euo pipefail
 # o dono NÃO testou no TestFlight. Já falhou 3x (1.7.8, 1.7.49, 1.8.11). Roda primeiro:
 # falhar aqui custa segundos; falhar depois custa uma volta inteira na fila da Apple.
 node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-release-notes.js"
+
+# ── TRAVA: a versão NATIVA é a MESMA da web (ordem do dono, 27/ago/2026) ──────
+# Antes a loja usava MAJOR.MINOR e a web MAJOR.MINOR.PATCH — "alinhado" virava julgamento,
+# e a build 265 chegou a subir como "2.1" carregando o código da 2.1.6. Agora é comparação
+# de string. Roda ANTES de arquivar: falhar aqui custa segundos; falhar depois custa uma
+# volta inteira na fila da loja.
+node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-versao-nativa.js" ios
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$REPO_ROOT/ios/App"

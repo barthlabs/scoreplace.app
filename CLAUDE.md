@@ -7,6 +7,17 @@ Plataforma web de gestao de torneios esportivos e board games. App SPA (Single P
 > ⚠️ **CONVENÇÃO CRÍTICA — nomes de formato são SÓ EXIBIÇÃO (desde jun/2026, staging):** na tela, "Liga" virou **"Pontos Corridos"** e "Grupos + Eliminatórias" virou **"Fase de Grupos"**. MAS o valor interno `t.format` é INTOCADO de propósito: continua `'Liga'` (legado `'Ranking'`) e `'Fase de Grupos + Eliminatórias'`; os códigos seguem `'liga'`/`'grupos_mata'`; `_isLigaFormat` checa `=== 'Liga'`. **Regra dos dois lados:** falando com o usuário/UI = use os nomes novos; lendo/escrevendo LÓGICA = os valores são AINDA os antigos — NUNCA "consertar" `=== 'Liga'` achando que é resíduo (quebra motor de sorteio/autoDraw/dados). Exibição passa por `window._formatDisplayName(fmt)` (store.js) ou pelas chaves i18n `format.*`. Detalhe na memória `project_format_rename_display_only`.
 
 - **Versao atual:** `1.7` (definida em `window.SCOREPLACE_VERSION` no store.js; esquema alinhado às lojas desde a v1.1 — ver memória `project_version_scheme_store_aligned`)
+- ⛔ **A VERSÃO NATIVA É A MESMA DA WEB — `X.Y.Z` (ordem do dono, 27/ago/2026).**
+  `MARKETING_VERSION` (iOS) e `versionName` (Android) passam a carregar o PATCH, iguaizinhos
+  ao `window.SCOREPLACE_VERSION`. Antes a loja usava só `MAJOR.MINOR` (a build 265 subiu como
+  "2.1" com o código da 2.1.6), e o dono cortou o padrão pela raiz: _"altere esse padrao que
+  é impossivel de alcancar. vc sempre faz cagada na nativa e nunca fica x.y no final…
+  adotemos o mesmo padrao da web x.y.z"_.
+  **Por que ele está certo:** com dois esquemas, "alinhado" virava julgamento — e a conta
+  batia de formas diferentes a cada leva. Com um só, alinhamento é comparação de string:
+  o que o testador lê no TestFlight é o mesmo número que o `version.txt` do ar.
+  O `CURRENT_PROJECT_VERSION` (build) segue independente e sempre incrementando — ele é da
+  Apple, não do produto. Primeira build no padrão novo: **2.1.22 (266)**.
 - **Convenção de versão (a partir de 30 Abr 2026):** `MAJOR.MINOR.PATCH-channel` no padrão semver. Em fase **beta**, incremento PATCH a cada deploy (`1.0.0-beta` → `1.0.1-beta` → `1.0.2-beta` → ...). MINOR sobe quando há feature significativa nova; MAJOR reservado pra v2.0 (mudanças incompatíveis). Estável: dropar o `-beta` (`1.0.0`).
 - **URL principal:** https://scoreplace.app
 - **GitHub repo:** `barthlabs/scoreplace.app` — ⚠️ **NÃO é `rstbarth/scoreplace.app`**, que este arquivo afirmou até 10/ago/2026. Os dois existem: `rstbarth/` é um espelho **ABANDONADO** (último push 20/mai/2026, `main` em `0ce285bb`) e `barthlabs/` é o `origin` de verdade. Isso importa porque o GitHub é **o backup** contra a corrupção do `.git` pelo Drive ([[project_git_repo_lives_in_google_drive]]): empurrar backup pro espelho morto — ou LER dele achando que é atual — é falha silenciosa. Conferir sempre com `git remote -v`.

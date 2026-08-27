@@ -20,6 +20,13 @@ set -euo pipefail
 # ── TRAVA: nota de versão antes de gerar o .aab (mesmo motivo do iOS) ─────────
 node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-release-notes.js"
 
+# ── TRAVA: a versão NATIVA é a MESMA da web (ordem do dono, 27/ago/2026) ──────
+# Antes a loja usava MAJOR.MINOR e a web MAJOR.MINOR.PATCH — "alinhado" virava julgamento,
+# e a build 265 chegou a subir como "2.1" carregando o código da 2.1.6. Agora é comparação
+# de string. Roda ANTES de arquivar: falhar aqui custa segundos; falhar depois custa uma
+# volta inteira na fila da loja.
+node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/check-versao-nativa.js" android
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ANDROID_DIR="$REPO_ROOT/android"
 
