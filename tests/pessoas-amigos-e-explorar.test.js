@@ -238,20 +238,41 @@ function mkContainer(sb) {
   ok(/\.cancel-x-btn\s*\{/.test(css) && /background:\s*#dc2626/.test(css),
      'e a classe canônica é mesmo o círculo vermelho com X branco (não inventei o padrão)');
 
-  // ── ⛔ CONVITES ACOMPANHAM A LARGURA DOS AMIGOS (2.1.17) ─────────────────
-  // _"o convite pendente deve acompanhar a largura do amigos. numa tela larga cabem 2, 3
-  // ou até 4 colunas"_. Era `flex-direction:column` — uma coluna, card esticado na largura
-  // inteira, logo abaixo de "Meus amigos" que já se dividia em 3. Duas listas de pessoas
-  // na mesma tela com larguras diferentes leem como telas diferentes.
-  const gridsPessoa = (exp.match(/grid-template-columns:repeat\(auto-fill,minmax\(([0-9.]+)rem,1fr\)\)/g) || []);
-  ok(gridsPessoa.length >= 2,
-     'amigos E convites usam grid auto-fill (a tela larga decide 2, 3 ou 4 colunas) — achei ' +
-     gridsPessoa.length);
-  const iSent = exp.indexOf('Aguardando resposta');
-  ok(iSent > 0 && /grid-template-columns:repeat\(auto-fill/.test(exp.slice(iSent, iSent + 900)),
-     '⛔ a seção de convites enviados é GRID, não mais uma coluna só');
-  ok(!/flex-direction:column;gap:6px;">\';\n\n    dedupedGroups/.test(exp),
-     'e a versão em coluna não voltou');
+  // ── ⛔ TODA LISTA DE PESSOA DIVIDE IGUAL (2.1.18) ─────────────────────────
+  // Ordem do dono, depois de eu errar isto na 2.1.17: _"3 colunas de amigos, 3 colunas de
+  // convites. qualquer que seja o numero de colunas de amigos nas diferentes larguras"_ —
+  // e, olhando a tela Explorar: _"a mesma coisa aqui"_.
+  //
+  // ⚠️ O QUE EU ERREI: dei aos convites um minmax MAIOR (13rem) que o dos amigos (9.7rem),
+  // achando que o card horizontal precisava de mais espaço. Mas `auto-fill` calcula as
+  // colunas A PARTIR do minmax — valores diferentes NUNCA cairiam no mesmo número. O
+  // pedido não era "convites mais largos", era "a mesma divisão".
+  ok(/var _GRID_PESSOAS = /.test(exp),
+     'existe UMA constante para o grid das listas de pessoa (enquanto o valor viver em dois lugares, ele diverge)');
+  const usosGrid = (exp.match(/_GRID_PESSOAS/g) || []).length;
+  ok(usosGrid >= 5,
+     'as três listas do #explore usam a constante (amigos + recebidos + enviados) — achei ' + usosGrid + ' referências');
+  ok(!/minmax\(13rem/.test(exp), '⛔ a largura mínima divergente (13rem) não voltou');
+  ok(/window\._gridPessoas = _GRID_PESSOAS/.test(exp),
+     'e ela é exposta para a QUARTA lista, a da tela #todas-pessoas');
+  ok(/window\._gridPessoas/.test(nova) && !/flex-direction:column;gap:6px;margin-top:8px/.test(nova),
+     '#todas-pessoas usa o mesmo grid (era uma coluna só)');
+
+  // ⛔ E NENHUMA DAS SEÇÕES PODE TER RECUO PRÓPRIO — foi o que derrubou uma coluna.
+  // MEDIDO no navegador a 700px, antes do conserto: amigos 3, recebidos 3, enviados 2.
+  // A seção de enviados tinha uma caixa âmbar com padding:12px + borda = 26px a menos de
+  // espaço para o grid interno, e no limiar isso vira uma coluna inteira.
+  const iEnviados = exp.indexOf('Aguardando resposta');
+  const cabecEnviados = exp.slice(Math.max(0, iEnviados - 700), iEnviados);
+  ok(!/padding:12px;">' \+/.test(cabecEnviados),
+     '⛔ a seção de convites enviados não tem caixa com padding própria (ela comia uma coluna)');
+
+  // ── ⛔ A COR DIZ O ESTADO (2.1.18) ───────────────────────────────────────
+  // _"convites pendentes em ambar"_. Sem este ramo, quem tinha convite em aberto ficava
+  // com o card cinza dos desconhecidos e só o ✕ vermelho denunciava — a cor contava outra
+  // história. Verde/âmbar/neutro são as MESMAS cores das seções da tela de Pessoas.
+  ok(/\? 'friend'\s*\n?\s*:\s*\(\(_mySent\.indexOf\(uid\) !== -1 \|\| _myRecv\.indexOf\(uid\) !== -1\) \? 'pending' : 'other'\)/.test(exp),
+     'o card é verde para amigo, ÂMBAR para convite pendente (enviado ou recebido) e neutro para desconhecido');
 
   // ── ⛔ O ✕ DE DESFAZER AMIZADE TAMBÉM É O CANÔNICO ───────────────────────
   // _"cade o cancelar paaro aqui porra?"_ — ele acabara de ver o círculo vermelho nos

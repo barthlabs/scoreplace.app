@@ -4,6 +4,22 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // scoreplace.app — Explorar (Buscar Usuários + Amizades)
 // ========================================
 
+// ⛔ 2.1.18 — O GRID DAS LISTAS DE PESSOA É UM SÓ. Ordem do dono, depois de eu errar isto
+// na 2.1.17: _"os convites devem acompanhar as larguras dos amigos. 3 colunas de amigos, 3
+// colunas de convites. qualquer que seja o numero de colunas de amigos nas diferentes
+// larguras"_.
+// O QUE EU FIZ DE ERRADO: dei aos convites um minmax MAIOR (13rem) que o dos amigos
+// (9.7rem), raciocinando que o card de convite é horizontal e precisaria de mais espaço.
+// Só que `auto-fill` calcula o número de colunas A PARTIR do minmax — com valores
+// diferentes, as duas listas NUNCA cairiam no mesmo número de colunas. O pedido não era
+// "convites mais largos", era "as duas listas com a MESMA divisão". Largura mínima
+// diferente é exatamente o jeito de garantir que isso não aconteça.
+// ⭐ Por isso virou CONSTANTE: enquanto o valor viver em dois lugares, ele volta a divergir.
+var _GRID_PESSOAS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(9.7rem,1fr));gap:8px;';
+// exposta porque a tela #todas-pessoas (todas-pessoas.js) monta a QUARTA lista de pessoa —
+// e o dono quer as quatro dividindo igual: "qualquer que seja o numero de colunas".
+window._gridPessoas = _GRID_PESSOAS;
+
 function renderExplore(container) {
   var _t = window._t || function(k) { return k; };
   // Invalida o cache de convidáveis a cada entrada na página — pega novos
@@ -881,7 +897,10 @@ function _renderPendingRequests(myUid, receivedIds) {
     var receivedLabel = _tR('explore.receivedInvites');
     if (receivedLabel === 'explore.receivedInvites') receivedLabel = 'Convites Recebidos';
     var html = '<div style="margin-bottom: 1.25rem;">' +
-      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--sp-c-f59e0b,#f59e0b); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">' + receivedLabel + ' (' + profiles.length + ')</div>';
+      '<div style="font-weight: 600; font-size: 0.9rem; color: var(--sp-c-f59e0b,#f59e0b); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">' + receivedLabel + ' (' + profiles.length + ')</div>' +
+      // 2.1.18: os RECEBIDOS também — eles não tinham grid nenhum (cards empilhados um por
+      // linha). "Qualquer que seja o número de colunas de amigos" vale para as três listas.
+      '<div style="' + _GRID_PESSOAS + '">';
 
     profiles.forEach(function(u) {
       var uid = u._docId;
@@ -985,21 +1004,24 @@ function _renderSentRequests(myUid, sentIds) {
     var titleLabel = _t('explore.sentPending');
     if (titleLabel === 'explore.sentPending') titleLabel = 'Convites Pendentes';
 
-    var html = '<div style="margin-bottom: 1.5rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:12px;">' +
+    // ⛔ 2.1.18 — A CAIXA ÂMBAR EM VOLTA SAIU, e o motivo é largura, não estética.
+    // Ela tinha `padding:12px` + borda: 26px a menos de espaço para o grid interno. Com
+    // `auto-fill`, isso derruba UMA COLUNA no limiar — MEDIDO em 700px: amigos 3,
+    // recebidos 3, enviados 2. O dono foi explícito: _"qualquer que seja o numero de
+    // colunas de amigos nas diferentes larguras"_. Enquanto uma das listas tiver recuo
+    // próprio, a conta do auto-fill diverge em alguma largura.
+    // ⚠️ O ÂMBAR NÃO SE PERDEU: ele continua no TÍTULO da seção e em cada card (variant
+    // 'pending'), que é onde o dono pediu ("convites pendentes em ambar"). O que saiu foi
+    // só o retângulo em volta — as três seções agora são estruturalmente idênticas.
+    var html = '<div style="margin-bottom: 1.5rem;">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;">' +
         '<span style="font-size:1rem;">✉️</span>' +
         '<div style="font-weight:700;font-size:0.88rem;color:var(--sp-c-f59e0b,#f59e0b);text-transform:uppercase;letter-spacing:0.5px;">' + titleLabel + ' (' + dedupedGroups.length + ')</div>' +
       '</div>' +
       '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px;">Aguardando resposta. Clique em ✕ no card para cancelar.</div>' +
-      // ⛔ 2.1.17 — MESMO GRID DOS AMIGOS. Ordem do dono: _"o convite pendente deve
-      // acompanhar a largura do amigos. numa tela larga cabem 2, 3 ou até 4 colunas"_.
-      // Era `flex-direction:column` — UMA coluna, cada card esticado na largura inteira,
-      // enquanto "Meus amigos" logo acima já se dividia em 3. Duas listas de pessoas na
-      // mesma tela com larguras diferentes leem como telas diferentes.
-      // ⚠️ minmax MAIOR que o dos amigos (13rem × 9.7rem) porque este card é HORIZONTAL
-      // (avatar + nome + ação) e o do amigo é compacto: com 9.7rem o botão de ação
-      // espremeria o nome. auto-fill continua decidindo 2, 3 ou 4 colunas pela tela.
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:8px;">';
+      // as três listas de pessoa (amigos, convites recebidos, convites enviados) usam
+      // EXATAMENTE o mesmo grid — ver _GRID_PESSOAS no topo do arquivo.
+      '<div style="' + _GRID_PESSOAS + '">';
 
     dedupedGroups.forEach(function(group) {
       var u = group.profile;
@@ -1099,7 +1121,7 @@ function _renderMyFriends(myUid, friendIds) {
 
     var html = '<div style="margin-bottom: 1.5rem;">' +
       '<div style="font-weight: 600; font-size: 0.9rem; color: var(--success-color); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">' + (window._t || function(k){return k;})('explore.myFriends') + ' (' + profiles.length + ')</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(9.7rem,1fr));gap:8px;">';
+      '<div style="' + _GRID_PESSOAS + '">';
 
     profiles.forEach(function(u) {
       var uid = u._docId;
@@ -1846,10 +1868,16 @@ window._explorePersonCard = function (u, mySent, myReceived, myFriends) {
   var uid = u._docId || u.uid || u.email;
   var safeUid = String(uid || '').replace(/'/g, "\\'");
   myFriends = myFriends || window._exploreMeusAmigos();
-  // variant 'friend' = borda e fundo verdes, os MESMOS da seção "Meus amigos" — o dono
-  // pediu que o amigo apareça "verde já como amigo", e verde tem que querer dizer a mesma
-  // coisa nas duas telas.
-  var variant = (myFriends.indexOf(String(uid)) !== -1) ? 'friend' : 'other';
+  // ⛔ A COR DIZ O ESTADO, e ela é a MESMA das seções da tela de Pessoas:
+  //   verde  = já é amigo        (igual à seção "Meus amigos")
+  //   âmbar  = convite pendente  (igual à seção "Convites pendentes") — ordem do dono
+  //            (27/ago): _"convites pendentes em ambar"_
+  //   neutro = desconhecido
+  // Sem o ramo âmbar, quem tinha convite em aberto ficava com o card cinza dos
+  // desconhecidos e só o ✕ vermelho denunciava o estado — a cor contava outra história.
+  var _mySent = mySent || [], _myRecv = myReceived || [];
+  var variant = (myFriends.indexOf(String(uid)) !== -1) ? 'friend'
+    : ((_mySent.indexOf(uid) !== -1 || _myRecv.indexOf(uid) !== -1) ? 'pending' : 'other');
   return _userCardHtml(u, uid, window._explorePersonActionBtn(u, mySent, myReceived, myFriends), variant,
     "window._openUserProfile('" + safeUid + "')");
 };

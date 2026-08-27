@@ -113,7 +113,12 @@
     return '<div style="margin-top:14px;">' +
       '<div style="font-size:0.78rem;font-weight:800;color:var(--text-bright);text-transform:uppercase;letter-spacing:0.6px;">' + _esc(titulo) + ' (' + arr.length + ')</div>' +
       (subtitulo ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">' + _esc(subtitulo) + '</div>' : '') +
-      '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">' +
+      // ⛔ 2.1.18 — O MESMO GRID DAS OUTRAS LISTAS DE PESSOA. Ordem do dono: _"3 colunas de
+      // amigos, 3 colunas de convites. qualquer que seja o numero de colunas de amigos nas
+      // diferentes larguras"_ — e depois, olhando ESTA tela: _"a mesma coisa aqui"_.
+      // A constante mora em explore.js (window._gridPessoas): enquanto o valor viver em mais
+      // de um lugar ele volta a divergir, que foi exatamente o erro da 2.1.17.
+      '<div style="' + (window._gridPessoas || 'display:grid;grid-template-columns:repeat(auto-fill,minmax(9.7rem,1fr));gap:8px;') + 'margin-top:8px;">' +
         arr.map(function (u) { return window._explorePersonCard(u, mySent, myReceived); }).join('') +
       '</div></div>';
   }
