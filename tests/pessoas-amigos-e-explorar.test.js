@@ -283,6 +283,43 @@ function mkContainer(sb) {
   ok(!/color:var\(--text-muted\);font-size:0\.88rem;[^"]*opacity:0\.5[^"]*">✕<\/button>/.test(exp),
      '⛔ e o ✕ pálido não voltou');
 
+  // ── ⛔ AMIGO NÃO É CONVITE PENDENTE (2.1.19) ─────────────────────────────
+  // Ordem do dono: _"amigos nao podem estar como convites pendetes. aceitou, virou amigo,
+  // nao tem convite pendente. em nenhuma dessas telas."_
+  //
+  // ⚠️ NÃO ERA BUG DE TELA — ERA DADO SUJO, medido em 27/ago/2026: 12 usuários da base
+  // com alguém que JÁ É AMIGO ainda em friendRequestsSent/Received (11 pares). O dono
+  // tinha 11 amigos listados como convite enviado, que é exatamente o que ele viu.
+  // A origem é histórica: hoje os dois caminhos de aceite limpam os dois lados, e a regra
+  // do Firestore permite a escrita cruzada. Uma origem plausível é o merge de contas
+  // legadas (auth.js), que faz arrayUnion dos convites antigos sem filtrar amizades.
+  //
+  // ⭐ Por isso a rede é na EXIBIÇÃO e não só uma limpeza do banco: limpar conserta os 11
+  // pares de hoje; filtrar conserta também o que vier de qualquer caminho não previsto.
+  // A amizade é o estado FORTE — se as duas coisas se contradizem, quem manda é `friends`.
+  ok(/window\._exploreSemAmigos = /.test(exp),
+     'existe a rede: uma função que tira do convite quem já é amigo');
+  ok(/_renderPendingRequests\(myUid, window\._exploreSemAmigos\(myReceived\)\)/.test(exp),
+     '⛔ os convites RECEBIDOS passam pela rede');
+  ok(/_renderSentRequests\(myUid, window\._exploreSemAmigos\(mySent\)\)/.test(exp),
+     '⛔ os convites ENVIADOS passam pela rede');
+  ok(/_exploreSemAmigos/.test(nova),
+     'e a tela #todas-pessoas usa a MESMA rede (as duas telas com a mesma entrada)');
+
+  // a rede em si: comportamento, não só presença
+  const S3 = mkSandbox([]);
+  S3.window.AppStore.currentUser = { uid: 'EU', friends: ['a1', { uid: 'a2' }] };
+  vm.runInContext("window._exploreMeusAmigos = " + (function () {
+    var cu = (window.AppStore && window.AppStore.currentUser) || {};
+    var raw = Array.isArray(cu.friends) ? cu.friends : [];
+    return raw.map(function (f) { return (typeof f === 'string') ? f : (f && (f.uid || f.id) || ''); })
+              .filter(Boolean).map(String);
+  }).toString() + ";" + (/window\._exploreSemAmigos = function[\s\S]*?\n};/.exec(exp) || [''])[0],
+    S3, { filename: 'rede' });
+  const filtrado = S3.window._exploreSemAmigos(['a1', 'a2', 'x9']);
+  ok(filtrado.length === 1 && filtrado[0] === 'x9',
+     'a rede tira os amigos e mantém quem tem convite de verdade — inclusive amigo gravado como {uid}. Veio: ' + JSON.stringify(filtrado));
+
   console.log(pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })();

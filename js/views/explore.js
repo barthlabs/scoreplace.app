@@ -20,6 +20,32 @@ var _GRID_PESSOAS = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(
 // e o dono quer as quatro dividindo igual: "qualquer que seja o numero de colunas".
 window._gridPessoas = _GRID_PESSOAS;
 
+// ⛔ 2.1.19 — AMIGO NÃO É CONVITE PENDENTE. Ordem do dono: _"amigos nao podem estar como
+// convites pendetes. aceitou, virou amigo, nao tem convite pendente. em nenhuma dessas
+// telas."_
+//
+// ⚠️ NÃO É BUG DE TELA — É DADO SUJO, e foi MEDIDO (27/ago/2026): 12 usuários da base têm
+// alguém que JÁ É AMIGO ainda listado em friendRequestsSent/Received — 11 pares. O próprio
+// dono tinha 11 amigos na lista de convites enviados, que é exatamente o que ele viu.
+//
+// A origem é HISTÓRICA: hoje os dois caminhos de aceite limpam os dois lados
+// (acceptFriendRequest remove de received do aceitante E de sent do remetente, e o
+// auto-aceite mútuo chama a mesma função), e a regra do Firestore permite a escrita
+// cruzada nos três arrays (isFriendArrayDiff). Ou seja: o fluxo de hoje não produz isto —
+// o que está lá veio de antes.
+//
+// ⭐ POR QUE A REDE É NA EXIBIÇÃO, e não só uma limpeza do banco: limpar o dado conserta
+// os 11 pares de hoje; filtrar aqui conserta também os que vierem de qualquer caminho que
+// eu não previ — corrida entre dois aparelhos, merge de contas, um fluxo futuro. A
+// amizade é o estado FORTE: se as duas coisas se contradizem, quem manda é `friends`.
+// (A limpeza do banco é escrita em dados reais e fica pro dono decidir — ver o relatório.)
+window._exploreSemAmigos = function (ids) {
+  var amigos = window._exploreMeusAmigos();
+  return (Array.isArray(ids) ? ids : []).filter(function (id) {
+    return amigos.indexOf(String(id)) === -1;
+  });
+};
+
 function renderExplore(container) {
   var _t = window._t || function(k) { return k; };
   // Invalida o cache de convidáveis a cada entrada na página — pega novos
@@ -107,9 +133,10 @@ function renderExplore(container) {
     '</div>';
 
   // Amigos primeiro (é a lista da pessoa), convites depois.
+  // ⛔ os convites passam pela rede: quem já é amigo NUNCA aparece como pendente.
   _renderMyFriends(myUid, myFriends);
-  _renderPendingRequests(myUid, myReceived);
-  _renderSentRequests(myUid, mySent);
+  _renderPendingRequests(myUid, window._exploreSemAmigos(myReceived));
+  _renderSentRequests(myUid, window._exploreSemAmigos(mySent));
 
   // v3.0.x: sincroniza estado inicial de sort/busca p/ a detecção de mudança em
   // _exploreApplyFilter (evita refetch/re-render redundante a cada keystroke). A

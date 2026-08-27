@@ -125,8 +125,13 @@
 
   function _corpo() {
     var cu = (window.AppStore && window.AppStore.currentUser) || {};
-    var mySent = cu.friendRequestsSent || [];
-    var myReceived = cu.friendRequestsReceived || [];
+    // ⛔ 2.1.19 — a MESMA rede da tela de Pessoas: quem já é amigo não é convite pendente.
+    // Aqui o card já daria verde (o ramo isFriend vem primeiro), mas passar pela rede
+    // deixa as duas telas com a MESMA entrada — e evita que uma mudança futura na ordem
+    // dos ramos ressuscite o âmbar em cima de um amigo.
+    var _rede = window._exploreSemAmigos || function (x) { return x || []; };
+    var mySent = _rede(cu.friendRequestsSent || []);
+    var myReceived = _rede(cu.friendRequestsReceived || []);
     var meus = _meusLocais();
     var temMeus = Object.keys(meus).length > 0;
     var vis = _visiveis();
