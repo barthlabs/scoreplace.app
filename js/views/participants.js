@@ -310,9 +310,58 @@ window._presenceBusyUntil = function (key, done) {
   if (done && typeof done.then === 'function') done.then(clear, clear); else clear();
 };
 
+/* ── DE ONDE SAI O UID DA PRESENÇA ────────────────────────────────────────────────
+ * ⛔ MEDIDO NO CONFRA (27/ago/2026, torneio AO VIVO): das 9 presenças VIVAS (<24h), OITO
+ * estavam gravadas com o NOME como chave. Não era legado — era o caminho de hoje.
+ * O dono confirmou que **não existe inscrito digitado na Confra**, ou seja: toda chave-nome
+ * ali é defeito. A única legítima é o coringa "Jogador X", que não tem uid por natureza.
+ *
+ * COMO ACONTECE: os chamadores passam `(pObj && pObj.uid) || ''`. Num torneio DIVIDIDO o
+ * elenco mora na subcoleção; com ele não hidratado, `pObj.uid` vem VAZIO e a porta caía
+ * direto no nome. O `_memberUidByName` também não salva — ele lê `t.participants`, que é
+ * justamente o que não está lá. [[feedback_cache_quente_satisfaz_metade_da_pergunta]]
+ *
+ * ⭐ A SEGUNDA FONTE QUE SEMPRE ESTÁ CARREGADA SÃO OS JOGOS. Os slots trazem
+ * `team1Uids`/`team2Uids` alinhados aos nomes — se a pessoa aparece em qualquer jogo na
+ * tela, o uid dela está ali. É a mesma ideia do `_matchN2u` em `_computeMonarchStandings`.
+ *
+ * Ordem: uid do chamador → elenco → jogos → (só então) nome.
+ * ⚠️ O nome continua sendo saída LEGÍTIMA — é o caso do fictício/coringa sem conta
+ * ([[feedback_uid_controls_everything_name_only_ficticio]]). O que não pode é chegar nele
+ * por DESISTÊNCIA, que era o que acontecia. */
+window._uidParaPresenca = function (t, playerName, uid) {
+  if (uid) return String(uid);
+  if (!t || !playerName) return '';
+  try {
+    if (typeof window._memberUidByName === 'function') {
+      var pelo = window._memberUidByName(t, playerName);
+      if (pelo) return String(pelo);
+    }
+  } catch (e) {}
+  try {
+    var ms = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : (t.matches || []);
+    var alvo = String(playerName).trim().toLowerCase();
+    for (var i = 0; i < (ms || []).length; i++) {
+      var m = ms[i]; if (!m) continue;
+      var lados = [[m.team1, m.team1Uids], [m.team2, m.team2Uids]];
+      for (var l = 0; l < lados.length; l++) {
+        var nomes = lados[l][0], uids = lados[l][1];
+        if (!Array.isArray(nomes) || !Array.isArray(uids)) continue;
+        for (var k = 0; k < nomes.length; k++) {
+          if (uids[k] && String(nomes[k]).trim().toLowerCase() === alvo) return String(uids[k]);
+        }
+      }
+    }
+  } catch (e) {}
+  return '';
+};
+
 window._toggleCheckIn = function (tId, playerName, uid) {
   const t = window._findTournamentById(tId);
   if (!t) return;
+  // ⛔ RESOLVE ANTES DE DECIDIR — ver a nota acima. Sem isto, elenco não hidratado grava
+  // a presença numa chave-nome que morre no primeiro rename.
+  uid = (typeof window._uidParaPresenca === 'function') ? window._uidParaPresenca(t, playerName, uid) : uid;
   const user = window.AppStore && window.AppStore.currentUser;
   // uid only (dono, 18-jul): quando o render passa o uid, a presença é gravada/lida pela
   // chave-UID — homônimos não colidem mais. Sem uid (guest sem conta), cai no nome (exceção

@@ -153,6 +153,7 @@ const SUITES = [
   'tests/confirmar-so-com-placar-escrito.test.js',
   'tests/busca-abre-o-mostrar-mais.test.js',
   'tests/queda-do-placar-nao-e-silenciosa.test.js',
+  'tests/presenca-nao-cai-na-chave-nome.test.js',
   'tests/ouvinte-das-partes-divididas.test.js',
   'tests/grupo-e-documento.test.js',
   'tests/sw-cache-name-acompanha-a-versao.test.js',
