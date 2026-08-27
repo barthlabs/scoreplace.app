@@ -225,13 +225,16 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       '</div>';
     }
 
-    // PRÓXIMOS DIAS
+    // ── PRÓXIMOS DIAS — DOBRÁVEL (2.1.25) ────────────────────────────────────
+    // Ordem do dono: _"na previsao do tempo expande clicando em proximos dias (que deve
+    // indicar como um mostrar mais/menos na linha dos proximos dias)"_.
+    // A previsão inteira ocupava meia tela em cada card de torneio; o que ele quer ver
+    // sempre é o AGORA e o HOJE. Os próximos dias ficam a um toque, e a escolha é lembrada.
+    // ⛔ Nasce FECHADA — o pedido é justamente "ficar com apenas o que temos nas imagens".
     if (r.dias && r.dias.length) {
-      h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
-        '<div style="font-size:0.62rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;' +
-        'letter-spacing:0.06em;margin-bottom:5px;">próximos dias</div>';
+      var _corpoDias = '';
       r.dias.forEach(function (d) {
-        h += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">' +
+        _corpoDias += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">' +
           '<span style="font-size:0.72rem;font-weight:700;color:var(--sp-c-cbd5e1,#cbd5e1);text-transform:capitalize;min-width:42px;">' + _sf(d.nome) + '</span>' +
           _img(d.icon, 26) +
           '<span style="font-size:0.75rem;font-weight:600;color:var(--text-bright);">' +
@@ -241,7 +244,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           _pillChuva(d.chuva) +
         '</div>';
       });
-      h += '</div>';
+      h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+        window._spDobra('previsao-proximos-dias',
+          '<span style="font-size:0.62rem;font-weight:700;color:var(--sp-c-94a3b8,#94a3b8);text-transform:uppercase;' +
+            'letter-spacing:0.06em;">próximos dias</span>',
+          '<div style="margin-top:5px;">' + _corpoDias + '</div>',
+          false) +
+      '</div>';
     }
 
     h += '</div>';

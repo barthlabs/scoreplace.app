@@ -36,6 +36,12 @@ function ok(c, m) { if (c) pass++; else { fail++; fails.push(m); } }
 // Carrega o módulo REAL (IIFE que só precisa de `window`).
 const SRC = fs.readFileSync(path.join(ROOT, 'js', 'views', 'weather.js'), 'utf8');
 const W = { _safeHtml: (s) => String(s == null ? '' : s) };
+// ⚠️ dobra-core ANTES do weather: a seção "próximos dias" virou dobrável (2.1.25) e chama
+// window._spDobra. Sem este load a suíte morre com "_spDobra is not a function" — foi o que
+// aconteceu no dia em que o helper nasceu. Mesma ordem do index.html.
+new Function('window', 'localStorage', 'document',
+  fs.readFileSync(path.join(ROOT, 'js', 'views', 'dobra-core.js'), 'utf8'))(
+  W, { getItem: () => null, setItem: () => {} }, { querySelectorAll: () => [] });
 new Function('window', 'document', 'sessionStorage', 'fetch', SRC)(
   W, { querySelectorAll: () => [], body: { contains: () => false } },
   { getItem: () => null, setItem: () => {} }, () => Promise.resolve({ json: () => ({}) })

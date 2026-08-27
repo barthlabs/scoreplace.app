@@ -1537,13 +1537,23 @@ window._buildProgressInner = function(t) {
       '</div>';
     }
 
+    // ── TORNEIO COMPLETO — DOBRÁVEL (2.1.25) ─────────────────────────────────
+    // Ordem do dono: _"no andamento na linha do torneio completo (mostrar mais/menos)"_.
+    // O que ele quer ver sempre é a RODADA (jogos, prazo, barra laranja). A travessia do
+    // torneio inteiro — barra roxa, duração e a janela programada — é contexto: útil, mas
+    // não a cada olhada. Fica a um toque, e a escolha é lembrada.
+    // ⛔ O CABEÇALHO CONTINUA VISÍVEL FECHADO: "🏆 Torneio completo · 84/105 jogos (80%)"
+    // é a informação em si, não um rótulo — esconder o número junto tornaria o toque
+    // obrigatório pra saber o essencial. Dobra só o que está ABAIXO dele.
     _ligaBarHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">' +
+      window._spDobra('progresso-torneio-completo',
         '<span style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--sp-c-a78bfa,#a78bfa);">🏆 Torneio completo</span>' +
-        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>' +
-      '</div>' +
-      window._progBarPct(_barPct, 'linear-gradient(90deg,#8b5cf6,#a78bfa)', 18, '7px', 'rgba(255,255,255,0.08)', '#a78bfa') +
-      _durRow + (_schedRow || _limiteLine) +
+        '<span style="font-size:0.82rem;font-weight:800;color:var(--text-bright);margin-left:auto;">' + _barDone + '/' + _barTotal + ' jogos (' + _barPct + '%)' + _barSuffix + '</span>',
+        '<div style="margin-top:6px;">' +
+          window._progBarPct(_barPct, 'linear-gradient(90deg,#8b5cf6,#a78bfa)', 18, '7px', 'rgba(255,255,255,0.08)', '#a78bfa') +
+          _durRow + (_schedRow || _limiteLine) +
+        '</div>',
+        false, 'flex-wrap:wrap;') +
     '</div>';
   }
 
@@ -2662,10 +2672,13 @@ window._buildTournamentConfigBox = function (t, opts) {
     // v4.x: sobre foto → tarja densa (_photoReadBox) + backdrop blur pra suavizar o fundo
     // agitado e garantir contraste do texto.
     var bgStyle = opts.bg ? ('background:' + window._spCor(opts.bg, 'background') + ';color:' + (_rbC ? _rbC.fg : '#f1f5f9') + ' !important;border:1px solid ' + window._spCor((_rbC ? _rbC.border : 'rgba(255,255,255,0.12)'), 'borda') + ';') : '';
-    // v4.4.x: SEMPRE colapsado por padrão — no DETALHE e na DASHBOARD (pedido do dono:
-    // "sempre fechado no detalhe e na dashboard"). Abre só quando o usuário clica (estado
-    // do <details> na sessão); sem persistência de "aberto" — todo render começa fechado.
-    var openAttr = '';
+    // ⛔ 2.1.26 — AGORA LEMBRA. Este comentário dizia "SEMPRE colapsado por padrão... sem
+    // persistência de 'aberto' — todo render começa fechado" (v4.4.x, pedido do dono na
+    // época). Ele MUDOU de ideia depois de ver as seções dobráveis da 2.1.25 funcionando:
+    // _"vamos adotar o mostrar mais/menos nas configuracoes do torneio. padronizar isso que
+    // ficou legal"_. O padrão continua FECHADO — o que muda é que a escolha de quem abriu
+    // sobrevive ao próximo render, como nas outras duas seções.
+    var openAttr = (typeof window._spDobraAberta === 'function' && window._spDobraAberta('config-torneio', false)) ? ' open' : '';
     // v4.x: TÍTULO = formatos das FASES juntos (ex.: "Pontos Corridos / Eliminatórias") —
     // multi-fase mostra as duas. O tipo de jogo (Duplas 2×2) desce pro digest, sem tanto peso.
     var _titleFmt = fmt;
@@ -2708,6 +2721,7 @@ window._buildTournamentConfigBox = function (t, opts) {
     // label "configuração ▾" do fim é cortada. O <span> do meio elipsa o texto
     // longo; o do fim nunca encolhe (flex-shrink:0 + nowrap) — fica sempre legível.
     return '<details class="info-box tourn-config-box"' + openAttr +
+        ' ontoggle="window._spDobraDetails(this, \'config-torneio\')"' +
         ' style="font-size:0.75rem;padding:6px 10px;line-height:1.55;border-radius:8px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;' + bgStyle + '">' +
         '<summary onclick="event.stopPropagation();" style="cursor:pointer;font-weight:700;list-style:none;display:flex;flex-direction:column;gap:3px;min-width:0;max-width:100%;">' +
         // v1.7.83: a ordem era ⚙️ + NOME DO FORMATO + "configuração ▾" na MESMA
@@ -2721,7 +2735,14 @@ window._buildTournamentConfigBox = function (t, opts) {
         // o formato INTEIRO, quebrando em quantas linhas precisar. Zero corte.
         '<span style="display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;">' +
         '<span style="flex-shrink:0;">⚙️</span>' +
-        '<span style="opacity:0.7;font-weight:500;font-size:0.68rem;white-space:nowrap;">configuração ▾</span>' +
+        '<span style="opacity:0.7;font-weight:500;font-size:0.68rem;white-space:nowrap;">configuração</span>' +
+        // ⛔ 2.1.26: a MESMA pílula das outras seções dobráveis, no lugar do "▾" solto.
+        // Padronizar aqui é o pedido do dono — e a pílula já é canônica (_spVerMaisTag),
+        // então recriá-la seria repetir o erro que ele mesmo apontou ("o ver menos ficou
+        // com uma aparência diferente").
+        ((typeof window._spVerMaisTag === 'function')
+          ? window._spVerMaisTag('', !openAttr, { attrs: ' data-dobra-pill="1"' })
+          : '') +
         '</span>' +
         '<span style="min-width:0;max-width:100%;overflow-wrap:anywhere;line-height:1.35;padding-left:22px;">' + summary + '</span>' +
         (digestLine ? '<span style="font-weight:500;font-size:0.68rem;opacity:0.85;line-height:1.4;padding-left:22px;">' + digestLine + '</span>' : '') +

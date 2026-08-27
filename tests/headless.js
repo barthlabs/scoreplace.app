@@ -147,6 +147,10 @@ load('wo-log.js');               // REGISTRO de W.O. (t.woLog) — o histórico 
 load('standings-core.js');       // _standingsCompare — cadeia de desempate padrão
 load('gender-ratio-core.js');    // proporção de gênero do sorteio equilibrado (50/50, 25/75, 75/25)
 load('sport-rules.js');             // window.SPORT_RULES — fonte única das regras das modalidades
+// ⚠️ ANTES do tournaments-utils: o bloco "Torneio completo" do progresso virou dobrável
+// (2.1.25) e chama window._spDobra. Sem este load, duas suítes morriam com "_spDobra is not
+// a function". Mesma ordem do index.html — o harness espelha a produção, não a contorna.
+load('dobra-core.js');              // _spDobra/_spDobraToggle — seção dobrável com memória
 load('tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 load('tournaments-categories.js');  // _displayCategoryName, _getParticipantCategories, _participantInCategory
 load('bracket-model.js');           // _appendCanonicalColumn
