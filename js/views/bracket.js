@@ -471,6 +471,14 @@ window._demaisJogosFechar = function (el) {
 
 window._demaisJogosAoAbrir = function (el) {
   if (!el || !el.open) return;
+  // ⛔ 2.1.21 — ESTA É A CAUSA RAIZ DO "a tela pula ao lançar resultado".
+  // O `ontoggle` do <details> não distingue quem abriu: o dedo do usuário ou o código.
+  // E `_rerenderBracket` RESTAURA o estado dos <details> depois de cada placar
+  // (`_newDetails[i].open = _detailsState[i]`) — o que dispara este ontoggle e rola a tela
+  // pro "Demais jogos da rodada". A cada confirmação. É o "inferniza tudo" do dono.
+  // A trava distingue exatamente isso: durante um re-render, abrir um <details> é
+  // RESTAURAÇÃO, não intenção — e restauração não rola nada.
+  if (window._travaRolagemDaChave) return;
   var alvo = el.querySelector('summary');
   if (!alvo) return;
   var rola = function () {
@@ -610,6 +618,7 @@ function _applyMyMatchesFilter() {
     clearTimeout(window._pendingSoftRefresh);
     var _goMine = function (behavior) {
       try {
+        if (window._travaRolagemDaChave) return;   // 2.1.21: lançando placar não se rola
         // Re-mede o chrome AGORA. `--scroll-anchor` (topbar + dropdown do hamburger +
         // back-header + barra STICKY de busca + 12px) é o que o `scroll-margin-top` dos
         // cards e dos boxes de grupo consome. Medir no instante do scroll cobre o caso
@@ -637,6 +646,17 @@ function _applyMyMatchesFilter() {
     var _reafirmar = function () {
       var _ultimo = null, _estaveis = 0, _voltas = 0;
       var _tick = function () {
+        // ⛔ 2.1.21 — LANÇOU PLACAR? O LAÇO PARA NA HORA. Ordem do dono: _"quando estamos
+        // lancando resultados a tela nao pode scrollar de forma alguma. inferniza tudo. tem
+        // que ficar onde esta sempre ao lancar resultado."_
+        // A CAUSA: este laço corrige a posição de entrada por até ~3s (30 voltas × 100ms).
+        // Quem entra na chave e já começa a lançar placar cai DENTRO dessa janela — e aí
+        // dois mecanismos disputam o mesmo scroll: o `_rerenderBracket`, que restaura a
+        // posição ancorada no card, e este, que insiste em levar o alvo DE ENTRADA pro
+        // topo. O resultado é a tela pulando a cada confirmação.
+        // ⚠️ Não dá pra "ajustar o tempo": não existe instante certo — a rolagem de entrada
+        // e o lançamento são intenções DIFERENTES, e a do dedo ganha sempre.
+        if (window._travaRolagemDaChave) return;
         _voltas++;
         var _el = _alvoDeEntrada();   // MESMO alvo do _goMine — senão um desfaz o outro
         if (!_el) return;

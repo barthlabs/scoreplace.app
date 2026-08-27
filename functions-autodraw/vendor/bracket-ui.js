@@ -739,6 +739,16 @@ function _rerenderBracket(tId, anchorMatchId) {
     return;
   }
 
+  // ⛔ 2.1.21 — A PARTIR DAQUI NINGUÉM MAIS ROLA A TELA SOZINHO. Ordem do dono: _"quando
+  // estamos lancando resultados a tela nao pode scrollar de forma alguma. inferniza tudo.
+  // tem que ficar onde esta sempre ao lancar resultado."_
+  // Este re-render já preservava scroll, hscroll, inputs e <details> — mas havia um SEGUNDO
+  // mecanismo mexendo no mesmo scroll: o laço `_reafirmar` da entrada na chave (bracket.js),
+  // que corrige a posição do alvo DE ENTRADA por até ~3s. Quem entra e já começa a lançar
+  // cai dentro dessa janela, e os dois brigam — a tela pula a cada confirmação.
+  // A trava sai só depois que a última passada de restauração terminou (ver `_restore`).
+  window._travaRolagemDaChave = true;
+
   // 1. Find anchor element — prefer the specific match card, fallback to any visible card
   var anchorEl = null;
   var anchorOffsetY = 0;
@@ -934,6 +944,11 @@ function _rerenderBracket(tId, anchorMatchId) {
     requestAnimationFrame(function() {
       _restore();
       if (container) container.style.minHeight = '';
+      // ⛔ a trava só sai DEPOIS da última restauração — soltar antes devolveria a janela
+      // em que o laço de entrada rola por cima do que acabamos de restaurar.
+      // O respiro de 400ms cobre o layout que ainda assenta (avatares, classificação
+      // recalculada); é curto o bastante pra não atrapalhar uma navegação de verdade.
+      setTimeout(function() { window._travaRolagemDaChave = false; }, 400);
       setTimeout(function() { window._suppressSoftRefresh = false; }, 3000);
     });
   });
