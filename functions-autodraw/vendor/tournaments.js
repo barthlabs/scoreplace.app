@@ -4282,19 +4282,22 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
 
-    ${/* ⛔ A LISTA DE INSCRITOS NÃO MORA NO DETALHE (2.1.35). Ordem do dono, textual:
-         _"tem que clicar em inscritos (botao) para abrir essa merda de inscritos"_ ·
-         _"os inscritos só quando clica no botão"_ · _"só essa merda de torneio novo é que
-         está abrindo errado"_.
-         ⭐ E ele estava certo de que "sempre foi assim" — MEDIDO: esta linha só emitia a
-         seção quando `hasDrawn` era FALSO, e nenhum torneio caía aí. O Confra tem sorteio
-         (some pelo `hasDrawn`); os outros 40 têm ZERO inscritos (a seção nem é construída,
-         `parts.length > 0` acima). O torneio novo — 8 inscritos E sem sorteio — foi o
-         PRIMEIRO em muito tempo a bater neste ramo, e aí a lista inteira entrou antes das
-         FERRAMENTAS DO ORGANIZADOR, escondendo o botão de sortear.
-         ⇒ O detalhe passa a ser SEMPRE o mesmo: informação → ferramentas → chave. A lista
-         (com filtros, busca e presença) vive em `#participants/:id`, onde o botão
-         "👥 Inscritos" já leva — e é lá que a chamada acontece. */ ''}
+    ${/* ⚠️ REVERTIDA a remoção da 2.1.35 — ela foi um DIAGNÓSTICO ERRADO meu (2.1.38).
+         Ordem do dono agora: "tem 8 inscritos mas não aparece na tela de detalhe onde
+         deveriam aparecer".
+
+         O QUE ACONTECEU: ele reclamou de abrir o torneio e não alcançar o botão de
+         sortear. Eu li a linha `hasDrawn ? '' : participantsHtml`, vi que o torneio novo
+         era o único a cair nesse ramo, e ARRANQUEI a seção. Só que as FERRAMENTAS DO
+         ORGANIZADOR já vêm ANTES desta linha no HTML (~3410 contra ~4172) — a seção nunca
+         foi o que escondia o botão.
+         ⭐ A causa real era outra e já estava corrigida na 2.1.34: o filtro de GÊNERO
+         escondia os 8 placeholders (`data-part-gender="none"`), deixando um vazio enorme
+         no lugar deles. Com o vazio, a página parecia terminar ali.
+         ⛔ A LIÇÃO: eu removi a seção no MESMO ciclo em que consertei a causa, sem esperar
+         pra ver se o conserto bastava. Duas mudanças pro mesmo sintoma — e a segunda virou
+         o defeito seguinte. [[feedback_uma_mudanca_por_vez_apos_estado_aprovado]] */ ''}
+    ${hasDrawn ? '' : participantsHtml}
 
     ${hasDrawn ? `
       <div class="mt-5">
