@@ -7486,7 +7486,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
                 typeLabel + (_statsSlotSport ? (' · ' + window._safeHtml(_statsSlotSport)) : '') + ' — Últimas Partidas' +
               '</div>' +
               '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' + cardsHtml + '</div>' +
-              '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra ver as estatísticas</div>';
+              '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra reproduzir a partida</div>';
           }).catch(function(e) { window._warn('[LiveStats] last matches err:', e); });
         };
         // Fallback para re-render quando write já confirmou anteriormente
@@ -13416,6 +13416,11 @@ window._openCasualMatch = function(restoreOpts) {
       var p1Style = isDecided ? (t1Win ? wRow : lRow) : oRow;
       var p2Style = isDecided ? (t2Win ? wRow : lRow) : oRow;
 
+      // ⭐ UM onclick, DUAS listas: este builder alimenta tanto o slot da tela de
+      // montagem casual quanto o da caixa de estatísticas por modalidade. Por isso
+      // "tocar o card reproduz a partida" (28/ago/2026) nasceu valendo nos dois
+      // lugares sem ninguém precisar lembrar do segundo — a regra mora no handler
+      // (`_casualOpenPastMatch`), não na lista. [[feedback_unify_dual_entry_points]]
       cardsHtml +=
         '<button onclick="window._casualOpenPastMatch(\'' + safeRoomCode + '\')" ' +
           'style="display:block;text-align:left;border-radius:12px;padding:9px 9px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1px solid var(--sp-b-255-255-255-01,rgba(255,255,255,0.10));color:var(--text-bright);cursor:pointer;transition:all 0.15s;font-family:inherit;min-width:0;width:100%;" ' +
@@ -13478,7 +13483,7 @@ window._openCasualMatch = function(restoreOpts) {
       slot.innerHTML =
         '<div style="font-size:0.6rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;text-align:left;">📊 Últimas Partidas</div>' +
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' + cardsHtml + '</div>' +
-        '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra ver as estatísticas</div>';
+        '<div style="text-align:center;font-size:0.54rem;color:var(--text-muted);opacity:0.7;font-style:italic;margin-top:5px;">Toque pra reproduzir a partida</div>';
     } catch (e) {
       window._warn('[Casual] _casualLoadLastMatches err:', e);
       slot.innerHTML = '';
@@ -13503,6 +13508,18 @@ window._openCasualMatch = function(restoreOpts) {
       try { window.location.hash = '#casual/' + roomCode; } catch(e) {}
       return;
     }
+    /* ⭐ ORDEM DO DONO (28/ago/2026): tocar o card REPRODUZ a partida. Antes ele abria
+     * direto na tela de estatísticas do fim — o placar final sem o caminho até ele.
+     * A reprodução termina exatamente NESSA MESMA tela de estatísticas (é o motor real
+     * chegando ao fim), então o que existia antes não se perde: vira o destino em vez
+     * de ser o começo.
+     * ⚠️ E o fallback NÃO é decoração: medido em produção, 2 das 15 partidas casuais
+     * não têm `liveState.pointLog` (partidas anteriores ao diário). Para essas não há
+     * o que reproduzir, e abrir uma reprodução vazia seria pior que a tela de stats —
+     * então elas seguem exatamente como eram. Por isso `_openCasualMatchReplay`
+     * devolve um booleano em vez de lançar. */
+    if (typeof window._openCasualMatchReplay === 'function' &&
+        window._openCasualMatchReplay(match)) return;
     var players = Array.isArray(match.players) ? match.players : [];
     var sportName = match.sport || (typeof _t === 'function' ? _t('casual.title') : 'Partida Casual');
     var p1Names = players.filter(function(p) { return p.team === 1; }).map(function(p) { return p.name; });

@@ -111,6 +111,93 @@
     });
   };
 
+  /* ── CASUAL: o replay sai do PRÓPRIO doc da partida ────────────────────────────
+   * Os cards de "Últimas Partidas" (bracket-ui `_casualLoadLastMatches`) trazem o doc
+   * de `casualMatches` inteiro, e é dele que a reprodução nasce — não do `matchHistory`.
+   * A razão é MEDIDA (28/ago/2026, base real): das 15 partidas casuais em produção,
+   * **13 têm `liveState.pointLog`** e **ZERO tem o campo `replay`** no topo. O `replay`
+   * compacto só é gravado no `matchHistory` (que é do jogador e obedece ao
+   * `statsVisibility`), enquanto o doc casual — legível por qualquer um — guarda o
+   * diário CRU dentro do `liveState`. Ler daqui é o que faz a reprodução valer também
+   * pra quem só assistiu.
+   *
+   * ⚠️ OS DOIS DIÁRIOS TÊM FORMATOS DIFERENTES, e é só por isso que esta função existe:
+   *     cru (liveState.pointLog) : team, serverTeam, p1Before, p2Before, isTiebreak, t
+   *     compacto (replay.points) : w,    sv,         a,        b,        tb,         t
+   * O motor só sabe ler o compacto. Traduzir AQUI — em vez de afrouxar o motor pra
+   * aceitar dois formatos — mantém um formato só do lado de quem reproduz.
+   *
+   * ⭐ `g1`/`g2`/`si` são a TESTEMUNHA que `_replayConfere` usa pra saber se o motor
+   * está onde o registro diz que a partida estava, e só existem nos diários novos:
+   * medido, 274 dos 670 pontos em produção os têm. Saem como `null` e não como 0 —
+   * `0` afirmaria "estava 0-0", `null` diz "não sei", e o motor trata os dois
+   * diferente (com `null` a conferência devolve true e o replay roda sem a rede).
+   *
+   * ⛔ `truncated: false` é AFIRMAÇÃO, não preguiça: o corte de 600 pontos existe só
+   * dentro de `_buildReplayPayload` (que monta o registro do matchHistory). O
+   * `liveState` do doc casual é gravado inteiro — conferido, nenhum `slice` no caminho
+   * de escrita.
+   *
+   * Devolve `null` quando não há diário; quem chama decide o que fazer com isso.
+   */
+  window._replayRecordFromCasualDoc = function (m) {
+    if (!m) return null;
+    var ls = m.liveState || {};
+    var pts = Array.isArray(ls.pointLog) ? ls.pointLog : [];
+    if (!pts.length) return null;
+    var sc = m.scoring || {};
+    // A ordem de saque como ela FICOU. Partida jogada sem marcar sacador reproduz sem
+    // sacador — `serveSkipped` é estado válido, não ausência de dado.
+    var so = (ls.serveSkipped || !Array.isArray(ls.serveOrder) || !ls.serveOrder.length)
+      ? null
+      : ls.serveOrder.map(function (s) { return { t: s.team, n: s.name || null }; });
+    return {
+      matchId: m._docId || m.roomCode || null,
+      matchType: 'casual',
+      sport: m.sport || '',
+      tournamentName: null,
+      players: Array.isArray(m.players) ? m.players : [],
+      sets: Array.isArray(ls.sets) ? ls.sets : [],
+      replay: {
+        v: 2,
+        truncated: false,
+        totalPoints: pts.length,
+        useSets: sc.type === 'sets',
+        isFixedSet: !!sc.fixedSet,
+        countingType: sc.countingType || null,
+        // A regra vai CRUA do doc, `tieRule:'ask'` incluído. Resolver aqui seria
+        // decidir por quem jogou: no 5-5 quem responde é o próprio diário, pelo `tb`
+        // do ponto seguinte (`_replayAnswerTie`, bracket-ui.js).
+        scoring: sc,
+        so: so,
+        serveSkipped: !!ls.serveSkipped,
+        points: pts.map(function (p) {
+          return {
+            w: p.team === 2 ? 2 : 1,
+            a: p.p1Before != null ? p.p1Before : 0,
+            b: p.p2Before != null ? p.p2Before : 0,
+            g1: p.g1 != null ? p.g1 : null,
+            g2: p.g2 != null ? p.g2 : null,
+            si: p.si != null ? p.si : 0,
+            tb: p.isTiebreak ? 1 : 0,
+            sv: p.serverTeam || null,
+            t: p.t || null
+          };
+        })
+      }
+    };
+  };
+
+  // Abre a reprodução de uma partida casual a partir do doc. Devolve `false` quando
+  // não há diário — quem chama cai no caminho antigo (a tela de estatísticas), que
+  // segue valendo pras 2 partidas em produção sem `pointLog`.
+  window._openCasualMatchReplay = function (m) {
+    var rec = window._replayRecordFromCasualDoc(m);
+    if (!rec) return false;
+    _abrir(rec);
+    return true;
+  };
+
   // Abre o replay a partir de um registro guardado por id (os cards do histórico
   // guardam só o id pra não carregar o payload inteiro em cada card).
   var _reg = {};

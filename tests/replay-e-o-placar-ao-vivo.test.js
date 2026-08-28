@@ -226,6 +226,108 @@ function sequencia() {
   ok(/saque aproximado/.test(velho.rotulo),
      'e DECLARA que o saque é aproximado (v:1 não gravou a ordem) em vez de fingir precisão');
 
+  // ── 8. O CARD DE "ÚLTIMAS PARTIDAS" DISPARA A REPRODUÇÃO ────────────────────
+  // Ordem do dono (28/ago/2026): _"nas partidas casuais, nas últimas partidas, clicar
+  // em uma delas deve disparar o replay da partida"_. Antes o card abria direto na
+  // tela de estatísticas — o placar final sem o caminho até ele.
+  //
+  // ⚠️ O QUE ESTE BLOCO REALMENTE COBRA, e por que não é redundante com o item 4: o
+  // card casual NÃO tem o `replay` compacto. Medido em produção (28/ago): das 15
+  // partidas casuais, 13 têm `liveState.pointLog` (o diário CRU) e ZERO tem o campo
+  // `replay`. Ou seja, este caminho passa por uma TRADUÇÃO que o item 4 não exercita.
+  // O formato cru abaixo é transcrição do que está no banco, não invenção:
+  //     team, server, serverTeam, p1Before, p2Before, isTiebreak, t  (+ g1,g2,si nos novos)
+  //
+  // ⭐ A asserção que impede a tradução de estar errada e passar: a reprodução tem que
+  // chegar ao MESMO placar da partida que foi de fato jogada no item 3. Um mapeamento
+  // trocado (w↔sv, a↔b) produz outro placar — o motor é quem confere, não o teste.
+  console.log('\n8. Tocar o card de "Últimas Partidas" reproduz a partida');
+  const casual = await page.evaluate((registro) => {
+    // Monta o doc de `casualMatches` como ele existe no banco, a partir do diário da
+    // partida jogada acima — reconstruindo o formato CRU do `liveState.pointLog`.
+    const cru = registro.replay.points.map((p) => ({
+      team: p.w, server: null, serverTeam: p.sv,
+      p1Before: p.a, p2Before: p.b, isTiebreak: !!p.tb,
+      g1: p.g1, g2: p.g2, si: p.si, t: p.t
+    }));
+    const doc = {
+      _docId: 'doc1', roomCode: 'ABC123', status: 'finished',
+      sport: 'Beach Tennis', isDoubles: true,
+      players: registro.players,
+      scoring: registro.replay.scoring,
+      result: { winner: registro.winnerTeam },
+      liveState: {
+        pointLog: cru,
+        sets: registro.sets,
+        serveOrder: registro.replay.so.map((s) => ({ team: s.t, name: s.n })),
+        serveSkipped: false
+      }
+    };
+    window._casualPastMatchesCache = { ABC123: doc };
+    const antesHist = JSON.parse(localStorage.getItem('scoreplace_casual_history_v2') || '[]').length;
+    // ⚠️ Chama `_openCasualMatchReplay` e NÃO `_casualOpenPastMatch`, e a razão é
+    // estrutural: o handler do card é definido DENTRO de `window._openCasualMatch`,
+    // então só passa a existir depois que a tela casual abre — fora dali ele é
+    // `undefined` ([[feedback_funcao_dentro_de_outra_nao_existe]]). O que ele faz com
+    // o doc é o que está sendo medido aqui; QUE ele chame isto está travado logo
+    // abaixo, por varredura do fonte.
+    const abriu = window._openCasualMatchReplay(doc);   // ← o que o clique do card faz
+    const ov = document.getElementById('live-scoring-overlay');
+    const abriuComoReplay = ov ? ov.getAttribute('data-replay') : null;
+    window._liveScoreReplaySkip();                    // corre até o fim
+    const lab = document.getElementById('lr-label');
+    return {
+      retorno: abriu,
+      abriuComoReplay: abriuComoReplay,
+      barra: !!document.getElementById('live-replay-bar'),
+      estado: window._getLiveScoreState(),
+      rotulo: lab ? lab.textContent : '',
+      hist: JSON.parse(localStorage.getItem('scoreplace_casual_history_v2') || '[]').length,
+      antesHist: antesHist,
+      temMomentum: !!document.getElementById('mom-replay-btn')
+    };
+  }, jogo.registro);
+
+  // A FIAÇÃO: que o clique do card passe por aqui ANTES de cair na tela de stats.
+  // É varredura de fonte de propósito — o handler é aninhado e não existe fora da tela
+  // casual (ver a nota acima). O que ele FAZ está medido ao vivo logo abaixo.
+  const handler = bui.slice(bui.indexOf('window._casualOpenPastMatch = function'),
+                            bui.indexOf('window._casualOpenPastMatch = function') + 1800);
+  ok(/_openCasualMatchReplay\(match\)\)\s*return;/.test(handler),
+     'o clique do card tenta a REPRODUÇÃO antes de qualquer outro caminho');
+  ok(handler.indexOf('_openCasualMatchReplay') < handler.indexOf('_openLiveScoring'),
+     'e a tela de estatísticas ficou como FALLBACK, depois dela');
+  ok(!/Toque pra ver as estatísticas/.test(bui),
+     'o rótulo do card não promete mais "estatísticas" — ele descreve o que o toque faz');
+
+  ok(casual.retorno === true, 'o abridor confirma que reproduziu (devolveu true)');
+  ok(!!casual.abriuComoReplay, 'o card abre o placar em modo REPRODUÇÃO (não na tela de stats)');
+  ok(casual.barra, 'a barra de controle da reprodução está na tela');
+  eq(casual.estado.sets, jogo.estado.sets, 'a reprodução chega ao mesmo placar da partida jogada');
+  eq(casual.estado.winner, jogo.estado.winner, 'e ao mesmo vencedor');
+  ok(!/divergiu/.test(casual.rotulo),
+     'o motor não divergiu da testemunha — a tradução do diário cru está certa ponto a ponto');
+  eq(casual.hist, casual.antesHist, 'reproduzir pelo card não gravou partida nenhuma');
+  ok(casual.temMomentum, 'e desemboca na tela de estatísticas — o que o card fazia antes vira o DESTINO');
+
+  // ── 9. Partida SEM diário continua abrindo as estatísticas ──────────────────
+  // Medido: 2 das 15 partidas casuais em produção não têm `pointLog` (anteriores ao
+  // diário). Para essas não há o que reproduzir, e abrir uma reprodução vazia seria
+  // pior que o comportamento antigo — então elas seguem exatamente como eram.
+  console.log('\n9. Partida antiga (sem diário) NÃO vira reprodução vazia');
+  const semDiario = await page.evaluate(() => {
+    const vazio = { _docId: 'd2', roomCode: 'NOLOG', status: 'finished', players: [],
+                    liveState: { pointLog: [], sets: [] } };
+    return {
+      converteu: window._replayRecordFromCasualDoc(vazio),
+      abriu: window._openCasualMatchReplay(vazio),
+      semLiveState: window._replayRecordFromCasualDoc({ roomCode: 'X', status: 'finished' })
+    };
+  });
+  eq(semDiario.converteu, null, 'sem pointLog a conversão devolve null (não um replay de 0 pontos)');
+  eq(semDiario.abriu, false, 'e o abridor devolve false — quem chama cai no caminho antigo');
+  eq(semDiario.semLiveState, null, 'doc sem liveState nenhum também devolve null, sem estourar');
+
   await browser.close();
   console.log(falhas === 0
     ? '\n✅ o replay é o placar ao vivo — e não grava nada\n'
