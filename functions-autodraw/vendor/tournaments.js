@@ -4049,7 +4049,30 @@ function renderTournaments(container, tournamentId = null) {
                 var _icNameMap = {}; parts.forEach(function (pp) { var nn = (window._pName ? window._pName(pp) : '') || ''; if (nn) _icNameMap[nn] = pp; });
                 var _icWaitSet = (typeof window._waitlistNameSet === 'function') ? window._waitlistNameSet(t) : {};
                 var _icCtx = { isOrg: isOrg, drawDone: drawDone, canRollCall: _rcActiveD, postDrawPresence: false, enrollOrderMap: _enrollOrderMap, nameToParticipant: _icNameMap, waitSet: _icWaitSet, cardPresence: _icPresCtx ? _icPresCtx.cardPresence : null };
-                cardsStr = _sortedParts.map(function (p) { return window._inscritoIndividualCard(t, p, parts.indexOf(p), _icCtx); }).join('');
+                /* ⛔ UMA FUNÇÃO AUSENTE NÃO PODE APAGAR A TELA INTEIRA (2.1.35).
+                 * Esta chamada era CRUA. `_inscritoIndividualCard` mora em participants.js,
+                 * e se aquele arquivo não tiver executado até aqui — erro no meio dele,
+                 * ordem trocada num bundle futuro — o `map` estoura e leva junto o render
+                 * do DETALHE inteiro: MEDIDO no harness, `0 bytes` de HTML. A pessoa vê
+                 * página em branco e nenhum erro.
+                 * ⭐ O irmão desta chamada, em bracket.js:1904, JÁ tinha a guarda. Duas
+                 * chamadas da mesma função, uma protegida e outra não — e a desprotegida
+                 * era a da tela mais usada do app.
+                 * ⛔ A queda NÃO é silenciosa nem vazia: sem o builder, o inscrito ainda
+                 * aparece pelo NOME, e a falha vai pro Sentry. Card feio é recuperável;
+                 * tela em branco não. [[feedback_init_que_morre_no_meio_e_silencioso]] */
+                var _mkCard = window._inscritoIndividualCard;
+                if (typeof _mkCard !== 'function') {
+                    try { if (window._captureException) window._captureException(new Error('_inscritoIndividualCard ausente no render do detalhe'), { tournamentId: String(t.id) }); } catch (_eIC) {}
+                }
+                cardsStr = _sortedParts.map(function (p) {
+                    if (typeof _mkCard === 'function') return _mkCard(t, p, parts.indexOf(p), _icCtx);
+                    var _nmFb = (window._pName ? window._pName(p) : '') || '';
+                    return '<div class="participant-card" data-part-card="1" data-part-name="' +
+                        window._safeHtml(_nmFb.toLowerCase()) + '" data-part-gender="none" data-part-skill="none" ' +
+                        'style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);' +
+                        'border:1px solid rgba(255,255,255,0.10);">' + window._safeHtml(_nmFb) + '</div>';
+                }).join('');
             }
 
             // Filter buttons + progress. Ausentes = quem NÃO é verde nem azul (pendente + fora);
@@ -4259,7 +4282,19 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
 
-    ${hasDrawn ? '' : participantsHtml}
+    ${/* ⛔ A LISTA DE INSCRITOS NÃO MORA NO DETALHE (2.1.35). Ordem do dono, textual:
+         _"tem que clicar em inscritos (botao) para abrir essa merda de inscritos"_ ·
+         _"os inscritos só quando clica no botão"_ · _"só essa merda de torneio novo é que
+         está abrindo errado"_.
+         ⭐ E ele estava certo de que "sempre foi assim" — MEDIDO: esta linha só emitia a
+         seção quando `hasDrawn` era FALSO, e nenhum torneio caía aí. O Confra tem sorteio
+         (some pelo `hasDrawn`); os outros 40 têm ZERO inscritos (a seção nem é construída,
+         `parts.length > 0` acima). O torneio novo — 8 inscritos E sem sorteio — foi o
+         PRIMEIRO em muito tempo a bater neste ramo, e aí a lista inteira entrou antes das
+         FERRAMENTAS DO ORGANIZADOR, escondendo o botão de sortear.
+         ⇒ O detalhe passa a ser SEMPRE o mesmo: informação → ferramentas → chave. A lista
+         (com filtros, busca e presença) vive em `#participants/:id`, onde o botão
+         "👥 Inscritos" já leva — e é lá que a chamada acontece. */ ''}
 
     ${hasDrawn ? `
       <div class="mt-5">

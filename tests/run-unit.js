@@ -247,6 +247,7 @@ const SUITES = [
   'tests/historico-remonta-pelo-tempo.test.js',
   'tests/ordem-dos-grupos-por-quem-olha.test.js',
   'tests/filtro-nao-esconde-quem-nao-tem-o-dado.test.js',
+  'tests/detalhe-nao-morre-por-funcao-ausente.test.js',
   // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
   'tests/jogo-espelhado-diz-quem-joga.test.js',
   'tests/historico-e-log-nao-se-apaga.test.js',
