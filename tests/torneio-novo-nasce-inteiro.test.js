@@ -53,10 +53,18 @@ const criacao = _R.ateOFim(store, i);
  * ⛔ A distinção que importa: em 26/ago a função de montar EXISTIA e estava certa; o que
  * faltava era alguém chamá-la no caminho por onde o torneio entra na tela. Por isso ③ não
  * pergunta "a função existe?" e sim "o OUVINTE a chama?". */
-ok(/_semPesados: \['matches', 'participants', 'opponentHistory'\]/.test(criacao),
-  '⭐ torneio novo nasce DIVIDIDO — no mesmo formato dos 41 de produção');
-ok(/_nJogos: 0/.test(criacao),
-  '   e com a contagem, que é o que separa "não sorteou" de "não carregou"');
+/* ⛔⛔ REVERTIDO PELA SEGUNDA VEZ (28/ago/2026), minutos depois de publicar — e agora
+ * na CRIAÇÃO: o dono criou um torneio e ele NÃO CHEGOU AO BANCO ("criei o torneio mas não
+ * consegui salvar 8 placeholders"; medido: 41 antes, 41 depois).
+ * ⛔ A LIÇÃO, e ela é pior que a da primeira vez: eu conferi as três condições da reversão
+ * anterior de verdade, no caminho — mas as três eram sobre LER um torneio dividido.
+ * Nenhuma cobria CRIAR um. Provei o caminho errado e chamei de prova, que é exatamente a
+ * falha de 26/ago com outra roupa.
+ * ⚠️ SÓ RELIGAR depois de criar um torneio DE VERDADE, com placeholders, e ver o documento
+ * aparecer no banco. A causa ainda não foi diagnosticada. */
+ok(!/_semPesados: \['matches'/.test(criacao),
+  '⛔ torneio novo NÃO nasce dividido — a criação dividida não chegou ao banco');
+ok(!/_nJogos: 0,/.test(criacao), '   (nem a contagem, que só faz sentido dividido)');
 
 // ── ③ ⛔ A CONDIÇÃO QUE FALTAVA: o OUVINTE busca o que falta ────────────────
 /* Esta é a asserção que não existia em 26/ago, e a ausência dela custou produção. Não
@@ -106,5 +114,5 @@ const velho = { id: 'v1', _semPesados: ['matches'], rounds: [{ round: 1, matches
 ok(enxerta(JSON.parse(JSON.stringify(velho)), null)._faltamPesados === true,
   '⚠️ documento SEM `_nJogos` (dividido antes desta versão) cai no comportamento antigo, que é o seguro');
 
-console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-dividido: ' + pass + ' ok, ' + fail + ' falhas');
+console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-inteiro: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

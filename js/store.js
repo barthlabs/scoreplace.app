@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.32';
+window.SCOREPLACE_VERSION = '2.1.33';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -12366,8 +12366,15 @@ window.AppStore = {
          * regressão"_. Meio migrado é o pior dos dois mundos.
          * ⭐ E nascer dividido segue sendo o caso MAIS SEGURO: torneio novo não tem jogo
          * nem inscrito — não há o que mover nem o que perder. */
-        _semPesados: ['matches', 'participants', 'opponentHistory'],
-        _nJogos: 0,
+        /* ⛔⛔ REVERTIDO DE NOVO em 28/ago/2026, minutos depois de publicar — e desta vez
+         * na CRIAÇÃO: o dono criou um torneio e ele NÃO CHEGOU AO BANCO ("criei o torneio
+         * mas não consegui salvar 8 placeholders"; medido: os 41 continuaram 41).
+         * ⛔ As três condições da reversão anterior eu conferi de verdade — mas todas as
+         * três eram sobre LER um torneio dividido. Nenhuma delas cobria CRIAR um. Provei o
+         * caminho errado e chamei de prova. É a MESMA falha da 2.0.109 com outra roupa:
+         * testar o que eu sabia olhar em vez do caminho por onde a coisa acontece.
+         * ⚠️ NÃO RELIGAR sem criar um torneio de verdade, com placeholders, e ver o
+         * documento aparecer no banco — a causa ainda não está diagnosticada. */
         // Default status='open' pra que torneios novos apareçam no feed público de
         // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
         status: 'open',

@@ -135,7 +135,7 @@ const SUITES = [
   'tests/placar-sem-sinal-vai-pra-fila.test.js',
   'tests/ouvinte-nunca-entrega-torneio-sem-jogos.test.js',
   'tests/torneio-dividido-nao-volta-pro-documento.test.js',
-  'tests/torneio-novo-nasce-dividido.test.js',
+  'tests/torneio-novo-nasce-inteiro.test.js',
   'tests/torneio-dividido-chega-inteiro-na-tela.test.js',
   'tests/expandir-demais-jogos-para-no-primeiro.test.js',
   'tests/ver-menos-acompanha-a-rolagem.test.js',
