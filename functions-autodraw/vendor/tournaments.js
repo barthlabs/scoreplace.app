@@ -3841,7 +3841,17 @@ function renderTournaments(container, tournamentId = null) {
           '</style>';
         _organizersHtml = '<div style="margin-top:1.25rem;margin-bottom:0.5rem;">' + _orgDropCss +
           '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px;">ORGANIZAÇÃO</div>' +
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + _orgCards + '</div>' +
+          /* ⭐ MESMA GRADE CANÔNICA DOS INSCRITOS (2.1.39). Ordem do dono: "o card do
+           * organizador deve ter a mesma largura dos cards dos jogadores" — e, quando eu
+           * perguntei se os cards eram os canônicos, a resposta foi que NÃO eram.
+           * ⛔ Ele estava certo: a Organização usava `display:flex;flex-wrap:wrap`, onde o
+           * card não tem trilha e se estica até o fim da linha. E existia desde sempre uma
+           * constante canônica pra isso — `_INSCRITO_GRID_SOLO` — que nem esta seção nem a
+           * de inscritos estavam usando. Cada uma tinha a sua medida escrita à mão.
+           * ⚠️ Minha primeira tentativa criou um helper novo: seria a TERCEIRA cópia da
+           * mesma medida. A constante já existe; o certo é chamá-la.
+           * [[feedback_reuse_what_already_works]] [[feedback_unify_dual_entry_points]] */
+          '<div style="' + window._INSCRITO_GRID_SOLO + '">' + _orgCards + '</div>' +
           _contactBtnHtml + '</div>';
       })();
     }
@@ -4092,9 +4102,16 @@ function renderTournaments(container, tournamentId = null) {
             // cards), 1 coluna no mobile (min(100%,…) evita overflow). Vale pro check-in também
             // (antes era coluna única). Ver [[feedback_maximize_screen_area_all_devices]].
             // align-items:stretch → cards da mesma linha com a MESMA ALTURA (dono: "sempre igual").
+            /* ⭐ A GRADE VEM DA CONSTANTE CANÔNICA (2.1.39), não de uma medida escrita
+             * aqui. `_INSCRITO_GRID_SOLO` já era o cânone (e o `inscritos-grid-canon`
+             * existe pra travá-lo) — esta seção mantinha uma cópia própria, que foi como
+             * a Organização e os inscritos acabaram com larguras diferentes.
+             * ⚠️ Na CHAMADA os cards ganham controles (Ausente/W.O.) e precisam de mais
+             * largura: aí a trilha vai a 320px. É a única diferença, e ela é do MODO, não
+             * uma segunda régua. */
             const gridStyle = (canCheckIn || _rcActiveD)
-                ? 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr));gap:8px;align-items:stretch;'
-                : 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:1rem;align-items:stretch;';
+                ? window._INSCRITO_GRID_SOLO.replace('100%, 260px', '100%, 320px')
+                : window._INSCRITO_GRID_SOLO;
 
             var _sortAlphaAsc = _enrollSort === 'alpha_asc';
             var _sortAlphaDesc = _enrollSort === 'alpha_desc';

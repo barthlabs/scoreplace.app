@@ -44,8 +44,21 @@ ok('host "Sem dupla" usa _INSCRITO_GRID_SOLO', hostSolo);
 ok('host "Duplas formadas" usa _INSCRITO_GRID_DUPLA', hostDupla);
 
 // 3. A seção INDIVIDUAL (gridStyle) também é grid responsivo — o padrão vale pra TODOS.
-const gridStyleM = src.match(/const gridStyle\s*=[\s\S]{0,240}?minmax\(min\(100%,[^;]+1fr\)\)/);
-ok('seção individual (gridStyle) também é grid responsivo', !!gridStyleM);
+/* ⭐ 2.1.39 — passa a aceitar (e a PREFERIR) a derivação da constante canônica.
+ * Até aqui esta seção tinha a medida escrita à mão, e foi assim que ela e o card do
+ * ORGANIZADOR acabaram com larguras diferentes: cada um com a sua régua. Pergunta do dono
+ * ao ver a tela: "está usando os cards canônicos ou inventou esses?" — e a resposta era
+ * que ninguém usava `_INSCRITO_GRID_SOLO`, que existe desde sempre pra isso.
+ * ⛔ A trava não afrouxou: quem deriva da constante já está coberto pelas asserções 1-4
+ * (que provam que ELA é grid responsivo, com stretch e sem coluna única). O que deixa de
+ * ser exigido é a CÓPIA literal — que era justamente o defeito. */
+const gridStyleTrecho = (src.match(/const gridStyle\s*=[\s\S]{0,400}?;/) || [''])[0];
+const gridStyleM = /minmax\(min\(100%,[^;]+1fr\)\)/.test(gridStyleTrecho) ||
+                   /window\._INSCRITO_GRID_SOLO/.test(gridStyleTrecho);
+ok('seção individual (gridStyle) é grid responsivo (literal ou via a constante canônica)', !!gridStyleM,
+   gridStyleTrecho.slice(0, 120));
+ok('⭐ e ela DERIVA do cânone, não de uma medida própria',
+   /window\._INSCRITO_GRID_SOLO/.test(gridStyleTrecho), gridStyleTrecho.slice(0, 120));
 
 // 4. Nenhum host de card de inscrito da seção de duplas voltou a usar coluna única inline.
 const badInline = /class="sp-dnd-host"\s*style="display:flex;flex-direction:column/.test(src);
