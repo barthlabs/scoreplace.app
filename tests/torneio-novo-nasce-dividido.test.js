@@ -44,9 +44,32 @@ const criacao = _R.ateOFim(store, i);
  * ⭐ O QUE ESTE TESTE TRANCA AGORA: torneio novo nasce INTEIRO. Só volta a nascer dividido
  * quando existirem (1) o ouvinte da subcoleção do torneio ABERTO e (2) a busca no primeiro
  * carregamento — provados num torneio de verdade, não em teste. */
-ok(!/_semPesados: \['matches'\]/.test(criacao),
-  '⛔ torneio novo NÃO nasce dividido — a busca no 1º carregamento não existe');
-ok(!/_nJogos: 0/.test(criacao), '   (nem a contagem, que só faz sentido dividido)');
+/* ⭐⭐ RELIGADO EM 28/ago/2026 — e o que mudou não foi opinião, foram as TRÊS condições
+ * que a própria reversão exigiu, conferidas NO CAMINHO:
+ *   (1) o ouvinte das partes fora do documento existe (2.0.123);
+ *   (2) ⭐ a BUSCA do 1º carregamento vive DENTRO do `startRealtimeListener` — o caminho
+ *       que estava descoberto. É a asserção ③ abaixo que tranca isso;
+ *   (3) prova em torneio DE VERDADE: 41 divididos em produção, a Confra ao vivo entre eles.
+ * ⛔ A distinção que importa: em 26/ago a função de montar EXISTIA e estava certa; o que
+ * faltava era alguém chamá-la no caminho por onde o torneio entra na tela. Por isso ③ não
+ * pergunta "a função existe?" e sim "o OUVINTE a chama?". */
+ok(/_semPesados: \['matches', 'participants', 'opponentHistory'\]/.test(criacao),
+  '⭐ torneio novo nasce DIVIDIDO — no mesmo formato dos 41 de produção');
+ok(/_nJogos: 0/.test(criacao),
+  '   e com a contagem, que é o que separa "não sorteou" de "não carregou"');
+
+// ── ③ ⛔ A CONDIÇÃO QUE FALTAVA: o OUVINTE busca o que falta ────────────────
+/* Esta é a asserção que não existia em 26/ago, e a ausência dela custou produção. Não
+ * basta a montagem existir: ela tem que ser disparada por `startRealtimeListener`, que é
+ * por onde o torneio entra na tela no PRIMEIRO carregamento. Testar a função sozinha foi
+ * exatamente o que deixou a suíte verde enquanto o app quebrava. */
+const _iOuv = store.indexOf('startRealtimeListener(');
+ok(_iOuv > 0, 'o ouvinte em tempo real existe');
+const _ouvinte = store.slice(_iOuv, store.indexOf('\n  pararDeOuvir', _iOuv));
+ok(/_montaPesadosQueFaltam\(/.test(_ouvinte),
+  '⛔⛔ o OUVINTE dispara a busca do que falta — sem isto, torneio dividido chega vazio e ninguém vai buscar');
+ok(/_enxertaJogos|_semPesados/.test(_ouvinte),
+  'e ele também enxerta o que já está em memória (a rede do re-render)');
 
 // ── ② o número é mantido por quem grava ─────────────────────────────────────
 ok(/_nJogos = \(pDepois\.matches \|\| \[\]\)\.length/.test(cf),
@@ -83,5 +106,5 @@ const velho = { id: 'v1', _semPesados: ['matches'], rounds: [{ round: 1, matches
 ok(enxerta(JSON.parse(JSON.stringify(velho)), null)._faltamPesados === true,
   '⚠️ documento SEM `_nJogos` (dividido antes desta versão) cai no comportamento antigo, que é o seguro');
 
-console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-inteiro: ' + pass + ' ok, ' + fail + ' falhas');
+console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-dividido: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

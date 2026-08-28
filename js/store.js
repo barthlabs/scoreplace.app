@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.31';
+window.SCOREPLACE_VERSION = '2.1.32';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -12347,7 +12347,27 @@ window.AppStore = {
          *
          * ⚠️ NÃO RELIGAR sem: (1) o ouvinte da subcoleção do torneio ABERTO, e (2) uma
          * busca no primeiro carregamento — provados num torneio de verdade, não em teste.
-         * Ver [[project_backup_antes_da_transferencia]]. */
+         * Ver [[project_backup_antes_da_transferencia]].
+         *
+         * ⭐⭐ RELIGADO EM 28/ago/2026, com as TRÊS condições conferidas NO CAMINHO — e é
+         * essa distinção que importa, porque o erro de 26/ago não foi a função estar
+         * errada, foi ninguém chamá-la no caminho por onde o torneio entra na tela:
+         *   (1) o ouvinte das partes que moram fora do documento existe (2.0.123);
+         *   (2) ⭐ a BUSCA do primeiro carregamento agora vive DENTRO do
+         *       `startRealtimeListener` (store.js) — exatamente o caminho que estava
+         *       descoberto. O ouvinte enxerta o que já está em memória E dispara
+         *       `_montaPesadosQueFaltam` pro que falta, com repintura quando chega;
+         *   (3) prova em torneio DE VERDADE, não em teste isolado: 41 torneios divididos
+         *       em produção — a Confra ao vivo, com 148 pessoas e 105 jogos, entre eles.
+         *
+         * POR QUE VOLTAR AGORA: enquanto existir um caminho que cria torneio no formato
+         * velho, o formato velho tem que seguir suportado — e aí `tournamentMirror` e
+         * `syncMatchRosters` não podem morrer. Ordem do dono: _"faça que senão vira
+         * regressão"_. Meio migrado é o pior dos dois mundos.
+         * ⭐ E nascer dividido segue sendo o caso MAIS SEGURO: torneio novo não tem jogo
+         * nem inscrito — não há o que mover nem o que perder. */
+        _semPesados: ['matches', 'participants', 'opponentHistory'],
+        _nJogos: 0,
         // Default status='open' pra que torneios novos apareçam no feed público de
         // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
         status: 'open',
