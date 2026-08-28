@@ -3,6 +3,21 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 
 // ─── Bracket / Standings View ───────────────────────────────────────────────
 
+/* Quem está olhando decide a ORDEM dos grupos (2.1.31). Ordem do dono: participante vê a
+ * AGENDA (como sempre foi); ORGANIZADOR vê os PENDENTES primeiro, na ordem do sorteio.
+ * ⛔ Mora aqui, num lugar só, porque os TRÊS pontos que listam grupos chamam o mesmo
+ * ordenador — a regra ter uma casa é o que impede a mesma tela mostrar ordens diferentes
+ * conforme a rota que a desenhou. [[feedback_unify_dual_entry_points]]
+ * ⚠️ Co-organizador tem o MESMO poder do organizador, e `AppStore.isOrganizer` já
+ * responde por ele — por isso a pergunta é feita a ela, e não a uma comparação de uid
+ * escrita aqui. [[project_cohost_same_power_as_organizer]] */
+function _ordemDeOrganizador(t) {
+  try {
+    return !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' &&
+              window.AppStore.isOrganizer(t));
+  } catch (e) { return false; }
+}
+
 // Atributos da célula 💯 PA (coluna de Pontos Avançados) — helper de STRING do render.
 // MOBILE = toque-e-segure (long-press) abre o detalhamento; DESKTOP = clique. Os
 // handlers de runtime (_paTouchStart/_paClick/_paTouchCancel) vivem em bracket-ui.js.
@@ -5268,7 +5283,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
   // schedule-poll.js — os 3 pontos que listam grupos chamam a mesma função, senão a
   // mesma tela mostra ordens diferentes conforme a rota que a desenhou.
   subgroups = (typeof window._schOrdenarGrupos === 'function')
-    ? window._schOrdenarGrupos(subgroups, { meu: _sgHasMe })
+    ? window._schOrdenarGrupos(subgroups, { meu: _sgHasMe, organizador: _ordemDeOrganizador(t) })
     : subgroups.map(function(sg, i) { return { sg: sg, i: i, me: _sgHasMe(sg) ? 0 : 1 }; })
         .sort(function(a, b) { return (a.me - b.me) || (a.i - b.i); })
         .map(function(o) { return o.sg; });
@@ -5535,7 +5550,7 @@ function renderGroupStage(t, isOrg, canEnterResult, opts) {
   // pro doc certo depois do sort, e a numeração global dos jogos segue a ordem ORIGINAL.
   const _wrapped = subgroups.map((sg, originalIdx) => ({ sg: sg, originalIdx: originalIdx }));
   const sortedSubgroups = (typeof window._schOrdenarGrupos === 'function')
-    ? window._schOrdenarGrupos(_wrapped, { grupo: (w) => w.sg, meu: _subgroupHasMe })
+    ? window._schOrdenarGrupos(_wrapped, { grupo: (w) => w.sg, meu: _subgroupHasMe, organizador: _ordemDeOrganizador(t) })
     : _wrapped.sort((a, b) => (_subgroupHasMe(a.sg) ? 0 : 1) - (_subgroupHasMe(b.sg) ? 0 : 1));
 
   // v3.0.x: numeração GLOBAL e ESTÁVEL dos jogos — Jogo 1 = 1º jogo da R1 do
@@ -6390,7 +6405,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
         // por categoria e "meus jogos × demais" logo abaixo — os dois filtram preservando
         // a ordem relativa, então a grade cronológica sobrevive ao recorte deles.
         var sortedGroups = (typeof window._schOrdenarGrupos === 'function')
-          ? window._schOrdenarGrupos(currentRoundData.monarchGroups, { meu: _groupHasMe })
+          ? window._schOrdenarGrupos(currentRoundData.monarchGroups, { meu: _groupHasMe, organizador: _ordemDeOrganizador(t) })
           : currentRoundData.monarchGroups.slice().sort(function(a, b) {
               return (_groupHasMe(a) ? 0 : 1) - (_groupHasMe(b) ? 0 : 1);
             });

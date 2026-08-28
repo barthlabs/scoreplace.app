@@ -244,6 +244,8 @@ const SUITES = [
   // Sintoma: aprovou o placar, abriu de novo e estava pendente; reiniciar corrigia.
   'tests/abrir-torneio-nao-usa-o-cache.test.js',
   'tests/proposta-nao-apaga-resultado.test.js',
+  'tests/historico-remonta-pelo-tempo.test.js',
+  'tests/ordem-dos-grupos-por-quem-olha.test.js',
   // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
   'tests/jogo-espelhado-diz-quem-joga.test.js',
   'tests/historico-e-log-nao-se-apaga.test.js',

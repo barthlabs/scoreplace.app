@@ -107,6 +107,43 @@
     return 'c' + _hashDe([a.targetUid || a.targetName || '', a.timestamp || '', a.category || ''].join('|'));
   }
 
+  /* ── O HISTÓRICO SE REMONTA PELO TEMPO, NÃO PELA POSIÇÃO (2.1.31) ──────────────
+   * ⛔ ISTO É O PRÉ-REQUISITO PRA `history` SAIR DO DOCUMENTO, e estava escrito como
+   * "o próximo passo" em functions-autodraw: enquanto o leitor ordenar por `_idx`, o log
+   * NÃO pode entrar em `_semPesados`.
+   *
+   * POR QUÊ, em uma frase: `_idx` é a posição do evento no ARRAY DO DOCUMENTO, e a PODA
+   * muda essa posição. A poda está LIGADA (`TETO_HIST = 120 → ALVO_HIST = 80`) e o Confra
+   * está em 105 eventos, ao vivo. Na primeira poda o documento volta a 80, os eventos
+   * seguintes nascem com `_idx` 80, 81… — que o espelho JÁ USOU. O `a[Number(x._idx)]`
+   * gravaria um evento por cima do outro e o log perderia linhas em silêncio.
+   * ⚠️ Isso não morde HOJE só porque `history` ainda é lido do documento. Move o campo
+   * pro marcador sem isto e o log começa a comer a si mesmo.
+   *
+   * ⛔ E ORDENAR POR `date` NÃO SERVE — foi a primeira tentativa e ela QUEBROU a
+   * invariante do módulo. Parecia óbvio (a própria `chaveDoEvento` deriva de `date`) e a
+   * medição do dia apoiava: 0 eventos fora de ordem na base atual. Mas a fixture do
+   * Confra tem **3 eventos fora de ordem cronológica** e **2 sem `date`** — o log é um
+   * append de vários caminhos, não um relógio. Ordenar por tempo reordenava esses três, e
+   * reordenar um log de auditoria é tão ruim quanto perdê-lo.
+   * ⚠️ A lição: "a base de hoje não tem essa anomalia" não é o mesmo que "essa anomalia
+   * não existe". A fixture guardava o contra-exemplo.
+   *
+   * ⭐ A REGRA QUE FICA: preservar a ordem GRAVADA (`_idx` crescente) e emitir DENSO.
+   * Colisão de índice vira ADJACÊNCIA em vez de sobrescrita — nenhum evento é engolido, e
+   * pra um log não podado o resultado é byte a byte o array original, então
+   * `remontar(dividir(t)) === t` continua valendo.
+   * ⛔ O que isto NÃO resolve, dito na cara: depois de MUITAS podas a ordem entre levas
+   * pode não ser perfeitamente cronológica. Ordem imperfeita é recuperável olhando a data
+   * do evento; evento comido não é. A correção definitiva é o espelho gravar uma
+   * SEQUÊNCIA monotônica em vez da posição — isso é mudança de ESCRITA, e vem depois. */
+  function _remontaHistorico(lista) {
+    return lista.slice()
+      .map(function (x, ord) { return { i: Number(x._idx), ord: ord, item: x.item }; })
+      .sort(function (a, b) { return (a.i - b.i) || (a.ord - b.ord); })
+      .map(function (x) { return _clone(x.item); });
+  }
+
   function chaveDoEvento(ev) {
     var d = (ev && ev.date != null) ? String(ev.date) : '';
     var m = (ev && ev.message != null) ? String(ev.message) : '';
@@ -412,6 +449,8 @@
         var o = {};
         lista.forEach(function (x) { o[x._idx] = _clone(x.item); });
         t[campo] = o;
+      } else if (campo === 'history') {
+        t[campo] = _remontaHistorico(lista);
       } else {
         var a = [];
         lista.forEach(function (x) { a[Number(x._idx)] = _clone(x.item); });

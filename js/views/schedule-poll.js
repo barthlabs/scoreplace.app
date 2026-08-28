@@ -302,21 +302,85 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     try { return String(a).localeCompare(String(b), 'pt-BR', { numeric: true, sensitivity: 'base' }); }
     catch (e) { return String(a) < String(b) ? -1 : (String(a) > String(b) ? 1 : 0); }
   }
+
+  /* ── A ORDEM DO SORTEIO É O CICLO DO NOME, NÃO O ALFABETO (2.1.31) ─────────────
+   * Correção do dono, em duas etapas. Primeiro: _"a ordem alfabética que está aparecendo
+   * os jogos concluídos não deveria ser isso... a ordem certa seria a2 depois do z, então
+   * não é alfabética, é ordem do sorteio/formação dos grupos"_. Depois, vendo o
+   * resultado: _"B, C, A2 seria a ordem correta"_.
+   *
+   * ⭐ É essa segunda frase que fecha a regra, e ela NÃO é o índice do array: se fosse,
+   * num sorteio entregue como A, B, Z, A2, C a resposta seria B, A2, C. Ele disse
+   * B, C, A2 — ou seja, o que manda é o CICLO do nome.
+   *
+   * O sorteio batiza os grupos A, B, C… Z e, quando acabam as letras, recomeça em
+   * A2, B2… Então o nome carrega DUAS informações: a letra e a volta. A ordem de
+   * formação é (volta, letra) — toda a 1ª volta antes de qualquer grupo da 2ª.
+   * ⛔ O alfabético lê "A2" como vizinho de "A" e enfia a 2ª volta no meio da 1ª.
+   *
+   * ⚠️ Nome que não segue o padrão (numérico, "Grupo 10", rótulo livre) NÃO é forçado
+   * aqui: cai no `_cmpNome`, que já resolve numérico direito. Inventar ordem pra nome
+   * que não tem a forma seria pior que o alfabético — seria arbitrário. */
+  function _voltaDoGrupo(nome) {
+    // pega o ÚLTIMO token do nome ("Grupo A2" → "A2"; "A2" → "A2")
+    var tok = String(nome == null ? '' : nome).trim().split(/\s+/).pop() || '';
+    var m = /^([A-Za-z]+)(\d*)$/.exec(tok);
+    if (!m) return null;                                  // não tem a forma: quem decide é _cmpNome
+    return { letra: m[1].toUpperCase(), volta: m[2] ? parseInt(m[2], 10) : 1 };
+  }
+  function _cmpFormacao(a, b) {
+    var x = _voltaDoGrupo(a), y = _voltaDoGrupo(b);
+    if (!x || !y) return _cmpNome(a, b);
+    if (x.volta !== y.volta) return x.volta - y.volta;    // toda a 1ª volta antes da 2ª
+    return x.letra < y.letra ? -1 : (x.letra > y.letra ? 1 : 0);
+  }
   // Ordena QUALQUER lista de grupos (ou de wrappers em volta deles). Decorate-sort: a
   // chave sai UMA vez por grupo, não a cada comparação — com 35 grupos são 35 leituras
   // em vez de ~360, e o dono está com prioridade em desempenho.
   //   opts.grupo(item) → o grupo dentro do item (default: o próprio item)
   //   opts.meu(grupo)  → true pro grupo de quem está olhando (vai pro topo)
+  //   opts.organizador → true pra quem ORGANIZA: outra ordem inteira (ver abaixo)
+  /* ── DUAS ORDENS, PORQUE SÃO DUAS PERGUNTAS DIFERENTES (2.1.31) ─────────────────
+   * Ordem do dono (28/ago/2026): _"a ordem dos jogos no detalhe do torneio para os
+   * participantes deve aparecer como está e para os organizadores deveria aparecer
+   * primeiro os pendentes na ordem do sorteio/formação dos grupos e depois os
+   * realizados"_.
+   *
+   * QUEM JOGA pergunta "quando é o meu jogo?" → agenda: o seu grupo, depois o que tem
+   * data pela ordem do relógio, depois o resto. É a ordem de hoje e ela FICA.
+   * QUEM ORGANIZA pergunta "o que falta fechar?" → os PENDENTES primeiro, e na ordem em
+   * que os grupos foram formados — porque é assim que ele percorre a quadra.
+   *
+   * ⛔ E A ORDEM DO SORTEIO NÃO É ALFABÉTICA. Correção do próprio dono: _"a ordem certa
+   * seria a2 depois do z, então não é alfabética, é ordem do sorteio/formação dos
+   * grupos"_. Os nomes ciclam A…Z e recomeçam em A2…, então `_cmpNome` põe A2 logo
+   * depois de A1 — no meio da lista, longe de onde o grupo realmente nasceu. A ordem de
+   * formação é o ÍNDICE DE CHEGADA (`i`), que é como o array vem do sorteio.
+   * ⚠️ Por isso `i` é o desempate do organizador e NÃO `_cmpNome`: nome é rótulo, não
+   * ordem. [[project_classificacao_nao_balanca_entrada_canonica]] é a mesma lição.
+   *
+   * ⛔ E o "meu grupo primeiro" NÃO vale pro organizador: ele contradiria o pedido —
+   * um grupo REALIZADO dele subiria acima dos pendentes, que é justo o que ele quer ver
+   * primeiro. Quem organiza está olhando o torneio, não o próprio jogo. */
   window._schOrdenarGrupos = function (arr, opts) {
     if (!Array.isArray(arr)) return [];
     opts = opts || {};
     var pegaG = opts.grupo || function (x) { return x; };
     var ehMeu = opts.meu || function () { return false; };
+    var org = !!opts.organizador;
     return arr.map(function (item, i) {
       var g = pegaG(item);
       var k = _schGrupoAgenda(g);
       return { item: item, i: i, me: ehMeu(g) ? 0 : 1, balde: k.balde, ms: k.ms, nome: k.nome };
     }).sort(function (x, y) {
+      if (org) {
+        // balde 1 = REALIZADO. Pendente é tudo o mais (com data ou sem).
+        var fx = x.balde === 1 ? 1 : 0, fy = y.balde === 1 ? 1 : 0;
+        if (fx !== fy) return fx - fy;                    // pendentes primeiro
+        // e na ordem do SORTEIO: A…Z, depois A2…Z2, e assim segue (ordem do dono).
+        var cf = _cmpFormacao(x.nome, y.nome);
+        return cf || (x.i - y.i);                         // estável: empate mantém a ordem
+      }
       if (x.me !== y.me) return x.me - y.me;             // ⛔ o SEU grupo primeiro, sempre
       if (x.balde !== y.balde) return x.balde - y.balde;
       if (x.balde === 0 && x.ms !== y.ms) return x.ms - y.ms;  // cronológico só no balde 0
