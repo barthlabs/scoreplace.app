@@ -286,13 +286,17 @@
     if (n(b.setsWon) !== n(a.setsWon)) return n(b.setsWon) - n(a.setsWon);
     var aGD = n(a.gamesWon) - n(a.gamesLost), bGD = n(b.gamesWon) - n(b.gamesLost);
     if (bGD !== aGD) return bGD - aGD;
+    // ⭐ LOGO DEPOIS DO SALDO DE GAMES — ordem do dono (27/ago/2026): _"o saldo de tie-break
+    // conta dentro do saldo de games, como pontos que não eram computados e agora são.
+    // depois do saldo de games, considere o saldo de tie-break"_. Os pontos do tie-break são
+    // da MESMA natureza dos games (unidade disputada em quadra), então o lugar deles é
+    // colado no saldo de games — não lá embaixo, depois dos critérios de contagem.
+    var aTBP = n(a.tbPointsWon) - n(a.tbPointsLost), bTBP = n(b.tbPointsWon) - n(b.tbPointsLost);
+    if (bTBP !== aTBP) return bTBP - aTBP;
     if (n(b.gamesWon) !== n(a.gamesWon)) return n(b.gamesWon) - n(a.gamesWon);
     var aTBD = n(a.tiebreaksWon) - n(a.tiebreaksLost), bTBD = n(b.tiebreaksWon) - n(b.tiebreaksLost);
     if (bTBD !== aTBD) return bTBD - aTBD;
     if (n(b.tiebreaksWon) !== n(a.tiebreaksWon)) return n(b.tiebreaksWon) - n(a.tiebreaksWon);
-    // saldo de PONTOS de tie-break (ver o critério `saldo_pontos_tiebreak` acima)
-    var aTBP = n(a.tbPointsWon) - n(a.tbPointsLost), bTBP = n(b.tbPointsWon) - n(b.tbPointsLost);
-    if (bTBP !== aTBP) return bTBP - aTBP;
     var aDiff = n(a.pointsFor) - n(a.pointsAgainst), bDiff = n(b.pointsFor) - n(b.pointsAgainst);
     if (bDiff !== aDiff) return bDiff - aDiff;
     if (n(b.pointsFor) !== n(a.pointsFor)) return n(b.pointsFor) - n(a.pointsFor);

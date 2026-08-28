@@ -424,7 +424,51 @@ window._propostaDoOutroLado = _propostaDoOutroLado;
 // Perdeu a corrida: a proposta do outro lado é a que vale. Cura a `t` local (senão o
 // aparelho continua pintando a própria proposta morta — exatamente o "cada um se vê como
 // autor"), realinha o espelho do jogo e redesenha com os botões certos.
-function _curaPropostaPerdida(tId, matchId, prVencedora) {
+// ⭐ A ASSINATURA DO PLACAR — o que faz duas propostas serem "a mesma".
+// Ordem do dono (27/ago/2026): _"quando duas propostas de placar batem poderia aprovar
+// diretamente. apenas se houver alguma divergência entre as equipes daí sim a corrida ganha
+// quem chegar primeiro."_ Então a corrida precisa saber COMPARAR, não só ordenar.
+//
+// Compara só o RESULTADO — nunca quem propôs, quando, nem por qual tela. Os dois lados
+// podem ter lançado por caminhos diferentes (o card inline e o overlay de sets) e ainda
+// estarem dizendo exatamente o mesmo placar; olhar o `kind` transformaria acordo em
+// divergência. `p1`/`p2` são vagas fixas do jogo, então os números já são comparáveis dos
+// dois lados sem inverter nada.
+//
+// ⚠️ Os pontos do TIE-BREAK entram: 6×7 com tie-break 5-7 NÃO é o mesmo jogo que 6×7 com
+// tie-break 2-7. Discordar ali é discordar do placar. Lidos pelo `window._setTiebreak`, o
+// leitor canônico, que aceita as duas formas gravadas na base.
+function _assinaturaDoPlacar(pr) {
+  if (!pr) return null;
+  var n = function (v) { return (v == null || v === '') ? '' : String(v); };
+  var ler = (typeof window._setTiebreak === 'function') ? window._setTiebreak : function () { return null; };
+  var partes = [n(pr.winner), pr.draw ? 'empate' : '', n(pr.scoreP1), n(pr.scoreP2)];
+  var sets = Array.isArray(pr.sets) ? pr.sets : [];
+  if (sets.length) {
+    partes.push(sets.map(function (st) {
+      var tb = ler(st);
+      return n(st.gamesP1) + '-' + n(st.gamesP2) + (tb ? ('t' + n(tb.p1) + '-' + n(tb.p2)) : '');
+    }).join(';'));
+  } else if (pr.isTiebreakEntry) {
+    partes.push('t' + n(pr.tbP1) + '-' + n(pr.tbP2));
+  }
+  return partes.join('|');
+}
+window._assinaturaDoPlacar = _assinaturaDoPlacar;
+
+// Fecho da corrida: a proposta do outro lado é a que está gravada. Duas saídas.
+//
+//   • OS DOIS DISSERAM O MESMO → isso é ACORDO, não conflito. Não faz sentido pedir que
+//     alguém aprove o que ele mesmo acabou de lançar: o jogo é confirmado na hora, pela
+//     porta de sempre (`_approveResult`), que aplica, grava, avança e avisa.
+//   • DIVERGIRAM → aí vale a corrida: quem chegou primeiro fica na mesa, e o segundo
+//     recebe a proposta do outro com Confirmar / Editar / Contestar.
+//
+// Em ambos os casos a `t` local é CURADA com a proposta que venceu — sem isso o aparelho
+// continua pintando a própria proposta morta, que é literalmente o sintoma relatado
+// ("cada um se via como o autor").
+function _fechaCorridaDoPlacar(tId, matchId, prVencedora, prMinha) {
+  var bateu = false;
   try {
     var t = window._findTournamentById(tId);
     var m = t && _findMatch(t, matchId);
@@ -433,9 +477,25 @@ function _curaPropostaPerdida(tId, matchId, prVencedora) {
       _propagateMatchUpdate(t, m);
     }
     _dualWriteResult(tId, matchId);
+    var a = _assinaturaDoPlacar(prVencedora), b = _assinaturaDoPlacar(prMinha);
+    bateu = !!(a && b && a === b);
   } catch (e) { window._error('[corrida do placar] cura falhou', e); }
+
+  if (bateu && typeof window._approveResult === 'function') {
+    // O registro diz POR QUE ninguém apertou Confirmar — senão o histórico mostra uma
+    // aprovação sem aprovador. [[feedback_proof_lives_in_the_data_not_in_a_stamp]]
+    try {
+      window.AppStore.logAction(tId, 'Consenso automático: os dois times lançaram o mesmo placar — confirmado sem aprovação manual.');
+    } catch (e2) {}
+    if (typeof showNotification === 'function') {
+      showNotification('🤝 Os dois times lançaram o mesmo placar', 'Não precisa de aprovação — o resultado está confirmado.', 'success');
+    }
+    window._approveResult(tId, matchId);
+    return;
+  }
+
   if (typeof showNotification === 'function') {
-    showNotification('Já tem placar pra aprovar', 'O outro time lançou primeiro. Use Confirmar, Editar ou Contestar.', 'info');
+    showNotification('Já tem placar pra aprovar', 'O outro time lançou primeiro, e com um placar diferente. Use Confirmar, Editar ou Contestar.', 'info');
   }
   _rerenderBracket(tId, matchId);
 }
@@ -1645,13 +1705,15 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
       }
       if (!Array.isArray(freshT.history)) freshT.history = [];
       freshT.history.push({ date: new Date().toISOString(), message: _gsmPropLogMsg });
-    }).then(function () {
-      if (_perdeuCorridaGsm) _curaPropostaPerdida(tId, matchId, _perdeuCorridaGsm);
+    }).then(function (gravou) {
+      // mesma régua do caminho inline (ver o comentário lá): o desfecho é contado DEPOIS
+      // que a transação volta, não antes.
+      if (_perdeuCorridaGsm) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorridaGsm, _pendingGsmObj); return; }
+      if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
+      _dualWriteResult(tId, matchId);    // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo
+      try { _notifyPendingApproval(t, m, _pendingGsmObj.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
+      showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     });
-    // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo.
-    _dualWriteResult(tId, matchId);
-    try { _notifyPendingApproval(t, m, m.pendingResult.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
-    showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     _rerenderBracket(tId, matchId);
     return;
   }
@@ -2296,13 +2358,18 @@ window._saveResultInline = function (tId, matchId) {
       }
       if (!Array.isArray(freshT.history)) freshT.history = [];
       freshT.history.push({ date: new Date().toISOString(), message: _pendingLogMsg });
-    }).then(function () {
-      if (_perdeuCorrida) _curaPropostaPerdida(tId, matchId, _perdeuCorrida);
+    }).then(function (gravou) {
+      // ⚠️ O QUE ACONTECE DEPOIS DA GRAVAÇÃO SÓ PODE SER DITO DEPOIS DELA. O aviso de
+      // "enviado", a notificação pro adversário e o espelho do jogo saíam DAQUI DE CIMA,
+      // antes de a transação voltar — então quem perdia a corrida (ou nem gravava, por
+      // falta de rede) avisava o adversário sobre uma proposta que não existe. Agora cada
+      // desfecho conta a sua própria história.
+      if (_perdeuCorrida) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorrida, _pendingPayload); return; }
+      if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
+      _dualWriteResult(tId, matchId);    // 4.1 DUAL-WRITE: espelha a proposta no doc do jogo
+      try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { window._error('[pendingApproval] notify failed', e); }
+      showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     });
-    // 4.1 DUAL-WRITE: espelha a proposta inicial (pendingResult) no doc do jogo.
-    _dualWriteResult(tId, matchId);
-    try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { window._error('[pendingApproval] notify failed', e); }
-    showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     _rerenderBracket(tId, matchId);
     return;
   }

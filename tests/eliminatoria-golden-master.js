@@ -52,21 +52,30 @@
  * `standingsCompareConfig`, os dois lados passaram a dizer a mesma coisa; quem se moveu foi
  * a TELA, que estava errada, e não a chave.
  *
- * ⚠️ REGRAVADO NA 2.1.27 — entrou o critério SALDO DE PONTOS DE TIE-BREAK (pedido do dono,
+ * ⚠️ REGRAVADO NA 2.1.28 — entrou o critério SALDO DE PONTOS DE TIE-BREAK (pedido do dono,
  * 27/ago/2026: _"se o saldo é o critério de pontuação, um critério a ser considerado antes do
  * sorteio seria saldo de tie-break disputado, que hoje não é considerado — apenas o saldo de
- * games"_). O diff MEDIDO, e ele é pequeno de propósito:
+ * games"_ · e a posição, no mesmo dia: _"o saldo de tie-break conta dentro do saldo de games,
+ * como pontos que não eram computados e agora são. depois do saldo de games, considere o
+ * saldo de tie-break"_ — ou seja LOGO depois dele, antes de games vencidos).
+ *
+ * O diff MEDIDO, e o que ele diz importa mais que o tamanho:
  *   · `classificacaoPorGrupo`: 0 dos 34 grupos mudaram de ordem.
- *   · `eliminatoria`: 2 dos 98 jogos — e são os MESMOS dois pares trocando de vaga entre
- *     P4 e P5 do Ouro. Nenhuma dupla nova, nenhum par desfeito.
+ *   · **as DUPLAS formadas são IDÊNTICAS** — 0 pares desfeitos, 0 pares novos, em todas as
+ *     chaves. Ninguém trocou de parceiro e ninguém mudou de chave (Ouro segue Ouro).
+ *   · `eliminatoria`: 21 dos 98 CONFRONTOS mudaram — quem enfrenta quem na 1ª rodada. É a
+ *     ORDEM DE SEMEADURA que mudou, e é ela que decide o cruzamento.
  *   · `motor-golden` (o Confra REAL, 28 torneios): nenhum valor mudou; só apareceram os dois
  *     campos novos (`tbPointsWon`/`tbPointsLost`) nas linhas.
- * A CAUSA, medida linha a linha no sandbox: uid0077 (Grupo S) e uid0114 (Grupo B2) estavam
- * empatados em TUDO acima — 3 vitórias, saldo de games +8, saldo de tie-breaks +1 — e só se
- * separam nos PONTOS do tie-break: 7-2 (saldo +5) contra 7-1 (saldo +6). Era exatamente esse
- * empate que antes escorria pros degraus de baixo. Provado por neutralização: zerando só o
- * critério novo, os dois retratos voltam BYTE A BYTE ao anterior.
- * É sorteio que AINDA NÃO FOI FEITO — a mesma licença das regravações acima.
+ *
+ * POR QUE MEXE EM TANTO CONFRONTO: o formato é de UM set, então `setsWon == wins` e a cadeia
+ * chega muito cedo em "saldo de games igual". Antes esses empates escorriam pra games
+ * vencidos; agora o saldo de tie-break decide primeiro — que é exatamente o que foi pedido.
+ * Na posição anterior (depois dos tie-breaks vencidos) eram 2 jogos: o critério quase nunca
+ * era alcançado, e por isso a posição importa mais que a existência dele.
+ *
+ * Provado por neutralização: zerando só o critério novo, o retrato volta BYTE A BYTE ao
+ * anterior. É sorteio que AINDA NÃO FOI FEITO — a mesma licença das regravações acima.
  *
  * Uso:
  *   node tests/eliminatoria-golden-master.js --gravar   → grava a fixture

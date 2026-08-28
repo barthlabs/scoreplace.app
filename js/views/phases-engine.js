@@ -1509,7 +1509,7 @@
       try { _buildH2H = require('./standings-core.js').buildH2H; } catch (e) { _buildH2H = null; }
     }
     var defaultTb = usesSets
-      ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
+      ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
       : ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     var tb = (Array.isArray(opts.tiebreakers) && opts.tiebreakers.length) ? opts.tiebreakers : defaultTb;
     // confronto direto POR UID (nome só pra quem não tem conta — é a identidade que ele tem)

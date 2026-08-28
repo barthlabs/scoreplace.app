@@ -251,6 +251,11 @@ console.log('──── 11. SALDO DE PONTOS DE TIE-BREAK (pedido do dono, 27/a
   var Q = linha('Q', 'uQ', { tiebreaksWon: 1, tiebreaksLost: 0, tbPointsWon: 7, tbPointsLost: 5 });
   ok(C.standingsCompareConfig(P, Q, { tiebreakers: ['saldo_games', 'tiebreaks_vencidos'] }) === 0,
     '(11) sem o critério novo, saldo de games e tie-breaks vencidos NÃO separam os dois');
+  // E na cadeia padrão ele decide ANTES de games vencidos — é a posição que o dono pediu.
+  var P2 = linha('P2', 'uP2', { gamesWon: 10, gamesLost: 8, tbPointsWon: 7, tbPointsLost: 1 });
+  var Q2 = linha('Q2', 'uQ2', { gamesWon: 12, gamesLost: 10, tbPointsWon: 7, tbPointsLost: 5 });
+  ok(C.standingsCompare(P2, Q2) < 0,
+    '(11) saldo de games igual (+2): o tie-break decide ANTES de games vencidos (12 > 10)');
   ok(C.standingsCompareConfig(P, Q, { tiebreakers: ['saldo_pontos_tiebreak'] }) < 0,
     '(11) com saldo de pontos de tie-break, P (7-1) passa na frente de Q (7-5)');
   ok(C.standingsCompare(P, Q) < 0,
@@ -291,8 +296,13 @@ console.log('──── 11. SALDO DE PONTOS DE TIE-BREAK (pedido do dono, 27/a
     '(11) toda cadeia padrão por sets inclui o critério (' + cadeias.length + ' cadeias)');
   ok(cadeias.every(function (c) { return c.indexOf('saldo_pontos_tiebreak') < c.indexOf('sorteio'); }),
     '(11) e ele entra ANTES do sorteio, como o dono pediu');
-  ok(cadeias.every(function (c) { return c.indexOf('saldo_games') < c.indexOf('saldo_pontos_tiebreak'); }),
-    '(11) e DEPOIS do saldo de games — é desempate do desempate, não substituto dele');
+  // Ordem do dono (27/ago/2026): _"o saldo de tie-break conta dentro do saldo de games, como
+  // pontos que não eram computados e agora são. depois do saldo de games, considere o saldo
+  // de tie-break"_ — LOGO depois, sem nada entre os dois.
+  ok(cadeias.every(function (c) {
+    var partes = c.replace(/[\[\]']/g, '').split(', ');
+    return partes.indexOf('saldo_pontos_tiebreak') === partes.indexOf('saldo_games') + 1;
+  }), '(11) e vem LOGO depois do saldo de games, sem critério entre os dois');
 })();
 
 console.log('');

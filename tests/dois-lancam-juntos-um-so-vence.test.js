@@ -18,6 +18,13 @@
  * O CONSERTO é fazer a mesma pergunta onde mora a verdade: dentro da transação, sobre o doc
  * fresco. Este teste separa as duas cópias de propósito — `local` (o que B vê) e `servidor`
  * (o que já tem a proposta de A) —, que é exatamente o que a trava velha não sabia fazer.
+ *
+ * ⭐ E A CORRIDA SÓ EXISTE SE HOUVER DISCORDÂNCIA. Segunda ordem do dono, no mesmo dia:
+ * _"quando duas propostas de placar batem poderia aprovar diretamente. apenas se houver
+ * alguma divergência entre as equipes daí sim a corrida ganha quem chegar primeiro."_
+ * Dois times dizendo o MESMO placar não é conflito, é acordo — pedir que um deles aprove o
+ * que ele mesmo acabou de lançar é burocracia inventada. Então: assinatura igual → confirma
+ * na hora; assinatura diferente → ganha quem chegou primeiro.
  */
 const H = require('./render-harness');
 const W = H.sandbox;
@@ -48,11 +55,16 @@ function novoT() {
 }
 const jogo = (t) => t.rounds[0].matches[0];
 
-function propostaDe(user, s1, s2) {
-  return { kind: 'inline', proposedBy: user.uid, proposedByEmail: user.email,
-    proposedByName: user.displayName, proposedAt: 1787000000000,
-    winner: s1 > s2 ? 'Catia / Roberta' : 'Angelica / Lician',
-    scoreP1: s1, scoreP2: s2, useSets: false };
+// ⚠️ A PROPOSTA DE A É FEITA PELO CÓDIGO DE VERDADE, não escrita à mão. Uma proposta
+// forjada aqui erra campos que o app grava (`useSets`, o array `sets` montado pelo
+// `_buildManualSet`…) e as duas assinaturas nunca bateriam — o teste diria "divergiram"
+// para dois placares idênticos, e eu estaria medindo o meu fixture, não o app.
+function propostaReal(user, s1, s2) {
+  const scratch = novoT();
+  boot(scratch, scratch, user);
+  montaDom('m1', s1, s2);
+  W._saveResultInline('t1', 'm1');
+  return JSON.parse(JSON.stringify(jogo(scratch).pendingResult));
 }
 
 function montaDom(matchId, s1, s2) {
@@ -96,18 +108,18 @@ async function main() {
     ok(typeof W._propostaDoOutroLado === 'function', 'a pergunta está exposta pro app inteiro');
     const m = jogo(t);
     ok(W._propostaDoOutroLado(t, m, B) === false, 'sem proposta nenhuma → não há corrida');
-    m.pendingResult = propostaDe(A, 6, 4);
+    m.pendingResult = propostaReal(A, 6, 4);
     ok(W._propostaDoOutroLado(t, m, B) === true, 'proposta de A, perguntando por B → é do OUTRO lado');
     ok(W._propostaDoOutroLado(t, m, A) === false, 'proposta de A, perguntando por A → é o MESMO lado (relançar é dele)');
     m.pendingResult.disputed = true;
     ok(W._propostaDoOutroLado(t, m, B) === false, 'proposta EM DISPUTA não trava ninguém (quem decide é o organizador)');
   }
 
-  console.log('\n2. A CORRIDA: B lança sem ter recebido a proposta de A');
+  console.log('\n2. DIVERGIRAM: B lança 3×6 sem saber que A já lançou 6×4 — ganha quem chegou primeiro');
   {
     const local = novoT();                     // o aparelho de B: jogo limpo (snapshot atrasado)
     const servidor = novoT();                  // o servidor: A já propôs 6×4
-    jogo(servidor).pendingResult = propostaDe(A, 6, 4);
+    jogo(servidor).pendingResult = propostaReal(A, 6, 4);
     boot(local, servidor, B);
     montaDom('m1', 3, 6);                      // B digita 3×6 e manda
     W._saveResultInline('t1', 'm1');
@@ -130,6 +142,47 @@ async function main() {
       '  → com o placar que vale');
     ok(avisos.some((a) => /outro time lançou primeiro/i.test(a)),
       '  → e B é avisado do que aconteceu, em vez de ficar achando que mandou');
+    ok(!jogo(local).winner, '  → e o jogo NÃO é decidido: placares diferentes precisam de gente');
+  }
+
+  console.log('\n2b. BATERAM: os dois lançaram o MESMO placar → confirma direto, sem aprovação');
+  {
+    const local = novoT(), servidor = novoT();
+    jogo(servidor).pendingResult = propostaReal(A, 3, 6);   // A já mandou 3×6, pelo código real
+    boot(local, servidor, B);
+    montaDom('m1', 3, 6);                                  // B manda o MESMO 3×6
+    W._saveResultInline('t1', 'm1');
+    await new Promise((r) => setTimeout(r, 0));
+
+    ok(jogo(local).winner === 'Angelica / Lician',
+      '⭐ o jogo é DECIDIDO na hora — ninguém precisou aprovar o que os dois já disseram');
+    ok(!jogo(local).pendingResult, '  → e não sobra proposta pendente');
+    ok(jogo(local).scoreP1 === 3 && jogo(local).scoreP2 === 6, '  → com o placar que os dois lançaram');
+    ok(avisos.some((a) => /mesmo placar/i.test(a)),
+      '  → e a tela DIZ por que confirmou sozinha (os dois lançaram igual)');
+    ok(!avisos.some((a) => /lançou primeiro/i.test(a)),
+      '  → sem o aviso de corrida perdida: não houve corrida, houve acordo');
+  }
+
+  console.log('\n2c. A ASSINATURA compara o PLACAR, não quem mandou nem por qual tela');
+  {
+    const base = { winner: 'Catia / Roberta', scoreP1: 6, scoreP2: 4 };
+    const sig = W._assinaturaDoPlacar;
+    ok(typeof sig === 'function', 'a assinatura está exposta');
+    ok(sig(Object.assign({ proposedBy: 'x', kind: 'inline', proposedAt: 1 }, base)) ===
+       sig(Object.assign({ proposedBy: 'y', kind: 'gsm', proposedAt: 999 }, base)),
+      'mesmo placar por telas e autores diferentes → MESMA assinatura');
+    ok(sig(Object.assign({}, base, { scoreP2: 5 })) !== sig(base), 'placar diferente → assinatura diferente');
+    // os PONTOS do tie-break entram: 6×7 com 5-7 não é o mesmo jogo que 6×7 com 2-7
+    const tbA = { winner: 'Angelica / Lician', scoreP1: 6, scoreP2: 7,
+      sets: [{ gamesP1: 6, gamesP2: 7, tiebreak: { pointsP1: 5, pointsP2: 7 } }] };
+    const tbB = { winner: 'Angelica / Lician', scoreP1: 6, scoreP2: 7,
+      sets: [{ gamesP1: 6, gamesP2: 7, tiebreak: { pointsP1: 2, pointsP2: 7 } }] };
+    ok(sig(tbA) !== sig(tbB), 'discordar dos pontos do tie-break é discordar do placar');
+    // o leitor canônico aceita a forma curta do histórico — a mesma assinatura tem que sair
+    const tbCurta = { winner: 'Angelica / Lician', scoreP1: 6, scoreP2: 7,
+      sets: [{ gamesP1: 6, gamesP2: 7, tiebreak: { p1: 5, p2: 7 } }] };
+    ok(sig(tbA) === sig(tbCurta), 'as duas formas gravadas do tie-break dão a MESMA assinatura');
   }
 
   console.log('\n3. O CAMINHO NORMAL segue igual: sem corrida, a proposta grava');
@@ -147,8 +200,9 @@ async function main() {
   console.log('\n4. RELANÇAR A PRÓPRIA proposta continua permitido (mesmo lado)');
   {
     const local = novoT(), servidor = novoT();
-    jogo(local).pendingResult = propostaDe(B, 3, 6);
-    jogo(servidor).pendingResult = propostaDe(B, 3, 6);
+    const minha = propostaReal(B, 3, 6);
+    jogo(local).pendingResult = minha;
+    jogo(servidor).pendingResult = JSON.parse(JSON.stringify(minha));
     boot(local, servidor, B);
     montaDom('m1', 2, 6);                       // B corrige o próprio placar
     W._saveResultInline('t1', 'm1');

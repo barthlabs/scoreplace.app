@@ -1163,7 +1163,7 @@ function _computeStandings(t, category) {
   // usar default em vez de [] (que pulava todos os tiebreakers).
   var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'sets') {
-    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
   if (t.advancedScoring && t.advancedScoring.enabled) {
     defaultTb = ['pontos_avancados'].concat(defaultTb);
@@ -1849,7 +1849,7 @@ function _rankByTiebreakers(t, playerNames) {
   // jogaram entre si). Empty array fallback aplicado.
   var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'gsm') {
-    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
   var tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
@@ -2927,7 +2927,7 @@ function _updateProgressiveClassification(t) {
     // UI em create-tournament.js.
     var _defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     if (t.scoring && t.scoring.type === 'sets') {
-      _defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+      _defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'saldo_pontos_tiebreak', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     }
     if (t.advancedScoring && t.advancedScoring.enabled) {
       _defaultTb = ['pontos_avancados'].concat(_defaultTb);
