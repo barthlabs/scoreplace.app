@@ -2795,7 +2795,25 @@ function renderDashboard(container) {
       // botão e ZERO input — é jogo de outra pessoa, não há o que lançar aqui.
       // Acima do card fica só o contexto que a chave não tem: de QUAL torneio é e QUANDO
       // o resultado saiu (esta seção cruza torneios; a chave é sempre de um só).
-      function _novCard(it) {
+      /* ⛔ GRUPO DE UM JOGO NÃO GASTA A LINHA INTEIRA (2.1.36).
+       * Relato do dono: "a quantidade de jogos mostrada numa linha tem que seguir o que
+       * aparece na sessão últimos resultados. nessa largura cabem 2 (que está mostrando
+       * nos últimos resultados) mas aqui está mostrando apenas 1 com um monte de espaço".
+       *
+       * MEDIDO rodando a régua REAL (`_spPreviewLen`) com o caso dele: com UM jogo por
+       * grupo os `kinds` viram [full, card, full, card] e, em 2 colunas, ela revela **1
+       * card** — o laço para no cabeçalho seguinte (`else if (cards > 0) break`), porque
+       * cabeçalho de linha inteira não divide fileira com card. Com 3 jogos NUM grupo a
+       * mesma régua revela 2 em 2 colunas: ou seja, a régua está certa; quem estraga a
+       * linha é o cabeçalho avulso.
+       *
+       * ⭐ E A SOLUÇÃO JÁ ESTAVA ESCRITA NA SEÇÃO IRMÃ. "Seus últimos resultados" tem dois
+       * ramos, e o comentário do segundo diz exatamente isto: "Singleton — sendo avulso, o
+       * rótulo não se repete em ninguém e um cabeçalho de linha inteira deixaria o resto da
+       * linha vazio" — e ali o cabeçalho vai INLINE, dentro do card. As Novidades emitiam o
+       * de linha cheia SEMPRE. Agora as duas seções seguem a MESMA régua, que é o que o
+       * dono pediu. [[feedback_unify_dual_entry_points]] */
+      function _novCard(it, cabecalhoInline) {
         var _quando = _agoLabel(it.at);
         // v1.8.78: o contexto "de qual torneio/grupo" saiu daqui e virou o cabeçalho
         // compartilhado de duas linhas, mostrado UMA vez por (grupo + torneio). Aqui
@@ -2816,6 +2834,7 @@ function renderDashboard(container) {
           ? window.renderMatchCard(it.m, false, it.tId, (it.m && it.m._gameNum != null) ? it.m._gameNum : null, false, null, { readOnly: true, dashConsensus: true })
           : '';
         return '<div data-nov-card="1"' + _spCard() + ' style="min-width:0;">' +
+          (cabecalhoInline || '') +
           (_quando
             ? '<div data-nov-quando="1" style="display:flex;justify-content:flex-end;margin-bottom:5px;padding:0 2px;">' +
                 '<span style="font-size:0.64rem;color:var(--sp-c-64748b,#64748b);font-weight:600;">' + _sf(_quando) + '</span>' +
@@ -2983,9 +3002,20 @@ function renderDashboard(container) {
       };
       var _novAntes = 0;
       _novGroups.forEach(function(g) {
-        _novAntes = _spCards;
-        _guarda(_grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"' + _spFull(), false, g.tId));
-        g.items.forEach(function(u) { _novAntes = _spCards; _guarda(_novCard(u.it)); });
+        /* Grupo com 2+ jogos: cabeçalho compartilhado de linha inteira — ele se paga,
+         * porque o rótulo serve a vários cards. Grupo de UM jogo: o cabeçalho vai DENTRO
+         * do card e a linha segue livre pro grupo seguinte. Mesma regra da seção irmã. */
+        if (g.items.length >= 2) {
+          _novAntes = _spCards;
+          _guarda(_grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="1"' + _spFull(), false, g.tId));
+          g.items.forEach(function(u) { _novAntes = _spCards; _guarda(_novCard(u.it)); });
+        } else {
+          /* `data-nov-head="inline"` (e não `"1"`): o rótulo continua RASTREÁVEL — a
+           * suíte confere que ele aparece uma vez só — mas não é confundido com o
+           * cabeçalho compartilhado, que é o único que ocupa a linha inteira. */
+          var _hIn = _grupoHeadHtml(g.grupo, g.tName, '#fbbf24', 'data-nov-head="inline"', true, g.tId);
+          g.items.forEach(function(u) { _novAntes = _spCards; _guarda(_novCard(u.it, _hIn)); });
+        }
       });
       _novHtml += _novVis;
       // ⚠️ Só guarda pra depois quando a seção NASCE recolhida. Aberta, tudo entra

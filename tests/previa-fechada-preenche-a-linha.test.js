@@ -169,12 +169,30 @@ ok(contar(NOV + MR, 'display:none !important') >= 3,
   // O cabeçalho do 1º grupo vem ANTES do 1º card → entra na prévia (contexto do card à
   // vista). O do 2º grupo vem depois → sai. Se o 1º entrasse marcado, a seção fechada
   // mostraria um card sem dizer de que grupo/torneio ele é.
+  /* ⭐ 2.1.36 — a fixture tem Grupo S com DOIS jogos e Grupo T com UM, e é isso que
+   * separa os dois tipos de cabeçalho agora:
+   *   S (2 jogos) → cabeçalho COMPARTILHADO, largura cheia — ele se paga.
+   *   T (1 jogo)  → rótulo INLINE, dentro do card — um cabeçalho de linha inteira pra um
+   *                 card só deixava metade da fileira vazia (relato do dono).
+   * ⛔ O que B4 protegia — "o card à vista não pode ficar sem contexto" — ficou MAIS
+   * forte, não mais fraco: no inline o rótulo VIAJA junto do card, então é impossível o
+   * card aparecer sem ele. */
   const heads = NOV.split('data-nov-head="1"').slice(1);
-  ok(heads.length === 2, 'B3 — Novidades tem 2 cabeçalhos de grupo (Grupo S e Grupo T) — vi ' + heads.length);
+  const headsIn = NOV.split('data-nov-head="inline"').slice(1);
+  ok(heads.length === 1, 'B3 — só o Grupo S (2 jogos) tem cabeçalho compartilhado — vi ' + heads.length);
+  ok(headsIn.length === 1, 'B3b — e o Grupo T (1 jogo) leva o rótulo dentro do card — vi ' + headsIn.length);
+  /* MEDIDO: nesta fixture o Grupo S vem PRIMEIRO (S@2593, T@11689). Então o cabeçalho
+   * compartilhado do S é o 1º elemento e tem que ENTRAR na prévia — é o invariante que
+   * B4 sempre protegeu: o card à vista não pode ficar sem dizer de que grupo é. */
   ok(heads[0].slice(0, 30).indexOf('data-sp-extra') === -1,
     'B4 — o cabeçalho do 1º grupo ENTRA na prévia (o card à vista não fica sem contexto)');
-  ok(heads[1].slice(0, 30).indexOf('data-sp-extra') !== -1,
-    'B5 — o cabeçalho do 2º grupo fica de fora (senão anunciaria cards escondidos)');
+  /* ⭐ E o grupo SEGUINTE não contribui mais nenhum cabeçalho de linha inteira: o dele é
+   * inline, preso ao próprio card. Anunciar card escondido virou impossível por
+   * construção — antes dependia de o `_spFull()` marcar o cabeçalho como extra. */
+  ok(heads.length === 1,
+    'B5 — o grupo seguinte não emite cabeçalho de linha inteira: nada anuncia card escondido');
+  ok(NOV.indexOf('data-nov-head="inline"') > NOV.indexOf('data-nov-card="1"'),
+    'B5b — e o rótulo inline vive DENTRO de um card, não solto na grade');
 })();
 
 // ── F. singular de verdade no convite ──────────────────────────────────────

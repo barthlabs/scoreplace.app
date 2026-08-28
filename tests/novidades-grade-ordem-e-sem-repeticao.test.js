@@ -249,22 +249,37 @@ ok(HTML.indexOf('(SB)') === -1, 'B2. torneio sandbox não aparece em NENHUMA das
 // antiga passaria a medir a ausência do rótulo, não a duplicação — que é o que estas
 // asserções nasceram pra pegar (o clone do sandbox). Elas continuam pegando exatamente
 // isso, agora contando CARDS e CABEÇALHOS.
-function cabecalhosNov(html) {
-  var out = [], re = /data-nov-head="1"[\s\S]*?letter-spacing:2px;[^"]*">([^<]+)</g, m;
+function cabecalhosNov(html, tipo) {
+  var out = [], re = new RegExp('data-nov-head="' + (tipo || '1') + '"[\\s\\S]*?letter-spacing:2px;[^"]*">([^<]+)<', 'g'), m;
   while ((m = re.exec(html))) out.push(m[1].trim());
   return out;
 }
+/* ⭐ 2.1.36 — DOIS tipos de cabeçalho, e a diferença é a LINHA que eles gastam.
+ * Grupo com 2+ jogos: cabeçalho COMPARTILHADO (`data-nov-head="1"`), largura cheia — ele
+ * se paga, porque o rótulo serve a vários cards.
+ * Grupo de UM jogo: rótulo INLINE (`data-nov-head="inline"`), DENTRO do card — um
+ * cabeçalho de linha inteira pra um card só deixava o resto da fileira vazio, que foi o
+ * relato do dono ("cabem 2, está mostrando 1"). É a mesma regra que "Seus últimos
+ * resultados" já usava; agora as duas seções não divergem.
+ * ⛔ O INVARIANTE destas asserções NÃO mudou: o rótulo de cada grupo aparece UMA vez. */
 const HEADS = cabecalhosNov(NOV);
+const HEADS_INLINE = cabecalhosNov(NOV, 'inline');
 ok(contar(NOV, 'data-nov-card="1"') === 3,
   'B3. os 3 jogos de outros entram uma vez cada (o clone do sandbox não duplica) — vi ' + contar(NOV, 'data-nov-card="1"'));
 ok(HEADS.filter(function (h) { return h === 'R1 Grupo S'; }).length === 1,
   'B4. o cabeçalho "R1 Grupo S" aparece UMA vez para os seus 2 jogos (a omissão pedida pelo dono) — vi ' +
   HEADS.filter(function (h) { return h === 'R1 Grupo S'; }).length);
-ok(HEADS.length === 2 && HEADS.indexOf('R1 Grupo T') !== -1 && HEADS.indexOf('R1 Grupo S') !== -1,
-  'B4b. há exatamente 2 cabeçalhos (Grupo T e Grupo S) para os 3 jogos — vi [' + HEADS.join(' | ') + ']');
+ok(HEADS.length === 1 && HEADS[0] === 'R1 Grupo S',
+  'B4b. o Grupo S (2 jogos) tem cabeçalho COMPARTILHADO de linha cheia — vi [' + HEADS.join(' | ') + ']');
+ok(HEADS_INLINE.length === 1 && HEADS_INLINE[0] === 'R1 Grupo T',
+  'B4b2. o Grupo T (1 jogo) leva o rótulo DENTRO do card, sem gastar a linha — vi [' + HEADS_INLINE.join(' | ') + ']');
+ok(HEADS.concat(HEADS_INLINE).length === 2,
+  'B4b3. e no total cada grupo é rotulado UMA vez (o invariante de sempre)');
 // o torneio vai na LINHA DE BAIXO do mesmo cabeçalho (nunca colado ao grupo)
-ok(/data-nov-head="1"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo T<\/div><div style="color:var\(--text-muted\)/.test(NOV),
-  'B4c. o nome do torneio vem numa segunda linha, logo abaixo do grupo');
+ok(/data-nov-head="1"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo S<\/div><div style="color:var\(--text-muted\)/.test(NOV),
+  'B4c. no cabeçalho compartilhado, o torneio vem na segunda linha, abaixo do grupo');
+ok(/data-nov-head="inline"[\s\S]*?letter-spacing:2px;[^"]*">R1 Grupo T<\/div><div style="color:var\(--text-muted\)/.test(NOV),
+  'B4c2. e no inline também — o desenho é o mesmo, só não ocupa a linha');
 
 // id de DOM repetido é o que faria _editPendingResult/_approveResult agirem no card errado
 const idsCard = (HTML.match(/id="card-[^"]+"/g) || []);
@@ -300,8 +315,11 @@ const posOntem = NOV.indexOf('R1 Grupo S');
 ok(posHoje !== -1 && posOntem !== -1 && posHoje < posOntem,
   'C2. o lançamento de hoje vem ACIMA do confirmado de ontem (hoje@' + posHoje + ' < ontem@' + posOntem + ')');
 
-ok(HEADS[0] === 'R1 Grupo T' && HEADS[1] === 'R1 Grupo S',
-  'C2b. a ordem dos cabeçalhos segue a do lançamento mais recente — vi [' + HEADS.join(' | ') + ']');
+/* A ordem continua sendo medida — só que pela POSIÇÃO dos rótulos no HTML, que vale
+ * para os dois tipos de cabeçalho. Comparar `HEADS[0]/HEADS[1]` deixou de servir quando o
+ * rótulo do grupo de 1 jogo saiu da lista dos compartilhados. */
+ok(NOV.indexOf('R1 Grupo T') < NOV.indexOf('R1 Grupo S'),
+  'C2b. o rótulo do lançamento mais recente (Grupo T) vem antes do de ontem (Grupo S)');
 
 // A sonda é o id do card (`id="card-<m.id>"`), que é estável e não depende de rótulo.
 const posS1 = NOV.indexOf('id="card-m-S1"');
