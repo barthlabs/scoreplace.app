@@ -60,6 +60,24 @@ ok('seção individual (gridStyle) é grid responsivo (literal ou via a constant
 ok('⭐ e ela DERIVA do cânone, não de uma medida própria',
    /window\._INSCRITO_GRID_SOLO/.test(gridStyleTrecho), gridStyleTrecho.slice(0, 120));
 
+// 3b. ⛔ NENHUMA RÉGUA PRÓPRIA — nem aqui, nem no #participants (2.1.40).
+/* O dono, ao ver os cards: "está usando os cards canônicos ou inventou esses?" e depois
+ * "mate a divergente que senão vira regressão como acabou de provar". Ele estava certo, e a
+ * prova foi minha: existiam TRÊS medidas para o MESMO card — 240px escrito à mão no
+ * #participants, 260px escrito à mão no detalhe, e a constante `_INSCRITO_GRID_SOLO` com um
+ * `gap` que não batia com nenhum dos dois. Trocar uma pela outra encolheu o respiro entre os
+ * cards na tela dele — regressão visível, causada por "canonizar" pro valor errado.
+ * ⭐ A constante agora vale a medida das telas APROVADAS (260px, gap:1rem) e as três derivam.
+ * Este teste falha se alguém escrever a medida à mão de novo em qualquer uma delas. */
+const pSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'participants.js'), 'utf8');
+const gsP = (pSrc.match(/gridStyle = [^;]{0,200};/g) || []);
+ok('#participants NÃO tem grade de inscrito escrita à mão',
+   !gsP.some((g) => /grid-template-columns/.test(g)), gsP.join(' | ').slice(0, 160));
+ok('#participants deriva de _INSCRITO_GRID_SOLO',
+   gsP.some((g) => /_INSCRITO_GRID_SOLO/.test(g)), gsP.join(' | ').slice(0, 160));
+ok('o cânone tem o respiro das telas aprovadas (gap:1rem, não 8px)',
+   !!(soloM && /gap:\s*1rem/.test(soloM[1])), soloM && soloM[1]);
+
 // 4. Nenhum host de card de inscrito da seção de duplas voltou a usar coluna única inline.
 const badInline = /class="sp-dnd-host"\s*style="display:flex;flex-direction:column/.test(src);
 ok('nenhum sp-dnd-host inline com flex-direction:column (regressão)', !badInline);

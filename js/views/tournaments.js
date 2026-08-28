@@ -27,7 +27,7 @@ var _t = window._t || function(k) { return k; };
 // align-items:STRETCH (não start) = todos os cards da MESMA LINHA têm a MESMA ALTURA (o card mais
 // curto estica até o mais alto da linha). Dono (recorrente): "os cards devem ter SEMPRE a mesma
 // altura, não pode um mais alto que o outro". Travado no teste junto com o grid.
-window._INSCRITO_GRID_SOLO = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:8px;align-items:stretch;';
+window._INSCRITO_GRID_SOLO = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr));gap:1rem;align-items:stretch;';
 window._INSCRITO_GRID_DUPLA = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(min(100%, 340px), 1fr));gap:8px;align-items:stretch;';
 
 // v1.3.84: chave ESTÁVEL da entrada (dupla ou solo) pra achar o card no DOM no update in-place.

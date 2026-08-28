@@ -2889,7 +2889,12 @@ function renderParticipants(container, tournamentId) {
       cardsStr = _dsecP.html;
     } else {
     // ── Normal mode: team cards with drag/split/delete ──
-    gridStyle = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:1rem;';
+    /* ⛔ TERCEIRA RÉGUA, MORTA (2.1.40). Esta linha tinha a medida escrita à mão — 240px,
+     * sem `min(100%)` — enquanto o DETALHE usava 260px e a constante canônica dizia outra
+     * coisa ainda. Mesmo card, três larguras. Foi assim que trocar uma pela outra virou
+     * regressão visível. Agora as três derivam de `_INSCRITO_GRID_SOLO`.
+     * [[feedback_unify_dual_entry_points]] */
+    gridStyle = window._INSCRITO_GRID_SOLO;
 
     // v2.7.49: inclui os da LISTA DE ESPERA no grid pré-sorteio (antes só apareciam
     // no painel de Lista de Espera, sumindo dos Inscritos). Intercalados, com badge
