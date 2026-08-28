@@ -10,4 +10,12 @@ Esta versão alinha o aplicativo ao site — se você usa o app, atualize.
 
 • Lançar placar não faz mais a tela pular, e o resultado sem sinal entra numa fila e é aplicado sozinho quando a conexão volta.
 
-• Vários acertos de leitura: nomes que cabem inteiros nos cards, listas alinhadas e menos repetição nas telas.
+• Placar mais simples: quando as duas partes lançam o mesmo resultado, ele se confirma sozinho — ninguém precisa aprovar. E dois lançamentos ao mesmo tempo deixaram de travar o jogo.
+
+• Desempate mais justo: o saldo de tie-break entrou como critério, logo depois do saldo de games — e sem virar game, como acontecia antes.
+
+• Amigo aparece como amigo: quem já é da sua lista não volta a aparecer como convite pendente.
+
+• A tela guarda o que você fechou: previsão, progresso e configuração abrem do jeito que você deixou.
+
+• Vários acertos de leitura: nomes que cabem inteiros nos cards, listas alinhadas, rolagem das notificações e menos repetição nas telas.
