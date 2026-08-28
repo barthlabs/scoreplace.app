@@ -4805,7 +4805,6 @@ function setupCreateTournamentModal() {
     }
 
     // Elim settings
-    // elimThirdPlace is always true — no toggle needed
     var _ertEl = document.getElementById('elim-ranking-type'); if (_ertEl) _ertEl.value = t.elimRankingType || 'individual';
 
     // Grupos
@@ -5371,7 +5370,6 @@ window._saveTournamentClickHandler = function() {
           manualPairing: (document.getElementById('manual-pairing') || {}).value === 'open' ? 'open' : 'organizer_only',
           teamSize: teamSizeVal,
           gameTypes: (document.getElementById('tourn-game-types') || {}).value || 'duplas',
-          thirdPlace: true,
           // No modo Vagas-por-sorteio nunca há corrida: zera limite/auto-close
           // pra que os gatilhos de fechamento automático fiquem inertes.
           maxParticipants: isDrawMode ? null : maxPartsVal,
@@ -5516,7 +5514,6 @@ window._saveTournamentClickHandler = function() {
 
         // Eliminatórias
         if (formatValue === 'elim_simples' || formatValue === 'elim_dupla' || formatValue === 'grupos_mata') {
-          tourData.elimThirdPlace = true;
           tourData.elimRankingType = document.getElementById('elim-ranking-type').value;
         }
 

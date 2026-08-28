@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.40';
+window.SCOREPLACE_VERSION = '2.1.41';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -2758,14 +2758,19 @@ window._sbCollectRealEnrollees = function (t) {
 window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
   var ALLOW_I = ['uid', 'name', 'displayName', 'email', 'photoURL', 'gender', 'birthDate',
     'skillBySport', 'categories', 'category', 'defaultCategory', 'categorySource',
-    'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq'];
+    'wasUncategorized', 'selfEnrolled', 'addedAt', 'enrollSeq', 'isPlaceholder'];
+  /* 2.1.41: `isPlaceholder` (e o par p1/p2Placeholder) entram na lista. Fora dela a
+   * limpeza APAGAVA a marca de "vaga", e a vaga voltava como pessoa comum — o mesmo
+   * tipo de perda que fazia o nº de inscrição sumir no desfazer da dupla. */
   var ALLOW_P = ALLOW_I.concat(['p1Uid', 'p1Name', 'p1Email', 'p1Photo', 'p1Seq', 'p1Gender', 'p1BirthDate',
-    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate']);
+    'p2Uid', 'p2Name', 'p2Email', 'p2Photo', 'p2Seq', 'p2Gender', 'p2BirthDate',
+    'p1Placeholder', 'p2Placeholder']);
   var isPair = function (p) { return !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)); };
   var member = function (p, n) {
     var g = function (suf) { return p['p' + n + suf]; };
     var o = { uid: g('Uid'), name: g('Name'), displayName: g('Name'), email: g('Email'),
-      photoURL: g('Photo'), gender: g('Gender'), birthDate: g('BirthDate'), enrollSeq: g('Seq') };
+      photoURL: g('Photo'), gender: g('Gender'), birthDate: g('BirthDate'), enrollSeq: g('Seq'),
+      isPlaceholder: (g('Placeholder') ? true : undefined) };
     Object.keys(o).forEach(function (k) { if (o[k] === undefined || o[k] === null) delete o[k]; });
     return o;
   };

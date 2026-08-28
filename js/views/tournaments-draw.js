@@ -2136,7 +2136,7 @@ window._buildPhase0Cfg = function (t) {
             if ((code === 'elim_dupla' || code === 'elim_simples') && (pr === 'bye' || pr === 'playin') && typeof window._autoP2Resolution === 'function') return window._autoP2Resolution(t);
             return pr;
         })(),
-        thirdPlace: t.thirdPlace !== false,
+        thirdPlace: true,   // 3º lugar sempre — não é opcional [[project_third_place_always]]
         categories: (Array.isArray(t.combinedCategories) && t.combinedCategories.length) ? t.combinedCategories.slice() : null,
         source: { type: 'enrollment' }
     };

@@ -735,7 +735,19 @@ window._buildTimeEstimation = function(t, opts) {
   // Número de partidas por formato
   function calcMatches(n, fmt) {
     if (fmt === 'Eliminatórias' || fmt === 'Eliminatórias Simples') {
-      return n - 1; // single elim (sem 3o lugar)
+      /* ⛔ 2.1.41 — "sem 3o lugar" era uma OMISSÃO, não uma decisão. Relato do dono:
+       * _"o que está errado é a estimativa de tempo considerando o número errado de jogos"_.
+       * A chave de 4 times tem QUATRO jogos — 2 semis, a final e o 3º — e a caixa dizia 3.
+       * O jogo existe, é jogado, ocupa quadra e tempo: fora da conta, ele subestima a
+       * previsão do dia inteiro, que é para o que a caixa serve.
+       * ⛔ E NÃO EXISTE MAIS FLAG PRA CONSULTAR. Ordem do dono: _"não existe razão motivo ou
+       * circunstância para a disputa do 3º lugar ser ignorada"_ e _"isso é código morto,
+       * acabe com essa merda que sempre regride nisso"_. Na 2.1.41 `elimThirdPlace` (escrita
+       * em 2 lugares, lida em NENHUM), o setter `_f2Terceiro` (sem chamador) e as oito
+       * condições `thirdPlace !== false` foram apagados. Eliminatória TEM disputa de 3º.
+       * ⚠️ O `n >= 4` não é circunstância, é aritmética: com menos de 4 não existem dois
+       * perdedores de semifinal pra disputá-la — o jogo não deixa de contar, ele não existe. */
+      return (n - 1) + (n >= 4 ? 1 : 0);
     } else if (fmt === 'Dupla Elim.' || fmt === 'Dupla Eliminatória') {
       // Upper bracket: n-1, Lower bracket: ~n-1, Grand final: 1-2
       return Math.ceil(n * 2 - 1);
@@ -860,6 +872,27 @@ window._buildTimeEstimation = function(t, opts) {
       if (_di && _di.effectiveTeams > 0) unitCount = _di.effectiveTeams;
     }
   } catch (e) {}
+  /* ⛔ 2.1.41 — O FALLBACK CONTAVA PESSOA COMO SE FOSSE TIME. Relato do dono, com print:
+   * _"e de onde 8 part / 4 duplas daria 7 jogos? dá 4 jogos"_. Ele está certo: o torneio é
+   * Duplas (2×2), e 8 inscritos são 4 times → eliminatória de 4 = 3 jogos + a disputa de 3º.
+   * A caixa dizia 7 — a conta de uma chave de OITO.
+   * ⭐ POR QUE O CAMINHO BOM NÃO PEGOU: `_diagnoseAll` devolve `effectiveTeams` contando as
+   * duplas JÁ FORMADAS, e antes do sorteio não há nenhuma; caía no fallback, que é o nº de
+   * ENTRADAS. Num torneio individual entrada = competidor e estava certo; num de duplas, não.
+   * ⛔ Não é uma segunda fórmula de resolução: só a queda passa a respeitar o `teamSize`.
+   * Dupla já formada conta 1; o resto se agrupa de `teamSize` em `teamSize`. */
+  var _ts = Math.max(1, Number(t.teamSize) || 1);
+  if (_ts > 1 && unitCount === parts.length) {
+    var _ehDupla = function (p) {
+      if (typeof p === 'string') return p.indexOf(' / ') !== -1;
+      if (!p || typeof p !== 'object') return false;
+      if (Array.isArray(p.participants) && p.participants.length > 1) return true;
+      return !!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+    };
+    var _times = 0, _avulsos = 0;
+    parts.forEach(function (p) { if (_ehDupla(p)) _times++; else _avulsos++; });
+    unitCount = _times + Math.floor(_avulsos / _ts);
+  }
   var realCount = 0;
   parts.forEach(function(p) {
     if (typeof p === 'object' && p !== null && Array.isArray(p.participants)) {

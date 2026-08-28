@@ -434,7 +434,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (cfg.eliminatoria.ativa) {
       var q = (cfg.grupos > 1) ? cfg.grupos * cfg.classificados : cfg.classificados;
       q = Math.min(q, gi.units);
-      if (q >= 2) elimGames = (q - 1) + (cfg.eliminatoria.terceiro ? 1 : 0);
+      if (q >= 2) elimGames = (q - 1) + (q >= 4 ? 1 : 0);   // 3º lugar sempre (≥4 tem 2 semis)
     }
     var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
     // ⛔ grupos e eliminatória podem ter formatos DIFERENTES: cada metade usa o
@@ -467,7 +467,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (gi.units > 0) q = Math.min(q, gi.units);
     var teams = Math.max(0, q);
     var people = teams * (isDupla ? 2 : 1);
-    var games = (teams >= 2) ? (teams - 1) + (cfg.eliminatoria.terceiro ? 1 : 0) : 0;
+    var games = (teams >= 2) ? (teams - 1) + (teams >= 4 ? 1 : 0) : 0;   // 3º lugar sempre
     // v2.0.74: tempo POR SET × sets da partida DESTA fase (a eliminatória).
     var gd = _minPartidaForm(gi, _elimEffScoring(cfg.eliminatoria || {}));
     var cc = parseInt((document.getElementById('tourn-court-count') || {}).value, 10) || (gi.t && gi.t.courtCount) || 1;
@@ -1141,7 +1141,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // v4.4.x: estratégia ÚNICA da eliminatória (performance/equilíbrio/sorteio) — dirige formação
   // das duplas E semeadura dos confrontos (compilador deriva bracketSeeding).
   window._f2Formacao = function (v) { S.cfg.eliminatoria.formacao = v; _norm(); _rerender(); };
-  window._f2Terceiro = function (b) { S.cfg.eliminatoria.terceiro = !!b; _norm(); };
+  /* window._f2Terceiro APAGADO (2.1.41): setter SEM CHAMADOR de um campo que `_norm()`
+   * força a `true` na linha seguinte. Decoy — faz o próximo leitor consertar o lugar
+   * errado. [[project_third_place_always]] [[feedback_funcao_dentro_de_outra_nao_existe]] */
   window._f2LineName = function (i, v) { if (S && S.cfg.eliminatoria.nomes) S.cfg.eliminatoria.nomes[i] = v; };
 
   // ── MODO FORM: monta os controles dentro do #fase1-box do editar/criar. ──

@@ -2706,6 +2706,10 @@ function renderTournaments(container, tournamentId = null) {
         // v2.1.3: se está na LISTA DE ESPERA, mostra a tag + "Sair da lista de
         // espera" (tem prioridade sobre o botão "Inscrever-se", que aparecia
         // errado pra quem já entrou na espera via inscrição tardia).
+        /* Os DOIS estados em que o chip do grupo já sai colado no botão de inscrição
+         * (desinscrever-se e inscrever-se). O outro ponto de inserção usa a negação
+         * disto — um só lugar decide, então nunca aparece duas vezes nem nenhuma. */
+        const _waChipJuntoDoEnroll = !_isInStandby && isAberto;
         const enrollBtnHtml = _isInStandby ? `
              <div style="font-size: 0.6rem; font-weight: 800; color: var(--sp-c-fbbf24,#fbbf24); background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.4px;">⏳ ${_t('enroll.onWaitlist') || 'Lista de espera'}</div>
              <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist') || 'Sair da lista de espera'}</button>
@@ -2717,7 +2721,17 @@ function renderTournaments(container, tournamentId = null) {
           ` : (isAberto && !_profileReady && window.AppStore.currentUser) ? `
              <button class="btn btn-sm" disabled style="opacity:0.45;cursor:not-allowed;padding:6px 12px;font-size:0.78rem;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:8px;color:var(--text-muted);">⏳ Carregando…</button>
           ` : (isAberto ? `
-             <button class="btn btn-sm btn-success hover-lift" style="${_enrollFlash}" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.enrollCurrentUser('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>
+             <div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
+               ${/* ⭐ 2.1.41 — O GRUPO OFICIAL FICA À ESQUERDA DE "INSCREVER-SE". Ordem do dono,
+                     pedida três vezes: _"esse botão de criar o grupo oficial deveria estar na
+                     esquerda do inscrever-se"_. Ele já morava à esquerda do "Desinscrever-se"
+                     (o ramo de cima) — só que o ramo de QUEM AINDA NÃO SE INSCREVEU não tinha
+                     o par, e o botão caía lá embaixo, na fila do Convidar/Compartilhar.
+                     ⛔ Ele não pode nascer duas vezes: o outro ponto de inserção passa a ser
+                     o complemento exato disto, via `_waChipJuntoDoEnroll`. */ ''}
+               ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
+               <button class="btn btn-sm btn-success hover-lift" style="${_enrollFlash}" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.enrollCurrentUser('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>
+             </div>
           ` : (isParticipating ? `
              <div style="font-size: 0.65rem; font-weight: 700; color: var(--sp-c-fef08a,#fef08a); text-transform: uppercase; letter-spacing: 0.5px;">${_t('enroll.enrolled')} ✓</div>
           ` : ''));
@@ -3240,7 +3254,7 @@ function renderTournaments(container, tournamentId = null) {
                     FECHADAS não caía em nenhum dos dois lados — e como o chip das Ferramentas
                     saiu na 1.8.30, ele ficava sem NENHUM acesso ao grupo (era o estado do
                     Confra). Criar/trocar/abrir agora vivem no painel que este botão abre. */ ''}
-              ${(!(isParticipating && isAberto) && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
+              ${(!_waChipJuntoDoEnroll && typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
               ${(!isFinished && t.startDate) ? `<button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window._tournamentAddToCalendar('${t.id}');">📅 Adicionar à agenda</button>` : ''}
             </div>` : ''}
 

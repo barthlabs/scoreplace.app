@@ -3537,7 +3537,7 @@ window._applySwissEliminationTransition = function (t, roundIdx) {
   });
   var _elimCfg = {
     source: { mapping: [{ dest: 'main', rankFrom: 1, rankTo: 999, label: '' }], scope: 'overall', rankingBasis: (_tsE > 1 ? 'team' : 'individual') },
-    pairingStrategy: 'seed', bracketResolution: 'bye', fixedPairs: false, grandFinal: false, thirdPlace: t.thirdPlace !== false
+    pairingStrategy: 'seed', bracketResolution: 'bye', fixedPairs: false, grandFinal: false, thirdPlace: true /* sempre */
   };
   var _built = window._phasesEngine.buildPhaseBrackets([{ standings: _rankedPool }], _elimCfg, function (g) { return g.standings || []; }, 'swelim-' + roundIdx);
   _built.matches.forEach(function (m) { if (m.phaseIndex == null) m.phaseIndex = 0; if (m.category === undefined) m.category = null; });

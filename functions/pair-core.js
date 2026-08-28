@@ -120,11 +120,16 @@ function computeFormPair(data, opts) {
   // Preserva o nº de inscrição ORIGINAL de cada membro (enrollSeq persistido no solo).
   var _seq1 = (_p1 && typeof _p1 === 'object' && _p1.enrollSeq != null) ? _p1.enrollSeq : null;
   var _seq2 = (_p2 && typeof _p2 === 'object' && _p2.enrollSeq != null) ? _p2.enrollSeq : null;
+  /* 2.1.41: e o "é uma VAGA" de cada membro. Sem isto o desfazer não tem como devolver o
+   * inscrito como ele entrou — e o card volta como pessoa comum onde era placeholder. */
+  var _ph1 = (_p1 && typeof _p1 === 'object' && _p1.isPlaceholder) ? true : undefined;
+  var _ph2 = (_p2 && typeof _p2 === 'object' && _p2.isPlaceholder) ? true : undefined;
   var newName = name1 + ' / ' + name2;
   var merged = cleanUndefined({
     displayName: newName, name: newName, uid: _u1 || _u2 || '',
     p1Name: name1, p1Uid: _u1, p2Name: name2, p2Uid: _u2,
-    p1Seq: _seq1, p2Seq: _seq2, ligaActive: true
+    p1Seq: _seq1, p2Seq: _seq2,
+    p1Placeholder: _ph1, p2Placeholder: _ph2, ligaActive: true
   });
 
   var maxI = Math.max(fi1, fi2), minI = Math.min(fi1, fi2);
@@ -200,18 +205,29 @@ function computeSplitPair(data, opts) {
   // é justamente a hora de parar de carregar isso adiante. O que o solo herda é o
   // que é DO TORNEIO (nº de inscrição, categoria) e o nome, que só identifica quem
   // não tem perfil. Mesma regra do pairPartnerSolo (enroll-core.js).
-  var solo = function (uid, name, seq) {
-    if (!uid) return name;
+  /* ⛔ 2.1.41 — `if (!uid) return name` DEVOLVIA UMA STRING, e a string não guarda campo
+   * nenhum: o nº de inscrição do membro morria ali. Ordem do dono, textual: _"quando forma
+   * dupla o número de inscrição de cada membro é mantido. ao dissolver a dupla fica muito
+   * fácil de manter os números de inscrição original de cada um"_. Ele está certo — o
+   * número JÁ vinha guardado em p1Seq/p2Seq; só não tinha onde pousar na volta.
+   * ⭐ MEDIDO no torneio de teste dele: participants[0] e [7] eram as strings "Jogador 02"
+   * e "Jogador 01", sem enrollSeq, enquanto os outros seis eram objetos com 1..6. Por isso
+   * `_buildEnrollOrderMap` mandava os dois pro FIM da fila (7 e 8) — o embaralhamento do
+   * print. E a string ainda colidia na chave `x` da subcoleção (ver tournament-split-core).
+   * ⛔ O que NÃO atravessa segue não atravessando: email/foto/gênero/nascimento continuam
+   * fora. O solo herda o que é DO TORNEIO — número, categoria — e o nome. */
+  var solo = function (uid, name, seq, isPh) {
     return cleanUndefined({
-      uid: uid, ligaActive: true,
+      uid: (uid || undefined), ligaActive: true,
       displayName: (name || undefined), name: (name || undefined),
       enrollSeq: (seq != null ? seq : undefined),
+      isPlaceholder: (isPh ? true : undefined),
       category: entry.category, categories: entry.categories,
       categorySource: entry.categorySource
     });
   };
-  var solo1 = solo(p1Uid, p1Name, entry.p1Seq);
-  var solo2 = solo(p2Uid, p2Name, entry.p2Seq);
+  var solo1 = solo(p1Uid, p1Name, entry.p1Seq, entry.p1Placeholder);
+  var solo2 = solo(p2Uid, p2Name, entry.p2Seq, entry.p2Placeholder);
 
   arr.splice(idx, 1, solo1, solo2);
 

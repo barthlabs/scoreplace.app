@@ -202,13 +202,27 @@
    * nome); e é infinitamente melhor que a posição, que muda sem ninguém ter feito nada.
    */
   function chaveDoInscrito(p) {
+    /* ⛔ 2.1.41 — `return 'x'` PARA TODA STRING: o pior tipo de colisão, porque não é
+     * aleatória, é TOTAL. Medido no torneio de teste do dono: 8 inscritos no documento,
+     * SETE docs na subcoleção. Dois inscritos eram string ("Jogador 01" e "Jogador 02",
+     * devolvidos assim pelo desfazer da dupla) e os dois escreveram na chave `x` — um
+     * comeu o outro. Sintoma na cara dele: _"removi e ele voltou"_ — remover apagava um
+     * doc, e o remonte trazia o sobrevivente de volta no lugar dos dois.
+     * ⭐ A string TEM conteúdo: é o nome. Passa pelo MESMO hash do ramo de nome (③), que
+     * já é o cânone pra quem não tem uid. [[feedback_chave_de_espelho_nunca_e_posicao]] */
+    if (typeof p === 'string') return _chaveDeNomes(String(p));
     if (!p || typeof p !== 'object') return 'x';
     if (p.uid) return 'u' + String(p.uid);
     if (p.p1Uid || p.p2Uid) return 'd' + String(p.p1Uid || '-') + '_' + String(p.p2Uid || '-');
-    var nomes = [p.name, p.displayName, p.p1Name, p.p2Name]
+    return _chaveDeNomes([p.name, p.displayName, p.p1Name, p.p2Name]
       .concat((Array.isArray(p.participants) ? p.participants : [])
         .map(function (x) { return x && (x.displayName || x.name); }))
-      .filter(Boolean).join('|');
+      .filter(Boolean).join('|'));
+  }
+  /* O hash de nome, UM só — usado pelo inscrito-objeto sem uid E pelo inscrito-string.
+   * Duas cópias divergiriam e a chave do MESMO nome mudaria conforme a forma da entrada. */
+  function _chaveDeNomes(nomes) {
+    nomes = String(nomes || '');
     var h = 0x811c9dc5;
     for (var i = 0; i < nomes.length; i++) {
       h ^= nomes.charCodeAt(i);

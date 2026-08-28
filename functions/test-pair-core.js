@@ -155,14 +155,28 @@ console.log('\n── desfazer dupla SÓ-UID (sem nome gravado) — bug de produ
 
 console.log('\n── desfazer dupla com FICTÍCIO (sem conta) — nome continua sendo a identidade ──');
 {
+  /* ⛔ ESTA ASSERÇÃO MUDOU NA 2.1.41, e mudou porque ela travava o DEFEITO.
+   * Ela exigia que o fictício voltasse como STRING do nome. String não guarda campo
+   * nenhum — então o nº de inscrição do membro (p2Seq) morria no desfazer, e a entrada
+   * ainda colidia na chave `x` da subcoleção de inscritos.
+   * Ordem do dono (28/ago/2026): _"quando forma dupla o número de inscrição de cada
+   * membro é mantido. ao dissolver a dupla fica muito fácil de manter os números de
+   * inscrição original de cada um"_. O nome CONTINUA sendo a identidade de quem não tem
+   * conta — só que agora ele viaja dentro de um objeto, junto do número.
+   * Ver tests/numero-de-inscricao-sobrevive-a-dupla.test.js. */
   const t = {
     id: 'T', enrollmentMode: 'teams', teamSize: 2, creatorUid: 'uidOrg',
-    participants: [{ uid: 'uidA', p1Uid: 'uidA', p2Name: 'Convidado', p1Seq: 1 }],
+    participants: [{ uid: 'uidA', p1Uid: 'uidA', p2Name: 'Convidado', p1Seq: 1, p2Seq: 2 }],
   };
   const r = computeSplitPair(t, { id1: 'uidA', id2: 'Convidado' });
   ok('uid + fictício → split', r.outcome === 'split', r.outcome);
   const parts = (r.updateData || {}).participants || [];
-  ok('fictício volta como string do nome', parts.indexOf('Convidado') !== -1, JSON.stringify(parts));
+  const _fic = parts.find((p) => p && typeof p === 'object' && (p.name || p.displayName) === 'Convidado');
+  ok('fictício volta como OBJETO, com o nome como identidade', !!_fic, JSON.stringify(parts));
+  ok('⛔ e com o nº de inscrição dele (2) — era isto que a string perdia',
+     !!_fic && _fic.enrollSeq === 2, JSON.stringify(_fic));
+  ok('nenhuma string solta no roster (colidia na chave `x` da subcoleção)',
+     !parts.some((p) => typeof p === 'string'), JSON.stringify(parts));
   ok('titular volta por uid', parts.some((p) => p && p.uid === 'uidA' && !p.p2Uid && !p.p2Name));
 }
 

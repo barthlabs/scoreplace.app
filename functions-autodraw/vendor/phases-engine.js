@@ -730,7 +730,14 @@
     // Com convergência (grande final entre 2/4 linhas), o 3º/4º é o do nível da
     // convergência (perdedores das finais das linhas), não interno a cada linha.
     var _wgf = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
-    var _wth = phaseCfg ? (phaseCfg.thirdPlace !== false) : true;
+    /* 3º LUGAR É O CAMINHO NATURAL — NÃO É OPÇÃO (2.1.41). Ordem do dono: _"não existe
+     * razão motivo ou circunstância para a disputa do 3º lugar ser ignorada"_ e _"isso é
+     * código morto, acabe com essa merda que sempre regride nisso"_. Quem perdeu a semi
+     * disputa o 3º, e pronto. A flag já era forçada a `true` no normalizador do format2
+     * (`e.terceiro = true`); o que sobrava era mato — um setter SEM CHAMADOR e oito
+     * condições que nunca eram falsas, cada uma um lugar onde o jogo podia sumir de novo.
+     * [[project_third_place_always]] */
+    var _wth = true;
     var _tierThird = _wth && !(_wgf && (destOrder.length === 2 || destOrder.length === 4));
 
     destOrder.forEach(function (dest) {
@@ -761,7 +768,7 @@
     // pela estratégia (linhas em ordem de seed): performance/'top' = (L1×L4),(L2×L3);
     // equilíbrio/'balanced' = (L1×L3),(L2×L4). Sem grande final → nada disso (independentes).
     var withGF = phaseCfg ? (phaseCfg.grandFinal !== false) : true;
-    var withThird = phaseCfg ? (phaseCfg.thirdPlace !== false) : true;
+    var withThird = true;   // 3º lugar sempre — ver a nota em _wth
     var tierKeys = destOrder.filter(function (d) { return tiers[d]; });
     function _mkConv(idSuffix, bracket, label) { return { id: idPrefix + idSuffix, bracket: bracket, round: 99, p1: 'TBD', p2: 'TBD', winner: null, tierLabel: label }; }
     if (withGF && tierKeys.length === 2) {
@@ -1189,7 +1196,13 @@
     var _daInscricao = !!(cfg && cfg.source && cfg.source.type === 'enrollment');
     var built = A.build(pool.length, dupla ? 'dupla' : 'simples', {
       participantes: pool,
-      tierThird: cfg ? (cfg.thirdPlace !== false) : true,
+      /* ⚠️ AQUI `cfg.thirdPlace` NÃO é a flag do organizador — é o PARÂMETRO INTERNO que
+       * o chamador passa como `{ thirdPlace: _tierThird }`, e `_tierThird` carrega a regra
+       * ESTRUTURAL: sob convergência (linhas que se juntam numa grande final) o 3º é o do
+       * nível da convergência, não um por linha — senão nasceriam dois "3º lugar".
+       * ⛔ Eu apaguei isto junto com a flag na 2.1.41 e dois testes pegaram na hora.
+       * A flag do ORGANIZADOR morreu; esta regra de geometria da chave fica. */
+      tierThird: (cfg ? cfg.thirdPlace !== false : true),
       ns: _nsDeterministico(idPrefix),
       bracketKey: bracketKey || null,
       semear: !_daInscricao
@@ -1210,7 +1223,7 @@
   }
 
   function _genElimFromPool(pool, cfg, idPrefix) {
-    var _third = cfg ? (cfg.thirdPlace !== false) : true;
+    var _third = (cfg ? cfg.thirdPlace !== false : true);   // parâmetro interno — ver a nota acima
     var dupla = !!(cfg && (cfg.formatCode === 'elim_dupla' || /dupla/i.test(String(cfg.format || ''))));
     if (pool.length === 1) {
       // 1 inscrito → campeão por BYE (preserva o legado da Fase 0).

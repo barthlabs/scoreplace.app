@@ -1487,8 +1487,6 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
       enrollmentMode: 'individual',
       teamSize: qcTeamSize,
       gameTypes: qcTeamSize > 1 ? 'duplas' : 'simples',
-      thirdPlace: true,
-      elimThirdPlace: true,
       status: 'open',
       // ⚠️ STORAGE CANÔNICO — torneio NOVO nasce com os jogos da fase classificatória em
       // `t.matches` taggeado (junto com a chave), não mais em `t.rounds`. Doc SEM esta marca
@@ -1540,7 +1538,6 @@ window.setupQuickCreateModal = function setupQuickCreateModal() {
     if (pub) pub.checked = true;
     const liga = document.getElementById('liga-open-enrollment');
     if (liga) liga.checked = true;
-    // elimThirdPlace is always true — no toggle needed
     // v4.4.x (Camada 2): construtor de fases 2+ removido. Torneio novo começa limpo — o
     // configurador único (format2) monta com o default do esporte no _f2MountInEditForm.
     window._phase1Name = '';
