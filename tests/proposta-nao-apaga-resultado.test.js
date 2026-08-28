@@ -117,103 +117,56 @@ AppStore._overlayResultOnMatch(m6, { matchId: 'm-v1', winner: null, wo: true, wo
 eq(m6.wo, true, 'wo é resultado e passa');
 eq(m6.woAbsent, 'Fulano', 'com quem faltou');
 
-/* ══ A SEGUNDA METADE: O DADO NÃO PODE REGREDIR ══════════════════════════════════
- * Ordem do dono, depois de ver a correção de cima: _"quando a proposta foi confirmada
- * pelo organizador ou adversário não pode mais ficar pendente. tem que ficar confirmada.
- * isso tem que ser robusto e confiável"_.
+
+/* ══ A SEGUNDA METADE: QUEM ESCREVE O SUBDOC AGORA É A CF ═════════════════════════
+ * Ordem do dono (28/ago/2026): _"acabe com o espelho. já migramos definitivamente para a
+ * nova versão de dados e desistimos do antigo"_ + _"quando a proposta foi confirmada pelo
+ * organizador ou adversário não pode mais ficar pendente. tem que ficar confirmada. isso
+ * tem que ser robusto e confiável"_.
  *
  * Proteger só a LEITURA não bastava: o subdoc do grupo V foi REGRAVADO às 23:17 com o
- * estado de proposta por cima de um resultado confirmado às 22:40. Quem regravou foi o
- * espelho `_dualWriteMatchResult`, copiando o match LOCAL de um cliente com a tela velha.
- * Enquanto isso for possível, o estrago volta por outro caminho.
+ * estado de proposta por cima de um resultado confirmado às 22:40 — pelo espelho do
+ * CLIENTE (`_dualWriteMatchResult`), que copiava o match local por cima do subdoc.
  *
- * ⚠️ ESTE BLOCO EXECUTA O ESPELHO DE VERDADE — extraído do store.js — contra um subdoc
- * fresco controlado aqui, exatamente como a transação faz. Não é varredura de fonte.
+ * ⛔ ESSE ESPELHO MORREU. Quem escreve `results` agora é a CF, DENTRO da transação que
+ * aplica o placar: quem grava é quem acabou de aplicar, então não existe retrato velho a
+ * empurrar. Este bloco guarda as três regras dessa escrita.
  */
-function membro(nome) {
-  const i = src.indexOf('  ' + nome);
-  if (i < 0) return null;
-  const fim = src.indexOf('\n  },', i);
-  return fim < 0 ? null : src.slice(i, fim + '\n  }'.length);
-}
-const mDual = membro('async _dualWriteMatchResult(');
-const mCommit = membro('async commitMatchResult(');
-ok(!!mDual && !!mCommit, 'extraí _dualWriteMatchResult e commitMatchResult do store.js');
+const bui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
+const ad  = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
 
-// Monta um AppStore de mentira com os membros REAIS + o mínimo em volta.
-function montaStore(matchLocal, subdocFresco, registro) {
-  const obj = new Function('return {' + corpo + ',\n' + mDual + ',\n' + mCommit + ',\n' +
-    '  _matchPlayerUids: function () { return []; },\n' +
-    '  _saveToCache: function () {},\n' +
-    '  tournaments: []' +
-    '};')();
-  obj.tournaments = [{ id: 'T', _results: {} }];
-  global.window = {
-    _collectAllMatches: function () { return [matchLocal]; },
-    _findMatch: function () { return matchLocal; },
-    FirestoreDB: {
-      // Reproduz o contrato da transação: roda o mutator sobre o doc FRESCO e
-      // ABORTA sem gravar quando ele devolve false.
-      mutateMatchResult: async function (tid, mid, fn) {
-        const out = fn(subdocFresco);
-        if (out === false) { registro.abortou = true; return { aborted: true }; }
-        registro.gravou = JSON.parse(JSON.stringify(subdocFresco));
-        return { aborted: false };
-      }
-    }
-  };
-  return obj;
-}
+console.log('\n6. O espelho do CLIENTE não existe mais');
+ok(!/_dualWriteMatchResult\s*\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
+   'store.js não tem mais NENHUMA chamada a _dualWriteMatchResult');
+ok(!/function _dualWriteResult/.test(bui) && !/_dualWriteResult\(tId/.test(bui),
+   'bracket-ui.js não tem mais o wrapper nem as 7 chamadas dele');
 
-console.log('\n6. Cliente ATRASADO não derruba resultado confirmado (o caso do grupo V)');
-{
-  // O que o cliente velho tem na mão: ainda a PROPOSTA (foi o que ele viu na tela).
-  const matchLocal = { id: 'm-v1', winner: null, scoreP1: null, scoreP2: null,
-                       pendingResult: { proposedByName: 'Patricia Paixao', scoreP1: 5, scoreP2: 6 } };
-  // O que o BANCO já tem: o resultado confirmado às 22:40.
-  const fresco = { matchId: 'm-v1', winner: 'Roberta Lukaisus / MARCIA TERZI',
-                   scoreP1: 5, scoreP2: 6, sets: [{ gamesP1: 5, gamesP2: 6 }], resultAt: 1787870450919 };
-  const reg = {};
-  const S = montaStore(matchLocal, fresco, reg);
-  S._dualWriteMatchResult("T", "m-v1")
-    .then(() => {
-    ok(reg.abortou === true, '⛔ o espelho ABORTA — o atrasado não escreve o passado dele');
-    ok(!reg.gravou, 'e nada foi gravado');
-    eq(fresco.winner, 'Roberta Lukaisus / MARCIA TERZI', 'o subdoc segue confirmado no banco');
-    eq([fresco.scoreP1, fresco.scoreP2], [5, 6], 'com o placar intacto');
+console.log('\n7. A CF escreve o subdoc — e com as travas certas');
+const bloco = ad.slice(ad.indexOf("if (nome === 'matches' && _mrEspelho"),
+                       ad.indexOf("if (nome === 'matches' && _mrEspelho") + 2400);
+ok(/buildMirrorDoc\(/.test(bloco),
+   'usa buildMirrorDoc — a MESMA fonte de functions/, não uma segunda cópia do formato');
+ok(/pendingResult = FieldValue\.delete\(\)/.test(bloco),
+   '⛔ jogo DECIDIDO apaga o pendingResult — confirmado não fica pedindo confirmação');
+ok(/_decidido = \(jogo\.winner != null/.test(bloco) && /jogo\.draw === true \|\| jogo\.wo != null/.test(bloco),
+   'e "decidido" inclui empate e W.O., não só winner');
+ok(/delete _doc\.playerUids/.test(bloco),
+   '⛔ roster VAZIO não sobrescreve roster bom — é ele que sustenta a regra de escrita');
+ok(/\{ merge: true \}/.test(bloco),
+   'grava com merge — é o que preserva o `replay`, que o servidor não sabe recalcular');
 
-    console.log('\n7. Quem CONFIRMA grava — e a proposta morre junto');
-    {
-      const matchLocal2 = { id: 'm-v1', winner: 'Roberta Lukaisus / MARCIA TERZI',
-                            scoreP1: 5, scoreP2: 6, sets: [{ gamesP1: 5, gamesP2: 6 }],
-                            resultAt: 1787870450919 };
-      const fresco2 = { matchId: 'm-v1', winner: null, scoreP1: null, scoreP2: null,
-                        pendingResult: { proposedByName: 'Patricia Paixao' } };
-      const reg2 = {};
-      const S2 = montaStore(matchLocal2, fresco2, reg2);
-      S2._dualWriteMatchResult('T', 'm-v1').then(() => {
-        ok(!reg2.abortou, 'a confirmação NÃO é abortada — ela é a novidade');
-        eq(reg2.gravou && reg2.gravou.winner, 'Roberta Lukaisus / MARCIA TERZI', 'o vencedor foi gravado');
-        ok(reg2.gravou && !('pendingResult' in reg2.gravou),
-           '⛔ e o pendingResult SUMIU do subdoc — jogo confirmado não fica pedindo confirmação');
+console.log('\n8. O construtor do subdoc é de verdade e monta o formato de produção');
+const mr = require(path.join(ROOT, 'functions-autodraw', 'vendor', 'match-roster.js'));
+const doc = mr.buildMirrorDoc({ name: 'Confra' },
+  { id: 'm1', winner: 'A / B', scoreP1: 6, scoreP2: 3, sets: [{ gamesP1: 6, gamesP2: 3 }],
+    p1: 'A / B', p2: 'C / D', label: 'R1 Grupo I2 • Jogo 1' },
+  'tour_1', '2026-08-28T00:00:00Z', null);
+eq(doc.winner, 'A / B', 'o vencedor entra');
+eq([doc.scoreP1, doc.scoreP2], [6, 3], 'o placar entra');
+eq(doc.roundLabel, 'R1 Grupo I2 • Jogo 1', 'e o rótulo, que é o que a tela mostra');
+ok(doc.tournamentId === 'tour_1' && !!doc.updatedAt, 'com tournamentId e updatedAt');
 
-        console.log('\n8. Corrigir um placar já confirmado continua permitido');
-        {
-          const matchLocal3 = { id: 'm-v1', winner: 'Outra Dupla', scoreP1: 6, scoreP2: 0, resultAt: 1788000000000 };
-          const fresco3 = { matchId: 'm-v1', winner: 'Roberta Lukaisus / MARCIA TERZI', scoreP1: 5, scoreP2: 6 };
-          const reg3 = {};
-          const S3 = montaStore(matchLocal3, fresco3, reg3);
-          S3._dualWriteMatchResult('T', 'm-v1').then(() => {
-            ok(!reg3.abortou, 'resultado por resultado passa — a trava é só contra VOLTAR pra indeciso');
-            eq(reg3.gravou && reg3.gravou.winner, 'Outra Dupla', 'a correção entrou');
-
-            console.log(falhas === 0
-              ? '\n✅ proposta não apaga resultado — e confirmado nunca volta a pendente\n'
-              : '\n❌ ' + falhas + ' falha(s)\n');
-            process.exit(falhas === 0 ? 0 : 1);
-          });
-        }
-      });
-    }
-  });
-}
+console.log(falhas === 0
+  ? '\n✅ proposta não apaga resultado — e o espelho do cliente morreu\n'
+  : '\n❌ ' + falhas + ' falha(s)\n');
+process.exit(falhas === 0 ? 0 : 1);

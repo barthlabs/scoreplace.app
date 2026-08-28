@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.29';
+window.SCOREPLACE_VERSION = '2.1.30';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10494,85 +10494,23 @@ window.AppStore = {
         r = false;
       }
     }
-    // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado no doc
-    // do jogo (tournaments/{id}/results/{matchId}). ADDITIVE — o doc do torneio segue
-    // autoritativo na leitura; a virada pra subdoc-only é a Fase B. Best-effort: falha
-    // aqui NUNCA derruba o save principal (o resultado já persistiu no doc do torneio).
-    try { await this._dualWriteMatchResult(tournamentId, matchId); } catch (e) { if (window._error) window._error('dualWriteMatchResult', e); }
+    /* ⛔ AQUI MORAVA O ESPELHO DO CLIENTE (`_dualWriteMatchResult`), E ELE MORREU (2.1.30).
+     * Ordem do dono: _"acabe com o espelho. já migramos definitivamente para a nova versão
+     * de dados e desistimos do antigo"_.
+     *
+     * Ele existia de quando o DOCUMENTO era a verdade e o subdoc de `results` era cópia.
+     * O preço apareceu em 28/ago/2026: o espelho copiava o match LOCAL por cima do subdoc,
+     * então um cliente com a tela velha empurrava o estado de PROPOSTA por cima de um
+     * resultado confirmado — e o jogo voltava a aparecer 0-0 pra todo mundo.
+     * [[project_proposta_apagava_resultado_confirmado]]
+     *
+     * ⭐ Quem escreve agora é a CF, DENTRO da transação que aplica o placar
+     * (`_gravaTorneio` em functions-autodraw). Não existe retrato velho a empurrar: quem
+     * grava é quem acabou de aplicar. É a regra do dono valendo por construção — o
+     * cliente dispara, o servidor escreve. [[project_porta_unica_de_escrita_cf]] */
     return r;
   },
 
-  // Espelha os campos de resultado do match LOCAL (já aplicado otimista pelo caller)
-  // no doc de resultado próprio do jogo. ESPELHO COMPLETO: o subdoc passa a refletir
-  // EXATAMENTE os campos de resultado do match — presente+definido → grava; ausente
-  // ou undefined → REMOVE do subdoc (cobre refazer/reset/contestar, que apagam ou
-  // trocam campos; senão o subdoc guardaria um vencedor/placar velho). Seed do
-  // playerUids se ainda não veio (caminho de confiança = org/sorteio).
-  async _dualWriteMatchResult(tournamentId, matchId) {
-    var t = this.tournaments.find(function (x) { return String(x.id) === String(tournamentId); });
-    if (!t) return;
-    var m = (typeof window._findMatch === 'function') ? window._findMatch(t, matchId) : null;
-    if (!m) {
-      var all = (typeof window._collectAllMatches === 'function') ? window._collectAllMatches(t) : [];
-      for (var i = 0; i < all.length; i++) { if (all[i] && String(all[i].id) === String(matchId)) { m = all[i]; break; } }
-    }
-    if (!m) return;
-    var puids = this._matchPlayerUids(t, m);
-    var self = this;
-    await this.commitMatchResult(tournamentId, matchId, function (res) {
-      /* ⛔ CONFIRMADO NUNCA VOLTA A PENDENTE. Ordem do dono (28/ago/2026): _"quando a
-       * proposta foi confirmada pelo organizador ou adversário não pode mais ficar
-       * pendente. tem que ficar confirmada. isso tem que ser robusto e confiável"_.
-       *
-       * MEDIDO na Confra, grupo V: o jogo foi CONFIRMADO às 22:40 (winner + 5x6 + sets
-       * na subcoleção `matches`) e às 23:17 o subdoc de `results` foi REGRAVADO com o
-       * estado de PROPOSTA — winner:null, placar null, `pendingResult` de volta. Este
-       * espelho é quem faz isso: ele copia o match LOCAL por cima do subdoc, e um
-       * cliente com a tela velha (que ainda via a proposta) empurra o passado dele por
-       * cima do presente de todo mundo. Some com a fusão de leitura e vira o relato:
-       * "aprovei ontem e hoje aparece 0-0".
-       *
-       * ⭐ A TRAVA VALE ONDE MORA A VERDADE — DENTRO DA TRANSAÇÃO. `res` aqui é o
-       * subdoc FRESCO lido pelo `mutateMatchResult`; devolver `false` ABORTA sem gravar.
-       * Conferir antes, fora daqui, seria conferir um retrato — e a corrida acontece
-       * exatamente na janela entre o retrato e a escrita.
-       * [[feedback_a_trava_vale_onde_mora_a_verdade]]
-       *
-       * A regra é só esta: se o BANCO já tem resultado e o que eu trago NÃO tem, eu
-       * estou atrasado — desisto. Regravar resultado por outro resultado (correção de
-       * placar, W.O., empate) segue livre; o que fica proibido é o caminho de volta,
-       * de decidido para indeciso. */
-      var bancoDecidiu = (res.winner != null && res.winner !== '') || res.draw === true || res.wo != null;
-      var euDecidi = (m.winner != null && m.winner !== '') || m.draw === true || m.wo != null;
-      if (bancoDecidiu && !euDecidi) return false;   // ⛔ aborta: não regride confirmado
-
-      self._matchResultFields.forEach(function (k) {
-        if (Object.prototype.hasOwnProperty.call(m, k) && m[k] !== undefined) res[k] = m[k];
-        else delete res[k];
-      });
-      /* ⛔ E a proposta MORRE quando o resultado entra. Sem isto o subdoc ficaria
-       * "decidido E com proposta pendente" — que é o estado que deixa Confirmar e
-       * Contestar na tela de um jogo já fechado. Quem confirmou já respondeu. */
-      if (euDecidi) delete res.pendingResult;
-      if (puids.length && !(res.playerUids && res.playerUids.length)) res.playerUids = puids;
-    }, { silent: true });
-    // 4.1 RE-SEED NO AVANÇO (inc 3a): se este jogo DECIDIU um vencedor, o
-    // _advanceWinner já rearranjou o p1/p2 dos jogos DOWNSTREAM (próximo/chave
-    // inferior/perdedor) na ESTRUTURA local → o roster (playerUids) do subdoc
-    // deles ficou velho. Re-semeia o roster de cada um a partir da estrutura
-    // ATUAL. Só admin consegue mexer em playerUids (regra) → org/local funciona;
-    // mata-mata disparado por PARTICIPANTE toma permission-denied silencioso e
-    // fica pra CF do inc 3b (caminho de confiança). Best-effort.
-    if (m.winner) {
-      var downstream = [];
-      [m.nextMatchId, m.loserMatchId, m.loserNextMatchId].forEach(function (id) {
-        if (id != null && id !== '' && downstream.indexOf(String(id)) === -1) downstream.push(String(id));
-      });
-      for (var i = 0; i < downstream.length; i++) {
-        try { await this.reseedMatchRoster(tournamentId, downstream[i]); } catch (e) {}
-      }
-    }
-  },
 
   // Re-escreve SÓ o playerUids (roster) de um jogo a partir da ESTRUTURA atual,
   // FORÇANDO overwrite (o dual-write só semeia quando vazio; aqui o slot TBD virou
@@ -10640,9 +10578,10 @@ window.AppStore = {
    * [[project_derivado_nao_se_guarda_standings]]. Um subdoc que carrega SÓ proposta
    * não sabe nada sobre o resultado; ele não pode falar sobre ele.
    *
-   * ⭐ E `undo`/refazer continua funcionando: `_dualWriteMatchResult` REMOVE a chave
-   * (`delete res[k]`) quando o campo some do match — não a põe em `null`. Chave
-   * ausente nunca chegou aqui, então desfazer nunca dependeu deste caminho.
+   * ⭐ E `undo`/refazer continua funcionando: quem escreve o subdoc agora é a CF, e ela
+   * grava o jogo como ele FICOU (`buildMirrorDoc`) — desfazer chega aqui como um jogo com
+   * a CHAVE AUSENTE, não com `null`. Chave ausente nunca entra neste laço, então desfazer
+   * nunca dependeu desta regra.
    * ⛔ `pendingResult` segue sempre sobrescrevendo, inclusive pra LIMPAR: é ele que
    * tira os botões de Confirmar/Contestar da tela quando o consenso fecha.
    */

@@ -9,6 +9,11 @@ const { getMessaging } = require('firebase-admin/messaging');
 const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
+// fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
+// incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
+let _mrEspelho = null;
+try { _mrEspelho = require('./vendor/match-roster.js'); }
+catch (e) { console.error('[espelho-result] vendor/match-roster.js indisponível:', e && e.message); }
 
 // v2.3.91: lógica de sorteio REAL do cliente (Rei/Rainha, duplas, equilíbrio,
 // categorias, folgas, desempate) carregada via shim Node. Substitui o stub 1×1
@@ -430,6 +435,59 @@ function _gravaTorneio(tx, ref, tDepois, tAntes) {
     };
     d.mudaram.forEach((m) => tx.set(col.doc(_ch(m)), m));
     d.sumiram.forEach((m) => tx.delete(col.doc(_ch(m))));
+    /* ⭐ A CF ASSUME O ESPELHO DO RESULTADO (2.1.30). Ordem do dono: _"acabe com o
+     * espelho... migre tudo para CF em sistema dividido leve e sem limites"_.
+     *
+     * ⛔ POR QUE ISTO PRECISAVA EXISTIR ANTES DE TIRAR O DO CLIENTE — medido em
+     * 28/ago/2026: `syncMatchRosters` (functions/index.js) monta `results` com
+     * `collectMatches(after)`, ou seja, a partir do DOCUMENTO. Torneio dividido tem
+     * `rounds[0].matches = []` ⇒ aquela CF já não escrevia NADA pro Confra, e o
+     * espelho do CLIENTE era o único escritor de `results`. E de `results` dependem o
+     * replay público, o relatório de inscritos, o compartilhamento e o adaptador de
+     * chaves. Tirar o cliente sem isto aqui congelaria os quatro.
+     *
+     * ⚠️ E era esse espelho do cliente que causou o 0-0 do grupo V: um cliente com a
+     * tela velha empurrava o estado de PROPOSTA por cima do resultado confirmado. Aqui
+     * quem escreve é quem acabou de APLICAR o placar, dentro da mesma transação — não
+     * há retrato velho possível. [[project_proposta_apagava_resultado_confirmado]]
+     *
+     * ⛔ `buildMirrorDoc` vem do vendor (fonte única em `functions/match-roster.js`):
+     * ele é quem carrega o `replay` adiante, e um `set` sem merge sem esse cuidado
+     * apagaria o ponto a ponto pra sempre. */
+    if (nome === 'matches' && _mrEspelho && d.mudaram.length) {
+      const _colR = ref.collection('results');
+      const _agora = new Date().toISOString();
+      d.mudaram.forEach((reg) => {
+        const jogo = reg && reg.jogo;
+        if (!jogo || jogo.id == null || jogo.id === '') return;
+        try {
+          const _doc = _mrEspelho.buildMirrorDoc(tDepois, jogo, ref.id, _agora, null);
+          /* ⛔ CONFIRMADO NÃO FICA PENDENTE — a versão robusta, no servidor.
+           * Ordem do dono: _"quando a proposta foi confirmada pelo organizador ou
+           * adversário não pode mais ficar pendente. tem que ficar confirmada"_.
+           * `merge: true` preserva o que não vem no payload — ótimo pro `replay`, ruim
+           * pro `pendingResult`: uma proposta já respondida sobreviveria calada e
+           * seguiria pedindo confirmação num jogo fechado (o estado exato dos jogos 1 e
+           * 2 do grupo V). Quando o jogo TEM resultado, a proposta é APAGADA de
+           * propósito — quem confirmou já respondeu. */
+          const _decidido = (jogo.winner != null && jogo.winner !== '') ||
+                            jogo.draw === true || jogo.wo != null;
+          if (_decidido) _doc.pendingResult = FieldValue.delete();
+          /* ⛔ ROSTER VAZIO NÃO SOBRESCREVE ROSTER BOM. `buildMirrorDoc` devolve
+           * `playerUids: []` quando não consegue resolver os uids a partir do torneio —
+           * e com `merge: true` esse array vazio APAGARIA o roster gravado. É ele que
+           * sustenta a regra "só quem joga ESTE jogo escreve": zerado, o participante
+           * toma permission-denied e o jogo só anda pelo organizador. Vazio aqui é
+           * "não sei", e "não sei" não escreve — a mesma regra do subdoc de resultado. */
+          if (!Array.isArray(_doc.playerUids) || !_doc.playerUids.length) delete _doc.playerUids;
+          tx.set(_colR.doc(String(jogo.id)), _doc, { merge: true });
+        } catch (e) {
+          // Best-effort declarado: o resultado JÁ está gravado em `matches`, que é a
+          // fonte de verdade. Falhar aqui não pode derrubar o placar.
+          console.error('[espelho-result] ' + ref.id + '/' + jogo.id + ': ' + (e && e.message));
+        }
+      });
+    }
   });
   // devolve pro documento tudo que NÃO está no marcador (dividir tira os três sempre)
   // ⛔ deriva de PESADOS — ver a nota gêmea em firebase-db.saveTournament.

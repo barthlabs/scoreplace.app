@@ -476,7 +476,6 @@ function _fechaCorridaDoPlacar(tId, matchId, prVencedora, prMinha) {
       m.pendingResult = prVencedora;
       _propagateMatchUpdate(t, m);
     }
-    _dualWriteResult(tId, matchId);
     var a = _assinaturaDoPlacar(prVencedora), b = _assinaturaDoPlacar(prMinha);
     bateu = !!(a && b && a === b);
   } catch (e) { window._error('[corrida do placar] cura falhou', e); }
@@ -1710,7 +1709,6 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
       // que a transação volta, não antes.
       if (_perdeuCorridaGsm) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorridaGsm, _pendingGsmObj); return; }
       if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
-      _dualWriteResult(tId, matchId);    // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo
       try { _notifyPendingApproval(t, m, _pendingGsmObj.proposedByName); } catch (e) { window._error('[pendingApproval gsm] notify failed', e); }
       showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     });
@@ -2366,7 +2364,6 @@ window._saveResultInline = function (tId, matchId) {
       // desfecho conta a sua própria história.
       if (_perdeuCorrida) { _fechaCorridaDoPlacar(tId, matchId, _perdeuCorrida, _pendingPayload); return; }
       if (gravou === false) return;      // a falha já se anuncia sozinha (commitTournamentTx)
-      _dualWriteResult(tId, matchId);    // 4.1 DUAL-WRITE: espelha a proposta no doc do jogo
       try { _notifyPendingApproval(t, m, _pendingPayload.proposedByName); } catch (e) { window._error('[pendingApproval] notify failed', e); }
       showNotification('⏳ Resultado enviado', 'Aguardando aprovação do time adversário ou do organizador.', 'success');
     });
@@ -2630,18 +2627,6 @@ window._notifyOrgAndCoHosts = _notifyOrgAndCoHosts;
 // advance/checkGroupComplete conforme o contexto. Sem save. Retorna o contexto
 // (kind, deferred, roundIdx, s1/s2, winner) pro chamador decidir toast/defer/save.
 // Extraída de _approveResult na blindagem (v4.0.121).
-// 4.1 (project_match_result_docs, inc 3a): espelha o resultado do jogo (já aplicado
-// otimista no match LOCAL pelo caller) no doc próprio tournaments/{id}/results/{matchId}.
-// Fire-and-forget best-effort — a leitura ainda é autoritativa no doc do torneio, então
-// uma falha aqui NUNCA afeta o fluxo (a virada da leitura pro subdoc é a Fase B).
-function _dualWriteResult(tId, matchId) {
-  try {
-    if (window.AppStore && typeof window.AppStore._dualWriteMatchResult === 'function') {
-      var _p = window.AppStore._dualWriteMatchResult(tId, matchId);
-      if (_p && typeof _p.catch === 'function') _p.catch(function(){});
-    }
-  } catch (e) {}
-}
 
 window._applyApprovedResult = function(t, matchId, pr) {
   var m = _findMatch(t, matchId);
@@ -2819,7 +2804,6 @@ window._approveResult = function(tId, matchId) {
   // 4.1 DUAL-WRITE (project_match_result_docs, inc 3a): espelha o resultado aprovado
   // (já aplicado otimista no `m` local por _applyApprovedResult) no doc do jogo.
   // Best-effort — nunca derruba o save principal.
-  _dualWriteResult(tId, matchId);
 
   // Notifica participantes do match (proposer + opposing team)
   // Bug 5 fix: choose persist function based on how the result was entered
@@ -2905,7 +2889,6 @@ window._contestResult = function(tId, matchId) {
         if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
       }, 'Resultado contestado por ' + (cu.displayName || cu.email) + ': ' + m.p1 + ' vs ' + m.p2);
       // 4.1 DUAL-WRITE: espelha a disputa (pendingResult.disputed) no doc do jogo.
-      _dualWriteResult(tId, matchId);
 
       var scoreText = (pr.scoreP1 != null ? pr.scoreP1 : '?') + ' × ' + (pr.scoreP2 != null ? pr.scoreP2 : '?');
       _notifyOrgAndCoHosts(t, {
@@ -2971,7 +2954,6 @@ window._organizerResetMatch = function(tId, matchId) {
       }, 'Organizador refez a partida (placar zerado): ' + m.p1 + ' vs ' + m.p2);
       // 4.1 DUAL-WRITE: o match local foi ZERADO → o espelho completo REMOVE os
       // campos de resultado do doc do jogo (senão o subdoc guardaria o placar velho).
-      _dualWriteResult(tId, matchId);
 
       _notifyMatchParticipants(t, m, {
         type: 'match-reset',
@@ -3339,7 +3321,6 @@ window._editPendingResult = function(tId, matchId) {
         if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(ft, fm);
       }, 'Contra-proposta: ' + m.p1 + ' ' + s1v + ' × ' + s2v + ' ' + m.p2 + ' por ' + (cu.displayName || cu.email));
       // 4.1 DUAL-WRITE: espelha a contra-proposta (novo pendingResult) no doc do jogo.
-      _dualWriteResult(tId, matchId);
       try { _notifyPendingApproval(t, m, _counter.proposedByName); } catch(e2) {}
       showNotification('⏳ Contra-proposta enviada', 'O time adversário foi notificado para aprovar ou contestar.', 'success');
       window._suppressSoftRefresh = false;

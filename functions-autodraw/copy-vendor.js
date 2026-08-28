@@ -98,3 +98,20 @@ for (const f of SO_FUNCTIONS) {
   fs.copyFileSync(path.join(SRC_DIR, f), path.join(OUT_FN, f));
   console.log(`[copy-vendor] functions/vendor/${f}`);
 }
+
+/* ── E O CONSTRUTOR DO SUBDOC DE RESULTADO VIAJA NA MÃO CONTRÁRIA (2.1.30) ────
+ * `functions/match-roster.js` é quem sabe montar `tournaments/{id}/results/{matchId}`,
+ * inclusive o cuidado de CARREGAR O `replay` ADIANTE — coisa que o servidor não sabe
+ * recalcular e que um `set` sem merge apagaria pra sempre.
+ * Agora o autoDraw também grava esse subdoc (a CF assumiu o espelho que era do
+ * cliente), e reescrever o construtor lá seria a SEGUNDA cópia de um mesmo formato —
+ * que é exatamente o que produziu o estrago do grupo V, com duas cópias do mesmo jogo
+ * discordando. Mesma fonte, dois destinos; o gate de vendor acusa se divergirem.
+ * ⚠️ A fonte aqui é `functions/`, não `js/views/` — por isso o laço tem SRC próprio. */
+const DE_FUNCTIONS = ['match-roster.js'];
+for (const f of DE_FUNCTIONS) {
+  const src = path.resolve(__dirname, '..', 'functions', f);
+  if (!fs.existsSync(src)) { console.error(`[copy-vendor] FONTE AUSENTE: ${src}`); process.exit(1); }
+  fs.copyFileSync(src, path.join(OUT_DIR, f));
+  console.log(`[copy-vendor] vendor/${f} (de functions/)`);
+}

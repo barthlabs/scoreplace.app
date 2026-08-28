@@ -69,6 +69,22 @@ if (!fs.existsSync(COPY_VENDOR)) {
 
 const FILES = lerFilesDoCopyVendor(fs.readFileSync(COPY_VENDOR, 'utf8'));
 
+/* ⭐ A SEGUNDA FONTE DO VENDOR (2.1.30): ele não vem só de `js/views/`.
+ * `match-roster.js` viaja de `functions/` — é ele que monta o subdoc
+ * `tournaments/{id}/results/{matchId}`, e agora as DUAS pontas de servidor gravam esse
+ * subdoc. Reescrevê-lo no autoDraw seria a segunda cópia de um formato, que é
+ * exatamente o defeito que esta trava existe pra impedir.
+ * ⚠️ Sem lê-la, o arquivo cai como ÓRFÃO e a trava reprova um vendor CORRETO — e trava
+ * que reprova sem defeito ensina a ignorar trava. */
+function lerListaNomeada(fonte, nome) {
+  const bloco = fonte.match(new RegExp('const\\s+' + nome + '\\s*=\\s*\\[([^\\]]*)\\]'));
+  if (!bloco) return [];
+  const nomes = [];
+  for (const m of bloco[1].matchAll(/'([^']+)'|"([^"]+)"/g)) nomes.push(m[1] || m[2]);
+  return nomes;
+}
+const DE_FUNCTIONS = lerListaNomeada(fs.readFileSync(COPY_VENDOR, 'utf8'), 'DE_FUNCTIONS');
+
 // Sanidade da própria trava: renomear/reformatar o `const FILES` no copy-vendor.js faria a
 // leitura voltar vazia e a trava passar a conferir NADA — verde sobre zero arquivo. Uma
 // trava que não sabe o que confere é decoração.
@@ -115,7 +131,24 @@ for (const f of FILES) {
 // Se o draw-core.js ainda der require nele, o servidor roda um arquivo que o app já não
 // tem — drift na direção contrária, e igualmente silencioso.
 if (fs.existsSync(VENDOR_DIR)) {
-  const naLista = new Set(FILES);
+  const naLista = new Set(FILES.concat(DE_FUNCTIONS));
+  // E o que vem de `functions/` também é conferido byte a byte — divergir ali é ter
+  // duas cópias do formato do subdoc, que é o defeito que essa lista veio evitar.
+  for (const f of DE_FUNCTIONS) {
+    const src = path.join(root, 'functions', f);
+    const dst = path.join(VENDOR_DIR, f);
+    /* ⚠️ Fonte E cópia ausentes = árvore que simplesmente não usa este arquivo, e isso
+     * NÃO é defeito: o meta-teste desta trava monta um `js/views/` + `vendor/` de mentira,
+     * sem `functions/`, e reprovar ali faria a trava acusar defeito onde não há. Defeito é
+     * uma existir sem a outra. */
+    const temSrc = fs.existsSync(src), temDst = fs.existsSync(dst);
+    if (!temSrc && !temDst) continue;
+    if (!temSrc) { fail.push('functions/' + f + ': FONTE AUSENTE, mas o vendor/ ainda tem a cópia.'); continue; }
+    if (!temDst) { divergentes.push({ f: f, motivo: 'ausente no vendor/ (roda `node functions-autodraw/copy-vendor.js`)' }); continue; }
+    if (fs.readFileSync(src, 'utf8') !== fs.readFileSync(dst, 'utf8')) {
+      divergentes.push({ f: f, motivo: 'vendor/ diverge de functions/' + f });
+    }
+  }
   for (const nome of fs.readdirSync(VENDOR_DIR)) {
     if (!nome.endsWith('.js')) continue;
     if (naLista.has(nome)) continue;
