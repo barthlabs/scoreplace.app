@@ -10520,10 +10520,40 @@ window.AppStore = {
     var puids = this._matchPlayerUids(t, m);
     var self = this;
     await this.commitMatchResult(tournamentId, matchId, function (res) {
+      /* ⛔ CONFIRMADO NUNCA VOLTA A PENDENTE. Ordem do dono (28/ago/2026): _"quando a
+       * proposta foi confirmada pelo organizador ou adversário não pode mais ficar
+       * pendente. tem que ficar confirmada. isso tem que ser robusto e confiável"_.
+       *
+       * MEDIDO na Confra, grupo V: o jogo foi CONFIRMADO às 22:40 (winner + 5x6 + sets
+       * na subcoleção `matches`) e às 23:17 o subdoc de `results` foi REGRAVADO com o
+       * estado de PROPOSTA — winner:null, placar null, `pendingResult` de volta. Este
+       * espelho é quem faz isso: ele copia o match LOCAL por cima do subdoc, e um
+       * cliente com a tela velha (que ainda via a proposta) empurra o passado dele por
+       * cima do presente de todo mundo. Some com a fusão de leitura e vira o relato:
+       * "aprovei ontem e hoje aparece 0-0".
+       *
+       * ⭐ A TRAVA VALE ONDE MORA A VERDADE — DENTRO DA TRANSAÇÃO. `res` aqui é o
+       * subdoc FRESCO lido pelo `mutateMatchResult`; devolver `false` ABORTA sem gravar.
+       * Conferir antes, fora daqui, seria conferir um retrato — e a corrida acontece
+       * exatamente na janela entre o retrato e a escrita.
+       * [[feedback_a_trava_vale_onde_mora_a_verdade]]
+       *
+       * A regra é só esta: se o BANCO já tem resultado e o que eu trago NÃO tem, eu
+       * estou atrasado — desisto. Regravar resultado por outro resultado (correção de
+       * placar, W.O., empate) segue livre; o que fica proibido é o caminho de volta,
+       * de decidido para indeciso. */
+      var bancoDecidiu = (res.winner != null && res.winner !== '') || res.draw === true || res.wo != null;
+      var euDecidi = (m.winner != null && m.winner !== '') || m.draw === true || m.wo != null;
+      if (bancoDecidiu && !euDecidi) return false;   // ⛔ aborta: não regride confirmado
+
       self._matchResultFields.forEach(function (k) {
         if (Object.prototype.hasOwnProperty.call(m, k) && m[k] !== undefined) res[k] = m[k];
         else delete res[k];
       });
+      /* ⛔ E a proposta MORRE quando o resultado entra. Sem isto o subdoc ficaria
+       * "decidido E com proposta pendente" — que é o estado que deixa Confirmar e
+       * Contestar na tela de um jogo já fechado. Quem confirmou já respondeu. */
+      if (euDecidi) delete res.pendingResult;
       if (puids.length && !(res.playerUids && res.playerUids.length)) res.playerUids = puids;
     }, { silent: true });
     // 4.1 RE-SEED NO AVANÇO (inc 3a): se este jogo DECIDIU um vencedor, o
@@ -10589,10 +10619,46 @@ window.AppStore = {
   // Campos de RESULTADO que vivem no subdoc (o resto do match = ESTRUTURA, fica no
   // doc do torneio). Sobrepõe esses campos do subdoc no objeto match da estrutura.
   _matchResultFields: ['scoreP1', 'scoreP2', 'winner', 'draw', 'sets', 'setsWonP1', 'setsWonP2', 'totalGamesP1', 'totalGamesP2', 'fixedSet', 'resultAt', 'startedAt', 'pendingResult', 'wo', 'woAbsent', 'woAbsentSide'],
+  /* ⛔ PROPOSTA PENDENTE NÃO APAGA RESULTADO CONFIRMADO.
+   *
+   * MEDIDO NA CONFRA (28/ago/2026), e é o relato "lancei os jogos ontem e agora
+   * aparece 0-0": o subdoc de `results` do grupo V, jogos 1 e 2, estava assim —
+   *     { scoreP1: null, scoreP2: null, winner: null, pendingResult: {...} }
+   *     (SEM `sets`, SEM `resultAt`)
+   * enquanto a subcoleção `matches` — a fonte de verdade — tinha o jogo decidido,
+   * 5x6 com sets, confirmado às 22:40. A fusão abaixo copiava "se a chave existe",
+   * então `scoreP1: null` e `winner: null` PASSAVAM POR CIMA do resultado bom:
+   * placar zerado na tela (o 0-0 do relato) e o jogo voltando a parecer indeciso.
+   * `sets` e `resultAt` sobreviviam só porque as chaves nem vinham no subdoc.
+   *
+   * ⚠️ E O ESTRAGO GRUDAVA: `hydrateMatchResults` chama `_saveToCache()` logo depois,
+   * então o apagamento era PERSISTIDO no cache local — não passava sozinho, mesmo
+   * com o banco certo. Foi por isso que o grupo I2 continuou 0-0 em 103 e 105 dias
+   * depois de aprovados, com as duas cópias íntegras no servidor.
+   *
+   * A REGRA: `null` aqui é "não sei", nunca "não tem" — a mesma lição de
+   * [[project_derivado_nao_se_guarda_standings]]. Um subdoc que carrega SÓ proposta
+   * não sabe nada sobre o resultado; ele não pode falar sobre ele.
+   *
+   * ⭐ E `undo`/refazer continua funcionando: `_dualWriteMatchResult` REMOVE a chave
+   * (`delete res[k]`) quando o campo some do match — não a põe em `null`. Chave
+   * ausente nunca chegou aqui, então desfazer nunca dependeu deste caminho.
+   * ⛔ `pendingResult` segue sempre sobrescrevendo, inclusive pra LIMPAR: é ele que
+   * tira os botões de Confirmar/Contestar da tela quando o consenso fecha.
+   */
   _overlayResultOnMatch: function (m, result) {
     if (!m || !result || typeof result !== 'object') return;
     var F = this._matchResultFields;
-    for (var i = 0; i < F.length; i++) { if (Object.prototype.hasOwnProperty.call(result, F[i])) m[F[i]] = result[F[i]]; }
+    // O subdoc só fala sobre o RESULTADO quando ele de fato carrega um.
+    var temResultado = (result.winner != null && result.winner !== '') ||
+                       result.draw === true || result.wo != null;
+    for (var i = 0; i < F.length; i++) {
+      var k = F[i];
+      if (!Object.prototype.hasOwnProperty.call(result, k)) continue;
+      if (!temResultado && k !== 'pendingResult' &&
+          result[k] == null && m[k] != null) continue;   // "não sei" não apaga o que se sabe
+      m[k] = result[k];
+    }
   },
 
   // Hidrata t._results da subcoleção `results` e sobrepõe nos objetos match da

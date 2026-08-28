@@ -243,6 +243,7 @@ const SUITES = [
   // o cache entrega documento COMPLETO de até 24h, e ele passava no teste de "já carregado".
   // Sintoma: aprovou o placar, abriu de novo e estava pendente; reiniciar corrigia.
   'tests/abrir-torneio-nao-usa-o-cache.test.js',
+  'tests/proposta-nao-apaga-resultado.test.js',
   // ⭐ FASE 2b — o jogo espelhado diz QUEM JOGA (insumo de autorização da CF).
   'tests/jogo-espelhado-diz-quem-joga.test.js',
   'tests/historico-e-log-nao-se-apaga.test.js',
