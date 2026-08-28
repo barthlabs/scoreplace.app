@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.26';
+window.SCOREPLACE_VERSION = '2.1.27';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11208,8 +11208,10 @@ window.AppStore = {
         }
 
         // Show toast for each new notification
+        var _chegouNova = false;
         snap.docChanges().forEach(function(change) {
           if (change.type === 'added') {
+            _chegouNova = true;
             var d = change.doc.data();
             if (d && !d.read && d.message && typeof showNotification === 'function') {
               showNotification('🔔 ' + (d.type === 'cohost_invite' ? window._t('store.cohostInviteTitle') : window._t('store.notifTitle')), d.message, 'info');
@@ -11217,8 +11219,19 @@ window.AppStore = {
           }
         });
 
-        // If user is on notifications page, refresh it
-        if (window.location.hash === '#notifications') {
+        // ⭐ SÓ AVISO NOVO REDESENHA A TELA (relato do dono, 27/ago/2026: _"quando você fica
+        // 5 segundos na tela de notificações ele não deve voltar pro topo, fica onde está"_).
+        //
+        // A leitura por permanência marca a notificação como lida DEPOIS de 5s na tela —
+        // e essa gravação volta por aqui como mudança `modified`. O re-render refazia o
+        // `innerHTML` do container inteiro, a página encolhia pro esqueleto de "carregando"
+        // e o navegador jogava a rolagem pro zero. Ou seja: o próprio recurso de "ler
+        // olhando" arrancava da vista o que a pessoa estava lendo.
+        //
+        // Notificação lida NÃO precisa de re-render: o cartão já se apaga sozinho no lugar
+        // (o ponto azul some e ele esmaece, sem tocar no DOM em volta). Só `added` — aviso
+        // que ainda não está na lista — justifica redesenhar.
+        if (_chegouNova && window.location.hash === '#notifications') {
           var vc = document.getElementById('view-container');
           if (vc && typeof renderNotifications === 'function') renderNotifications(vc);
         }

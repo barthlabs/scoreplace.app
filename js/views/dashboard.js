@@ -5422,6 +5422,25 @@ function _hydrateFriendsPresenceWidget() {
       return p.startsAt > nowMs;
     });
     ownPlans.sort(function(a, b) { return a.startsAt - b.startsAt; });
+    // ⭐ CHEGOU CANCELA O PLANO NA LISTA (relato do dono, 27/ago/2026: _"tá dobrado, a
+    // presença tá duas vezes no mesmo lugar"_). Quem faz check-in no Paineiras e também
+    // tinha plano de ir ao Paineiras às 17h aparecia DUAS vezes na mesma seção — "Você
+    // está em" e "Você estará em", o mesmo local, ao mesmo tempo. O plano não é uma
+    // segunda presença: é a previsão da que já aconteceu. Chegar responde o plano.
+    //
+    // O par é por LOCAL (placeId; nome como reserva pra local comunitário sem placeId) —
+    // não por documento: são docs diferentes, de tipos diferentes, e é justamente por isso
+    // que os dois passavam. A informação de "chegou antes do que planejou" não se perde:
+    // ela já é dita no cartão de "Agora no local" ("chegou antes · planejou 17:00").
+    var _ondeJaEstou = {};
+    ownCheckins.forEach(function(p) {
+      var k = String(p.placeId || p.venueName || '').toLowerCase();
+      if (k) _ondeJaEstou[k] = 1;
+    });
+    ownPlans = ownPlans.filter(function(p) {
+      var k = String(p.placeId || p.venueName || '').toLowerCase();
+      return !(k && _ondeJaEstou[k]);
+    });
     if (ownCheckins.length > 0 || ownPlans.length > 0) {
       var myRows = '';
       ownCheckins.forEach(function(p) {

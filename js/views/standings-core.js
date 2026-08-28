@@ -81,6 +81,20 @@
     games_vencidos: function (a, b) { return _n(b.gamesWon) - _n(a.gamesWon); },
     saldo_tiebreaks: function (a, b) { return (_n(b.tiebreaksWon) - _n(b.tiebreaksLost)) - (_n(a.tiebreaksWon) - _n(a.tiebreaksLost)); },
     tiebreaks_vencidos: function (a, b) { return _n(b.tiebreaksWon) - _n(a.tiebreaksWon); },
+    // ⭐ SALDO DE PONTOS DE TIE-BREAK (pedido do dono, 27/ago/2026: _"se o saldo é o critério
+    // de pontuação, um critério a ser considerado antes do sorteio seria saldo de tie-break
+    // disputado, que hoje não é considerado — apenas o saldo de games"_).
+    //
+    // Não confundir com `saldo_tiebreaks`, que conta QUANTOS tie-breaks a pessoa venceu:
+    // perder um tie-break por 5-7 e perder por 0-7 valem o mesmo ali. Aqui o que conta são
+    // os PONTOS disputados dentro do tie-break — o mesmo raciocínio do saldo de games, um
+    // degrau abaixo. Quem levou 6-7 fica na frente de quem levou 2-7.
+    //
+    // Sem tie-break no torneio (Beach Tennis com set fixo, Pickleball, vôlei) os dois lados
+    // ficam em 0 e o critério é NEUTRO — passa adiante, nunca chuta.
+    saldo_pontos_tiebreak: function (a, b) {
+      return (_n(b.tbPointsWon) - _n(b.tbPointsLost)) - (_n(a.tbPointsWon) - _n(a.tbPointsLost));
+    },
     pontos_a_favor: function (a, b) { return _n(b.pointsFor) - _n(a.pointsFor); },
     aproveitamento: function (a, b) { return _n(b.winRate) - _n(a.winRate); },
     menos_jogos: function (a, b) { return _n(a.played) - _n(b.played); },
@@ -173,8 +187,34 @@
         || (k === 'sonneborn_berger' && amostra.sonnebornBerger == null)
         || (k === 'pontos_avancados' && amostra.points == null)
         || ((k === 'antiguidade' || k === 'juventude') && !(opts.birth && Object.keys(opts.birth).length))
-        || (k === 'confronto_direto' && !(opts.h2h && Object.keys(opts.h2h).length));
+        || (k === 'confronto_direto' && !(opts.h2h && Object.keys(opts.h2h).length))
+        || (k === 'saldo_pontos_tiebreak' && amostra.tbPointsWon == null && amostra.tbPointsLost == null);
       (falta ? out.semDado : out.aplicaveis).push(k);
+    });
+    return out;
+  }
+
+  // ── LEITOR ÚNICO: PONTOS DE TIE-BREAK DE UM JOGO, POR LADO ────────────────────────────
+  // Devolve { p1, p2 } somando os tie-breaks de TODOS os sets do jogo. Existe aqui, ao lado
+  // do critério que os usa, porque quatro acumuladores diferentes (grupo, liga, monarca,
+  // fase) precisam da MESMA conta — e quatro cópias divergiriam na primeira mudança.
+  // Passa por `window._setTiebreak`, o leitor canônico do bracket-model: ele aceita as duas
+  // formas gravadas na base ({pointsP1,pointsP2} do doc do torneio e {p1,p2} do histórico).
+  function tiebreakPointsOfMatch(m) {
+    var out = { p1: 0, p2: 0 };
+    var sets = (m && Array.isArray(m.sets)) ? m.sets : [];
+    var ler = (typeof window !== 'undefined' && typeof window._setTiebreak === 'function') ? window._setTiebreak : null;
+    sets.forEach(function (st) {
+      var tb = null;
+      if (ler) tb = ler(st);
+      else if (st && st.tiebreak) {
+        var _p1 = st.tiebreak.pointsP1 != null ? st.tiebreak.pointsP1 : st.tiebreak.p1;
+        var _p2 = st.tiebreak.pointsP2 != null ? st.tiebreak.pointsP2 : st.tiebreak.p2;
+        if (_p1 != null || _p2 != null) tb = { p1: _p1 || 0, p2: _p2 || 0 };
+      }
+      if (!tb) return;
+      out.p1 += _n(tb.p1);
+      out.p2 += _n(tb.p2);
     });
     return out;
   }
@@ -250,6 +290,9 @@
     var aTBD = n(a.tiebreaksWon) - n(a.tiebreaksLost), bTBD = n(b.tiebreaksWon) - n(b.tiebreaksLost);
     if (bTBD !== aTBD) return bTBD - aTBD;
     if (n(b.tiebreaksWon) !== n(a.tiebreaksWon)) return n(b.tiebreaksWon) - n(a.tiebreaksWon);
+    // saldo de PONTOS de tie-break (ver o critério `saldo_pontos_tiebreak` acima)
+    var aTBP = n(a.tbPointsWon) - n(a.tbPointsLost), bTBP = n(b.tbPointsWon) - n(b.tbPointsLost);
+    if (bTBP !== aTBP) return bTBP - aTBP;
     var aDiff = n(a.pointsFor) - n(a.pointsAgainst), bDiff = n(b.pointsFor) - n(b.pointsAgainst);
     if (bDiff !== aDiff) return bDiff - aDiff;
     if (n(b.pointsFor) !== n(a.pointsFor)) return n(b.pointsFor) - n(a.pointsFor);
@@ -264,6 +307,7 @@
     window._standingsBuildH2H = buildH2H;
     window._standingsOrdemChave = buildOrdemChave;
     window._standingsExplain = explainTiebreakers;
+    window._standingsTbPoints = tiebreakPointsOfMatch;        // pontos de tie-break do jogo
   }
   // Node (teste headless e qualquer módulo que carregue só o phases-engine)
   if (typeof module !== 'undefined' && module.exports) {
@@ -273,6 +317,7 @@
       buildH2H: buildH2H,
       buildOrdemChave: buildOrdemChave,
       explainTiebreakers: explainTiebreakers,
+      tiebreakPointsOfMatch: tiebreakPointsOfMatch,
       CRITERIOS: CRITERIOS
     };
   }

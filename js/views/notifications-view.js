@@ -17,6 +17,15 @@ function renderNotifications(container) {
 
   var uid = cu.uid || cu.email;
 
+  // ⭐ REDESENHO DE TELA ABERTA NÃO ROUBA A ROLAGEM. Trocar o `innerHTML` do container
+  // encolhe a página pro esqueleto de "carregando" por um instante, e o navegador prende
+  // a rolagem no zero. Entrando na tela isso é o certo (começa do topo); num redesenho de
+  // quem JÁ está lendo — aviso novo chegando, "Carregar mais" — é perder o lugar do dedo.
+  // Quem sabe distinguir os dois casos é o roteador, pelo mesmo sinal de visita nova que
+  // decide o agrupamento logo abaixo.
+  var _rolagemAntes = (window._notifNovaVisita === true)
+    ? 0 : (window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0);
+
   container.innerHTML =
     '<div style="max-width: 700px; margin: 0 auto;">' +
       (typeof window._renderBackHeader === 'function'
@@ -405,6 +414,9 @@ function renderNotifications(container) {
     }
 
     listDiv.innerHTML = html;
+    // A lista voltou a ter altura: devolve a rolagem de onde ela estava (ver o comentário
+    // de `_rolagemAntes` no topo). Zero = era visita nova, e aí o topo é o lugar certo.
+    if (_rolagemAntes > 0) { try { window.scrollTo(0, _rolagemAntes); } catch (e) {} }
 
     // ── v1.8.78: LIDA = FICOU 5s NA TELA ──────────────────────────────────────
     // Ordem do dono (15/ago): "quando abrimos as notificações, aquelas que aparecerem

@@ -1031,7 +1031,11 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // v2.8.95/98: passou do horário previsto de saída → só "🕐 ainda aqui".
         if (p.endsAt && p.endsAt < now) { subtitle = '🕐 ainda aqui'; }
         // v2.8.95: fez check-in ANTES do horário que tinha planejado chegar
-        else if (p.uid && _planStartByUid[p.uid] != null && _planStartByUid[p.uid] > p.startsAt) { subtitle = '✅ chegou antes · planejou ' + _hhmm(_planStartByUid[p.uid]); }
+        // ⭐ UMA LINHA, UM FATO (ordem do dono, 27/ago/2026: _"tá muito feio, informação
+        // demais, podia ser mais simples"_). Eram dois fatos colados ("chegou antes" +
+        // "planejou 17:00") num campo estreito — quebrava em quatro linhas e esticava o
+        // cartão. "chegou antes das 17:00" diz as duas coisas numa frase só.
+        else if (p.uid && _planStartByUid[p.uid] != null && _planStartByUid[p.uid] > p.startsAt) { subtitle = '✅ chegou antes das ' + _hhmm(_planStartByUid[p.uid]); }
         var borderColor = klass === 'me' ? '#10b981' : '#fbbf24';
         var avatar = p.photoURL
           ? '<img src="' + _safe(p.photoURL) + '" alt="" style="width:40px;height:40px;display:block;border-radius:50%;object-fit:cover;border:2px solid ' + window._spCor(borderColor, 'borda') + ';flex-shrink:0;">'
@@ -1046,7 +1050,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         if (klass === 'me' && p._id) {
           var docIdSafe = String(p._id).replace(/"/g, '&quot;');
           var pidSafe = String(pidForLeave).replace(/"/g, '&quot;');
-          leaveBtn = '<button type="button" class="cancel-x-btn" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + docIdSafe + '","' + pidSafe + '","checkin")\' style="--cx-size:24px;" title="Sair do local">✕</button>';
+          leaveBtn = '<button type="button" class="cancel-x-btn" onclick=\'event.stopPropagation(); window._venuesCancelMyPresenceHere("' + docIdSafe + '","' + pidSafe + '","checkin")\' style="--cx-size:24px;flex-shrink:0;" title="Sair do local">✕</button>';
         }
         var nowSports = Array.isArray(p.sports) ? p.sports : [];
         var icons = _sportsIcons(nowSports);
@@ -1056,16 +1060,18 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         // v0.16.51: min-height fixo (60px) + box-sizing border-box garantem
         // que cards com ✕ (1.15rem) tenham mesma altura que cards sem ✕.
         // Avatar 40px + padding 8px*2 = 56px; 60px dá folga pro border.
+        // ⭐ O ✕ SAI DE DENTRO DO NOME E VAI PRO FIM DA LINHA. Ele morava colado no nome,
+        // dentro do mesmo flex — e num cartão estreito comia a palavra ("Voc✕") e ainda
+        // roubava a largura da legenda de baixo. No fim da linha ele é o que é: uma ação da
+        // linha inteira. Nome e legenda passam a caber numa linha só, com reticências.
         friendsHtml.push(
           '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-darker);border-radius:10px;min-height:60px;box-sizing:border-box;">' +
             iconsHtml + avatar +
             '<div style="flex:1;min-width:0;">' +
-              '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
-                '<span style="font-weight:600;font-size:0.88rem;color:var(--text-bright);overflow:hidden;line-height:1.25;">' + _safe(name) + '</span>' +
-                leaveBtn +
-              '</div>' +
-              '<div style="font-size:0.72rem;color:var(--text-muted);">' + _safe(subtitle) + '</div>' +
+              '<div style="font-weight:600;font-size:0.88rem;color:var(--text-bright);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(name) + '</div>' +
+              '<div style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _safe(subtitle) + '</div>' +
             '</div>' +
+            leaveBtn +
           '</div>'
         );
       } else if (p.visibility === 'public' || p.type === 'tournament') {
@@ -1073,8 +1079,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       }
     });
     if (friendsHtml.length === 0 && otherCount === 0) { box.innerHTML = ''; return; }
+    // ⭐ `auto-fit`, NÃO `auto-fill` — é a causa do cartão espremido. Com `auto-fill` o
+    // navegador cria as colunas de 180px que couberem e as deixa lá mesmo VAZIAS: com uma
+    // pessoa só no local, ela ficava numa faixa de 180px e a outra metade da largura
+    // sobrava em branco — daí a legenda quebrar em quatro linhas e o cartão inchar.
+    // `auto-fit` colapsa a coluna vazia e o único cartão ocupa a largura toda.
     var friendsGrid = friendsHtml.length > 0
-      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:' + (otherCount > 0 ? '10px' : '0') + ';">' + friendsHtml.join('') + '</div>'
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:' + (otherCount > 0 ? '10px' : '0') + ';">' + friendsHtml.join('') + '</div>'
       : '';
     var othersPill = otherCount > 0
       ? '<div style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(107,114,128,0.15);border:1px solid rgba(107,114,128,0.3);border-radius:999px;color:var(--text-bright);font-weight:600;font-size:0.8rem;">👥 +' + otherCount + ' outro' + (otherCount === 1 ? '' : 's') + '</div>'

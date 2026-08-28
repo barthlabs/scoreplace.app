@@ -241,6 +241,60 @@ console.log('──── 10. ENTRE OS QUE CAÍRAM NA MESMA FASE, valem os crit�
     '(10) a cadeia histórica (terminando em alfabético) fica como fallback pra quem não configurou');
 })();
 
+console.log('──── 11. SALDO DE PONTOS DE TIE-BREAK (pedido do dono, 27/ago/2026) ────');
+// _"se o saldo é o critério de pontuação, um critério a ser considerado antes do sorteio
+//  seria saldo de tie-break DISPUTADO (que hoje não é considerado), apenas o saldo de games"_
+(function () {
+  // Os dois empatam em TUDO — inclusive em quantos tie-breaks venceram (1 a 0 para cada um).
+  // Só os PONTOS dentro do tie-break separam: P venceu por 7-1, Q venceu por 7-5.
+  var P = linha('P', 'uP', { tiebreaksWon: 1, tiebreaksLost: 0, tbPointsWon: 7, tbPointsLost: 1 });
+  var Q = linha('Q', 'uQ', { tiebreaksWon: 1, tiebreaksLost: 0, tbPointsWon: 7, tbPointsLost: 5 });
+  ok(C.standingsCompareConfig(P, Q, { tiebreakers: ['saldo_games', 'tiebreaks_vencidos'] }) === 0,
+    '(11) sem o critério novo, saldo de games e tie-breaks vencidos NÃO separam os dois');
+  ok(C.standingsCompareConfig(P, Q, { tiebreakers: ['saldo_pontos_tiebreak'] }) < 0,
+    '(11) com saldo de pontos de tie-break, P (7-1) passa na frente de Q (7-5)');
+  ok(C.standingsCompare(P, Q) < 0,
+    '(11) a cadeia PADRÃO também aplica o critério (P na frente)');
+
+  // Quem PERDEU por menos fica na frente de quem perdeu por mais — é a mesma régua do saldo.
+  var R = linha('R', 'uR', { tiebreaksWon: 0, tiebreaksLost: 1, tbPointsWon: 6, tbPointsLost: 8 });
+  var S = linha('S', 'uS', { tiebreaksWon: 0, tiebreaksLost: 1, tbPointsWon: 2, tbPointsLost: 7 });
+  ok(C.standingsCompareConfig(R, S, { tiebreakers: ['saldo_pontos_tiebreak'] }) < 0,
+    '(11) perdendo 6-8 (saldo -2) fica na frente de quem perdeu 2-7 (saldo -5)');
+
+  // SEM TIE-BREAK NO TORNEIO o critério é NEUTRO — nunca chuta.
+  var T1 = linha('T1', 'uT1'), T2 = linha('T2', 'uT2');
+  ok(C.standingsCompareConfig(T1, T2, { tiebreakers: ['saldo_pontos_tiebreak'] }) === 0,
+    '(11) sem tie-break disputado, o critério não decide nada');
+  var expl = C.explainTiebreakers([T1], { tiebreakers: ['saldo_pontos_tiebreak'] });
+  ok(expl.semDado.indexOf('saldo_pontos_tiebreak') !== -1,
+    '(11) e a tabela DIZ que o critério ficou sem dado, em vez de fingir que aplicou');
+
+  // O LEITOR ÚNICO aceita as duas formas gravadas na base.
+  var doc = C.tiebreakPointsOfMatch({ sets: [{ gamesP1: 7, gamesP2: 6, tiebreak: { pointsP1: 7, pointsP2: 4 } }] });
+  ok(doc.p1 === 7 && doc.p2 === 4, '(11) lê a forma do doc do torneio {pointsP1,pointsP2}');
+  var dois = C.tiebreakPointsOfMatch({ sets: [
+    { gamesP1: 7, gamesP2: 6, tiebreak: { pointsP1: 7, pointsP2: 4 } },
+    { gamesP1: 6, gamesP2: 7, tiebreak: { pointsP1: 5, pointsP2: 7 } }
+  ] });
+  ok(dois.p1 === 12 && dois.p2 === 11, '(11) soma os tie-breaks de TODOS os sets do jogo');
+  var vazio = C.tiebreakPointsOfMatch({ sets: [{ gamesP1: 6, gamesP2: 2 }] });
+  ok(vazio.p1 === 0 && vazio.p2 === 0, '(11) set sem tie-break não inventa ponto nenhum');
+
+  // ⚠️ O CRITÉRIO PRECISA ESTAR NA CADEIA PADRÃO — senão ele existe e ninguém o chama.
+  var bl4 = fs.readFileSync(path.join(__dirname, '../js/views/bracket-logic.js'), 'utf8');
+  // Só as cadeias de torneio POR SETS: onde não há set não há tie-break, e o critério
+  // seria peso morto. Elas se reconhecem por já carregarem `saldo_games`.
+  var cadeias = (bl4.match(/\['confronto_direto'[^\]]*\]/g) || [])
+    .filter(function (c) { return c.indexOf('saldo_games') !== -1; });
+  ok(cadeias.length >= 3 && cadeias.every(function (c) { return c.indexOf('saldo_pontos_tiebreak') !== -1; }),
+    '(11) toda cadeia padrão por sets inclui o critério (' + cadeias.length + ' cadeias)');
+  ok(cadeias.every(function (c) { return c.indexOf('saldo_pontos_tiebreak') < c.indexOf('sorteio'); }),
+    '(11) e ele entra ANTES do sorteio, como o dono pediu');
+  ok(cadeias.every(function (c) { return c.indexOf('saldo_games') < c.indexOf('saldo_pontos_tiebreak'); }),
+    '(11) e DEPOIS do saldo de games — é desempate do desempate, não substituto dele');
+})();
+
 console.log('');
 if (fail) { console.log('❌ desempate-do-organizador-vale: ' + pass + ' ok, ' + fail + ' falha(s)'); fails.forEach(function (f) { console.log('   • ' + f); }); process.exit(1); }
 console.log('✅ desempate-do-organizador-vale: ' + pass + ' asserções, 0 falha(s)');

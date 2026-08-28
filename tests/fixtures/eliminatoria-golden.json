@@ -1227,15 +1227,15 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P4",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 78 / Pessoa 79",
+      "p1": "Pessoa 115 / Pessoa 49",
       "p1Uid": null,
       "p2": "Pessoa 101 / Pessoa 104",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0077",
-        "uid0078"
+        "uid0114",
+        "uid0051"
       ],
       "team2Uids": [
         "uid0102",
@@ -1248,15 +1248,15 @@
       "id": "ph-tour_1780009816637-1-gold-VC-R1-P5",
       "isBye": false,
       "label": null,
-      "p1": "Pessoa 115 / Pessoa 49",
+      "p1": "Pessoa 78 / Pessoa 79",
       "p1Uid": null,
       "p2": "Pessoa 64 / Pessoa 63",
       "p2Uid": null,
       "phaseIndex": 1,
       "round": 1,
       "team1Uids": [
-        "uid0114",
-        "uid0051"
+        "uid0077",
+        "uid0078"
       ],
       "team2Uids": [
         "uid0061",

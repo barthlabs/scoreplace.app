@@ -149,6 +149,8 @@ window._computeMonarchStandings = function(group, t, category) {
   })();
   matches.forEach(function(m) {
     if (!m.winner || !m.team1 || !m.team2) return;
+    // pontos de tie-break do jogo (leitor único — ver standings-core.tiebreakPointsOfMatch)
+    var _tbp = (typeof window._standingsTbPoints === 'function') ? window._standingsTbPoints(m) : { p1: 0, p2: 0 };
     var s1 = parseInt(m.scoreP1) || 0;
     var s2 = parseInt(m.scoreP2) || 0;
     var team1Won = window._matchWinnerSide(m) === 1;
@@ -187,6 +189,8 @@ window._computeMonarchStandings = function(group, t, category) {
       stats[k].gamesLost += gw2;
       stats[k].tiebreaksWon += tb1;
       stats[k].tiebreaksLost += tb2;
+      stats[k].tbPointsWon = (stats[k].tbPointsWon || 0) + _tbp.p1;
+      stats[k].tbPointsLost = (stats[k].tbPointsLost || 0) + _tbp.p2;
       if (team1Won) stats[k].wins++; else stats[k].losses++;
     });
     _ladoPares(m.team2, _u2m).forEach(function(_p) {
@@ -200,6 +204,8 @@ window._computeMonarchStandings = function(group, t, category) {
       stats[k].gamesLost += gw1;
       stats[k].tiebreaksWon += tb2;
       stats[k].tiebreaksLost += tb1;
+      stats[k].tbPointsWon = (stats[k].tbPointsWon || 0) + _tbp.p2;
+      stats[k].tbPointsLost = (stats[k].tbPointsLost || 0) + _tbp.p1;
       if (!team1Won) stats[k].wins++; else stats[k].losses++;
     });
   });
@@ -956,8 +962,10 @@ function _computeStandings(t, category) {
             if (tp1 > tp2) tb1++; else if (tp2 > tp1) tb2++;
           }
         });
-        if (scoreMap[kP1]) { scoreMap[kP1].setsWon += sw1; scoreMap[kP1].setsLost += sw2; scoreMap[kP1].gamesWon += gw1; scoreMap[kP1].gamesLost += gw2; scoreMap[kP1].tiebreaksWon += tb1; }
-        if (scoreMap[kP2]) { scoreMap[kP2].setsWon += sw2; scoreMap[kP2].setsLost += sw1; scoreMap[kP2].gamesWon += gw2; scoreMap[kP2].gamesLost += gw1; scoreMap[kP2].tiebreaksWon += tb2; }
+        // pontos de tie-break (leitor único — ver standings-core.tiebreakPointsOfMatch)
+        var _tbpG = (typeof window._standingsTbPoints === 'function') ? window._standingsTbPoints(m) : { p1: 0, p2: 0 };
+        if (scoreMap[kP1]) { scoreMap[kP1].setsWon += sw1; scoreMap[kP1].setsLost += sw2; scoreMap[kP1].gamesWon += gw1; scoreMap[kP1].gamesLost += gw2; scoreMap[kP1].tiebreaksWon += tb1; scoreMap[kP1].tbPointsWon = (scoreMap[kP1].tbPointsWon || 0) + _tbpG.p1; scoreMap[kP1].tbPointsLost = (scoreMap[kP1].tbPointsLost || 0) + _tbpG.p2; }
+        if (scoreMap[kP2]) { scoreMap[kP2].setsWon += sw2; scoreMap[kP2].setsLost += sw1; scoreMap[kP2].gamesWon += gw2; scoreMap[kP2].gamesLost += gw1; scoreMap[kP2].tiebreaksWon += tb2; scoreMap[kP2].tbPointsWon = (scoreMap[kP2].tbPointsWon || 0) + _tbpG.p2; scoreMap[kP2].tbPointsLost = (scoreMap[kP2].tbPointsLost || 0) + _tbpG.p1; }
       }
 
       // Sit-out (folga): NÃO pontua aqui. v2.3.12: a compensação é a MÉDIA das
@@ -994,6 +1002,8 @@ function _computeStandings(t, category) {
             }
           });
         } else { _g1 = ms1; _g2 = ms2; }
+        // pontos de tie-break (leitor único — ver standings-core.tiebreakPointsOfMatch)
+        var _tbpM = (typeof window._standingsTbPoints === 'function') ? window._standingsTbPoints(m) : { p1: 0, p2: 0 };
         m.team1.forEach(function(name, _i) {
           if (_isGhost(name)) return; // Jogador X joga mas não pontua
           var k = _ensureEntry(name, Array.isArray(m.team1Uids) ? m.team1Uids[_i] : null);
@@ -1002,6 +1012,7 @@ function _computeStandings(t, category) {
           scoreMap[k].pointsDiff += (ms1 - ms2);
           scoreMap[k].gamesWon += _g1; scoreMap[k].gamesLost += _g2;
           scoreMap[k].setsWon += _sw1; scoreMap[k].setsLost += _sw2; scoreMap[k].tiebreaksWon += _tb1;
+          scoreMap[k].tbPointsWon = (scoreMap[k].tbPointsWon || 0) + _tbpM.p1; scoreMap[k].tbPointsLost = (scoreMap[k].tbPointsLost || 0) + _tbpM.p2;
           if (isDraw) { scoreMap[k].draws = (scoreMap[k].draws || 0) + 1; scoreMap[k].points += 1; }
           else if (team1Won) { scoreMap[k].wins++; scoreMap[k].points += 3; }
           else { scoreMap[k].losses++; }
@@ -1014,6 +1025,7 @@ function _computeStandings(t, category) {
           scoreMap[k].pointsDiff += (ms2 - ms1);
           scoreMap[k].gamesWon += _g2; scoreMap[k].gamesLost += _g1;
           scoreMap[k].setsWon += _sw2; scoreMap[k].setsLost += _sw1; scoreMap[k].tiebreaksWon += _tb2;
+          scoreMap[k].tbPointsWon = (scoreMap[k].tbPointsWon || 0) + _tbpM.p2; scoreMap[k].tbPointsLost = (scoreMap[k].tbPointsLost || 0) + _tbpM.p1;
           if (isDraw) { scoreMap[k].draws = (scoreMap[k].draws || 0) + 1; scoreMap[k].points += 1; }
           else if (team2Won) { scoreMap[k].wins++; scoreMap[k].points += 3; }
           else { scoreMap[k].losses++; }
@@ -1151,7 +1163,7 @@ function _computeStandings(t, category) {
   // usar default em vez de [] (que pulava todos os tiebreakers).
   var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'sets') {
-    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
   if (t.advancedScoring && t.advancedScoring.enabled) {
     defaultTb = ['pontos_avancados'].concat(defaultTb);
@@ -1837,7 +1849,7 @@ function _rankByTiebreakers(t, playerNames) {
   // jogaram entre si). Empty array fallback aplicado.
   var defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   if (t.scoring && t.scoring.type === 'gsm') {
-    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+    defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
   }
   var tiebreakers = (Array.isArray(t.tiebreakers) && t.tiebreakers.length > 0) ? t.tiebreakers : defaultTb;
   var birthByName = (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {};
@@ -2915,7 +2927,7 @@ function _updateProgressiveClassification(t) {
     // UI em create-tournament.js.
     var _defaultTb = ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     if (t.scoring && t.scoring.type === 'sets') {
-      _defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
+      _defaultTb = ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     }
     if (t.advancedScoring && t.advancedScoring.enabled) {
       _defaultTb = ['pontos_avancados'].concat(_defaultTb);

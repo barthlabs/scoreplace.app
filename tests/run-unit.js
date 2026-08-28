@@ -791,6 +791,7 @@ const SUITES = [
   // organizador resolve), com e sem tie-break. Nasceu do R1 Grupo S do Confra, onde uma
   // participante tentou lançar o mesmo jogo 5 vezes em 2 minutos. v1.8.51.
   'tests/participante-lanca-e-aprova.test.js',
+  'tests/dois-lancam-juntos-um-so-vence.test.js',
   'tests/tiebreak-display-persist.test.js',
   'tests/criterio-nao-perde-o-flex-ao-reaparecer.test.js',
   'tests/progress-third-place-nodouble.test.js',

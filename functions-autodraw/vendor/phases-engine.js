@@ -1471,8 +1471,12 @@
           if (g1 > g2) sw1++; else if (g2 > g1) sw2++;
           if (st.tiebreak) { var tp1 = parseInt(st.tiebreak.pointsP1) || 0, tp2 = parseInt(st.tiebreak.pointsP2) || 0; if (tp1 > tp2) tb1++; else if (tp2 > tp1) tb2++; }
         });
+        // pontos de tie-break (leitor único — ver standings-core.tiebreakPointsOfMatch)
+        var _tbpP = (typeof window._standingsTbPoints === 'function') ? window._standingsTbPoints(m) : { p1: 0, p2: 0 };
         smap[m.p1].setsWon += sw1; smap[m.p1].setsLost += sw2; smap[m.p1].gamesWon += gw1; smap[m.p1].gamesLost += gw2; smap[m.p1].tiebreaksWon += tb1;
         smap[m.p2].setsWon += sw2; smap[m.p2].setsLost += sw1; smap[m.p2].gamesWon += gw2; smap[m.p2].gamesLost += gw1; smap[m.p2].tiebreaksWon += tb2;
+        smap[m.p1].tbPointsWon = (smap[m.p1].tbPointsWon || 0) + _tbpP.p1; smap[m.p1].tbPointsLost = (smap[m.p1].tbPointsLost || 0) + _tbpP.p2;
+        smap[m.p2].tbPointsWon = (smap[m.p2].tbPointsWon || 0) + _tbpP.p2; smap[m.p2].tbPointsLost = (smap[m.p2].tbPointsLost || 0) + _tbpP.p1;
       }
     });
     // Buchholz (soma dos pontos dos adversários) + Sonneborn-Berger (ponderado por resultado), group-local.
@@ -1505,7 +1509,7 @@
       try { _buildH2H = require('./standings-core.js').buildH2H; } catch (e) { _buildH2H = null; }
     }
     var defaultTb = usesSets
-      ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
+      ? ['confronto_direto', 'saldo_sets', 'saldo_games', 'sets_vencidos', 'games_vencidos', 'tiebreaks_vencidos', 'saldo_pontos_tiebreak', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio']
       : ['confronto_direto', 'saldo_pontos', 'vitorias', 'buchholz', 'sonneborn_berger', 'antiguidade', 'sorteio'];
     var tb = (Array.isArray(opts.tiebreakers) && opts.tiebreakers.length) ? opts.tiebreakers : defaultTb;
     // confronto direto POR UID (nome só pra quem não tem conta — é a identidade que ele tem)

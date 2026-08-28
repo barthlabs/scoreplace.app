@@ -397,6 +397,49 @@ function _userTeamInMatch(t, m, user) {
   return 0;
 }
 
+// ⭐ A CORRIDA DAS DUAS PROPOSTAS — por que OS DOIS lados se viam como autor do placar
+// (relato do dono, 27/ago/2026: _"no celular de cada um aparecia que quem tinha lançado o
+// resultado era aquele próprio usuário; como cada um constava como o apontador, nenhum
+// deles podia aprovar — o organizador teve que aprovar"_).
+//
+// A trava contra o 2º lançamento (incidente 18/jul) existia, mas perguntava pro `m` LOCAL:
+// _"já tem proposta do outro lado?"_. Quando os dois lançam quase juntos, o aparelho B ainda
+// não recebeu o snapshot com a proposta de A — a trava responde "não tem" e a transação
+// grava `fm.pendingResult = <proposta de B>` POR CIMA da de A, incondicionalmente. Daí:
+// o servidor guarda B, o aparelho de A segue mostrando a cópia otimista com A como
+// proponente — e a UI esconde o Confirmar de quem propôs. Os dois esperando o outro.
+//
+// O conserto é fazer a MESMA pergunta onde mora a verdade: DENTRO da transação, sobre o
+// doc FRESCO. Achou proposta viva do outro lado → aborta (o mutator devolve `false`, e
+// `commitTournamentTx` não grava), e aí a tela local é curada com a proposta que venceu.
+function _propostaDoOutroLado(t, m, user) {
+  var pr = m && m.pendingResult;
+  if (!pr || pr.disputed) return false;
+  var meu = _userTeamInMatch(t, m, user);
+  var dele = pr.proposedBy ? _userTeamInMatch(t, m, { uid: pr.proposedBy }) : 0;
+  return meu > 0 && dele > 0 && meu !== dele;
+}
+window._propostaDoOutroLado = _propostaDoOutroLado;
+
+// Perdeu a corrida: a proposta do outro lado é a que vale. Cura a `t` local (senão o
+// aparelho continua pintando a própria proposta morta — exatamente o "cada um se vê como
+// autor"), realinha o espelho do jogo e redesenha com os botões certos.
+function _curaPropostaPerdida(tId, matchId, prVencedora) {
+  try {
+    var t = window._findTournamentById(tId);
+    var m = t && _findMatch(t, matchId);
+    if (m) {
+      m.pendingResult = prVencedora;
+      _propagateMatchUpdate(t, m);
+    }
+    _dualWriteResult(tId, matchId);
+  } catch (e) { window._error('[corrida do placar] cura falhou', e); }
+  if (typeof showNotification === 'function') {
+    showNotification('Já tem placar pra aprovar', 'O outro time lançou primeiro. Use Confirmar, Editar ou Contestar.', 'info');
+  }
+  _rerenderBracket(tId, matchId);
+}
+
 // Verifica se user é organizador ou co-host ativo (independente de viewMode —
 // pra approval queremos a permissão real, não a visualização atual).
 function _isUserOrgOrCoHost(t, user) {
@@ -1586,14 +1629,24 @@ window._commitSetsResult = function (tId, matchId, sets, p1Sets, p2Sets, isFixed
     // (pendingResult) no match FRESCO via commitTournamentTx, em vez de syncImmediate
     // (doc inteiro → lost-update quando 2 propostas/resultados concorrem). Espelha o
     // caminho de proposta simples de _saveResultInline.
+    // ⭐ MESMA TRAVA DO CAMINHO INLINE (ver _propostaDoOutroLado). Aqui ela é a ÚNICA:
+    // o fecho por sets nunca teve nem a checagem local, então o 2º lançamento gravava
+    // por cima do 1º sem perguntar nada a ninguém.
+    var _perdeuCorridaGsm = null;
     window.AppStore.commitTournamentTx(tId, function (freshT) {
       var fm = window._findMatch(freshT, matchId);
+      if (fm && _propostaDoOutroLado(freshT, fm, _curUserGsm)) {
+        _perdeuCorridaGsm = fm.pendingResult;
+        return false;                       // mutator aborta → nada é gravado
+      }
       if (fm) {
         fm.pendingResult = _pendingGsmObj;
         if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
       }
       if (!Array.isArray(freshT.history)) freshT.history = [];
       freshT.history.push({ date: new Date().toISOString(), message: _gsmPropLogMsg });
+    }).then(function () {
+      if (_perdeuCorridaGsm) _curaPropostaPerdida(tId, matchId, _perdeuCorridaGsm);
     });
     // 4.1 DUAL-WRITE: espelha a proposta (sets) no doc do jogo.
     _dualWriteResult(tId, matchId);
@@ -2227,14 +2280,24 @@ window._saveResultInline = function (tId, matchId) {
     window.AppStore.logAction(tId, _pendingLogMsg);
     // BLINDAGEM: persiste a proposta ATOMICAMENTE (re-aplica pendingResult no
     // match fresco + histórico), em vez de syncImmediate do doc inteiro. project_concurrency_safe_saves.
+    // ⭐ A TRAVA VALE ONDE ESTÁ A VERDADE (ver _propostaDoOutroLado): a checagem local
+    // acima olha uma cópia que pode ser velha. Aqui, dentro da transação, o doc é o
+    // FRESCO — se o outro lado já propôs, aborta em vez de gravar por cima.
+    var _perdeuCorrida = null;
     window.AppStore.commitTournamentTx(tId, function (freshT) {
       var fm = window._findMatch(freshT, matchId);
+      if (fm && _propostaDoOutroLado(freshT, fm, _curUser)) {
+        _perdeuCorrida = fm.pendingResult;
+        return false;                       // mutator aborta → nada é gravado
+      }
       if (fm) {
         fm.pendingResult = _pendingPayload;
         if (typeof window._propagateMatchUpdate === 'function') window._propagateMatchUpdate(freshT, fm);
       }
       if (!Array.isArray(freshT.history)) freshT.history = [];
       freshT.history.push({ date: new Date().toISOString(), message: _pendingLogMsg });
+    }).then(function () {
+      if (_perdeuCorrida) _curaPropostaPerdida(tId, matchId, _perdeuCorrida);
     });
     // 4.1 DUAL-WRITE: espelha a proposta inicial (pendingResult) no doc do jogo.
     _dualWriteResult(tId, matchId);
@@ -9206,6 +9269,34 @@ window._openLiveScoring = function(tId, matchId, opts) {
   }
   window._liveNowSyncCurrent = _lnSync;   // pro teardown do overlay alcançar
 
+  // ⭐ FECHAR O PLACAR TEM QUE APAGAR A BATIDA (relato do dono, 27/ago/2026: _"esse ao vivo
+  // não some nunca; já foi cancelada no meio e não some"_).
+  //
+  // A vitrine tira sozinha quem parou de dar sinal (`_LIVE_STALE_MS`, 60s) — e o desenho
+  // contava com isso pra cobrir "fechou a aba no meio". Só que o `setInterval` do heartbeat
+  // é GLOBAL (`window.__liveHb`) e ninguém o parava quando o overlay era fechado por
+  // DENTRO do app: nem o ✕ Encerrar, nem o "Abandonar partida". O intervalo seguia batendo
+  // `status:'live'` a cada 20s enquanto o app estivesse aberto — o jogo nunca ficava velho,
+  // e por isso nunca saía da lista. O único caminho que parava a batida era o do jogo que
+  // termina normalmente, dentro de `_lnSync`.
+  //
+  // Quem fecha o placar sai da vitrine. Encerrar de vez (status `finished`) só quem encerra
+  // PRA TODOS — o jogo de torneio e o dono da sala casual. Convidado que abandona só cala a
+  // própria batida: se os outros seguem jogando, a batida deles mantém o jogo no ar.
+  function _lnTeardown() {
+    if (typeof window._liveNowStopHeartbeat === 'function') window._liveNowStopHeartbeat();
+    try { clearTimeout(_lnTimer); } catch (e) {}
+    if (!_lnPub || _spectate || _replay) return;
+    var _id = _lnResolveId(); if (!_id) return;
+    var _cuLn = window.AppStore && window.AppStore.currentUser;
+    var _souDono = !isCasual || !!(_cuLn && _cuLn.uid && _casualCreatedBy && _cuLn.uid === _casualCreatedBy);
+    if (_souDono && typeof window._liveNowFinish === 'function') {
+      window._liveNowFinish(_id, _serializeState());
+    }
+    _lnPub = false;
+  }
+  window._liveNowTeardownCurrent = _lnTeardown;
+
   // ── ESPECTADOR: o estado ENTRA do doc público e a tela vira leitura ────────────
   // Mesmo render, mesma placa, mesmas cores — o que muda é a direção do dado. E a
   // trava visual é por SELETOR de ação, não por id de botão: id muda de nome, a
@@ -11188,6 +11279,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
       try { sessionStorage.removeItem('_activeCasualRoom'); } catch(_eSS) {}
     }
     // Cleanup e fecha overlay
+    _lnTeardown();          // sai da vitrine "Ao vivo agora" (ver _lnTeardown)
     if (_unsubFirestore) { try { _unsubFirestore(); } catch(_e3) {} _unsubFirestore = null; }
     try { window.removeEventListener('resize', _onResize); } catch(_e4) {}
     try { document.removeEventListener('visibilitychange', _onVisibility); } catch(_e5) {}
@@ -11230,6 +11322,7 @@ window._openLiveScoring = function(tId, matchId, opts) {
     // diz o que vai acontecer com o resultado e com os outros jogadores, e encerra na hora.
     // Uma pergunta, uma resposta, e sai.
     var _cleanup = function() {
+      _lnTeardown();        // sai da vitrine "Ao vivo agora" (ver _lnTeardown)
       if (_unsubFirestore) { try { _unsubFirestore(); } catch(e) {} _unsubFirestore = null; }
       window.removeEventListener('resize', _onResize);
       document.removeEventListener('visibilitychange', _onVisibility);

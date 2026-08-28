@@ -2567,6 +2567,7 @@ window._buildTournamentConfigBox = function (t, opts) {
             pontos_avancados: 'Pontos avançados', confronto_direto: 'Confronto direto',
             saldo_pontos: 'Saldo de pontos', saldo_sets: 'Saldo de sets', saldo_games: 'Saldo de games',
             sets_vencidos: 'Sets vencidos', games_vencidos: 'Games vencidos', tiebreaks_vencidos: 'Tiebreaks vencidos',
+            saldo_pontos_tiebreak: 'Saldo de pontos de tie-break',
             vitorias: 'Vitórias', buchholz: 'Buchholz', sonneborn_berger: 'Sonneborn-Berger',
             antiguidade: 'Antiguidade', juventude: 'Juventude', sorteio: 'Sorteio'
         };
