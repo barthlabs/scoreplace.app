@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.36';
+window.SCOREPLACE_VERSION = '2.1.37';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10421,6 +10421,36 @@ window.AppStore = {
             if (_lt) {
               Object.keys(_d.tournament).forEach(function (k) { _lt[k] = _d.tournament[k]; });
               try { this._saveToCache(); } catch (_eC) {}
+              /* ⛔ GRAVOU ⇒ REPINTA. NÃO ESPERAR O ECO (2.1.37).
+               * Relato do dono no torneio de teste: lançou a final, "tive que lançar de
+               * novo", e depois "só não desenhou o pódium". MEDIDO: o dado estava certo
+               * (torneio `finished`, `finishedAt` gravado) e o `renderBracket` produz o
+               * pódio (🥇🥈🥉 no HTML). Ou seja: o estado chegou e a TELA não redesenhou.
+               *
+               * A CAUSA é este bloco. Ele traz o torneio do servidor, copia por cima do
+               * local — e então CONFIA no eco do `onSnapshot` pra repintar. Mas o eco
+               * atravessa dois portões: `_suppressSoftRefresh` (ligado por outros caminhos,
+               * com timeout) e o gate de assinatura. Qualquer um que engula o eco deixa a
+               * tela no estado de ANTES do placar, e quem está olhando conclui que não
+               * gravou — foi exatamente o que aconteceu: ele lançou de novo.
+               *
+               * ⚠️ E o pior caso é o da FINAL: o placar do próprio jogo ainda aparece pela
+               * mutação in-place do card, mas `status: finished` é mudança ESTRUTURAL — o
+               * pódio só nasce num render inteiro. Sem repintura, ele nunca aparece.
+               *
+               * ⭐ A regra: quem GRAVA repinta; o eco vira redundância, não a única ponte.
+               * [[project_mutacao_otimista_morre_no_carregamento_em_voo]]
+               * ⛔ A repintura é FORÇADA de propósito: solto o `_suppressSoftRefresh` (ele
+               * existe pra calar eco ALHEIO, não a confirmação da MINHA gravação) e zero a
+               * assinatura carimbada — senão o gate compara o estado novo com ele mesmo,
+               * porque a cópia logo acima já adiantou o local, e conclui "nada mudou". */
+              try {
+                if ((window.location.hash || '').indexOf('#tournaments/' + String(tournamentId)) === 0) {
+                  window._suppressSoftRefresh = false;
+                  window._tdetailSig = null;
+                  if (typeof window._softRefreshView === 'function') window._softRefreshView();
+                }
+              } catch (_eR) { /* best-effort: repintura nunca derruba o placar já gravado */ }
             }
           }
         } else {
