@@ -1481,8 +1481,22 @@ window._partApplyFilter = function () {
     var isMulti = c.getAttribute('data-part-multi') === '1';
     var _inact = c.getAttribute('data-part-inactive') === '1';
     var okSearch = !q || nm.indexOf(q) !== -1;
-    var okGender = isMulti || gf === 'all' || g === gf || g.split(',').indexOf(gf) !== -1;
-    var okSkill = isMulti || sk === 'all' || s === sk || s.split(',').indexOf(sk) !== -1;
+    /* ⛔ QUEM NÃO TEM O DADO NÃO É ESCONDIDO PELO FILTRO DELE (2.1.34).
+     * Relato do dono (28/ago/2026): criou um torneio, inscreveu 8 placeholders, e a tela
+     * de inscritos veio VAZIA — com os contadores dizendo "Todos (8)". Os cards estavam
+     * lá: o filtro de GÊNERO os apagou. Placeholder é vaga sem conta, não tem gênero, e
+     * `g` cai em 'none'; com o ♂ aceso, `g === gf` é falso pros oito e todos levam
+     * `display:none`. Tela vazia, sem uma linha dizendo por quê.
+     * ⭐ A REGRA: filtrar por ♂ quer dizer "me mostre os homens", e um placeholder NÃO É
+     * "não-homem" — é DESCONHECIDO. Esconder o desconhecido é tratar "não sei" como "não
+     * é", o mesmo erro que no mesmo dia apagou placar confirmado
+     * ([[project_proposta_apagava_resultado_confirmado]]).
+     * ⚠️ E o efeito passava de estético: sem a lista o organizador não alcança o botão de
+     * sortear — o torneio inteiro ficava intransitável. */
+    var okGender = isMulti || gf === 'all' || !g || g === 'none' ||
+                   g === gf || g.split(',').indexOf(gf) !== -1;
+    var okSkill = isMulti || sk === 'all' || !s || s === 'none' ||
+                  s === sk || s.split(',').indexOf(sk) !== -1;
     var okActive = af === 'all' || (af === 'active' ? !_inact : _inact);
     var ok = okSearch && okGender && okSkill && okActive;
     c.style.display = ok ? '' : 'none';
@@ -1532,8 +1546,32 @@ window._partApplyFilter = function () {
   _groups.forEach(function (grp) {
     grp.items.slice().sort(_cmp).forEach(function (c) { grp.parent.appendChild(c); });
   });
+  /* ⛔ FILTRO NUNCA ESVAZIA A TELA EM SILÊNCIO (2.1.34).
+   * Esta linha SEMPRE existiu — e o elemento `part-search-empty` NUNCA foi renderizado
+   * por ninguém (`grep` em js/views/: uma ocorrência só, esta). Ou seja: a intenção de
+   * avisar estava escrita, o aviso não existia, e o `if (empty)` engolia isso calado.
+   * Foi essa combinação que fez o dono ver "Todos (8)" com a lista vazia e concluir que
+   * os inscritos tinham sumido — o filtro de gênero escondia os 8 e nada dizia por quê.
+   * ⭐ Agora o aviso NASCE quando precisa: some com a causa (o card sem gênero deixou de
+   * ser escondido, acima) e some com o sintoma (se ainda sobrar zero, a tela FALA). */
   var empty = document.getElementById('part-search-empty');
-  if (empty) empty.style.display = (shown === 0 && cards.length > 0) ? '' : 'none';
+  var _escondeuTudo = (shown === 0 && cards.length > 0);
+  if (!empty && _escondeuTudo && cards[0] && cards[0].parentNode) {
+    empty = document.createElement('div');
+    empty.id = 'part-search-empty';
+    empty.style.cssText = 'padding:18px 14px;text-align:center;color:var(--text-muted);' +
+      'font-size:0.86rem;line-height:1.5;';
+    cards[0].parentNode.insertBefore(empty, cards[0]);
+  }
+  if (empty) {
+    if (_escondeuTudo) {
+      empty.innerHTML = '<div style="font-weight:700;color:var(--text-bright);margin-bottom:4px;">' +
+        'Nada aparece com os filtros de agora</div>' +
+        '<div>' + cards.length + (cards.length === 1 ? ' inscrito está' : ' inscritos estão') +
+        ' ocultos. Limpe a busca ou os filtros de gênero/nível para vê-los.</div>';
+    }
+    empty.style.display = _escondeuTudo ? '' : 'none';
+  }
   // v3.0.97: não pula a tela / a barra sticky não sai do lugar quando o filtro esvazia.
   // v3.1.41: com BUSCA ATIVA, leva o 1º resultado pra logo abaixo da barra (nunca tela
   // preta embaixo tendo que rolar pra cima).
