@@ -75,9 +75,21 @@ function ordemPeloNome(nm) {
   if (!doc.fields) { console.error('✗ torneio não encontrado'); process.exit(1); }
   const parts = f(doc.fields.participants) || [];
   const strings = parts.filter((p) => typeof p === 'string');
-  if (!strings.length) { console.log('✓ nenhuma entrada em string — nada a fazer'); return; }
+  /* SEM NÚMERO também é estrago do mesmo defeito: quem entrou numa dupla sem `enrollSeq`
+   * gravado sai dela sem número, e o rank denso o joga pro FIM — o "voltou como inscrito
+   * 8" do relato. A partir da 2.1.41 a CF faz o backfill antes de formar; o que já está
+   * gravado é este rito que conserta. */
+  const semNum = parts.filter((p) => p && typeof p === 'object' && p.enrollSeq == null &&
+    !((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)));
+  const _toChk = f(doc.fields.teamOrigins) || {};
+  const _temDupla = parts.some((p) => p && typeof p === 'object' && (p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name));
+  const _toSuspeito = Object.keys(_toChk).length > 0 && !_temDupla;
+  if (!strings.length && !semNum.length && !_toSuspeito) { console.log('✓ nada a consertar'); return; }
 
-  console.log('  ' + strings.length + ' de ' + parts.length + ' entrada(s) em string: ' + JSON.stringify(strings) + '\n');
+  if (strings.length) console.log('  ' + strings.length + ' de ' + parts.length + ' entrada(s) em string: ' + JSON.stringify(strings));
+  if (semNum.length) console.log('  ' + semNum.length + ' sem nº de inscrição: ' +
+    JSON.stringify(semNum.map((p) => p.displayName || p.name)));
+  console.log('');
 
   // ── ① string vira objeto. Objeto existente NÃO é tocado. ────────────────────────
   const novos = parts.map((p) => {
@@ -129,6 +141,18 @@ function ordemPeloNome(nm) {
     if (typeof parts[i] !== 'string') return;
     console.log('  · "' + parts[i] + '"  →  objeto' + (p.enrollSeq != null ? '  nº ' + p.enrollSeq : '  (sem nº)'));
   });
+  /* quem ficou sem número FORA da série completa entra no FIM (max+1) — o cânone: novo
+   * nunca preenche vago de quem saiu, senão passa na frente de quem chegou antes. */
+  if (!serieCompleta) {
+    let max = 0;
+    novos.forEach((p) => { if (p && typeof p === 'object' && p.enrollSeq != null && p.enrollSeq > max) max = p.enrollSeq; });
+    novos.forEach((p) => {
+      if (!p || typeof p !== 'object' || p.enrollSeq != null) return;
+      if ((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name)) return;
+      p.enrollSeq = ++max;
+      console.log('  · "' + (p.displayName || p.name) + '" estava SEM nº → ' + p.enrollSeq + ' (fim da fila)');
+    });
+  }
 
   // ── ② as chaves da subcoleção saem do MÓDULO REAL ──────────────────────────────
   const regsAntes = S.dividir({ id: TID, participants: parts }, ['participants']).participants || [];
@@ -139,6 +163,24 @@ function ordemPeloNome(nm) {
   console.log('  chaves DEPOIS: ' + JSON.stringify(kDepois) + '  (distintas: ' + new Set(kDepois).size + ')');
   if (new Set(kDepois).size !== kDepois.length) { console.error('\n✗ ABORTADO: as chaves novas ainda colidem'); process.exit(1); }
 
+  /* ── DUPLA FANTASMA no `teamOrigins` ────────────────────────────────────────────
+   * O mapa registra "A / B" → 'formada'. Quando a dupla é desfeita, a marca ficava (a CF
+   * só passou a apagá-la na 2.1.41). Registro de dupla que não existe é mentira guardada
+   * — e como o mapa é chaveado por NOME, ele casa com qualquer dupla futura de mesmo nome
+   * e a marca como formada sem que ninguém tenha formado.
+   * ⛔ TRAVA: só sai a chave que NÃO tem dupla correspondente no elenco de agora. */
+  const toAntes = f(doc.fields.teamOrigins) || {};
+  const duplasVivas = {};
+  novos.forEach((p) => {
+    if (!p || typeof p !== 'object') return;
+    if (!((p.p1Uid || p.p1Name) && (p.p2Uid || p.p2Name))) return;
+    [p.displayName, p.name, (p.p1Name || '') + ' / ' + (p.p2Name || '')].forEach((k) => { if (k) duplasVivas[k] = 1; });
+  });
+  const toNovo = {}; const fantasmas = [];
+  Object.keys(toAntes).forEach((k) => { if (duplasVivas[k]) toNovo[k] = toAntes[k]; else fantasmas.push(k); });
+  const toLimpo = fantasmas.length > 0;
+  if (toLimpo) console.log('\n  teamOrigins — dupla(s) fantasma a remover: ' + JSON.stringify(fantasmas));
+
   const sub = await (await fetch(BASE + '/tournaments/' + TID + '/inscritos?pageSize=300', { headers: H })).json();
   const existentes = (sub.documents || []).map((d) => d.name.split('/').pop());
   const orfaos = existentes.filter((id) => kDepois.indexOf(id) === -1);
@@ -147,9 +189,12 @@ function ordemPeloNome(nm) {
 
   if (!APLICAR) { console.log('\n(ensaio) rode com --aplicar pra gravar'); return; }
 
-  // ③ o documento
-  let r = await fetch(BASE + '/tournaments/' + TID + '?updateMask.fieldPaths=participants',
-    { method: 'PATCH', headers: H, body: JSON.stringify({ fields: { participants: enc(novos) } }) });
+  // ③ o documento (+ teamOrigins, se houver dupla fantasma)
+  const campos = { participants: enc(novos) };
+  let mask = 'updateMask.fieldPaths=participants';
+  if (toLimpo) { campos.teamOrigins = enc(toNovo); mask += '&updateMask.fieldPaths=teamOrigins'; }
+  let r = await fetch(BASE + '/tournaments/' + TID + '?' + mask,
+    { method: 'PATCH', headers: H, body: JSON.stringify({ fields: campos }) });
   if (!r.ok) { console.error('✗ doc: ' + r.status + ' ' + (await r.text()).slice(0, 300)); process.exit(1); }
   console.log('\n  ✓ documento gravado');
 
