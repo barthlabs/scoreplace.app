@@ -86,6 +86,44 @@ if (typeof dividir === 'function') {
   ok(!chaves.includes('x'), 'e nenhuma delas é a constante `x`');
 }
 
+// ── ④ NINGUÉM entra numa dupla sem número (a causa de "voltou como inscrito 8") ──
+console.log('\n④ Sem número no banco, a dupla não o inventa nem o perde');
+/* MEDIDO no torneio do dono: o "Jogador 01" voltou da dupla SEM enrollSeq e o "02" com o
+ * dele. O desfazer estava certo — devolve `entry.p1Seq`. O que faltava era o número
+ * EXISTIR: `_ensureEnrollSeqs` (cliente) atribui no RENDER e muta a memória; se nada
+ * gravar depois, o banco segue sem eles e `p1Seq` nasce null. Agora o backfill roda no
+ * ÚNICO escritor, ANTES de qualquer dupla se formar. */
+const semNum = { participants: [
+  { name: 'Jogador 01', displayName: 'Jogador 01', isPlaceholder: true },   // ← sem enrollSeq
+  { name: 'Jogador 02', displayName: 'Jogador 02', isPlaceholder: true },   // ← sem enrollSeq
+  { name: 'Jogador 03', displayName: 'Jogador 03', isPlaceholder: true, enrollSeq: 9 }
+] };
+const f2 = pc.computeFormPair(semNum, { uid1: '', name1: 'Jogador 01', uid2: '', name2: 'Jogador 02' });
+const d2 = f2.participants.find((p) => p && p.p1Name === 'Jogador 01');
+ok(d2 && d2.p1Seq != null && d2.p2Seq != null,
+   '⛔ os dois GANHAM número antes de virar dupla — got ' + JSON.stringify([d2 && d2.p1Seq, d2 && d2.p2Seq]));
+ok(d2 && d2.p1Seq > 9 && d2.p2Seq > 9,
+   'e entram no FIM da fila (max+1), nunca num vago — cânone do nº cronológico');
+ok(d2 && d2.p1Seq !== d2.p2Seq, 'e nunca com o mesmo número');
+const s2 = pc.computeSplitPair({ participants: f2.participants }, { id1: 'Jogador 01', id2: 'Jogador 02' });
+const v01 = s2.participants.find((p) => p && (p.name || p.displayName) === 'Jogador 01');
+ok(v01 && v01.enrollSeq === d2.p1Seq,
+   '⛔ e o desfazer devolve EXATAMENTE o número com que ele entrou — got ' + (v01 && v01.enrollSeq));
+ok(pc.backfillEnrollSeqs(['Zé solto']) === true, 'string legada também vira objeto pra poder ter número');
+
+// ── ⑤ o desfazer não deixa rastro de dupla que não existe mais ───────────────────
+console.log('\n⑤ teamOrigins não guarda dupla desfeita');
+const comTO = {
+  participants: [{ p1Name: 'Ana', p2Name: 'Bia', p1Seq: 1, p2Seq: 2, displayName: 'Ana / Bia', name: 'Ana / Bia' }],
+  teamOrigins: { 'Ana / Bia': 'formada', 'Cida / Dora': 'formada' }
+};
+const s3 = pc.computeSplitPair(comTO, { id1: 'Ana', id2: 'Bia' });
+ok(s3.outcome === 'split', 'a dupla se desfaz');
+ok(s3.updateData.teamOrigins && s3.updateData.teamOrigins['Ana / Bia'] === undefined,
+   '⛔ a marca da dupla desfeita SAI — registro de dupla que não existe é mentira guardada');
+ok(s3.updateData.teamOrigins && s3.updateData.teamOrigins['Cida / Dora'] === 'formada',
+   'e as outras duplas ficam intactas');
+
 console.log(falhas === 0
   ? '\n✅ o número é da PESSOA: a dupla não o toma, e o desfazer o devolve\n'
   : '\n❌ ' + falhas + ' falha(s)\n');

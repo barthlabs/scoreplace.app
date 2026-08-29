@@ -75,10 +75,49 @@ function markDuplasManualUpdate(data) {
 
 // Decide a FORMAÇÃO da dupla a partir do doc atual. Espelha _formDuplaByUids.
 // opts: { uid1, name1, uid2, name2 }. Match por uid (conta) ou por nome (fictício sem conta).
+/* ⛔ NINGUÉM PODE ESTAR SEM NÚMERO NA HORA DE ENTRAR NUMA DUPLA (2.1.41).
+ * MEDIDO no torneio do dono: o "Jogador 01" voltou da dupla SEM `enrollSeq`, enquanto o
+ * "Jogador 02" voltou com o dele. O desfazer estava certo — ele devolve `entry.p1Seq`. O
+ * que faltava era o número EXISTIR: `p1Seq` foi gravado `null` porque o inscrito não tinha
+ * `enrollSeq` no banco quando a dupla se formou.
+ * ⭐ POR QUE ALGUÉM FICA SEM NÚMERO: `_ensureEnrollSeqs` (cliente) atribui os números no
+ * RENDER e muta o objeto em memória — se nada gravar depois, o banco segue sem eles. O
+ * número parecia existir na tela e não existia no dado. [[project_enroll_number_chronological_no_gaps]]
+ * ⇒ Aqui, no ÚNICO escritor, o backfill acontece ANTES de qualquer dupla se formar, e é
+ * gravado junto. Mesma regra do cliente: quem não tem entra no FIM (`max+1`), nunca num
+ * vago — senão um inscrito tardio pega número baixo e passa na frente de quem chegou antes. */
+function backfillEnrollSeqs(arr) {
+  var max = 0, mexeu = false;
+  arr.forEach(function (p) {
+    if (!p || typeof p !== 'object') return;
+    [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function (s) {
+      if (s != null && !isNaN(s) && Number(s) > max) max = Number(s);
+    });
+  });
+  arr.forEach(function (p, i) {
+    if (!p || typeof p !== 'object') {
+      /* string legada: vira objeto pra PODER ter número. String não guarda campo — foi
+       * exatamente assim que o nº se perdeu e que dois inscritos colidiram na mesma chave
+       * da subcoleção. */
+      var nm = String(p || '').trim();
+      if (!nm) return;
+      arr[i] = { name: nm, displayName: nm, enrollSeq: ++max };
+      mexeu = true;
+      return;
+    }
+    if (isPairEntry(p)) {
+      if (p.p1Seq == null) { p.p1Seq = ++max; mexeu = true; }
+      if (p.p2Seq == null) { p.p2Seq = ++max; mexeu = true; }
+    } else if (p.enrollSeq == null) { p.enrollSeq = ++max; mexeu = true; }
+  });
+  return mexeu;
+}
+
 function computeFormPair(data, opts) {
   var uid1 = opts.uid1 || '', name1 = opts.name1 || '';
   var uid2 = opts.uid2 || '', name2 = opts.name2 || '';
   var arr = asParticipantsArray(data).slice();
+  var _backfilled = backfillEnrollSeqs(arr);
 
   // ⚠️ SÓ ENTRADA SOLO PODE VIRAR DUPLA (v1.5.8 — a "mistura" do Torneio de Casais).
   // O findIndex antigo era `p.uid === uid1` SEM checar se a entrada é dupla. Numa dupla o
@@ -98,7 +137,10 @@ function computeFormPair(data, opts) {
     return {
       outcome: 'alreadyPaired',
       who: pairedIds[idA] ? (name1 || idA) : (name2 || idB),
-      participants: asParticipantsArray(data), updateData: null
+      participants: arr,
+      /* o backfill é conserto de dado e vai mesmo quando a dupla NÃO se forma — senão o
+       * roster fica sem número até alguém acertar de formar uma dupla que dê certo. */
+      updateData: _backfilled ? { participants: arr } : null
     };
   }
 
@@ -111,7 +153,7 @@ function computeFormPair(data, opts) {
     return uid2 ? (typeof p === 'object' && p && p.uid === uid2) : (entryName(p) === name2);
   });
   if (fi1 === -1 || fi2 === -1 || fi1 === fi2) {
-    return { outcome: 'notFound', participants: asParticipantsArray(data), updateData: null };
+    return { outcome: 'notFound', participants: arr, updateData: _backfilled ? { participants: arr } : null };
   }
 
   var _p1 = arr[fi1], _p2 = arr[fi2];
@@ -231,10 +273,26 @@ function computeSplitPair(data, opts) {
 
   arr.splice(idx, 1, solo1, solo2);
 
+  /* ⛔ 2.1.41 — O RASTRO DA DUPLA DESFEITA FICAVA NO `teamOrigins`. Medido no torneio do
+   * dono: a dupla tinha sido desfeita e `teamOrigins` ainda dizia
+   * `"Jogador 01 / Jogador 02": "formada"`. Registro de uma dupla que não existe mais é
+   * mentira guardada — e este mapa é chaveado por NOME, então ele ainda casa com qualquer
+   * dupla futura de mesmo nome e a marca como "formada" sem que ninguém tenha formado.
+   * O desfazer é a hora de apagar: quem escreveu a marca (computeFormPair) tem que ter a
+   * ponta que a remove. */
+  var _to = Object.assign({}, data.teamOrigins || {});
+  var _mexeuTO = false;
+  [nm, p1Name + ' / ' + p2Name, p2Name + ' / ' + p1Name].forEach(function (k) {
+    if (k && Object.prototype.hasOwnProperty.call(_to, k)) { delete _to[k]; _mexeuTO = true; }
+  });
+
+  var _upd = { participants: arr, memberUids: computeMemberUids(Object.assign({}, data, { participants: arr })) };
+  if (_mexeuTO) _upd.teamOrigins = _to;
+
   return {
     outcome: 'split',
     participants: arr,
-    updateData: { participants: arr, memberUids: computeMemberUids(Object.assign({}, data, { participants: arr })) },
+    updateData: _upd,
     p1Name: p1Name, p2Name: p2Name, p1Uid: p1Uid, p2Uid: p2Uid
   };
 }
@@ -252,6 +310,6 @@ function findDuplicatePeople(data) {
 }
 
 module.exports = {
-  computeFormPair, computeSplitPair, dropRequestsInvolving, markDuplasManualUpdate,
+  computeFormPair, backfillEnrollSeqs, computeSplitPair, dropRequestsInvolving, markDuplasManualUpdate,
   isPairEntry, entryIdentities, findDuplicatePeople
 };
