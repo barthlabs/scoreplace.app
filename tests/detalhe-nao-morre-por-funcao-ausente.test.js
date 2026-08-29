@@ -37,7 +37,18 @@ ok(i > 0, 'o builder é capturado numa variável antes de ser usado');
 const bloco = _R.ateSairDoBloco(src, i);
 ok(/typeof _mkCard === 'function'/.test(bloco), '⛔ e o uso é guardado por typeof');
 ok(/_captureException/.test(bloco), 'a ausência é REPORTADA (não engolida)');
-ok(/window\._pName/.test(bloco), 'e a queda ainda mostra o NOME do inscrito');
+/* ⛔ MUDOU NA 2.1.46, por ordem do dono: _"é pra tirar o que não está aprovado e fica
+ * causando essas merdas de regressões"_. O card de emergência que esta asserção exigia era
+ * uma SEGUNDA versão do card de inscrito — e o commit 23931d4b já tinha matado uma pirata
+ * do mesmo lugar em 1.3.35. Card de emergência nasce simples, alguém o melhora, e vira a
+ * divergência que aparece na tela do dono.
+ * ⭐ O ESSENCIAL SEGUE PROTEGIDO: a ausência não derruba o render do DETALHE (medido em
+ * 2.1.35: 0 bytes de HTML, tela branca, sem erro). A seção fica vazia, o resto da tela
+ * fica de pé, e a falha vai pro Sentry. */
+ok(/cardsStr = \(typeof _mkCard === 'function'\)/.test(bloco),
+   '⛔ sem o builder canônico a seção fica VAZIA — não nasce card alternativo');
+ok(!/class="participant-card/.test(bloco),
+   '⛔⛔ e nenhum card de inscrito é montado à mão aqui (a pirata não volta)');
 
 console.log('\n② Não sobrou nenhuma chamada crua');
 const cru = /window\._inscritoIndividualCard\s*\(/g;
@@ -51,6 +62,6 @@ ok(!/\.map\(function \(p\) \{ return window\._inscritoIndividualCard/.test(src),
    '⛔ o `map` cru — o que produzia 0 bytes de HTML — não voltou');
 
 console.log(falhas === 0
-  ? '\n✅ função ausente vira card feio, nunca tela em branco\n'
+  ? '\n✅ função ausente esvazia a seção, nunca a tela — e sem card alternativo\n'
   : '\n❌ ' + falhas + ' falha(s)\n');
 process.exit(falhas === 0 ? 0 : 1);

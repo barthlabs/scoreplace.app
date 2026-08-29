@@ -4102,14 +4102,26 @@ function renderTournaments(container, tournamentId = null) {
                 if (typeof _mkCard !== 'function') {
                     try { if (window._captureException) window._captureException(new Error('_inscritoIndividualCard ausente no render do detalhe'), { tournamentId: String(t.id) }); } catch (_eIC) {}
                 }
-                cardsStr = _sortedParts.map(function (p) {
-                    if (typeof _mkCard === 'function') return _mkCard(t, p, parts.indexOf(p), _icCtx);
-                    var _nmFb = (window._pName ? window._pName(p) : '') || '';
-                    return '<div class="participant-card" data-part-card="1" data-part-name="' +
-                        window._safeHtml(_nmFb.toLowerCase()) + '" data-part-gender="none" data-part-skill="none" ' +
-                        'style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);' +
-                        'border:1px solid rgba(255,255,255,0.10);">' + window._safeHtml(_nmFb) + '</div>';
-                }).join('');
+                /* ⛔ 2.1.46 — A PIRATA MORREU, E ELA ERA MINHA. Aqui existia um card de
+                 * emergência escrito à mão pro caso de `_inscritoIndividualCard` não ter
+                 * nascido. Ordem do dono, depois de um dia inteiro de regressões: _"é pra
+                 * tirar o que não está aprovado e fica causando essas merdas de
+                 * regressões"_ e _"não mandei eliminar qualquer coisa que não seja a
+                 * canônica exatamente para não ter que ficar fazendo tudo de novo"_.
+                 * Ele está certo, e o commit 23931d4b já tinha matado uma pirata daqui em
+                 * 1.3.35 ("mata a versão pirata do detalhe") — eu a ressuscitei hoje com
+                 * intenção boa. Card de emergência é uma SEGUNDA versão do card: nasce
+                 * simples, alguém a melhora, e vira a divergência que o dono vê na tela.
+                 * ⭐ O QUE A 2.1.35 ENSINOU FICA: a ausência não pode derrubar o render do
+                 * DETALHE inteiro (medido: 0 bytes de HTML, tela branca, sem erro). Então
+                 * a queda é: reporta ao Sentry e a SEÇÃO fica vazia — o resto da tela (as
+                 * ferramentas do organizador, o botão de sortear) continua de pé.
+                 * ⚠️ Perde-se ver os nomes nesse caso. É o preço que o dono escolheu, e é
+                 * o menor: uma seção vazia se conserta; uma segunda versão do card se
+                 * arrasta por meses. [[feedback_unify_dual_entry_points]] */
+                cardsStr = (typeof _mkCard === 'function')
+                    ? _sortedParts.map(function (p) { return _mkCard(t, p, parts.indexOf(p), _icCtx); }).join('')
+                    : '';
             }
 
             // Filter buttons + progress. Ausentes = quem NÃO é verde nem azul (pendente + fora);

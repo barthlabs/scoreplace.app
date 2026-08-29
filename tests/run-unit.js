@@ -141,6 +141,7 @@ const SUITES = [
   'tests/quem-esta-entrando-nao-volta-pra-landing.test.js',
   'tests/encerrados-em-lista-com-dobra.test.js',
   'tests/acoes-do-card-ficam-a-direita-mesmo-quebrando.test.js',
+  'tests/card-de-inscrito-tem-um-dono-so.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',
   'tests/torneio-dividido-chega-inteiro-na-tela.test.js',
   'tests/expandir-demais-jogos-para-no-primeiro.test.js',
