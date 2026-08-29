@@ -1106,7 +1106,20 @@ window.FirestoreDB = {
            * documento, senão a gravação o zera. Escrever a lista aqui à mão já custou três
            * incidentes num dia — e no dia em que um campo novo entrar em PESADOS, este
            * ponto esqueceria dele em silêncio. */
-          (S.PESADOS || ['participants', 'history']).forEach(function (k) {
+          /* ⛔ 2.1.42 — `S` NÃO EXISTE NESTE ESCOPO, e foi isto que quebrou a criação.
+           * `var S = window._tSplit` é declarado na LINHA 2252, dentro de OUTRA função.
+           * Aqui dava `ReferenceError: S is not defined` — dentro do try, e o catch abaixo
+           * RELANÇA ⇒ a gravação inteira morria. Como este ramo só roda em torneio com
+           * `_semPesados`, ninguém viu enquanto torneio novo nascia inteiro; no dia em que
+           * ele passou a nascer DIVIDIDO (2.1.32), toda criação passou a falhar. Sintoma
+           * na mão do dono, minutos depois de publicar: _"criei o torneio mas não consegui
+           * salvar 8 placeholders"_ — e o doc não chegava ao banco.
+           * ⭐ ACHADO NO SENTRY, não por leitura: `ReferenceError: S is not defined`, 6×,
+           * às 15:20 UTC de 28/ago — 14 minutos depois do deploy da 2.1.32. A reversão
+           * (2.1.33) foi feita às cegas e escreveu "a causa não está diagnosticada". Era
+           * uma letra. [[feedback_measure_dont_declare_fixed]] */
+          var _S = (typeof window !== 'undefined') ? window._tSplit : null;
+          ((_S && _S.PESADOS) || ['participants', 'history']).forEach(function (k) {
             if (_fora.indexOf(k) === -1 && cleanData[k] !== undefined) _p.config[k] = cleanData[k];
           });
           _p.config._semPesados = _fora;

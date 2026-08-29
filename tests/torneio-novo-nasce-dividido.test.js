@@ -55,16 +55,25 @@ const criacao = _R.ateOFim(store, i);
  * pergunta "a função existe?" e sim "o OUVINTE a chama?". */
 /* ⛔⛔ REVERTIDO PELA SEGUNDA VEZ (28/ago/2026), minutos depois de publicar — e agora
  * na CRIAÇÃO: o dono criou um torneio e ele NÃO CHEGOU AO BANCO ("criei o torneio mas não
- * consegui salvar 8 placeholders"; medido: 41 antes, 41 depois).
- * ⛔ A LIÇÃO, e ela é pior que a da primeira vez: eu conferi as três condições da reversão
- * anterior de verdade, no caminho — mas as três eram sobre LER um torneio dividido.
- * Nenhuma cobria CRIAR um. Provei o caminho errado e chamei de prova, que é exatamente a
- * falha de 26/ago com outra roupa.
- * ⚠️ SÓ RELIGAR depois de criar um torneio DE VERDADE, com placeholders, e ver o documento
- * aparecer no banco. A causa ainda não foi diagnosticada. */
-ok(!/_semPesados: \['matches'/.test(criacao),
-  '⛔ torneio novo NÃO nasce dividido — a criação dividida não chegou ao banco');
-ok(!/_nJogos: 0,/.test(criacao), '   (nem a contagem, que só faz sentido dividido)');
+ * consegui salvar 8 placeholders"; medido: 41 antes, 41 depois). A reversão escreveu, com
+ * honestidade, "a causa ainda não foi diagnosticada".
+ *
+ * ⭐⭐ RELIGADO NA 2.1.42, COM A CAUSA NA MÃO — e ela não era a divisão:
+ *   `ReferenceError: S is not defined`, 6× às 15:20 UTC, 14 minutos depois do deploy da
+ *   2.1.32. Em `firebase-db.saveTournament`, `(S.PESADOS || [...])` usava um `S` declarado
+ *   1.100 linhas abaixo, dentro de OUTRA função. Aquele ramo SÓ roda quando o doc tem
+ *   `_semPesados` — invisível enquanto torneio novo nascia inteiro, fatal no dia em que
+ *   passou a nascer dividido. E o catch daquele bloco relança de propósito, então a falha
+ *   era total e muda.
+ * ⭐ ACHADO NO SENTRY, não relendo o código. Eu tinha revertido às cegas; o erro estava
+ *   gravado com o carimbo de hora colado no deploy. [[feedback_measure_dont_declare_fixed]]
+ *
+ * ⚠️ E A LIÇÃO ANTERIOR CONTINUA VALENDO: as três condições que eu conferi eram todas
+ * sobre LER um torneio dividido; nenhuma cobria CRIAR. A asserção ⑤ abaixo é a que faltava
+ * — ela EXECUTA o ramo do save que quebrou, em vez de olhar o objeto criado. */
+ok(/_semPesados: \['matches'/.test(criacao),
+  '⛔ torneio novo nasce DIVIDIDO');
+ok(/_nJogos: 0,/.test(criacao), '   e com a contagem, que desfaz o empate "sem jogo" × "não buscou"');
 
 // ── ③ ⛔ A CONDIÇÃO QUE FALTAVA: o OUVINTE busca o que falta ────────────────
 /* Esta é a asserção que não existia em 26/ago, e a ausência dela custou produção. Não
@@ -114,5 +123,5 @@ const velho = { id: 'v1', _semPesados: ['matches'], rounds: [{ round: 1, matches
 ok(enxerta(JSON.parse(JSON.stringify(velho)), null)._faltamPesados === true,
   '⚠️ documento SEM `_nJogos` (dividido antes desta versão) cai no comportamento antigo, que é o seguro');
 
-console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-inteiro: ' + pass + ' ok, ' + fail + ' falhas');
+console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-dividido: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

@@ -93,7 +93,18 @@ ok('⭐ e o que ESTÁ no marcador sai mesmo (os jogos)', (cfg.rounds[0].matches 
 
 // ── ④ os dois escritores derivam da lista, nenhum cita nome à mão ────────────
 const cli = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
-ok('⛔ o cliente devolve derivando de PESADOS', /\(S\.PESADOS \|\| \[[^\]]*\]\)\.forEach/.test(cli));
+/* ⛔ ESTA ASSERÇÃO TRAVAVA O DEFEITO (corrigida na 2.1.42). Ela exigia o texto literal
+ * `(S.PESADOS || [...]).forEach` — e esse `S` não existe naquele escopo: é declarado
+ * ~1.100 linhas abaixo, dentro de OUTRA função. O ramo só roda em torneio com
+ * `_semPesados`, então a linha nunca era executada pela suíte; o teste lia o fonte e
+ * dava verde enquanto a criação de todo torneio dividido morria com
+ * `ReferenceError: S is not defined` (6× no Sentry, 14 min depois do deploy da 2.1.32).
+ * ⭐ O que importa é a DERIVAÇÃO da lista, não o nome da variável que a segura. Quem
+ * garante que a linha RODA é gravar-torneio-dividido-roda-de-verdade.test.js, que a
+ * executa. Asserção de texto não substitui execução. */
+ok('⛔ o cliente devolve derivando de PESADOS (não de lista à mão)',
+   /PESADOS\)?\s*\|\|\s*\[[^\]]*\]\)\.forEach/.test(cli));
+ok('   e sem alcançar símbolo de outro escopo', !/\(S\.PESADOS/.test(cli));
 const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
 ok('⛔ o servidor idem', /\(_tSplit\.PESADOS \|\| \[[^\]]*\]\)\.forEach/.test(cf));
 const iG = cf.indexOf('function _gravaTorneio(');

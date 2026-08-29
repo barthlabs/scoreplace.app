@@ -69,6 +69,24 @@ const mir = cf.slice(iM, _fimMir > 0 ? _fimMir : cf.length);
 ok(/_pulados = Array\.isArray\(depois\._semPesados\)/.test(mir),
   '⭐ o gatilho lê do MARCADOR quais partes saíram — nunca de uma lista minha');
 ok(/const _pula = \(nome\) =>/.test(mir), 'e decide por parte');
+
+/* ⛔ E A DECLARAÇÃO VEM ANTES DO PRIMEIRO USO — `const` tem ZONA MORTA (28/ago).
+ * `_pula` estava declarado DEPOIS do alerta de `playerUids` que o consulta. No caso EXATO
+ * que o alerta existe pra denunciar (jogos jogáveis SEM uid), a condição lançava
+ * ReferenceError e o gatilho MORRIA ali: matches, inscritos e history não eram espelhados,
+ * e o alerta nunca chegava ao log. O aviso derrubava o espelho justamente quando tinha
+ * algo a avisar — e em silêncio. `node --check` PASSA; só a ORDEM denuncia. */
+const _iDecl = mir.indexOf('const _pula = (nome) =>');
+const _iUso = mir.search(/_pula\('/);
+ok(_iDecl > 0 && _iUso > 0 && _iDecl < _iUso,
+  '⛔ `_pula` é DECLARADO antes do primeiro uso — zona morta do const derruba o gatilho inteiro');
+/* ⛔ E `_pulados` É DECLARADO NESTA função. A `let` tinha ficado perdida dentro de
+ * `tournamentSummary`, onde ninguém a lê; sem `use strict` a atribuição aqui virava GLOBAL
+ * implícita, viva entre invocações no mesmo contêiner quente. */
+ok(/const _pulados = Array\.isArray\(depois\._semPesados\)/.test(mir),
+  '⛔ `_pulados` é DECLARADO no gatilho — atribuir sem declarar vira global entre invocações');
+ok(_iDecl > mir.indexOf('_pulados = Array.isArray(depois._semPesados)'),
+  '⭐ e `_pula` nasce colado no marcador de que ele deriva');
 ['matches', 'participants', 'history'].forEach((parte) => {
   ok(new RegExp("_pula\\('" + parte + "'\\)").test(mir),
     "⛔ `" + parte + "` é pulado quando saiu do doc — senão o espelho apaga a cópia VIVA");

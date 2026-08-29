@@ -1846,7 +1846,6 @@ exports.tournamentSummary = onDocumentWritten(
     try {
       const db = getFirestore();
       const antes = (event.data && event.data.before && event.data.before.exists) ? event.data.before.data() : null;
-      let _pulados = [];
       const depois = (event.data && event.data.after && event.data.after.exists) ? event.data.after.data() : null;
 
       // torneio apagado → o resumo some junto (senão a tela mostraria fantasma)
@@ -2003,7 +2002,18 @@ exports.tournamentMirror = onDocumentWritten(
        * concluiu "não há mais ninguém" e APAGOU a subcoleção inteira. O elenco sumia.
        * Mesmo estrago, campo diferente, e eu tinha acabado de escrever o aviso pro outro.
        * ⇒ A trava passa a ser derivada do MARCADOR, não de uma lista minha. */
-      _pulados = Array.isArray(depois._semPesados) ? depois._semPesados : [];
+      const _pulados = Array.isArray(depois._semPesados) ? depois._semPesados : [];
+      /* ⛔ `_pula` NASCE COLADO NO MARCADOR — e não lá embaixo, junto do primeiro espelho.
+       * Ele estava declarado DEPOIS do alerta de `playerUids` que o consulta. `const` tem
+       * zona morta: no caso EXATO que o alerta existe pra denunciar (jogos jogáveis sem
+       * uid), a condição lançava ReferenceError e o gatilho MORRIA ali — matches, inscritos
+       * e history não eram espelhados, e o alerta nunca chegava ao log. O aviso derrubava
+       * o espelho justamente quando tinha algo a avisar.
+       * ⛔ E `_pulados` não tinha declaração NESTA função: a `let` estava perdida dentro de
+       * `tournamentSummary`, onde ninguém a lê. Sem `use strict` isso virava uma GLOBAL
+       * implícita, viva entre invocações no mesmo contêiner quente. Agora nasce aqui, junto
+       * de quem a usa. ⭐ A regra: quem decide sobre `_pulados` nasce colado nele. */
+      const _pula = (nome) => _pulados.indexOf(nome) !== -1;
       const pDepois = _tSplit.dividir(depois);
       if (!pDepois) return;
       // ⚠️ Sem `antes` (torneio novo, ou 1ª passada) o diff grava TUDO — que é o
@@ -2028,7 +2038,6 @@ exports.tournamentMirror = onDocumentWritten(
           'jogáveis — a derivação não carregou (vendor/bracket-logic). A escrita por jogador fica NEGADA.');
       }
 
-      const _pula = (nome) => _pulados.indexOf(nome) !== -1;
       const r1 = _pula('matches')
         ? { gravados: 0, apagados: 0, total: 0 }
         : await _espelhaColecao(db, id, 'matches', pAntes.matches, pDepois.matches, (m) => m._chave);

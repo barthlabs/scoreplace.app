@@ -606,7 +606,20 @@ window.removeParticipantFunction = function (tId, participantName, memberUid) {
                         tournamentId: String(t.id), tournamentName: t.name || '', level: 'fundamental'
                     });
                 }
-                if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
+                /* ⛔ 2.1.42 — SEM `allowRosterRemoval` A REMOÇÃO NUNCA ACONTECIA. O guard
+                 * de elenco do `saveTournament` restaura quem chega faltando no save — é a
+                 * proteção contra cópia atrasada apagar gente (o "sumiço do Gersom"). Ele
+                 * tem a porta de saída para a remoção INTENCIONAL, e o próprio aviso dele
+                 * diz: _"se a remoção era intencional, o caminho precisa passar
+                 * allowRosterRemoval"_. Este caminho — o botão ✕ do ORGANIZADOR — nunca
+                 * passava. Só o "sair do torneio" do próprio inscrito passava.
+                 * ⭐ MEDIDO NO SENTRY: `roster shrink blocked: tour_1787962809278
+                 * (nome:jogador 01 (participants))`, 15 ocorrências. Relato do dono no
+                 * mesmo minuto: _"removi o 1 e ele voltou como inscrito 8"_ — ele voltava
+                 * porque o guard o devolvia, e ia pro fim da fila.
+                 * ⚠️ A remoção aqui já é intencional e confirmada por diálogo; declarar
+                 * isso é o contrato do guard, não um furo nele. */
+                if (typeof window.FirestoreDB !== 'undefined' && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t, { allowRosterRemoval: true });
                 else if (typeof window.AppStore.sync === 'function') window.AppStore.sync();
                 const container = document.getElementById('view-container');
                 if (container) {

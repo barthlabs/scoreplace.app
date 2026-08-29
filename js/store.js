@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.41';
+window.SCOREPLACE_VERSION = '2.1.42';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -12401,15 +12401,30 @@ window.AppStore = {
          * regressão"_. Meio migrado é o pior dos dois mundos.
          * ⭐ E nascer dividido segue sendo o caso MAIS SEGURO: torneio novo não tem jogo
          * nem inscrito — não há o que mover nem o que perder. */
-        /* ⛔⛔ REVERTIDO DE NOVO em 28/ago/2026, minutos depois de publicar — e desta vez
-         * na CRIAÇÃO: o dono criou um torneio e ele NÃO CHEGOU AO BANCO ("criei o torneio
-         * mas não consegui salvar 8 placeholders"; medido: os 41 continuaram 41).
-         * ⛔ As três condições da reversão anterior eu conferi de verdade — mas todas as
-         * três eram sobre LER um torneio dividido. Nenhuma delas cobria CRIAR um. Provei o
-         * caminho errado e chamei de prova. É a MESMA falha da 2.0.109 com outra roupa:
-         * testar o que eu sabia olhar em vez do caminho por onde a coisa acontece.
-         * ⚠️ NÃO RELIGAR sem criar um torneio de verdade, com placeholders, e ver o
-         * documento aparecer no banco — a causa ainda não está diagnosticada. */
+        /* ⛔⛔ REVERTIDO em 28/ago/2026, minutos depois de publicar — e desta vez na
+         * CRIAÇÃO: o dono criou um torneio e ele NÃO CHEGOU AO BANCO ("criei o torneio mas
+         * não consegui salvar 8 placeholders"; medido: os 41 continuaram 41). A reversão
+         * escreveu, honestamente, "a causa ainda não está diagnosticada".
+         *
+         * ⭐⭐ A CAUSA, ACHADA EM 28/ago À NOITE — e não estava na divisão:
+         *   `ReferenceError: S is not defined`, 6 ocorrências às 15:20 UTC, 14 minutos
+         *   depois do deploy da 2.1.32. Em `firebase-db.saveTournament` a linha
+         *   `(S.PESADOS || [...])` usava um `S` declarado 1.100 linhas ABAIXO, dentro de
+         *   OUTRA função. Esse ramo só roda quando o doc tem `_semPesados` — então ficou
+         *   invisível enquanto torneio novo nascia inteiro, e passou a derrubar TODA
+         *   criação no dia em que ele passou a nascer dividido. O catch daquele bloco
+         *   RELANÇA de propósito (gravar o objeto inteiro desfaria a divisão em silêncio),
+         *   e por isso a falha era total e muda. Corrigido na 2.1.42.
+         * ⭐ E ACHEI MEDINDO, não lendo: o erro estava no Sentry desde as 15:20, com o
+         *   carimbo de hora colado no deploy. Eu tinha revertido às cegas.
+         *   [[feedback_measure_dont_declare_fixed]] [[feedback_no_blind_fixes]]
+         *
+         * ⚠️ O QUE CONTINUA VALENDO DA LIÇÃO ANTERIOR: as três condições que eu havia
+         * conferido eram todas sobre LER um torneio dividido; nenhuma cobria CRIAR um.
+         * Agora existe teste do caminho da CRIAÇÃO (torneio-novo-nasce-dividido) e a causa
+         * tem trava própria (grava-torneio-dividido-nao-usa-simbolo-de-outro-escopo). */
+        _semPesados: ['matches', 'participants', 'opponentHistory'],
+        _nJogos: 0,
         // Default status='open' pra que torneios novos apareçam no feed público de
         // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
         status: 'open',
