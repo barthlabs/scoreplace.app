@@ -285,7 +285,18 @@ window._inscritoActionRow = function (typeText, presenceGroupHtml, delBtnHtml) {
   var actionSpan = action
     ? '<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-shrink:0;flex-wrap:wrap;" onclick="event.stopPropagation();">' + action + '</div>'
     : '';
-  return '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' + typeSpan + actionSpan + '</div>';
+  /* ⛔ 2.1.46 — `space-between` MORRE NA LINHA QUEBRADA. Relato do dono, com print:
+   * _"ausente/wo e excluir na esquerda é o canônico caralho?"_ — e não é: o cânone é tipo
+   * à ESQUERDA, ações à DIREITA (é o que esta linha sempre quis dizer).
+   * O QUE ACONTECE: `justify-content` age POR LINHA. Com o card estreito, o texto do tipo
+   * ("Inscrição Individual") enche a primeira linha e o grupo de ações QUEBRA pra segunda.
+   * Sozinho lá, `space-between` não tem entre o que espaçar e o encosta na ESQUERDA. O
+   * card está certo, o alinhamento é que só valia enquanto tudo coubesse numa linha.
+   * ⭐ `flex-end` resolve as DUAS: na linha cheia o `typeSpan` tem `flex:1 1 auto`, cresce
+   * e consome a folga — então nada muda ali; na linha quebrada, a ação vai pra direita,
+   * que é onde ela sempre devia estar. Mesma família de [[feedback_margin_left_auto_morre_na_linha_cheia]]:
+   * alinhamento pensado pra UMA linha some quando ela vira duas. */
+  return '<div style="margin-top:6px;display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;">' + typeSpan + actionSpan + '</div>';
 };
 
 // Feedback "salvando presença" no(s) card(s) do inscrito enquanto o write confirma (como o de
