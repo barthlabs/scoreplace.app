@@ -55,7 +55,32 @@ const SWEEP_EXCLUDED_COLLECTIONS = {
   // O log serve pra explicar um sorteio passado; trocar o uid nele faz o log MENTIR sobre
   // quem estava lá. Aqui o uid morto é a resposta certa.
   debugDrawLogs: 'log de sorteio — histórico; reescrever falsifica o registro',
+  // ⛔ v2.1.48 — A AUTORIDADE DA AMIZADE TEM TRATAMENTO PRÓPRIO (_mergeAmizade no index.js).
+  // O sweep genérico troca o uid DENTRO DOS CAMPOS. Aqui isso é CORRUPÇÃO garantida: o par
+  // é a CHAVE DO DOCUMENTO (`pairId = menorUid__maiorUid`), não um campo. O sweep deixaria
+  // `uidA = keepUid` num doc cujo id ainda diz o uid morto — o cânone mentindo sobre si
+  // mesmo, e `pairId(keep, terceiro)` deixando de achar a relação que existe.
+  friendships: 'a chave é o par; rekey só o _mergeAmizade sabe fazer (e resolver colisão)',
+  // E esta é SUBCOLEÇÃO (`friendAccess/{uid}/accepted/{friendUid}`): o sweep genérico varre
+  // documentos de topo e nem chegaria nela — ficaria projeção do uid morto concedendo
+  // leitura pra sempre. Excluir aqui é explicitar que o tratamento é outro, não esquecer.
+  friendAccess: 'projeção das rules; direção e subcoleção — repontada pelo _mergeAmizade',
 };
+
+/* ⛔ v2.1.48 (4ª auditoria, ponto 4B) — CAMPOS DE `users` QUE A VARREDURA NÃO TOCA.
+ * O sweep genérico troca o uid dentro dos CAMPOS de todo doc. Nos quatro campos de cache
+ * social isso REINVENTA amizade: ele acha lixo legado com o oldUid, troca por keepUid e
+ * grava por cima do que o `amizade-lifecycle` acabou de projetar do cânone. Confiar na
+ * ordem de escrita como única defesa é frágil — a exclusão é explícita.
+ */
+const AMIZADE_CACHE_CAMPOS = new Set([
+  'friends', 'friendRequestsSent', 'friendRequestsReceived', 'friendRequestsSentAt',
+]);
+
+/** O campo de `users/{id}` pode ser reescrito pela varredura genérica de uid? */
+function shouldSweepUserField(campo) {
+  return !AMIZADE_CACHE_CAMPOS.has(String(campo || ''));
+}
 
 /**
  * A coleção deve entrar na varredura genérica de uid?
@@ -124,5 +149,6 @@ function planNotifMigration(dropDocs, keepDocs, dropUid, keepUid) {
 
 module.exports = {
   SWEEP_EXCLUDED_COLLECTIONS, shouldSweepCollection,
+  AMIZADE_CACHE_CAMPOS, shouldSweepUserField,
   notifSignature, movedNotifId, planNotifMigration,
 };

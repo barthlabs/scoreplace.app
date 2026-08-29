@@ -5252,17 +5252,16 @@ function _hydrateFriendsPresenceWidget() {
           }
           var resolvedUid = v.uid;
           window._log('[FriendsWidget] email resolvido:', em, '→', resolvedUid);
-          // Persiste a migração no doc do usuário atual
-          try {
-            var FV = firebase.firestore.FieldValue;
-            window.FirestoreDB.db.collection('users').doc(cu.uid).update({
-              friends: FV.arrayUnion(resolvedUid)
-            }).then(function() {
-              return window.FirestoreDB.db.collection('users').doc(cu.uid).update({
-                friends: FV.arrayRemove(em)
-              });
-            }).catch(function(e) { window._warn('[FriendsWidget] migrate persist falhou:', e); });
-          } catch (e) {}
+          /* ⛔ v2.1.48 — A PERSISTÊNCIA SAIU DAQUI (3ª auditoria, ponto 3).
+           * Este era o writer client-side esquecido: ele gravava `friends` do próprio
+           * perfil (arrayUnion do uid + arrayRemove do e-mail) pra "não refazer a query".
+           * `friends` é CACHE do cânone desde a 2.1.48 e é campo privilegiado — a escrita
+           * seria recusada, e o `.catch` acima transformaria isso em aviso a cada abertura
+           * do dashboard. Pior: se passasse, o cliente estaria decidindo metade de uma
+           * relação sem a outra metade e sem `friendAccess`.
+           * ⭐ A conversão e-mail → uid é do BACKFILL (scripts/backfill-amizade.js), que
+           * resolve pela porta da conta viva, e da fusão no servidor. Aqui a resolução
+           * segue valendo só pra ESTA sessão, na memória — que é o que a tela precisa. */
           return resolvedUid;
         })
         .catch(function(e) { window._warn('[FriendsWidget] resolve query falhou pra', em, e); return null; });

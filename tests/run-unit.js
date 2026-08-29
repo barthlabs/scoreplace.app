@@ -928,6 +928,15 @@ const SUITES = [
   // a mesma pessoa como "Fabi2401@" na classificação e "Dani Bataglia" nos jogos.
   'tests/nome-vem-do-perfil-nao-do-sorteio.test.js',
   'functions/test-merge-collections-core.js',
+  // v2.1.48 — a autoridade da amizade (fechou a escalada de privilégio da 2.1.47)
+  'functions/test-amizade-authority-core.js',
+  // v2.1.48 — a fiação: merge/exclusão/varredura/backfill (P0-2, P0-3, P0-4 da auditoria)
+  'functions/test-amizade-ciclo-de-vida-uid.js',
+  // v2.1.48 — writers únicos (profile-merge + sweep) e rollback da UI, ambos funcionais
+  'functions/test-amizade-writers-unicos.js',
+  // v2.1.48 — o gate de writers tem que DETECTAR aliases (6ª auditoria, ponto 1)
+  'tests/gate-amizade-detecta-alias.test.js',
+  'tests/amizade-ui-rollback.test.js',
   // O espelho do roster saiu do cliente (onde nunca funcionou — sem regra, sempre negado)
   // e virou responsabilidade do gatilho `syncMatchRosters`. v1.7.99.
   'functions/test-roster-mirror-core.js',

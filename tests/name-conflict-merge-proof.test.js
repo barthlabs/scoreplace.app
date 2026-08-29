@@ -118,8 +118,17 @@ ok(/position:fixed[^']*width:1px/.test(bVerify),
 // A prova chega ao servidor e é VERIFICADA lá.
 ok(/proofIdToken/.test(cli), 'o cliente envia o proofIdToken da sessão do telefone');
 const bMerge = bloco(cf, 'exports.mergePhoneAccount', 'exports.fixMergedParticipants');
-ok(/verifyIdToken\(String\(_proofToken\)\)/.test(bMerge) && /_dec\.uid === oldUid/.test(bMerge),
-  'mergePhoneAccount VALIDA a prova (verifyIdToken + uid === oldUid)');
+/* ⚠️ v2.1.48: a validação saiu de dentro do `exports.mergePhoneAccount` para a função
+ * `_provaDePosseDeOld`, porque ela passou a ser conferida DUAS vezes — antes de adquirir o
+ * lock de ciclo de vida (senão uma chamada sem prova já marcava `merging` em duas contas)
+ * e de novo depois dele. A REGRA é idêntica: token que prova ser o `oldUid`. */
+const bProva = bloco(cf, 'async function _provaDePosseDeOld', 'exports.mergePhoneAccount');
+ok(/verifyIdToken\(String\(proof\)\)/.test(bProva) && /dec\.uid === oldUid/.test(bProva),
+  'a prova é VALIDADA (verifyIdToken + uid === oldUid)');
+ok(/_provaDePosseDeOld\(request, callerUid, oldUid/.test(bMerge),
+  'e o mergePhoneAccount a usa');
+ok(bMerge.indexOf('RECUSADO sem prova de posse') < bMerge.indexOf('adquirir(admin.firestore()'),
+  '⛔ ANTES de adquirir o lock — sem prova, zero escrita em userLifecycle');
 ok(/sem prova de posse da conta a mesclar/.test(bMerge),
   'sem prova, o servidor recusa');
 

@@ -66,15 +66,25 @@ const merge = P.computeProfileMerge;
   const upd = merge(keep, drop, 'uKeep');
   ok('união de modalidades sem duplicar', JSON.stringify(upd.preferredSports) === JSON.stringify(['Tênis', 'Padel']));
   ok('união de e-mails vinculados', JSON.stringify(upd.linkedEmails) === JSON.stringify(['a@x.com', 'b@x.com']));
-  ok('união de amigos sem duplicar', JSON.stringify(upd.friends) === JSON.stringify(['uA', 'uB']));
+  /* ⛔ REVOGADO em 29/ago/2026 (v2.1.48, 4ª auditoria, ponto 4A). Este teste exigia que a
+   * fusão de perfil UNISSE `friends`. Os quatro campos de amizade deixaram de ser dado de
+   * perfil: são PROJEÇÃO de `friendships`, reconstruída por `amizade-lifecycle`. União
+   * preservava o uid MORTO, criava amizade consigo mesmo depois da fusão e deixava o mesmo
+   * uid como amigo E como convite. Agora eles estão em NUNCA_COPIAR.
+   * A prova funcional está em functions/test-amizade-writers-unicos.js. */
+  ok('⛔ `friends` NÃO é mais unido pela fusão de perfil (é projeção do cânone)', upd.friends === undefined);
   ok('array sem novidade não vira write', merge({ preferredSports: ['Tênis', 'Padel'] }, { preferredSports: ['Padel'] }, 'u').preferredSports === undefined);
 })();
 
 // ── Auto-amizade: o sobrevivente não pode virar amigo de si mesmo ────────────
+/* ⛔ v2.1.48 (4ª auditoria, ponto 4A): esta guarda continua no módulo, mas ficou SEM EFEITO
+ * prático aqui — `friends` não é mais copiado pela fusão de perfil, então não há lista pra
+ * filtrar. Quem impede a auto-amizade agora é `projetarCache` (`if (!outro || outro === uid)
+ * return`), provado em tests/amizade/lifecycle.test.js, bloco [old↔keep].
+ * O teste passa a afirmar o que de fato vale: a fusão não devolve `friends` nenhum. */
 (() => {
   const upd = merge({ friends: ['uX'] }, { friends: ['uKeep', 'uY'] }, 'uKeep');
-  ok('o uid do sobrevivente é filtrado da lista de amigos', (upd.friends || []).indexOf('uKeep') === -1);
-  ok('o resto dos amigos entra', JSON.stringify(upd.friends) === JSON.stringify(['uX', 'uY']));
+  ok('⛔ a fusão de perfil não devolve `friends` — nem pra filtrar', upd.friends === undefined);
 })();
 
 // ── Campos que NUNCA viajam ──────────────────────────────────────────────────

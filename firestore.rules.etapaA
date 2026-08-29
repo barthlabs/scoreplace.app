@@ -566,12 +566,22 @@ service cloud.firestore {
     function statsVisibleToCaller(userId) {
       let u = get(/databases/$(database)/documents/users/$(userId)).data;
       let vis = u.get('statsVisibility', 'public');
-      // ⭐ A prova de amizade é a PROJEÇÃO server-only, nunca mais o array do perfil.
-      // `exists()` num caminho dirigido não precisa ordenar os uids (as Rules não sabem
-      // montar o `pairId`), e responde sem ramificação.
-      return vis == 'public'
-        || (vis == 'friends'
-            && exists(/databases/$(database)/documents/friendAccess/$(userId)/accepted/$(request.auth.uid)));
+      /* ═══ ETAPA A DO CUTOVER — ARQUIVO TEMPORÁRIO, NÃO É O ESTADO FINAL ═══════
+       *
+       * ⛔ A VERSÃO ANTERIOR DESTE ARQUIVO ESTAVA ERRADA, e o erro era meu: ela mantinha
+       * `request.auth.uid in u.get('friends')` argumentando que "congelado é seguro".
+       * FALSO. Congelar impede fraude NOVA — não remove a que JÁ aconteceu. Quem tinha
+       * inserido o próprio uid no `friends` da vítima durante a janela da 2.1.47
+       * continuaria lendo as estatísticas dela, agora para sempre, porque o estado
+       * congelou COM a fraude dentro. O congelamento eternizaria a autorização forjada.
+       *
+       * ⇒ Nesta etapa `friends` vira TEMPORARIAMENTE PRIVADO para terceiros:
+       *     · `public`  → segue público (a regra não muda);
+       *     · `private` → segue privado;
+       *     · `friends` → ninguém além do DONO lê, até a autoridade nova entrar na Etapa C.
+       * É a mesma política de falhar fechado que rege a leva inteira. O acesso volta por
+       * RECONFIRMAÇÃO, um par de cada vez, e não por herança de um array adulterável. */
+      return vis == 'public';
     }
 
     match /users/{userId} {

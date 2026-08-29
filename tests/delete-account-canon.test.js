@@ -145,7 +145,18 @@ const cfBloco = src.slice(src.indexOf('exports.deleteAccount = onCall('), src.in
 ok(/request\.auth && request\.auth\.uid/.test(cfBloco), 'CF exige auth (só a própria pessoa se exclui)');
 ok(/deleted: true/.test(cfBloco), 'CF grava o tombstone { deleted: true }');
 ok(/_uidSweep\.findUidPaths/.test(cfBloco), 'CF usa o cânone pra achar o uid');
-ok(/arrayRemove\(uid\)/.test(cfBloco), 'CF tira o uid do friends[] de outras pessoas');
+/* ⛔ REVOGADO em 29/ago/2026 (v2.1.48, 4ª auditoria, ponto 4C): a CF tinha uma limpeza
+ * MANUAL de `friends[]` de terceiros (query + arrayRemove). Era um segundo writer do mesmo
+ * cache, com visão parcial — só `friends`, nunca `sent`/`received`/`sentAt` — convivendo
+ * com a autoridade nova. Agora quem limpa é `_excluirAmizade`, que projeta os quatro campos
+ * do cânone e ainda DESCOBRE quem carrega o uid mesmo depois de a relação já ter sido
+ * apagada (retry após falha parcial).
+ * Prova funcional do efeito: tests/amizade/lifecycle.test.js, blocos [exclusão] e
+ * [retry delete]. */
+ok(/_excluirAmizade\(db, uid\)/.test(cfBloco),
+  'CF delega a limpeza social ao amizade-lifecycle (autoridade única)');
+ok(!/collection\("users"\)\.where\("friends", "array-contains"/.test(cfBloco),
+  '⛔ e NÃO tem mais writer paralelo de friends[] na própria CF');
 ok(/collection\("presences"\)/.test(cfBloco), 'CF apaga presenças');
 ok(/admin\.auth\(\)\.deleteUser\(uid\)/.test(cfBloco), 'CF apaga a conta de Auth');
 

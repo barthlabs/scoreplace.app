@@ -128,11 +128,15 @@ ok(/if \(telCanon && _contactPhone\.isIdentityPhone\(meu\)\)/.test(IDX),
   'F6. dedup não usa o número do organizador como evidência (casal com um aparelho só não é "a mesma pessoa")');
 ok(/_survSemIdentidade/.test(IDX),
   'F7. na fusão, celular VERIFICADO vence o registrado pelo organizador');
-ok(/phoneSource: admin\.firestore\.FieldValue\.delete\(\)/.test(IDX),
+// ⚠️ v2.1.48: passou a usar `_FV` (subpath `firebase-admin/firestore`) — no runtime do
+// emulador de Functions `admin.firestore.FieldValue` vem undefined e derrubava este ramo.
+// A REGRA é a mesma: a procedência de organizador morre quando o SMS prova a posse.
+ok(/phoneSource: _FV\.delete\(\)/.test(IDX),
   'F8. quando o SMS finalmente prova a posse, a procedência de organizador é apagada');
 // Todo caminho do SERVIDOR que põe telefone num perfil deriva notifyWhatsApp junto —
 // mesma razão do E6: o false residual não pode sobreviver ao número chegar.
-ok(/phone: ghPhone[\s\S]{0,900}notifyWhatsApp: true/.test(IDX),
+// (janela ampliada: comentários novos entraram entre os dois pontos)
+ok(/phone: ghPhone[\s\S]{0,1600}notifyWhatsApp: true/.test(IDX),
   'F9. o ghost-claim do mergePhoneAccount (número provado por SMS) deriva notifyWhatsApp:true');
 ok(/surv\.phone = _oldPhone;[\s\S]{0,500}surv\.notifyWhatsApp = true/.test(IDX),
   'F10. o sobrevivente da fusão que herda celular deriva notifyWhatsApp:true');

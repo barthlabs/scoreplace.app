@@ -2683,118 +2683,55 @@ window.FirestoreDB = {
 
   // ---- Friend Requests ----
 
+  /* ⛔ AS CINCO OPERAÇÕES DE AMIZADE SAÍRAM DAQUI (v2.1.48, 29/ago/2026).
+   * Elas escreviam nos perfis dos DOIS lados por `arrayUnion`/`arrayRemove`, e a regra
+   * que permitia isso (`isFriendArrayDiff`) não perguntava QUEM estava escrevendo — era
+   * uma escalada de privilégio: qualquer conta se punha no `friends` de qualquer pessoa
+   * e passava a ler estatísticas marcadas como "só amigos".
+   * Agora a autoridade é a CF (functions/index.js → _amizadeAplicar), que decide pela
+   * máquina de estados em functions/amizade-authority-core.js e grava relação +
+   * projeção + cache numa transação só. O convite CRUZADO (os dois se convidam ⇒ vira
+   * amizade) e a notificação também são do servidor agora — o cliente não sabe mais o
+   * suficiente pra decidir isso, e é bom que não saiba.
+   * A assinatura dos cinco métodos foi PRESERVADA: `fromUid`/`myUid` são ignorados (o
+   * ator vem do token), e os ~12 chamadores em explore.js/tournaments-analytics.js
+   * seguem chamando igual. */
   async sendFriendRequest(fromUid, toUid, fromData) {
-    if (!this.db || !fromUid || !toUid) return;
-    try {
-      // Check if the other person already sent us a request — if so, auto-accept (mutual)
-      // We check OUR (fromUid) received list to see if toUid already sent us a request
-      var fromDoc = await this.db.collection('users').doc(fromUid).get();
-      var fromDocData = fromDoc.exists ? fromDoc.data() : {};
-      var receivedList = fromDocData.friendRequestsReceived || [];
-      if (receivedList.indexOf(toUid) !== -1) {
-        // Mutual request! Auto-accept both directions
-        await this.acceptFriendRequest(fromUid, toUid);
-        // Notify both
-        await this.addNotification(toUid, {
-          type: 'friend_accepted',
-          fromUid: fromUid,
-          fromName: fromData.displayName || '',
-          fromEmail: fromData.email || '',
-          message: (fromData.displayName || 'Alguém') + ' aceitou seu convite e agora é seu amigo(a)!',
-          createdAt: new Date().toISOString(),
-          read: false
-        });
-        // Mutual friend request: auto-accepted
-        return 'auto-accepted';
-      }
-      // Normal flow: send request
-      // Add to sender's friendRequestsSent + record timestamp in sentAt map
-      await this.db.collection('users').doc(fromUid).set({
-        friendRequestsSent: firebase.firestore.FieldValue.arrayUnion(toUid)
-      }, { merge: true });
-      var _sentAtUpdate = {};
-      _sentAtUpdate['friendRequestsSentAt.' + toUid] = new Date().toISOString();
-      await this.db.collection('users').doc(fromUid).update(_sentAtUpdate);
-      // Add to receiver's friendRequestsReceived
-      await this.db.collection('users').doc(toUid).set({
-        friendRequestsReceived: firebase.firestore.FieldValue.arrayUnion(fromUid)
-      }, { merge: true });
-      // Create notification for receiver
-      await this.addNotification(toUid, {
-        type: 'friend_request',
-        fromUid: fromUid,
-        fromName: fromData.displayName || '',
-        fromEmail: fromData.email || '',
-        message: (fromData.displayName || 'Alguém') + ' quer ser seu amigo(a)!',
-        createdAt: new Date().toISOString(),
-        read: false
-      });
-    } catch (e) {
-      window._error('Erro ao enviar convite de amizade:', e);
-    }
+    if (!toUid) return;
+    var r = await this._callFn('sendFriendRequest', { toUid: String(toUid) });
+    return (r && r.evento === 'auto-aceito') ? 'auto-accepted' : undefined;
   },
 
   async acceptFriendRequest(myUid, friendUid) {
-    if (!this.db || !myUid || !friendUid) return;
-    try {
-      // Add each other to friends arrays
-      await this.db.collection('users').doc(myUid).set({
-        friends: firebase.firestore.FieldValue.arrayUnion(friendUid),
-        friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(friendUid)
-      }, { merge: true });
-      await this.db.collection('users').doc(friendUid).set({
-        friends: firebase.firestore.FieldValue.arrayUnion(myUid),
-        friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(myUid)
-      }, { merge: true });
-      // Trophy hook
-      setTimeout(function() {
+    if (!friendUid) return;
+    return this._callFn('acceptFriendRequest', { friendUid: String(friendUid) }).then(function () {
+      setTimeout(function () {
         if (typeof window._trophyOnFriendAdded === 'function') window._trophyOnFriendAdded();
       }, 500);
-    } catch (e) {
-      window._error('Erro ao aceitar amizade:', e);
-    }
+    });
+  },
+
+  /* ⭐ A lista de amizades antigas a reconfirmar (v2.1.48). Vem do servidor porque só ele
+   * pode enumerar `friendships` sem abrir a porta pra enumerar relação de terceiro — o
+   * `uidA`/`uidB` da consulta é o do token, nunca do corpo. */
+  async listLegacyFriendships() {
+    var r = await this._callFn('listLegacyFriendships', {});
+    return (r && Array.isArray(r.relacoes)) ? r.relacoes : [];
   },
 
   async removeFriend(myUid, friendUid) {
-    if (!this.db || !myUid || !friendUid) return;
-    try {
-      await this.db.collection('users').doc(myUid).set({
-        friends: firebase.firestore.FieldValue.arrayRemove(friendUid)
-      }, { merge: true });
-      await this.db.collection('users').doc(friendUid).set({
-        friends: firebase.firestore.FieldValue.arrayRemove(myUid)
-      }, { merge: true });
-    } catch (e) {
-      window._error('Erro ao remover amizade:', e);
-    }
+    if (!friendUid) return;
+    return this._callFn('removeFriend', { friendUid: String(friendUid) });
   },
 
   async cancelFriendRequest(fromUid, toUid) {
-    if (!this.db || !fromUid || !toUid) return;
-    try {
-      await this.db.collection('users').doc(fromUid).set({
-        friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(toUid)
-      }, { merge: true });
-      await this.db.collection('users').doc(toUid).set({
-        friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(fromUid)
-      }, { merge: true });
-    } catch (e) {
-      window._error('Erro ao cancelar convite de amizade:', e);
-    }
+    if (!toUid) return;
+    return this._callFn('cancelFriendRequest', { toUid: String(toUid) });
   },
 
   async rejectFriendRequest(myUid, friendUid) {
-    if (!this.db || !myUid || !friendUid) return;
-    try {
-      await this.db.collection('users').doc(myUid).set({
-        friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(friendUid)
-      }, { merge: true });
-      await this.db.collection('users').doc(friendUid).set({
-        friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(myUid)
-      }, { merge: true });
-    } catch (e) {
-      window._error('Erro ao rejeitar amizade:', e);
-    }
+    if (!friendUid) return;
+    return this._callFn('rejectFriendRequest', { friendUid: String(friendUid) });
   },
 
   // ---- Notifications ----

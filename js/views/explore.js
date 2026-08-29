@@ -161,6 +161,11 @@ function renderExplore(container) {
       // sentido quando há um, e enterra a lista de amigos quando não há nenhum.
       '<div id="explore-friends"></div>' +
 
+      // ⭐ v2.1.48 — as amizades ANTERIORES ao corte, esperando reconfirmação. Fica logo
+      // abaixo dos amigos porque é exatamente disso que a pessoa vai sentir falta: elas
+      // saíram da lista de cima e o caminho de volta tem que estar à vista.
+      '<div id="explore-legacy"></div>' +
+
       // Convites ainda não aceitos: os que EU recebo (respondo) e os que enviei (aguardo).
       '<div id="explore-pending"></div>' +
       '<div id="explore-sent"></div>' +
@@ -175,6 +180,7 @@ function renderExplore(container) {
   // Amigos primeiro (é a lista da pessoa), convites depois.
   // ⛔ os convites passam pela rede: quem já é amigo NUNCA aparece como pendente.
   _renderMyFriends(myUid, myFriends);
+  window._renderLegacyFriendships(document.getElementById('explore-legacy'));
   _renderPendingRequests(myUid, window._exploreSemAmigos(myReceived));
   _renderSentRequests(myUid, window._exploreSemAmigos(mySent));
 
@@ -582,7 +588,7 @@ window._exploreSortAllSections = function () {
   var mode = window._otrosSortMode || 'date-desc';
   var dim = mode.indexOf('alpha') === 0 ? 'alpha' : 'date';
   var dir = mode.indexOf('-desc') >= 0 ? 'desc' : 'asc';
-  ['explore-pending', 'explore-friends', 'explore-sent'].forEach(function (secId) {
+  ['explore-pending', 'explore-friends', 'explore-legacy', 'explore-sent'].forEach(function (secId) {
     var sec = document.getElementById(secId);
     if (!sec) return;
     var cards = Array.prototype.slice.call(sec.querySelectorAll('[data-person-card]'));
@@ -622,7 +628,7 @@ window._exploreFilterAllSections = function () {
   var gender = fb.gender || 'all';
   var skill = fb.skill || 'all';
   var anyFilter = !!q || gender !== 'all' || skill !== 'all';
-  ['explore-pending', 'explore-friends', 'explore-sent', 'explore-results'].forEach(function (secId) {
+  ['explore-pending', 'explore-friends', 'explore-legacy', 'explore-sent', 'explore-results'].forEach(function (secId) {
     var sec = document.getElementById(secId);
     if (!sec) return;
     var cards = sec.querySelectorAll('[data-person-card]');
@@ -1207,8 +1213,9 @@ window._cancelFriendRequest = function(toUid) {
   if (!cu) return;
   var myUid = cu.uid || cu.email;
 
-  // Update local state
-  cu.friendRequestsSent = (cu.friendRequestsSent || []).filter(function(id) { return id !== toUid; });
+  var desfazerC = _amizadeOtimista(cu, function () {
+    cu.friendRequestsSent = (cu.friendRequestsSent || []).filter(function(id) { return id !== toUid; });
+  });
 
   window.FirestoreDB.cancelFriendRequest(myUid, toUid).then(function() {
     if (typeof showNotification !== 'undefined') {
@@ -1216,7 +1223,7 @@ window._cancelFriendRequest = function(toUid) {
     }
     var container = document.getElementById('view-container');
     if (container) window._exploreScrollSafeRender(container);
-  });
+  }).catch(function (e) { desfazerC(e); });
 };
 
 // v1.0.15-beta: cancela múltiplos uids do mesmo grupo (legacy email-keyed +
@@ -1227,21 +1234,39 @@ window._cancelFriendRequestMulti = function(toUids) {
   if (!cu || !Array.isArray(toUids) || toUids.length === 0) return;
   var myUid = cu.uid || cu.email;
 
-  // Update local state — remove all uids in the group
-  cu.friendRequestsSent = (cu.friendRequestsSent || []).filter(function(id) {
-    return toUids.indexOf(id) === -1;
-  });
+  /* ⛔ 5ª auditoria (ponto 5): ANTES este multi tirava TODOS os uids do estado local e
+   * engolia a falha de cada um com um `.catch` que só logava — depois anunciava
+   * "convite cancelado" mesmo quando nenhum tinha sido. Sucesso global declarado sobre
+   * falha parcial é a pior forma de mentir na tela.
+   * Agora: restaura SOMENTE os que falharam, e o aviso reflete o que de fato aconteceu. */
+  var antesSent = (cu.friendRequestsSent || []).slice();
+  cu.friendRequestsSent = antesSent.filter(function(id) { return toUids.indexOf(id) === -1; });
 
-  // Cancel all in parallel — Firestore arrayRemove é idempotente, sem risco
   var promises = toUids.map(function(toUid) {
-    return window.FirestoreDB.cancelFriendRequest(myUid, toUid).catch(function(e) {
-      window._warn('[cancelFriendRequest] failed for', toUid, e);
-    });
+    return window.FirestoreDB.cancelFriendRequest(myUid, toUid)
+      .then(function () { return { uid: toUid, ok: true }; })
+      .catch(function (e) {
+        window._warn('[cancelFriendRequest] falhou para', toUid, e && e.message);
+        return { uid: toUid, ok: false, erro: e };
+      });
   });
 
-  Promise.all(promises).then(function() {
-    if (typeof showNotification !== 'undefined') {
-      showNotification((window._t||function(k){return k;})('explore.notifInviteCancelled'), (window._t||function(k){return k;})('explore.notifInviteCancelledMsg'), 'info');
+  Promise.all(promises).then(function(res) {
+    var _t = window._t || function(k){return k;};
+    var falharam = res.filter(function (r) { return !r.ok; });
+    if (falharam.length) {
+      // devolve ao estado local apenas os que NÃO foram cancelados
+      falharam.forEach(function (r) {
+        if (cu.friendRequestsSent.indexOf(r.uid) === -1 && antesSent.indexOf(r.uid) !== -1) {
+          cu.friendRequestsSent.push(r.uid);
+        }
+      });
+      if (typeof showNotification !== 'undefined') {
+        showNotification(_t('explore.notifFriendError'),
+          (falharam[0].erro && falharam[0].erro.message) || _t('explore.notifFriendErrorMsg'), 'error');
+      }
+    } else if (typeof showNotification !== 'undefined') {
+      showNotification(_t('explore.notifInviteCancelled'), _t('explore.notifInviteCancelledMsg'), 'info');
     }
     var container = document.getElementById('view-container');
     if (container) window._exploreScrollSafeRender(container);
@@ -1275,6 +1300,88 @@ window._exploreScrollSafeRender = function(container) {
   requestAnimationFrame(function() { window.scrollTo(0, _sy); });
 };
 
+/* ═══ AMIZADES ANTIGAS PARA RECONFIRMAR (v2.1.48) ══════════════════════════════
+ *
+ * O corte da 2.1.48 tirou as amizades legadas da lista — `users.friends` era gravável
+ * cross-user, então reciprocidade antiga não é prova e não pode conceder leitura. Mas o
+ * caminho de VOLTA faz parte da migração, não de uma leva futura: aqui a pessoa vê os
+ * pares antigos dela e reconfirma um a um.
+ *
+ * ⛔ Não é uma segunda autoridade: "Reconfirmar" chama o MESMO `sendFriendRequest` (a
+ * relação `legacy_unverified` vira `pending`), e só o aceite do outro lado gera
+ * `friendAccess`. "Descartar" chama o MESMO `removeFriend`.
+ * A lista vem da callable `listLegacyFriendships`, que consulta só relações em que o
+ * caller é uidA ou uidB — o cliente não enumera relação de terceiro.
+ */
+window._renderLegacyFriendships = function (div) {
+  if (!div || !window.FirestoreDB || !window.FirestoreDB.listLegacyFriendships) return;
+  var _t = window._t || function (k) { return k; };
+  window.FirestoreDB.listLegacyFriendships().then(function (lista) {
+    if (!lista.length) { div.innerHTML = ''; return; }
+    var html = '<div style="margin-bottom:1.5rem;" id="legacy-friendships-section">' +
+      '<div style="font-weight:600;font-size:0.9rem;color:var(--warning-color,#f59e0b);margin-bottom:0.35rem;text-transform:uppercase;letter-spacing:0.5px;">' +
+        _t('explore.legacyTitle') + ' (' + lista.length + ')</div>' +
+      '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.4;">' +
+        _t('explore.legacyHelp') + '</div>' +
+      '<div style="' + _GRID_PESSOAS + '">';
+    lista.forEach(function (r) {
+      var uid = String(r.uid || '');
+      var safeUid = uid.replace(/'/g, "\\'");
+      var nome = window._escapeHtml ? window._escapeHtml(r.displayName || uid) : (r.displayName || uid);
+      html += '<div class="user-card" data-uid="' + uid + '" style="padding:0.75rem;">' +
+        '<div style="font-weight:600;margin-bottom:0.5rem;">' + nome + '</div>' +
+        '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;">' +
+          '<button class="btn btn-primary btn-sm" onclick="window._spinButton(this,\'' + _t('explore.legacyConfirming') + '\'); window._reconfirmarAmizade(\'' + safeUid + '\')">' +
+            _t('explore.legacyConfirm') + '</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="window._descartarAmizadeLegada(\'' + safeUid + '\')">' +
+            _t('explore.legacyDiscard') + '</button>' +
+        '</div></div>';
+    });
+    html += '</div></div>';
+    div.innerHTML = html;
+  }).catch(function (e) {
+    window._warn('[legacy] lista não carregou:', e && e.message);
+    div.innerHTML = '';
+  });
+};
+
+/** Reconfirmar = o convite de sempre. A relação legada vira pending. */
+window._reconfirmarAmizade = function (uid) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !uid) return;
+  var _t = window._t || function (k) { return k; };
+  window.FirestoreDB.sendFriendRequest(cu.uid, uid).then(function () {
+    if (typeof showNotification !== 'undefined') {
+      showNotification(_t('explore.legacyConfirmed'), _t('explore.legacyConfirmedMsg'), 'success');
+    }
+    var c = document.getElementById('view-container');
+    if (c) window._exploreScrollSafeRender(c);
+  }).catch(function (e) {
+    window._warn('[legacy] reconfirmação recusada:', e && e.message);
+    if (typeof showNotification !== 'undefined') {
+      showNotification(_t('explore.notifFriendError'), (e && e.message) || _t('explore.notifFriendErrorMsg'), 'error');
+    }
+    var c = document.getElementById('view-container');
+    if (c) window._exploreScrollSafeRender(c);
+  });
+};
+
+/** Descartar = o `removeFriend` de sempre; ele também vale sobre `legacy_unverified`. */
+window._descartarAmizadeLegada = function (uid) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  if (!cu || !uid) return;
+  var _t = window._t || function (k) { return k; };
+  window.FirestoreDB.removeFriend(cu.uid, uid).then(function () {
+    var c = document.getElementById('view-container');
+    if (c) window._exploreScrollSafeRender(c);
+  }).catch(function (e) {
+    window._warn('[legacy] descarte recusado:', e && e.message);
+    if (typeof showNotification !== 'undefined') {
+      showNotification(_t('explore.notifFriendError'), (e && e.message) || _t('explore.notifFriendErrorMsg'), 'error');
+    }
+  });
+};
+
 window._sendFriendRequest = function(toUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
@@ -1288,7 +1395,7 @@ window._sendFriendRequest = function(toUid) {
     if (result === 'auto-accepted') {
       // Mutual request auto-accepted — update local state
       if (!cu.friends) cu.friends = [];
-      if (cu.friends.indexOf(toUid) === -1) cu.friends.push(toUid);
+      if (cu.friends.indexOf(toUid) === -1) cu.friends.push(toUid);   // só no ramo de sucesso (auto-aceito)
       cu.friendRequestsSent = (cu.friendRequestsSent || []).filter(function(id) { return id !== toUid; });
       cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== toUid; });
       // v3.0.x: convite mútuo auto-aceito É uma amizade formada — conta no GA4
@@ -1312,20 +1419,66 @@ window._sendFriendRequest = function(toUid) {
     }
     var container = document.getElementById('view-container');
     if (container) window._exploreScrollSafeRender(container);
+  }).catch(function (e) {
+    /* ⛔ 6ª auditoria (ponto 16): ESTA CADEIA NÃO TINHA `.catch`.
+     * Aqui não há estado otimista a desfazer — o local só muda no ramo de sucesso — mas a
+     * rejection ficava PERDIDA e a tela não dizia nada. Com a autoridade nova a recusa é
+     * comum e específica: sessão de conta unificada, conta excluída, lock de ciclo de vida
+     * (`merging`/`deleting`), alvo que desligou convites, alvo inexistente, rede.
+     * O botão já foi trocado por "Convite enviado" pelo `_spinButton` do onclick — sem
+     * aviso e sem re-render, a tela AFIRMA um convite que o servidor recusou. */
+    window._warn('[amizade] convite não enviado:', e && e.message);
+    if (typeof showNotification !== 'undefined') {
+      showNotification((window._t||function(k){return k;})('explore.notifFriendError'),
+        (e && e.message) || (window._t||function(k){return k;})('explore.notifFriendErrorMsg'), 'error');
+    }
+    var c2 = document.getElementById('view-container');
+    if (c2) window._exploreScrollSafeRender(c2);
   });
 };
+
+/* ⛔ 4ª auditoria (ponto 9): OTIMISMO SEM VOLTA É MENTIRA NA TELA.
+ * Estes três fluxos alteravam `currentUser.friends`/`friendRequests*` ANTES da Cloud
+ * Function e não tinham `.catch` — se o servidor recusasse, a tela seguia afirmando uma
+ * amizade que não existe, até o próximo carregamento do perfil. Com a autoridade nova a
+ * recusa deixou de ser rara: sessão de conta absorvida (lápide), conta excluída, alvo com
+ * "não aceito convites", validação do servidor, rede.
+ * ⭐ Agora o otimismo é EXPLÍCITO e reversível: guarda o retrato, aplica, e no erro
+ * DESFAZ e avisa. Ver [[feedback_mutacao_otimista_morre_no_carregamento_em_voo]]. */
+function _amizadeOtimista(cu, aplicar) {
+  var antes = {
+    friends: (cu.friends || []).slice(),
+    friendRequestsSent: (cu.friendRequestsSent || []).slice(),
+    friendRequestsReceived: (cu.friendRequestsReceived || []).slice()
+  };
+  aplicar();
+  return function desfazer(err) {
+    cu.friends = antes.friends;
+    cu.friendRequestsSent = antes.friendRequestsSent;
+    cu.friendRequestsReceived = antes.friendRequestsReceived;
+    var msg = (err && (err.message || err.erro)) || '';
+    window._warn('[amizade] operação recusada, estado revertido:', msg);
+    if (typeof showNotification !== 'undefined') {
+      showNotification(
+        (window._t || function (k) { return k; })('explore.notifFriendError'),
+        msg || (window._t || function (k) { return k; })('explore.notifFriendErrorMsg'),
+        'error');
+    }
+    var c = document.getElementById('view-container');
+    if (c) window._exploreScrollSafeRender(c);
+  };
+}
 
 window._acceptFriend = function(friendUid) {
   var cu = window.AppStore.currentUser;
   if (!cu) return;
   var myUid = cu.uid || cu.email;
 
-  if (!cu.friends) cu.friends = [];
-  // Prevent duplicate: only add if not already in friends list
-  if (cu.friends.indexOf(friendUid) === -1) {
-    cu.friends.push(friendUid);
-  }
-  cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== friendUid; });
+  var desfazer = _amizadeOtimista(cu, function () {
+    if (!cu.friends) cu.friends = [];
+    if (cu.friends.indexOf(friendUid) === -1) cu.friends.push(friendUid);
+    cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== friendUid; });
+  });
 
   window.FirestoreDB.acceptFriendRequest(myUid, friendUid).then(function() {
     // v1.0.59-beta: GA4 — friend_added (só conta na aceitação, não no envio)
@@ -1338,7 +1491,7 @@ window._acceptFriend = function(friendUid) {
     if (typeof _updateNotificationBadge === 'function') _updateNotificationBadge();
     var container = document.getElementById('view-container');
     if (container) window._exploreScrollSafeRender(container);
-  });
+  }).catch(function (e) { desfazer(e); });
 };
 
 window._rejectFriend = function(friendUid) {
@@ -1346,7 +1499,9 @@ window._rejectFriend = function(friendUid) {
   if (!cu) return;
   var myUid = cu.uid || cu.email;
 
-  cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== friendUid; });
+  var desfazerR = _amizadeOtimista(cu, function () {
+    cu.friendRequestsReceived = (cu.friendRequestsReceived || []).filter(function(id) { return id !== friendUid; });
+  });
 
   window.FirestoreDB.rejectFriendRequest(myUid, friendUid).then(function() {
     if (typeof showNotification !== 'undefined') {
@@ -1354,7 +1509,7 @@ window._rejectFriend = function(friendUid) {
     }
     var container = document.getElementById('view-container');
     if (container) window._exploreScrollSafeRender(container);
-  });
+  }).catch(function (e) { desfazerR(e); });
 };
 
 window._removeFriend = function(friendUid) {
@@ -1365,8 +1520,9 @@ window._removeFriend = function(friendUid) {
   // Confirm before removing
   if (typeof showAlertDialog === 'function') {
     showAlertDialog((window._t||function(k){return k;})('explore.unfriendTitle'), (window._t||function(k){return k;})('explore.unfriendConfirm'), function() {
-      // Update local state
-      cu.friends = (cu.friends || []).filter(function(id) { return id !== friendUid; });
+      var desfazerX = _amizadeOtimista(cu, function () {
+        cu.friends = (cu.friends || []).filter(function(id) { return id !== friendUid; });
+      });
 
       window.FirestoreDB.removeFriend(myUid, friendUid).then(function() {
         if (typeof showNotification !== 'undefined') {
@@ -1374,15 +1530,17 @@ window._removeFriend = function(friendUid) {
         }
         var container = document.getElementById('view-container');
         if (container) window._exploreScrollSafeRender(container);
-      });
+      }).catch(function (e) { desfazerX(e); });
     }, { type: 'warning', confirmText: (window._t||function(k){return k;})('explore.unfriendYes'), cancelText: (window._t||function(k){return k;})('explore.cancel') });
   } else {
-    // Fallback without dialog
-    cu.friends = (cu.friends || []).filter(function(id) { return id !== friendUid; });
+    // Fallback sem diálogo — mesmo rollback do caminho normal (5ª auditoria, ponto 5)
+    var desfazerF = _amizadeOtimista(cu, function () {
+      cu.friends = (cu.friends || []).filter(function(id) { return id !== friendUid; });
+    });
     window.FirestoreDB.removeFriend(myUid, friendUid).then(function() {
       var container = document.getElementById('view-container');
       if (container) window._exploreScrollSafeRender(container);
-    });
+    }).catch(function (e) { desfazerF(e); });
   }
 };
 

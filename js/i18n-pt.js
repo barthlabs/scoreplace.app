@@ -754,6 +754,17 @@ window._translations['pt'] = {
   'explore.unfriendConfirm': 'Tem certeza que deseja desfazer esta amizade?',
   'explore.unfriendYes': 'Sim, desfazer',
   'explore.cancel': 'Cancelar',
+  // v2.1.48 — a operação de amizade pode ser recusada pelo servidor (sessão de conta
+  // unificada, conta excluída, alvo que não aceita convites). A tela desfaz e avisa.
+  'explore.legacyTitle': 'Amizades antigas para reconfirmar',
+  'explore.legacyHelp': 'Estas amizades vêm de antes da mudança de segurança e precisam ser confirmadas de novo pelos dois lados. Enquanto isso, elas não dão acesso às suas estatísticas.',
+  'explore.legacyConfirm': 'Reconfirmar',
+  'explore.legacyConfirming': 'Enviando...',
+  'explore.legacyDiscard': 'Descartar',
+  'explore.legacyConfirmed': 'Convite enviado',
+  'explore.legacyConfirmedMsg': 'Assim que a outra pessoa aceitar, vocês voltam a ser amigos.',
+  'explore.notifFriendError': 'Não deu certo',
+  'explore.notifFriendErrorMsg': 'A operação não foi concluída. Tente de novo.',
   'explore.notifUnfriended': 'Amizade Desfeita',
   'explore.notifUnfriendedMsg': 'A amizade foi removida.',
 

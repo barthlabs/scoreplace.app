@@ -17,6 +17,12 @@
 
 // Nunca copiar do drop para o sobrevivente:
 const NUNCA_COPIAR = new Set([
+  /* ⛔ v2.1.48 (4ª auditoria, ponto 4A) — OS QUATRO CAMPOS DE AMIZADE.
+   * Eles NÃO são dado de perfil: são PROJEÇÃO da autoridade (`friendships` +
+   * `friendAccess`), reconstruída por `amizade-lifecycle.reconstruirCache`. Unir aqui,
+   * genericamente, preservaria o uid morto, criaria amizade consigo mesmo depois da fusão
+   * e deixaria o mesmo uid como amigo E como convite. Quem decide é o cânone. */
+  'friends', 'friendRequestsSent', 'friendRequestsReceived', 'friendRequestsSentAt',
   // Prova de merge — o servidor TRATA como prova (resolveMergedLogin devolve custom token).
   'mergedInto', 'mergedAt',
   // Assinatura Pro: só o webhook do Stripe concede (campo privilegiado nas rules).

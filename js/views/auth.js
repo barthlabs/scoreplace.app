@@ -3850,42 +3850,29 @@ function _autoFriendOnInvite(inviterUid, currentUser) {
   var myFriends = currentUser.friends || [];
   if (myFriends.indexOf(inviterUid) !== -1) return;
 
-  // Torna amigos mutuamente (sem necessidade de aceite — veio via convite)
-  window.FirestoreDB.db.collection('users').doc(myUid).set({
-    friends: firebase.firestore.FieldValue.arrayUnion(inviterUid)
-  }, { merge: true });
-  window.FirestoreDB.db.collection('users').doc(inviterUid).set({
-    friends: firebase.firestore.FieldValue.arrayUnion(myUid)
-  }, { merge: true });
-
-  // Remove convites pendentes entre eles se houver
-  window.FirestoreDB.db.collection('users').doc(myUid).set({
-    friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(inviterUid),
-    friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(inviterUid)
-  }, { merge: true });
-  window.FirestoreDB.db.collection('users').doc(inviterUid).set({
-    friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(myUid),
-    friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(myUid)
-  }, { merge: true });
-
-  // Atualiza estado local (com dedup)
-  if (!currentUser.friends) currentUser.friends = [];
-  if (currentUser.friends.indexOf(inviterUid) === -1) {
-    currentUser.friends.push(inviterUid);
-  }
-
-  // Notifica quem convidou
-  window.FirestoreDB.addNotification(inviterUid, {
-    type: 'friend_accepted',
-    fromUid: myUid,
-    fromName: currentUser.displayName || '',
-    fromEmail: currentUser.email || '',
-    message: _t('auth.friendAcceptedMsg', {name: currentUser.displayName || _t('auth.someone')}),
-    createdAt: new Date().toISOString(),
-    read: false
+  /* ⚠️ MUDANÇA DE COMPORTAMENTO DELIBERADA (v2.1.48, 29/ago/2026) — LEIA ANTES DE "CONSERTAR".
+   *
+   * Isto criava amizade MÚTUA E IMEDIATA, sem aceite, escrevendo nos dois perfis. Não dá
+   * pra manter: sob a autoridade nova, "veio via convite" é uma afirmação do CLIENTE, e
+   * o servidor não tem como conferi-la — não existe registro de que o link `?ref=UID`
+   * tenha sido emitido. Um cliente qualquer diria "vim pelo convite de fulano" e teria
+   * amizade forçada com quem quisesse: seria a MESMA escalada que a 2.1.48 veio fechar,
+   * entrando por outra porta.
+   *
+   * Então o convite agora vira CONVITE PENDENTE, do recém-chegado para quem convidou.
+   * Falha fechado: quem clicou no link claramente quer a conexão, e quem convidou decide.
+   * ⏳ Se o dono quiser a amizade automática de volta, o caminho honesto é o servidor
+   * EMITIR o link (guardar `inviteTokens/{token}` com quem emitiu) e a CF conferir o
+   * token — aí a procedência é do servidor e o aceite automático se sustenta. */
+  window.FirestoreDB.sendFriendRequest(myUid, inviterUid).catch(function (e) {
+    window._warn('[autoFriendOnInvite] convite não enviado:', e && e.message);
   });
 
-  // Auto-friendship via invite
+  /* ⛔ O estado local NÃO recebe mais `inviterUid` em `friends`: agora é convite
+   * PENDENTE, não amizade. Pintar amizade que o servidor não tem seria mentira otimista
+   * — e a próxima leitura do perfil desfaria na cara da pessoa.
+   * A notificação também saiu: quem avisa é a CF (`_amizadeNotificar`), com o texto
+   * certo pro evento que REALMENTE aconteceu (convite, não aceite). */
 }
 
 // v1.9.83: envia o e-mail de verificação RICO (botão CTA, remetente
@@ -4722,81 +4709,61 @@ async function simulateLoginSuccess(user) {
         var legacyData = legacyDoc.data();
         // Merge legacy data into UID doc (friends, requests, etc.)
         var mergeData = {};
-        // ⛔ 2.1.24 — UNIR SEM RECONCILIAR ERA A FÁBRICA DOS CONVITES FANTASMA.
-        // Eram três arrayUnion independentes, um por campo, e NENHUM comparava com o outro:
-        // quem já era amigo pelo uid e tinha convite pendente pelo doc legado terminava nos
-        // DOIS lugares. MEDIDO em 27/ago/2026: 12 usuários, 11 pares — o dono via os próprios
-        // amigos na lista de "convites pendentes".
-        // A união continua atômica (arrayUnion), e a invariante entra logo depois com um
-        // arrayRemove — ver `_amizadeCore.conviteDeQuemJaEAmigo` no fim deste bloco.
-        if (legacyData.friends && legacyData.friends.length > 0) mergeData.friends = firebase.firestore.FieldValue.arrayUnion.apply(null, legacyData.friends);
-        if (legacyData.friendRequestsReceived && legacyData.friendRequestsReceived.length > 0) mergeData.friendRequestsReceived = firebase.firestore.FieldValue.arrayUnion.apply(null, legacyData.friendRequestsReceived);
-        if (legacyData.friendRequestsSent && legacyData.friendRequestsSent.length > 0) mergeData.friendRequestsSent = firebase.firestore.FieldValue.arrayUnion.apply(null, legacyData.friendRequestsSent);
+        // ⛔ HISTÓRICO (2.1.24): unir sem reconciliar era a fábrica dos convites fantasma —
+        // três arrayUnion independentes, nenhum comparando com o outro. MEDIDO em
+        // 27/ago/2026: 12 usuários, 11 pares; o dono via os próprios amigos na lista de
+        // "convites pendentes". A invariante NÃO mora mais aqui (ver logo abaixo): ela vive
+        // em `functions/amizade-authority-core.js` e na CF, que ao ACEITAR tira o uid dos
+        // dois arrays de convite dos DOIS lados, numa transação.
+        /* ⛔ v2.1.48 — os três arrays de amizade SAÍRAM deste merge.
+         * Eles viraram campo privilegiado: nem o dono do próprio perfil os escreve por
+         * cliente, porque escrever a própria metade da relação deixaria a projeção
+         * `friendAccess` (que é o que as Rules leem) mentindo sobre a outra metade.
+         * ⭐ A amizade do doc legado NÃO se perde: `scripts/backfill-amizade.js` lê TODOS
+         * os perfis — inclusive os legados com chave de e-mail — e monta
+         * `friendships/{pairId}` a partir deles.
+         * ⭐ E o doc legado NÃO é mais apagado logo abaixo — ver a nota lá. Sem o delete,
+         * a fonte continua de pé e o backfill (que aborta se achar doc com chave de
+         * e-mail) obriga o transporte da amizade antes de qualquer limpeza. */
         // Copy profile fields if not already set
         if (legacyData.displayName && (!existingProfile || !existingProfile.displayName)) mergeData.displayName = legacyData.displayName;
         if (legacyData.photoURL && (!existingProfile || !existingProfile.photoURL)) mergeData.photoURL = legacyData.photoURL;
         if (Object.keys(mergeData).length > 0) {
           if (window._realEmailOrEmpty(user.email)) mergeData.email = user.email;
           await window.FirestoreDB.db.collection('users').doc(uid).set(mergeData, { merge: true });
-          // ⛔ A INVARIANTE, logo depois da união: quem está em `friends` sai dos convites.
-          // Escrita SEPARADA de propósito — arrayUnion e arrayRemove não convivem no mesmo
-          // campo na mesma escrita, e arrayRemove é atômico (não sobrescreve convite que
-          // tenha chegado no meio). A união é determinística (perfil atual ∪ legado), então
-          // dá pra calcular quem sai sem reler o documento.
-          try {
-            var _amiz = (window._amizadeCore || {});
-            var _tirar = _amiz.conviteDeQuemJaEAmigo ? _amiz.conviteDeQuemJaEAmigo({
-              friends: _amiz.unirUids((existingProfile || {}).friends, legacyData.friends),
-              friendRequestsSent: _amiz.unirUids((existingProfile || {}).friendRequestsSent, legacyData.friendRequestsSent),
-              friendRequestsReceived: _amiz.unirUids((existingProfile || {}).friendRequestsReceived, legacyData.friendRequestsReceived)
-            }) : [];
-            if (_tirar.length) {
-              await window.FirestoreDB.db.collection('users').doc(uid).set({
-                friendRequestsSent: firebase.firestore.FieldValue.arrayRemove.apply(null, _tirar),
-                friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove.apply(null, _tirar)
-              }, { merge: true });
-            }
-          } catch (_eInv) { window._warn('[merge legado] invariante de amizade:', _eInv); }
+          /* ⛔ v2.1.48 — a limpeza da invariante saiu junto: ela existia porque a UNIÃO
+           * acima trazia amigo e convite no mesmo merge. Sem a união, não há o que
+           * reconciliar aqui — e a escrita seria recusada de qualquer forma.
+           * A invariante continua viva onde ela decide de fato: em
+           * `functions/amizade-authority-core.js` (aceitar tira dos dois convites) e na
+           * fusão do servidor. (⚠️ este comentário citava `amizade-core.reconciliarAmizade`,
+           * arquivo REMOVIDO na 2.1.48: a invariante "amigo não é convite" passou a ser
+           * aplicada na SAÍDA de `projetarCache`, no cânone.) */
         }
-        // Update all other users who reference the old email ID in their friends/requests
-        var allUsers = await window.FirestoreDB.db.collection('users').get();
-        var batch = window.FirestoreDB.db.batch();
-        var batchCount = 0;
-        allUsers.forEach(function(doc) {
-          if (doc.id === user.email || doc.id === uid) return;
-          var d = doc.data();
-          var ref = window.FirestoreDB.db.collection('users').doc(doc.id);
-          var updates = {};
-          if (d.friends && d.friends.indexOf(user.email) !== -1) {
-            updates.friends = firebase.firestore.FieldValue.arrayUnion(uid);
-            batch.update(ref, { friends: firebase.firestore.FieldValue.arrayRemove(user.email) });
-            batchCount++;
-          }
-          if (d.friendRequestsSent && d.friendRequestsSent.indexOf(user.email) !== -1) {
-            updates.friendRequestsSent = firebase.firestore.FieldValue.arrayUnion(uid);
-            batch.update(ref, { friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(user.email) });
-            batchCount++;
-          }
-          if (d.friendRequestsReceived && d.friendRequestsReceived.indexOf(user.email) !== -1) {
-            updates.friendRequestsReceived = firebase.firestore.FieldValue.arrayUnion(uid);
-            batch.update(ref, { friendRequestsReceived: firebase.firestore.FieldValue.arrayRemove(user.email) });
-            batchCount++;
-          }
-          // ⛔ 2.1.24 — O TERCEIRO TAMBÉM PRECISA DA INVARIANTE. Cada campo acima é tratado
-          // ISOLADO: quem tinha o e-mail antigo em `friends` e o uid novo em `sent` ficava
-          // com o mesmo uid nos dois. Se o uid entra em `friends`, ele sai dos convites.
-          if (updates.friends) {
-            updates.friendRequestsSent = firebase.firestore.FieldValue.arrayRemove(uid);
-            updates.friendRequestsReceived = firebase.firestore.FieldValue.arrayRemove(uid);
-          }
-          if (Object.keys(updates).length > 0) {
-            batch.update(ref, updates);
-            batchCount++;
-          }
-        });
-        if (batchCount > 0) await batch.commit();
-        // Delete the legacy doc
-        await window.FirestoreDB.db.collection('users').doc(user.email).delete();
+        /* ⛔ v2.1.48 — O REPONTAMENTO DE TERCEIROS SAIU DAQUI.
+         * Este trecho varria TODOS os perfis e reescrevia `friends`/`friendRequests*` de
+         * gente que não era o usuário logado. Sob a autoridade nova isso é impossível por
+         * construção (os três campos são privilegiados: só o Admin SDK escreve), e manter
+         * a tentativa só produziria uma recusa por perfil a cada merge — ruído que
+         * esconderia erro real.
+         * ⭐ Quem faz esse repontamento é a FUSÃO NO SERVIDOR (functions/index.js ~5998,
+         * a que percorre os três campos trocando uid velho por novo) — ela já existia e
+         * roda com Admin SDK, vendo os dois lados.
+         * ⏳ LEGADO QUE FICA: se algum perfil de terceiro ainda tiver o e-mail antigo em
+         * `friends`, quem limpa é `scripts/backfill-amizade.js` (que ignora entrada que
+         * não seja uid conhecido e DENUNCIA cada uma). Não é silencioso. */
+        /* ⛔ v2.1.48 — O APAGAR DO DOC LEGADO SAIU DAQUI (P0-3 da auditoria externa).
+         * A versão anterior desta leva parou de copiar amizade pro uid novo e mandava
+         * "o backfill roda depois". Falso: DEPOIS DO DELETE A FONTE JÁ MORREU — as
+         * amizades do doc legado seriam perdidas sem ninguém notar.
+         * ⭐ MEDIDO na base em 29/ago/2026: **0 docs de usuário com chave de e-mail** em
+         *    260 perfis. Este caminho não tem dado vivo. Mas "não tem hoje" não é trava:
+         *    a trava é o `scripts/backfill-amizade.js`, que ABORTA se encontrar qualquer
+         *    doc com chave de e-mail, dizendo que a migração tem que TRANSPORTAR a
+         *    amizade antes de apagar. Enquanto isso, o doc legado FICA — resíduo é
+         *    barato, relação perdida não se recupera.
+         * (E desde a 2.1.48 este delete falharia de qualquer forma: `allow delete` exige
+         *  `request.auth.uid == userId`, e aqui o id do doc é um e-mail.) */
         // Migrated legacy user doc
         // Reload profile after migration
         if (window.AppStore.loadUserProfile) {

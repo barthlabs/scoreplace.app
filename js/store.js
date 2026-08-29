@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.47';
+window.SCOREPLACE_VERSION = '2.1.48';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -11906,10 +11906,16 @@ window.AppStore = {
       return;
     }
 
-    // Persiste lista limpa
+    // ⛔ v2.1.48 — A GRAVAÇÃO SAIU DAQUI. `friends` virou campo privilegiado: ele é
+    // CACHE de exibição de `friendships/{pairId}`, e quem escreve é só o Admin SDK. Se
+    // esta linha continuasse, ela bateria numa recusa das rules e o `catch` abaixo
+    // registraria um erro a cada login — ruído que esconderia erro de verdade.
+    // A canonicalização que este trecho fazia (dedup + e-mail→uid) passou pro backfill
+    // (scripts/backfill-amizade.js), que roda com Admin SDK e vê os dois lados.
+    // O cálculo continua porque a lista limpa ainda serve a ESTA sessão, na memória.
     try {
-      await db.collection('users').doc(uid).update({ friends: clean });
       this.currentUser.friends = clean;
+      window._log('[selfHealFriends] lista saneada em memória (persistência é do servidor desde 2.1.48)');
       window._log('[selfHealFriends v0.17.6] cleaned', {
         before: friends.length,
         after: clean.length,

@@ -136,11 +136,27 @@ const KEEP = 'I061h3pJ7ifGgrjjo7dMVQOswOM2';   // eduardo@mange.adv.br (a sobrev
 // automático ficou sem existir. Varre o índice atrás das chamadas.
 (() => {
   const idx = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
-  const bloco = idx.slice(idx.indexOf('async function _executeMerge'));
+  /* ⚠️ v2.1.48: `_executeMerge` virou um invólucro fino que só põe o lock de ciclo de vida
+   * (`comLock(..., "merging", ...)`) e delega. O corpo real é `_executeMergeInterno`, e é
+   * nele que estas asserções têm que olhar — fatiar o invólucro daria falso NEGATIVO.
+   * Ver functions/amizade-lock.js: o lock cobre a fusão INTEIRA porque `mergedInto` só é
+   * gravada no fim, e sem ele cabia amizade nova com o uid já absorvido. */
+  const bloco = idx.slice(idx.indexOf('async function _executeMergeInterno'));
   const fim2 = bloco.indexOf('\n}\n');
   const corpo = bloco.slice(0, fim2 > 0 ? fim2 : 4000);
-  ok('_executeMerge chama a varredura de TODAS as coleções', /_sweepAllCollectionsByUid\(/.test(corpo));
-  ok('_executeMerge chama a migração das notificações', /_migrateNotifications\(/.test(corpo));
+  ok('_executeMerge (interno) chama a varredura de TODAS as coleções', /_sweepAllCollectionsByUid\(/.test(corpo));
+  /* ⚠️ v2.1.48 (8ª auditoria): o invólucro passou a delegar pra `guardaDeMerge`
+   * (amizade-lifecycle), que faz as DUAS coisas — confere a fase/manutenção E adquire o
+   * lock. Foi extraída pra lá porque o index.js não é `require`-ável em teste: enquanto a
+   * trava morava aqui, a única prova possível era regex. Agora ela é exercitada de verdade
+   * em tests/amizade/auto-merge-freeze.test.js. */
+  // fatia a função em vez de contar caracteres: o comentário dela é maior que qualquer
+  // janela fixa, e regex com distância mágica quebra na próxima linha de comentário.
+  const _iEM = idx.indexOf('async function _executeMerge(db, keepDoc, dropDoc) {');
+  const _corpoEM = idx.slice(_iEM, idx.indexOf('\n}', _iEM));
+  ok('e o invólucro delega pra guardaDeMerge (fase + lock, nessa ordem)',
+    /guardaDeMerge\(db, HttpsError/.test(_corpoEM));
+  ok('_executeMerge (interno) chama a migração das notificações', /_migrateNotifications\(/.test(corpo));
   ok('a varredura DESCOBRE as coleções (listCollections), não recebe lista',
     /_sweepAllCollectionsByUid[\s\S]{0,600}listCollections\(\)/.test(idx));
   ok('a varredura decide pelo core (shouldSweepCollection), não por lista local',

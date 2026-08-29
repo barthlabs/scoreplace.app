@@ -70,3 +70,64 @@ functions-stripe/node_modules
 #  anonimiza na gravação: nome → "Pessoa N", e-mail → @exemplo.test, uid → uidNNNN,
 #  telefone removido. Auditado: 0 e-mail real, 0 telefone, 0 uid do Firebase.
 #  Elas precisam estar no repo pra o golden GATEAR a CI, e não só a minha máquina.)
+
+# ⛔ v2.1.48 — ARQUIVOS OPERACIONAIS DA MIGRAÇÃO DE AMIZADE (6ª auditoria, ponto 13).
+# Backups e adjudicações carregam o GRAFO SOCIAL inteiro: uids reais, quem é amigo de quem,
+# quem convidou quem. Isso não entra no Git nem por acidente. Modelo só como *.example.json,
+# sem uid real.
+backup-amizade-*.json
+backup-antes-do-corte*.json
+adjudicacao*.json
+!*.example.json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUDITORIA E SEGREDOS (ago/2026) — Git é LOCAL nesta máquina.
+# Regra: o repositório guarda FONTE. Nada de credencial, backup, dump ou pacote
+# de auditoria — esses vivem fora do versionamento, e alguns carregam grafo
+# social/identidade real.
+# ⚠️ Conferido antes de escrever: nenhuma destas regras atinge arquivo hoje
+# rastreado. Os `.env.example` do infra/whatsapp são templates SEM segredo e
+# continuam versionados pela negação abaixo.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# pacotes gerados por scripts/audit-package.sh
+.audit/
+
+# segredos de ambiente — templates de exemplo CONTINUAM versionados
+.env
+.env.*
+!*.example
+
+# chaves e credenciais
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+google-services.json.local
+GoogleService-Info.plist.local
+
+# builds e caches
+dist/
+.cache/
+.parcel-cache/
+.turbo/
+*.tsbuildinfo
+
+# logs
+*.log
+logs/
+
+# IDE puramente local
+.idea/
+.vscode/
+
+# backups, dumps e pacotes — carregam dado real
+scoreplace-backup-*.tar.gz
+scoreplace-backup-*.zip
+scoreplace-audit-*.zip
+firebase-export-*/
+firestore-export-*/
+dump-*.json

@@ -1,0 +1,28 @@
+{
+  "//": "Config DEDICADA ao teste ponta-a-ponta das callables de amizade (P0-4). Sobe Firestore + Functions pra as CFs rodarem DE VERDADE contra dado real de emulador. NÃO usar pra deploy. Rodada via: npm run test:amizade Inclui o emulador de AUTH porque o auto-merge exige credencial AUTENTICADA nos dois lados (_mayAutoMerge) — sem Auth o gatilho recusa antes de chegar na fusão, e o teste ficaria verde pelo motivo errado.",
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "runtime": "nodejs22"
+    }
+  ],
+  "firestore": {
+    "rules": "tests/concurrency/firestore.allow.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8082
+    },
+    "functions": {
+      "port": 5012
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true,
+    "auth": {
+      "port": 9098
+    }
+  }
+}

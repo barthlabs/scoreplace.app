@@ -68,7 +68,30 @@ const _enrollCore = require("./enroll-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
-const _amizade = require("./vendor/amizade-core.js"); // a invariante "amigo não é convite pendente"
+const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
+/* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
+ * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
+ * transação morria com "Cannot read properties of undefined (reading 'arrayUnion')" — o
+ * teste ponta-a-ponta (tests/amizade/run.js) pegou. O subpath é o caminho documentado e
+ * funciona nos dois runtimes. O resto do arquivo segue no padrão antigo de propósito:
+ * trocar tudo é outra leva. */
+const { FieldValue: _FV } = require("firebase-admin/firestore");
+/* ═══ AMIZADE (v2.1.48) — requires no TOPO, e isso não é estilo ═══════════════
+ * `_executeMerge` (~linha 424) e `_mergeAccountsKeepOlder` (~845) usam estes módulos.
+ * Enquanto os `const` ficaram no FIM do arquivo, funcionavam por acaso: a chamada é em
+ * runtime, então a zona morta já tinha passado. Bastava alguém mover uma dessas chamadas
+ * pro tempo de carga pra derrubar calado — a armadilha que já custou caro neste projeto.
+ *   amizade-service   → as 5 operações (transação: relação + projeção + cache)
+ *   amizade-lock      → exclusão mútua de ciclo de vida (aquisição transacional, ownership)
+ *   amizade-fase      → fase da migração + manutenção (o backend congela junto do cliente)
+ *   amizade-lifecycle → projeção do cânone em merge/exclusão + a guarda de merge
+ */
+const _amizadeSvc = require("./amizade-service");
+const _amizadeLock = require("./amizade-lock");
+const _amizadeFase = require("./amizade-fase");
+const _amizadeVida = require("./amizade-lifecycle");
+// Os 4 campos de cache social: quem os escreve é SÓ o amizade-lifecycle (e o backfill).
+const _AMIZADE_CACHE_CAMPOS = new Set(["friends", "friendRequestsSent", "friendRequestsReceived", "friendRequestsSentAt"]);
 const _nameUnique = require("./name-unique-core");
 const _nameVariant = require("./name-variant-core");
 // v1.7.36: vigia estrutural — quem troca jogadores de um jogo que JÁ EXISTE sem ter
@@ -399,7 +422,70 @@ function _dedupKey(field, value) {
  * keepDoc and dropDoc are Firestore DocumentSnapshot instances.
  * Returns { tourFixed, casualFixed }.
  */
+/* ⛔ FRONTEIRA DO LOCK (7ª auditoria, ponto 3): EXTERNA adquire, INTERNA pressupõe.
+ * `_executeMerge` é o ponto de entrada para quem AINDA NÃO tem o lock. Quem já tem —
+ * `_mergeAccountsKeepOlder`, que precisa cobrir as duas ramificações dele, inclusive a
+ * rara em que `keepDoc` não existe e só se grava a lápide — chama `_executeMergeInterno`
+ * direto. Adquirir duas vezes o mesmo uid na mesma cadeia seria deadlock consigo mesmo:
+ * a segunda aquisição veria `merging` e falharia. */
 async function _executeMerge(db, keepDoc, dropDoc) {
+  /* ⛔ 8ª auditoria (ponto 1): A TRAVA DE FASE MORA AQUI, não em cada caller.
+   * `autoMergeOnProfileUpdate` chama `_executeMerge` DIRETO — ele não passa por
+   * `_scanAndMergeByField` nem por `_mergeAccountsKeepOlder`, que eram os únicos gates.
+   * Ou seja: uma edição de perfil disparava o gatilho e a fusão atravessava o freeze,
+   * contradizendo o runbook. Pôr a trava na fronteira comum faz QUALQUER caller futuro
+   * nascer protegido — gate por caller apodrece na primeira chamada nova. */
+  return _amizadeVida.guardaDeMerge(db, HttpsError, [dropDoc.id, keepDoc.id], async () => {
+    /* ⛔ 9ª auditoria (ponto 5): RELÊ E REAVALIA DEPOIS DO LOCK.
+     * Os callers (`autoMergeOnProfileUpdate`, `_scanAndMergeByField`) escolheram o par com
+     * snapshots capturados ANTES da aquisição. Lock impede simultaneidade, não atualiza
+     * retrato: entre a escolha e a aquisição outra operação pode ter fundido o drop — e
+     * fundi-lo de novo criaria um SEGUNDO tombstone e reescreveria amizade usando um uid
+     * morto. */
+    const [fk, fd] = await Promise.all([
+      db.collection("users").doc(keepDoc.id).get(),
+      db.collection("users").doc(dropDoc.id).get(),
+    ]);
+    if (!fd.exists || (fd.data() || {}).mergedInto) {
+      console.log("[_executeMerge] " + dropDoc.id + " já foi fundido/removido por outra operação — abortado");
+      return { resultado: { pulado: true, motivo: "drop-ja-fundido" }, finais: null };
+    }
+    if (!fk.exists || (fk.data() || {}).mergedInto) {
+      console.log("[_executeMerge] o sobrevivente " + keepDoc.id + " virou lápide — abortado");
+      return { resultado: { pulado: true, motivo: "keep-virou-lapide" }, finais: null };
+    }
+    if ((fd.data() || {}).deleted === true || (fk.data() || {}).deleted === true) {
+      console.log("[_executeMerge] uma das contas foi excluída — abortado");
+      return { resultado: { pulado: true, motivo: "conta-excluida" }, finais: null };
+    }
+    // e a REGRA também é reavaliada com o dado de agora
+    const prova = await _mayAutoMerge(fk, fd);
+    if (!prova.allowed) {
+      console.log("[_executeMerge] reavaliação pós-lock RECUSOU " + keepDoc.id + " × " + dropDoc.id + ": " + prova.reason);
+      return { resultado: { pulado: true, motivo: "reavaliacao-" + prova.reason }, finais: null };
+    }
+    /* ⛔ 10ª auditoria (ponto 2): O VENCEDOR É RECALCULADO AQUI, sob o lock.
+     * Confirmar que os dois perfis existem não bastava: `pickSurvivorByActivity` decide por
+     * PROVEDOR do Auth, atividade e CONTAGEM DE TORNEIOS — tudo isso muda enquanto a
+     * operação espera o lock. Manter a direção escolhida antes pode fundir na direção
+     * errada e apagar a conta que deveria sobreviver, que é irreversível.
+     * `_determineMergeWinner` relê Auth e recontagem, então rodá-lo aqui é a decisão de
+     * agora, não a de antes. */
+    const { keepDoc: kNovo, dropDoc: dNovo } = await _determineMergeWinner(fk, fd);
+    if (kNovo.id !== keepDoc.id) {
+      console.warn("[_executeMerge] a direção MUDOU sob o lock: antes keep=" + keepDoc.id +
+        ", agora keep=" + kNovo.id + " — seguindo a decisão de AGORA");
+    }
+    const r = await _executeMergeInterno(db, kNovo, dNovo);
+    // o drop (o de AGORA) virou lápide: estado TERMINAL, não `active`
+    return { resultado: r, finais: { [dNovo.id]: "merged", [kNovo.id]: "active" } };
+  });
+}
+
+/** ⚠️ PRESSUPÕE (a) a trava de fase JÁ conferida e (b) o lock JÁ adquirido pelos dois uids.
+ * Quem entra por fora usa `_executeMerge`, que faz as duas coisas. Chamar esta direto sem
+ * isso fura o freeze e roda sem exclusão mútua. */
+async function _executeMergeInterno(db, keepDoc, dropDoc) {
   const keepData  = keepDoc.data();
   const dropData  = dropDoc.data();
   const keepUid   = keepDoc.id;
@@ -489,6 +575,15 @@ async function _executeMerge(db, keepDoc, dropDoc) {
   // (3 check-ins apontariam pra uid morto). A varredura agora DESCOBRE as coleções em tempo
   // de execução e varre todas, menos as que têm tratamento próprio (lista de EXCLUSÃO no
   // core). Coleção nova nasce coberta, sem ninguém lembrar de cadastrá-la.
+  // ⛔ AMIZADE ANTES da varredura genérica: `friendships`/`friendAccess` estão EXCLUÍDAS
+  // dela de propósito (a chave é o par; o sweep corromperia). Se isto falhar, a fusão para —
+  // cânone de amizade meio migrado é pior que fusão interrompida.
+  /* ⛔ 6ª auditoria (ponto 3): o lock cobre a fusão INTEIRA, não só a migração da amizade.
+   * A `mergedInto` só é gravada lá no fim; sem o lock, cabia uma amizade nova com o uid
+   * absorvido DEPOIS de a migração já ter passado por ele — relação órfã garantida. */
+  // (o lock `merging` já está posto por `_executeMerge`, que envolve tudo)
+  const amizadeFixed = await _amizadeNoMerge(db, dropUid, keepUid);
+
   const sweptFixed = await _sweepAllCollectionsByUid(db, dropUid, keepUid);
   const casualFixed = sweptFixed.casualMatches || 0;
   const colFixed = sweptFixed;
@@ -549,6 +644,19 @@ async function _executeMerge(db, keepDoc, dropDoc) {
  * _repairTournaments (o sumiço do Gersom, v1.7.26).
  * @returns {Object} contagem de docs alterados por coleção
  */
+/* ═══ AMIZADE NO CICLO DE VIDA DE UID ══════════════════════════════════════════
+ * A rotina vive em `amizade-lifecycle.js` (módulo à parte, `db` por parâmetro) porque
+ * `index.js` NÃO é `require`-ável em teste — ele registra onCall e lê secrets no import.
+ * Sem extrair, a única prova possível seria regex sobre o fonte, e a auditoria externa
+ * recusou isso com razão: regex não prova o EFEITO da operação.
+ * Agora `tests/amizade/lifecycle.test.js` roda estas funções contra o emulador de verdade.
+ */
+const _relacoesDe = (db, uid) => _amizadeVida.relacoesDe(db, uid);
+const _mergeAmizade = (db, o, k) => _amizadeVida.mergeAmizade(db, o, k);
+const _reconstruirCacheAmizade = (db, uids) => _amizadeVida.reconstruirCache(db, uids);
+const _amizadeNoMerge = (db, o, k) => _amizadeVida.amizadeNoMerge(db, o, k);
+const _excluirAmizade = (db, uid) => _amizadeVida.excluirAmizade(db, uid);
+
 async function _sweepAllCollectionsByUid(db, dropUid, keepUid) {
   const out = {};
   if (!dropUid || !keepUid) return out;
@@ -574,6 +682,13 @@ async function _sweepAllCollectionsByUid(db, dropUid, keepUid) {
         if (!swept.changed) continue;
         const payload = {};
         for (const k of Object.keys(swept.value)) {
+          /* ⛔ v2.1.48 (4ª auditoria, ponto 4B) — A VARREDURA NÃO EDITA OS 4 CAMPOS DE
+           * CACHE DE AMIZADE. Eles são projeção do cânone (`friendships`), já reescrita
+           * pelo `amizade-lifecycle` ANTES desta varredura. Se o sweep os tocasse, acharia
+           * lixo legado com o oldUid, trocaria por keepUid e REINVENTARIA uma amizade que
+           * o cânone não tem — gravando por cima do que acabou de ser reconstruído.
+           * Ordem de escrita não pode ser a única defesa. */
+          if (nome === "users" && !_mergeCols.shouldSweepUserField(k)) continue;
           if (JSON.stringify(swept.value[k]) !== JSON.stringify(atual[k])) payload[k] = swept.value[k];
         }
         // ── trava anti-encolhimento ────────────────────────────────────────────
@@ -719,7 +834,19 @@ async function _recordLoginRedirects(db, ownerUid, dropEmail, dropPhone) {
  */
 async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   if (!uidA || !uidB || uidA === uidB) throw new HttpsError("invalid-argument", "uids inválidos pra merge");
+  // ponto 4: a fusão muda a autoridade social — não roda com a migração congelada
+  await _amizadeFase.exigirLiberado(db, HttpsError, "mergeAccountsKeepOlder");
   let ua, ub;
+  /* ⛔ 10ª auditoria (ponto 2): O LOCK VEM ANTES DE TUDO QUE DECIDE.
+   * A ordem anterior lia Auth, perfis e contagem de torneios, escolhia keep/drop, e SÓ
+   * DEPOIS adquiria o lock. Lock impede simultaneidade, não atualiza retrato: entre a
+   * decisão e a aquisição cabe uma fusão inteira, e a direção escolhida podia estar
+   * invertida — fundir na direção errada apaga a conta que deveria sobreviver, e isso é
+   * irreversível. Agora nada que decide é lido antes da posse. */
+  let _terminouMerge = false;
+  const posseMerge = await _amizadeLock.adquirir(db, [uidA, uidB], "merging");
+  try {
+
   try { ua = await admin.auth().getUser(uidA); } catch (e) { ua = null; }
   try { ub = await admin.auth().getUser(uidB); } catch (e) { ub = null; }
   if (!ua || !ub) throw new HttpsError("not-found", "uma das contas não existe mais (já fundida?)");
@@ -763,12 +890,13 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   const dropU = (_pickAct.keep === "a") ? ub : ua;
   console.log(`[merge] keep=${keepU.uid} [${(keepU.providerData || []).map((p) => p.providerId).join(",")}] ` +
     `← drop=${dropU.uid} (critério: ${_pickAct.reason}${_pickAct.detail ? " — " + _pickAct.detail : ""})`);
-  const keepDoc = (keepU.uid === uidA) ? da : dbb;
-  const dropDoc = (dropU.uid === uidA) ? da : dbb;
 
   console.log(`[mergeKeepOlder] keep=${keepU.uid} (criado ${keepU.metadata.creationTime}) ← drop=${dropU.uid} (criado ${dropU.metadata.creationTime})`);
 
   // Credenciais do drop a mover pro keep (antes de apagar o drop).
+  /* ⚠️ 10ª auditoria (ponto 2): estas credenciais são lidas SÓ AGORA, depois de a direção
+   * ter sido decidida sob o lock. Calculá-las antes seria fixar `dropEmail`/`dropPhone`/
+   * providers de um "drop" que a decisão de agora pode ter invertido. */
   const dropEmail = (dropU.email && !_isSyntheticAuthEmail(dropU.email)) ? dropU.email : null;
   const dropPhone = dropU.phoneNumber || null;
   // v1.7.11 — o provedor FEDERADO também viaja. Tem que ser lido AQUI: o "sub" do provedor
@@ -777,11 +905,22 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   // por providerId) — nesse caso aquele login morre e quem cobre é loginRedirects.
   const _fedToLink = _mergeRules.planProviderTransfer(keepU.providerData, dropU.providerData);
 
+  /* `da`/`dbb` já foram lidos SOB O LOCK (logo depois da aquisição), então descrevem o
+   * estado de agora — não precisam ser relidos. */
+  const keepDoc = (keepU.uid === uidA) ? da : dbb;
+  const dropDoc = (dropU.uid === uidA) ? da : dbb;
+
   // 1) Move TODOS os dados (torneios, matchHistory, casuais) + tombstone do dropDoc.
   if (keepDoc.exists && dropDoc.exists) {
-    await _executeMerge(db, keepDoc, dropDoc);
+    await _executeMergeInterno(db, keepDoc, dropDoc);    // já chama _amizadeNoMerge dentro
   } else if (dropDoc.exists) {
     // keep sem doc Firestore (raro) — só marca tombstone apontando pro keep.
+    /* ⛔ 3ª auditoria (ponto 1): ESTA RAMIFICAÇÃO NÃO PASSAVA POR NENHUMA MIGRAÇÃO DE
+     * AMIZADE. Gravava a lápide e pronto — as relações do uid absorvido continuariam
+     * apontando pra um uid que acabou de morrer, e a projeção `friendAccess` dele
+     * continuaria CONCEDENDO leitura. Tombstone sem migrar amizade não é aceitável.
+     * A porta é a mesma dos outros caminhos, e ela é idempotente. */
+    await _amizadeNoMerge(db, dropU.uid, keepU.uid);
     await db.collection("users").doc(dropU.uid).set(
       { mergedInto: keepU.uid, mergedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   }
@@ -822,7 +961,21 @@ async function _mergeAccountsKeepOlder(db, uidA, uidB) {
   //    vazia, e a resolveLoginRedirect usa este mapa pra corrigir. Ver _recordLoginRedirects.
   await _recordLoginRedirects(db, keepU.uid, dropEmail, dropPhone);
 
+  _terminouMerge = true;      // daqui pra frente o drop é lápide: lifecycle terminal
   return { survivorUid: keepU.uid, droppedUid: dropU.uid, already: false };
+  } finally {
+    /* ⛔ 9ª auditoria (ponto 3): o DROP vira TERMINAL (`merged`), não `active` — ele acabou
+     * de virar lápide, e devolvê-lo a `active` deixaria uma operação com validação velha
+     * escrever sobre uid morto. O KEEP volta a `active`, que é a verdade dele.
+     * Se a fusão FALHOU antes de terminar, `_terminou` fica falso e os dois voltam a
+     * `active` (ownership-aware), pra a operação poder ser repetida. */
+    /* ⛔ 10ª auditoria (ponto 3): o desfecho vem do FATO. Se a lápide (`mergedInto`) já
+     * foi gravada e uma etapa POSTERIOR falhou (transferir provedor, refletir e-mail),
+     * o drop continua morto — devolvê-lo a `active` por causa do erro seria ressuscitar
+     * um uid que já não existe. `_terminouMerge` sozinho não sabia disso. */
+    await _amizadeLock.finalizarPeloFato(db, posseMerge).catch((e) =>
+      console.error("[mergeKeepOlder] finalização do lifecycle falhou:", e && e.message));
+  }
 }
 
 /**
@@ -850,6 +1003,18 @@ async function _mayAutoMerge(docA, docB) {
 }
 
 async function _scanAndMergeByField(db, field) {
+  /* ⛔ 7ª auditoria (ponto 4): a varredura automática e a agendada passam por aqui. Elas
+   * não têm HttpsError nem quem as escute — então simplesmente NÃO RODAM enquanto a
+   * migração estiver congelada. Voltam sozinhas quando a fase liberar. */
+  if (!(await _amizadeFase.liberado(db))) {
+    /* ⛔ 9ª auditoria (ponto 7): devolve ARRAY, como em toda outra saída desta função.
+     * Antes devolvia `{pulado:true,...}` e o `scheduledAutoMergeCleanup` fazia
+     * `phoneResults.length` — que num objeto sem `length` vira `undefined`, e a soma vira
+     * `NaN` no log. Função que às vezes é array e às vezes é objeto é armadilha pro
+     * próximo caller. */
+    console.warn('[_scanAndMergeByField] PULADO (' + field + '): migração de amizade em manutenção');
+    return [];
+  }
   const allSnap = await db.collection("users").get();
   const byKey = {};
 
@@ -5244,8 +5409,68 @@ exports.deleteAccount = onCall(
     const out = { uid, tournamentsLeft: 0, tournamentsAnonymized: 0, tournamentsDeleted: 0,
       friendsCleaned: 0, presencesDeleted: 0, notificationsDeleted: 0, casualLeft: 0 };
 
+    /* ⛔ 9ª auditoria (ponto 2): FASE E LOCK ANTES DA PRIMEIRA ESCRITA.
+     * A ordem anterior era: conferir torneios → APAGAR os organizados → REESCREVER os que
+     * participa → só então conferir a fase e adquirir `deleting`. Ou seja, "em manutenção o
+     * delete nem começa" era falso: ele já tinha destruído torneios. E um merge concorrente
+     * só disputava o uid DEPOIS disso.
+     * Agora: fase → lock → revalidar sob o lock → guard SÓ-LEITURA → e só então escrever.
+     * Se o guard recusar, o lock é liberado e NADA foi escrito. */
+    await _amizadeFase.exigirLiberado(db, HttpsError, "deleteAccount");
+
+    /* ⛔ 11ª auditoria (ponto 1): A RETOMADA VEM ANTES DO LOCK.
+     * Se uma tentativa anterior gravou o tombstone e o `deleteUser` falhou, o lifecycle
+     * ficou TERMINAL (`deleted`) — e `adquirir` recusa terminal, por desenho. Ou seja: com
+     * a retomada dentro do lock, ela nunca era alcançada e a pessoa ficava presa com
+     * profile morto e login vivo.
+     * Aqui não há o que coordenar: os dados já foram destruídos e a autoridade de amizade
+     * já foi limpa na tentativa anterior. Falta UM passo, no Auth. Nada de torneios,
+     * amizades ou presenças é repetido. */
+    {
+      const _pre = await db.collection("users").doc(uid).get();
+      const _pd = _pre.exists ? (_pre.data() || {}) : null;
+      if (_pd && (_pd.deleted === true || _pd.deletedAt)) {
+        let _authVivo = false;
+        try { await admin.auth().getUser(uid); _authVivo = true; } catch (e) {}
+        if (!_authVivo) throw new HttpsError("failed-precondition", "esta conta já foi excluída");
+        console.warn("[deleteAccount] " + uid + ": tombstone existe e o Auth sobreviveu — retomando SÓ o passo do Auth");
+        try { await admin.auth().deleteUser(uid); }
+        catch (e) {
+          /* ⛔ NÃO limpa nem altera o lifecycle: ele já é `deleted` e continua correto.
+           * Mexer aqui só poderia piorar (ressuscitar um terminal). */
+          throw new HttpsError("internal", "conta não pôde ser removida do login: " + (e.code || e.message));
+        }
+        return Object.assign({ ok: true, retomado: true }, out);
+      }
+    }
+
+    let _posseDel;
+    try {
+      _posseDel = await _amizadeLock.adquirir(db, [uid], "deleting");
+    } catch (e) {
+      if (e && e.migracao) throw new HttpsError("unavailable", e.message);
+      if (e && e.lifecycle) throw new HttpsError("aborted", e.message);
+      throw e;
+    }
+
     let email = "";
-    try { const au = await admin.auth().getUser(uid); email = (au.email || "").toLowerCase(); } catch (e) {}
+    try {
+      /* ⭐ REVALIDA SOB O LOCK (ponto 5): o perfil é relido AGORA, com a conta já travada.
+       * Entre a autenticação e a aquisição cabe uma fusão inteira — apagar uma conta que
+       * acabou de virar lápide destruiria dados do sobrevivente. */
+      const _meuDoc = await db.collection("users").doc(uid).get();
+      if (_meuDoc.exists) {
+        const _m = _meuDoc.data() || {};
+        if (_m.mergedInto) {
+          throw new HttpsError("failed-precondition",
+            "sua conta foi unificada com outra — entre de novo e exclua a conta atual");
+        }
+        if (_m.deleted === true || _m.deletedAt) {
+          // (a retomada é tratada ANTES do lock — ver o bloco no topo da função)
+          throw new HttpsError("failed-precondition", "esta conta já foi excluída");
+        }
+      }
+      try { const au = await admin.auth().getUser(uid); email = (au.email || "").toLowerCase(); } catch (e) {}
 
     // 0) PORTA — jogo pendente BLOQUEIA a exclusão (ordem do dono, ago/2026).
     // Sem isto, a pessoa apaga a conta estando SORTEADA e leva o grupo dos outros
@@ -5323,19 +5548,35 @@ exports.deleteAccount = onCall(
       await doc.ref.set(next).catch((e) => console.error("[deleteAccount] torneio " + doc.id, e.message));
     }
 
-    // 3) O uid dela no friends[] de OUTRAS pessoas.
-    try {
-      // user-vivo:isento — busca REVERSA por uid (quem me tem como amigo), não por campo
-      // de identidade. Não há lápide a resolver: o uid consultado já é o da conta viva.
-      const amigos = await db.collection("users").where("friends", "array-contains", uid).get();
-      let b = db.batch(), n = 0;
-      for (const d of amigos.docs) {
-        b.update(d.ref, { friends: admin.firestore.FieldValue.arrayRemove(uid) });
-        out.friendsCleaned++;
-        if (++n >= 400) { await b.commit(); b = db.batch(); n = 0; }
-      }
-      if (n) await b.commit();
-    } catch (e) { console.error("[deleteAccount] friends:", e.message); }
+    // 3a) A AUTORIDADE da amizade (v2.1.48): relações + as DUAS direções da projeção.
+    // ⛔ Antes daqui só se limpava o CACHE (`friends[]` dos outros, logo abaixo). Isso
+    // deixaria `friendships/{pairId}` e `friendAccess/{outro}/accepted/{uid}` de pé —
+    // projeção órfã de conta apagada continua CONCEDENDO leitura. Autoridade sem dono
+    // é o pior resíduo possível.
+    /* ⛔ 6ª auditoria (ponto 2): AQUI NÃO SE ENGOLE ERRO.
+     * Antes era try/catch com log, e a exclusão SEGUIA — gravava a lápide e apagava o Auth
+     * mesmo se a limpeza da amizade tivesse falhado. Conta viva com exclusão incompleta é
+     * recuperável: a pessoa tenta de novo. Conta MORTA com `friendAccess` órfão é uma
+     * autorização de leitura sem dono, e não há mais quem a limpe pelo fluxo normal.
+     * Então a falha sobe e a exclusão PARA antes de tornar a conta morta. */
+    /* ⛔ 10ª auditoria (ponto 1): AQUI HAVIA UMA SEGUNDA AQUISIÇÃO DO MESMO LOCK.
+     * A fase e o `deleting` já são adquiridos no TOPO desta função, antes da primeira
+     * escrita. Este bloco (resto da correção anterior, que eu achei ter substituído)
+     * adquiria de novo — e a segunda aquisição via o próprio lock da primeira e falhava.
+     * Resultado: o CAMINHO FELIZ do delete travava contra si mesmo, depois de já ter
+     * apagado torneios. Os testes não pegaram porque só exercitavam caminhos de RECUSA.
+     * `_excluirAmizade` roda sob a posse que já existe. */
+    const amz = await _excluirAmizade(db, uid);
+    out.friendshipsDeleted = amz.relacoesApagadas;
+    out.friendAccessDeleted = amz.acessosApagados;
+
+    /* 3) ⛔ v2.1.48 (4ª auditoria, ponto 4C) — O SEGUNDO WRITER SAIU DAQUI.
+     * Havia uma limpeza manual: query `friends array-contains uid` + arrayRemove nos docs
+     * de terceiros. Duas autoridades escrevendo o mesmo cache é a duplicidade que produz
+     * recorrência — e esta ficava com uma visão parcial (só `friends`, nunca `sent`/
+     * `received`/`sentAt`). Quem limpa é o `_excluirAmizade` acima, que projeta os quatro
+     * campos do cânone e ainda DESCOBRE quem carrega o uid mesmo depois de a relação já
+     * ter sido apagada (retry após falha parcial). */
 
     // 4) Presenças/check-ins.
     try { out.presencesDeleted = await _batchDeleteQuery(db.collection("presences").where("uid", "==", uid)); }
@@ -5358,17 +5599,37 @@ exports.deleteAccount = onCall(
       for (const d of nt.docs) { b.delete(d.ref); out.notificationsDeleted++; if (++n >= 400) { await b.commit(); b = db.batch(); n = 0; } }
       if (n) await b.commit();
     } catch (e) {}
+    /* ⚠️ `_FV` (subpath `firebase-admin/firestore`) e não `admin.firestore.FieldValue`:
+     * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e esta
+     * linha derrubava o caminho feliz do delete com 500 — achado pelo teste de happy path.
+     * O subpath é o caminho documentado e funciona nos dois runtimes. */
     await db.collection("users").doc(uid).set({
       deleted: true,
-      deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      deletedAt: _FV.serverTimestamp(),
     });   // set SEM merge: sobrescreve o doc inteiro — todo dado pessoal some aqui
 
     // 7) Auth por último: se algo acima falhar, a pessoa ainda consegue re-tentar logada.
     try { await admin.auth().deleteUser(uid); }
     catch (e) { console.error("[deleteAccount] deleteUser:", e.code || e.message); throw new HttpsError("internal", "conta não pôde ser removida do login: " + (e.code || e.message)); }
 
+    /* ⛔ 9ª auditoria (ponto 3): TERMINAL, não `active`. A conta acabou de virar lápide de
+     * exclusão — devolvê-la pra `active` deixaria uma operação que fez a validação antes
+     * chegar depois e escrever sobre um uid morto. `deleted` não expira por lease. */
+    await _amizadeLock.finalizar(db, _posseDel, { [uid]: "deleted" }).catch((e) =>
+      console.error("[deleteAccount] finalização do lifecycle falhou:", e && e.message));
+
     console.log("[deleteAccount] " + JSON.stringify(out));
     return Object.assign({ ok: true }, out);
+    } catch (e) {
+      /* ⛔ 10ª auditoria (ponto 3): o desfecho vem do FATO GRAVADO, não de "deu erro".
+       * Se o tombstone já foi persistido e o `deleteUser` falhou depois, devolver o
+       * lifecycle pra `active` criaria o limbo: profile morto, Auth vivo, lifecycle vivo.
+       * `finalizarPeloFato` lê `users/{uid}` e conclui — `deleted`/`merged` quando é o
+       * caso, `active` só se a conta estiver mesmo viva (guard de jogo pendente, por
+       * exemplo, que é só leitura e não escreveu nada). */
+      await _amizadeLock.finalizarPeloFato(db, _posseDel).catch(() => {});
+      throw e;
+    }
   }
 );
 
@@ -5644,6 +5905,46 @@ exports.confirmEmailMerge = onCall(
 // atual. Marca a conta antiga com mergedInto para desativação.
 //
 // Deploy: firebase deploy --only functions:mergePhoneAccount
+/* ⛔ 7ª auditoria (ponto 2): `mergePhoneAccount` é uma fusão INDEPENDENTE e estava fora do
+ * protocolo de lock — só `_executeMerge` estava coberto, e este caminho não passa por ele.
+ * A operação inteira (perfil, amizade, lápide, credenciais) agora roda sob a MESMA
+ * aquisição de OLD + KEEP, liberada só pelo `operationId` dela.
+ * ⚠️ `dryRun` NÃO adquire lock de escrita: ensaio não pode trancar a conta de ninguém. */
+/* ⛔ 11ª auditoria (ponto 4): A PROVA DE POSSE VIRA FUNÇÃO, pra ser conferida ANTES de
+ * adquirir o lock e DE NOVO depois dele. Antes, o lock era adquirido primeiro e a prova
+ * conferida depois — então uma chamada SEM prova nenhuma já escrevia em `userLifecycle`,
+ * marcando `merging` em duas contas alheias e podendo travá-las até o lease vencer.
+ * A regra em si não mudou: token de posse do `oldUid`, ou identificador provado no próprio
+ * token do caller que o `oldUid` possui. */
+async function _provaDePosseDeOld(request, callerUid, oldUid, oldData) {
+  const proof = request.data && request.data.proofIdToken;
+  if (proof) {
+    try {
+      const dec = await admin.auth().verifyIdToken(String(proof));
+      if (dec && dec.uid === oldUid) return { proven: true, via: "proofIdToken", oldAuth: null };
+    } catch (e) { /* inválido */ }
+  }
+  let oldAuth = null;
+  try { oldAuth = await admin.auth().getUser(oldUid); } catch (e) { /* sem Auth record */ }
+
+  const email = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
+  const fone = request.auth.token && request.auth.token.phone_number;
+  const d = oldData || {};
+  if (email) {
+    if (oldAuth && oldAuth.email && oldAuth.email.toLowerCase() === email) return { proven: true, via: "email-auth", oldAuth };
+    if (d.email && String(d.email).toLowerCase() === email) return { proven: true, via: "email-perfil", oldAuth };
+    if (Array.isArray(d.linkedEmails) && d.linkedEmails.map((e) => String(e).toLowerCase()).indexOf(email) !== -1) {
+      return { proven: true, via: "email-vinculado", oldAuth };
+    }
+  }
+  if (fone) {
+    if (oldAuth && oldAuth.phoneNumber && _phoneDigitsMatch(fone, oldAuth.phoneNumber)) return { proven: true, via: "phone-auth", oldAuth };
+    const op = await _registeredPhoneFor(oldUid, oldAuth);
+    if (op && _phoneDigitsMatch(fone, op)) return { proven: true, via: "phone-perfil", oldAuth };
+  }
+  return { proven: false, via: null, oldAuth };
+}
+
 exports.mergePhoneAccount = onCall(
   { region: "us-central1", memory: "512MiB", timeoutSeconds: 300 },
   async (request) => {
@@ -5656,6 +5957,50 @@ exports.mergePhoneAccount = onCall(
 
     // v2.5.x: dryRun=true → calcula e RELATA tudo que mudaria, sem escrever nada.
     const dryRun = !!(request.data && request.data.dryRun);
+
+    // ponto 4: em manutenção, nem o ensaio nem a fusão passam
+    await _amizadeFase.exigirLiberado(admin.firestore(), HttpsError, "mergePhoneAccount");
+
+    /* ⛔ 11ª auditoria (ponto 4): PROVA ANTES DO LOCK. Sem isto, uma chamada sem prova
+     * nenhuma já marcava `merging` em duas contas — inclusive alheias — e as travava até o
+     * lease vencer. Leitura é de graça; escrever em `userLifecycle` não é. */
+    {
+      const _preOld = await admin.firestore().collection("users").doc(oldUid).get();
+      const _pv = await _provaDePosseDeOld(request, callerUid, oldUid,
+        _preOld.exists ? (_preOld.data() || {}) : {});
+      if (!_pv.proven) {
+        console.warn("[mergePhoneAccount] RECUSADO sem prova de posse — nada foi escrito:", callerUid, "→", oldUid);
+        throw new HttpsError("permission-denied", "sem prova de posse da conta a mesclar");
+      }
+    }
+
+    let _posseFone = null;
+    let _fusaoFoneOk = false;
+    if (!dryRun) {
+      try {
+        _posseFone = await _amizadeLock.adquirir(admin.firestore(), [oldUid, callerUid], "merging");
+      } catch (e) {
+        if (e && e.migracao) throw new HttpsError("unavailable", e.message);
+        if (e && e.lifecycle) throw new HttpsError("aborted", e.message);
+        throw e;
+      }
+      /* ponto 5: revalida DEPOIS do lock — entre a chamada e a aquisição cabe outra fusão */
+      const _dbRev = admin.firestore();
+      const [_ro, _rc] = await Promise.all([
+        _dbRev.collection("users").doc(oldUid).get(),
+        _dbRev.collection("users").doc(callerUid).get(),
+      ]);
+      if (_ro.exists && (_ro.data() || {}).mergedInto) {
+        throw new HttpsError("aborted", "a conta antiga já foi unificada por outra operação");
+      }
+      if (_rc.exists && (_rc.data() || {}).mergedInto) {
+        throw new HttpsError("failed-precondition", "sua conta foi unificada — entre de novo para continuar");
+      }
+      if ((_ro.exists && (_ro.data() || {}).deleted === true) || (_rc.exists && (_rc.data() || {}).deleted === true)) {
+        throw new HttpsError("failed-precondition", "uma das contas foi excluída");
+      }
+    }
+    try {
     const db = admin.firestore();
     const report = {
       dryRun, tournaments: 0, memberUidsFixed: 0, casualMatches: 0,
@@ -5686,10 +6031,23 @@ exports.mergePhoneAccount = onCall(
       try { const _gu = await admin.auth().getUser(oldUid); ghPhone = _gu.phoneNumber || null; } catch (e) { /* nada */ }
       if (dryRun) return { ok: true, merged: false, claimedPhone: ghPhone };
       if (ghPhone) {
-        // Libera o número do fantasma e seta no caller (Auth + perfil).
-        try { await admin.auth().deleteUser(oldUid); } catch (e) { console.warn("[mergePhoneAccount] del ghost:", (e && (e.code || e.message)) || e); }
+        /* ⛔ 11ª auditoria (ponto 4): FALHA AQUI NÃO VIRA SUCESSO.
+         * Antes, os dois passos eram `try/catch` que só logavam — e a função devolvia
+         * `{ ok: true, claimedPhone }` mesmo quando o número NÃO tinha sido transferido.
+         * O cliente marcava o telefone como reivindicado, e ele continuava no fantasma.
+         * ⚠️ Os dois passos são do Auth, não do Firestore: não há transação. A ordem
+         * importa — libera o número primeiro (senão o `updateUser` bate em
+         * `phone-number-already-exists`), e se a segunda parte falhar a exceção sobe. */
+        try { await admin.auth().deleteUser(oldUid); }
+        catch (e) {
+          console.error("[mergePhoneAccount] ghost: deleteUser falhou:", (e && (e.code || e.message)) || e);
+          throw new HttpsError("internal", "não foi possível liberar o número da conta antiga: " + ((e && (e.code || e.message)) || e));
+        }
         try { await admin.auth().updateUser(callerUid, { phoneNumber: ghPhone }); }
-        catch (e) { console.error("[mergePhoneAccount] set phone on caller failed:", (e && (e.code || e.message)) || e); }
+        catch (e) {
+          console.error("[mergePhoneAccount] ghost: set phone on caller falhou:", (e && (e.code || e.message)) || e);
+          throw new HttpsError("internal", "o número foi liberado mas não pôde ser vinculado à sua conta: " + ((e && (e.code || e.message)) || e));
+        }
         await db.collection("users").doc(callerUid).set(
           {
             phone: ghPhone, phoneCountry: "55", updatedAt: new Date().toISOString(),
@@ -5697,15 +6055,24 @@ exports.mergePhoneAccount = onCall(
             // registrado pelo organizador, a procedência morre aqui — senão a conta
             // ficaria com telefone verificado e carimbo de "posto por terceiro", e os
             // guards de identidade continuariam recusando o que já foi provado.
-            phoneSource: admin.firestore.FieldValue.delete(),
-            phoneSetBy: admin.firestore.FieldValue.delete(),
-            phoneSetAt: admin.firestore.FieldValue.delete(),
+            // ⚠️ `_FV` (subpath) e não `admin.firestore.FieldValue`: no runtime do emulador
+            // de Functions o namespace vem sem `.FieldValue` e derrubava o ramo ghost com
+            // 500 — o mesmo tropeço já corrigido no deleteAccount.
+            phoneSource: _FV.delete(),
+            phoneSetBy: _FV.delete(),
+            phoneSetAt: _FV.delete(),
             // notifyWhatsApp é derivado de ter celular (cânone v1.9.68) — sem isto,
             // um false residual de antes do número deixaria o canal 💬 caído.
             notifyWhatsApp: true,
           }, { merge: true }
         ).catch(() => {});
       }
+      /* ⚠️ O ghost NÃO é fusão: nada foi absorvido, só um número mudou de dono.
+       * Ele roda SOB o lock (o `finally` da função vai chamar `finalizarPeloFato`), e é
+       * justamente por isso que o ponto 3 importa: `oldUid` não tem perfil, então
+       * `estadoFinalPeloFato` devolve DESCONHECIDO e o lifecycle dele NÃO vira `deleted`.
+       * Inventar terminal aqui marcaria como morta uma identidade que pode estar viva —
+       * e terminal não se desfaz. Sem perfil, sem conclusão. */
       console.log("[mergePhoneAccount] ghost claim — phone", ghPhone, "→ caller", callerUid);
       return { ok: true, merged: false, claimedPhone: ghPhone };
     }
@@ -5722,27 +6089,11 @@ exports.mergePhoneAccount = onCall(
     //  (b) implícita — o caller se autenticou com um identificador (e-mail OU
     //      celular no próprio token) que oldUid possui (cobre o auto-merge do
     //      login por cross-ref, onde a posse do identificador já foi provada).
-    let _proven = false;
-    const _proofToken = request.data && request.data.proofIdToken;
-    if (_proofToken) {
-      try { const _dec = await admin.auth().verifyIdToken(String(_proofToken)); if (_dec && _dec.uid === oldUid) _proven = true; } catch (e) { /* inválido */ }
-    }
-    let _oldAuth = null;
-    try { _oldAuth = await admin.auth().getUser(oldUid); } catch (e) { /* sem Auth record */ }
-    if (!_proven) {
-      const _callerEmail = String((request.auth.token && request.auth.token.email) || "").toLowerCase();
-      const _callerPhone = request.auth.token && request.auth.token.phone_number;
-      if (_callerEmail) {
-        if (_oldAuth && _oldAuth.email && _oldAuth.email.toLowerCase() === _callerEmail) _proven = true;
-        if (!_proven && oldData.email && String(oldData.email).toLowerCase() === _callerEmail) _proven = true;
-        if (!_proven && Array.isArray(oldData.linkedEmails) && oldData.linkedEmails.map(e => String(e).toLowerCase()).indexOf(_callerEmail) !== -1) _proven = true;
-      }
-      if (!_proven && _callerPhone) {
-        if (_oldAuth && _oldAuth.phoneNumber && _phoneDigitsMatch(_callerPhone, _oldAuth.phoneNumber)) _proven = true;
-        if (!_proven) { const _op = await _registeredPhoneFor(oldUid, _oldAuth); if (_op && _phoneDigitsMatch(_callerPhone, _op)) _proven = true; }
-      }
-    }
-    if (!_proven) throw new HttpsError("permission-denied", "sem prova de posse da conta a mesclar");
+    /* ponto 4: REVALIDA a prova agora, já sob o lock — entre a conferência de cima e a
+     * aquisição, o identificador que provava a posse pode ter mudado de dono. */
+    const _pvLock = await _provaDePosseDeOld(request, callerUid, oldUid, oldData);
+    const _oldAuth = _pvLock.oldAuth;
+    if (!_pvLock.proven) throw new HttpsError("permission-denied", "sem prova de posse da conta a mesclar");
 
     const newName = newData.displayName || newData.name || "";
     const newEmail = (newData.email || "").toLowerCase();
@@ -5932,16 +6283,18 @@ exports.mergePhoneAccount = onCall(
     const surv = {};
     // ⛔ 2.1.24 — UNIR OS TRÊS E RECONCILIAR. Antes eram três uniões INDEPENDENTES: quem já
     // era amigo por um lado e tinha convite pendente pelo outro terminava nos dois arrays.
-    // MEDIDO na base (27/ago): 12 usuários, 11 pares. `reconciliarAmizade` tira dos convites
-    // quem está em `friends` — e NUNCA mexe em `friends`, que é o estado forte.
-    const _fsd = _amizade.reconciliarAmizade({
-      friends: unionArr(newData.friends, oldData.friends).filter(u => u !== callerUid && u !== oldUid),
-      friendRequestsSent: unionArr(newData.friendRequestsSent, oldData.friendRequestsSent).filter(u => u !== callerUid && u !== oldUid),
-      friendRequestsReceived: unionArr(newData.friendRequestsReceived, oldData.friendRequestsReceived).filter(u => u !== callerUid && u !== oldUid),
-    });
-    surv.friends = _fsd.friends;
-    surv.friendRequestsSent = _fsd.friendRequestsSent;
-    surv.friendRequestsReceived = _fsd.friendRequestsReceived;
+    /* ⛔ 3ª auditoria (pontos 1 e 2): AQUI HAVIA UM SEGUNDO MOTOR DE MERGE DE AMIZADE.
+     * Ele unia `friends`/`friendRequestsSent`/`friendRequestsReceived` dos dois docs com
+     * `unionArr` e reconciliava a invariante — sem nunca tocar em `friendships` nem em
+     * `friendAccess`. Resultado: o cânone ficava pra trás e o cache virava a única
+     * "verdade", justamente o arranjo que a 2.1.48 veio desfazer. E união preserva o uid
+     * MORTO, que é o que não pode sobrar.
+     * ⭐ Agora os quatro campos NÃO entram em `surv`: quem os escreve é
+     * `_amizadeNoMerge` → `_reconstruirCacheAmizade`, chamado logo depois da gravação do
+     * sobrevivente, a partir das relações canônicas já resolvidas.
+     * (A invariante "amigo não é convite" vive agora em `projetarCache`, aplicada na
+     * SAÍDA — ver tests/amigo-nao-e-convite-pendente.test.js.) */
+
     // v1.7.61 — a regra de "o e-mail da conta absorvida vira vínculo" MORAVA AQUI, inline, e
     // só aqui: o caminho comum de fusão (_executeMerge) não tinha equivalente, e por isso a
     // Fabiana saiu de uma fusão sem `linkedEmails`. Agora é UMA função pura, usada pelos dois.
@@ -5999,41 +6352,23 @@ exports.mergePhoneAccount = onCall(
     report.profileUnion = true;
     if (!dryRun) await db.collection("users").doc(callerUid).set(surv, { merge: true });
 
-    // ── 5. Amizades de TERCEIROS apontando pra oldUid (full scan) ─────────────
-    const allUsers = await db.collection("users").get();
-    let fbatch = db.batch(); let fcount = 0;
-    for (const ud of allUsers.docs) {
-      if (ud.id === callerUid || ud.id === oldUid) continue;
-      const d = ud.data(); const fu = {}; let fChanged = false;
-      ["friends", "friendRequestsSent", "friendRequestsReceived"].forEach(field => {
-        if (Array.isArray(d[field]) && d[field].indexOf(oldUid) !== -1) {
-          const arr = d[field].filter(x => x !== oldUid);
-          if (arr.indexOf(callerUid) === -1) arr.push(callerUid);
-          fu[field] = arr; fChanged = true;
-        }
-      });
-      // ⛔ 2.1.24 — E RECONCILIA O TERCEIRO. O laço acima trata cada campo ISOLADO: quem
-      // tinha o uid velho em `friends` e o novo em `sent` fica com o mesmo uid nos dois.
-      // Reconcilia sobre o estado FINAL (o que já existia + o que o laço acabou de mudar),
-      // senão a invariante olharia um retrato desatualizado.
-      if (fChanged) {
-        const _rec = _amizade.reconciliarAmizade({
-          friends: fu.friends || d.friends,
-          friendRequestsSent: fu.friendRequestsSent || d.friendRequestsSent,
-          friendRequestsReceived: fu.friendRequestsReceived || d.friendRequestsReceived,
-        });
-        ["friendRequestsSent", "friendRequestsReceived"].forEach(f => {
-          const antes = (fu[f] || d[f] || []).length;
-          if (_rec[f].length !== antes) fu[f] = _rec[f];
-        });
-      }
-      if (fChanged) {
-        if (!dryRun) fbatch.update(ud.ref, fu);
-        report.friendRefsRepointed++; fcount++;
-        if (fcount >= 400) { if (!dryRun) await fbatch.commit(); fbatch = db.batch(); fcount = 0; }
-      }
+    /* ── 5. AMIZADE: a porta ÚNICA ────────────────────────────────────────────
+     * ⛔ 3ª auditoria (ponto 1): aqui havia a TERCEIRA implementação independente de
+     * migração de amizade — um full scan de `users` repontando `friends`/requests de
+     * terceiros campo a campo, sem nunca tocar em `friendships`/`friendAccess`.
+     * Três motores decidindo a mesma coisa é exatamente a duplicidade de autoridade que
+     * produz recorrência. Agora `_executeMerge`, as duas ramificações de
+     * `_mergeAccountsKeepOlder` e este caminho chamam a MESMA rotina, que:
+     *   · rekeya `friendships/{pairId}` (a chave é o par — o sweep genérico corromperia);
+     *   · resolve colisão quando old e keep têm relação com a mesma terceira pessoa;
+     *   · recria `friendAccess` nas duas direções e apaga a do uid morto;
+     *   · reconstrói o cache dos DOIS e de todo terceiro afetado A PARTIR DO CÂNONE.
+     * ⚠️ `dryRun` continua respeitado: nada é escrito no ensaio. */
+    if (!dryRun) {
+      const _amz = await _amizadeNoMerge(db, oldUid, callerUid);
+      report.friendRefsRepointed = (_amz.relacoesReescritas || 0) + (_amz.relacoesApagadas || 0);
+      report.friendCachesRebuilt = (_amz.afetados || []).length;
     }
-    if (!dryRun && fcount > 0) await fbatch.commit();
 
     // ── 6. Presenças ──────────────────────────────────────────────────────────
     const presSnap = await db.collection("presences").where("uid", "==", oldUid).get();
@@ -6108,9 +6443,22 @@ exports.mergePhoneAccount = onCall(
       await _recordLoginRedirects(db, callerUid, _oldAuth && _oldAuth.email, _oldAuth && _oldAuth.phoneNumber);
     }
 
+    if (!dryRun) _fusaoFoneOk = true;     // a lápide foi gravada acima: lifecycle terminal
     console.log(`[mergePhoneAccount] ${dryRun ? "DRY-RUN " : ""}DONE ` + JSON.stringify(report));
     // Compat: mantém os campos antigos (tournaments/casualMatches) no retorno.
     return Object.assign({ ok: true, merged: true }, report, { casualMatches: report.casualMatches });
+    } finally {
+      /* ⛔ 9ª auditoria (ponto 3): no sucesso o `oldUid` vira TERMINAL (`merged`) — ele
+       * acabou de receber a lápide. Voltar a `active` deixaria uma operação com validação
+       * velha escrever sobre uid morto. No fracasso os dois voltam a `active`, pra a
+       * pessoa poder tentar de novo. Ownership-aware nos dois casos. */
+      /* ponto 3: idem — e cobre também o "ghost" (Auth sem doc): se o oldUid deixou de
+       * existir como identidade, `finalizarPeloFato` conclui `deleted`, nunca `active`. */
+      if (_posseFone) {
+        await _amizadeLock.finalizarPeloFato(admin.firestore(), _posseFone).catch((e) =>
+          console.error("[mergePhoneAccount] finalização do lifecycle falhou:", e && e.message));
+      }
+    }
   }
 );
 
@@ -6467,6 +6815,21 @@ async function _sweepDeletionLeftovers(db, uid, kind) {
     try { await admin.auth().getUser(uid); } catch (e) { authVivo = false; }
   }
   if (authVivo) sobras.push("Firebase Auth — conta de login ainda existe");
+
+  /* ⛔ 6ª auditoria (ponto 2): a autoridade NOVA também entra na conta de sobras. Antes só
+   * `users.friends[]` era conferido — e é justamente `friendships`/`friendAccess` que
+   * concede leitura. Órfão ali é autorização sem dono. */
+  await conta("friendships.uidA (relação com uid morto)", db.collection("friendships").where("uidA", "==", uid));
+  await conta("friendships.uidB (relação com uid morto)", db.collection("friendships").where("uidB", "==", uid));
+  try {
+    const meus = await db.collection("friendAccess").doc(uid).collection("accepted").get();
+    if (!meus.empty) sobras.push("friendAccess/" + uid + "/accepted (" + meus.size + ")");
+  } catch (e) {}
+  try {
+    // projeção REVERSA: alguém ainda concede acesso PARA o uid morto
+    const rev = await db.collectionGroup("accepted").where("friendUid", "==", uid).get();
+    if (!rev.empty) sobras.push("friendAccess reverso apontando pro uid (" + rev.size + ")");
+  } catch (e) { console.warn("[sweepLeftovers] friendAccess reverso:", e && e.message); }
 
   await conta("tournaments.memberUids", db.collection("tournaments").where("memberUids", "array-contains", uid));
   await conta("tournaments.creatorUid", db.collection("tournaments").where("creatorUid", "==", uid));
@@ -7769,3 +8132,108 @@ exports.setParticipantLetzplay = onCall(
     return { ok: true, handle: r.handle, anterior: r.anterior };
   }
 );
+
+/* ═══ AMIZADE: a implementação vive em `amizade-service.js` ════════════════════
+ * ⛔ 6ª auditoria (ponto 1): enquanto `_amizadeAplicar` morava AQUI, ela escrevia os quatro
+ * caches sociais direto (via aliases `AU`/`AR`), e o gate `check-amizade-client-writes.js`
+ * afirmava que só `amizade-lifecycle` e o backfill escreviam. O gate passava porque a
+ * regex não via os aliases — fronteira mentirosa, gate verde contradizendo o código.
+ * A escrita é legítima (mesma transação que muda relação + projeção + cache); o que estava
+ * errado era o LUGAR. Agora o index.js fica só com os adapters das callables.
+ */
+const _amizadeAplicar = (acao, caller, alvo) => _amizadeSvc.aplicar(acao, caller, alvo);
+const _amizadeNotificar = (db, para, de, tipo, texto) => _amizadeSvc.notificar(db, para, de, tipo, texto);
+
+const _AMIZADE_OPTS = { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS };
+
+exports.sendFriendRequest = onCall(_AMIZADE_OPTS, async (request) => {
+  const caller = request.auth && request.auth.uid;
+  const r = await _amizadeAplicar("enviar", caller, String((request.data || {}).toUid || ""));
+  // ⚠️ notifica o uid RESOLVIDO (`r.alvoUid`), não o que veio no corpo: se o cliente mandou
+  // uma lápide, o aviso tem que chegar em quem está vivo.
+  const db = admin.firestore();
+  if (r.evento === "auto-aceito") {
+    await _amizadeNotificar(db, r.alvoUid, caller, "friend_accepted", " aceitou seu convite e agora é seu amigo(a)!");
+  } else {
+    await _amizadeNotificar(db, r.alvoUid, caller, "friend_request", " quer ser seu amigo(a)!");
+  }
+  console.log("[amizade] enviar", caller, "→", r.alvoUid, "=", r.evento);
+  return { ok: true, evento: r.evento };
+});
+
+exports.acceptFriendRequest = onCall(_AMIZADE_OPTS, async (request) => {
+  const caller = request.auth && request.auth.uid;
+  const r = await _amizadeAplicar("aceitar", caller, String((request.data || {}).friendUid || ""));
+  await _amizadeNotificar(admin.firestore(), r.alvoUid, caller, "friend_accepted",
+    " aceitou seu convite e agora é seu amigo(a)!");
+  console.log("[amizade] aceitar", caller, "←", r.alvoUid);
+  return { ok: true, evento: r.evento };
+});
+
+exports.rejectFriendRequest = onCall(_AMIZADE_OPTS, async (request) => {
+  const caller = request.auth && request.auth.uid;
+  const r = await _amizadeAplicar("recusar", caller, String((request.data || {}).friendUid || ""));
+  return { ok: true, evento: r.evento };
+});
+
+exports.cancelFriendRequest = onCall(_AMIZADE_OPTS, async (request) => {
+  const caller = request.auth && request.auth.uid;
+  const r = await _amizadeAplicar("cancelar", caller, String((request.data || {}).toUid || ""));
+  return { ok: true, evento: r.evento };
+});
+
+/* ⭐ A LISTA DE RECONFIRMAÇÃO (5ª auditoria, ponto 3).
+ * O corte tira 271 amizades da tela — corretamente, porque `legacy_unverified` não é prova.
+ * Mas produto maduro não apaga a rede social da pessoa e manda esperar uma leva futura: o
+ * caminho de volta faz parte da própria migração.
+ * ⛔ POR QUE UMA CALLABLE E NÃO UMA QUERY DO CLIENTE: enumerar `friendships` do lado do
+ * cliente exigiria uma query por `uidA`/`uidB` — e Rules autorizam a query, não o resultado.
+ * Aqui o `uidA/uidB` vem do `request.auth.uid` e NUNCA do corpo, então não há como
+ * enumerar relação de terceiro. Devolve só o outro uid + o mínimo público pra desenhar a
+ * linha (nome e foto), nunca o documento do outro.
+ * ⚠️ Não é uma segunda autoridade: quem reconfirma é o `sendFriendRequest` de sempre. */
+exports.listLegacyFriendships = onCall(_AMIZADE_OPTS, async (request) => {
+  const caller = request.auth && request.auth.uid;
+  if (!caller) throw new HttpsError("unauthenticated", "login necessário");
+  const db = admin.firestore();
+
+  const [a, b] = await Promise.all([
+    db.collection("friendships").where("uidA", "==", caller).where("status", "==", "legacy_unverified").get(),
+    db.collection("friendships").where("uidB", "==", caller).where("status", "==", "legacy_unverified").get(),
+  ]);
+  const outros = new Map();
+  [a, b].forEach((s) => s.forEach((d) => {
+    const x = d.data() || {};
+    const outro = x.uidA === caller ? x.uidB : x.uidA;
+    if (!outro || outro === caller) return;
+    outros.set(outro, { origem: x.legacyOrigem || "", desde: x.createdAt || null });
+  }));
+  if (!outros.size) return { ok: true, relacoes: [] };
+
+  // perfis em lote — só os campos que a linha precisa
+  const uids = [...outros.keys()];
+  const docs = await db.getAll(...uids.map((u) => db.collection("users").doc(u)));
+  const relacoes = [];
+  docs.forEach((d) => {
+    if (!d.exists) return;                       // conta apagada: some da lista
+    const x = d.data() || {};
+    if (x.mergedInto) return;                    // lápide: o par certo é o do sobrevivente
+    const meta = outros.get(d.id) || {};
+    relacoes.push({
+      uid: d.id,
+      displayName: x.displayName || "",
+      photoURL: x.photoURL || "",
+      origem: meta.origem,
+      desde: meta.desde,
+    });
+  });
+  relacoes.sort((p, q) => String(p.displayName).localeCompare(String(q.displayName), "pt-BR"));
+  console.log("[amizade] listLegacy", caller, "→", relacoes.length);
+  return { ok: true, relacoes: relacoes };
+});
+
+exports.removeFriend = onCall(_AMIZADE_OPTS, async (request) => {
+  const caller = request.auth && request.auth.uid;
+  const r = await _amizadeAplicar("remover", caller, String((request.data || {}).friendUid || ""));
+  return { ok: true, evento: r.evento };
+});
