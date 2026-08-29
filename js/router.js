@@ -223,6 +223,35 @@ function initRouter() {
     var _isLegalView = (view === 'privacy' || view === 'terms' || view === 'delete-account');
     if (!_isLoggedInNow && !_isLegalView && typeof renderLanding === 'function') {
 
+      /* ⛔ QUEM ESTÁ ENTRANDO NÃO VOLTA PRA LANDING NEM PRO LOGIN (2.1.45).
+       * Ordem do dono: _"quando a pessoa faz login a partir da landing page, não pode
+       * voltar à landing page, nem à tela de login. isso causa confusão. a pessoa logou e
+       * volta para a landing ou para a tela de login e ela se pergunta: não deu certo?
+       * use o carregando em vez disso"_.
+       *
+       * Entre "o provedor autenticou" e "o app tem o usuário" existe uma janela em que
+       * `currentUser` é null — e as regras abaixo concluem, corretamente pelo que elas
+       * sabem, "não logado ⇒ landing". No REDIRECT a janela é maior: a página recarrega
+       * inteira e volta com o `getRedirectResult` pendente. Para quem olha, voltar pra
+       * tela de onde saiu quer dizer UMA coisa: falhou. E a pessoa tenta de novo no meio
+       * de um login que estava dando certo.
+       * ⭐ A marca é posta no início de cada caminho de login (auth.js) e apagada quando
+       * a sessão resolve ou o login falha/é cancelado — e CADUCA em 20s, pra um erro não
+       * tratado não trocar "parece que falhou" por "não sai mais do lugar".
+       * ⚠️ Este ramo vem ANTES dos de authCache: a pergunta "estou entrando agora?" tem
+       * precedência sobre "tenho cache?", senão o caminho sem cache — o de quem entra
+       * pela primeira vez, justo o do relato — pintaria a landing assim mesmo. */
+      if (typeof window._loginEmCurso === 'function' && window._loginEmCurso()) {
+        window._log('[scoreplace-router] login em curso → Carregando (a landing fica fora do caminho)');
+        viewContainer.innerHTML = window._bootInProgress
+          ? ''
+          : ((typeof window._renderBallLoader === 'function')
+            ? window._renderBallLoader('Entrando…', { minHeight: '60vh', bar: true })
+            : '<div style="text-align:center;padding:60vh 0 0;">Entrando…</div>');
+        _firstRoute = false;
+        return;
+      }
+
       if (_hasAuthCacheNow) {
         if (window._authStateResolved) {
           // v1.3.81-beta: authCache existe mas Firebase confirmou null (sessão

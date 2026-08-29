@@ -628,7 +628,16 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
     window._log('[scoreplace-auth] Checking getRedirectResult on page load...');
     firebase.auth().getRedirectResult().then(function(result) {
       window._log('[scoreplace-auth] getRedirectResult:', result && result.user ? { uid: result.user.uid, email: result.user.email } : 'no user');
-      if (!result || !result.user) return;
+      /* ⛔ PONTO DE ESTRANGULAMENTO DA FALHA no fluxo de REDIRECT (o pior caso, porque a
+       * página inteira recarrega). Voltou SEM usuário ⇒ não há login acontecendo, e a
+       * landing volta a ser um destino legítimo. Apagar aqui, e não no
+       * `onAuthStateChanged(null)`, é o que importa: no redirect o `null` chega ANTES
+       * deste resultado, e limpar lá cedo demais reacenderia a landing no meio de um
+       * login que estava dando certo — exatamente o defeito que se quer matar. */
+      if (!result || !result.user) {
+        try { if (typeof window._limparLoginEmCurso === 'function') window._limparLoginEmCurso(); } catch (_lc) {}
+        return;
+      }
       var user = result.user;
 
       // v0.17.83: belt+suspenders — fecha modal-login imediatamente quando o
@@ -673,6 +682,8 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
         });
       }
     }).catch(function(error) {
+      // o redirect falhou: a marca sai e a landing volta a valer
+      try { if (typeof window._limparLoginEmCurso === 'function') window._limparLoginEmCurso(); } catch (_lc) {}
       if (!error || !error.code) return;
       window._warn('[scoreplace-auth] getRedirectResult error:', error);
       if (error.code === 'auth/account-exists-with-different-credential') {
@@ -863,8 +874,61 @@ if (typeof firebase !== 'undefined' && firebase.auth) {
   });
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════
+ * LOGIN EM CURSO — quem entrou NUNCA volta pra landing nem pro login
+ *
+ * Ordem do dono (28/ago/2026): _"quando a pessoa faz login a partir da landing page,
+ * não pode voltar à landing page, nem à tela de login. isso causa confusão. a pessoa
+ * logou e volta para a landing ou para a tela de login e ela se pergunta: não deu certo?
+ * use o carregando em vez disso"_.
+ *
+ * ⭐ POR QUE ACONTECE: entre "o provedor autenticou" e "o app tem o usuário" existe uma
+ * janela — o `onAuthStateChanged` ainda não disparou, `AppStore.currentUser` é null, e o
+ * portão de landing do router (js/router.js) conclui, corretamente pelas regras dele,
+ * "não logado ⇒ landing". No fluxo de REDIRECT a janela é maior ainda, porque a página
+ * inteira recarrega e volta com `getRedirectResult` pendente.
+ * ⛔ Para quem está olhando, voltar pra tela de onde saiu significa UMA coisa: falhou. E
+ * ela tenta de novo, no meio de um login que estava dando certo.
+ *
+ * A MARCA: posta no início de CADA caminho de login, apagada quando a sessão resolve
+ * (sucesso) ou quando o login falha/é cancelado. Enquanto ela existe, o portão pinta o
+ * Carregando canônico em vez da landing.
+ *
+ * ⛔ E ELA TEM PRAZO. Marca sem prazo vira armadilha: um erro que ninguém tratou deixaria
+ * a pessoa PRESA no "Carregando" para sempre — trocar "parece que falhou" por "não sai
+ * mais do lugar" seria piorar. Passados 20s ela caduca sozinha e a landing volta a ser
+ * legítima. [[feedback_never_wait_for_an_exact_value]] [[feedback_init_que_morre_no_meio_e_silencioso]]
+ *
+ * ⚠️ `sessionStorage`, não variável: o redirect RECARREGA a página, e variável não
+ * sobrevive a isso — era justamente o caso pior. Some quando a aba fecha, que é o
+ * tempo de vida certo pra "estou entrando agora".
+ * ══════════════════════════════════════════════════════════════════════════════════ */
+var _LOGIN_EM_CURSO_K = 'sp_login_em_curso';
+var _LOGIN_EM_CURSO_MS = 20000;
+
+window._marcarLoginEmCurso = function () {
+  try { sessionStorage.setItem(_LOGIN_EM_CURSO_K, String(Date.now())); } catch (e) {}
+  window._log('[scoreplace-auth] login em curso — a landing fica fora do caminho');
+};
+
+window._limparLoginEmCurso = function () {
+  try { sessionStorage.removeItem(_LOGIN_EM_CURSO_K); } catch (e) {}
+};
+
+/* true enquanto um login iniciado há menos de 20s ainda não resolveu. */
+window._loginEmCurso = function () {
+  var t = null;
+  try { t = sessionStorage.getItem(_LOGIN_EM_CURSO_K); } catch (e) { return false; }
+  if (!t) return false;
+  var idade = Date.now() - Number(t);
+  if (!(idade >= 0) || idade > _LOGIN_EM_CURSO_MS) { window._limparLoginEmCurso(); return false; }
+  return true;
+};
+
 function handleGoogleLogin() {
   var isLocalFile = window.location.protocol === 'file:';
+  window._marcarLoginEmCurso();
 
   // v0.17.85: reset defensivo do guard a cada nova tentativa de login.
   // Previne caso degenerado onde guard ficou preso de tentativa anterior.
@@ -1326,6 +1390,7 @@ function _appleSha256Hex(str) {
 }
 
 function handleAppleLogin() {
+  window._marcarLoginEmCurso();
   if (typeof window._resetLoginGuard === 'function') window._resetLoginGuard();
 
   // Modo dev/local (file://) — simula, igual ao Google
@@ -1440,7 +1505,11 @@ function _onAppleAuthError(error) {
   }
   var code = String((error && (error.code || error.message)) || 'unknown');
   // Cancelamento do usuário (nativo retorna 1001/canceled; web popup-closed) — silencioso
-  if (/1001|cancel|popup-closed-by-user|cancelled-popup-request/i.test(code)) return;
+  if (/1001|cancel|popup-closed-by-user|cancelled-popup-request/i.test(code)) {
+    // desistiu: nada em curso, a landing volta a valer na hora (sem esperar o prazo)
+    try { if (typeof window._limparLoginEmCurso === 'function') window._limparLoginEmCurso(); } catch (_lc) {}
+    return;
+  }
   if (typeof _handleAccountLinking === 'function' && _handleAccountLinking(error, 'Apple')) return;
   showNotification(_t('auth.error'), 'Não foi possível entrar com a Apple. Tente e-mail, celular ou Google.', 'error');
 }
@@ -3008,6 +3077,7 @@ function handleEmailLogin() {
     return;
   }
 
+  window._marcarLoginEmCurso();
   showNotification(_t('auth.signingIn'), _t('auth.signingInMsg'), 'info');
   firebase.auth().signInWithEmailAndPassword(email, password)
     .then(function(result) {
@@ -4205,6 +4275,11 @@ window._checkEmailVerified = function() {
 };
 
 async function simulateLoginSuccess(user) {
+  /* A sessão resolveu — a landing volta a ser um destino legítimo. Aqui é o FUNIL
+   * ÚNICO de sucesso (popup, redirect, e-mail, nativo e o modo dev passam por ele),
+   * então é o lugar certo pra apagar a marca: um clear por caminho ficaria devendo
+   * num deles. [[feedback_unify_dual_entry_points]] */
+  try { if (typeof window._limparLoginEmCurso === 'function') window._limparLoginEmCurso(); } catch (_lc) {}
   // v1.8.40: memoriza o MÉTODO de login numa chave que sobrevive ao logout —
   // alimenta a badge "✓ da última vez" do modal. Cada handler já gravou o
   // authProvider no authCache antes de chegar aqui (funil único).

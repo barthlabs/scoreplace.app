@@ -46,6 +46,15 @@ window._spDobraToggle = function (chave) {
     var pill = raizes[i].querySelector('[data-dobra-pill]');
     if (corpo) corpo.style.display = abrindo ? '' : 'none';
     if (pill) pill.textContent = abrindo ? 'ver menos' : 'ver mais';
+    /* ⭐ 2.1.45 — A DOBRA ABRE CORPO PREGUIÇOSO. O `<details>` da dashboard tinha um
+     * `ontoggle` que montava o conteúdo só no primeiro ABRIR — foi ele que tirou 437 KB
+     * de HTML construído e nunca visto (v1.8.94, o relato de "fica lenta" no nativo).
+     * Trocar aquele `<details>` por esta dobra sem trazer isto junto REGREDIRIA a
+     * medição. O gancho é opcional: quem não tem corpo preguiçoso não paga nada.
+     * ⚠️ Só ao ABRIR: hidratar ao fechar seria montar justamente o que ninguém vai ver. */
+    if (abrindo && corpo && typeof window._spDobraHidratar === 'function') {
+      try { window._spDobraHidratar(corpo); } catch (_h) {}
+    }
   }
   try { localStorage.setItem('scoreplace_dobra_' + chave, abrindo ? '1' : '0'); } catch (e) {}
 };

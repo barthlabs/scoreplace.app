@@ -271,6 +271,28 @@ window._dashLazyOpen = function (el, gid) {
   } catch (e) { if (window._warn) window._warn('[dash lazy]', e); }
 };
 
+/* A MESMA hidratação, chamada pela DOBRA em vez do <details> (2.1.45).
+ * ⛔ Não é uma segunda cópia: `_dashLazyOpen` recebe o <details> e procura o slot dentro
+ * dele; aqui já chega o corpo da dobra. O que faz o trabalho — achar o slot não
+ * preenchido, rodar a função guardada uma única vez e reajustar os nomes — é o mesmo, e
+ * fica num lugar só. [[feedback_unify_dual_entry_points]] */
+window._spDobraHidratar = function (corpo) {
+  try {
+    if (!corpo) return;
+    var alvos = corpo.querySelectorAll('[data-lazy-slot]');
+    for (var i = 0; i < alvos.length; i++) {
+      var alvo = alvos[i];
+      if (alvo.getAttribute('data-filled') === '1') continue;
+      var gid = alvo.getAttribute('data-lazy-slot');
+      var monta = gid && window._dashLazyGroups && window._dashLazyGroups[gid];
+      if (typeof monta !== 'function') continue;
+      alvo.setAttribute('data-filled', '1');
+      alvo.innerHTML = monta();          // só executa agora
+      if (typeof window._fitNames === 'function') window._fitNames(alvo);
+    }
+  } catch (e) { if (window._warn) window._warn('[dobra lazy]', e); }
+};
+
 // ── PEDIDO DE REPINTURA DA DASHBOARD — UMA PORTA, E ELA JUNTA (1.9.41) ───────
 // Relato do dono: a dashboard "pisca 2x ao carregar". São dois pedidos legítimos que
 // chegam separados no boot e cada um repinta a tela inteira:
@@ -3349,7 +3371,9 @@ function renderDashboard(container) {
       // v1.8.94: TUDO o que monta card fica dentro do fechamento — o custo só é
       // pago se o bloco abrir. Antes o `finishedCards` já vinha pronto e o adiamento
       // teria economizado só a inserção, que é a parte barata.
-      var _abertoEnc = _dashDetailsAberto('scoreplace_dash_finished_open', false);
+      var _abertoEnc = (typeof window._spDobraAberta === 'function')
+        ? window._spDobraAberta('dash-encerrados', false)
+        : _dashDetailsAberto('scoreplace_dash_finished_open', false);
       var _montaEnc = function () {
       var _cu = window.AppStore.currentUser;
         var myFinished = finishedList.filter(function(t) {
@@ -3363,19 +3387,40 @@ function renderDashboard(container) {
           return false;
         });
         var otherFinished = finishedList.filter(function(t) { return myFinished.indexOf(t) === -1; });
+        /* ⭐ 2.1.45 — ENCERRADO SAI EM LISTA, SEMPRE. Ordem do dono: _"a seção de torneios
+         * encerrados poderia listar em modo lista e usar o ver mais/ver menos, para não ser
+         * essa linha que poucos notam"_.
+         * ⛔ Aqui a lista NÃO segue o toggle global (`_dashView`) como o `_renderTGroup`
+         * faz: torneio encerrado é consulta — a pessoa quer ACHAR um, não folheá-lo. Card
+         * grande pra quem já acabou gasta a tela inteira com o que não vai mais acontecer.
+         * Reusa `_buildCompactList`, a mesma linha do modo Lista do resto da dashboard. */
         var finishedCards = '';
         if (myFinished.length > 0) {
           finishedCards += '<div style="font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:8px;opacity:0.85;">🏆 ' + _t('dashboard.yourFinished', {count: myFinished.length}) + '</div>';
-          finishedCards += '<div style="margin-bottom:1rem;">' + _renderTGroup(myFinished) + '</div>';
+          finishedCards += '<div style="margin-bottom:1rem;">' + _buildCompactList(myFinished) + '</div>';
         }
         if (otherFinished.length > 0) {
           if (myFinished.length > 0) finishedCards += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin-bottom:8px;opacity:0.7;">' + _t('dashboard.otherFinished', {count: otherFinished.length}) + '</div>';
-          finishedCards += _renderTGroup(otherFinished);
+          finishedCards += _buildCompactList(otherFinished);
         }
-        var _abertoEnc = _dashDetailsAberto('scoreplace_dash_finished_open', false);
         return finishedCards;
       };
-      finishedSectionHtml = '<div style="margin-top:1.25rem;"><details' + _dashDetailsAttr('scoreplace_dash_finished_open', false, 'enc') + '><summary style="cursor:pointer;font-weight:700;font-size:0.9rem;color:var(--text-muted);padding:8px 0;user-select:none;">' + _t('dashboard.finishedSection', {count: finishedList.length}) + '</summary><div style="margin-top:0.75rem;">' + _dashLazyBody('enc', _abertoEnc, _montaEnc) + '</div></details></div>';
+      /* ⛔ A LINHA QUE POUCOS NOTAM ERA UM `<summary>` — texto apagado, sem affordance
+       * nenhuma além do triangulinho do navegador. Passa a usar a dobra CANÔNICA
+       * (`window._spDobra`), a mesma pílula "ver mais / ver menos" que o dono aprovou nas
+       * outras seções: _"adotar o mostrar mais/menos... padronizar isso que ficou legal"_.
+       * ⭐ E o corpo continua PREGUIÇOSO: `_dashLazyBody` devolve um slot vazio quando a
+       * seção está fechada, e a dobra o hidrata no primeiro abrir (window._spDobraHidratar).
+       * Sem isso, trocar o <details> desfaria os 437 KB que a v1.8.94 tirou do DOM.
+       * ⚠️ A chave da dobra é OUTRA (`dash-encerrados`), não a do <details> — a memória
+       * do `_spDobra` vive em `scoreplace_dobra_*`. Reaproveitar o nome antigo faria as
+       * duas memórias brigarem pela mesma seção. */
+      var _rotuloEnc = '<span style="font-weight:700;font-size:0.9rem;color:var(--text-muted);">' +
+        _t('dashboard.finishedSection', {count: finishedList.length}) + '</span>';
+      var _corpoEnc = '<div style="margin-top:0.75rem;">' + _dashLazyBody('enc', _abertoEnc, _montaEnc) + '</div>';
+      finishedSectionHtml = '<div style="margin-top:1.25rem;">' +
+        window._spDobra('dash-encerrados', _rotuloEnc, _corpoEnc, _abertoEnc, 'padding:8px 0;user-select:none;') +
+        '</div>';
     }
   })();
 

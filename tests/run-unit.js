@@ -138,6 +138,8 @@ const SUITES = [
   'tests/torneio-novo-nasce-inteiro.test.js',
   'tests/gravar-torneio-dividido-roda-de-verdade.test.js',
   'tests/todo-js-que-vai-ao-ar-parseia.test.js',
+  'tests/quem-esta-entrando-nao-volta-pra-landing.test.js',
+  'tests/encerrados-em-lista-com-dobra.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',
   'tests/torneio-dividido-chega-inteiro-na-tela.test.js',
   'tests/expandir-demais-jogos-para-no-primeiro.test.js',
