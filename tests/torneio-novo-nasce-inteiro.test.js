@@ -1,5 +1,5 @@
 /* TORNEIO NOVO NASCE NO FORMATO NOVO (2.0.106)
- * node tests/torneio-novo-nasce-dividido.test.js
+ * node tests/torneio-novo-nasce-inteiro.test.js
  *
  * Depois que o Confra foi dividido, o caminho novo passou a ser exercitado por 1 torneio
  * contra 38. ⛔ Caminho que é exceção APODRECE: mudança futura quebra o raro em silêncio,
@@ -71,9 +71,33 @@ const criacao = _R.ateOFim(store, i);
  * ⚠️ E A LIÇÃO ANTERIOR CONTINUA VALENDO: as três condições que eu conferi eram todas
  * sobre LER um torneio dividido; nenhuma cobria CRIAR. A asserção ⑤ abaixo é a que faltava
  * — ela EXECUTA o ramo do save que quebrou, em vez de olhar o objeto criado. */
-ok(/_semPesados: \['matches'/.test(criacao),
-  '⛔ torneio novo nasce DIVIDIDO');
-ok(/_nJogos: 0,/.test(criacao), '   e com a contagem, que desfaz o empate "sem jogo" × "não buscou"');
+/* ⛔⛔⛔ REVERTIDO PELA TERCEIRA VEZ (28/ago, 22:35) — e agora com PERDA DE DADO MEDIDA:
+ *     _nPartes = { participants: 8 }   ← o doc DIZ que há 8 morando fora
+ *     participants no doc: 0           ← saíram (correto)
+ *     subcoleção `inscritos`: 0        ← ⛔ NÃO CHEGARAM
+ * Os 8 placeholders do dono existiam só na memória do navegador.
+ *
+ * ⭐ E A CAUSA É ESTRUTURAL, não mais um descuido: o cliente NÃO pode escrever
+ * subcoleção (a regra nega, por desenho). Quem escreve é a CF `tournamentMirror` — que
+ * DERIVA DO DOCUMENTO e PULA o que está em `_semPesados`, justamente pra não apagar a
+ * subcoleção ao ver o doc vazio. Quem tira do doc é o cliente; quem gravaria fora está
+ * proibido de olhar. O dado cai no vão. Nos 41 migrados não aparece porque a subcoleção
+ * foi escrita ANTES, com o doc cheio — só quebra em quem NASCE dividido.
+ *
+ * ⚠️ RELIGAR exige uma PEÇA NOVA, não outra conferência: uma porta de escrita no servidor
+ * que receba os inscritos e os grave na subcoleção. Até lá, nasce inteiro. */
+ok(!/_semPesados: \['matches', 'participants'/.test(criacao),
+  '⛔ torneio novo NÃO nasce dividido — os inscritos não chegariam à subcoleção');
+
+// ── ⑤ A CAUSA, travada: a CF do espelho PULA o que saiu do documento ──────────────
+/* Esta asserção é o que faltava nas três tentativas. Ela não pergunta "nasce dividido?" —
+ * pergunta POR QUE não pode nascer ainda. No dia em que existir a porta de escrita, é ela
+ * que vai apontar o que mudou. */
+ok(/_pulados\s*=\s*Array\.isArray\(depois\._semPesados\)/.test(cf),
+  '⛔ a CF do espelho deriva o que PULAR do marcador do documento');
+ok(/_pula\('participants'\)/.test(cf),
+  '⛔⛔ e ela PULA `participants` quando ele saiu do doc — logo NINGUÉM o escreve na ' +
+  'subcoleção se ele nunca esteve lá. É isto que impede nascer dividido.');
 
 // ── ③ ⛔ A CONDIÇÃO QUE FALTAVA: o OUVINTE busca o que falta ────────────────
 /* Esta é a asserção que não existia em 26/ago, e a ausência dela custou produção. Não
@@ -123,5 +147,5 @@ const velho = { id: 'v1', _semPesados: ['matches'], rounds: [{ round: 1, matches
 ok(enxerta(JSON.parse(JSON.stringify(velho)), null)._faltamPesados === true,
   '⚠️ documento SEM `_nJogos` (dividido antes desta versão) cai no comportamento antigo, que é o seguro');
 
-console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-dividido: ' + pass + ' ok, ' + fail + ' falhas');
+console.log((fail ? '✗' : '✓') + ' torneio-novo-nasce-inteiro: ' + pass + ' ok, ' + fail + ' falhas');
 process.exit(fail ? 1 : 0);

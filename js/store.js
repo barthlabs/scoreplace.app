@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.42';
+window.SCOREPLACE_VERSION = '2.1.43';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -12423,8 +12423,31 @@ window.AppStore = {
          * conferido eram todas sobre LER um torneio dividido; nenhuma cobria CRIAR um.
          * Agora existe teste do caminho da CRIAÇÃO (torneio-novo-nasce-dividido) e a causa
          * tem trava própria (grava-torneio-dividido-nao-usa-simbolo-de-outro-escopo). */
-        _semPesados: ['matches', 'participants', 'opponentHistory'],
-        _nJogos: 0,
+        /* ⛔⛔⛔ REVERTIDO PELA TERCEIRA VEZ (28/ago/2026, 22:35) — e desta vez com PERDA
+         * DE DADO medida, não suposta. O dono criou um torneio com 8 placeholders e o
+         * banco ficou assim:
+         *     _nPartes  = { participants: 8 }   ← o doc DIZ que há 8 morando fora
+         *     participants no doc: 0            ← saíram do documento (correto)
+         *     subcoleção `inscritos`: 0         ← ⛔ NÃO CHEGARAM LÁ
+         * Os 8 existiam só na memória do navegador dele. Recarregar a aba os perderia.
+         *
+         * ⛔ A CAUSA, e ela é ESTRUTURAL — não é mais um símbolo fora de escopo:
+         * o cliente não tem permissão de escrever nas subcoleções (a regra nega, por
+         * desenho: [[feedback_draw_is_cf_only]]). Quem escreve é a CF `tournamentMirror`.
+         * Mas ela DERIVA DO DOCUMENTO: `_pulados = depois._semPesados` faz ela PULAR
+         * justamente as partes que saíram do doc — a trava que existe pra ela não APAGAR
+         * a subcoleção quando o doc está vazio. Resultado: quem tira do documento é o
+         * cliente, quem poderia gravar fora é a CF, e ela está proibida de olhar. Ninguém
+         * escreve. O dado cai no vão entre os dois.
+         * ⭐ Nos 41 torneios migrados isso não aparece porque a subcoleção foi escrita
+         * ANTES pela migração, com o doc ainda cheio. Só quebra em quem NASCE dividido.
+         *
+         * ⚠️ O QUE FALTA PRA RELIGAR (e agora é uma peça, não uma conferência):
+         * uma PORTA DE ESCRITA no servidor que receba os inscritos e os grave na
+         * subcoleção — o cliente dispara, a CF escreve ([[project_porta_unica_de_escrita_cf]]).
+         * Enquanto ela não existir, torneio novo NASCE INTEIRO, e a CF espelha a partir do
+         * documento como sempre fez. ⛔ Não religar sem CRIAR um torneio de verdade e ver
+         * os inscritos aparecerem NA SUBCOLEÇÃO — não no doc, não na tela. */
         // Default status='open' pra que torneios novos apareçam no feed público de
         // discovery (a query filtra por status=='open'). Só pra CRIAÇÃO.
         status: 'open',
