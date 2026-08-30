@@ -1,5 +1,14 @@
 # Changelog do scoreplace.app
 
+## CF — O W.O. chega nas subcoleções (30/ago/2026)
+
+- **Problema:** `mutateTournament` roda o mutator sobre `doc.data()` — o documento CRU. Em torneio dividido isso é o documento magro (`participants: []`, nenhum jogo), então o W.O. entra no `woLog` e na classificação e não entra nem no elenco nem no jogo. Medido no Confra: a Nathalya seguiu escalada nos 3 jogos do grupo depois do W.O. dela; Fábio Ruggiero, Tiago Lima e Erika Benedet sumiram do elenco; os ausentes não foram desativados.
+- **Por que não se conserta no cliente:** `firestore.rules` nega escrita do cliente em `inscritos` (`allow write: if false`) e em `matches` ("O CLIENTE NÃO ESCREVE AQUI. NUNCA."). Cânone: tudo roda na CF, o cliente só dispara.
+- **Correção:** `functions/wo-split-reconcile-core.js` (puro) + reconciliação dentro do gatilho `syncMatchRosters`, que já hospeda o espelho do roster. O gatilho vê TODA escrita de QUALQUER cliente — inclusive o app nativo antigo, que nunca chamará CF alguma. Age sobre o DELTA do `woLog` (só o que acabou de entrar), nunca sobre o histórico: reprocessar o log reabriria decisão antiga, e no Confra havia ausentes pré-divisão ativos de propósito, um deles reativado à mão pelo organizador.
+- **Guards:** não reescreve jogo com placar (é reescrever história); não toca jogo de outro grupo; "Jogador X" é vaga e não entra no elenco; idempotente; atualiza `_nPartes`/`memberUids` junto, para não recriar a divergência que fecha.
+- **Prova em PRODUÇÃO, não só em teste:** torneio descartável (`isSandbox`, privado) criado, um W.O. gravado só no documento, e o gatilho reconciliou em menos de 5s — jogo trocado na string E nos arrays, substituto no elenco, ausente desativado. Torneio apagado em seguida (doc, resumo e feed em 404).
+- **Cobertura:** `tests/wo-chega-nas-subcolecoes.test.js`, 19 asserções sobre as formas reais de produção.
+
 ## CF — A limpeza noturna não apaga mais a lápide (30/ago/2026)
 
 - **Incidente reconstruído pelo PITR:** 27/ago 23:03 a Loraine criou uma conta nova com Google; 23:05 a dedup fundiu a antiga (e-mail/senha) na nova, gravando `mergedInto` + `mergedAt`; 28/ago 04:15 a `cleanupAbandonedAuth` apagou a conta antiga inteira — Auth e Firestore, **lápide junto**. O uid antigo segue gravado nos jogos, então o card passou a mostrar "…" no lugar do nome.

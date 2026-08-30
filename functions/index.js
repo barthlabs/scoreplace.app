@@ -69,6 +69,7 @@ const _splitParts = require("./split-parts.js");   // torneio dividido: elenco n
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
 const _splitResultMirror = require("./match-result-mirror-core.js");
+const _woReconcile = require("./wo-split-reconcile-core.js"); // W.O. chega nas subcoleções
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
  * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
@@ -7690,6 +7691,64 @@ exports.syncMatchRosters = onDocumentWritten(
       }
     } catch (_rmErr) {
       console.error("[espelho-roster] " + tid + " falhou:", _rmErr && _rmErr.message);
+    }
+
+    /* ── O W.O. CHEGA NAS SUBCOLEÇÕES (2.1.63) ──────────────────────────────
+     * `mutateTournament` — a porta do W.O. — roda o mutator sobre o documento CRU. Num
+     * torneio DIVIDIDO isso é o documento MAGRO: elenco vazio e nenhum jogo. Então o W.O.
+     * entra no `woLog` e na classificação e NÃO entra nem no elenco nem no jogo. Medido no
+     * Confra: a Nathalya seguiu escalada nos 3 jogos do grupo depois do W.O. dela, e três
+     * substitutos (Fábio Ruggiero, Tiago Lima, Erika Benedet) sumiram do elenco.
+     * E o cliente NÃO pode ser o conserto: as regras negam escrita dele em
+     * `inscritos`/`matches`. Cânone: tudo roda na CF, o cliente só dispara.
+     *
+     * ⭐ AQUI, e não numa chamável: este gatilho vê TODA escrita, de QUALQUER cliente —
+     * inclusive o app NATIVO, que não tem auto-update e nunca vai chamar CF nenhuma.
+     * Mesma razão pela qual o espelho do roster mora logo acima.
+     *
+     * ⭐ E SÓ SOBRE O DELTA do `woLog`: reconciliar o histórico inteiro reabriria decisão
+     * antiga. No ensaio do reparo manual isso apareceu na hora — três ausentes de W.O.
+     * pré-divisão estavam ativos DE PROPÓSITO, um deles reativado à mão pelo organizador.
+     *
+     * Best-effort e isolado, como os vizinhos: falhar aqui não derruba o gatilho nem
+     * desfaz o save que já aconteceu. [[project_wo_nao_escreve_nas_subcolecoes]] */
+    try {
+      if (_woReconcile.precisaReconciliar(after) &&
+          _woReconcile.novasEntradasDeWo(before, after).length) {
+        const _db2 = admin.firestore();
+        const _ref2 = _db2.collection("tournaments").doc(tid);
+        const _colIns = _ref2.collection(_tSplitFn.colecaoDaParte("participants"));
+        const _colJog = _ref2.collection(_tSplitFn.colecaoDaParte("matches"));
+        const [_sIns, _sJog] = await Promise.all([_colIns.get(), _colJog.get()]);
+        const _ins = _sIns.docs.map((d) => Object.assign({ _id: d.id }, d.data()));
+        const _jog = _sJog.docs.map((d) => Object.assign({ _id: d.id }, d.data()));
+        const plano = _woReconcile.planejar(before, after, _ins, _jog);
+        if (!plano.nada) {
+          const lote = _db2.batch();
+          plano.novosInscritos.forEach((n) => lote.set(_colIns.doc(n._id), { _k: n._k, _idx: n._idx, item: n.item }, { merge: true }));
+          plano.desativar.forEach((d) => lote.set(_colIns.doc(d._id), { _k: d._k, _idx: d._idx, item: d.item }, { merge: true }));
+          plano.patchesDeJogo.forEach((p) => {
+            const corpo = { _loc: p._loc, _chave: p._chave, jogo: p.jogo };
+            if (p.playerUids) corpo.playerUids = p.playerUids;
+            lote.set(_colJog.doc(p._id), corpo, { merge: true });
+          });
+          /* ⛔ O MARCADOR TEM QUE ACOMPANHAR. `_nPartes.participants` é o que faz o app
+           * decidir se busca o elenco; deixá-lo para trás depois de acrescentar gente
+           * recria a divergência que este gatilho existe pra fechar. */
+          if (plano.novosInscritos.length) {
+            const _nP = Object.assign({}, after._nPartes || {}, { participants: _ins.length + plano.novosInscritos.length });
+            const _mem = Array.from(new Set((after.memberUids || []).concat(plano.novosInscritos.map((n) => n.item.uid))));
+            lote.update(_ref2, { _nPartes: _nP, memberUids: _mem });
+          }
+          await lote.commit();
+          console.log("[wo-reconcilia] " + tid + " · " + plano.eventos + " evento(s) · +" +
+            plano.novosInscritos.length + " inscrito(s) · " + plano.desativar.length + " desativado(s) · " +
+            plano.patchesDeJogo.length + " jogo(s)" +
+            (plano.recusados.length ? " · " + plano.recusados.length + " recusado(s) por placar já lançado" : ""));
+        }
+      }
+    } catch (_woErr) {
+      console.error("[wo-reconcilia] " + tid + " falhou:", _woErr && _woErr.message);
     }
 
     // Assinatura (roster+resultado) de cada jogo ANTES → só processa os que mudaram.
