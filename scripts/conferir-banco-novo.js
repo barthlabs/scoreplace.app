@@ -1,24 +1,29 @@
-/* CONFERIDOR — o banco novo diz a mesma coisa que o velho?
+/* CONFERIDOR — a fonte viva de cada torneio pode ser provada?
  *
- * Lê as subcoleções (`matches`, `participants`, `history`), REMONTA o torneio e
- * compara com o documento original, campo por campo. É esta prova, repetida por dias
- * com o torneio ao vivo, que autoriza trocar a leitura — e só ela.
+ * Antes da divisão, o documento é a fonte e as subcoleções são o espelho: remontar
+ * o espelho tem de devolver o documento inteiro. Depois da divisão, o documento fica
+ * propositalmente magro e as partes indicadas por `_semPesados` viram a fonte viva.
+ * Comparar a remontagem completa contra esse documento magro acusa uma divergência
+ * que é justamente o estado correto — e ler `participants` em vez de `inscritos`
+ * sequer olha a coleção canônica.
  *
- * Ordem do dono: "desliga o banco velho, que é apagado depois de ter CERTEZA de que
- * tudo funcionou no banco novo (banco velho fica de backup até concluir a Confra)".
- * Este script é o "ter certeza".
+ * Este gate mantém as duas provas separadas:
+ *   ① inteiro: espelho → documento, byte a byte;
+ *   ② dividido: marcador → coleção canônica → montar → dividir de volta, com cada
+ *      registro aproveitado, contagem de jogos e backup pré-divisão obrigatório.
  *
  * ⛔ NÃO ESCREVE NADA. Só lê e compara.
  *
  * Uso:  node scripts/conferir-banco-novo.js            (todos)
  *       node scripts/conferir-banco-novo.js <id>       (um torneio)
- *       node scripts/conferir-banco-novo.js --detalhe  (mostra os campos que divergem)
+ *       node scripts/conferir-banco-novo.js --detalhe  (mostra os motivos)
  */
 const path = require('path');
 const { execSync } = require('child_process');
 const S = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
+const PARTES_DO_ESPELHO_LEGADO = ['matches', 'participants', 'history'];
 const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
 const DETALHE = process.argv.includes('--detalhe');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
@@ -50,71 +55,133 @@ async function lista(url, tk) {
   return out;
 }
 
+async function documento(url, tk) {
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + tk } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(r.status + ' ' + url);
+  return doc2obj(await r.json());
+}
+
+function partesIndicadas(config) {
+  const fora = Array.isArray(config && config._semPesados) ? config._semPesados.slice() : [];
+  const invalidas = fora.filter((nome) => (S.PARTES || []).indexOf(nome) === -1);
+  return { fora, invalidas, dividida: fora.length > 0 };
+}
+
+async function lePartes(id, nomes, tk) {
+  const pares = await Promise.all(nomes.map(async (nome) => {
+    const colecao = S.colecaoDaParte(nome);
+    const docs = await lista(`${BASE}/tournaments/${id}/${colecao}`, tk);
+    return [nome, docs.map((d) => d.dados)];
+  }));
+  return Object.fromEntries(pares);
+}
+
+function diferencas(a, b) {
+  return [...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])]
+    .filter((k) => !S.iguais((a || {})[k], (b || {})[k]));
+}
+
+async function confereDividido(config, nomes, partes, backup) {
+  const problemas = [];
+  let montado = null;
+  try {
+    // Mesmo caminho do app/CF: o marcador escolhe TODAS as partes e a coleção de cada uma.
+    montado = await S.montarDoBanco(JSON.parse(JSON.stringify(config)), async (colecao) => {
+      const nome = nomes.find((x) => S.colecaoDaParte(x) === colecao);
+      return nome ? partes[nome] : [];
+    });
+  } catch (e) {
+    return ['NÃO MONTA: ' + ((e && e.message) || e)];
+  }
+
+  // Inversão real: o que foi montado precisa voltar exatamente ao config magro guardado.
+  const volta = S.dividir(JSON.parse(JSON.stringify(montado)), nomes);
+  if (!volta || !S.iguais(volta.config, config)) {
+    problemas.push('config não é a inversa da montagem' +
+      (DETALHE ? ' (' + diferencas(config, volta && volta.config).join(', ') + ')' : ''));
+  }
+  nomes.forEach((nome) => {
+    // Sem esta contagem, um doc com `_loc` inválido pode ser lido e silenciosamente
+    // ignorado pela remontagem. A tela perderia um jogo e o gate ainda ficaria verde.
+    const lidos = (partes[nome] || []).length;
+    const aproveitados = ((volta && volta[nome]) || []).length;
+    if (lidos !== aproveitados) problemas.push(nome + ': li ' + lidos + ', a montagem aproveitou ' + aproveitados);
+  });
+  if (nomes.indexOf('matches') !== -1 && Number.isFinite(config._nJogos) &&
+      config._nJogos !== ((partes.matches || []).length)) {
+    problemas.push('matches: _nJogos=' + config._nJogos + ', subcoleção=' + (partes.matches || []).length);
+  }
+
+  // O backup é a prova imutável da transferência. Não comparamos seu conteúdo ao vivo:
+  // placares e inscrições podem mudar legitimamente depois do salto. Mas sua ausência
+  // torna impossível auditar uma reclamação ou voltar com segurança, então bloqueia.
+  if (!backup || !backup.doc) problemas.push('BACKUP PRÉ-DIVISÃO AUSENTE');
+  else if (Array.isArray(backup.doc._semPesados) && backup.doc._semPesados.length) {
+    problemas.push('backup não guarda o documento inteiro');
+  }
+  return problemas;
+}
+
 (async () => {
   const tk = token();
-  console.log('▶ conferindo o banco novo contra o velho  (NÃO escreve nada)\n');
+  console.log('▶ conferindo fontes do torneio (NÃO escreve nada)\n');
 
   const torneios = SO_ESTE
-    ? [{ id: SO_ESTE, dados: doc2obj(await (await fetch(`${BASE}/tournaments/${SO_ESTE}`, { headers: { Authorization: 'Bearer ' + tk } })).json()) }]
+    ? [{ id: SO_ESTE, dados: await documento(`${BASE}/tournaments/${SO_ESTE}`, tk) }]
     : await lista(`${BASE}/tournaments`, tk);
 
-  let iguais = 0, divergentes = 0, semEspelho = 0;
+  let inteiros = 0, divididos = 0, problemasN = 0;
   const problemas = [];
 
   for (const t of torneios) {
-    const velho = t.dados;
-    const [ms, ps, hs] = await Promise.all([
-      lista(`${BASE}/tournaments/${t.id}/matches`, tk),
-      lista(`${BASE}/tournaments/${t.id}/participants`, tk),
-      lista(`${BASE}/tournaments/${t.id}/history`, tk)
-    ]);
+    const config = t.dados;
+    if (!config) { problemasN++; problemas.push({ id: t.id, nome: t.id, o: 'TORNEIO AUSENTE' }); continue; }
+    const estado = partesIndicadas(config);
+    if (estado.invalidas.length) {
+      problemasN++; problemas.push({ id: t.id, nome: config.name, o: 'MARCADOR INVÁLIDO: ' + estado.invalidas.join(', ') }); continue;
+    }
 
-    const esperado = S.dividir(velho);
-    const temAlgoPraEspelhar = esperado.matches.length + esperado.participants.length + esperado.history.length;
-    if (!ms.length && !ps.length && !hs.length && temAlgoPraEspelhar > 0) {
-      semEspelho++;
-      problemas.push({ id: t.id, nome: velho.name, o: 'ESPELHO AUSENTE (' + temAlgoPraEspelhar + ' itens esperados)' });
+    if (!estado.dividida) {
+      const partes = await lePartes(t.id, PARTES_DO_ESPELHO_LEGADO, tk);
+      const esperado = S.dividir(config, PARTES_DO_ESPELHO_LEGADO);
+      const haEspelho = PARTES_DO_ESPELHO_LEGADO.some((nome) => (partes[nome] || []).length);
+      const haFonte = PARTES_DO_ESPELHO_LEGADO.some((nome) => (esperado[nome] || []).length);
+      if (!haEspelho && haFonte) {
+        problemasN++; problemas.push({ id: t.id, nome: config.name, o: 'ESPELHO AUSENTE' }); continue;
+      }
+      const montado = S.remontar(Object.assign({ config }, partes));
+      if (!S.iguais(config, montado)) {
+        problemasN++; problemas.push({ id: t.id, nome: config.name, o: 'ESPELHO DIVERGE: ' + diferencas(config, montado).join(', ') }); continue;
+      }
+      inteiros++;
       continue;
     }
 
-    // remonta a partir do que está NO BANCO NOVO
-    const novo = S.remontar({
-      config: velho,                       // a configuração é o próprio documento
-      matches: ms.map((d) => d.dados),
-      participants: ps.map((d) => d.dados),
-      history: hs.map((d) => d.dados)
-    });
-
-    // ⚠️ compara com o ORIGINAL: se remontar não devolve o original, a migração não
-    // pode avançar — nem que seja "só a ordem".
-    // ⛔ comparação CANÔNICA: o Firestore devolve as chaves de objeto ORDENADAS, e
-    // exigir a ordem original faria 30 dos 39 torneios "divergirem" por nada. Ordem de
-    // ARRAY continua valendo — jogo trocado de lugar é regressão visível.
-    if (S.iguais(velho, novo)) { iguais++; continue; }
-    divergentes++;
-    const chaves = new Set([...Object.keys(velho), ...Object.keys(novo || {})]);
-    const dif = [...chaves].filter((k) => !S.iguais(velho[k], (novo || {})[k]));
-    problemas.push({ id: t.id, nome: velho.name, o: 'DIVERGE em: ' + (dif.join(', ') || 'ordem/estrutura') });
-    if (DETALHE) {
-      dif.slice(0, 2).forEach((k) => {
-        console.log('   ─ ' + (velho.name || t.id) + ' · campo `' + k + '`');
-        console.log('       velho: ' + JSON.stringify(velho[k]).slice(0, 200));
-        console.log('       novo : ' + JSON.stringify((novo || {})[k]).slice(0, 200));
-      });
+    // Partes e backup são leituras independentes. Fazê-las em série deixa o gate
+    // artificialmente lento e não acrescenta nenhuma segurança.
+    const [partes, backup] = await Promise.all([
+      lePartes(t.id, estado.fora, tk),
+      documento(`${BASE}/tournaments_backup/${t.id}`, tk)
+    ]);
+    const falhas = await confereDividido(config, estado.fora, partes, backup);
+    if (falhas.length) {
+      problemasN++; problemas.push({ id: t.id, nome: config.name, o: falhas.join(' · ') }); continue;
     }
+    divididos++;
   }
 
   console.log('torneios conferidos:', torneios.length);
-  console.log('  ✓ idênticos          :', iguais);
-  console.log('  ✗ divergentes        :', divergentes);
-  console.log('  ⚠ sem espelho ainda  :', semEspelho);
+  console.log('  ✓ inteiros, espelho idêntico :', inteiros);
+  console.log('  ✓ divididos, fonte montável  :', divididos);
+  console.log('  ✗ bloqueios                  :', problemasN);
   if (problemas.length) {
     console.log('\nO QUE PRECISA DE OLHO:');
-    problemas.slice(0, 12).forEach((p) => console.log('  ·', (p.nome || p.id).slice(0, 34).padEnd(34), p.o));
-    if (problemas.length > 12) console.log('  … e mais', problemas.length - 12);
+    problemas.slice(0, 16).forEach((p) => console.log('  ·', (p.nome || p.id).slice(0, 34).padEnd(34), p.o, '[' + p.id + ']'));
+    if (problemas.length > 16) console.log('  … e mais', problemas.length - 16);
   }
-  console.log('\n' + (divergentes === 0 && semEspelho === 0
-    ? '✅ o banco novo diz EXATAMENTE a mesma coisa que o velho'
-    : '⛔ NÃO trocar a leitura enquanto isto não estiver zerado'));
-  process.exit(divergentes ? 1 : 0);
-})();
+  console.log('\n' + (problemasN === 0
+    ? '✅ cada torneio é lido da sua fonte canônica e o backup da divisão existe'
+    : '⛔ NÃO avançar a migração enquanto houver bloqueio'));
+  process.exit(problemasN ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

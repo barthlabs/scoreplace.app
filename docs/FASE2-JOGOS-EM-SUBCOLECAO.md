@@ -58,6 +58,30 @@ Ler as três subcoleções sempre seria trocar um problema por outro.
 
 ## A ordem (cada passo é reversível e provado antes do seguinte)
 
+### Estado auditado em 30/ago/2026
+
+O código em produção já ultrapassou a formulação inicial deste documento, de forma
+**gradual e por torneio**: documentos que carregam `_semPesados` têm as partes ali
+nomeadas fora do documento; o cliente, as Functions e o resumo usam
+`montarDoBanco` para lê-las. A escrita também respeita esse marcador e não devolve
+as partes ao documento.
+
+Isso não autoriza a próxima retirada de campo. O estado fica registrado assim:
+
+- **Decisão adotada:** `_semPesados` é o único seletor de fonte por torneio; ausência
+  de dados nunca decide migração.
+- **Problema corrigido:** o leitor da tela não entrega documento magro como se estivesse
+  completo; ele monta e repinta pelo mesmo objeto.
+- **Dívida corrigida nesta auditoria:** `conferir-banco-novo.js` deixou de comparar a
+  remontagem completa contra o documento deliberadamente reduzido e passou a usar
+  `colecaoDaParte`/`montarDoBanco`, exigindo também o backup pré-divisão.
+- **Dívida ainda aberta:** não existe equivalência histórica automática para mutações
+  ocorridas depois do salto (placar, inscrição e W.O. podem mudar legitimamente). O
+  backup é preservado para investigação e reversão; qualquer novo passo precisa de
+  uma prova específica da sua escrita, não de uma igualdade enganosa com o passado.
+- **Proposta futura, não autorizada por esta nota:** tirar mais partes, apagar o
+  documento antigo ou alterar o modelo de `standings`.
+
 ### 2a — LER da subcoleção  ⟵ *o passo seguro, começa aqui*
 `_ensureTournamentLoaded` monta o torneio a partir de config + subcoleções
 (`remontar`), com queda para o documento. **Nada muda na escrita.**
