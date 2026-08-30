@@ -160,6 +160,44 @@ function makeT() {
   ok((t.ligaGhosts || []).indexOf('Jogador X') !== -1, 'guest: Jogador X registrado como ghost');
 })();
 
+// ── (e) JOGADOR X NÃO É IDENTIDADE GLOBAL: G2 ≠ E2 ──────────────────────────
+// Regressão 2.1.53 (Confra): dar W.O. ao Jogador X do G2 marcava também o
+// Jogador X do E2 porque o render varria a rodada inteira e, sem uid, casava o
+// texto "Jogador X". O coringa é uma OCORRÊNCIA de vaga: pode existir em mais de
+// um grupo/fase ao mesmo tempo. O W.O. e a próxima substituição têm de ficar no
+// grupo escolhido.
+(function () {
+  function jogo(id, groupName, a, b, c, d) {
+    return { id, bracket: 'monarch', isMonarch: true, groupName, phaseIndex: 0, round: 1,
+      team1: [a, b], team1Uids: [null, 'u-' + b], team2: [c, d], team2Uids: ['u-' + c, 'u-' + d],
+      p1: a + ' / ' + b, p2: c + ' / ' + d, winner: null, scoreP1: null, scoreP2: null };
+  }
+  const e2 = 'R1 Grupo E2', g2 = 'R1 Grupo G2';
+  const t = { id: 'two-x', format: 'Liga', ligaRoundFormat: 'rei_rainha', ligaGhosts: ['Jogador X'], history: [],
+    participants: [
+      { displayName: 'Kallana', uid: 'u-Kallana' }, { displayName: 'Fábio Ruggiero', uid: 'u-Fábio Ruggiero' },
+      { displayName: 'Tiago', uid: 'u-Tiago' }, { displayName: 'E1', uid: 'u-E1' }, { displayName: 'E2', uid: 'u-E2' },
+      { displayName: 'E3', uid: 'u-E3' }, { displayName: 'G1', uid: 'u-G1' }, { displayName: 'G2', uid: 'u-G2' }, { displayName: 'G3', uid: 'u-G3' },
+    ],
+    matches: [jogo('e2-1', e2, 'Jogador X', 'E1', 'E2', 'E3'), jogo('g2-1', g2, 'Jogador X', 'Kallana', 'G2', 'G3')]
+  };
+  W.AppStore.tournaments = [t];
+  W._monWoApply(t.id, 0, g2, 'Jogador X', 'Fábio Ruggiero', false);
+  const markG2 = t.matches.find(m => m.isSitOut && m.groupName === g2);
+  ok(!!markG2 && markG2.p1 === 'Jogador X' && markG2.woReplacedBy === 'Fábio Ruggiero', 'W.O. do Jogador X fica registrado somente no G2');
+  ok(!t.matches.some(m => m.isSitOut && m.groupName === e2), 'E2 não recebe W.O. por compartilhar o rótulo Jogador X');
+  ok(t.matches.find(m => m.id === 'e2-1').team1[0] === 'Jogador X', 'o Jogador X do E2 continua na própria vaga');
+  W._monWoApply(t.id, 0, e2, 'Jogador X', 'Tiago', false);
+  ok(t.matches.find(m => m.id === 'e2-1').team1[0] === 'Tiago', 'Tiago pode assumir a vaga do E2 depois do W.O. independente no G2');
+  ok(t.matches.some(m => m.isSitOut && m.groupName === e2 && m.woReplacedBy === 'Tiago'), 'o segundo W.O. pertence ao E2, não substitui o do G2');
+
+  const bracket = fs.readFileSync(path.join(ROOT, 'js/views/bracket.js'), 'utf8');
+  ok(bracket.indexOf('(g.matches || []).forEach(function (mm)') !== -1,
+    'render da classificação lê marcadores W.O. do grupo atual');
+  ok(bracket.indexOf('(((rounds[currentRound - 1] || {}).matches) || []).forEach(function (mm)') === -1,
+    'render não volta a varrer W.O. da rodada inteira');
+})();
+
 console.log(`  ${pass} asserts OK, ${fail} falhas`);
 if (fail > 0) { console.error('❌ monarch-wo-uid-identity FALHOU'); process.exit(1); }
 console.log('✅ monarch-wo-uid-identity: OK');

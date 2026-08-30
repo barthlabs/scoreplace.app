@@ -6597,7 +6597,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
               if (_p.absentUid) _woRedU[String(_p.absentUid)] = 1;
               else if (_p.absentName) _woRed[_p.absentName] = 1;
             });
-            (((rounds[currentRound - 1] || {}).matches) || []).forEach(function (mm) {
+            // O marcador de W.O. é do GRUPO, nunca da rodada inteira. Isto importa
+            // especialmente para Jogador X: ele não tem uid e pode ocupar mais de
+            // uma vaga simultaneamente (inclusive em grupos diferentes). Percorrer
+            // todos os matches da rodada e casar o fallback por nome fazia o W.O.
+            // de "Jogador X" no G2 pintar outro Jogador X no E2 — e bloqueava a
+            // substituição correta. `g.matches` é a coleção canônica deste grupo.
+            (g.matches || []).forEach(function (mm) {
               if (!mm || !mm.isSitOut || mm.sitOutReason !== 'wo') return;
               var _us = [].concat(mm.team1Uids || [], mm.p1Uid || []).filter(Boolean);
               if (_us.length) { _us.forEach(function (u) { _woRedU[String(u)] = 1; }); }
