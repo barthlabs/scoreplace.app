@@ -1432,11 +1432,32 @@ exports.cleanupOldCasualMatches = onSchedule(
 // demorar semanas pra voltar. 30 dias = definitivamente abandonado.
 //
 // TIPO 2 — "Ghosts": contas cuja duplicata foi mergeada em outra conta. O doc
-// Firestore fica com `mergedInto: <uid_canonico>` como tombstone. Após 7 dias
-// do merge o ghost é apagado de Auth E Firestore — sem fantasmas no sistema.
-// Por que 7 dias? É tempo suficiente pra qualquer sessão ativa do ghost expirar
-// naturalmente. Firebase tokens duram 1h; refresh tokens duram mais, mas após
-// o merge a conta não tem mais dados úteis.
+// Firestore fica com `mergedInto: <uid_canonico>` como tombstone.
+//
+// ⛔ A LÁPIDE NÃO SE APAGA — ISTO AQUI JÁ APAGOU UMA PESSOA REAL (30/ago/2026).
+// Este bloco dizia "após 7 dias do merge o ghost é apagado de Auth E Firestore — sem
+// fantasmas no sistema", e a premissa ("após o merge a conta não tem mais dados úteis") é
+// FALSA: o uid antigo continua gravado nos JOGOS, e é a lápide que permite ao resolvedor
+// seguir dele até a conta viva. Apagar a lápide não some com um fantasma — quebra toda
+// referência histórica àquele uid.
+//
+// O CASO MEDIDO, ponta a ponta: a Loraine criou uma conta Google em 27/ago 23:03; a dedup
+// fundiu a antiga (e-mail/senha) na nova às 23:05, gravando a lápide; às 04:15 do dia
+// seguinte ESTA rotina apagou a conta antiga inteira, lápide junto. Resultado na tela do
+// dono: o card do jogo mostrando "…" no lugar do nome dela, porque o uid gravado no jogo
+// não resolvia mais pra lugar nenhum.
+//
+// ⛔ E ELA NÃO DEVERIA NEM TER PASSADO NA PENEIRA DOS 7 DIAS: a idade da lápide era lida de
+// `updatedAt || createdAt`, e o merge NÃO mexe nesses campos — ele grava `mergedAt`. O
+// `updatedAt` dela era de 19/ago, então uma lápide de DOIS MINUTOS foi julgada com 9 dias e
+// morreu na mesma noite. Pior: sem nenhum carimbo, `mergedMs` virava 0 e o `if (mergedMs &&
+// …)` deixava PASSAR — idade desconhecida resultava em APAGAR, que é o default errado.
+//
+// AGORA: a idade sai de `mergedAt` (o campo que o merge de fato grava), desconhecida =
+// PULA, e o documento Firestore NUNCA é apagado. Só a conta Auth órfã sai — o login já é
+// feito pela conta canônica, e o merge (`mergeKeepOlder`) inclusive já apaga o Auth do drop
+// no ato, o que torna esta passagem quase sempre um no-op.
+// [[project_lapide_mergedinto_e_carga_nao_lixo]] [[project_fusao_indevida_cilone]]
 //
 // Implementação segura:
 // - Pagina via listUsers() (1000 por vez)
@@ -1507,11 +1528,24 @@ exports.cleanupAbandonedAuth = onSchedule(
           if (!snaps[j].exists) continue; // incompleto — já tratado acima
           const data = snaps[j].data() || {};
           if (!data.mergedInto) continue; // conta real — não tocar
-          // É um ghost. Checar quando foi mergeado (campo createdAt ou updatedAt)
-          const mergedAtStr = data.updatedAt || data.createdAt || "";
-          const mergedMs = mergedAtStr ? new Date(mergedAtStr).getTime() : 0;
-          if (mergedMs && (now - mergedMs) < GHOST_THRESHOLD_MS) continue; // recente, aguardar
-          // Ghost velho o suficiente → apagar Auth + Firestore
+          /* ⭐ A IDADE SAI DE `mergedAt`, que é o campo que o merge REALMENTE grava
+           * (mergeKeepOlder e os outros três pontos gravam `mergedInto` + `mergedAt`
+           * juntos). `updatedAt`/`createdAt` descrevem a vida da PESSOA, não a da lápide —
+           * e foi lendo eles que uma lápide de dois minutos foi julgada com nove dias. */
+          const _ts = data.mergedAt;
+          const mergedMs = (_ts && typeof _ts.toMillis === "function") ? _ts.toMillis()
+            : (_ts && typeof _ts === "string") ? new Date(_ts).getTime() : 0;
+          /* ⛔ SEM CARIMBO, NÃO SE DECIDE. Antes, `mergedMs = 0` caía no `if (mergedMs && …)`
+           * e seguia direto pra exclusão: idade desconhecida virava "apagar". O default de
+           * uma rotina destrutiva tem que ser NÃO FAZER. */
+          if (!mergedMs) {
+            console.warn(`[cleanupAbandonedAuth] ghost sem mergedAt — PULANDO uid=${batch[j].uid}`);
+            continue;
+          }
+          if ((now - mergedMs) < GHOST_THRESHOLD_MS) continue; // recente, aguardar
+          /* ⛔ SÓ O AUTH ÓRFÃO SAI. O documento Firestore É A LÁPIDE e fica PRA SEMPRE: o uid
+           * antigo segue gravado nos jogos, e é por ela que o resolvedor chega na conta viva.
+           * Apagá-lo foi o que pôs "…" no lugar do nome da Loraine no card. */
           try {
             await auth.deleteUser(batch[j].uid);
           } catch (err) {
@@ -1520,13 +1554,8 @@ exports.cleanupAbandonedAuth = onSchedule(
               continue;
             }
           }
-          try {
-            await snaps[j].ref.delete();
-          } catch (err) {
-            console.warn(`[cleanupAbandonedAuth] failed ghost fs uid=${batch[j].uid}:`, err.message);
-          }
           deletedGhosts++;
-          console.log(`[cleanupAbandonedAuth] ghost: uid=${batch[j].uid} mergedInto=${data.mergedInto}`);
+          console.log(`[cleanupAbandonedAuth] ghost auth removido (lápide PRESERVADA): uid=${batch[j].uid} mergedInto=${data.mergedInto}`);
         }
       }
 

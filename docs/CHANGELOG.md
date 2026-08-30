@@ -1,5 +1,13 @@
 # Changelog do scoreplace.app
 
+## CF — A limpeza noturna não apaga mais a lápide (30/ago/2026)
+
+- **Incidente reconstruído pelo PITR:** 27/ago 23:03 a Loraine criou uma conta nova com Google; 23:05 a dedup fundiu a antiga (e-mail/senha) na nova, gravando `mergedInto` + `mergedAt`; 28/ago 04:15 a `cleanupAbandonedAuth` apagou a conta antiga inteira — Auth e Firestore, **lápide junto**. O uid antigo segue gravado nos jogos, então o card passou a mostrar "…" no lugar do nome.
+- **Três defeitos, todos corrigidos:** ① a idade da lápide saía de `updatedAt || createdAt`, campos que o merge não toca — o `updatedAt` dela era de 19/ago, então uma lápide de dois minutos foi julgada com nove dias; agora sai de `mergedAt`, que é o que o merge grava. ② sem carimbo, `mergedMs` virava 0 e o `if (mergedMs && …)` deixava passar: idade desconhecida resultava em apagar; agora pula. ③ o documento Firestore era apagado; agora **nunca** é — só a conta Auth órfã sai.
+- **Trava geral:** `tests/limpeza-nao-apaga-a-lapide.test.js` varre as 14 rotinas `onSchedule` e falha se qualquer uma apagar um documento de `users/`. Limpeza de subcoleção (notificação velha) segue liberada. A peneira é exercitada contra o corpo antigo para não virar decoração.
+- **Reparo do dado:** perfil da Loraine restaurado do PITR pelo retrato imediatamente anterior à exclusão — com a lápide, não o de véspera (esse ressuscitaria a duplicata que a fusão tinha resolvido). `scripts/restaurar-conta-do-pitr.js`.
+- **Medido:** 15 lápides no banco; nenhuma em risco hoje, porque o merge já apaga o Auth do absorvido e a rotina só enxerga quem ainda tem conta Auth. Foi o caso da Loraine — o Auth dela sobreviveu ao merge.
+
 ## 2.1.62 — Uid sem conta mostra o nome gravado (30/ago/2026)
 
 - **Problema corrigido:** no card do jogo, a Loraine Soares aparecia como "…". Medido: o uid dela (`aune9…`) não tem documento em `users/` — não existe nenhuma conta "Loraine" no banco — e o nome está gravado no próprio jogo (`p1`, `team1`). A tela tinha o nome à mão e mostrava reticências.
