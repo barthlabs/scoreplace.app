@@ -56,7 +56,13 @@ function boot(t, quemSou) {
   win._findTournamentById = () => t;
   win._canManagePresence = () => true;
   win.showAlertDialog = (title, html) => { CAP = { title, html }; DOM = parseDom(html); };
-  win.showConfirmDialog = (a, b, onOk) => { onOk && onOk(); };
+  win.showConfirmDialog = (title, html, onOk, onNo, opts) => {
+    // O picker de W.O. traz ações próprias no cabeçalho; confirmações internas
+    // (como o nome do Jogador X) continuam exercitando o callback canônico.
+    if (!(opts && opts.headerHtml)) { if (onOk) onOk(); return; }
+    var tela = String(html || '') + String((opts && opts.headerHtml) || '');
+    CAP = { title, html: tela, opts: opts || {} }; DOM = parseDom(tela);
+  };
   win.showInputDialog = (a, b, onOk) => { onOk && onOk('Jogador X'); };
   win.showNotification = () => {};
   win._safeHtml = (s) => String(s == null ? '' : s);
@@ -118,6 +124,8 @@ sec(function () {
   ok(/vai para os Desativados/i.test(CAP.html), 'o diálogo DECLARA o desfecho: vai para os Desativados');
   ok(CAP.html.indexOf('fim da lista de espera') !== -1, 'e ensina que religar o toggle leva ao fim da lista de espera');
   ok(CAP.html.indexOf('Sandra') !== -1 && CAP.html.indexOf('Jogador X') !== -1, 'e a fila + Jogador X continuam ali');
+  ok(CAP.opts.hideFooter === true && /Cancelar/.test(CAP.opts.headerHtml || '') && /liga-fill-action/.test(CAP.opts.headerHtml || ''),
+    'Cancelar e a ação de confirmar ficam no cabeçalho, sem rodapé duplicado');
 });
 
 // ── 2+3. Convite: o W.O. já vale e DESATIVA (era o teste dos dois destinos) ──

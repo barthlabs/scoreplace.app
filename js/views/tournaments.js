@@ -3114,17 +3114,14 @@ function renderTournaments(container, tournamentId = null) {
                    </div>
                  `;
                 } else {
-                    // v1.3.16 (dono): a CHAMADA acontece DIRETO no detalhe — a lista de inscritos
-                    // inline (individual: lista de check-in; duplas: seção canônica com o factory
-                    // _rollCallPresenceCtx) já tem o toggle Presente/Ausente + W.O. por pessoa e a
-                    // contagem que trava abaixo do cabeçalho. O botão "Inscritos / Chamada" (→
-                    // #participants) foi removido: era página duplicada. Fica só Regras.
-                    // (O participante não-org segue com a tela de inscritos dele, inalterada.)
+                    // A ficha mostra os cards, mas a CHAMADA continua sendo uma rota explícita.
+                    // O botão não depende de haver sorteio: é a porta para filtros, presença e W.O.
                     actionsHtml = `
                    ${inviteModalHtml}
                    ${teamEnrollModalHtml}
-                   <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:1rem;">
+                   <div class="tournament-action-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:1rem;">
                      <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#rules/${t.id}'">📋 Regras</button>
+                     <button class="btn btn-outline btn-sm hover-lift" onclick="event.stopPropagation(); window.location.hash='#participants/${t.id}'">👥 Inscritos</button>
                    </div>
                    ${autoDrawCountdownHtml ? `<div style="margin-top:1rem;text-align:center;">${autoDrawCountdownHtml}</div>` : ''}
                  `;

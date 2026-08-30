@@ -35,6 +35,9 @@ ok(/chrome:\s*false/.test(src),
    'a seção canônica de duplas entra sem filtro, presença ou W.O.');
 ok(/window\.location\.hash='#participants\/\$\{t\.id\}'/.test(src),
    'o botão "👥 Inscritos" continua levando para a rota própria');
+const preDrawActions = src.slice(src.indexOf('} else {\n                    // A ficha mostra os cards'), src.indexOf('} else if (!window.AppStore.currentUser)', src.indexOf('} else {\n                    // A ficha mostra os cards')));
+ok(/grid-template-columns:1fr 1fr/.test(preDrawActions) && /#participants\/\$\{t\.id\}/.test(preDrawActions),
+   'antes do sorteio, a ficha também mantém o botão Inscritos para a chamada');
 
 console.log(fail ? '\n❌ ' + fail + ' falha(s)\n' : '\n✅ detalhe separado da chamada\n');
 process.exit(fail ? 1 : 0);

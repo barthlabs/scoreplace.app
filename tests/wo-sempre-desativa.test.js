@@ -51,7 +51,11 @@ function loadLiga(t) {
   win._canManagePresence = () => true;
   win.showNotification = (a, b) => { LAST_TOAST = a + ' — ' + b; };
   win.showAlertDialog = (title, html) => { CAP_HTML = String(html || ''); };
-  win.showConfirmDialog = (title, html, onYes) => { if (typeof onYes === 'function') onYes(); };
+  win.showConfirmDialog = (title, html, onYes, onNo, opts) => {
+    // A confirmação de W.O. usa o diálogo canônico com as ações no cabeçalho.
+    // Junta o header para as asserções continuarem olhando a tela inteira.
+    CAP_HTML = String(html || '') + String((opts && opts.headerHtml) || '');
+  };
   win.showInputDialog = (title, msg, cb) => { if (typeof cb === 'function') cb('Jogador X'); };
   win._safeHtml = (s) => String(s == null ? '' : s);
   win._sendUserNotification = () => {};
@@ -195,7 +199,9 @@ sec('sem escolha na tela', function () {
   ok(/vai para os Desativados/i.test(CAP_HTML), 'o diálogo DIZ que a pessoa vai para os Desativados');
   ok(!/fica desativad[oa]/i.test(CAP_HTML), 'e sem adjetivo com gênero — o app não presume o gênero de ninguém');
   ok(/lista de espera/i.test(CAP_HTML), 'e explica que religar o toggle a leva pra lista de espera');
-  ok(CAP_HTML.indexOf('_ligaApplyWo(') !== -1, 'e o botão aplica o W.O. sem parâmetro de destino');
+  ok(CAP_HTML.indexOf('liga-fill-action') !== -1, 'a ação única do W.O. fica no cabeçalho');
+  ok(CAP_HTML.indexOf('Renato Oshima') !== -1 && CAP_HTML.indexOf('Jogador X') !== -1,
+    'a confirmação já mostra fila selecionável e Jogador X, sem uma segunda tela');
 
   CAP_HTML = '';
   win._ligaPickFill(t.id, 0, 'R1 Grupo Z', 'Eliane Cinelli');

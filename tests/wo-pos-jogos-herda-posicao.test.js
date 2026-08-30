@@ -64,7 +64,7 @@ function loadLiga(t, opts) {
   win._woBtnHtml = (onclick) => '<button class="wo-btn" onclick="' + onclick + '">Aplicar W.O.</button>';
   win.showNotification = () => {};
   win.showAlertDialog = (title, html) => { LAST_DIALOG = { title, html }; };
-  win.showConfirmDialog = (t2, m, cb) => { if (cb) cb(); };
+  win.showConfirmDialog = (title, html, onOk, onCancel, opts) => { LAST_DIALOG = { title, html: String(html || '') + String((opts && opts.headerHtml) || '') }; };
   win.showInputDialog = () => {};
   win._safeHtml = (s) => String(s == null ? '' : s);
   win._sendUserNotification = () => {};

@@ -1,5 +1,9 @@
 # Changelog do scoreplace.app
 
+## 2.1.51 — Ficha, chamada e W.O. voltam aos fluxos canônicos (30/ago/2026)
+
+- **Regressões recuperadas sem abrir nova frente arquitetural:** o card da dashboard continua abrindo a ficha do torneio; a ficha conserva os cards canônicos dos inscritos abaixo do organizador e recupera o botão **👥 Inscritos**, que abre exclusivamente a chamada (`#participants/:id`) com presença, filtros e W.O. O fluxo de confirmação de W.O. volta a abrir o seletor canônico: lista completa de espera com caixas, uma seleção promove direto, múltiplas enviam convite e **Jogador X** segue como alternativa. As ações **Cancelar** e **Confirmar** ficam no cabeçalho do modal; com uma pessoa elegível a tela cabe sem a rolagem artificial da variante regressiva. Regras preservadas: W.O. desativa sempre o ausente e a reativação o devolve ao fim da espera.
+
 > **Este arquivo saiu do `CLAUDE.md` em 19/ago/2026.** Ele era 90% daquele arquivo
 > (507 KB de 565 KB) e entrava no contexto de TODA sessão — sem ser instrução. É
 > histórico, e histórico não precisa ser lido pra trabalhar: precisa estar guardado e
@@ -928,4 +932,3 @@
 - Fix: Service Worker removido (causava cache stale)
 - Botoes de organizador condicionais (+Participante/+Time/Encerrar/Sortear/Iniciar)
 - Status badge (Inscricoes Abertas/Encerradas) na mesma linha da modalidade no mobile
-

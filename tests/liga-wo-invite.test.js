@@ -31,7 +31,7 @@ W._sendUserNotification = function (uid, data) { _notifs.push({ uid: uid, data: 
 W.showNotification = function () {};
 let _lastAlertHtml = '';
 W.showAlertDialog = function (title, html) { _lastAlertHtml = String(html || ''); };
-W.showConfirmDialog = function (t2, m, onC) { if (onC) onC(); };
+W.showConfirmDialog = function (title, html, onOk, onCancel, opts) { _lastAlertHtml = String(html || '') + String((opts && opts.headerHtml) || ''); };
 W.showInputDialog = function (t2, m, cb) { cb(''); };
 W.document = { querySelectorAll: function () { return []; }, querySelector: function () { return null; }, getElementById: function () { return null; } };
 

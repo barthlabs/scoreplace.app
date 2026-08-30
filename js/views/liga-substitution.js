@@ -439,52 +439,10 @@ window._ligaWoConfirm = function (tId, roundIndex, groupName, absentName) {
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   if (!_canManageGroup(t, group)) return;
-  var sub = _ligaNextSuplente(t, group, absentName);
-  var _woPenVal = (typeof window._woAdvPenalty === 'function') ? window._woAdvPenalty(t) : 0;
-
-  var html = '<div style="font-size:0.85rem;opacity:0.9;margin-bottom:12px;"><b>' + _safe(absentName) + '</b> leva W.O. — 0 pts nesta rodada' + (_woPenVal ? ' e ' + _woPenVal + ' nos Pontos Avançados' : '') + '.</div>';
-
-  // W.O. pós-jogos (2.0.50): se o grupo já tem placar lançado, o organizador precisa
-  // saber ANTES de confirmar o que muda e o que não muda — a sistemática da 2.0.15:
-  // jogo disputado fica como está (nome e placar); quem entra herda vaga e posição.
-  var _temPlacar = (group.matches || []).some(_jogoJaTemPlacar);
-  if (_temPlacar) {
-    html += '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:10px;margin-bottom:12px;font-size:0.74rem;color:var(--sp-c-93c5fd,#93c5fd);">' +
-      '📌 Este grupo já tem <b>jogos disputados</b>. Eles <b>não mudam</b>: nome e placar de quem jogou ficam como estão. Quem assumir herda a <b>vaga e a posição</b> de ' + _safe(absentName) + ' na classificação e nos jogos futuros.' +
-    '</div>';
-  }
-
-  // Quem assume — mostrado ANTES de confirmar: o organizador tem que saber quem entra.
-  if (sub) {
-    // Se a proporção fez alguém FURAR a fila (v1.8.45), o diálogo diz isso com todas as
-    // letras — quem foi passado pra trás vai perguntar, e a resposta tem que estar aqui.
-    var _pureFirst = window._waitlistFirst(t, _ligaSuplenteServe(t, group, absentName));
-    var _furou = _pureFirst && _wlDisplay(_pureFirst) !== _wlDisplay(sub);
-    var _rrExp = _furou ? _ligaRatioRank(t, group, absentName) : null;
-    var _comoEntra = (_furou && _rrExp)
-      ? 'Entra <b>na frente da fila</b> pra manter a proporção ' + _safe((typeof window._ratioLabel === 'function' && window._ratioLabel(_rrExp.ratio)) || _rrExp.ratio) + ' do grupo. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.'
-      : 'Primeiro da lista de espera. Assume a vaga agora e <b>fica até o fim do torneio</b> — sai só se levar W.O.';
-    html += '<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:10px;margin-bottom:14px;">' +
-      '<div style="font-size:0.72rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin-bottom:4px;">✅ QUEM ASSUME A VAGA</div>' +
-      '<div style="font-size:0.95rem;font-weight:700;">' + _safe(_wlDisplay(sub)) + '</div>' +
-      '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">' + _comoEntra + '</div>' +
-    '</div>';
-  } else {
-    html += '<div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;padding:10px;margin-bottom:14px;font-size:0.78rem;color:var(--sp-c-fbbf24,#fbbf24);">' +
-      '⚠️ <b>A lista de espera está vazia</b> — ninguém assume a vaga automaticamente. O grupo fica com a vaga aberta; você ainda pode convidar quem ficou de fora ou completar com Jogador X.' +
-    '</div>';
-  }
-
-  // Sem escolha: o destino é UM só. O box explica o que acontece e como se volta.
-  html += _ligaWoDestBox(absentName);
-  // ⭐ 2.0.61 — QUEM ASSUME é escolha de PRIMEIRA CLASSE no ato de apontar. Ordem do
-  // dono (24/ago, caso Fábio/E2 — a fila tinha gente que não podia ir): _"quero que
-  // quando o organizador aponte ele possa indicar se atende pela fila ou por jogador x"_.
-  // Antes o Jogador X só existia enterrado na tela seguinte; agora são dois botões:
-  html += '<button class="btn btn-danger" style="width:100%;font-weight:800;" onclick="window._ligaApplyWo(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 Aplicar W.O.' + (sub ? ' — entra ' + _safe(_wlDisplay(sub)) : '') + '</button>';
-  html += '<button class="btn btn-outline" style="width:100%;margin-top:8px;font-weight:800;border-color:rgba(251,191,36,0.45);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._ligaWoConfirmGuest(\'' + _esc(tId) + '\',' + roundIndex + ',\'' + _esc(groupName) + '\',\'' + _esc(absentName) + '\')">🚫 W.O. + 🎾 Jogador X no lugar (não pontua)</button>';
-
-  if (window.showAlertDialog) window.showAlertDialog('Confirmar W.O.?', html, function () {}, { type: 'warning', confirmText: 'Cancelar' });
+  // ⛔ O confirmador não pode esconder a FILA numa segunda tela. A seleção canônica
+  // (1 marcado → substitui agora; vários → convida; Jogador X) já mora em
+  // `_ligaPickFill`; este é só o primeiro ponto de entrada dela.
+  window._ligaPickFill(tId, roundIndex, groupName, absentName, { confirmTitle: 'Confirmar W.O.?' });
 };
 
 // 2.0.61 — o atalho do botão "W.O. + Jogador X" do diálogo de confirmação: fecha o
@@ -833,7 +791,8 @@ function _ligaNotifyWoCycle(t, group, absentName, subName, isGuest) {
 window._ligaNotifyWoCycle = _ligaNotifyWoCycle;
 
 // ── Passo 2 (legado): convidar folga OU Jogador X — segue disponível pra vaga aberta ──
-window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
+window._ligaPickFill = function (tId, roundIndex, groupName, absentName, opts) {
+  opts = opts || {};
   var t = _findT(tId); if (!t) return;
   var group = _getGroup(t, roundIndex, groupName); if (!group) return;
   var cat = _groupCategory(group);
@@ -914,6 +873,11 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   // torneio usa PA E a punição de W.O. está ativa — com o VALOR configurado pelo org.
   var _woPenVal = (typeof window._woAdvPenalty === 'function') ? window._woAdvPenalty(t) : 0;
   var html = '<div style="font-size:0.85rem;opacity:0.85;margin-bottom:10px;"><b>' + _safe(absentName) + '</b> leva W.O. (0 pts na rodada' + (_woPenVal ? ', ' + _woPenVal + ' nos Pontos Avançados' : '') + '). Quem entra no lugar?</div>';
+  // Jogos com placar pertencem a quem os disputou. O seletor completo substituiu a
+  // janela resumida, mas esse aviso continua obrigatório antes de confirmar o W.O.
+  if ((group.matches || []).some(_jogoJaTemPlacar)) {
+    html += '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:7px 9px;margin:0 0 8px;font-size:0.7rem;color:var(--sp-c-93c5fd,#93c5fd);">📌 Há jogos disputados: eles <b>não mudam</b>. Quem entrar assume a vaga e os jogos futuros.</div>';
+  }
   if (folgas.length > 0) {
     var _souOrgHint = (typeof window._canManagePresence === 'function')
       ? !!window._canManagePresence(t, window.AppStore && window.AppStore.currentUser) : false;
@@ -976,15 +940,6 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
         _tag +
       '</button>';
     }).join('') + '</div>';
-    // AÇÃO ÚNICA (v1.6.92, regra do dono): "pode ser 1 botão colocar se apenas 1 estiver
-    // selecionado ou convidar se mais de um estiver selecionado". O rótulo e o que ele faz
-    // são recalculados a cada toque (_ligaSyncFillAction). Participante nunca vê "Colocar".
-    html += '<button id="liga-fill-action" class="btn btn-success" style="width:100%;margin-top:4px;font-weight:800;" ' +
-      'data-tid="' + _safe(tId) + '" data-ri="' + roundIndex + '" data-gn="' + _safe(groupName) + '" data-abs="' + _safe(absentName) + '" data-org="' + (_souOrg ? '1' : '0') + '" ' +
-      // rótulo inicial NEUTRO: quem manda é o _ligaSyncFillAction logo após a montagem.
-      // Deixar "Convidar" aqui fazia o botão prometer convite mesmo quando a ação é
-      // colocação direta (1 marcado + organizador) — se o sync falhasse, mentia.
-      'onclick="window._ligaFillAction(this)">Marque quem entra ou recebe o convite</button>';
   } else {
     // O texto antigo dizia "ninguém DA MESMA CATEGORIA" mesmo quando a lista de espera
     // tinha gente — a frase culpava a categoria por um defeito de leitura. Agora só é
@@ -997,7 +952,21 @@ window._ligaPickFill = function (tId, roundIndex, groupName, absentName) {
   // e o dono não o achou no caso Fábio/E2. Opção de primeira classe vem ANTES da explicação.
   html += _ligaWoDestBox(absentName);
 
-  if (window.showAlertDialog) window.showAlertDialog('Substituto', html, function () {}, { type: 'info', confirmText: 'Fechar' });
+  // Ações no topo, como os demais diálogos operacionais: não roubam altura do conteúdo e
+  // deixam a fila, o convite e o Jogador X visíveis juntos. O botão é a mesma ação única
+  // de antes — apenas mudou de lugar; `_ligaSyncFillAction` continua sendo sua fonte única.
+  var _headerAction = '<button id="liga-fill-action" type="button" class="btn btn-success" style="padding:8px 11px;font-size:0.78rem;font-weight:800;" ' +
+    'data-tid="' + _safe(tId) + '" data-ri="' + roundIndex + '" data-gn="' + _safe(groupName) + '" data-abs="' + _safe(absentName) + '" data-org="' + (_souOrg ? '1' : '0') + '" data-fallback-wo="' + (folgas.length ? '0' : '1') + '" ' +
+    'onclick="window._ligaFillAction(this)">Confirmar</button>';
+  var _headerCancel = '<button type="button" class="btn btn-outline" style="padding:8px 11px;font-size:0.78rem;" onclick="document.getElementById(\'confirm-cancel-btn\').click()">Cancelar</button>';
+  if (window.showConfirmDialog) {
+    window.showConfirmDialog(opts.confirmTitle || 'Substituto', html, function () {}, function () {}, {
+      type: 'warning', maxWidth: '460px', hideFooter: true, headerHtml: _headerCancel + _headerAction
+    });
+  } else if (window.showAlertDialog) {
+    // Fallback de ambientes legados/testes que ainda não expõem o diálogo canônico.
+    window.showAlertDialog(opts.confirmTitle || 'Substituto', html + _headerAction, function () {}, { type: 'warning', confirmText: 'Cancelar' });
+  }
 
   // ⚠️ SINCRONIZA O RÓTULO NA MONTAGEM. `_ligaSyncFillAction` só rodava no TOQUE
   // (fim do _ligaToggleCand), então o botão abria com o texto estático "Convidar
@@ -1134,6 +1103,11 @@ window._ligaSyncFillAction = function () {
   } catch (e) {}
   var org = act.getAttribute('data-org') === '1';
   if (!sel.length) {
+    if (act.getAttribute('data-fallback-wo') === '1') {
+      act.textContent = '🚫 Aplicar W.O.';
+      act.style.opacity = '';
+      return;
+    }
     act.textContent = 'Marque quem entra ou recebe o convite';
     act.style.opacity = '0.5';
     return;
@@ -1166,6 +1140,10 @@ window._ligaFillAction = function (btn) {
     });
   } catch (e) {}
   if (!sel.length) {
+    if (btn.getAttribute('data-fallback-wo') === '1') {
+      window._ligaApplyWo(tId, ri, gn, abs);
+      return;
+    }
     if (window.showNotification) window.showNotification('Substituto', 'Marque quem entra no lugar.', 'info');
     return;
   }

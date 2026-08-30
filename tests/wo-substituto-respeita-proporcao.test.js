@@ -83,7 +83,9 @@ function loadLiga(t, profiles) {
   win._canManagePresence = () => true;
   win.showNotification = () => {};
   win.showAlertDialog = (title, html) => { LAST_DIALOG = { title: title, html: html }; };
-  win.showConfirmDialog = () => {};
+  win.showConfirmDialog = (title, html, onOk, onCancel, opts) => {
+    LAST_DIALOG = { title: title, html: String(html || '') + String((opts && opts.headerHtml) || ''), opts: opts || {} };
+  };
   win.showInputDialog = () => {};
   win._safeHtml = (s) => String(s == null ? '' : s);
   win._sendUserNotification = () => {};
@@ -239,16 +241,18 @@ sec(function () {
     'perfil sem gênero preenchido: o prefixo "Masc C" da inscrição declara — veio ' + (sub && sub.uid));
 });
 
-// ── 6. O diálogo "Confirmar W.O.?" DIZ que alguém furou a fila (e por quê) ──
+// ── 6. O diálogo "Confirmar W.O.?" abre o seletor completo, ordenado pela régua ──
 sec(function () {
   const t = novoT();
   loadLiga(t, PROFILES);
   LAST_DIALOG = null;
   win._ligaWoConfirm(t.id, 0, 'R1 Grupo R', 'Glauce Assunção');
-  ok(!!LAST_DIALOG && /QUEM ASSUME A VAGA/.test(LAST_DIALOG.html || ''), 'o diálogo de confirmação não abriu');
+  ok(!!LAST_DIALOG && LAST_DIALOG.title === 'Confirmar W.O.?', 'o diálogo de confirmação não abriu');
   ok(/Rodrigo Godinho/.test(LAST_DIALOG.html || ''), 'o diálogo devia nomear o Rodrigo como quem assume');
-  ok(/na frente da fila/.test(LAST_DIALOG.html || '') && /25\/75/.test(LAST_DIALOG.html || ''),
-    'quem foi passado pra trás vai perguntar — o diálogo tem que dizer que ele entra NA FRENTE DA FILA pela proporção 25/75');
+  ok(/quebra 25\/75/.test(LAST_DIALOG.html || '') && /data-on="1"[^>]*data-name="Rodrigo Godinho"/.test(LAST_DIALOG.html || ''),
+    'a proporção ordena e pré-marca o Rodrigo; quem quebra 25/75 continua visível');
+  ok(LAST_DIALOG.opts.hideFooter === true && /Cancelar/.test(LAST_DIALOG.html || '') && /id="liga-fill-action"/.test(LAST_DIALOG.html || ''),
+    'Cancelar e a ação única ficam no cabeçalho do seletor');
 });
 
 // ── 7. Sem fura-fila, o texto continua o de sempre ──────────────────────────
@@ -261,8 +265,10 @@ sec(function () {
   LAST_DIALOG = null;
   win._ligaWoConfirm(t.id, 0, 'R1 Grupo R', 'Glauce Assunção');
   ok(!!LAST_DIALOG && /Fabiana Ferre/.test(LAST_DIALOG.html || ''), 'a Fabiana devia assumir');
-  ok(/Primeiro da lista de espera/.test(LAST_DIALOG.html || ''), 'sem fura-fila o texto é o de sempre');
-  ok(!/na frente da fila/.test(LAST_DIALOG.html || ''), 'não pode alegar fura-fila quando não houve');
+  ok(/Fabiana Ferre/.test(LAST_DIALOG.html || '') && /Nathalya Calil/.test(LAST_DIALOG.html || ''),
+    'sem candidata que preserve 25/75, a fila inteira continua visível para escolha explícita');
+  ok(!/data-on="1"/.test(LAST_DIALOG.html || '') && /quebra 25\/75/.test(LAST_DIALOG.html || ''),
+    'sem opção que preserve a proporção, ninguém é escolhido automaticamente');
 });
 
 // ── 8. O diálogo "Substituto" (_ligaPickFill): ordem, pré-marca e tag ───────
