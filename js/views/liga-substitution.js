@@ -2025,10 +2025,30 @@ function _monMatches(t, gName, pIdx) {
 }
 function _monPlaying(t, gName, pIdx) { return _monMatches(t, gName, pIdx).filter(function (m) { return !m.isSitOut; }); }
 function _monWoMarker(t, gName, pIdx) { return _monMatches(t, gName, pIdx).filter(function (m) { return m.isSitOut && m.sitOutReason === 'wo'; })[0] || null; }
+// Um coringa não tem uid, mas ainda é uma PESSOA/VAGA distinta. `team*SlotIds`
+// guarda essa identidade por posição e se repete nos três jogos rotativos do mesmo
+// grupo. Nome continua sendo só rótulo. Registros antigos sem slotId mantêm o fallback
+// por nome; toda vaga X criada daqui para frente recebe um id próprio.
+function _monSlotIds(m, side) {
+  var k = side === 'p1' ? 'team1SlotIds' : 'team2SlotIds';
+  var names = side === 'p1' ? m.team1 : m.team2;
+  if (!Array.isArray(m[k])) m[k] = (names || []).map(function () { return null; });
+  return m[k];
+}
 function _monPlayers(t, gName, pIdx) {
-  var s = {};
-  _monPlaying(t, gName, pIdx).forEach(function (m) { (m.team1 || []).concat(m.team2 || []).forEach(function (n) { if (n) s[n] = 1; }); });
-  return Object.keys(s);
+  var s = {}, n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(t) || {}) : {};
+  _monPlaying(t, gName, pIdx).forEach(function (m) {
+    [['p1', m.team1 || [], m.team1Uids || []], ['p2', m.team2 || [], m.team2Uids || []]].forEach(function (side) {
+      var ids = _monSlotIds(m, side[0]);
+      side[1].forEach(function (name, i) {
+        if (!name) return;
+        var uid = side[2][i] || n2u[name] || null, slotId = ids[i] || null;
+        var key = uid ? ('uid:' + uid) : (slotId ? ('slot:' + slotId) : ('name:' + name));
+        if (!s[key]) s[key] = { name: name, uid: uid, slotId: slotId };
+      });
+    });
+  });
+  return Object.keys(s).map(function (k) { return s[k]; });
 }
 // Folgas da rodada = participantes solo, reais, que ficaram de fora de TODOS os
 // grupos desta fase e não estão ausentes/ghost. São os candidatos a "chamar".
@@ -2047,10 +2067,10 @@ function _monRoundFolgas(t, pIdx) {
   });
   return out;
 }
-function _monCanManage(t, gName, pIdx) { return _canManageGroup(t, { players: _monPlayers(t, gName, pIdx) }); }
+function _monCanManage(t, gName, pIdx) { return _canManageGroup(t, { players: _monPlayers(t, gName, pIdx).map(function (p) { return p.name; }) }); }
 
 // Aplica: troca ausente→substituto nos jogos do grupo + marcador W.O. + ghost/folga.
-window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) {
+window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest, absentSlotId) {
   pIdx = pIdx || 0;
   _commitLiga(tId, function (ft) {
     var playing = _monPlaying(ft, gName, pIdx);
@@ -2064,12 +2084,14 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
     var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
     var absentUid = _n2u[absentName] || null;
     var fillUid = isGuest ? null : (_n2u[fillName] || null);
-    var _rwSide = function (m, nk, uk) {
+    var fillSlotId = isGuest ? ('ghostmon:' + Date.now() + ':' + Math.floor(Math.random() * 1e6)) : null;
+    var _rwSide = function (m, nk, uk, side) {
       var names = m[nk]; if (!Array.isArray(names)) return;
       var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
+      var slotIds = _monSlotIds(m, side);
       names.forEach(function (n, i) {
-        var hit = (absentUid && uids[i]) ? (uids[i] === absentUid) : (n === absentName);
-        if (hit) { names[i] = fillName; uids[i] = fillUid; }
+        var hit = absentSlotId ? (slotIds[i] === absentSlotId) : ((absentUid && uids[i]) ? (uids[i] === absentUid) : (n === absentName));
+        if (hit) { names[i] = fillName; uids[i] = fillUid; slotIds[i] = fillSlotId; }
       });
       m[uk] = uids;
     };
@@ -2080,8 +2102,8 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
       // renomeava o ausente também nos jogos JÁ DISPUTADOS — o resultado de quem jogou
       // passaria a ser creditado ao substituto.
       if (_jogoJaTemPlacar(m)) return;
-      _rwSide(m, 'team1', 'team1Uids');
-      _rwSide(m, 'team2', 'team2Uids');
+      _rwSide(m, 'team1', 'team1Uids', 'p1');
+      _rwSide(m, 'team2', 'team2Uids', 'p2');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     });
     // remove marcador W.O. anterior deste grupo (idempotente)
@@ -2097,7 +2119,7 @@ window._monWoApply = function (tId, pIdx, gName, absentName, fillName, isGuest) 
       // DUAS vezes é duas chances de discordar sobre quem é a pessoa.
       p1Uid: absentUid || null,
       team1Uids: absentUid ? [absentUid] : undefined,
-      woReplacedBy: fillName, woIsGuest: !!isGuest, label: 'W.O.',
+      absentSlotId: absentSlotId || null, woReplacedBy: fillName, woIsGuest: !!isGuest, woFillSlotId: fillSlotId, label: 'W.O.',
       category: (playing[0] && playing[0].category) || undefined
     });
     if (isGuest) { _addGhost(ft, fillName); }              // Jogador X — não pontua
@@ -2133,18 +2155,19 @@ window._monWoRevert = function (tId, pIdx, gName) {
     var _n2u = (typeof window._buildNameToUid === 'function') ? (window._buildNameToUid(ft) || {}) : {};
     var absentUid = _n2u[absentName] || null;
     var fillUid = isGuest ? null : (_n2u[fillName] || null);
-    var _rwSide = function (m, nk, uk) {
+    var _rwSide = function (m, nk, uk, side) {
       var names = m[nk]; if (!Array.isArray(names)) return;
       var uids = Array.isArray(m[uk]) ? m[uk].slice() : names.map(function () { return null; });
+      var slotIds = _monSlotIds(m, side);
       names.forEach(function (n, i) {
-        var hit = (fillUid && uids[i]) ? (uids[i] === fillUid) : (n === fillName);
-        if (hit) { names[i] = absentName; uids[i] = absentUid; }
+        var hit = wm.woFillSlotId ? (slotIds[i] === wm.woFillSlotId) : ((fillUid && uids[i]) ? (uids[i] === fillUid) : (n === fillName));
+        if (hit) { names[i] = absentName; uids[i] = absentUid; slotIds[i] = wm.absentSlotId || null; }
       });
       m[uk] = uids;
     };
     _monPlaying(ft, gName, pIdx).forEach(function (m) {
-      _rwSide(m, 'team1', 'team1Uids');
-      _rwSide(m, 'team2', 'team2Uids');
+      _rwSide(m, 'team1', 'team1Uids', 'p1');
+      _rwSide(m, 'team2', 'team2Uids', 'p2');
       if (m.team1 && m.team2) { m.p1 = m.team1.join(' / '); m.p2 = m.team2.join(' / '); }
     });
     ft.matches = (ft.matches || []).filter(function (m) { return !(m.bracket === 'monarch' && m.groupName === gName && ((m.phaseIndex || 0) === pIdx) && m.isSitOut && m.sitOutReason === 'wo'); });
@@ -2165,8 +2188,9 @@ window._monWoFlow = function (tId, pIdx, gName) {
   var t = _findT(tId); if (!t) return;
   if (!_monCanManage(t, gName, pIdx)) { if (window.showNotification) window.showNotification('W.O.', 'Só o organizador ou um jogador do grupo pode fazer isso.', 'info'); return; }
   var players = _monPlayers(t, gName, pIdx);
-  var rows = players.map(function (p) {
-    return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="window._monWoPickFill(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(p) + '\')">' + _safe(p) + '</button>';
+  var rows = players.map(function (p, i) {
+    var discr = p.slotId ? (' <span style="opacity:.65;font-size:.75em;">(vaga ' + (i + 1) + ')</span>') : '';
+    return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="window._monWoPickFill(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(p.name) + '\',\'' + _esc(p.slotId || '') + '\')">' + _safe(p.name) + discr + '</button>';
   }).join('');
   if (window.showAlertDialog) {
     window.showAlertDialog('Quem não pôde jogar? — ' + _safe(gName),
@@ -2176,7 +2200,7 @@ window._monWoFlow = function (tId, pIdx, gName) {
 };
 
 // Passo 2: escolher o preenchimento — chamar uma FOLGA da rodada OU Jogador X.
-window._monWoPickFill = function (tId, pIdx, gName, absentName) {
+window._monWoPickFill = function (tId, pIdx, gName, absentName, absentSlotId) {
   pIdx = pIdx || 0;
   var t = _findT(tId); if (!t) return;
   var folgas = _monRoundFolgas(t, pIdx);
@@ -2184,24 +2208,24 @@ window._monWoPickFill = function (tId, pIdx, gName, absentName) {
   if (folgas.length) {
     html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-4ade80,#4ade80);margin:4px 0 6px;">Folga da rodada — entra e PONTUA</div>';
     html += folgas.map(function (f) {
-      return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(16,185,129,0.4);color:var(--sp-c-4ade80,#4ade80);" onclick="window._monWoApply(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f) + '\',false); window._dismissAllOverlays&&window._dismissAllOverlays();">🟢 ' + _safe(f) + '</button>';
+      return '<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;border-color:rgba(16,185,129,0.4);color:var(--sp-c-4ade80,#4ade80);" onclick="window._monWoApply(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(f) + '\',false,\'' + _esc(absentSlotId || '') + '\'); window._dismissAllOverlays&&window._dismissAllOverlays();">🟢 ' + _safe(f) + '</button>';
     }).join('');
   } else {
     html += '<div style="font-size:0.72rem;opacity:0.7;margin-bottom:8px;">Nenhum jogador de folga nesta rodada.</div>';
   }
   html += '<div style="font-size:0.74rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin:12px 0 6px;">Jogador X — qualquer presente (NÃO pontua)</div>';
-  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._monWoGuestPrompt(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\')">🎾 Completar com Jogador X</button>';
+  html += '<button class="btn btn-outline" style="width:100%;border-color:rgba(251,191,36,0.4);color:var(--sp-c-fbbf24,#fbbf24);" onclick="window._monWoGuestPrompt(\'' + _esc(tId) + '\',' + pIdx + ',\'' + _esc(gName) + '\',\'' + _esc(absentName) + '\',\'' + _esc(absentSlotId || '') + '\')">🎾 Completar com Jogador X</button>';
   if (window.showAlertDialog) window.showAlertDialog('Substituir ' + _safe(absentName), html, function () {}, { type: 'info', confirmText: 'Fechar' });
 };
 
-window._monWoGuestPrompt = function (tId, pIdx, gName, absentName) {
+window._monWoGuestPrompt = function (tId, pIdx, gName, absentName, absentSlotId) {
   if (typeof window.showInputDialog === 'function') {
     window.showInputDialog('Jogador X', 'Nome de quem vai completar a rodada (opcional):', function (val) {
       var name = (val || '').trim() || 'Jogador X';
-      window._monWoApply(tId, pIdx, gName, absentName, name, true);
+      window._monWoApply(tId, pIdx, gName, absentName, name, true, absentSlotId);
     }, { placeholder: 'Jogador X', confirmText: 'Completar' });
   } else {
-    window._monWoApply(tId, pIdx, gName, absentName, 'Jogador X', true);
+    window._monWoApply(tId, pIdx, gName, absentName, 'Jogador X', true, absentSlotId);
   }
 };
 

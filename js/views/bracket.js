@@ -5295,7 +5295,6 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // already exposes.
     // v4.1.39: W.O. canônico — fase do grupo, marcador W.O. e ghosts (Jogador X).
     var _pIdxM = (sg.matches && sg.matches[0] && sg.matches[0].phaseIndex) || 0;
-    var _ghostsM = t.ligaGhosts || [];
     var _woMk = (sg.matches || []).filter(function(m) { return m && m.isSitOut && m.sitOutReason === 'wo'; })[0] || null;
     // Classificação: quem joga MENOS os ghosts (Jogador X não pontua), MAIS o
     // ausente do W.O. (aparece com 0 pts). Os demais jogam com o substituto.
@@ -5313,14 +5312,16 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // identidade que ele tem.
     var _stUidsG = Array.isArray(sg.playersUids) ? sg.playersUids : [];
     var _stNomesG = Array.isArray(sg.players) ? sg.players : [];
+    var _stSlotsG = Array.isArray(sg.playersSlotIds) ? sg.playersSlotIds : [];
     var _stRoster = [];
     for (var _si = 0; _si < Math.max(_stUidsG.length, _stNomesG.length); _si++) {
       var _stU = _stUidsG[_si] || null, _stNm = _stNomesG[_si] || '';
       if (!_stU && !_stNm) continue;
       var _stDisp = (_stU && typeof window._displayNameForUid === 'function')
         ? (window._displayNameForUid(_stU, _stNm) || _stNm) : _stNm;
-      if (_ghostsM.indexOf(_stNm) !== -1 || _ghostsM.indexOf(_stDisp) !== -1) continue;
-      _stRoster.push({ name: _stDisp, uid: _stU });
+      // `ghostmon:*` é identidade da vaga, não um nome global. Mantemos a vaga
+      // na tabela (zerada pelo motor) mesmo quando há vários Jogadores X iguais.
+      _stRoster.push({ name: _stDisp, uid: _stU, slotId: _stSlotsG[_si] || null });
     }
     if (_woMk && _woMk.p1 && !_stRoster.some(function (r) { return r.name === _woMk.p1; })) {
       var _wU = (typeof window._slotUidsPositional === 'function')
@@ -5340,7 +5341,7 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     // ⭐ Como foi achado: a MESMA função, com o MESMO dado, devolvia a ordem certa em Node
     // (onde passei o grupo REAL) e a errada no navegador. A diferença não estava na função —
     // estava no que chegava nela. [[project_classificacao_publicada_congela]]
-    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: sg.matches, classifCongelada: sg.classifCongelada }, t, sg.category || null) : [];
+    var standings = typeof window._computeMonarchStandings === 'function' ? window._computeMonarchStandings({ players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: sg.matches, classifCongelada: sg.classifCongelada }, t, sg.category || null) : [];
     // Cards: só os jogos de verdade (o marcador W.O. vira pílula no cabeçalho).
     var matches = (sg.matches || []).filter(function(m) { return !(m.isSitOut && m.sitOutReason === 'wo'); });
     var groupDone = matches.length > 0 && matches.every(function(m) { return !!m.winner || m.isBye || m.isSitOut; });
@@ -6523,13 +6524,14 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // sustentar a tabela: sem rótulo, elenco vazio → classificação vazia.
             var _uG = Array.isArray(g.playersUids) ? g.playersUids : [];
             var _nG = Array.isArray(g.players) ? g.players : [];
+            var _sG = Array.isArray(g.playersSlotIds) ? g.playersSlotIds : [];
             var _stRoster = [];
             for (var _ri = 0; _ri < Math.max(_uG.length, _nG.length); _ri++) {
               var _rU = _uG[_ri] || null, _rN = _nG[_ri] || '';
               if (!_rU && !_rN) continue;
               var _rD = (_rU && typeof window._displayNameForUid === 'function')
                 ? (window._displayNameForUid(_rU, _rN) || _rN) : _rN;
-              _stRoster.push({ name: _rD, uid: _rU });
+              _stRoster.push({ name: _rD, uid: _rU, slotId: _sG[_ri] || null });
             }
             // ⭐ 2.0.53 — TODOS os W.O.s do grupo entram na tabela, não só o último.
             // Ordem do dono (print do Grupo A: 3 substituições — Denise→Carol,
@@ -6567,7 +6569,7 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
             // ⛔ `classifCongelada` viaja junto — ver a nota no outro chamador: sem ela o
             // retrato congelado é gravado e nunca lido, e a tela recalcula pelos critérios.
             var _gst = window._computeMonarchStandings(
-              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), matches: g.matches, classifCongelada: g.classifCongelada },
+              { players: _stPlayers, playersUids: _stRoster.map(function (r) { return r.uid; }), playersSlotIds: _stRoster.map(function (r) { return r.slotId || null; }), matches: g.matches, classifCongelada: g.classifCongelada },
               t, g.category || null) || [];
             // Estado de W.O. na CLASSIFICAÇÃO DO GRUPO (pedido do dono):
             //  • falta APONTADA (claim pending/disputed, ainda não confirmada) → nome ÂMBAR + tag W.O.;

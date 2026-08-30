@@ -195,6 +195,7 @@
               // woAbsent, subStatus, subName, subIsGuest, pendingInviteId).
               subgroups.push(Object.assign({}, g, {
                 players: (g.players || []).slice(),
+                playersSlotIds: (g.playersSlotIds || []).slice(),
                 matches: (g.matches || []).slice()
               }));
             });
@@ -711,19 +712,21 @@
           .map(function (g) {
             var jogos = porGrupo[g];
             // elenco do grupo: união posicional dos slots (uid manda, nome só de reserva)
-            var nomes = [], uids = [], visto = {};
+            var nomes = [], uids = [], slotIds = [], visto = {};
             jogos.forEach(function (m) {
-              [[m.team1, m.team1Uids], [m.team2, m.team2Uids]].forEach(function (par) {
-                var N = par[0] || [], U = par[1] || [];
+              [[m.team1, m.team1Uids, m.team1SlotIds], [m.team2, m.team2Uids, m.team2SlotIds]].forEach(function (par) {
+                var N = par[0] || [], U = par[1] || [], S = par[2] || [];
                 for (var i = 0; i < Math.max(N.length, U.length); i++) {
-                  var k = U[i] || N[i]; if (!k || visto[k]) continue;
-                  visto[k] = 1; nomes.push(N[i] || ''); uids.push(U[i] || null);
+                  // O coringa não tem uid e seu nome pode repetir. O slotId é a
+                  // identidade da vaga; sem ele, mantém a chave legada por nome.
+                  var k = U[i] || S[i] || N[i]; if (!k || visto[k]) continue;
+                  visto[k] = 1; nomes.push(N[i] || ''); uids.push(U[i] || null); slotIds.push(S[i] || null);
                 }
               });
             });
             return {
               name: jogos[0].groupName || ('Grupo ' + String.fromCharCode(65 + g)),
-              groupIdx: g, players: nomes, playersUids: uids, matches: jogos
+              groupIdx: g, players: nomes, playersUids: uids, playersSlotIds: slotIds, matches: jogos
             };
           });
         var ehMonarch = ms.some(function (m) { return m.isMonarch === true; });

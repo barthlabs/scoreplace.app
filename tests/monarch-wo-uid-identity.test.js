@@ -198,6 +198,41 @@ function makeT() {
     'render não volta a varrer W.O. da rodada inteira');
 })();
 
+// ── (f) ATÉ TRÊS JOGADORES X NO MESMO GRUPO SÃO TRÊS VAGAS ──────────────────
+(function () {
+  const g = 'R1 Grupo X';
+  function rr(id, a, b, c, d) {
+    return { id, bracket: 'monarch', isMonarch: true, groupName: g, phaseIndex: 0, round: 1,
+      team1: [a, b], team1Uids: ['u-' + a, 'u-' + b], team2: [c, d], team2Uids: ['u-' + c, 'u-' + d],
+      p1: a + ' / ' + b, p2: c + ' / ' + d, winner: null };
+  }
+  const t = { id: 'three-x', format: 'Liga', ligaRoundFormat: 'rei_rainha', ligaGhosts: [], history: [],
+    participants: ['A', 'B', 'C', 'D', 'Tiago'].map(displayName => ({ displayName, uid: 'u-' + displayName })),
+    matches: [rr('x1', 'A', 'B', 'C', 'D'), rr('x2', 'A', 'C', 'B', 'D'), rr('x3', 'A', 'D', 'B', 'C')] };
+  W.AppStore.tournaments = [t];
+  W._monWoApply(t.id, 0, g, 'A', 'Jogador X', true);
+  W._monWoApply(t.id, 0, g, 'B', 'Jogador X', true);
+  W._monWoApply(t.id, 0, g, 'C', 'Jogador X', true);
+  const ids = t.matches.filter(m => !m.isSitOut).flatMap(m => (m.team1SlotIds || []).concat(m.team2SlotIds || []))
+    .filter(x => /^ghostmon:/.test(x));
+  const unique = Array.from(new Set(ids));
+  eq(unique.length, 3, 'três Jogadores X recebem três identidades de slot distintas');
+  const tabelaX = W._computeMonarchStandings({
+    players: ['Jogador X', 'Jogador X', 'Jogador X', 'D'],
+    playersUids: [null, null, null, 'u-D'], playersSlotIds: unique,
+    matches: t.matches.filter(m => !m.isSitOut)
+  }, t, null) || [];
+  eq(tabelaX.filter(x => x.name === 'Jogador X' && x.isGhost).length, 3,
+    'classificação preserva três linhas distintas de Jogador X, todas zeradas');
+  const alvo = unique[0];
+  W._monWoApply(t.id, 0, g, 'Jogador X', 'Tiago', false, alvo);
+  const jogos = t.matches.filter(m => !m.isSitOut);
+  const tiago = jogos.reduce((n, m) => n + (m.team1 || []).concat(m.team2 || []).filter(x => x === 'Tiago').length, 0);
+  const xs = jogos.reduce((n, m) => n + (m.team1 || []).concat(m.team2 || []).filter(x => x === 'Jogador X').length, 0);
+  eq(tiago, 3, 'a vaga X escolhida vira Tiago nos três jogos rotativos dela');
+  eq(xs, 6, 'as outras duas vagas Jogador X permanecem intactas (2 × 3 aparições)');
+})();
+
 console.log(`  ${pass} asserts OK, ${fail} falhas`);
 if (fail > 0) { console.error('❌ monarch-wo-uid-identity FALHOU'); process.exit(1); }
 console.log('✅ monarch-wo-uid-identity: OK');

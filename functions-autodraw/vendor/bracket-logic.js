@@ -42,7 +42,12 @@ window._computeMonarchStandings = function(group, t, category) {
   // ele só existe pra completar os jogos (chaves). O uid real — inclusive quem levou
   // W.O. — sempre aparece. Ghosts vêm de t.ligaGhosts (quando t disponível).
   var _ghostSet = (t && Array.isArray(t.ligaGhosts)) ? t.ligaGhosts : [];
-  var _isGhostMon = function (n) { return n && _ghostSet.indexOf(n) !== -1; };
+  // Um slot ghost novo tem identidade própria (`ghostmon:*`). O nome só é fallback
+  // para documentos legados, que ainda não tinham slot id. Assim até quatro
+  // "Jogador X" no mesmo grupo permanecem quatro vagas distintas.
+  var _isGhostMon = function (n, slotId) {
+    return slotId ? String(slotId).indexOf('ghostmon:') === 0 : (n && _ghostSet.indexOf(n) !== -1);
+  };
   // v4.4.117: CLASSIFICAÇÃO POR UID. A chave da tabela é o uid (quando conhecido) — dois
   // homônimos (Vivian × Vivi Hirata, ou 2 pessoas mesmo nome) NUNCA se somam na mesma linha.
   // Seed do elenco usa group.playersUids (gravado no sorteio); cada jogo usa team1Uids/
@@ -72,19 +77,20 @@ window._computeMonarchStandings = function(group, t, category) {
   // com nome gravado — 98 de 98 jogos do Confra, medido. É a merda que o cânone do uid
   // existe pra impedir: trocar o nome do perfil depois deixaria a chave com o antigo.
   function _monUid(name, uid) { return uid || _matchN2u[name] || _n2uMon[name] || null; }
-  function _monKey(name, uid) {
+  function _monKey(name, uid, slotId) {
+    if (_isGhostMon(name, slotId)) return 'ghost:' + slotId;
     var u = _monUid(name, uid);
     return u ? ('uid:' + u) : ('name:' + name);
   }
-  function _monEnsure(name, uid) {
+  function _monEnsure(name, uid, slotId) {
     // ⭐ 2.0.52 — O FANTASMA OCUPA A VAGA NA TABELA, ZERADO. Ordem do dono (24/ago/2026,
     // G2 do Confra, com o print na mão): _"era para colocar o jogador x no 3o lugar
     // deixando a kallana em 4o e a adele em 5o"_. Antes o ghost era pulado no seed e a
     // vaga SUMIA da tabela — quem estava abaixo subia um degrau que não ganhou em quadra.
     // O que NÃO mudou: ghost segue sem PONTUAR (o crédito de jogo pula linha isGhost,
     // e o PA dele é 0) e fora do sorteio/avanço — só a VAGA fica visível, com zeros.
-    if (_isGhostMon(name)) {
-      var kg = 'name:' + name;
+    if (_isGhostMon(name, slotId)) {
+      var kg = slotId ? ('ghost:' + slotId) : ('name:' + name);
       if (!stats[kg]) stats[kg] = {
         key: kg, uid: null, name: name, isGhost: true,
         wins: 0, losses: 0, played: 0, pointsFor: 0, pointsAgainst: 0,
@@ -116,10 +122,10 @@ window._computeMonarchStandings = function(group, t, category) {
   // Ou seja: o rótulo ainda MANDAVA aqui. Agora a lista sai da união posicional
   // (uid manda; o nome só entra onde NÃO há uid — fictício/legado), e o `name` da
   // linha é o nome VIVO do perfil. Ver [[project_uid_identity_canon_locked]].
-  function _ladoPares(nomes, uids) {
-    var N = Array.isArray(nomes) ? nomes : [], U = Array.isArray(uids) ? uids : [];
-    var n = Math.max(N.length, U.length), out = [];
-    for (var i = 0; i < n; i++) { if (N[i] || U[i]) out.push({ name: N[i] || '', uid: U[i] || null }); }
+  function _ladoPares(nomes, uids, slotIds) {
+    var N = Array.isArray(nomes) ? nomes : [], U = Array.isArray(uids) ? uids : [], S = Array.isArray(slotIds) ? slotIds : [];
+    var n = Math.max(N.length, U.length, S.length), out = [];
+    for (var i = 0; i < n; i++) { if (N[i] || U[i] || S[i]) out.push({ name: N[i] || '', uid: U[i] || null, slotId: S[i] || null }); }
     return out;
   }
   function _nomeVivoMon(p) {
@@ -129,8 +135,8 @@ window._computeMonarchStandings = function(group, t, category) {
     }
     return p.name || '';
   }
-  _ladoPares(group.players, group.playersUids).forEach(function (p) {
-    _monEnsure(_nomeVivoMon(p), p.uid);
+  _ladoPares(group.players, group.playersUids, group.playersSlotIds).forEach(function (p) {
+    _monEnsure(_nomeVivoMon(p), p.uid, p.slotId);
   });
 
   var matches = (group.rounds && group.rounds[0]) ? group.rounds[0].matches : (group.matches || []);
@@ -178,8 +184,8 @@ window._computeMonarchStandings = function(group, t, category) {
     // do jogo está clobberado mas o uid bate o do elenco, encontra a linha certa.
     // v1.7.79: itera pelo par POSICIONAL (uid manda) — `m.team1.forEach` era
     // name-driven e, sem rótulo gravado, não somava jogo nenhum.
-    _ladoPares(m.team1, _u1m).forEach(function(_p) {
-      var k = _monKey(_p.name, _p.uid); if (!stats[k] || stats[k].isGhost) return;
+    _ladoPares(m.team1, _u1m, m.team1SlotIds).forEach(function(_p) {
+      var k = _monKey(_p.name, _p.uid, _p.slotId); if (!stats[k] || stats[k].isGhost) return;
       stats[k].played++;
       stats[k].pointsFor += s1;
       stats[k].pointsAgainst += s2;
@@ -193,8 +199,8 @@ window._computeMonarchStandings = function(group, t, category) {
       stats[k].tbPointsLost = (stats[k].tbPointsLost || 0) + _tbp.p2;
       if (team1Won) stats[k].wins++; else stats[k].losses++;
     });
-    _ladoPares(m.team2, _u2m).forEach(function(_p) {
-      var k = _monKey(_p.name, _p.uid); if (!stats[k] || stats[k].isGhost) return;
+    _ladoPares(m.team2, _u2m, m.team2SlotIds).forEach(function(_p) {
+      var k = _monKey(_p.name, _p.uid, _p.slotId); if (!stats[k] || stats[k].isGhost) return;
       stats[k].played++;
       stats[k].pointsFor += s2;
       stats[k].pointsAgainst += s1;
@@ -245,14 +251,14 @@ window._computeMonarchStandings = function(group, t, category) {
     Object.keys(stats).forEach(function (k) { _pts[k] = (stats[k].wins || 0) * 3; stats[k].buchholz = 0; stats[k].sonnebornBerger = 0; });
     (matches || []).forEach(function (m) {
       if (!m || !m.winner || m.isBye || m.isSitOut) return;
-      var l1 = _ladoPares(m.team1, m.team1Uids), l2 = _ladoPares(m.team2, m.team2Uids);
+      var l1 = _ladoPares(m.team1, m.team1Uids, m.team1SlotIds), l2 = _ladoPares(m.team2, m.team2Uids, m.team2SlotIds);
       var venceu1 = (window._matchWinnerSide(m) === 1);
       [[l1, l2, venceu1], [l2, l1, !venceu1]].forEach(function (par) {
         par[0].forEach(function (p) {
-          var k = _monKey(p.name, p.uid);
+          var k = _monKey(p.name, p.uid, p.slotId);
           if (!stats[k]) return;
           par[1].forEach(function (o) {
-            var ko = _monKey(o.name, o.uid);
+            var ko = _monKey(o.name, o.uid, o.slotId);
             if (!stats[ko]) return;
             stats[k].buchholz += _pts[ko] || 0;
             if (par[2]) stats[k].sonnebornBerger += _pts[ko] || 0;   // só o que ele VENCEU
@@ -5828,5 +5834,4 @@ window._isLigaAutoDraw = function (t) {
 // cliente×CF). Apagada em vez de mantida dormente: uma função de sorteio viva no
 // cliente é a corrida a uma linha de voltar. Quem sorteia: functions-autodraw
 // (autoDraw, cron 1min) via draw-core.generateLigaRound — o MESMO motor, vendored.
-
 
