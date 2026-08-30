@@ -6748,12 +6748,33 @@ exports.accountSummaryEmail = onDocumentWritten(
       // ORDEM: enfileira PRIMEIRO, assinatura DEPOIS — se o enfileiramento falhar, a
       // assinatura não é gravada e a próxima escrita re-tenta (perder o e-mail em
       // silêncio seria pior que, raramente, mandar duas vezes).
-      await _enqueueMail(admin.firestore(), {
+      /* ⚠️ `_FV` (subpath `firebase-admin/firestore`) e NÃO `admin.firestore.FieldValue`:
+       * no runtime do emulador de Functions esse namespace vem sem `.FieldValue`, e a linha
+       * derrubava o gatilho INTEIRO no catch de best-effort — o e-mail de boas-vindas /
+       * confirmação nunca era enfileirado, `accountEmailSig` nunca era gravado (a ordem é
+       * enfileirar primeiro), e o log repetia "[accountSummaryEmail] falhou (best-effort):
+       * Cannot read properties of undefined (reading 'serverTimestamp')" com a suíte verde.
+       * Mesmo caminho já adotado em `deleteAccount` e em `accountDeletionEmail`. */
+      // Id determinístico por conta + assinatura: duas escritas concorrentes do mesmo
+      // perfil podem disparar o gatilho antes de `accountEmailSig` ser persistido. `add()`
+      // criava dois e-mails; `create()` permite que somente a primeira execução enfileire.
+      const crypto = require("crypto");
+      const mailId = "acctsum_" + crypto.createHash("sha256")
+        .update(uid + "\n" + sig).digest("hex");
+      const mailRef = admin.firestore().collection("mail").doc(mailId);
+      try {
+        await mailRef.create({
         to: [email],
         replyTo: "contato@barthlabs.com",
         message: { subject: mail.subject, html: mail.html, text: mail.text },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        createdAt: _FV.serverTimestamp(),
+        });
+      } catch (e) {
+        // Outra execução concorrente já enfileirou exatamente esta versão da identidade.
+        // Só esse conflito é idempotência; qualquer outra falha precisa manter a assinatura
+        // ausente para que uma escrita futura tente novamente.
+        if (!(e && (e.code === 6 || e.code === "already-exists" || e.code === "ALREADY_EXISTS"))) throw e;
+      }
       await after.ref.set({ accountEmailSig: sig }, { merge: true });
       console.log("[accountSummaryEmail]", isNew ? "nascimento" : "mudança", "→", email);
     } catch (e) {
@@ -6940,9 +6961,15 @@ exports.accountDeletionEmail = onDocumentWritten(
       const ehRelatorio = !alvos.user;
       const alvo = alvos.user || alvos.report;
       const m = ehRelatorio ? _delEmail.buildReportEmail(info) : _delEmail.buildUserEmail(info);
+      /* ⚠️ `_FV` (subpath `firebase-admin/firestore`) e NÃO `admin.firestore.FieldValue`:
+       * no runtime do emulador de Functions esse namespace vem sem `.FieldValue`, e a linha
+       * derrubava o gatilho INTEIRO no catch de best-effort — o e-mail de exclusão nunca era
+       * enfileirado e o log dizia "[accountDeletionEmail] falhou: Cannot read properties of
+       * undefined (reading 'serverTimestamp')", com a suíte verde porque nada conferia a
+       * fila `mail`. Mesmo caminho já adotado no tombstone de `deleteAccount`. */
       await põe(idMail, Object.assign({}, alvo, {
         message: { subject: m.subject, html: m.html, text: m.text },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: _FV.serverTimestamp(),
       }));
       console.log("[accountDeletionEmail] enfileirado (" + (ehRelatorio ? "relatório — conta sem e-mail" : "confirmação ao titular") +
         ") → " + alvo.to.join(",") + " (cc " + (alvo.cc.join(",") || "—") + ") | sobras=" + leftovers.length);

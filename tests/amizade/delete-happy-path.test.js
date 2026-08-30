@@ -39,7 +39,7 @@ const D1 = 'uidDELETEhappy0000000000001';
 const D2 = 'uidDELETEamigo0000000000002';
 
 async function limpar() {
-  for (const col of ['friendships', 'users', 'userLifecycle', 'tournaments']) {
+  for (const col of ['friendships', 'users', 'userLifecycle', 'tournaments', 'mail']) {
     const s = await db.collection(col).get(); const b = db.batch(); s.forEach((d) => b.delete(d.ref)); await b.commit();
   }
   const acc = await db.collectionGroup('accepted').get();
@@ -48,6 +48,41 @@ async function limpar() {
 }
 const authVivo = async (uid) => { try { await admin.auth().getUser(uid); return true; } catch (e) { return false; } };
 const lifecycleDe = async (uid) => { const d = await db.collection('userLifecycle').doc(uid).get(); return d.exists ? (d.data() || {}).estado : null; };
+
+/* ⛔ O E-MAIL DE EXCLUSÃO (bug achado no log de 29/ago/2026): `accountDeletionEmail` usava
+ * `admin.firestore.FieldValue.serverTimestamp()`, que no runtime do emulador de Functions é
+ * `undefined`. O gatilho morria no catch de best-effort, o log dizia
+ *   [accountDeletionEmail] falhou: Cannot read properties of undefined (reading 'serverTimestamp')
+ * e a suíte seguia VERDE, porque nenhum teste olhava a fila `mail`. Falha silenciosa num
+ * caminho de LGPD (a pessoa não recebia a confirmação da exclusão dela).
+ * Aqui o gatilho é AGUARDADO por polling com teto explícito — se o documento não aparecer,
+ * o teste falha; nunca vira aviso. O id é determinístico (`account-deletion-email-core.js:
+ * mailDocId`), então não há relógio nem ordem envolvidos. */
+const CC_CONTATO = 'contato@barthlabs.com';
+const idDoEmail = (uid) => 'acctdel_' + String(uid).replace(/[^A-Za-z0-9_-]/g, '_');
+const TETO_GATILHO_MS = 180000;
+
+/* ⚠️ O TETO E A ORDEM DA SUÍTE, MEDIDOS (29/ago/2026). O emulador executa os gatilhos em
+ * FILA e `_sweepDeletionLeftovers` (index.js) espera 5 s DE PROPÓSITO em cada exclusão
+ * notificável — para não acusar "Auth ainda existe" em toda exclusão legítima. Com este
+ * arquivo rodando por ÚLTIMO, as suítes anteriores deixavam ~100 eventos notificáveis na
+ * fila: o evento de D1 só era processado depois de ~8 min, e nem 300 s bastavam. Por isso
+ * `run.js` passou a chamar este arquivo LOGO no começo — a fila curta é o que torna a
+ * medição possível. O teto continua existindo para a espera nunca virar espera infinita.
+ * ⛔ Tentei antes detectar "fila ociosa" pelo tamanho de `mail`: é sinal ERRADO. Os ids são
+ * determinísticos, então a reentrega de um uid já enfileirado não cria documento novo e a
+ * contagem estabiliza com a fila ainda cheia. */
+
+/** Espera o documento existir. Devolve o snapshot, ou null se estourar o teto. */
+async function esperarDoc(ref, tetoMs) {
+  const limite = Date.now() + (tetoMs || TETO_GATILHO_MS);
+  for (;;) {
+    const d = await ref.get();
+    if (d.exists) return d;
+    if (Date.now() > limite) return null;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
 
 module.exports = (async () => {
   await db.doc('_meta/amizadeMigration').set({ fase: 'live', maintenance: false });
@@ -64,6 +99,26 @@ module.exports = (async () => {
   ok(doc1.deleted === true, 'o perfil vira tombstone `deleted:true`');
   ok(!doc1.displayName && !doc1.email, 'e sem dado pessoal');
   ok(await lifecycleDe(D1) === 'deleted', '⛔ e o lifecycle termina `deleted` (terminal, não `active`)');
+
+  // ── o gatilho accountDeletionEmail tem que ter ENFILEIRADO o e-mail ────────
+  const mailSnap = await esperarDoc(db.collection('mail').doc(idDoEmail(D1)));
+  ok(!!mailSnap, '⛔ accountDeletionEmail enfileirou `mail/' + idDoEmail(D1) +
+    '` dentro de ' + (TETO_GATILHO_MS / 1000) + 's (ausente = o gatilho morreu calado)');
+  if (mailSnap) {
+    const mail = mailSnap.data() || {};
+    ok(Array.isArray(mail.to) && mail.to.indexOf(D1 + '@x.com') !== -1,
+      '   vai para o e-mail da conta excluída');
+    ok(Array.isArray(mail.cc) && mail.cc.indexOf(CC_CONTATO) !== -1,
+      '   com cópia para ' + CC_CONTATO);
+    ok(mail.replyTo === CC_CONTATO, '   e replyTo ' + CC_CONTATO);
+    ok(!!(mail.message && String(mail.message.subject || '').trim()), '   tem assunto');
+    ok(!!(mail.message && String(mail.message.html || '').trim()), '   tem corpo html');
+    ok(!!(mail.message && String(mail.message.text || '').trim()), '   tem corpo texto');
+    /* ⛔ ESTA é a asserção que pega o bug de origem: `serverTimestamp()` resolvido vira um
+     * Timestamp com `toDate`. Se o campo vier `undefined`/null, o `_FV` não funcionou. */
+    ok(!!(mail.createdAt && typeof mail.createdAt.toDate === 'function'),
+      '⛔ `createdAt` é Timestamp resolvido (prova que serverTimestamp() funcionou)');
+  }
 
   // ══ 2) HAPPY PATH COM AMIZADE ACEITA ══════════════════════════════════════
   await limpar();
@@ -91,6 +146,10 @@ module.exports = (async () => {
   ok(!(cacheD2.friends || []).includes(D1), 'o cache do amigo não guarda o uid morto');
   ok(await lifecycleDe(D1) === 'deleted', 'lifecycle `deleted`');
   ok(await lifecycleDe(D2) !== 'deleted', 'e o amigo continua normal');
+  /* ⛔ AQUI NÃO se repete a asserção do e-mail: `mailDocId` é determinístico POR UID, então
+   * o documento deste bloco tem o MESMO id do bloco 1 e um gatilho atrasado do bloco 1 pode
+   * recriá-lo — a asserção mediria o evento errado e passaria por sorte. A verificação do
+   * e-mail vive no bloco 1, onde o evento é inequívoco. */
 
   // ══ 3) EXCLUSÃO RETOMÁVEL: tombstone gravado, Auth sobreviveu ═════════════
   /* Simula a falha real: o Firestore já virou tombstone e o `deleteUser` falhou. Antes,

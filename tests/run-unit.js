@@ -1038,6 +1038,8 @@ const SUITES = [
   // Gate do DETALHE (#tournaments/:id) não pula ao marcar presença: _tournamentDetailSig é
   // determinística (sem updatedAt) → o eco do próprio write vê "igual". v1.3.96.
   'tests/tournament-detail-sig.test.js',
+  // Card da dashboard abre a ficha; a chamada é exclusiva de #participants/:id. v2.1.49.
+  'tests/detalhe-abre-detalhe-nao-chamada.test.js',
   // Inscritos (individual E duplas) usam GRID responsivo — várias colunas em tela larga, nunca
   // coluna única. Trava contra regressão (dono: "não pode regredir"). v1.3.101.
   'tests/inscritos-grid-canon.test.js',

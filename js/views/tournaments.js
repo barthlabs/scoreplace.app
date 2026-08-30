@@ -4338,22 +4338,14 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
 
-    ${/* ⚠️ REVERTIDA a remoção da 2.1.35 — ela foi um DIAGNÓSTICO ERRADO meu (2.1.38).
-         Ordem do dono agora: "tem 8 inscritos mas não aparece na tela de detalhe onde
-         deveriam aparecer".
-
-         O QUE ACONTECEU: ele reclamou de abrir o torneio e não alcançar o botão de
-         sortear. Eu li a linha `hasDrawn ? '' : participantsHtml`, vi que o torneio novo
-         era o único a cair nesse ramo, e ARRANQUEI a seção. Só que as FERRAMENTAS DO
-         ORGANIZADOR já vêm ANTES desta linha no HTML (~3410 contra ~4172) — a seção nunca
-         foi o que escondia o botão.
-         ⭐ A causa real era outra e já estava corrigida na 2.1.34: o filtro de GÊNERO
-         escondia os 8 placeholders (`data-part-gender="none"`), deixando um vazio enorme
-         no lugar deles. Com o vazio, a página parecia terminar ali.
-         ⛔ A LIÇÃO: eu removi a seção no MESMO ciclo em que consertei a causa, sem esperar
-         pra ver se o conserto bastava. Duas mudanças pro mesmo sintoma — e a segunda virou
-         o defeito seguinte. [[feedback_uma_mudanca_por_vez_apos_estado_aprovado]] */ ''}
-    ${hasDrawn ? '' : participantsHtml}
+    ${/* ⛔ DETALHE NÃO É CHAMADA (2.1.49).
+         Regra escolhida pelo dono: tocar o card na dashboard abre a ficha do torneio;
+         a lista de inscritos — filtros, presença e W.O. — só abre pelo botão
+         "👥 Inscritos" em #participants/:id. A reversão da 2.1.38 misturou os dois
+         contextos e, em torneio ainda sem sorteio, fazia a chamada ocupar a primeira
+         tela do detalhe. O cartão, as ferramentas e a chave continuam acima; a chamada
+         tem sua rota própria. O gate detalhe-abre-detalhe-nao-chamada.test.js trava a
+         separação para que este ramo não volte por acidente. */ ''}
 
     ${hasDrawn ? `
       <div class="mt-5">

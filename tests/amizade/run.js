@@ -284,6 +284,22 @@ const FECHADA = 'uidFECHADA0000000000000000005'; // acceptFriendRequests: false
   console.log('\n' + pass + ' ok, ' + fail + ' falhas (callables)');
   if (fail) process.exit(1);
 
+  /* ⛔ ESTE VEM ANTES DE TUDO: `accountSummaryEmail` dispara no NASCIMENTO do perfil, e a
+   * prova é a fila `mail`. Como o emulador serializa gatilhos e as suítes de amizade apagam
+   * dezenas de perfis (5 s de espera deliberada por exclusão), medir isto tarde mediria a
+   * FILA e não o gatilho. */
+  console.log('\n──── accountSummaryEmail: o e-mail da conta chega na fila ────');
+  await require('./account-summary-email.test.js');
+
+  /* ⛔ ESTE VEM LOGO DEPOIS, e a ordem é parte do teste (29/ago/2026).
+   * `delete-happy-path` verifica que o gatilho `accountDeletionEmail` ENFILEIROU o e-mail de
+   * exclusão em `mail` — e o gatilho é assíncrono, com 5 s deliberados de espera por evento
+   * notificável (`_sweepDeletionLeftovers`). Rodando por último, ele entrava atrás de ~100
+   * eventos das outras suítes: ~8 min de fila, e a espera estourava qualquer teto razoável.
+   * Aqui em cima a fila é curta e a medição vira o que ela diz ser. */
+  console.log('\n──── deleteAccount: caminho feliz ────');
+  await require('./delete-happy-path.test.js');
+
   // ── integração do ciclo de vida (merge/exclusão/cache) no mesmo emulador ──
   console.log('\n──── ciclo de vida (merge, exclusão, cache) ────');
   await require('./lifecycle.test.js');
@@ -295,8 +311,6 @@ const FECHADA = 'uidFECHADA0000000000000000005'; // acceptFriendRequests: false
   await require('./concorrencia.test.js');
   console.log('\n──── auto-merge por gatilho no freeze ────');
   await require('./auto-merge-freeze.test.js');
-  console.log('\n──── deleteAccount: caminho feliz ────');
-  await require('./delete-happy-path.test.js');
   console.log('\n──── mergePhoneAccount: prova de posse e ghost ────');
   await require('./merge-phone-prova.test.js');
 })().catch((e) => { console.error('ERRO', e); process.exit(1); });
