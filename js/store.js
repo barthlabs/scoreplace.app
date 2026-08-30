@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.60';
+window.SCOREPLACE_VERSION = '2.1.61';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -12225,28 +12225,64 @@ window.AppStore = {
       if (window._error) window._error('[fase2] não há como montar — torneio ficaria sem jogos na tela');
       return;
     }
+    /* ⛔ A TRAVA ERA DE UMA VEZ SÓ — E ISSO ESVAZIAVA A TELA PELO RESTO DA SESSÃO.
+     * Medido no Confra AO VIVO (30/ago): `_montandoPesados[id]` era ligada aqui e só
+     * desligada no `.catch`. No caminho de SUCESSO — e nos dois `return` mudos do `.then`
+     * (`!montado`, `!vivo`) — ela ficava ligada pra sempre, e o `continue` abaixo passou a
+     * engolir TODO pedido seguinte de montagem daquele torneio.
+     * O ESTRAGO: bastava UM eco chegar sem os jogos pra `_faltamPesados` acusar certo, a
+     * busca ser pedida, o `continue` recusar calado — e o objeto vivo virar o documento
+     * MAGRO. A partir daí `_enxertaJogos` não tem mais de onde enxertar (o `velho` também
+     * está vazio) e a tela mostra o torneio SEM NADA: "Demais jogos da rodada (0)",
+     * classificação toda zerada, 1 W.O. de 15, 5 eventos de 113. No banco, nada faltava.
+     * E não dava erro nenhum: `return` mudo não passa nem pelo `_falhasDePartes` do `?diag=1`.
+     * Só recarregar a página curava — porque a trava é de memória, não de dado.
+     *
+     * ⭐ Agora a trava quer dizer EM VOO (o que ela sempre quis dizer) e é solta em TODO
+     * caminho, via `_soltar` — inclusive nos dois returns mudos, que também ganharam voz.
+     * ⚠️ Soltar sozinho reabriria a porta pro laço que o comentário do chamador teme: torneio
+     * cujo marcador promete uma parte que a subcoleção não tem buscaria A CADA eco. Por isso
+     * a trava de "em voo" vem com um PISO entre tentativas. Retentar é obrigatório; retentar
+     * em rajada é o mesmo desastre com outro nome.
+     * Ver [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]]. */
     this._montandoPesados = this._montandoPesados || {};
+    this._ultimaMontagem = this._ultimaMontagem || {};
+    var PISO_ENTRE_TENTATIVAS_MS = 15000;
     var self = this;
+    var _soltar = function (tid) { delete self._montandoPesados[tid]; };
+    var _agora = Date.now();
     for (var i = 0; i < ids.length; i++) {
       var id = String(ids[i]);
-      if (this._montandoPesados[id]) continue;
+      if (this._montandoPesados[id]) continue;                  // já tem uma EM VOO
+      var _ult = this._ultimaMontagem[id];
+      if (_ult && (_agora - _ult) < PISO_ENTRE_TENTATIVAS_MS) continue;   // acabou de tentar
       this._montandoPesados[id] = true;
+      this._ultimaMontagem[id] = _agora;
       /* eslint-disable no-loop-func */
       (function (tid) {
         var alvo = (self.tournaments || []).find(function (x) { return x && String(x.id) === tid; });
         if (!alvo || !Array.isArray(alvo._semPesados) || !alvo._semPesados.length) {
-          delete self._montandoPesados[tid]; return;
+          _soltar(tid); return;
         }
         window.FirestoreDB._montaDeSubcolecoes(tid, alvo, alvo._semPesados)
           .then(function (montado) {
-            if (!montado) return;
+            /* ⛔ Estes dois returns eram MUDOS e travados. Mudo já era ruim; travado deixava
+             * o torneio sem jogos pelo resto da sessão. Agora soltam e falam. */
+            if (!montado) {
+              if (window._warn) window._warn('[fase2] montagem de ' + tid + ' voltou vazia');
+              _soltar(tid); return;
+            }
             // ⭐ escreve NO LUGAR (mesma referência): meia dúzia de telas guardam o objeto,
             // e trocar a referência deixaria elas com o de antes. Mesmo motivo pelo qual o
             // completo SUBSTITUI o resumo no lugar em `_ensureTournamentLoaded`.
             var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === tid; });
-            if (!vivo) return;
+            if (!vivo) {
+              if (window._warn) window._warn('[fase2] ' + tid + ' saiu do store durante a montagem');
+              _soltar(tid); return;
+            }
             Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
             delete vivo._faltamPesados;
+            _soltar(tid);
             try { self._saveToCache(); } catch (e) {}
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
           })
@@ -12257,7 +12293,7 @@ window.AppStore = {
             self._falhasDePartes = (self._falhasDePartes || []);
             self._falhasDePartes.push(tid.slice(-6) + ': ' + String((e && e.message) || e).slice(0, 90));
             if (self._falhasDePartes.length > 6) self._falhasDePartes.shift();
-            delete self._montandoPesados[tid];   // deixa uma próxima tentativa acontecer
+            _soltar(tid);   // deixa uma próxima tentativa acontecer
           });
       })(id);
       /* eslint-enable no-loop-func */

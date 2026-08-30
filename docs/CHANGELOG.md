@@ -1,5 +1,13 @@
 # Changelog do scoreplace.app
 
+## 2.1.61 — A montagem das partes destrava (30/ago/2026)
+
+- **Problema corrigido:** em torneio dividido, `_montaPesadosQueFaltam` ligava `_montandoPesados[id]` e só desligava no `.catch`. No caminho de sucesso — e nos dois `return` mudos do `.then` (`!montado`, `!vivo`) — a trava ficava ligada pelo resto da sessão, e o `if (this._montandoPesados[id]) continue;` passava a engolir todo pedido seguinte de montagem daquele torneio.
+- **Estrago medido (Confra ao vivo, 30/ago):** bastava um eco chegar sem os jogos para `_faltamPesados` acusar corretamente, a busca ser pedida e o `continue` recusá-la em silêncio. O objeto vivo virava o documento magro e `_enxertaJogos` perdia a fonte do enxerto. A tela mostrava "Demais jogos da rodada (0)", classificação zerada, 1 W.O. de 15 e 5 eventos de 113 — com 115 jogos e 93 placares intactos no banco. Sem erro: `return` mudo não chega ao `_falhasDePartes` do `?diag=1`. Só recarregar a página curava.
+- **Correção:** a trava passa a significar EM VOO e é solta em todos os cinco caminhos, com piso de 15s entre tentativas para que soltar não vire busca em rajada a cada eco. Os dois returns mudos ganharam aviso.
+- **Prova:** `tests/montagem-de-partes-destrava.test.js` roda o método real e o corpo anterior no mesmo banco de provas — o antigo trava e não remonta; o atual remonta e se cura.
+- **Não corrigido nesta versão:** `mutateTournament` continua rodando o mutator sobre o documento cru (elenco e jogos vazios em torneio dividido) e não escreve nas subcoleções — o cliente não tem permissão para isso. É o que faz um W.O. entrar no `woLog` e não entrar no jogo. O conserto é levar esses fluxos para a CF.
+
 ## 2.1.60 — Espelho de resultado acompanha os jogos divididos (30/ago/2026)
 
 - **Problema corrigido:** em torneios grandes, `matches` já é a fonte canônica numa subcoleção, mas a projeção `results/{matchId}` ainda escutava apenas o documento principal, que é propositalmente magro. Isso podia deixar placar, W.O., horário de início ou roster antigos — e até faltar um `results` inteiro.
