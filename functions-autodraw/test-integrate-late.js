@@ -113,7 +113,10 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
   ok('só toca Rei/Rainha (o formato que a fila serve)', corpo.includes("ligaRoundFormat !== 'rei_rainha'"));
   ok('nem carrega perfil sem 4 na fila (custo zero no caso comum)', corpo.includes('_fila < 4'));
   ok('resolve nome e gênero por uid ANTES do motor', corpo.includes('_preloadDrawNames(') && corpo.includes('_enrichParticipantsFromProfiles('));
-  ok('persiste dentro de transação com write-boundary', corpo.includes('runTransaction') && corpo.includes('_applyWriteBoundary'));
+  ok('monta torneio dividido dentro da transação', corpo.includes('await _leTorneio(tx, doc.ref, doc.id)'));
+  ok('guarda o estado anterior para gravar só deltas', corpo.includes('const _tAntes = _antesDoMotor(t)'));
+  ok('persiste pelo writer canônico (inclusive subcoleções)', corpo.includes('_gravaTorneio(tx, doc.ref, t, _tAntes)'));
+  ok('não pula torneio dividido por ler documento cru', !corpo.includes('PULADO: torneio dividido'));
   ok('best-effort por torneio (um doc ruim não derruba a varredura)', corpo.includes('catch'));
   ok('avisa depois de formar', corpo.includes('_avisarGrupoFormado('));
 

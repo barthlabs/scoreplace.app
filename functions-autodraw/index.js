@@ -56,7 +56,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '1.5';
+const CF_VERSION = '2.1.58';
 
 initializeApp();
 const db = getFirestore();
@@ -1664,9 +1664,13 @@ async function _formarGruposDaEspera(doc) {
   await _preloadDrawNames(t0);
   try {
     const res = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(doc.ref);
-      if (!snap.exists) return { changed: false };
-      const t = snap.data(); t.id = doc.id;
+      // A query da varredura traz só o documento de configuração. Para torneio dividido,
+      // grupos e jogos vivem nas subcoleções: montar aqui é obrigatório antes de deixar o
+      // motor alterar a fila, senão a gravação posterior não tem como comparar/escrever
+      // as partes canônicas. É o mesmo caminho de drawRound/integrateLateEntries.
+      const t = await _leTorneio(tx, doc.ref, doc.id);
+      if (!t) return { changed: false };
+      const _tAntes = _antesDoMotor(t);
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) { /* best-effort */ }
       _enrichParticipantsFromProfiles(t);
       // nomes dos grupos ANTES, pra saber depois quais nasceram agora (e avisar só eles)
@@ -1680,16 +1684,10 @@ async function _formarGruposDaEspera(doc) {
           novos.push({ name: g.name, players: (g.players || []).slice(), uids: (g.playersUids || []).slice() });
         }
       }));
-      // ⚠️ Aqui o torneio veio de uma QUERY (varredura agendada), não de `_leTorneio` —
-      // então ele NÃO está montado. Gravar dividido a partir de um objeto sem os jogos
-      // apagaria a subcoleção. Enquanto esta varredura não ler montado, torneio DIVIDIDO
-      // é pulado: ele entra no grupo pelo caminho normal, e pular é reversível.
-      if (Array.isArray(t._semPesados) && t._semPesados.length) {
-        console.log('[espera→grupo]', doc.id, 'PULADO: torneio dividido e esta varredura ainda lê o doc cru');
-        return { changed: false };
-      }
-      const b = _applyWriteBoundary(t);
-      tx.set(doc.ref, b.persist);
+      // `_gravaTorneio` preserva o marcador e grava apenas os registros que mudaram em
+      // cada subcoleção. Nunca usar `tx.set` direto: ele recolocaria os pesados no doc ou
+      // descartaria mudanças de grupos/jogos ao formar a espera.
+      _gravaTorneio(tx, doc.ref, t, _tAntes);
       return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0, novos: novos, nome: t.name || '' };
     });
     if (res.changed) {

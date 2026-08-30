@@ -1,5 +1,10 @@
 # Changelog do scoreplace.app
 
+## 2.1.58 — Espera automática funciona também em torneios divididos (30/ago/2026)
+
+- **Correção arquitetural de escrita:** a varredura agendada de Rei/Rainha agora monta o torneio pelas subcoleções canônicas antes de formar grupos da lista de espera. Antes, ela pulava explicitamente qualquer torneio dividido — 41 dos 42 torneios auditados. A gravação passa pelo writer canônico e persiste somente os deltas das partes alteradas; não recoloca os campos pesados no documento principal.
+- **Gate de regressão:** o teste da integração tardia exige montagem, snapshot anterior e gravação canônica dentro da transação; remover esse caminho ou reintroduzir o pulo do torneio dividido falha a suíte.
+
 ## 2.1.52 — Cards só no pré-sorteio; chamada é a única lista operacional (30/ago/2026)
 
 - **Contrato visual corrigido:** os botões canônicos de ação, inclusive **📋 Regras** e **👥 Inscritos**, permanecem nos estados pré-sorteio, em andamento e encerrado para quem organiza. A ficha mostra os cards canônicos de inscritos somente antes do sorteio. Assim que há chaveamento, os cards deixam de ser duplicados no detalhe: a tela **Inscritos** é a fonte operacional única para presença, W.O. e exclusão.
