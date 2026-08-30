@@ -53,6 +53,14 @@ const digitada = { rounds: [{ monarchGroups: [{ name: 'G1' }, { name: 'G2' }], m
 ok(onde(digitada, '', 'Fulana Digitada', 'G1') === 'G2',
   '⭐ inscrito DIGITADO pelo organizador (sem uid) acha pelo nome — é a exceção do cânone');
 
+// ── Jogador X é vaga, não identidade por nome ───────────────────────────────
+const vagasX = { rounds: [{ monarchGroups: [{ name: 'R1 Grupo D' }, { name: 'R1 Grupo E2' }], matches: [
+  { monarchGroup: 0, team1: ['Jogador X'], team2: ['Ana'] },
+  { monarchGroup: 1, team1: ['Jogador X'], team2: ['Bia'] }
+] }] };
+ok(onde(vagasX, '', 'Jogador X', 'R1 Grupo D') === '',
+  '⛔ Jogador X é uma vaga por slot: nunca recebe grupo de outra vaga com o mesmo rótulo');
+
 // ── a rodada mais recente manda ─────────────────────────────────────────────
 const duasRodadas = { rounds: [
   { monarchGroups: [{ name: 'R1 Grupo A' }], matches: [{ monarchGroup: 0, team1Uids: ['p'] }] },

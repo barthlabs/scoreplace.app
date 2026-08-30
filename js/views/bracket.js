@@ -410,6 +410,13 @@ window._grupoAtualDoJogador = function (t, uid, nome, ignorarGrupo) {
   if (!t || (!uid && !nome)) return '';
   var alvoU = uid ? String(uid) : '';
   var alvoN = (!alvoU && nome) ? String(nome).trim().toLowerCase() : '';
+  // "Jogador X" não é pessoa sem uid: é o rótulo visual de uma vaga do grupo.
+  // A mesma inscrição pode ter várias vagas X (até todas as quatro) e elas não
+  // formam uma identidade entre grupos. Esta indicação significa que uma PESSOA
+  // saiu por W.O. daqui e reapareceu em outro grupo; para vaga-coringa ela seria
+  // sempre uma inferência falsa pelo nome. A identidade operacional do X segue
+  // sendo slotId nos fluxos de W.O./substituição, nunca este texto de exibição.
+  if (!alvoU && /^jogador\s*x$/i.test(String(nome || '').trim())) return '';
   var rounds = Array.isArray(t.rounds) ? t.rounds : [];
   for (var i = rounds.length - 1; i >= 0; i--) {
     var r = rounds[i] || {};
