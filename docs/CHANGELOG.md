@@ -1,6 +1,6 @@
 # Changelog do scoreplace.app
 
-## CF — O W.O. chega nas subcoleções (30/ago/2026)
+## 2.1.63 — O W.O. chega nas subcoleções (Cloud Function) (30/ago/2026)
 
 - **Problema:** `mutateTournament` roda o mutator sobre `doc.data()` — o documento CRU. Em torneio dividido isso é o documento magro (`participants: []`, nenhum jogo), então o W.O. entra no `woLog` e na classificação e não entra nem no elenco nem no jogo. Medido no Confra: a Nathalya seguiu escalada nos 3 jogos do grupo depois do W.O. dela; Fábio Ruggiero, Tiago Lima e Erika Benedet sumiram do elenco; os ausentes não foram desativados.
 - **Por que não se conserta no cliente:** `firestore.rules` nega escrita do cliente em `inscritos` (`allow write: if false`) e em `matches` ("O CLIENTE NÃO ESCREVE AQUI. NUNCA."). Cânone: tudo roda na CF, o cliente só dispara.
@@ -9,7 +9,7 @@
 - **Prova em PRODUÇÃO, não só em teste:** torneio descartável (`isSandbox`, privado) criado, um W.O. gravado só no documento, e o gatilho reconciliou em menos de 5s — jogo trocado na string E nos arrays, substituto no elenco, ausente desativado. Torneio apagado em seguida (doc, resumo e feed em 404).
 - **Cobertura:** `tests/wo-chega-nas-subcolecoes.test.js`, 19 asserções sobre as formas reais de produção.
 
-## CF — A limpeza noturna não apaga mais a lápide (30/ago/2026)
+## 2.1.63 — A limpeza noturna não apaga mais a lápide (Cloud Function) (30/ago/2026)
 
 - **Incidente reconstruído pelo PITR:** 27/ago 23:03 a Loraine criou uma conta nova com Google; 23:05 a dedup fundiu a antiga (e-mail/senha) na nova, gravando `mergedInto` + `mergedAt`; 28/ago 04:15 a `cleanupAbandonedAuth` apagou a conta antiga inteira — Auth e Firestore, **lápide junto**. O uid antigo segue gravado nos jogos, então o card passou a mostrar "…" no lugar do nome.
 - **Três defeitos, todos corrigidos:** ① a idade da lápide saía de `updatedAt || createdAt`, campos que o merge não toca — o `updatedAt` dela era de 19/ago, então uma lápide de dois minutos foi julgada com nove dias; agora sai de `mergedAt`, que é o que o merge grava. ② sem carimbo, `mergedMs` virava 0 e o `if (mergedMs && …)` deixava passar: idade desconhecida resultava em apagar; agora pula. ③ o documento Firestore era apagado; agora **nunca** é — só a conta Auth órfã sai.
