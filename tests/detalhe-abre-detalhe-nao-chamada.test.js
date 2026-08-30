@@ -2,8 +2,8 @@
  *
  * O card da dashboard já navega para #tournaments/:id. O detalhe não pode, por
  * sua vez, injetar a CHAMADA: filtro, presença e W.O. pertencem à rota explícita
- * #participants/:id. Os cards canônicos dos inscritos, porém, aparecem logo
- * abaixo da Organização, dentro da própria ficha.
+ * #participants/:id. Antes do sorteio, os cards canônicos aparecem logo abaixo
+ * da Organização; depois do sorteio, ficam exclusivamente na chamada.
  */
 'use strict';
 const fs = require('fs');
@@ -33,11 +33,17 @@ ok(/canRollCall:\s*false[\s\S]{0,220}cardPresence:\s*null/.test(src),
    'os cards da ficha não recebem ações de chamada');
 ok(/chrome:\s*false/.test(src),
    'a seção canônica de duplas entra sem filtro, presença ou W.O.');
+const detailBuilder = src.slice(src.indexOf('// ── Inscritos NA FICHA'), src.indexOf('// Check if tournament has bracket content'));
+ok(/if\s*\(\s*!drawDone\s*\)/.test(detailBuilder) && /data-detail-participants="1"/.test(detailBuilder),
+   'os cards da ficha são montados somente antes do sorteio');
 ok(/window\.location\.hash='#participants\/\$\{t\.id\}'/.test(src),
    'o botão "👥 Inscritos" continua levando para a rota própria');
 const preDrawActions = src.slice(src.indexOf('} else {\n                    // A ficha mostra os cards'), src.indexOf('} else if (!window.AppStore.currentUser)', src.indexOf('} else {\n                    // A ficha mostra os cards')));
 ok(/grid-template-columns:1fr 1fr/.test(preDrawActions) && /#participants\/\$\{t\.id\}/.test(preDrawActions),
    'antes do sorteio, a ficha também mantém o botão Inscritos para a chamada');
+const organizerActions = src.slice(src.indexOf('// --- Build actionsHtml based on tournament state ---'), src.indexOf('} else if (!window.AppStore.currentUser)'));
+ok((organizerActions.match(/#participants\/\$\{t\.id\}/g) || []).length === 3,
+   'Regras e Inscritos aparecem canonicamente nos três estados do organizador');
 
 console.log(fail ? '\n❌ ' + fail + ' falha(s)\n' : '\n✅ detalhe separado da chamada\n');
 process.exit(fail ? 1 : 0);

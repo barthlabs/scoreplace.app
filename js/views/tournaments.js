@@ -4178,11 +4178,11 @@ function renderTournaments(container, tournamentId = null) {
               ${_ligaSortBtnFinal}
             </div>`;
 
-            // ── Inscritos NA FICHA, pelos renderizadores canônicos ──────────
-            // A ficha responde “qual é este torneio?” e mostra quem está nele;
-            // a CHAMADA responde “quem está presente?” e continua em #participants/:id.
-            // Portanto, nenhum contexto de presença, filtro, barra sticky ou W.O. cruza
-            // esta fronteira. Os cards, porém, são os MESMOS construtores canônicos.
+            // ── Inscritos NA FICHA, só ANTES do sorteio ─────────────────────
+            // Pré-sorteio a ficha responde “quem está inscrito?”. Depois do sorteio, a
+            // lista tem operações (presença, W.O. e exclusão) e pertence exclusivamente
+            // à CHAMADA em #participants/:id. Não duplicar os cards no detalhe.
+            if (!drawDone) {
             var _dsec = (typeof window._buildDoublesInscritosSection === 'function')
               ? window._buildDoublesInscritosSection(t, {
                   isOrg: isOrg, drawDone: drawDone,
@@ -4198,7 +4198,7 @@ function renderTournaments(container, tournamentId = null) {
                   ${_dsec.html}
                 </div>`;
             } else {
-              // Individual/pós-sorteio: mesmo card canônico, sem os controles da chamada.
+              // Individual pré-sorteio: mesmo card canônico, sem os controles da chamada.
               var _detailCardCtx = { isOrg: isOrg, drawDone: drawDone, canRollCall: false,
                 postDrawPresence: false, enrollOrderMap: _enrollOrderMap,
                 nameToParticipant: _icNameMap, waitSet: _icWaitSet, cardPresence: null };
@@ -4216,6 +4216,7 @@ function renderTournaments(container, tournamentId = null) {
                       ${_detailCards}
                    </div>
                 </div>` : '';
+            }
             }
         }
 
