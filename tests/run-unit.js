@@ -136,6 +136,7 @@ const SUITES = [
   'tests/ouvinte-nunca-entrega-torneio-sem-jogos.test.js',
   'tests/torneio-dividido-nao-volta-pro-documento.test.js',
   'tests/conferidor-fase2-segue-a-fonte-canonica.test.js',
+  'tests/conferidor-espelho-resultados.test.js',
   'tests/torneio-novo-nasce-inteiro.test.js',
   'tests/gravar-torneio-dividido-roda-de-verdade.test.js',
   'tests/todo-js-que-vai-ao-ar-parseia.test.js',
