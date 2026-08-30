@@ -244,6 +244,7 @@ const SUITES = [
   // jogos do documento torneio a torneio, sem release — e é isso que remove o TETO de 1 MB.
   'tests/abrir-torneio-monta-das-subcolecoes.test.js',
   'tests/montagem-de-partes-destrava.test.js',
+  'tests/uid-sem-conta-mostra-nome-gravado.test.js',
   // ⛔ O BOTÃO QUE NASCE DEPOIS DO RENDER (2.0.96). A montagem preguiçosa de "Meus
   // Resultados" (2.0.86) deixava o botão de aprovar sem ouvinte: aparecia e o clique
   // não fazia NADA — sem erro, sem aviso, sem Sentry. Travou o jogo 63 do Confra.

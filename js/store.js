@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.61';
+window.SCOREPLACE_VERSION = '2.1.62';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -866,6 +866,21 @@ window._preloadUserProfiles = function (uids) {
   });
   return waitFor.length ? Promise.all(waitFor) : Promise.resolve();
 };
+/* ── NOME GRAVADO NO JOGO: A ÚLTIMA RESERVA, E SÓ PRA UID SEM CONTA ────────────
+ * ⛔ NÃO É UM FURO NO CÂNONE "identidade é uid, nome vem do perfil vivo" — é o caso que o
+ * cânone não previa. Ele assume que o perfil EXISTE e só está atrasado; por isso o span
+ * `[data-uid-name]` nasce vazio e o CSS pinta "…" enquanto carrega. Mas quando não existe
+ * `users/{uid}` nenhum, "…" não é "carregando": é PARA SEMPRE.
+ * MEDIDO (Confra, 30/ago): a Loraine Soares aparecia como "…" no card do jogo. O uid dela
+ * (aune9…) não tem documento em `users/` — não existe conta "Loraine" no banco inteiro — e
+ * o nome dela está gravado no próprio jogo (`team1: [..., "Loraine Soares"]`). A tela tinha
+ * o nome à mão e mostrava reticências.
+ * ⭐ A RESERVA SÓ VALE DEPOIS DE PROCURAR. `_preloadUserProfiles` grava perfil VAZIO pra uid
+ * sem doc (_"uid sem doc: entra vazio"_), então dá pra separar "ainda não carreguei" de
+ * "carreguei e não existe" — e é só no segundo caso que o nome gravado entra. Assim nada de
+ * nome velho piscando durante a carga, que é o que o cânone protege.
+ * [[project_orphan_uid_entries]] · [[feedback_rotulo_por_perfil_nunca_congelado_no_render]] */
+window._nomeGravadoPorUid = window._nomeGravadoPorUid || {};
 window._nameForUid = function (uid) {
   if (!uid) return '';
   var p = window._userProfileCache[uid];
@@ -873,6 +888,9 @@ window._nameForUid = function (uid) {
   // v4.5.67: também lê o cache do bracket (_profileNameByUid, populado por
   // _preloadPlayerPhotos) — UMA leitura unificada, os dois caches valem.
   if (window._profileNameByUid && window._profileNameByUid[uid]) return window._profileNameByUid[uid];
+  // ⚠️ `p` existir com displayName vazio é a PROVA de que a conta não existe (o preload já
+  // procurou). Sem `p`, ainda não procurei — e aí "…" é honesto.
+  if (p && window._nomeGravadoPorUid[uid]) return window._nomeGravadoPorUid[uid];
   return '';
 };
 window._emailForUid = function (uid) { var p = uid && window._userProfileCache[uid]; return (p && p.email) || ''; };
@@ -6728,7 +6746,17 @@ window._resolveSideLive = function (t, sideStr, uidHint) {
       if (_parts.length > 0 && uidHint.length === _parts.length) {
         return _parts.map(function (part, i) {
           var u = uidHint[i];
-          return (u && _liveByUid(u)) || part;
+          var vivo = u && _liveByUid(u);
+          /* ⭐ COLHE AQUI, que é o único lugar onde nome e uid vêm PAREADOS POR POSIÇÃO.
+           * Sem isto a reserva de `_nameForUid` não teria de onde tirar o nome: os 34
+           * pontos que desenham `[data-uid-name]` emitem só o uid, e o span é preenchido
+           * pela hidratação. Colhendo neste ponto, um lugar só cura todos eles.
+           * ⛔ Só quando o vivo NÃO resolveu — perfil existente jamais é sobrescrito por
+           * rótulo gravado, que é o que envelhece. */
+          if (u && !vivo && part && window._nomeGravadoPorUid && !window._nomeGravadoPorUid[u]) {
+            window._nomeGravadoPorUid[u] = part;
+          }
+          return vivo || part;
         }).join(' / ');
       }
       // Fallback (hint LEGADO só-contas, sem posicional): resolve posicional se a contagem

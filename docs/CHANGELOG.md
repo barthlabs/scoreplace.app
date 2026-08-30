@@ -1,5 +1,13 @@
 # Changelog do scoreplace.app
 
+## 2.1.62 — Uid sem conta mostra o nome gravado (30/ago/2026)
+
+- **Problema corrigido:** no card do jogo, a Loraine Soares aparecia como "…". Medido: o uid dela (`aune9…`) não tem documento em `users/` — não existe nenhuma conta "Loraine" no banco — e o nome está gravado no próprio jogo (`p1`, `team1`). A tela tinha o nome à mão e mostrava reticências.
+- **Causa:** o cânone v4.5.63 proíbe o nome gravado como fallback (o span `[data-uid-name]` nasce vazio e o CSS pinta "…" enquanto o perfil carrega). A regra protege contra rótulo velho piscando, mas assume que o perfil EXISTE e só está atrasado. Sem conta nenhuma, "…" deixa de ser "carregando".
+- **Correção:** `_preloadUserProfiles` já grava perfil VAZIO para uid sem doc, o que separa "ainda não procurei" de "procurei e não existe". `_nameForUid` ganhou uma última reserva que só vale no segundo caso, alimentada por `_nomeGravadoPorUid` — colhido em `_resolveSideLive`, o único ponto onde nome e uid vêm pareados por posição. Um lugar só cura os 34 pontos que emitem `[data-uid-name]`.
+- **Prova:** `tests/uid-sem-conta-mostra-nome-gravado.test.js` trava os dois riscos do excesso: perfil vivo nunca é sobrescrito pelo nome gravado, e durante a carga o retorno segue vazio (o "…" continua honesto).
+- **⚠️ Não resolvido:** por que a conta da Loraine não existe. O reparo é de EXIBIÇÃO; a conta segue ausente.
+
 ## 2.1.61 — A montagem das partes destrava (30/ago/2026)
 
 - **Problema corrigido:** em torneio dividido, `_montaPesadosQueFaltam` ligava `_montandoPesados[id]` e só desligava no `.catch`. No caminho de sucesso — e nos dois `return` mudos do `.then` (`!montado`, `!vivo`) — a trava ficava ligada pelo resto da sessão, e o `if (this._montandoPesados[id]) continue;` passava a engolir todo pedido seguinte de montagem daquele torneio.

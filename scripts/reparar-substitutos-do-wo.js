@@ -153,23 +153,44 @@ async function grava(url, objeto) {
       const g = m.jogo; if (!g) return;
       if (String(g.label || '').indexOf(w.groupName) !== 0) return;
       if ((g.roundIndex || 0) !== (w.roundIndex || 0)) return;
+      /* ⛔ O NOME MORA EM DOIS LUGARES NO MESMO JOGO, e trocar um só deixa o jogo
+       * discordando de si mesmo. Medido depois da primeira passada deste script: eu troquei
+       * `p1`/`p2` (a string "A / B") e deixei `team1`/`team2` (os arrays de nomes) com o
+       * ausente — os 6 jogos continuavam citando a Nathalya e a marcia por ali.
+       * ⭐ Por isso o laço percorre a TRINCA (string, array de nomes, array de uids) junta:
+       * quem esquecer uma das três reintroduz a divergência. */
       let mexeu = false;
       const novo = JSON.parse(JSON.stringify(g));
-      [['p1', 'team1Uids'], ['p2', 'team2Uids']].forEach(([campoNome, campoUids]) => {
-        const partes = String(novo[campoNome] || '').split(' / ');
+      [['p1', 'team1', 'team1Uids'], ['p2', 'team2', 'team2Uids']].forEach(([campoStr, campoNomes, campoUids]) => {
+        let mexeuAqui = false;
+        const partes = String(novo[campoStr] || '').split(' / ');
         partes.forEach((nome, i) => {
           if (nome.trim() !== w.absentName) return;
           partes[i] = w.subName;
           if (Array.isArray(novo[campoUids])) novo[campoUids][i] = w.subUid || null;
-          mexeu = true;
+          mexeuAqui = true;
         });
-        if (mexeu) novo[campoNome] = partes.join(' / ');
+        if (Array.isArray(novo[campoNomes])) {
+          novo[campoNomes].forEach((nome, i) => {
+            if (String(nome).trim() !== w.absentName) return;
+            novo[campoNomes][i] = w.subName;
+            if (Array.isArray(novo[campoUids])) novo[campoUids][i] = w.subUid || null;
+            mexeuAqui = true;
+          });
+        }
+        if (mexeuAqui) { novo[campoStr] = partes.join(' / '); mexeu = true; }
       });
       if (!mexeu) return;
       /* ⛔ placar lançado = história. Não reescrevo quem jogou depois do resultado. */
       if (g.scoreP1 != null || g.scoreP2 != null) { recusados.push(g.label + ' (tem placar ' + g.scoreP1 + 'x' + g.scoreP2 + ')'); return; }
-      const uids = []; (novo.team1Uids || []).concat(novo.team2Uids || []).forEach((u) => { if (u) uids.push(u); });
-      patchesDeJogo.push({ _id: m._id, de: g.p1 + ' X ' + g.p2, para: novo.p1 + ' X ' + novo.p2, label: g.label, jogo: novo, playerUids: uids, _loc: m._loc, _chave: m._chave });
+      /* ⚠️ `playerUids` é índice denormalizado e NEM TODO jogo tem. Escrever onde não
+       * existia é inventar campo — só atualizo o de quem já tinha. */
+      const patch = { _id: m._id, de: g.p1 + ' X ' + g.p2, para: novo.p1 + ' X ' + novo.p2, label: g.label, jogo: novo, _loc: m._loc, _chave: m._chave };
+      if (Array.isArray(m.playerUids)) {
+        const uids = []; (novo.team1Uids || []).concat(novo.team2Uids || []).forEach((u) => { if (u) uids.push(u); });
+        patch.playerUids = uids;
+      }
+      patchesDeJogo.push(patch);
     });
   });
 
@@ -226,7 +247,12 @@ async function grava(url, objeto) {
   if (!APLICAR) { console.log('\n▸ ENSAIO — nada foi gravado. Rode com --aplicar pra valer.'); return; }
 
   for (const n of novosInscritos) { await grava(DOC + '/inscritos/' + n._id, { _k: n._k, _idx: n._idx, item: n.item }); console.log('  ✓ gravado inscritos/' + n._id); }
-  for (const p of patchesDeJogo) { await grava(DOC + '/matches/' + p._id, { _loc: p._loc, _chave: p._chave, jogo: p.jogo, playerUids: p.playerUids }); console.log('  ✓ gravado matches/' + p._id); }
+  for (const p of patchesDeJogo) {
+    const corpo = { _loc: p._loc, _chave: p._chave, jogo: p.jogo };
+    if (p.playerUids) corpo.playerUids = p.playerUids;
+    await grava(DOC + '/matches/' + p._id, corpo);
+    console.log('  ✓ gravado matches/' + p._id);
+  }
   for (const d of desativar) { await grava(DOC + '/inscritos/' + d._id, { _k: d._k, _idx: d._idx, item: d.item }); console.log('  ✓ desativado inscritos/' + d._id + ' (' + d.nome + ')'); }
   await grava(DOC + '?updateMask.fieldPaths=memberUids&updateMask.fieldPaths=_nPartes&updateMask.fieldPaths=_nJogos&updateMask.fieldPaths=updatedAt',
               { memberUids: memberUids, _nPartes: nPartes, _nJogos: jogos.length, updatedAt: new Date().toISOString() });
