@@ -84,6 +84,17 @@ function corpoDaFuncao(src, nome) {
     'sobrou o avatar antigo (seed pelo nome) — é o que produzia o círculo igual pra todos');
 });
 
+// O card ativo tinha um ciclo de layout: o fit diminuía a fonte e o pai
+// `flex:0 1 auto` diminuía junto, disparando novo ResizeObserver. A caixa do nome deve
+// ter largura estável, senão o texto vibra e pode terminar truncado.
+const orgCard = corpoDaFuncao(tourn, '_buildOrgCard') || '';
+ok('o nome do organizador mede uma caixa estável (não flex:auto)',
+  /class="sp-org-name-row"[\s\S]{0,220}width:min\(100%,12rem\)/.test(orgCard) &&
+  /class="sp-org-name-box"[\s\S]{0,120}flex:1;min-width:0/.test(orgCard),
+  'sem caixa estável, fonte e largura se realimentam e o nome vibra');
+ok('o caminho instável flex:0 1 auto saiu do nome do organizador',
+  !/flex:0 1 auto;min-width:0;height:1\.15rem/.test(orgCard));
+
 console.log(falhas === 0
   ? '\n✅ pessoa-na-tela-hidrata: OK'
   : '\n❌ pessoa-na-tela-hidrata: ' + falhas + ' falha(s)');
