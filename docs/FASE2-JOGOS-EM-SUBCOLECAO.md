@@ -79,7 +79,7 @@ Isso não autoriza a próxima retirada de campo. O estado fica registrado assim:
   ocorridas depois do salto (placar, inscrição e W.O. podem mudar legitimamente). O
   backup é preservado para investigação e reversão; qualquer novo passo precisa de
   uma prova específica da sua escrita, não de uma igualdade enganosa com o passado.
-- **Dívida ainda aberta, confirmada em produção (30/ago):** `results/{matchId}` é
+- **Problema corrigido nesta leva (30/ago):** `results/{matchId}` é
   projeção de `matches`, mas o cliente escreve jogos divididos pela subcoleção e os
   dois caminhos antigos de reconciliação (`syncMatchRosters` e
   `backfillMatchResultDocs`) ainda leem só o documento principal magro. A medição
@@ -88,14 +88,16 @@ Isso não autoriza a próxima retirada de campo. O estado fica registrado assim:
   Casos registrados: Confra (3 `playerUids`, 2 `startedAt`), BT Corpus Christi
   (placar/W.O. de terceiro lugar) e Duplas Mistas (um espelho ausente). A fonte
   continua sendo `matches`; o conferidor distingue ausência de divergência e entra
-  no runner para impedir que o problema desapareça do mapa.
+  no runner para impedir que o problema desapareça do mapa. `syncSplitMatchResult`
+  passa a projetar cada escrita canônica e o backfill monta as partes antes de reparar
+  os casos legados, preservando `replay`.
 - **Arquitetura-alvo já adotada, ainda incompleta:** `matches` é a fonte; `results`
   é espelho server-authoritative para leitura/autorizações por jogo. Não é permitido
   reabrir dual-write no cliente para mascarar a falha.
-- **Proposta futura, não autorizada por esta nota:** fazer a projeção cobrir a
-  escrita na subcoleção (ou concentrar tais writes numa porta de servidor), depois
-  reparar os espelhos existentes com ensaio e verificação. A escolha altera
-  autoridade/custo de escrita e exige escopo explícito do arquiteto.
+- **Dívida ainda aberta:** o reparo dos espelhos já existentes é uma operação de dados
+  separada, limitada aos IDs confirmados pelo conferidor e obrigatoriamente seguida da
+  mesma medição read-only. O gatilho cobre alterações futuras; ele não reexecuta eventos
+  antigos sozinho.
 - **Proposta futura, não autorizada por esta nota:** tirar mais partes, apagar o
   documento antigo ou alterar o modelo de `standings`.
 

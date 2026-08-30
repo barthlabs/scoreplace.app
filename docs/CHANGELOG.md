@@ -1,5 +1,11 @@
 # Changelog do scoreplace.app
 
+## 2.1.60 — Espelho de resultado acompanha os jogos divididos (30/ago/2026)
+
+- **Problema corrigido:** em torneios grandes, `matches` já é a fonte canônica numa subcoleção, mas a projeção `results/{matchId}` ainda escutava apenas o documento principal, que é propositalmente magro. Isso podia deixar placar, W.O., horário de início ou roster antigos — e até faltar um `results` inteiro.
+- **Correção arquitetural:** `syncSplitMatchResult` observa cada escrita em `matches`, remonta o torneio pelo mesmo núcleo canônico do app e grava somente o espelho daquele jogo. A fonte continua sendo `matches`; não há dual-write no cliente. O backfill passou a montar torneios divididos e preserva o replay ao reparar um espelho existente.
+- **Prova e reparo:** o conferidor read-only identifica separadamente ausência e divergência. Após publicar, o backfill será limitado aos três torneios encontrados na medição, seguido de nova conferência sem escrita.
+
 ## 2.1.59 — Pipeline do sorteio não conserva dependência removida (30/ago/2026)
 
 - **Problema corrigido:** o deploy do codebase `autodraw` abortava antes de publicar porque seu sincronizador ainda tentava copiar `amizade-core.js`, módulo deliberadamente removido da antiga arquitetura de amizade. A lista de vendor agora contém somente a dependência ativa (`tournament-split-core.js`) e um teste impede a referência morta de voltar.

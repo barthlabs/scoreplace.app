@@ -68,6 +68,7 @@ const _enrollCore = require("./enroll-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
+const _splitResultMirror = require("./match-result-mirror-core.js");
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
  * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
@@ -7545,6 +7546,60 @@ exports.syncDiscoveryFeed = onDocumentWritten(
 // torneio). Idempotente por assinatura (não reescreve se o espelho já bate).
 // Deploy: firebase deploy --only functions:syncMatchRosters
 const { collectMatches, subdocSignature, buildSeedDoc, buildMirrorDoc } = require("./match-roster");
+
+// Lê um torneio pela fonte que o próprio marcador declara. Esta função existe para os
+// dois caminhos server-side de `results`: o gatilho incremental e o backfill. Deixar
+// cada um listar partes por conta própria recriaria a falha que esta leva corrige.
+async function _montarTorneioCanonico(tournamentRef, config) {
+  return _tSplitFn.montarDoBanco(config, async (colecao) => {
+    const snap = await tournamentRef.collection(colecao).get();
+    return snap.docs.map((d) => d.data());
+  });
+}
+
+// ─── syncSplitMatchResult — Fase 2: fonte `matches` → projeção `results` ──────
+// `syncMatchRosters` observa o documento do torneio e serve os torneios inteiros.
+// Depois da Fase 2, o placar pode mudar em `tournaments/{tid}/matches/{matchId}`
+// sem que o doc pai contenha qualquer jogo. Este é o gatilho complementar, não uma
+// segunda fonte: ele remonta o torneio atual pelo mesmo `montarDoBanco` do app/CF e
+// espelha exclusivamente o jogo que mudou. O cliente continua sem dual-write.
+exports.syncSplitMatchResult = onDocumentWritten(
+  { document: "tournaments/{tid}/matches/{matchId}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
+  async (event) => {
+    const tid = event.params.tid;
+    const matchId = event.params.matchId;
+    const db = admin.firestore();
+    const tournamentRef = db.collection("tournaments").doc(tid);
+    const configSnap = await tournamentRef.get();
+    if (!configSnap.exists) return;
+    const config = configSnap.data() || {};
+    const fora = Array.isArray(config._semPesados) ? config._semPesados : [];
+    if (fora.indexOf('matches') === -1) return; // o espelho legado segue pelo gatilho do doc
+
+    let t;
+    try {
+      t = await _montarTorneioCanonico(tournamentRef, config);
+    } catch (e) {
+      // Fail-closed: um torneio incompleto jamais pode produzir `results` inventado.
+      console.error(`[syncSplitMatchResult] ${tid}/${matchId}: não montou fonte canônica:`, e && e.message);
+      return;
+    }
+
+    const resultRef = tournamentRef.collection("results").doc(String(matchId));
+    const anteriorSnap = await resultRef.get();
+    const plano = _splitResultMirror.planoDoEspelho(
+      t, matchId, anteriorSnap.exists ? anteriorSnap.data() : null, tid, new Date().toISOString()
+    );
+    if (plano.acao === 'skip') return;
+    if (plano.acao === 'delete') {
+      if (anteriorSnap.exists) await resultRef.delete();
+      return;
+    }
+    await resultRef.set(plano.doc); // sem merge: campos removidos da fonte também somem
+    console.log(`[syncSplitMatchResult] ${tid}/${matchId}: espelho atualizado`);
+  }
+);
+
 exports.syncMatchRosters = onDocumentWritten(
   { document: "tournaments/{tid}", region: "us-central1", memory: "256MiB", timeoutSeconds: 60 },
   async (event) => {
@@ -7703,7 +7758,16 @@ exports.backfillMatchResultDocs = onRequest(
     const errors = [];
     for (const tdoc of docs) {
       tournaments++;
-      const t = tdoc.data() || {};
+      const bruto = tdoc.data() || {};
+      let t;
+      try {
+        // `backfill` também é reparo dos torneios já divididos: o documento pai é
+        // magro por desenho; usar `collectMatches(bruto)` os ignorava em silêncio.
+        t = await _montarTorneioCanonico(tdoc.ref, bruto);
+      } catch (e) {
+        errors.push({ tid: tdoc.id, err: 'não montou fonte canônica: ' + String(e && e.message) });
+        continue;
+      }
       const matches = collectMatches(t).filter((m) => m && m.id != null && m.id !== "");
       if (!matches.length) continue; // sem chave (fase de inscrição) → nada a semear
       withBracket++;
@@ -7724,7 +7788,9 @@ exports.backfillMatchResultDocs = onRequest(
             // force: só reescreve se o espelho mudou (idempotente por assinatura)
             if (subdocSignature(existingData[id]) === subdocSignature(buildSeedDoc(t, m))) { skipped++; continue; }
             if (dryRun) { refreshed++; continue; }
-            await resultsCol.doc(id).set(buildMirrorDoc(t, m, tdoc.id));
+            // `replay` não é derivável de matches; carregar o anterior evita que o
+            // reparo correto do placar apague o ponto-a-ponto da partida.
+            await resultsCol.doc(id).set(buildMirrorDoc(t, m, tdoc.id, null, existingData[id]));
             refreshed++;
           } else {
             if (dryRun) { created++; continue; }

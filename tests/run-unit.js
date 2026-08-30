@@ -137,6 +137,8 @@ const SUITES = [
   'tests/torneio-dividido-nao-volta-pro-documento.test.js',
   'tests/conferidor-fase2-segue-a-fonte-canonica.test.js',
   'tests/conferidor-espelho-resultados.test.js',
+  'tests/espelho-results-segue-jogo-dividido.test.js',
+  'functions/test-match-result-mirror-core.js',
   'tests/torneio-novo-nasce-inteiro.test.js',
   'tests/gravar-torneio-dividido-roda-de-verdade.test.js',
   'tests/todo-js-que-vai-ao-ar-parseia.test.js',
