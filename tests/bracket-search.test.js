@@ -43,7 +43,7 @@ ok(vis().every(Boolean),'sem busca: todos visíveis');
 ok(empty.style.display==='none','sem busca: slot vazio escondido');
 
 input.value='bru'; F();
-ok(JSON.stringify(vis())==='[true,true,false]','trecho "bru" mostra o GRUPO inteiro (classificação + jogos irmãos), não só o card do Bruno — '+JSON.stringify(vis()));
+ok(JSON.stringify(vis())==='[false,true,false]','trecho "bru" mostra só o card do Bruno — '+JSON.stringify(vis()));
 ok(colB.style.display==='none','coluna sem card visível devia sumir');
 ok(colA.style.display!=='none','coluna com card visível devia ficar');
 
@@ -85,6 +85,17 @@ ok(vis()[2]===true,'desligar o toggle NÃO desfaz a busca ativa ("dinho" segue v
 ok(vis()[0]===false && vis()[1]===false,'…e os demais seguem filtrados pela busca');
 input.value=''; F();
 ok(vis().every(Boolean),'limpar tudo devolve todos os cards');
+
+// Jogador X é uma VAGA — encontrá-lo pede o contexto completo do grupo (os três
+// jogos e a classificação), enquanto a busca por pessoa real acima continua cirúrgica.
+const ghostCard=mkEl({'data-players':'Jogador X | Ana'},colA);
+cards.push(ghostCard);
+input.value='jogador'; F();
+ok(vis()[0]===true && vis()[1]===true && vis()[3]===true,
+  'buscar Jogador X mostra TODOS os jogos do grupo da vaga');
+ok(vis()[2]===false,'buscar Jogador X não mostra grupo sem Jogador X');
+input.value=''; F();
+ok(vis().every(Boolean),'limpar a busca do Jogador X restaura os jogos');
 
 
 // ── A barra tem que existir TAMBÉM no bracket INLINE — e FORA do container dele ──

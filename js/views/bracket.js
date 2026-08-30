@@ -7789,7 +7789,11 @@ window._bracketApplyFilter = function () {
   var shown = 0;
   var conts = [];            // ancestrais candidatos, na ordem em que aparecem
   var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
-  var hitGroups = [];        // grupos que a busca encontrou: mostram classificação + TODOS os jogos
+  // "Jogador X" é uma vaga, não uma pessoa: encontrá-lo exige o retrato do grupo
+  // inteiro. Para atletas reais, preserva o filtro cirúrgico (só os jogos daquela
+  // pessoa), com a classificação estrutural já mantida pelos marcadores.
+  var showGhostGroupContext = !onlyMine && /(^|\s)jogador(?:\s+x)?(?=\s|$)/.test(q);
+  var hitGroups = [];        // somente os grupos achados pela busca de Jogador X
   var markHit = function (el) {
     for (var p = el; p && p !== root && p !== document.body; p = p.parentElement) {
       if (holdsSearch(p)) break;
@@ -7822,7 +7826,7 @@ window._bracketApplyFilter = function () {
     // de W.O.) não pode deixar só um card solto: a classificação e os jogos
     // rotativos daquele grupo explicam a vaga. Guarda o box mais próximo para
     // restaurar os irmãos abaixo, depois que todos os hits forem conhecidos.
-    if (hit && !onlyMine) {
+    if (hit && showGhostGroupContext) {
       for (var gp = c.parentElement; gp && gp !== root && gp !== document.body; gp = gp.parentElement) {
         if (gp.getAttribute && gp.getAttribute('data-group-box') === '1') {
           if (hitGroups.indexOf(gp) === -1) hitGroups.push(gp);
@@ -7837,10 +7841,10 @@ window._bracketApplyFilter = function () {
       else if (hit) contHasHit[ix] = true;
     }
   }
-  // Grupo encontrado = retrato completo: não esconder os outros dois jogos por
-  // não conterem literalmente o nome buscado. `data-fb-marker` continua sendo
-  // declarativo e não recebe display próprio. No modo "Só meus jogos", mantém a
-  // restrição pessoal e não expande os irmãos.
+  // Jogador X encontrado = retrato completo: não esconder os outros dois jogos
+  // por não conterem literalmente o rótulo da vaga. `data-fb-marker` continua
+  // declarativo e não recebe display próprio. Uma busca por atleta real não
+  // expande os irmãos; no modo "Só meus jogos", também não há expansão.
   for (var hg = 0; hg < hitGroups.length; hg++) {
     var siblings = hitGroups[hg].querySelectorAll('[data-players]');
     for (var hs = 0; hs < siblings.length; hs++) {
