@@ -233,7 +233,18 @@ async function grava(url, objeto) {
 
   /* (C) OS MARCADORES saem da CONTAGEM REAL das coleções — nunca de aritmética sobre o
    * valor velho. Somar +1 a um marcador que já mente propaga a mentira. */
-  const memberUids = Array.from(new Set((t.memberUids || []).concat(novosInscritos.map((n) => n.item.uid))));
+  /* ⛔ `memberUids` TAMBÉM sai da COLEÇÃO, não do delta desta rodada. Eu tinha feito
+   * `t.memberUids + novosInscritos`, e na segunda passada `novosInscritos` estava vazio (os
+   * três já tinham voltado ao elenco) — resultado: 151 inscritos e memberUids parado em 149,
+   * com o Fábio e o Tiago de fora. E isso não é cosmético: `memberUids` é o campo do
+   * `array-contains` que faz o torneio APARECER pro participante. Ficariam sem ver o
+   * próprio torneio. Mesma lição do (C): reparo se calcula do dado, nunca do delta. */
+  const memberUids = Array.from(new Set(
+    (t.memberUids || [])
+      .concat(inscritos.map((p) => p.item && p.item.uid))
+      .concat(novosInscritos.map((n) => n.item.uid))
+      .filter(Boolean)
+  ));
   const nPartes = Object.assign({}, t._nPartes || {}, {
     participants: inscritos.length + novosInscritos.length,
     matches: jogos.length
