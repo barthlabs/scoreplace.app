@@ -2249,7 +2249,11 @@ window._monWoControlHtml = function (tId, pIdx, gName, groupDone) {
     groupDone ? _org : manage);
   if (wm) {
     var lbl = wm.woIsGuest ? (_safe(wm.woReplacedBy) + ' (Jogador X)') : _safe(wm.woReplacedBy);
-    var s = '<span style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:var(--sp-c-a78bfa,#a78bfa);background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O.<br>→ ' + lbl + '</span>';
+    // A pílula canônica também é índice de busca. Depois da troca, Jogador X
+    // pode não estar mais nos cards da vaga; sem estes dois nomes o filtro não
+    // consegue manter o grupo e o W.O. visíveis.
+    var _woBusca = _safe(String(wm.p1 || '') + ' ' + String(wm.woReplacedBy || ''));
+    var s = '<span data-players="' + _woBusca + '" data-my-match="1" data-fb-marker="1" style="display:inline-block;font-size:0.66rem;font-weight:700;line-height:1.25;text-align:left;color:var(--sp-c-a78bfa,#a78bfa);background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.3);padding:3px 8px;border-radius:6px;">🔁 ' + _safe(wm.p1) + ' W.O.<br>→ ' + lbl + '</span>';
     var played = (typeof window._matchHasRealPlay === 'function') && _monPlaying(t, gName, pIdx).some(function (m) { return window._matchHasRealPlay(m); });
     if (manage && !played && typeof window._woBtnHtml === 'function') {
       s += ' ' + window._woBtnHtml("window._monWoRevert('" + _esc(tId) + "'," + pIdx + ",'" + _esc(gName) + "')", false, { label: '↩️ Reverter<br>W.O.', size: 'btn-sm' });

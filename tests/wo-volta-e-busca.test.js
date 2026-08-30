@@ -142,6 +142,8 @@ sec(function () {
   const iW = src.indexOf('_waitBoxHtml = ');
   const wbox = _R.ateOFim(src, iW);
   ok(wbox.indexOf('data-players=') !== -1, 'os chips da LISTA DE ESPERA também precisam de data-players');
+  ok(wbox.indexOf('if (_wlNames.length)') !== -1 && wbox.indexOf('Lista de espera (') !== -1,
+    'havendo pelo menos um nome na fila, a seção Lista de espera é renderizada no box da rodada');
   // o filtro continua sendo o mesmo (não duplicamos lógica de busca)
   ok(src.indexOf("querySelectorAll('[data-players]')") !== -1, 'o filtro segue varrendo [data-players] — uma lógica só');
 });

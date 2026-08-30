@@ -158,6 +158,9 @@ function makeT() {
   eq(rr1.team1[0], 'Jogador X', 'guest: nome do slot vira Jogador X');
   eq(rr1.team1Uids[0], null, 'guest: UID do slot é null (ghost não pontua)');
   ok((t.ligaGhosts || []).indexOf('Jogador X') !== -1, 'guest: Jogador X registrado como ghost');
+  const ctrl = W._monWoControlHtml(t.id, 0, gName, false) || '';
+  ok(/data-players="João Jogador X"/.test(ctrl) && /data-fb-marker="1"/.test(ctrl),
+    'pílula canônica de W.O. indexa ausente e Jogador X para o filtro manter o grupo visível');
 })();
 
 // ── (e) JOGADOR X NÃO É IDENTIDADE GLOBAL: G2 ≠ E2 ──────────────────────────

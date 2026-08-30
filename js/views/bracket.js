@@ -7789,6 +7789,7 @@ window._bracketApplyFilter = function () {
   var shown = 0;
   var conts = [];            // ancestrais candidatos, na ordem em que aparecem
   var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
+  var hitGroups = [];        // grupos que a busca encontrou: mostram classificação + TODOS os jogos
   var markHit = function (el) {
     for (var p = el; p && p !== root && p !== document.body; p = p.parentElement) {
       if (holdsSearch(p)) break;
@@ -7817,6 +7818,18 @@ window._bracketApplyFilter = function () {
     // Guarda o display original UMA vez — o card pode ter display próprio (flex/grid).
     setDisp(c, hit);
     if (hit) shown++;
+    // Busca na chave é por GRUPO. Encontrar Jogador X (inclusive numa pílula
+    // de W.O.) não pode deixar só um card solto: a classificação e os jogos
+    // rotativos daquele grupo explicam a vaga. Guarda o box mais próximo para
+    // restaurar os irmãos abaixo, depois que todos os hits forem conhecidos.
+    if (hit && !onlyMine) {
+      for (var gp = c.parentElement; gp && gp !== root && gp !== document.body; gp = gp.parentElement) {
+        if (gp.getAttribute && gp.getAttribute('data-group-box') === '1') {
+          if (hitGroups.indexOf(gp) === -1) hitGroups.push(gp);
+          break;
+        }
+      }
+    }
     for (var p = c.parentElement; p && p !== root && p !== document.body; p = p.parentElement) {
       if (holdsSearch(p)) break;
       var ix = conts.indexOf(p);
@@ -7824,11 +7837,25 @@ window._bracketApplyFilter = function () {
       else if (hit) contHasHit[ix] = true;
     }
   }
+  // Grupo encontrado = retrato completo: não esconder os outros dois jogos por
+  // não conterem literalmente o nome buscado. `data-fb-marker` continua sendo
+  // declarativo e não recebe display próprio. No modo "Só meus jogos", mantém a
+  // restrição pessoal e não expande os irmãos.
+  for (var hg = 0; hg < hitGroups.length; hg++) {
+    var siblings = hitGroups[hg].querySelectorAll('[data-players]');
+    for (var hs = 0; hs < siblings.length; hs++) {
+      if (siblings[hs].getAttribute && siblings[hs].getAttribute('data-fb-marker') === '1') continue;
+      setDisp(siblings[hs], true);
+    }
+  }
   // Container sem NENHUM card casando some inteiro (grid, coluna de rodada, box de grupo,
   // <details> de "Demais jogos da rodada"…). Com filtro limpo, todos voltam.
   for (var k = 0; k < conts.length; k++) setDisp(conts[k], contHasHit[k]);
-  // O contador do <details> ("Demais jogos da rodada (N)") acompanha o filtro — senão
-  // anuncia 3 mostrando 1. O texto original fica guardado pra voltar ao limpar a busca.
+  // O contador do <details> é a QUANTIDADE DA SEÇÃO, não a quantidade temporariamente
+  // visível pela busca. "Demais jogos da rodada (N)" responde quantos jogos existem
+  // ali; trocar por (0) ao buscar Jogador X fazia parecer que não havia mais jogos.
+  // A abertura automática continua usando `nvis`, portanto resultado filtrado aparece
+  // sem clique, mas o cabeçalho preserva o total canônico da rodada.
   var dets = document.querySelectorAll('details');
   for (var d = 0; d < dets.length; d++) {
     var inside = dets[d].querySelectorAll('[data-players]');
@@ -7851,7 +7878,6 @@ window._bracketApplyFilter = function () {
       if (inside[z].getAttribute && inside[z].getAttribute('data-fb-marker') === '1') continue;
       if (inside[z].style.display !== 'none') nvis++;
     }
-    lbl.textContent = lbl.dataset.fbTxt.replace(/\((\d+)\)\s*$/, '(' + nvis + ')');
     /* ⭐ ACHAR SEM MOSTRAR É NÃO ACHAR. Ordem do dono (26/ago/2026): _"quando filtrarmos uma
      * informação deve aparecer a informacao sem precisarmos clicar no mostrar mais"_.
      * O filtro já revelava o `<details>` (o container deixa de ser `display:none`), mas ele

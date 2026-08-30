@@ -43,7 +43,7 @@ ok(vis().every(Boolean),'sem busca: todos visíveis');
 ok(empty.style.display==='none','sem busca: slot vazio escondido');
 
 input.value='bru'; F();
-ok(JSON.stringify(vis())==='[false,true,false]','trecho "bru" devia mostrar só o card do Bruno — '+JSON.stringify(vis()));
+ok(JSON.stringify(vis())==='[true,true,false]','trecho "bru" mostra o GRUPO inteiro (classificação + jogos irmãos), não só o card do Bruno — '+JSON.stringify(vis()));
 ok(colB.style.display==='none','coluna sem card visível devia sumir');
 ok(colA.style.display!=='none','coluna com card visível devia ficar');
 
