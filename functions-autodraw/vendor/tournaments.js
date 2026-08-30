@@ -3601,7 +3601,9 @@ function renderTournaments(container, tournamentId = null) {
     </div>
   `;
 
-    let participantsHtml = '';
+    // A ficha mostra os inscritos logo após a Organização, mas não vira a CHAMADA:
+    // presença, filtros e W.O. ficam exclusivamente em #participants/:id.
+    let detailParticipantsHtml = '';
     var _organizersHtml = '';
     // v3.0.x: barra de filtro/busca CANÔNICA dos inscritos (mesma de #participants).
     // Montada dentro do ramo de grade individual e injetada no back-header (belowHtml)
@@ -4179,57 +4181,44 @@ function renderTournaments(container, tournamentId = null) {
               ${_ligaSortBtnFinal}
             </div>`;
 
-            // ── Torneios de duplas: seção canônica (Sem dupla + Duplas formadas) ──
-            // v4.5.74: EXTRAÍDA p/ window._buildDoublesInscritosSection (single source of
-            // truth) — a MESMA seção é usada na CHAMADA (#participants) com o toggle
-            // Presente injetado via ctx.cardPresence. Ver [[project_two_participant_card_renderers]].
-            // v1.3.16 (dono): a CHAMADA (roll-call) de DUPLAS aparece DIRETO no detalhe —
-            // toggle Presente/Ausente + W.O. por membro/time, igual ao #participants. Reusa o
-            // factory canônico _rollCallPresenceCtx (nada de duplicar 100 linhas). Só pré-sorteio
-            // (a seção de duplas já só existe antes do sorteio). _rcActiveD definido no topo.
-            var _rcPresCtx = (typeof window._rollCallPresenceCtx === 'function' && _rcActiveD)
-              ? window._rollCallPresenceCtx(t, { isOrg: isOrg, active: _rcActiveD, postDraw: false, woScope: t.woScope })
-              : {};
+            // ── Inscritos NA FICHA, pelos renderizadores canônicos ──────────
+            // A ficha responde “qual é este torneio?” e mostra quem está nele;
+            // a CHAMADA responde “quem está presente?” e continua em #participants/:id.
+            // Portanto, nenhum contexto de presença, filtro, barra sticky ou W.O. cruza
+            // esta fronteira. Os cards, porém, são os MESMOS construtores canônicos.
             var _dsec = (typeof window._buildDoublesInscritosSection === 'function')
               ? window._buildDoublesInscritosSection(t, {
                   isOrg: isOrg, drawDone: drawDone,
                   orgUids: _orgUidsShared, orgEmails: _orgEmailsShared,
                   peopleCount: individualCountParts, hasTournCats: _hasTournCats,
-                  chrome: true,
-                  countBarHtml: checkInControls,
-                  cardPresence: _rcPresCtx.cardPresence,
-                  memberPresence: _rcPresCtx.memberPresence
+                  chrome: false
                 })
               : null;
             if (_dsec && _dsec.isDoubles) {
-              // v1.3.23: a barra de contagem já entra DENTRO da seção (logo abaixo da barra de
-              // filtro/busca, via countBarHtml) — não prefixa mais antes da seção.
-              participantsHtml = _dsec.html;
+              detailParticipantsHtml = `
+                <div class="mt-5 mb-4" data-detail-participants="1">
+                  <h3 style="margin-bottom:1.2rem;font-size:1.1rem;color:var(--text-bright);border-bottom:1px solid var(--border-color);padding-bottom:0.5rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">👥 Inscritos <span style="font-size:0.8rem;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));padding:3px 10px;border-radius:12px;font-weight:600;margin-left:5px;color:var(--text-muted);">${individualCountParts}</span></h3>
+                  ${_dsec.html}
+                </div>`;
             } else {
-              // Modo normal (individual ou duplas pós-sorteio)
-              // v3.1.47: barra de inscrito CANÔNICA (preset window._inscritosBar — o MESMO
-              // de #participants e do modo duplas). Sort A-Z/🕒 + gênero + habilidade +
-              // busca, STICKY no fluxo, lê os data-part-* via window._partApplyFilter.
-              // Aparece com >1 card e antes do sorteio.
-              _inscritosFilterBarHtml = (typeof window._inscritosBar === 'function')
-                ? window._inscritosBar(t, !drawDone && parts.length > 1)
+              // Individual/pós-sorteio: mesmo card canônico, sem os controles da chamada.
+              var _detailCardCtx = { isOrg: isOrg, drawDone: drawDone, canRollCall: false,
+                postDrawPresence: false, enrollOrderMap: _enrollOrderMap,
+                nameToParticipant: _icNameMap, waitSet: _icWaitSet, cardPresence: null };
+              var _detailCards = (typeof _mkCard === 'function')
+                ? _sortedParts.map(function (p) { return _mkCard(t, p, parts.indexOf(p), _detailCardCtx); }).join('')
                 : '';
-              participantsHtml = `
-                <div class="mt-5 mb-4">
+              detailParticipantsHtml = parts.length ? `
+                <div class="mt-5 mb-4" data-detail-participants="1">
                    <h3 style="margin-bottom: 1.5rem; font-size: 1.3rem; color: var(--text-bright); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; flex-wrap:wrap;">
                       👥 Inscritos Confirmados <span style="font-size: 0.8rem; background: var(--sp-g-255-255-255-01,rgba(255,255,255,0.1)); padding: 3px 10px; border-radius: 12px; font-weight: 600; margin-left: 5px; color: var(--text-muted);">${individualCountParts}</span>
                    </h3>
                    ${isOrg && drawDone ? '<div style="font-size:0.72rem;color:var(--text-muted);opacity:0.6;margin-bottom:8px;font-style:italic;">💡 Segure e arraste um nome sobre outro para mesclar participantes duplicados</div>' : ''}
                    ${(window.AppStore.isCreator(t) && drawDone) ? '<div style="font-size:0.72rem;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.22);border-radius:8px;padding:6px 10px;">👑 <b>Compartilhar a organização:</b> arraste um inscrito até a <b>estrela do organizador</b> (no card da ORGANIZAÇÃO) — ela brilha quando você começa a arrastar. No celular, <b>toque na estrela do organizador</b> e escolha quem promover. Funciona durante o torneio também.</div>' : ''}
-                   ${/* v1.3.23: barra de filtro/busca no TOPO, barra de contagem STICKY logo abaixo. */ ''}
-                   ${_inscritosFilterBarHtml}
-                   ${checkInControls}
-                   <div data-merge-container="${t.id}" class="sp-dnd-host" style="${gridStyle}">
-                      ${cardsStr}
+                   <div data-merge-container="${t.id}" class="sp-dnd-host" style="${window._INSCRITO_GRID_SOLO}">
+                      ${_detailCards}
                    </div>
-                   ${(_hasTournCats && isOrg) ? `<div id="inline-cat-mgr-${t.id}"></div>` : ''}
-                </div>
-            `;
+                </div>` : '';
             }
         }
 
@@ -4338,14 +4327,7 @@ function renderTournaments(container, tournamentId = null) {
     ${tournamentId && typeof window._meuCardNoTopo === 'function' ? window._meuCardNoTopo(visible[0]) : ''}
     ${tournamentId ? _organizersHtml : ''}
 
-    ${/* ⛔ DETALHE NÃO É CHAMADA (2.1.49).
-         Regra escolhida pelo dono: tocar o card na dashboard abre a ficha do torneio;
-         a lista de inscritos — filtros, presença e W.O. — só abre pelo botão
-         "👥 Inscritos" em #participants/:id. A reversão da 2.1.38 misturou os dois
-         contextos e, em torneio ainda sem sorteio, fazia a chamada ocupar a primeira
-         tela do detalhe. O cartão, as ferramentas e a chave continuam acima; a chamada
-         tem sua rota própria. O gate detalhe-abre-detalhe-nao-chamada.test.js trava a
-         separação para que este ramo não volte por acidente. */ ''}
+    ${tournamentId ? detailParticipantsHtml : ''}
 
     ${hasDrawn ? `
       <div class="mt-5">

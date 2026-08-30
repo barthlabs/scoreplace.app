@@ -1,8 +1,9 @@
 /* DETALHE ABRE DETALHE, NÃO A CHAMADA
  *
  * O card da dashboard já navega para #tournaments/:id. O detalhe não pode, por
- * sua vez, injetar a lista de inscritos: filtro, presença e W.O. pertencem à
- * rota explícita #participants/:id, acessada pelo botão "👥 Inscritos".
+ * sua vez, injetar a CHAMADA: filtro, presença e W.O. pertencem à rota explícita
+ * #participants/:id. Os cards canônicos dos inscritos, porém, aparecem logo
+ * abaixo da Organização, dentro da própria ficha.
  */
 'use strict';
 const fs = require('fs');
@@ -22,8 +23,16 @@ const detailTemplate = htmlStart >= 0 && htmlEnd > htmlStart ? src.slice(htmlSta
 ok(detailTemplate.length > 0, 'encontrou o template final do detalhe');
 ok(!/\$\{\s*hasDrawn\s*\?\s*''\s*:\s*participantsHtml\s*\}/.test(detailTemplate),
    'o detalhe não injeta participantsHtml antes do sorteio');
-ok(!/\$\{\s*participantsHtml\s*\}/.test(detailTemplate),
-   'a chamada não é emitida em nenhuma condição no detalhe');
+ok(/\$\{\s*tournamentId\s*\?\s*detailParticipantsHtml\s*:\s*''\s*\}/.test(detailTemplate),
+   'o detalhe emite a seção própria de cards canônicos');
+ok(detailTemplate.indexOf('detailParticipantsHtml') > detailTemplate.indexOf('_organizersHtml'),
+   'os cards entram logo abaixo da Organização');
+ok(/data-detail-participants="1"/.test(src),
+   'a seção de cards da ficha é identificável e exclusiva');
+ok(/canRollCall:\s*false[\s\S]{0,220}cardPresence:\s*null/.test(src),
+   'os cards da ficha não recebem ações de chamada');
+ok(/chrome:\s*false/.test(src),
+   'a seção canônica de duplas entra sem filtro, presença ou W.O.');
 ok(/window\.location\.hash='#participants\/\$\{t\.id\}'/.test(src),
    'o botão "👥 Inscritos" continua levando para a rota própria');
 
