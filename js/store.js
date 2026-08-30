@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.56';
+window.SCOREPLACE_VERSION = '2.1.57';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -770,22 +770,42 @@ window._preloadUserProfiles = function (uids) {
       }, 8000);
       db.collection('users').where(_fb, 'in', lote).get().then(function (snap) {
         var vistos = {};
-        snap.forEach(function (doc) {
-          var d = doc.data() || {};
-          vistos[doc.id] = 1;
-          window._userProfileCache[doc.id] = {
+        var redirects = [];
+        var guardarPerfil = function (uid, d) {
+          window._userProfileCache[uid] = {
             displayName: d.displayName || d.name || '', email: d.email || '', phone: d.phone || '',
             photoURL: d.photoURL || '', gender: d.gender || '',
             skillBySport: (d.skillBySport && typeof d.skillBySport === 'object') ? d.skillBySport : null,
             birthDate: d.birthDate || '', defaultCategory: d.defaultCategory || ''
           };
-        });
-        // uid sem doc: entra vazio, senão ele seria pedido de novo a cada hidratação
-        lote.forEach(function (uid) {
-          if (!vistos[uid] && !window._userProfileCache[uid]) {
-            window._userProfileCache[uid] = { displayName: '', email: '', phone: '', photoURL: '',
-              gender: '', skillBySport: null, birthDate: '', defaultCategory: '' };
+        };
+        snap.forEach(function (doc) {
+          var d = doc.data() || {};
+          vistos[doc.id] = 1;
+          // O UID ainda gravado no jogo pode ser uma lápide de merge. Não se pode usar o
+          // nome dela (é dado morto), mas o resolvedor canônico segue mergedInto até a conta
+          // ativa. Espelhamos o perfil vivo também NA CHAVE ANTIGA: a identidade do jogo não
+          // muda, apenas o display desse uid volta a resolver.
+          if (d.mergedInto && typeof window._userVivo === 'function') {
+            (function (uidAntigo, docLapide) {
+              redirects.push(window._userVivo(docLapide).then(function (vivo) {
+                if (!vivo || !vivo.data) return;
+                guardarPerfil(uidAntigo, vivo.data);
+                if (vivo.uid && vivo.uid !== uidAntigo) guardarPerfil(vivo.uid, vivo.data);
+              }).catch(function () {}));
+            })(doc.id, doc);
+          } else {
+            guardarPerfil(doc.id, d);
           }
+        });
+        return Promise.all(redirects).then(function () {
+          // uid sem doc: entra vazio, senão ele seria pedido de novo a cada hidratação
+          lote.forEach(function (uid) {
+            if (!vistos[uid] && !window._userProfileCache[uid]) {
+              window._userProfileCache[uid] = { displayName: '', email: '', phone: '', photoURL: '',
+                gender: '', skillBySport: null, birthDate: '', defaultCategory: '' };
+            }
+          });
         });
       }).catch(function (e) {
         // 2.0.55: o catch MUDO escondia a causa da seca de nomes (409 uids sem

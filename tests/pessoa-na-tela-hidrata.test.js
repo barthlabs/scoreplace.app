@@ -94,6 +94,12 @@ ok('o nome do organizador mede uma caixa estável (não flex:auto)',
   'sem caixa estável, fonte e largura se realimentam e o nome vibra');
 ok('o caminho instável flex:0 1 auto saiu do nome do organizador',
   !/flex:0 1 auto;min-width:0;height:1\.15rem/.test(orgCard));
+ok('a estrela é parte visual do nome, não uma coluna solta do card',
+  /sp-name-fit sp-org-name-fit/.test(orgCard) && !/var _starSpan/.test(orgCard),
+  'o nome e a estrela precisam viajar juntos depois da hidratação');
+const css = ler('css/components.css');
+ok('a estrela do organizador fica à direita do nome com pequena folga',
+  /\.sp-org-name-fit::after\{content:'★';[\s\S]{0,120}margin-left:0\.25rem/.test(css));
 
 console.log(falhas === 0
   ? '\n✅ pessoa-na-tela-hidrata: OK'

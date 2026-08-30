@@ -2455,6 +2455,10 @@ html, body,
    ⛔ Não mexer no `line-height`: é ele que a caixa de duas linhas usa como régua
    (o motor calcula a quebra a partir dele). */
 .sp-name-fit:not([data-fitted]){font-size:calc(var(--sp-box-h, 1.05rem) / 1.25);line-height:1.1;}
+/* O distintivo da Organização pertence ao NOME, não a uma coluna do card. Assim a
+   estrela fica logo à direita do texto, inclusive quando o perfil termina de hidratar,
+   e o box pai continua estável para o ajuste de fonte. */
+.sp-org-name-fit::after{content:'★';display:inline-block;margin-left:0.25rem;color:#fbbf24;font-size:0.92em;line-height:1;vertical-align:0.02em;}
 /* ⚠️ O `line-height:1.1` acima NÃO é cosmético: esta caixa tem ALTURA FIXA, e quando
    o nome é longo demais o motor do fit (store.js, `_quebraNaCaixaEmLote`) o quebra em
    DUAS linhas DENTRO deste mesmo espaço — cânone do dono, 23/ago/2026: a caixa é igual

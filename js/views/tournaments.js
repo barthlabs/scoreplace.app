@@ -3660,7 +3660,6 @@ function renderTournaments(container, tournamentId = null) {
           // de quem promover (entrada por toque, mobile). O ALVO de soltar é a VAGA
           // separada (_buildDropzone), que só aparece durante o arraste.
           var _tapAttrs = isTapPicker ? ' title="Toque para co-organizar" onclick="if(window._openOrgPickerDialog)window._openOrgPickerDialog(\'' + _safeTId + '\')"' : '';
-          var _starSpan = '<span class="sp-org-star" style="display:inline-flex;align-items:center;flex-shrink:0;">' + _crownSvg + '</span>';
           // v1.8.3 — O CARD DE ORGANIZAÇÃO ENTRA NO FILTRO DA BUSCA.
           // Relato do dono (11/ago/2026), com o filtro em "debora": _"os organizadores
           // nenhum é debora e ficam lá atrapalhando a tela. se tiver organizador que bate
@@ -3688,16 +3687,16 @@ function renderTournaments(container, tournamentId = null) {
               // era `flex:0 1 auto`: ao diminuir a fonte, a caixa diminuía junto; o
               // ResizeObserver mandava medir de novo e o nome ficava vibrando, às vezes
               // acabando cortado. A faixa fixa (responsiva no card estreito) interrompe
-              // esse ciclo. A coroa continua ao lado do nome, dentro da mesma faixa — não
-              // é empurrada para a borda do card.
-              '<div class="sp-org-name-row" style="display:flex;align-items:center;gap:4px;min-width:0;width:min(100%,12rem);">' +
+              // esse ciclo. A estrela é um pseudo-elemento DO PRÓPRIO nome: acompanha o
+              // fim do texto com uma folga curta, em vez de ocupar uma coluna no card.
+              '<div class="sp-org-name-row" style="display:flex;align-items:center;min-width:0;width:min(100%,12rem);">' +
                 '<div class="sp-org-name-box" style="flex:1;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
                   // e o NOME pelo mesmo caminho: escrito no render, ele CONGELAVA vazio
                   // (a tela não se redesenha só porque um perfil chegou depois).
                   window._personNameHtml(roleUid, name,
                     'font-weight:700;color:var(--text-bright);white-space:nowrap;',
-                    'sp-name-fit', ' data-maxrem="0.82" data-minrem="0.55"') +
-                '</div>' + _starSpan + '</div>' +
+                    'sp-name-fit sp-org-name-fit', ' data-maxrem="0.82" data-minrem="0.55"') +
+                '</div></div>' +
               '<div style="font-size:0.65rem;color:var(--text-muted);line-height:1.2;"' +
                 (roleUid && roleM && roleF
                   ? ' data-uid-role="' + window._safeHtml(String(roleUid)) + '"' +
