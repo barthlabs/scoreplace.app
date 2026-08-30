@@ -94,10 +94,11 @@ Isso não autoriza a próxima retirada de campo. O estado fica registrado assim:
 - **Arquitetura-alvo já adotada, ainda incompleta:** `matches` é a fonte; `results`
   é espelho server-authoritative para leitura/autorizações por jogo. Não é permitido
   reabrir dual-write no cliente para mascarar a falha.
-- **Dívida ainda aberta:** o reparo dos espelhos já existentes é uma operação de dados
-  separada, limitada aos IDs confirmados pelo conferidor e obrigatoriamente seguida da
-  mesma medição read-only. O gatilho cobre alterações futuras; ele não reexecuta eventos
-  antigos sozinho.
+- **Problema corrigido em produção (30/ago):** o reparo de dados foi executado somente
+  nos três torneios apontados pelo conferidor: 5 espelhos refeitos na Confra, 1 no BT
+  Corpus Christi e 1 criado nas Duplas Mistas. A medição posterior conferiu 42 torneios,
+  183 jogos canônicos, 0 `results` ausentes e 0 divergentes. O gatilho cobre alterações
+  futuras; ele não reexecuta eventos antigos sozinho.
 - **Proposta futura, não autorizada por esta nota:** tirar mais partes, apagar o
   documento antigo ou alterar o modelo de `standings`.
 
