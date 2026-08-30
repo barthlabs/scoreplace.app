@@ -70,6 +70,9 @@ const idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 ok('⛔ e o <script> saiu do index.html', !/amizade-core\.js/.test(idx));
 const fidx = fs.readFileSync(path.join(ROOT, 'functions', 'index.js'), 'utf8');
 ok('⛔ e o import morto saiu do functions/index.js', !/vendor\/amizade-core/.test(fidx));
+const copyVendor = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'copy-vendor.js'), 'utf8');
+ok('⛔ e o sincronizador de vendor não tenta mais copiar o módulo removido',
+  !/['\"]amizade-core\.js['\"]/.test(copyVendor));
 ok('⛔ e nenhum comentário diz mais que o merge usa reconciliarAmizade',
   !/reconciliarAmizade/.test(fidx));
 

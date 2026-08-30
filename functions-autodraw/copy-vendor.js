@@ -88,11 +88,10 @@ console.log(`[copy-vendor] ✓ ${copied} arquivos sincronizados em vendor/`);
  * cópias divergem, e divergir numa chave é gravar o registro de A por cima do de B.
  * Por isso o arquivo viaja — mesma fonte, dois destinos. */
 const OUT_FN = path.resolve(__dirname, '..', 'functions', 'vendor');
-// ⭐ `amizade-core.js` viaja pelo MESMO motivo do split: a invariante "amigo não é convite
-// pendente" faltava em TRÊS pontos (o merge legado no cliente e DOIS na fusão do servidor),
-// e cada um unia os arrays por conta própria. Escrever a regra de novo em functions/ seria
-// a quarta cópia — e foi a ausência de fonte única que produziu os 11 pares medidos na base.
-const SO_FUNCTIONS = ['tournament-split-core.js', 'amizade-core.js'];
+// Só o tradutor de torneio precisa viajar ao codebase principal. A antiga cópia de
+// `amizade-core.js` foi removida quando a autoridade de amizade foi consolidada no
+// servidor; mantê-la nesta lista fazia todo deploy do autoDraw abortar por fonte ausente.
+const SO_FUNCTIONS = ['tournament-split-core.js'];
 if (!fs.existsSync(OUT_FN)) fs.mkdirSync(OUT_FN, { recursive: true });
 for (const f of SO_FUNCTIONS) {
   fs.copyFileSync(path.join(SRC_DIR, f), path.join(OUT_FN, f));

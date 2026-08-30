@@ -1,5 +1,9 @@
 # Changelog do scoreplace.app
 
+## 2.1.59 — Pipeline do sorteio não conserva dependência removida (30/ago/2026)
+
+- **Problema corrigido:** o deploy do codebase `autodraw` abortava antes de publicar porque seu sincronizador ainda tentava copiar `amizade-core.js`, módulo deliberadamente removido da antiga arquitetura de amizade. A lista de vendor agora contém somente a dependência ativa (`tournament-split-core.js`) e um teste impede a referência morta de voltar.
+
 ## 2.1.58 — Espera automática funciona também em torneios divididos (30/ago/2026)
 
 - **Correção arquitetural de escrita:** a varredura agendada de Rei/Rainha agora monta o torneio pelas subcoleções canônicas antes de formar grupos da lista de espera. Antes, ela pulava explicitamente qualquer torneio dividido — 41 dos 42 torneios auditados. A gravação passa pelo writer canônico e persiste somente os deltas das partes alteradas; não recoloca os campos pesados no documento principal.
