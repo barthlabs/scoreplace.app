@@ -3684,15 +3684,14 @@ function renderTournaments(container, tournamentId = null) {
             window._personAvatarHtml(roleUid, name,
               'width:2rem;height:2rem;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(99,102,241,0.3);') +
             '<div style="flex:1;min-width:0;">' +
-              // v1.8.79: a coroa fica COLADA à direita do nome (pedido do dono). O box do
-              // nome tinha `flex:1` e engolia toda a sobra da linha, então a coroa era
-              // empurrada pra borda do card e parecia solta, longe de quem ela qualifica.
-              // Com `flex:0 1 auto` o box mede o texto e só encolhe quando falta espaço —
-              // a coroa vem logo depois em qualquer largura, e a sobra fica DEPOIS dela.
-              // ⚠️ O pai do `.sp-name-fit` continua sendo este box (é ele que `_fitOne`
-              // mede pra encolher a fonte); só mudou como ele reparte a linha.
-              '<div style="display:flex;align-items:center;gap:4px;">' +
-                '<div style="flex:0 1 auto;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
+              // A caixa que o `.sp-name-fit` mede PRECISA TER LARGURA ESTÁVEL. Ela já
+              // era `flex:0 1 auto`: ao diminuir a fonte, a caixa diminuía junto; o
+              // ResizeObserver mandava medir de novo e o nome ficava vibrando, às vezes
+              // acabando cortado. A faixa fixa (responsiva no card estreito) interrompe
+              // esse ciclo. A coroa continua ao lado do nome, dentro da mesma faixa — não
+              // é empurrada para a borda do card.
+              '<div class="sp-org-name-row" style="display:flex;align-items:center;gap:4px;min-width:0;width:min(100%,12rem);">' +
+                '<div class="sp-org-name-box" style="flex:1;min-width:0;height:1.15rem;overflow:hidden;display:flex;align-items:center;">' +
                   // e o NOME pelo mesmo caminho: escrito no render, ele CONGELAVA vazio
                   // (a tela não se redesenha só porque um perfil chegou depois).
                   window._personNameHtml(roleUid, name,
