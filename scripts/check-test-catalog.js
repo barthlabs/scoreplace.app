@@ -58,10 +58,13 @@ const AUTODRAW_MANUAL = [
 /* Testes que NÃO são suíte: fixtures, harnesses e helpers que outras suítes requerem. */
 const NAO_SAO_SUITE = new Set([
   'tests/render-harness.js', 'tests/headless.js', 'tests/recorte.js',
-  'tests/pilula-ver-mais.js', 'tests/test-utils.js', 'tests/_stub-firestore-http.js',
+  'tests/pilula-ver-mais.js', 'tests/_stub-firestore-http.js',
   'tests/_conta-de-partes-fixture.js', 'tests/concurrency/emu-harness.js',
-  'tests/concurrency/emu-harness-views.js', 'tests/eliminatoria-golden-master.js',
+  'tests/concurrency/emu-harness-views.js',
 ]);
+/* ⚠️ `tests/test-utils.js` SAIU desta lista: ele está em `tests/run-unit.js` e RODA no
+ * `npm test` — ou seja, é suíte catalogada, não fixture. Uma isenção que não isenta nada
+ * mente sobre por que o arquivo está ali, e some com a informação de que ele é executado. */
 
 /* ── Onde cada grupo é descoberto (a VERDADE, não uma cópia) ─────────────────── */
 const catalogo = new Map();
@@ -89,32 +92,55 @@ Object.keys(EMULADOR_MANUAL).forEach((f) => põe(f, 'emulador-manual', EMULADOR_
 Object.keys(AUTODRAW_MANUAL).forEach((f) => põe(f, 'autodraw-manual', AUTODRAW_MANUAL[f]));
 
 /* ── O universo real no disco ───────────────────────────────────────────────── */
+/* ⛔ UMA VARREDURA SÓ, RECURSIVA NOS TRÊS. A primeira versão deste gate (L15.P2) descia
+ * em `tests/` mas lia `functions/` e `functions-autodraw/` só no PRIMEIRO NÍVEL — um
+ * `functions/qualquer-pasta/test-x.js` ficaria órfão e o gate diria "completo".
+ * ⚠️ Um gate com ponto cego é pior que gate nenhum: ele responde "está tudo catalogado"
+ * com a mesma cara nos dois casos, e é justamente essa resposta que faz ninguém procurar.
+ *
+ * ⭐ E OS DOIS PADRÕES VALEM EM QUALQUER LUGAR: `*.test.js` (convenção de `tests/`) e
+ * `test-*.js` (convenção de `functions/`). Restringir o padrão por diretório reabriria a
+ * mesma brecha por outro caminho — um `functions/foo/bar.test.js` escaparia.
+ * Medido antes de trocar: aceitar os dois em todos os três acrescenta UM arquivo ao
+ * universo (`tests/test-utils.js`), que já é suíte registrada no `run-unit.js`.
+ *
+ * ⛔ `node_modules` fica de fora em TODO nível — `functions/node_modules` sozinho tem
+ * milhares de `test-*.js` de dependências, que não são nossos e nunca serão catalogados. */
+const RAIZES = ['tests', 'functions', 'functions-autodraw'];
+const EH_TESTE = (nome) => /\.test\.js$/.test(nome) || /^test-.*\.js$/.test(nome);
+
 const universo = [];
-(function anda(dir, aceitaPrefixo) {
+(function varrer(dir) {
   const abs = path.join(RAIZ, dir);
   if (!fs.existsSync(abs)) return;
   fs.readdirSync(abs, { withFileTypes: true }).forEach((e) => {
     const rel = dir + '/' + e.name;
-    if (e.isDirectory()) { if (e.name !== 'node_modules') anda(rel, aceitaPrefixo); return; }
-    if (/\.test\.js$/.test(e.name) || (aceitaPrefixo && /^test-.*\.js$/.test(e.name))) universo.push(rel);
+    if (e.isDirectory()) { if (e.name !== 'node_modules') varrer(rel); return; }
+    if (EH_TESTE(e.name)) universo.push(rel);
   });
-})('tests', false);
-['functions', 'functions-autodraw'].forEach((d) => anda2(d));
-function anda2(dir) {
-  const abs = path.join(RAIZ, dir);
-  if (!fs.existsSync(abs)) return;
-  fs.readdirSync(abs, { withFileTypes: true }).forEach((e) => {
-    if (e.isDirectory()) return;                    // node_modules e afins ficam de fora
-    if (/^test-.*\.js$/.test(e.name)) universo.push(dir + '/' + e.name);
-  });
-}
+});
+RAIZES.forEach((d) => {
+  (function varrer(dir) {
+    const abs = path.join(RAIZ, dir);
+    if (!fs.existsSync(abs)) return;
+    fs.readdirSync(abs, { withFileTypes: true }).forEach((e) => {
+      const rel = dir + '/' + e.name;
+      if (e.isDirectory()) { if (e.name !== 'node_modules') varrer(rel); return; }
+      if (EH_TESTE(e.name)) universo.push(rel);
+    });
+  })(d);
+});
 
 const orfaos = universo.filter((f) => !catalogo.has(f) && !NAO_SAO_SUITE.has(f));
 /* ⚠️ E o inverso também acusa: um arquivo catalogado que foi APAGADO deixa o catálogo
  * mentindo — e um `npm test` verde sobre uma lista com fantasma é pior que nenhum. */
 const fantasmas = [...catalogo.keys()].filter((f) => !fs.existsSync(path.join(RAIZ, f)));
+/* ⚠️ E a lista de isenções também tem que ser verdade: arquivo que não existe mais, ou
+ * que virou suíte catalogada, não pode continuar listado como "não é suíte". */
+const isencoesMortas = [...NAO_SAO_SUITE].filter(
+  (f) => !fs.existsSync(path.join(RAIZ, f)) || catalogo.has(f));
 
-if (orfaos.length || fantasmas.length) {
+if (orfaos.length || fantasmas.length || isencoesMortas.length) {
   console.error('✗ check-test-catalog FALHOU:\n');
   if (orfaos.length) {
     console.error('  • ' + orfaos.length + ' teste(s) SEM COMANDO que os execute:');
@@ -132,6 +158,13 @@ if (orfaos.length || fantasmas.length) {
     console.error('  • ' + fantasmas.length + ' arquivo(s) CATALOGADO(S) que não existem mais:');
     fantasmas.forEach((f) => console.error('      · ' + f));
     console.error('\n    Tire do catálogo (ou do tests/run-unit.js) — catálogo com fantasma mente.');
+  }
+  if (isencoesMortas.length) {
+    console.error('  • ' + isencoesMortas.length + ' isenção(ões) em NAO_SAO_SUITE que não isentam nada:');
+    isencoesMortas.forEach((f) => console.error('      · ' + f +
+      (catalogo.has(f) ? '  (já é suíte catalogada, roda por: ' + catalogo.get(f).cmd + ')'
+                       : '  (não existe mais)')));
+    console.error('\n    Tire da lista — isenção que não isenta esconde que o arquivo É executado.');
   }
   process.exitCode = 1;   // ⛔ nunca process.exit(): trunca o stdout já enfileirado
 } else {

@@ -78,6 +78,17 @@ teste órfão).
 | `amizade` | `npm run test:amizade` | 8 suítes requeridas por `tests/amizade/run.js` |
 | `ext` | `npm run test:ext` | extensão letzplay |
 
+⛔ **O gate varre os TRÊS diretórios recursivamente** (`tests/`, `functions/`,
+`functions-autodraw/`), com `node_modules` de fora em todo nível, e aceita os **dois
+padrões** em qualquer um deles (`*.test.js` e `test-*.js`). A primeira versão (L15.P2)
+descia só em `tests/` e lia os outros dois no primeiro nível — um
+`functions/qualquer-pasta/test-x.js` ficaria órfão e o gate responderia "completo".
+⚠️ Gate com ponto cego é pior que gate nenhum: ele dá a MESMA resposta nos dois casos, e é
+essa resposta que faz ninguém procurar. Corrigido na L15.P2.1, provado com sonda nas duas
+subpastas e com o gate antigo passando batido na mesma sonda. O gate também recusa
+**isenção morta** em `NAO_SAO_SUITE` (arquivo apagado, ou que virou suíte catalogada) —
+isenção que não isenta esconde que o arquivo É executado.
+
 ⚠️ **Os grupos de emulador rodam em SÉRIE, e isso não é preferência.** Todas as suítes usam o
 projeto `demo-scoreplace`, então em paralelo os dados se misturam; e as `rules-*` disputam
 porta: 8098 (`rules-sandbox-read`, `rules-cohost-uid-only`, `rules-mail-server-only`) e 8099
