@@ -124,6 +124,10 @@ function makeSW(opts) {
   const sandbox = {
     console: { log() {}, warn() {}, error() {} },
     URL, Promise, Map, Set, Date, JSON,
+    // ⚠️ O sw.js passou a ARMAR UM PRAZO na navegação (2.1.70). Sem `setTimeout` no
+    // sandbox ele estoura no primeiro fetch de navegação — e o teste acusaria o
+    // harness, não o arquivo.
+    setTimeout, clearTimeout,
     Request: FakeRequest,
     Response: FakeResponse,
     caches: {
@@ -167,7 +171,12 @@ function makeSW(opts) {
   sandbox.self.addEventListener = (t, fn) => { (listeners[t] = listeners[t] || []).push(fn); };
 
   vm.createContext(sandbox);
-  vm.runInContext(swSrc, sandbox, { filename: 'sw.js' });
+  /* O PRAZO da navegação é constante no arquivo. Encurtá-lo aqui mantém a suíte
+   * rápida SEM inventar um segundo caminho: o código executado é o mesmo. */
+  const fonte = (typeof opts.prazoNav === 'number')
+    ? swSrc.replace(/var PRAZO_NAVEGACAO_MS = \d+;/, 'var PRAZO_NAVEGACAO_MS = ' + opts.prazoNav + ';')
+    : swSrc;
+  vm.runInContext(fonte, sandbox, { filename: 'sw.js' });
 
   return { listeners, netCalls, notifications, importCalls, store, FakeRequest, FakeResponse };
 }
@@ -299,15 +308,35 @@ const CACHE_QUENTE = {
   await checaPush;
   await checaForeground;
 
-  // 3a) Navegação com a rede pendurada → tem que responder do cache.
-  const swNav = makeSW({ cached: CACHE_QUENTE, netHangs: true });
+  // 3a) Navegação com a rede PENDURADA → não pode ficar esperando pra sempre.
+  //
+  // ⚠️ MUDOU O MECANISMO, NÃO O INVARIANTE (2.1.70 · R1.0). Até a 2.1.69 a navegação
+  // saía do cache SEM sequer tentar a rede — e era exatamente isso que fazia o app abrir
+  // com o shell de uma build e o JS de outra (medido em produção em 31/ago: documento
+  // 2.1.63 executando JS 2.1.69, com "0 inscritos" e Novidades vazia na tela). Ordem do
+  // dono na R1.0: navegação ONLINE busca a rede ANTES do cache.
+  // O invariante desta suíte continua de pé, e é o que se afirma aqui: **rede pendurada
+  // não deixa a tela em branco**. O sw.js arma um PRAZO de parede (`PRAZO_NAVEGACAO_MS`)
+  // e, estourado o prazo, serve o shell do cache. `prazoNav` só encurta esse mesmo prazo
+  // pra a suíte não esperar 1,8s — o código executado é o do arquivo.
+  const swNav = makeSW({ cached: CACHE_QUENTE, netHangs: true, prazoNav: 30 });
   const navReq = new swNav.FakeRequest('https://scoreplace.app/', { mode: 'navigate' });
   const corrida = await Promise.race([
     fetchVia(swNav, navReq).then((r) => ({ quem: 'cache', body: r && r.body })),
     new Promise((r) => setTimeout(() => r({ quem: 'TRAVOU' }), 300))
   ]);
-  ok('navegação responde do cache mesmo com a rede pendurada (a tela branca do relato)',
+  ok('rede pendurada NÃO deixa a navegação em branco — estourado o prazo, vem o shell do cache',
     corrida.quem === 'cache' && corrida.body === '<html>SHELL</html>');
+
+  // 3a-bis) ⭐ E O CONTRÁRIO TAMBÉM: com a rede RESPONDENDO, a navegação NÃO pode sair
+  // do cache. Sem esta asserção, "3a passou" também passaria com o cache-first de volta —
+  // que é o defeito que a R1.0 fechou.
+  {
+    const swOk = makeSW({ cached: CACHE_QUENTE });
+    const r = await fetchVia(swOk, new swOk.FakeRequest('https://scoreplace.app/', { mode: 'navigate' }));
+    ok('  → com rede boa, a navegação vem da REDE, não do cache (invariante R1.0)',
+      !!r && /^DA-REDE:/.test(String(r.body)));
+  }
 
   // 3b) CSS/JS render-blocking do <head>: idem.
   const swCss = makeSW({ cached: CACHE_QUENTE, netHangs: true });
@@ -320,7 +349,7 @@ const CACHE_QUENTE = {
 
   // 3c) Navegação para uma rota que o cache não tem sob a URL exata cai no
   //     /index.html precacheado (o app é SPA: toda rota é o mesmo shell).
-  const swDeep = makeSW({ cached: CACHE_QUENTE, netHangs: true });
+  const swDeep = makeSW({ cached: CACHE_QUENTE, netHangs: true, prazoNav: 30 });
   const deepReq = new swDeep.FakeRequest('https://scoreplace.app/invite/abc', { mode: 'navigate' });
   const deepRace = await Promise.race([
     fetchVia(swDeep, deepReq).then((r) => ({ quem: 'cache', body: r && r.body })),

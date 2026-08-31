@@ -1,4 +1,73 @@
-window.SCOREPLACE_VERSION = '2.1.69';
+window.SCOREPLACE_VERSION = '2.1.70';
+
+/* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
+ *
+ * ⛔ O BURACO QUE ISTO FECHA. `_checkForUpdate` (lá embaixo) sempre comparou
+ * `version.txt` com `SCOREPLACE_VERSION` — ou seja, com o JS QUE ESTÁ RODANDO. Medido
+ * em produção em 31/ago/2026: uma sessão rodava o documento (shell) da 2.1.63 com o JS
+ * da 2.1.67–2.1.69. Nesse estado `version.txt` e `SCOREPLACE_VERSION` BATEM, o arbitro
+ * diz "você está atualizado", e a tela mistura um HTML de uma build com o código de
+ * outra. É assim que `inscritos`, "📣 Novidades" e "🏅 Seus últimos resultados"
+ * aparecem vazios com o dado canônico intacto no banco.
+ *
+ * ⛔ E o `?v=` NÃO impedia: cache-buster é QUERY. `/js/store.js?v=2.1.63` e
+ * `?v=2.1.69` são o MESMO arquivo no Hosting — o shell velho pede a URL velha e a rede
+ * devolve o código NOVO. Por isso a checagem tem que ser sobre o que o DOCUMENTO diz de
+ * si mesmo, e não sobre a URL que ele usou pra pedir os scripts.
+ *
+ * ⭐ O shell carimba a própria versão em `<meta name="sp-shell">` (escrito pelo
+ * prerender, mesma fonte do version.txt e do CACHE_NAME).
+ *
+ * ⚠️ SHELL SEM CARIMBO NÃO ACUSA. Um index.html anterior a esta versão não tem a meta;
+ * tratar "não sei" como "incoerente" poria toda instalação antiga em estado de alarme
+ * no primeiro load — e é justamente o load em que o SW novo troca o shell. "Não sei"
+ * devolve `false`, e quem resolve esse caso é o `_checkForUpdate` de sempre.
+ */
+window._versaoDoShell = function () {
+  try {
+    if (typeof document === 'undefined' || !document.querySelector) return '';
+    var m = document.querySelector('meta[name="sp-shell"]');
+    return (m && String(m.getAttribute('content') || '').trim()) || '';
+  } catch (e) { return ''; }
+};
+window._versaoIncoerente = function () {
+  var shell = window._versaoDoShell();
+  if (!shell) return false;                       // sem carimbo = "não sei", nunca "errado"
+  return shell !== window.SCOREPLACE_VERSION;
+};
+
+/* "Posso apresentar os números DESTE torneio como fato?"
+ *
+ * ⛔ DUAS MANEIRAS DE MENTIR, e as duas já aconteceram na tela do dono:
+ *   ① versão híbrida (acima) — o render é de outra build;
+ *   ② hidratação incompleta — o torneio é DIVIDIDO e as partes pesadas ainda não
+ *      chegaram. Aí `participants` tem 2 de 152 e `matches` 1 de 115, e desenhar isso
+ *      não é "mostrar o que temos", é AFIRMAR que o torneio tem 2 inscritos.
+ *
+ * ⭐ Reconta em vez de confiar no marcador: `_marcaPartesQueFaltam` recalcula e LIMPA
+ * `_faltamPesados` quando nada falta. Isso importa porque o marcador é campo local que
+ * pode ter sido gravado no documento por uma mutação — confiar nele cegamente deixaria
+ * um torneio inteiro preso em "atualizando" pra sempre.
+ *
+ * Devolve true = pode afirmar. [[project_derivado_nao_se_guarda_standings]] */
+window._dadosConfiaveis = function (t) {
+  if (window._versaoIncoerente()) return false;
+  if (!t) return true;
+  try {
+    if (typeof window._marcaPartesQueFaltam !== 'function') return true;
+    return !window._marcaPartesQueFaltam(t);
+  } catch (e) { return true; }
+};
+/* Idem pra uma LISTA: as seções da dashboard somam vários torneios, e basta UM
+ * incompleto pra o total ser mentira. */
+window._listaConfiavel = function (lista) {
+  if (window._versaoIncoerente()) return false;
+  var arr = Array.isArray(lista) ? lista : [];
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i] && !window._dadosConfiaveis(arr[i])) return false;
+  }
+  return true;
+};
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -3448,6 +3517,31 @@ window._devWhatsAppBtnHtml = function (opts) {
         try { sessionStorage.setItem('sp_update_reloaded_for', v); } catch (e) {}
         window._log('[AutoUpdate] New version:', v, '(running:', window.SCOREPLACE_VERSION + ').');
         window._showUpdatePill(); // mostra a pílula mesmo se o reload auto for adiado
+        window._applyUpdate(!!opts.force);
+        return;
+      }
+      /* ── R1.0 · VERSÃO BATE, SHELL NÃO ────────────────────────────────────────
+       * O ramo acima só enxerga "o JS rodando está atrasado". O híbrido medido em
+       * 31/ago é o contrário: o JS está EM DIA (version.txt === SCOREPLACE_VERSION) e
+       * quem está velho é o DOCUMENTO. Sem este ramo o arbitro dizia "atualizado" com
+       * a tela mostrando dado de outra build.
+       * ⚠️ GUARD PRÓPRIO, separado do `sp_update_reloaded_for`: são duas incoerências
+       * diferentes e cada uma tem direito a UMA tentativa. Somadas, no pior caso, dois
+       * reloads e depois só a pílula — nunca laço. */
+      var _shell = window._versaoDoShell();
+      if (_shell && _shell !== window.SCOREPLACE_VERSION) {
+        var _chave = _shell + '>' + window.SCOREPLACE_VERSION;
+        var _jaTentou = null;
+        try { _jaTentou = sessionStorage.getItem('sp_shell_reloaded_for'); } catch (e) {}
+        if (_jaTentou === _chave) {
+          window._log('[AutoUpdate] shell=' + _shell + ' != js=' + window.SCOREPLACE_VERSION +
+            ' MESMO após reload — sem laço: só a pílula.');
+          window._showUpdatePill();
+          return;
+        }
+        try { sessionStorage.setItem('sp_shell_reloaded_for', _chave); } catch (e) {}
+        window._log('[AutoUpdate] EXECUÇÃO HÍBRIDA: shell=' + _shell + ' js=' + window.SCOREPLACE_VERSION + '.');
+        window._showUpdatePill();
         window._applyUpdate(!!opts.force);
       }
     }).catch(function() {});

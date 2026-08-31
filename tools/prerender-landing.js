@@ -260,6 +260,25 @@ async function main() {
             console.log('[prerender] ✓ sw.js CACHE_NAME = scoreplace-v' + vm[1]);
           }
         } catch (e) { console.warn('[prerender] CACHE_NAME falhou:', e && e.message); }
+
+        /* ── O SHELL CARIMBA A PRÓPRIA VERSÃO (R1.0) ──────────────────────────
+         * Mesma família do CACHE_NAME acima, e pelo mesmo motivo: uma premissa que
+         * ninguém mantém vale menos que nenhuma. `<meta name="sp-shell">` é o que
+         * permite ao app, em tempo de execução, comparar a versão do DOCUMENTO com a
+         * do JS que está rodando — o híbrido que ninguém via.
+         * ⚠️ Relê o index do disco: `newIndex` já foi gravado logo acima. */
+        try {
+          const idxSrc = fs.readFileSync(INDEX_PATH, 'utf8');
+          const novoIdx = idxSrc.replace(
+            /<meta name="sp-shell" content="[^"]*">/,
+            '<meta name="sp-shell" content="' + vm[1] + '">');
+          if (novoIdx !== idxSrc) {
+            fs.writeFileSync(INDEX_PATH, novoIdx, 'utf8');
+            console.log('[prerender] ✓ index.html sp-shell = ' + vm[1]);
+          } else if (idxSrc.indexOf('name="sp-shell"') === -1) {
+            console.warn('[prerender] ⚠️ index.html SEM <meta name="sp-shell"> — a coerência de versão fica cega');
+          }
+        } catch (e) { console.warn('[prerender] sp-shell falhou:', e && e.message); }
       } else {
         console.warn('[prerender] SCOREPLACE_VERSION não encontrado em store.js — version.txt não gerado');
       }

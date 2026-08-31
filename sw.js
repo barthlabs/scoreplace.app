@@ -97,7 +97,7 @@ self.addEventListener('notificationclick', function(event) {
   );
 });
 
-var CACHE_NAME = 'scoreplace-v2.1.69';
+var CACHE_NAME = 'scoreplace-v2.1.70';
 // NOTE: js/release-notes.js NÃO entra aqui de propósito — é lazy-loaded só
 // quando o usuário abre "Notas de versões" no Help. Adicioná-lo ao precache
 // faria cache.addAll baixar 1MB durante o SW install, anulando o ganho do
@@ -353,24 +353,139 @@ function _networkFirst(event) {
       // tropeçando, ou depois de o iOS expulsar o cache. Navegação ganha uma
       // página mínima com botão de tentar de novo; asset ganha um erro de rede
       // honesto (o script falha como falharia sem SW, sem derrubar o resto).
-      if (_isNav) {
-        return new Response(
-          '<!doctype html><html><head><meta charset="utf-8">' +
-          '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-          '<title>scoreplace.app</title></head>' +
-          '<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#e2e8f0;font-family:-apple-system,sans-serif;text-align:center">' +
-          '<div><p style="font-size:1.05rem;margin:0 0 16px">Sem conexão com o servidor.</p>' +
-          '<button onclick="location.reload()" style="font-size:1rem;font-weight:700;padding:12px 28px;border-radius:10px;border:0;background:#16a34a;color:#fff">Tentar de novo</button></div>' +
-          '</body></html>',
-          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-        );
-      }
+      if (_isNav) return _paginaSemRede();   // FONTE ÚNICA da página de "sem conexão"
       return Response.error();
     });
   });
 }
 
-// Fetch: shell do cache (paint instantâneo), rede primeiro pro resto
+/* ══ R1.0 · NAVEGAÇÃO ONLINE NUNCA COMEÇA COM SHELL DE OUTRA VERSÃO ═════════════
+ *
+ * ⛔ O QUE ESTAVA ERRADO, e por que era invisível. A navegação caía no mesmo
+ * cache-first dos assets. O request de navegação é `/` — SEM `?v=` —, e o precache
+ * guarda `/` e `/index.html` desde o install de QUALQUER versão anterior. Então a
+ * navegação dava HIT quase sempre e o SW respondia com o index.html VELHO,
+ * revalidando só em segundo plano.
+ *
+ * ⛔ E o `?v=` NÃO salvava, ao contrário do que o comentário antigo aqui prometia.
+ * O cache-buster é só QUERY: `/js/store.js?v=2.1.63` e `/js/store.js?v=2.1.69` são o
+ * MESMO arquivo no Hosting. Quando o shell velho pedia `?v=2.1.63` e o cache não
+ * tinha mais aquela entrada, a requisição ia à rede — e a rede devolvia o conteúdo
+ * ATUAL. Resultado medido em produção (31/ago/2026): shell 2.1.63 executando JS
+ * 2.1.67–2.1.69. Execução híbrida, com o `_checkForUpdate` calado, porque ele compara
+ * version.txt com o JS RODANDO — e o JS rodando estava certo. Quem estava velho era o
+ * documento, e ninguém perguntava a versão dele.
+ * Nessa mistura, `inscritos`, Novidades e "Seus últimos resultados" aparecem vazios
+ * com o dado canônico intacto no banco.
+ *
+ * ⭐ AGORA: navegação vai à REDE primeiro (`cache:'reload'`, que também pula o cache
+ * HTTP do navegador). O cache só entra quando a rede REALMENTE falhou.
+ *
+ * ⚠️ O CUSTO É UM ROUND-TRIP, e só do DOCUMENTO. Os 7 CSS e os scripts de <head> —
+ * que são o que segura o primeiro pixel, e a razão do cache-first ter nascido em
+ * 1.8.35 — continuam vindo do cache por URL exata. A tela branca que aquela versão
+ * fechou não volta por aqui: o que passou a esperar a rede é uma resposta de ~30 KB,
+ * não a fila de 90 arquivos.
+ */
+function _paginaSemRede() {
+  // ⛔ NUNCA resolver navegação com undefined nem com Response.error():
+  // `respondWith(undefined)` mata a página com "Returned response is null" — no PWA
+  // standalone isso é TELA PRETA sem mensagem nenhuma (medido no simulador,
+  // 24/ago/2026). Uma página mínima com botão é o piso.
+  return new Response(
+    '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>scoreplace.app</title></head>' +
+    '<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#e2e8f0;font-family:-apple-system,sans-serif;text-align:center">' +
+    '<div><p style="font-size:1.05rem;margin:0 0 16px">Sem conexão com o servidor.</p>' +
+    '<button onclick="location.reload()" style="font-size:1rem;font-weight:700;padding:12px 28px;border-radius:10px;border:0;background:#16a34a;color:#fff">Tentar de novo</button></div>' +
+    '</body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
+
+/* O shell do cache SÓ pode ser servido se este cache consegue entregar, sob a URL
+ * EXATA que ele pede, todo o <head> render-blocking dele.
+ *
+ * ⛔ POR QUE CONFERIR EM VEZ DE SÓ DEVOLVER: offline, um asset que não está sob a URL
+ * exata cai no `ignoreSearch` de `_networkFirst` e recebe a cópia de OUTRA versão —
+ * que é exatamente a mistura que esta leva existe pra proibir. Conferindo antes, ou o
+ * shell velho é servido COERENTE (ele e todo o <head> dele, da mesma build — que é o
+ * que a regra permite offline), ou não é servido shell nenhum e a pessoa vê a página
+ * de "sem conexão", que é honesta. ⚠️ O `ignoreSearch` continua existindo pros scripts
+ * `defer`, que não seguram a pintura — tirá-lo de lá é o que trouxe a landing em
+ * chaves cruas em 10/ago (ver o comentário em `_networkFirst`).
+ */
+function _shellCoerenteDoCache(event) {
+  return caches.open(CACHE_NAME).then(function(cache) {
+    return cache.match(event.request).then(function(hit) {
+      return hit || cache.match('/index.html') || null;
+    }).then(function(shell) {
+      if (!shell) return null;
+      return shell.clone().text().then(function(html) {
+        var urls = _versionedShellUrls(html);
+        if (!urls.length) return shell;   // shell sem <head> versionado: nada a misturar
+        return Promise.all(urls.map(function(u) { return cache.match(u); }))
+          .then(function(hits) {
+            var faltam = hits.filter(function(h) { return !h; }).length;
+            if (faltam) return null;      // ⛔ serviria MISTURADO — melhor não servir
+            return shell;
+          });
+      }).catch(function() { return null; });
+    });
+  }).catch(function() { return null; });
+}
+
+/* ⚠️ O PRAZO EXISTE PORQUE "REDE PENDURADA" NÃO É "REDE QUE FALHOU".
+ * `fetch` numa conexão que aceita a conexão e nunca responde não rejeita NUNCA — e
+ * navegação rede-primeiro sem prazo é a tela branca de 1.8.35 de volta, por um caminho
+ * novo. É a mesma lição do conferidor da R0.4.2: prazo é RELÓGIO DE PAREDE armado por
+ * nós, nunca a promessa de um timeout de biblioteca.
+ * ⭐ E estourar o prazo NÃO reabre a mistura: o que se serve no lugar é o shell
+ * COERENTE do cache (ele e todo o <head> dele, da mesma build), então o carregamento
+ * inteiro é de uma versão só. O `_checkForUpdate`, que agora enxerga o
+ * `<meta sp-shell>`, percebe que aquela versão não é a atual e atualiza. */
+var PRAZO_NAVEGACAO_MS = 1800;
+
+function _navegacaoRedePrimeiro(event) {
+  // `cache:'reload'` pula o cache HTTP do navegador — sem isto o `max-age` do Hosting
+  // devolveria um index velho DE DENTRO do navegador, com o SW inocente.
+  var req = new Request(event.request.url, { cache: 'reload', credentials: 'same-origin', redirect: 'follow' });
+  var _estourou = false;
+  var _prazo = new Promise(function(resolve) {
+    setTimeout(function() { _estourou = true; resolve('__PRAZO__'); }, PRAZO_NAVEGACAO_MS);
+  });
+  var _daRede = fetch(req).then(function(resp) {
+    // ⚠️ Guarda no cache MESMO se o prazo já estourou: esta resposta é a versão nova, e
+    // é ela que a próxima navegação vai encontrar.
+    if (resp && resp.status === 200) {
+      var _c = resp.clone();
+      caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, _c); }).catch(function() {});
+    }
+    return resp;
+  });
+  return Promise.race([_daRede, _prazo]).then(function(qual) {
+    if (qual === '__PRAZO__' || _estourou) {
+      return _shellCoerenteDoCache(event).then(function(cached) {
+        return cached || _daRede.catch(function() { return _paginaSemRede(); });
+      });
+    }
+    return _naRespostaDaRede(event, qual);
+  }).catch(function() {
+    return _shellCoerenteDoCache(event).then(function(cached) { return cached || _paginaSemRede(); });
+  });
+}
+
+function _naRespostaDaRede(event, resp) {
+  return Promise.resolve().then(function() {
+    if (resp && resp.status === 200) return resp;   // já foi pro cache lá em cima
+    // Rede respondeu, mas com shell inutilizável (5xx/404). Não é "offline", e mesmo
+    // assim servir a página quebrada não ajuda ninguém: tenta o cache coerente.
+    return _shellCoerenteDoCache(event).then(function(cached) { return cached || resp; });
+  });
+}
+
+// Fetch: navegação pela REDE (coerência de versão), assets do cache por URL exata
 self.addEventListener('fetch', function(event) {
   var url = event.request.url;
 
@@ -410,31 +525,25 @@ self.addEventListener('fetch', function(event) {
   // exata, `?v=` novo = miss = vai à rede; só serve do cache o que é exatamente
   // aquele arquivo naquela versão. Ver [[project_pwa_auto_update]].
   if (url.indexOf(self.location.origin) === 0) {
-    var _isNavReq = (event.request.mode === 'navigate');
+    // ── ⭐ R1.0 · NAVEGAÇÃO É REDE PRIMEIRO. Sai do caminho cache-first. ────────
+    // Ver `_navegacaoRedePrimeiro` logo acima do fetch handler pro porquê inteiro.
+    if (event.request.mode === 'navigate') {
+      event.respondWith(_navegacaoRedePrimeiro(event));
+      return;
+    }
     event.respondWith(
-      caches.match(event.request).then(function(hit) {
-        // Navegação: o request é a raiz (`/`); o precache guarda `/` e
-        // `/index.html`. Tenta os dois antes de desistir do cache.
-        var pending = hit ? Promise.resolve(hit)
-          : (_isNavReq ? caches.match('/index.html') : Promise.resolve(null));
-        return pending.then(function(cached) {
-          if (!cached) return null;
-          // Revalida em segundo plano — o usuário já recebeu a resposta. Se a
-          // versão mudou, quem aplica é o pipeline de update (SW novo →
-          // skipWaiting → controllerchange → reload) e o `_checkForUpdate`
-          // batendo em version.txt 1s depois do load. `cache:'reload'` na
-          // navegação preserva o bypass do cache HTTP da v1.3.64.
-          var refreshReq = _isNavReq
-            ? new Request(event.request.url, { cache: 'reload', credentials: 'same-origin', redirect: 'follow' })
-            : event.request;
-          fetch(refreshReq).then(function(fresh) {
-            if (fresh && fresh.status === 200) {
-              var c = fresh.clone();
-              caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, c); });
-            }
-          }).catch(function() {});
-          return cached;
-        });
+      caches.match(event.request).then(function(cached) {
+        if (!cached) return null;
+        // Revalida em segundo plano — o usuário já recebeu a resposta. Como a
+        // chave é a URL EXATA com `?v=`, o que volta da rede é o MESMO arquivo:
+        // isto atualiza bytes, nunca troca de versão.
+        fetch(event.request).then(function(fresh) {
+          if (fresh && fresh.status === 200) {
+            var c = fresh.clone();
+            caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, c); });
+          }
+        }).catch(function() {});
+        return cached;
       }).then(function(cached) {
         if (cached) return cached;
         return _networkFirst(event);

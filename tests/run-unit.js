@@ -447,6 +447,10 @@ const SUITES = [
   'tests/email-secundario-server-only.test.js',
   'tests/convite-de-torneio-server-only.test.js',
   'tests/parte-incompleta-conta-como-faltando.test.js',
+  /* R1.0 — integridade de publicação. Sem estes dois, o híbrido shell/JS volta calado:
+   * o de navegação roda o sw.js REAL, o da dashboard roda o _buildMyResultsHtml REAL. */
+  'tests/navegacao-nao-mistura-versoes.test.js',
+  'tests/dashboard-nao-afirma-vazio.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

@@ -366,6 +366,29 @@ window._spVerMaisTag = _verMaisTag;
  * problema original: dois desenhos da mesma pílula divergindo). Mesma função, dois nomes. */
 window._verMaisTag = _verMaisTag;
 
+/* ══ R1.0 · NÚMERO QUE AINDA NÃO É FATO NÃO SE IMPRIME COMO FATO ═══════════════
+ *
+ * ⛔ O SINTOMA, medido na tela do dono: "2 inscritos" num torneio de 152, "0 jogos",
+ * "📣 Novidades" e "🏅 Seus últimos resultados" sumidas — com o banco intacto. Duas
+ * causas, ambas fora da dashboard: torneio DIVIDIDO cujas partes pesadas ainda não
+ * chegaram, e execução HÍBRIDA (shell de uma build, JS de outra).
+ *
+ * ⛔ POR QUE NÃO BASTAVA CONSERTAR A CAUSA: a dashboard afirmava. `individualCount`
+ * saía de `t.participants.length` sem nunca perguntar se aquela lista está COMPLETA, e
+ * um zero afirmado é indistinguível de um zero verdadeiro pra quem olha. Enquanto o
+ * dado não estiver assentado, o honesto é dizer "estou buscando", não "são 2".
+ *
+ * ⚠️ ISTO NÃO É ESCONDER SEÇÃO. A seção continua no lugar, com o mesmo tamanho e o
+ * mesmo cabeçalho — o que muda é o número, que vira reticências, e a linha que explica.
+ * Esconder deixaria o buraco no lugar do erro; a ordem é o contrário.
+ *
+ * Recupera-se sozinho: `_marcaPartesQueFaltam` já dispara a busca das partes, e a
+ * chegada delas re-renderiza. Nenhum reload, nenhum laço. */
+window._dashNum = function (n, t) {
+  return (typeof window._dadosConfiaveis === 'function' && !window._dadosConfiaveis(t))
+    ? '…' : n;
+};
+
 function renderDashboard(container) {
   // v2.8.40: torneios ocultados pelo usuário somem de TODAS as seções (filtro na
   // fonte) e reaparecem só na seção "Torneios ocultados" no fim.
@@ -1064,7 +1087,7 @@ function renderDashboard(container) {
                        <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👤</span>
-                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
+                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum(individualCount, t)}</span>
                           </div>
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statEnrolled')}</span>
                        </div>
@@ -1072,7 +1095,7 @@ function renderDashboard(container) {
                        <div class="stat-box" style="flex-direction: column;${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">👥</span>
-                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
+                             <span style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum(teamCount, t)}</span>
                           </div>
                           <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.8;">${_t('dashboard.statTeams')}</span>
                        </div>
@@ -1093,7 +1116,7 @@ function renderDashboard(container) {
                        <div class="stat-box" style="flex-direction: column; border-color: rgba(251,191,36,0.45);${_pReadBg ? 'background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;' : ''}">
                           <div style="display: flex; align-items: center; gap: 4px;">
                              <span style="font-size: 1.1rem;">⏱️</span>
-                             <span class="stat-accent" style="font-size: 1.4rem; font-weight: 800; line-height: 1;">${_standbyCount}</span>
+                             <span class="stat-accent" style="font-size: 1.4rem; font-weight: 800; line-height: 1;">${window._dashNum(_standbyCount, t)}</span>
                           </div>
                           <span class="stat-accent" style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; opacity: 0.95;">${_t('dashboard.statWaiting')}</span>
                        </div>
@@ -2026,7 +2049,24 @@ function renderDashboard(container) {
     // seção "Novidades no seu torneio" — apagando exatamente para quem ela mais serve
     // (o recém-inscrito, que só tem os jogos dos outros para acompanhar).
     var totalSection = pendingForMe.length + pendingByMe.length + disputedMatches.length + noResult.length + upcoming.length + recentConfirmed.length + othersResults.length;
-    if (totalSection === 0) return '';
+    /* ── R1.0 · VAZIO SÓ VALE SE FOR VERDADE ──────────────────────────────────
+     * ⛔ `return ''` aqui é a seção INTEIRA sumindo: "📣 Novidades no seu torneio" e
+     * "🏅 Seus últimos resultados" desaparecem da tela. Isso está certo quando a pessoa
+     * de fato não tem jogo nenhum — e estava ERRADO em 31/ago, quando os jogos
+     * existiam (115 no Confra) mas as partes pesadas do torneio dividido ainda não
+     * tinham chegado, ou o shell era de outra build. O zero era da HIDRATAÇÃO, não do
+     * dado, e a tela apagou as duas seções afirmando que não havia nada.
+     * ⚠️ Não é reload nem esconder: a seção FICA, dizendo que está buscando. Quando as
+     * partes chegam, o re-render normal a preenche. */
+    if (totalSection === 0) {
+      if (typeof window._listaConfiavel === 'function' && !window._listaConfiavel(participacoes)) {
+        return '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.22);border-radius:14px;padding:16px;margin-bottom:1rem;text-align:center;">' +
+          '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">🏅 Seus jogos e novidades</div>' +
+          '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Carregando os dados dos seus torneios…</div>' +
+          '</div>';
+      }
+      return '';
+    }
 
     var _sf = window._safeHtml || function(s) { return String(s || ''); };
     var _sportIcon = function(s) {
@@ -3586,7 +3626,7 @@ function renderDashboard(container) {
           '</div>' +
           '<div class="compact-badges" style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
             (t.isSandbox ? '<span style="font-size:0.62rem;font-weight:700;padding:2px 6px;border-radius:5px;background:#b91c1c;color:#fff;letter-spacing:0.5px;white-space:nowrap;">🧪 SB</span>' : '') +
-            '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + pCount + '</span>' +
+            '<span style="font-size:0.7rem;color:var(--text-muted);">👤 ' + window._dashNum(pCount, t) + '</span>' +
             (hasDraw && !isFinished ? '<span style="font-size:0.7rem;color:' + window._spCor((prog.pct === 100 ? '#10b981' : '#f59e0b'), 'color') + ';">' + prog.pct + '%</span>' : '') +
             '<span style="font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(' + statusBadgeBgRgb + ',0.15);color:' + window._spCor(statusColor, 'color') + ';white-space:nowrap;">' + statusText + '</span>' +
             (isOrg ? '<span style="font-size:0.65rem;padding:2px 6px;border-radius:4px;background:rgba(251,191,36,0.15);color:var(--sp-c-fbbf24,#fbbf24);">' + _t('auth.orgShort') + '</span>' : '') +
