@@ -703,6 +703,104 @@ async function test_diag_convite_semTransacaoFuraACota() {
     'no caminho SEM transação a cota é furada (' + passaram + ' passaram, teto é ' + _tiCore.LIMITE_DIARIO + ')');
 }
 
+/* ══ L1.1 · CONVITE DE DUPLA E DE CO-ORGANIZAÇÃO — um e-mail por CONVITE ═══════
+ *
+ * ⛔ O QUE SE PROVA CONTRA O EMULADOR, e não dá pra provar sem ele: `create()` num
+ * documento de id determinístico é o que serializa duas entregas simultâneas do MESMO
+ * convite. Em memória o comportamento é uma promessa; aqui é o Firestore recusando.
+ *
+ * ⭐ E A OUTRA METADE, que é onde um id "idempotente" mal escolhido estraga tudo:
+ * recusar e convidar DE NOVO tem que sair. A chave sai do CARIMBO do convite gravado,
+ * então o convite novo é outro documento. */
+const _invCore = require('../../functions/invite-email-core.js');
+
+/* ⛔ AQUI O SDK TEM QUE SER O ADMIN, e a razão é o próprio mecanismo sob teste.
+ * A Function usa `ref.create()` — escrita com pré-condição de NÃO EXISTIR, imposta pelo
+ * BANCO. O SDK compat (que o resto desta suíte usa) NÃO EXPÕE `create` — é a mesma
+ * ausência que obrigou `tx.set` em vez de `tx.create` na L1.1.1.
+ * ⚠️ Trocar por "ler-e-se-não-existir-gravar" numa transação passaria — e provaria OUTRA
+ * coisa. O que precisa ser provado é que o `create()` da produção serializa. Então este
+ * bloco fala com o emulador pelo firebase-admin (FIRESTORE_EMULATOR_HOST já está no
+ * ambiente, posto pelo `emulators:exec`). */
+const _admin = require('../../functions/node_modules/firebase-admin');
+const _adminApp = _admin.apps && _admin.apps.length
+  ? _admin.app()
+  : _admin.initializeApp({ projectId: H.PROJECT_ID }, 'l1_1_invites');
+const _adminDb = _adminApp.firestore();
+
+async function _limpaConvitesInvite() {
+  const snap = await _adminDb.collection('mail').get();
+  await Promise.all(snap.docs
+    .filter((d) => /^(pairinv_|chinv_)/.test(d.id))
+    .map((d) => d.ref.delete()));
+}
+/* EXATAMENTE o que a Function faz: id do REGISTRO + `create()` tolerando ALREADY_EXISTS. */
+async function _poeConvite(mailId, doc) {
+  try { await _adminDb.collection('mail').doc(mailId).create(doc); return true; }
+  catch (e) {
+    if (e && (e.code === 6 || String(e.message || '').indexOf('ALREADY_EXISTS') !== -1)) return false;
+    throw e;
+  }
+}
+const _contaConvites = async (pref) => {
+  const snap = await _adminDb.collection('mail').get();
+  return snap.docs.filter((d) => d.id.indexOf(pref) === 0).length;
+};
+
+async function test_alvo_convitePar_umEmailPorConvite() {
+  await _limpaConvitesInvite();
+  const tid = 'tourPar', req = { id: 'uA__uB', inviterUid: 'uA', inviteeUid: 'uB', createdAt: 1000 };
+  const mailId = _invCore.mailDocIdDoPar(_invCore.chaveDoConvitePar(tid, req));
+  const doc = () => _invCore.montaEmailPar({ tournamentId: tid, tournamentName: 'T', requestId: req.id,
+    inviterName: 'A', destinatarios: ['b@x.test'], agora: 1 });
+  // 6 entregas SIMULTÂNEAS do mesmo convite (reentrega do gatilho + retry do usuário)
+  const rs = await Promise.all(Array.from({ length: 6 }, () => _poeConvite(mailId, doc())));
+  ok(rs.filter(Boolean).length === 1, 'exatamente UMA das 6 entregas simultâneas gravou');
+  ok(await _contaConvites('pairinv_') === 1, 'e há UM único e-mail na fila (retry não duplica)');
+}
+
+async function test_alvo_convitePar_recusaENovoConviteSai() {
+  await _limpaConvitesInvite();
+  const tid = 'tourPar';
+  const r1 = { id: 'uA__uB', inviterUid: 'uA', inviteeUid: 'uB', createdAt: 1000 };
+  await _poeConvite(_invCore.mailDocIdDoPar(_invCore.chaveDoConvitePar(tid, r1)),
+    _invCore.montaEmailPar({ tournamentId: tid, tournamentName: 'T', requestId: r1.id, destinatarios: ['b@x.test'], agora: 1 }));
+  // o convidado RECUSA (o registro sai) e a pessoa convida de novo: carimbo novo
+  const r2 = { id: 'uA__uB', inviterUid: 'uA', inviteeUid: 'uB', createdAt: 2000 };
+  const saiu = await _poeConvite(_invCore.mailDocIdDoPar(_invCore.chaveDoConvitePar(tid, r2)),
+    _invCore.montaEmailPar({ tournamentId: tid, tournamentName: 'T', requestId: r2.id, destinatarios: ['b@x.test'], agora: 2 }));
+  ok(saiu === true, '⭐ convite NOVO depois da recusa SAI — a idempotência não pode virar mordaça');
+  ok(await _contaConvites('pairinv_') === 2, 'e agora há dois e-mails, um por convite');
+}
+
+async function test_alvo_conviteCoHost_umEmailPorEntradaPendente() {
+  await _limpaConvitesInvite();
+  const tid = 'tourCh';
+  const e1 = { uid: 'cH', status: 'pending', invitedAt: '2026-08-31T10:00:00.000Z' };
+  const id1 = _invCore.mailDocIdDoCoHost(_invCore.chaveDoConviteCoHost(tid, e1));
+  const doc1 = () => _invCore.montaEmailCoHost({ tournamentId: tid, tournamentName: 'T', destinatarios: ['c@x.test'], agora: 1 });
+  const rs = await Promise.all(Array.from({ length: 5 }, () => _poeConvite(id1, doc1())));
+  ok(rs.filter(Boolean).length === 1, 'co-org: uma só das 5 entregas simultâneas gravou');
+  // recusou → nova entrada pending com outro invitedAt
+  const e2 = { uid: 'cH', status: 'pending', invitedAt: '2026-09-02T11:00:00.000Z' };
+  const saiu = await _poeConvite(_invCore.mailDocIdDoCoHost(_invCore.chaveDoConviteCoHost(tid, e2)), doc1());
+  ok(saiu === true, '⭐ co-org: convite novo depois da recusa também sai');
+  ok(await _contaConvites('chinv_') === 2, 'dois e-mails, um por entrada pendente');
+}
+
+/* DIAGNÓSTICO — o caminho ANTIGO (`.add()`, id automático) contra o MESMO emulador:
+ * 6 entregas do mesmo convite viram 6 e-mails. Sem ele, os alvos acima poderiam estar
+ * verdes por acidente. */
+async function test_diag_convitePar_addDuplicaOMesmoConvite() {
+  await _limpaConvitesInvite();
+  const antes = (await _adminDb.collection('mail').get()).size;
+  const doc = { to: ['b@x.test'], message: { subject: '🤝 Convite de dupla', html: '<b>x</b>' }, createdAt: 'x' };
+  await Promise.all(Array.from({ length: 6 }, () => _adminDb.collection('mail').add(doc)));
+  const depois = (await _adminDb.collection('mail').get()).size;
+  ok(depois - antes === 6,
+    'no caminho ANTIGO (`.add()`) o MESMO convite vira ' + (depois - antes) + ' e-mails');
+}
+
 (async function main() {
   // window global usado pelos mutators do teste de views (emu-harness-views seta global.window=global)
   const suites = [
@@ -728,6 +826,10 @@ async function test_diag_convite_semTransacaoFuraACota() {
     ['alvo L1.3a convite: cota diaria sob corrida de 25', test_alvo_convite_cotaDiariaSobCorrida],
     ['alvo L1.3a convite: retry nao duplica outbox', test_alvo_convite_retryNaoDuplica],
     ['alvo L1.3a convite: cota e por organizador E por torneio', test_alvo_convite_cotaEhPorOrganizadorEPorTorneio],
+    ['diag L1.1 .add() duplica o MESMO convite', test_diag_convitePar_addDuplicaOMesmoConvite],
+    ['alvo L1.1 convite de dupla: um e-mail por convite', test_alvo_convitePar_umEmailPorConvite],
+    ['alvo L1.1 convite de dupla: recusa + convite novo SAI', test_alvo_convitePar_recusaENovoConviteSai],
+    ['alvo L1.1 co-organizacao: um e-mail por entrada pendente', test_alvo_conviteCoHost_umEmailPorEntradaPendente],
   ];
   for (const [name, fn] of suites) {
     console.log('──────────── ' + name + ' ────────────');

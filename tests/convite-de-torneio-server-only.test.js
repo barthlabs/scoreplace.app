@@ -155,14 +155,21 @@ console.log('\n⑥ a UI esconde o campo de quem não é organizador\n');
     '   e o comentário registra que esconder NÃO é a defesa — a Function é');
 }
 
-console.log('\n⑦ dívida preservada: /mail segue aberto (F1/F2 continuam)\n');
+console.log('\n⑦ /mail segue aberto — mas a dívida de F1/F2 foi PAGA na L1.1\n');
 {
   const rules = fs.readFileSync(path.join(RAIZ, 'firestore.rules'), 'utf8');
   ok(/match \/mail\/\{mailId\} \{[\s\S]{0,120}allow write: if request\.auth != null;/.test(rules),
-    '⚠️ /mail NÃO foi fechado nesta leva — F1 (convite de dupla) e F2 (co-organização) ainda escrevem');
+    '⚠️ /mail continua aberto: fechar a Rule é a segunda metade de L1');
+  /* ⚠️ ESTA ASSERÇÃO MUDOU DE LADO, DE PROPÓSITO. Na 2.1.69 ela AFIRMAVA que os writers
+   * de F1/F2 seguiam intactos — era o registro honesto da dívida que aquele escopo
+   * mandava preservar. A L1.1 (2.1.75) pagou a dívida: os dois viraram capability de
+   * servidor. Deixar a asserção antiga seria travar o repositório no defeito. */
   const org = fs.readFileSync(path.join(RAIZ, 'js', 'views', 'tournaments-organizer.js'), 'utf8');
-  ok(/queueEmail\(channelResult\.emails/.test(org),
-    '⚠️ e os writers de F1/F2 seguem intactos, como o escopo mandou');
+  ok(!/queueEmail\(channelResult\.emails/.test(org),
+    '⭐ os writers de F1/F2 SAÍRAM na L1.1 — ver tests/convites-dupla-e-coorg-server-only.test.js');
+  const db = fs.readFileSync(path.join(RAIZ, 'js', 'firebase-db.js'), 'utf8');
+  ok(!/async queueEmail\s*\(/.test(db),
+    '⭐ e a porta `queueEmail` deixou de existir no cliente');
 }
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s) de ' + (pass + fail) : '✅ ' + pass + '/' + pass + ' ok') + '\n');

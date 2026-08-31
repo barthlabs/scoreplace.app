@@ -2957,20 +2957,35 @@ window.FirestoreDB = {
     }
   },
 
-  // ---- Email Queue (Firebase Extension "Trigger Email from Firestore") ----
+  /* ══ L1.1 · `queueEmail` MORREU ═══════════════════════════════════════════════
+   * Era a ÚNICA porta do cliente para `/mail`, e recebia destinatário, assunto e HTML
+   * INTEIROS de quem chamasse. Com `firestore.rules` aceitando write de qualquer
+   * autenticado, isso não é fila de e-mail: é um relay aberto saindo do remetente do
+   * produto. Os dois fluxos que a usavam — convite de dupla e de co-organização —
+   * viraram capabilities de servidor (`sendPairInviteEmail` / `sendCoHostInviteEmail`),
+   * que resolvem torneio, permissão, destinatário, URL, assunto e corpo sozinhas.
+   * ⛔ NÃO REINTRODUZIR. `tests/convites-dupla-e-coorg-server-only.test.js` recusa
+   * qualquer `collection('mail')` ou `queueEmail` em js/. */
 
-  async queueEmail(to, subject, html) {
-    if (!this.db || !to) return;
+  /** Convite de DUPLA: manda SÓ os identificadores. O servidor confere o convite
+   *  gravado em `pairRequests` e monta o e-mail. */
+  async sendPairInviteEmail(tournamentId, inviteeUid) {
+    if (!tournamentId || !inviteeUid) return null;
     try {
-      var toArr = Array.isArray(to) ? to : [to];
-      await this.db.collection('mail').add({
-        to: toArr,
-        message: { subject: subject || 'scoreplace.app', html: html || '' },
-        createdAt: new Date().toISOString()
+      return await this._callFn('sendPairInviteEmail', {
+        tournamentId: String(tournamentId), inviteeUid: String(inviteeUid)
       });
-    } catch (e) {
-      window._warn('Erro ao enfileirar email:', e);
-    }
+    } catch (e) { window._warn('[convite-dupla] e-mail não saiu:', e && e.message); return null; }
+  },
+
+  /** Convite de CO-ORGANIZAÇÃO: idem, conferido contra a entrada `pending` em `coHosts`. */
+  async sendCoHostInviteEmail(tournamentId, targetUid) {
+    if (!tournamentId || !targetUid) return null;
+    try {
+      return await this._callFn('sendCoHostInviteEmail', {
+        tournamentId: String(tournamentId), targetUid: String(targetUid)
+      });
+    } catch (e) { window._warn('[convite-coorg] e-mail não saiu:', e && e.message); return null; }
   },
 
   // v2.1.19: e-mails de NOTIFICAÇÃO entram numa fila com janela por importância

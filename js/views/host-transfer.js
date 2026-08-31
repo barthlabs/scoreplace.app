@@ -173,6 +173,12 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       level: 'fundamental',
       _fallbackEmail: target.email || '', _fallbackName: target.displayName || ''
     });
+    /* ⭐ L1.1 · O E-MAIL DO CONVITE SAI PELO SERVIDOR. A entrada `pending` já está em
+     * `coHosts` (o `AppStore.mutate` acima) — e é ela, junto com a régua canônica de
+     * organizador, que autoriza a Function. O cliente manda só os identificadores. */
+    if (target.uid && window.FirestoreDB && typeof window.FirestoreDB.sendCoHostInviteEmail === 'function') {
+      window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(target.uid));
+    }
     _notifyByEmail(user.uid, {
       type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: t.name,
       targetName: target.displayName,

@@ -462,54 +462,26 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
     // v2.7.94: CONVITE DE DUPLA — email e WhatsApp com BOTÕES funcionais (Aceitar verde /
     // Recusar vermelho) que executam a ação via deep-link (#pair/...). Bypassa o digest
     // de email porque cada convite precisa dos seus próprios botões.
+    /* ⛔ L1.1 · O E-MAIL DO CONVITE DE DUPLA SAIU DAQUI. Este ramo montava assunto, HTML e
+     * deep-links no NAVEGADOR e chamava `queueEmail` → `.add()` em `/mail`, que as rules
+     * abrem a qualquer autenticado. Quem enviava escolhia destinatário, assunto e corpo.
+     * ⭐ Agora quem manda é `sendPairInviteEmail`, disparada na ORIGEM do convite
+     * (js/views/tournaments-draw.js), depois de o `pairRequests` estar gravado — é esse
+     * registro que autoriza. Aqui fica só a notificação in-app, que já foi criada.
+     * ⚠️ O `return` continua: o convite tem os próprios botões e não pode cair no digest,
+     * senão a pessoa recebe a mesma coisa duas vezes. */
     if (templateType === 'pair_invite' && (templateData.acceptUrl || templateData.rejectUrl)) {
-        var _safe = window._safeHtml || function(s){ return s; };
-        var _inv = _safe(templateData.pairInviterName || 'Alguém');
-        var _tn  = _safe(templateData.tournamentName || '');
-        var _acc = templateData.acceptUrl || templateData.tournamentUrl || '';
-        var _rej = templateData.rejectUrl || templateData.tournamentUrl || '';
-        if (channelResult.emails && channelResult.emails.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
-            var _html =
-              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:var(--sp-c-e2e8f0,#e2e8f0);">' +
-                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:var(--sp-c-fbbf24,#fbbf24);">🤝 Convite de dupla</div>' +
-                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:var(--sp-c-cbd5e1,#cbd5e1);"><b>' + _inv + '</b> quer formar dupla com você' + (_tn ? ' em <b>' + _tn + '</b>' : '') + '.</p>' +
-                '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>' +
-                  '<td style="padding:0 6px;"><a href="' + _rej + '" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">❌ Recusar</a></td>' +
-                  '<td style="padding:0 6px;"><a href="' + _acc + '" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">✅ Aceitar</a></td>' +
-                '</tr></table>' +
-                '<p style="font-size:0.78rem;color:var(--sp-c-64748b,#64748b);margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
-              '</div>';
-            window.FirestoreDB.queueEmail(channelResult.emails, '🤝 Convite de dupla — ' + (templateData.tournamentName || 'scoreplace.app'), _html);
-        }
-        // v1.2.9: o WhatsApp saiu (canal morto) — o e-mail acima mantém os dois
-        // botões de ação diretos, e a notificação in-app cobre o resto.
-        return; // não cai no digest
+        return; // não cai no digest — o e-mail é server-only e sai na origem
     }
     // v2.8.52: CONVITE DE CO-ORGANIZAÇÃO — botões Aceitar (direita) / Recusar (esquerda)
     // funcionais via deep-link (#cohost/...). Kelly recebeu só um link pro torneio antes;
     // agora recebe os botões/links de ação. Bypassa o digest (precisa dos próprios botões).
+    /* ⛔ L1.1 · idem para a CO-ORGANIZAÇÃO. Quem manda agora é `sendCoHostInviteEmail`,
+     * disparada em js/views/host-transfer.js depois de a entrada `pending` existir em
+     * `coHosts` — e é essa entrada que autoriza, junto com a régua canônica de
+     * organizador no servidor. */
     if (templateType === 'cohost_invite' && (templateData.acceptUrl || templateData.rejectUrl)) {
-        var _cs = window._safeHtml || function(s){ return s; };
-        var _cwho = _cs(templateData.inviterName || templateData.fromName || 'O organizador');
-        var _ctn  = _cs(templateData.tournamentName || '');
-        var _cacc = templateData.acceptUrl || templateData.tournamentUrl || '';
-        var _crej = templateData.rejectUrl || templateData.tournamentUrl || '';
-        if (channelResult.emails && channelResult.emails.length > 0 && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
-            var _chtml =
-              '<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:480px;margin:0 auto;background:#0f172a;border-radius:14px;padding:28px 24px;color:var(--sp-c-e2e8f0,#e2e8f0);">' +
-                '<div style="font-size:1.3rem;font-weight:800;margin-bottom:6px;color:var(--sp-c-fbbf24,#fbbf24);">👑 Convite de co-organização</div>' +
-                '<p style="font-size:1rem;line-height:1.5;margin:0 0 22px;color:var(--sp-c-cbd5e1,#cbd5e1);"><b>' + _cwho + '</b> convidou você pra <b>co-organizar</b>' + (_ctn ? ' <b>' + _ctn + '</b>' : '') + '.</p>' +
-                '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>' +
-                  '<td style="padding:0 6px;"><a href="' + _crej + '" style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">❌ Recusar</a></td>' +
-                  '<td style="padding:0 6px;"><a href="' + _cacc + '" style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;font-weight:800;font-size:0.95rem;padding:13px 26px;border-radius:10px;">✅ Aceitar</a></td>' +
-                '</tr></table>' +
-                '<p style="font-size:0.78rem;color:var(--sp-c-64748b,#64748b);margin:22px 0 0;text-align:center;">Clique em um botão pra responder — você será levado ao torneio.</p>' +
-              '</div>';
-            window.FirestoreDB.queueEmail(channelResult.emails, '👑 Convite de co-organização — ' + (templateData.tournamentName || 'scoreplace.app'), _chtml);
-        }
-        // v1.2.9: idem pair_invite — o WhatsApp saiu; os botões Aceitar/Recusar
-        // seguem no e-mail.
-        return; // não cai no digest
+        return; // não cai no digest — o e-mail é server-only e sai na origem
     }
     // ── Email ──
     // v2.1.19: e-mails de notificação agora vão pra fila de DIGEST (janela por
@@ -531,10 +503,15 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
                 ctaLabel: (_emCta && _emCta.label) || '',
                 ctaUrl: (_emCta && _emCta.url) || ''
             });
-        } else if (typeof window._emailTemplate === 'function' && window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function') {
-            var html = window._emailTemplate(templateType, templateData);
-            var subject = templateData.subject || 'scoreplace.app — ' + (templateData.tournamentName || 'Notificação');
-            window.FirestoreDB.queueEmail(channelResult.emails, subject, html);
+        } else {
+            /* ⛔ L1.1 · O FALLBACK MORREU, e não foi substituído por outro envio direto.
+             * Ele só era alcançável com um `js/firebase-db.js` em cache anterior à
+             * v2.1.19 (as duas funções vivem no MESMO arquivo) — mas era um writer aberto
+             * de `/mail` esperando a hora, e a leva existe pra fechar a porta, não pra
+             * deixar um caminho lateral. Sem `queueNotifEmail` o e-mail não sai; a
+             * notificação IN-APP já foi criada e é a garantia de que ninguém perde o
+             * aviso. Falha OBSERVÁVEL, nunca silenciosa: [[feedback_no_load_fallback]]. */
+            window._warn('[notif] queueNotifEmail indisponível — e-mail não enviado (a notificação no app já foi criada). Atualize o app.');
         }
     }
     // v1.2.9: o canal WhatsApp saiu daqui por inteiro (número banido, apelação

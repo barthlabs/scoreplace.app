@@ -459,6 +459,8 @@ const SUITES = [
   'tests/card-do-topo-nao-diz-nao-inscrito-sem-saber.test.js',
   /* R1.3 — a assinatura de conjunto congelava o 1º quadro; e a vitrine morria no log. */
   'tests/dashboard-repinta-quando-a-parte-chega.test.js',
+  /* L1.1 — convite de dupla e de co-organização saem do cliente; /mail segue aberto. */
+  'tests/convites-dupla-e-coorg-server-only.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

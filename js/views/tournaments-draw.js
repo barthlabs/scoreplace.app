@@ -4034,6 +4034,15 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
                     level: 'fundamental'
                 });
             }
+            /* ⭐ L1.1 · O E-MAIL SAI DAQUI, PELO SERVIDOR. O convite já está GRAVADO (o
+             * `saveTournament` acima confirmou) — e é esse registro que autoriza a
+             * Function. O cliente manda só os identificadores; assunto, HTML, links e
+             * destinatário são resolvidos lá.
+             * ⚠️ Depois do save de propósito: pedir o e-mail de um convite que não
+             * persistiu manda a pessoa clicar num botão que não vai encontrar nada. */
+            if (window.FirestoreDB && typeof window.FirestoreDB.sendPairInviteEmail === 'function') {
+                window.FirestoreDB.sendPairInviteEmail(String(t.id), uid2);
+            }
             if (typeof showNotification === 'function') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
         }).catch(function(e) {

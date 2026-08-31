@@ -73,6 +73,7 @@ const _woReconcile = require("./wo-split-reconcile-core.js"); // W.O. chega nas 
 const _secEmail = require("./secondary-email-core.js");       // e-mail secundário: decisões puras
 const _secReserva = require("./secondary-email-reserva.js"); // e-mail secundário: reserva ATÔMICA
 const _tInvCore = require("./tournament-invite-core.js");     // convite avulso: decisões puras
+const _invEmail = require("./invite-email-core.js");         // convite de dupla / co-org: decisões puras
 const _tInvReserva = require("./tournament-invite-reserva.js"); // convite avulso: reserva ATÔMICA
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
@@ -5852,6 +5853,133 @@ exports.sendTournamentInvite = onCall(
     if (!r.ok) return { ok: false, motivo: r.motivo, usadosHoje: r.usadosHoje };
     console.log("[sendTournamentInvite] " + tid + " por " + callerUid + " · " + r.usadosHoje + "/" + _tInvCore.LIMITE_DIARIO + " hoje");
     return { ok: true, usadosHoje: r.usadosHoje, restamHoje: _tInvCore.LIMITE_DIARIO - r.usadosHoje };
+  }
+);
+
+/* ══ L1.1 · CONVITE DE DUPLA E DE CO-ORGANIZAÇÃO SAEM DO CLIENTE ═══════════════
+ *
+ * ⛔ ATÉ A 2.1.74 os dois e-mails eram montados no NAVEGADOR — assunto, HTML, deep-links e
+ * lista de destinatários — e gravados direto em `/mail`, que `firestore.rules` abre a
+ * qualquer autenticado. Não era "convite", era um relay: quem chamasse escolhia pra quem,
+ * com que assunto e com que corpo, saindo do remetente do produto.
+ *
+ * ⭐ AGORA o cliente manda só IDENTIFICADORES. E a autorização não é um campo do payload:
+ * é o CONVITE PERSISTIDO no documento do torneio. Sem o registro, recusa.
+ *
+ * ⚠️ AS DUAS RECUSAM SEM CONTAR O QUE NÃO EXISTE: quando não há convite, a resposta é a
+ * mesma para "não existe" e "não é seu" — a porta não vira oráculo de quem convidou quem.
+ */
+
+/** Manda o e-mail do convite de DUPLA que JÁ está gravado em `pairRequests`. */
+exports.sendPairInviteEmail = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const tid = String((request.data && request.data.tournamentId) || "").trim();
+    const inviteeUid = String((request.data && request.data.inviteeUid) || "").trim();
+    if (!tid || !inviteeUid) throw new HttpsError("invalid-argument", "sem tournamentId/inviteeUid");
+
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = snap.data() || {};
+
+    /* ⭐ A AUTORIZAÇÃO É O REGISTRO. Só existe e-mail se houver um convite gravado de QUEM
+     * CHAMA para ESTE convidado. Adulterar `inviteeUid` não encontra registro nenhum. */
+    const req = _invEmail.achaConvitePar(t, callerUid, inviteeUid);
+    if (!req) return { ok: false, motivo: "convite-inexistente" };
+
+    /* ⛔ O DESTINATÁRIO VEM DO PERFIL, NO SERVIDOR — nunca do payload. E respeita o
+     * opt-out `notifyEmail`, com a MESMA régua que o cliente usava. */
+    let perfil = {};
+    try {
+      const u = await db.collection("users").doc(inviteeUid).get();
+      if (u.exists) perfil = u.data() || {};
+    } catch (e) { /* sem perfil: sem e-mail, e o convite in-app já existe */ }
+    const destinatarios = _invEmail.destinatariosDoPerfil(perfil);
+    if (!destinatarios.length) return { ok: false, motivo: "sem-destinatario" };
+
+    let inviterName = "";
+    try {
+      const me = await db.collection("users").doc(callerUid).get();
+      if (me.exists) inviterName = String((me.data() || {}).displayName || "");
+    } catch (e) { /* nome é ornamento; a falta dele não impede o convite */ }
+
+    /* ⭐ ID DETERMINÍSTICO PELO CONVITE, não pelo instante: reentrega cai no MESMO
+     * documento (`create` recusa) e não duplica; recusar e convidar de novo gera um
+     * registro com `createdAt` novo, logo chave nova, logo e-mail novo. */
+    const mailId = _invEmail.mailDocIdDoPar(_invEmail.chaveDoConvitePar(tid, req));
+    const doc = _invEmail.montaEmailPar({
+      tournamentId: tid, tournamentName: t.name || "", requestId: req.id,
+      inviterName: inviterName, destinatarios: destinatarios, agora: Date.now(),
+    });
+    try {
+      await db.collection("mail").doc(mailId).create(doc);
+    } catch (e) {
+      if (e && (e.code === 6 || String(e.message || "").indexOf("ALREADY_EXISTS") !== -1)) {
+        return { ok: true, jaEnfileirado: true };
+      }
+      throw e;
+    }
+    return { ok: true, destinatarios: destinatarios.length };
+  }
+);
+
+/** Manda o e-mail do convite de CO-ORGANIZAÇÃO que JÁ está gravado em `coHosts`. */
+exports.sendCoHostInviteEmail = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const tid = String((request.data && request.data.tournamentId) || "").trim();
+    const targetUid = String((request.data && request.data.targetUid) || "").trim();
+    if (!tid || !targetUid) throw new HttpsError("invalid-argument", "sem tournamentId/targetUid");
+
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = snap.data() || {};
+
+    /* ⭐ DUAS CONDIÇÕES, e a régua de quem convida é a CANÔNICA (`ehOrganizador`, a mesma
+     * de `aplicarNoTorneio` e de `sendTournamentInvite`) — escrever um segundo critério é
+     * como as duas versões divergem em silêncio. */
+    if (!_partesPerm.ehOrganizador(t, callerUid)) {
+      throw new HttpsError("permission-denied", "só o organizador ou co-organizador pode convidar");
+    }
+    const entry = _invEmail.achaCoHostPendente(t, targetUid);
+    if (!entry) return { ok: false, motivo: "convite-inexistente" };
+
+    let perfil = {};
+    try {
+      const u = await db.collection("users").doc(targetUid).get();
+      if (u.exists) perfil = u.data() || {};
+    } catch (e) { /* idem sendPairInviteEmail */ }
+    const destinatarios = _invEmail.destinatariosDoPerfil(perfil);
+    if (!destinatarios.length) return { ok: false, motivo: "sem-destinatario" };
+
+    let inviterName = "";
+    try {
+      const me = await db.collection("users").doc(callerUid).get();
+      if (me.exists) inviterName = String((me.data() || {}).displayName || "");
+    } catch (e) { /* ornamento */ }
+
+    /* A chave sai do `invitedAt` da ENTRADA: recusar e convidar de novo cria uma entrada
+     * nova, com carimbo novo — e-mail novo. Reentrega da mesma: mesmo id, sem duplicar. */
+    const mailId = _invEmail.mailDocIdDoCoHost(_invEmail.chaveDoConviteCoHost(tid, entry));
+    const doc = _invEmail.montaEmailCoHost({
+      tournamentId: tid, tournamentName: t.name || "",
+      inviterName: inviterName, destinatarios: destinatarios, agora: Date.now(),
+    });
+    try {
+      await db.collection("mail").doc(mailId).create(doc);
+    } catch (e) {
+      if (e && (e.code === 6 || String(e.message || "").indexOf("ALREADY_EXISTS") !== -1)) {
+        return { ok: true, jaEnfileirado: true };
+      }
+      throw e;
+    }
+    return { ok: true, destinatarios: destinatarios.length };
   }
 );
 
