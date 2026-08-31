@@ -86,8 +86,11 @@ if (codPools && codCont) {
   // sempre visível ("na dashboard deve aparecer o número total de torneios na plataforma").
   ok(/_todosCount = _poolPlataforma\.length/.test(src),
      'o total continua saindo do pool da PLATAFORMA, não do círculo');
-  ok(/_circuloCount = _poolPlataforma\.filter/.test(src),
-     'e o círculo tem contagem PRÓPRIA, medida sobre a mesma plataforma');
+  /* ⛔ 2.1.67 — `_circuloCount` saiu junto com a pílula "Pra Você" (ordem do dono). O que
+   * esta seção guarda é que o TOTAL vem da plataforma, não do círculo; a régua do círculo
+   * segue viva definindo a lista padrão, e é `dashboard-mostra-o-meu-circulo` quem a guarda. */
+  ok(/window\._ehDoMeuCirculo\(t, _ctxCirc\)/.test(src),
+     'e o círculo segue medido sobre a mesma plataforma, agora só pra FILTRAR a lista padrão');
   ok(r.abertos === 11, 'pill "Inscrições abertas" inclui os abertos OCULTOS (11) — deu ' + r.abertos);
   ok(r.encerrados === 3, 'pill "Encerrados" inclui o encerrado OCULTO (3) — deu ' + r.encerrados);
 
@@ -124,8 +127,15 @@ if (codPools && codCont) {
    * ⚠️ Mas em outra FORMA: pílula de uma linha, não o card com emoji grande e número em
    * 1.3rem que ocupava a hero box. Devolver igual seria desfazer o pedido anterior — o que
    * ele quis foi o ACESSO, não o painel. É isso que as duas asserções abaixo separam. */
-  ok(/_fStyle\('todos', '📋', _circuloCount/.test(src),
-    'o filtro padrão existe e lê o contador do círculo');
+  /* ⛔ 2.1.67 — o dono mandou remover as pílulas "Pra Você" e "Organizados": _"pra vc e
+   * organizados eu nunca pedi para existirem ai (remova)"_. A asserção antiga guardava
+   * justamente a existência delas. O que continua importando é que o ESTADO padrão siga
+   * sendo o círculo e que exista PORTA DE VOLTA — sem a pílula `todos`, quem clicasse em
+   * outro filtro ficaria preso. */
+  ok(!/_fStyle\('todos'/.test(src) && !/_fStyle\('organizados'/.test(src),
+    '⛔ as pílulas "Pra Você" e "Organizados" NÃO existem mais');
+  ok(/window\._dashFilter = \(window\._dashFilter === filter\) \? 'todos' : filter;/.test(src),
+    '⭐ e clicar na pílula ativa volta pra lista cheia (a porta de volta que a pílula era)');
   // ⚠️ medir DENTRO do _fStyle: o `font-size:1.3rem` ainda existe no _statPill (os números
   // sociais, órfãos desde a 2.1.13 e guardados pro "distribuir depois"). Olhar o arquivo
   // inteiro acusaria o vizinho.
@@ -133,8 +143,13 @@ if (codPools && codCont) {
   const _corpoF = src.slice(_iF, src.indexOf('};', _iF));
   ok(!/font-size:1\.3rem/.test(_corpoF) && /border-radius:999px/.test(_corpoF),
     '⛔ e voltou como PÍLULA, não como o card grande da hero box (o que o dono mandou eliminar)');
-  ok(/const _circuloCount = /.test(src) && /const _abertosCount = /.test(src) && /const _encerradosPillCount = /.test(src),
-    '⭐ mas os contadores CONTINUAM calculados — a redistribuição religa uma porta nova, não reescreve a lógica');
+  /* ⚠️ 2.1.67: `_circuloCount` e `organizadosCount` foram REMOVIDOS — as pílulas que os
+   * consumiam saíram por ordem do dono, e contador sem consumidor é código morto. Os das
+   * pílulas que FICARAM continuam calculados, que é o ponto original desta asserção. */
+  ok(/const _abertosCount = /.test(src) && /const _encerradosPillCount = /.test(src),
+    '⭐ os contadores das pílulas que ficaram CONTINUAM calculados');
+  ok(!/const _circuloCount = /.test(src) && !/const organizadosCount = /.test(src),
+    '⛔ e os das pílulas removidas saíram junto — sem contador órfão');
   ok(/window\._applyDashFilter = /.test(src) || /_applyDashFilter/.test(src),
     'e o aplicador de filtro segue existindo pra ser religado');
   /* ⛔ 2.1.11 — O TOTAL DEIXOU DE SAIR DE `_todosCount`. Esta asserção cobrava

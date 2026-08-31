@@ -129,5 +129,22 @@ console.log('\n④ o que já funcionava continua\n');
   ok((r3._faltaOQue || []).indexOf('participants') !== -1, '   mas os 2 inscritos soltos seguem acusando falta (2 de 152)');
 }
 
-console.log('\n' + (fail ? '✗ ' + fail + ' falha(s) de ' + (pass + fail) : '✅ ' + pass + '/' + pass + ' ok') + '\n');
+console.log('\n⑤ a ORIGEM do pedaço solto: mutateTournament não devolve parte pesada ao doc\n');
+{
+  const db = fs.readFileSync(path.join(RAIZ, 'js', 'firebase-db.js'), 'utf8');
+  const i = db.indexOf('async mutateTournament(');
+  const j = db.indexOf('\n  // ── PLACAR POR JOGO EM DOC PRÓPRIO', i);
+  const corpo = db.slice(i, j === -1 ? i + 12000 : j);
+  ok(/_tSplit\.dividir\(/.test(corpo),
+    '⭐ mutateTournament DIVIDE antes de gravar (era daqui que vinha o jogo solto no doc)');
+  ok(/_pM\.config\._nPartes = _persist\._nPartes/.test(corpo),
+    '⛔ e PRESERVA `_nPartes` — recontar aqui gravaria "1 jogo, 2 inscritos" como verdade');
+  ok(/_pM\.config\._nJogos = _persist\._nJogos/.test(corpo), '   idem `_nJogos`');
+  ok(/throw _eDM;/.test(corpo),
+    '⛔ falhar em dividir NÃO grava o objeto inteiro (isso desfaria a divisão em silêncio)');
+  ok(corpo.indexOf('_tSplit.dividir(') < corpo.indexOf('transaction.set(ref, _persist)'),
+    '   e a divisão acontece ANTES do set');
+}
+
+console.log('\n' + (fail ? '✗ ' + fail + ' falha(s)' : '✅ ' + pass + '/' + pass + ' ok') + '\n');
 process.exitCode = fail ? 1 : 0;

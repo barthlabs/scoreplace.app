@@ -72,13 +72,15 @@ ok(circulo(t({ creatorUid: 'estranho' })), 'deslogado não tem círculo: vê tud
 // ⛔ 2.1.13 — o pill "Pra Você" saiu da tela com o resto da seção de números (ordem do
 // dono: "elimine essa sessao"). A régua do CÍRCULO — que é o que este arquivo protege —
 // não foi tocada: ela segue cortando a lista e o contador segue sendo calculado.
-ok(/const _circuloCount = _poolPlataforma\.filter/.test(src),
-  'o contador do círculo continua calculado (a régua é o que este teste guarda, não o pill)');
+ok(!/const _circuloCount = /.test(src),
+  '⛔ o contador do círculo saiu junto com a pílula que era seu único consumidor');
 // 2.1.23: o pill voltou (ordem do dono), agora compacto — ver a nota em
 // tests/filtros-varrem-a-plataforma.test.js. O que este arquivo guarda é a RÉGUA do
 // círculo, que não mudou.
-ok(/_fStyle\('todos', '📋', _circuloCount/.test(src),
-  'e o pill que o exibe lê o contador do círculo');
+/* ⛔ 2.1.67 — a pílula "Pra Você" saiu por ordem do dono, e com ela o `_circuloCount`.
+ * A RÉGUA, que é o que este arquivo guarda, continua viva: ela define a LISTA PADRÃO. */
+ok(/filtered = filtered\.filter\(function \(t\) \{ return window\._ehDoMeuCirculo\(t, _ctxCirc\); \}\);/.test(src),
+  '⭐ e a régua segue definindo a lista PADRÃO da dashboard (é o que importa, não a pílula)');
 // O Explorar é BOTÃO ao lado do toggle "Lista" (ordem do dono: "explorar ao lado do
 // toggle lista"), não um pill de filtro.
 // ⚠️ 2.1.10 — ELE DEIXOU DE ALTERNAR O FILTRO E PASSOU A ABRIR UMA TELA. Esta asserção

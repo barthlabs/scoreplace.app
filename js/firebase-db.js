@@ -1346,6 +1346,43 @@ window.FirestoreDB = {
         if (Array.isArray(clean.waitlist)) _stripped.waitlist = window._stripStoredNamesForUidEntries(clean.waitlist);
         if (Object.keys(_stripped).length) _persist = Object.assign({}, clean, _stripped);
       }
+      /* ⛔ TORNEIO DIVIDIDO: ESTA PORTA NÃO DEVOLVE PARTE PESADA PRO DOCUMENTO (2.1.67).
+       * `saveTournament` já fazia isso desde a Fase 2; esta aqui, não — e o estrago foi
+       * MEDIDO no doc do Confra em 31/ago: `_semPesados` listava `matches`, e mesmo assim o
+       * documento tinha 1 jogo em `rounds[0].matches` e 2 entradas em `participants`. Vieram
+       * daqui: o mutator do W.O. empurra o marcador em `rounds[i].matches`, e o `set` abaixo
+       * gravava tudo cru. Um único registro solto era o bastante pra o app concluir que já
+       * tinha os 115 e nunca buscar o resto — três telas zeradas seguidas.
+       *
+       * ⚠️ E AQUI NÃO SE RECALCULA `_nPartes`/`_nJogos`, ao contrário do `saveTournament`.
+       * Lá o objeto em memória está COMPLETO, então recontar é correto. Aqui `data` saiu do
+       * documento MAGRO: recontar gravaria "1 jogo, 2 inscritos" como verdade e destruiria o
+       * marcador — que é justamente o que a conta do cliente usa pra saber que falta coisa.
+       * Só se REMOVE o que não devia estar no documento; os contadores ficam como estavam. */
+      var _foraM = Array.isArray(_persist._semPesados) ? _persist._semPesados : null;
+      if (_foraM && _foraM.length && typeof window !== 'undefined' && window._tSplit && typeof window._tSplit.dividir === 'function') {
+        try {
+          var _pM = window._tSplit.dividir(JSON.parse(JSON.stringify(_persist)), _foraM);
+          if (_pM && _pM.config) {
+            /* devolve pro doc o que é pesado por natureza mas NÃO está no marcador —
+             * mesma razão do saveTournament: sem isso a gravação zeraria esses campos. */
+            var _SM = window._tSplit;
+            ((_SM && _SM.PESADOS) || ['participants', 'history']).forEach(function (k) {
+              if (_foraM.indexOf(k) === -1 && _persist[k] !== undefined) _pM.config[k] = _persist[k];
+            });
+            _pM.config._semPesados = _foraM;
+            if (_persist._nPartes !== undefined) _pM.config._nPartes = _persist._nPartes;
+            if (_persist._nJogos !== undefined) _pM.config._nJogos = _persist._nJogos;
+            if (_persist._nGrupos !== undefined) _pM.config._nGrupos = _persist._nGrupos;
+            _persist = _pM.config;
+          }
+        } catch (_eDM) {
+          /* ⛔ Falhar aqui e gravar o objeto inteiro desfaria a divisão em silêncio — que é
+           * exatamente o defeito que este bloco existe pra impedir. Melhor não gravar. */
+          if (window._error) window._error('[fase2] não consegui dividir pra mutar ' + tournamentId, _eDM);
+          throw _eDM;
+        }
+      }
       transaction.set(ref, _persist); // set (sem merge) DENTRO da txn = clobber-free
       // Devolve o estado autoritativo HIDRATADO (group.matches como refs) pro caller
       // sincronizar o AppStore sem depender de um render pra reconstruir os grupos.

@@ -413,7 +413,8 @@ function renderDashboard(container) {
   // Filtros de Relacionamento (Dono / Participante)
   const organizados = window.AppStore.getMyOrganized();
   const participacoes = window.AppStore.getMyParticipations();
-  const organizadosCount = organizados.length;
+  /* ⛔ `organizadosCount` REMOVIDO (2.1.67): alimentava só a pílula "Organizados".
+   * O filtro `organizados` em si segue existindo mais abaixo. */
   const participacoesCount = participacoes.length;
 
   // Torneios com qualquer data definida (startDate, registrationLimit ou endDate)
@@ -1367,7 +1368,11 @@ function renderDashboard(container) {
 
   // Filter function
   window._applyDashFilter = function(filter) {
-    window._dashFilter = filter;
+    /* ⭐ CLICAR NA PÍLULA ATIVA DESLIGA O FILTRO (2.1.67). Antes só ligava, e a volta pra
+     * lista cheia era a pílula "Pra Você" (filtro `todos`) — que o dono mandou remover por
+     * nunca ter pedido. Sem o toggle, quem clicasse em "Participando" ficaria preso ali.
+     * `todos` continua sendo o estado padrão; ele só deixou de ter pílula própria. */
+    window._dashFilter = (window._dashFilter === filter) ? 'todos' : filter;
     window._dashPage = 1;
     window._dashRerender();
   };
@@ -3138,7 +3143,9 @@ function renderDashboard(container) {
    * aparecer o número total de torneios na plataforma"). Assim a pessoa vê "4 pra você ·
    * 39 na plataforma" e sabe que o resto está a um toque. */
   const _circCtx = { locais: _dashLocaisFavoritos(), amigos: _dashAmigos() };
-  const _circuloCount = _poolPlataforma.filter(function (t) { return window._ehDoMeuCirculo(t, _circCtx); }).length;
+  /* ⛔ `_circuloCount` REMOVIDO (2.1.67): existia só pra alimentar a pílula "Pra Você",
+   * que o dono mandou tirar. A RÉGUA (`_ehDoMeuCirculo`) continua viva e é ela que define a
+   * lista PADRÃO logo abaixo — o que morreu foi a contagem, não o critério. */
   const _abertosCount = _poolPlataforma.filter(_isOpenEnrollment).length;
   const _encerradosPillCount = _poolPlataforma.filter(t => t && t.status === 'finished').length;
 
@@ -4116,9 +4123,16 @@ function renderDashboard(container) {
            card com emoji grande e número em 1.3rem que ocupava a hero box inteira.
            A faixa ROLA na horizontal: com 6 filtros em tela estreita, quebrar linha
            empurraria a lista pra baixo, que é o que ele mandou tirar em primeiro lugar. -->
+      <!-- ⛔ 2.1.67 — "Pra Você" e "Organizados" REMOVIDOS por ordem do dono: _"pra vc e
+           organizados eu nunca pedi para existirem ai (remova)"_. Eles voltaram na 2.1.23
+           junto com as outras pílulas, mas essas duas nunca foram pedidas.
+           ⚠️ "Pra Você" era a pílula do filtro TODOS, ou seja, a PORTA DE VOLTA pra lista
+           cheia — tirar só ela deixaria quem clicasse em qualquer outro filtro preso, sem
+           como desfazer. Por isso _applyDashFilter passou a DESLIGAR o filtro ativo quando
+           ele é clicado de novo: a volta existe sem precisar da pílula.
+           ⚠️ SEM CRASE aqui: este comentário mora DENTRO de um template literal, e uma
+           crase fecharia a string do html inteiro. Foi o que o node --check pegou agora. -->
       <span style="display:flex;gap:5px;overflow-x:auto;flex:1 1 auto;min-width:0;scrollbar-width:none;-ms-overflow-style:none;">
-        ${_fStyle('todos', '📋', _circuloCount, _t('dashboard.filterForYou'))}
-        ${organizadosCount > 0 ? _fStyle('organizados', '🏆', organizadosCount, _t('dashboard.filterOrganized')) : ''}
         ${participacoesCount > 0 ? _fStyle('participando', '👤', participacoesCount, _t('dashboard.filterParticipating')) : ''}
         ${_abertosCount > 0 ? _fStyle('abertos', '🗓️', _abertosCount, _t('dashboard.filterOpen')) : ''}
         ${favoritosCount > 0 ? _fStyle('favoritos', '❤️', favoritosCount, _t('dashboard.filterFavorites')) : ''}

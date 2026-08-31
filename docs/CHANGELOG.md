@@ -1,5 +1,11 @@
 # Changelog do scoreplace.app
 
+## 2.1.67 — Filtros que ninguém pediu saem, e a porta que sujava o documento fecha (31/ago/2026)
+
+- **Filtros:** removidas as pílulas **"Pra Você"** e **"Organizados"** da dashboard — ordem do dono, que nunca as pediu. "Explorar" fica. ⚠️ "Pra Você" era a pílula do filtro `todos`, ou seja, a única PORTA DE VOLTA pra lista cheia; sem ela, quem clicasse em qualquer outro filtro ficaria preso. Por isso `_applyDashFilter` passou a **desligar** o filtro ativo quando ele é clicado de novo. `_circuloCount` e `organizadosCount` saíram junto — eram consumidos só por essas pílulas. A régua `_ehDoMeuCirculo` continua viva: é ela que define a lista padrão.
+- **A porta que sujava o documento (dívida das últimas três levas, agora fechada):** `mutateTournament` — a transação por onde passam W.O., substituição e formação de grupo — gravava o documento **sem `dividir`**. `saveTournament` já fazia isso desde a Fase 2; esta não. Medido no doc do Confra em 31/ago: `_semPesados` listava `matches`, e o documento tinha 1 jogo em `rounds[0].matches` e 2 entradas em `participants`. Vinham daqui — o mutator do W.O. empurra o marcador em `rounds[i].matches` e o `set` gravava tudo cru. Um único registro solto bastava para o app concluir que já tinha os 115.
+- **⚠️ E aqui NÃO se recalcula `_nPartes`/`_nJogos`**, ao contrário do `saveTournament`: lá o objeto em memória está completo e recontar é correto; aqui os dados saem do documento magro, e recontar gravaria "1 jogo, 2 inscritos" como verdade, destruindo o marcador que a conta do cliente usa. Só se remove o que não devia estar no documento.
+
 ## 2.1.66 — O cache também pede a parte que falta (31/ago/2026)
 
 - **Problema:** a 2.1.65 corrigiu a CONTA (quantidade em vez de presença), mas ela morava dentro de `_enxertaJogos` — que só roda no caminho do OUVINTE. `_loadFromCache` põe o cache direto em `store.tournaments` e volta: um torneio pintado do cache com parte incompleta nunca pedia o resto. Por isso as regressões continuaram depois de publicar a 2.1.65: "2 inscritos" (de 152), classificação zerada, "últimos resultados" caindo num torneio antigo e a seção de novidades vazia — todos esses widgets leem o mesmo objeto que o cache pintou.
