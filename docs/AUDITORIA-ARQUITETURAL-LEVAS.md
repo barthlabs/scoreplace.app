@@ -20,7 +20,7 @@
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
 | L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) a leitura cruzada de perfis MAPEADA (L4.P5) e a MATRIZ DE ALTERNATIVAS registrada (L4.P6, nada escolhido).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
-| L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Três achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`); o marcador e o documento **divergem em 1 torneio**; e o `autoDraw` agendado roda a cada minuto num laço no-op silencioso (**250 pares `generating round 1` + `skip (no-round-generated)` nas últimas 500 linhas de log, zero erro**), sendo ele e `_autoDrawIncrementalPhaseRound` os **únicos** caminhos do autodraw que não passam pela porta ciente da divisão. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
+| L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`) e o marcador e o documento **divergem em 1 torneio**. ⚠️ **A L6.P0.1 RETIFICOU a P7**: a leitura de log que dizia "roda a cada minuto num laço no-op" estava datada por LIMITE (`--limit 500`) e não por TEMPO — os 250 pares reproduzem, mas são **todos de 28/ago**, e o `stdout` do `autodraw` está **mudo desde 2026-08-28T14:09:13Z**. O que está medido HOJE é mais simples e mais forte: o agendador dispara **a cada minuto com HTTP 200** (revisão `autodraw-00050-taw`, mais recente 31/ago 22:36Z) e **não escreve uma linha**, enquanto o único torneio que a query alcança está **vencido há 151 min** com o elenco fora do documento e o array **vazio** — sai pelo `continue` sem log de `functions-autodraw/index.js:1148`. Independente do log, segue valendo por LEITURA de código: `exports.autoDraw` e `_autoDrawIncrementalPhaseRound` são os **únicos** caminhos do autodraw que não passam pela porta ciente da divisão. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
 | L8 | representações múltiplas de match + custo Firestore | **Parcial.** `matches` é fonte e `results` é projeção para jogos divididos; modelo completo ainda não convergiu. | Medir reads/writes por tela e preservar `replay`/autorizações. |
 | L9 | código morto, fallbacks e aliases | **Aberta.** | Prova de ausência de chamadores antes de remover compatibilidade. |
@@ -1713,19 +1713,20 @@ e `_autoDrawIncrementalPhaseRound` (:1473) são os **únicos** caminhos do autod
 passam por `_leTorneio`/`_gravaTorneio` — leem `doc.data()` cru de uma query e gravam direto
 (:1269, :1333, :1505). **(P6)** ⭐ **Medido**: o marcador e o documento **divergem em 1
 torneio** — `_semPesados` diz que `participants` e `matches` estão fora, e o documento ainda
-carrega 2 entradas de elenco e jogos dentro de `rounds[].matches`. **(P7)** ⭐ **Medido**: o
-`autoDraw` agendado roda a cada minuto sobre 1 documento e registra, em laço, o par
-`Auto-draw: generating round 1` + `Auto-draw: skip (no-round-generated)` — **250 pares nas
-últimas 500 linhas de log, com ZERO erro**. É um no-op permanente e silencioso.
+carrega 2 entradas de elenco e jogos dentro de `rounds[].matches`. **(P7 — RETIFICADA pela
+L6.P0.1, leia lá antes de usar esta linha)** A redação original desta P7 dizia que o
+`autoDraw` "roda a cada minuto num laço no-op" e datava a evidência por LIMITE de linhas, não
+por tempo. Os pares de log existem e são reproduzíveis, mas são todos de **28/ago/2026** e de
+revisões que não estão mais no ar; o comportamento de HOJE é outro, e está medido na L6.P0.1.
 
-*Hipótese (não confirmada nesta etapa).* **(H1)** Que P6 e P7 sejam o mesmo evento: uma
-escrita não-ciente da divisão teria devolvido elenco/jogos ao documento, e o motor de sorteio
-passaria a operar sobre um estado meio-dividido que não gera rodada. Confirmar exige ler o
-documento inteiro daquele torneio (tem PII) e correlacionar com o horário das gravações —
-não foi feito. **(H2)** Que a ausência da trava de alinhamento em `functions-autodraw`
-(registrada na R0.3 como escopo deliberado) permita que o código no ar difira do `main` —
-`no-round-generated` existe em `functions-autodraw/draw-core.js:270`, então o log é
-compatível com o main, mas isso não prova igualdade.
+*Hipótese (não confirmada nesta etapa).* **(H1 — DERRUBADA pela L6.P0.1)** Eu supus que P6 e
+P7 fossem o mesmo evento. A medição de reconfirmação separou os dois: o torneio que a query do
+`autoDraw` alcança tem o array de elenco **VAZIO** no documento, enquanto o torneio divergente
+de P6 é **outro** (2 entradas no doc). Não é o mesmo evento. **(H2)** Que a ausência da trava
+de alinhamento em `functions-autodraw` (registrada na R0.3 como escopo deliberado) permita que
+o código no ar difira do `main`. A L6.P0.1 estreitou isto sem fechar: a revisão no ar é
+`autodraw-00050-taw`, publicada em **30/ago/2026 19:14 UTC**, e o `firebase-functions-hash`
+dos registros é `d8be07cf…` — dá pra comparar revisão a revisão, mas não se comparou código.
 
 *Proposta futura (nada escolhido, nada autorizado).* Reduzir autoridade sobre o documento pai
 exigiria, em alguma ordem ainda não decidida: fechar as escritas diretas do cliente,
@@ -1734,6 +1735,81 @@ substituir as allowlists por-chave por validação de valor (ou mover a decisão
 autodraw passarem pela porta ciente da divisão. ⛔ Nenhuma dessas foi decidida, e **P1 e P4
 esbarram no bundle das lojas (2.1.28)**, o mesmo bloqueio externo da L2 — fechar a Rule antes
 do cutover nativo cortaria clientes instalados que não se atualizam.
+
+**L6.P0.1 — reproduzir ou retificar a evidência de log do `autoDraw` (read-only,
+31/ago/2026). ⛔ RETIFICA a P7 da L6.P0.** Nada de produto, Rules, Functions, testes, scripts
+ou dados foi tocado; nenhuma publicação.
+
+*Por que esta etapa existe.* A L6.P0 registrou "250 pares nas últimas 500 linhas de log" e
+concluiu que o `autoDraw` "roda a cada minuto num laço no-op". Duas consultas independentes
+por esses textos voltaram **zero**. O conflito é objetivo e tinha que ser resolvido medindo.
+
+**(1) O RECURSO CERTO.** `gcloud functions describe autoDraw --region=us-central1` devolve
+`projects/scoreplace-app/locations/us-central1/functions/autoDraw`, **GEN_2**, **ACTIVE**,
+serviço de apoio `.../services/autodraw`, revisão `autodraw-00050-taw`, `updateTime`
+**2026-08-30T19:14:46Z**, `entryPoint autoDraw`. Sendo Gen2, os registros NÃO estão em
+`resource.type="cloud_function"` (Gen1) e sim em **`cloud_run_revision`**, com
+`resource.labels.service_name="autodraw"`.
+
+**(2) FILTRO EXATO, JANELA E FONTE — para qualquer um repetir.**
+Fonte: Cloud Logging do projeto `scoreplace-app`, via `gcloud logging read`, ordem padrão
+(mais novo primeiro). Filtro:
+`resource.labels.service_name="autodraw" AND (logName:"stdout" OR logName:"stderr") AND timestamp>="2026-08-24T00:00:00Z"`
+⚠️ **Por que as buscas por texto voltaram zero** — medido, variante a variante:
+`textPayload:"no-round-generated"` → **0** (o operador `:` casa TOKENS; a frase com hífen e
+parênteses não vira token), enquanto `textPayload=~"no-round-generated"` (regex) → 200;
+`resource.type="cloud_function"` (Gen1) → **0**; e o mesmo filtro com janela `>= 29/ago` →
+**0**, que é o achado do item (5). ⚠️ Terceira armadilha: pedir `--format="value(textPayload)"`
+**sem** filtrar `logName` devolve sobretudo `run.googleapis.com/requests`, que **não tem
+`textPayload`** — a saída vem em branco e parece "nenhum log".
+
+**(3) CONTAGENS SEPARADAS (janela 24/ago → 31/ago, limite 1000, batendo no limite).**
+`Auto-draw: generating round 1` = **500** · `Auto-draw: skip (no-round-generated)` = **500** ·
+erros/exception/denied = **0**. Por revisão: `autodraw-00047-cuv` 485+485 e
+`autodraw-00048-jot` 15+15. Com `--limit 500` (o da L6.P0) dá exatamente 250+250 — o número
+original **reproduz**, e era o LIMITE que definia a amostra, não o tempo.
+
+**(4) PROCEDÊNCIA — são da Function publicada.** Cada registro traz
+`labels."goog-managed-by": "cloudfunctions"`, `goog-drz-cloudfunctions-id: autodraw`,
+`goog-drz-cloudfunctions-location: us-central1`, `deployment-scheduled: true`,
+`firebase-functions-hash: d8be07cf…`, `execution_id` e imagem base
+`serverless-runtimes/…/nodejs24`. Não é execução local nem serviço homônimo.
+
+**(5) O QUE FICA RETIFICADO — a P7 estava datada por LIMITE, não por TEMPO.**
+⛔ **O erro foi meu e é de método**: usei `--limit 500`, li "250 pares" e escrevi "roda a cada
+minuto", **sem nunca olhar o intervalo de timestamps da amostra**. É a mesma família de
+[[feedback_busca_truncada_nao_e_busca]] — o limite virou a janela.
+*Fato que PERMANECE (dado):* os pares existem, são reproduzíveis e são da Function publicada,
+com zero erro. *Fato NOVO que corrige o sentido:* **todos são de 28/ago/2026** — o registro
+mais recente de `stdout`/`stderr` do `autodraw` é **2026-08-28T14:09:13Z**, e a consulta com
+janela `>= 2026-08-29` devolve **0**; a revisão que está no ar desde 30/ago (`autodraw-00050-taw`)
+**nunca escreveu uma linha de `stdout`**. Ou seja: o laço `generating round 1` +
+`no-round-generated` **não é o comportamento de hoje** e não deve ser descrito no presente.
+*Fato SEPARADO, que continua valendo por LEITURA de código (item 5 do pedido):* o caminho
+existe e não passa pela porta ciente da divisão — `exports.autoDraw` lê `doc.data()` cru da
+query (`functions-autodraw/index.js:1115`, `:1117`) e grava direto em `:1269` e `:1333`;
+`_autoDrawIncrementalPhaseRound` grava em `:1505` sem transação nem releitura. Isso é código,
+não log, e não depende desta medição.
+
+**(6) O QUE ESTÁ ACONTECENDO AGORA — medido, e é mais forte que a P7 original.**
+O agendador **continua disparando**: 500 entradas de `run.googleapis.com/requests` no serviço
+`autodraw`, **todas HTTP 200**, todas na revisão `autodraw-00050-taw`, a mais recente
+**2026-08-31T22:36:08Z**. E, no mesmo período, **zero linhas de `stdout`**.
+Reconfirmação em produção no mesmo instante (`agora` = 2026-08-31T22:37:46Z, só agregado):
+dos **44** torneios, exatamente **1** tem `nextDrawAt`, e ele está **vencido há 151 min** —
+`format=Liga`, `status=active`, `drawManual=false`, `drawFirstDate=sim` (passa por todas as
+guardas de `:1135-1137`) —, com `participants` **no marcador `_semPesados`** e o array
+**VAZIO no documento** (`0` entradas). ⇒ O `autoDraw` alcança esse documento a cada minuto,
+lê elenco vazio e **sai em silêncio**: o `continue` de `:1148`
+(`if (participants.length < 2) continue;`) não tem log nenhum.
+⚠️ **Qual dos ramos silenciosos é o tomado continua sendo HIPÓTESE**, não medição: `:1148` é o
+candidato que casa com o dado, mas `:1205` (dedup por `lastAutoDrawAt`) e `:1481`
+(`owed > nowMs`, no ramo de fase) também saem sem escrever nada. Distinguir exigiria
+instrumentar a Function — fora do escopo desta leva.
+
+*Decisão de método que fica registrada:* medição de log **declara a janela de tempo e o
+intervalo real dos timestamps da amostra**, nunca só o `--limit`. Amostra que bate no limite é
+amostra **truncada** e tem que ser dita como tal.
 
 ## Gates de processo registrados
 
