@@ -9,17 +9,39 @@
  *   - AUSENTE: há jogo canônico, mas não há `results/{matchId}`;
  *   - DIVERGENTE: o doc existe, mas roster/resultado/exibição não batem com a fonte.
  *
+ * ⚠️ LEITURA RESILIENTE (R0.4). Este conferidor morria no PRIMEIRO GET com
+ * `UND_ERR_CONNECT_TIMEOUT` em 10.000 ms — o teto interno do undici, que o `fetch` do Node
+ * não deixa configurar. Medido com curl no mesmo instante: connect 0,049s no IPv4 contra
+ * 5,035s no IPv6. Uma requisição isolada passava (~5,4s); centenas em sequência, não.
+ * O resultado era o pior possível para uma auditoria: nenhum contador impresso e nenhuma
+ * conclusão possível — "sem dado" com cara de execução. Agora os GETs passam por
+ * `scripts/lib/leitura-resiliente.js` (node:https, timeout de socket explícito + retentativa
+ * limitada de erro transitório). O CRITÉRIO DE COMPARAÇÃO NÃO MUDOU: mesma ordem, mesmo
+ * escopo, mesmas assinaturas, mesmos contadores.
+ *
  * Uso: node scripts/conferir-espelho-resultados.js [<tid>] [--detalhe]
+ *
+ * Ajustes (todos opcionais, com padrão conservador):
+ *   SP_FETCH_TIMEOUT_MS   timeout por tentativa, em ms   (padrão 30000)
+ *   SP_FETCH_TENTATIVAS   nº máximo de tentativas        (padrão 4)
+ *   SP_FETCH_ESPERA_MS    base da espera progressiva     (padrão 500, teto 4000)
  */
 const path = require('path');
 const { execSync } = require('child_process');
 const Split = require(path.join(__dirname, '..', 'js', 'views', 'tournament-split-core.js'));
 const Roster = require(path.join(__dirname, '..', 'functions', 'match-roster.js'));
+const Leitura = require(path.join(__dirname, 'lib', 'leitura-resiliente.js'));
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/scoreplace-app/databases/(default)/documents';
 const DETALHE = process.argv.includes('--detalhe');
 const SO_ESTE = process.argv.slice(2).find((a) => !a.startsWith('--')) || null;
 const token = () => execSync('gcloud auth print-access-token', { encoding: 'utf8' }).trim();
+
+const ler = Leitura.criarLeitor({
+  timeoutMs: Number(process.env.SP_FETCH_TIMEOUT_MS) || 30000,
+  tentativas: Number(process.env.SP_FETCH_TENTATIVAS) || 4,
+  esperaBaseMs: Number(process.env.SP_FETCH_ESPERA_MS) || 500
+});
 
 function fromF(v) {
   if (v == null) return null;
@@ -42,30 +64,33 @@ function doc2obj(d) {
   Object.entries((d && d.fields) || {}).forEach(([k, v]) => { o[k] = fromF(v); });
   return o;
 }
-async function lista(url, tk) {
+/* ⚠️ A SEMÂNTICA DESTES DOIS É INTOCADA — só o transporte mudou. 404 continua sendo
+ * "coleção/doc não existe" (lista devolve o que juntou; documento devolve null), e qualquer
+ * outro !ok continua LANÇANDO. Retentar 404 seria inventar espera onde a resposta já veio. */
+async function lista(url, tk, rotulo) {
   let page = null, out = [];
   do {
     const q = url + (url.includes('?') ? '&' : '?') + 'pageSize=300' + (page ? '&pageToken=' + encodeURIComponent(page) : '');
-    const r = await fetch(q, { headers: { Authorization: 'Bearer ' + tk } });
+    const r = await ler(q, { Authorization: 'Bearer ' + tk }, rotulo || ('lista ' + url));
     if (!r.ok) { if (r.status === 404) return out; throw new Error(r.status + ' ' + url); }
-    const j = await r.json();
+    const j = JSON.parse(r.texto || '{}');
     (j.documents || []).forEach((d) => out.push({ id: d.name.split('/').pop(), dados: doc2obj(d) }));
     page = j.nextPageToken || null;
   } while (page);
   return out;
 }
-async function documento(url, tk) {
-  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + tk } });
+async function documento(url, tk, rotulo) {
+  const r = await ler(url, { Authorization: 'Bearer ' + tk }, rotulo || ('documento ' + url));
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(r.status + ' ' + url);
-  return doc2obj(await r.json());
+  return doc2obj(JSON.parse(r.texto || '{}'));
 }
 async function montar(tid, config, tk) {
   const fora = Array.isArray(config._semPesados) ? config._semPesados : [];
   if (!fora.length) return config;
   const partes = await Promise.all(fora.map(async (nome) => {
     const col = Split.colecaoDaParte(nome);
-    const docs = await lista(`${BASE}/tournaments/${tid}/${col}`, tk);
+    const docs = await lista(`${BASE}/tournaments/${tid}/${col}`, tk, 'parte `' + col + '` de ' + tid);
     return [col, docs.map((d) => d.dados)];
   }));
   const porColecao = Object.fromEntries(partes);
@@ -92,8 +117,8 @@ function camposDiferentes(atual, esperado) {
   const tk = token();
   console.log('▶ conferindo espelho matches → results (NÃO escreve nada)\n');
   const torneios = SO_ESTE
-    ? [{ id: SO_ESTE, dados: await documento(`${BASE}/tournaments/${SO_ESTE}`, tk) }]
-    : await lista(`${BASE}/tournaments`, tk);
+    ? [{ id: SO_ESTE, dados: await documento(`${BASE}/tournaments/${SO_ESTE}`, tk, 'documento do torneio ' + SO_ESTE) }]
+    : await lista(`${BASE}/tournaments`, tk, 'listagem de todos os torneios');
   let jogos = 0, semEspelho = 0, divergentes = 0, torneiosComJogos = 0;
   const problemas = [];
 
@@ -105,7 +130,7 @@ function camposDiferentes(atual, esperado) {
     if (!ids.length) continue;
     torneiosComJogos++;
     jogos += ids.length;
-    const results = await lista(`${BASE}/tournaments/${item.id}/results`, tk);
+    const results = await lista(`${BASE}/tournaments/${item.id}/results`, tk, 'espelho `results` de ' + item.id);
     const espelho = Object.fromEntries(results.map((d) => [d.id, d.dados]));
     const ausentes = [], diferentes = [];
     ids.forEach((id) => {
@@ -144,4 +169,21 @@ function camposDiferentes(atual, esperado) {
     ? '⛔ espelho de resultado requer decisão de correção; fonte matches permanece intacta'
     : '✅ cada jogo canônico possui results com assinatura compatível'));
   process.exit((semEspelho || divergentes) ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  /* ⛔ AUDITORIA QUE NÃO TERMINOU NÃO TEM RESUMO. Antes isto imprimia o objeto de erro cru e
+   * saía 1 — sem dizer QUAL leitura morreu nem quantas tentativas houve, e sem deixar claro
+   * que nenhum contador foi produzido. Um relatório precisa distinguir "conferi e está ok"
+   * de "não consegui conferir", e a segunda linha é a que costuma ser lida errado. */
+  console.error('\n⛔ AUDITORIA NÃO CONCLUÍDA — nenhum contador foi produzido.');
+  if (e && e.spLeituraFalhou) {
+    console.error('   causa      : ' + e.spCausa);
+    console.error('   operação   : ' + e.spOperacao);
+    console.error('   url        : ' + e.spUrl);
+    console.error('   tentativas : ' + e.spTentativas);
+    console.error('\n   Isto NÃO diz que o espelho está certo nem errado — diz que a leitura falhou.');
+    console.error('   Se for rede lenta, dá pra afrouxar: SP_FETCH_TIMEOUT_MS / SP_FETCH_TENTATIVAS.');
+  } else {
+    console.error(e);
+  }
+  process.exit(1);
+});

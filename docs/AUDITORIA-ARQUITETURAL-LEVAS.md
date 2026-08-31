@@ -14,7 +14,7 @@
 
 | Leva | Tema do backlog | Situação em 30/ago | Gate antes de executar |
 |---|---|---|---|
-| L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ⚠️ A reconferência de 30/ago **não completou**: `scripts/conferir-espelho-resultados.js` abortou em `UND_ERR_CONNECT_TIMEOUT` (rede do ambiente, inclusive com `--dns-result-order=ipv4first`). Sem dado novo — nem "ok" nem "falhou". | Conferidor read-only permanece no runner. |
+| L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. Reconferido em 30/ago **depois da R0.4**: 42 torneios · 183 jogos canônicos · **0 ausentes** e **0 divergentes**, exit 0. | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Aberta, causa confirmada.** `firestore.rules` aceita write de qualquer autenticado; `js/firebase-db.js` e `js/views/auth.js` escrevem direto. | Preservar a extensão de e-mail; trocar a porta por Function e fechar Rules sem perder fluxos legítimos. |
 | L2 | fila de notificações/e-mail | **Aberta.** `notif_email_queue` ainda aceita create pelo cliente. | Mapear emissores e deduplicação antes de fechar a fila. |
 | L3 | `casualMatches` | **Aberta, causa confirmada.** qualquer autenticado pode escrever qualquer documento. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. |
@@ -37,6 +37,7 @@
 | Gate | Onde está pendurado | O que barra | Prova |
 |---|---|---|---|
 | `scripts/check-deploy-alignment.js` | `hosting.predeploy[0]` **e**, desde R0.3, `functions[0].predeploy` do `firebase.json` da raiz | deploy com árvore suja ou com `HEAD` fora de `origin/main` | `tests/trava-de-alinhamento-barra-deploy.test.js` |
+| `scripts/lib/leitura-resiliente.js` | GETs de `scripts/conferir-espelho-resultados.js` | auditoria que termina sem contador: falha transitória de rede é retentada, falha persistente vira exit não-zero com causa/operação/tentativas | `tests/conferidor-sobrevive-a-rede.test.js` |
 
 **Por que a leva R0.3 existiu.** `scripts/deploy-functions.sh` não tem uma linha de git —
 publica o que está no disco. Medido em 30/ago/2026: as Functions foram atualizadas às 19:38
@@ -51,6 +52,17 @@ outra.
 ela cairia no ramo do carimbo (`.deploy-alignment.json`, escrito apenas pelo
 `deploy-hosting.sh`) e barraria todo deploy desses codebases. O teste trava essa decisão para
 que ninguém a "complete" antes de resolver a ausência de `.git`.
+
+
+**R0.4 — por que o conferidor não terminava.** Ele morria no primeiro GET com
+`UND_ERR_CONNECT_TIMEOUT` em 10.000 ms: esse é o `connectTimeout` interno do undici, e o
+`fetch` do Node não o expõe. Medido com curl no mesmo instante — connect 0,049s no IPv4
+contra 5,035s no IPv6; uma requisição isolada passava (~5,4s), centenas não.
+`AbortSignal.timeout` foi **descartado** por não alterar esse teto, e
+`--dns-result-order=ipv4first` foi tentado uma vez sem mudar o desfecho. O transporte passou
+a ser `node:https`, que aceita timeout de socket explícito (padrão 30s), com até 4 tentativas
+e espera progressiva de teto 4s, retentando **somente** erros transitórios identificados.
+O critério de comparação `matches → results` não foi tocado.
 
 **Bypass:** `SP_SKIP_ALIGNMENT=1` continua existindo para emergência declarada, e continua
 anunciando no console que foi usado. O teste cobre isso — bypass mudo seria pior que trava
