@@ -42,7 +42,10 @@
     {
       "source": "functions",
       "codebase": "default",
-      "runtime": "nodejs22"
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node scripts/check-deploy-alignment.js"
+      ]
     }
   ],
   "extensions": {

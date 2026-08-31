@@ -14,7 +14,7 @@
 
 | Leva | Tema do backlog | Situação em 30/ago | Gate antes de executar |
 |---|---|---|---|
-| L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. | Conferidor read-only permanece no runner. |
+| L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ⚠️ A reconferência de 30/ago **não completou**: `scripts/conferir-espelho-resultados.js` abortou em `UND_ERR_CONNECT_TIMEOUT` (rede do ambiente, inclusive com `--dns-result-order=ipv4first`). Sem dado novo — nem "ok" nem "falhou". | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Aberta, causa confirmada.** `firestore.rules` aceita write de qualquer autenticado; `js/firebase-db.js` e `js/views/auth.js` escrevem direto. | Preservar a extensão de e-mail; trocar a porta por Function e fechar Rules sem perder fluxos legítimos. |
 | L2 | fila de notificações/e-mail | **Aberta.** `notif_email_queue` ainda aceita create pelo cliente. | Mapear emissores e deduplicação antes de fechar a fila. |
 | L3 | `casualMatches` | **Aberta, causa confirmada.** qualquer autenticado pode escrever qualquer documento. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. |
@@ -31,6 +31,30 @@
 | L14 | identidade, merges, retries e concorrência | **Aberta.** | Matriz de idempotência e provas de posse antes de alterar merge/login. |
 | L15 | testes não descobertos automaticamente | **Aberta.** | Catálogo de testes e gate que falha para arquivo novo não registrado. |
 | L16 | observabilidade e hardening | **Aberta.** | Métricas, alertas e runbooks definidos por risco, sem registrar PII. |
+
+## Gates de processo registrados
+
+| Gate | Onde está pendurado | O que barra | Prova |
+|---|---|---|---|
+| `scripts/check-deploy-alignment.js` | `hosting.predeploy[0]` **e**, desde R0.3, `functions[0].predeploy` do `firebase.json` da raiz | deploy com árvore suja ou com `HEAD` fora de `origin/main` | `tests/trava-de-alinhamento-barra-deploy.test.js` |
+
+**Por que a leva R0.3 existiu.** `scripts/deploy-functions.sh` não tem uma linha de git —
+publica o que está no disco. Medido em 30/ago/2026: as Functions foram atualizadas às 19:38
+BRT e o commit que carrega esse código (`0aecc59b`) é de 19:41, ou seja três minutos com
+produção rodando código não commitado. A trava já existia desde o incidente de 12/ago
+(produção 1.8.27 com `origin/main` 1.8.24), mas só o caminho do Hosting passava por ela:
+`functions[0].predeploy` estava `[]`. A correção foi ligar a trava existente, não escrever
+outra.
+
+**Escopo deliberado:** a trava NÃO foi aplicada a `functions-autodraw` nem a
+`functions-stripe`. Esses diretórios têm `firebase.json` próprio e **não têm `.git`**, então
+ela cairia no ramo do carimbo (`.deploy-alignment.json`, escrito apenas pelo
+`deploy-hosting.sh`) e barraria todo deploy desses codebases. O teste trava essa decisão para
+que ninguém a "complete" antes de resolver a ausência de `.git`.
+
+**Bypass:** `SP_SKIP_ALIGNMENT=1` continua existindo para emergência declarada, e continua
+anunciando no console que foi usado. O teste cobre isso — bypass mudo seria pior que trava
+nenhuma.
 
 ## Leitura correta do progresso
 
