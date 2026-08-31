@@ -19,6 +19,18 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.78 NÃO ganhou item, e é DECISÃO — mesma razão da 2.1.64 e da 1.8.27. Ela é
+    // 100% AUTORIZAÇÃO E FERRAMENTA: a regra de `magicLinks` trocou `allow read` (que em
+    // Rules do Firestore é `get` + `list`) por `allow get` + `allow list: if false`,
+    // fechando a ENUMERAÇÃO pública da coleção e preservando exatamente o que o produto
+    // usa — o `get` por token, que é como o link do e-mail abre. Medido antes (L4.P2):
+    // anônimo fazia `list`=200. Vieram junto a suíte de emulador que trava as duas
+    // direções e a trava estática que prova nos três clientes (web, Android, iOS) que a
+    // única leitura é `.doc(token).get()`. Em js/, css/ e index.html o diff é SÓ o
+    // `SCOREPLACE_VERSION`, os cache-busters e o snapshot do prerender — zero tela, zero
+    // comportamento novo pra quem joga. Nenhum link parou de funcionar: quem tem o link
+    // continua entrando igual. A trava (check-release-notes) pega OMISSÃO e não sabe
+    // julgar isso; a justificativa fica aqui, pro próximo leitor não achar que faltou.
     // ⚠️ 2.1.64 NÃO ganhou item, e é DECISÃO — mesma razão da 2.0.32. Ela é 100% ferramenta
     // de auditoria e gate de processo: a trava `check-deploy-alignment` passou a valer para o
     // deploy do codebase `main` (antes só o Hosting passava por ela), e o conferidor read-only

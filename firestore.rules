@@ -912,15 +912,32 @@ service cloud.firestore {
     }
 
     // ─── Magic Links wrapper (v1.0.30-beta) ──────────────────────────────────
-    // Cloud Function `sendMagicLink` cria docs aqui com o link Firebase
-    // assinado. Usuário NÃO autenticado clica no email, abre /?ml=TOKEN no
-    // browser, e o JS do app lê esse doc pra resolver o firebaseLink real e
-    // redirecionar. Token é 24 chars random base64url — segredo suficiente
-    // pra leitura pública (igual unlisted YouTube link). Escrita só via
-    // Admin SDK (Cloud Function bypassa rules).
+    // Cloud Function `sendMagicLink` cria docs aqui com o link Firebase assinado.
+    // Usuário NÃO autenticado clica no e-mail, abre /?ml=TOKEN (ou /?vt=TOKEN, a
+    // confirmação de conta) e o JS do app resolve o `firebaseLink` real e redireciona.
+    // O wrapper existe porque scanners anti-phishing prefetcham o link e QUEIMAM o
+    // oobCode de uso único antes da pessoa — 7 contas travadas em jul/2026.
+    //
+    // ⛔ ERA `allow read: if true`, e isso não era "leitura por token": em Rules do
+    // Firestore, `read` = `get` + `list`. Numa regra de documento curinga, isso libera
+    // ENUMERAR a coleção inteira — sem token e sem conta. E cada documento guarda o
+    // `firebaseLink` ASSINADO (o oobCode de entrada) e o `email`. O raciocínio do
+    // comentário antigo ("o token de 24 chars é o segredo, igual link não-listado") vale
+    // para o `get`; a listagem passa por fora dele.
+    // MEDIDO no emulador contra estas mesmas rules (L4.P2, 31/ago/2026): anônimo fazia
+    // `get`=200, `list`=200 e `runQuery`=200.
+    //
+    // ⭐ `allow get` é o verbo certo, e não custa nada ao produto: o inventário L4.P3
+    // varreu o disco inteiro e a ÚNICA leitura de `magicLinks` em web, Android e iOS é
+    // `collection('magicLinks').doc(token).get()` — nenhum `where`, `list`, `runQuery`
+    // ou `orderBy` em lugar nenhum. A única query da coleção é a da limpeza agendada,
+    // que roda com Admin SDK e ignora as rules.
+    // Travado por tests/rules-magiclinks-sem-enumeracao.test.js (emulador) e por
+    // scripts/check-magiclinks-get-only.js (trava estática nos três clientes).
     match /magicLinks/{token} {
-      allow read: if true;
-      allow write: if false;
+      allow get: if true;      // por TOKEN conhecido — anônimo inclusive; é o fluxo
+      allow list: if false;    // ⛔ enumeração: negada pros dois, anônimo e autenticado
+      allow write: if false;   // só Admin SDK (Cloud Function bypassa rules)
     }
 
     // ─── Presences (check-ins + planned "I'll play here") ─────────────────────
