@@ -20,7 +20,7 @@
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
 | L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) a leitura cruzada de perfis MAPEADA (L4.P5) e a MATRIZ DE ALTERNATIVAS registrada (L4.P6, nada escolhido).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
-| L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
+| L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Três achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`); o marcador e o documento **divergem em 1 torneio**; e o `autoDraw` agendado roda a cada minuto num laço no-op silencioso (**250 pares `generating round 1` + `skip (no-round-generated)` nas últimas 500 linhas de log, zero erro**), sendo ele e `_autoDrawIncrementalPhaseRound` os **únicos** caminhos do autodraw que não passam pela porta ciente da divisão. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
 | L8 | representações múltiplas de match + custo Firestore | **Parcial.** `matches` é fonte e `results` é projeção para jogos divididos; modelo completo ainda não convergiu. | Medir reads/writes por tela e preservar `replay`/autorizações. |
 | L9 | código morto, fallbacks e aliases | **Aberta.** | Prova de ausência de chamadores antes de remover compatibilidade. |
@@ -1578,6 +1578,162 @@ cobertura cresceu (**teste obsoleto**). `test-backfill-emu` e `test-syncroster-e
 que o espelho **não** se curasse sozinho, o oposto do que 6c2570cb (10/ago, "o espelho do
 roster passa a se manter sozinho") decidiu com medição em produção — reescritos para afirmar
 a **cura automática**, preservando o limite do `dryRun` (**teste obsoleto**).
+
+**L6.P0 — inventário read-only dos writers de `tournaments` (31/ago/2026). ⛔ NADA FOI
+DECIDIDO, NADA FOI ALTERADO.** Produto, Rules, Functions, scripts, testes e dados intactos;
+nenhuma publicação. As Rules citadas foram lidas do RULESET NO AR
+(`9a65fc58-55a4-40bd-bb5a-50f53edd23ae`), que é byte a byte igual ao `main`.
+
+*Método.* Mapeamento por dono (cada ocorrência de escrita atribuída ao `exports.`/método que
+a contém) sobre `js/`, `functions/`, `functions-autodraw/`, `scripts/` e `tests/`, mais três
+medições read-only em produção — agregadas, sem id, nome, uid ou e-mail. Os scripts de
+medição ficaram fora do repositório.
+
+**(1-3) AS PORTAS DE ESCRITA, POR CODEBASE — quem escreve o quê.**
+
+*Cliente · porta canônica em `js/firebase-db.js`.*
+`saveTournament` (:235, grava em :1153 com `.set(merge:true)` a partir do objeto EM MEMÓRIA)
+— **93 chamadas** em `js/`, de longe a porta mais usada; `mutateTournament` (:1235, transação
+com `transaction.set` SEM merge em :1386, ciente da divisão em :1362-1383); `mutateMatchResult`
+(:1415, transação em `results/{matchId}`); `leaveStandby` (:1552 → `standbyParticipants`,
+`waitlist`, `memberUids`); `_enrollParticipantTx` (:1579) e `_deenrollParticipantTx` (:1825),
+que são o **fallback** das CFs homônimas; `_deleteSubcollection` (:1915) e `deleteTournament`
+(:1944); `enfileirarPlacar` (:2366 → cria `resultQueue/{id}`). `setPresenceFields` (:1214)
+NÃO escreve: virou disparo de `aplicarNoTorneio`.
+
+*Cliente · orquestração (`js/store.js`).* `AppStore.mutate` (:10778) aplica o mutator no
+objeto local, enfileira a persistência **serializada por torneio** (`_txQueue[tId]`) e chama
+`commitTournamentTx` (:10712) → `mutateTournament`. O MESMO mutator é replicado no sandbox.
+`commitResultTx` tenta a CF `applyMatchResult` e, na falha, cai na FILA (`enfileirarPlacar`).
+
+*⛔ Cliente · escrita DIRETA fora da porta — 5 sítios, 3 arquivos.*
+`js/store.js:3840` `.update({status:'closed'})`; `js/store.js:9676` `.update({adminEmails})`;
+e `js/views/arbitros.js:274, :309, :342` `.update({arbitros: arrayUnion/arrayRemove})`.
+⚠️ `arbitros` não está em NENHUMA das duas allowlists das Rules, então essas três só passam
+para admin — mas o campo é lido como autorização de arbitragem em `js/views/bracket.js:4920` e
+`js/views/bracket-ui.js:704`. `adminEmails` idem (admin-only). `status` está nas duas listas.
+
+*Functions (`functions/index.js`) · porta ciente da divisão.* `functions/split-parts.js`
+(`hidratar` + `gravar`) é usada por **seis** portas: `enrollParticipant` (:2946/:2948),
+`deenrollParticipant` (:3237/:3245), `formPair` (:3310/:3319), `splitPair` (:3357/:3365),
+`respondHostInvite` (:3428/:3444) e `propagateDisplayName` (:7806/:7813). Fora dela:
+`aplicarNoTorneio` (:3154) — a porta única de escrita FINA, com allowlist em
+`functions/partes-permissao.js`, `batch` sem transação e bump obrigatório de `updatedAt`;
+os callables `setParticipantsGender` (:2465), `setParticipantsProfile` (:2511),
+`applyLetzplayScans` (:3462) e `sendOrgCommunication` (:3553, subcoleção `communications`);
+os gatilhos `syncMatchRosters` (:7928), `syncSplitMatchResult` (:7891) e
+`purgeTournamentCopies` (:8338); e a manutenção `deleteAccount` (:5439), `mergePhoneAccount`
+(:6274, **17** escritas), `fixMergedParticipants` (:6803), `backfillMatchResultDocs` (:8113) e
+`repairTournaments` (:6816).
+
+*Autodraw (`functions-autodraw/index.js`) · porta própria.* `_leTorneio` (:375, monta das
+subcoleções DENTRO da transação) + `_gravaTorneio` (:397, grava só o que mudou). Sete
+chamadores: `drawRound` (:631), `integrateLateEntries` (:734), `formLatePair` (:810),
+`splitLatePair` (:849), `applyMatchResult` (:903), `closeRound` (:1074) e
+`_formarGruposDaEspera` (:1671). Gatilhos: `tournamentMirror` (:1964 — espelha as subcoleções
+E **poda** `history` e `categoryNotifications` no próprio doc, :2132/:2156),
+`tournamentSummary` (:1840), `applyQueuedResult` (:995) e `autoDrawReconcile` (:1705, só
+`nextDrawAt`).
+
+*Scripts administrativos (Admin SDK, não passam por Rule).* 16 arquivos de `scripts/` tocam
+`tournaments`; 14 com operação de escrita — entre eles `dividir-todos.js`,
+`desfazer-divisao.js`, `rechavear-inscritos.js`, `rechavear-historico.js`, `salto-fase2.js`,
+`congelar-grupos-fechados.js` e `apagar-standings-do-doc.js`.
+
+**(4) OPERAÇÕES COM MAIS DE UMA AUTORIDADE DE ESCRITA — o núcleo da L6.**
+`tournaments/{id}/results`: **cinco** — cliente (`mutateMatchResult`), `syncMatchRosters`,
+`syncSplitMatchResult`, `backfillMatchResultDocs` e o autodraw (`_gravaTorneio`, :483).
+Elenco: cliente (`saveTournament`, `_enrollParticipantTx`), CF (as seis portas), autodraw
+(`integrateLateEntries`, `formLatePair`/`splitLatePair`) e scripts. `history`: cliente
+(`mutate` + `logAction`), CF (`gravar`) e `tournamentMirror` (poda). `status`: cliente
+(`saveTournament`, `mutate`, `store.js:3840`) e servidor. `rounds`/`matches`: cliente,
+`_gravaTorneio` **e** `autoDraw` cru. `nextDrawAt`: recomputado por TODO save do cliente,
+por `autoDraw` e por `autoDrawReconcile`.
+
+**(6) O QUE AS RULES REALMENTE IMPÕEM.** O documento tem 13 subcoleções com regra: `results`
+(create/delete admin; update admin **ou** participante daquele jogo com `playerUids`
+imutável), `letzplayScans` (admin), `resultQueue` (create com `actorUid == auth.uid`;
+update/delete negados) e **nove com `allow write: if false`** (`matches`, `grupos`,
+`checkedIn`, `inscritos`, `history`, `woClaims`, `woLog`, `opponentHistory`,
+`categoryNotifications`). ⚠️ `participants` e `communications` existem no banco e **não têm
+bloco de regra nenhum** — negadas por omissão, alcançáveis só pelo Admin SDK.
+⛔ **E o achado que define a leva:** no documento pai, `isEnrollmentOnlyDiff()`
+(`firestore.rules:37`) e `isParticipantBracketDiff()` (`:97`) autorizam por
+`diff().affectedKeys().hasOnly([…])` — isto é, olham **quais chaves mudaram e mais nada**.
+Não há uma única checagem de VALOR. A segunda lista tem ~45 campos de topo, entre eles
+`matches`, `rounds`, `groups`, `standings`, `classification`, `status`, `participants`,
+`memberUids` e `history`; a primeira vale para **qualquer autenticado**, não só participante,
+e inclui `participants`, `memberUids` e `status`.
+
+**(7) CONCORRÊNCIA, RETRY, IDEMPOTÊNCIA.** `mutateTournament` e as portas de CF leem fresco
+dentro da transação (clobber-free); `AppStore.mutate` serializa por torneio para não gerar
+`failed-precondition` em lote. `resultQueue` tem id derivado da intenção (reentrega cai no
+mesmo doc). `autoDraw` rebaseia `rounds` numa transação (`rebaseRounds`, dedup por número da
+rodada). ⛔ Em contraste: `saveTournament` grava o objeto EM MEMÓRIA com `merge:true` — é o
+caminho de last-write-wins e é o mais chamado (93); `_autoDrawIncrementalPhaseRound` (:1505)
+grava `phaseRounds` com `.update()` **sem transação e sem releitura**, sobre um `t` lido numa
+query que pode ter segundos de idade; e as cinco escritas diretas do cliente não passam por
+guard nenhum.
+
+**(8) COMPATIBILIDADE COM DOCUMENTO DIVIDIDO — medido.** `PARTES` (js/views/tournament-split-core.js:65)
+= `participants, history, opponentHistory, checkedIn, woClaims, woLog, categoryNotifications,
+matches, grupos`. `dividir()` **esvazia o campo no documento** (`config[campo] = []`, :389).
+Medição em produção: **44 torneios, 41 divididos**, e as partes fora são exatamente
+`matches` (41), `participants` (41) e `opponentHistory` (41). Todo escritor de elenco precisa
+hidratar — é o que `split-parts.js` e `_leTorneio` fazem, e é o que as duas exceções do
+autodraw **não** fazem.
+
+**(9) TESTES E GATES.** 47 arquivos de teste citam as portas (`saveTournament`,
+`mutateTournament`, `aplicarNoTorneio`, `_gravaTorneio`, `_splitParts`). Sete suítes dirigem
+as Rules REAIS no emulador (`npm run test:rules`); das que tocam torneio,
+`rules-inscricao-espera` prova que inscrever-se **não** muda o nome nem escreve `adminUids`,
+e `rules-cohost-uid-only` e `rules-sandbox-read` cobrem co-organização e leitura do sandbox.
+⛔ **Não existe suíte** que dirija as Rules contra as duas allowlists do documento pai pelo
+lado do VALOR — nenhuma prova, contra o emulador, do que um autenticado não-participante ou
+um participante comum consegue ou não consegue escrever em `participants`, `memberUids`,
+`status`, `standings` ou `matches`.
+
+═══ CLASSIFICAÇÃO ═══
+
+*Decisão já adotada (registro, não mudança).* (a) A escrita de subcoleção é do SERVIDOR: nove
+subcoleções com `allow write: if false` e a ordem do dono de 25/ago — _"o certo é tudo rodar
+em CF só sendo disparado pelo client side"_. (b) `aplicarNoTorneio` é a porta única de
+escrita fina, com allowlist em tabela e não em `if`. (c) Autorização por **uid**, nunca por
+e-mail. (d) O cliente não deriva avanço de chave: a queda do placar é a FILA, não o motor
+local. (e) `results` é doc por jogo, com a corrida contida na transação daquele doc.
+
+*Problema aberto.* **(P1)** As duas allowlists do documento pai autorizam por CHAVE e nunca
+por VALOR (`firestore.rules:37` e `:97`) — derivado de leitura das Rules, **não medido no
+emulador nesta etapa**, porque a leva é read-only e criar suíte seria editar testes.
+**(P2)** Cinco escritas diretas do cliente fora da porta (`js/store.js:3840`, `:9676`;
+`js/views/arbitros.js:274, :309, :342`), sem guard, sem fila e sem rastro.
+**(P3)** `results` tem cinco autoridades de escrita. **(P4)** `saveTournament` grava a cópia
+em memória com `merge:true` em 93 sítios. **(P5)** ⭐ **Medido**: `exports.autoDraw` (:1113)
+e `_autoDrawIncrementalPhaseRound` (:1473) são os **únicos** caminhos do autodraw que não
+passam por `_leTorneio`/`_gravaTorneio` — leem `doc.data()` cru de uma query e gravam direto
+(:1269, :1333, :1505). **(P6)** ⭐ **Medido**: o marcador e o documento **divergem em 1
+torneio** — `_semPesados` diz que `participants` e `matches` estão fora, e o documento ainda
+carrega 2 entradas de elenco e jogos dentro de `rounds[].matches`. **(P7)** ⭐ **Medido**: o
+`autoDraw` agendado roda a cada minuto sobre 1 documento e registra, em laço, o par
+`Auto-draw: generating round 1` + `Auto-draw: skip (no-round-generated)` — **250 pares nas
+últimas 500 linhas de log, com ZERO erro**. É um no-op permanente e silencioso.
+
+*Hipótese (não confirmada nesta etapa).* **(H1)** Que P6 e P7 sejam o mesmo evento: uma
+escrita não-ciente da divisão teria devolvido elenco/jogos ao documento, e o motor de sorteio
+passaria a operar sobre um estado meio-dividido que não gera rodada. Confirmar exige ler o
+documento inteiro daquele torneio (tem PII) e correlacionar com o horário das gravações —
+não foi feito. **(H2)** Que a ausência da trava de alinhamento em `functions-autodraw`
+(registrada na R0.3 como escopo deliberado) permita que o código no ar difira do `main` —
+`no-round-generated` existe em `functions-autodraw/draw-core.js:270`, então o log é
+compatível com o main, mas isso não prova igualdade.
+
+*Proposta futura (nada escolhido, nada autorizado).* Reduzir autoridade sobre o documento pai
+exigiria, em alguma ordem ainda não decidida: fechar as escritas diretas do cliente,
+substituir as allowlists por-chave por validação de valor (ou mover a decisão para CF, como
+`matches` já fez), unificar as cinco autoridades de `results`, e fazer as duas exceções do
+autodraw passarem pela porta ciente da divisão. ⛔ Nenhuma dessas foi decidida, e **P1 e P4
+esbarram no bundle das lojas (2.1.28)**, o mesmo bloqueio externo da L2 — fechar a Rule antes
+do cutover nativo cortaria clientes instalados que não se atualizam.
 
 ## Gates de processo registrados
 
