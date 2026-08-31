@@ -597,6 +597,112 @@ async function test_alvo_secEmail_cooldownAindaVale() {
   ok(outro.ok, 'o freio e por PAR uid+email: outro endereco do mesmo uid nao e bloqueado');
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════
+ * L1.3a — CONVITE AVULSO DE TORNEIO: cota e cooldown sob CONCORRÊNCIA
+ *
+ * ⛔ POR QUE PRECISA DO EMULADOR: a cota diária existe pra LIMITAR quantos e-mails saem. Se
+ * ler-a-cota e gravar-a-cota forem passos separados, N chamadas simultâneas leem o mesmo
+ * "usados" e todas passam — a cota vira decoração e o convidado recebe N e-mails. Só o
+ * servidor de verdade impõe a serialização (transação aborta e re-executa em conflito).
+ * ════════════════════════════════════════════════════════════════════════════════ */
+const _tiCore = require('../../functions/tournament-invite-core.js');
+const _tiRes = require('../../functions/tournament-invite-reserva.js');
+
+async function _limpaConvite() {
+  for (const col of ['tournamentInviteCooldown', 'tournamentInviteQuota', 'mail']) {
+    const snap = await H.rawDb.collection(col).get();
+    await Promise.all(snap.docs.map((d) => d.ref.delete().catch(() => {})));
+  }
+}
+const _contarC = async (col) => (await H.rawDb.collection(col).get()).size;
+const _convidar = (uid, tid, email, agora) => _tiRes.reservarConvite({
+  db: H.rawDb, core: _tiCore, uid: uid, tournamentId: tid, email: email, agora: agora,
+  dadosDoEmail: { tournamentName: 'Torneio de Prova', inviterName: 'Org', dateText: '', venue: '' }
+});
+
+async function test_alvo_convite_cooldownSobCorrida() {
+  await _limpaConvite();
+  const uid = 'orgA', tid = 'tourA', email = 'convidado@x.test';
+  const agora = Date.now();
+  /* DUAS chamadas juntas, mesmo instante: nenhuma vê o cooldown da outra sem a transação */
+  const [a, b] = await Promise.all([_convidar(uid, tid, email, agora), _convidar(uid, tid, email, agora)]);
+  const okCount = [a, b].filter((r) => r && r.ok).length;
+  ok(okCount === 1, 'duas concorrentes pro MESMO e-mail: exatamente UMA passa (veio ' + okCount + ')');
+  const rec = [a, b].find((r) => r && !r.ok);
+  ok(rec && rec.motivo === 'cooldown', 'a outra cai no cooldown (veio ' + (rec && rec.motivo) + ')');
+  eq(await _contarC('mail'), 1, 'UM documento de outbox — o convidado recebe um e-mail');
+  const q = await H.rawDb.collection('tournamentInviteQuota').get();
+  eq(Number(q.docs[0].data().enviados), 1, 'e a cota contou UM');
+}
+
+async function test_alvo_convite_cotaDiariaSobCorrida() {
+  await _limpaConvite();
+  const uid = 'orgB', tid = 'tourB';
+  const t0 = Date.now();
+  /* 25 destinatários DIFERENTES (sem cooldown entre eles), todos ao mesmo tempo.
+   * Sem transação, os 25 leem "0 usados" e os 25 passam — a cota de 20 não valeria nada. */
+  const alvos = Array.from({ length: 25 }, (_, i) => 'c' + i + '@x.test');
+  const rs = await Promise.all(alvos.map((e, i) => _convidar(uid, tid, e, t0 + i)));
+  const passaram = rs.filter((r) => r && r.ok).length;
+  const barrados = rs.filter((r) => r && r.motivo === 'limite-diario').length;
+  eq(passaram, _tiCore.LIMITE_DIARIO, 'exatamente ' + _tiCore.LIMITE_DIARIO + ' passaram sob corrida de 25');
+  eq(barrados, 25 - _tiCore.LIMITE_DIARIO, 'e os demais foram barrados por limite-diario');
+  eq(await _contarC('mail'), _tiCore.LIMITE_DIARIO, 'e saíram exatamente ' + _tiCore.LIMITE_DIARIO + ' e-mails');
+  const q = await H.rawDb.collection('tournamentInviteQuota').get();
+  eq(Number(q.docs[0].data().enviados), _tiCore.LIMITE_DIARIO, 'a cota parou no teto');
+}
+
+async function test_alvo_convite_retryNaoDuplica() {
+  await _limpaConvite();
+  const uid = 'orgC', tid = 'tourC', email = 'retry@x.test';
+  const agora = Date.now();
+  const r1 = await _convidar(uid, tid, email, agora);
+  ok(r1.ok, 'o primeiro convite passa');
+  const r2 = await _convidar(uid, tid, email, agora + 1);
+  ok(!r2.ok && r2.motivo === 'cooldown', 'o retry imediato é recusado, não vira 2o e-mail');
+  eq(await _contarC('mail'), 1, 'segue UM documento de outbox');
+  /* passado o cooldown, um novo convite pro mesmo e-mail é legítimo */
+  const r3 = await _convidar(uid, tid, email, agora + _tiCore.COOLDOWN_MS + 1000);
+  ok(r3.ok, 'passado o cooldown, permite de novo');
+  eq(await _contarC('mail'), 2, 'e aí sim são dois');
+  ok(r3.mailId !== r1.mailId, 'com ids de outbox diferentes (reservas diferentes)');
+}
+
+async function test_alvo_convite_cotaEhPorOrganizadorEPorTorneio() {
+  await _limpaConvite();
+  const t0 = Date.now();
+  /* o teto de um organizador não pode travar outro, nem um torneio travar o outro */
+  const rs = await Promise.all(Array.from({ length: 21 }, (_, i) => _convidar('orgD', 'tourD', 'd' + i + '@x.test', t0 + i)));
+  eq(rs.filter((r) => r.ok).length, _tiCore.LIMITE_DIARIO, 'orgD estourou a cota no tourD');
+  const outroOrg = await _convidar('orgE', 'tourD', 'e0@x.test', t0);
+  ok(outroOrg.ok, 'OUTRO organizador no mesmo torneio não é afetado');
+  const outroTorneio = await _convidar('orgD', 'tourE', 'f0@x.test', t0);
+  ok(outroTorneio.ok, 'e o MESMO organizador em outro torneio também não');
+}
+
+/* DIAGNÓSTICO — prova que a corrida existia. Reproduz a sequência sem transação contra o
+ * MESMO emulador: 25 concorrentes leem "0 usados" e todas passam. Fica VERDE documentando a
+ * doença; se um dia parar de furar, é porque o teste deixou de exercitar o caminho antigo. */
+async function test_diag_convite_semTransacaoFuraACota() {
+  await _limpaConvite();
+  const uid = 'orgDiag', tid = 'tourDiag';
+  const t0 = Date.now();
+  const chaveCota = _tiCore.chaveDeCota(uid, tid, t0);
+  const cotaRef = H.rawDb.collection('tournamentInviteQuota').doc(chaveCota);
+  const antigo = async (email, agora) => {
+    const snap = await cotaRef.get();                       // lê FORA de transação
+    const usados = (snap.exists && Number(snap.data().enviados)) || 0;
+    if (usados >= _tiCore.LIMITE_DIARIO) return { ok: false };
+    await cotaRef.set({ enviados: usados + 1 }, { merge: true });
+    await H.rawDb.collection('mail').add(_tiCore.montaEmail({ email: email, tournamentId: tid, agora: agora }));
+    return { ok: true };
+  };
+  const rs = await Promise.all(Array.from({ length: 25 }, (_, i) => antigo('g' + i + '@x.test', t0 + i)));
+  const passaram = rs.filter((r) => r.ok).length;
+  ok(passaram > _tiCore.LIMITE_DIARIO,
+    'no caminho SEM transação a cota é furada (' + passaram + ' passaram, teto é ' + _tiCore.LIMITE_DIARIO + ')');
+}
+
 (async function main() {
   // window global usado pelos mutators do teste de views (emu-harness-views seta global.window=global)
   const suites = [
@@ -617,6 +723,11 @@ async function test_alvo_secEmail_cooldownAindaVale() {
     ['alvo L1.1.1 reserva de e-mail secundario ATOMICA sob corrida', test_alvo_secEmail_reservaAtomicaSobCorrida],
     ['alvo L1.1.1 retry nao duplica o e-mail', test_alvo_secEmail_retryNaoDuplica],
     ['alvo L1.1.1 cooldown continua valendo (e soltando)', test_alvo_secEmail_cooldownAindaVale],
+    ['diag L1.3a sem transacao a cota do convite e furada', test_diag_convite_semTransacaoFuraACota],
+    ['alvo L1.3a convite: cooldown sob corrida', test_alvo_convite_cooldownSobCorrida],
+    ['alvo L1.3a convite: cota diaria sob corrida de 25', test_alvo_convite_cotaDiariaSobCorrida],
+    ['alvo L1.3a convite: retry nao duplica outbox', test_alvo_convite_retryNaoDuplica],
+    ['alvo L1.3a convite: cota e por organizador E por torneio', test_alvo_convite_cotaEhPorOrganizadorEPorTorneio],
   ];
   for (const [name, fn] of suites) {
     console.log('──────────── ' + name + ' ────────────');

@@ -121,10 +121,25 @@ window._tournamentInviteText = function(t, url) {
     return lines.join('\n');
 };
 
-// Envia convite de torneio por e-mail — HTML rico e branded (mesmo padrão dos
-// e-mails de notificação), com botão azul "Entrar no torneio". Vai pela fila
-// `mail/` (extension firestore-send-email, remetente scoreplace.app@gmail.com).
-// Fallback pra mailto: quando a fila não está disponível (ex: deslogado).
+/* CONVITE AVULSO POR E-MAIL — agora é a capability `sendTournamentInvite` (L1.3a, 2.1.69).
+ *
+ * ⛔ O QUE ESTAVA AQUI, e por que era a pior superfície do inventário L1.2:
+ *   · `FirestoreDB.queueEmail(email, subject, html)` com o endereço vindo do INPUT, validado
+ *     só por `email.indexOf('@') === -1` — passava "a@b", vírgula (múltiplos destinatários em
+ *     alguns relays) e quebra de linha (injeção de cabeçalho SMTP);
+ *   · assunto e corpo montados AQUI, no cliente;
+ *   · `/mail` aberto a qualquer autenticado nas rules;
+ *   · e a UI do campo não tinha gate de organizador.
+ * Somados, qualquer pessoa logada mandava e-mail arbitrário saindo do remetente do produto.
+ *
+ * ⛔ O FALLBACK `mailto:` TAMBÉM SAIU. Ele parecia inofensivo — "só abre o cliente de e-mail
+ * da pessoa" —, mas era a porta que fazia o fluxo seguir funcionando quando a fila não
+ * respondia: mantê-lo é manter um caminho que ignora autorização, cota e cooldown. Se a
+ * capability recusa, a resposta certa é DIZER que recusou.
+ *
+ * O cliente agora manda só `tournamentId` e o e-mail candidato. Torneio, permissão, URL,
+ * remetente, assunto e HTML são resolvidos no servidor.
+ */
 window._sendTournamentInviteEmail = function(tournamentId) {
     var t = (window.AppStore.tournaments || []).find(function(tour) { return String(tour.id) === String(tournamentId); });
     if (!t) return;
@@ -134,39 +149,38 @@ window._sendTournamentInviteEmail = function(tournamentId) {
         if (typeof showNotification === 'function') showNotification(window._t('tourn.attention'), window._t('tourn.enterEmail'), 'warning');
         return;
     }
-    var cu = window.AppStore.currentUser;
-    var inviterUid = (cu && (cu.uid || cu.email)) || '';
-    var inviteUrl = window._tournamentUrl(t.id) + (inviterUid ? '?ref=' + encodeURIComponent(inviterUid) : '');
-    var inviterName = (cu && cu.displayName) ? cu.displayName : '';
-
-    // Corpo: quem convidou + data/local (o nome do torneio aparece em destaque
-    // no cabeçalho 🏆 do template). Mantém o mesmo conteúdo da mensagem de
-    // WhatsApp, só que em HTML branded.
-    var lines = [inviterName ? (inviterName + ' está te convidando para este torneio.') : 'Você foi convidado para este torneio.', ''];
-    var _dl = _tournamentDateText(t);
-    if (_dl) lines.push('📅 ' + _dl);
-    if (t.venue) lines.push('📍 ' + t.venue);
-    var message = lines.join('\n');
-    var subject = 'Convite para o torneio: ' + (t.name || 'Torneio');
-
-    var canQueue = window.FirestoreDB && typeof window.FirestoreDB.queueEmail === 'function' && window.FirestoreDB.db;
-    if (canQueue && typeof window._emailTemplate === 'function') {
-        var html = window._emailTemplate('tournament_invite', {
-            message: message,
-            tournamentName: t.name || 'Torneio',
-            tournamentUrl: inviteUrl,
-            ctaText: 'Entrar no torneio',
-            ctaUrl: inviteUrl
-        });
-        window.FirestoreDB.queueEmail(email, subject, html);
-        if (inp) inp.value = '';
-        if (typeof showNotification === 'function') showNotification('Convite enviado', 'E-mail enviado para ' + email, 'success');
-        return;
-    }
-    // Fallback: abre o cliente de e-mail do usuário com texto puro.
-    var body = message + '\n\n👉 Inscreva-se: ' + inviteUrl;
-    window.open('mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body), '_self');
-    if (typeof showNotification === 'function') showNotification(window._t('tourn.emailOpening'), window._t('tourn.emailOpeningMsg'), 'info');
+    if (!window.FirestoreDB || typeof window.FirestoreDB._callFn !== 'function') return;
+    var btnTexto = 'Convite enviado';
+    if (inp) inp.disabled = true;
+    /* ⚠️ A checagem de formato acima é só cortesia de tela — a de verdade roda no servidor,
+     * onde não dá pra pular. */
+    window.FirestoreDB._callFn('sendTournamentInvite', { tournamentId: String(t.id), email: email })
+      .then(function (r) {
+        if (inp) inp.disabled = false;
+        if (r && r.ok) {
+            if (inp) inp.value = '';
+            if (typeof showNotification === 'function') {
+                showNotification(btnTexto, 'E-mail enviado para ' + email +
+                    (typeof r.restamHoje === 'number' ? ' · restam ' + r.restamHoje + ' convites hoje' : ''), 'success');
+            }
+            return;
+        }
+        var m = {
+            'email-invalido': ['E-mail inválido', 'Confira o endereço e tente de novo.', 'warning'],
+            'cooldown': ['Aguarde um pouco', 'Você já convidou esse e-mail há pouco. Tente de novo em instantes.', 'info'],
+            'limite-diario': ['Limite do dia atingido', 'São até 20 convites por torneio por dia. Tente amanhã.', 'warning']
+        }[(r && r.motivo)] || ['Não deu pra enviar', 'Tente novamente.', 'warning'];
+        if (typeof showNotification === 'function') showNotification(m[0], m[1], m[2]);
+      })
+      .catch(function (e) {
+        if (inp) inp.disabled = false;
+        var negado = e && String(e.code || '').indexOf('permission-denied') !== -1;
+        if (typeof showNotification === 'function') {
+            showNotification(negado ? 'Sem permissão' : 'Erro ao enviar',
+                negado ? 'Só o organizador ou co-organizador pode convidar por e-mail.'
+                       : ((e && e.message) || 'Tente novamente.'), negado ? 'warning' : 'error');
+        }
+      });
 };
 
 // Copy tournament link to clipboard (with native share fallback on mobile)

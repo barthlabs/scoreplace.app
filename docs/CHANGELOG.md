@@ -1,5 +1,17 @@
 # Changelog do scoreplace.app
 
+## 2.1.69 — Convite avulso de torneio sai do cliente (31/ago/2026)
+
+- **Problema (a maior superfície cliente do inventário L1.2):** `js/views/tournaments-sharing.js` chamava `queueEmail(email, subject, html)` com o endereço vindo de um **input livre**, validado só por `email.indexOf('@') === -1`. Assunto e corpo eram montados no cliente. A UI do campo era construída em `tournaments.js` dentro de `if (tournamentId)` e **antes** de `if (isOrg)` — sem gate de organizador. Com `/mail` aberto a qualquer autenticado nas rules, qualquer pessoa logada mandava e-mail arbitrário, do remetente do produto, para qualquer endereço.
+- **Correção:** callable `sendTournamentInvite`. O cliente manda apenas `tournamentId` e um e-mail candidato; o servidor resolve torneio, permissão, URL, remetente, assunto e HTML. ⛔ Nenhuma Function genérica com `to`/`subject`/`html`.
+- **Autorização:** `_partesPerm.ehOrganizador` — a **mesma régua canônica** de `aplicarNoTorneio` (criador, `adminUids` ou co-host ativo/aceito). Não foi criado critério paralelo. Co-host pendente não passa.
+- **Validação:** substituída a checagem de `@` por uma que recusa vírgula e ponto-e-vírgula (múltiplos destinatários em alguns relays), **quebra de linha e CRLF** (injeção de cabeçalho SMTP), espaços, colchetes/aspas, domínio sem ponto, TLD numérico ou de 1 letra, e comprimentos fora da RFC 5321.
+- **Reserva atômica:** cooldown de 2 min por (organizador, torneio, e-mail), cota de 20/dia por (organizador, torneio) e criação do outbox acontecem **numa transação só**, com id de outbox determinístico (`tinv_…`) para o retry não duplicar. As leituras vêm antes das escritas, como o Firestore exige.
+- **Removido:** o fallback `mailto:` do cliente. Parecia inofensivo, mas era o caminho que mantinha o fluxo funcionando **ignorando autorização, cota e cooldown**.
+- **UI:** o campo de convite por e-mail só é renderizado para organizador/co-organizador. ⚠️ Esconder não é a defesa — a Function é a autoridade final e recusa com `permission-denied` mesmo para quem chamar por fora da tela.
+- **Provas contra o emulador** (`npm run test:concurrency`, 86 ok): cooldown sob corrida (uma passa, uma cai); **cota diária sob corrida de 25 concorrentes — exatamente 20 passam**; retry não duplica; cota é por organizador e por torneio; e um diagnóstico reproduz a sequência sem transação provando que ela fura a cota.
+- **⚠️ Dívida preservada:** `/mail` **não** foi fechado nesta leva. F1 (convite de dupla) e F2 (co-organização) continuam escrevendo do cliente — fechar a regra depende deles.
+
 ## 2.1.68 — A reserva do e-mail secundário vira atômica (31/ago/2026)
 
 - **Corrida fechada:** `requestSecondaryEmail` lia `emailVerifyThrottle` fora de qualquer transação, decidia, e só depois criava a verificação, gravava o throttle e enfileirava o e-mail com `.add()`. Duas requisições simultâneas do mesmo uid para o mesmo endereço liam o throttle vazio, ambas concluíam "pode enviar", criavam **dois tokens** e disparavam **dois e-mails**, cada um com um link válido. O `.add()` ainda garantia que um retry gerasse um segundo documento de outbox.

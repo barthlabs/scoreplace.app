@@ -445,6 +445,7 @@ const SUITES = [
   'tests/conferidor-entrega-o-veredito.test.js',
   'tests/transporte-tem-deadline-real.test.js',
   'tests/email-secundario-server-only.test.js',
+  'tests/convite-de-torneio-server-only.test.js',
   'tests/parte-incompleta-conta-como-faltando.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',

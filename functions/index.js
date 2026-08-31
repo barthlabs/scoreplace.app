@@ -72,6 +72,8 @@ const _splitResultMirror = require("./match-result-mirror-core.js");
 const _woReconcile = require("./wo-split-reconcile-core.js"); // W.O. chega nas subcoleções
 const _secEmail = require("./secondary-email-core.js");       // e-mail secundário: decisões puras
 const _secReserva = require("./secondary-email-reserva.js"); // e-mail secundário: reserva ATÔMICA
+const _tInvCore = require("./tournament-invite-core.js");     // convite avulso: decisões puras
+const _tInvReserva = require("./tournament-invite-reserva.js"); // convite avulso: reserva ATÔMICA
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
  * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
@@ -5787,6 +5789,71 @@ function _purgeUidEverywhere(node, uid, manterSlots) {
  * por isso o token é CSPRNG, o banco guarda só o hash, e a vinculação usa o `ownerUid`
  * gravado no PEDIDO, nunca o uid de quem clica no link.
  * ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * CONVITE AVULSO DE TORNEIO POR E-MAIL — capability específica  (L1.3a, 2.1.69)
+ *
+ * ⛔ O QUE ISTO SUBSTITUI. `js/views/tournaments-sharing.js` chamava
+ * `FirestoreDB.queueEmail(email, subject, html)`: endereço de INPUT LIVRE validado por
+ * `indexOf('@')`, assunto e corpo montados no CLIENTE, e `/mail` aberto a qualquer
+ * autenticado nas rules. A UI que expõe o campo é montada em `tournaments.js` dentro de
+ * `if (tournamentId)` e ANTES de `if (isOrg)` — sem gate de organizador. Somando: qualquer
+ * pessoa logada mandava e-mail arbitrário, do remetente do produto, pra qualquer endereço.
+ *
+ * ⭐ Agora o cliente manda `tournamentId` e UM e-mail. O servidor resolve torneio, permissão,
+ * URL, remetente, assunto e HTML. ⛔ Nada de `to`/`subject`/`html` vindo de fora.
+ *
+ * ⚠️ ESTA capability aceita um endereço do cliente, ao contrário do e-mail secundário, e é
+ * deliberado: o convidado NÃO TEM CONTA, então não há uid pra resolver — o endereço é o dado
+ * do convite. O que a torna segura é o conjunto: autorização de organizador, cota diária,
+ * cooldown por destinatário e corpo fixo no servidor.
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+exports.sendTournamentInvite = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const tid = String((request.data && request.data.tournamentId) || "").trim();
+    if (!tid) throw new HttpsError("invalid-argument", "sem tournamentId");
+
+    const email = _tInvCore.normalizaEmail((request.data && request.data.email) || "");
+    if (!_tInvCore.emailValido(email)) return { ok: false, motivo: "email-invalido" };
+
+    const db = admin.firestore();
+    const snap = await db.collection("tournaments").doc(tid).get();
+    if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+    const t = snap.data() || {};
+
+    /* ⭐ A RÉGUA É A CANÔNICA, não uma cópia. `_partesPerm.ehOrganizador` é a mesma que
+     * `aplicarNoTorneio` usa — criador, adminUids ou co-host ativo/aceito. Escrever um
+     * segundo critério aqui seria pôr a autorização em dois lugares, que é como as duas
+     * versões divergem em silêncio. [[project_cohost_same_power_as_organizer]] */
+    if (!_partesPerm.ehOrganizador(t, callerUid)) {
+      throw new HttpsError("permission-denied", "só o organizador ou co-organizador pode convidar por e-mail");
+    }
+
+    /* nome de quem convida: do PERFIL, não do que o cliente mandar */
+    let inviterName = "";
+    try {
+      const u = await db.collection("users").doc(callerUid).get();
+      inviterName = (u.exists && (u.data() || {}).displayName) || "";
+    } catch (e) { /* nome é enfeite; a falta dele não impede o convite */ }
+
+    const agora = Date.now();
+    const r = await _tInvReserva.reservarConvite({
+      db: db, core: _tInvCore, uid: callerUid, tournamentId: tid, email: email, agora: agora,
+      dadosDoEmail: {
+        tournamentName: t.name || "Torneio",
+        inviterName: inviterName,
+        dateText: _tInvCore.textoDaData(t),
+        venue: t.venueName || t.venue || ""
+      }
+    });
+    if (!r.ok) return { ok: false, motivo: r.motivo, usadosHoje: r.usadosHoje };
+    console.log("[sendTournamentInvite] " + tid + " por " + callerUid + " · " + r.usadosHoje + "/" + _tInvCore.LIMITE_DIARIO + " hoje");
+    return { ok: true, usadosHoje: r.usadosHoje, restamHoje: _tInvCore.LIMITE_DIARIO - r.usadosHoje };
+  }
+);
 
 exports.requestSecondaryEmail = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },

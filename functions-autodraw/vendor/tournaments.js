@@ -3020,12 +3020,22 @@ function renderTournaments(container, tournamentId = null) {
                          <button class="btn btn-sm hover-lift" style="margin-top:8px;background:rgba(139,92,246,0.15);color:var(--sp-c-c4b5fd,#c4b5fd);border:1px solid rgba(139,92,246,0.3);border-radius:10px;padding:7px 16px;font-size:0.72rem;font-weight:600;cursor:pointer;" onclick="event.stopPropagation(); window._openTournamentInvitePrint('${t.id}')">🖨️ Imprimir convite</button>
                       </div>
 
-                      <!-- Email -->
+                      <!-- Email — SÓ organizador/co-organizador (L1.3a, 2.1.69) -->
+                      <!-- ⛔ Este bloco vivia dentro de if (tournamentId) e ANTES de qualquer
+                           if (isOrg): QUALQUER pessoa logada via o campo e mandava e-mail com
+                           assunto e corpo escolhidos por ela, saindo do remetente do produto.
+                           ⚠️ Esconder o campo NAO E a defesa — e so a cortesia. A autoridade
+                           final e a Function sendTournamentInvite, que confere a mesma regua
+                           canonica de organizador no servidor e recusa com permission-denied
+                           mesmo que alguem chame por fora da tela.
+                           ⚠️ Sem crase neste comentario: ele mora dentro de um template
+                           literal e uma crase fecharia a string do html inteiro. -->
+                      ${(typeof window._isUserOrgOrCoHost === 'function' && window._isUserOrgOrCoHost(t, window.AppStore.currentUser)) ? `
                       <div style="font-size:0.65rem;font-weight:600;color:var(--text-muted);letter-spacing:0.3px;">Convide por e-mail</div>
                       <div style="display: flex; gap: 6px; align-items: stretch; margin-top:-3px;">
                          <input type="email" placeholder="email@exemplo.com" id="invite-email-${t.id}" style="flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-dark); color: var(--text-main); font-size: 0.75rem; min-width: 0; box-sizing: border-box;">
                          <button class="btn btn-indigo btn-sm hover-lift" style="font-size:0.75rem;" onclick="event.stopPropagation(); window._sendTournamentInviteEmail('${t.id}')">E-mail</button>
-                      </div>
+                      </div>` : ''}
 
                    </div>
                 </div>
