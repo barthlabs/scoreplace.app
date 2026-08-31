@@ -17,7 +17,7 @@
 | L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ✅ **Reconferido em 31/ago/2026, pelo Codex**, depois da R0.4.2 pôr deadline de parede no transporte: **42 torneios · 9 com jogos canônicos · 183 jogos canônicos · 0 results ausentes · 0 results divergentes.** Os contadores foram capturados pelo verificador, não por quem implementou — que é o que faltava desde 30/ago, quando a execução ficava viva por mais de 3 minutos e era encerrada sem imprimir nada. | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
-| L3 | `casualMatches` | **Aberta, causa confirmada.** qualquer autenticado pode escrever qualquer documento. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. |
+| L3 | `casualMatches` | **Aberta, inventário concluído (L3.P0, read-only).** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. **10 portas no cliente** (`js/firebase-db.js:3107-3384`), **nenhuma no servidor que escreva** — as Functions só LEEM e APAGAM. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
 | L4 | profile/privacy + e-mail secundário | **Aberta.** Há caminhos históricos de perfil, verificação e identidade que exigem uma fonte de verdade explícita. | Inventário de campos, PII, leitores e writers; manter recuperação de conta. |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
@@ -49,6 +49,74 @@ e-mail); um gatilho sobre `tournaments/{id}` ou sobre as coleções de jogo, nã
 `level: 'all'`: `account_update`, `swiss_to_elimination`, `wo-claim`, `match-disputed`,
 `schedule` e `info`. Produção no instante da medição: a fila estava **vazia** (0 total,
 0 vencidos), com duas leituras-controle provando que a consulta funcionava.
+
+**L3 — o que o inventário achou (L3.P0, read-only).**
+
+*Decisão adotada (registro, não mudança):* a leitura de `casualMatches` é **aberta de
+propósito** — a regra existe para o join anônimo por QR/código funcionar, e o documento não
+carrega PII além de nome e foto que já são públicos. O que está indefinido é a **escrita**.
+
+*Problema aberto — autoridade.* `allow write: if request.auth != null` cobre `create`,
+`update` e `delete` em qualquer documento. Na prática: qualquer pessoa logada pode apagar a
+sala de outra (`cancelCasualMatch`, `js/firebase-db.js:3305`, é um `.delete()` cru), reescrever
+`liveState` e `result` de uma partida em que não está (`updateCasualMatch`, `:3204`, é um
+`.update()` cru, sem transação), ou criar documento declarando `createdBy` de terceiro
+(`saveCasualMatch`, `:3107`, é um `.add()` do payload cru). ⚠️ O comentário da regra explica
+por que ficou assim: a transação de claim-slot ADICIONA o uid a `playerUids`, então
+`update` não podia ser escopado a "já está em playerUids" sem quebrar o join.
+
+*Concorrência — o que já é transação e o que não é.* `claimCasualSlot` (:3214),
+`joinCasualMatch` (:3247) e `leaveCasualMatch` (:3328) rodam em `runTransaction`; `save`,
+`update` e `cancel` **não**. O placar ao vivo é `updateCasualMatch({liveState, lastActivityAt})`
+com debounce de 300ms (`js/views/bracket-ui.js:8931-8945`) — **last-write-wins**, sem trava:
+dois clientes marcando ponto ao mesmo tempo sobrescrevem um ao outro, e o `_isRemoteUpdate`
+existe para evitar eco, não para arbitrar. A deleção tem três caminhos independentes:
+`cancelCasualMatch` (recusa apagar `status:'finished'`), o auto-dissolve dentro de
+`leaveCasualMatch` (:3369, apaga quando some o último slot ocupado) e a limpeza agendada
+`cleanupOldCasualMatches` (`functions/index.js:1352`: 30 dias para `finished`, 2h para
+`active` inativa, 12h para o resto — **sem timestamp = apaga**).
+
+*⚠️ Evidência nova e objetiva: três campos-fantasma comandam as estatísticas de partida
+casual.* `hostUid`, `guestUid`, `hostColor` e `guestColor` são **lidos e nunca escritos** —
+`grep` no repositório inteiro devolve só leituras. Quem lê:
+`js/trophies.js:290,308` (as duas queries do cliente),
+`functions/index.js:4918,4930` (`_computeBackfillStats`),
+`js/trophy-catalog.js:800-805` e `functions/index.js:4874-4877` (`_isMatchQualified` /
+`_isCasualMatchQualified`, que exigem os dois uids não-vazios e distintos). O schema real
+(`docs/schemas.md:244`) tem `createdBy`, `participants[]`, `playerUids[]` e `result.winner`.
+Consequência mecânica: as queries por `hostUid`/`guestUid` voltam **vazias**, o filtro
+anti-fraude devolve **false para todo documento**, e `myColor` compara com um campo
+inexistente — ou seja, `casualMatchesPlayed`, `casualMatchesWon` e `casualSportsPlayed`
+tendem a **zero por construção**, e os troféus de partida casual nunca disparam.
+⚠️ Não há caminho alternativo por `playerUids` nessas contagens; os índices declarados em
+`firestore.indexes.json` cobrem `createdBy+status` e `playerUids+status`, **não**
+`hostUid+status` — o que corrobora que essas duas queries nunca serviram.
+⛔ **É a MESMA classe de defeito já paga uma vez neste projeto e documentada em
+`functions/merge-collections-core.js:27`**: *"a consulta de `casualMatches` mirava
+`creatorUid`, campo que nem existe"*. Aquela foi corrigida; estas quatro sobreviveram.
+
+*Hipótese ainda pendente:* que os troféus casuais estejam de fato zerados em produção. Não
+foi medido — a L3.P0 é read-only e não consultou o banco. A verificação seria um agregado
+sobre `users` (quantos perfis têm `casualMatchesPlayed > 0`), sem PII.
+
+*Proposta futura, NÃO decidida:* separar as duas questões. (a) Os campos-fantasma são um
+defeito de **leitura**, independente de Rules, e cabem numa leva pequena e testável; (b) a
+autoridade de escrita depende de decidir quem manda em cada operação — criar, entrar, sair,
+marcar ponto, encerrar e apagar têm atores diferentes —, e a regra hoje não distingue nenhum
+deles. ⛔ Nenhuma mudança de Rules é proposta aqui.
+
+*Cobertura de teste.* 4 suítes verdes travam invariantes reais do produto —
+`casual-mesma-pessoa-um-slot-so`, `dupla-casual-nao-perde-jogador`,
+`formacao-de-duplas-casual` e `usuario-sempre-time-azul` —, mais
+`tiebreak-uma-forma-de-gravar`, `replay-e-o-placar-ao-vivo` e
+`functions/test-merge-collections-core.js` no `npm test`. ⚠️ **Zero cobertura de Rules**
+(`tests/rules-*.test.js` não menciona a coleção) e **zero cobertura dos campos-fantasma** —
+nenhum teste confronta o que as queries pedem com o que os writers gravam.
+
+*Compatibilidade nativa.* O bundle embarcado (`android/app/src/main/assets/public/js/`,
+`SCOREPLACE_VERSION = 2.1.28`) tem as mesmas 10 portas de `casualMatches`. Vale aqui o mesmo
+bloqueio registrado na L2: fechar a escrita quebraria o app das lojas, que executa o bundle
+local e não tem auto-update.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
