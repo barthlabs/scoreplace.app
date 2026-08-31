@@ -19,6 +19,16 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.79 NÃO ganhou item, e é DECISÃO — mesma razão da 2.1.78 e da 2.1.64. Ela REMOVE
+    // código morto: `deleteTournament` tentava apagar `discoveryFeed/{id}` pelo cliente, e essa
+    // linha NUNCA funcionou — a regra da coleção é `allow write: if false` desde que a coleção
+    // nasceu (jun/2026), e `delete` está dentro de `write`. O erro caía num `catch (e) {}` mudo.
+    // Quem sempre limpou é o servidor, por Admin SDK (`syncDiscoveryFeed` e
+    // `purgeTournamentCopies`), e a produção prova: 44 torneios, 43 públicos, 43 docs no feed,
+    // ZERO órfãos. Tirar a linha não muda UMA tela: ela não fazia nada. O que muda é o teste,
+    // que afirmava o contrário e ficava verde contra um Firestore de mentira. Zero
+    // comportamento novo pra quem joga. A trava (check-release-notes) pega OMISSÃO e não sabe
+    // julgar isso; a justificativa fica aqui, pro próximo leitor não achar que faltou.
     // ⚠️ 2.1.78 NÃO ganhou item, e é DECISÃO — mesma razão da 2.1.64 e da 1.8.27. Ela é
     // 100% AUTORIZAÇÃO E FERRAMENTA: a regra de `magicLinks` trocou `allow read` (que em
     // Rules do Firestore é `get` + `list`) por `allow get` + `allow list: if false`,

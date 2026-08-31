@@ -1623,6 +1623,62 @@ erro e estouro.
 anunciando no console que foi usado. O teste cobre isso — bypass mudo seria pior que trava
 nenhuma.
 
+**R1.4 — writer cliente natimorto de `discoveryFeed`. CONCLUÍDA E PUBLICADA (2.1.79,
+31/ago/2026).** ⚠️ Achado durante a **L4.P6**, procurando precedentes de coleção-espelho
+escrita pelo servidor. Não havia chip de `discoveryFeed` nesta auditoria até aqui — este é o
+primeiro.
+
+*Problema corrigido:* **writer cliente natimorto**. `js/firebase-db.js`, em
+`deleteTournament`, tentava `collection('discoveryFeed').doc(tId).delete()` — e a coleção tem
+**um único** bloco de regra, `allow read: if true; allow write: if false`, com `delete` dentro
+de `write`. O único curinga do arquivo é `match /{path=**}/results/{matchId}`, que só casa
+caminho terminando em `results/{matchId}` e nunca um documento de topo: **nenhuma outra regra
+podia conceder**. Não é regressão — a regra nasceu junto com a coleção em 03/jun/2026
+(`d4a03da6`, v1.9.92) e nunca foi outra coisa; a tentativa do cliente entrou **dois meses
+depois** (01/ago/2026, `8e019813`). O `catch (e) {}` mudo — sem log, sem `_captureException`,
+sem Sentry — é o que fez isso durar, no mesmo método em que a limpeza de subcoleção, uma linha
+acima, grita de propósito.
+
+*Decisão adotada:* **o servidor é a única autoridade de remoção do índice.** Dois caminhos
+independentes, ambos por Admin SDK (que ignora as Rules) e ambos deployados:
+`syncDiscoveryFeed` (`onDocumentWritten` em `tournaments/{tid}`, `functions/index.js:7825`)
+remove quando o torneio some **ou** deixa de ser público; `purgeTournamentCopies`
+(`onDocumentDeleted`, `:8338`, passo 5 na `:8433`) remove **incondicionalmente** — é a rede que
+cobre o guard de `isPublic` do primeiro. O cliente não participa, e a Rule que já dizia isso
+fica **intocada**.
+
+*Evidência de produção (read-only, agregada, colhida antes de editar):* **44 torneios, 43
+públicos, 43 documentos em `discoveryFeed`, ZERO órfãos**, zero público sem doc no feed — o
+conjunto do feed é exatamente o dos públicos, 1:1. Com provas de sanidade contra a leitura por
+REST que erra em silêncio (43/43 com o campo `tid`; `tid` ≠ id do doc em 0 casos; exit
+não-zero se a coleção voltar vazia). E os gatilhos executam: desde 01/jun,
+`purgeTournamentCopies` rodou **22 vezes com 0 erro** e `syncDiscoveryFeed` registrou **15
+remoções** `(deleted/private)`.
+
+*Gate corrigido — e ele estava INVERTIDO.*
+`tests/apagar-torneio-nao-deixa-orfao.test.js` exigia `'o índice de descoberta foi apagado'`
+contra um **Firestore de mentira cujo `delete()` só ANOTA**: mock de cliente não sabe negar,
+logo **nunca validou autorização**. Trinta dias de verde sobre uma linha que a produção negava
+100% das vezes — mesma família do congelador cego (fixture que o teste sabia ler). Agora:
+a asserção exige que o cliente **não** tente; a ordem "subcoleções PRIMEIRO, torneio DEPOIS"
+segue provada como estava; e os dois caminhos de servidor são provados **por fonte**, no idioma
+que o arquivo já usava — âncora no `exports.` (nunca no nome solto, que aparece em comentário) e
+no fim do gatilho (nunca janela de N caracteres). ⛔ O teste **declara explicitamente o que não
+prova**: que a regra nega em execução — isso é trabalho de suíte de emulador.
+**Controle contra `d32d52b1`:** o teste novo falha em **2** na árvore anterior (a tentativa do
+cliente e a trava anti-retorno do writer), e as asserções de servidor **passam dos dois lados**,
+provando que o corte não inventou comportamento que já não existisse.
+
+*⏳ Dívida ainda aberta — registrada, NÃO corrigida nesta leva:* o passo 5 de
+`purgeTournamentCopies` **também engole a falha** (`catch (e) {}`) e **não entra no contador**
+do resumo do log. Hoje não falha; no dia em que falhar, ninguém vê. É observabilidade de
+servidor (família da L16) e ficou **deliberadamente fora do escopo** — mexer em Functions não
+estava autorizado nesta leva.
+
+*Publicado:* versão **2.1.79**, **Hosting apenas**. ⛔ Functions, Rules, autodraw, Stripe e
+bundles nativos **não** foram publicados; `firestore.rules`, `functions/`, `functions-autodraw/`,
+`android/` e `ios/` têm diff **vazio**, e nenhum dado foi lido para escrita ou migrado.
+
 ## Leitura correta do progresso
 
 L0 resolveu uma falha concreta de consistência e reparou os dados afetados. Isso **não**

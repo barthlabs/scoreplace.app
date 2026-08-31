@@ -1958,8 +1958,12 @@ window.FirestoreDB = {
         }
       }
     }
-    // discoveryFeed é um doc de ÍNDICE com o id do torneio — some junto.
-    try { await this.db.collection('discoveryFeed').doc(tId).delete(); } catch (e) {}
+    // ⛔ `discoveryFeed/{id}` NÃO se apaga daqui, e nunca deu: o índice é SERVER-AUTHORITATIVE.
+    // `firestore.rules` diz `allow write: if false` — e `delete` está DENTRO de `write` —, então
+    // a tentativa do cliente tomava permission-denied desde que nasceu (2.1.79 mediu: 0 órfãos
+    // em 44 torneios, ou seja quem limpava nunca foi este código). Quem remove é o Admin SDK,
+    // que ignora as rules: `syncDiscoveryFeed` (onDocumentWritten) e `purgeTournamentCopies`
+    // (onDocumentDeleted, passo 5), os dois em `functions/index.js`.
     try {
       await this.db.collection('tournaments').doc(tId).delete();
     } catch (e) {

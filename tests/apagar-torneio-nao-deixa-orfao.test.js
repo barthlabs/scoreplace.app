@@ -89,7 +89,16 @@ function fakeDb(conteudo, opts) {
     eq(DB.db._restante['tour_x/letzplayScans'], 0, 'nenhum scan sobrou');
     const log = DB.db._log;
     ok(log.indexOf('del doc tournaments/tour_x') >= 0, 'o torneio foi apagado');
-    ok(log.indexOf('del doc discoveryFeed/tour_x') >= 0, 'o índice de descoberta foi apagado');
+    // ⭐ 2.1.79 — ESTA ASSERÇÃO ESTAVA INVERTIDA, e ficou verde por 30 dias.
+    // Ela exigia que o cliente apagasse `discoveryFeed/{id}`. O cliente TENTAVA — e a
+    // produção NEGAVA em 100% das vezes: `firestore.rules` tem um único bloco pra essa
+    // coleção, `allow write: if false`, e `delete` está dentro de `write`. O `catch (e) {}`
+    // mudo engolia o permission-denied, e este teste — que dirige um Firestore de MENTIRA,
+    // cujo `delete()` só ANOTA e não sabe negar — carimbava a limpeza como feita.
+    // Mock de cliente NÃO valida autorização de Rules; nunca validou. O índice é do
+    // SERVIDOR (ver o bloco "quem apaga o índice de descoberta é o SERVIDOR", abaixo).
+    ok(log.indexOf('del doc discoveryFeed/tour_x') < 0,
+      'o cliente NÃO tenta apagar discoveryFeed (a regra nega `write`; tentar só gerava catch mudo)');
     // ORDEM: o último delete de subcoleção acontece ANTES do delete do torneio.
     const ultimoFilho = Math.max(log.lastIndexOf('del tour_x/results'), log.lastIndexOf('del tour_x/letzplayScans'));
     const paiIdx = log.indexOf('del doc tournaments/tour_x');
@@ -124,6 +133,51 @@ function fakeDb(conteudo, opts) {
     ok(DB.db._log.indexOf('del doc tournaments/tour_err') >= 0,
       'o organizador clicou em Apagar e o torneio sumiu');
     ok(gritou, 'e o erro da limpeza foi registrado (não é silencioso)');
+  }
+
+  console.log('▸ quem apaga o índice de descoberta é o SERVIDOR, e está escrito');
+  {
+    /* ⭐ 2.1.79 — A OUTRA METADE DA ASSERÇÃO INVERTIDA LÁ EM CIMA.
+     * Tirar a tentativa do cliente só é seguro se a remoção EXISTIR do outro lado. E,
+     * como no bloco de `matches`, "o servidor limpa" não pode ser promessa: tem que
+     * estar escrito no gatilho. Por FONTE, que é o que este arquivo alcança.
+     * ⛔ O QUE ESTE TESTE **NÃO** PROVA, e não pode fingir que prova: que a regra nega o
+     * cliente em tempo de execução. O Firestore daqui é de mentira — o `delete()` dele
+     * ANOTA e pronto, não conhece autorização nenhuma. Regra se prova dirigindo as rules
+     * reais no emulador (é o que as suítes `rules-*` fazem). Aqui se prova TEXTO. */
+    const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
+    const _i = rules.indexOf('match /discoveryFeed/{');
+    const blocoFeed = _i >= 0 ? rules.slice(_i, rules.indexOf('\n    }', _i)) : '';
+    ok(/allow write:\s*if false/.test(blocoFeed),
+      'a regra de discoveryFeed nega `write` ao cliente (é POR ISSO que ele não tenta)');
+
+    const cf = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    // ⛔ ANCORA NO `exports.` e no FIM do gatilho — as duas lições do bloco de `matches`:
+    // o nome solto aparece em comentário, e janela de N caracteres quebra quando alguém
+    // acrescenta um comentário.
+    const gatilho = function (nome) {
+      const a = cf.indexOf('exports.' + nome + ' =');
+      if (a < 0) return '';
+      const b = cf.indexOf('\nexports.', a + 10);
+      return cf.slice(a, b > a ? b : undefined);
+    };
+    const sync = gatilho('syncDiscoveryFeed');
+    const purge = gatilho('purgeTournamentCopies');
+
+    ok(/onDocumentWritten/.test(sync) && /"tournaments\/\{tid\}"/.test(sync),
+      'syncDiscoveryFeed escuta o documento do torneio');
+    ok(/collection\("discoveryFeed"\)/.test(sync) && /\.delete\(\)/.test(sync),
+      'e apaga o doc do feed quando o torneio some ou deixa de ser público');
+
+    ok(/onDocumentDeleted/.test(purge) && /"tournaments\/\{tid\}"/.test(purge),
+      'purgeTournamentCopies dispara no APAGAR do torneio');
+    ok(/collection\("discoveryFeed"\)\.doc\(tid\)\.delete\(\)/.test(purge),
+      'e apaga discoveryFeed/{tid} INCONDICIONALMENTE (a rede que cobre o guard de isPublic do outro)');
+
+    // ⛔ E o cliente não pode voltar a tentar por outro caminho.
+    const cliente = fs.readFileSync(path.join(__dirname, '..', 'js', 'firebase-db.js'), 'utf8');
+    ok(!/collection\(['"]discoveryFeed['"]\)\s*\.\s*doc\([^)]*\)\s*\.\s*delete\(/.test(cliente),
+      'js/firebase-db.js não tem writer de discoveryFeed (o natimorto da 1.6.78 não volta)');
   }
 
   console.log('▸ a lista de subcoleções é a das regras do Firestore');
