@@ -7,7 +7,7 @@
 
 ## Medição de referência
 
-- **17 levas** no mapa: 2 concluídas (L0, L1) e 15 ainda não iniciadas.
+- **17 levas** no mapa: 2 concluídas (L0, L1), 1 **bloqueada externamente** (L2) e 14 ainda não iniciadas.
 - Por contagem de levas (não por esforço): **11,8% concluído** e **88,2% restante**.
 - A porcentagem não é prazo: `Vite`, Capacitor e migrações de identidade são maiores
   que uma correção de Rules, por exemplo.
@@ -16,7 +16,7 @@
 |---|---|---|---|
 | L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ✅ **Reconferido em 31/ago/2026, pelo Codex**, depois da R0.4.2 pôr deadline de parede no transporte: **42 torneios · 9 com jogos canônicos · 183 jogos canônicos · 0 results ausentes · 0 results divergentes.** Os contadores foram capturados pelo verificador, não por quem implementou — que é o que faltava desde 30/ago, quando a execução ficava viva por mais de 3 minutos e era encerrada sem imprimir nada. | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
-| L2 | fila de notificações/e-mail | **Aberta, inalterada pela L1.** `notif_email_queue` ainda aceita `create` de qualquer autenticado (`firestore.rules`), e o `rules-mail-server-only` afirma isso explicitamente para que o escopo não se confunda com o de `/mail`. | Mapear emissores e deduplicação antes de fechar a fila. |
+| L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
 | L3 | `casualMatches` | **Aberta, causa confirmada.** qualquer autenticado pode escrever qualquer documento. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. |
 | L4 | profile/privacy + e-mail secundário | **Aberta.** Há caminhos históricos de perfil, verificação e identidade que exigem uma fonte de verdade explícita. | Inventário de campos, PII, leitores e writers; manter recuperação de conta. |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
@@ -31,6 +31,24 @@
 | L14 | identidade, merges, retries e concorrência | **Aberta.** | Matriz de idempotência e provas de posse antes de alterar merge/login. |
 | L15 | testes não descobertos automaticamente | **Aberta.** | Catálogo de testes e gate que falha para arquivo novo não registrado. |
 | L16 | observabilidade e hardening | **Aberta.** | Métricas, alertas e runbooks definidos por risco, sem registrar PII. |
+
+**L2 — o que o inventário achou, para quando o bloqueio sair.** `notif_email_queue` tem
+**1 writer cliente** (`js/firebase-db.js:3018` `queueNotifEmail`, alcançado só por
+`_dispatchChannels` em `js/views/tournaments-organizer.js:500`) e **4 writers de servidor**
+legítimos que precisam entrar na modelagem de deduplicação: `_avisarDuplicataSuspeita`
+(`functions/index.js:2672`), `sendOrgCommunication` (`:3735`), `runTournamentReminders`
+(`functions/reminder-run.js:68`) e `_queueDrawEmail` (`functions-autodraw/index.js:155`),
+mais o script operacional `scripts/resend-draw-emails.js:163`. A L2.P1 mapeou **77 origens
+de intenção** convergindo no writer cliente, em cinco classes: ação de organizador, evento
+canônico de jogo/chave, usuário→usuário, social fora de torneio e sistema/conta. ⚠️ Achado
+que condiciona o desenho: `firestore.rules:660` deixa `users/{uid}/notifications` com
+`allow create: if request.auth != null` — um gatilho que escutasse a notificação **in-app**
+para decidir o e-mail herdaria essa fraqueza (o cliente forjaria o evento e, por tabela, o
+e-mail); um gatilho sobre `tournaments/{id}` ou sobre as coleções de jogo, não.
+⚠️ Seis tipos disparados não têm entrada em `js/notification-catalog.js` e caem no default
+`level: 'all'`: `account_update`, `swiss_to_elimination`, `wo-claim`, `match-disputed`,
+`schedule` e `info`. Produção no instante da medição: a fila estava **vazia** (0 total,
+0 vencidos), com duas leituras-controle provando que a consulta funcionava.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
