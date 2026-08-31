@@ -455,6 +455,8 @@ const SUITES = [
   'tests/inscrito-continua-inscrito-com-parte-atrasada.test.js',
   /* R1.1.1 — depois do teto: erro visível e recuperável, nunca "Carregando" eterno. */
   'tests/falha-de-partes-tem-saida.test.js',
+  /* R1.1.2 — o card do TOPO tinha a própria leitura e dizia "você não está inscrito". */
+  'tests/card-do-topo-nao-diz-nao-inscrito-sem-saber.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

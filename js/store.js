@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.72';
+window.SCOREPLACE_VERSION = '2.1.73';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -8949,7 +8949,28 @@ window._meuStatusNoTorneio = function (t) {
   var fila = (typeof window._getWaitlist === 'function') ? (window._getWaitlist(t) || []) : [];
   var wlIdx = -1;
   for (var i = 0; i < fila.length; i++) { if (_souEu(fila[i])) { wlIdx = i; break; } }
-  if (!eu && wlIdx === -1) return { code: 'none', entry: null, wo: false };
+  /* ⛔ R1.1.2 · AQUI MORAVA O ÚLTIMO "VOCÊ NÃO ESTÁ INSCRITO". Este ramo lia
+   * `_getCompetitors(t)` — que é `t.participants` — e concluía `none` sem nunca perguntar
+   * se aquela lista está COMPLETA. Num torneio DIVIDIDO o elenco chega depois do
+   * documento-base, então durante a janela o card do topo, que existe justamente pra
+   * responder "eu estou nesse torneio?", respondia NÃO a quem está.
+   * ⚠️ A espera já era coberta desde a v1.7.55 (`_getWaitlist`, que viaja no documento-base
+   * e por isso é confiável). O que faltava era o elenco.
+   *
+   * ⭐ E A DECISÃO NÃO É REESCRITA AQUI: pergunta-se à MESMA porta canônica que o cartão da
+   * tela inicial e o detalhe usam (`_souInscrito` → `null` = "não sei"), e o estado de
+   * desistência sai de `_partesFalharam`. Uma quarta régua divergiria em silêncio, que é
+   * exatamente como este defeito sobreviveu a três levas.
+   * ⚠️ `_canon !== false` cobre também o caso em que a porta canônica ACHA a pessoa por
+   * outra régua e este laço não achou: divergência entre leitores nunca pode virar "não". */
+  if (!eu && wlIdx === -1) {
+    var _canon = (typeof window._souInscrito === 'function') ? window._souInscrito(t, cu) : false;
+    if (_canon !== false) {
+      var _erro = (typeof window._partesFalharam === 'function') && window._partesFalharam(t);
+      return { code: _erro ? 'erro' : 'carregando', entry: null, wo: false };
+    }
+    return { code: 'none', entry: null, wo: false };
+  }
 
   var entry = eu || fila[wlIdx];
 
@@ -8994,8 +9015,31 @@ window._meuCardNoTopo = function (t, opts) {
     ? '<img src="' + window._safeHtml(foto) + '" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">'
     : '<div style="width:40px;height:40px;border-radius:50%;background:var(--sp-g-255-255-255-01,rgba(255,255,255,0.1));flex-shrink:0;"></div>';
 
+  /* ⛔ R1.1.2 · OS DOIS ESTADOS QUE FALTAVAM, e eles vêm ANTES de qualquer coisa que
+   * dependa de `st.entry` — nos dois ela é `null`.
+   * "Você não está inscrito" é a frase mais cara desta tela: ela manda a pessoa procurar o
+   * organizador. Dizê-la porque a leitura ainda não voltou é o pior desfecho possível
+   * aqui. Enquanto não se sabe, o card DIZ que não sabe. */
+  if (st.code === 'carregando') {
+    return '<div id="sp-meu-card" data-meu-status="carregando" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
+      'background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.28);">' + avatar +
+      '<div style="min-width:0;"><div style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);">⏳ Carregando a lista de inscritos deste torneio…</div></div></div>';
+  }
+  if (st.code === 'erro') {
+    /* Mesma saída da R1.1.1, e o MESMO botão: ele reabre a busca DAQUELE torneio — não
+     * recarrega a página, não limpa cache, não mexe no service worker. */
+    var _btn = (typeof window._botaoTentarPartes === 'function') ? window._botaoTentarPartes(t.id) : '';
+    return '<div id="sp-meu-card" data-meu-status="erro" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;' +
+      'background:rgba(248,113,113,0.09);border:1px solid rgba(248,113,113,0.30);">' + avatar +
+      '<div style="min-width:0;flex:1;"><div style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;">Não consegui carregar a lista de inscritos. ' +
+      'Sua inscrição não se perdeu — foi a leitura que falhou.</div></div>' + _btn + '</div>';
+  }
+
   if (st.code === 'none') {
     // NÃO INSCRITO também é resposta — e é a que faz a pessoa procurar o organizador.
+    // ⚠️ E agora ela só é dita com o elenco COMPLETO na mão (ver `_meuStatusNoTorneio`).
     return '<div id="sp-meu-card" data-meu-status="none" style="margin:0 0 10px;padding:10px 12px;border-radius:12px;display:flex;align-items:center;gap:10px;' +
       'background:rgba(148,163,184,0.10);border:1px solid rgba(148,163,184,0.28);">' + avatar +
       '<div style="min-width:0;"><div style="font-weight:800;font-size:0.9rem;color:var(--text-bright,#e8ecf3);">' + nome + '</div>' +
