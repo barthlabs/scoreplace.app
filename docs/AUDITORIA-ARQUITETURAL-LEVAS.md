@@ -18,7 +18,7 @@
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
-| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) e fronteiras CARACTERIZADAS no emulador (L4.P2) — read-only.** ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
+| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2) e `magicLinks` INVENTARIADO (L4.P3) — read-only.** ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
@@ -1076,6 +1076,131 @@ instante do deploy.
 provado é o comportamento **das regras**, com dado sintético. (2) As sondas cobrem as
 operações pedidas na leva; outras coleções e outras formas de consulta não foram exercitadas.
 (3) O Admin SDK ignora Rules — nada aqui diz respeito aos caminhos server-side.
+
+**L4.P3 — inventário de `magicLinks` e o que um corte de enumeração atingiria (read-only, 31/ago/2026).**
+
+⚠️ *Nota de método, e ela vale para todas as levas.* O `grep` recursivo deste ambiente é um
+wrapper de `ugrep` com **`--ignore-files`**: ele **respeita o `.gitignore`**, e os bundles
+embarcados estão ignorados (`android/.gitignore:96`, `ios/.gitignore:4`). Medido agora:
+
+| Termo | `grep -r` (árvore versionada) | Walker real | Escondidos |
+|---|---|---|---|
+| `casualMatches` | 19 | 61 | **42** |
+| `linkedEmails` | 18 | 26 | 8 |
+| `emailVerifications` | 6 | 10 | 4 |
+| `magicLinks` | 3 | 7 | 4 |
+
+⭐ As varreduras estruturais das L3.P0.1 e L4.P0 foram feitas com **walker em Node** e não são
+afetadas; os confrontos com o bundle nativo usaram **caminho explícito**, que atravessa o
+filtro. O que fica corrigido é o alcance dos **censos de arquivo** feitos com `grep -rln`:
+eles descrevem a árvore **versionada**, não o disco. O inventário abaixo usa o walker.
+
+**(1) Writers, readers e consumidores — a superfície inteira são 7 arquivos.**
+
+| Papel | Camada | Onde |
+|---|---|---|
+| Writer — link de LOGIN | Function (callable) | `sendMagicLink`, `functions/index.js:1776`; grava em `:1818` |
+| Writer — link de CONFIRMAÇÃO de conta | Function (interno) | `_wrapVerificationLink`, `functions/index.js:2034`; grava em `:2038` |
+| Quem chama o 2º writer | Function | `_queueVerificationEmail` (`:2052`), usado em `:2086` e em `:2220` (`drainPendingVerifications`) |
+| Quem pede o 1º writer | Cliente web | `js/views/auth.js:2421-2422` e o reenvio em `:2457-2458` (`httpsCallable('sendMagicLink')`) |
+| Reader / consumidor | **Cliente web** | `js/views/auth.js:56` — `collection('magicLinks').doc(token).get()` |
+| Reader / consumidor | **Bundle Android** | `android/app/src/main/assets/public/js/views/auth.js:56` |
+| Reader / consumidor | **Bundle iOS** | `ios/App/App/public/js/views/auth.js:56` |
+| Reader / consumidor | staging do Capacitor | `www/js/views/auth.js` |
+| Limpeza | Function agendada | `cleanupOldMagicLinks`, `functions/index.js:1581`; query em `:1592` |
+| Exclusão da varredura de uid | Function (config) | `functions/merge-collections-core.js:50` — *"token de login, efêmero"* |
+| Script / gatilho / extensão | — | **nenhum** |
+
+**(2) Que forma de leitura cada caminho exige — provado, não inferido.**
+Existe **uma única leitura em todo o produto**, e ela aparece em 4 cópias do mesmo arquivo:
+`db.collection('magicLinks').doc(token).get()`. ⭐ **Não há um só `where`, `list`, `runQuery`
+ou `orderBy` sobre `magicLinks` em lugar nenhum** — nem no cliente, nem nas Functions, nem em
+script, nem em teste (walker sobre todo o disco). A única query da coleção é server-side, no
+`cleanupOldMagicLinks` (`where("expiresAt","<",now)`), que roda com Admin SDK e **ignora as
+Rules**.
+
+| Requisito | Precisa? | Prova |
+|---|---|---|
+| `get` por token conhecido | **Sim** | `js/views/auth.js:56` e as 3 cópias |
+| `list` | **Não** | nenhuma ocorrência no disco |
+| query | **Não** pelo cliente | a única é a da limpeza, com Admin SDK |
+| leitura autenticada | **Não** | quem clica o link ainda não entrou — é o que o fluxo existe para fazer |
+| leitura anônima | **Sim, obrigatória** | o resolver roda antes de qualquer login (`js/views/auth.js:22-29`) |
+
+**(3) O que o documento guarda, por quanto tempo e quem revoga.**
+
+| Campo | Origem | Sensibilidade |
+|---|---|---|
+| `firebaseLink` | `generateSignInWithEmailLink` (`:1799`) ou `generateEmailVerificationLink` | ⛔ **link ASSINADO de entrada** — carrega o `oobCode` |
+| `email` | endereço do pedido | PII; o cliente ainda o grava em `localStorage` (`js/views/auth.js:75`) |
+| `kind` | só o writer de confirmação escreve (`"verify"`) | baixa |
+| `createdAt` / `expiresAt` | `serverTimestamp()` e `new Date(...)` | baixa |
+
+*Id do documento:* `crypto.randomBytes(18).toString('base64url')` → 24 caracteres, 144 bits
+(`:1816` e `:2036`). *Prazos, e são DOIS na mesma coleção:* login = **90 min** (`:1824`);
+confirmação = **24 h** (`:2043`).
+⛔ **Consumo e revogação: o app não faz nenhum dos dois.** O resolver **lê e redireciona** —
+não apaga, não marca. Não existe campo `used`, `consumedAt` ou equivalente (confirmado no dado:
+os documentos têm exatamente 5 chaves). A única autoridade que consome é o **Firebase Auth**,
+pelo uso único do `oobCode` e pelo prazo próprio dele. O documento do Firestore sobrevive ao
+uso e só sai pela limpeza.
+⚠️ *E a limpeza roda menos do que o comentário diz.* O texto em `functions/index.js:1579`
+promete *"3x ao dia (04:30, 12:30, 20:30 BRT)"*, mas o `schedule` é
+**`"every day 04:30"`** (`:1583`) — **uma vez por dia**. Um documento vencido pode ficar até
+~24 h além do prazo; para um `kind:"verify"` (24 h), até ~48 h de presença total.
+
+**(4) Compatibilidade nativa — o ponto que decide qualquer corte futuro.** O bundle 2.1.28
+**usa** `magicLinks`: `android/.../auth.js:56` e `ios/.../auth.js:56`, e o trecho do wrapper
+(linhas 20-90) é **idêntico ao do web** — conferido por `diff`, sem diferença. ⭐ E ele depende
+**apenas de `get` por id**: não há `list` nem query no bundle, exatamente como no web.
+
+**(5) Produção, só agregados (nenhum id, token, e-mail, uid ou URL impresso).**
+`magicLinks` = **1 documento**: `kind=verify`, prazo declarado de **1440 min**, **ainda
+válido**, `createdAt` e `expiresAt` ambos `Timestamp(Firestore)`, e exatamente 5 chaves
+(`createdAt`, `email`, `expiresAt`, `firebaseLink`, `kind`). **Consumidos: não há como
+contar** — o schema não tem marcador de consumo, e isso é resultado, não lacuna de medição.
+⭐ Coleções irmãs limpas pelo mesmo job: `gateTokens` e `gateVerifications` estão **vazias** e
+**não têm bloco nas Rules** — cobertas pelo default-deny, ao contrário de `magicLinks`.
+
+**(6) Testes: zero. Medido, não estimado.** Walker sobre `tests/` e `functions/test-*.js`
+procurando `magicLink`, `?ml=`, `?vt=`, `wrapVerification` e `sendMagicLink`: **nenhum
+arquivo**. Nenhum dos 13 specs de Playwright cita magic link. As lacunas que a leva pediu para
+levantar (**sem escrever os testes**):
+
+| Lacuna | O que precisaria provar | Existe hoje |
+|---|---|---|
+| Acesso público por token conhecido | anônimo faz `get` do próprio token e o resolver redireciona | **não** |
+| Negação de enumeração pública | anônimo NÃO consegue `list`/`runQuery` | **não** (a L4.P2 mediu o contrário: 200) |
+| Consumo / retry / expiração | 2º clique, link vencido, `expiresAt` passado, doc ausente | **não** |
+| Compatibilidade web × nativa | os dois bundles exercitam o mesmo caminho de `get` | **não** |
+| Prazo dos dois tipos | 90 min no login, 24 h na confirmação | **não** |
+| Limpeza agendada | remove vencido e preserva válido | **não** |
+
+**Classificação.**
+
+*DECISÃO JÁ ADOTADA.* (a) O wrapper existe porque **scanners de e-mail queimavam o `oobCode`
+antes da pessoa** — 7 contas travadas em jul/2026 (`functions/index.js:2026-2031`). A leitura
+anônima por token é o mecanismo dessa correção, não um descuido. (b) A mesma coleção atende
+login e confirmação de conta, de propósito — *"Reusa a coleção magicLinks — mesmas rules e
+mesmo cleanup"* (`:2031-2033`). (c) `magicLinks` está fora da varredura de uid da fusão.
+
+*PROBLEMA ABERTO.* (a) A regra concede `list` e `runQuery` (provado na L4.P2) enquanto o
+produto **inteiro** precisa só de `get` — a diferença entre o que a regra dá e o que o código
+usa está medida nos dois lados. (b) O documento **não é consumido nem revogável pelo app**: só
+o `oobCode` tem uso único, por autoridade do Firebase. (c) A limpeza roda **1×/dia**, não 3×,
+e o comentário afirma o contrário. (d) Cobertura de teste **zero** para todo o fluxo de acesso
+por link. (e) O `email` do documento é copiado para o `localStorage` do dispositivo
+(`js/views/auth.js:75`) — é o que faz o `signInWithEmailLink` completar sem perguntar.
+
+*HIPÓTESE PENDENTE.* Que exista algum consumidor de `list`/query fora do repositório
+(ferramenta interna, console, integração). Não há indício, e **não é verificável por leitura
+de código** — só por log de acesso do Firestore, que não foi consultado.
+
+*PROPOSTA FUTURA — não formulada.* ⛔ Nenhuma Rule escrita, nenhuma capability desenhada,
+nenhum cutover proposto. O que esta etapa entrega é o alcance exato: **um corte de enumeração
+atingiria 4 cópias de uma única chamada, todas `get` por id, e nenhuma delas mudaria de
+forma** — mais os dois bundles das lojas, que executam esse mesmo `get` e continuam sem
+receber atualização.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
