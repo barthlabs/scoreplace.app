@@ -17,7 +17,7 @@
 | L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ✅ **Reconferido em 31/ago/2026, pelo Codex**, depois da R0.4.2 pôr deadline de parede no transporte: **42 torneios · 9 com jogos canônicos · 183 jogos canônicos · 0 results ausentes · 0 results divergentes.** Os contadores foram capturados pelo verificador, não por quem implementou — que é o que faltava desde 30/ago, quando a execução ficava viva por mais de 3 minutos e era encerrada sem imprimir nada. | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
-| L3 | `casualMatches` | **Aberta. Inventário concluído e RETIFICADO (L3.P0 + L3.P0.1) e schema de produção MEDIDO (L3.P1) — tudo read-only.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
+| L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
 | L4 | profile/privacy + e-mail secundário | **Aberta.** Há caminhos históricos de perfil, verificação e identidade que exigem uma fonte de verdade explícita. | Inventário de campos, PII, leitores e writers; manter recuperação de conta. |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
@@ -417,6 +417,180 @@ as consultas de contagem dependem não existem em documento nenhum.
    excluídas. Com 17 documentos e saída agregada, isso não muda nenhum contador acima.
 6. Nada foi medido sobre o app **nativo** das lojas: ele lê e escreve a mesma coleção, mas a
    medição não distingue origem de escrita.
+
+**L3.P2 — contrato de autoridade e gates de corte (read-only, 31/ago/2026). ⛔ NADA É
+DECIDIDO AQUI.** Esta etapa registra uma arquitetura-alvo **futura** e o que ela custaria;
+não escolhe entre as opções, não propõe texto de Rule e não altera nada. O que segue é
+evidência lida do repositório e do dado medido na L3.P1.
+
+*O que a linguagem de Rules deste projeto já provou saber fazer.* Não é especulação — cada
+recurso abaixo já está em uso em `firestore.rules`, e é isso que torna a comparação honesta:
+
+| Recurso | Precedente no próprio arquivo | Serve para |
+|---|---|---|
+| `request.auth.uid in resource.data.lista` | `:280` (`results/{matchId}`) | pertencimento por uid |
+| campo imutável para participante | `:281` — `request.resource.data.playerUids == resource.data.playerUids` | impedir que participante mexa no elenco |
+| `diff(resource.data).affectedKeys().hasOnly([...])` | `:38`, `:98`, `:955` | limitar QUAIS campos a transição toca |
+| `resource.data.get('campo', [])` | `:187`, `:221` | tolerar campo ausente sem estourar |
+| `request.resource.data.keys().hasOnly([...])` | `:512`, `:518`, `:539` | fechar o formato de um `create` |
+
+⛔ **E o que ela NÃO sabe fazer, e é o eixo desta leva:** a linguagem **não itera lista de
+mapas**. Não há `map`, `filter` nem `exists` sobre `players[]`, `participants[]` ou
+`pendingLinkRequests[]`; indexar exige literal (`players[0]`), e o índice do slot é dinâmico.
+⚠️ Consequência direta: **toda operação cujo campo-alvo é lista de mapas fica fora do alcance
+de uma Rule**, por construção — não por falta de capricho na escrita da regra.
+
+⛔ **O aviso mais caro está no próprio arquivo, e já foi pago duas vezes.** `firestore.rules:41-60`
+registra que (a) a regra de aceite de co-organização **nunca funcionou**: promover a
+`'active'` mexia em `adminUids`, que não estava no `hasOnly` → *permission-denied
+determinístico* (Sentry SCOREPLACE-WEB-6R), e (b) `waitlistNoticeSent` faltando na mesma
+lista derrubava **toda** inscrição no teto. ⚠️ Em `casualMatches` a superfície é **26
+conjuntos de campos distintos** (20 writers diretos + 6 portas, L3.P0.1) — a mesma armadilha,
+26 vezes maior. E três desses writers (`:11513`, `:11529`, `:11554`) são **compat de legado**:
+`closePending` deixou de ser escrito na 2.0.4 (`js/views/bracket-ui.js:11357`), mas o
+confirmar/recusar continua vivo para salas antigas. ⛔ Caminho raro é exatamente o que morre
+calado numa lista `hasOnly` incompleta.
+
+**(1-5) O contrato, operação por operação.** "Rules dá conta?" responde à pergunta 4 da leva:
+se uma Rule consegue validar a **transição** com segurança, sozinha.
+
+| Operação (writers) | (1) o que a UI exige hoje | (2) quem deveria poder | (3) identificador canônico disponível no doc | (4) Rules dá conta? | (5) o que a transição exigiria |
+|---|---|---|---|---|---|
+| Criar sala (`fb:3111`) | `.add` do payload cru | quem abre | `createdBy` (17/17, e sempre dentro das identidades) | **Sim** — `create` com `createdBy == request.auth.uid` e `keys().hasOnly([...])` | fechar o formato do `create`; hoje o payload é livre |
+| Entrar por código (`fb:3250`) | transação que insere em `participants` **e** `playerUids` | quem tem o código | `playerUids` (17/17 não-vazio) | **Parcial** — o acréscimo em `playerUids` é validável; `participants` é **lista de mapas** e não | refatorar o writer para separar o que é validável do que não é, **ou** capability/servidor |
+| Reivindicar slot (`fb:3236`) | reescreve `players[]` inteiro; exige slot livre e "não tenho outro slot" | quem está na sala | nenhum — o slot vive dentro de lista de mapas | **Não** — os dois guardas exigem iterar `players[]` | capability por intenção (`{docId, slotIndex}`) ou autoridade server-side |
+| Marcar ponto (`fb:3208` via `_syncLiveState`, `ui:9943`, `ui:10375`) | `liveState` + `lastActivityAt`, debounce 300 ms | quem está na sala | `playerUids` | **Sim** — pertencimento + `hasOnly(['liveState','lastActivityAt','status'])` | fechar `updateCasualMatch`, que hoje aceita **qualquer** campo |
+| Publicar gênero (`ui:14569`) | dot-path `participantGenders.<uid>` | o dono do uid | a própria chave do mapa | **Sim** — `MapDiff` limitado a `request.auth.uid`; ⚠️ o campo falta em 4/17, exige `get('participantGenders', {})` | nenhuma refatoração de writer |
+| Pronto / recomeço / confirmar encerramento (`ui:14504`, `ui:10774`, `ui:11529`) | `arrayUnion(meuUid)` em `readyPlayers`, `restartReady`, `closePending.confirmedBy` | o dono do uid | o próprio elemento | **Com ressalva** — validável por `hasAll`/`hasOnly`, que tratam lista como **conjunto**: duplicata é invisível | nenhuma no writer; a ressalva é semântica, não de código |
+| Encerrar / evacuar (`ui:8859`, `ui:11308`, `ui:11447`) | `hostClosed: true` — todo cliente que lê isso **sai da sala** (`ui:8988`) | o host | ⛔ **não existe campo de host**; `createdBy` é autoria, não papel | **Só metade** — "estar em `playerUids`" é validável; "ser o host" não tem dado que sustente | decidir onde mora o papel de host — é dado que **não existe** hoje |
+| Voltar ao setup / apontar sala nova (`ui:10506`, `ui:11452`, `ui:10706`, `ui:15088`, `ui:11554`) | `setupAt`, `status:'setup'`, `nextRoomCode` | quem está na sala | `playerUids` | **Sim** — pertencimento + `hasOnly` | nenhuma, se o conjunto de campos for enumerado sem erro |
+| Config de estatística (`ui:9971`) | `statsConfig` | quem está na sala | `playerUids` | **Sim** | nenhuma |
+| Sugerir vínculo (`ui:8718`) | lê o doc e regrava `pendingLinkRequests` inteiro | quem está na sala | lista de mapas | **Não** | writer precisa virar transação; validação só por capability/servidor |
+| Aceitar vínculo (`ui:204`) | regrava `pendingLinkRequests`, `players`, `playerUids`, `participants` — **atribui a partida a um uid** | a pessoa sugerida | `suggestedUid` dentro de lista de mapas | **Não** — o alvo da autorização está no elemento da lista | capability por intenção ou servidor; é a operação que move estatística de pessoa |
+| Snapshot Rei/Rainha (`ui:9864`) | `.add` de doc novo `finished` com `result` | a sessão que jogou | `playerUids` do doc **criado** | **Sim** — `request.auth.uid in request.resource.data.playerUids` + `keys().hasOnly` | fechar o formato do `create` |
+| Apagar sala (`fb:3319`) | `.delete()`; recusa `finished` **no cliente** | quem criou | `createdBy` + `status` | **Sim** para o caminho do criador | — |
+| Auto-dissolver ao sair (`fb:3369`) | `transaction.delete` quando some o último slot ocupado | o último a sair (**pode não ser o criador**) | a condição está em `players[]` | **Não** — depende de contar ocupantes em lista de mapas | servidor, ou aceitar que a sala fique para a limpeza agendada |
+| Limpeza agendada (`fn:1397`), exclusão (`fn:5626`), fusão (`fn:6587`, `fn:724`) | Admin SDK | as próprias Functions | — | **N/A** — Admin SDK **ignora Rules** | ⚠️ qualquer decisão de Rule deixa estes quatro exatamente como estão |
+
+**(6) Os 12/17 documentos divergentes não são cosmética — sob regra de pertencimento eles
+viram recusa a gente real.** A L3.P1 mediu: as três representações coincidem em **5**
+documentos e divergem em **12**; há uid presente **só** em `playerUids` (3 casos) e **só** em
+`participants` (2 casos); `participants` **não existe** em 2 documentos; `players` está vazio
+em 1. Uma regra ancorada em `playerUids` é a única que hoje encontra base em 17/17 — e ainda
+assim recusaria a escrita de quem, nos 2 casos medidos, só consta em `participants`.
+⛔ E há um limite que nenhuma escolha de lista resolve: **o cânone permite participante SEM
+CONTA** — `tests/slot-sem-uid-e-gente-sem-conta.test.js` trava que slot sem uid é gente que
+não tem perfil, e o nome digitado É a identidade legítima dela. Essa pessoa **nunca** satisfaz
+uma condição por uid; quem escreve por ela é o aparelho de outra pessoa. Qualquer alvo futuro
+precisa dizer o que fazer com esses dois grupos (divergentes e sem-conta) **antes** de a regra
+existir, não depois.
+
+**(7) QR e slots vazios.** A leitura é `if true` e é o que faz o código/QR funcionar sem
+conta. ⚠️ Mas a escrita já exige `request.auth != null`, e **não há login anônimo no
+produto** — `signInAnonymously` não aparece em lugar nenhum de `js/`. Ou seja: a justificativa
+escrita na própria Rule (*"Public read so anonymous QR / room-code joins work"*) descreve a
+LEITURA; entrar de fato já exige conta hoje. O problema real do ingresso é outro e é de
+ordem: uma regra de pertencimento avalia `resource.data` — o estado **antes** —, e quem está
+entrando por definição ainda não está lá. A transição de ingresso precisa ser tratada como
+caso próprio ("não estou na lista, e o diff acrescenta só a mim"), separada da transição de
+quem já é da sala. Isso é expressável para `playerUids`; a mesma escrita toca `participants`,
+que é lista de mapas, e aí não é.
+
+**(8) Concorrência, medida no código.**
+- *Placar:* `_syncLiveState` (`ui:8931-8945`) grava `liveState` inteiro com debounce de 300 ms
+  — **last-write-wins**. `_isRemoteUpdate` evita eco, não arbitra. Dois aparelhos marcando
+  ponto ao mesmo tempo: o último a chegar apaga o outro.
+- *Pronto / recomeço / confirmação:* o `arrayUnion` é atômico no campo, mas **a decisão que
+  vem depois não é** — o cliente faz um `.get()` separado e avalia o quórum
+  (`_readyConditionMet`, `_restartConditionMet`, `ui:11538-11548`). É TOCTOU: dois clientes
+  podem ler o mesmo estado e ambos concluírem que são o gatilho.
+- *Quem dispara o recomeço:* eleição **no cliente**, por `sorted[0] === myUid`
+  (`_amRestartStarter`) — determinística e sem árbitro. Se as listas lidas divergirem entre
+  aparelhos, dois se acham o primeiro.
+- *Vínculo de jogador:* `pendingLinkRequests` é lido e **regravado inteiro**, sem transação,
+  nos dois lados (`ui:8718` e `ui:204`). Duas ações simultâneas = lost update clássico.
+- ⭐ Isto é o mesmo princípio já assentado no projeto: transação resolve **concorrência**, não
+  **autoridade**; e a trava só vale dentro de onde mora a verdade.
+  [[feedback_a_trava_vale_onde_mora_a_verdade]]
+
+**Comparação das três opções — sem escolher nenhuma.**
+
+| Critério | (A) Rules com transições restritas | (B) capabilities por intenção (Function) | (C) autoridade server-side nas operações críticas |
+|---|---|---|---|
+| Cobre lista de mapas (`players`, `participants`, `pendingLinkRequests`) | **Não** — limite da linguagem | Sim | Sim |
+| Custo de latência no placar ao vivo | nenhum (escrita direta) | +1 ida ao servidor por evento | idem, e o placar é o caminho mais quente |
+| Funciona offline / com sinal ruim | sim (fila do SDK) | não | não |
+| Nº de superfícies a enumerar sem errar | **26 conjuntos de campos** | 1 por intenção | 1 por operação |
+| Modo de falha quando erra | **permission-denied silencioso** — precedente `:41-60` | erro explícito da callable | erro explícito |
+| Alcança os 4 writers server-side | não (Admin SDK ignora Rules) | não se aplica | é o mesmo plano |
+| Quebra o app das lojas (2.1.28) | **sim, imediatamente** | só se o cliente velho perder o caminho antigo | idem |
+| Verificável por teste antes de subir | sim (emulador de Rules) | sim (emulador de Functions) | sim |
+| Resolve a concorrência do item 8 | não — Rule autoriza, não serializa | parcialmente (o servidor pode transacionar) | sim |
+
+⛔ Nenhuma das três é adotada, e a leva proíbe escolher. Registrado só o que cada uma cobre
+e o que cada uma custa.
+
+**Invariantes que QUALQUER opção precisa preservar.** São contratos já pagos com incidente:
+1. **Entrar pelo código/QR continua funcionando** — inclusive para quem chega primeiro à sala
+   e ainda não consta em lista nenhuma.
+2. **Participante sem conta continua legítimo** — slot sem uid é gente sem perfil, e o nome
+   digitado é a identidade. [[project_uid_do_slot_se_recupera]]
+3. **A mesma pessoa ocupa UM slot só** — o guarda pergunta às três listas
+   (`tests/casual-mesma-pessoa-um-slot-so`), e a divergência é **curada**, não recusada.
+4. **`status:'finished'` é registro permanente** — nenhum caminho novo pode apagá-lo
+   (`fb:3315`).
+5. **Ninguém fica preso na tela** — o encerramento não pode voltar a depender de confirmação
+   que nunca chega; foi exatamente o que a 2.0.4 removeu (`ui:11357`).
+6. **O placar ao vivo não pode ficar mais lento** — é o caminho quente.
+   [[feedback_instrumentacao_nao_pode_cobrar_pedagio]]
+7. **Nada de regressão silenciosa**: recusa tem que aparecer, não sumir.
+8. **O app das lojas continua funcionando** enquanto for a versão publicada.
+
+**Gates que precisam EXISTIR antes de qualquer implementação.** Hoje: **zero**.
+⚠️ As 8 suítes de casual (`casual-mesma-pessoa-um-slot-so`, `dupla-casual-nao-perde-jogador`,
+`formacao-de-duplas-casual`, `usuario-sempre-time-azul`, `azul-e-slots-fixos`,
+`slot-se-decide-por-uid`, `replay-e-o-placar-ao-vivo`, `tiebreak-uma-forma-de-gravar`) são
+**testes de TEXTO-FONTE**: leem o `.js` com `readFileSync` e casam expressão regular. Nenhuma
+escreve no Firestore, nenhuma sobe emulador — logo **nenhuma delas é capaz de detectar um
+`permission-denied`**. Uma mudança de Rule passaria com a suíte inteira verde.
+⭐ A infraestrutura para os gates já existe e é reaproveitável: 6 suítes de Rules rodam contra
+o emulador (`tests/rules-*.test.js`) e o harness de corrida carrega o `js/firebase-db.js`
+REAL contra o Firestore do emulador (`tests/concurrency/emu-harness.js`).
+
+| Gate | O que precisa provar | Harness que já existe |
+|---|---|---|
+| G1 — cobertura de Rules para casual | hoje `tests/rules-*.test.js` **não menciona a coleção**; cada uma das 26 superfícies precisa de um caso permitido e um negado | `tests/rules-*.test.js` |
+| G2 — controle com a Rule ANTIGA | a suíte tem de FALHAR contra a regra permissiva; senão ela não prova o corte | mesmo padrão da L1.2 (rules sintéticas "velhas") |
+| G3 — inventário de campos vs `hasOnly` | teste que deriva do CÓDIGO a lista de campos escritos e confronta com a lista autorizada; writer novo sem cobertura reprova | varredura estrutural da L3.P0.1 |
+| G4 — corrida real | placar simultâneo, dois "prontos", dois "recomeços" e dois vínculos concorrentes, contra Firestore de verdade | `tests/concurrency/emu-harness.js` |
+| G5 — compatibilidade de dado | os 12/17 divergentes, os 2 sem `participants` e o participante sem conta continuam operando | fixture derivada da medição L3.P1 |
+| G6 — paridade nativa | o bundle embarcado exercita os mesmos caminhos com a Rule nova | `scripts/check-embedded-www.sh` como ponto de partida |
+
+**⛔ BLOQUEIO DE CUTOVER NATIVO — condição de corte, não recomendação.**
+`android/app/src/main/assets/public/js/store.js` e `ios/App/App/public/js/store.js` estão em
+**`SCOREPLACE_VERSION = '2.1.28'`**, e `capacitor.config.json` declara `webDir: "www"` **sem
+`server.url`** — o `server.hostname` ali serve só como origem da WebView. Ou seja: o app das
+lojas **executa o pacote local** e **não recebe atualização** quando o Hosting publica.
+Medido na L3.P0.1: os dois bundles são byte-a-byte idênticos entre si e contêm os **mesmos 20
+writers diretos**, isto é, **26 caminhos de escrita** que hoje dependem de
+`allow write: if request.auth != null`. ⛔ Qualquer restrição de Rule entra em vigor no
+**servidor**, para **todo cliente ao mesmo tempo** — o app publicado quebraria no instante do
+deploy das Rules, sem nada a fazer do lado de quem já instalou. Portanto a mudança de Rule só
+pode acontecer **depois** de (a) versão nativa compatível publicada **e aprovada** nas duas
+lojas, e (b) política de adoção autorizada pelo dono (piso de versão, prazo, e o que acontece
+com quem não atualizar). É o mesmo bloqueio já registrado na L2, e ele continua **externo**.
+
+**Separação exigida pela leva — três coisas distintas, e nenhuma vira a outra.**
+- **DECISÃO PENDENTE (do dono, não minha):** quem manda em cada operação de `casualMatches`,
+  e qual das três opções (A/B/C) — ou qual mistura — atende. ⛔ Continua **em aberto**;
+  nada nesta leva a antecipa. [[feedback_never_freeze_my_opinion_as_owners_decision]]
+- **HIPÓTESE — já resolvida e fora deste escopo:** os troféus casuais zerados. **Confirmada**
+  na L3.P1 (266 perfis, zero com `casualMatchesPlayed > 0`, contra 15 partidas terminadas),
+  com causa medida (os 4 campos-fantasma não existem em 17/17). É defeito de **leitura**, não
+  de autoridade, e não depende de nenhuma decisão de Rule para ser corrigido.
+- **PROPOSTA FUTURA — não formulada:** nenhum texto de Rule, nenhuma assinatura de capability
+  e nenhum desenho server-side foi escrito nesta leva. O que existe é o contrato acima e a
+  lista de gates que teriam de estar verdes **antes** de qualquer implementação começar.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
