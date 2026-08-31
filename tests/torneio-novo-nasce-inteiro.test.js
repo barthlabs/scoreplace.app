@@ -138,10 +138,22 @@ const r2 = enxerta(JSON.parse(JSON.stringify(cheio)), null);
 ok(r2._faltamPesados === true,
   '⛔ mas torneio com 12 jogos fora e nada em memória É — "não carregou" ≠ "não tem"');
 
+/* ⚠️ FIXTURE CORRIGIDA em 2.1.65: ela dava UM jogo em memória contra `_nJogos: 12` e
+ * esperava que a marca de falta saísse — ou seja, codificava justamente o defeito que
+ * derrubou a tela do dono três vezes ("existe ao menos um" contando como "tenho tudo").
+ * A conta agora é de QUANTIDADE, então a memória tem que trazer os 12 para a marca sair.
+ * A intenção da asserção não mudou: com memória, os jogos voltam e a marca sai. */
+const doze = Array.from({ length: 12 }, function (_, k) { return { id: 'm' + k }; });
 const r3 = enxerta(JSON.parse(JSON.stringify(cheio)),
+  { id: 'c1', rounds: [{ round: 1, matches: doze }] });
+ok(!r3._faltamPesados && r3.rounds[0].matches.length === 12,
+  'e com memória COMPLETA, os jogos voltam e a marca sai');
+
+/* ⛔ E o outro lado, que é o defeito de 31/ago: memória PARCIAL não pode passar por completa. */
+const r4 = enxerta(JSON.parse(JSON.stringify(cheio)),
   { id: 'c1', rounds: [{ round: 1, matches: [{ id: 'm1' }] }] });
-ok(!r3._faltamPesados && r3.rounds[0].matches.length === 1,
-  'e com memória, os jogos voltam e a marca sai');
+ok(r4._faltamPesados === true,
+  '⛔ com 1 jogo de 12 em memória, a marca de falta CONTINUA (parcial não é completo)');
 
 const velho = { id: 'v1', _semPesados: ['matches'], rounds: [{ round: 1, matches: [] }], matches: [] };
 ok(enxerta(JSON.parse(JSON.stringify(velho)), null)._faltamPesados === true,

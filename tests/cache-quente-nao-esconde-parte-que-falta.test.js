@@ -58,7 +58,11 @@ ok('⭐ os jogos do cache continuam sendo aproveitados (não se rebusca o que j�
   (r.rounds[0].matches || []).length === 2);
 
 // `memberUids` é a TESTEMUNHA que cura os documentos que já existem, sem contador nenhum
-const semTestemunha = enxerta(Object.assign(doDoc(), { memberUids: [] }), cacheQuente());
+/* ⚠️ `_nJogos: 2` aqui é DE PROPÓSITO (2.1.65): a asserção é sobre o ELENCO sem contador e
+ * sem testemunha. Com o `_nJogos: 115` do fixture original, quem acusava era `matches` (2 em
+ * memória contra 115 prometidos) e a asserção media outra coisa. Igualando o contador ao que
+ * o cache tem, sobra só a pergunta que ela quer fazer. */
+const semTestemunha = enxerta(Object.assign(doDoc(), { memberUids: [], _nJogos: 2 }), cacheQuente());
 ok('⚠️ sem contador E sem testemunha, NÃO acusa (senão vira busca em laço a cada snapshot)',
   !semTestemunha._faltamPesados);
 
@@ -70,24 +74,37 @@ ok('⭐ com `_nPartes`, a falta é sabida sem testemunha', comContador._faltamPe
 ok('  → e cobre TODA parte da lista, não só o elenco',
   comContador._faltaOQue.indexOf('opponentHistory') !== -1);
 
+/* ⚠️ `matches: 2` casa com o que o cache traz (2.1.65) — a asserção é sobre contador ZERO do
+ * ELENCO. Com 115 no marcador e 2 em memória, quem acusava era `matches`, e o teste passava
+ * a medir outra coisa. */
 const contadorZero = enxerta(
-  Object.assign(doDoc(), { memberUids: [], _nPartes: { matches: 115, participants: 0, opponentHistory: 0 } }),
+  Object.assign(doDoc(), { memberUids: [], _nPartes: { matches: 2, participants: 0, opponentHistory: 0 } }),
   cacheQuente());
 ok('⛔ contador ZERO é "vazio DE VERDADE" — não se busca nada',
   !contadorZero._faltamPesados,
   'torneio recém-criado não pode ficar buscando um elenco que não existe');
 
 // ── tudo em memória ⇒ nada a buscar ──────────────────────────────────────────
-const completo = enxerta(doDoc(), {
+/* ⚠️ "TUDO em memória" agora quer dizer TUDO MESMO (2.1.65): o fixture dava 1 jogo contra os
+ * 115 do marcador e mesmo assim esperava "nada é pedido" — era o defeito escrito como teste.
+ * Os contadores aqui descrevem exatamente o que a memória tem. */
+const completo = enxerta(
+  Object.assign(doDoc(), { _nJogos: 1, _nPartes: { matches: 1, participants: 1, opponentHistory: 1 } }),
+  { id: 'confra', participants: [{ uid: 'u1' }], opponentHistory: [{ uid: 'u1' }],
+    rounds: [{ matches: [{ id: 'm1' }] }] });
+ok('⭐ com tudo em memória, nada é pedido', !completo._faltamPesados);
+
+/* ⛔ e o inverso, que é o incidente de 31/ago: 1 jogo de 115 NÃO é "tudo em memória". */
+const parcial = enxerta(doDoc(), {
   id: 'confra', participants: [{ uid: 'u1' }], opponentHistory: [{ uid: 'u1' }],
   rounds: [{ matches: [{ id: 'm1' }] }]
 });
-ok('⭐ com tudo em memória, nada é pedido', !completo._faltamPesados);
+ok('⛔ 1 jogo de 115 em memória NÃO passa por completo', parcial._faltamPesados === true);
 
 // ── a conta deriva da LISTA, não de nomes ────────────────────────────────────
 const trecho = store.slice(i, store.indexOf('\n    }\n', i));
 ok('⛔ a conta percorre `_semPesados` (nome escrito à mão foi o defeito)',
-  /fora\.forEach\(function \(nome\) \{[\s\S]*?_temEmMemoria\(nome\)/.test(trecho),
+  /fora\.forEach\(function \(nome\) \{[\s\S]*?_quantoTenho\(nome\)/.test(trecho),
   'com `if (fora.indexOf(\'matches\')...)` solto, a parte seguinte fica de fora de novo');
 ok('⛔ e nenhum `if` isolado por nome decide a falta',
   !/if \(fora\.indexOf\('matches'\) !== -1\) \{\s*var _nJ/.test(trecho));

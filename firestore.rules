@@ -728,13 +728,31 @@ service cloud.firestore {
       }
     }
 
-    // ─── Email verification tokens ───────────────────────────────────────────
-    // Criado pelo dono (autenticado) para verificar posse de um email secundário.
-    // Leitura pública (token é o segredo). Update público para marcar como verificado.
+    // ─── Verificação de e-mail secundário — SERVER-ONLY (L1.1, 2.1.65) ───────
+    // ⛔ O QUE ESTAVA AQUI ERA UM BURACO, não um descuido de digitação:
+    //     allow read: if true;    // "token é o segredo — quem tem o link pode ler"
+    //     allow create: if request.auth != null;
+    //     allow update: if true;  // marcar verified=true após clique no link
+    // O token era o ID do documento e ia CRU pro banco, então `read: true` permitia LISTAR a
+    // coleção e colher tokens VÁLIDOS de terceiros — o token só é segredo se ninguém mais
+    // puder lê-lo. E `update: true` deixava qualquer um, inclusive anônimo, marcar
+    // `verified`. Somando: o token nascia no cliente com `Math.random()`.
+    //
+    // ⚠️ E isto não era "só" um e-mail a mais no perfil: `linkedEmails` é PROVA DE POSSE —
+    // `functions/index.js` aceita `via: "email-vinculado"` como prova numa fusão de contas, e
+    // `_uidByProfileEmail` resolve LOGIN por ele. Quem escrevesse aqui mexia em quem entra na
+    // conta. Ver [[project_privileged_fields_never_client_writable]].
+    //
+    // Agora quem cria, lê e consome é o Admin SDK, pelas capabilities
+    // `requestSecondaryEmail` / `confirmSecondaryEmail`. O documento é chaveado pelo HASH do
+    // token; o token só existe no e-mail enviado.
     match /emailVerifications/{token} {
-      allow read: if true;         // token é o segredo — quem tem o link pode ler
-      allow create: if request.auth != null; // só autenticados criam
-      allow update: if true;       // marcar verified=true após clique no link
+      allow read, write: if false;
+    }
+
+    // Freio de reenvio do e-mail secundário (chave = hash de uid+e-mail). Só Admin SDK.
+    match /emailVerifyThrottle/{chave} {
+      allow read, write: if false;
     }
 
     // ─── Casual matches ──────────────────────────────────────────────────────

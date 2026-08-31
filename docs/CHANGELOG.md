@@ -1,5 +1,17 @@
 # Changelog do scoreplace.app
 
+## 2.1.65 — E-mail secundário sai do cliente e `emailVerifications` fecha (31/ago/2026)
+
+- **Problema:** o fluxo de vincular um e-mail secundário rodava inteiro no cliente. O token nascia de `Math.random()` (não é CSPRNG), ia CRU pro banco como id de `emailVerifications/{token}`, e a regra dava `allow read: if true` — o token só é segredo se ninguém mais puder lê-lo, e ali dava pra listar a coleção e colher token válido de terceiros. `allow update: if true` deixava qualquer um, inclusive anônimo, marcar `verified`. A vinculação era um `users/{ownerUid}.update({linkedEmails})` do cliente, em passo separado da marca de uso.
+- **Por que era grave:** `linkedEmails` é prova de posse de conta — a fusão aceita `via: "email-vinculado"` e `_uidByProfileEmail` resolve login por ele. Escrever ali é mexer em quem entra na conta.
+- **Correção:** duas capabilities específicas, `requestSecondaryEmail` (exige autenticação) e `confirmSecondaryEmail`. ⛔ Deliberadamente NÃO existe Function genérica que aceite `to`/`subject`/`html` do cliente: isso moveria a regra de lugar sem mudar quem decide. Token CSPRNG de 32 bytes gerado no servidor, banco guarda só o sha256 (o id do documento É o hash), corpo do e-mail fixo em `functions/secondary-email-core.js`, freio de reenvio por par uid+e-mail, e a confirmação marca uso e vincula na MESMA transação, sempre ao `ownerUid` gravado no pedido — nunca ao uid de quem clica no link.
+- **Rules:** `emailVerifications` e `emailVerifyThrottle` passam a `allow read, write: if false`.
+- **Removido:** `_checkEmailLinkIntent`, terceiro caminho de escrita direta do mesmo fluxo (gravava `linkedEmails` de OUTRA conta a partir do cliente). Era código morto — a chave `scoreplace_linkEmailIntent` nunca era escrita em lugar nenhum do repositório.
+- **Compatibilidade:** registros antigos com `verified: true` continuam contando como usados, então nenhum link já enviado vira replay. `emailVerifyCodes`, magic links, recuperação de senha e os demais e-mails transacionais não foram tocados.
+- **⚠️ Dívida aberta preservada:** `/mail` continua com `allow write: if request.auth != null` para qualquer autenticado. Os outros escritores (convites e comunicados de torneio) seguem no cliente — migração em L1.2/L1.3.
+- **Não implementado de propósito:** unicidade de e-mail entre contas. Essa regra não existe hoje em lugar nenhum do repositório e não foi inventada aqui.
+- **Regressão corrigida na mesma versão — tela zerada pela TERCEIRA vez.** Medido no documento do Confra em 31/ago 01:10: `_semPesados` listava `matches`, mas o documento tinha **1 jogo solto** em `round[0].matches` e **2 inscritos soltos** em `participants`, enquanto as subcoleções tinham 115 e 152. `_enxertaJogos` perguntava "tenho esta parte?" com presença (`existe ao menos um?`) — um jogo solto respondia "tenho", a busca dos 115 nunca disparava, e a tela desenhava com 1: classificação zerada, "Demais jogos da rodada (0)", W.O. e inativos sumidos. A pergunta passou a ser de QUANTIDADE, comparando com `_nPartes`/`_nJogos`: tenho 1 de 115 ⇒ falta. As correções anteriores não pegavam esta — a 2.1.61 consertou a trava que impedia remontar e a 2.1.63 consertou quem escreve; nenhuma tocou a pergunta. ⚠️ A origem do pedaço solto é `mutateTournament`, que grava o documento sem `dividir`; fechar essa porta segue como dívida aberta.
+
 ## 2.1.64 — Ferramenta de auditoria: gate de deploy e conferidor que termina (31/ago/2026)
 
 Esta versão dá número a quatro levas que estavam empilhadas sob a 2.1.63 sem bump — o dono

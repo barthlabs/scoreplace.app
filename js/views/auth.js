@@ -105,59 +105,52 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       window.history.replaceState(null, '', '/#dashboard');
     }
 
-    // Aguardar Firestore estar pronto
-    var tries = 0;
-    var resolve = function() {
-      var db = window.FirestoreDB && window.FirestoreDB.db;
-      if (!db) {
-        if (tries++ < 60) return setTimeout(resolve, 100);
+    /* ⛔ O CLIENTE NÃO LÊ MAIS O TOKEN NEM VINCULA NADA (L1.1, 2.1.65). Aqui morava um
+     * `emailVerifications/{token}.get()` seguido de `users/{ownerUid}.update({linkedEmails})`
+     * e de um `update({verified:true})` — três escritas de cliente num fluxo que decide QUEM
+     * ENTRA NA CONTA (`linkedEmails` é aceito como prova numa fusão e resolve login).
+     * ⚠️ Pior: a vinculação e a marca de "usado" eram passos SEPARADOS. Dois cliques no mesmo
+     * link, ou uma falha no meio, deixavam o token queimado sem vincular — ou vinculavam
+     * duas vezes. Agora é UMA transação no servidor.
+     * ⛔ Sem fallback de escrita direta: se a chamada falhar, a tela diz que falhou. */
+    var confirmar = function () {
+      var fns = null;
+      try { fns = window.firebase && window.firebase.functions && window.firebase.functions(); } catch (e) { fns = null; }
+      /* Sem sessão TAMBÉM confirma, de propósito: o link chega na caixa do e-mail candidato e
+       * costuma ser aberto em outro navegador. A posse do token é a prova, e o destino do
+       * vínculo vem do registro (`ownerUid`), não de quem clica. */
+      if (!fns) {
+        if (tries++ < 60) return setTimeout(confirmar, 100);
         return;
       }
-      db.collection('emailVerifications').doc(token).get().then(function(doc) {
-        if (!doc.exists) {
-          if (window.showNotification) window.showNotification('Link inválido', 'Este link de verificação não existe ou já foi usado.', 'error');
-          return;
-        }
-        var data = doc.data() || {};
-        if (data.verified) {
-          if (window.showNotification) window.showNotification('Já confirmado', data.emailToVerify + ' já está vinculado.', 'info');
-          return;
-        }
-        if (new Date(data.expiresAt) < new Date()) {
-          if (window.showNotification) window.showNotification('Link expirado', 'Solicite uma nova verificação no seu perfil.', 'warning');
-          return;
-        }
-        var ownerUid = data.ownerUid;
-        var emailToVerify = data.emailToVerify;
-        // Adicionar à linkedEmails do dono
-        db.collection('users').doc(ownerUid).get().then(function(userDoc) {
-          var userData = userDoc.exists ? (userDoc.data() || {}) : {};
-          var linked = Array.isArray(userData.linkedEmails) ? userData.linkedEmails.slice() : [];
-          if (linked.indexOf(emailToVerify) === -1) linked.push(emailToVerify);
-          return db.collection('users').doc(ownerUid).update({ linkedEmails: linked });
-        }).then(function() {
-          // Marcar token como usado
-          return doc.ref.update({ verified: true, verifiedAt: new Date().toISOString() });
-        }).then(function() {
-          if (window.showNotification) {
-            window.showNotification('✅ E-mail confirmado!', emailToVerify + ' foi vinculado à sua conta.', 'success');
-          }
-          // Atualizar currentUser em memória se for o dono
+      fns.httpsCallable('confirmSecondaryEmail')({ token: token }).then(function (res) {
+        var r = (res && res.data) || {};
+        if (r.ok) {
+          if (window.showNotification) window.showNotification('✅ E-mail confirmado!', r.email + ' foi vinculado à sua conta.', 'success');
+          /* O objeto em memória é do NAVEGADOR de quem clicou — só atualiza se for a mesma
+           * pessoa. A verdade já está no banco de qualquer jeito. */
           var cu = window.AppStore && window.AppStore.currentUser;
-          if (cu && cu.uid === ownerUid) {
-            var linked2 = Array.isArray(cu.linkedEmails) ? cu.linkedEmails.slice() : [];
-            if (linked2.indexOf(emailToVerify) === -1) linked2.push(emailToVerify);
-            cu.linkedEmails = linked2;
+          if (cu && r.email) {
+            var l2 = Array.isArray(cu.linkedEmails) ? cu.linkedEmails.slice() : [];
+            if (l2.indexOf(r.email) === -1) l2.push(r.email);
+            cu.linkedEmails = l2;
             if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
           }
-        }).catch(function(e) {
-          window._warn('[EmailVerify] update error:', e);
-          if (window.showNotification) window.showNotification('Erro ao vincular', e && e.message, 'error');
-        });
-      }).catch(function(e) {
-        window._warn('[EmailVerify] read error:', e);
+          return;
+        }
+        var m = {
+          usado: ['Já confirmado', 'Este link já foi usado.', 'info'],
+          expirado: ['Link expirado', 'Solicite uma nova verificação no seu perfil.', 'warning'],
+          invalido: ['Link inválido', 'Este link de verificação não existe ou já foi usado.', 'error']
+        }[r.motivo] || ['Link inválido', 'Este link de verificação não existe ou já foi usado.', 'error'];
+        if (window.showNotification) window.showNotification(m[0], m[1], m[2]);
+      }).catch(function (e) {
+        window._warn('[EmailVerify] confirm error:', e);
+        if (window.showNotification) window.showNotification('Erro ao confirmar', (e && e.message) || 'Tente novamente.', 'error');
       });
     };
+    var tries = 0;
+    var resolve = confirmar;
     setTimeout(resolve, 500);
   } catch(e) {}
 })();
@@ -2628,9 +2621,6 @@ function _completeEmailLinkSignIn() {
       }
       showNotification(_t('auth.loginDone'), user.displayName ? _t('auth.welcomeName', {greeting: window._welcomeWord(user), name: user.displayName}) : _t('auth.welcome', {greeting: window._welcomeWord(user)}), 'success');
       // v1.8.65: verificar se este login é resultado de um pedido de vinculação de email
-      if (user.email && typeof window._checkEmailLinkIntent === 'function') {
-        setTimeout(function() { window._checkEmailLinkIntent(user.email); }, 1500);
-      }
       // v1.8.74: sugerir criação de senha após login via magic link
       if (user.email) {
         setTimeout(function() {
@@ -9596,52 +9586,36 @@ window._profileHydrateNameConflict = function () {
         return;
       }
 
-      var db = window.FirestoreDB && window.FirestoreDB.db;
-      if (!db) return;
-
       inp.disabled = true;
       if (window.showNotification) window.showNotification('📧 Enviando verificação...', email, 'info');
 
-      // Gerar token de verificação simples
-      var token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      var verifyUrl = 'https://scoreplace.app/?verify_email=' + token;
-      var expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); // 24h
-
-      // Salvar token no Firestore
-      db.collection('emailVerifications').doc(token).set({
-        ownerUid: cu.uid,
-        ownerName: cu.displayName || cu.email || '',
-        emailToVerify: email,
-        createdAt: new Date().toISOString(),
-        expiresAt: expiresAt,
-        verified: false
-      }).then(function() {
-        // Criar email via coleção mail (Trigger Email extension)
-        return db.collection('mail').add({
-          to: [email],
-          message: {
-            subject: 'Confirme seu e-mail no scoreplace.app',
-            html:
-              '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0f172a;color:var(--sp-c-e2e8f0,#e2e8f0);border-radius:12px;">' +
-              '<div style="text-align:center;margin-bottom:24px;">' +
-                '<img src="https://scoreplace.app/icons/icon-192.svg" width="48" height="48" style="border-radius:10px;">' +
-                '<h2 style="color:var(--sp-c-fbbf24,#fbbf24);margin:12px 0 4px;">scoreplace.app</h2>' +
-              '</div>' +
-              '<p style="font-size:1rem;margin-bottom:8px;">Olá!</p>' +
-              '<p style="color:var(--sp-c-94a3b8,#94a3b8);margin-bottom:20px;">Clique no botão abaixo para confirmar que <b style="color:var(--sp-c-e2e8f0,#e2e8f0);">' + email + '</b> é seu e-mail e vinculá-lo à sua conta.</p>' +
-              '<div style="text-align:center;margin:24px 0;">' +
-                '<a href="' + verifyUrl + '" style="background:#6366f1;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;display:inline-block;">Confirmar e-mail</a>' +
-              '</div>' +
-              '<p style="font-size:0.8rem;color:var(--sp-c-64748b,#64748b);text-align:center;">Este link expira em 24 horas. Se você não solicitou isso, ignore este e-mail.</p>' +
-              '</div>'
-          }
-        });
-      }).then(function() {
-        inp.value = '';
+      /* ⛔ O CLIENTE NÃO GERA MAIS O TOKEN NEM ESCREVE NADA (L1.1, 2.1.65). Aqui morava:
+       *   · `Math.random()` como gerador do token — não é CSPRNG;
+       *   · o token CRU virando id do documento em `emailVerifications` (que tinha
+       *     `allow read: if true` — dava pra listar a coleção e colher token dos outros);
+       *   · um `mail/.add()` com `to`, assunto e HTML montados aqui.
+       * ⚠️ E não era "só" um e-mail no perfil: `linkedEmails` é PROVA DE POSSE — a fusão de
+       * contas aceita `via: "email-vinculado"` e o login resolve por ele. Agora quem decide
+       * é `requestSecondaryEmail`; o corpo do e-mail é fixo no servidor.
+       * ⚠️ As validações de e-mail principal e já-vinculado acima CONTINUAM (resposta rápida
+       * na tela) e são refeitas no servidor, que é onde não dá pra pular. */
+      window.FirestoreDB._callFn('requestSecondaryEmail', { email: email }).then(function (r) {
         inp.disabled = false;
-        if (window.showNotification) window.showNotification('✅ E-mail enviado!', 'Verifique ' + email + ' e clique no link de confirmação.', 'success');
-        if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
-      }).catch(function(err) {
+        if (r && r.ok) {
+          inp.value = '';
+          if (window.showNotification) window.showNotification('✅ E-mail enviado!', 'Verifique ' + email + ' e clique no link de confirmação.', 'success');
+          if (typeof window._profileRenderLinkedEmails === 'function') window._profileRenderLinkedEmails();
+          return;
+        }
+        var motivo = (r && r.motivo) || 'invalido';
+        var recado = {
+          invalido: ['E-mail inválido', 'Digite um e-mail válido.', 'warning'],
+          principal: ['Mesmo e-mail', 'Este já é o seu e-mail principal.', 'warning'],
+          'ja-vinculado': ['Já vinculado', 'Este e-mail já está na sua lista.', 'info'],
+          cooldown: ['Aguarde um pouco', 'Já enviamos há pouco. Tente de novo em instantes.', 'info']
+        }[motivo] || ['Não deu pra enviar', 'Tente novamente.', 'warning'];
+        if (window.showNotification) window.showNotification(recado[0], recado[1], recado[2]);
+      }).catch(function (err) {
         inp.disabled = false;
         window._warn('[linkEmail] send error:', err);
         if (window.showNotification) window.showNotification('Erro ao enviar', (err && err.message) || 'Tente novamente.', 'error');
@@ -9664,49 +9638,17 @@ window._profileHydrateNameConflict = function () {
       }).catch(function(e) { window._warn('[LinkedEmail] unlink error:', e); });
     };
 
-    // Detectar link de vinculação ao completar login via magic link
-    window._checkEmailLinkIntent = function(signedInEmail) {
-      try {
-        var raw = localStorage.getItem('scoreplace_linkEmailIntent');
-        if (!raw) return;
-        var intent = JSON.parse(raw);
-        // Expirado (>30 min) ou email não bate
-        if (!intent || !intent.ownerUid || !intent.emailToLink) return;
-        if (Date.now() - (intent.requestedAt || 0) > 30 * 60 * 1000) {
-          localStorage.removeItem('scoreplace_linkEmailIntent');
-          return;
-        }
-        if ((signedInEmail || '').toLowerCase() !== intent.emailToLink.toLowerCase()) return;
-        // Email confere — vincular ao ownerUid
-        localStorage.removeItem('scoreplace_linkEmailIntent');
-        var db = window.FirestoreDB && window.FirestoreDB.db;
-        if (!db) return;
-        db.collection('users').doc(intent.ownerUid).get().then(function(doc) {
-          if (!doc.exists) return;
-          var data = doc.data() || {};
-          var ownerName = data.displayName || 'Outra conta';
-          // Mostrar confirmação para o usuário
-          if (typeof showConfirmDialog === 'function') {
-            showConfirmDialog(
-              '🔗 Vincular e-mail?',
-              'O e-mail "' + signedInEmail + '" será vinculado à conta "' + ownerName + '". Confirma?',
-              function() {
-                var linked = Array.isArray(data.linkedEmails) ? data.linkedEmails.slice() : [];
-                if (linked.indexOf(signedInEmail.toLowerCase()) === -1) {
-                  linked.push(signedInEmail.toLowerCase());
-                }
-                db.collection('users').doc(intent.ownerUid).update({ linkedEmails: linked })
-                  .then(function() {
-                    if (window.showNotification) window.showNotification('✅ E-mail vinculado!', signedInEmail + ' agora faz parte da conta "' + ownerName + '".', 'success');
-                  });
-              },
-              function() { /* cancelou */ },
-              'Vincular', 'Cancelar'
-            );
-          }
-        }).catch(function(e) { window._warn('[LinkEmail] confirm error:', e); });
-      } catch(e) { window._warn('[LinkEmail] intent check error:', e); }
-    };
+    /* ⛔ `_checkEmailLinkIntent` REMOVIDA (L1.1, 2.1.65) — era o TERCEIRO caminho de escrita
+     * direta deste fluxo: lia `localStorage.scoreplace_linkEmailIntent` e, confirmando num
+     * diálogo, fazia `users/{intent.ownerUid}.update({ linkedEmails })` — escrevendo no
+     * perfil de OUTRA conta a partir do cliente, sem prova de posse nenhuma além do próprio
+     * localStorage (que quem senta no navegador escreve à mão).
+     * ⭐ E era CÓDIGO MORTO desde sempre: varredura em js/, extension/, extensions/,
+     * functions/ e scripts/ não acha um único `setItem('scoreplace_linkEmailIntent')` — só as
+     * três linhas que LIAM e REMOVIAM. A intenção nunca podia existir, então o diálogo nunca
+     * podia aparecer. Removida junto com a chamada em `_handleAuthStateChange`, para não
+     * deixar fallback de escrita direta neste fluxo.
+     * [[feedback_verify_existence_in_code]] */
 
     // Porque reescrever: a cadeia anterior (auth.js → currentUser → store.js
     // saveUserProfileToFirestore → firebase-db.js saveUserProfile → Firestore

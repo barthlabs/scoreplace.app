@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.64';
+window.SCOREPLACE_VERSION = '2.1.65';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -10945,16 +10945,57 @@ window.AppStore = {
         if (nome === 'participants') return (novo.memberUids || []).length > 0;
         return false;
       };
-      var _temEmMemoria = function (nome) {
-        if (nome === 'matches') return achou || (novo.rounds || []).some(function (r) { return r && _cheio(r.matches); }) || _cheio(novo.matches);
-        if (nome === 'grupos') return achouG || (novo.rounds || []).some(function (r) { return r && _cheio(r.monarchGroups); });
-        return _cheio(novo[nome]);
+      /* ⛔ A PERGUNTA É QUANTIDADE, NÃO PRESENÇA — e essa distinção derrubou a tela do dono
+       * PELA TERCEIRA VEZ (31/ago, 01:10). Medido no documento do Confra naquele instante:
+       *     _semPesados: ["matches","participants","opponentHistory"]
+       *     round[0].matches: 1        ← UM jogo solto dentro do documento
+       *     participants (no doc): 2   ← DOIS inscritos soltos
+       *     subcoleção matches: 115 · inscritos: 152   ← o dado real, intacto
+       * O teste antigo era `_cheio(...)`: "existe ao menos um?". Com UM jogo solto ele
+       * respondia "tenho", `_faltamPesados` nunca era marcado, a busca dos 115 nunca
+       * disparava — e a tela desenhava o torneio com 1 jogo: classificação zerada, "Demais
+       * jogos da rodada (0)", W.O. e inativos sumidos. Idem no elenco: 2 soltos escondiam 152.
+       *
+       * ⚠️ De onde vem o pedaço solto: `mutateTournament` (a porta do W.O.) grava o documento
+       * SEM `dividir` — o mutator empurra o marcador de W.O. em `rounds[i].matches` e aquilo
+       * fica no doc. Fechar essa porta é outra leva; aqui a conta passa a ser à prova disso.
+       *
+       * ⭐ Agora se compara com o CONTADOR que o escritor gravou (`_nPartes`/`_nJogos`): tenho
+       * 1 de 115 ⇒ FALTA. É a mesma lição do cache quente satisfazendo metade da pergunta.
+       * [[feedback_cache_quente_satisfaz_metade_da_pergunta]] */
+      var _tamanho = function (x) {
+        if (Array.isArray(x)) return x.length;
+        if (x && typeof x === 'object') return Object.keys(x).length;
+        return 0;
+      };
+      var _quantoTenho = function (nome) {
+        if (nome === 'matches') {
+          var n = _tamanho(novo.matches);
+          (novo.rounds || []).forEach(function (r) { if (r) n += _tamanho(r.matches); });
+          (novo.groups || []).forEach(function (g) { if (g) n += _tamanho(g.matches); });
+          return n;
+        }
+        if (nome === 'grupos') {
+          var g2 = 0;
+          (novo.rounds || []).forEach(function (r) { if (r) g2 += _tamanho(r.monarchGroups); });
+          return g2;
+        }
+        return _tamanho(novo[nome]);
       };
       var falta = false, _oQueFalta = [];
       fora.forEach(function (nome) {
-        if (_temEmMemoria(nome)) return;
+        var tenho = _quantoTenho(nome);
         var n = _conta(nome);
-        if (n === 0) return;                       // vazio DE VERDADE
+        /* Com contador, a decisão é aritmética e não admite meio-termo. */
+        if (n != null) {
+          if (n === 0) return;                     // vazio DE VERDADE
+          if (tenho >= n) return;                  // já tenho tudo
+          falta = true; _oQueFalta.push(nome);     // tenho `tenho` de `n` ⇒ falta
+          return;
+        }
+        /* ⚠️ SEM contador (documento antigo), volta a valer o teste de presença — é o que
+         * havia antes e não posso endurecer sem número pra comparar. */
+        if (tenho > 0) return;
         /* ⛔ SEM CONTADOR, quem decide é a NATUREZA da parte — e os testes me pegaram aqui:
          * eu tinha feito "sem prova, não acusa" pra TODAS, e isso é regressão nas
          * estruturais. Documento dividido antes de existir `_nJogos` nunca mais buscaria os

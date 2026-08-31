@@ -70,6 +70,7 @@ const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode 
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
 const _splitResultMirror = require("./match-result-mirror-core.js");
 const _woReconcile = require("./wo-split-reconcile-core.js"); // W.O. chega nas subcoleções
+const _secEmail = require("./secondary-email-core.js");       // e-mail secundário: decisões puras
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
  * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
@@ -5769,6 +5770,110 @@ function _purgeUidEverywhere(node, uid, manterSlots) {
   }
   return walk(node, "");
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * E-MAIL SECUNDÁRIO — CAPABILITIES ESPECÍFICAS  (L1.1, 2.1.65)
+ *
+ * ⛔ POR QUE NÃO UMA FUNCTION GENÉRICA de e-mail. Uma CF que aceitasse `to`, `subject` e
+ * `html` do cliente moveria a regra de lugar sem mudar quem decide: qualquer autenticado
+ * seguiria escolhendo destinatário e conteúdo, só que com o carimbo do servidor por cima —
+ * o que é PIOR, porque passa a parecer confiável. Aqui existem duas portas estreitas, cada
+ * uma com um trabalho só, e o corpo do e-mail é fixo no servidor.
+ *
+ * ⚠️ O QUE ESTE FLUXO DE FATO CONCEDE: `linkedEmails` é PROVA DE POSSE. `index.js:5968`
+ * aceita `via: "email-vinculado"` como prova numa fusão de contas, e `_uidByProfileEmail`
+ * (index.js:4283) resolve LOGIN por ele. Vincular um e-mail mexe em quem entra na conta —
+ * por isso o token é CSPRNG, o banco guarda só o hash, e a vinculação usa o `ownerUid`
+ * gravado no PEDIDO, nunca o uid de quem clica no link.
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+exports.requestSecondaryEmail = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "Login obrigatório");
+    const emailBruto = (request.data && request.data.email) || "";
+    const db = admin.firestore();
+    const agora = Date.now();
+
+    const perfilSnap = await db.collection("users").doc(callerUid).get();
+    const perfil = perfilSnap.exists ? (perfilSnap.data() || {}) : {};
+
+    const email = _secEmail.normalizaEmail(emailBruto);
+    const chave = email ? _secEmail.chaveDeThrottle(callerUid, email) : null;
+    let ultimoEnvioMs = 0;
+    if (chave) {
+      const tSnap = await db.collection("emailVerifyThrottle").doc(chave).get().catch(() => null);
+      ultimoEnvioMs = (tSnap && tSnap.exists && Number(tSnap.data().lastSentAt)) || 0;
+    }
+
+    const d = _secEmail.decidePedido({
+      email: emailBruto, perfil: perfil, agora: agora, ultimoEnvioMs: ultimoEnvioMs,
+      emailDoToken: (request.auth.token && request.auth.token.email) || ""
+    });
+    /* ⚠️ Estes motivos falam do PEDIDO de quem chama (formato, o próprio principal, a própria
+     * lista) — nenhum deles conta nada sobre OUTRAS contas. É a linha que a invariante 6
+     * protege: nada aqui pode virar oráculo de "este e-mail existe no sistema". */
+    if (!d.ok) return { ok: false, motivo: d.motivo };
+
+    /* ⭐ O token existe SÓ aqui e no e-mail. O documento é chaveado pelo hash. */
+    const token = _secEmail.novoToken();
+    const id = _secEmail.hashToken(token);
+    /* `create()`: se o mesmo hash já existir (colisão impossível na prática, mas o create é
+     * de graça), falha em vez de sobrescrever um pedido de outra pessoa. */
+    await db.collection("emailVerifications").doc(id).create(_secEmail.novoRegistro({
+      uid: callerUid, email: d.email, agora: agora
+    }));
+    await db.collection("emailVerifyThrottle").doc(chave).set({
+      lastSentAt: agora, uid: callerUid
+    }, { merge: true });
+
+    await _enqueueMail(db, _secEmail.montaEmail(d.email, _secEmail.urlDeConfirmacao(token)));
+    console.log("[requestSecondaryEmail] uid=" + callerUid + " pedido enfileirado");
+    return { ok: true };
+  }
+);
+
+/* ⛔ A CONFIRMAÇÃO NÃO EXIGE SESSÃO, e é decisão, não esquecimento. O link chega na CAIXA do
+ * e-mail candidato e pode ser aberto em qualquer navegador — exigir login aqui quebraria o
+ * caso comum (o fluxo antigo também não exigia). A posse do token É a prova, e o destino da
+ * vinculação vem do registro (`ownerUid`), então estar logado em outra conta não muda nada:
+ * o e-mail vai para a conta que PEDIU. */
+exports.confirmSecondaryEmail = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const token = String((request.data && request.data.token) || "");
+    if (!token) return { ok: false, motivo: "invalido" };
+    const db = admin.firestore();
+    const ref = db.collection("emailVerifications").doc(_secEmail.hashToken(token));
+
+    /* ⭐ TRANSAÇÃO: marcar usado e vincular têm que acontecer JUNTOS. Separados, dois cliques
+     * simultâneos no mesmo link vinculariam duas vezes, e um erro no meio deixaria o token
+     * queimado sem ter vinculado nada. */
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const dec = _secEmail.decideConfirmacao(snap.exists ? (snap.data() || {}) : null, Date.now());
+      if (!dec.ok) return dec;
+
+      const uref = db.collection("users").doc(dec.ownerUid);
+      const usnap = await tx.get(uref);
+      if (!usnap.exists) return { ok: false, motivo: "invalido" };
+      const atual = usnap.data() || {};
+      const linked = Array.isArray(atual.linkedEmails) ? atual.linkedEmails.slice() : [];
+      const jaTem = linked.map(_secEmail.normalizaEmail).indexOf(dec.email) !== -1;
+      if (!jaTem) linked.push(dec.email);
+
+      tx.update(ref, { used: true, verified: true, usedAt: new Date().toISOString() });
+      if (!jaTem) tx.update(uref, { linkedEmails: linked });
+      return { ok: true, email: dec.email, ownerUid: dec.ownerUid, jaTem: jaTem };
+    });
+
+    if (out.ok) console.log("[confirmSecondaryEmail] vinculado a uid=" + out.ownerUid);
+    /* ⚠️ Devolve o e-mail só no sucesso — e quem chega aqui com sucesso é quem tem o token,
+     * ou seja, quem controla aquela caixa. Nos demais casos, só o motivo. */
+    return out.ok ? { ok: true, email: out.email } : { ok: false, motivo: out.motivo };
+  }
+);
 
 exports.requestEmailMerge = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
