@@ -136,6 +136,16 @@ function montaEmail(emailCandidato, urlConfirmacao) {
   };
 }
 
+/* ⭐ ID DETERMINÍSTICO DO DOCUMENTO DE OUTBOX (L1.1.1). Antes o e-mail entrava em /mail com
+ * `.add()` — id automático —, então um retry criava um SEGUNDO documento e a pessoa recebia
+ * duas vezes. Derivando o id da RESERVA (chave do throttle + instante), a re-execução da
+ * transação reescreve o MESMO documento. ⚠️ `agora` tem que vir de fora da transação: lido
+ * dentro, mudaria a cada re-execução e o id deixaria de ser determinístico. */
+function mailDocIdDaReserva(chaveThrottle, agoraMs) {
+  return 'secmail_' + crypto.createHash('sha256')
+    .update(String(chaveThrottle) + ':' + String(agoraMs)).digest('hex').slice(0, 40);
+}
+
 function urlDeConfirmacao(token) {
   return 'https://scoreplace.app/?verify_email=' + encodeURIComponent(String(token));
 }
@@ -143,5 +153,6 @@ function urlDeConfirmacao(token) {
 module.exports = {
   PRAZO_MS, COOLDOWN_MS,
   normalizaEmail, emailValido, novoToken, hashToken, chaveDeThrottle,
-  decidePedido, novoRegistro, decideConfirmacao, montaEmail, urlDeConfirmacao
+  decidePedido, novoRegistro, decideConfirmacao, montaEmail, urlDeConfirmacao,
+  mailDocIdDaReserva
 };

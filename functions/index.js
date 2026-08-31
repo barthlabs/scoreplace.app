@@ -71,6 +71,7 @@ const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaPart
 const _splitResultMirror = require("./match-result-mirror-core.js");
 const _woReconcile = require("./wo-split-reconcile-core.js"); // W.O. chega nas subcoleções
 const _secEmail = require("./secondary-email-core.js");       // e-mail secundário: decisões puras
+const _secReserva = require("./secondary-email-reserva.js"); // e-mail secundário: reserva ATÔMICA
 const _amizadeAuth = require("./amizade-authority-core");   // a AUTORIDADE: pairId, transições, merge, exclusão
 /* ⚠️ FieldValue pelo SUBPATH, não por `admin.firestore.FieldValue`. MEDIDO em 29/ago/2026:
  * dentro do runtime do emulador de Functions o namespace vem sem `.FieldValue`, e a
@@ -5799,16 +5800,11 @@ exports.requestSecondaryEmail = onCall(
     const perfilSnap = await db.collection("users").doc(callerUid).get();
     const perfil = perfilSnap.exists ? (perfilSnap.data() || {}) : {};
 
-    const email = _secEmail.normalizaEmail(emailBruto);
-    const chave = email ? _secEmail.chaveDeThrottle(callerUid, email) : null;
-    let ultimoEnvioMs = 0;
-    if (chave) {
-      const tSnap = await db.collection("emailVerifyThrottle").doc(chave).get().catch(() => null);
-      ultimoEnvioMs = (tSnap && tSnap.exists && Number(tSnap.data().lastSentAt)) || 0;
-    }
-
+    /* ⛔ A DECISÃO DE PEDIDO (formato, principal, já-vinculado) fica AQUI, fora da transação:
+     * ela depende do perfil e não participa da corrida. O COOLDOWN saiu daqui de propósito —
+     * ele é a trava da concorrência e só vale se for lido e gravado dentro da transação. */
     const d = _secEmail.decidePedido({
-      email: emailBruto, perfil: perfil, agora: agora, ultimoEnvioMs: ultimoEnvioMs,
+      email: emailBruto, perfil: perfil, agora: agora, ultimoEnvioMs: 0,
       emailDoToken: (request.auth.token && request.auth.token.email) || ""
     });
     /* ⚠️ Estes motivos falam do PEDIDO de quem chama (formato, o próprio principal, a própria
@@ -5816,19 +5812,18 @@ exports.requestSecondaryEmail = onCall(
      * protege: nada aqui pode virar oráculo de "este e-mail existe no sistema". */
     if (!d.ok) return { ok: false, motivo: d.motivo };
 
-    /* ⭐ O token existe SÓ aqui e no e-mail. O documento é chaveado pelo hash. */
-    const token = _secEmail.novoToken();
-    const id = _secEmail.hashToken(token);
-    /* `create()`: se o mesmo hash já existir (colisão impossível na prática, mas o create é
-     * de graça), falha em vez de sobrescrever um pedido de outra pessoa. */
-    await db.collection("emailVerifications").doc(id).create(_secEmail.novoRegistro({
-      uid: callerUid, email: d.email, agora: agora
-    }));
-    await db.collection("emailVerifyThrottle").doc(chave).set({
-      lastSentAt: agora, uid: callerUid
-    }, { merge: true });
+    /* ⭐ RESERVA ATÔMICA (L1.1.1). Antes isto era ler-throttle → decidir → criar verificação →
+     * gravar throttle → `.add()` no outbox, tudo solto: duas chamadas simultâneas do MESMO uid
+     * pro MESMO e-mail liam o throttle vazio, ambas passavam, e saíam DOIS e-mails com DOIS
+     * links válidos. Agora as três escritas e a leitura do throttle vivem numa transação só —
+     * a concorrente é abortada pelo Firestore, re-executa, lê o throttle recém-gravado e cai
+     * no cooldown. O documento do outbox tem id derivado da reserva, então a re-execução
+     * interna reescreve o mesmo doc em vez de criar outro. */
+    const r = await _secReserva.reservarEnvio({
+      db: db, core: _secEmail, uid: callerUid, email: d.email, agora: agora
+    });
+    if (!r.ok) return { ok: false, motivo: r.motivo };
 
-    await _enqueueMail(db, _secEmail.montaEmail(d.email, _secEmail.urlDeConfirmacao(token)));
     console.log("[requestSecondaryEmail] uid=" + callerUid + " pedido enfileirado");
     return { ok: true };
   }

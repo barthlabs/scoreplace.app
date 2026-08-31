@@ -482,6 +482,121 @@ async function test_alvo_abaEsquecida_caminhoAntigoDestroi() {
   ok(!perdeuSuplente, 'FILA (suplentes): idem');
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════
+ * L1.1.1 — RESERVA DO E-MAIL SECUNDÁRIO É ATÔMICA
+ *
+ * ⛔ A CORRIDA REAL: `requestSecondaryEmail` lia o throttle, decidia, e só DEPOIS criava a
+ * verificação, gravava o throttle e enfileirava o e-mail. Duas chamadas simultâneas do MESMO
+ * uid pro MESMO endereço liam o throttle vazio, ambas concluíam "pode enviar" e saíam DOIS
+ * e-mails, cada um com um link válido.
+ *
+ * ⛔ POR QUE ESTE TESTE PRECISA DO EMULADOR: a serialização é imposta pelo SERVIDOR (a
+ * transação aborta e re-executa em conflito). Um dublê em memória tornaria a corrida
+ * IMPOSSÍVEL e o teste passaria a medir a minha imaginação — que é justamente o que a
+ * memória project_concurrency_safe_saves proíbe.
+ * ════════════════════════════════════════════════════════════════════════════════ */
+const _secCore = require('../../functions/secondary-email-core.js');
+const _secRes = require('../../functions/secondary-email-reserva.js');
+
+async function _limpaSec() {
+  for (const col of ['emailVerifyThrottle', 'emailVerifications', 'mail']) {
+    const snap = await H.rawDb.collection(col).get();
+    await Promise.all(snap.docs.map((d) => d.ref.delete().catch(() => {})));
+  }
+}
+const _contar = async (col) => (await H.rawDb.collection(col).get()).size;
+const _reservar = (uid, email, agora) =>
+  _secRes.reservarEnvio({ db: H.rawDb, core: _secCore, uid: uid, email: email, agora: agora });
+
+async function test_alvo_secEmail_reservaAtomicaSobCorrida() {
+  await _limpaSec();
+  const uid = 'uidCorrida', email = 'alvo@corrida.test';
+  /* DUAS chamadas DISPARADAS JUNTAS, com o MESMO instante — o pior caso: nada no throttle
+   * pra nenhuma das duas ver. */
+  const agora = Date.now();
+  const [a, b] = await Promise.all([_reservar(uid, email, agora), _reservar(uid, email, agora)]);
+
+  const okCount = [a, b].filter((r) => r && r.ok).length;
+  ok(okCount === 1, 'das DUAS concorrentes, exatamente UMA reservou (veio ' + okCount + ')');
+  const recusada = [a, b].find((r) => r && !r.ok);
+  ok(recusada && recusada.motivo === 'cooldown',
+    'e a outra foi recusada por cooldown (veio ' + (recusada && recusada.motivo) + ')');
+
+  eq(await _contar('emailVerifications'), 1, 'UMA verificação criada');
+  eq(await _contar('mail'), 1, 'UM documento de outbox — não dois e-mails');
+
+  const vencedora = [a, b].find((r) => r && r.ok);
+  const vSnap = await H.rawDb.collection('emailVerifications').get();
+  const vDoc = vSnap.docs[0];
+  ok(vDoc.id === vencedora.hash, 'o id do documento de verificação é o HASH do token');
+  ok(JSON.stringify(vDoc.data()).indexOf(vencedora.token) === -1,
+    'o token BRUTO não aparece no documento de verificação');
+  ok(vDoc.data().ownerUid === uid, 'e o dono gravado é quem pediu');
+
+  const mSnap = await H.rawDb.collection('mail').get();
+  ok(mSnap.docs[0].id === vencedora.mailId, 'o outbox usa o id determinístico da reserva');
+  ok(JSON.stringify(mSnap.docs[0].data()).indexOf(vencedora.token) !== -1,
+    'e é ELE que carrega o link (a extensão precisa; o cliente não lê /mail)');
+}
+
+/* DIAGNÓSTICO — prova que a corrida EXISTIA. Reproduz a sequência da L1.1 (ler o throttle,
+ * decidir, e só então escrever) contra o MESMO emulador. Fica VERDE documentando a doença:
+ * se um dia ela parar de duplicar, é porque o teste deixou de exercitar o caminho antigo e
+ * o "alvo" acima virou verde por acidente. */
+async function test_diag_secEmail_sequenciaAntigaDuplica() {
+  await _limpaSec();
+  const uid = 'uidDiag', email = 'alvo@diag.test';
+  const agora = Date.now();
+  const chave = _secCore.chaveDeThrottle(uid, email);
+  const tRef = H.rawDb.collection('emailVerifyThrottle').doc(chave);
+
+  const antigo = async () => {
+    /* 1) lê o throttle FORA de qualquer transação — era exatamente assim */
+    const snap = await tRef.get();
+    const ultimo = (snap.exists && Number((snap.data() || {}).lastSentAt)) || 0;
+    if (ultimo && (agora - ultimo) < _secCore.COOLDOWN_MS) return { ok: false };
+    /* 2) só então escreve, cada uma com seu token e `.add()` no outbox */
+    const token = _secCore.novoToken();
+    await H.rawDb.collection('emailVerifications').doc(_secCore.hashToken(token))
+      .set(_secCore.novoRegistro({ uid: uid, email: email, agora: agora }));
+    await tRef.set({ lastSentAt: agora, uid: uid }, { merge: true });
+    await H.rawDb.collection('mail').add(_secCore.montaEmail(email, _secCore.urlDeConfirmacao(token)));
+    return { ok: true };
+  };
+
+  const [x, y] = await Promise.all([antigo(), antigo()]);
+  ok(x.ok && y.ok, 'no caminho ANTIGO as duas concorrentes passam (nenhuma vê a outra)');
+  eq(await _contar('mail'), 2, 'e saem DOIS e-mails — a duplicata que a leva veio fechar');
+  eq(await _contar('emailVerifications'), 2, 'com DOIS links válidos ao mesmo tempo');
+}
+
+async function test_alvo_secEmail_retryNaoDuplica() {
+  await _limpaSec();
+  const uid = 'uidRetry', email = 'alvo@retry.test';
+  const agora = Date.now();
+  const r1 = await _reservar(uid, email, agora);
+  ok(r1.ok, 'a primeira reserva passa');
+  /* RETRY imediato — o que acontece quando a resposta se perde na volta e o cliente repete */
+  const r2 = await _reservar(uid, email, agora + 1);
+  ok(!r2.ok && r2.motivo === 'cooldown', 'o retry é recusado (cooldown), não vira 2o e-mail');
+  eq(await _contar('mail'), 1, 'segue UM documento de outbox');
+  eq(await _contar('emailVerifications'), 1, 'e UMA verificacao');
+}
+
+async function test_alvo_secEmail_cooldownAindaVale() {
+  await _limpaSec();
+  const uid = 'uidCool', email = 'alvo@cool.test';
+  const t0 = Date.now();
+  ok((await _reservar(uid, email, t0)).ok, 'primeiro envio passa');
+  const dentro = await _reservar(uid, email, t0 + _secCore.COOLDOWN_MS - 1000);
+  ok(!dentro.ok && dentro.motivo === 'cooldown', 'dentro da janela, cooldown');
+  /* ⭐ e DEPOIS da janela volta a permitir: freio que não solta é porta trancada. */
+  ok((await _reservar(uid, email, t0 + _secCore.COOLDOWN_MS + 1000)).ok, 'passada a janela, permite de novo');
+  eq(await _contar('mail'), 2, 'e ai sim sao DOIS documentos de outbox (dois pedidos legitimos)');
+  const outro = await _reservar(uid, 'outro@cool.test', t0 + 1);
+  ok(outro.ok, 'o freio e por PAR uid+email: outro endereco do mesmo uid nao e bloqueado');
+}
+
 (async function main() {
   // window global usado pelos mutators do teste de views (emu-harness-views seta global.window=global)
   const suites = [
@@ -498,6 +613,10 @@ async function test_alvo_abaEsquecida_caminhoAntigoDestroi() {
     ['alvo FASE B leitura isolada (loadMatchResult + collectionGroup)', test_alvo_faseB_isolatedReads],
     ['alvo ABA ESQUECIDA não apaga o trabalho dos outros', test_alvo_abaEsquecida_naoApagaOsOutros],
     ['alvo ABA ESQUECIDA — contra-exemplo do caminho antigo', test_alvo_abaEsquecida_caminhoAntigoDestroi],
+    ['diag L1.1.1 sequencia ANTIGA duplica o e-mail', test_diag_secEmail_sequenciaAntigaDuplica],
+    ['alvo L1.1.1 reserva de e-mail secundario ATOMICA sob corrida', test_alvo_secEmail_reservaAtomicaSobCorrida],
+    ['alvo L1.1.1 retry nao duplica o e-mail', test_alvo_secEmail_retryNaoDuplica],
+    ['alvo L1.1.1 cooldown continua valendo (e soltando)', test_alvo_secEmail_cooldownAindaVale],
   ];
   for (const [name, fn] of suites) {
     console.log('──────────── ' + name + ' ────────────');

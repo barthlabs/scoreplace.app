@@ -128,14 +128,55 @@ console.log('\n⑦ as Functions existem, com o contrato certo\n');
   const con = idx.slice(idx.indexOf('exports.confirmSecondaryEmail'), idx.indexOf('exports.requestEmailMerge'));
   ok(/const callerUid = request\.auth && request\.auth\.uid;[\s\S]{0,120}unauthenticated/.test(req),
     '⭐ requestSecondaryEmail EXIGE autenticação');
-  ok(/_secEmail\.novoToken\(\)/.test(req) && /_secEmail\.hashToken\(token\)/.test(req), 'gera token e grava pelo hash');
-  ok(/\.create\(/.test(req), 'usa create() — não sobrescreve pedido existente');
-  ok(/emailVerifyThrottle/.test(req), 'e registra o freio de reenvio');
-  ok(/_enqueueMail\(db, _secEmail\.montaEmail\(/.test(req), 'o e-mail sai do template do servidor');
+  /* ⚠️ L1.1.1 — ESTAS QUATRO MUDARAM DE CASA, não sumiram. Gerar o token, gravar pelo hash,
+   * registrar o freio e montar o e-mail saíram do corpo da Function e foram para a RESERVA
+   * atômica (`functions/secondary-email-reserva.js`) — que é o que fecha a corrida. Apontar
+   * as asserções pro lugar novo preserva a intenção; deixá-las no corpo da CF só provaria
+   * que o código não se moveu. */
+  const _res = fs.readFileSync(path.join(RAIZ, 'functions', 'secondary-email-reserva.js'), 'utf8');
+  ok(/core\.novoToken\(\)/.test(_res) && /core\.hashToken\(token\)/.test(_res), 'gera token e grava pelo hash (na reserva)');
+  ok(/emailVerifyThrottle/.test(_res), 'e registra o freio de reenvio (na reserva)');
+  ok(/core\.montaEmail\(email, core\.urlDeConfirmacao\(token\)\)/.test(_res), 'o e-mail sai do template do servidor');
+  ok(/mailDocIdDaReserva\(chave, agora\)/.test(_res),
+    '⭐ e o outbox usa id determinístico em vez de `.add()` — era o `.add()` que duplicava no retry');
   ok(!/request\.data && request\.data\.(html|subject|to)\b/.test(req), '⛔ não aceita html/subject/to do cliente');
   ok(/runTransaction/.test(con), '⭐ confirmSecondaryEmail marca uso e vincula na MESMA transação');
   ok(/dec\.ownerUid/.test(con) && !/request\.auth\.uid/.test(con), '⛔ vincula ao ownerUid do registro, e nem olha o uid de quem chama');
   ok(/used: true/.test(con) && /verified: true/.test(con), 'marca used e verified (compatível com o registro antigo)');
+}
+
+console.log('\n⑧ L1.1.1 — a reserva do envio é ATÔMICA\n');
+{
+  const idx = fs.readFileSync(path.join(RAIZ, 'functions', 'index.js'), 'utf8');
+  const req = idx.slice(idx.indexOf('exports.requestSecondaryEmail'), idx.indexOf('exports.confirmSecondaryEmail'));
+  ok(/_secReserva\.reservarEnvio\(/.test(req), '⭐ o pedido passa pela reserva atômica');
+  ok(!/collection\("emailVerifyThrottle"\)\.doc\(chave\)\.get\(\)/.test(req),
+    '⛔ e NÃO lê mais o throttle solto antes de decidir (era a corrida)');
+  ok(!/_enqueueMail\(db, _secEmail\.montaEmail/.test(req),
+    '⛔ nem enfileira o e-mail fora da transação (o `.add()` duplicava no retry)');
+
+  const res = fs.readFileSync(path.join(RAIZ, 'functions', 'secondary-email-reserva.js'), 'utf8');
+  ok(/db\.runTransaction\(/.test(res), '⭐ as escritas vivem numa transação');
+  const tx = res.slice(res.indexOf('return db.runTransaction('));
+  ok(/tx\.get\(throttleRef\)/.test(tx), '   que LÊ o throttle dentro dela — é isso que serializa as concorrentes');
+  /* ⚠️ `throttleRef` é criado FORA da transação (precisa ser lido por `tx.get`), então a
+   * escrita dele aparece como `tx.set(throttleRef, …)` e não com o nome da coleção. A 1ª
+   * versão desta asserção procurava o nome e reprovou o código CERTO. */
+  ok(/tx\.set\(db\.collection\('emailVerifications'\)/.test(tx), '   e escreve `emailVerifications` na MESMA transação');
+  ok(/tx\.set\(throttleRef,/.test(tx), '   e o throttle (lido por tx.get logo acima) na MESMA transação');
+  ok(/tx\.set\(db\.collection\('mail'\)/.test(tx), '   e o outbox `mail` na MESMA transação');
+  ok(!/tx\.create\(/.test(res),
+    '⛔ usa tx.set, não tx.create — `create` não existe no SDK compat que o teste de concorrência usa');
+  ok(/const token = core\.novoToken\(\);[\s\S]{0,400}return db\.runTransaction/.test(res),
+    '⭐ o token e o id do outbox nascem FORA da transação (dentro, a re-execução mudaria o id)');
+
+  const core = fs.readFileSync(CORE, 'utf8');
+  ok(/function mailDocIdDaReserva\(chaveThrottle, agoraMs\)/.test(core),
+    '⭐ o documento de outbox tem id DETERMINÍSTICO derivado da reserva');
+  const C2 = require(CORE);
+  ok(C2.mailDocIdDaReserva('k', 1) === C2.mailDocIdDaReserva('k', 1), '   estável para a mesma reserva');
+  ok(C2.mailDocIdDaReserva('k', 1) !== C2.mailDocIdDaReserva('k', 2), '   e diferente para outra');
+  ok(C2.mailDocIdDaReserva('k', 1) !== C2.mailDocIdDaReserva('j', 1), '   e diferente para outro par uid+e-mail');
 }
 
 console.log('\n' + (fail ? '✗ ' + fail + ' falha(s) de ' + (pass + fail) : '✅ ' + pass + '/' + pass + ' ok') + '\n');

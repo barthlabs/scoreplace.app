@@ -1,5 +1,15 @@
 # Changelog do scoreplace.app
 
+## 2.1.68 — A reserva do e-mail secundário vira atômica (31/ago/2026)
+
+- **Corrida fechada:** `requestSecondaryEmail` lia `emailVerifyThrottle` fora de qualquer transação, decidia, e só depois criava a verificação, gravava o throttle e enfileirava o e-mail com `.add()`. Duas requisições simultâneas do mesmo uid para o mesmo endereço liam o throttle vazio, ambas concluíam "pode enviar", criavam **dois tokens** e disparavam **dois e-mails**, cada um com um link válido. O `.add()` ainda garantia que um retry gerasse um segundo documento de outbox.
+- **Correção:** `functions/secondary-email-reserva.js` — ler o throttle, decidir, criar a verificação, gravar o throttle e criar o documento de outbox acontecem numa **transação só**. As concorrentes disputam o mesmo documento de throttle: uma commita, a outra é abortada pelo Firestore, re-executa, lê o throttle recém-gravado e cai no cooldown. No máximo um envio válido por janela.
+- **Outbox com id determinístico:** o documento em `/mail` passou a ter id derivado da reserva (`mailDocIdDaReserva` = hash da chave do throttle + instante), então a re-execução interna da transação reescreve o mesmo documento em vez de criar outro. ⚠️ Por isso o token e o id nascem **fora** da transação — gerados dentro, cada re-execução mudaria o id e a idempotência morreria.
+- **`tx.set`, nunca `tx.create`:** o módulo roda com o Admin SDK na Function e com o SDK compat no teste de concorrência, e `transaction.create` não existe no compat. A proteção contra duplicata vem da leitura do throttle dentro da transação, que é o que serializa as concorrentes.
+- **Preservado:** token CSPRNG, apenas o hash no `emailVerifications`, confirmação pública por posse do link, expiração, uso único, vínculo ao `ownerUid` do pedido, template fixo no servidor e nenhuma enumeração de contas.
+- **Provas contra o emulador** (`npm run test:concurrency`, 68 ok): duas solicitações simultâneas geram uma única verificação e um único outbox; retry não duplica; cooldown continua valendo e voltando a soltar; o token bruto não entra no documento de verificação; e um diagnóstico reproduz a **sequência antiga** contra o mesmo emulador para provar que ela duplicava — sem ele, o teste-alvo poderia ficar verde por acidente.
+- **Rules:** não mudaram. `/mail` já era `read: if false` para o cliente.
+
 ## 2.1.67 — Filtros que ninguém pediu saem, e a porta que sujava o documento fecha (31/ago/2026)
 
 - **Filtros:** removidas as pílulas **"Pra Você"** e **"Organizados"** da dashboard — ordem do dono, que nunca as pediu. "Explorar" fica. ⚠️ "Pra Você" era a pílula do filtro `todos`, ou seja, a única PORTA DE VOLTA pra lista cheia; sem ela, quem clicasse em qualquer outro filtro ficaria preso. Por isso `_applyDashFilter` passou a **desligar** o filtro ativo quando ele é clicado de novo. `_circuloCount` e `organizadosCount` saíram junto — eram consumidos só por essas pílulas. A régua `_ehDoMeuCirculo` continua viva: é ela que define a lista padrão.
