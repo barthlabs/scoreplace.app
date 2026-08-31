@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.71';
+window.SCOREPLACE_VERSION = '2.1.72';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -908,6 +908,75 @@ window._souInscrito = function (t, cu) {
  * (tournament-split-core.js) — elas viajam SEMPRE no documento-base. Dar "não sei" a uma
  * resposta que já é completa inventaria carregamento onde não há, e a pessoa veria
  * "⏳ Carregando…" pra sempre num torneio que não tem espera nenhuma. */
+
+/* ══ R1.1.1 · DESISTIR PODE; FINGIR QUE AINDA ESTÁ TENTANDO, NÃO ═══════════════
+ *
+ * ⛔ O QUE FALTAVA NA 2.1.71. O teto de 6 tentativas existe pra não virar laço de rede, e
+ * está certo. Só que, esgotado o teto, a busca parava e a tela continuava mostrando
+ * "⏳ Carregando…" — girando sem nada girando por trás. Sem console (PWA no iOS) e sem
+ * botão, a única saída era fechar e reabrir o app. Um "carregando" que nunca termina é uma
+ * afirmação falsa igual a "você não está inscrito": as duas dizem à pessoa algo que não é
+ * verdade sobre o estado do sistema.
+ *
+ * ⭐ TRÊS ESTADOS AQUI TAMBÉM: carregando (há retentativa automática viva) · ERRO (o teto
+ * acabou, e existe botão) · carregado. ⛔ E o erro NUNCA vira "não inscrito": `_souInscrito`
+ * continua devolvendo `null`, porque erro de leitura não é prova de ausência.
+ */
+
+/** A leitura das partes deste torneio DESISTIU? Reconta a falta em vez de confiar só no
+ *  registro: se o ouvinte trouxe o dado no meio-tempo, isto já responde `false` sozinho —
+ *  é o que faz a tela se curar sem ninguém limpar nada. */
+window._partesFalharam = function (t) {
+  if (!t || !t.id) return false;
+  try {
+    var reg = (window.AppStore && window.AppStore._partesEmErro) || {};
+    if (!reg[String(t.id)]) return false;
+    return !!window._marcaPartesQueFaltam(t);
+  } catch (e) { return false; }
+};
+
+/** Estado de leitura das partes: 'carregado' | 'carregando' | 'erro'. FONTE ÚNICA — as
+ *  três telas (cartão, seções, detalhe) perguntam aqui pra não divergirem. */
+window._estadoDasPartes = function (t) {
+  if (!t) return 'carregado';
+  if (window._partesFalharam(t)) return 'erro';
+  try { if (window._marcaPartesQueFaltam(t)) return 'carregando'; } catch (e) {}
+  return 'carregado';
+};
+
+/* ⛔ O QUE ESTE BOTÃO **NÃO** FAZ, de propósito: não recarrega a página, não limpa cache,
+ * não desregistra service worker, não mexe em nada global. Recarregar "resolveria" por
+ * acidente e esconderia a causa — e num torneio ao vivo joga fora o estado da tela de
+ * quem está lançando placar. Ele reabre a busca DAQUELE torneio e mais nada. */
+window._tentarPartesDeNovo = function (tid, btn) {
+  var AS = window.AppStore;
+  if (!AS || !tid) return;
+  tid = String(tid);
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Tentando…'; }
+  } catch (e) {}
+  /* Zera o orçamento de tentativas: quem pediu foi a PESSOA, e a decisão dela renova o
+   * teto. ⚠️ O carimbo do piso também sai — senão o clique cairia no `continue` e o botão
+   * giraria sem nada acontecer, que é exatamente o defeito que esta leva fecha. */
+  if (AS._tentativasDePartes) delete AS._tentativasDePartes[tid];
+  if (AS._ultimaMontagem) delete AS._ultimaMontagem[tid];
+  if (AS._partesEmErro) delete AS._partesEmErro[tid];
+  if (typeof AS._montaPesadosQueFaltam === 'function') AS._montaPesadosQueFaltam([tid]);
+  /* Repinta AGORA pra sair do "erro" e entrar em "carregando" — o resultado da tentativa
+   * repinta de novo sozinho (sucesso pelo `_softRefreshView` da montagem; falha pela
+   * transição de erro). */
+  if (typeof window._softRefreshView === 'function') {
+    try { window._softRefreshView(); } catch (e) {}
+  }
+};
+
+/** O botão, num lugar só — o cartão, as seções e o detalhe usam o MESMO. */
+window._botaoTentarPartes = function (tid, texto) {
+  var idEsc = String(tid).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return '<button class="btn btn-sm" onclick="event.stopPropagation(); event.preventDefault(); window._tentarPartesDeNovo(\'' + idEsc + '\', this)" ' +
+    'style="padding:6px 12px;font-size:0.78rem;font-weight:700;background:rgba(248,113,113,0.14);border:1px solid rgba(248,113,113,0.4);border-radius:8px;color:var(--sp-c-fca5a5,#fca5a5);cursor:pointer;">' +
+    (texto || '🔄 Tentar novamente') + '</button>';
+};
 
 window._userProfileCache = window._userProfileCache || {};
 window._userProfilePending = window._userProfilePending || {};
@@ -11254,6 +11323,11 @@ window.AppStore = {
              * ⚠️ Uma busca por torneio de cada vez (`_montandoPesados`): sem isso, cada eco
              * durante a busca dispara outra, e um torneio ao vivo ecoa o tempo todo. */
             if (data && data._faltamPesados) _paraMontar.push(String(data.id));
+            /* ⭐ R1.1.1 · O OUVINTE CURA O ERRO. Se as partes chegaram por outro caminho
+             * (outra aba montou e o eco trouxe o doc inteiro, ou o torneio deixou de ser
+             * dividido), o estado de erro tem que morrer aqui — senão a tela fica com um
+             * "não consegui carregar" ao lado do dado carregado, que é pior que o erro. */
+            else if (data && store._partesEmErro) delete store._partesEmErro[String(data.id)];
           }
           _novoParsed[doc.id] = data;
           if (data && data.isSandbox === true && !_devSeesSb) return;
@@ -12498,6 +12572,7 @@ window.AppStore = {
     this._ultimaMontagem = this._ultimaMontagem || {};
     this._tentativasDePartes = this._tentativasDePartes || {};
     this._retentandoPartes = this._retentandoPartes || {};
+    this._partesEmErro = this._partesEmErro || {};
     var PISO_ENTRE_TENTATIVAS_MS = 15000;
     var MAX_TENTATIVAS = 6;
     var self = this;
@@ -12516,6 +12591,18 @@ window.AppStore = {
       self._tentativasDePartes[tid] = n;
       if (n >= MAX_TENTATIVAS) {
         if (window._warn) window._warn('[fase2] ' + tid + ': ' + n + ' tentativas sem sucesso (' + porque + ') — parando de retentar nesta sessão');
+        /* ⛔ R1.1.1 · ESGOTAR O TETO EM SILÊNCIO É "CARREGANDO…" PARA SEMPRE. A 2.1.71
+         * acertou em não converter desconhecido em "não inscrito", mas a última tentativa
+         * apenas parava: a tela ficava girando sem nada girando por trás dela, e a única
+         * saída era fechar o app. Desistir é legítimo (o contrário é laço de rede); mentir
+         * sobre estar tentando, não. Aqui a desistência vira ESTADO, e o estado tem botão.
+         * ⚠️ Repinta uma vez SÓ, na TRANSIÇÃO — repintar a cada falha seria a rajada que o
+         * piso existe pra impedir, com outro nome. */
+        var _novo = !self._partesEmErro[tid];
+        self._partesEmErro[tid] = { desde: Date.now(), tentativas: n, causa: String(porque || '').slice(0, 120) };
+        if (_novo && typeof window._softRefreshView === 'function') {
+          try { window._softRefreshView(); } catch (e) {}
+        }
         return;
       }
       if (self._retentandoPartes[tid]) return;                // já há uma agendada
@@ -12565,6 +12652,7 @@ window.AppStore = {
             delete vivo._faltamPesados;
             delete vivo._faltaOQue;
             delete self._tentativasDePartes[tid];   // deu certo: o contador zera
+            delete self._partesEmErro[tid];         // ⭐ e o erro some junto: a tela se cura
             _soltar(tid);
             try { self._saveToCache(); } catch (e) {}
             if (typeof window._softRefreshView === 'function') window._softRefreshView();

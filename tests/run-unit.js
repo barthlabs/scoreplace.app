@@ -453,6 +453,8 @@ const SUITES = [
   'tests/dashboard-nao-afirma-vazio.test.js',
   /* R1.1 — a ORIGEM: leitura incompleta apresentada como fato. Roda o AppStore real. */
   'tests/inscrito-continua-inscrito-com-parte-atrasada.test.js',
+  /* R1.1.1 — depois do teto: erro visível e recuperável, nunca "Carregando" eterno. */
+  'tests/falha-de-partes-tem-saida.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

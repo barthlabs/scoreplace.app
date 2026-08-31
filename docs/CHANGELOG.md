@@ -1,5 +1,20 @@
 # Changelog do scoreplace.app
 
+## 2.1.72 — Depois de desistir, a tela diz o que houve e oferece saída (31/ago/2026)
+
+- **O que a 2.1.71 deixou aberto.** Ela acertou o principal — dado desconhecido não vira "você não está inscrito" — e acertou o **teto de 6 tentativas**: sem teto, um torneio cujo marcador promete uma parte que a subcoleção não tem bateria na rede para sempre. O que faltou foi o **depois** do teto: a busca parava e a tela continuava mostrando **"⏳ Carregando…"**, girando sem nada girando por trás. Num PWA de iOS não há console; sem botão, a única saída era fechar e reabrir o app.
+- **⚠️ Um "carregando" que nunca termina é uma afirmação falsa** — da mesma família de "você não está inscrito". As duas contam à pessoa algo que não é verdade sobre o estado do sistema. Desistir é legítimo; fingir que ainda se está tentando, não.
+- **Três estados de leitura, em fonte única** (`window._estadoDasPartes`): `carregando` (há retentativa automática viva) · `erro` (o teto acabou) · `carregado`. As três telas — cartão da inicial, seções "📣 Novidades"/"🏅 Seus últimos resultados" e detalhe do torneio — perguntam no mesmo lugar, para não divergirem.
+- **⛔ Erro NÃO vira ausência:** `_souInscrito` continua devolvendo `null` no estado de erro. Falha de **leitura** não é prova de que a pessoa não está inscrita. Travado em teste.
+- **O número do cartão passa de `…` para `—`** quando o teto acaba. Reticências querem dizer "já volto"; depois de desistir, nada está a caminho, e prometer o que não vem é o mesmo defeito com outra tipografia.
+- **Botão "🔄 Tentar novamente"**, visível no cartão, na faixa das seções e no detalhe — o **mesmo** botão nos três lugares (dois desenhos divergiriam). ⛔ Ele **não** recarrega a página, **não** limpa cache ou armazenamento, **não** desregistra o service worker e **não** mexe em nada global: reabre a busca **daquele** torneio e mais nada. Recarregar "resolveria" por acidente, esconderia a causa e, num torneio ao vivo, jogaria fora a tela de quem está lançando placar. Travado em teste por inspeção do corpo da função.
+- **⚠️ O clique renova o orçamento de tentativas e limpa o carimbo do piso** — sem isso ele cairia no próprio piso e o botão giraria sem nada acontecer, que é exatamente o defeito que a leva fecha.
+- **A tela se cura sozinha:** `_partesFalharam` **reconta** a falta em vez de confiar no registro, então um dado que chegue pelo listener mata o erro sem clique nenhum; e o próprio listener limpa o registro, para não sobrar lixo na sessão.
+- **Sem laço e sem rajada:** a transição para o erro repinta **uma vez só** (repintar a cada falha seria a rajada que o piso existe para impedir, com outro nome), e 12 ecos depois do teto não geram nenhuma ida ao banco. Medido no teste.
+- **⚠️ Enquanto houver retentativa viva, a interface continua dizendo "Carregando"** — anunciar erro com tentativa em andamento assusta à toa.
+- **Provas:** `tests/falha-de-partes-tem-saida.test.js` roda o **AppStore real** e o **`_buildMyResultsHtml` real** — 47 asserções: seis falhas terminam em erro visível; o erro não declara "não inscrito"; "Tentar novamente" vai de fato ao banco; o sucesso posterior devolve inscrição, inscritos e o jogo na seção **sem reload**; a chegada tardia pelo listener também cura; e não há laço nem rajada. Contra a árvore da 2.1.71 a suíte fica vermelha em 28.
+- **Nada de dados:** nenhuma escrita, migração ou backfill. Firestore, Functions, Rules, autodraw, Stripe, `/mail` e amizade intocados. `sw.js` mudou uma linha: o `CACHE_NAME` do rito de versão.
+
 ## 2.1.71 — "Não sei ainda" vira um estado, e para de sair como "você não está inscrito" (31/ago/2026)
 
 - **O relato, que sobrevivia a hard reset:** quem está inscrito aparecia como "não inscrito"; contagens sumiam ou reduziam; "📣 Novidades no seu torneio" e "🏅 Seus últimos resultados" desapareciam.

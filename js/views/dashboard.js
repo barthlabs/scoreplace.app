@@ -385,8 +385,13 @@ window._verMaisTag = _verMaisTag;
  * Recupera-se sozinho: `_marcaPartesQueFaltam` já dispara a busca das partes, e a
  * chegada delas re-renderiza. Nenhum reload, nenhum laço. */
 window._dashNum = function (n, t) {
-  return (typeof window._dadosConfiaveis === 'function' && !window._dadosConfiaveis(t))
-    ? '…' : n;
+  if (typeof window._dadosConfiaveis === 'function' && window._dadosConfiaveis(t)) return n;
+  /* ⛔ R1.1.1 · "…" QUER DIZER "JÁ VOLTO". Depois de esgotado o teto de tentativas nada
+   * mais está a caminho, e continuar mostrando reticências é prometer o que não vai
+   * acontecer. "—" diz "não tenho este número", e o botão de tentar de novo mora no
+   * bloco do botão de inscrição, logo abaixo. */
+  if (typeof window._partesFalharam === 'function' && window._partesFalharam(t)) return '—';
+  return '…';
 };
 
 function renderDashboard(container) {
@@ -783,6 +788,7 @@ function renderDashboard(container) {
       ? window._souInscrito(t, window.AppStore.currentUser)
       : window._cardSouInscrito(t, window.AppStore.currentUser);
     const _inscricaoIndefinida = (isParticipating === null);
+    const _partesEmErro = (typeof window._partesFalharam === 'function') && window._partesFalharam(t);
 
     // v2.1.5: detecta se o usuário está na lista de espera (standby/waitlist)
     // Usa _userMatchesParticipant centralizado para consistência com detalhes.
@@ -874,6 +880,12 @@ function renderDashboard(container) {
       // O geral continua na PÁGINA do torneio (onde a pessoa está olhando o evento);
       // o do jogo mora na chave, que é onde ela está olhando o jogo dela.
       enrollBtnHtml = `<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>`;
+    } else if (_inscricaoIndefinida && _partesEmErro) {
+      /* ⛔ R1.1.1 · esgotou o teto: nada mais está a caminho. Dizer "Carregando" aqui é
+       * mentira, e sem botão a única saída era fechar o app. */
+      enrollBtnHtml = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">`
+        + `<span style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;color:var(--sp-c-fca5a5,#fca5a5);">⚠️ Não carregou</span>`
+        + window._botaoTentarPartes(t.id) + `</div>`;
     } else if (_inscricaoIndefinida && canEnroll) {
       /* ⛔ NÃO oferecer "Inscrever-se" enquanto não se sabe: pra quem JÁ está inscrito
        * esse botão é uma afirmação errada na cara da pessoa, e clicá-lo dispara uma
@@ -2086,8 +2098,30 @@ function renderDashboard(container) {
           _indef = window.AppStore.participacoesIndefinidas() || [];
         }
       } catch (e) { _indef = []; }
-      if (_indef.length ||
-          (typeof window._listaConfiavel === 'function' && !window._listaConfiavel(participacoes))) {
+      var _incertos = _indef.slice();
+      (participacoes || []).forEach(function (t) {
+        if (t && typeof window._dadosConfiaveis === 'function' && !window._dadosConfiaveis(t) &&
+            _incertos.indexOf(t) === -1) _incertos.push(t);
+      });
+      if (_incertos.length) {
+        /* ⛔ R1.1.1 · "CARREGANDO" SÓ ENQUANTO ALGO ESTÁ MESMO A CAMINHO. Esgotado o teto
+         * de tentativas, nada está — e a faixa girava para sempre, sem console (PWA no
+         * iOS) e sem saída que não fosse fechar o app. Se TODO torneio incerto desistiu, a
+         * faixa diz o que houve e traz o botão. ⚠️ Se ainda há um tentando, continua
+         * "Carregando": anunciar erro com retentativa viva assusta à toa. */
+        var _emErro = _incertos.filter(function (t) {
+          return typeof window._partesFalharam === 'function' && window._partesFalharam(t);
+        });
+        if (_emErro.length && _emErro.length === _incertos.length) {
+          var _tid = String(_emErro[0].id);
+          return '<div style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.28);border-radius:14px;padding:16px;margin-bottom:1rem;text-align:center;">' +
+            '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">🏅 Seus jogos e novidades</div>' +
+            '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;line-height:1.5;">Não consegui carregar os dados ' +
+              (_emErro.length > 1 ? 'dos seus torneios' : 'do torneio <b>' + (window._safeHtml ? window._safeHtml(_emErro[0].name || '') : '') + '</b>') +
+              '.<br>Seus jogos e inscrições continuam salvos — foi a leitura que falhou.</div>' +
+            '<div style="margin-top:12px;">' + window._botaoTentarPartes(_tid) + '</div>' +
+            '</div>';
+        }
         return '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.22);border-radius:14px;padding:16px;margin-bottom:1rem;text-align:center;">' +
           '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">🏅 Seus jogos e novidades</div>' +
           '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Carregando os dados dos seus torneios…</div>' +

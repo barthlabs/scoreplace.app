@@ -2544,6 +2544,7 @@ function renderTournaments(container, tournamentId = null) {
           : (t.participants && window.AppStore.currentUser && typeof window._isUserEnrolledInTournament === 'function'
               ? window._isUserEnrolledInTournament(window.AppStore.currentUser, t) : false);
         const _inscricaoIndefinida = (isParticipating === null);
+        const _partesEmErro = (typeof window._partesFalharam === 'function') && window._partesFalharam(t);
 
         // v2.1.3: usuário está na LISTA DE ESPERA (standby/waitlist)? Inscrição
         // tardia (pós-sorteio, Fechadas OFF) coloca o novo inscrito aqui — e o
@@ -2735,6 +2736,14 @@ function renderTournaments(container, tournamentId = null) {
              <div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
                ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
                <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>
+             </div>
+          ` : (isAberto && _inscricaoIndefinida && _partesEmErro && window.AppStore.currentUser) ? `
+             ${/* ⛔ R1.1.1 — o teto de tentativas acabou: NADA está a caminho. Manter
+                  "⏳ Carregando…" aqui é girar sem nada girando por trás, e sem console
+                  (PWA no iOS) a única saída era fechar o app. */ ''}
+             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+               <span style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;color:var(--sp-c-fca5a5,#fca5a5);">⚠️ Lista não carregou</span>
+               ${window._botaoTentarPartes(t.id)}
              </div>
           ` : (isAberto && (!_profileReady || _inscricaoIndefinida) && window.AppStore.currentUser) ? `
              ${/* ⛔ R1.1 — o MESMO gate de "⏳ Carregando…" passa a cobrir o elenco que ainda
