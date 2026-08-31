@@ -18,7 +18,7 @@
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
-| L4 | profile/privacy + e-mail secundário | **Aberta.** Há caminhos históricos de perfil, verificação e identidade que exigem uma fonte de verdade explícita. | Inventário de campos, PII, leitores e writers; manter recuperação de conta. |
+| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0, read-only).** 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
@@ -591,6 +591,204 @@ com quem não atualizar). É o mesmo bloqueio já registrado na L2, e ele contin
 - **PROPOSTA FUTURA — não formulada:** nenhum texto de Rule, nenhuma assinatura de capability
   e nenhum desenho server-side foi escrito nesta leva. O que existe é o contrato acima e a
   lista de gates que teriam de estar verdes **antes** de qualquer implementação começar.
+
+**L4.P0 — inventário read-only (31/ago/2026). ⛔ Nenhuma arquitetura escolhida, nenhum texto
+de Rule proposto, nenhum dado de produção consultado.** Tudo abaixo saiu de varredura
+estrutural do repositório — mesmo método da L3.P0.1, porque o método importa: `userLifecycle`
+é alcançado por `const COL = 'userLifecycle'` (`functions/amizade-lock.js:35`), nome de
+coleção **guardado em variável**, que uma busca pelo literal não acharia.
+
+**(1) As superfícies de identidade, e quem manda em cada uma.**
+
+| Documento / subcoleção | Rules | Autoridade de escrita |
+|---|---|---|
+| `users/{uid}` (`:577`) | `read: auth != null` · create/update/delete só o dono | dono, **menos 15 campos privilegiados** |
+| `users/{uid}/notifications` (`:658`) | read/update/delete só o dono · **`create: auth != null`** | qualquer autenticado ESCREVE na caixa alheia |
+| `users/{uid}/matchHistory` (`:679`) | read pelo dono **ou** `statsVisibility` · write só o dono | dono |
+| `users/{uid}/templates` (`:687`) | read/write só o dono | dono |
+| `users/{uid}/phoneVerifyAttempts` (`:702`) | read/write só o dono | dono |
+| `users/{uid}/trophies` (`:717`), `milestones` (`:723`) | read pelo dono ou `statsVisibility` · write só o dono | dono (e backfill por Admin SDK) |
+| `emailVerifications/{hashDoToken}` (`:749`) | `read, write: if false` | **só Admin SDK** (L1.1) |
+| `emailVerifyThrottle/{chave}` (`:754`) | `read, write: if false` | só Admin SDK |
+| `emailVerifyCodes/{uid}` (`:910`) | `read, write: if false` | só Admin SDK |
+| `magicLinks/{token}` (`:921`) | **`read: if true`** · write false | só Admin SDK; leitura pública pelo token |
+| `loginRedirects/{key}` (`:858`) | `read, write: if false` | só Admin SDK — é PROVA de acesso |
+| `userLifecycle/{uid}` (`:804`) | read só o dono · write false | só Admin SDK |
+| `friendships/{pairId}` (`:809`) | read pelas duas pontas · write false | só Admin SDK |
+| `friendAccess/{uid}/accepted/{fid}` (`:814`) | read pelas duas pontas · write false | só Admin SDK |
+| `friendRequests/{id}` (`:832`) | `read, write: if false` | ninguém — coleção morta |
+| `presences/{id}` (`:931`) | **`read: auth != null`** · create com uid próprio · update/delete do dono | dono |
+| `reports/{id}` (`:840`) | create com `reporterUid` próprio · read/update/delete false | só criação |
+| `mergeTokens`, `mergeProofLimits` | **sem bloco nas Rules** | negadas pelo default-deny — server-only **por ausência**, não por declaração |
+
+**(2) PII e nível de exposição.** ⚠️ O comentário da regra de `users` diz que a leitura
+autenticada *"strips PII from anonymous visitors"* — e é verdade para **anônimo**. Para
+**qualquer pessoa logada**, `allow read: if request.auth != null` entrega o documento
+**inteiro**: `email`, `email_lower`, `linkedEmails[]`, `phone`, `linkedPhones[]`,
+`fcmToken`, `preferredCeps`, `displayName`, `photoURL`, `gender`, `birthDate`,
+`statsVisibility` e os sinais de identidade (`dupSuspect`, `nameConflict`, `mergedInto`).
+Não há projeção nem campo escondido — [[project_email_no_doc_publico]] registra a mesma
+classe. **Server-only de fato:** token de e-mail secundário (só o hash),
+código de verificação (hasheado), `loginRedirects`, `mergeTokens`, `mergeProofLimits`,
+`friendships`/`friendAccess`, `userLifecycle`.
+
+**(3) Leitores e escritores, por camada.** Contagem estrutural (janela de 4 linhas;
+L = sem verbo de escrita, E = com):
+
+| Coleção | Cliente L/E | Function L/E | Script L/E |
+|---|---|---|---|
+| `users` | **69/39** | **106/60** | 12/2 |
+| `notifications` | 7/3 | 5/13 | 0/0 |
+| `presences` | 9/3 | 4/0 | 0/0 |
+| `friendships` | 0/0 | 9/3 | 4/5 |
+| `friendAccess` | 0/0 | 5/3 | 3/1 |
+| `emailVerifications` | **0/0** | 1/2 | 0/0 |
+| `emailVerifyThrottle` · `emailVerifyCodes` | 0/0 | 1/0 · 2/0 | 0/0 |
+| `loginRedirects` | 0/0 | 2/1 | 0/0 |
+| `magicLinks` | 1/0 | 1/2 | 0/0 |
+| `mergeTokens` · `mergeProofLimits` | 0/0 | 1/1 · 1/0 | 0/0 |
+| `trophies` · `milestones` | 2/3 · 0/2 | 3/2 · 2/4 | 0/0 |
+| `friendRequests` · `userLifecycle` | 0/0 | 0/0 (⚠️ nome em variável) | 0/0 |
+
+⭐ O desenho da L1 aparece no número: `emailVerifications` tem **zero** chamadas no cliente e
+`friendships`/`friendAccess` também. `users`, ao contrário, é a superfície larga — 39 sítios
+de escrita no cliente e 60 nas Functions.
+
+**(4) Campos privilegiados — 15, bloqueados no create E no update.**
+`privilegedUserFields()` (`firestore.rules:628`): `mergedInto`, `mergedAt`, `plan`,
+`planExpiresAt`, `dupDismissed`, `dupDismissedInfo`, `dupSuspect`, `nameConflict`,
+`phoneSource`, `phoneSetBy`, `phoneSetAt`, `friends`, `friendRequestsSent`,
+`friendRequestsReceived`, `friendRequestsSentAt`. ⭐ Conferido nesta varredura: **nenhum
+caminho do cliente escreve nenhum dos 15**. Dois quase-positivos foram inspecionados e
+descartados — `js/views/auth.js:4576` (`plan:`) vai para `window._identify`, que é analytics,
+e `js/views/explore.js:1451-1452` mexe no objeto em memória do otimismo de amizade, não num
+payload do Firestore.
+
+**(5) O ciclo do e-mail secundário, ponta a ponta.**
+
+| Etapa | Onde | Autoridade |
+|---|---|---|
+| Pedido | `requestSecondaryEmail` (`functions/index.js:5986`) | callable autenticada; valida formato/principal/já-vinculado fora da transação |
+| Reserva | `functions/secondary-email-reserva.js` | **transação** — lê o throttle e grava verificação + throttle + outbox juntos (L1.1.1) |
+| Token | `secondary-email-core.js:42` | CSPRNG de 32 bytes no servidor; o banco guarda só o **sha256** — o id do doc É o hash |
+| Prazo | `PRAZO_MS = 24 h` (`:35`) | `decideConfirmacao` recusa expirado |
+| Freio | `COOLDOWN_MS = 2 min` (`:36`), por (uid, e-mail) | dentro da transação — é ela que serializa |
+| Confirmação | `confirmSecondaryEmail` (`functions/index.js:6032`) | **não exige sessão** (o link chega na caixa); vincula ao `ownerUid` do REGISTRO, nunca a quem clica; marca `used` e vincula na MESMA transação |
+| Merge | `functions/index.js:6754` | reaponta `emailVerifications.ownerUid` de oldUid para o sobrevivente |
+| Recuperação | `_uidByProfileEmail` (`:4281`) → `_resolveAccount` (`:4332`) | resolve e-mail → conta em `checkAccount` (`:4395`), login por senha (`:4511`) e reset (`:4562`) — **sempre com o Auth primeiro**, o perfil só como queda |
+| **Remoção** | `window._profileUnlinkEmail` (`js/views/auth.js:9626`) | ⚠️ **escrita DIRETA do cliente**: `users/{uid}.update({ linkedEmails })` |
+
+**(6) Invariantes da L1 e das correções de identidade que não podem regredir.**
+1. `/mail` e `emailVerifications` são **server-only**; o cliente não gera token nem monta
+   e-mail (L1.1, L1.2).
+2. A confirmação vincula ao `ownerUid` **do registro**, nunca ao uid de quem clica.
+3. Assunto, corpo e destinatário do e-mail nascem no servidor; nada de `html`/`subject`/`to`
+   vindos do cliente.
+4. Id de outbox **determinístico** — `.add()` duplicava no retry (L1.1.1).
+5. Os motivos devolvidos ao cliente **não podem virar oráculo** de "este e-mail existe no
+   sistema" (travado em `tests/email-secundario-server-only.test.js:65`).
+6. Campo que o servidor trata como PROVA não se escreve pelo cliente — a lição do
+   `mergedInto` (sequestro provado no emulador em 15/jul/2026, `firestore.rules:583-598`).
+7. Identidade é **uid**; e-mail e nome não autorizam nada
+   ([[feedback_uid_controls_everything_name_only_ficticio]]).
+8. A lápide (`mergedInto`) é **carga, não lixo** — não se apaga.
+9. Não existe regra de unicidade de e-mail entre contas, e **inventá-la seria comportamento
+   novo** (`functions/secondary-email-core.js:22-28`).
+
+**(7) Representações duplicadas de identidade.** E-mail vive em `users.email`,
+`users.email_lower`, `users.linkedEmails[]`, no **Auth** (primário e sintético) e em
+`loginRedirects` (chaveado pela credencial). Telefone vive em `users.phone`,
+`users.linkedPhones[]`, no Auth (`phoneNumber`), no e-mail sintético derivado do número, e
+tem **procedência própria** em `phoneSource`/`phoneSetBy`/`phoneSetAt` — é ela que decide se
+o número vale como identidade ou só como contato. Nome vive em `displayName` e no rótulo
+gravado em slots/inscritos. Uid vive no doc, em `playerUids`/`memberUids`, na lápide
+`mergedInto` e em `loginRedirects`. ⚠️ Cada duplicação tem dono declarado — o problema
+conhecido não é a duplicação em si, é quando duas autoridades escrevem a mesma projeção
+(foi o que a 4ª auditoria fechou em `friends[]`, hoje campo privilegiado).
+
+**(8) Concorrência e retries.**
+- *Dois pedidos simultâneos do mesmo par (uid, e-mail):* fechado pela transação da reserva —
+  a concorrente é abortada, re-executa, lê o throttle recém-gravado e cai no cooldown.
+- *Dois cliques no mesmo link:* fechado — `used` e o vínculo na mesma transação.
+- *Retry do gatilho:* o id de outbox é derivado da reserva, então a re-execução reescreve o
+  MESMO documento.
+- *Merge simultâneo:* `_provaDePosseDeOld` é conferida **antes e depois** do lock
+  (`functions/index.js:6239-6245`) — antes, o lock era adquirido primeiro e uma chamada sem
+  prova já marcava `merging` em duas contas alheias.
+- *Exclusão:* `deleteAccount` roda sob a posse que já existe e finaliza o lifecycle **pelo
+  fato gravado**, não por "deu erro" (`functions/index.js:5666`).
+- ⚠️ *Ainda em aberto:* `notifications` aceita `create` de qualquer autenticado, e
+  `_enqueueMail` usa `.add()` sem idempotência em seis caminhos (dívida já registrada na L1.2).
+
+**(9) Legado e o bundle nativo 2.1.28.** ⛔ **Achado novo e verificável.** O pacote embarcado
+está em `SCOREPLACE_VERSION = '2.1.28'`; a L1.1 saiu na **2.1.65** e a L1.2 na **2.1.77**.
+Comparação direta dos arquivos:
+
+| Marcador | Web (main) | `android/.../js` e `ios/.../js` |
+|---|---|---|
+| `requestSecondaryEmail` (caminho servidor) | 2 ocorrências | **0** |
+| `collection('emailVerifications')` (escrita direta) | 0 | **2** |
+| `collection('mail')` real | 0 (só a lápide em comentário, `firebase-db.js:2960`) | **presente em `firebase-db.js` e `views/auth.js`** |
+| `_checkEmailLinkIntent` (fallback removido) | 0 | **3** |
+
+⇒ O app das lojas ainda executa o fluxo ANTIGO, e as Rules que ele precisa já estão fechadas
+(`emailVerifications` e `/mail` = `if false`). Pelo código, vincular e-mail secundário e os
+três fluxos de convite por e-mail **não têm como funcionar** no app publicado.
+⚠️ Acúmulo sem limpeza: `magicLinks` tem varredura agendada (`functions/index.js:1592`), mas
+`emailVerifications`, `emailVerifyThrottle`, `emailVerifyCodes`, `mergeTokens` e
+`mergeProofLimits` **não têm nenhuma** — documentos expirados ficam para sempre (invisíveis,
+já que as Rules são deny-all, mas ficam).
+
+**(10) Testes, lacunas e gates.** A cobertura de identidade é a mais densa do repositório —
+`email-secundario-server-only` (8 blocos: token, pedido, confirmação, template, Rules,
+cliente, contrato das Functions, atomicidade), `rules-privileged-fields`, `login-redirect`,
+`merge-federated-wins`, `perfil-mesclado-hidrata-na-chave`, `lapide-nunca-vence-a-conta-viva`,
+`user-vivo-no-servidor`, `identidade-e-uid-nunca-email`, `duplicata-nomeia-o-canal`, mais 12
+suítes `functions/test-*`. **As lacunas medidas:**
+
+| Lacuna | Evidência |
+|---|---|
+| `rules-privileged-fields` cobre **4 dos 15** campos | asserções só para `mergedInto`, `mergedAt`, `plan`, `planExpiresAt`; **zero** para os outros 11 (`dupDismissed`, `dupDismissedInfo`, `dupSuspect`, `nameConflict`, `phoneSource`, `phoneSetBy`, `phoneSetAt`, `friends`, `friendRequestsSent`, `friendRequestsReceived`, `friendRequestsSentAt`) |
+| Nada trava "cliente não escreve privilegiado" | a varredura desta leva deu zero, mas é conferência manual: um `payload.plan` novo passaria verde |
+| Remoção de e-mail secundário sem cobertura | `email-secundario-server-only` não cita `_profileUnlinkEmail`, `unlink` nem remoção |
+| Nenhum teste de Rules para `users`, `notifications`, `presences`, `magicLinks` | os 7 `rules-*.test.js` não cobrem essas quatro |
+| Nenhum gate de paridade web × bundle nativo | a divergência do item (9) não é detectada por nada |
+
+**Classificação exigida pela leva.**
+
+*DECISÃO JÁ ADOTADA (registro, não mudança).* (a) Token, template e destinatário do e-mail
+secundário são do servidor; o cliente só pede e confirma. (b) A confirmação **não exige
+sessão** — o link chega na caixa e a posse do token é a prova; o destino sai do registro.
+(c) `linkedEmails` **não** entrou na lista de privilegiados quando a L1.1 fechou o fluxo.
+(d) Não existe unicidade de e-mail entre contas, de propósito. (e) `matchHistory`, `trophies`
+e `milestones` têm leitura governada por `statsVisibility`, com ausente = público.
+
+*PROBLEMA ABERTO.* (a) **`linkedEmails` é prova de posse e é escrito pelo cliente.** O
+servidor o aceita como prova numa fusão (`functions/index.js:6262-6264`, `via:
+"email-vinculado"`) e resolve conta por ele (`_uidByProfileEmail:4287` →
+`_resolveAccount:4340` → `checkAccount`, login por senha e reset). A adição passou a ser
+server-only na L1.1, mas a **remoção** continua sendo um `users/{uid}.update({linkedEmails})`
+direto do cliente (`js/views/auth.js:9626`), e a mesma Rule que permite remover permite
+gravar **qualquer** array. ⚠️ Escopo honesto do que isso alcança: `_resolveAccount` tenta o
+**Auth primeiro**, então um endereço que já é e-mail primário de alguma conta não é
+alcançado por esse caminho; e ninguém escreve no perfil alheio (update é owner-only).
+O próprio repositório já documenta a tensão em `functions/index.js:4687`. (b) **Qualquer
+autenticado lê o perfil inteiro de qualquer pessoa**, PII incluída. (c) **Qualquer
+autenticado cria notificação na caixa de qualquer pessoa** (`firestore.rules:660`). (d) O app
+das lojas roda o fluxo de identidade pré-L1 contra Rules pós-L1. (e) Coleções efêmeras de
+identidade sem limpeza. (f) `mergeTokens`/`mergeProofLimits` são server-only por
+**default-deny**, não por regra escrita.
+
+*HIPÓTESE PENDENTE.* (a) Que o vínculo de e-mail secundário e os convites por e-mail estejam
+**de fato falhando** hoje no app das lojas. O código diz que sim; **não foi medido** — esta
+leva proibiu consultar produção. Seria verificável por `permission-denied` no Sentry ou por
+contagem de `emailVerifications` criadas por origem. (b) Que exista documento legado em
+`emailVerifications` com o token CRU como id (do fluxo pré-L1.1) ainda não expirado — não
+medido.
+
+*PROPOSTA FUTURA — não formulada.* Nenhum texto de Rule, nenhuma capability e nenhum desenho
+de privacidade foi escrito aqui. ⛔ E vale o mesmo bloqueio da L2/L3.P2: qualquer mudança de
+Rule nesta área atinge o app 2.1.28 no instante do deploy, e a decisão é do dono.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
