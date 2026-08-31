@@ -18,7 +18,7 @@
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
-| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) e a leitura cruzada de perfis MAPEADA (L4.P5).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
+| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) a leitura cruzada de perfis MAPEADA (L4.P5) e a MATRIZ DE ALTERNATIVAS registrada (L4.P6, nada escolhido).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
@@ -1342,6 +1342,185 @@ repositório. Não há indício; só se descartaria com log de acesso, não cons
 *PROPOSTA FUTURA — não formulada.* Nenhuma Rule, coleção, projeção, migração ou capability.
 ⛔ E continua valendo o bloqueio de corte nativo: os bundles 2.1.28 leem os mesmos campos e
 não recebem atualização.
+
+**L4.P6 — matriz de decisão para privacidade de perfil e cutover nativo (read-only, 31/ago/2026).**
+⛔ **Matriz, não escolha.** Nenhuma alternativa é adotada, recomendada ou implementada; nada
+aqui vira decisão. Produção não foi consultada nesta etapa — tudo sai do código já mapeado
+nas L4.P0–P5.
+
+**Os cinco problemas abertos que a leva mandou registrar, com a evidência de cada um.**
+
+| # | Problema | Evidência | Consequência factual |
+|---|---|---|---|
+| 1 | `listRecentUsers` retém o documento inteiro | `js/firebase-db.js:2490` — `results[doc.id] = data`, sem `sanitize` | até 30 documentos completos de desconhecidos recém-ativos ficam em memória do `#explore`; o irmão `searchUsers`, na MESMA tela, projeta 10 campos |
+| 2 | `loadUserProfile` devolve o documento cru | `js/firebase-db.js:2475` — `return doc.data()`, **30 chamadas** | o uso demonstrado em cada consumidor é de 1 a 4 campos (L4.P5); o que trafega e fica é tudo |
+| 3 | `listInvitableUsers` varre até 2000 perfis | `js/firebase-db.js:2693` — `collection('users').limit(2000).get()`, cache de sessão de 5 min | ⛔ a permissão de `list` em `users` **está em uso**, não é sobra: alimenta `#explore` (`:205`, `:759`) e `#todas-pessoas` (`:57`) |
+| 4 | Campos sem leitor cliente seguem legíveis | `fcmToken` (só Function, `functions/index.js:5305-5316`), `preferredCeps` (só o próprio perfil), `linkedPhones` (nenhum no cliente), `plan` | qualquer autenticado lê os quatro em qualquer perfil, e nenhum consumidor cliente precisa deles |
+| 5 | `linkedEmails` é prova de posse com remoção client-writable | adiciona: `confirmSecondaryEmail` (`functions/index.js:6052-6057`) e a fusão; **remove: `window._profileUnlinkEmail` (`js/views/auth.js:9626`)** — `users/{uid}.update({linkedEmails})` direto | a mesma Rule que permite remover permite gravar **qualquer** array; o servidor aceita o campo como prova (`via:"email-vinculado"`, `:6262-6264`) e resolve conta por ele (`:4287`) |
+
+**Duas restrições que moldam TODAS as alternativas.**
+1. ⛔ **Rules autorizam documentos, não projetam campos.** Não existe liberar `displayName` e
+   reter `phone` no mesmo documento. Toda restrição de campo hoje é client-side — e
+   client-side não é fronteira. O repositório já registrava isso em
+   `js/firebase-db.js:2632`.
+2. ⛔ **A hidratação de perfis usa QUERY, e não tem plano B.** `_preloadUserProfiles` carrega
+   em lotes de 10 com `where(documentId(), 'in', lote)` (`js/store.js:1045`) — que é `list`,
+   não `get`. O `.catch` (`:1084-1093`) **só reporta** (`_captureMessage`, no máximo 2× por
+   sessão) e **não cai** no caminho por documento. Ou seja: negar `list` em `users` hoje
+   apagaria os nomes de toda chave e lista de inscritos, em silêncio. ⚠️ O próprio comentário
+   do código descreve o precedente dessa falha por outra causa: *"2.0.55: o catch MUDO
+   escondia a causa da seca de nomes (409 uids sem nome no aparelho do dono…)"*.
+
+⭐ **E um fato que muda o tamanho do problema: login, recuperação, fusão e confirmação de
+e-mail NÃO passam pelas Rules.** `_resolveAccount` → `_uidByProfileEmail`
+(`functions/index.js:4281`), `_provaDePosseDeOld` (`:6245`) e `confirmSecondaryEmail`
+(`:6032`) rodam com **Admin SDK**. Nenhuma mudança de Rule os afeta. O que os afetaria é
+**mover o dado de lugar** — e essa é a linha que separa as alternativas abaixo.
+
+**A matriz. Cinco alternativas plausíveis, nenhuma escolhida.**
+
+*(A) Manter como está.* **Dados:** tudo continua disponível a busca, chave, categorias,
+organizador, amizade, convites, ranking e identidade — nada muda. **Invariantes:** todos
+preservados, porque nada se move. **Impacto:** zero em web, 2.1.28, `www/`, Functions, Rules,
+custo, concorrência, dados e rollout. **Nativo:** não se aplica. **Migração:** nenhuma.
+**Gates:** os que já existem. **Risco de manter:** os cinco problemas acima permanecem — em
+particular, qualquer autenticado enumera 266 perfis com `email`, `phone` e `fcmToken` dentro,
+e resolve e-mail ou telefone → conta. **Risco de mudar:** nenhum (é a linha de base).
+
+*(B) Ampliar a projeção no CLIENTE.* Estender o `sanitize` do `searchUsers` ao
+`listRecentUsers` e dar projeção ao `loadUserProfile`. **Dados:** inalterados para todos os
+consumidores — a projeção seria o superconjunto do que a L4.P5 mediu como usado.
+**Invariantes:** todos preservados; nada de identidade se move. **Impacto:** só `js/`; Rules,
+Functions, Firestore, custo e dados intocados; concorrência inalterada. **Nativo:** ⛔ **não
+alcança o 2.1.28** — o bundle tem a própria cópia do `firebase-db.js` e continua retendo o
+documento inteiro. **Migração:** nenhuma; sem compatibilidade temporária, sem rollback além
+de reverter o commit. **Gates:** trava estática de "nenhum caminho retém campo fora da lista"
+nos três clientes, mais controle contra a árvore atual. **Risco de manter:** o problema 4
+segue inteiro. **Risco de mudar:** ⚠️ **cria a aparência de fronteira sem a fronteira** —
+quem chama a API direto recebe o documento como ele é. É exatamente o que
+`js/firebase-db.js:2626-2633` já diz ter feito uma vez.
+
+*(C) Espelho público server-written: `usersPublic/{uid}`.* Documento com os campos que a
+L4.P5 demonstrou necessários no cruzamento; `users/{uid}` deixa de ser lido por terceiros.
+⭐ **Tem precedente em produção neste repositório:** `tournaments_summary` é exatamente isso
+— `allow write: if false`, escrito só pela Function (`functions-autodraw/index.js:1851`,
+`:1896`) e lido pelo cliente (`js/views/todos-torneios.js:60`, `:94`). **Dados:** busca,
+chave, categorias, amizade, convites e ranking passam a ler o espelho; organizador e
+identidade continuam no servidor. **Invariantes:** exige decidir onde vive `mergedInto` — o
+`_userVivo` do cliente (`js/views/user-vivo-core.js:61`) o lê hoje em `users`; sem ele no
+espelho, "perfil vivo vence lápide" quebra no cliente. **Impacto:** Rules ganham uma coleção;
+Functions ganham um escritor e um gatilho de sincronismo; **custo dobra na escrita** (um
+write a mais por alteração de perfil) e cai na leitura (documento menor); **concorrência**:
+duas autoridades escrevendo a mesma projeção é a duplicidade que este projeto já pagou em
+`friends[]` — o espelho tem de ter **um único escritor**; **dados existentes**: 266 perfis
+precisam ser semeados antes de qualquer leitura. **Nativo:** ⛔ **não deployável sem versão
+nativa nova** — o 2.1.28 lê `users` diretamente em 20 sítios e não recebe atualização; a
+dependência que bloqueia o cutover é **versão compatível aprovada nas duas lojas + política
+de adoção**. **Migração:** semeadura completa → leitura dupla (espelho com queda para
+`users`) → só então fechar `users`; rollback = reabrir `users` e voltar a ler dele.
+**Autoridade de escrita:** só Admin SDK; retries idempotentes por uid. **Gates:** paridade
+espelho×`users` campo a campo sobre os 266 perfis; suíte de Rules nas duas coleções; controle
+contra a arquitetura atual; e um gate que prove que **nenhum cliente** lê `users` de
+terceiro. **Risco de manter:** os cinco problemas. **Risco de mudar:** espelho defasado é
+nome velho na tela — o cânone `js/store.js:766-773` existe justamente para isso; e um espelho
+sem `mergedInto` reintroduz a lápide como pessoa.
+
+*(D) Subcoleção privada: `users/{uid}/privado/*`.* O documento de perfil fica público-para-
+autenticado e o que é PII/prova desce para subcoleção com regra própria. **Dados:** busca,
+chave, categorias, amizade e ranking seguem no documento pai, sem mudança de forma; o
+organizador perde `email`/`phone`/`linkedEmails` do cliente e passaria a depender do
+servidor. **Invariantes:** `mergedInto` pode ficar no pai (segue privilegiado); `linkedEmails`
+e telefones com procedência descem, o que **fecha o problema 5 por construção** (subcoleção
+com `write: if false`). **Impacto:** Rules ganham blocos por subcoleção; Firestore cobra
+**uma leitura a mais** por acesso ao dado privado; a busca por `email_lower`/`phone`
+**deixa de existir no cliente** (não se consulta subcoleção pelo pai) — os 8 sítios de
+resolução por identificador teriam de virar servidor; dados existentes exigem migração campo
+a campo. **Nativo:** ⛔ **não deployável sem versão nativa nova** — o 2.1.28 lê esses campos
+no documento pai. **Migração:** escrever nos dois lugares → migrar leitores → parar de
+escrever no pai → limpar o pai; rollback só é barato antes do último passo.
+**Gates:** paridade pai×subcoleção; Rules nas duas; prova de que nenhum leitor cliente ficou
+apontando para o campo antigo. **Risco de manter:** os cinco. **Risco de mudar:** ⚠️ é a
+alternativa com **mais superfície de escrita** durante a transição, e o projeto já registrou
+o que acontece quando duas autoridades escrevem a mesma coisa.
+
+*(E) Capabilities server-side para as consultas.* Busca, lista de convidáveis e resolução
+e-mail/telefone → conta viram callables; o cliente perde `list` em `users` e mantém `get`.
+**Dados:** todos continuam disponíveis, mediados. **Invariantes:** preservados — a resolução
+de identidade **já é server-side**, então login, recuperação, fusão e confirmação **não
+perdem nada**. **Impacto:** Functions ganham 3 capabilities; Rules perdem `list`;
+⛔ **a hidratação de perfis quebra** — ela é `where(documentId(),'in',…)`, ou seja `list`, e
+não tem queda para `get` (restrição 2). Ou a hidratação migra para `get` por documento (10×
+mais chamadas, mas 1 leitura por documento igual), ou vira capability também.
+**Custo:** cada busca passa a ser uma invocação de Function; o scan de 2000 sai do cliente e
+vira leitura server-side com cache. **Nativo:** ⛔ **bloqueado** — o 2.1.28 faz as consultas
+direto; fechar `list` no servidor as nega **no instante do deploy**, para todos ao mesmo
+tempo, e o app das lojas não recebe atualização. **Migração:** publicar as capabilities →
+migrar os clientes → esperar a adoção nativa → só então fechar `list`. **Rollback:** reabrir
+`list`. **Gates:** suíte de Rules com `list` negado e `get` permitido; controle contra a
+árvore atual; trava estática de que nenhum cliente faz `where` em `users`; e um teste que
+prove a hidratação sem `list`. **Risco de manter:** os cinco. **Risco de mudar:** latência no
+caminho quente e a quebra silenciosa da hidratação se a ordem for invertida.
+
+**Comparação, sem escolher.**
+
+| Critério | (A) manter | (B) projeção cliente | (C) espelho público | (D) subcoleção privada | (E) capabilities |
+|---|---|---|---|---|---|
+| Move a fronteira de verdade | não | **não** | sim | sim | sim |
+| Fecha o problema 4 (campos sem leitor) | não | parcial | sim | sim | não por si só |
+| Fecha o problema 5 (`linkedEmails`) | não | não | não por si só | **sim** | não por si só |
+| Fecha o problema 3 (scan de 2000) | não | não | sim (scan no espelho) | não | sim |
+| Deployável sem versão nativa nova | — | **sim** | não | não | não |
+| Escritas a mais por alteração de perfil | 0 | 0 | **+1** | +1 durante a transição | 0 |
+| Leituras a mais por acesso | 0 | 0 | −(doc menor) | **+1** para o dado privado | invocação de Function |
+| Superfície de concorrência nova | nenhuma | nenhuma | **espelho** | **dupla escrita** | nenhuma |
+| Dados existentes a migrar | 0 | 0 | 266 perfis | 266 perfis, campo a campo | 0 |
+| Quebra a hidratação se feita sozinha | não | não | não | não | **sim** (restrição 2) |
+
+**Invariantes adotados × como cada alternativa os toca.** ⚠️ Nenhuma delas é compatível "de
+graça": a coluna diz **o que precisaria ser resolvido**, não que já esteja.
+
+| Invariante | (B) | (C) | (D) | (E) |
+|---|---|---|---|---|
+| Identidade é uid; e-mail/nome não autorizam | intacto | intacto | intacto | intacto |
+| Perfil vivo vence lápide (`_userVivo`) | intacto | ⚠️ exige `mergedInto` no espelho | intacto | intacto |
+| Nome/e-mail/telefone de terceiro vêm da fonte canônica | intacto | ⚠️ a fonte passa a ser o espelho — defasagem vira nome velho | intacto no pai | intacto |
+| `linkedEmails`/`mergedInto`/telefone com procedência/tokens são prova, não client-writable | ⛔ não muda o problema 5 | não muda | ⭐ resolve por construção | não muda |
+| `statsVisibility` ausente = público | intacto (a Rule lê por `get()` server-side) | ⚠️ a Rule leria onde? | intacto | intacto |
+| Login, recuperação, fusão e confirmação não perdem resolução | intacto | ⚠️ só se as Functions continuarem lendo `users` | ⚠️ idem, com o campo na subcoleção | ⭐ intacto — já é server-side |
+
+**Gates obrigatórios antes de QUALQUER implementação — comuns a C, D e E.**
+1. Suíte de Rules no emulador para o desenho novo, anônimo **e** autenticado, com **controle
+   contra a arquitetura atual** (tem de falhar lá, senão não prova nada).
+2. Trava estática nos **três clientes** (web, Android, iOS, e `www/`) provando que nenhum
+   leitor ficou apontando para o caminho antigo — no molde do
+   `scripts/check-magiclinks-get-only.js`, andando o disco e não `grep -r`.
+3. Teste de **hidratação sem `list`**: a chave desenha os nomes. Hoje isto falharia em
+   silêncio (restrição 2), e é o gate que impede repetir a "seca de nomes".
+4. Paridade campo a campo entre a origem e o destino sobre os 266 perfis, **agregada e sem
+   PII**.
+5. Prova de que **login, recuperação, fusão e confirmação de e-mail** continuam resolvendo —
+   as quatro rodam com Admin SDK e não são cobertas por teste de Rules.
+6. Gate de **cutover nativo**: nenhuma Rule restritiva entra antes de versão compatível
+   aprovada nas duas lojas **e** política de adoção autorizada pelo dono.
+
+**Classificação.**
+
+*DECISÃO JÁ ADOTADA (nada de novo aqui).* Os invariantes da tabela acima, todos já
+registrados nas L4.P0–P5 e no cânone do projeto.
+
+*PROBLEMA ABERTO.* Os cinco da primeira tabela, com a evidência de cada um. ⭐ Somam-se a
+eles as duas restrições: Rules não projetam campos, e a hidratação depende de `list` sem
+plano B.
+
+*HIPÓTESE PENDENTE.* (a) Que exista consumidor de `users` fora do repositório (console,
+ferramenta interna, integração) que uma mudança de leitura quebraria — não verificável por
+código, só por log de acesso, não consultado. (b) Que a defasagem de um espelho (C) fique
+dentro do que o cânone de nome vivo tolera — não medido, e mensurável só depois de existir.
+
+*PROPOSTA FUTURA — as cinco alternativas acima, e SÓ COMO ALTERNATIVAS.* ⛔ Nenhuma foi
+escolhida, nenhuma foi recomendada, nenhuma virou plano. Não há texto de Rule, assinatura de
+capability, esquema de coleção nem sequência de migração escritos nesta leva — só o contrato
+do que cada caminho custaria. A decisão é do dono.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
