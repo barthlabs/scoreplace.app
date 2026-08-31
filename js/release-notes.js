@@ -19,6 +19,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.64 NÃO ganhou item, e é DECISÃO — mesma razão da 2.0.32. Ela é 100% ferramenta
+    // de auditoria e gate de processo: a trava `check-deploy-alignment` passou a valer para o
+    // deploy do codebase `main` (antes só o Hosting passava por ela), e o conferidor read-only
+    // `matches → results` ganhou transporte com deadline de parede, flush de stdout e
+    // diagnóstico explícito quando a leitura não termina. Zero mudança de tela, zero
+    // comportamento novo pra quem joga — o diff não toca css/, nem view alguma, nem CF.
+    // A trava (check-release-notes) pega OMISSÃO e não sabe julgar isso; a justificativa fica
+    // aqui, pro próximo leitor não achar que faltou.
     // ⚠️ 2.0.32 NÃO ganhou item, e é DECISÃO. Ela é 100% ferramenta: uma trava de teste
     // (scripts/check-vendor-fresh.js) que barra o `npm test` quando o
     // `functions-autodraw/vendor/` — a cópia de js/views/* que o autoDraw roda no servidor

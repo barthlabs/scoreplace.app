@@ -1,5 +1,18 @@
 # Changelog do scoreplace.app
 
+## 2.1.64 — Ferramenta de auditoria: gate de deploy e conferidor que termina (31/ago/2026)
+
+Esta versão dá número a quatro levas que estavam empilhadas sob a 2.1.63 sem bump — o dono
+cobrou, com razão: coisa que entra no `main` sobe o número, ainda que a leva peça o contrário.
+**Nada aqui muda o comportamento do app para quem usa**; é ferramenta de auditoria e gate de
+processo.
+
+- **R0.3 — a trava de alinhamento passou a valer para o deploy do codebase `main`.** `scripts/deploy-functions.sh` não tem uma linha de git: publica o que está no disco. Medido em 30/ago, as Functions foram atualizadas às 19:38 BRT e o commit que carrega esse código (`0aecc59b`) é de 19:41 — três minutos com produção rodando código não commitado. A trava `check-deploy-alignment.js` já existia desde o incidente de 12/ago, mas só o Hosting passava por ela (`functions[0].predeploy` estava `[]`). Ligada no `firebase.json` da raiz; `autodraw` e `stripe` ficam de fora por decisão registrada (não têm `.git`, cairiam no ramo do carimbo e todo deploy deles falharia).
+- **R0.4 — o conferidor do espelho sobrevive à rede.** Morria no primeiro GET com `UND_ERR_CONNECT_TIMEOUT`, sem imprimir contador algum. Transporte passou de `fetch`/undici para `node:https`, com retentativa limitada apenas de erros transitórios identificados e sem aumento de paralelismo.
+- **R0.4.1 — o veredito chega ao stdout.** O script terminava em `process.exit()`, que com stdout em pipe pode derrubar o processo antes do flush. Passou a usar `process.exitCode`. Também deixou de ficar mudo quando o `gcloud` falha.
+- **R0.4.2 — deadline de parede por tentativa.** `https.request({ timeout })` vira `socket.setTimeout` e só arma quando já existe socket; com DNS pendurado não havia relógio, e o conferidor ficou vivo por mais de 3 minutos contra produção. Agora há um timer armado antes de `https.request`, que destrói a requisição mesmo sem socket, limpo em sucesso, erro e estouro.
+- **Reconferência do espelho `matches → results`, pelo Codex:** 42 torneios · 9 com jogos canônicos · 183 jogos canônicos · **0 ausentes** e **0 divergentes**.
+
 ## 2.1.63 — O W.O. chega nas subcoleções (Cloud Function) (30/ago/2026)
 
 - **Problema:** `mutateTournament` roda o mutator sobre `doc.data()` — o documento CRU. Em torneio dividido isso é o documento magro (`participants: []`, nenhum jogo), então o W.O. entra no `woLog` e na classificação e não entra nem no elenco nem no jogo. Medido no Confra: a Nathalya seguiu escalada nos 3 jogos do grupo depois do W.O. dela; Fábio Ruggiero, Tiago Lima e Erika Benedet sumiram do elenco; os ausentes não foram desativados.
