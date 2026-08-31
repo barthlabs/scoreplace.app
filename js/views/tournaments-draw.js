@@ -4039,11 +4039,25 @@ window._participantSelfPair = function(tId, name1, uid1, name2, uid2) {
              * Function. O cliente manda só os identificadores; assunto, HTML, links e
              * destinatário são resolvidos lá.
              * ⚠️ Depois do save de propósito: pedir o e-mail de um convite que não
-             * persistiu manda a pessoa clicar num botão que não vai encontrar nada. */
-            if (window.FirestoreDB && typeof window.FirestoreDB.sendPairInviteEmail === 'function') {
-                window.FirestoreDB.sendPairInviteEmail(String(t.id), uid2);
-            }
-            if (typeof showNotification === 'function') showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
+             * persistiu manda a pessoa clicar num botão que não vai encontrar nada.
+             * ⭐ L1.1.1 · e o TOAST espera o veredito. Antes ele dizia "Convite enviado"
+             * sem olhar o retorno — inclusive quando a Function tinha respondido que não
+             * achou o convite. O convite e a notificação no app são fatos; o e-mail é
+             * outro fato, e agora só é afirmado quando acontece. */
+            var _pediuEmail = (window.FirestoreDB && typeof window.FirestoreDB.sendPairInviteEmail === 'function')
+                ? Promise.resolve(window.FirestoreDB.sendPairInviteEmail(String(t.id), uid2))
+                    .catch(function (e) { window._warn('[convite-dupla] e-mail falhou:', e && e.message); return { enviado: false, motivo: 'falha-de-rede' }; })
+                : Promise.resolve({ enviado: false, motivo: 'sem-porta' });
+            _pediuEmail.then(function (veredito) {
+                if (typeof showNotification !== 'function') return;
+                if (veredito && veredito.enviado) {
+                    showNotification('Convite enviado', 'Aguardando ' + name2 + ' aceitar a dupla.', 'success');
+                    return;
+                }
+                /* ⛔ O convite EXISTE (gravado) e a notificação no app também. O que não
+                 * saiu foi o e-mail — e apagar o convite por causa disso seria pior. */
+                showNotification('Convite registrado', name2 + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');
+            });
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
         }).catch(function(e) {
             // não persistiu → remove o convite local e avisa (loud failure)

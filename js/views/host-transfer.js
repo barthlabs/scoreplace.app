@@ -152,40 +152,86 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       status: 'pending', type: 'cohost', invitedAt: new Date().toISOString()
     };
     t.coHosts.push(_chEntry);
-    // Blindagem v4.0.119: portão AppStore.mutate; re-check existência no fresco (idempotência).
-    window.AppStore.mutate(tId, function (ft) {
+
+    /* ⛔ L1.1.1 · AQUI FALTAVA UM `await`, E ISSO TORNAVA O E-MAIL INTERMITENTE.
+     * `AppStore.mutate` é ASSÍNCRONA: ela aplica o mutator no objeto local na hora, mas a
+     * gravação vai pra uma FILA por torneio e só termina quando o `commitTournamentTx`
+     * resolve. O código chamava `sendCoHostInviteEmail` na linha seguinte — então a
+     * Function podia LER o documento antes de a entrada `pending` existir nele e devolver
+     * `convite-inexistente`. E a tela dizia "convite enviado" do mesmo jeito.
+     * ⚠️ É a autorização por REGISTRO PERSISTIDO da L1.1 que torna a ordem obrigatória:
+     * quem autoriza é o documento, não o payload — pedir o e-mail antes de o registro
+     * existir é pedir a um servidor que ele recuse.
+     *
+     * ⭐ Agora TUDO que anuncia o convite espera a gravação: o e-mail, a notificação do
+     * convidado, a notificação do organizador e o toast. E se a gravação FALHAR, a entrada
+     * otimista local é desfeita e ninguém é avisado de um convite que não existe. */
+    var _tudoOuNada = Promise.resolve(window.AppStore.mutate(tId, function (ft) {
       if (!Array.isArray(ft.coHosts)) ft.coHosts = [];
       var ex = ft.coHosts.find(function (ch) { return target.uid && ch.uid && ch.uid === target.uid; });
       if (ex) return;
       ft.coHosts.push(_chEntry);
-    });
+    }));
 
-    // v2.8.52: deep-links Aceitar/Recusar (#cohost/<accept|reject>/<tId>/cohost) pra
-    // o convite ter BOTÕES funcionais no e-mail e WhatsApp (não só um link pro torneio).
-    var _chBase = 'https://scoreplace.app/#cohost/';
-    _notifyByEmail(target.uid || target.email, {
-      type: 'cohost_invite', tournamentId: String(t.id), tournamentName: t.name,
-      fromName: user.displayName, fromUid: user.uid,
-      inviterName: user.displayName || _tH('org.theOrganizer'),
-      acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
-      rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
-      message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + t.name + '".',
-      level: 'fundamental',
-      _fallbackEmail: target.email || '', _fallbackName: target.displayName || ''
+    _tudoOuNada.then(function () {
+      // v2.8.52: deep-links Aceitar/Recusar (#cohost/<accept|reject>/<tId>/cohost) pra
+      // o convite ter BOTÕES funcionais — hoje montados no SERVIDOR (L1.1); estes aqui
+      // seguem só pra notificação in-app.
+      var _chBase = 'https://scoreplace.app/#cohost/';
+      _notifyByEmail(target.uid || target.email, {
+        type: 'cohost_invite', tournamentId: String(t.id), tournamentName: t.name,
+        fromName: user.displayName, fromUid: user.uid,
+        inviterName: user.displayName || _tH('org.theOrganizer'),
+        acceptUrl: _chBase + 'accept/' + encodeURIComponent(String(t.id)) + '/cohost',
+        rejectUrl: _chBase + 'reject/' + encodeURIComponent(String(t.id)) + '/cohost',
+        message: (user.displayName || _tH('org.theOrganizer')) + ' ' + _tH('org.invitedCohost') + ' "' + t.name + '".',
+        level: 'fundamental',
+        _fallbackEmail: target.email || '', _fallbackName: target.displayName || ''
+      });
+      _notifyByEmail(user.uid, {
+        type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: t.name,
+        targetName: target.displayName,
+        message: _tH('org.cohostInviteSent') + ' ' + (target.displayName || target.email) + '.',
+        level: 'all', inviteType: 'cohost'
+      });
+      /* ⭐ O E-MAIL SAI PELO SERVIDOR, agora com a entrada `pending` JÁ gravada. */
+      if (!target.uid || !window.FirestoreDB || typeof window.FirestoreDB.sendCoHostInviteEmail !== 'function') {
+        return { enviado: false, motivo: 'sem-uid' };
+      }
+      /* ⛔ A FALHA DO E-MAIL NÃO PODE CAIR NO `catch` DA GRAVAÇÃO. Se a chamada
+       * REJEITAR, o `catch` lá embaixo desfaria a entrada `pending` e diria "o convite
+       * não foi salvo" — apagando da tela um convite que ESTÁ gravado, por causa de um
+       * e-mail. São duas falhas diferentes e cada uma tem o seu desfecho. */
+      return Promise.resolve(window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(target.uid)))
+        .catch(function (e) { window._warn('[co-org] e-mail falhou:', e && e.message); return { enviado: false, motivo: 'falha-de-rede' }; });
+    }).then(function (veredito) {
+      var quem = target.displayName || target.email || '';
+      if (veredito && veredito.enviado) {
+        if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + quem, 'info');
+        return;
+      }
+      /* ⛔ O CONVITE EXISTE — ele está gravado e a notificação no app já foi criada. O que
+       * não saiu foi o E-MAIL. Dizer "convite enviado" aqui seria a mentira que esta leva
+       * fecha; apagar o convite seria pior ainda. Fala-se a verdade inteira. */
+      if (typeof showNotification === 'function') {
+        showNotification('Convite registrado', quem + ' já pode ver o convite no app — mas o e-mail de aviso não pôde ser enviado agora.', 'warning');
+      }
+    }).catch(function (e) {
+      /* ⛔ A GRAVAÇÃO FALHOU: desfaz a entrada otimista e NÃO anuncia convite nenhum.
+       * ⚠️ Remove pela REFERÊNCIA, não por valor — foi a lição da v1.8.40 na inscrição:
+       * filtrar por igualdade não removia a cópia que entrou no array, e a pessoa
+       * continuava se vendo convidada. */
+      try {
+        var _tv = (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
+        if (_tv && Array.isArray(_tv.coHosts)) _tv.coHosts = _tv.coHosts.filter(function (ch) { return ch !== _chEntry; });
+        if (Array.isArray(t.coHosts)) t.coHosts = t.coHosts.filter(function (ch) { return ch !== _chEntry; });
+      } catch (_e) {}
+      window._error('[co-org] convite NÃO foi gravado', e);
+      if (typeof showNotification === 'function') {
+        showNotification('Não foi possível convidar', 'O convite não foi salvo. Verifique a conexão e tente de novo.', 'error');
+      }
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
     });
-    /* ⭐ L1.1 · O E-MAIL DO CONVITE SAI PELO SERVIDOR. A entrada `pending` já está em
-     * `coHosts` (o `AppStore.mutate` acima) — e é ela, junto com a régua canônica de
-     * organizador, que autoriza a Function. O cliente manda só os identificadores. */
-    if (target.uid && window.FirestoreDB && typeof window.FirestoreDB.sendCoHostInviteEmail === 'function') {
-      window.FirestoreDB.sendCoHostInviteEmail(String(t.id), String(target.uid));
-    }
-    _notifyByEmail(user.uid, {
-      type: 'cohost_invite_sent', tournamentId: String(t.id), tournamentName: t.name,
-      targetName: target.displayName,
-      message: _tH('org.cohostInviteSent') + ' ' + (target.displayName || target.email) + '.',
-      level: 'all', inviteType: 'cohost'
-    });
-    if (typeof showNotification === 'function') showNotification(_tH('org.inviteSent'), _tH('org.awaitingResponse') + ' ' + (target.displayName || target.email), 'info');
   };
 
   // ─── Accept host invite ───────────────────────────────────────────────────

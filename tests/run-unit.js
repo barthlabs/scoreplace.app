@@ -461,6 +461,8 @@ const SUITES = [
   'tests/dashboard-repinta-quando-a-parte-chega.test.js',
   /* L1.1 — convite de dupla e de co-organização saem do cliente; /mail segue aberto. */
   'tests/convites-dupla-e-coorg-server-only.test.js',
+  /* L1.1.1 — o convite só é anunciado depois de estar GRAVADO. */
+  'tests/convite-so-anuncia-depois-de-gravar.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

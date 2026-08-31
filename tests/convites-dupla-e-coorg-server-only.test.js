@@ -108,8 +108,17 @@ console.log('\n§1c O DISPARO SAI DA ORIGEM, depois de o convite estar gravado')
 {
   ok(/saveTournament\(t\)\)\.then[\s\S]{0,2600}sendPairInviteEmail\(String\(t\.id\), uid2\)/.test(SRC_DRAW),
     '⭐ dupla: só depois do `saveTournament` confirmar (é o registro que autoriza)');
-  ok(/AppStore\.mutate\(tId[\s\S]{0,1600}sendCoHostInviteEmail\(String\(t\.id\), String\(target\.uid\)\)/.test(SRC_HT),
-    '⭐ co-org: só depois de a entrada `pending` existir em coHosts');
+  /* ⚠️ MEDIR PROXIMIDADE NO TEXTO ERA UMA MEDIDA RUIM — e a L1.1.1 provou: a distância
+   * mudou e a asserção quebrou sem que nada de errado tivesse acontecido. Pior, ela
+   * passava na 2.1.75, onde a ORDEM estava ERRADA (`mutate` sem `await`). O que importa é
+   * a ESTRUTURA: a chamada mora dentro do `.then` da promessa da gravação. E a prova de
+   * ORDEM DE EXECUÇÃO, que texto nenhum dá, está em
+   * tests/convite-so-anuncia-depois-de-gravar.test.js. */
+  const _iMutate = SRC_HT.indexOf('Promise.resolve(window.AppStore.mutate(tId');
+  const _iThen = SRC_HT.indexOf('.then(function () {', _iMutate);
+  const _iChamada = SRC_HT.indexOf('sendCoHostInviteEmail(String(t.id), String(target.uid))');
+  ok(_iMutate > 0 && _iThen > _iMutate && _iChamada > _iThen,
+    '⭐ co-org: a chamada vive DEPOIS do `.then` da gravação (ordem de execução provada em convite-so-anuncia-depois-de-gravar)');
 }
 
 /* ── §2 · AS FUNCTIONS: RECUSAS ─────────────────────────────────────────────── */

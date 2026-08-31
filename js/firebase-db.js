@@ -2967,25 +2967,48 @@ window.FirestoreDB = {
    * ⛔ NÃO REINTRODUZIR. `tests/convites-dupla-e-coorg-server-only.test.js` recusa
    * qualquer `collection('mail')` ou `queueEmail` em js/. */
 
+  /* ⭐ L1.1.1 · OS DOIS ENVELOPES DEVOLVEM UM VEREDITO, não a resposta crua.
+   * `{ enviado: boolean, motivo: string }`. Antes devolviam o objeto da Function ou
+   * `null` no catch — e quem chamava mostrava "Convite enviado" de qualquer jeito,
+   * inclusive quando a Function tinha respondido `convite-inexistente`. Afirmar que
+   * um e-mail saiu quando ele não saiu é a mesma família de defeito que a R1.1 fechou
+   * na tela: dizer à pessoa algo que não é verdade sobre o estado do sistema.
+   * ⚠️ Um veredito só, aqui, e não uma tradução em cada tela: duas cópias divergiriam
+   * e uma delas voltaria a mentir. */
+  _vereditoDoEnvio(res, ondeLog) {
+    if (res && res.ok === true) return { enviado: true, motivo: '' };
+    var motivo = (res && res.motivo) ? String(res.motivo) : 'sem-resposta';
+    window._warn('[' + ondeLog + '] e-mail não saiu: ' + motivo);
+    return { enviado: false, motivo: motivo };
+  },
+
   /** Convite de DUPLA: manda SÓ os identificadores. O servidor confere o convite
    *  gravado em `pairRequests` e monta o e-mail. */
   async sendPairInviteEmail(tournamentId, inviteeUid) {
-    if (!tournamentId || !inviteeUid) return null;
+    if (!tournamentId || !inviteeUid) return { enviado: false, motivo: 'sem-identificadores' };
     try {
-      return await this._callFn('sendPairInviteEmail', {
+      var r = await this._callFn('sendPairInviteEmail', {
         tournamentId: String(tournamentId), inviteeUid: String(inviteeUid)
       });
-    } catch (e) { window._warn('[convite-dupla] e-mail não saiu:', e && e.message); return null; }
+      return this._vereditoDoEnvio(r, 'convite-dupla');
+    } catch (e) {
+      window._warn('[convite-dupla] e-mail não saiu:', e && e.message);
+      return { enviado: false, motivo: 'falha-de-rede' };
+    }
   },
 
   /** Convite de CO-ORGANIZAÇÃO: idem, conferido contra a entrada `pending` em `coHosts`. */
   async sendCoHostInviteEmail(tournamentId, targetUid) {
-    if (!tournamentId || !targetUid) return null;
+    if (!tournamentId || !targetUid) return { enviado: false, motivo: 'sem-identificadores' };
     try {
-      return await this._callFn('sendCoHostInviteEmail', {
+      var r = await this._callFn('sendCoHostInviteEmail', {
         tournamentId: String(tournamentId), targetUid: String(targetUid)
       });
-    } catch (e) { window._warn('[convite-coorg] e-mail não saiu:', e && e.message); return null; }
+      return this._vereditoDoEnvio(r, 'convite-coorg');
+    } catch (e) {
+      window._warn('[convite-coorg] e-mail não saiu:', e && e.message);
+      return { enviado: false, motivo: 'falha-de-rede' };
+    }
   },
 
   // v2.1.19: e-mails de NOTIFICAÇÃO entram numa fila com janela por importância
