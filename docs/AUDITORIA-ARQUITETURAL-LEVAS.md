@@ -18,7 +18,7 @@
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
-| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0) e produção MEDIDA (L4.P1) — read-only.** 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
+| L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) e fronteiras CARACTERIZADAS no emulador (L4.P2) — read-only.** ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
@@ -959,6 +959,123 @@ aqui projeta o futuro. (2) O Admin SDK **ignora as Rules** — a medição diz o
 o que um cliente conseguiria. (3) A leitura não é transacional. (4) A cronologia dos rulesets
 sai da API de Rules do projeto, que lista os publicados; não prova o que rodou em cada
 requisição. (5) Nenhuma tentativa de exploração foi feita, aqui ou em qualquer etapa.
+
+**L4.P2 — as fronteiras atuais, caracterizadas no emulador (31/ago/2026).**
+
+*Método.* Emulador Firestore carregando **o `firestore.rules` do repositório**, dirigido por
+REST com JWT não-assinado (o mesmo driver dos `tests/rules-*.test.js`), três sujeitos —
+**anônimo** (sem cabeçalho), **A** e **B** autenticados — e um quarto de semeadura
+(`Bearer owner`, bypass de admin do emulador) só para criar documentos que as Rules impedem o
+cliente de criar. **100 sondas.** Dados 100% sintéticos (`@naoexiste.invalid`, uids
+`uid*_sintetico`, `firebaseLink` fictício). Driver e config viveram num diretório temporário
+**fora do repositório** e foram apagados ao fim, junto com o `firestore-debug.log` gerado.
+⛔ Nada de produção foi lido, escrito ou tentado. Códigos: **200 = permitido, 403 = negado**.
+
+**(1) `users` — o que um autenticado alcança no perfil alheio.**
+
+| Sonda | Código | Leitura |
+|---|---|---|
+| A faz `get` do perfil completo de B | **200** | permitido |
+| A faz `list` da coleção `users` | **200** | ⛔ **permitido — a base de perfis é enumerável** |
+| A faz `runQuery` em `users` | **200** | ⛔ permitido |
+| anônimo faz `get` do perfil de B | 403 | negado |
+| anônimo faz `list` de `users` | 403 | negado |
+| A grava no PRÓPRIO `linkedEmails` um array arbitrário de 3 endereços | **200** | permitido |
+| A grava `linkedEmails` de B | 403 | negado |
+| A cria o próprio perfil (documento novo) | 200 | permitido |
+| A cria perfil com id de OUTRO uid | 403 | negado |
+| A atualiza o próprio perfil | 200 | permitido |
+| A apaga o próprio perfil | 200 | permitido |
+| A apaga o perfil de B | 403 | negado |
+
+⭐ **Os 15 campos privilegiados, um por um, em UPDATE e em CREATE: 30 sondas, 30 × 403.**
+`mergedInto`, `mergedAt`, `plan`, `planExpiresAt`, `dupDismissed`, `dupDismissedInfo`,
+`dupSuspect`, `nameConflict`, `phoneSource`, `phoneSetBy`, `phoneSetAt`, `friends`,
+`friendRequestsSent`, `friendRequestsReceived`, `friendRequestsSentAt` — **todos negados nas
+duas operações**. Isto fecha, com execução, a lacuna que a L4.P0 mediu: o teste permanente
+(`tests/rules-privileged-fields.test.js`) só afirma 4 desses 15.
+
+**(2) `magicLinks` — a hipótese da L4.P1 está CONFIRMADA.**
+
+| Sonda | Anônimo | Autenticado |
+|---|---|---|
+| `get` por id | **200** | **200** |
+| `list` da coleção | **200** | **200** |
+| `runQuery` | **200** | **200** |
+| escrita | 403 | 403 |
+
+⛔ **`allow read: if true` numa regra de documento curinga libera `list`, não só `get`** — a
+coleção inteira é **enumerável sem credencial nenhuma**. A L4.P1 tinha registrado isso como
+leitura do texto da regra e marcado explicitamente que a listagem **não havia sido testada**;
+agora foi, contra as Rules reais, e o resultado é 200. O comentário da própria regra
+(`firestore.rules:914-920`) justifica a abertura com *"Token é 24 chars random base64url —
+segredo suficiente pra leitura pública (igual unlisted YouTube link)"* — raciocínio que vale
+para `get`, e que a enumeração contorna. O documento guarda `firebaseLink` (o link assinado de
+entrada) e `email`; a L4.P1 mediu **1 documento dentro do prazo** em produção.
+⚠️ **Nenhuma tentativa foi feita contra produção, e não será.** O que está provado é a
+fronteira da regra no emulador, com documento sintético.
+
+**(3) Coleções de identidade server-only — 60 sondas, 60 × 403.**
+`emailVerifications`, `loginRedirects`, `mergeTokens`, `mergeProofLimits` e
+`pendingEmailVerifications`, cada uma em `get`, `list`, `runQuery`, `create`, `update` e
+`delete`, para anônimo **e** autenticado: **tudo negado**. ⭐ Confirma que
+`pendingEmailVerifications` e `mergeProofLimits`, que **não têm bloco escrito nas Rules**,
+estão de fato cobertas pelo default-deny — server-only por ausência, e a ausência funciona.
+
+**(4) `users/{uid}/notifications` — a fronteira é assimétrica, e é exatamente a que a regra diz.**
+
+| Sonda | Código |
+|---|---|
+| A **cria** notificação na caixa de B | **200** |
+| A lê a notificação de B | 403 |
+| A lista a caixa de B | 403 |
+| A altera a notificação de B | 403 |
+| A apaga a notificação de B | 403 |
+| B lê a própria | 200 |
+| anônimo cria na caixa de B | 403 |
+
+⇒ Qualquer autenticado **deposita** na caixa de qualquer pessoa, com conteúdo escolhido por
+ele, e não consegue ler nem desfazer nada. A L4.P0 tinha lido isso da regra
+(`firestore.rules:660`); aqui está executado.
+
+**(5) Confronto com o texto das Rules.** Tudo bateu, com uma diferença de **alcance**, não de
+intenção: o comentário de `users` diz que a leitura autenticada *"strips PII from anonymous
+visitors"* — e o anônimo está mesmo barrado (403 em `get` e em `list`). O que o comentário não
+diz é que o autenticado tem **`list` e `runQuery`**, não só `get` dirigido: a base inteira de
+perfis é enumerável por qualquer conta logada, com `email`, `phone` e `fcmToken` dentro. Mesma
+diferença em `magicLinks`: a regra pretende "quem tem o token lê", e o que ela concede é "quem
+quiser lista".
+
+**Classificação.**
+
+*DECISÃO JÁ ADOTADA, agora com prova executável.* (a) Os 15 campos privilegiados estão
+fechados no create **e** no update — 30/30 negados. (b) Perfil é do dono: criar, atualizar e
+apagar cross-user são negados; anônimo não lê perfil. (c) As cinco coleções de identidade
+server-only são deny-all completo, inclusive as duas que dependem só do default-deny.
+(d) `linkedEmails` do PRÓPRIO perfil é escrivível pelo cliente com array arbitrário (200) e o
+cross-user é negado (403) — a fronteira que a L4.P0/P1 descreveu está confirmada nos dois
+sentidos.
+
+*PROBLEMA ABERTO (evidência nova desta etapa).* (a) **`magicLinks` é enumerável por anônimo**
+(`list` e `runQuery` = 200), e cada documento carrega o link assinado de entrada e um e-mail.
+Deixa de ser hipótese. (b) **`users` é enumerável por qualquer autenticado** (`list` e
+`runQuery` = 200) — a L4.P0 tinha registrado a leitura do documento inteiro; agora está claro
+que também não há barreira para varrer a coleção. (c) A caixa de notificações de qualquer
+pessoa aceita depósito de qualquer autenticado.
+
+*HIPÓTESE PENDENTE.* Que alguém já tenha enumerado qualquer uma das duas coleções. **Não
+medido e não mensurável por este caminho** — exigiria log de acesso do Firestore, que não foi
+consultado. ⛔ Nenhuma tentativa contra produção foi feita.
+
+*PROPOSTA FUTURA — não formulada.* Nenhuma Rule, nenhuma capability, nenhuma mudança de
+produto foi escrita nesta etapa, como a leva exigiu. ⚠️ E continua valendo o bloqueio de corte
+nativo: o bundle 2.1.28 não recebe atualização, e qualquer mudança de Rule vale para todos no
+instante do deploy.
+
+*Limitações.* (1) O emulador aplica o mesmo motor de Rules, mas não é a produção; o que está
+provado é o comportamento **das regras**, com dado sintético. (2) As sondas cobrem as
+operações pedidas na leva; outras coleções e outras formas de consulta não foram exercitadas.
+(3) O Admin SDK ignora Rules — nada aqui diz respeito aos caminhos server-side.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
