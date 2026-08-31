@@ -463,6 +463,9 @@ const SUITES = [
   'tests/convites-dupla-e-coorg-server-only.test.js',
   /* L1.1.1 — o convite só é anunciado depois de estar GRAVADO. */
   'tests/convite-so-anuncia-depois-de-gravar.test.js',
+  /* L15.P2 — era headless, passava, e NENHUM comando o alcançava (medido na L15.P0).
+   * Registrado aqui pelo gate `check-test-catalog`. */
+  'tests/perfil-mesclado-hidrata-na-chave.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

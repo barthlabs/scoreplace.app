@@ -40,8 +40,22 @@ ok(canClose({ creatorUid: ORG, memberUids: [ORG, P] }, P, ''),
    'PARTICIPANTE (em memberUids, fora de admin) FECHA — diferença-chave vs drawRound (admin-only)');
 ok(canClose({ creatorUid: ORG, adminUids: [A], memberUids: [ORG, A, P] }, A, ''),
    'co-host (adminUids) fecha');
-ok(canClose({ creatorUid: ORG, memberUids: [], memberEmails: ['part@x.com'] }, P, MAIL),
-   'fallback memberEmails só quando memberUids VAZIO (doc legado)');
+/* ⛔ O FALLBACK POR `memberEmails` MORREU — e esta asserção mudou de lado por isso.
+ * Ela afirmava "fallback memberEmails só quando memberUids VAZIO (doc legado)". Em
+ * 26/ago/2026 (362fc0f2, "identidade é uid: e-mail e nome saíram de toda decisão") o
+ * caminho foi removido de `_isTournamentParticipant`
+ * (functions-autodraw/index.js:340), com o motivo escrito lá: "deixar entrar por e-mail
+ * seria deixar entrar quem tem a string, não quem é a pessoa".
+ * ⚠️ A COBERTURA NÃO ENCOLHEU: onde havia uma asserção de permissão agora há uma de
+ * RECUSA — que é a que de fato protege. */
+ok(!canClose({ creatorUid: ORG, memberUids: [], memberEmails: ['part@x.com'] }, P, MAIL),
+   '⛔ memberEmails NÃO autoriza nem com memberUids VAZIO — só uid (362fc0f2)');
+ok(!canClose({ creatorUid: ORG, memberUids: [], memberEmails: [MAIL] }, X, MAIL),
+   '⛔ e um estranho com o e-mail listado também não entra');
+ok(!canClose({ creatorUid: ORG, memberEmails: ['part@x.com'] }, P, MAIL),
+   '⛔ nem com o campo memberUids AUSENTE (doc legado de verdade)');
+ok(canClose({ creatorUid: ORG, memberUids: [ORG, P] }, P, ''),
+   '⭐ e o mesmo participante, agora por UID, continua fechando');
 
 console.log('──── NEGA ────');
 ok(!canClose({ creatorUid: ORG, memberUids: [ORG, P] }, X, MAIL),

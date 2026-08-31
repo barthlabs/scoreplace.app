@@ -112,12 +112,26 @@ function runAgainst(rulesFile, label) {
 // Reconstrói a regra VELHA (uma linha) a partir da atual — prova que o vazamento existia.
 function makeOldRules() {
   const cur = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
-  const NEW_BLOCK = /allow read: if \(\s*\n\s*\(resource\.data\.get\('isSandbox'[\s\S]*?\n\s*\);/;
-  if (!NEW_BLOCK.test(cur)) {
+  /* ⚠️ A FLAG `g` É O TESTE. Sem ela, `String.replace` troca só a PRIMEIRA ocorrência —
+   * e o bloco é IDÊNTICO em duas coleções desde 25/ago/2026 (4c595e2d, `tournaments_summary`,
+   * que vem ANTES no arquivo). O replace passou a reverter o resumo e deixar `tournaments`
+   * com a regra NOVA: o "velho" gerado negava a leitura (403) e o controle ficou vermelho
+   * sem nada de errado na regra de produção. Nasceu certo em 25/jul (91f9f070), quando havia
+   * um bloco só. ⛔ Contar quantas ocorrências existem seria frágil de outro jeito; trocar
+   * TODAS é o que a intenção sempre foi.
+   * ⭐ E o `esperadas` abaixo trava o alvo: se um dia o bloco sumir de uma das coleções, o
+   * teste ACUSA em vez de gerar um "velho" que não é velho coisa nenhuma. */
+  const NEW_BLOCK = /allow read: if \(\s*\n\s*\(resource\.data\.get\('isSandbox'[\s\S]*?\n\s*\);/g;
+  const achadas = (cur.match(NEW_BLOCK) || []).length;
+  if (achadas < 1) {
     throw new Error('não achei o bloco novo de allow read em firestore.rules — ajuste o teste');
   }
   const old = cur.replace(NEW_BLOCK,
     "allow read: if (resource.data.isPublic == true) || (request.auth != null);");
+  const sobraram = (old.match(NEW_BLOCK) || []).length;
+  if (sobraram !== 0) {
+    throw new Error('o "velho" gerado ainda tem ' + sobraram + ' bloco(s) NOVO(s) — o controle não provaria nada');
+  }
   const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spsbold-')), 'old.rules');
   fs.writeFileSync(p, old);
   return p;

@@ -36,12 +36,27 @@ ok(isAdmin({ creatorUid: UID }, UID, 'qualquer@x.com'),
    '(1) creatorUid == uid → autoriza (caminho imutável, independe de email)');
 ok(isAdmin({ creatorUid: 'outro_uid_longo', adminUids: ['x_longo', UID] }, UID, ''),
    '(2) uid em adminUids → autoriza mesmo SEM email (co-host por telefone)');
-ok(isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: ['a@x.com', MAIL] }, UID, MAIL),
-   '(3) email em adminEmails → autoriza (backward compat)');
-ok(isAdmin({ creatorUid: 'outro_uid_longo', organizerEmail: 'DONO@X.com' }, UID, MAIL),
-   '(4) recovery: adminEmails ausente → organizerEmail (case-insensitive)');
-ok(isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: [], organizerEmail: MAIL }, UID, MAIL),
-   '(4) recovery vale com adminEmails VAZIO (bug v1.6.66 apagava o campo)');
+/* ⛔ OS CAMINHOS (3) E (4) MORRERAM — e as asserções deles viraram RECUSAS.
+ * Este arquivo travava os "4 caminhos da rule": creatorUid, adminUids, adminEmails e o
+ * recovery por organizerEmail. Em 26/ago/2026 (362fc0f2, "identidade é uid: e-mail e nome
+ * saíram de toda decisão") sobraram DOIS: `_isTournamentAdmin`
+ * (functions-autodraw/index.js:321-328) só olha `creatorUid` e `adminUids`.
+ * As `firestore.rules` fizeram o mesmo movimento (linhas 12-23: "os caminhos por E-MAIL
+ * FORAM REMOVIDOS … a pessoa troca o e-mail e perde/ganha admin sem nada ter mudado no
+ * torneio"), com backfill de `adminUids` medido antes (8/8 torneios convergidos).
+ * ⚠️ A COBERTURA NÃO ENCOLHEU: onde havia 3 asserções de permissão por e-mail agora há 4
+ * de recusa — e o espelho continua tendo de bater com a rule, que é o motivo deste arquivo. */
+ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: ['a@x.com', MAIL] }, UID, MAIL),
+   '⛔ (3) e-mail em adminEmails NÃO autoriza mais — só uid (362fc0f2)');
+ok(!isAdmin({ creatorUid: 'outro_uid_longo', organizerEmail: 'DONO@X.com' }, UID, MAIL),
+   '⛔ (4) recovery por organizerEmail NÃO autoriza mais, nem case-insensitive');
+ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: [], organizerEmail: MAIL }, UID, MAIL),
+   '⛔ (4) nem com adminEmails VAZIO — o campo deixou de decidir');
+ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: [MAIL], organizerEmail: MAIL,
+              memberUids: [UID] }, UID, MAIL),
+   '⛔ e-mail em TODOS os campos de uma vez ainda NÃO entra sem uid');
+ok(isAdmin({ creatorUid: 'outro_uid_longo', adminUids: [UID], adminEmails: [] }, UID, ''),
+   '⭐ o MESMO co-host, agora por adminUids, autoriza sem e-mail nenhum');
 
 console.log('──── quem NÃO é admin é RECUSADO ────');
 ok(!isAdmin({ creatorUid: 'outro_uid_longo' }, UID, MAIL),
@@ -56,11 +71,10 @@ ok(!isAdmin({ creatorUid: UID }, null, MAIL), 'sem uid (não autenticado) → NE
 ok(!isAdmin(null, UID, MAIL), 'doc inexistente → NEGA');
 
 console.log('──── bordas que a rule trata e é fácil errar ao portar ────');
-// A rule só cai no organizerEmail quando adminEmails NÃO é lista não-vazia. Com adminEmails
-// preenchido e o email fora dela, o recovery NÃO pode salvar — senão um ex-organizador cujo
-// email saiu de adminEmails continuaria mandando.
+// ⚠️ Esta continua valendo — e agora por um motivo MAIS FORTE: não é "o recovery só age
+// quando adminEmails está vazia", é que e-mail não decide mais nada.
 ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: ['b@x.com'], organizerEmail: MAIL }, UID, MAIL),
-   'adminEmails NÃO-vazio e email fora dela → recovery NÃO salva (ex-organizador não volta)');
+   'ex-organizador por e-mail não volta — e-mail não decide (antes: só quando adminEmails vazia)');
 ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminUids: [] }, UID, ''),
    'adminUids vazio + sem email → NEGA (não vira passe livre)');
 // authEmail() na rule é '' quando o token não tem email → nunca casa por email.
@@ -72,9 +86,14 @@ ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: [''], organizerEmail: 
 // a CF autorizaria alguém que o write direto do cliente recusaria.
 ok(!isAdmin({ creatorUid: 'outro_uid_longo', adminEmails: ['DONO@X.COM'] }, UID, MAIL),
    'adminEmails em MAIÚSCULA não casa — igual à rule (o lower é do _computeAdminEmails, na escrita)');
-// organizerEmail, esse SIM, a rule abaixa: `data.organizerEmail.lower() == authEmail()`.
-ok(isAdmin({ creatorUid: 'outro_uid_longo', organizerEmail: 'DONO@X.COM' }, UID, MAIL),
-   'organizerEmail em MAIÚSCULA casa — a rule usa .lower() nesse campo (assimetria REAL da rule)');
+/* ⛔ A ASSIMETRIA DE CAIXA SUMIU JUNTO COM O CAMPO. A rule tinha
+ * `data.organizerEmail.lower() == authEmail()` de um lado e `authEmail() in adminEmails`
+ * (exato) do outro — e este arquivo travava a diferença. Sem caminho por e-mail, não há
+ * assimetria: MAIÚSCULA e minúscula são recusadas igualmente. */
+ok(!isAdmin({ creatorUid: 'outro_uid_longo', organizerEmail: 'DONO@X.COM' }, UID, MAIL),
+   '⛔ organizerEmail em MAIÚSCULA também não casa — não há mais caminho por e-mail');
+ok(!isAdmin({ creatorUid: 'outro_uid_longo', organizerEmail: MAIL }, UID, MAIL),
+   '⛔ nem em minúscula: a caixa deixou de importar porque o campo deixou de decidir');
 
 console.log('\n════════════════════════════════════════');
 if (fail) { console.error(`❌ drawround-authz: ${pass} ok, ${fail} falharam`); process.exit(1); }

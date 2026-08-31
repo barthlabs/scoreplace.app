@@ -4,7 +4,7 @@
   "private": true,
   "description": "scoreplace.app — vanilla JS SPA. Package.json existe apenas para devDependencies de tooling (Playwright, Lighthouse). NÃO há build step nem bundler — index.html serve js/ e css/ direto.",
   "scripts": {
-    "test": "node scripts/check-ext-version.js && node scripts/check-vendor-fresh.js && node scripts/check-shell-version.js && node scripts/check-amizade-client-writes.js && node scripts/check-runbook-amizade.js && node tests/run-unit.js",
+    "test": "node scripts/check-ext-version.js && node scripts/check-vendor-fresh.js && node scripts/check-shell-version.js && node scripts/check-test-catalog.js && node scripts/check-amizade-client-writes.js && node scripts/check-runbook-amizade.js && node tests/run-unit.js",
     "test:unit": "node tests/run-unit.js",
     "test:ext": "node tests/lz-extensao-real.test.js",
     "test:concurrency": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
@@ -25,7 +25,12 @@
     "check:ext": "node scripts/check-ext-version.js",
     "check:cache": "node scripts/check-cache-busters.js",
     "check:vendor": "node scripts/check-vendor-fresh.js",
-    "check:shell": "node scripts/check-shell-version.js"
+    "check:shell": "node scripts/check-shell-version.js",
+    "check:catalog": "node scripts/check-test-catalog.js",
+    "test:autodraw": "node functions-autodraw/test-closeround.js && node functions-autodraw/test-closeround-authz.js && node functions-autodraw/test-drawinitial.js && node functions-autodraw/test-drawround-authz.js && node functions-autodraw/test-format2.js && node functions-autodraw/test-orphan-uid.js && node functions-autodraw/test-parity-old-vs-new.js && node functions-autodraw/test-persist-boundary.js && node functions-autodraw/test-uid-identity.js",
+    "test:emu": "npm run test:emu:fs && npm run test:emu:fn",
+    "test:emu:fs": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-pair-replicate.js && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-sandbox-replicate.js && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-reminders-emulator.js\"",
+    "test:emu:fn": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only functions,firestore --project demo-scoreplace \"node functions/test-backfill-emu.js && node functions/test-syncroster-emu.js\""
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

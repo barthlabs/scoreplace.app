@@ -27,6 +27,19 @@ function ok(name, cond, got) {
   else { fail++; console.log('  ✗ ' + name + (got !== undefined ? ' — ' + got : '')); }
 }
 
+/* ⚠️ PRESENÇA PRECISA DE CARIMBO — as fixtures usavam `1`, e `1` NÃO é presença.
+ * Desde 23/ago/2026 (dd878b65, ordem do dono: "presença caduca em 24h") o valor gravado
+ * em `checkedIn` é um CARIMBO, e `_presencaFresca` (js/views/identity-core.js:229) recusa
+ * qualquer coisa anterior ao ano 2000 — inclusive `1` e `true`, que ela trata como
+ * VENCIDO de propósito: "presença sem hora não dá pra provar que é de hoje".
+ * Com `1` as 11 armadilhas de UID deste arquivo ficavam vermelhas por um motivo que não
+ * tem nada a ver com o que elas travam. `AGORA` é determinístico (um instante só, lido
+ * uma vez) — nada de relógio andando no meio da suíte.
+ * ⛔ `absent` NÃO leva carimbo: ele está fora de `_PRESENCA_MAPS` porque é W.O., não
+ * presença, e W.O. não caduca. Trocar o valor lá seria inventar uma regra que não existe. */
+const AGORA = Date.now();
+const VENCIDA = AGORA - (25 * 60 * 60 * 1000);   // 25h — um dia e uma hora atrás
+
 console.log('\n═══ CÂNONE: uid sempre; nome SÓ pra fictício ═══\n');
 
 // ── ARMADILHA 1 · dupla presente que o nome diria ausente ────────────────────
@@ -38,17 +51,17 @@ console.log('Dupla com uid — o rótulo NÃO pode ser consultado:');
     id: 'x', enrollmentMode: 'time', teamSize: 2, participants: [dupla],
     // Os DOIS uids têm check-in ⇒ a dupla apareceu inteira ⇒ PRESENTE.
     // O rótulo NÃO está no mapa — quem ler o nome vai dizer "ausente" e errar.
-    checkedIn: { a1: 1, b1: 1 }, absent: {}, waitlist: [],
+    checkedIn: { a1: AGORA, b1: AGORA }, absent: {}, waitlist: [],
   };
   ok('dupla 100% presente é PRESENTE (nome diria ausente)', W._entryIsPresent(t, dupla) === true);
 
   // Agora o inverso: o rótulo ESTÁ no mapa, mas os uids NÃO. Quem cair no nome diz
   // "presente" e erra — ninguém daquela dupla fez check-in.
-  const t2 = Object.assign({}, t, { checkedIn: { 'Ana / Bia': 1 } });
+  const t2 = Object.assign({}, t, { checkedIn: { 'Ana / Bia': AGORA } });
   ok('rótulo no mapa NÃO faz a dupla presente (uid manda)', W._entryIsPresent(t2, dupla) === false);
 
   // Meia dupla: 1 slot presente, 1 não. Não joga.
-  const t3 = Object.assign({}, t, { checkedIn: { a1: 1 } });
+  const t3 = Object.assign({}, t, { checkedIn: { a1: AGORA } });
   ok('dupla com 1 slot ausente NÃO é presente', W._entryIsPresent(t3, dupla) === false);
 }
 
@@ -57,7 +70,7 @@ console.log('\nHomônimos — dois "João Silva", uids diferentes:');
 {
   const joao1 = { uid: 'u1', displayName: 'João Silva', name: 'João Silva' };
   const joao2 = { uid: 'u2', displayName: 'João Silva', name: 'João Silva' };
-  const t = { id: 'y', participants: [joao1, joao2], checkedIn: { u1: 1 }, absent: {}, waitlist: [] };
+  const t = { id: 'y', participants: [joao1, joao2], checkedIn: { u1: AGORA }, absent: {}, waitlist: [] };
   ok('só o João do uid u1 está presente', W._entryIsPresent(t, joao1) === true);
   ok('o outro João (u2) NÃO herda a presença pelo nome', W._entryIsPresent(t, joao2) === false);
 }
@@ -68,17 +81,42 @@ console.log('\nE-mail / celular NÃO são identidade de quem tem uid:');
   const p = { uid: 'u9', displayName: 'Rodrigo', name: 'Rodrigo',
               email: 'rod@x.com', phone: '+5511999998888' };
   const t = { id: 'z', participants: [p], absent: {}, waitlist: [],
-              checkedIn: { 'rod@x.com': 1, '+5511999998888': 1, 'Rodrigo': 1 } };
+              checkedIn: { 'rod@x.com': AGORA, '+5511999998888': AGORA, 'Rodrigo': AGORA } };
   ok('check-in por e-mail/celular/nome NÃO vale — só o uid', W._entryIsPresent(t, p) === false);
-  t.checkedIn = { u9: 1 };
+  t.checkedIn = { u9: AGORA };
   ok('check-in pelo uid vale', W._entryIsPresent(t, p) === true);
+}
+
+// ── ARMADILHA 3b · PRESENÇA VENCIDA (dd878b65, 23/ago: caduca em 24h) ────────
+// ⚠️ Estas asserções nasceram COM o conserto de fixture da L15.P2 e são o que impede o
+// erro de voltar por baixo: se alguém "consertar" o teste afrouxando `_presencaFresca`
+// pra aceitar `1`/`true` de novo, é AQUI que fica vermelho — não nas armadilhas de uid.
+console.log('\nPresença CADUCA — carimbo velho não vale, e carimbo nenhum também não:');
+{
+  const p = { uid: 'u9', displayName: 'Rodrigo' };
+  const base = { id: 'z2', participants: [p], absent: {}, waitlist: [] };
+  ok('carimbo de 25h atrás NÃO conta como presente',
+     W._entryIsPresent(Object.assign({}, base, { checkedIn: { u9: VENCIDA } }), p) === false);
+  ok('carimbo de agora conta',
+     W._entryIsPresent(Object.assign({}, base, { checkedIn: { u9: AGORA } }), p) === true);
+  ok('⛔ `1` (marcador legado, sem hora) NÃO vale — era o que quebrava esta suíte',
+     W._entryIsPresent(Object.assign({}, base, { checkedIn: { u9: 1 } }), p) === false);
+  ok('⛔ `true` também não vale',
+     W._entryIsPresent(Object.assign({}, base, { checkedIn: { u9: true } }), p) === false);
+  ok('a régua é a canônica: _PRESENCA_TTL_MS = 24h',
+     W._PRESENCA_TTL_MS === 24 * 60 * 60 * 1000, W._PRESENCA_TTL_MS);
+  // ⛔ `absent` está FORA de _PRESENCA_MAPS: é W.O., não presença, e W.O. não caduca.
+  ok('`absent` NÃO caduca — marcador sem carimbo segue valendo lá',
+     W._PRESENCA_MAPS.indexOf('absent') === -1 &&
+     W._entryAnyInMap(Object.assign({}, base, { checkedIn: {}, absent: { u9: 1 } }),
+                      Object.assign({}, base, { checkedIn: {}, absent: { u9: 1 } }).absent, p) === true);
 }
 
 // ── ARMADILHA 4 · o fictício — a ÚNICA exceção ───────────────────────────────
 console.log('\nJogador FICTÍCIO (digitado pelo organizador, sem conta) — nome é a identidade:');
 {
   const ficticio = { displayName: 'Convidado do Zé', name: 'Convidado do Zé' }; // sem uid
-  const t = { id: 'w', participants: [ficticio], checkedIn: { 'Convidado do Zé': 1 },
+  const t = { id: 'w', participants: [ficticio], checkedIn: { 'Convidado do Zé': AGORA },
               absent: {}, waitlist: [] };
   ok('fictício resolve por nome (não tem outra identidade)', W._entryIsPresent(t, ficticio) === true);
   t.checkedIn = {};
@@ -89,11 +127,11 @@ console.log('\nJogador FICTÍCIO (digitado pelo organizador, sem conta) — nome
 console.log('\nMarcar ausente é por uid; 1 slot ausente derruba a dupla:');
 {
   const dupla = { p1Uid: 'a1', p1Name: 'Ana', p2Uid: 'b1', p2Name: 'Bia', displayName: 'Ana / Bia' };
-  const t = { id: 'v', participants: [dupla], checkedIn: { a1: 1, b1: 1 },
+  const t = { id: 'v', participants: [dupla], checkedIn: { a1: AGORA, b1: AGORA },
               absent: { b1: 1 }, waitlist: [] };
   ok('dupla com 1 slot marcado ausente NÃO é presente', W._isParticipantPresent(t, dupla) === false);
   // O rótulo no mapa `absent` não pode derrubar quem tem uid limpo.
-  const t2 = { id: 'v2', participants: [dupla], checkedIn: { a1: 1, b1: 1 },
+  const t2 = { id: 'v2', participants: [dupla], checkedIn: { a1: AGORA, b1: AGORA },
                absent: { 'Ana / Bia': 1 }, waitlist: [] };
   ok('rótulo em `absent` NÃO derruba a dupla (uid manda)', W._isParticipantPresent(t2, dupla) === true);
 }
@@ -105,9 +143,9 @@ console.log('\nChamada pré-sorteio — 16 inscritos, 10 com presença:');
 {
   const t = { id: 'r', participants: [], checkedIn: {}, absent: {}, waitlist: [] };
   for (let i = 1; i <= 16; i++) t.participants.push({ uid: 'u' + i, displayName: 'J' + i, name: 'J' + i });
-  for (let i = 1; i <= 10; i++) t.checkedIn['u' + i] = 1;
+  for (let i = 1; i <= 10; i++) t.checkedIn['u' + i] = AGORA;
   // armadilha: o nome de um AUSENTE plantado no mapa. Quem ler nome leva 11 pra chave.
-  t.checkedIn['J16'] = 1;
+  t.checkedIn['J16'] = AGORA;
   const r = W._applyPresenceRoll(t, 'waitlist');
   ok('sorteia entre os 10 (J16 não entra pelo nome)', t.participants.length === 10,
      'na chave=' + t.participants.length);
@@ -126,7 +164,7 @@ console.log('\nChamada pré-sorteio com DUPLAS (2 slots, 2 uid):');
       { p1Uid: 'a2', p1Name: 'Caio', p2Uid: 'b2', p2Name: 'Duda', displayName: 'Caio / Duda' },
       { p1Uid: 'a3', p1Name: 'Eva', p2Uid: 'b3', p2Name: 'Fabio', displayName: 'Eva / Fabio' },
     ],
-    checkedIn: { a1: 1, b1: 1, a2: 1 }, // dupla 1 inteira; dupla 2 com 1 só; dupla 3 ninguém
+    checkedIn: { a1: AGORA, b1: AGORA, a2: AGORA }, // dupla 1 inteira; dupla 2 com 1 só; dupla 3 ninguém
     absent: {}, waitlist: [],
   };
   const r = W._applyPresenceRoll(t, 'waitlist');
@@ -151,7 +189,7 @@ console.log('\nFORMA REAL DO DOC (só uid, ZERO nome — é o que a CF lê):');
       { p1Uid: 'a2', p2Uid: 'b2' },   // 1 slot presente
       { p1Uid: 'a3', p2Uid: 'b3' },   // ninguém
     ],
-    checkedIn: { a1: 1, b1: 1, a2: 1 }, absent: {}, waitlist: [],
+    checkedIn: { a1: AGORA, b1: AGORA, a2: AGORA }, absent: {}, waitlist: [],
   };
   const uidsOf = (p) => W._participantUids(p).join('+');
   const r = W._applyPresenceRoll(t, 'waitlist');

@@ -7,8 +7,8 @@
 
 ## Medição de referência
 
-- **17 levas** no mapa: 2 concluídas (L0, L1), 1 **bloqueada externamente** (L2) e 14 ainda não iniciadas.
-- Por contagem de levas (não por esforço): **11,8% concluído** e **88,2% restante**.
+- **17 levas** no mapa: 3 concluídas (L0, L1, L15), 1 **bloqueada externamente** (L2) e 13 ainda não iniciadas.
+- Por contagem de levas (não por esforço): **17,6% concluído** e **82,4% restante**.
 - A porcentagem não é prazo: `Vite`, Capacitor e migrações de identidade são maiores
   que uma correção de Rules, por exemplo.
 
@@ -29,7 +29,7 @@
 | L12 | PWA, service worker e cache | **Parcial/hardening contínuo.** Gates de versão/cache existem; não é encerrado por uma release. | Teste de atualização e navegação offline em aparelho real. |
 | L13 | Capacitor/nativo | **Aberta.** | Decidir política de versões mínimas/atualização e validar iOS/Android reais. |
 | L14 | identidade, merges, retries e concorrência | **Aberta.** | Matriz de idempotência e provas de posse antes de alterar merge/login. |
-| L15 | testes não descobertos automaticamente | **Aberta.** | Catálogo de testes e gate que falha para arquivo novo não registrado. |
+| L15 | testes não descobertos automaticamente | **Concluída (L15.P0/P1/P2).** Medido em 8341efe2: **603 arquivos de teste no disco, 581 na lista à mão de `tests/run-unit.js` e 15 que NENHUM comando alcançava** — entre eles `functions-autodraw/test-uid-identity.js`, **vermelho 11/22 sem ninguém ver**. Os 5 vermelhos foram triados e reparados sem afrouxar invariante nenhum (ver abaixo), e `scripts/check-test-catalog.js` passou a exigir que todo arquivo de teste tenha um comando conhecido. | Gate no `npm test`; suítes de emulador serializadas por grupo. |
 | L16 | observabilidade e hardening | **Aberta.** | Métricas, alertas e runbooks definidos por risco, sem registrar PII. |
 
 **L2 — o que o inventário achou, para quando o bloqueio sair.** `notif_email_queue` tem
@@ -61,6 +61,40 @@ mais novos já não têm isso — `accountSummaryEmail`, `accountDeletionEmail`,
 convites da L1.1 usam id determinístico + `create()`. ⚠️ Não é a mesma classe de problema
 que a L1 fechou (aquilo era autorização; isto é entrega dobrada), e por isso vai
 registrado em separado em vez de entrar de carona.
+
+**L15 — quais comandos executam cada grupo de teste.** O catálogo é conferido por
+`scripts/check-test-catalog.js` (no `npm test`), que falha se aparecer arquivo de teste sem
+comando **ou** se um arquivo catalogado for apagado (catálogo com fantasma mente tanto quanto
+teste órfão).
+
+| Grupo | Comando | O que roda |
+|---|---|---|
+| `run-unit` | `npm test` | 582 suítes headless, listadas à mão em `tests/run-unit.js` |
+| `rules` | `npm run test:rules` | 6 suítes que dirigem as Rules REAIS no emulador |
+| `autodraw-manual` | `npm run test:autodraw` | 9 suítes do motor de sorteio |
+| `emulador-manual` | `npm run test:emu` | 5 suítes de emulador (`:emu:fs` Firestore · `:emu:fn` Firestore+Functions) |
+| `concurrency` | `npm run test:concurrency` | corridas contra o emulador |
+| `purge` | `npm run test:purge` | purga de torneio (Firestore+Functions) |
+| `amizade` | `npm run test:amizade` | 8 suítes requeridas por `tests/amizade/run.js` |
+| `ext` | `npm run test:ext` | extensão letzplay |
+
+⚠️ **Os grupos de emulador rodam em SÉRIE, e isso não é preferência.** Todas as suítes usam o
+projeto `demo-scoreplace`, então em paralelo os dados se misturam; e as `rules-*` disputam
+porta: 8098 (`rules-sandbox-read`, `rules-cohost-uid-only`, `rules-mail-server-only`) e 8099
+(`rules-privileged-fields`, `rules-inscricao-espera`, `rules-amizade-nao-cross-user`). Cada
+suíte sobe e derruba o próprio emulador; encadeadas por `&&`, não colidem.
+
+**O que a triagem da L15.P1 achou nos 5 vermelhos** — nenhum era regressão de produto:
+`rules-sandbox-read` reconstruía a regra antiga com `replace` **sem a flag `g`**, e desde
+25/ago (4c595e2d, `tournaments_summary`) havia DOIS blocos idênticos: revertia o errado e o
+controle acusava 403 (**fixture**). `test-uid-identity` marcava presença com `1`, que desde
+23/ago (dd878b65, "presença caduca em 24h") conta como **vencida** (**fixture**). Os dois
+`*-authz` do autodraw exigiam autorização por `memberEmails`/`adminEmails`/`organizerEmail`,
+removida em 26/ago (362fc0f2, "identidade é uid") — as asserções viraram **recusas** e a
+cobertura cresceu (**teste obsoleto**). `test-backfill-emu` e `test-syncroster-emu` exigiam
+que o espelho **não** se curasse sozinho, o oposto do que 6c2570cb (10/ago, "o espelho do
+roster passa a se manter sozinho") decidiu com medição em produção — reescritos para afirmar
+a **cura automática**, preservando o limite do `dryRun` (**teste obsoleto**).
 
 ## Gates de processo registrados
 

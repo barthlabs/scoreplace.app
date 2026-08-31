@@ -87,13 +87,36 @@ async function pollSub(tid, matchId, predicate, label, tries) {
   const finR = await pollSub(tid, "final", (d) => d && (d.playerUids || []).join("|") === "uA");
   ok(finR && (finR.playerUids || []).join("|") === "uA", "reverter: 'final' volta a roster [uA] (C saiu)");
 
-  console.log("──── não backfilla jogo sem subdoc ────");
+  /* ⛔ ESTA ASSERÇÃO AFIRMAVA LITERALMENTE A REGRA QUE FOI REMOVIDA. Ela exigia que um
+   * jogo NOVO, sem subdoc semeado, NÃO ganhasse espelho — o `if (!snap.exists) continue`
+   * que existia em `syncMatchRosters`.
+   * Em 6c2570cb ("1.7.99 — o espelho do roster passa a se manter sozinho, no servidor") a
+   * linha caiu, com a medição de produção escrita no código (functions/index.js:8074-8083):
+   * o Confra tinha 4 docs pra dezenas de jogos e dois torneios de eliminatória tinham ZERO,
+   * porque o seed vivia no CLIENTE e o sorteio AUTOMÁTICO roda no SERVIDOR. "Quem dependesse
+   * do subdoc existir tinha cobertura aleatória."
+   * ⭐ Agora se afirma a CURA: o jogo novo ganha espelho sozinho, com o roster canônico. */
+  console.log("──── cura automática: jogo NOVO ganha espelho sozinho (6c2570cb) ────");
   await db.collection("tournaments").doc(tid).update({
-    matches: admin.firestore.FieldValue.arrayUnion({ id: "extra", p1: "A", p2: "B", winner: "A" }),
+    matches: admin.firestore.FieldValue.arrayUnion({
+      id: "extra", p1: "A", p2: "B", winner: "A", team1Uids: ["uA"], team2Uids: ["uB"],
+    }),
   });
+  const ex = await pollSub(tid, "extra", (d) => !!d);
+  ok(!!ex, "⭐ jogo novo SEM subdoc semeado ganha espelho pelo gatilho");
+  ok(ex && (ex.playerUids || []).slice().sort().join("|") === "uA|uB",
+    `⭐ e o espelho nasce com o roster canônico por uid (got ${(ex && ex.playerUids || []).join("|")})`);
+  ok(ex && ex.winner === "A", "⭐ carregando o resultado que o jogo já tinha");
+
+  /* ⚠️ E O LIMITE CONTINUA: o gatilho só toca jogo cuja ASSINATURA mudou
+   * (functions/index.js:8087). Reescrever o MESMO jogo não reescreve o espelho — senão
+   * toda escrita no torneio varreria a chave inteira. */
+  const antesIdem = JSON.stringify(ex);
+  await db.collection("tournaments").doc(tid).update({ updatedAt: new Date().toISOString() });
   await sleep(2500);
-  const ex = await db.collection("tournaments").doc(tid).collection("results").doc("extra").get();
-  ok(!ex.exists, "NÃO backfilla jogo sem subdoc semeado");
+  const depoisIdem = await db.collection("tournaments").doc(tid).collection("results").doc("extra").get();
+  ok(depoisIdem.exists && JSON.stringify(depoisIdem.data()) === antesIdem,
+    "⛔ escrita sem mudança de assinatura NÃO reescreve o espelho (idempotente)");
 
   console.log("════════════════════════════════════════");
   console.log((fail === 0 ? "✅" : "❌") + " syncMatchRosters E2E: " + (fail === 0 ? "todos ok" : fail + " falharam"));
