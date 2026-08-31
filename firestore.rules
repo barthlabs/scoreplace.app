@@ -859,10 +859,31 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // ─── Mail (firestore-send-email extension) ───────────────────────────────
+    // ─── Mail (firestore-send-email extension) — SERVER-ONLY (L1.2) ──────────
+    // ⛔ ERA `allow write: if request.auth != null`, e isso não era "fila de e-mail":
+    // era um RELAY. Quem estivesse logado escolhia DESTINATÁRIO, ASSUNTO e HTML, e a
+    // extensão entregava saindo do remetente do produto. O inventário da L1.P0 mediu a
+    // superfície: uma única porta cliente (`FirestoreDB.queueEmail`) e três fluxos
+    // usando-a — convite de torneio, convite de dupla e convite de co-organização.
+    //
+    // ⭐ A ORDEM IMPORTOU. Fechar a regra ANTES de migrar teria quebrado os três fluxos
+    // em produção. As levas foram: L1.3a (convite avulso → `sendTournamentInvite`),
+    // L1.1 (dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e
+    // `queueEmail` deixou de existir), L1.1.1 (o e-mail só é pedido depois de o convite
+    // PERSISTIR — senão a Function lia o documento antes do registro e recusava). Só
+    // então, com a varredura de `js/` sem nenhum writer, a porta fecha.
+    //
+    // ⚠️ AS FUNCTIONS NÃO PASSAM POR AQUI: elas usam o Admin SDK, que ignora as rules.
+    // Fechar a regra não desliga nenhum e-mail legítimo — e a extensão
+    // firestore-send-email continua consumindo a coleção normalmente.
+    //
+    // ⛔ SEM EXCEÇÃO POR UID, E-MAIL, DONO DE TORNEIO OU CAMPO DO PAYLOAD. Qualquer
+    // brecha desse tipo devolve o relay por outro nome: o que o cliente controla, ele
+    // escolhe. Travado por tests/rules-mail-server-only.test.js, contra o emulador.
+    // ⚠️ `notif_email_queue` (logo abaixo) NÃO é escopo desta leva — segue aberta a
+    // autenticado e é dívida registrada como L2.
     match /mail/{mailId} {
-      allow read: if false;
-      allow write: if request.auth != null;
+      allow read, write: if false;
     }
 
     // ─── Notif email digest queue (v2.1.19) ──────────────────────────────────

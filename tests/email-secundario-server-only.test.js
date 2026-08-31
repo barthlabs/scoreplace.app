@@ -102,9 +102,11 @@ console.log('\n⑤ Rules: o cliente não lê nem escreve emailVerifications\n');
   ok(!/allow update: if true/.test(bloco), '⛔ o `update: if true` sumiu');
   const bt = rules.slice(rules.indexOf('match /emailVerifyThrottle/'), rules.indexOf('match /emailVerifyThrottle/') + 160);
   ok(/allow read, write: if false;/.test(bt), 'emailVerifyThrottle também é server-only');
-  /* ⛔ dívida aberta que NÃO é desta leva */
-  ok(/match \/mail\/\{mailId\} \{[\s\S]{0,120}allow write: if request\.auth != null;/.test(rules),
-    '⚠️ /mail SEGUE aberto a qualquer autenticado — dívida de L1.2/L1.3, fora desta leva');
+  /* ⭐ A dívida que esta linha registrava como "fora desta leva" foi PAGA na L1.2
+   * (2.1.77): /mail virou server-only. Comportamento provado contra o emulador em
+   * tests/rules-mail-server-only.test.js. */
+  ok(/match \/mail\/\{mailId\} \{[\s\S]{0,80}allow read, write: if false;/.test(rules),
+    '⭐ /mail é server-only — a fila de e-mail deixou de ser alcançável pelo cliente');
 }
 
 console.log('\n⑥ o cliente não escreve mais nada deste fluxo\n');

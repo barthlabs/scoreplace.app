@@ -155,11 +155,18 @@ console.log('\n⑥ a UI esconde o campo de quem não é organizador\n');
     '   e o comentário registra que esconder NÃO é a defesa — a Function é');
 }
 
-console.log('\n⑦ /mail segue aberto — mas a dívida de F1/F2 foi PAGA na L1.1\n');
+console.log('\n⑦ /mail FECHADO (L1.2) — a dívida de F1/F2 foi paga na L1.1\n');
 {
   const rules = fs.readFileSync(path.join(RAIZ, 'firestore.rules'), 'utf8');
-  ok(/match \/mail\/\{mailId\} \{[\s\S]{0,120}allow write: if request\.auth != null;/.test(rules),
-    '⚠️ /mail continua aberto: fechar a Rule é a segunda metade de L1');
+  /* ⚠️ TERCEIRA VIRADA DESTA ASSERÇÃO, e cada uma foi honesta no seu momento: 2.1.69
+   * registrava que /mail seguia aberto (dívida daquele escopo), 2.1.75 registrava a
+   * mesma coisa com F1/F2 já migrados, e a L1.2 (2.1.77) FECHOU. Uma asserção que
+   * afirma a dívida vira mentira no dia em que a dívida é paga.
+   * ⛔ A prova de COMPORTAMENTO das rules não é esta linha — é
+   * tests/rules-mail-server-only.test.js, que dirige o emulador. Aqui só se trava o texto
+   * pra ninguém reabrir a porta sem passar por lá. */
+  ok(/match \/mail\/\{mailId\} \{[\s\S]{0,80}allow read, write: if false;/.test(rules),
+    '⭐ /mail é server-only: `allow read, write: if false` (comportamento provado em rules-mail-server-only)');
   /* ⚠️ ESTA ASSERÇÃO MUDOU DE LADO, DE PROPÓSITO. Na 2.1.69 ela AFIRMAVA que os writers
    * de F1/F2 seguiam intactos — era o registro honesto da dívida que aquele escopo
    * mandava preservar. A L1.1 (2.1.75) pagou a dívida: os dois viraram capability de

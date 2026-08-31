@@ -247,10 +247,12 @@ console.log('\n§6 NADA DO CLIENTE ENTRA NO E-MAIL');
   ok(m.message.html.indexOf('phishing.example') === -1, '⛔ URL do payload é IGNORADA');
 }
 
-console.log('\n§7 A RULE DE /mail SEGUE ABERTA — de propósito nesta leva');
+console.log('\n§7 A RULE DE /mail FOI FECHADA NA L1.2');
 {
-  ok(/match \/mail\/\{mailId\} \{[\s\S]{0,120}allow write: if request\.auth != null;/.test(RULES),
-    '⚠️ /mail NÃO foi fechado aqui: o escopo é a primeira metade de L1');
+  /* ⚠️ Esta asserção nasceu afirmando o CONTRÁRIO — era o registro honesto de que a L1.1
+   * só fazia a primeira metade. A L1.2 (2.1.77) fez a segunda. */
+  ok(/match \/mail\/\{mailId\} \{[\s\S]{0,80}allow read, write: if false;/.test(RULES),
+    '⭐ /mail é server-only (comportamento provado em tests/rules-mail-server-only.test.js)');
   ok(/match \/notif_email_queue\/\{id\} \{[\s\S]{0,160}allow create: if request\.auth != null;/.test(RULES),
     '⚠️ e `notif_email_queue` também segue como está — fechá-la é L2');
   /* ⛔ Os writers de SERVIDOR que sobram são legítimos e não impedem o fechamento:
