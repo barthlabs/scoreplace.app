@@ -38,6 +38,10 @@ let pass = 0, fail = 0; const fails = [];
 function ok(c, m) { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; fails.push(m); console.log('  ✗ ' + m); } }
 
 const AGORA = Date.now();
+/* ⛔ envelope: contra a árvore anterior à R1.1 esta porta não existe, e um TypeError
+ * esconderia o resto da suíte. Ver a mesma nota em sw-abre-sem-tela-branca. */
+const _indef = () => (typeof W.AppStore.participacoesIndefinidas === 'function')
+  ? W.AppStore.participacoesIndefinidas() : [];
 
 /* ── O CONFRA COMO ELE ESTAVA NO DOCUMENTO, medido em 31/ago 01:10 ─────────────
  *   _semPesados      : ["matches","participants","opponentHistory"]
@@ -149,8 +153,11 @@ W.localStorage = W.localStorage || {
   setItem: function (k, v) { _mem[k] = String(v); },
   removeItem: function (k) { delete _mem[k]; }
 };
-function secao(tours) {
-  W.AppStore.tournaments = tours;
+/* ⚠️ `noStore` existe porque o caso do ORGANIZADOR é exatamente a divergência entre os
+ * dois: o store TEM o torneio, e `participacoes` volta VAZIA. Igualar os dois aqui
+ * apagaria justamente o cenário que se quer provar. */
+function secao(tours, noStore) {
+  W.AppStore.tournaments = noStore || tours;
   W.AppStore.currentUser = { uid: 'u-rb', displayName: 'Rodrigo Barth', email: 'rb@x.com' };
   W.AppStore.isOrganizer = function (t) { return !!(t && t.creatorUid === 'u-rb'); };
   const fn = new Function('window', 'document', 'localStorage', 'participacoes',
@@ -176,6 +183,49 @@ console.log('\n§3 VAZIO VERDADEIRO CONTINUA SUMINDO');
   ok(html === '',
     'torneio hidratado e sem jogo meu: a seção some, como sempre somou (senão vira aviso permanente)');
   ok(secao([]) === '', 'sem torneio nenhum: some também');
+}
+
+/* ══ §4 · R1.1 — O CASO QUE A REDE DA 2.1.70 NÃO PEGAVA ══════════════════════
+ * A rede conferia os torneios DA LISTA. O defeito do organizador é a LISTA VIR VAZIA:
+ * `getMyParticipations()` exige, de criador e co-host, prova de inscrição real em
+ * `participants[]` (v2.2.45) — e num torneio dividido essa lista chega depois. A prova
+ * falha, `participacoes` volta `[]`, e lista vazia é "confiável" por definição.
+ * Resultado: as duas seções sumiam da tela do dono, e só da dele. */
+console.log('\n§4 ORGANIZADOR — lista VAZIA por carregamento não apaga as seções');
+{
+  const _asOrig = { t: W.AppStore.tournaments, u: W.AppStore.currentUser };
+  const meu = confraPelaMetade();
+  meu.creatorUid = 'u-rb';
+  meu.memberUids = ['u-rb'];
+  /* ⚠️ Os 2 soltos NÃO podem ser eu: se eu estiver na parte que ficou no documento, me
+   * acho na lista parcial e o defeito não acontece — achar é fato. O relato é justamente
+   * o caso em que os soltos são OUTRAS pessoas e eu estou nos 150 que faltam. */
+  meu.participants = [{ uid: 'u-zzz', displayName: 'Solto 1' }, { uid: 'u-yyy', displayName: 'Solto 2' }];
+  W.AppStore.tournaments = [meu];
+  W.AppStore.currentUser = { uid: 'u-rb', displayName: 'Rodrigo Barth', email: 'rb@x.com' };
+
+  const vazia = W.AppStore.getMyParticipations();
+  ok(vazia.length === 0, 'reproduzido: o organizador NÃO entra em "Participando" com o elenco pela metade');
+  ok(W._listaConfiavel(vazia) === true,
+    '  → e essa lista vazia É "confiável" — por isso a rede da 2.1.70 passava batido');
+  ok(_indef().length === 1,
+    '  → a incerteza só aparece perguntando por fora, que é o que a R1.1 acrescentou');
+
+  const html = secao(vazia, [meu]);
+  ok(html !== '', '⭐ e agora as seções NÃO somem, mesmo com `participacoes` vazia');
+  ok(/[Cc]arregando/.test(html), '  → dizem que estão carregando');
+
+  // Vazio VERDADEIRO do organizador: elenco carregado, ele não se inscreveu.
+  const meuOk = confraInteiroSemJogosMeus();
+  meuOk.creatorUid = 'u-rb'; meuOk.memberUids = ['u-rb'];
+  meuOk.participants = [{ uid: 'u-zzz', displayName: 'Solto 1' }, { uid: 'u-yyy', displayName: 'Solto 2' }];
+  meuOk._nPartes = { participants: 2, matches: 1, opponentHistory: 2 };
+  W.AppStore.tournaments = [meuOk];
+  ok(_indef().length === 0, 'com o elenco carregado não sobra incerteza');
+  ok(secao(W.AppStore.getMyParticipations(), [meuOk]) === '',
+    '  → e aí a seção some de novo, como sempre — senão vira aviso permanente');
+
+  W.AppStore.tournaments = _asOrig.t; W.AppStore.currentUser = _asOrig.u;
 }
 
 console.log('\n' + (fail ? '✗' : '✅') + ' dashboard/vazio: ' + pass + ' ok, ' + fail + ' falharam');

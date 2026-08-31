@@ -451,6 +451,8 @@ const SUITES = [
    * o de navegação roda o sw.js REAL, o da dashboard roda o _buildMyResultsHtml REAL. */
   'tests/navegacao-nao-mistura-versoes.test.js',
   'tests/dashboard-nao-afirma-vazio.test.js',
+  /* R1.1 — a ORIGEM: leitura incompleta apresentada como fato. Roda o AppStore real. */
+  'tests/inscrito-continua-inscrito-com-parte-atrasada.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

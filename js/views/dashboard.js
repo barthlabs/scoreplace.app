@@ -775,7 +775,14 @@ function renderDashboard(container) {
     // "Desinscrever-se" para participantes de torneios em dupla.
     // 2.0.90: pelo acessador — aceita o RESUMO (participantUids) ou o documento
     // completo, com o mesmo resultado. Ver _cardSouInscrito em tournaments-utils.js.
-    let isParticipating = window._cardSouInscrito(t, window.AppStore.currentUser);
+    /* ⭐ R1.1 · TRÊS ESTADOS: true | false | null ("ainda não dá pra afirmar"). Num
+     * torneio DIVIDIDO o elenco chega depois do documento-base, e `_cardSouInscrito`
+     * respondia `false` nessa janela — "Inscrever-se" pra quem já está inscrito. Achar é
+     * fato; NÃO achar só vale quando a lista está completa. Ver `_souInscrito` (store.js). */
+    let isParticipating = (typeof window._souInscrito === 'function')
+      ? window._souInscrito(t, window.AppStore.currentUser)
+      : window._cardSouInscrito(t, window.AppStore.currentUser);
+    const _inscricaoIndefinida = (isParticipating === null);
 
     // v2.1.5: detecta se o usuário está na lista de espera (standby/waitlist)
     // Usa _userMatchesParticipant centralizado para consistência com detalhes.
@@ -867,6 +874,11 @@ function renderDashboard(container) {
       // O geral continua na PÁGINA do torneio (onde a pessoa está olhando o evento);
       // o do jogo mora na chave, que é onde ela está olhando o jogo dela.
       enrollBtnHtml = `<button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>`;
+    } else if (_inscricaoIndefinida && canEnroll) {
+      /* ⛔ NÃO oferecer "Inscrever-se" enquanto não se sabe: pra quem JÁ está inscrito
+       * esse botão é uma afirmação errada na cara da pessoa, e clicá-lo dispara uma
+       * inscrição em cima de outra. Mesmo desenho do gate `_profileReady` do detalhe. */
+      enrollBtnHtml = `<button class="btn btn-sm" disabled style="opacity:0.45;cursor:not-allowed;padding:6px 12px;font-size:0.78rem;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:8px;color:var(--text-muted);">⏳ Carregando…</button>`;
     } else if (!isParticipating && canEnroll) {
       enrollBtnHtml = `<button class="btn btn-sm btn-success hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._dashEnroll('${t.id}')">✅ ${_t('enroll.enrollBtn')}</button>`;
     } else if (isParticipating && !canEnroll && !isFinished) {
@@ -2059,7 +2071,23 @@ function renderDashboard(container) {
      * ⚠️ Não é reload nem esconder: a seção FICA, dizendo que está buscando. Quando as
      * partes chegam, o re-render normal a preenche. */
     if (totalSection === 0) {
-      if (typeof window._listaConfiavel === 'function' && !window._listaConfiavel(participacoes)) {
+      /* ⛔ R1.1 · A REDE DA 2.1.70 CONFERIA OS TORNEIOS **DA LISTA** — e o defeito do
+       * organizador é a LISTA VIR VAZIA. `getMyParticipations()` exige, pra criador e
+       * co-host, prova de inscrição real em `participants[]`; num torneio dividido essa
+       * lista chega depois, a prova falha, e `participacoes` volta `[]`. Lista vazia é
+       * confiável por definição — então a rede passava batido e as duas seções sumiam.
+       * Um membro comum não caía nisso: pra ele a resposta sai do `memberUids`, que viaja
+       * sempre no documento-base. Era por isso que o relato era do dono.
+       * ⭐ `participacoesIndefinidas()` pergunta pelo lado de fora: "há torneio MEU cujo
+       * elenco ainda não chegou?". [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]] */
+      var _indef = [];
+      try {
+        if (typeof window.AppStore.participacoesIndefinidas === 'function') {
+          _indef = window.AppStore.participacoesIndefinidas() || [];
+        }
+      } catch (e) { _indef = []; }
+      if (_indef.length ||
+          (typeof window._listaConfiavel === 'function' && !window._listaConfiavel(participacoes))) {
         return '<div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.22);border-radius:14px;padding:16px;margin-bottom:1rem;text-align:center;">' +
           '<div style="font-size:0.9rem;font-weight:700;color:var(--text-bright);">🏅 Seus jogos e novidades</div>' +
           '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Carregando os dados dos seus torneios…</div>' +

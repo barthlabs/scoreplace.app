@@ -2533,12 +2533,17 @@ function renderTournaments(container, tournamentId = null) {
 
         const sortearOnClick = `event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._handleSortearClick('${t.id}', ${isAberto})`;
 
-        let isParticipating = false;
-        if (t.participants && window.AppStore.currentUser) {
-            isParticipating = typeof window._isUserEnrolledInTournament === 'function'
-              ? window._isUserEnrolledInTournament(window.AppStore.currentUser, t)
-              : false;
-        }
+        /* ⭐ R1.1 · TRÊS ESTADOS. `if (t.participants && …)` parecia um guard, mas num
+         * torneio DIVIDIDO `t.participants` EXISTE e está incompleto — o guard passava e
+         * a resposta saía `false` pra quem está inscrito. Pior: com `participants`
+         * ausente de vez, `isParticipating` já nascia `false` sem ninguém perguntar nada.
+         * Agora quem responde é a porta única, que devolve `null` quando o elenco ainda
+         * não chegou. Ver `_souInscrito` (store.js). */
+        let isParticipating = (typeof window._souInscrito === 'function')
+          ? window._souInscrito(t, window.AppStore.currentUser)
+          : (t.participants && window.AppStore.currentUser && typeof window._isUserEnrolledInTournament === 'function'
+              ? window._isUserEnrolledInTournament(window.AppStore.currentUser, t) : false);
+        const _inscricaoIndefinida = (isParticipating === null);
 
         // v2.1.3: usuário está na LISTA DE ESPERA (standby/waitlist)? Inscrição
         // tardia (pós-sorteio, Fechadas OFF) coloca o novo inscrito aqui — e o
@@ -2731,7 +2736,10 @@ function renderTournaments(container, tournamentId = null) {
                ${(typeof window._waGrpTournamentJoinChip === 'function') ? window._waGrpTournamentJoinChip(t) : ''}
                <button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window.deenrollCurrentUser('${t.id}')">🛑 ${_t('enroll.unenrollBtn')}</button>
              </div>
-          ` : (isAberto && !_profileReady && window.AppStore.currentUser) ? `
+          ` : (isAberto && (!_profileReady || _inscricaoIndefinida) && window.AppStore.currentUser) ? `
+             ${/* ⛔ R1.1 — o MESMO gate de "⏳ Carregando…" passa a cobrir o elenco que ainda
+                  não chegou. Oferecer "Inscrever-se" a quem já está inscrito não é só um
+                  rótulo errado: o clique dispara uma inscrição em cima de outra. */ ''}
              <button class="btn btn-sm" disabled style="opacity:0.45;cursor:not-allowed;padding:6px 12px;font-size:0.78rem;background:var(--bg-darker);border:1px solid var(--border-color);border-radius:8px;color:var(--text-muted);">⏳ Carregando…</button>
           ` : (isAberto ? `
              <div style="display:flex;align-items:stretch;justify-content:flex-end;gap:6px;flex-wrap:wrap;">

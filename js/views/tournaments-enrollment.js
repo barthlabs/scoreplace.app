@@ -957,9 +957,22 @@ window._doEnrollCurrentUser = function(tId, selectedCategories, _onSuccess) {
 
     // --- Optimistic UI: update locally FIRST, then sync to Firestore ---
     // Check if already enrolled locally — covers individual entries AND team membership
-    var alreadyIn = typeof window._isUserEnrolledInTournament === 'function'
+    /* ⛔ R1.1 · NÃO INSCREVER ÀS CEGAS. `_isUserEnrolledInTournament` lê `t.participants`
+     * — num torneio DIVIDIDO essa lista chega depois do documento-base, e `false` ali
+     * quer dizer "não achei", não "não está". Seguir em frente inscreve por cima de quem
+     * já está inscrito. Os botões já ficam em "⏳ Carregando…" nesse estado; esta é a
+     * segunda tranca, pra o caminho por link/atalho não passar por baixo dela. */
+    var _souInsc = (typeof window._souInscrito === 'function') ? window._souInscrito(t, user) : null;
+    if (_souInsc === null && typeof window._souInscrito === 'function') {
+        if (typeof showNotification !== 'undefined') {
+            showNotification('Carregando', 'Ainda estou lendo a lista de inscritos deste torneio. Tente de novo em instantes.', 'info');
+        }
+        if (typeof window.AppStore._montaPesadosQueFaltam === 'function') window.AppStore._montaPesadosQueFaltam([String(tId)]);
+        return;
+    }
+    var alreadyIn = (_souInsc === true) || (typeof window._isUserEnrolledInTournament === 'function'
       ? window._isUserEnrolledInTournament(user, t)
-      : false;
+      : false);
     if (alreadyIn) {
         if (typeof showNotification !== 'undefined') showNotification(_t('enroll.alreadyEnrolled'), _t('enroll.alreadyEnrolledMsg'), 'info');
         window._scrollToParticipant(tId, user.displayName);

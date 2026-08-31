@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.70';
+window.SCOREPLACE_VERSION = '2.1.71';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -845,6 +845,69 @@ window._marcaPartesQueFaltam = function (t) {
   else { delete t._faltamPesados; delete t._faltaOQue; }
   return falta;
 };
+
+/* ══ R1.1 · "NÃO SEI AINDA" É UM TERCEIRO ESTADO, E TEM QUE SER DITO ═══════════
+ *
+ * ⛔ A ORIGEM DO INCIDENTE, e por que ela sobreviveu a três correções. Num torneio
+ * DIVIDIDO o elenco não mora no documento: o ouvinte entrega primeiro o documento-base e
+ * a subcoleção `inscritos` chega DEPOIS. Nessa janela `t.participants` é uma lista
+ * INCOMPLETA — e TODAS as portas que decidem "estou inscrito?" liam essa lista e
+ * respondiam `false`. `false` é uma AFIRMAÇÃO: a tela dizia "você não está inscrito" a
+ * quem está, o cartão dizia 0/2 inscritos, e o organizador via o próprio torneio sumir de
+ * "Participando" — o que apaga "📣 Novidades" e "🏅 Seus últimos resultados" junto, porque
+ * as duas seções percorrem essa lista.
+ *
+ * ⚠️ ISSO SOBREVIVE A HARD REFRESH porque não é cache do navegador: a cada boot o
+ * documento-base chega antes das partes, e a janela existe de novo.
+ *
+ * ⭐ A ASSIMETRIA QUE FAZ ISTO FUNCIONAR: **achar é fato, não achar não é**. Encontrar-se
+ * numa lista parcial PROVA inscrição — nada vai desmentir. Não se encontrar só quer dizer
+ * alguma coisa se a lista estiver COMPLETA. Por isso a resposta positiva sai na hora
+ * (janela de incerteza mínima) e só a negativa exige prova de completude.
+ *
+ * ⛔ E POR QUE `null` E NÃO `false` COM UM FLAG AO LADO: `false` cai em `if (x)` do mesmo
+ * jeito que `null`, mas quem lê `false` acha que recebeu uma resposta. `null` obriga o
+ * chamador a decidir o que fazer com "não sei" — e é isso que a leva pede.
+ * [[project_derivado_nao_se_guarda_standings]] */
+
+/** Esta parte pesada específica falta? Reconta em vez de confiar no marcador — ele é
+ *  campo local que uma mutação pode ter gravado no documento. */
+window._parteFalta = function (t, nome) {
+  if (!t || !nome) return false;
+  try {
+    if (typeof window._marcaPartesQueFaltam !== 'function') return false;
+    window._marcaPartesQueFaltam(t);
+    return (Array.isArray(t._faltaOQue) ? t._faltaOQue : []).indexOf(nome) !== -1;
+  } catch (e) { return false; }
+};
+
+/** O ELENCO deste torneio já é uma lista completa? Só quando for é que "não achei"
+ *  pode virar "não está". */
+window._elencoCarregado = function (t) {
+  if (!t) return false;
+  if (Array.isArray(t.participantUids)) return true;   // resumo: completo por construção
+  return !window._parteFalta(t, 'participants');
+};
+
+/** ESTOU INSCRITO?  `true` | `false` | `null` (= ainda não dá pra afirmar).
+ *  ⛔ Quem chama NÃO pode tratar `null` como `false`: é exatamente o defeito que esta
+ *  leva fecha. Trate como CARREGANDO. */
+window._souInscrito = function (t, cu) {
+  if (!t || !cu || !cu.uid) return false;
+  var achou = false;
+  try {
+    achou = (typeof window._cardSouInscrito === 'function') ? !!window._cardSouInscrito(t, cu) : false;
+  } catch (e) { achou = false; }
+  if (achou) return true;                       // ⭐ positivo é FATO, mesmo em lista parcial
+  if (window._elencoCarregado(t)) return false; // lista completa e não estou nela: fato
+  return null;                                  // "não sei ainda"
+};
+
+/* ⛔ A LISTA DE ESPERA **NÃO** GANHA TERCEIRO ESTADO, e isso foi conferido antes de
+ * escrever: `standbyParticipants` e `waitlist` não estão em `PESADOS`
+ * (tournament-split-core.js) — elas viajam SEMPRE no documento-base. Dar "não sei" a uma
+ * resposta que já é completa inventaria carregamento onde não há, e a pessoa veria
+ * "⏳ Carregando…" pra sempre num torneio que não tem espera nenhuma. */
 
 window._userProfileCache = window._userProfileCache || {};
 window._userProfilePending = window._userProfilePending || {};
@@ -12433,9 +12496,41 @@ window.AppStore = {
      * Ver [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]]. */
     this._montandoPesados = this._montandoPesados || {};
     this._ultimaMontagem = this._ultimaMontagem || {};
+    this._tentativasDePartes = this._tentativasDePartes || {};
+    this._retentandoPartes = this._retentandoPartes || {};
     var PISO_ENTRE_TENTATIVAS_MS = 15000;
+    var MAX_TENTATIVAS = 6;
     var self = this;
     var _soltar = function (tid) { delete self._montandoPesados[tid]; };
+    /* ⛔ R1.1 · QUEM RETENTA DEPOIS DE UMA FALHA? Até aqui, NINGUÉM. Esta função só é
+     * chamada pelo ouvinte (a cada eco) e pelo boot. Um torneio parado — que é o caso
+     * normal fora do dia do evento — não ecoa: uma falha de rede num único GET deixava a
+     * tela incompleta pelo RESTO DA SESSÃO, calada, com o dado inteiro no banco. A trava
+     * de "em voo" era solta certinho e não adiantava nada, porque ninguém batia na porta
+     * de novo.
+     * ⭐ Agora a própria falha agenda a próxima, respeitando o mesmo piso. Com teto: um
+     * torneio cujo marcador promete uma parte que a subcoleção não tem pararia de tentar
+     * em vez de bater pra sempre. O contador zera no sucesso. */
+    var _retentarDepois = function (tid, porque) {
+      var n = (self._tentativasDePartes[tid] || 0) + 1;
+      self._tentativasDePartes[tid] = n;
+      if (n >= MAX_TENTATIVAS) {
+        if (window._warn) window._warn('[fase2] ' + tid + ': ' + n + ' tentativas sem sucesso (' + porque + ') — parando de retentar nesta sessão');
+        return;
+      }
+      if (self._retentandoPartes[tid]) return;                // já há uma agendada
+      self._retentandoPartes[tid] = true;
+      setTimeout(function () {
+        delete self._retentandoPartes[tid];
+        var ainda = (self.tournaments || []).find(function (x) { return x && String(x.id) === tid; });
+        if (!ainda || !window._marcaPartesQueFaltam(ainda)) return;   // chegou por outro caminho
+        /* ⚠️ O TIMER **É** O PISO. Sem limpar o carimbo, a própria retentativa cairia no
+         * `continue` do piso e não sairia do lugar — a tela ficaria incompleta com um
+         * agendamento que não faz nada, que é pior que não agendar. */
+        delete self._ultimaMontagem[tid];
+        self._montaPesadosQueFaltam([tid]);
+      }, PISO_ENTRE_TENTATIVAS_MS + 250);
+    };
     var _agora = Date.now();
     for (var i = 0; i < ids.length; i++) {
       var id = String(ids[i]);
@@ -12456,7 +12551,7 @@ window.AppStore = {
              * o torneio sem jogos pelo resto da sessão. Agora soltam e falam. */
             if (!montado) {
               if (window._warn) window._warn('[fase2] montagem de ' + tid + ' voltou vazia');
-              _soltar(tid); return;
+              _soltar(tid); _retentarDepois(tid, 'voltou vazia'); return;
             }
             // ⭐ escreve NO LUGAR (mesma referência): meia dúzia de telas guardam o objeto,
             // e trocar a referência deixaria elas com o de antes. Mesmo motivo pelo qual o
@@ -12468,6 +12563,8 @@ window.AppStore = {
             }
             Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
             delete vivo._faltamPesados;
+            delete vivo._faltaOQue;
+            delete self._tentativasDePartes[tid];   // deu certo: o contador zera
             _soltar(tid);
             try { self._saveToCache(); } catch (e) {}
             if (typeof window._softRefreshView === 'function') window._softRefreshView();
@@ -12480,6 +12577,7 @@ window.AppStore = {
             self._falhasDePartes.push(tid.slice(-6) + ': ' + String((e && e.message) || e).slice(0, 90));
             if (self._falhasDePartes.length > 6) self._falhasDePartes.shift();
             _soltar(tid);   // deixa uma próxima tentativa acontecer
+            _retentarDepois(tid, String((e && e.message) || e).slice(0, 60));
           });
       })(id);
       /* eslint-enable no-loop-func */
@@ -12580,7 +12678,38 @@ window.AppStore = {
         return ch && ch.status === 'active' && ch.uid === uid;
       });
       if (!isCreator && !isCoHost) return true; // membro comum = participante
+      /* ⛔ R1.1 · ORGANIZADOR COM ELENCO AINDA NÃO CARREGADO. `_isEnrolledInParts` lê
+       * `t.participants` — que num torneio DIVIDIDO chega DEPOIS do documento-base. Nessa
+       * janela ele respondia `false` e o organizador via o PRÓPRIO torneio sumir de
+       * "Participando"; como "📣 Novidades" e "🏅 Seus últimos resultados" percorrem
+       * exatamente esta lista, as duas seções sumiam junto. Era o relato, e sobrevivia a
+       * hard refresh porque a janela renasce a cada boot.
+       * ⭐ Aqui a lista continua honesta (não inventa inscrição), mas a INCERTEZA fica
+       * registrada em `participacoesIndefinidas()` — é a dashboard que decide não afirmar
+       * vazio enquanto houver alguma. */
+      if (!_isEnrolledInParts(t) && typeof window._elencoCarregado === 'function' && !window._elencoCarregado(t)) {
+        return false;
+      }
       return _isEnrolledInParts(t); // organizador/co-host: exige inscrição real
+    });
+  },
+
+  /* Torneios em que EU sou membro (`memberUids`, que viaja SEMPRE no documento-base e
+   * nunca encolhe) mas cuja resposta "estou participando?" ainda NÃO pode ser dada,
+   * porque o elenco não chegou.
+   * ⛔ Existe porque `getMyParticipations()` devolvendo `[]` é indistinguível de "não
+   * participo de nada" — e uma lista vazia por carregamento apagava duas seções inteiras
+   * da tela inicial. Quem pergunta isto está perguntando "esse vazio é confiável?". */
+  participacoesIndefinidas() {
+    if (!this.currentUser || !this.currentUser.uid) return [];
+    var uid = this.currentUser.uid;
+    if (typeof window._elencoCarregado !== 'function') return [];
+    return (this.tournaments || []).filter(function (t) {
+      if (!t || t.isSandbox) return false;
+      var souMembro = (t.creatorUid === uid) ||
+        (Array.isArray(t.memberUids) && t.memberUids.indexOf(uid) !== -1);
+      if (!souMembro) return false;
+      return !window._elencoCarregado(t);
     });
   },
 

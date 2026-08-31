@@ -83,13 +83,20 @@ function novoTorneio() {
   return { id: ID, _semPesados: ['matches', 'participants'], _faltamPesados: true, rounds: [{ matches: [] }], participants: [] };
 }
 function monta(metodoTxt, montadorFake) {
-  const janela = { FirestoreDB: { _montaDeSubcolecoes: montadorFake }, _error: function () {}, _warn: function () {}, _softRefreshView: function () {} };
-  const ctx = { window: janela, Date: Date, Array: Array, Object: Object, String: String, JSON: JSON, console: console };
+  /* ⚠️ 2.1.71: a falha passou a AGENDAR a própria retentativa, então o método depende de
+   * `setTimeout` e de `_marcaPartesQueFaltam`. Aqui o timer é CAPTURADO em vez de
+   * disparado — o teste manda o relógio, e nada fica pendurado depois que a suíte acaba. */
+  const agendados = [];
+  const janela = { FirestoreDB: { _montaDeSubcolecoes: montadorFake }, _error: function () {}, _warn: function () {}, _softRefreshView: function () {},
+    _marcaPartesQueFaltam: function (t) { return !!(t && t._faltamPesados); } };
+  const ctx = { window: janela, Date: Date, Array: Array, Object: Object, String: String, JSON: JSON, console: console,
+    setTimeout: function (fn) { agendados.push(fn); return agendados.length; } };
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   const alvo = vm.runInContext('({ ' + metodoTxt + ' })', ctx);
   alvo.tournaments = [novoTorneio()];
   alvo._saveToCache = function () {};
+  alvo._agendados = agendados;
   return alvo;
 }
 const esperar = () => new Promise(function (r) { setTimeout(r, 0); });
@@ -152,6 +159,37 @@ function andarORelogio(store, ms) {
   await store._montaPesadosQueFaltam([ID]); await esperar();
   await store._montaPesadosQueFaltam([ID]); await esperar();
   ok(n === 1, '⛔ o PISO segura a rajada — eco atrás de eco não vira N buscas');
+
+  /* ── ⭐ 2.1.71 · SOLTAR A TRAVA NÃO BASTA: ALGUÉM PRECISA BATER NA PORTA DE NOVO ──
+   * A trava era solta certinho e não adiantava nada — esta função só é chamada pelo
+   * OUVINTE (a cada eco) e pelo boot. Torneio parado não ecoa, então uma falha de rede
+   * num único GET deixava a tela incompleta pelo RESTO DA SESSÃO, calada, com o dado
+   * inteiro no banco. Agora a própria falha agenda a próxima. */
+  console.log('');
+  n = 0;
+  store = monta(METODO, function () {
+    n++;
+    if (n === 1) return Promise.reject(new Error('rede caiu'));
+    return Promise.resolve({ rounds: [{ matches: [{ id: 'j1' }] }], participants: [{ uid: 'u1' }] });
+  });
+  await store._montaPesadosQueFaltam([ID]); await esperar();
+  ok(n === 1 && store._agendados.length === 1,
+    '⭐ a FALHA agenda a próxima tentativa (antes: ninguém retentava um torneio parado)');
+  store._agendados[0](); await esperar(); await esperar();
+  ok(n === 2, '   e a retentativa vai mesmo ao banco — o timer É o piso, então o carimbo é limpo');
+  ok(store.tournaments[0].rounds[0].matches.length === 1, '   os jogos chegam na segunda, sem recarregar');
+  ok(!store._tentativasDePartes[ID], '   e o contador de tentativas zera no sucesso');
+
+  // teto: um torneio que promete uma parte inexistente não pode bater pra sempre
+  n = 0;
+  store = monta(METODO, function () { n++; return Promise.reject(new Error('sempre falha')); });
+  for (let k = 0; k < 10; k++) {
+    await store._montaPesadosQueFaltam([ID]); await esperar();
+    if (!store._agendados.length) break;
+    store._agendados.shift()();
+    await esperar();
+  }
+  ok(n <= 6, '⛔ e há TETO: para de retentar depois de 6 (medido: ' + n + ') — senão vira laço eterno');
 
   console.log('\n② o código de ONTEM, no mesmo banco de provas, TRAVA\n');
 
