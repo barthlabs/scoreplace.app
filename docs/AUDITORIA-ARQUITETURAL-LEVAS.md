@@ -14,7 +14,7 @@
 
 | Leva | Tema do backlog | Situação em 30/ago | Gate antes de executar |
 |---|---|---|---|
-| L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. Reconferido em 30/ago **depois da R0.4**: 42 torneios · 183 jogos canônicos · **0 ausentes** e **0 divergentes**, exit 0. | Conferidor read-only permanece no runner. |
+| L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ⚠️ **NÃO reconferido.** A execução de 30/ago pela R0.4 ficou viva por mais de 3 minutos após imprimir só o cabeçalho e foi encerrada sem contadores (`https.request({timeout})` não é deadline antes de haver socket). Segue **não reconferido** até uma execução real terminar com os contadores capturados. | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Aberta, causa confirmada.** `firestore.rules` aceita write de qualquer autenticado; `js/firebase-db.js` e `js/views/auth.js` escrevem direto. | Preservar a extensão de e-mail; trocar a porta por Function e fechar Rules sem perder fluxos legítimos. |
 | L2 | fila de notificações/e-mail | **Aberta.** `notif_email_queue` ainda aceita create pelo cliente. | Mapear emissores e deduplicação antes de fechar a fila. |
 | L3 | `casualMatches` | **Aberta, causa confirmada.** qualquer autenticado pode escrever qualquer documento. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. |
@@ -37,7 +37,7 @@
 | Gate | Onde está pendurado | O que barra | Prova |
 |---|---|---|---|
 | `scripts/check-deploy-alignment.js` | `hosting.predeploy[0]` **e**, desde R0.3, `functions[0].predeploy` do `firebase.json` da raiz | deploy com árvore suja ou com `HEAD` fora de `origin/main` | `tests/trava-de-alinhamento-barra-deploy.test.js` |
-| `scripts/lib/leitura-resiliente.js` | GETs de `scripts/conferir-espelho-resultados.js` | auditoria que termina sem contador: falha transitória de rede é retentada, falha persistente vira exit não-zero com causa/operação/tentativas | `tests/conferidor-sobrevive-a-rede.test.js` |
+| `scripts/lib/leitura-resiliente.js` | GETs de `scripts/conferir-espelho-resultados.js` | auditoria que termina sem contador: falha transitória de rede é retentada, falha persistente vira exit não-zero com causa/operação/tentativas | `tests/conferidor-sobrevive-a-rede.test.js` | · deadline de parede por tentativa desde R0.4.2 (`tests/transporte-tem-deadline-real.test.js`)
 
 **Por que a leva R0.3 existiu.** `scripts/deploy-functions.sh` não tem uma linha de git —
 publica o que está no disco. Medido em 30/ago/2026: as Functions foram atualizadas às 19:38
@@ -60,9 +60,17 @@ que ninguém a "complete" antes de resolver a ausência de `.git`.
 contra 5,035s no IPv6; uma requisição isolada passava (~5,4s), centenas não.
 `AbortSignal.timeout` foi **descartado** por não alterar esse teto, e
 `--dns-result-order=ipv4first` foi tentado uma vez sem mudar o desfecho. O transporte passou
-a ser `node:https`, que aceita timeout de socket explícito (padrão 30s), com até 4 tentativas
-e espera progressiva de teto 4s, retentando **somente** erros transitórios identificados.
-O critério de comparação `matches → results` não foi tocado.
+a ser `node:https`, com até 4 tentativas e espera progressiva de teto 4s, retentando
+**somente** erros transitórios identificados. O critério de comparação `matches → results`
+não foi tocado.
+
+**R0.4.2 — a primeira tentativa de deadline estava errada.** A R0.4 passava `timeout` ao
+`https.request` e chamava isso de deadline: essa opção vira `socket.setTimeout`, e o socket
+só existe DEPOIS do DNS resolver e do agent entregar conexão. Com o DNS pendurado não há
+socket, logo não há relógio — e o conferidor ficou vivo por mais de 3 minutos contra
+produção, reprovado pelo Codex. Agora há um **timer de parede por tentativa**, armado ANTES
+de `https.request`, que destrói a requisição mesmo sem socket algum e é limpo em sucesso,
+erro e estouro.
 
 **Bypass:** `SP_SKIP_ALIGNMENT=1` continua existindo para emergência declarada, e continua
 anunciando no console que foi usado. O teste cobre isso — bypass mudo seria pior que trava

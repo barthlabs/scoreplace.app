@@ -443,6 +443,7 @@ const SUITES = [
   'tests/trava-de-alinhamento-barra-deploy.test.js',
   'tests/conferidor-sobrevive-a-rede.test.js',
   'tests/conferidor-entrega-o-veredito.test.js',
+  'tests/transporte-tem-deadline-real.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

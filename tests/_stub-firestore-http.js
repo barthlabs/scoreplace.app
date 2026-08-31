@@ -41,6 +41,10 @@ https.request = function (opts, cb) {
     destroy(err) { if (this._ouv.error) this._ouv.error(err); },
     end() {
       if (anota) fs.appendFileSync(anota, String(opts.method) + ' ' + String(opts.path) + '\n');
+      /* ⛔ SILÊNCIO ABSOLUTO — a condição que reprovou a leva contra produção: nenhum socket,
+       * nenhum evento, nenhuma resposta. Quem tem que terminar aqui é o DEADLINE do
+       * transporte. Sem este caso, o dublê só percorria caminhos que já respondiam. */
+      if (cenario.nuncaResponde) return;
       process.nextTick(() => {
         /* falha de rede: o helper decide se retenta, pelo código */
         if (cenario.erroDeRede) {

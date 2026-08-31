@@ -47,31 +47,70 @@ function ehTransitorio(err) {
   return CODIGOS_TRANSITORIOS.has(c);
 }
 
-/** Transporte padrão: um GET, com timeout de socket explícito (cobre o connect). */
+/* ── DEADLINE DE PAREDE POR TENTATIVA ─────────────────────────────────────────
+ * ⛔ O QUE A VERSÃO ANTERIOR PROMETEU E NÃO CUMPRIU. Ela passava `timeout: timeoutMs` pro
+ * `https.request` e tratava isso como deadline. NÃO É: essa opção vira `socket.setTimeout`,
+ * e o socket só existe DEPOIS de resolver o DNS e obter conexão do agent. Enquanto o DNS
+ * pendura — ou enquanto a requisição espera na fila do agent — não há socket, logo não há
+ * relógio, e o `'timeout'` nunca dispara.
+ * REPROVADO CONTRA PRODUÇÃO pelo Codex: o conferidor imprimiu só o cabeçalho e ficou vivo
+ * por mais de 3 minutos, sem contador nenhum, até ser morto à mão.
+ *
+ * ⭐ AGORA O RELÓGIO COMEÇA ANTES DE `https.request` — antes de DNS, antes de socket, antes
+ * da fila do agent. Ele é a única garantia de que uma tentativa TERMINA. Ao estourar,
+ * `req.destroy()` derruba o que existir e a promessa é rejeitada com `SP_TIMEOUT`, que a
+ * política de retentativa já classifica como transitório.
+ *
+ * ⚠️ O DEADLINE COBRE A REQUISIÇÃO INTEIRA, não só o connect: ele só é limpo quando o corpo
+ * termina de chegar. Cabeçalho que chega e corpo que trava é o mesmo pendura com outro nome.
+ *
+ * ⛔ E ELE É LIMPO EM TODO CAMINHO — sucesso, erro, deadline. Timer esquecido segura o
+ * processo vivo depois do trabalho pronto, que é o defeito de hoje ao contrário.
+ */
 function transporteHttps(timeoutMs) {
   return function get(url, headers) {
     return new Promise((resolve, reject) => {
       let u;
       try { u = new URL(url); } catch (e) { reject(Object.assign(e, { code: 'SP_URL_INVALIDA' })); return; }
-      const req = https.request({
-        protocol: u.protocol, hostname: u.hostname, port: u.port || 443,
-        /* ⚠️ `pathname + search`, NÃO `u.href`: o caminho do Firestore contém `(default)`, e
-         * a WHATWG URL o preserva sem encodar (conferido). Reconstruir à mão arriscaria
-         * quebrar isso em silêncio. */
-        path: u.pathname + u.search,
-        method: 'GET',                       // ⛔ fixo. Este módulo não escreve.
-        headers: headers || {},
-        timeout: timeoutMs
-      }, (res) => {
-        let corpo = '';
-        res.setEncoding('utf8');
-        res.on('data', (c) => { corpo += c; });
-        res.on('end', () => resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, texto: corpo }));
-      });
-      /* O 'timeout' do socket não aborta sozinho — sem este destroy a requisição ficaria
-       * pendurada para sempre, que é a promessa-cadáver de novo, com outro nome. */
-      req.on('timeout', () => { req.destroy(Object.assign(new Error('timeout de ' + timeoutMs + 'ms em ' + u.hostname), { code: 'SP_TIMEOUT' })); });
-      req.on('error', reject);
+
+      let req = null, timer = null, terminou = false;
+      const limpar = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      /* guarda de reentrada: depois do destroy o 'error' ainda chega (ECONNRESET/ABORT_ERR),
+       * e resolver/rejeitar duas vezes esconderia a causa verdadeira. */
+      const falhar = (err) => {
+        if (terminou) return; terminou = true; limpar();
+        try { if (req) req.destroy(); } catch (e) { /* já morto */ }
+        reject(err);
+      };
+      const concluir = (v) => { if (terminou) return; terminou = true; limpar(); resolve(v); };
+
+      timer = setTimeout(() => {
+        falhar(Object.assign(
+          new Error('deadline de ' + timeoutMs + 'ms estourado sem resposta de ' + u.hostname),
+          { code: 'SP_TIMEOUT', spDestruiu: !!req }));
+      }, timeoutMs);
+
+      try {
+        req = https.request({
+          protocol: u.protocol, hostname: u.hostname, port: u.port || 443,
+          /* ⚠️ `pathname + search`, NÃO `u.href`: o caminho do Firestore contém `(default)`, e
+           * a WHATWG URL o preserva sem encodar (conferido). Reconstruir à mão arriscaria
+           * quebrar isso em silêncio. */
+          path: u.pathname + u.search,
+          method: 'GET',                       // ⛔ fixo. Este módulo não escreve.
+          headers: headers || {},
+          timeout: timeoutMs                   // 2ª rede, quando há socket; não substitui o deadline
+        }, (res) => {
+          let corpo = '';
+          res.setEncoding('utf8');
+          res.on('data', (c) => { corpo += c; });
+          res.on('end', () => concluir({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, texto: corpo }));
+          res.on('error', falhar);
+        });
+      } catch (e) { falhar(e); return; }
+
+      req.on('timeout', () => falhar(Object.assign(new Error('socket ocioso por ' + timeoutMs + 'ms em ' + u.hostname), { code: 'SP_TIMEOUT' })));
+      req.on('error', falhar);
       req.end();
     });
   };

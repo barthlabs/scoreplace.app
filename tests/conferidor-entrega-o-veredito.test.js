@@ -144,7 +144,26 @@ console.log('\n④ credencial ausente também fala (era o caminho mais mudo)\n')
   ok((r.stdout || '').indexOf('▶ conferindo espelho') !== -1, '   e o cabeçalho já saiu antes — execução não fica muda');
 }
 
-console.log('\n⑤ o script não tem process.exit() e o critério segue intocado\n');
+console.log('\n⑤ servidor que NUNCA responde: o processo termina, com diagnóstico e sem contadores\n');
+{
+  /* ⛔ ESTE É O CASO QUE REPROVOU A LEVA CONTRA PRODUÇÃO. O conferidor imprimiu só o
+   * cabeçalho e ficou vivo por MAIS DE 3 MINUTOS, sem contador, até ser morto à mão — porque
+   * `https.request({timeout})` só arma o relógio quando há socket. Aqui o dublê não responde
+   * NADA, e quem tem que encerrar é o deadline de parede do transporte. */
+  const t0 = Date.now();
+  const r = rodar({ rotas: [], nuncaResponde: true }, { SP_FETCH_TIMEOUT_MS: '250' });
+  const gasto = Date.now() - t0;
+  const out = r.stdout || '', err = r.stderr || '';
+  ok(r.status === 1, '⭐ o PROCESSO termina, com exit 1 (obtido: ' + r.status + ')');
+  ok(gasto < 20000, '   e termina rápido: ' + gasto + 'ms (antes ficava vivo por minutos)');
+  ok(/AUDITORIA NÃO CONCLUÍDA/.test(err), '   com "AUDITORIA NÃO CONCLUÍDA" no stderr');
+  ok(/causa\s*:\s*SP_TIMEOUT/.test(err), '   causa SP_TIMEOUT — o deadline, não o socket');
+  ok(/tentativas\s*:\s*2/.test(err), '   e o nº de tentativas');
+  ok(!/torneios conferidos:/.test(out), '⛔ nenhum contador no stdout');
+  ok(/▶ conferindo espelho/.test(out), '   mas o cabeçalho saiu: a execução não fica muda');
+}
+
+console.log('\n⑥ o script não tem process.exit() e o critério segue intocado\n');
 {
   const src = fs.readFileSync(SCRIPT, 'utf8');
   ok(!/process\.exit\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
