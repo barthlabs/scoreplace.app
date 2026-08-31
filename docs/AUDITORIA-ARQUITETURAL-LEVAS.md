@@ -20,7 +20,7 @@
 | L3 | `casualMatches` | **Aberta. Inventário RETIFICADO (L3.P0/P0.1), schema de produção MEDIDO (L3.P1) e contrato de autoridade + gates REGISTRADOS (L3.P2) — tudo read-only. ⛔ A decisão de autoridade continua do dono e NÃO foi tomada.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
 | L4 | profile/privacy + e-mail secundário | **Aberta. Inventário CONCLUÍDO (L4.P0), produção MEDIDA (L4.P1) fronteiras CARACTERIZADAS no emulador (L4.P2), `magicLinks` INVENTARIADO (L4.P3) a leitura cruzada de perfis MAPEADA (L4.P5) e a MATRIZ DE ALTERNATIVAS registrada (L4.P6, nada escolhido).** ⭐ **L4.P4 CONCLUÍDA E PUBLICADA (2.1.78, commit `2c8cb628`, ruleset `9a65fc58`):** a enumeração pública de `magicLinks` foi fechada — `allow get` por token, `list` negado —, com suíte de Rules, trava estática nos três clientes e controle contra `94f7d9cf`. ⛔ Confirmado por execução: `magicLinks` é enumerável por ANÔNIMO (`list`/`runQuery` = 200) e `users` por qualquer autenticado; os 15 campos privilegiados estão negados 30/30 em create e update. 18 superfícies de identidade mapeadas; 15 campos privilegiados fechados no create e no update, com **zero** writer no cliente (conferido). ⛔ Achados abertos: `users` é legível **inteiro** por qualquer autenticado (PII incluída); `notifications` aceita `create` de qualquer autenticado; `linkedEmails` é **prova de posse** aceita na fusão e na resolução de conta, e a REMOÇÃO segue sendo escrita direta do cliente (`js/views/auth.js:9626`); o bundle das lojas (2.1.28) roda o fluxo de identidade PRÉ-L1 contra Rules PÓS-L1. | Definir fonte de verdade e privacidade do perfil. **Não decidido nesta etapa.** |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
-| L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`) e o marcador e o documento **divergem em 1 torneio**. ⚠️ **A L6.P0.1 RETIFICOU a P7**: a leitura de log que dizia "roda a cada minuto num laço no-op" estava datada por LIMITE (`--limit 500`) e não por TEMPO — os 250 pares reproduzem, mas são **todos de 28/ago**, e o `stdout` do `autodraw` está **mudo desde 2026-08-28T14:09:13Z**. O que está medido HOJE é mais simples e mais forte: o agendador dispara **a cada minuto com HTTP 200** (revisão `autodraw-00050-taw`, mais recente 31/ago 22:36Z) e **não escreve uma linha**, enquanto o único torneio que a query alcança está **vencido há 151 min** com o elenco fora do documento e o array **vazio** — sai pelo `continue` sem log de `functions-autodraw/index.js:1148`. Independente do log, segue valendo por LEITURA de código: `exports.autoDraw` e `_autoDrawIncrementalPhaseRound` são os **únicos** caminhos do autodraw que não passam pela porta ciente da divisão. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
+| L6 | writers excessivamente amplos de `tournaments` | **Aberta. Inventário CONCLUÍDO (L6.P0, read-only, 31/ago/2026). ⛔ Nenhuma autoridade foi alterada e nada foi decidido.** Mapeadas as portas dos três codebases: no cliente, `js/firebase-db.js` concentra 9 portas (a maior é `saveTournament`, **93 chamadas**, que grava a cópia EM MEMÓRIA com `merge:true`) mais a orquestração `AppStore.mutate` → `commitTournamentTx`; no `functions/`, seis portas passam pelo tradutor ciente da divisão (`functions/split-parts.js`) e `aplicarNoTorneio` é a porta única de escrita fina; no `functions-autodraw/`, sete chamadores passam por `_leTorneio`/`_gravaTorneio`. ⛔ Achados abertos: as duas allowlists do documento pai (`firestore.rules:37` e `:97`) autorizam por CHAVE e **nunca por valor** — a segunda tem ~45 campos, entre eles `matches`, `standings`, `status`, `participants` e `memberUids`, e a primeira vale pra **qualquer autenticado**; há **5 escritas diretas do cliente fora da porta** (`js/store.js:3840`, `:9676`; `js/views/arbitros.js:274/:309/:342`); `results` tem **cinco** autoridades de escrita; e `participants`/`communications` são subcoleções **sem regra nenhuma**. ⭐ Achados MEDIDOS em produção: 41 dos 44 torneios estão divididos (`matches`, `participants`, `opponentHistory`) e o marcador e o documento **divergem em 1 torneio**. ⚠️ **A L6.P0.1 RETIFICOU a P7**: a leitura de log que dizia "roda a cada minuto num laço no-op" estava datada por LIMITE (`--limit 500`) e não por TEMPO — os 250 pares reproduzem, mas são **todos de 28/ago**, e o `stdout` do `autodraw` está **mudo desde 2026-08-28T14:09:13Z**. ⭐ **A L6.P1 fechou a causa, com as FUNÇÕES REAIS rodadas contra o documento real**: o agendador chega ao handler (`Google-Cloud-Scheduler`, POST /, **200**, 0,06–0,23 s, revisão `autodraw-00050-taw`), o documento **entra** na query (`nextDrawAt` inteiro, vencido há 166 min) e **todas** as guardas passam — `_isIncrementalLigaPhase`=false, `isLiga`=true, `drawManual`=false, `drawFirstDate` presente, `status`=active, `pendingDraw`=false. Barra só em `functions-autodraw/index.js:1148`, `participants.length` = **0**, um `continue` **sem log** — e por isso 200 sem `stdout` não é log perdido, é log inexistente. ⛔ Não é "não elegível": `_semPesados` inclui `participants` e as subcoleções têm **10 inscritos** e **13 jogos**. É **incompatibilidade com partes divididas**, e o risco é imediato: o sorteio AGENDADO nunca gera rodada nesse torneio (o manual, via `drawRound`, gera — ele hidrata). Correção à P5: são **três** e não dois os caminhos do autodraw que leem `doc.data()` cru — `autoDrawReconcile` (:1715) também. | Escolher autoridade por operação antes de restringir qualquer writer. **Não decidido nesta etapa.** ⚠️ Fechar as allowlists esbarra no bundle das lojas (2.1.28), o mesmo bloqueio externo da L2. |
 | L7 | `saveTournament` / `AppStore` e caminhos paralelos | **Aberta.** | Escolher porta canônica de mutação, com testes de save atrasado e rollback. |
 | L8 | representações múltiplas de match + custo Firestore | **Parcial.** `matches` é fonte e `results` é projeção para jogos divididos; modelo completo ainda não convergiu. | Medir reads/writes por tela e preservar `replay`/autorizações. |
 | L9 | código morto, fallbacks e aliases | **Aberta.** | Prova de ausência de chamadores antes de remover compatibilidade. |
@@ -1810,6 +1810,79 @@ instrumentar a Function — fora do escopo desta leva.
 *Decisão de método que fica registrada:* medição de log **declara a janela de tempo e o
 intervalo real dos timestamps da amostra**, nunca só o `--limit`. Amostra que bate no limite é
 amostra **truncada** e tem que ser dita como tal.
+
+**L6.P1 — incidente read-only: o `autoDraw` agendado sai CALADO num torneio elegível
+(31/ago/2026).** ⛔ Nada foi corrigido, nada publicado; nenhuma ação de sorteio foi
+executada. Fecha a pergunta que a L6.P0.1 deixou como hipótese: **qual ramo silencioso é o
+tomado**.
+
+*Método.* Além dos logs e do Cloud Scheduler, a decisão foi **simulada com as funções REAIS**:
+`require('functions-autodraw/draw-core.js')._window` — o mesmo `drawWindow` que a Function
+usa — avaliado contra o **documento real**, percorrendo as guardas de `exports.autoDraw` na
+ordem em que elas aparecem. O script imprime só veredito e contagem; nenhum tid, nome, uid,
+e-mail ou conteúdo de inscrito passa pela saída. Nenhuma escrita, nenhum sorteio.
+
+**(1) A execução agendada CHEGA ao handler.** `firebase-schedule-autoDraw-us-central1`,
+`every 1 minutes`, **ENABLED**, última tentativa **2026-08-31T22:50:16Z**. Os registros de
+requisição do serviço `autodraw` trazem `userAgent=Google-Cloud-Scheduler`, `POST /`,
+**status 200**, latência **0,06–0,23 s**, revisão `autodraw-00050-taw`. ⇒ Não é agendamento
+parado, não é timeout, não é erro de invocação.
+
+**(2)+(3) AS PRÉ-CONDIÇÕES, UMA A UMA, CONTRA O DOCUMENTO REAL.**
+`nextDrawAt` está gravado como **inteiro** e vencido há **166 min** ⇒ a query
+`where('nextDrawAt','<=', now)` (`functions-autodraw/index.js:1115`) **devolve** o documento.
+Daí em diante: `[1125] _isIncrementalLigaPhase` = **false** — o torneio TEM `phases` (2), mas
+`currentPhaseIndex` = 0 e a função exige `cur >= 1` (`js/views/tournaments-utils.js:1924`) —,
+então **não** é o ramo de fase; `[1135] isLiga` = true (`format` = `Liga`);
+`[1136] drawManual` = false; `[1137] drawFirstDate` presente; `status` = `active`;
+`_ligaSeasonEndMs` = null; `pendingDraw` e `stagedDraw` = false. **Todas passam.**
+A única que barra é `[1148] participants.length` = **0** → `continue`.
+
+**(4) POR QUE 200 SEM `stdout`.** Porque o caminho que o handler toma **não tem log nenhum**:
+o `continue` de `:1148` é mudo por construção, e as linhas do `autoDraw` só começam em
+`:1211` (`generating round N`) e nos `continue` que têm motivo escrito. 200 + 60 ms + zero
+linha é exatamente o que esse caminho produz. **Não é log perdido nem filtrado — é log
+inexistente.**
+
+**(5) A CLASSIFICAÇÃO CERTA: incompatibilidade com partes divididas, na forma de retorno
+antecipado silencioso.** ⛔ Não é "torneio não elegível". O marcador do documento é
+`_semPesados = ["matches","participants","opponentHistory"]`, e as subcoleções têm
+**10 registros em `inscritos`** e **13 em `matches`** (contagem agregada, nada do conteúdo
+lido para a saída). O elenco EXISTE — ele só não está no documento. E `exports.autoDraw` lê
+`doc.data()` **cru** (`:1115`, `:1117`) e **nunca hidrata**, ao contrário das sete portas do
+autodraw que passam por `_leTorneio` (`:375`). É a mesma classe que `functions/split-parts.js`
+fechou no `functions/` em 26/ago — seis portas decidindo com elenco vazio — e que no
+`functions-autodraw/` continua aberta.
+
+**(6) RISCO IMEDIATO: SIM.** Enquanto o elenco morar fora do documento, o sorteio AGENDADO
+**nunca** gera rodada nesse torneio: o `nextDrawAt` segue vencido e crescendo, e
+`autoDrawReconcile` (`:1705`) — que **também lê cru** (`:1715`) e calcula `_nextOwedDrawMs`
+sem olhar elenco — mantém o campo apontando para um sorteio que não acontece. Não há erro,
+não há alerta, não há linha de log: para quem organiza, a rodada simplesmente não sai.
+⚠️ **O caminho MANUAL não está afetado**: `drawRound` passa por `_leTorneio` e enxerga os 10
+inscritos — quem sortear pelo app consegue.
+⚠️ **Correção à P5 da L6.P0:** ela disse que `exports.autoDraw` e
+`_autoDrawIncrementalPhaseRound` eram os **únicos** caminhos do autodraw fora da porta ciente
+da divisão. São **três**: `autoDrawReconcile` também lê `doc.data()` cru. Ele só escreve
+`nextDrawAt`, mas decide sobre um torneio que não leu inteiro.
+
+**(7) TESTES — o que cobre e a lacuna objetiva.** Cobrem o motor e o agendamento:
+`tests/draw-schedule.test.js`, `tests/liga-countdown.test.js`,
+`tests/liga-autodraw-server-only.test.js` (prova que o cliente NÃO sorteia),
+`functions-autodraw/test-draw.js` e `test-persist-boundary.js`. ⛔ **A interseção é vazia:**
+nenhum teste exercita `exports.autoDraw` contra torneio **dividido** — a varredura dos
+arquivos que citam `autoDraw` e também `_semPesados`/`montarDoBanco` devolve só
+`test-draw.js`, onde "inscritos" aparece como palavra, não como subcoleção. E **nenhum** teste
+exercita a guarda `participants.length < 2`. *Lacuna a fechar quando houver leva:* um teste
+que monte torneio com `participants` em `_semPesados` e exija que o caminho AGENDADO ou
+hidrate ou **reclame** — hoje ele sai calado, que é o pior dos três desfechos.
+
+*Classificação.* **Problema aberto (P8)**, e ele SUBSTITUI a leitura antiga da P7: o
+comportamento atual não é um laço que gira à toa, é uma saída silenciosa na primeira guarda
+que depende de dado que saiu do documento. *Hipótese que fica de pé:* que o laço de 28/ago
+(`generating round 1` + `no-round-generated`) seja o MESMO torneio antes de o elenco sair do
+documento — plausível pela sequência, **não verificado**, porque exigiria correlacionar
+horário de migração com o log e ler conteúdo que esta leva não expõe.
 
 ## Gates de processo registrados
 
