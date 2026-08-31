@@ -457,6 +457,8 @@ const SUITES = [
   'tests/falha-de-partes-tem-saida.test.js',
   /* R1.1.2 — o card do TOPO tinha a própria leitura e dizia "você não está inscrito". */
   'tests/card-do-topo-nao-diz-nao-inscrito-sem-saber.test.js',
+  /* R1.3 — a assinatura de conjunto congelava o 1º quadro; e a vitrine morria no log. */
+  'tests/dashboard-repinta-quando-a-parte-chega.test.js',
   'tests/versao-nativa-e-a-da-web.test.js',
   'tests/amigo-nao-e-convite-pendente.test.js',
   'tests/secoes-dobraveis-com-memoria.test.js',

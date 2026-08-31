@@ -2193,11 +2193,22 @@ window.FirestoreDB = {
       // que vitrine pesada.
       var tournaments = [];
       var _viaResumo = false;
+      /* ⛔ R1.3 · A CONTAGEM TEM QUE SOBREVIVER AOS DOIS CAMINHOS. O log final lia
+       * `snap.size` — e `snap` só nasce dentro do `if (!_viaResumo)`. Quando o caminho do
+       * RESUMO dava certo (o normal desde a 2.0.90), `snap` era `undefined`, o log lançava
+       * `TypeError: Cannot read properties of undefined (reading 'size')`, e o `catch` lá
+       * embaixo devolvia `{ tournaments: [] }`. Ou seja: a vitrine voltava VAZIA depois de
+       * ter lido os resumos com sucesso — o dado estava na mão e era jogado fora por uma
+       * linha de LOG. Medido em produção na 2.1.73: 5 exceções por carregamento.
+       * ⚠️ `var` hoisted engana: a variável existe, só não tem valor. Nada avisa.
+       * [[project_vitrine_volta_vazia_snap_indefinido]] */
+      var _lidos = 0;
       try {
         var qs = this.db.collection('tournaments_summary')
           .where('isPublic', '==', true)
           .limit(limit + 1);
         var snapS = await qs.get();
+        _lidos = snapS.size;
         try { if (window._noteFsReads) window._noteFsReads(snapS.size, 'load-all-public-resumo'); } catch (e) {}
         snapS.forEach(function (doc) {
           var d = doc.data();
@@ -2219,6 +2230,7 @@ window.FirestoreDB = {
           .where('isPublic', '==', true)
           .limit(limit + 1);
         var snap = await q.get();
+        _lidos = snap.size;
         try { if (window._noteFsReads) window._noteFsReads(snap.size, 'load-all-public'); } catch (e) {}
         snap.forEach(function(doc) {
           var d = doc.data();
@@ -2235,7 +2247,8 @@ window.FirestoreDB = {
       });
       var hasMore = tournaments.length > limit;
       if (hasMore) tournaments = tournaments.slice(0, limit);
-      window._log('[loadAllPublicTournaments v0.16.62]', { snapSize: snap.size, returned: tournaments.length, hasMore: hasMore });
+      window._log('[loadAllPublicTournaments v0.16.62]',
+        { via: _viaResumo ? 'resumo' : 'completo', lidos: _lidos, returned: tournaments.length, hasMore: hasMore });
       return {
         tournaments: tournaments,
         nextCursor: null, // paginação por cursor desabilitada temporariamente

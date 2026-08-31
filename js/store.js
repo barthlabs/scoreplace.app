@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.73';
+window.SCOREPLACE_VERSION = '2.1.74';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3957,9 +3957,39 @@ window._clearDrawDecisions = function (tId) { try { delete window._drawDecisions
 // Volta a ser só o CONJUNTO (quantos + quais), que é o que o cânone v2.8.60 pediu: torneio
 // que chega async aparece, e nada mais repinta. Placar novo aparece ao entrar no torneio —
 // que é onde ele é olhado. Ver [[project_dashboard_no_rerender]].
+// ⭐ R1.3 · MAS "CONJUNTO" SOZINHO CONGELA O PRIMEIRO QUADRO. Medido em produção na
+// 2.1.73, em sessão autenticada real: o Confra estava INTEIRO no runtime (152 inscritos,
+// 115 jogos, `_estadoDasPartes` = "carregado", `_souInscrito` = true) e o DOM continuava
+// no primeiro quadro — "👤 … INSCRITOS", "⏳ Carregando…", "Participando 1" e as
+// Novidades ausentes, com 99 itens elegíveis calculados ali na hora.
+// A CAUSA É ESTA STRING: quando as partes pesadas chegam, a QUANTIDADE de torneios e os
+// IDS não mudam. A assinatura ficava idêntica, `_softRefreshView` concluía "nada mudou" e
+// o `_softRefreshView()` que a própria montagem dispara não repintava NUNCA. Só navegar
+// pra fora e voltar curava.
+//
+// ⛔ E A SAÍDA NÃO É VOLTAR PRO CONTEÚDO. `updatedAt` está proibido pelo motivo escrito
+// acima, e contar `participants.length`/jogos traria de volta o repinte a cada placar e a
+// cada inscrição — o dedo perdendo o clique. O que entra é SÓ A TRANSIÇÃO DE HIDRATAÇÃO:
+// um caractere por torneio, tirado do MESMO `_estadoDasPartes` que o cartão, o card do
+// topo e o detalhe consultam.
+//   ''  carregado   ·   '~' carregando   ·   '!' erro
+// Placar, presença e eco de escrita não mexem nesse caractere — a assinatura não muda e a
+// dashboard não é reconstruída. Só a chegada (ou a desistência) das partes mexe, e aí a
+// repintura é obrigatória: é exatamente a informação que está errada na tela.
+// ⚠️ Torneio INTEIRO devolve '' — a string fica IDÊNTICA à da versão anterior, então quem
+// não tem torneio dividido não ganha nem uma repintura a mais.
+// ⚠️ Sem `_estadoDasPartes` (bundle misto), cai na assinatura antiga em vez de arriscar.
+// [[project_dashboard_no_rerender]] [[project_detail_view_sig_no_updatedat]]
 window._dashDataSigFor = function (list) {
   var arr = Array.isArray(list) ? list : [];
-  return arr.length + '|' + arr.map(function (t) { return (t && t.id); }).join(',');
+  var _hid = function (t) {
+    try {
+      if (typeof window._estadoDasPartes !== 'function') return '';
+      var e = window._estadoDasPartes(t);
+      return (e === 'erro') ? '!' : (e === 'carregado' ? '' : '~');
+    } catch (_e) { return ''; }
+  };
+  return arr.length + '|' + arr.map(function (t) { return (t && t.id) + _hid(t); }).join(',');
 };
 window._softRefreshView = function() {
   // 0. If bracket just re-rendered locally, skip to avoid double-render + scroll jump
