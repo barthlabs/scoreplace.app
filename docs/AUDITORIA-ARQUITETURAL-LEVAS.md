@@ -17,7 +17,7 @@
 | L0 | jogos divididos: fonte `matches` → projeção `results` | **Concluída em produção (2.1.60).** 42 torneios / 183 jogos auditados; 7 reparos; 0 ausentes e 0 divergentes. ✅ **Reconferido em 31/ago/2026, pelo Codex**, depois da R0.4.2 pôr deadline de parede no transporte: **42 torneios · 9 com jogos canônicos · 183 jogos canônicos · 0 results ausentes · 0 results divergentes.** Os contadores foram capturados pelo verificador, não por quem implementou — que é o que faltava desde 30/ago, quando a execução ficava viva por mais de 3 minutos e era encerrada sem imprimir nada. | Conferidor read-only permanece no runner. |
 | L1 | `/mail` client-writable | **Concluída em produção (2.1.77).** `/mail` é **server-only**: `allow read, write: if false`. O problema corrigido era um **relay de cliente autenticado** — quem estivesse logado escolhia destinatário, assunto e HTML, e a extensão entregava do remetente do produto. Fechado em quatro passos, nesta ordem: **L1.3a** (2.1.69) convite avulso → `sendTournamentInvite`; **L1.1** (2.1.75) dupla e co-organização → `sendPairInviteEmail`/`sendCoHostInviteEmail`, e `queueEmail` deixou de existir; **L1.1.1** (2.1.76) o e-mail só é pedido depois de o convite **persistir**; **L1.2** (2.1.77) a Rule fecha. Comportamento provado contra o emulador em `tests/rules-mail-server-only.test.js` — 24 asserções, com controle na regra antiga. ⚠️ A linha anterior desta tabela dizia que `js/views/auth.js` escrevia em `/mail`: era verdade até a 2.1.65 e ficou **histórica**; a varredura de `js/` (101 arquivos) não encontra writer nenhum. | Extensão `firestore-send-email` preservada — as Functions usam Admin SDK e ignoram as rules. |
 | L2 | fila de notificações/e-mail | **BLOQUEADA EXTERNAMENTE.** Inventário concluído (L2.P0 e L2.P1, ambas read-only, em 2.1.77). **Problema:** `notif_email_queue` aceita `create` de qualquer autenticado, com destinatário, mensagem, CTA e nível vindos do payload do cliente. **O bloqueio não é técnico do servidor — é do parque instalado:** `capacitor.config.json` declara `webDir: "www"` e um `server` **sem `server.url`**, então o app das lojas executa o **bundle local**, não o Hosting; o bundle publicado (`android/app/src/main/assets/public/js/store.js`) está em **2.1.28** e o `firebase-db.js` dele ainda escreve direto em `notif_email_queue`. Fechar a Rule hoje cortaria o e-mail de notificação de todo app nativo instalado, que **não tem auto-update**. | ⛔ **Invariante: não fechar a Rule** até existir versão Android/iOS compatível, aprovada nas lojas, com política de **versão mínima/cutover autorizada** pelo dono. ⛔ **Decisão pendente preservada: NÃO haverá Function genérica** que aceite e-mail, destinatário, HTML, URL, mensagem ou tipo arbitrário do cliente — a migração é por **capability específica de intenção** ou por **evento canônico server-side**, e o único texto livre que permanece é o de `sendOrgCommunication`, que já autoriza por organizador. ⏳ **Hipótese ainda pendente:** a adoção efetiva da versão nativa futura — publicar não é o mesmo que estar instalado, e o cutover depende de medida de adoção, não de data. ⛔ O cutover **não foi executado** e nenhum build nativo foi preparado ou publicado nesta leva. |
-| L3 | `casualMatches` | **Aberta, inventário concluído e RETIFICADO (L3.P0 + L3.P0.1, read-only).** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
+| L3 | `casualMatches` | **Aberta. Inventário concluído e RETIFICADO (L3.P0 + L3.P0.1) e schema de produção MEDIDO (L3.P1) — tudo read-only.** `firestore.rules:763` é `allow read: if true; allow write: if request.auth != null` — leitura ABERTA (para o join anônimo por QR/código) e escrita por **qualquer autenticado, em qualquer documento**, com o comentário da própria regra assumindo: *"Left permissive for authenticated users"*. Coleção **plana**, sem subcoleção. ⛔ A L3.P0 declarou aqui *"10 portas no cliente, nenhuma no servidor que escreva"* — **as duas metades eram falsas** e a L3.P0.1 as corrigiu: são **30 writers** — 6 portas em `js/firebase-db.js`, **20 chamadas diretas** em `js/views/bracket-ui.js`, **3 escritas server-side** (`deleteAccount`, `mergePhoneAccount` e o sweep genérico de uid) e 1 deleção agendada. | Definir autoridade por sessão/participante e concorrência do placar ao vivo. **Não decidido nesta etapa.** |
 | L4 | profile/privacy + e-mail secundário | **Aberta.** Há caminhos históricos de perfil, verificação e identidade que exigem uma fonte de verdade explícita. | Inventário de campos, PII, leitores e writers; manter recuperação de conta. |
 | L5 | amizade e autorização friends-only | **Preparada, bloqueada externamente.** Migração está `not_started`; dry-run leu 262 perfis. | Gate nativo (clientes mínimos) e aprovação humana formal do cutover. |
 | L6 | writers excessivamente amplos de `tournaments` | **Aberta.** | Inventário dos writers e invariantes de concorrência antes de restringir qualquer um. |
@@ -95,7 +95,7 @@ tendem a **zero por construção**, e os troféus de partida casual nunca dispar
 `functions/merge-collections-core.js:27`**: *"a consulta de `casualMatches` mirava
 `creatorUid`, campo que nem existe"*. Aquela foi corrigida; estas quatro sobreviveram.
 
-*Hipótese ainda pendente:* que os troféus casuais estejam de fato zerados em produção. Não
+*Hipótese ainda pendente:* ⭐ **RESOLVIDA na L3.P1 — CONFIRMADA** (medição de 31/ago/2026, mais abaixo); o texto original fica como estava. Que os troféus casuais estejam de fato zerados em produção. Não
 foi medido — a L3.P0 é read-only e não consultou o banco. A verificação seria um agregado
 sobre `users` (quantos perfis têm `casualMatchesPlayed > 0`), sem PII.
 
@@ -303,6 +303,120 @@ de escrita no cliente das lojas.
 ⛔ **Nada é proposto nesta etapa.** Nenhuma Rule, nenhuma Function, nenhum dado, nenhuma
 versão e nenhum deploy foram tocados. O que muda aqui é só o registro factual, e o que ele
 corrige é uma afirmação de completude que a P0 fez sem ter base para fazer.
+
+**L3.P1 — o schema REAL em produção, medido (read-only, 31/ago/2026).**
+
+*Método.* Duas varreduras completas da coleção com o Admin SDK sob credencial padrão do
+`gcloud` (`projectId: scoreplace-app`), só `.get()`, nenhuma escrita, saída exclusivamente
+agregada — nenhum id, uid, `roomCode`, nome ou placar foi lido para fora de um contador.
+⚠️ Cada execução abre com um **controle**: lê `tournaments` e aborta se vier vazio. Sem ele,
+um driver mudo devolveria zero e o zero seria lido como medida.
+[[project_ler_firestore_por_rest_erra_calado]] O script falha com código 1 e a frase *"não é
+zero, é ausência de resultado"* em qualquer erro — a leva proibiu transformar falha em zero.
+A classificação de tipo é feita sobre o valor **em runtime**, que é o que a Function enxerga.
+A simulação da limpeza é uma cópia literal do `_ts` e dos cortes de
+`cleanupOldCasualMatches` (`functions/index.js:1352-1400`), avaliada no instante da medição.
+
+**(1-2) Total e status.** **17 documentos** — coleção inteira, sem `limit`.
+`finished` 15 · `setup` 1 · `waiting` 1. Nenhum `active`, nenhum sem `status`.
+
+**(3) Presença e tipo efetivo dos dez campos pedidos.**
+
+| Campo | Presente | Tipo observado | Ausente / nulo |
+|---|---|---|---|
+| `createdBy` | 17/17 | string | 0 |
+| `createdAt` | 17/17 | string ISO-8601 | 0 |
+| `players` | 17/17 | array (16 não-vazios, **1 vazio**) | 0 |
+| `playerUids` | 17/17 | array não-vazio | 0 |
+| `participants` | 15/17 | array não-vazio | **2 ausentes** |
+| `roomCode` | 17/17 | string | 0 |
+| `result` | 17/17 | 15 object, **2 `null`** | 0 |
+| `liveState` | 16/17 | object | 1 ausente |
+| `finishedAt` | 15/17 | string ISO-8601 | 2 ausentes |
+| `lastActivityAt` | 14/17 | **number (epoch ms)** | 3 ausentes |
+
+⚠️ `createdAt` e `finishedAt` são **string ISO**; `lastActivityAt` e `setupAt` são **number
+epoch**. Nenhum campo de data é `Timestamp` nativo do Firestore em nenhum dos 17 documentos
+— o que explica por que o `_ts` da limpeza, que só sabe tratar número e string, nunca produz
+`NaN` hoje (medido: 0 casos). É uma coincidência do dado atual, não uma garantia do código.
+
+**(4) As três representações de pessoa divergem em 12 dos 17 documentos.**
+Iguais nas três listas: **5**. Divergentes: **12**. Nenhum documento com as três vazias.
+Contando uid que aparece em **uma só** das três representações: 3 só em `playerUids`,
+2 só em `participants`, 0 só em `players`. Há **1** documento com `players` vazio e
+`playerUids` preenchido; **nenhum** no sentido inverso. ⚠️ Isto é a contraparte medida do
+que o código já dizia em comentário: o guarda `jaEstou` de `joinCasualMatch` (`:3270`)
+precisou cruzar as três listas justamente porque elas não coincidem.
+
+**(5) `createdBy`.** Presente e não-vazio em **17/17**, e em **17/17** o valor está **dentro**
+do conjunto de identidades do próprio documento (`players[].uid` ∪ `playerUids[]` ∪
+`participants[].uid`). Zero ausentes, zero vazios, zero fora.
+
+**(6) Campos-fantasma: ZERO ocorrências em 17/17 documentos.** `hostUid`, `guestUid`,
+`hostColor` e `guestColor` **não existem em nenhum documento da produção** — nem legado, nem
+recente. ⭐ Isto fecha, pelo lado do dado, o que a L3.P0 tinha achado só pelo lado do código.
+
+**(7) Tipos efetivos dos timestamps.** `setupAt`: ausente em **16/17**, number epoch em 1.
+`createdAt`: string ISO em 17. `finishedAt`: string ISO em 15, ausente em 2.
+`lastActivityAt`: number epoch em 14, ausente em 3. `updatedAt`: **ausente em 17/17**.
+⚠️ `updatedAt` é o **segundo** termo do fallback da limpeza nos dois ramos
+(`finishedAt || updatedAt || createdAt` e `lastActivityAt || updatedAt || createdAt`) e
+**não existe em documento nenhum** — o fallback do meio é morto na prática.
+
+**(8) A limpeza agendada apagaria HOJE: zero documentos.** Os 17 ficam. Nenhum caiu por
+idade, nenhum por falta de timestamp, nenhum caso de `NaN`. Margens medidas:
+
+| Classe | Faixa de idade | Corte | Quantos |
+|---|---|---|---|
+| `finished` | 1 d – 7 d | 30 d | 2 |
+| `finished` | 7 d – 30 d | 30 d | **13** |
+| não-`finished` | 1 h – 12 h | 12 h | 2 (folga de 5 h e 6 h) |
+
+⚠️ Observação factual com prazo: **13 dos 15 `finished` estão na faixa de 7 a 30 dias**, ou
+seja, saem sozinhos nas próximas semanas pela regra de 30 dias já em vigor. Registrado como
+fato do dado medido em 31/ago/2026, não como pedido de ação.
+
+**(9) Compatibilidade para amarrar escrita a criador ou participante — o que o dado diz.**
+Zero documentos sem `createdBy`; zero com `createdBy` fora das identidades; zero sem
+identidade alguma; zero com uid apenas em `players` (que uma verificação por `playerUids`
+não enxergaria); `playerUids` presente e não-vazio em **17/17**. O único desencontro medido:
+**2 documentos não têm `participants`**. ⛔ Registro do dado; **nenhuma Rule é proposta nem
+escolhida aqui** — a leva proibiu, e a decisão de autoridade continua aberta.
+
+**Hipótese da L3.P0 — CONFIRMADA.** Ela dizia: *"que os troféus casuais estejam de fato
+zerados em produção. Não foi medido"*. Agora foi, por agregado sobre `users`:
+
+| Medida | Valor |
+|---|---|
+| Perfis lidos (nenhuma lápide entre eles) | 266 |
+| Perfis com o campo `_rankStats.casualMatchesPlayed` materializado | 263 |
+| Perfis com `casualMatchesPlayed > 0` | **0** |
+| Perfis com `casualMatchesWon > 0` | **0** |
+| Perfis com qualquer troféu casual em `_trophyIds` | **0** |
+| Partidas casuais reais em produção | 17 (15 `finished`, com `result` object) |
+
+⚠️ Os três caminhos possíveis foram conferidos separadamente para não confundir "campo
+ausente" com "campo zerado": `users/{uid}.casualMatchesPlayed` → 0 perfis têm o campo;
+`users/{uid}.stats.casualMatchesPlayed` → 0 perfis; `users/{uid}._rankStats.casualMatchesPlayed`
+→ 263 perfis têm, e **todos com valor 0**. A presença em 263 perfis é o que prova que o
+caminho medido é o certo — se fosse o errado, a contagem seria 0 e nada estaria provado.
+⭐ Os dois lados fecham no mesmo ponto: 15 partidas terminadas com resultado gravado, 266
+pessoas, e nenhuma estatística casual diferente de zero — enquanto os quatro campos de que
+as consultas de contagem dependem não existem em documento nenhum.
+
+**Limitações desta medição — o que ela NÃO diz.**
+1. É um **retrato dos sobreviventes**. A `cleanupOldCasualMatches` apaga `finished` com mais
+   de 30 dias e salas paradas em 2 h/12 h; documentos anteriores a 30 dias **já não existem**.
+   Nada aqui descreve o histórico da coleção, só o que estava vivo em 31/ago/2026.
+2. **N = 17.** Os contadores são exatos para esse conjunto e não sustentam projeção.
+3. O Admin SDK **ignora as Rules**. A medição diz o que o **dado** é; não diz, e não pode
+   dizer, o que um cliente conseguiria escrever.
+4. A simulação da limpeza (item 8) **reimplementa** a lógica da Function num instante; não é
+   observação da Function executando.
+5. A varredura não é transacional — escritas concorrentes durante a leitura não foram
+   excluídas. Com 17 documentos e saída agregada, isso não muda nenhum contador acima.
+6. Nada foi medido sobre o app **nativo** das lojas: ele lê e escreve a mesma coleção, mas a
+   medição não distingue origem de escrita.
 
 **Dívida registrada na L1.2, NÃO executada: idempotência dos writers legados de `/mail`.**
 Fechar a Rule tirou o cliente da coleção; não mudou como o **servidor** escreve nela. Seis
