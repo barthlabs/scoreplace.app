@@ -114,8 +114,20 @@ function camposDiferentes(atual, esperado) {
 }
 
 (async () => {
-  const tk = token();
+  /* ⛔ O PRIMEIRO PASSO TAMBÉM PRECISA FALAR. `token()` é um `execSync` do gcloud, e num
+   * ambiente sem credencial ele lança ANTES de qualquer linha de saída — o que produz uma
+   * execução praticamente muda, indistinguível de "rodou e não achou nada". Agora o passo se
+   * anuncia e a falha dele vira uma causa nomeada, igual às leituras. */
   console.log('▶ conferindo espelho matches → results (NÃO escreve nada)\n');
+  let tk;
+  try {
+    tk = token();
+  } catch (e) {
+    throw Object.assign(new Error('não consegui obter o token de acesso'), {
+      spLeituraFalhou: true, spTentativas: 1, spCausa: 'gcloud auth print-access-token falhou: ' + (e && e.message ? String(e.message).split('\n')[0] : e),
+      spOperacao: 'obter credencial de leitura', spUrl: '(local: gcloud auth print-access-token)', cause: e
+    });
+  }
   const torneios = SO_ESTE
     ? [{ id: SO_ESTE, dados: await documento(`${BASE}/tournaments/${SO_ESTE}`, tk, 'documento do torneio ' + SO_ESTE) }]
     : await lista(`${BASE}/tournaments`, tk, 'listagem de todos os torneios');
@@ -168,7 +180,14 @@ function camposDiferentes(atual, esperado) {
   console.log('\n' + (semEspelho || divergentes
     ? '⛔ espelho de resultado requer decisão de correção; fonte matches permanece intacta'
     : '✅ cada jogo canônico possui results com assinatura compatível'));
-  process.exit((semEspelho || divergentes) ? 1 : 0);
+  /* ⛔ NADA DE `process.exit()` AQUI. Quando o stdout é um PIPE (que é como qualquer
+   * ferramenta de CI captura este script), a escrita no Node é ASSÍNCRONA — e `process.exit()`
+   * derruba o processo antes do buffer esvaziar. O sintoma é o pior possível para uma
+   * auditoria: exit code correto e SAÍDA VAZIA, ou seja, um veredito que não chega a ninguém.
+   * Foi exatamente o que o Codex viu, duas vezes. `process.exitCode` deixa o processo terminar
+   * sozinho, depois do flush — mesmo código de saída, sem perder o que foi impresso.
+   * exit 0 = auditoria concluída sem divergência · exit 1 = divergência OU leitura inconclusiva. */
+  process.exitCode = (semEspelho || divergentes) ? 1 : 0;
 })().catch((e) => {
   /* ⛔ AUDITORIA QUE NÃO TERMINOU NÃO TEM RESUMO. Antes isto imprimia o objeto de erro cru e
    * saía 1 — sem dizer QUAL leitura morreu nem quantas tentativas houve, e sem deixar claro
@@ -185,5 +204,5 @@ function camposDiferentes(atual, esperado) {
   } else {
     console.error(e);
   }
-  process.exit(1);
+  process.exitCode = 1;   // ⛔ exitCode, não exit(): ver a nota acima — exit() come o diagnóstico
 });
