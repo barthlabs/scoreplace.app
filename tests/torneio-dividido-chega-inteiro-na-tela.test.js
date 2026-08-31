@@ -57,6 +57,10 @@ const ctx = {
   console: console
 };
 vm.createContext(ctx);
+/* ⚠️ 2.1.66: a conta do que falta saiu de `_enxertaJogos` e virou
+ * `window._marcaPartesQueFaltam`, chamada pelo ouvinte E pelo cache. O fixture a injeta
+ * neste contexto, num lugar só. */
+require(require('path').join(__dirname, '_conta-de-partes-fixture.js')).injetar(ctx, src);
 /* ⚠️ `_aplicaSnapTorneios` vive dentro de um closure e lê variáveis dele. Recriá-las aqui
  * é o preço de exercitar a função REAL em vez de uma cópia — e é um preço que vale: foi
  * justamente testar a cópia (a função isolada) que deixou o defeito passar. */

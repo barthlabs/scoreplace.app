@@ -31,6 +31,11 @@ const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
 const i = store.indexOf('    function _enxertaJogos(novo, velho) {');
 const corpo = store.slice(i, store.indexOf('\n    }\n', i) + 6);
 const ctx = { window: {} }; vm.createContext(ctx);
+/* ⚠️ 2.1.66: a conta do que falta saiu de dentro de `_enxertaJogos` e virou
+ * `window._marcaPartesQueFaltam`, pra que o caminho do CACHE use a MESMA função. */
+const _m0 = store.indexOf('window._marcaPartesQueFaltam = function (t) {');
+const _m1 = store.indexOf('window._userProfileCache = window._userProfileCache || {};');
+vm.runInContext(store.slice(_m0, _m1), ctx);
 vm.runInContext(corpo + '\nthis.F = _enxertaJogos;', ctx);
 const enxerta = ctx.F;
 
@@ -102,10 +107,16 @@ const parcial = enxerta(doDoc(), {
 ok('⛔ 1 jogo de 115 em memória NÃO passa por completo', parcial._faltamPesados === true);
 
 // ── a conta deriva da LISTA, não de nomes ────────────────────────────────────
-const trecho = store.slice(i, store.indexOf('\n    }\n', i));
+/* ⚠️ 2.1.66: o LAÇO da conta mudou de casa — saiu de `_enxertaJogos` e foi para
+ * `window._marcaPartesQueFaltam`, que os DOIS caminhos (ouvinte e cache) chamam. A
+ * asserção continua a mesma: a conta percorre a LISTA, não nomes escritos à mão. */
+const trecho = store.slice(_m0, _m1);
 ok('⛔ a conta percorre `_semPesados` (nome escrito à mão foi o defeito)',
-  /fora\.forEach\(function \(nome\) \{[\s\S]*?_quantoTenho\(nome\)/.test(trecho),
+  /_semPesados\.forEach\(function \(nome\) \{[\s\S]*?_quantoTenho\(nome\)/.test(trecho),
   'com `if (fora.indexOf(\'matches\')...)` solto, a parte seguinte fica de fora de novo');
+ok('⭐ e a conta é UMA só — o caminho do cache chama a mesma função',
+  /_loadFromCache\(\)[\s\S]*?window\._marcaPartesQueFaltam\(t\)[\s\S]*?_montaPesadosQueFaltam\(/.test(store),
+  'era só o ouvinte que contava; o cache pintava parte incompleta e ninguém pedia o resto');
 ok('⛔ e nenhum `if` isolado por nome decide a falta',
   !/if \(fora\.indexOf\('matches'\) !== -1\) \{\s*var _nJ/.test(trecho));
 

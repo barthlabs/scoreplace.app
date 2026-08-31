@@ -40,6 +40,13 @@ const FIM = SRC.indexOf('\n    function _aplicaSnapTorneios(snap)');
 ok(INI !== -1 && FIM > INI, 'achei `_enxertaJogos` em js/store.js');
 const ctx = { window: {}, console: console, Array: Array, Object: Object, JSON: JSON, String: String };
 ctx.globalThis = ctx; vm.createContext(ctx);
+/* ⚠️ A DECISÃO saiu de dentro de `_enxertaJogos` (2.1.66) e virou `window._marcaPartesQueFaltam`,
+ * pra que o caminho do CACHE use a MESMA conta. Quem recorta uma tem que recortar a outra —
+ * senão o teste morre em "not a function" e parece defeito do código. */
+const M0 = SRC.indexOf('window._marcaPartesQueFaltam = function (t) {');
+const M1 = SRC.indexOf('window._userProfileCache = window._userProfileCache || {};');
+ok(M0 !== -1 && M1 > M0, 'achei `window._marcaPartesQueFaltam` (a conta, fonte única)');
+vm.runInContext(SRC.slice(M0, M1), ctx);
 const enxerta = vm.runInContext('(' + SRC.slice(INI, FIM).trim() + ')', ctx);
 
 /* O DOCUMENTO REAL do Confra naquele instante — números medidos, não inventados. */

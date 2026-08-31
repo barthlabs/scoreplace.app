@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.65';
+window.SCOREPLACE_VERSION = '2.1.66';
 /* tabela de cor ausente (teste headless) => devolve a cor crua, como antes da 2.0.94 */
 if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c) { return c; };
 
@@ -704,6 +704,79 @@ window._spNameForLetzplay = function (handle, fallback) {
 //   _nameForUid/_emailForUid/_phoneForUid(uid) — leem o cache (síncrono).
 //   _displayName(uid, guestName) — uid → nome vivo (vazio até hidratar); sem uid → guest.
 //   _hydrateUidNames(root) — pós-render, preenche [data-uid-name] com o nome vivo.
+/* ── QUE PARTES FALTAM NESTE TORNEIO? — FONTE ÚNICA (2.1.66) ────────────────────
+ * ⛔ POR QUE ISTO É `window.` E NÃO UMA CLOSURE. Esta conta vivia dentro de
+ * `_enxertaJogos`, que só roda no caminho do OUVINTE. `_loadFromCache` põe o cache
+ * direto em `store.tournaments` sem passar por lá — então um torneio pintado do cache
+ * com parte incompleta NUNCA pedia o resto, e a tela ficava errada até o ouvinte
+ * chegar (ou para sempre, se ele demorasse). Foi o último pedaço do incidente de
+ * 31/ago: 2 inscritos de 152 e 1 jogo de 115 na tela do dono.
+ *
+ * ⛔ A PERGUNTA É QUANTIDADE, NÃO PRESENÇA. `existe ao menos um?` é o que fez um único
+ * jogo solto dentro do documento passar por "tenho os 115". Aqui se compara com o
+ * CONTADOR que o escritor gravou.
+ *
+ * Ordem da decisão, por parte de `_semPesados`:
+ *   ① CONTADOR (`_nPartes`, `_nJogos`, `_nGrupos`): zero = vazio DE VERDADE, não busca;
+ *      tenho < prometido = FALTA; tenho >= prometido = completo.
+ *   ② sem contador, TESTEMUNHA no documento (`memberUids` prova que há elenco);
+ *   ③ sem contador nem testemunha: `matches`/`grupos` são estruturais e acusam; as de
+ *      topo não, senão vira busca em laço a cada eco.
+ * Muta `t` (marca `_faltamPesados`/`_faltaOQue`) e devolve true se falta algo. */
+window._marcaPartesQueFaltam = function (t) {
+  if (!t || !Array.isArray(t._semPesados) || !t._semPesados.length) {
+    if (t) { delete t._faltamPesados; delete t._faltaOQue; }
+    return false;
+  }
+  var _tam = function (x) {
+    if (Array.isArray(x)) return x.length;
+    if (x && typeof x === 'object') return Object.keys(x).length;
+    return 0;
+  };
+  var _quantoTenho = function (nome) {
+    if (nome === 'matches') {
+      var n = _tam(t.matches);
+      (t.rounds || []).forEach(function (r) { if (r) n += _tam(r.matches); });
+      (t.groups || []).forEach(function (g) { if (g) n += _tam(g.matches); });
+      return n;
+    }
+    if (nome === 'grupos') {
+      var g2 = 0;
+      (t.rounds || []).forEach(function (r) { if (r) g2 += _tam(r.monarchGroups); });
+      return g2;
+    }
+    return _tam(t[nome]);
+  };
+  var _conta = function (nome) {
+    if (t._nPartes && typeof t._nPartes[nome] === 'number') return t._nPartes[nome];
+    if (nome === 'matches' && typeof t._nJogos === 'number') return t._nJogos;
+    if (nome === 'grupos' && typeof t._nGrupos === 'number') return t._nGrupos;
+    return null;
+  };
+  var _testemunha = function (nome) {
+    if (nome === 'participants') return (t.memberUids || []).length > 0;
+    return false;
+  };
+  var falta = false, oQue = [];
+  t._semPesados.forEach(function (nome) {
+    var tenho = _quantoTenho(nome);
+    var n = _conta(nome);
+    if (n != null) {
+      if (n === 0) return;                 // vazio DE VERDADE
+      if (tenho >= n) return;              // completo
+      falta = true; oQue.push(nome);       // tenho `tenho` de `n`
+      return;
+    }
+    if (tenho > 0) return;                 // sem contador: volta a valer presença
+    var estrutural = (nome === 'matches' || nome === 'grupos');
+    if (!estrutural && !_testemunha(nome)) return;
+    falta = true; oQue.push(nome);
+  });
+  if (falta) { t._faltamPesados = true; t._faltaOQue = oQue; }
+  else { delete t._faltamPesados; delete t._faltaOQue; }
+  return falta;
+};
+
 window._userProfileCache = window._userProfileCache || {};
 window._userProfilePending = window._userProfilePending || {};
 // ⭐ ÉPOCA DO CACHE DE PERFIS (2.0.63): sobe a cada perfil que entra no cache.
@@ -10234,6 +10307,26 @@ window.AppStore = {
         if (typeof window._hydrateMonarchGroups === 'function') {
           this.tournaments.forEach(function(t){ try { window._hydrateMonarchGroups(t); } catch(e){} });
         }
+        /* ⛔ O CACHE TAMBÉM TEM QUE PEDIR O QUE FALTA (2.1.66) — e não pedia.
+         * Este caminho jogava o cache direto em `store.tournaments` e voltava. A conta do
+         * que falta morava DENTRO de `_enxertaJogos`, que só roda no caminho do OUVINTE.
+         * Resultado medido na tela do dono em 31/ago: torneio pintado do cache com 2
+         * inscritos de 152 e 1 jogo de 115, e NINGUÉM buscando o resto — "2 inscritos",
+         * classificação zerada, "últimos resultados" caindo num torneio antigo (o widget lê
+         * este mesmo objeto) e a seção de novidades vazia.
+         * ⭐ Agora a MESMA função decide nos dois caminhos, e a busca dispara já no boot,
+         * sem depender de o ouvinte chegar. Best-effort: falhar aqui não pode impedir a
+         * lista de pintar — o cache continua sendo o que dá a primeira tela.
+         * [[feedback_unify_dual_entry_points]] [[feedback_cache_quente_satisfaz_metade_da_pergunta]] */
+        try {
+          var _faltam = [];
+          this.tournaments.forEach(function (t) {
+            if (t && window._marcaPartesQueFaltam(t)) _faltam.push(String(t.id));
+          });
+          if (_faltam.length && typeof this._montaPesadosQueFaltam === 'function') {
+            this._montaPesadosQueFaltam(_faltam);
+          }
+        } catch (e) { window._warn('[cache] conta de partes que faltam falhou:', e && e.message); }
         // Loaded from local cache
         return true;
       }
@@ -10933,83 +11026,13 @@ window.AppStore = {
        *      contador: `memberUids` prova que há elenco mesmo com `participants: []`;
        *   ③ sem contador nem testemunha, NÃO acusa — melhor não buscar do que buscar em
        *      laço a cada snapshot de um torneio que legitimamente não tem aquela parte. */
-      var _conta = function (nome) {
-        if (novo._nPartes && typeof novo._nPartes[nome] === 'number') return novo._nPartes[nome];
-        if (nome === 'matches' && typeof novo._nJogos === 'number') return novo._nJogos;
-        if (nome === 'grupos' && typeof novo._nGrupos === 'number') return novo._nGrupos;
-        return null;
-      };
-      var _testemunha = function (nome) {
-        // `memberUids` é denormalizado NO DOCUMENTO e cobre inscritos + espera: se ele tem
-        // gente, `participants: []` em memória só pode ser parte que não chegou.
-        if (nome === 'participants') return (novo.memberUids || []).length > 0;
-        return false;
-      };
-      /* ⛔ A PERGUNTA É QUANTIDADE, NÃO PRESENÇA — e essa distinção derrubou a tela do dono
-       * PELA TERCEIRA VEZ (31/ago, 01:10). Medido no documento do Confra naquele instante:
-       *     _semPesados: ["matches","participants","opponentHistory"]
-       *     round[0].matches: 1        ← UM jogo solto dentro do documento
-       *     participants (no doc): 2   ← DOIS inscritos soltos
-       *     subcoleção matches: 115 · inscritos: 152   ← o dado real, intacto
-       * O teste antigo era `_cheio(...)`: "existe ao menos um?". Com UM jogo solto ele
-       * respondia "tenho", `_faltamPesados` nunca era marcado, a busca dos 115 nunca
-       * disparava — e a tela desenhava o torneio com 1 jogo: classificação zerada, "Demais
-       * jogos da rodada (0)", W.O. e inativos sumidos. Idem no elenco: 2 soltos escondiam 152.
-       *
-       * ⚠️ De onde vem o pedaço solto: `mutateTournament` (a porta do W.O.) grava o documento
-       * SEM `dividir` — o mutator empurra o marcador de W.O. em `rounds[i].matches` e aquilo
-       * fica no doc. Fechar essa porta é outra leva; aqui a conta passa a ser à prova disso.
-       *
-       * ⭐ Agora se compara com o CONTADOR que o escritor gravou (`_nPartes`/`_nJogos`): tenho
-       * 1 de 115 ⇒ FALTA. É a mesma lição do cache quente satisfazendo metade da pergunta.
-       * [[feedback_cache_quente_satisfaz_metade_da_pergunta]] */
-      var _tamanho = function (x) {
-        if (Array.isArray(x)) return x.length;
-        if (x && typeof x === 'object') return Object.keys(x).length;
-        return 0;
-      };
-      var _quantoTenho = function (nome) {
-        if (nome === 'matches') {
-          var n = _tamanho(novo.matches);
-          (novo.rounds || []).forEach(function (r) { if (r) n += _tamanho(r.matches); });
-          (novo.groups || []).forEach(function (g) { if (g) n += _tamanho(g.matches); });
-          return n;
-        }
-        if (nome === 'grupos') {
-          var g2 = 0;
-          (novo.rounds || []).forEach(function (r) { if (r) g2 += _tamanho(r.monarchGroups); });
-          return g2;
-        }
-        return _tamanho(novo[nome]);
-      };
-      var falta = false, _oQueFalta = [];
-      fora.forEach(function (nome) {
-        var tenho = _quantoTenho(nome);
-        var n = _conta(nome);
-        /* Com contador, a decisão é aritmética e não admite meio-termo. */
-        if (n != null) {
-          if (n === 0) return;                     // vazio DE VERDADE
-          if (tenho >= n) return;                  // já tenho tudo
-          falta = true; _oQueFalta.push(nome);     // tenho `tenho` de `n` ⇒ falta
-          return;
-        }
-        /* ⚠️ SEM contador (documento antigo), volta a valer o teste de presença — é o que
-         * havia antes e não posso endurecer sem número pra comparar. */
-        if (tenho > 0) return;
-        /* ⛔ SEM CONTADOR, quem decide é a NATUREZA da parte — e os testes me pegaram aqui:
-         * eu tinha feito "sem prova, não acusa" pra TODAS, e isso é regressão nas
-         * estruturais. Documento dividido antes de existir `_nJogos` nunca mais buscaria os
-         * jogos, e o torneio abriria SEM CHAVE — o desastre da 2.0.109 de novo.
-         * ⭐ `matches` e `grupos` são estruturais: ninguém divide um torneio vazio, então
-         * "está no marcador e não tenho em memória" JÁ é prova. Acusa, que é o seguro.
-         * ⭐ As de topo (elenco, histórico, presença) podem ser legitimamente vazias — ali,
-         * sem contador nem testemunha, acusar viraria busca em laço a cada snapshot. */
-        var _estrutural = (nome === 'matches' || nome === 'grupos');
-        if (n === null && !_estrutural && !_testemunha(nome)) return;
-        falta = true; _oQueFalta.push(nome);
-      });
-      if (falta) { novo._faltamPesados = true; novo._faltaOQue = _oQueFalta; }
-      else { delete novo._faltamPesados; delete novo._faltaOQue; }
+      /* ⭐ A CONTA MORA NUM LUGAR SÓ (2.1.66). Ela vivia AQUI DENTRO, e por isso só o
+       * caminho do OUVINTE a executava — `_loadFromCache` jogava o cache direto em
+       * `store.tournaments` sem passar por aqui, então um torneio pintado do cache com 2
+       * inscritos de 152 e 1 jogo de 115 NUNCA pedia o resto. Era o último pedaço do
+       * incidente de 31/ago. Agora os dois caminhos chamam a MESMA função.
+       * [[feedback_unify_dual_entry_points]] */
+      window._marcaPartesQueFaltam(novo);
       return novo;
     }
 

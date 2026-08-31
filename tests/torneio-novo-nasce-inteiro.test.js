@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _contaFix = require(path.join(__dirname, '_conta-de-partes-fixture.js'));
 const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
@@ -121,7 +122,11 @@ ok(/_nJogos = \(_p\.matches \|\| \[\]\)\.length/.test(db),
 // ── ③ a rede usa o número em vez de adivinhar — rodando a função REAL ──────
 const i0 = store.indexOf('function _enxertaJogos(');
 const corpo = store.slice(i0, store.indexOf('\n    }', i0) + 6);
-const ctx = { store: { tournaments: [] } }; vm.createContext(ctx);
+const ctx = { store: { tournaments: [] }, window: {} }; vm.createContext(ctx);
+/* ⚠️ 2.1.66: a conta do que falta saiu de `_enxertaJogos` e virou
+ * `window._marcaPartesQueFaltam` (os dois caminhos, ouvinte e cache, usam a MESMA).
+ * Quem recorta uma tem que ter a outra no contexto — o fixture faz isso num lugar só. */
+_contaFix.injetar(ctx, store);
 vm.runInContext(corpo + '\nthis.f = _enxertaJogos;', ctx);
 const enxerta = ctx.f;
 

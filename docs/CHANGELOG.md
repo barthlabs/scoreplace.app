@@ -1,5 +1,12 @@
 # Changelog do scoreplace.app
 
+## 2.1.66 — O cache também pede a parte que falta (31/ago/2026)
+
+- **Problema:** a 2.1.65 corrigiu a CONTA (quantidade em vez de presença), mas ela morava dentro de `_enxertaJogos` — que só roda no caminho do OUVINTE. `_loadFromCache` põe o cache direto em `store.tournaments` e volta: um torneio pintado do cache com parte incompleta nunca pedia o resto. Por isso as regressões continuaram depois de publicar a 2.1.65: "2 inscritos" (de 152), classificação zerada, "últimos resultados" caindo num torneio antigo e a seção de novidades vazia — todos esses widgets leem o mesmo objeto que o cache pintou.
+- **Correção:** a conta virou `window._marcaPartesQueFaltam`, fonte única chamada pelos DOIS caminhos. `_loadFromCache` passou a marcar o que falta e disparar `_montaPesadosQueFaltam` já no boot, sem depender de o ouvinte chegar.
+- **Testes:** `tests/_conta-de-partes-fixture.js` carrega a conta real num lugar só — seis suítes recortam `_enxertaJogos` do fonte e todas precisavam dela. Nova asserção trava que o caminho do cache chama a mesma função.
+- **⚠️ Dívida preservada:** a origem do pedaço solto no documento segue sendo `mutateTournament`, que grava sem `dividir`. Fechar essa porta continua pendente.
+
 ## 2.1.65 — E-mail secundário sai do cliente e `emailVerifications` fecha (31/ago/2026)
 
 - **Problema:** o fluxo de vincular um e-mail secundário rodava inteiro no cliente. O token nascia de `Math.random()` (não é CSPRNG), ia CRU pro banco como id de `emailVerifications/{token}`, e a regra dava `allow read: if true` — o token só é segredo se ninguém mais puder lê-lo, e ali dava pra listar a coleção e colher token válido de terceiros. `allow update: if true` deixava qualquer um, inclusive anônimo, marcar `verified`. A vinculação era um `users/{ownerUid}.update({linkedEmails})` do cliente, em passo separado da marca de uso.

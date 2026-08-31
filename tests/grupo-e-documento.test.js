@@ -109,10 +109,15 @@ ok('  → inclusive no lado ANTES do diff (senão tudo pareceria novo a cada gra
  * quebraria de novo, agora apagando a CHAVE inteira. Agora ela deriva de `_semPesados`. */
 console.log('\n──── a rede do enxerto ────');
 const vm = require('vm');
+const _contaFix = require(path.join(__dirname, '_conta-de-partes-fixture.js'));
 const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
 const iE = store.indexOf('    function _enxertaJogos(novo, velho) {');
 const corpoE = store.slice(iE, store.indexOf('\n    }\n', iE) + 6);
 const ctx = { window: {} }; vm.createContext(ctx);
+/* ⚠️ 2.1.66: a conta do que falta saiu de `_enxertaJogos` e virou
+ * `window._marcaPartesQueFaltam` (os dois caminhos, ouvinte e cache, usam a MESMA).
+ * Quem recorta uma tem que ter a outra no contexto — o fixture faz isso num lugar só. */
+_contaFix.injetar(ctx, store);
 vm.runInContext(corpoE + '\nthis.F = _enxertaJogos;', ctx);
 const enxerta = ctx.F;
 
