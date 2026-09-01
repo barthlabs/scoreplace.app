@@ -36,6 +36,87 @@ cd "$RAIZ"
 DRY=0
 [[ "${1:-}" == "--dry-run" ]] && DRY=1
 
+# ── L6.R2.3 · UMA CÓPIA FIEL, MONTADA NUM LUGAR SÓ ───────────────────────────────────
+# O preflight e a publicação precisam da MESMA cópia: mesma extração, mesmos symlinks,
+# mesmo carimbo. Duas montagens divergiriam — e divergir aqui é o preflight aprovar uma
+# árvore que não é a que sobe.
+# ⚠️ `DEST` fica GLOBAL de propósito: o corpo veio do passo 3-5 e o publicador usa a
+# variável depois da chamada. Sem `local`, o comportamento antigo é preservado byte a byte.
+montar_copia() {
+# (corpo do antigo passo 3-5, agora compartilhado com o preflight)
+DEST="$1"
+rm -rf "$DEST"; mkdir -p "$DEST"
+git archive HEAD | tar -x -C "$DEST"
+# ⚠️ Procura o node_modules SUBINDO os diretórios, como o Node faz. Publicar de uma
+# WORKTREE do git é caso normal aqui, e worktree NÃO tem node_modules próprio — os
+# testes só passam nela porque o Node sobe até o do repo pai. Fixar em "$RAIZ" fazia
+# o deploy abortar em toda worktree com "node_modules não resolveu", que é a MESMA
+# armadilha que a 1.8.2 pagou (lá o symlink apontava pra um caminho sem pai e o
+# predeploy morria com "Cannot find module '@playwright/test'" — parecendo regressão
+# do commit, quando era só o node_modules fora de alcance).
+NM=""
+DIR="$RAIZ"
+while [[ "$DIR" != "/" ]]; do
+  if [[ -e "$DIR/node_modules/@playwright/test" ]]; then NM="$DIR/node_modules"; break; fi
+  DIR="$(dirname "$DIR")"
+done
+if [[ -z "$NM" ]]; then
+  echo "✗ node_modules não resolveu a partir de $RAIZ (o predeploy roda testes com Chromium)."
+  echo "  rode 'npm ci' no repo (ou no repo PAI, se você está numa worktree) e tente de novo."
+  exit 1
+fi
+ln -s "$NM" "$DEST/node_modules"
+
+# ── L6.R2.2 · A PROVA DE CONCORRÊNCIA TEM QUE RODAR AQUI TAMBÉM ──────────────────────
+# `functions-autodraw/test-corrida-slot-emu.js` sobe o Firestore Emulator e dirige DUAS
+# transações concorrentes com o Admin SDK — é o único gate que prova a trava manual ×
+# automático no mecanismo (abort + retry do servidor), e não num modelo em memória.
+# ⛔ MAS `functions-autodraw/node_modules` é gitignored, então na cópia extraída por
+# `git archive` o `firebase-admin` não existe e a corrida se declarava PULADA. Medido em
+# 01/set/2026: a 2.1.81 subiu com a prova de concorrência NÃO EXECUTADA no predeploy.
+# "Pulada" não é aprovação. Aqui o subprojeto ganha o MESMO tratamento que a raiz já tinha:
+# o node_modules real é LIGADO dentro da cópia, e a corrida roda de verdade.
+NM_AD=""
+if [[ -e "$RAIZ/functions-autodraw/node_modules/firebase-admin" ]]; then
+  NM_AD="$RAIZ/functions-autodraw/node_modules"
+elif [[ -e "$RAIZ/functions/node_modules/firebase-admin" ]]; then
+  NM_AD="$RAIZ/functions/node_modules"
+fi
+if [[ -z "$NM_AD" ]]; then
+  echo
+  echo "✗ firebase-admin NÃO existe no ambiente-fonte — a prova de concorrência do sorteio"
+  echo "  (functions-autodraw/test-corrida-slot-emu.js) não teria como rodar no predeploy."
+  echo
+  echo "  ⛔ NÃO publico sem essa prova: foi assim que a 2.1.81 subiu com a corrida manual ×"
+  echo "     automático apenas 'PULADA'. Um gate que se declara pulado não é um gate."
+  echo
+  echo "  CONSERTO:  (cd functions-autodraw && npm install)"
+  exit 1
+fi
+mkdir -p "$DEST/functions-autodraw"
+ln -s "$NM_AD" "$DEST/functions-autodraw/node_modules"
+echo "  ▸ firebase-admin ligado na cópia ($NM_AD) — a corrida do sorteio roda no predeploy"
+# ⛔ E o teste passa a EXIGIR o emulador neste caminho: sem a variável ele pode se declarar
+# pulado (útil em máquina sem Java), com ela um 'pulado' vira VERMELHO.
+export SP_EXIGE_CORRIDA_REAL=1
+
+# lixo que o Drive cria e que iria pro ar junto (hosting.public = ".")
+LIXO="$(find "$DEST" \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \) | head -5 || true)"
+if [[ -n "$LIXO" ]]; then echo "✗ lixo na extração:"; echo "$LIXO"; exit 1; fi
+
+cat > "$DEST/.deploy-alignment.json" <<JSON
+{
+  "alinhado": true,
+  "commit": "$COMMIT",
+  "versao": "$VERSAO",
+  "em": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "por": "scripts/deploy-hosting.sh"
+}
+JSON
+echo "▸ extraído em $DEST (carimbado)"
+}
+
+
 VERSAO="$(tr -d '[:space:]' < version.txt)"
 COMMIT="$(git rev-parse HEAD)"
 
@@ -103,6 +184,85 @@ if [[ -n "$(git status --porcelain)" ]]; then
 else
   echo "  ✓ snapshot já em dia"
 fi
+
+# ── TRAVA DURA: O CACHE DO SW TEM QUE SER O DA VERSÃO ─────────────────────────
+# ⛔ ISTO JÁ ACONTECEU, e ficou 33 VERSÕES sem ninguém ver (2.0.92 → 2.0.125). O dono abriu
+# o PWA no celular e viu "0 INSCRITOS" num torneio com 148, sendo ele o organizador; no
+# desktop, tudo normal. O banco estava CERTO.
+# Todos os scripts têm `?v=` e trocam com a versão. `/index.html` é o ÚNICO servido sem
+# query: ele casa EXATO no cache do service worker e, se o nome do cache não muda, vem do
+# VELHO — trazendo junto os `?v=` antigos de TODOS os scripts. O aparelho passa a rodar
+# código antigo sobre o dado de hoje, e a tela mente com cara de dado errado.
+# ⚠️ A suíte também confere isto, mas suíte não impede PUBLICAR. Aqui impede: aborta antes
+# de subir um byte, que é o mesmo lugar onde o cache-buster já era barrado.
+VER_APP="$(sed -n "s/.*SCOREPLACE_VERSION *= *'\([^']*\)'.*/\1/p" js/store.js | head -1)"
+VER_SW="$(sed -n "s/.*CACHE_NAME *= *'scoreplace-v\([^']*\)'.*/\1/p" sw.js | head -1)"
+if [[ -z "$VER_APP" || -z "$VER_SW" ]]; then
+  echo "✗ não consegui ler a versão (app='$VER_APP' sw='$VER_SW') — não publico às cegas."
+  exit 1
+fi
+if [[ "$VER_APP" != "$VER_SW" ]]; then
+  echo
+  echo "✗ CACHE_NAME do service worker DIVERGE da versão do app."
+  echo "    js/store.js SCOREPLACE_VERSION = $VER_APP"
+  echo "    sw.js       CACHE_NAME         = scoreplace-v$VER_SW"
+  echo
+  echo "  O QUE ISSO CAUSA: index.html é o único arquivo sem ?v=. Com o cache velho, o PWA"
+  echo "  carrega o index ANTIGO e, com ele, os ?v= antigos de todos os scripts — o celular"
+  echo "  fica preso numa versão anterior à do desktop e a tela mostra dado errado."
+  echo
+  echo "  CONSERTO:  npm run prerender     (ele sincroniza, no mesmo passo do version.txt)"
+  exit 1
+fi
+echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
+
+# ── 1.9 · PREFLIGHT: TODOS OS GATES ANTES DE TOCAR NO `main` ─────────────────────────
+# ⛔ POR QUE ISTO EXISTE (medido em 01/set/2026, na publicação da 2.1.81 e de novo na
+# 2.1.82): este script empurrava o commit pro `main` no passo 2 e só DEPOIS extraía a
+# cópia e rodava o predeploy. Quando um gate reprovava — e reprovou —, o `origin/main` já
+# carregava um commit de release que NÃO tinha passado nos gates necessários pra publicá-lo.
+# Na 2.1.81 isso obrigou a desfazer um amend com o main já adiantado; na 2.1.82 só não doeu
+# porque o ensaio foi feito À MÃO, o que não protege o próximo deploy.
+# A regra passa a ser: nenhum commit de release é empurrado antes de tudo o que é preciso
+# pra publicá-lo passar — na MESMA forma em que vai ser publicado (cópia extraída, com as
+# dependências ligadas e a corrida do sorteio rodando de verdade).
+# ⚠️ `check-version-ahead` só tem sentido ONDE HÁ GIT: ele varre branches e remotos atrás de
+# uma versão MAIOR que a que vai subir. Na cópia extraída não há `.git`, então lá ele passa
+# vazio — por isso ele roda AQUI, no repositório de verdade, antes de tudo.
+echo "▸ preflight: nenhum branch/remoto está à frente desta versão?"
+if ! node "$RAIZ/scripts/check-version-ahead.js"; then
+  echo
+  echo "✗ PREFLIGHT REPROVOU (versão à frente) — nada foi empurrado e nada foi publicado."
+  exit 1
+fi
+
+echo "▸ preflight: montando a cópia e rodando os gates ANTES de tocar no main…"
+PRE="${TMPDIR:-/tmp}/sp-preflight-$$"
+montar_copia "$PRE"
+PRE_OK=1
+# Os MESMOS comandos do `hosting.predeploy` (firebase.json), na mesma ordem, na cópia.
+# `SP_EXIGE_CORRIDA_REAL=1` proíbe o desfecho "pulada" da corrida manual × automático:
+# aqui ela roda no Emulator ou o deploy para.
+if ! ( cd "$PRE" && SP_EXIGE_CORRIDA_REAL=1 PATH="/opt/homebrew/opt/openjdk/bin:$PATH" \
+       node scripts/check-deploy-alignment.js \
+    && node scripts/check-version-ahead.js \
+    && node scripts/check-release-notes.js \
+    && npm test \
+    && npm run prerender ); then
+  PRE_OK=0
+fi
+if [[ $PRE_OK -ne 1 ]]; then
+  echo
+  echo "✗ PREFLIGHT REPROVOU — nada foi empurrado e nada foi publicado."
+  echo "  origin/main segue intocado: $(git rev-parse --short origin/main 2>/dev/null || echo '?')"
+  echo "  A cópia com a falha ficou em: $PRE"
+  echo
+  echo "  ⛔ É de propósito que isto acontece ANTES do push: commit de release só entra no"
+  echo "     main depois de passar em tudo que é preciso pra publicá-lo."
+  exit 1
+fi
+rm -rf "$PRE"
+echo "  ✓ preflight VERDE — pode alinhar o main e publicar"
 
 # ── 2. alinhar o main ANTES de publicar ──────────────────────────────────────
 echo "▸ conferindo origin/main…"
@@ -177,108 +337,9 @@ if [[ -n "$PRINCIPAL" && "$PRINCIPAL" != "$RAIZ" ]]; then
   fi
 fi
 
-# ── TRAVA DURA: O CACHE DO SW TEM QUE SER O DA VERSÃO ─────────────────────────
-# ⛔ ISTO JÁ ACONTECEU, e ficou 33 VERSÕES sem ninguém ver (2.0.92 → 2.0.125). O dono abriu
-# o PWA no celular e viu "0 INSCRITOS" num torneio com 148, sendo ele o organizador; no
-# desktop, tudo normal. O banco estava CERTO.
-# Todos os scripts têm `?v=` e trocam com a versão. `/index.html` é o ÚNICO servido sem
-# query: ele casa EXATO no cache do service worker e, se o nome do cache não muda, vem do
-# VELHO — trazendo junto os `?v=` antigos de TODOS os scripts. O aparelho passa a rodar
-# código antigo sobre o dado de hoje, e a tela mente com cara de dado errado.
-# ⚠️ A suíte também confere isto, mas suíte não impede PUBLICAR. Aqui impede: aborta antes
-# de subir um byte, que é o mesmo lugar onde o cache-buster já era barrado.
-VER_APP="$(sed -n "s/.*SCOREPLACE_VERSION *= *'\([^']*\)'.*/\1/p" js/store.js | head -1)"
-VER_SW="$(sed -n "s/.*CACHE_NAME *= *'scoreplace-v\([^']*\)'.*/\1/p" sw.js | head -1)"
-if [[ -z "$VER_APP" || -z "$VER_SW" ]]; then
-  echo "✗ não consegui ler a versão (app='$VER_APP' sw='$VER_SW') — não publico às cegas."
-  exit 1
-fi
-if [[ "$VER_APP" != "$VER_SW" ]]; then
-  echo
-  echo "✗ CACHE_NAME do service worker DIVERGE da versão do app."
-  echo "    js/store.js SCOREPLACE_VERSION = $VER_APP"
-  echo "    sw.js       CACHE_NAME         = scoreplace-v$VER_SW"
-  echo
-  echo "  O QUE ISSO CAUSA: index.html é o único arquivo sem ?v=. Com o cache velho, o PWA"
-  echo "  carrega o index ANTIGO e, com ele, os ?v= antigos de todos os scripts — o celular"
-  echo "  fica preso numa versão anterior à do desktop e a tela mostra dado errado."
-  echo
-  echo "  CONSERTO:  npm run prerender     (ele sincroniza, no mesmo passo do version.txt)"
-  exit 1
-fi
-echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 
-# ── 3-5. cópia limpa + carimbo ───────────────────────────────────────────────
-DEST="${TMPDIR:-/tmp}/sp-deploy-$$"
-rm -rf "$DEST"; mkdir -p "$DEST"
-git archive HEAD | tar -x -C "$DEST"
-# ⚠️ Procura o node_modules SUBINDO os diretórios, como o Node faz. Publicar de uma
-# WORKTREE do git é caso normal aqui, e worktree NÃO tem node_modules próprio — os
-# testes só passam nela porque o Node sobe até o do repo pai. Fixar em "$RAIZ" fazia
-# o deploy abortar em toda worktree com "node_modules não resolveu", que é a MESMA
-# armadilha que a 1.8.2 pagou (lá o symlink apontava pra um caminho sem pai e o
-# predeploy morria com "Cannot find module '@playwright/test'" — parecendo regressão
-# do commit, quando era só o node_modules fora de alcance).
-NM=""
-DIR="$RAIZ"
-while [[ "$DIR" != "/" ]]; do
-  if [[ -e "$DIR/node_modules/@playwright/test" ]]; then NM="$DIR/node_modules"; break; fi
-  DIR="$(dirname "$DIR")"
-done
-if [[ -z "$NM" ]]; then
-  echo "✗ node_modules não resolveu a partir de $RAIZ (o predeploy roda testes com Chromium)."
-  echo "  rode 'npm ci' no repo (ou no repo PAI, se você está numa worktree) e tente de novo."
-  exit 1
-fi
-ln -s "$NM" "$DEST/node_modules"
-
-# ── L6.R2.2 · A PROVA DE CONCORRÊNCIA TEM QUE RODAR AQUI TAMBÉM ──────────────────────
-# `functions-autodraw/test-corrida-slot-emu.js` sobe o Firestore Emulator e dirige DUAS
-# transações concorrentes com o Admin SDK — é o único gate que prova a trava manual ×
-# automático no mecanismo (abort + retry do servidor), e não num modelo em memória.
-# ⛔ MAS `functions-autodraw/node_modules` é gitignored, então na cópia extraída por
-# `git archive` o `firebase-admin` não existe e a corrida se declarava PULADA. Medido em
-# 01/set/2026: a 2.1.81 subiu com a prova de concorrência NÃO EXECUTADA no predeploy.
-# "Pulada" não é aprovação. Aqui o subprojeto ganha o MESMO tratamento que a raiz já tinha:
-# o node_modules real é LIGADO dentro da cópia, e a corrida roda de verdade.
-NM_AD=""
-if [[ -e "$RAIZ/functions-autodraw/node_modules/firebase-admin" ]]; then
-  NM_AD="$RAIZ/functions-autodraw/node_modules"
-elif [[ -e "$RAIZ/functions/node_modules/firebase-admin" ]]; then
-  NM_AD="$RAIZ/functions/node_modules"
-fi
-if [[ -z "$NM_AD" ]]; then
-  echo
-  echo "✗ firebase-admin NÃO existe no ambiente-fonte — a prova de concorrência do sorteio"
-  echo "  (functions-autodraw/test-corrida-slot-emu.js) não teria como rodar no predeploy."
-  echo
-  echo "  ⛔ NÃO publico sem essa prova: foi assim que a 2.1.81 subiu com a corrida manual ×"
-  echo "     automático apenas 'PULADA'. Um gate que se declara pulado não é um gate."
-  echo
-  echo "  CONSERTO:  (cd functions-autodraw && npm install)"
-  exit 1
-fi
-mkdir -p "$DEST/functions-autodraw"
-ln -s "$NM_AD" "$DEST/functions-autodraw/node_modules"
-echo "  ▸ firebase-admin ligado na cópia ($NM_AD) — a corrida do sorteio roda no predeploy"
-# ⛔ E o teste passa a EXIGIR o emulador neste caminho: sem a variável ele pode se declarar
-# pulado (útil em máquina sem Java), com ela um 'pulado' vira VERMELHO.
-export SP_EXIGE_CORRIDA_REAL=1
-
-# lixo que o Drive cria e que iria pro ar junto (hosting.public = ".")
-LIXO="$(find "$DEST" \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \) | head -5 || true)"
-if [[ -n "$LIXO" ]]; then echo "✗ lixo na extração:"; echo "$LIXO"; exit 1; fi
-
-cat > "$DEST/.deploy-alignment.json" <<JSON
-{
-  "alinhado": true,
-  "commit": "$COMMIT",
-  "versao": "$VERSAO",
-  "em": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "por": "scripts/deploy-hosting.sh"
-}
-JSON
-echo "▸ extraído em $DEST (carimbado)"
+# ── 3-5. cópia limpa + carimbo (a MESMA função que o preflight usou) ─────────
+montar_copia "${TMPDIR:-/tmp}/sp-deploy-$$"
 
 if [[ $DRY -eq 1 ]]; then
   echo "✓ dry-run completo — nada foi publicado."

@@ -80,7 +80,14 @@ console.log('▸ ④ a checagem vem ANTES do upload (e depois do push do main)')
   ok(pos.push > 0 && pos.check > 0 && pos.link > 0 && pos.deploy > 0, 'achei os quatro marcos no script');
   ok(pos.check < pos.deploy, '⭐ a checagem acontece ANTES do `firebase deploy` (nada é publicado)');
   ok(pos.link < pos.deploy, 'e o symlink também');
-  ok(pos.push < pos.check, 'e depois do alinhamento do main, que é o desenho do script');
+  /* ⚠️ INVERTIDO DE PROPÓSITO na L6.R2.3, e isto é um ganho, não um afrouxamento.
+   * Quando esta asserção nasceu, o script empurrava o main ANTES de montar a cópia, então
+   * "a checagem vem depois do push" era a descrição fiel do desenho. A L6.R2.3 mudou o
+   * desenho justamente porque isso era o defeito: um gate que reprova DEPOIS do push deixa
+   * no `origin/main` um commit de release que não passou nos gates. Agora a checagem da
+   * dependência (dentro de `montar_copia`, chamada pelo preflight) acontece ANTES do push —
+   * e é isso que o teste passa a exigir. */
+  ok(pos.check < pos.push, '⭐ a checagem acontece ANTES do push (nada de release entra no main sem gate)');
 }
 
 // ── ⑤ a prova de verdade: cópia git archive + dependência ligada roda a corrida ──────

@@ -31,12 +31,18 @@ const chk = fs.readFileSync(path.join(ROOT, 'scripts', 'check-release-notes.js')
 ok(/check-release-notes\.js/.test(sh),
    '⛔ o deploy-hosting.sh chama a trava da nota (é o único ponto do fluxo COM git)');
 
-// tem que ser ANTES da extração — depois dela não há mais histórico pra consultar
+// tem que ser ANTES da extração — depois dela não há mais histórico pra consultar.
+// ⚠️ ATUALIZADO na L6.R2.3: a extração virou a função `montar_copia`, DEFINIDA no topo do
+// script e CHAMADA depois. Comparar contra o texto `git archive` passou a medir a
+// DEFINIÇÃO, não o momento em que ela roda — e a pergunta aqui é sobre a ORDEM DE
+// EXECUÇÃO. Por isso o marco passou a ser a CHAMADA (`montar_copia "`), que é onde a cópia
+// nasce de fato. O invariante não mudou: a trava roda enquanto ainda há `.git`.
 const iTrava = sh.indexOf('check-release-notes.js');
-// o COMANDO, não a menção no cabeçalho do script (que descreve o passo 3 em comentário)
-const iArchive = sh.indexOf('\ngit archive HEAD');
-ok(iTrava > 0 && iArchive > 0 && iTrava < iArchive,
-   'e é chamada ANTES do `git archive` — depois, a cópia não tem .git e a pergunta fica sem resposta');
+const iCopia = sh.indexOf('montar_copia "');
+ok(iTrava > 0 && iCopia > 0 && iTrava < iCopia,
+   'e é chamada ANTES de a cópia ser montada — depois, a cópia não tem .git e a pergunta fica sem resposta');
+ok(sh.indexOf('montar_copia() {') < iCopia,
+   '(a função é definida antes de ser chamada — é por isso que a medição é pela CHAMADA)');
 
 // e tem que ABORTAR, não só avisar
 const linha = sh.slice(iTrava - 200, iTrava + 200);

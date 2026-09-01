@@ -2091,7 +2091,44 @@ já existente; `venuePlaceId`; localidade estruturada do `addressComponents`;
 `preferredLocations` do organizador. ⛔ Nenhuma foi escolhida, nenhum schema foi alterado e
 nenhuma migração foi desenhada.
 
+**L6.R2.3 — preflight completo antes do push (01/set/2026). Só o fluxo de deploy; nada
+publicado, versão inalterada.**
+
+*Problema comprovado.* `scripts/deploy-hosting.sh` empurrava o commit pro `main` (passo 2) e
+só DEPOIS extraía a cópia e rodava o predeploy. Isso reprovou **duas vezes em um dia**: na
+2.1.81 um gate falhou com o `main` já adiantado — e o conserto virou um commit a mais, porque
+desfazer o que já está no remoto é pior; na 2.1.82 só não doeu porque o ensaio foi feito **à
+mão**, o que não protege o próximo deploy de ninguém.
+
+*Correção.* Novo passo **1.9 · PREFLIGHT**, antes de qualquer `git push`: monta a cópia fiel
+do `HEAD` e roda ali os **mesmos cinco comandos** do `hosting.predeploy`, com
+`SP_EXIGE_CORRIDA_REAL=1` — ou seja, a corrida manual × automático roda **de verdade no
+Emulator**, sem desfecho "pulada". Reprovou: encerra **antes** do push, não chama
+`firebase deploy` e não toca em `origin/main`, dizendo a causa e onde ficou a cópia.
+⭐ E a cópia é montada por **uma função só** (`montar_copia`), usada pelo preflight e pela
+publicação — duas montagens divergiriam, e divergir aqui seria o preflight aprovar uma árvore
+que não é a que sobe. A **trava dura do `CACHE_NAME`** também subiu para antes do push, pelo
+mesmo motivo. E `check-version-ahead` passou a rodar no **repositório de verdade** (na cópia
+não há `.git`, e lá ele passava vazio).
+
+*Gate novo — e ele usa repositório e remoto REAIS, não mock.*
+`tests/preflight-antes-do-push.test.js` cria um repo e um remoto em /tmp, põe um `firebase` e
+um `npm` falsos no PATH e roda o script inteiro nos dois desfechos: reprovado → **o remoto não
+se move** e o `firebase deploy` **nunca é chamado**; aprovado → o push acontece e só então o
+upload. **Controle contra `7894af10`: falha em 16** — e a linha que importa é literal: com o
+script antigo, o commit de release **chegou ao remoto** mesmo com o gate reprovando.
+
+*Duas asserções de outros testes foram INVERTIDAS de propósito, e isso é ganho:*
+`nota-de-versao-e-cobrada-onde-tem-git` media a posição do texto `git archive`, que agora é a
+DEFINIÇÃO da função — passou a medir a **chamada**, que é o que descreve a execução; e
+`deploy-liga-firebase-admin` exigia "a checagem vem depois do push", que era a descrição fiel
+do desenho ANTIGO — agora exige o contrário, que é o ponto desta leva.
+
+*Invariante que fica:* nenhum commit de release é empurrado antes de tudo o que é preciso para
+publicá-lo passar — na mesma forma em que vai ser publicado.
+
 **L6.R2.2 — CONCLUÍDA E PUBLICADA (2.1.82, 01/set/2026).** Hosting apenas.
+
 
 *Problema corrigido — o aviso não estava no fluxo operacional.* A L6.R2.1 pôs o aviso de fuso
 indeterminado **só no formulário de criar/editar**, por onde o organizador passa uma vez. O
