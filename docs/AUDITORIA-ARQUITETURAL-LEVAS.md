@@ -1920,6 +1920,51 @@ a da janela. ⏳ **Dívida aberta:** enquanto os eventos não declararem fuso (o
 coordenada — medido: `venueLat`/`venueLon` são **nulos nos 44**), o sorteio agendado fica
 inativo para eles. O caminho MANUAL não é afetado. Nenhum dado foi alterado por esta leva.
 
+**L6.R1.1 — a trava de slot passou a ter prova REAL, no emulador (31/ago/2026). Só teste;
+nada de produto, versão ou publicação.**
+
+*A evidência que faltava, e por que a antiga não bastava.* A L6.R1 entregou a trava
+(`drawSlotAt`, reivindicada dentro da transação que grava a rodada) com um gate que era
+**modelo em memória**: `test-autodraw-dividido.js` chama `reivindicarSlot` duas vezes no
+mesmo objeto e vê a segunda recusar. Isso prova a REGRA, não o MECANISMO — e o mecanismo é o
+que segura a invariante em produção: quem impede a segunda gravação não é o `if` do módulo, é
+a **transação do Firestore**, que aborta um dos dois concorrentes e o **re-executa**; é na
+re-execução, lendo a marca já gravada, que o perdedor desiste. Modelo em memória não tem
+abort, não tem retry e não tem servidor — testa ao redor do bug
+([[project_concurrency_safe_saves]], [[feedback_a_trava_vale_onde_mora_a_verdade]]).
+
+*O gate novo.* `functions-autodraw/test-corrida-slot-emu.js` sobe o **Firestore Emulator**
+(porta 8097, própria — 8080 é o de concorrência, 8098/8099 são os de rules) e dispara
+`Promise.all` de **duas transações reais** sobre o **mesmo documento**: uma representa o
+caminho automático, a outra o manual. As duas leem, tentam reivindicar o **mesmo**
+`drawSlotAt` com a `reivindicarSlot` REAL do `agenda-core`, e gravam a consequência no mesmo
+documento transacional. Uma **barreira** segura as duas depois do read e antes do write, só
+na primeira tentativa — sem ela uma poderia commitar antes de a outra ler e **não haveria
+disputa nenhuma**: o teste passaria sem testar.
+
+*O que ele mede, em 12 corridas, por leitura final do emulador:* exatamente uma vence
+(12/12); `drawSlotAt` é o slot disputado (12/12); **uma** rodada persistida (12/12); zero
+jogo duplicado — 1 jogo, 1 id distinto (12/12); a agenda avançou **uma única vez**, medida por
+contador `_avancos` (12/12) e parou no próximo slot de calendário (12/12); o retry do vencedor
+não vence de novo nem cria rodada (1→1) e não move o contador (1→1); e nas duas ordens
+sequenciais (manual→auto e auto→manual) o segundo não gera. ⭐ E o teste confirma que a
+disputa foi REAL: **houve re-execução de transação em 12/12** corridas — o abort vem do
+servidor, que é justamente o que o modelo em memória não tinha.
+
+*Prova de que o teste PEGA a falha (sonda, em árvore separada).* Com `reivindicarSlot`
+desligada — a linha que recusa o slot repetido removida —, a suíte fica **vermelha em 13
+asserções**: "uma rodada" cai pra 0/12, o retry passa de 2 para 3 rodadas e as duas ordens
+sequenciais quebram. Verde que não sabe ficar vermelho não é gate.
+
+*Preservado:* a asserção estrutural de que os caminhos de produção reivindicam o slot **dentro
+de `db.runTransaction`** e **antes** do `_gravaTorneio` — agora para os três (`autoDraw`,
+`drawRound`, `closeRound`), comparando as posições no texto, e não só a presença.
+
+*Onde roda:* `npm run test:autodraw` **e** `npm test` (registrado em `tests/run-unit.js`, que
+executa cada suíte em processo próprio). ⚠️ **Preço medido:** o `npm test` passou de ~2min30
+para **4min03** — a diferença é o boot do emulador, e o `npm test` é predeploy do Hosting.
+⛔ Nenhum código de produto foi alterado para tornar o teste possível.
+
 ## Gates de processo registrados
 
 | Gate | Onde está pendurado | O que barra | Prova |
