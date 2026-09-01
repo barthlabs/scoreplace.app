@@ -232,6 +232,54 @@ window.FirestoreDB = {
       ? window._computeMemberUids(data) : [];
   },
 
+  /* ═══ ROTEAMENTO DE COLEÇÃO — o sandbox mora em `sandboxes`, não em `tournaments` ═══
+   * (FIX.SANDBOX.P2, 2.1.87)
+   *
+   * ⛔ POR QUE O SANDBOX MUDOU DE COLEÇÃO — medido no Emulator com ESTE MESMO SDK:
+   * enquanto ele vivia em `tournaments`, negar só o documento-pai não fechava nada — o
+   * participante real continuava lendo inscritos, matches, opponentHistory, grupos,
+   * checkedIn, woLog, history e results do sandbox por `get` direto (as regras dessas
+   * subcoleções condicionam ao PAI por isPublic/autenticado e nunca olham `isSandbox`).
+   * E a fuga não se fecha escopando `memberUids`, porque preservá-lo byte a byte é
+   * exatamente o que o invariante do dono exige. A COLEÇÃO é o isolamento.
+   *
+   * ⚠️ A ROTA NÃO SAI DO NOME DO ID. Este projeto já pagou caro por heurística de nome
+   * ("heurística de nome não é identidade"). Ela sai de FATO: ou o id está no registro que
+   * o ouvinte de `sandboxes` preenche, ou o objeto em memória diz `isSandbox === true`.
+   * Sem fato → `tournaments`, que é o caso de 100% dos torneios reais. */
+  _ehSandbox(idOuT) {
+    try {
+      if (idOuT && typeof idOuT === 'object') return idOuT.isSandbox === true;
+      var id = String(idOuT || '');
+      if (!id) return false;
+      if (window._sbIdsConhecidos && window._sbIdsConhecidos[id]) return true;
+      var lista = (window.AppStore && window.AppStore.tournaments) || [];
+      for (var i = 0; i < lista.length; i++) {
+        if (String(lista[i].id) === id) return lista[i].isSandbox === true;
+      }
+      return false;
+    } catch (e) { return false; }
+  },
+
+  /* A referência do DOCUMENTO do torneio, na coleção certa. */
+  _tRef(idOuT) {
+    var id = String((idOuT && idOuT.id) || idOuT || '');
+    return this.db.collection(this._ehSandbox(idOuT) ? 'sandboxes' : 'tournaments').doc(id);
+  },
+
+  /* O nome da SUBCOLEÇÃO. A única exceção de forma autorizada pelo dono: `results` vira
+   * `resultsSandbox` dentro do sandbox — porque a regra de collection group
+   * `/{path=**}/results/{matchId}` NÃO pode ser escopada por coleção-pai, e a cópia fiel
+   * preserva `playerUids` reais: mantendo o nome, o participante real leria os resultados
+   * do sandbox por aquela mesma regra. Muda só o NOME do caminho; ids, campos, placares e
+   * contagens vão byte a byte (provado em tests/sandbox-cf-emulador.test.js). */
+  _subNome(idOuT, sub) {
+    return (String(sub) === 'results' && this._ehSandbox(idOuT)) ? 'resultsSandbox' : String(sub);
+  },
+
+  /* A referência de uma SUBCOLEÇÃO do torneio, já roteada. */
+  _tSub(idOuT, sub) { return this._tRef(idOuT).collection(this._subNome(idOuT, sub)); },
+
   async saveTournament(tourData, options) {
     if (!this.db) return;
     var docId = String(tourData.id);
@@ -442,7 +490,7 @@ window.FirestoreDB = {
         var _uidsOf = (typeof window !== 'undefined' && typeof window._participantUids === 'function')
           ? window._participantUids
           : function (p) { return (p && p.uid) ? [p.uid] : []; };
-        var _rSnap = await this.db.collection('tournaments').doc(docId).get();
+        var _rSnap = await this._tRef(docId).get();
         var _banco = _rSnap.exists ? (_rSnap.data() || {}) : null;
         if (_banco) {
           // ── v1.9.87 · O JOGADOR FICTÍCIO TAMBÉM PRECISA SER PROTEGIDO ─────────
@@ -602,7 +650,7 @@ window.FirestoreDB = {
     delete cleanData._allowScoreClear;
     if (!_allowScoreClear) {
       try {
-        var _snapP = await this.db.collection('tournaments').doc(docId).get();
+        var _snapP = await this._tRef(docId).get();
         if (_snapP.exists) {
           var _bancoP = _snapP.data() || {};
           var _temPlacar = function (m) {
@@ -1039,7 +1087,7 @@ window.FirestoreDB = {
     // aceito→pendente é barrada. Assim o organizador continua podendo cancelar.
     if (Array.isArray(cleanData.coHosts)) {
       try {
-        var _snapC = await this.db.collection('tournaments').doc(docId).get();
+        var _snapC = await this._tRef(docId).get();
         var _chBanco = _snapC.exists ? ((_snapC.data() || {}).coHosts) : null;
         if (Array.isArray(_chBanco) && _chBanco.length) {
           var _aceito = function (c) { return c && (c.status === 'active' || c.status === 'accepted'); };
@@ -1067,7 +1115,7 @@ window.FirestoreDB = {
     try {
       var _incMulti = Array.isArray(cleanData.phases) && cleanData.phases.length > 1;
       if (!_incMulti && !_allowReset) {
-        var _exSnap = await this.db.collection('tournaments').doc(docId).get();
+        var _exSnap = await this._tRef(docId).get();
         if (_exSnap.exists) {
           var _ex = _exSnap.data() || {};
           if (Array.isArray(_ex.phases) && _ex.phases.length > 1) {
@@ -1093,6 +1141,7 @@ window.FirestoreDB = {
      * ⛔ `participants`/`history` só saem se estiverem NO MARCADOR — `dividir` extrai os
      * três por natureza, e gravar a config crua dele zeraria o elenco. */
     var _fora = Array.isArray(cleanData._semPesados) ? cleanData._semPesados : null;
+    var _sbPartesSave = null;
     if (_fora && _fora.length && window._tSplit && typeof window._tSplit.dividir === 'function') {
       try {
         /* ⭐ PEDE SÓ O QUE O MARCADOR DIZ (2.0.124). Antes `dividir` extraía TUDO e quem grava
@@ -1141,6 +1190,10 @@ window.FirestoreDB = {
           _p.config._nPartes = _fora.reduce(function (acc, nome) {
             acc[nome] = ((_p[nome] || []).length); return acc;
           }, {});
+          /* SANDBOX: guarda as partes pra gravá-las depois do documento. Aqui o objeto está
+           * completo (é o de memória), então o marcador acima está certo — mas num sandbox
+           * NÃO existe CF que escreva o que ele promete. Ver `_sbGravaPartes`. */
+          if (this._ehSandbox(docId)) _sbPartesSave = _p;
           cleanData = _p.config;
         }
       } catch (_eD) {
@@ -1150,7 +1203,19 @@ window.FirestoreDB = {
         throw _eD;
       }
     }
-    await this.db.collection('tournaments').doc(docId).set(cleanData, { merge: true });
+    await this._tRef(docId).set(cleanData, { merge: true });
+    /* SANDBOX DIVIDIDO: e as partes logo atrás — lendo o que está lá pra escrever só o
+     * DELTA (diff canônico), nunca a coleção inteira de novo. Num torneio real esta linha
+     * não roda: lá quem escreve a subcoleção é a CF, e a regra nega o cliente. */
+    if (_sbPartesSave) {
+      var _antesSave = {};
+      for (var _iS = 0; _iS < _fora.length; _iS++) {
+        var _snS = await this._tSub(docId, window._tSplit.colecaoDaParte(_fora[_iS])).get();
+        var _rgS = []; _snS.forEach(function (d) { var v = d.data(); if (v) _rgS.push(v); });
+        _antesSave[_fora[_iS]] = _rgS;
+      }
+      await this._sbGravaPartes(docId, _antesSave, _sbPartesSave, _fora);
+    }
     // v1.7.98: aqui havia a escrita dupla no espelho (`_mirrorRoster`). Saiu — o cliente
     // NÃO tem permissão nessa subcoleção e nunca teve; quem espelha é a CF. Ver a nota
     // longa onde a função morava.
@@ -1232,14 +1297,87 @@ window.FirestoreDB = {
   },
 
 
+  /* ── AS PARTES DE UM SANDBOX DIVIDIDO SÃO ESCRITAS POR AQUI (2.1.87) ──────────────
+   * ⛔ E SÓ DE UM SANDBOX. Num torneio real esta porta NÃO escreve subcoleção — quem
+   * escreve é a CF, e a regra nega o cliente (`allow write: if false`). Mas os gatilhos da
+   * CF observam `tournaments/{tid}`: eles NÃO enxergam `sandboxes/`. Se ninguém escrevesse
+   * aqui, avançar fase num sandbox dividido gravaria as rodadas SEM os jogos e o `_nJogos`
+   * velho continuaria prometendo o que ninguém escreveu — o "14 inscritos e 0 jogos" de
+   * volta, agora no avanço. No sandbox existe UM dono, que é o único escritor, e as Rules
+   * dão a ele escrita nas próprias subcoleções: aqui é o lugar certo.
+   * ⚠️ O diff é o CANÔNICO (`jogosQueMudaram` + `chaveDoRegistro`), o mesmo que o servidor
+   * usa em functions/split-parts.js — duas réguas de chave divergentes gravariam o registro
+   * de A por cima do de B. */
+  async _sbGravaPartes(id, antes, depois, fora) {
+    var S = (typeof window !== 'undefined') ? window._tSplit : null;
+    if (!S || !Array.isArray(fora) || !fora.length) return 0;
+    /* ⚠️ EM LOTES DE 400: o teto do batch do Firestore é 500, e um avanço de fase num
+     * torneio do tamanho do Confra passa disso com folga (115 jogos + 152 inscritos). Lote
+     * estourado não grava NADA — e "não gravou nada" aqui é a chave da próxima fase sumindo. */
+    var pend = [];
+    for (var i = 0; i < fora.length; i++) {
+      var nome = fora[i];
+      var col = this._tSub(id, S.colecaoDaParte(nome));
+      var d = S.jogosQueMudaram((antes && antes[nome]) || [], (depois && depois[nome]) || []);
+      d.mudaram.forEach(function (x) { var k = S.chaveDoRegistro(x); if (k) pend.push({ ref: col.doc(k), v: x }); });
+      d.sumiram.forEach(function (x) { var k = S.chaveDoRegistro(x); if (k) pend.push({ ref: col.doc(k), v: null }); });
+    }
+    for (var j = 0; j < pend.length; j += 400) {
+      var lote = this.db.batch();
+      pend.slice(j, j + 400).forEach(function (w) { if (w.v === null) lote.delete(w.ref); else lote.set(w.ref, w.v); });
+      await lote.commit();
+    }
+    return pend.length;
+  },
+
   async mutateTournament(tournamentId, mutatorFn, options) {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');
-    var ref = this.db.collection('tournaments').doc(String(tournamentId));
+    var ref = this._tRef(tournamentId);
     var self = this;
+    /* ⭐ SANDBOX DIVIDIDO: as partes ENTRAM antes do mutator e SAEM depois do commit.
+     * Entram porque um mutator que avança fase precisa ver o torneio COMPLETO — rodar sobre
+     * o documento magro materializaria a próxima fase a partir de um elenco vazio.
+     * ⚠️ Lidas FORA da transação porque o SDK do cliente não aceita consulta dentro dela
+     * (`transaction.get` só recebe DocumentReference). Não é corrida: o sandbox tem um dono
+     * só, que é quem está escrevendo. */
+    var _sbFora = null, _sbRegs = null, _sbAntes = null;
+    if (this._ehSandbox(tournamentId)) {
+      try {
+        var _cfgSb = (await ref.get()).data() || {};
+        var _fSb = Array.isArray(_cfgSb._semPesados) ? _cfgSb._semPesados : [];
+        if (_fSb.length) {
+          var _S0 = window._tSplit;
+          _sbRegs = {};
+          for (var _i0 = 0; _i0 < _fSb.length; _i0++) {
+            var _snap0 = await this._tSub(tournamentId, _S0.colecaoDaParte(_fSb[_i0])).get();
+            var _regs0 = []; _snap0.forEach(function (d) { var v = d.data(); if (v) _regs0.push(v); });
+            _sbRegs[_fSb[_i0]] = _regs0;
+          }
+          _sbFora = _fSb;
+          _sbAntes = JSON.parse(JSON.stringify(_sbRegs));   // o lado esquerdo do diff de saída
+        }
+      } catch (_eSb) {
+        /* ⛔ Seguir com o documento magro gravaria fase nova sobre elenco vazio. Melhor não
+         * gravar: o dono tenta de novo e o sandbox fica como está. */
+        if (window._error) window._error('[sandbox] não montei as partes pra mutar ' + tournamentId, _eSb);
+        throw _eSb;
+      }
+    }
+    var _sbDepois = null;
     var _txOut = await this.db.runTransaction(async function (transaction) {
       var doc = await transaction.get(ref);
       if (!doc.exists) throw new Error('Tournament not found: ' + tournamentId);
       var data = doc.data();
+      /* SANDBOX DIVIDIDO: as partes voltam pro documento FRESCO pela porta canônica
+       * (`remontar`), que é quem sabe ONDE cada registro mora — `_loc` diz a posição, e o
+       * Firestore entrega por id, que aqui é hash. ⛔ Sobrepor `rounds` inteiro pela cópia
+       * lida antes da transação jogaria fora o que o fresco tem de novo; aqui a config vem
+       * do fresco e só os REGISTROS vêm de fora. */
+      if (_sbRegs) {
+        var _mont = window._tSplit.remontar(Object.assign({ config: data }, _sbRegs));
+        if (!_mont) throw new Error('[sandbox] remontar devolveu vazio — recuso mutar torneio incompleto');
+        data = _mont;
+      }
       // Rei/Rainha: o doc fresco traz grupos só com matchIds. Hidrata group.matches
       // como refs de round.matches ANTES do mutator (W.O./substituição leem g.matches).
       try { if (typeof window !== 'undefined' && typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(data); } catch (_hmErr) {}
@@ -1371,9 +1509,21 @@ window.FirestoreDB = {
               if (_foraM.indexOf(k) === -1 && _persist[k] !== undefined) _pM.config[k] = _persist[k];
             });
             _pM.config._semPesados = _foraM;
-            if (_persist._nPartes !== undefined) _pM.config._nPartes = _persist._nPartes;
-            if (_persist._nJogos !== undefined) _pM.config._nJogos = _persist._nJogos;
-            if (_persist._nGrupos !== undefined) _pM.config._nGrupos = _persist._nGrupos;
+            if (_sbFora) {
+              /* ⭐ SANDBOX: AQUI O OBJETO ESTÁ COMPLETO (as partes foram enxertadas antes do
+               * mutator), então recontar é CORRETO — e obrigatório: o avanço criou jogos, e
+               * `_nJogos` velho prometeria menos do que existe. É o oposto do caso de cima,
+               * onde `data` saiu do documento magro. As partes vão pro banco depois do commit
+               * (`_sbGravaPartes`), porque no sandbox não há CF que espelhe. */
+              _sbDepois = _pM;
+              _pM.config._nPartes = _foraM.reduce(function (acc, nome) { acc[nome] = ((_pM[nome] || []).length); return acc; }, {});
+              if (_foraM.indexOf('matches') !== -1) _pM.config._nJogos = (_pM.matches || []).length;
+              if (_foraM.indexOf('grupos') !== -1) _pM.config._nGrupos = (_pM.grupos || []).length;
+            } else {
+              if (_persist._nPartes !== undefined) _pM.config._nPartes = _persist._nPartes;
+              if (_persist._nJogos !== undefined) _pM.config._nJogos = _persist._nJogos;
+              if (_persist._nGrupos !== undefined) _pM.config._nGrupos = _persist._nGrupos;
+            }
             _persist = _pM.config;
           }
         } catch (_eDM) {
@@ -1392,6 +1542,18 @@ window.FirestoreDB = {
     // v1.7.29: escrita dupla também aqui — a INSCRIÇÃO passa por esta transação, então
     // v1.7.98: o espelho saiu daqui junto com o do `saveTournament` — mesma razão (regra
     // inexistente, escrita sempre negada). A verdade continua sendo o array no doc.
+    /* SANDBOX DIVIDIDO: as partes vão ao banco AGORA, depois do documento. Fora da transação
+     * porque só o documento cabe nela; a ordem é essa de propósito — documento primeiro faz
+     * o marcador prometer antes de existir, e é preferível o contrário (parte gravada que o
+     * marcador ainda não conta é invisível; marcador sem parte é tela vazia). Aborto do
+     * mutator não escreve nada. */
+    if (_sbFora && _sbDepois && !(_txOut && _txOut.aborted)) {
+      try { await this._sbGravaPartes(tournamentId, _sbAntes, _sbDepois, _sbFora); }
+      catch (_eGP) {
+        if (window._error) window._error('[sandbox] o documento gravou mas as partes não — ' + tournamentId, _eGP);
+        throw _eGP;
+      }
+    }
     return _txOut;
   },
 
@@ -1415,8 +1577,7 @@ window.FirestoreDB = {
   async mutateMatchResult(tournamentId, matchId, mutatorFn) {
     if (!this.ensureDb()) throw new Error('Firestore not initialized');
     if (matchId == null || matchId === '') throw new Error('mutateMatchResult: matchId vazio');
-    var ref = this.db.collection('tournaments').doc(String(tournamentId))
-      .collection('results').doc(String(matchId));
+    var ref = this._tSub(tournamentId, 'results').doc(String(matchId));
     var self = this;
     return this.db.runTransaction(async function (transaction) {
       var doc = await transaction.get(ref);
@@ -1451,8 +1612,7 @@ window.FirestoreDB = {
   // mapa { [matchId]: resultData } pra hidratação de leitura (merge nos matches).
   async loadMatchResults(tournamentId) {
     if (!this.ensureDb()) return {};
-    var snap = await this.db.collection('tournaments').doc(String(tournamentId))
-      .collection('results').get();
+    var snap = await this._tSub(tournamentId, 'results').get();
     var out = {};
     snap.forEach(function (d) { out[d.id] = d.data(); });
     return out;
@@ -1464,8 +1624,7 @@ window.FirestoreDB = {
   async loadMatchResult(tournamentId, matchId) {
     if (!this.ensureDb()) return null;
     if (matchId == null || matchId === '') return null;
-    var d = await this.db.collection('tournaments').doc(String(tournamentId))
-      .collection('results').doc(String(matchId)).get();
+    var d = await this._tSub(tournamentId, 'results').doc(String(matchId)).get();
     return d.exists ? d.data() : null;
   },
 
@@ -1552,7 +1711,7 @@ window.FirestoreDB = {
   async leaveStandby(tournamentId, user) {
     if (!this.db) throw new Error('Firestore not initialized');
     var self = this;
-    var docRef = this.db.collection('tournaments').doc(String(tournamentId));
+    var docRef = this._tRef(tournamentId);
     return this.db.runTransaction(async function (tx) {
       var doc = await tx.get(docRef);
       if (!doc.exists) throw new Error('Tournament not found');
@@ -1587,7 +1746,7 @@ window.FirestoreDB = {
       participantObj.displayName || participantObj.name || participantObj.phone
     ));
     if (!_hasId) throw new Error('enrollParticipant: participantObj sem identificador válido');
-    var docRef = this.db.collection('tournaments').doc(String(tournamentId));
+    var docRef = this._tRef(tournamentId);
     var self = this;
     return this.db.runTransaction(async function(transaction) {
       var doc = await transaction.get(docRef);
@@ -1824,7 +1983,7 @@ window.FirestoreDB = {
 
   async _deenrollParticipantTx(tournamentId, userUid) {
     if (!this.db) throw new Error('Firestore not initialized');
-    var docRef = this.db.collection('tournaments').doc(String(tournamentId));
+    var docRef = this._tRef(tournamentId);
     var self = this;
     return this.db.runTransaction(async function(transaction) {
       var doc = await transaction.get(docRef);
@@ -1913,7 +2072,7 @@ window.FirestoreDB = {
   // Apaga TODOS os docs de uma subcoleção, em lotes de 400 (o teto do batch é 500).
   // Devolve quantos foram apagados. Best-effort: erro num lote não derruba o resto.
   async _deleteSubcollection(tournamentId, sub) {
-    var col = this.db.collection('tournaments').doc(String(tournamentId)).collection(sub);
+    var col = this._tSub(tournamentId, sub);
     var apagados = 0;
     for (var volta = 0; volta < 50; volta++) {           // teto de segurança (20 mil docs)
       var snap = await col.limit(400).get();
@@ -1965,7 +2124,7 @@ window.FirestoreDB = {
     // que ignora as rules: `syncDiscoveryFeed` (onDocumentWritten) e `purgeTournamentCopies`
     // (onDocumentDeleted, passo 5), os dois em `functions/index.js`.
     try {
-      await this.db.collection('tournaments').doc(tId).delete();
+      await this._tRef(tId).delete();
     } catch (e) {
       window._error('Erro ao deletar torneio:', e);
       if (typeof window._captureException === 'function') {
@@ -2321,11 +2480,12 @@ window.FirestoreDB = {
       window._error('[fase2] falta o tradutor (_tSplit) — o torneio abriria sem jogos');
       throw new Error('tradutor indisponível');
     }
-    var ref = this.db.collection('tournaments').doc(String(id));
+    var self = this;
     var lidos = 0;
     try {
       var t = await S.montarDoBanco(config, async function (colecao) {
-        var snap = await ref.collection(colecao).get();
+        // pela porta única (`_tSub`): é ela que decide entre tournaments e sandboxes
+        var snap = await self._tSub(id, colecao).get();
         lidos += snap.size;
         var arr = []; snap.forEach(function (d) { var v = d.data(); if (v) arr.push(v); });
         return arr;
@@ -2387,8 +2547,7 @@ window.FirestoreDB = {
     // O SDK já persistiu localmente quando `set` retorna o objeto; a promessa é a
     // confirmação do SERVIDOR, e essa a gente não espera de propósito.
     try {
-      this.db.collection('tournaments').doc(String(tournamentId))
-        .collection('resultQueue').doc(id).set(item)
+      this._tSub(tournamentId, 'resultQueue').doc(id).set(item)
         .catch(function (e) { if (window._warn) window._warn('[filaPlacar] servidor recusou a intenção', e); });
       return true;
     } catch (e) {
@@ -2412,7 +2571,7 @@ window.FirestoreDB = {
   async carregarHistoricoCompleto(id) {
     if (!this.db || !id) return null;
     try {
-      var snap = await this.db.collection('tournaments').doc(String(id)).collection('history').get();
+      var snap = await this._tSub(id, 'history').get();
       var arr = [];
       snap.forEach(function (d) { var v = d.data(); if (v && v.item) arr.push(v.item); });
       try { if (window._noteFsReads) window._noteFsReads(snap.size, 'historico-completo'); } catch (e) {}
@@ -2428,7 +2587,7 @@ window.FirestoreDB = {
   async loadTournamentById(id) {
     if (!this.db || !id) return null;
     try {
-      var doc = await this.db.collection('tournaments').doc(String(id)).get();
+      var doc = await this._tRef(id).get();
       if (!doc.exists) return null;
       var _t = doc.data();
       // o documento diz o que saiu dele; enquanto não disser nada, nada muda

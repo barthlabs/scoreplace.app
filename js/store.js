@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.86';
+window.SCOREPLACE_VERSION = '2.1.87';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3129,56 +3129,53 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
 // é o modelo "torneio futuro com mais inscritos entra no reset". Se o original está
 // ENCERRADO/degradado (participants[] virou slots de chave sem uid), mantém os inscritos
 // reais que o SB já capturou — NUNCA perde ninguém. Ver project_sandbox_tournament.
-window._resyncSandboxRoster = function (ft) {
-  try {
-    if (!ft || ft.isSandbox !== true || !ft.sandboxOf) return;
-    var orig = (typeof window._findTournamentById === 'function') ? window._findTournamentById(ft.sandboxOf) : null;
-    if (!orig) return;
-
-    var keep = {
-      id: ft.id, name: ft.name, isSandbox: true, sandboxOf: ft.sandboxOf,
-      notificationsMuted: true, isPublic: false,
-      sandboxOwnerUid: ft.sandboxOwnerUid, creatorUid: ft.creatorUid,
-      organizerEmail: ft.organizerEmail, organizerName: ft.organizerName,
-      createdAt: ft.createdAt
-    };
-    var fresh;
-    try { fresh = JSON.parse(JSON.stringify(orig)); } catch (e) { return; }
-    Object.keys(ft).forEach(function (k) { delete ft[k]; });        // limpa o estado de teste
-    Object.keys(fresh).forEach(function (k) { ft[k] = fresh[k]; }); // re-clona a config do original
-    Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) ft[k] = keep[k]; });
-    delete ft.sandboxId;
-    ft.sandboxSyncedAt = Date.now();
-    /* ⛔ O SB NASCE (E RESSINCRONIZA) INTEIRO — ver _sbAplicaEnvelope. Sem isto o resync
-     * gravaria `_semPesados` prometendo partes que ninguém pode escrever. */
-    delete ft._semPesados; delete ft._nPartes; delete ft._nJogos;
-    delete ft._nGrupos; delete ft._partesQueFaltam;
-
-    /* ⭐ RÉPLICA FIEL — o roster vem do original COMO ESTÁ, sem reconstrução.
-     *
-     * ⛔ AQUI HAVIA O SEGUNDO DEFEITO DO INVARIANTE, e ele era grande: este bloco RECONSTRUÍA
-     * o elenco (`_sbRebuildCleanRoster`), ZERAVA `waitlist`, `standbyParticipants` e
-     * `monarchWaitlist`, e ainda DESMONTAVA duplas em pessoas conforme o `enrollmentMode`.
-     * Ordem do dono (01/set/2026): _"não é permitido simplificar, limpar, reconstruir,
-     * normalizar, reduzir ou substituir participantes, inscrições, member state, jogos,
-     * resultados, fases, rankings, classificações congeladas, W.O., espera, histórico,
-     * barras, progresso ou chaves"_. Um sandbox que chega com a espera vazia e as duplas
-     * desmontadas não simula o torneio — simula outro torneio.
-     * ⇒ `participants`, `waitlist`, `standbyParticipants` e `monarchWaitlist` já vieram do
-     * `fresh` no bloco acima e ficam EXATAMENTE como o original os tem. Nada a fazer aqui.
-     * ⚠️ `_sbCollectRealEnrollees`/`_sbRebuildCleanRoster` seguem existindo (outros pontos as
-     * usam), mas NÃO entram mais na cópia: reconstruir é exatamente o que foi proibido. */
-
-    // memberUids = SÓ os donos do SB (dev). Antes o roster real entrava aqui — e era isso
-    // que fazia o Firestore ENTREGAR o SB no listener de cada participante espelhado. O
-    // roster continua completo em participants[] (é dele que o motor sorteia); memberUids é
-    // só chave de entrega. Fonte única: _computeMemberUids. Ver project_sandbox_tournament.
-    ft.coHosts = [];
-    ft.memberUids = (typeof window._computeMemberUids === 'function')
-      ? window._computeMemberUids(ft)
-      : [ft.sandboxOwnerUid, ft.creatorUid].filter(Boolean);
-  } catch (e) { if (window._error) window._error('resyncSandboxRoster', e); }
+/* Os sandboxes chegam por um ouvinte PRÓPRIO (coleção `sandboxes`) e entram na mesma lista
+ * que a tela já usa — quem abre um sandbox não precisa saber de coleção nenhuma.
+ * ⛔ Só entra `ready`: o filtro está no ouvinte, e aqui é a porta de entrada.
+ *
+ * ⚠️ FUNÇÃO SOLTA, NÃO MÉTODO DE `AppStore` — e isso não é estilo. Escrever
+ * `window.AppStore._ingestSandboxes = …` AQUI lança `Cannot set properties of undefined`,
+ * porque neste ponto do arquivo o `AppStore` ainda não foi criado. E um throw no topo de
+ * store.js não falha barulhento: ele mata o RESTO do arquivo, e todas as funções que viriam
+ * depois somem em silêncio (foi o que derrubou `_pName`, `_spinButton` e
+ * `_findTournamentById` em três testes de Chromium). Mesma família do `<script>` sem
+ * fechamento descrita no CLAUDE.md. Aqui o AppStore é resolvido na CHAMADA, não na carga. */
+window._sbIngest = function (docs) {
+  var AS = window.AppStore;
+  if (!AS) return;
+  var lista = AS.tournaments || (AS.tournaments = []);
+  (docs || []).forEach(function (d) {
+    if (!d || !d.id || d.sbState !== 'ready') return;
+    var i = -1;
+    for (var k = 0; k < lista.length; k++) { if (String(lista[k].id) === String(d.id)) { i = k; break; } }
+    if (i === -1) lista.push(d); else Object.assign(lista[i], d);
+  });
+  try { if (typeof window._repintarSeNecessario === 'function') window._repintarSeNecessario(); } catch (e) {}
 };
+
+window._resyncSandboxRoster = function (ft) {
+  /* ⛔ DESLIGADO NA 2.1.87 — e é a decisão certa, não uma pendência.
+   *
+   * Este resync re-clonava a config do original NO CLIENTE. Com o sandbox em `sandboxes/`
+   * e com a FORMA persistida tendo que ser preservada (dividido continua dividido), isso
+   * não é possível daqui: o cliente NÃO PODE escrever as subcoleções (`firestore.rules`:
+   * `allow write: if false`). Um resync client-side gravaria a config nova prometendo
+   * `_nPartes` que ninguém preencheria — exatamente o defeito "14 inscritos e 0 jogos"
+   * que esta leva existe pra matar, só que por outra porta.
+   *
+   * ⛔ E a versão anterior dele fazia o que o invariante do dono proíbe em letra: RECONSTRUÍA
+   * o elenco, ZERAVA `waitlist`/`standbyParticipants`/`monarchWaitlist` e DESMONTAVA duplas.
+   *
+   * ⭐ Quem re-sincroniza é o SERVIDOR: `createSandbox` lê o original inteiro, prova a
+   * igualdade canônica e escreve as partes. Re-sincronizar = criar de novo por lá.
+   * (Medido em 01/set/2026: existem ZERO sandboxes legados em `tournaments`, então esta
+   * função não tem sujeito nenhum em produção.) */
+  if (window._warn) {
+    window._warn('[sandbox] resync do cliente está desligado — quem copia é a CF createSandbox');
+  }
+  return;
+};
+
 
 // Flag ligada pro usuário atual? Use em qualquer gate:
 //   if (window._flag('safe-area')) { ...novo caminho... } else { ...atual... }
@@ -3839,7 +3836,7 @@ setInterval(function() {
         }
       } else if (window.FirestoreDB.db) {
         // Fallback: update cirúrgico — não toca em memberEmails/adminEmails
-        window.FirestoreDB.db.collection('tournaments').doc(String(tId))
+        window.FirestoreDB._tRef(tId)
           .update({ status: 'closed' }).catch(function() {});
       }
     }
@@ -9739,7 +9736,7 @@ window._recoverWipedAdminEmails = function() {
     var newAdminEmails = window.FirestoreDB._computeAdminEmails(t);
 
     // Escrita cirúrgica — só adminEmails (Firestore rule permite)
-    window.FirestoreDB.db.collection('tournaments').doc(String(t.id))
+    window.FirestoreDB._tRef(t.id)
       .update({ adminEmails: newAdminEmails })
       .then(function() {
         // Atualiza AppStore em memória para que a sessão atual funcione
@@ -11288,6 +11285,37 @@ window.AppStore = {
     var _uid = _cuNow && _cuNow.uid ? _cuNow.uid : '';
     if (!_uid) { window._warn('[realtime] sem uid — listener não inicia (identidade é uid)'); return; }
     var query = coll.where('memberUids', 'array-contains', _uid);
+    /* ═══ O OUVINTE DE SANDBOX É OUTRO, E EM OUTRA COLEÇÃO (FIX.SANDBOX.P2, 2.1.87) ═══
+     * ⭐ O ouvinte acima fica EXCLUSIVO de torneio real: o sandbox não está mais em
+     * `tournaments`, então ele nunca mais é entregue no aparelho de participante nenhum —
+     * e isso deixou de depender de a tela lembrar de filtrar.
+     * ⚠️ A query é POR DONO (`sandboxOwnerUid`), não por membership: a regra lê
+     * `resource.data`, então uma consulta que não constranja esse campo é recusada inteira.
+     * É de propósito — é o que impede varredura da coleção.
+     * ⛔ E só entra o que está `ready`: o documento nasce `creating` e a CF só promove
+     * depois da prova canônica. Sem este filtro, uma criação interrompida apareceria como
+     * sandbox utilizável pela metade — que é exatamente o que o dono proibiu. */
+    try {
+      if (window._sbUnsub) { try { window._sbUnsub(); } catch (e) {} window._sbUnsub = null; }
+      window._sbIdsConhecidos = window._sbIdsConhecidos || {};
+      window._sbUnsub = window.FirestoreDB.db.collection('sandboxes')
+        .where('sandboxOwnerUid', '==', _uid)
+        .onSnapshot(function (snap) {
+          snap.docChanges().forEach(function (ch) {
+            var d = ch.doc.data() || {};
+            var pronto = (d.sbState === 'ready');
+            if (ch.type === 'removed' || !pronto) { delete window._sbIdsConhecidos[ch.doc.id]; }
+            else { window._sbIdsConhecidos[ch.doc.id] = true; }
+          });
+          var vivos = snap.docs.filter(function (d) { return (d.data() || {}).sbState === 'ready'; });
+          try { window._sbIngest(vivos.map(function (d) { return d.data(); })); } catch (e) {}
+        }, function (err) {
+          // ⚠️ falhar aqui NÃO pode derrubar a lista de torneios reais — são ouvintes
+          // independentes de propósito.
+          if (window._warn) window._warn('[sandbox] ouvinte de sandboxes falhou', err);
+        });
+    } catch (e) { if (window._warn) window._warn('[sandbox] não consegui abrir o ouvinte', e); }
+
     // 1.9.79: o corpo do listener vira função NOMEADA e MEDIDA ('snapshot-torneios')
     // — o relato do aparelho (78) mostrou travadas de ~1,2s repetidas com 'trechos:
     // nenhum': era exatamente este callback, sem nome, pagando doc.data() de TODOS os
@@ -12618,7 +12646,7 @@ window.AppStore = {
     alvos.forEach(function (nome) {
       try {
         var _col = (typeof S.colecaoDaParte === 'function') ? S.colecaoDaParte(nome) : nome;
-        var un = window.FirestoreDB.db.collection('tournaments').doc(id).collection(_col)
+        var un = window.FirestoreDB._tSub(id, _col)
           .onSnapshot(function (snap) {
             try {
               var vivo = (self.tournaments || []).find(function (x) { return x && String(x.id) === id; });

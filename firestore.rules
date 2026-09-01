@@ -204,6 +204,104 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /* ═══ SANDBOX DO DESENVOLVEDOR — COLEÇÃO PRÓPRIA (FIX.SANDBOX.P2, 2.1.87) ═══════
+     * O sandbox saiu de `tournaments/{id}` e passou a morar aqui. NÃO é preferência de
+     * organização: é a única forma de o invariante do dono ("réplica fiel, inclusive
+     * memberUids/coHosts/adminUids byte a byte") conviver com o isolamento.
+     *
+     * ⛔ POR QUE NÃO DAVA EM `tournaments`, medido no Emulator com o SDK do app:
+     *   · negar só o DOCUMENTO-pai não fecha nada — o participante real continuava lendo
+     *     inscritos, matches, opponentHistory, grupos, checkedIn, woLog, history e results
+     *     do sandbox por `get` direto, porque as regras dessas subcoleções condicionam ao
+     *     PAI por `isPublic`/autenticado e nunca olham `isSandbox`;
+     *   · e a fuga não se fecha escopando membership, porque preservar `memberUids` é
+     *     justamente o que o invariante exige.
+     *
+     * ⭐ AQUI A PERMISSÃO É POR DONO, NÃO POR MEMBERSHIP: `sandboxOwnerUid`. O elenco
+     * (`memberUids`, `coHosts`, `adminUids`) viaja INTACTO dentro do documento — ele é
+     * estado do torneio, não chave de entrega. Quem entrega é a coleção.
+     *
+     * ⚠️ `list` exige query por `sandboxOwnerUid`: a regra lê `resource.data`, então uma
+     * consulta que não constranja esse campo é recusada inteira ("rules are not filters").
+     * É de propósito — é o que impede varredura da coleção. */
+    match /sandboxes/{sandboxId} {
+      function sbDono() {
+        return get(/databases/$(database)/documents/sandboxes/$(sandboxId)).data.get('sandboxOwnerUid', '');
+      }
+      /* Os quatro campos que fazem deste documento um SANDBOX. Eles são do SERVIDOR: quem
+       * os escreve é a `createSandbox` (admin SDK, não passa por regra). O dono opera o
+       * torneio dentro do sandbox à vontade — o que ele não pode é mudar de que original o
+       * sandbox é cópia, de quem ele é, se é sandbox, ou reabrir o estado de criação. */
+      function sbCarimboIntacto() {
+        return request.resource.data.get('sandboxOwnerUid', '') == resource.data.get('sandboxOwnerUid', '')
+          && request.resource.data.get('sandboxOf', '') == resource.data.get('sandboxOf', '')
+          && request.resource.data.get('isSandbox', false) == resource.data.get('isSandbox', false)
+          && request.resource.data.get('sbState', '') == resource.data.get('sbState', '');
+      }
+      allow read: if request.auth != null
+        && request.auth.uid == resource.data.get('sandboxOwnerUid', '');
+      /* ⛔ CRIAR É DA FUNCTION, E SÓ DELA. É isto — e não negar toda escrita — que sustenta
+       * "cópia fiel provada no servidor": o documento NASCE da `createSandbox`, que lê o
+       * original canônico, prova a igualdade campo a campo e só então marca `ready`. O
+       * cliente não fabrica sandbox, nem à mão nem por engano. */
+      allow create: if false;
+      /* ⭐ E O DONO OPERA O QUE É DELE. Sandbox que não aceita escrita não é sandbox: é
+       * fotografia. Está na lista de provas obrigatórias do dono — _"DEV lê/opera cada parte
+       * do sandbox"_ e _"fluxo sandbox: inscritos, membership, barras, chaves, placar,
+       * avanço e resultado"_ — e placar e avanço são ESCRITA.
+       * ⛔ E isto NÃO contradiz o `allow write: if false` das subcoleções de `tournaments`.
+       * Lá a negativa é MULTI-INQUILINO: qualquer um dos 152 inscritos poderia mexer no jogo
+       * dos outros, então a autorização por jogo mora na CF. Aqui existe UM leitor e UM
+       * escritor — o dono — e não há terceiro a proteger. O que continua sendo do servidor é
+       * o CARIMBO, e é ele que `sbCarimboIntacto()` trava. */
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.get('sandboxOwnerUid', '')
+        && sbCarimboIntacto();
+      /* Apagar é do dono: _"os dados do SB devem ficar apenas enquanto existe o SB. ao apagar
+       * o SB deve apagar tudo relativo a ele para não persistir."_ (dono, 01/ago/2026). Sem
+       * isto o botão "Apagar Torneio" do próprio sandbox tomaria permission-denied e os
+       * sandboxes se acumulariam — que é a origem dos 151 `results` órfãos de 01/ago. */
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.get('sandboxOwnerUid', '');
+
+      match /matches/{matchId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /resultQueue/{itemId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /categoryNotifications/{apontamentoId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /opponentHistory/{categoria} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /grupos/{grupoId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /checkedIn/{quemId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /woClaims/{claimId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /woLog/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /inscritos/{inscritoId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /history/{eventoId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /letzplayScans/{scanUid} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+      match /resultsSandbox/{matchId} {
+        allow read, write: if request.auth != null && request.auth.uid == sbDono();
+      }
+    }
+
     match /tournaments/{tournamentId} {
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll
@@ -484,8 +582,28 @@ service cloud.firestore {
     // jogado. Medido em 01/ago/2026 no perfil da Flávia Barchetta.
     // Leitura só; escrita continua exclusivamente pelo caminho aninhado, que valida o
     // torneio pai.
+    /* ⚠️ ESTREITADO EM 2.1.87 — era `allow read: if request.auth != null`, ou seja
+     * QUALQUER logado lia QUALQUER doc de `results` de QUALQUER torneio, por id.
+     * Agora vale o padrão seguro canônico do Firestore: o doc só é legível por quem
+     * ESTÁ nele. Isso mantém de pé os DOIS únicos usos legítimos do cliente, que já
+     * filtram exatamente assim (inventariados antes de mexer):
+     *   · js/firebase-db.js  loadMyMatchResults  — histórico de partidas na ficha
+     *   · js/views/tournaments-enrollment-report.js — relatório/cartão do jogador
+     * ambos `collectionGroup('results').where('playerUids','array-contains', uid)`.
+     * (`functions/index.js` usa admin SDK e não passa por regra.)
+     *
+     * ⛔ E POR QUE O SANDBOX NÃO GUARDA `results` COM ESSE NOME: regra de collection
+     * group NÃO pode ser escopada por coleção-pai — não existe "results, mas só sob
+     * tournaments". Como a cópia do sandbox é FIEL, ela preserva `playerUids` reais;
+     * mantendo o nome, o participante real passaria por esta mesma regra e leria os
+     * resultados do sandbox. Acrescentar aqui uma condição de sandbox recusaria a query
+     * legítima inteira (condição não restringida pela query) e exigiria backfill nos
+     * docs legados. Por isso o sandbox grava em `resultsSandbox`, que este curinga não
+     * alcança — a ÚNICA exceção de forma persistida, e ela muda só o NOME do caminho.
+     * Ver o bloco `match /sandboxes/{sandboxId}` acima. */
     match /{path=**}/results/{matchId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && (request.auth.uid in resource.data.get('playerUids', []));
     }
 
     // ─── Histórico letzplay: 1 doc por COMPETIÇÃO, 1 doc por PARTIDA ──────────

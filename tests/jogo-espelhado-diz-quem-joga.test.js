@@ -62,7 +62,14 @@ ok(jogo && jogo.jogo.playerUids === undefined,
 
 // ── a regra do Firestore usa exatamente esse campo ───────────────────────────
 const regras = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
-const i = regras.indexOf('match /matches/{matchId}');
+/* ⚠️ A ÂNCORA TEM QUE SER DENTRO DE `tournaments`. Desde a 2.1.87 existe um segundo
+ * `match /matches/{matchId}` no arquivo — o do bloco `match /sandboxes/{sandboxId}`, que
+ * vem ANTES. Um `indexOf` solto passou a achar o do sandbox e a janela de 1800 caracteres
+ * caía no lugar errado: o teste ficava vermelho sem nada de errado na regra de produção.
+ * Mesma família do `.replace` sem a flag `g` já documentado em rules-sandbox-read. */
+const iTourn = regras.indexOf('match /tournaments/{tournamentId}');
+ok(iTourn > 0, 'o bloco de torneios existe');
+const i = regras.indexOf('match /matches/{matchId}', iTourn);
 ok(i > 0, 'a subcoleção de jogos tem regra própria');
 const bloco = regras.slice(i, i + 1800);
 ok(/allow read:/.test(bloco), 'leitura liberada (paridade com o documento, que já é legível)');

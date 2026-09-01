@@ -2331,7 +2331,7 @@ function renderTournaments(container, tournamentId = null) {
         // If tournament not found in visible list, try loading it directly from Firestore
         if (visible.length === 0 && window.FirestoreDB && window.FirestoreDB.db) {
             container.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text-muted);">Carregando torneio...</div>';
-            window.FirestoreDB.db.collection('tournaments').doc(String(tournamentId)).get().then(function(doc) {
+            window.FirestoreDB._tRef(tournamentId).get().then(function(doc) {
                 if (doc.exists) {
                     var t = doc.data();
                     // Add to AppStore if not there

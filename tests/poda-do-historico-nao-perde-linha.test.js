@@ -68,7 +68,13 @@ ok(/_linhaDoHistorico/.test(draw) &&
 // ── ⑤ e dá pra ler ──────────────────────────────────────────────────────────
 ok(/match \/history\/\{eventoId\}/.test(rules),
   '⛔ a subcoleção é LEGÍVEL: sem regra o Firestore nega por omissão e a busca voltaria vazia');
-const rBloco = rules.slice(rules.indexOf('match /history/{eventoId}'), rules.indexOf('match /history/{eventoId}') + 700);
+/* ⚠️ ÂNCORA DEPOIS DE `tournaments` (2.1.87): `history` existe também no bloco `sandboxes`,
+ * onde o DONO escreve de propósito (é o sandbox dele). O que se cobra aqui é a regra do
+ * torneio REAL — `indexOf` solto pegava o bloco errado. */
+const _iH = rules.indexOf('match /history/{eventoId}', rules.indexOf('match /tournaments/{tournamentId}'));
+/* e o FIM é o fecho do bloco, não uma janela fixa: comentário novo empurraria a linha pra
+ * fora do recorte e o teste reprovaria sem defeito nenhum. */
+const rBloco = rules.slice(_iH, rules.indexOf('\n      }', _iH));
 ok(/allow write: if false/.test(rBloco), 'e o cliente NÃO escreve nela — quem espelha é a CF');
 
 console.log((fail ? '✗' : '✓') + ' poda-do-historico-nao-perde-linha: ' + pass + ' ok, ' + fail + ' falhas');

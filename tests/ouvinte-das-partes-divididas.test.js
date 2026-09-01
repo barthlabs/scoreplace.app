@@ -61,7 +61,11 @@ ok('  → e o router segue soltando ao sair da rota', /pararDeOuvirJogos\(\)/.te
 // ── a regra do banco tem que deixar LER, senão a tela abre sem o dado ────────
 const rules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
 ['checkedIn', 'woClaims', 'woLog', 'inscritos', 'matches'].forEach((c) => {
-  const m = rules.indexOf('match /' + c + '/{');
+  /* ⚠️ ÂNCORA DEPOIS DE `tournaments` (2.1.87): estas mesmas subcoleções existem também no
+   * bloco `sandboxes`, ONDE O DONO ESCREVE de propósito (é como ele lança placar e avança
+   * fase no próprio sandbox). `indexOf` solto caía lá e cobrava a regra do torneio REAL no
+   * bloco errado. O que este teste protege é a tabela de permissão do torneio de verdade. */
+  const m = rules.indexOf('match /' + c + '/{', rules.indexOf('match /tournaments/{tournamentId}'));
   ok('⛔ há regra de LEITURA para `' + c + '` (sem ela o Firestore nega por omissão)', m > 0);
   if (m > 0) {
     const bloco = rules.slice(m, rules.indexOf('\n      }', m));

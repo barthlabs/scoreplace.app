@@ -979,7 +979,7 @@ function renderBracket(container, tournamentId, isInline) {
       if (!container.firstElementChild) container.innerHTML = (typeof window._renderBallLoader === 'function')
         ? window._renderBallLoader('Carregando chaveamento…', { minHeight: '40vh', bar: true })
         : '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Carregando chaveamento…</div>';
-      window.FirestoreDB.db.collection('tournaments').doc(tId).get().then(function(doc) {
+      window.FirestoreDB._tRef(tId).get().then(function(doc) {
         if (doc.exists) {
           const tLoaded = Object.assign({ id: doc.id }, doc.data());
           if (!window.AppStore.publicDiscovery) window.AppStore.publicDiscovery = [];

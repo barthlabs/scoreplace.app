@@ -47,7 +47,10 @@ const SUITES = [
   // MAGRO: saía com 14 inscritos e 0 jogos, gravado com `_semPesados` prometendo partes que
   // NINGUÉM pode escrever (a regra nega o cliente; a CF pula o que está no marcador). Agora
   // ele lê o original COMPLETO pela porta canônica, PROVA a igualdade e só então grava.
-  'tests/sandbox-e-replica-fiel.test.js',
+  // O cliente não fabrica mais sandbox: ele PEDE à CF (só o id) e ROTEIA a coleção. A
+  // fidelidade em si é provada no Emulator (tests/sandbox-cf-emulador.test.js, fora da
+  // suíte unitária porque sobe Firestore+Auth+Functions).
+  'tests/sandbox-cliente-roteia-e-nao-fabrica.test.js',
   // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
   // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
   // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o

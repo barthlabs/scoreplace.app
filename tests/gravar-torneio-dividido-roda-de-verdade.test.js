@@ -39,14 +39,25 @@ const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
 // ── recorta o bloco REAL (pelo construto, nunca por linha fixa) ───────────────────
 const ini = db.indexOf("var _fora = Array.isArray(cleanData._semPesados)");
 ok(ini > 0, 'achei o bloco que divide na gravação');
-const fim = db.indexOf("await this.db.collection('tournaments')", ini);
+/* ⚠️ 2.1.87: a linha que grava virou `this._tRef(docId)` (roteamento tournaments/sandboxes).
+ * O `indexOf` da linha antiga achava uma ocorrência LÁ NA FRENTE e o recorte engolia um
+ * `await` — o `new Function` estourava SyntaxError. A âncora é a linha que grava, seja qual
+ * for a porta. */
+const fim = db.indexOf("await this._tRef(docId).set(cleanData", ini);
 ok(fim > ini, 'e o fim dele (a linha que grava)');
 const bloco = db.slice(ini, fim);
 
 /* O bloco roda com EXATAMENTE o que ele tem em escopo de verdade: `cleanData`, `docId` e
  * `window`. Se ele alcançar qualquer outro nome — como o `S` de outra função —, é
  * ReferenceError aqui, que é o ponto. `await` não aparece no trecho recortado. */
-const rodar = new Function('cleanData', 'docId', 'window', bloco + '\n return cleanData;');
+const _corpo = new Function('cleanData', 'docId', 'window', bloco + '\n return { doc: cleanData, sbPartes: _sbPartesSave };');
+/* ⭐ COM `this`, porque o bloco REAL roda como método de `FirestoreDB` — e desde a 2.1.87
+ * ele pergunta `this._ehSandbox(docId)` (num sandbox as partes têm que ser gravadas pelo
+ * cliente: não existe CF espelhando `sandboxes/`). Rodar sem `this` daria "undefined is not
+ * a function" AQUI e passaria a impressão de regressão do fonte — o oposto do que este teste
+ * existe pra medir. */
+const rodar = (t, id, win, ehSb) => _corpo.call({ _ehSandbox: () => !!ehSb }, t, id, win).doc;
+const rodarSb = (t, id, win) => _corpo.call({ _ehSandbox: () => true }, t, id, win);
 
 const novoTorneio = {
   id: 'tour_TESTE', name: 'T', creatorUid: 'u1', status: 'open',
@@ -79,6 +90,24 @@ ok(!erro2, '⛔ também não lança com elenco e jogos'
    + (erro2 ? '  →  ' + erro2.constructor.name + ': ' + erro2.message : ''));
 ok(saiu2 && saiu2._nPartes && saiu2._nPartes.participants === 2,
    'e conta os 2 inscritos que foram morar fora — got ' + (saiu2 && saiu2._nPartes && saiu2._nPartes.participants));
+
+/* ── ④ SANDBOX: O MESMO BLOCO TEM QUE DEIXAR AS PARTES NA MÃO DE QUEM GRAVA (2.1.87) ──
+ * Num torneio real este bloco só limpa o documento: quem escreve a subcoleção é a CF. Mas o
+ * gatilho dela observa `tournaments/{tid}` e NÃO enxerga `sandboxes/` — então, no sandbox, o
+ * marcador (`_nPartes`) prometeria partes que ninguém escreveria. É o mesmo defeito do "14
+ * inscritos e 0 jogos", só que no save em vez de na criação. */
+console.log('\n④ Num SANDBOX, as partes saem separadas pra serem gravadas (não só removidas)');
+const _sbSaida = rodarSb(JSON.parse(JSON.stringify(cheio)), 'sb_TESTE', win);
+ok(_sbSaida && _sbSaida.sbPartes, '⭐ o bloco separa as partes quando o alvo é sandbox');
+ok(_sbSaida && _sbSaida.sbPartes && (_sbSaida.sbPartes.participants || []).length === 2,
+   '   e são as MESMAS que o marcador promete (2 inscritos)');
+ok(_sbSaida && _sbSaida.doc && _sbSaida.doc._nPartes && _sbSaida.doc._nPartes.participants === 2,
+   '   marcador e partes contam a mesma coisa — promessa com dono');
+/* CONTROLE VERMELHO: fora do sandbox o bloco NÃO pode separar nada, senão o cliente passaria
+ * a tentar escrever subcoleção de torneio real — onde a regra nega e sempre negou. */
+const _realSaida = _corpo.call({ _ehSandbox: () => false }, JSON.parse(JSON.stringify(cheio)), 'tour_TESTE', win);
+ok(_realSaida && !_realSaida.sbPartes,
+   '⛔ CONTROLE: em torneio REAL ele não separa parte nenhuma — lá quem escreve é a CF');
 
 console.log('\n③ O símbolo de outro escopo não volta');
 ok(!/\(S\.PESADOS/.test(db),

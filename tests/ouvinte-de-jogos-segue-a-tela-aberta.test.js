@@ -33,8 +33,12 @@ const corpo = store.slice(i, store.indexOf('\n  },', j) + 4);
 let soltas = 0, assinou = null;
 const fakeDb = { collection: () => ({ doc: () => ({ collection: () => ({
   onSnapshot: (f, e) => { assinou = f; return function () { soltas++; }; } }) }) }) };
+/* ⚠️ 2.1.87: o ouvinte passou a pedir a subcoleção por `FirestoreDB._tSub(id, parte)` — a
+ * porta única que decide entre `tournaments` e `sandboxes`. O harness dá a MESMA porta (o
+ * roteamento em si é provado em sandbox-cliente-roteia-e-nao-fabrica). */
+const _tSub = () => fakeDb.collection().doc().collection();
 const ctx = {
-  window: { FirestoreDB: { db: fakeDb }, _tSplit: {
+  window: { FirestoreDB: { db: fakeDb, _tSub: _tSub }, _tSplit: {
       remontar: (p) => Object.assign({}, p.config, { _montado: p.matches.length }) },
     _softRefreshView: () => {}, _error: () => {}, _warn: () => {}, _noteFsReads: () => {} },
   JSON: JSON

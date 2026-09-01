@@ -161,7 +161,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     }
 
     // Fetch tournament
-    db.collection('tournaments').doc(tId).get()
+    window.FirestoreDB._tRef(tId).get()
       .then(function(doc) {
         if (!doc.exists) throw new Error('Torneio não encontrado');
         var t = Object.assign({ id: doc.id }, doc.data());
@@ -271,7 +271,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           invitedAt: new Date().toISOString(),
           invitedBy: cu.uid || cu.email
         };
-        return db.collection('tournaments').doc(tId).update({
+        return window.FirestoreDB._tRef(tId).update({
           arbitros: firebase.firestore.FieldValue.arrayUnion(entry)
         });
       })
@@ -306,7 +306,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       confirmedAt: new Date().toISOString(),
       invitedBy:   cu.uid || cu.email
     };
-    db.collection('tournaments').doc(tId).update({
+    window.FirestoreDB._tRef(tId).update({
       arbitros: firebase.firestore.FieldValue.arrayUnion(entry)
     }).then(function() {
       if (typeof window.showNotification === 'function') {
@@ -329,7 +329,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!db || !uid || !tId) return;
 
     // We need to find the exact entry to remove (arrayRemove needs deep equality)
-    db.collection('tournaments').doc(tId).get()
+    window.FirestoreDB._tRef(tId).get()
       .then(function(snap) {
         if (!snap.exists) throw new Error('Torneio não encontrado');
         var t = snap.data();
@@ -339,7 +339,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           if (arbitros[i].uid === uid) { entry = arbitros[i]; break; }
         }
         if (!entry) throw new Error('Árbitro não encontrado');
-        return db.collection('tournaments').doc(tId).update({
+        return window.FirestoreDB._tRef(tId).update({
           arbitros: firebase.firestore.FieldValue.arrayRemove(entry)
         });
       })

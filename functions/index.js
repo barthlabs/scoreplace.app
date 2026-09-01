@@ -8713,3 +8713,196 @@ exports.removeFriend = onCall(_AMIZADE_OPTS, async (request) => {
   const r = await _amizadeAplicar("remover", caller, String((request.data || {}).friendUid || ""));
   return { ok: true, evento: r.evento };
 });
+
+/* ═══ createSandbox — A CÓPIA FIEL, FEITA NO SERVIDOR (FIX.SANDBOX.P2, 2.1.87) ══════════
+ *
+ * INVARIANTE DO DONO (01/set/2026): _"O sandbox é uma réplica fiel do original. Qualquer
+ * diferença de estado além de id técnico, isSandbox/sandboxOf/sandboxOwnerUid e estado
+ * técnico de criação, notificações suprimidas e estatísticas históricas pessoais
+ * suprimidas é defeito bloqueante."_ · _"Não é permitido simplificar, limpar, reconstruir,
+ * normalizar, reduzir, mover ou substituir participants, inscritos, memberUids, coHosts,
+ * adminUids, jogos, resultados, fases, rankings, classificações congeladas, W.O., espera,
+ * suplentes, histórico, progresso, barras, chaves; nem a forma persistida."_
+ *
+ * ⛔ POR QUE ISTO TEM QUE SER SERVIDOR — e não podia ser cliente:
+ *   · o cliente NÃO PODE escrever as subcoleções (`firestore.rules`: `allow write: if
+ *     false` em inscritos/matches/opponentHistory/...). Um sandbox DIVIDIDO criado pelo
+ *     cliente prometia `_nPartes` que ninguém preenchia — foi o "14 inscritos e 0 jogos";
+ *   · e o objeto que o cliente tem em mãos é o documento MAGRO (as partes chegam depois),
+ *     então clonar dali JÁ NASCE incompleto.
+ *   ⇒ aqui roda o Admin SDK: lê o original inteiro, PROVA, e escreve as partes.
+ *
+ * ⭐ A ÚNICA exceção de forma persistida, autorizada pelo dono:
+ *      tournaments/{id}/results/{matchId} → sandboxes/{id}/resultsSandbox/{matchId}
+ *   Motivo: a regra de COLLECTION GROUP `/{path=**}/results/{matchId}` não pode ser
+ *   escopada por coleção-pai (limitação da plataforma, não escolha). Como a cópia é FIEL,
+ *   ela preserva `playerUids` reais — mantendo o nome, o participante real passaria por
+ *   aquela regra e leria os resultados do sandbox. Muda SÓ o nome do caminho: ids, campos,
+ *   placares e contagens vão byte a byte.
+ *
+ * ⚠️ `creating` → `ready`: o documento nasce com `sbState:'creating'` e só vira `'ready'`
+ * DEPOIS da prova canônica. O cliente só lista/abre o que está `ready`, então falha no meio
+ * não deixa sandbox utilizável.
+ */
+const SB_IDENTIDADES_DE_TESTE = [
+  "rstbarth@gmail.com", "B17n7JCXYOfqahlcLZ0fKxGGyUu1",
+  "rstbarth@hotmail.com",
+  "nelsonterrabarth@gmail.com", "9r1I1brrTecENuQKXYWpAqTmBbQ2",
+];
+/* ⛔ A LISTA VIVE NO SERVIDOR. No cliente ela é `window.SP_TEST_IDENTITIES` e qualquer um
+ * a reescreve no console; aqui ela é autoridade. Mesmo conteúdo, dono diferente. */
+function _sbEhIdentidadeDeTeste(uid, email) {
+  const u = String(uid || "").toLowerCase();
+  const e = String(email || "").toLowerCase();
+  return SB_IDENTIDADES_DE_TESTE.some((x) => {
+    const k = String(x).toLowerCase();
+    return k && (k === u || k === e);
+  });
+}
+
+/* JSON canônico (chaves ordenadas) — a régua da prova de igualdade. */
+function _sbCanon(v) {
+  if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
+  if (Array.isArray(v)) return "[" + v.map(_sbCanon).join(",") + "]";
+  return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + _sbCanon(v[k])).join(",") + "}";
+}
+
+/* Campos que PODEM diferir. Tudo que não está aqui tem que sair idêntico. */
+const SB_ENVELOPE = [
+  "id", "name", "isSandbox", "sandboxOf", "sandboxOwnerUid", "sandboxId", "sbState",
+  "sandboxSyncedAt", "notificationsMuted", "isPublic",
+  "creatorUid", "organizerEmail", "organizerName", "createdAt", "updatedAt",
+  "remindersSent", "finishNotifiedAt", "nextDrawAt", "lastAutoDrawAt",
+];
+
+exports.createSandbox = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 300, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const db = admin.firestore();
+
+    // ── ① AUTORIZAÇÃO ESTRITA, no servidor ──────────────────────────────────
+    const perfil = await db.collection("users").doc(callerUid).get().catch(() => null);
+    const email = (perfil && perfil.exists && (perfil.data() || {}).email) || "";
+    if (!_sbEhIdentidadeDeTeste(callerUid, email)) {
+      throw new HttpsError("permission-denied", "sandbox é só para a identidade de teste");
+    }
+
+    // ⛔ O CLIENTE MANDA UM ID E MAIS NADA. Nenhum payload de torneio é aceito — é o que
+    // impede "cópia fiel" de virar "o que o cliente disser que é a cópia".
+    const origId = String(((request.data || {}).originalTournamentId) || "");
+    if (!origId) throw new HttpsError("invalid-argument", "originalTournamentId é obrigatório");
+
+    // ── ② IDEMPOTÊNCIA: já existe um sandbox PRONTO deste original para este dono? ──
+    const jaTem = await db.collection("sandboxes")
+      .where("sandboxOwnerUid", "==", callerUid)
+      .where("sandboxOf", "==", origId)
+      .where("sbState", "==", "ready").limit(1).get();
+    if (!jaTem.empty) return { ok: true, id: jaTem.docs[0].id, reaproveitado: true };
+
+    // ── ③ LÊ O ORIGINAL CANÔNICO E COMPLETO ─────────────────────────────────
+    const origRef = db.collection("tournaments").doc(origId);
+    const origSnap = await origRef.get();
+    if (!origSnap.exists) throw new HttpsError("not-found", "torneio original não existe");
+    const cfg = origSnap.data() || {};
+    if (cfg.isSandbox === true) throw new HttpsError("failed-precondition", "não se cria sandbox de sandbox");
+
+    // TODAS as subcoleções que o original de fato tem — enumeradas, não adivinhadas.
+    const subRefs = await origRef.listCollections();
+    const partes = {};
+    for (const c of subRefs) {
+      const snap = await c.get();
+      partes[c.id] = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+    }
+
+    // ── ④ VALIDA AS CONTAGENS PROMETIDAS, ANTES DE ESCREVER ─────────────────
+    const S = require("./vendor/tournament-split-core.js");   // cópia gerada (copy-vendor)
+    const fora = Array.isArray(cfg._semPesados) ? cfg._semPesados : [];
+    const faltas = [];
+    const colecaoDaParte = (nome) => (typeof S.colecaoDaParte === "function" ? S.colecaoDaParte(nome) : nome);
+    for (const nome of fora) {
+      const col = colecaoDaParte(nome);
+      const veio = (partes[col] || []).length;
+      const prometido = (cfg._nPartes || {})[nome];
+      if (prometido != null && veio !== prometido) faltas.push(nome + ": " + veio + " de " + prometido);
+    }
+    if (cfg._nJogos != null) {
+      const nj = (partes.matches || []).length;
+      if (nj !== cfg._nJogos) faltas.push("_nJogos: " + nj + " de " + cfg._nJogos);
+    }
+    if (faltas.length) {
+      throw new HttpsError("failed-precondition", "original incompleto — " + faltas.join(", "));
+    }
+
+    // ── ⑤ ESCREVE: `creating` (invisível) + parent + TODAS as subcoleções ───
+    const sbId = "sb_" + origId + "_" + Date.now();
+    const sbRef = db.collection("sandboxes").doc(sbId);
+    const envelope = {
+      id: sbId,
+      name: "(SB) " + String(cfg.name || "Torneio"),
+      isSandbox: true, sandboxOf: String(origId), sandboxOwnerUid: callerUid,
+      sbState: "creating",                       // ⛔ invisível até a prova
+      notificationsMuted: true,                  // notificações suprimidas
+      isPublic: false,
+      creatorUid: callerUid,
+      organizerEmail: email || "",
+      organizerName: (perfil && perfil.exists && (perfil.data() || {}).displayName) || "",
+      createdAt: new Date().toISOString(),
+      sandboxSyncedAt: Date.now(),
+    };
+    // ⭐ o documento sai do original INTEIRO e só o envelope é sobreposto. memberUids,
+    // coHosts, adminUids, participants, phases, rounds, _semPesados, _nPartes, _nJogos —
+    // tudo passa como está. É isso que "mesma forma persistida" quer dizer.
+    const sbDoc = Object.assign({}, cfg, envelope);
+    delete sbDoc.sandboxId;
+    await sbRef.set(sbDoc);
+
+    let escritos = 0;
+    for (const col of Object.keys(partes)) {
+      const destino = (col === "results") ? "resultsSandbox" : col;   // a única exceção
+      let lote = db.batch(); let n = 0;
+      for (const d of partes[col]) {
+        lote.set(sbRef.collection(destino).doc(d.id), d.data);        // id e campos byte a byte
+        n++; escritos++;
+        if (n >= 400) { await lote.commit(); lote = db.batch(); n = 0; }
+      }
+      if (n > 0) await lote.commit();
+    }
+
+    // ── ⑥ PROVA CANÔNICA, relendo o que foi gravado ─────────────────────────
+    const difs = [];
+    const relido = (await sbRef.get()).data() || {};
+    const chaves = new Set(Object.keys(cfg).concat(Object.keys(relido)));
+    for (const k of chaves) {
+      if (SB_ENVELOPE.indexOf(k) !== -1) continue;
+      if (_sbCanon(cfg[k]) !== _sbCanon(relido[k])) difs.push("campo:" + k);
+    }
+    for (const col of Object.keys(partes)) {
+      const destino = (col === "results") ? "resultsSandbox" : col;
+      const snap = await sbRef.collection(destino).get();
+      if (snap.size !== partes[col].length) {
+        difs.push(destino + ": " + snap.size + " de " + partes[col].length);
+        continue;
+      }
+      const porId = {}; snap.docs.forEach((d) => { porId[d.id] = d.data(); });
+      for (const d of partes[col]) {
+        if (_sbCanon(porId[d.id]) !== _sbCanon(d.data)) { difs.push(destino + "/" + d.id); break; }
+      }
+    }
+    if (difs.length) {
+      // ⛔ NÃO deixa sandbox parcial utilizável: some com o que foi escrito e falha.
+      await db.recursiveDelete(sbRef).catch(() => {});
+      throw new HttpsError("internal", "cópia divergente — " + difs.slice(0, 6).join(", "));
+    }
+
+    // ── ⑦ só agora fica visível ─────────────────────────────────────────────
+    await sbRef.update({ sbState: "ready" });
+    /* ⭐ `envelope` VAI NA RESPOSTA de propósito: é a lista viva do que pode diferir, e é
+     * contra ELA que o controle da suíte cobra as duas exceções da 2.1.86 (membership
+     * trocada, `_semPesados` removido). Teste que carrega a própria cópia da lista fica
+     * verde no dia em que alguém afrouxa a de verdade. */
+    return { ok: true, id: sbId, docsCopiados: escritos, subcolecoes: Object.keys(partes).length,
+      envelope: SB_ENVELOPE.slice() };
+  }
+);

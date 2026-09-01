@@ -48,7 +48,10 @@ ok(/Não consegui lançar o placar/.test(bloco),
 const iE = db.indexOf('async enfileirarPlacar(');
 ok(iE > 0, 'o enfileirador existe');
 const enf = db.slice(iE, iE + 3000);
-ok(/collection\('resultQueue'\)/.test(enf),
+/* ⚠️ 2.1.87: a porta passou a ser `_tSub(tId,'resultQueue')` — o mesmo `collection`, com o
+ * roteamento tournaments/sandboxes num lugar só. O que este teste cobra é o mesmo: escrita
+ * COMUM de Firestore (é ela que o SDK entrega sozinho quando a rede volta), não uma chamável. */
+ok(/_tSub\([^)]*'resultQueue'\)/.test(enf),
   '⭐ escrita comum de Firestore — o SDK entrega sozinho quando a rede volta');
 ok(!/await this\.db[\s\S]{0,120}resultQueue[\s\S]{0,120}\.set\(/.test(enf),
   '⛔ e NÃO espera a promessa: offline ela só resolve quando a rede voltar, travaria a tela');
@@ -74,7 +77,10 @@ ok(/merge: true/.test(q) && !/\.delete\(\)/.test(q),
   '⛔ o item da fila NÃO é apagado: é o recibo do que a pessoa mandou');
 
 // ── ⑤ a regra: só criar, só em nome próprio ─────────────────────────────────
-const iR = rules.indexOf('match /resultQueue/{itemId}');
+/* ⚠️ ÂNCORA DEPOIS DE `tournaments` (2.1.87): existe um segundo `match /resultQueue/{itemId}`
+ * no arquivo — o do bloco `sandboxes`, que nega escrita a todo mundo. `indexOf` solto caía
+ * nele e cobrava a regra do torneio real no bloco errado. */
+const iR = rules.indexOf('match /resultQueue/{itemId}', rules.indexOf('match /tournaments/{tournamentId}'));
 ok(iR > 0, 'a fila tem regra');
 const r = _R.ateSairDoBloco(rules, iR);
 ok(/request\.resource\.data\.actorUid == request\.auth\.uid/.test(r),

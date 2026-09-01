@@ -9,51 +9,23 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // isolamento. Depois um trigger de CF (Etapa 3) espelha o roster do original → SB. As
 // ÚNICAS diferenças: notificações mudas, stats/resultados não vazam, invisível pra não-dev.
 // Só o dev (_isTestIdentity) enxerga/usa. Ver memória project_sandbox_tournament.
-/* ⭐ O ENVELOPE DO SANDBOX — a ÚNICA coisa que pode diferir do original.
- * Recebe a cópia FIEL e devolve o sandbox. Não simplifica, não limpa, não reconstrói e não
- * normaliza NADA do estado do torneio: participantes, inscrições, jogos, resultados, fases,
- * classificações congeladas, W.O., espera, histórico e chaves passam INTACTOS.
- * A lista do que muda é a mesma de `_sbCore.ENVELOPE`, e é ela que o teste cobra. */
-window._sbAplicaEnvelope = function (completo, sbId, cu, nomeOriginal, origId) {
-    var sb = completo;                                  // já é uma cópia; não re-clona
-    sb.id = sbId;
-    sb.name = '(SB) ' + String(nomeOriginal || 'Torneio');
-    sb.isSandbox = true;
-    sb.sandboxOf = String(origId);
-    sb.notificationsMuted = true;   // notificações suprimidas
-    sb.isPublic = false;            // privado
-    sb.sandboxOwnerUid = cu.uid;
-    sb.creatorUid = cu.uid;         // dev = admin do SB (autoriza drawRound/reset)
-    sb.organizerEmail = cu.email || '';
-    sb.organizerName = cu.displayName || '';
-    sb.createdAt = new Date().toISOString();
-    sb.sandboxSyncedAt = Date.now();
-    delete sb.sandboxId;            // SB não tem SB próprio
-    // ⚠️ ENTREGA, não estado do torneio. O clone trouxe memberUids/coHosts/admin* do
-    // ORIGINAL — os uids de TODAS as pessoas reais. Enquanto eles estiverem aqui, o Firestore
-    // ENTREGA o doc do SB no listener (`memberUids array-contains`) de cada uma delas: 152
-    // pessoas recebendo um torneio fantasma. `participants` (o elenco, que É o estado)
-    // continua íntegro e é dele que o motor sorteia. Ver [[project_sandbox_tournament]].
-    sb.memberUids = [cu.uid];
-    sb.coHosts = [];                // co-host do original não administra (nem vê) o SB
-    sb.adminUids = [cu.uid];
-    sb.adminEmails = cu.email ? [String(cu.email).toLowerCase()] : [];
-    /* ⛔ O SANDBOX NASCE INTEIRO. Sem estes marcadores tudo mora no DOCUMENTO — e é isso que
-     * torna a cópia provável na hora, sem depender de ninguém escrever as partes depois.
-     * Gravar `_semPesados` aqui seria prometer subcoleções que NINGUÉM pode escrever: o
-     * cliente não pode (firestore.rules: `allow write: if false`) e a CF do espelho pula
-     * justamente o que está no marcador. Foi assim que o SB saiu com 14 inscritos e 0 jogos. */
-    delete sb._semPesados; delete sb._nPartes; delete sb._nJogos;
-    delete sb._nGrupos; delete sb._partesQueFaltam;
-    return sb;
-};
+/* ⛔ `_sbAplicaEnvelope` FOI REMOVIDA (2.1.87). Ela montava o envelope do sandbox no
+ * CLIENTE; hoje quem monta é a Cloud Function `createSandbox`, que é também quem prova a
+ * igualdade canônica. Manter as duas seria manter DUAS definições do que pode diferir
+ * entre original e sandbox — e a que o cliente usasse venceria a que o servidor prova.
+ * A lista viva é `SB_ENVELOPE`, em functions/index.js. */
 
-/* ⛔ NUNCA CRIA A PARTIR DO OBJETO DA TELA. Carrega o original COMPLETO pela porta canônica
- * (documento fresco + subcoleções + hidratação), PROVA que as partes cumprem o que o
- * documento prometeu e que o sandbox é canonicamente igual — e só então grava e navega.
- * Falhou ou veio incompleto: não grava documento parcial, não navega, avisa e deixa tentar
- * de novo. Ordem do dono: _"se a cópia não puder provar igualdade canônica de tudo isso
- * antes de ficar visível, ela NÃO serve, NÃO pode ser aberta"_. */
+/* ⛔ A CRIAÇÃO SAIU DO CLIENTE (FIX.SANDBOX.P2, 2.1.87). Agora é a Cloud Function
+ * `createSandbox`, e ela recebe UM id — mais nada.
+ *
+ * POR QUE: o cliente NÃO PODE escrever as subcoleções (`firestore.rules`: `allow write:
+ * if false`). Um sandbox DIVIDIDO fabricado aqui prometia `_nPartes` que ninguém
+ * preenchia — foi o "14 inscritos e 0 jogos". E o objeto que o cliente tem em mãos é o
+ * documento MAGRO (as partes chegam depois), então clonar dali já nasce incompleto.
+ * No servidor o Admin SDK lê o original inteiro, PROVA a igualdade canônica e escreve as
+ * partes; o documento nasce `creating` e só vira `ready` depois da prova.
+ * ⛔ NÃO mandar payload de torneio daqui: "cópia fiel" viraria "o que o cliente disser
+ * que é a cópia". Ver functions/index.js → createSandbox. */
 window._criaSandboxFiel = async function (origId, cu) {
     var _erro = function (titulo, detalhe) {
         if (window._error) window._error('[sandbox] ' + titulo, detalhe);
@@ -62,40 +34,26 @@ window._criaSandboxFiel = async function (origId, cu) {
         }
         return { ok: false, motivo: titulo, detalhe: detalhe };
     };
-    if (!window.FirestoreDB || typeof window.FirestoreDB.loadTournamentById !== 'function') {
-        return _erro('sem-porta', 'Não consegui ler o torneio original.');
+    if (!window.firebase || !firebase.functions) return _erro('sem-porta', 'Não consegui falar com o servidor.');
+    var r;
+    try {
+        var call = firebase.app().functions('us-central1').httpsCallable('createSandbox');
+        r = await call({ originalTournamentId: String(origId) });   // ⬅ só o id
+    } catch (e) {
+        var msg = (e && e.message) || 'A criação falhou no servidor.';
+        return _erro((e && e.code) || 'falhou', msg);
     }
-    // ① o original COMPLETO — documento fresco + partes + hidratação (porta canônica)
-    var completo = null;
-    try { completo = await window.FirestoreDB.loadTournamentById(origId); }
-    catch (e) { return _erro('leitura-falhou', 'A leitura do torneio original falhou.'); }
-    if (!completo) return _erro('leitura-vazia', 'A leitura do torneio original voltou vazia.');
-    // ② as partes cumprem o que o documento prometeu?
-    var chk = window._sbPartesCompletas ? window._sbPartesCompletas(completo) : { ok: true, faltas: [] };
-    if (!chk.ok) {
-        return _erro('partes-incompletas', 'O original chegou incompleto (' +
-            chk.faltas.map(function (f) { return f.parte + ': ' + f.veio + ' de ' + f.prometido; }).join(', ') + ').');
-    }
-    // ③ envelope sobre a cópia fiel
-    var origParaProva = JSON.parse(JSON.stringify(completo));   // retrato do original ANTES do envelope
-    var sbId = 'tour_' + Date.now() + '_sb';
-    var sb = window._sbAplicaEnvelope(completo, sbId, cu, origParaProva.name, origId);
-    // ④ PROVA a igualdade canônica ANTES de gravar
-    var prova = window._sbProvaIgualdade ? window._sbProvaIgualdade(origParaProva, sb) : { ok: true, diferencas: [] };
-    if (!prova.ok) {
-        return _erro('copia-divergente', 'A cópia saiu diferente do original em: ' +
-            prova.diferencas.slice(0, 4).map(function (d) { return d.campo; }).join(', ') + '.');
-    }
-    var prog = window._sbProvaProgresso ? window._sbProvaProgresso(origParaProva, sb) : { ok: true };
-    if (!prog.ok) return _erro('progresso-divergente', 'O progresso da cópia não bateu com o do original.');
-    // ⑤ só agora grava e navega
-    window.AppStore.addTournament(sb);
+    var d = (r && r.data) || {};
+    if (!d.ok || !d.id) return _erro('sem-resposta', 'O servidor não confirmou a criação.');
     if (typeof showNotification === 'function') {
-        showNotification('🧪 Sandbox criado', '"' + sb.name + '" — réplica fiel: ' +
-            ((sb.participants || []).length) + ' inscritos, ' + prog.sb.total + ' jogos.', 'success');
+        showNotification('🧪 Sandbox ' + (d.reaproveitado ? 'aberto' : 'criado'),
+          '"(SB)" — réplica fiel provada no servidor' + (d.docsCopiados ? (' (' + d.docsCopiados + ' documentos)') : '') + '.', 'success');
     }
-    setTimeout(function () { window.location.hash = '#tournaments/' + sbId; }, 400);
-    return { ok: true, id: sbId, progresso: prog.sb };
+    // o ouvinte de `sandboxes` traz o documento; até lá, já sabemos rotear este id.
+    window._sbIdsConhecidos = window._sbIdsConhecidos || {};
+    window._sbIdsConhecidos[d.id] = true;
+    setTimeout(function () { window.location.hash = '#tournaments/' + d.id; }, 400);
+    return { ok: true, id: d.id };
 };
 
 window._openOrCreateSandbox = function(origId) {
