@@ -2911,6 +2911,29 @@ function renderTournaments(container, tournamentId = null) {
         let sortearBtn = '';
         let sortearAberto = '';
         if (isOrg) {
+            /* ── "AVANÇAR DE FASE" É UM BOTÃO SÓ, E ELE MORA AQUI ────────────────────────
+             * ⛔ Havia DOIS nas Ferramentas do Organizador, lado a lado, disparando a MESMA
+             * `_advanceMultiPhase`: este (dentro do ramo `isLigaAutoDraw`, rotulado
+             * "⏭️ Avançar de Fase") e uma segunda renderização direta no bloco "v4.4.50"
+             * lá embaixo ("🏆 Avançar de fase"). Medido no render real da Confra: 2 botões.
+             * A segunda saiu.
+             * ⚠️ E o cálculo SUBIU pra fora do ramo de propósito. Medido nas três formas:
+             * sem `isLigaAutoDraw` (drawFirstDate vazio, ou drawManual) o `sortearBtn` NÃO
+             * tinha botão de avanço nenhum — quem servia aquelas era justamente o bloco
+             * removido. Apagar só ele deixaria esses torneios SEM ação de avanço nas
+             * Ferramentas. Aqui em cima, a condição é a mesma de antes e vale pros três
+             * ramos: exatamente UM botão, sempre.
+             * ⛔ A regra de avanço não muda: mesma `_phaseCanAdvance`, mesma
+             * `_advanceMultiPhase`. O botão CONTEXTUAL da chave (bracket.js) é outra coisa
+             * e continua independente. */
+            var _phaseCanAdvance = !isFinished && window._isMultiPhase && window._isMultiPhase(t) &&
+                window._phasesPhaseComplete && window._phasesPhaseComplete(t) &&
+                ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length);
+            var _advBtn = '';
+            if (_phaseCanAdvance) {
+                var _nextPhNm = window._safeHtml(((t.phases[(t.currentPhaseIndex || 0) + 1] || {}).name) || 'próxima fase');
+                _advBtn = `<button class="btn btn-success hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._advanceMultiPhase('${t.id}')" title="Sorteia ${_nextPhNm} pela classificação e configuração do torneio">⏭️ Avançar de Fase</button>`;
+            }
             if (isLigaAutoDraw) {
                 // v2.7.82: o sorteio é automático, então o botão manual era OMITIDO.
                 // Mas o organizador ainda pode precisar sortear na mão (ex.: auto-draw
@@ -2943,15 +2966,7 @@ function renderTournaments(container, tournamentId = null) {
                     var _faseEhElim = window._currentPhaseIsElimination(t);
                     var _adManualLbl = hasDraw ? '🎲 Rodada Extra (manual)' : '🎲 Sortear agora (manual)';
                     var _manualBtn = _faseEhElim ? '' : `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._confirmManualAutoDraw('${t.id}')">${_adManualLbl}</button>`;
-                    var _phaseCanAdvance = window._isMultiPhase && window._isMultiPhase(t) &&
-                        window._phasesPhaseComplete && window._phasesPhaseComplete(t) &&
-                        ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length);
-                    var _advBtn = '';
-                    if (_phaseCanAdvance) {
-                        var _nextPhNm = window._safeHtml(((t.phases[(t.currentPhaseIndex || 0) + 1] || {}).name) || 'próxima fase');
-                        _advBtn = `<button class="btn btn-success hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window._advanceMultiPhase('${t.id}')" title="Sorteia ${_nextPhNm} pela classificação e configuração do torneio">⏭️ Avançar de Fase</button>`;
-                    }
-                    sortearBtn = _advBtn + _manualBtn;
+                    sortearBtn = _manualBtn;   // o "Avançar de Fase" entra depois, uma vez só, pros três ramos
                 }
             } else if (isLigaFormat && t.drawManual) {
                 sortearBtn = (t.status === 'closed' && !hasDraw) ? `<button class="btn btn-warning hover-lift${_glowGame}" onclick="event.stopPropagation(); window._drawBtnBusy&&window._drawBtnBusy(this,'${t.id}'); window.generateDrawFunction('${t.id}')">🎲 Sortear</button>` : '';
@@ -2977,6 +2992,9 @@ function renderTournaments(container, tournamentId = null) {
                 if (sortearBtn) sortearBtn = _busyBtn;
                 if (sortearAberto) sortearAberto = _busyBtn;
             }
+            // ⭐ O "Avançar de Fase" entra POR ÚLTIMO e UMA VEZ SÓ — depois do troca-por-"Sorteando…"
+            // acima, que é sobre o SORTEIO e não deve engolir a ação de avançar.
+            if (_advBtn) sortearBtn = _advBtn + sortearBtn;
         }
 
         if (tournamentId) {
@@ -3557,11 +3575,16 @@ function renderTournaments(container, tournamentId = null) {
                       _setPhaseLateEnrollment DELETADAS (v1.3.66). Pedido do dono. */ ''}
                 ${sortearBtn}
                 ${sortearAberto}
-                ${/* v4.4.50: "Avançar de fase" também nas Ferramentas do Organizador — mesma
-                      condição do banner do bracket (multi-fase, fase atual concluída, existe
-                      próxima fase). _advanceMultiPhase abre o painel de resolução se a chave
-                      da próxima fase não for pow2. */ ''}
-                ${(isOrg && !isFinished && window._isMultiPhase && window._isMultiPhase(t) && window._phasesPhaseComplete && window._phasesPhaseComplete(t) && ((t.currentPhaseIndex || 0) + 1) < ((t.phases || []).length)) ? `<button class="btn btn-success hover-lift btn-shine" onclick="event.stopPropagation(); window._advanceMultiPhase('${t.id}')">🏆 Avançar de fase</button>` : ''}
+                ${/* ⛔ REMOVIDO: a segunda renderização de "Avançar de fase" (bloco v4.4.50).
+                      Ela criava "🏆 Avançar de fase" sob a MESMA condição do "⏭️ Avançar de
+                      Fase" que já vem em `sortearBtn` logo acima — os dois apareciam LADO A
+                      LADO nas Ferramentas, disparando a mesma `_advanceMultiPhase` (medido no
+                      render real: 2 botões). Agora o botão é UM SÓ e nasce em `sortearBtn`,
+                      calculado fora do ramo `isLigaAutoDraw` pra valer nos três ramos.
+                      ⚠️ NÃO reintroduzir aqui: quem quiser mudar rótulo/condição mexe no
+                      `_advBtn`, que é o único lugar. O botão da CHAVE (bracket.js) é outra
+                      ação, no contexto dela, e continua independente.
+                      Travado por tests/avancar-de-fase-e-um-botao-so.test.js. */ ''}
                 ${(!isFinished && hasDraw && !window._isLigaFormat(t)) ? `<button class="btn btn-tool-amber hover-lift" onclick="event.stopPropagation(); window.finishTournament('${t.id}')">🏁 ${_t('org.finishTournament')}</button>` : ''}
                 ${/* v2.6.29/31: botão "Configurar Playoffs (Fase Final)" removido e o
                       módulo de playoff (tournaments-playoff.js, rota #fase-final,

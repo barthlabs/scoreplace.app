@@ -33,6 +33,11 @@ const SUITES = [
   // que a TELA mostrava no instante anterior. Fecha no oráculo de produção da Confra:
   // 105 jogos na fase 0, 70 duplas, 100 jogos, 140 top-4, nenhum 5º, Rodada 2 e 0/100.
   'tests/congelada-nasce-no-avanco-e-nunca-muda.test.js',
+  // Havia DOIS "Avançar de fase" nas Ferramentas do Organizador, lado a lado, disparando a
+  // MESMA _advanceMultiPhase (medido no render real: 2 botões). Este mede o HTML que
+  // renderTournaments produz — e cobre as três formas, porque o _advBtn só existia dentro do
+  // ramo isLigaAutoDraw: apagar só o duplicado deixaria duas delas SEM ação de avanço.
+  'tests/avancar-de-fase-e-um-botao-so.test.js',
   // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
   // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
   // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o
