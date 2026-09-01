@@ -216,10 +216,25 @@ function corredor(quem, barreira, tentativas) {
 })().catch((e) => { console.error('DRIVER EXPLODIU:', e && e.stack || e); process.exit(1); });
 `;
 
+/* ⛔ L6.R2.2 · NO CAMINHO DE DEPLOY, "PULADA" É VERMELHO.
+ * `scripts/deploy-hosting.sh` liga o `functions-antodraw/node_modules` real dentro da cópia
+ * extraída e exporta `SP_EXIGE_CORRIDA_REAL=1`. Com essa variável, não existe desfecho
+ * "pulado": ou a corrida roda, ou o deploy para antes de publicar. Sem ela (máquina sem
+ * Java, checkout enxuto) o pulo continua permitido — e continua sendo dito em voz alta. */
+const EXIGE = process.env.SP_EXIGE_CORRIDA_REAL === '1';
 if (!ADMIN) {
+  if (EXIGE) {
+    console.error('\n✗ a corrida no emulador NÃO PÔDE RODAR e este caminho EXIGE a prova real.');
+    console.error('  `firebase-admin` não resolveu a partir de: ' + [AQUI, RAIZ, path.join(RAIZ, 'functions')].join(', '));
+    console.error('  ⛔ Um gate que se declara "pulado" não é um gate — foi assim que a 2.1.81 subiu');
+    console.error('     com a prova de concorrência do sorteio NÃO executada no predeploy.');
+    console.error('  CONSERTO:  (cd functions-autodraw && npm install)');
+    process.exit(1);
+  }
   console.log('\n② a corrida no emulador: PULADA — `firebase-admin` não existe nesta árvore.');
-  console.log('   (é a cópia extraída do predeploy; a corrida roda na árvore de trabalho e no');
-  console.log('    `npm run test:autodraw`. As ' + pass + ' asserções estruturais acima VALERAM.)');
+  console.log('   (a corrida roda na árvore de trabalho, no `npm run test:autodraw` e — desde a');
+  console.log('    L6.R2.2 — também no predeploy, que liga a dependência. As ' + pass + ' asserções');
+  console.log('    estruturais acima VALERAM.)');
   console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✓ ') + pass + ' asserções (corrida pulada)');
   process.exit(fail ? 1 : 0);
 }

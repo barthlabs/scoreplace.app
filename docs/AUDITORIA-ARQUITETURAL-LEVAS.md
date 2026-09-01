@@ -2091,7 +2091,40 @@ já existente; `venuePlaceId`; localidade estruturada do `addressComponents`;
 `preferredLocations` do organizador. ⛔ Nenhuma foi escolhida, nenhum schema foi alterado e
 nenhuma migração foi desenhada.
 
-**⚠️ CORREÇÃO À L6.R1.1, descoberta no deploy da 2.1.81 (01/set/2026).** A suíte
+**L6.R2.2 — CONCLUÍDA E PUBLICADA (2.1.82, 01/set/2026).** Hosting apenas.
+
+*Problema corrigido — o aviso não estava no fluxo operacional.* A L6.R2.1 pôs o aviso de fuso
+indeterminado **só no formulário de criar/editar**, por onde o organizador passa uma vez. O
+torneio vive na **ficha**, e era ali que o sorteio automático silenciosamente não acontecia.
+Agora a ficha traz um aviso **persistente** (não toast) para **organizador e co-organizador**,
+com as três informações exigidas — não está agendado, o manual continua, e como corrigir —
+mais **ação direta de editar**. Some sozinho quando o local resolve; invisível para visitante
+e inscrito. Ficha e formulário usam a **mesma** `_venueGeo.resolverFuso`, provado por teste
+que roda 10 casos nos dois e exige resposta idêntica.
+
+*Gate corrigido — "PULADA" não é aprovação.* A L6.R1.1 registrou a corrida no `npm test`, que
+é o `hosting.predeploy`; o predeploy roda numa cópia de `git archive` sem
+`functions-autodraw/node_modules`, então o teste se declarava pulado e **saía 0** — a 2.1.81
+subiu com a prova de concorrência **não executada**. `scripts/deploy-hosting.sh` passou a
+**ligar o `node_modules` do subprojeto dentro da cópia** (mesmo tratamento que a raiz já
+tinha) e a exportar `SP_EXIGE_CORRIDA_REAL=1`, que transforma qualquer "pulado" em **vermelho**
+nesse caminho. Sem a dependência no ambiente-fonte, o deploy **falha antes de qualquer
+upload**, com o conserto escrito.
+
+*Invariantes que ficam.* ① Aviso operacional mora onde o operador VOLTA, não só onde ele
+passa. ② Uma decisão, um resolvedor: tela nenhuma pode ter heurística própria de fuso.
+③ Gate que pode se declarar "pulado" precisa de um caminho onde o pulo é proibido — senão ele
+é decoração no dia em que mais importa. ④ Teste que depende de subprojeto só serve de gate de
+predeploy se o predeploy garantir a dependência.
+
+*Gates novos.* `tests/aviso-fuso-na-ficha.test.js` (30) e
+`tests/deploy-liga-firebase-admin.test.js` (22), ambos no `npm test`. O segundo **não confere
+por leitura**: extrai o HEAD com `git archive`, confirma que a cópia não tem `node_modules`,
+liga a dependência como o deploy faz e roda a corrida — 12 disputas reais, abort e retry em
+12/12, 31 asserções, zero "PULADA".
+
+**⚠️ CORREÇÃO À L6.R1.1, descoberta no deploy da 2.1.81 (01/set/2026).**
+ A suíte
 `test-corrida-slot-emu.js` foi registrada no `npm test` — e o `npm test` é `hosting.predeploy`,
 que roda numa **cópia extraída por `git archive` em /tmp**. Lá `functions-autodraw/node_modules`
 não existe (é gitignored), então o `firebase-admin` do driver não resolve e **o deploy foi

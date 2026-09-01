@@ -231,6 +231,40 @@ if [[ -z "$NM" ]]; then
   exit 1
 fi
 ln -s "$NM" "$DEST/node_modules"
+
+# ── L6.R2.2 · A PROVA DE CONCORRÊNCIA TEM QUE RODAR AQUI TAMBÉM ──────────────────────
+# `functions-autodraw/test-corrida-slot-emu.js` sobe o Firestore Emulator e dirige DUAS
+# transações concorrentes com o Admin SDK — é o único gate que prova a trava manual ×
+# automático no mecanismo (abort + retry do servidor), e não num modelo em memória.
+# ⛔ MAS `functions-autodraw/node_modules` é gitignored, então na cópia extraída por
+# `git archive` o `firebase-admin` não existe e a corrida se declarava PULADA. Medido em
+# 01/set/2026: a 2.1.81 subiu com a prova de concorrência NÃO EXECUTADA no predeploy.
+# "Pulada" não é aprovação. Aqui o subprojeto ganha o MESMO tratamento que a raiz já tinha:
+# o node_modules real é LIGADO dentro da cópia, e a corrida roda de verdade.
+NM_AD=""
+if [[ -e "$RAIZ/functions-autodraw/node_modules/firebase-admin" ]]; then
+  NM_AD="$RAIZ/functions-autodraw/node_modules"
+elif [[ -e "$RAIZ/functions/node_modules/firebase-admin" ]]; then
+  NM_AD="$RAIZ/functions/node_modules"
+fi
+if [[ -z "$NM_AD" ]]; then
+  echo
+  echo "✗ firebase-admin NÃO existe no ambiente-fonte — a prova de concorrência do sorteio"
+  echo "  (functions-autodraw/test-corrida-slot-emu.js) não teria como rodar no predeploy."
+  echo
+  echo "  ⛔ NÃO publico sem essa prova: foi assim que a 2.1.81 subiu com a corrida manual ×"
+  echo "     automático apenas 'PULADA'. Um gate que se declara pulado não é um gate."
+  echo
+  echo "  CONSERTO:  (cd functions-autodraw && npm install)"
+  exit 1
+fi
+mkdir -p "$DEST/functions-autodraw"
+ln -s "$NM_AD" "$DEST/functions-autodraw/node_modules"
+echo "  ▸ firebase-admin ligado na cópia ($NM_AD) — a corrida do sorteio roda no predeploy"
+# ⛔ E o teste passa a EXIGIR o emulador neste caminho: sem a variável ele pode se declarar
+# pulado (útil em máquina sem Java), com ela um 'pulado' vira VERMELHO.
+export SP_EXIGE_CORRIDA_REAL=1
+
 # lixo que o Drive cria e que iria pro ar junto (hosting.public = ".")
 LIXO="$(find "$DEST" \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \) | head -5 || true)"
 if [[ -n "$LIXO" ]]; then echo "✗ lixo na extração:"; echo "$LIXO"; exit 1; fi

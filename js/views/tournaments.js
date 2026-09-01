@@ -3981,6 +3981,11 @@ function renderTournaments(container, tournamentId = null) {
                 if (typeof window._patchProfileMetaSlots === 'function') window._patchProfileMetaSlots(container, t);
             }).catch(function() {});
         }
+        // L6.R2.2: o aviso de fuso indeterminado é PATCH pós-render (mesmo idioma do
+        // _patchProfileMetaSlots) — some sozinho quando o local passa a resolver.
+        setTimeout(function () {
+            try { if (typeof window._patchAvisoFusoNaFicha === 'function') window._patchAvisoFusoNaFicha(container, t); } catch (e) {}
+        }, 0);
         // v2.7.97: conta PESSOAS (dupla = 2). Antes usava "/" no nome → dupla com
         // displayName sem "/" (ex.: "Kelly Barth", p1Name/p2Name) contava como 1
         // ("12 em vez de 13"). _personCount conta pela estrutura (p1Name && p2Name).

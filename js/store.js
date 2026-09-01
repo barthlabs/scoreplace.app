@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.81';
+window.SCOREPLACE_VERSION = '2.1.82';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -9358,6 +9358,65 @@ window._loadParticipantProfilesByName = function(list) {
 };
 
 // Patch dos slots [data-pmeta-name] dentro de container após o perfil carregar.
+/* ── L6.R2.2 · O AVISO DE FUSO NA FICHA DO TORNEIO ────────────────────────────────────
+ * ⛔ POR QUE ELE PRECISA EXISTIR AQUI TAMBÉM: a 2.1.81 pôs o aviso no formulário de
+ * criar/editar — e é lá que o organizador PASSA UMA VEZ. O torneio fica meses na ficha, e
+ * é nela que ele volta todo dia. Um sorteio automático que nunca acontece por falta de
+ * fuso ficava invisível no fluxo operacional: sem erro, sem log na tela, sem nada.
+ * ⛔ E ele NÃO é um toast: aviso que some sozinho não serve pra um estado que dura.
+ *
+ * QUEM VÊ: só organizador e co-organizador (mesmo poder, cânone do projeto). Pro inscrito
+ * e pro visitante isto não é informação — é tarefa de quem organiza.
+ * QUANDO: sorteio automático configurado + data marcada + fuso NÃO resolvível.
+ * A decisão é a MESMA do formulário — `window._venueGeo.resolverFuso` —, nunca uma segunda
+ * heurística. [[feedback_unify_dual_entry_points]]
+ * ⛔ E não se inventa fuso: nem do aparelho, nem do servidor, nem UTC, nem offset fixo. */
+window._avisoFusoDaFicha = function (t) {
+  if (!t || !window._venueGeo || typeof window._venueGeo.resolverFuso !== 'function') return null;
+  // só quem organiza
+  var ehOrg = !!(window.AppStore && typeof window.AppStore.isOrganizer === 'function' && window.AppStore.isOrganizer(t));
+  if (!ehOrg) return null;
+  // sorteio automático configurado, com data marcada
+  var cfg = (t.phases && t.phases[t.currentPhaseIndex || 0]) || t;
+  var auto = (t.drawManual !== true) && !!(cfg && cfg.drawFirstDate) && t.status !== 'finished';
+  if (!auto) return null;
+  var cu = (window.AppStore && window.AppStore.currentUser) || null;
+  var perfil = cu ? { timeZone: cu.timeZone, city: cu.city, cidade: cu.cidade, state: cu.state } : null;
+  if (window._venueGeo.resolverFuso(t, perfil).tz) return null;   // resolveu → some sozinho
+  return {
+    titulo: (window._t && window._t('ficha.tzUnknownTitle')) || 'Sorteio automático NÃO agendado',
+    corpo: (window._t && window._t('ficha.tzUnknownBody')) || '',
+    acao: (window._t && window._t('ficha.tzUnknownCta')) || 'Editar torneio',
+    id: String(t.id)
+  };
+};
+
+window._patchAvisoFusoNaFicha = function (container, t) {
+  if (!container) return false;
+  var antigo = container.querySelector('#ficha-aviso-fuso');
+  var dados = null;
+  try { dados = window._avisoFusoDaFicha(t); } catch (e) { dados = null; }
+  if (!dados) { if (antigo) antigo.remove(); return false; }   // resolveu → o aviso sai
+  var html =
+    '<div id="ficha-aviso-fuso" style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.45);' +
+    'border-radius:12px;padding:12px 14px;margin:0 0 12px;">' +
+      '<div style="font-size:0.86rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:5px;">⚠️ ' +
+        window._safeHtml(dados.titulo) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.55;margin-bottom:10px;">' +
+        dados.corpo + '</div>' +
+      '<button class="btn btn-sm" style="background:rgba(245,158,11,0.18);color:var(--sp-c-fbbf24,#fbbf24);' +
+      'border:1px solid rgba(245,158,11,0.5);font-size:0.78rem;font-weight:600;padding:7px 14px;border-radius:9px;cursor:pointer;" ' +
+      'onclick="window.location.hash=\'#create-tournament/' + window._safeHtml(dados.id) + '\'">' +
+        window._safeHtml(dados.acao) + '</button>' +
+    '</div>';
+  if (antigo) { antigo.outerHTML = html; return true; }
+  // entra no TOPO do conteúdo da ficha — é aviso operacional, não rodapé
+  var alvo = container.firstElementChild;
+  if (alvo) alvo.insertAdjacentHTML('beforebegin', html);
+  else container.insertAdjacentHTML('afterbegin', html);
+  return true;
+};
+
 window._patchProfileMetaSlots = function(container, t) {
   if (!container) return;
   var slots = container.querySelectorAll('[data-pmeta-name]');

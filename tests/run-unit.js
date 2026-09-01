@@ -1043,6 +1043,8 @@ const SUITES = [
   'js/views/team-formation.test.js',
   'js/views/phase-brick4.test.js',
   'tests/venue-geo-core.test.js',                 // L6.R2.1: tipo canônico do local + espelho do resolvedor
+  'tests/aviso-fuso-na-ficha.test.js',            // L6.R2.2: o aviso de fuso na FICHA (organizador)
+  'tests/deploy-liga-firebase-admin.test.js',     // L6.R2.2: "PULADA" não é aprovação no deploy
   'functions-autodraw/test-agenda-core.js',       // L6.R1: fuso do evento, janela de 1 min, trava de slot
   'functions-autodraw/test-autodraw-dividido.js', // L6.R1: sorteio agendado em torneio DIVIDIDO
   'functions-autodraw/test-corrida-slot-emu.js',  // L6.R1.1: a corrida manual × automático no EMULADOR real
