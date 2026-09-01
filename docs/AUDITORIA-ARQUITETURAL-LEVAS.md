@@ -2091,7 +2091,19 @@ já existente; `venuePlaceId`; localidade estruturada do `addressComponents`;
 `preferredLocations` do organizador. ⛔ Nenhuma foi escolhida, nenhum schema foi alterado e
 nenhuma migração foi desenhada.
 
-**L6.R2.1 — CONCLUÍDA E PUBLICADA (2.1.81, 01/set/2026).** Fecha os problemas A, B, C e D da
+**⚠️ CORREÇÃO À L6.R1.1, descoberta no deploy da 2.1.81 (01/set/2026).** A suíte
+`test-corrida-slot-emu.js` foi registrada no `npm test` — e o `npm test` é `hosting.predeploy`,
+que roda numa **cópia extraída por `git archive` em /tmp**. Lá `functions-autodraw/node_modules`
+não existe (é gitignored), então o `firebase-admin` do driver não resolve e **o deploy foi
+barrado**. ⛔ A saída não foi afrouxar nem fingir: na árvore de trabalho e no
+`npm run test:autodraw` a corrida roda **inteira** (31 asserções, 12 disputas reais); na cópia
+do predeploy, onde a dependência não existe, a parte do emulador é **PULADA em voz alta** —
+impressa e contada — e as **14 asserções estruturais** continuam rodando, porque não dependem
+de emulador nenhum. *Invariante que fica:* teste que exige dependência de subprojeto não pode
+ser gate de `predeploy` sem dizer o que deixou de conferir.
+
+**L6.R2.1 — CONCLUÍDA E PUBLICADA (2.1.81, 01/set/2026).**
+ Fecha os problemas A, B, C e D da
 L6.R2.P0. Publicado **Hosting apenas**.
 
 *Causa-raiz corrigida.* A alínea de coordenada da resolução de fuso estava **morta por

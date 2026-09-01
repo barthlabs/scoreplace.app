@@ -94,9 +94,27 @@ console.log('\n① os caminhos REAIS reivindicam o slot DENTRO da transação\n'
 /* ── PARTE 2 · A CORRIDA NO EMULADOR ──────────────────────────────────────────────────
  * O driver roda DENTRO de `firebase emulators:exec`, com o Admin SDK apontado pro
  * emulador (é o mesmo SDK que a Cloud Function usa) e a `reivindicarSlot` REAL. */
+/* ── ONDE ESTE TESTE CONSEGUE RODAR, e por que isso está escrito aqui ──────────────────
+ * O `hosting.predeploy` roda `npm test` numa CÓPIA EXTRAÍDA por `git archive` em /tmp — e
+ * `functions-autodraw/node_modules` é gitignored, então lá o `firebase-admin` não existe.
+ * MEDIDO em 01/set/2026: o deploy da 2.1.81 foi barrado exatamente por isto.
+ * ⛔ A saída NÃO é fingir que passou. Na árvore de trabalho (e no `npm run test:autodraw`)
+ * a corrida roda inteira e é ela que trava a invariante. Na cópia do predeploy, onde a
+ * dependência não existe, a parte do emulador é PULADA — e o teste DIZ ISSO em voz alta,
+ * ainda rodando as 14 asserções estruturais, que não dependem de emulador nenhum.
+ * ⚠️ Um "pulado" mudo seria pior que teste nenhum; por isso ele é impresso e contado. */
+function _acharAdmin() {
+  const tentativas = [AQUI, RAIZ, path.join(RAIZ, 'functions')];
+  for (const base of tentativas) {
+    try { return require.resolve('firebase-admin', { paths: [base] }); } catch (e) { /* tenta a próxima */ }
+  }
+  return null;
+}
+const ADMIN = _acharAdmin();
+
 const DRIVER = `
 'use strict';
-const admin = require(${JSON.stringify(path.join(AQUI, 'node_modules', 'firebase-admin'))});
+const admin = require(${JSON.stringify(ADMIN || 'firebase-admin')});
 const A = require(${JSON.stringify(path.join(AQUI, 'agenda-core.js'))});
 admin.initializeApp({ projectId: ${JSON.stringify(PROJECT)} });
 const db = admin.firestore();
@@ -197,6 +215,14 @@ function corredor(quem, barreira, tentativas) {
   process.exit(0);
 })().catch((e) => { console.error('DRIVER EXPLODIU:', e && e.stack || e); process.exit(1); });
 `;
+
+if (!ADMIN) {
+  console.log('\n② a corrida no emulador: PULADA — `firebase-admin` não existe nesta árvore.');
+  console.log('   (é a cópia extraída do predeploy; a corrida roda na árvore de trabalho e no');
+  console.log('    `npm run test:autodraw`. As ' + pass + ' asserções estruturais acima VALERAM.)');
+  console.log('\n' + (fail ? '✗ ' + fail + ' falha(s), ' : '✓ ') + pass + ' asserções (corrida pulada)');
+  process.exit(fail ? 1 : 0);
+}
 
 console.log('\n② a corrida REAL no Firestore Emulator (' + CORRIDAS + ' disputas)\n');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'spcorrida-'));
