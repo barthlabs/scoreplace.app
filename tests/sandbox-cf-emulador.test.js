@@ -48,7 +48,17 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
 
   // ── ORIGINAL DIVIDIDO (a forma do Confra) ──
   const membros=[DEV,REAL,'u_a','u_b'];
-  const baseDiv={ name:'Confra', sport:'Beach Tennis', isPublic:true, creatorUid:DEV,
+  /* ⚠️ OS CAMPOS "DE ORGANIZADOR" ENTRAM AQUI DE PROPÓSITO (2.1.88): name, creatorUid,
+   * organizerEmail/Name, isPublic, createdAt, updatedAt, remindersSent, finishNotifiedAt,
+   * nextDrawAt, lastAutoDrawAt e sandboxId. Até a 2.1.87 eles estavam ISENTOS no envelope e
+   * a Function trocava seis deles — a prova canônica dava verde sobre documento adulterado.
+   * ⛔ "creatorUid" é de OUTRA pessoa (uOrig, não o dev): é o que faz "preservou o criador"
+   * ser uma medição, e não uma coincidência com quem chamou. */
+  const baseDiv={ name:'Confra', sport:'Beach Tennis', isPublic:true, creatorUid:'uOrig',
+    organizerEmail:'dono@original.com', organizerName:'Dono Original',
+    createdAt:'2026-06-01T10:00:00.000Z', updatedAt:'2026-08-31T23:59:00.000Z',
+    remindersSent:{'7d':true}, finishNotifiedAt:'2026-08-30T00:00:00.000Z',
+    nextDrawAt:1756000000000, lastAutoDrawAt:1755000000000, sandboxId:'sb_antigo_1',
     memberUids:membros, coHosts:[{uid:'uCo',nome:'Co'}], adminUids:[DEV,'u_a'],
     waitlist:[{uid:'w1'}], standbyParticipants:[{uid:'s1'}], monarchWaitlist:{'0':['w1']},
     woLog:[{absentUid:'ux',groupName:'G0'}], phases:[{name:'RR'},{name:'Ouro/Prata'}],
@@ -59,9 +69,13 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
     participants:[], _semPesados:['matches','participants','opponentHistory'],
     _nPartes:{matches:5,participants:7,opponentHistory:1}, _nJogos:5 };
   await db.doc('tournaments/orig_div').set(baseDiv);
-  for(let i=0;i<5;i++) await db.doc('tournaments/orig_div/matches/m'+i).set({_chave:'m'+i,jogo:{id:'m'+i,winner:'a',scoreP1:6,scoreP2:3}});
-  for(let i=0;i<7;i++) await db.doc('tournaments/orig_div/inscritos/u'+i).set({_k:'u'+i,item:{uid:'u'+i,name:'P'+i,enrollSeq:i+1}});
-  await db.doc('tournaments/orig_div/opponentHistory/_default_').set({_idx:0,item:{u0:['u1']}});
+  /* ⚠️ "_loc" e "_idx" NÃO são enfeite: são o que "remontar" usa pra devolver cada registro à
+   * POSIÇÃO de origem. Sem eles a abertura fria (seção ⑪) remontaria um torneio vazio e o
+   * teste passaria a medir o harness em vez do app. É a mesma forma que "split-parts.js"
+   * grava no servidor. */
+  for(let i=0;i<5;i++) await db.doc('tournaments/orig_div/matches/m'+i).set({_chave:'m'+i,_loc:{tipo:'rounds',ri:0,mi:i},jogo:{id:'m'+i,winner:'a',scoreP1:6,scoreP2:3}});
+  for(let i=0;i<7;i++) await db.doc('tournaments/orig_div/inscritos/u'+i).set({_k:'u'+i,_idx:i,item:{uid:'u'+i,name:'P'+i,enrollSeq:i+1}});
+  await db.doc('tournaments/orig_div/opponentHistory/_default_').set({_idx:'_default_',item:{u0:['u1']}});
   for(const c of ['grupos','history','checkedIn','woLog','woClaims']) await db.doc('tournaments/orig_div/'+c+'/d1').set({x:1,c});
   await db.doc('tournaments/orig_div/results/m1').set({playerUids:[DEV,REAL],winner:'a',scoreP1:6,scoreP2:3,updatedAt:9});
 
@@ -212,7 +226,13 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   });
   // avanço — a mesma escrita do documento que o "commitTournamentTx" faz
   await m('fluxo: avanço de fase', async()=>{
-    await sbRef.set({currentPhaseIndex:1,rounds:[{round:1,status:'complete',matches:[]},{round:2,status:'active',matches:[]}]},{merge:true});
+    /* ⚠️ ACRESCENTA a rodada, não substitui o array. Substituir jogava fora os
+     * monarchGroups (e a classificação CONGELADA dentro deles) — que é justamente o que a
+     * abertura fria da seção ⑫ vai conferir depois. Avançar fase NUNCA apaga a fase
+     * anterior; um teste que apaga estaria medindo outra coisa. */
+    const _at=(await sbRef.get()).data()||{};
+    const _rds=(_at.rounds||[]).concat([{round:2,status:'active',matches:[]}]);
+    await sbRef.set({currentPhaseIndex:1,rounds:_rds},{merge:true});
     const d=(await sbRef.get()).data()||{};
     return {ok:true,fase:d.currentPhaseIndex,rodadas:(d.rounds||[]).length};
   });
@@ -247,6 +267,94 @@ const canon=v=>{ if(v===null||typeof v!=='object') return JSON.stringify(v===und
   R['controle 2.1.86 · _semPesados removido']={ok:true,acusa:difsCanonicas(origDoc,c186b)};
   R['controle · a cópia REAL não acusa nada']={ok:true,acusa:difsCanonicas(origDoc,sbDocOk)};
 
+  /* ── ⑪ CONTROLES CAMPO A CAMPO DAS EXCEÇÕES DA 2.1.87 ────────────────────────
+   * Cada campo que o envelope antigo isentava vira um controle PRÓPRIO: adulterar SÓ ele
+   * tem que ser acusado. Um controle por campo, porque "a lista encolheu" é afirmação sobre
+   * a lista — e o que interessa é o efeito de cada item que saiu dela. */
+  R._preservados={ok:true};
+  ['name','creatorUid','organizerEmail','organizerName','isPublic','createdAt','updatedAt',
+   'remindersSent','finishNotifiedAt','nextDrawAt','lastAutoDrawAt','sandboxId'].forEach(nome=>{
+    R._preservados[nome]={ igual: canon(origDoc[nome])===canon(sbDocOk[nome]),
+                           orig: canon(origDoc[nome]).slice(0,60) };
+  });
+  const mexeu={ name:'(SB) Confra', creatorUid:DEV, organizerEmail:'dev@x.com',
+                organizerName:'Dev', isPublic:false, createdAt:'2026-09-01T00:00:00.000Z' };
+  R._controlesPorCampo={ok:true};
+  Object.keys(mexeu).forEach(nome=>{
+    const forjado=Object.assign({},sbDocOk); forjado[nome]=mexeu[nome];
+    R._controlesPorCampo[nome]=difsCanonicas(origDoc,forjado);
+  });
+  R['sandboxCreatedAt existe e createdAt é do original']={ok:true,
+    sandboxCreatedAt: typeof sbDocOk.sandboxCreatedAt, createdAt: sbDocOk.createdAt};
+
+  /* ── ⑫ ABERTURA FRIA: link direto, sem cache, sem "_sbIdsConhecidos" ─────────
+   * ⛔ ISTO NÃO É MOCK. Carrega o "js/firebase-db.js" DE VERDADE neste processo, aponta pro
+   * Firestore do Emulator com o SDK do app, zera todo contexto (sem AppStore, sem ids
+   * conhecidos) e chama "loadTournamentById" — que é exatamente o que o roteador chama
+   * quando alguém abre "#tournaments/{sbId}" numa aba nova. */
+  const vm=require('vm'), fs2=require('fs');
+  const ROOT2=process.env.ROOT_PATH;
+  const win={}; win.window=win;
+  win._error=()=>{}; win._warn=()=>{}; win._log=()=>{};
+  win._tSplit=require(ROOT2+'/js/views/tournament-split-core.js');
+  vm.createContext(win);
+  vm.runInContext(fs2.readFileSync(ROOT2+'/js/firebase-db.js','utf8'), win);
+  const FDB=win.FirestoreDB;
+  FDB.db=fdb;                       // o compat do app, apontado pro Emulator
+  win.AppStore={tournaments:[]};    // ⛔ nada em memória
+  delete win._sbIdsConhecidos;      // ⛔ nenhum fato registrado
+
+  if(app.auth().currentUser) await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('rstbarth@gmail.com','senha123');
+  await m('FRIO: DEV abre o sandbox pelo link direto', async()=>{
+    const t=await FDB.loadTournamentById(sbDivId);
+    if(!t) return {ok:true,achou:false};
+    const jogos=(((t.rounds||[])[0]||{}).matches||[]).filter(Boolean);
+    return {ok:true,achou:true,name:t.name,creatorUid:t.creatorUid,isSandbox:t.isSandbox,
+      inscritos:(t.participants||[]).length, jogos:jogos.length, placar:(jogos[1]||{}).scoreP1,
+      congelada:(((((t.rounds||[])[0]||{}).monarchGroups||[])[0]||{}).classifCongelada||[]).length,
+      registrou: !!(win._sbIdsConhecidos && win._sbIdsConhecidos[sbDivId])};
+  });
+  await m('FRIO: e o resultado vem de resultsSandbox', async()=>{
+    const r=await FDB.loadMatchResult(sbDivId,'m1');
+    return {ok:true,winner:(r||{}).winner, caminho:FDB._tSub(sbDivId,'results').path};
+  });
+  await m('FRIO: o TORNEIO REAL segue abrindo por tournaments', async()=>{
+    const t=await FDB.loadTournamentById('orig_div');
+    return {ok:true,achou:!!t,caminho:FDB._tRef('orig_div').path};
+  });
+  // e para o REAL, o mesmo link direto não abre nada
+  if(app.auth().currentUser) await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('real@x.com','senha123');
+  const win2={}; win2.window=win2; win2._error=()=>{}; win2._warn=()=>{}; win2._log=()=>{};
+  win2._tSplit=win._tSplit; vm.createContext(win2);
+  vm.runInContext(fs2.readFileSync(ROOT2+'/js/firebase-db.js','utf8'), win2);
+  win2.AppStore={tournaments:[]};
+  win2.FirestoreDB.db=fdb;
+  await m('FRIO: REAL abre o mesmo link', async()=>{
+    const t=await win2.FirestoreDB.loadTournamentById(sbDivId);
+    return {ok:true,achou:!!t};
+  });
+
+  /* ── ⑬ EXCLUSÃO: apagar o sandbox apaga o sandbox INTEIRO ────────────────────
+   * Pelo cliente REAL ("deleteTournament"), como o botão faz. E o que fecha o teste é o
+   * ORIGINAL sair ileso — apagar cópia não pode encostar no que foi copiado. */
+  if(app.auth().currentUser) await app.auth().signOut();
+  await app.auth().signInWithEmailAndPassword('rstbarth@gmail.com','senha123');
+  const antesDoDelete=await retratoDoOriginal();
+  await m('DELETE: o dono apaga o próprio sandbox', async()=>{
+    await FDB.deleteTournament(sbDivId);
+    const parent=(await db.doc('sandboxes/'+sbDivId).get()).exists;
+    const sobrou={};
+    for(const c of ['matches','inscritos','opponentHistory','grupos','history','checkedIn',
+                    'woLog','woClaims','resultsSandbox','resultQueue','categoryNotifications','letzplayScans']){
+      sobrou[c]=(await db.collection('sandboxes/'+sbDivId+'/'+c).get()).size;
+    }
+    return {ok:true,parent:parent,sobrou:sobrou,
+      total:Object.keys(sobrou).reduce((a,k)=>a+sobrou[k],0)};
+  });
+  R['DELETE: o ORIGINAL não foi tocado']={ok:true,igual:(await retratoDoOriginal())===antesDoDelete};
+
   console.log('__JSON__'+JSON.stringify(R));
   process.exit(0);
 })().catch(e=>{console.error('DRIVER ERRO:',e&&e.stack||e);process.exit(1);});
@@ -263,6 +371,7 @@ try {
     env: Object.assign({}, process.env, {
       PATH: '/opt/homebrew/opt/openjdk/bin:' + process.env.PATH,
       ADMIN_PATH: path.join(ROOT, 'functions/node_modules/firebase-admin'),
+      ROOT_PATH: ROOT,
       FB_PATH: path.join(ROOT, 'node_modules/firebase'),
     }),
   });
@@ -420,6 +529,52 @@ ok('⭐⭐ CONTROLE: a cópia sem `_semPesados` é ACUSADA (' + c2.join(', ') + 
 ok('⭐ e a cópia REAL não é acusada de nada (senão o controle acusaria qualquer coisa)',
   (R['controle · a cópia REAL não acusa nada'].acusa || []).length === 0,
   J(R['controle · a cópia REAL não acusa nada']));
+
+console.log('\n── ⑪ envelope ESTRITO: os campos que a 2.1.87 isentava (e trocava) ──');
+['name', 'creatorUid', 'organizerEmail', 'organizerName', 'isPublic', 'createdAt', 'updatedAt',
+ 'remindersSent', 'finishNotifiedAt', 'nextDrawAt', 'lastAutoDrawAt', 'sandboxId'].forEach((k) => {
+  ok('⛔ `' + k + '` NÃO está no envelope', env.indexOf(k) === -1, J(env));
+  ok('⭐⭐ e a cópia PRESERVOU `' + k + '` byte a byte (' + R._preservados[k].orig + ')',
+    R._preservados[k].igual === true, J(R._preservados[k]));
+});
+ok('⭐ e o envelope ficou EXATAMENTE na lista autorizada (8 campos)',
+  J(env.slice().sort()) === J(['id', 'isSandbox', 'notificationsMuted', 'sandboxCreatedAt',
+    'sandboxOf', 'sandboxOwnerUid', 'sandboxSyncedAt', 'sbState']), J(env));
+const cr = R['sandboxCreatedAt existe e createdAt é do original'];
+ok('⭐⭐ a data técnica da cópia é `sandboxCreatedAt` — `createdAt` continua o do original',
+  cr.sandboxCreatedAt === 'string' && cr.createdAt === '2026-06-01T10:00:00.000Z', J(cr));
+Object.keys(R._controlesPorCampo).filter((k) => k !== 'ok').forEach((k) => {
+  const acusa = R._controlesPorCampo[k] || [];
+  ok('⭐⭐ CONTROLE: adulterar SÓ `' + k + '` é acusado (' + acusa.join(', ') + ')',
+    acusa.length === 1 && acusa[0] === k, J(acusa));
+});
+
+console.log('\n── ⑫ abertura FRIA: link direto, sem cache e sem contexto ──');
+const fr = R['FRIO: DEV abre o sandbox pelo link direto'];
+ok('⭐⭐ o DONO abre o sandbox pelo id, sem nada em memória', fr.ok === true && fr.achou === true, J(fr));
+ok('⭐⭐ e veio da coleção certa: o id ficou registrado como sandbox', fr.registrou === true, J(fr));
+ok('⭐⭐ com o NOME do original (a identidade é a tarja, não o nome)', fr.name === 'Confra', J(fr.name));
+ok('⭐ e com `creatorUid` do original preservado', fr.creatorUid === 'uOrig', J(fr.creatorUid));
+ok('⭐⭐ INSCRITOS chegaram na abertura fria (7)', fr.inscritos === 7, J(fr.inscritos));
+ok('⭐⭐ CHAVE chegou: 5 jogos remontados na posição', fr.jogos === 5, J(fr.jogos));
+ok('⭐⭐ PLACAR veio junto (6 no jogo m1)', fr.placar === 6, J(fr.placar));
+ok('⭐ e a classificação CONGELADA também (4 linhas)', fr.congelada === 4, J(fr.congelada));
+const fr2 = R['FRIO: e o resultado vem de resultsSandbox'];
+ok('⭐⭐ o resultado é lido em `resultsSandbox`, já roteado',
+  fr2.ok === true && fr2.winner === 'a' && /\/resultsSandbox$/.test(fr2.caminho || ''), J(fr2));
+const fr3 = R['FRIO: o TORNEIO REAL segue abrindo por tournaments'];
+ok('⛔ CONTROLE: torneio REAL abre por `tournaments` como sempre',
+  fr3.achou === true && fr3.caminho === 'tournaments/orig_div', J(fr3));
+ok('⭐⭐ ⛔ e o MESMO link não abre nada pro REAL',
+  R['FRIO: REAL abre o mesmo link'].achou === false, J(R['FRIO: REAL abre o mesmo link']));
+
+console.log('\n── ⑬ exclusão: apagar o sandbox apaga o sandbox inteiro ──');
+const dl = R['DELETE: o dono apaga o próprio sandbox'];
+ok('⭐⭐ o documento do sandbox sumiu', dl.ok === true && dl.parent === false, J(dl.parent));
+ok('⭐⭐ e TODAS as 12 subcoleções ficaram vazias — inclusive `resultsSandbox`',
+  dl.total === 0, J(dl.sobrou));
+ok('⭐⭐ ⛔ e o ORIGINAL não foi tocado (doc + 9 subcoleções)',
+  R['DELETE: o ORIGINAL não foi tocado'].igual === true, J(R['DELETE: o ORIGINAL não foi tocado']));
 
 console.log(falhas === 0 ? '\n✅ sandbox-cf-emulador: OK' : '\n❌ sandbox-cf-emulador: ' + falhas + ' falha(s)');
 process.exit(falhas === 0 ? 0 : 1);

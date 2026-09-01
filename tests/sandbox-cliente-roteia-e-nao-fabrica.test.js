@@ -140,6 +140,71 @@ const ok = (n, c, x) => { if (c) console.log('  ✓ ' + n); else { console.log('
       n2 === 950 && commits === 3 && escritas.length === 950, 'n=' + n2 + ' commits=' + commits);
   }
 
+  /* ── ⑦ O PODER DE ORGANIZADOR VEM DA CONDIÇÃO, NÃO DO DADO TROCADO (2.1.88) ──────────
+   * ⛔ Até a 2.1.87 a Function gravava `creatorUid` = uid do dev pra que os botões de
+   * organizador aparecessem. Isso é comprar interface com ESTADO — e estado é o que o
+   * sandbox existe pra reproduzir. Ordem do dono: _"não altere creatorUid, adminUids,
+   * coHosts ou membership para conceder controles"_. */
+  console.log('\n── ⑦ organizador do sandbox: condição de interface, sem tocar no dado ──');
+  {
+    const A = W.AppStore;
+    const antes = A.currentUser;
+    A.currentUser = { uid: 'uDev', email: 'dev@x.com' };
+    // o sandbox preserva o criador do ORIGINAL — quem manda nele é o dono do sandbox
+    const sb = { id: 'sb_x', isSandbox: true, sandboxOwnerUid: 'uDev', creatorUid: 'uOrig',
+                 adminUids: ['uOrig'], coHosts: [{ uid: 'uCo', status: 'active' }], memberUids: ['uOrig', 'uReal'] };
+    const real = { id: 'real_x', creatorUid: 'uOrig', adminUids: ['uOrig'], coHosts: [] };
+    ok('⭐⭐ o DONO do sandbox é organizador dele', A.isOrganizer(sb) === true);
+    ok('⭐⭐ e criador, para efeito de controles', A.isCreator(sb) === true);
+    ok('⭐⭐ ⛔ e NADA no documento foi trocado pra isso',
+      sb.creatorUid === 'uOrig' && JSON.stringify(sb.adminUids) === '["uOrig"]' &&
+      sb.coHosts.length === 1 && sb.memberUids.length === 2, JSON.stringify(sb));
+    ok('⛔ CONTROLE: torneio REAL de outra pessoa continua NÃO sendo meu',
+      A.isOrganizer(real) === false && A.isCreator(real) === false);
+    A.currentUser = { uid: 'uOutro', email: 'outro@x.com' };
+    ok('⛔ CONTROLE: sandbox de OUTRA pessoa não me dá poder nenhum',
+      A.isOrganizer(sb) === false && A.isCreator(sb) === false);
+    A.currentUser = antes;
+  }
+  ok('⭐ e o sandbox se anuncia por TARJA, não pelo nome (a Function não prefixa mais)',
+    fs.readFileSync(path.join(ROOT, 'js/views/tournaments.js'), 'utf8')
+      .indexOf('t.isSandbox ? `<div style="background:#b91c1c') !== -1);
+  {
+    const fn = fs.readFileSync(path.join(ROOT, 'functions/index.js'), 'utf8');
+    ok('⛔ a Function NÃO prefixa mais o nome com "(SB) "', fn.indexOf('"(SB) " + String(cfg.name') === -1);
+    const iEnv = fn.indexOf('const SB_ENVELOPE = [');
+    const env = fn.slice(iEnv, fn.indexOf('];', iEnv));
+    ['name', 'creatorUid', 'organizerEmail', 'organizerName', 'isPublic', 'createdAt',
+     'updatedAt', 'remindersSent', 'finishNotifiedAt', 'nextDrawAt', 'lastAutoDrawAt',
+     'sandboxId'].forEach((k) => {
+      ok('  ⛔ `' + k + '` fora do SB_ENVELOPE', env.indexOf('"' + k + '"') === -1, env);
+    });
+  }
+
+  /* ── ⑧ APAGAR O SANDBOX APAGA TUDO QUE É DELE ───────────────────────────────────────
+   * A lista de subcoleções do sandbox tem que COBRIR o que a Function copia. Se uma parte
+   * nova entrar na cópia e não entrar aqui, ela sobrevive órfã numa coleção onde ninguém
+   * mais passa — a mesma origem dos 151 `results` órfãos de 01/ago/2026. */
+  console.log('\n── ⑧ a lista de exclusão do sandbox cobre o que a cópia cria ──');
+  if (temHelpers) {
+    const regras = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
+    const iSb = regras.indexOf('match /sandboxes/{sandboxId} {');
+    // ⚠️ começa DEPOIS do `match` do próprio parent, senão "sandboxes" entra como se fosse
+    // subcoleção dele mesmo e o teste cobra do apagar uma coleção que não existe.
+    const bloco = regras.slice(regras.indexOf('\n', iSb), regras.indexOf('match /tournaments/{tournamentId} {'));
+    const nasRegras = (bloco.match(/match \/([A-Za-z]+)\/\{/g) || [])
+      .map((s) => s.replace('match /', '').replace(/\/\{$/, ''));
+    const naLista = (real._sandboxSubcollections || []).map((c) => real._subNome('sb_2', c));
+    ok('as regras declaram ' + nasRegras.length + ' subcoleções de sandbox', nasRegras.length >= 12, JSON.stringify(nasRegras));
+    const faltando = nasRegras.filter((c) => naLista.indexOf(c) === -1);
+    ok('⭐⭐ nenhuma delas fica de fora do apagar (faltando: ' + faltando.join(', ') + ')',
+      faltando.length === 0, JSON.stringify({ nasRegras: nasRegras, naLista: naLista }));
+    ok('⭐⭐ e `results` do sandbox é apagado como `resultsSandbox`',
+      naLista.indexOf('resultsSandbox') !== -1, JSON.stringify(naLista));
+    ok('⛔ CONTROLE: em torneio REAL a lista continua a curta (results + letzplayScans)',
+      JSON.stringify(real._tournamentSubcollections) === JSON.stringify(['results', 'letzplayScans']));
+  }
+
   console.log('\n── ⑤ ESTRUTURAL: nada de segunda fonte no cliente ──');
   const org = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-organizer.js'), 'utf8');
   ok('⛔ o cliente não monta mais o envelope (removida `_sbAplicaEnvelope`)',

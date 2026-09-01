@@ -19,6 +19,16 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.88 NÃO ganhou item PRÓPRIO, e é DECISÃO. Ela termina o trabalho que o item
+    // "🔒 O sandbox de teste ficou realmente privado — e virou cópia exata" (2.1.87) já
+    // descreve pro usuário, e o que ela conserta é INVISÍVEL pra quem joga: a cópia deixou
+    // de trocar nome, criador, e-mail do organizador, visibilidade e data de criação do
+    // torneio (a prova de igualdade rodava com justamente esses campos isentos), o poder de
+    // organizador dentro do sandbox virou condição de tela em vez de dado adulterado, o link
+    // direto pro sandbox passou a abrir em aba nova, e apagá-lo passou a apagar as partes
+    // dele. Nada disso alcança torneio de verdade: sandbox é ferramenta do desenvolvedor,
+    // e nenhuma tela de quem joga muda. Escrever um item novo prometeria novidade onde não
+    // há — e a nota do usuário é sobre o que ELE vê. Detalhe em docs/CHANGELOG.md (2.1.88).
     // ⚠️ 2.1.80 NÃO ganhou item, e é DECISÃO — mesma família da 2.1.79. Pro usuário ela não
     // muda NENHUMA tela: é o sorteio AGENDADO da Liga que passou a funcionar em torneio com
     // os dados divididos (o elenco mora em subcoleção e o cron decidia com a lista vazia do

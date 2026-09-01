@@ -36,7 +36,13 @@ ok(idx.indexOf('js/views/tournament-split-core.js') < idx.indexOf('js/firebase-d
 
 // ── o leitor: dispara pelo MARCADOR, e sabe cair de volta ────────────────────
 const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
-const fn = db.slice(db.indexOf('async loadTournamentById'), db.indexOf('async loadTournamentById') + 1200);
+/* ⚠️ ANCORADO NO FIM DO MÉTODO, não numa janela fixa (2.1.88). A janela de 1200 caracteres
+ * cortava o corpo no meio assim que a função crescesse — e cresceu: entrou o caminho da
+ * abertura fria de sandbox, e o `_semPesados` (que vem DEPOIS) ficou fora do recorte. O
+ * teste reprovava sem existir defeito nenhum, que é a definição de teste que ensina a
+ * ignorar teste. É a mesma regra que `teste-nao-recorta-por-tamanho-fixo` cobra. */
+const _iLTB = db.indexOf('async loadTournamentById');
+const fn = db.slice(_iLTB, db.indexOf('\n  },', _iLTB));
 ok(/_semPesados/.test(fn), 'loadTournamentById olha o marcador `_semPesados`');
 ok(/Array\.isArray\(_t\._semPesados\)/.test(fn),
   'o marcador é uma LISTA do que saiu — dá pra tirar só os jogos e deixar o resto');

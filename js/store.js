@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.87';
+window.SCOREPLACE_VERSION = '2.1.88';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -2933,6 +2933,23 @@ window._isTestIdentity = function () {
 // (3) invisível pra não-dev. `sandboxOf` aponta pro original; no original, `sandboxId`
 // aponta de volta. Ver memória project_sandbox_tournament.
 window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true); };
+/* ⭐ O PODER DE ORGANIZADOR DENTRO DO SANDBOX É CONDIÇÃO DE INTERFACE (2.1.88).
+ *
+ * ⛔ ATÉ A 2.1.87 ELE ERA COMPRADO COM DADO: a Function gravava `creatorUid` = uid do dev
+ * (e a 2.1.86 mexia também em `adminUids`/`coHosts`), e aí `isCreator`/`isOrganizer`
+ * respondiam sozinhos. Só que trocar quem CRIOU o torneio pra conceder um BOTÃO é
+ * adulterar o estado — e o estado é justamente o que o sandbox existe pra reproduzir.
+ * Ordem do dono: _"não altere creatorUid, adminUids, coHosts ou membership para conceder
+ * controles"_. Então o dado volta a ser o do original e o poder passa a ser DERIVADO:
+ * é o meu sandbox ⇒ eu opero. Uma linha, num lugar só, sem tocar em documento nenhum.
+ *
+ * ⚠️ Isto NÃO amplia permissão de servidor: as Rules de `sandboxes` já autorizam
+ * exatamente `sandboxOwnerUid` e mais ninguém. Aqui é só a TELA deixando de esconder do
+ * dono os controles do que é dele. */
+window._souDonoDoSandbox = function (t) {
+  var cu = window.AppStore && window.AppStore.currentUser;
+  return !!(t && t.isSandbox === true && cu && cu.uid && t.sandboxOwnerUid === cu.uid);
+};
 // É SANDBOX, sabendo só a REFERÊNCIA (id/nome) — sem depender do doc estar carregado.
 // Existe porque o doc do SB pode não estar na lista local (só o dev recebe) e, pior, pode
 // ter sido APAGADO: apagar o doc do torneio NÃO apaga a subcoleção `results`, então os
@@ -2943,8 +2960,14 @@ window._isSandboxTournament = function (t) { return !!(t && t.isSandbox === true
 // Ver [[project_sandbox_tournament]] e [[project_game_counts_only_with_score_partner_opponent]].
 window._isSandboxRef = function (tournamentId, tournamentName) {
   var id = String(tournamentId || '');
-  if (/_sb$/.test(id)) return true;                              // convenção do clone: tour_<ts>_sb
-  if (/^\(SB\)/.test(String(tournamentName || ''))) return true; // o clone prefixa "(SB) "
+  if (/_sb$/.test(id)) return true;                              // convenção antiga: tour_<ts>_sb
+  /* ⭐ CONVENÇÃO NOVA (2.1.87): a Function nomeia `sb_<original>_<timestamp>`. Sem esta
+   * linha, o único sinal por REFERÊNCIA de um sandbox atual seria o nome — e desde a 2.1.88
+   * o nome é o do original, byte a byte, justamente pra não adulterar a cópia. */
+  if (/^sb_/.test(id)) return true;
+  /* ⚠️ O NOME SÓ DENUNCIA SANDBOX ANTIGO. Sandbox novo NÃO é mais prefixado (a identidade
+   * virou tarja + `isSandbox`); esta linha fica pelos registros já gravados com "(SB) ". */
+  if (/^\(SB\)/.test(String(tournamentName || ''))) return true;
   if (id && typeof window._findTournamentById === 'function') {
     var t = window._findTournamentById(id);
     if (t && t.isSandbox === true) return true;
@@ -12844,6 +12867,9 @@ window.AppStore = {
     if (!this.currentUser) return false;
     var uid = this.currentUser.uid;
     if (!uid || !tournament) return false;
+    // ⭐ o dono do SANDBOX opera o próprio sandbox — por condição, não por dado trocado.
+    // Ver `_souDonoDoSandbox` (2.1.88).
+    if (window._souDonoDoSandbox && window._souDonoDoSandbox(tournament)) return true;
     if (tournament.creatorUid && tournament.creatorUid === uid) return true;
     if (Array.isArray(tournament.coHosts)) {
       return tournament.coHosts.some(function(ch) {
@@ -12862,6 +12888,8 @@ window.AppStore = {
      * (scripts/conferir-admin-por-uid.js). Não salvava ninguém.
      * ⚠️ Esta escapou da minha primeira varredura porque guardava o campo numa VARIÁVEL
      * antes de comparar — a busca por `creatorEmail ===` não a via. */
+    // ⭐ e o dono do SANDBOX manda no próprio sandbox (condição de interface, 2.1.88).
+    if (window._souDonoDoSandbox && window._souDonoDoSandbox(tournament)) return true;
     return !!(this.currentUser.uid && tournament.creatorUid &&
               tournament.creatorUid === this.currentUser.uid);
   },
@@ -12892,6 +12920,8 @@ window.AppStore = {
     var email = this.currentUser.email;
     // v1.2.44: só uid (o fallback por organizerEmail saiu — ver AppStore.isOrganizer).
     return this.tournaments.filter(function(t) {
+      // o sandbox é do dono dele, ainda que `creatorUid` seja o do original (2.1.88)
+      if (window._souDonoDoSandbox && window._souDonoDoSandbox(t)) return true;
       return !!(uid && t.creatorUid === uid);
     });
   },

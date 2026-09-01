@@ -1,5 +1,42 @@
 # Changelog do scoreplace.app
 
+## 2.1.88 — o envelope do sandbox encolhe pro que ele sempre devia ter sido (01/set/2026)
+
+### O defeito: a prova estava rodando com os réus isentos
+
+A 2.1.87 pôs o sandbox em coleção própria e provou igualdade canônica campo a campo. Só que o `SB_ENVELOPE` — a lista do que PODE diferir — isentava **doze** campos, e a Function **trocava seis deles**: `name` (virava `"(SB) …"`), `creatorUid`, `organizerEmail`, `organizerName`, `isPublic` e `createdAt`. Ou seja: **a prova dava verde sobre um documento que já não era o original**, porque justamente os campos adulterados estavam fora da comparação. Ela ainda `delete`ava o `sandboxId` do original — campo do original que some é diferença, e diferença é defeito.
+
+⭐ **A lista agora é a exata que o dono autorizou, e são 8:** `id`, `isSandbox`, `sandboxOf`, `sandboxOwnerUid`, `sbState`, `sandboxCreatedAt`, `sandboxSyncedAt`, `notificationsMuted`. Tudo o mais — inclusive `updatedAt`, `remindersSent`, `finishNotifiedAt`, `nextDrawAt` e `lastAutoDrawAt` — viaja **byte a byte**, e há um **controle por campo**: adulterar só `name` acusa `name`, só `creatorUid` acusa `creatorUid`, e assim por diante.
+
+- ⚠️ **`sandboxCreatedAt` é campo NOVO de propósito.** A data técnica da cópia precisa existir, e `createdAt` é do **torneio** — sobrescrevê-lo era a adulteração, não a solução.
+- ⚠️ **`isPublic` viaja igual e não vaza:** as Rules de `sandboxes` autorizam por `sandboxOwnerUid` e **nunca** olham `isPublic`; quem publica na vitrine é o gatilho `syncDiscoveryFeed`, que observa `tournaments/{id}` e não enxerga esta coleção.
+
+### O poder de organizador para de ser comprado com dado
+
+Trocar `creatorUid` era como o dev ganhava os botões do organizador dentro do sandbox. Agora o criador é o do original e o poder é **derivado**: `window._souDonoDoSandbox(t)` (`isSandbox && sandboxOwnerUid === meu uid`) entra em `isOrganizer`, `isCreator` e `getMyOrganized`. Uma condição de interface, num lugar só, **sem tocar em documento nenhum** — e não amplia permissão de servidor, porque as Rules já autorizavam exatamente esse uid.
+
+E a identidade visual saiu do nome: a ficha do torneio ganhou a **mesma tarja vermelha** do cartão (`🧪 SANDBOX · TORNEIO DE TESTE`), que depende só de `isSandbox`.
+
+⛔ **E a adulteração que sobrevivia escondida no cliente saiu junto:** `persist-core.js` ainda reescrevia `memberUids`/`adminUids`/`adminEmails` do sandbox com os uids do dev a cada gravação. Isso era da época em que o sandbox morava em `tournaments` e a invisibilidade dependia do listener; hoje a **coleção** é o isolamento, e aqueles ramos apagariam de volta, na primeira gravação do cliente, a membership que a Function copia byte a byte.
+
+### Abertura fria: o link direto passa a funcionar
+
+⛔ **MEDIDO no Emulator, com o `js/firebase-db.js` de verdade:** abrir `#tournaments/{sbId}` numa aba nova **não achava nada**. `_ehSandbox` decide por FATO (ouvinte registrado ou objeto em memória) e numa aba recém-aberta não há fato nenhum — a rota caía em `tournaments`. Pior: a leitura não voltava "não existe", voltava **`permission-denied`**, porque a regra de `tournaments/{id}` desreferencia `resource.data` e em documento inexistente `resource` é nulo. Era isso que engolia o caminho.
+
+⭐ Agora `loadTournamentById` **guarda** o erro da primeira leitura, pergunta a `sandboxes` e, achando, **registra o id** — daí em diante partes, placar e escrita roteiam sozinhas. Para quem não é o dono a leitura é negada e o desfecho é o mesmo "não encontrado". Provado na abertura fria: nome do original, `creatorUid` do original, **7 inscritos**, **5 jogos remontados na posição**, placar e a classificação **congelada** — e o torneio real seguindo por `tournaments`.
+
+### Apagar o sandbox apaga o sandbox inteiro
+
+Num torneio real o cliente só limpa `results` e `letzplayScans` — o resto é da CF `purgeTournamentCopies`, gatilho em `tournaments/{id}`, que **não observa `sandboxes/`**. Sem isso, apagar o sandbox deixaria jogos, inscritos, grupos, histórico e placares vivos e sem dono, numa coleção onde ninguém mais passa (a origem dos 151 `results` órfãos de 01/ago). Agora há `_sandboxSubcollections` com as **12** partes, e o teste cobra que ela **cubra o que as Rules declaram** — parte nova na cópia sem entrada no apagar reprova.
+
+### Gates
+
+`npm run test:sandbox` foi a **126 asserções**, com quatro seções novas: envelope estrito com preservação campo a campo, **6 controles individuais** de adulteração, **abertura fria** (cliente real, sem cache e sem contexto, incluindo a negativa para o participante real) e **exclusão completa** com o original intacto. `sandbox-cliente-roteia-e-nao-fabrica` ganhou o poder-por-condição (com controle de sandbox alheio) e a cobertura da lista de exclusão contra as Rules.
+
+### Escopo
+
+Publicado **Functions + Hosting**. ⛔ Rules **não mudaram** nesta leva. Sem backfill, migração, Android, iOS, autodraw ou Stripe. Nenhum dado de produção apagado — a exclusão é provada **dentro do Emulator**, sobre o sandbox que o próprio teste cria.
+
 ## 2.1.87 — o sandbox sai de `tournaments`, vira réplica fiel de verdade e fica isolado (01/set/2026)
 
 ### O que a 2.1.86 não resolvia, e ficou provado

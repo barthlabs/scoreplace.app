@@ -8767,12 +8767,27 @@ function _sbCanon(v) {
   return "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + _sbCanon(v[k])).join(",") + "}";
 }
 
-/* Campos que PODEM diferir. Tudo que não está aqui tem que sair idêntico. */
+/* Campos que PODEM diferir — a lista EXATA autorizada pelo dono (FIX.SANDBOX.P2.P3).
+ *
+ * ⛔ ELA ENCOLHEU NA 2.1.88, e o motivo é que a de antes MENTIA. Ela listava `name`,
+ * `creatorUid`, `organizerEmail`, `organizerName`, `isPublic`, `createdAt`, `updatedAt`,
+ * `remindersSent`, `finishNotifiedAt`, `nextDrawAt` e `lastAutoDrawAt` — e a Function
+ * de fato TROCAVA os seis primeiros. Ou seja: a prova de igualdade canônica rodava com
+ * esses campos ISENTOS e dava verde sobre um documento que já não era o original.
+ * Ordem do dono: _"O sandbox deve preservar todos eles byte a byte."_
+ *
+ * ⭐ O QUE SOBROU É SÓ O QUE FAZ O DOCUMENTO SER UM SANDBOX: o id técnico, os quatro
+ * carimbos, as duas datas técnicas e a supressão de notificação. Nada mais.
+ * ⚠️ `sandboxCreatedAt` é campo NOVO de propósito: a data técnica da cópia precisa existir
+ * em algum lugar, e `createdAt` é do ORIGINAL — sobrescrevê-lo era a adulteração.
+ * ⛔ Poder de organizador do dono do sandbox NÃO se resolve aqui: é condição de INTERFACE
+ * (`_souDonoDoSandbox`, em js/store.js). Trocar `creatorUid`/`adminUids`/`coHosts` pra
+ * conceder botão é justamente o que esta lista proíbe. */
 const SB_ENVELOPE = [
-  "id", "name", "isSandbox", "sandboxOf", "sandboxOwnerUid", "sandboxId", "sbState",
-  "sandboxSyncedAt", "notificationsMuted", "isPublic",
-  "creatorUid", "organizerEmail", "organizerName", "createdAt", "updatedAt",
-  "remindersSent", "finishNotifiedAt", "nextDrawAt", "lastAutoDrawAt",
+  "id",                                         // id técnico próprio
+  "isSandbox", "sandboxOf", "sandboxOwnerUid", "sbState",
+  "sandboxCreatedAt", "sandboxSyncedAt",        // datas TÉCNICAS da cópia (não as do torneio)
+  "notificationsMuted",                         // notificações suprimidas
 ];
 
 exports.createSandbox = onCall(
@@ -8840,22 +8855,23 @@ exports.createSandbox = onCall(
     const sbRef = db.collection("sandboxes").doc(sbId);
     const envelope = {
       id: sbId,
-      name: "(SB) " + String(cfg.name || "Torneio"),
       isSandbox: true, sandboxOf: String(origId), sandboxOwnerUid: callerUid,
       sbState: "creating",                       // ⛔ invisível até a prova
       notificationsMuted: true,                  // notificações suprimidas
-      isPublic: false,
-      creatorUid: callerUid,
-      organizerEmail: email || "",
-      organizerName: (perfil && perfil.exists && (perfil.data() || {}).displayName) || "",
-      createdAt: new Date().toISOString(),
+      sandboxCreatedAt: new Date().toISOString(),// data TÉCNICA da cópia — `createdAt` é do original
       sandboxSyncedAt: Date.now(),
     };
-    // ⭐ o documento sai do original INTEIRO e só o envelope é sobreposto. memberUids,
-    // coHosts, adminUids, participants, phases, rounds, _semPesados, _nPartes, _nJogos —
-    // tudo passa como está. É isso que "mesma forma persistida" quer dizer.
+    /* ⭐ O DOCUMENTO SAI DO ORIGINAL INTEIRO E SÓ O CARIMBO É SOBREPOSTO (2.1.88).
+     * `name`, `creatorUid`, `organizerEmail`, `organizerName`, `isPublic`, `createdAt`,
+     * `updatedAt`, `remindersSent`, `finishNotifiedAt`, `nextDrawAt`, `lastAutoDrawAt`,
+     * memberUids, coHosts, adminUids, participants, phases, rounds, `_semPesados`,
+     * `_nPartes`, `_nJogos` — TUDO passa como está. É isso que "réplica fiel" quer dizer.
+     * ⛔ E NADA é deletado: o `delete sbDoc.sandboxId` que morava aqui apagava um campo do
+     * ORIGINAL. Campo do original que some é diferença, e diferença é defeito.
+     * ⚠️ `isPublic` viaja igual — e não vaza: as Rules de `sandboxes` autorizam por
+     * `sandboxOwnerUid` e NUNCA olham `isPublic`; quem publica na vitrine é o gatilho
+     * `syncDiscoveryFeed`, que observa `tournaments/{id}` e não enxerga esta coleção. */
     const sbDoc = Object.assign({}, cfg, envelope);
-    delete sbDoc.sandboxId;
     await sbRef.set(sbDoc);
 
     let escritos = 0;

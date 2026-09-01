@@ -2069,6 +2069,19 @@ window.FirestoreDB = {
   // delete recursivo) — quem esquece isso deixa dado vivo sem dono.
   _tournamentSubcollections: ['results', 'letzplayScans'],
 
+  /* ⭐ APAGAR UM SANDBOX É APAGAR O SANDBOX INTEIRO (2.1.88). Num torneio REAL o cliente só
+   * limpa `results` e `letzplayScans` — as outras subcoleções ele nem pode escrever, e quem
+   * as remove é a CF `purgeTournamentCopies` (gatilho em `tournaments/{id}`). Só que esse
+   * gatilho NÃO observa `sandboxes/`: se o cliente apagasse só o documento, TODAS as partes
+   * do sandbox (jogos, inscritos, grupos, histórico, placares) ficariam vivas e sem dono —
+   * exatamente os 151 `results` órfãos medidos em 01/ago/2026, agora numa coleção onde
+   * ninguém mais passa. No sandbox o dono pode escrever, então é ele quem limpa.
+   * ⛔ A lista deriva das MESMAS partes que a criação copia; `results` aqui é traduzido pra
+   * `resultsSandbox` por `_subNome`, então não precisa (nem pode) ser escrito à mão. */
+  _sandboxSubcollections: ['matches', 'inscritos', 'opponentHistory', 'grupos', 'checkedIn',
+    'woLog', 'woClaims', 'history', 'resultQueue', 'categoryNotifications',
+    'letzplayScans', 'results'],
+
   // Apaga TODOS os docs de uma subcoleção, em lotes de 400 (o teto do batch é 500).
   // Devolve quantos foram apagados. Best-effort: erro num lote não derruba o resto.
   async _deleteSubcollection(tournamentId, sub) {
@@ -2103,8 +2116,10 @@ window.FirestoreDB = {
   async deleteTournament(tournamentId) {
     if (!this.db) return;
     var tId = String(tournamentId);
-    for (var i = 0; i < this._tournamentSubcollections.length; i++) {
-      var sub = this._tournamentSubcollections[i];
+    // sandbox: TODAS as partes são dele e ninguém mais as limpa — ver `_sandboxSubcollections`
+    var _subs = this._ehSandbox(tId) ? this._sandboxSubcollections : this._tournamentSubcollections;
+    for (var i = 0; i < _subs.length; i++) {
+      var sub = _subs[i];
       try {
         var n = await this._deleteSubcollection(tId, sub);
         if (n && window._log) window._log('[delete torneio]', tId, '→', n, 'doc(s) de', sub);
@@ -2587,8 +2602,41 @@ window.FirestoreDB = {
   async loadTournamentById(id) {
     if (!this.db || !id) return null;
     try {
-      var doc = await this._tRef(id).get();
-      if (!doc.exists) return null;
+      /* ⚠️ A PRIMEIRA LEITURA PODE FALHAR EM VEZ DE "NÃO EXISTIR", e ignorar isso foi o que
+       * me fez publicar o fallback abaixo sem ele nunca rodar (medido no Emulator): a regra
+       * de `tournaments/{id}` desreferencia `resource.data`, e num documento INEXISTENTE
+       * `resource` é nulo — a avaliação erra e o SDK devolve `permission-denied`, não um
+       * snapshot vazio. Por isso o erro é guardado, não relançado: quem decide se é "não
+       * encontrado" é o fim desta função, depois de perguntar também a `sandboxes`. */
+      var doc = null, _erro1 = null;
+      try { doc = await this._tRef(id).get(); } catch (_e1) { _erro1 = _e1; }
+      /* ⭐ ABERTURA FRIA DE SANDBOX — O LINK DIRETO NÃO TEM CONTEXTO (2.1.88).
+       * `_ehSandbox` decide por FATO: o ouvinte registrou o id, ou o objeto em memória diz
+       * `isSandbox`. Num navegador que ACABOU DE ABRIR em `#tournaments/{sbId}` não existe
+       * fato nenhum — sem lista, sem cache, sem `_sbIdsConhecidos` —, então a rota cai em
+       * `tournaments`, o documento não está lá e a tela dizia "não encontrado".
+       * ⇒ Aqui o fato é CRIADO: não achou em `tournaments`, pergunta a `sandboxes`; achando,
+       * REGISTRA o id, e a partir daí as partes (`_montaDeSubcolecoes`) e toda leitura e
+       * escrita seguintes já roteiam sozinhas — inclusive `results`→`resultsSandbox`.
+       * ⛔ E isto não abre nada pra ninguém: as Rules de `sandboxes` entregam só ao
+       * `sandboxOwnerUid`. Pra qualquer outra pessoa a leitura é NEGADA e o desfecho é o
+       * mesmo "não encontrado" — o `catch` existe pra isso, não pra esconder erro. */
+      if ((!doc || !doc.exists) && !this._ehSandbox(id)) {
+        try {
+          var _sbDoc = await this.db.collection('sandboxes').doc(String(id)).get();
+          if (_sbDoc && _sbDoc.exists) {
+            window._sbIdsConhecidos = window._sbIdsConhecidos || {};
+            window._sbIdsConhecidos[String(id)] = true;
+            doc = _sbDoc;
+          }
+        } catch (_eSbFrio) { /* negado = não é seu sandbox; segue como não encontrado */ }
+      }
+      if (!doc || !doc.exists) {
+        // não achou em lugar nenhum: se a primeira leitura tinha erro DE VERDADE, ele
+        // aparece agora — engoli-lo faria "sem permissão" e "não existe" virarem a mesma coisa.
+        if (_erro1) throw _erro1;
+        return null;
+      }
       var _t = doc.data();
       // o documento diz o que saiu dele; enquanto não disser nada, nada muda
       var _fora = Array.isArray(_t._semPesados) ? _t._semPesados : null;

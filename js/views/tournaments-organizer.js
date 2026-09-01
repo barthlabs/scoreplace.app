@@ -47,7 +47,9 @@ window._criaSandboxFiel = async function (origId, cu) {
     if (!d.ok || !d.id) return _erro('sem-resposta', 'O servidor não confirmou a criação.');
     if (typeof showNotification === 'function') {
         showNotification('🧪 Sandbox ' + (d.reaproveitado ? 'aberto' : 'criado'),
-          '"(SB)" — réplica fiel provada no servidor' + (d.docsCopiados ? (' (' + d.docsCopiados + ' documentos)') : '') + '.', 'success');
+          // ⚠️ 2.1.88: o nome do sandbox é o do ORIGINAL (a identidade é a tarja vermelha na
+          // ficha, não um prefixo colado no nome — prefixar era adulterar a cópia).
+          'Réplica fiel provada no servidor' + (d.docsCopiados ? (' (' + d.docsCopiados + ' documentos)') : '') + '.', 'success');
     }
     // o ouvinte de `sandboxes` traz o documento; até lá, já sabemos rotear este id.
     window._sbIdsConhecidos = window._sbIdsConhecidos || {};

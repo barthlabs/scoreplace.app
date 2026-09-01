@@ -3273,6 +3273,14 @@ function renderTournaments(container, tournamentId = null) {
 
             ${pendingInviteBannerHtml}
 
+            ${/* ⭐ A IDENTIDADE DE SANDBOX É ESTA TARJA, NÃO O NOME (2.1.88).
+                 Até a 2.1.87 o sandbox se anunciava com um "(SB) " colado no nome — e nome
+                 é ESTADO do torneio: prefixá-lo é adulterar a cópia que o sandbox existe
+                 pra reproduzir. Ordem do dono: _"preserve a identidade visual de sandbox por
+                 banner/isSandbox, não pelo nome"_. A tarja é a mesma do cartão do dashboard,
+                 e some sozinha em torneio real porque depende só de `isSandbox`. */ ''}
+            ${t.isSandbox ? `<div style="background:#b91c1c;color:#fff;text-align:center;font:800 11px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:1.5px;padding:6px 8px;border-radius:8px;margin-top:10px;">🧪 SANDBOX · TORNEIO DE TESTE</div>` : ''}
+
             <!-- Middle Left: Nome + Logo + Favorito -->
             <!-- Logo: na tela de detalhe ocupa 1/3 da largura do card (max 160px), cap responsivo via CSS min() -->
             <div style="display: flex; align-items: ${window._tourLogoSrc(t) && tournamentId ? 'flex-start' : 'center'}; gap: ${window._tourLogoSrc(t) && tournamentId ? '18px' : '14px'}; margin: 1.8rem 0 0.5rem 0;">
