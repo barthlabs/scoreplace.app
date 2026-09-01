@@ -29,6 +29,9 @@ let closeRoundFn = null;    // fecho de rodada no servidor (Suíço-pow2 Opção
 let canRecompile = null;
 let hasDrawnBracket = null;  // régua de 'já tem chave' — a MESMA do cliente (matches/rounds/groups)
 let drawWindow = null; // window do shim Node — expõe _calcNextDrawDate (prazo p/ lançar resultado)
+// L6.R1 (2.1.80): a agenda do sorteio no FUSO DO EVENTO — janela de 1 minuto, calendário
+// em dias civis e a trava de slot. Puro e testado à parte (test-agenda-core.js).
+const _agenda = require('./agenda-core.js');
 try {
   const _dc = require('./draw-core.js');
   generateLigaRound = _dc.generateLigaRound;
@@ -56,7 +59,7 @@ try {
 
 // Versão DESTE código de function. Sobe junto com a do app a cada deploy — é o que prova,
 // no log, qual build atendeu a chamada. Ver [[feedback_indicate_version_on_deploy]].
-const CF_VERSION = '2.1.59';
+const CF_VERSION = '2.1.80';
 
 initializeApp();
 const db = getFirestore();
@@ -387,6 +390,56 @@ async function _leTorneio(tx, ref, tId) {
   return montado;
 }
 
+/* "Transação" só de leitura: `_leTorneio` pede um objeto com `.get(ref)`, e fora de uma
+ * transação isso é o próprio `ref.get()`. Existe pra NÃO haver uma segunda montagem de
+ * torneio dividido escrita à mão — duas versões da mesma leitura divergem. */
+const _TX_LEITURA = { get: (r) => r.get() };
+
+/* O fuso do LOCAL DO EVENTO, na ordem que o dono definiu: (a) declarado no evento;
+ * (b) local/endereço/coordenada do evento; (c) cidade declarada do organizador;
+ * (d) nada seguro → `{ tz: null, motivo }` e quem chama NÃO GERA.
+ * ⛔ O passo (c) é a ÚNICA razão de isto ser async: ler o perfil custa uma leitura, então
+ * só acontece quando o evento sozinho não resolveu. */
+async function _fusoDoEvento(t) {
+  const r = _agenda.resolverFuso(t, null);
+  if (r.tz) return r;
+  const uid = t && (t.creatorUid || t.organizerUid);
+  if (!uid) return r;
+  try {
+    const s = await db.collection('users').doc(String(uid)).get();
+    if (s.exists) return _agenda.resolverFuso(t, s.data() || {});
+  } catch (e) { /* perfil ilegível: continua "não determinado", que é o desfecho seguro */ }
+  return r;
+}
+
+/* ── L6.R1 · A TRAVA MANUAL × AUTOMÁTICO, DO LADO MANUAL ────────────────────────────────
+ * Quando o organizador gera a rodada NA MÃO dentro de um slot que ainda estava devido, ele
+ * CONSOME esse slot: o cron precisa reconhecer a geração e apenas agendar o próximo, em vez
+ * de gerar de novo. A marca é a MESMA (`drawSlotAt`) e é gravada na MESMA transação que
+ * grava a rodada — quem perder a corrida re-executa, relê e desiste.
+ * ⛔ Não bloqueia o manual: se o slot já foi consumido, o organizador continua podendo
+ * sortear (é direito dele, inclusive pra rodada de uma janela perdida). O que a marca faz é
+ * impedir a SEGUNDA geração do MESMO slot.
+ * Devolve o slot consumido, ou null quando o torneio não tem agenda automática.
+ * ⛔ SÍNCRONA de propósito: roda DENTRO da transação, e transação não é lugar de leitura
+ * fora do `tx`. O fuso é resolvido ANTES (uma vez, com `_fusoDoEvento`) e entra por
+ * parâmetro — na re-execução da transação o valor já está em mãos. */
+function _consumirSlotAgendado(t, nowMs, tz) {
+  try {
+    if (!tz || !drawWindow || typeof drawWindow._nextOwedDrawMs !== 'function') return null;
+    if (typeof drawWindow._nextOwedDrawMs(t, nowMs) !== 'number') return null;  // sem sorteio previsto
+    const fz = { tz: tz };
+    const inc = !!(drawWindow._isIncrementalLigaPhase && drawWindow._isIncrementalLigaPhase(t));
+    const cur = t.currentPhaseIndex || 0;
+    const fonte = inc ? ((t.phases && t.phases[cur]) || {}) : t;
+    const devido = _agenda.slotDevido(_agenda.cfgDeAgenda(fonte), nowMs, fz.tz);
+    if (devido == null) return null;
+    if (_agenda.slotReivindicado(t, devido)) return devido;   // já consumido — nada a escrever
+    _agenda.reivindicarSlot(t, devido);
+    return devido;
+  } catch (e) { return null; }   // a trava nunca pode derrubar um sorteio manual
+}
+
 
 /* Grava o torneio respeitando o que saiu do documento. Devolve o mesmo `{persist, clean}`
  * de sempre, pra quem chama seguir devolvendo `clean` ao cliente sem saber de nada disto.
@@ -532,10 +585,36 @@ function _applyWriteBoundary(data) {
   data.adminEmails = w._computeAdminEmails(data);
   data.adminUids = w._computeAdminUids(data);
   data.memberUids = w._mergeMemberUids(data, data.memberUids, w._computeMemberUids(data));
+  /* ── L6.R1 · O `nextDrawAt` CANÔNICO SAI DAQUI, e nunca do passado ────────────────────
+   * Esta é a fronteira por onde TODA escrita do autodraw passa — sorteio manual, fecho de
+   * rodada, placar e o cron. Por isso a regra do agendamento mora aqui e não em cada porta:
+   * uma segunda régua de agenda em outro lugar divergiria em silêncio.
+   * A separação é: `_nextOwedDrawMs` decide SE ainda há sorteio previsto (formato, manual,
+   * temporada encerrada, fase de chave, rodadas da fase) e o `agenda-core` decide QUANDO —
+   * no calendário e no FUSO DO EVENTO.
+   * ⛔ E o resultado NUNCA é um instante vencido: ou é o slot cuja janela de 1 minuto ainda
+   * está viva e não foi reivindicada, ou é o próximo slot do calendário. Era exatamente
+   * isso que faltava — um `nextDrawAt` vencido reescrito a cada gravação prendia o
+   * documento na consulta do cron pra sempre (L6.P1).
+   * ⛔ Sem fuso seguro, o campo SAI: sem ele não há calendário, e chutar horário é pior que
+   * não agendar. O diagnóstico é escrito por quem chama (autoDraw/autoDrawReconcile). */
   try {
     const owed = w._nextOwedDrawMs(data);
-    if (typeof owed === 'number') data.nextDrawAt = owed;
-    else delete data.nextDrawAt;
+    if (typeof owed !== 'number') {
+      delete data.nextDrawAt;
+    } else {
+      const _fz = _agenda.resolverFuso(data, null);
+      if (!_fz.tz) {
+        delete data.nextDrawAt;
+      } else {
+        const _inc = !!(w._isIncrementalLigaPhase && w._isIncrementalLigaPhase(data));
+        const _cur = data.currentPhaseIndex || 0;
+        const _fonte = _inc ? ((data.phases && data.phases[_cur]) || {}) : data;
+        const _q = _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(_fonte), data, Date.now(), _fz.tz);
+        if (typeof _q === 'number') data.nextDrawAt = _q;
+        else delete data.nextDrawAt;
+      }
+    }
   } catch (e) { /* otimização; nunca derruba a gravação */ }
 
   const clean = w._cleanUndefined(data);
@@ -619,6 +698,9 @@ exports.drawRound = onCall(async (request) => {
         adminUids: _p.adminUids, adminEmails: _p.adminEmails, organizerEmail: _p.organizerEmail });
   }
   await _preloadDrawNames(pre.data()); // popula drawWindow._profileNameByUid
+  // L6.R1: o fuso do evento é resolvido FORA da transação (pode custar uma leitura de
+  // perfil) e entra na trava de slot lá dentro, que é síncrona.
+  const _fzManual = await _fusoDoEvento(pre.data());
 
   // A VERSÃO no log é o contrato: se a linha não disser CF_VERSION, é build velha atendendo
   // (deploy não pegou / instância antiga). Sem isto não dá pra saber que código respondeu.
@@ -681,6 +763,11 @@ exports.drawRound = onCall(async (request) => {
     t.history.push({ date: new Date().toISOString(), message: msg });
 
     // v4.1.30: o sorteio LIMPA a presença (drawInitial já zera checkedIn/absent).
+    /* L6.R1 · MANUAL × AUTOMÁTICO: se havia um slot agendado devido, este sorteio o CONSOME
+     * — na mesma transação que grava a rodada. O cron então reconhece a geração e apenas
+     * agenda o próximo slot, em vez de sortear de novo. */
+    const _slotManual = _consumirSlotAgendado(t, Date.now(), _fzManual && _fzManual.tz);
+    if (_slotManual) console.log(`drawRound: slot ${new Date(_slotManual).toISOString()} consumido pelo manual (${_fzManual.tz})`);
     const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
     // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
@@ -1067,6 +1154,7 @@ exports.closeRound = onCall(async (request) => {
     throw _drawFail('permission-denied', 'Só um participante ou o organizador fecha a rodada.', { tId, uid, email: email || '(sem email)' });
   }
   await _preloadDrawNames(pre.data()); // nome vivo por uid (o motor gera a próxima rodada e lê nomes)
+  const _fzClose = await _fusoDoEvento(pre.data());   // L6.R1: fuso fora da transação
 
   let out;
   try {
@@ -1086,6 +1174,10 @@ exports.closeRound = onCall(async (request) => {
         // (outro fechou primeiro, ou a rodada não fechou de fato). O cliente reconcilia pelo listener.
         return { ok: false, reason: (res && res.reason) || 'close-failed' };
       }
+      /* L6.R1 · MANUAL × AUTOMÁTICO: fechar a rodada e gerar a próxima CONSOME o slot
+       * agendado que estivesse devido — mesma marca, mesma transação. */
+      const _slotClose = _consumirSlotAgendado(t, Date.now(), _fzClose && _fzClose.tz);
+      if (_slotClose) console.log(`closeRound: slot ${new Date(_slotClose).toISOString()} consumido pelo manual (${_fzClose.tz})`);
       const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
       return { ok: true, branch: res.branch, tournament: b.clean };
     });
@@ -1115,7 +1207,7 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
   const snap = await db.collection('tournaments').where('nextDrawAt', '<=', now.getTime()).get();
 
   for (const doc of snap.docs) {
-    const t = doc.data();
+    let t = doc.data();   // reatribuído pelo torneio MONTADO quando a rodada nasce
     const tId = doc.id;
 
     // v3.1.14 (brick 4 etapa 4): Liga incremental "Pontos Corridos rodada a rodada" de
@@ -1130,211 +1222,167 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
       continue;
     }
 
-    // Skip if not Liga/Ranking format with auto-draw
+    /* ── L6.R1 · FUSO DO EVENTO, JANELA DE 1 MINUTO E TORNEIO DIVIDIDO ──────────────────
+     * O que havia aqui errava três coisas de uma vez, e as três foram medidas:
+     *   ① montava o horário com offset FIXO (`-03:00`) — o horário de Brasília de hoje, não
+     *      o do EVENTO: erra Manaus, erra o Acre, erra qualquer torneio fora do Brasil e
+     *      voltaria a errar no dia em que o horário de verão voltar;
+     *   ② decidia o elenco no documento CRU. Num torneio DIVIDIDO o elenco mora em
+     *      `inscritos` e o documento traz `participants: []` — a guarda `< 2` matava o
+     *      sorteio EM SILÊNCIO. Medido em 31/ago: 1 torneio, 10 inscritos na subcoleção,
+     *      166 min vencido, ZERO linha de log (L6.P1 na auditoria);
+     *   ③ gravava `rounds` direto no doc, o que devolveria os jogos ao documento e desfaria
+     *      a divisão.
+     * Agora: fuso IANA do local do evento, janela do MESMO MINUTO local, montagem por
+     * `_leTorneio` DENTRO da transação e persistência exclusivamente por `_gravaTorneio`. */
     const isLiga = t.format === 'Liga' || t.format === 'Ranking';
     if (!isLiga) continue;
     if (t.drawManual) continue;
     if (!t.drawFirstDate) continue;
     if (t.status === 'finished') continue;
-    // v2.4.12: temporada acabou (endDate ou ligaSeasonMonths) → não gerar mais
-    // rodadas nem notificações. Pra temporada ativa não muda nada.
+    // v2.4.12: temporada acabou (endDate ou ligaSeasonMonths) → não gerar mais rodadas.
     if (_ligaSeasonEnded(t, now)) { console.log(`Auto-draw: ${tId} — temporada encerrada, skip`); continue; }
-    // v2.3.96: já há um sorteio em revisão (rede de segurança) aguardando o
-    // organizador publicar/anular — não re-sortear (senão re-randomiza a cada hora).
+    // v2.3.96: já há um sorteio em revisão aguardando o organizador publicar/anular.
     if (t.pendingDraw) { console.log(`Auto-draw: ${tId} tem pendingDraw em revisão — skip`); continue; }
 
-    // Check participants
-    const participants = Array.isArray(t.participants) ? t.participants : [];
-    if (participants.length < 2) continue;
-
-    // v3.x: construtor de fases — auto-draw para no fim da Fase 0 classificatória
-    // e NUNCA roda em fase de chave (avanço de fase é manual). Helper self-contained
-    // no vendor tournaments-utils (drawWindow). Single-phase → false (sem efeito).
-    if (drawWindow && typeof drawWindow._suppressAutoDrawForPhases === 'function' &&
-        drawWindow._suppressAutoDrawForPhases(t)) {
-      console.log(`Auto-draw: skip ${tId} — fase classificatória completa ou em fase de chave (avanço manual)`);
-      continue;
-    }
-
-    // Calculate next draw date.
-    // FIX timezone: o horário agendado (drawFirstDate + drawFirstTime) é hora
-    // LOCAL do Brasil (BRT, UTC-3, sem horário de verão desde 2019). O servidor
-    // roda em UTC — sem o offset, "19:00" virava 19:00 UTC = 16:00 BRT e o
-    // sorteio disparava ~3h ANTES do horário programado. Anexar "-03:00"
-    // interpreta corretamente como BRT.
-    let _fdDate = String(t.drawFirstDate);
-    let _fdTime = t.drawFirstTime || '19:00';
-    if (_fdDate.indexOf('T') !== -1) {
-      const _parts = _fdDate.split('T');
-      _fdDate = _parts[0];
-      if (_parts[1]) _fdTime = _parts[1].slice(0, 5); // HH:MM
-    }
-    const firstDrawStr = _fdDate + 'T' + _fdTime + ':00-03:00';
-    const firstDraw = new Date(firstDrawStr);
-    if (isNaN(firstDraw.getTime())) continue;
-
-    // v2.6.55: intervalo < 1 = SEM repetição → exatamente 1 rodada (1 sorteio único),
-    // mesmo com a temporada/término ainda aberta. Espelha _calcNextDrawDate do cliente.
-    const _interval = parseInt(t.drawIntervalDays, 10);
-    const _noRepeat = !_interval || _interval < 1;
-    const intervalMs = (_noRepeat ? 7 : _interval) * 86400000;
-
-    // If first draw is in the future, skip
-    if (firstDraw > now) continue;
-
-    // Calculate how many intervals have passed
-    const elapsed = now.getTime() - firstDraw.getTime();
-    const intervalsCompleted = _noRepeat ? 0 : Math.floor(elapsed / intervalMs);
-    const expectedRounds = _noRepeat ? 1 : (intervalsCompleted + 1);
-
-    const currentRounds = Array.isArray(t.rounds) ? t.rounds.length : 0;
-    const currentRodadas = Array.isArray(t.rodadas) ? t.rodadas.length : 0;
-    const actualRounds = Math.max(currentRounds, currentRodadas);
-
-    // Horário agendado da rodada atual (base do firstDraw + intervalos completos).
-    const mostRecentScheduled = new Date(firstDraw.getTime() + intervalsCompleted * intervalMs);
-
-    // v2.4.17: dedup por TIMESTAMP — espelha o cliente (bracket-logic poller).
-    // Sem isto, se o organizador muda drawFirstDate/drawIntervalDays no meio da
-    // temporada, o gate por CONTAGEM (actualRounds < expectedRounds) dispara uma
-    // rodada POR HORA até a contagem alcançar o esperado — gerando rodadas em
-    // sequência (e notificações). O cliente só dispara se ainda não sorteou pro
-    // horário agendado atual; aqui igual: pula se já sorteamos pra este slot.
-    // Assim a cadência fica uma rodada por intervalo, mesmo após mudar a config.
-    const lastFired = t.lastAutoDrawAt ? new Date(t.lastAutoDrawAt) : null;
-    if (lastFired && !isNaN(lastFired.getTime()) && lastFired >= mostRecentScheduled) {
-      continue;
-    }
-
-    // If we need more rounds, generate one
-    if (actualRounds < expectedRounds) {
-      console.log(`Auto-draw: generating round ${actualRounds + 1} for ${tId} (${t.name})`);
-
-      // Se o motor de sorteio não carregou, NUNCA cair no stub antigo — pula e
-      // deixa o cliente (organizador) sortear corretamente.
-      if (typeof generateLigaRound !== 'function') {
-        console.error(`Auto-draw: draw-core indisponível — pulando ${tId}`);
-        continue;
+    /* (1) O FUSO DO EVENTO. Sem fuso seguro NÃO se sorteia — e o documento sai da agenda,
+     * senão o diagnóstico se repetiria a cada minuto pra sempre. `autoDrawReconcile`
+     * reavalia a cada 30 min e devolve o agendamento sozinho quando a origem existir. */
+    const _fuso = await _fusoDoEvento(t);
+    if (!_fuso.tz) {
+      console.warn(`[autoDraw] ${tId} SEM FUSO — não sorteio automaticamente: ${_fuso.motivo}`);
+      if (typeof t.nextDrawAt === 'number') {
+        try { await doc.ref.update({ nextDrawAt: FieldValue.delete() }); }
+        catch (e) { console.error(`[autoDraw] ${tId} ao tirar da agenda:`, e && e.message); }
       }
+      continue;
+    }
 
-      try {
-        // v2.3.91: usa o MESMO motor de sorteio do app (Rei/Rainha, duplas,
-        // equilíbrio, categorias, folgas justas, desempate). Muta `t` in-place.
-        t.id = tId;
-        await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor
-        _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
-        // v1.7.35: quantas rodadas existiam ANTES do motor rodar. É o que permite
-        // saber, depois, quais rodadas são CONTRIBUIÇÃO deste sorteio — e só elas
-        // viajam pro banco (ver o rebase transacional na gravação, abaixo).
-        const _roundsAntes = Array.isArray(t.rounds) ? t.rounds.length : 0;
-        const res = generateLigaRound(t, mostRecentScheduled);
-        if (!res.ok) {
-          console.log(`Auto-draw: skip ${tId} (${res.reason})`);
-          continue;
-        }
+    /* (2) A JANELA. A rodada automática só nasce no MESMO MINUTO LOCAL do horário
+     * agendado; o Scheduler pode entrar alguns segundos depois e isso vale. */
+    const _cfg = _agenda.cfgDeAgenda(t);
+    const _nowMs = now.getTime();
+    const _devido = _agenda.slotDevido(_cfg, _nowMs, _fuso.tz);
+    const _futuro = _agenda.proximoSlotFuturo(_cfg, _nowMs, _fuso.tz);
 
-        // v2.6.74: avança `nextDrawAt` pro próximo slot devido. O motor já setou
-        // t.lastAutoDrawAt = mostRecentScheduled → o helper devolve o PRÓXIMO slot
-        // (futuro), então a query não re-dispara este. null = sem mais sorteio
-        // (sorteio único feito / temporada encerrada) → remove o campo.
-        let _nextDrawMs = null;
+    if (_devido == null || !_agenda.mesmoMinuto(_nowMs, _devido)) {
+      /* JANELA PERDIDA (ou ainda não chegou). ⛔ Não gera rodada atrasada, ⛔ não desliga o
+       * auto-sorteio, e reagenda pro próximo horário de CALENDÁRIO — nunca `agora +
+       * intervalo`, que deslocaria o ciclo pra sempre. O organizador segue podendo sortear
+       * a rodada perdida na mão. */
+      const _quer = (typeof _futuro === 'number') ? _futuro : null;
+      const _tem = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
+      if (_quer !== _tem) {
         try {
-          if (drawWindow && typeof drawWindow._nextOwedDrawMs === 'function') {
-            _nextDrawMs = drawWindow._nextOwedDrawMs(t, now.getTime());
+          await doc.ref.update({ nextDrawAt: _quer != null ? _quer : FieldValue.delete() });
+          if (_devido != null) {
+            console.log(`Auto-draw: ${tId} — janela do slot perdida (fuso ${_fuso.tz}, fonte ${_fuso.fonte});` +
+              ` reagendado pro próximo slot de calendário: ${_quer != null ? new Date(_quer).toISOString() : '(nenhum)'}`);
           }
-        } catch (e) { /* best-effort */ }
-        const _nextDrawField = (typeof _nextDrawMs === 'number') ? _nextDrawMs : FieldValue.delete();
+        } catch (e) { console.error(`[autoDraw] ${tId} ao reagendar:`, e && e.message); }
+      }
+      continue;
+    }
 
-        // ── REDE DE SEGURANÇA (v2.3.96): sorteio em revisão ────────────────────
-        // Se t.stagedDraw, o sorteio NÃO vai a público nem notifica. Grava SÓ em
-        // `pendingDraw` — o doc público (rounds/status/standings) fica INTOCADO,
-        // então participantes não veem nada. O organizador revisa no app e clica
-        // "Publicar" (move pendingDraw → rounds + notifica) ou "Anular".
-        if (t.stagedDraw) {
-          const pendingDraw = {
-            rounds: t.rounds || [],
-            standings: t.standings || null,
-            sitOutHistory: t.sitOutHistory || null,
-            opponentHistory: t.opponentHistory || null,
-            // v2.7.9: lista de espera do Rei/Rainha (sobra da divisão por 4). Sem
-            // isso, o publish não tinha o que carregar e a espera sumia.
-            monarchWaitlist: t.monarchWaitlist || null,
-            status: 'active',
-            roundIndex: res.roundIndex,
-            roundNumber: res.roundNumber,
-            firstDraw: !!res.firstDraw,
-            generatedAt: now.toISOString(),
-            source: 'autoDraw',
-          };
-          await db.collection('tournaments').doc(tId).update({
-            pendingDraw: pendingDraw,
-            lastAutoDrawAt: t.lastAutoDrawAt,
-            nextDrawAt: _nextDrawField,
-            updatedAt: t.updatedAt,
-          });
-          console.log(`Auto-draw STAGED (review): round ${res.roundNumber} held in pendingDraw for ${tId} — no public, no notify`);
-          continue; // não publica, não notifica
-        }
+    // Motor indisponível → NUNCA improvisar; o organizador sorteia pelo app.
+    if (typeof generateLigaRound !== 'function') {
+      console.error(`Auto-draw: draw-core indisponível — pulando ${tId}`);
+      continue;
+    }
 
-        // Persiste só os campos que o sorteio mutou (evita reescrever o doc todo
-        // e clobber de edições concorrentes do organizador).
-        const payload = {
-          rounds: t.rounds,
-          status: t.status,
-          lastAutoDrawAt: t.lastAutoDrawAt,
-          nextDrawAt: _nextDrawField,
-          updatedAt: t.updatedAt,
-        };
-        if (t.standings) payload.standings = t.standings;
-        if (t.sitOutHistory) payload.sitOutHistory = t.sitOutHistory;       // fairness das folgas
-        if (t.opponentHistory) payload.opponentHistory = t.opponentHistory; // anti-repeat de duplas
-        if (t.monarchWaitlist) payload.monarchWaitlist = t.monarchWaitlist; // v2.7.9: espera Rei/Rainha
-        if (t.drawVisibility) payload.drawVisibility = t.drawVisibility;
-        // v3.0.x: PARIDADE — _generateNextRound seta t.tournamentStarted (Pontos Corridos
-        // não-manual). Sem incluir no payload seletivo, o sorteio do SERVIDOR perdia esse
-        // campo (só o cliente persistia) → banner "Iniciar Torneio" reaparecia e a duração
-        // do torneio quebrava (NaN). Mesma classe dos incidentes monarchWaitlist/tournamentStarted.
-        if (t.tournamentStarted) payload.tournamentStarted = t.tournamentStarted;
-        // v4.4.70 FONTE ÚNICA Rei/Rainha: normaliza o que vai ser GRAVADO (grupos
-        // com matchIds, sem group.matches embutido — round.matches é a fonte
-        // única). Chama a MESMA função canônica que o cliente (bracket-model.js,
-        // vendored → drawWindow). Sem isto o sorteio do SERVIDOR regravava cada
-        // jogo Rei/Rainha em dobro. Clona só rounds (payload tem sentinel
-        // FieldValue em nextDrawAt que não sobrevive a JSON) → não muta t em
-        // memória, que ainda é lido nas notificações abaixo.
-        if (drawWindow && typeof drawWindow._foldMonarchGroups === 'function' && Array.isArray(payload.rounds)) {
-          payload.rounds = JSON.parse(JSON.stringify(payload.rounds));
-          drawWindow._foldMonarchGroups(payload);
-        }
-        // ── v1.7.35 · REBASE TRANSACIONAL — o servidor não sobrescreve o que
-        // aconteceu na quadra enquanto ele pensava ────────────────────────────────
-        // O `t` vem da QUERY lá em cima (uma leitura só, para todos os torneios) e
-        // entre ela e este ponto há `_preloadDrawNames` (perfis pela rede) mais os
-        // torneios processados em SEQUÊNCIA — a janela é de segundos, não de
-        // milissegundos. Gravar `rounds: t.rounds` cru significa devolver ao banco a
-        // chave como ela estava na leitura: um placar lançado no meio tempo seria
-        // apagado PELO SERVIDOR. É a mesma classe que fechei no cliente (1.7.26–34),
-        // e aqui não adianta o guard do `saveTournament` — este caminho não passa por
-        // ele (Admin SDK, e o cliente nem está envolvido).
-        //
-        // Conserto: dentro de UMA transação, releio o doc e REBASEIO — a contribuição
-        // deste sorteio são as rodadas que o motor ACRESCENTOU (as de índice >=
-        // `_roundsAntes`); todo o resto vem da leitura FRESCA, com os placares que
-        // chegaram. Dedup por número de rodada torna o retry idempotente (a transação
-        // pode re-executar; sem isso, uma re-execução duplicaria a rodada).
-        await db.runTransaction(async (tx) => {
-          const _ref = db.collection('tournaments').doc(tId);
-          const _snap = await tx.get(_ref);
-          const _fresh = _snap.exists ? (_snap.data() || {}) : {};
-          const _rb = rebaseRounds(_fresh.rounds, t.rounds, _roundsAntes);
-          if (_rb.descartadas) {
-            console.log(`Auto-draw: rebase descartou ${_rb.descartadas} rodada(s) que já estavam no doc (retry idempotente) — ${tId}`);
+    /* (3) DENTRO DA JANELA. O bloco abaixo fecha junto com o `catch` que já existia — a
+     * geração inteira continua sendo defense-in-depth: falhar aqui não escreve nada. */
+    {
+      try {
+        const _refT = doc.ref;
+        /* Nomes vivos são N leituras em `users/` e a transação os releria a cada retry, então
+         * ficam FORA dela — e saem do torneio MONTADO, senão num torneio dividido não haveria
+         * uid nenhum pra buscar (era outro efeito de decidir no documento cru). */
+        try {
+          const _tNomes = await _leTorneio(_TX_LEITURA, _refT, tId);
+          if (_tNomes) { _tNomes.id = tId; await _preloadDrawNames(_tNomes); }
+        } catch (e) { console.warn(`[autoDraw] ${tId} pré-carga de nomes falhou:`, e && e.message); }
+
+        const _out = await db.runTransaction(async (tx) => {
+          // ⭐ MONTA das subcoleções DENTRO da transação: é a única forma de decidir elenco
+          // com o dado real e ainda ser clobber-free.
+          const tf = await _leTorneio(tx, _refT, tId);
+          if (!tf) return { pulou: 'torneio-sumiu' };
+          tf.id = tId;
+          const _tAntes = _antesDoMotor(tf);
+          if (tf.status === 'finished') return { pulou: 'finished' };
+          if (tf.pendingDraw) return { pulou: 'pendingDraw' };
+          if (drawWindow && typeof drawWindow._suppressAutoDrawForPhases === 'function' &&
+              drawWindow._suppressAutoDrawForPhases(tf)) return { pulou: 'fase-classificatoria-completa' };
+
+          const _parts = Array.isArray(tf.participants) ? tf.participants : [];
+          if (_parts.length < 2) return { pulou: 'menos-de-2-inscritos', n: _parts.length };
+
+          /* ⛔ A TRAVA: a rodada de um slot nasce UMA vez. Manual e automático passam pela
+           * mesma marca (`drawSlotAt`), gravada na MESMA transação que grava a rodada — é o
+           * Firestore que serializa: quem perder a corrida re-executa, relê a marca e
+           * desiste. Não é estado local, não é listener, não é timeout. */
+          if (!_agenda.reivindicarSlot(tf, _devido)) return { pulou: 'slot-ja-sorteado' };
+
+          _enrichParticipantsFromProfiles(tf); // gênero/skill/e-mail por uid
+          const _res = generateLigaRound(tf, new Date(_devido));
+          if (!_res || !_res.ok) return { pulou: (_res && _res.reason) || 'no-round-generated' };
+
+          // o motor também mexe em lastAutoDrawAt; a marca do slot é a nossa e fica.
+          tf.drawSlotAt = _devido;
+          tf.lastAutoDrawAt = new Date(_devido).toISOString();
+          tf.updatedAt = new Date().toISOString();
+
+          if (tf.stagedDraw) {
+            /* REDE DE SEGURANÇA (v2.3.96): o sorteio fica EM REVISÃO e o documento público
+             * não pode mudar. Persiste-se uma cópia do estado ANTERIOR ao motor com só os
+             * campos de agenda e o pacote em `pendingDraw` — assim `_gravaTorneio` vê diff
+             * ZERO nas partes divididas e toca apenas o documento. */
+            const tEspera = _tAntes ? JSON.parse(JSON.stringify(_tAntes)) : Object.assign({}, tf);
+            tEspera.pendingDraw = {
+              rounds: tf.rounds || [], standings: tf.standings || null,
+              sitOutHistory: tf.sitOutHistory || null, opponentHistory: tf.opponentHistory || null,
+              monarchWaitlist: tf.monarchWaitlist || null, status: 'active',
+              roundIndex: _res.roundIndex, roundNumber: _res.roundNumber, firstDraw: !!_res.firstDraw,
+              generatedAt: new Date().toISOString(), source: 'autoDraw'
+            };
+            tEspera.drawSlotAt = tf.drawSlotAt;
+            tEspera.lastAutoDrawAt = tf.lastAutoDrawAt;
+            tEspera.updatedAt = tf.updatedAt;
+            _gravaTorneio(tx, _refT, tEspera, _tAntes);
+            return { pulou: 'staged', roundNumber: _res.roundNumber };
           }
-          tx.update(_ref, Object.assign({}, payload, { rounds: _rb.rounds }));
+
+          _gravaTorneio(tx, _refT, tf, _tAntes);
+          return { ok: true, t: tf, res: _res };
         });
 
+        if (!_out || !_out.ok) {
+          const _m = (_out && _out.pulou) || 'sem-resultado';
+          if (_m === 'staged') {
+            // o próprio `_gravaTorneio` já reagendou pela fronteira canônica
+            console.log(`Auto-draw STAGED (review): round ${_out.roundNumber} held in pendingDraw for ${tId} — no public, no notify`);
+            continue;
+          }
+          console.log(`Auto-draw: skip ${tId} (${_m}${(_out && _out.n !== undefined) ? ' n=' + _out.n : ''})` +
+            ` · fuso ${_fuso.tz} (${_fuso.fonte})`);
+          /* ⭐ O SLOT FOI CONSUMIDO DE QUALQUER JEITO — inclusive quando quem gerou foi o
+           * MANUAL (`slot-ja-sorteado`), que é literalmente a regra: o automático reconhece
+           * a geração e apenas agenda o próximo. Sem isto o documento voltaria à consulta a
+           * cada minuto com o mesmo horário vencido, que foi o defeito da L6.P1. */
+          const _q2 = (typeof _futuro === 'number') ? _futuro : null;
+          const _t2 = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
+          if (_q2 !== _t2) {
+            try { await doc.ref.update({ nextDrawAt: _q2 != null ? _q2 : FieldValue.delete() }); }
+            catch (e) { console.error(`[autoDraw] ${tId} ao reagendar após skip:`, e && e.message); }
+          }
+          continue;
+        }
+        t = _out.t;
+        const res = _out.res;
+
         console.log(`Auto-draw: round ${res.roundNumber} created with ${res.matchCount} match(es)` +
-          ` [${res.firstDraw ? 'first draw' : 'next round'}] for ${tId}`);
+          ` [${res.firstDraw ? 'first draw' : 'next round'}] for ${tId} · fuso ${_fuso.tz} (${_fuso.fonte})`);
 
         // Notify participants (push/in-app personalizado). IDENTIDADE = uid (não
         // email). Cada participante carrega seu(s) uid(s); duplas têm p1Uid/p2Uid.
@@ -1477,36 +1525,84 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     return;
   }
   const nowMs = now.getTime();
-  const owed = drawWindow._nextOwedDrawMs(t, nowMs);
-  if (typeof owed !== 'number' || owed > nowMs) return; // sem slot devido agora
-  const cur = t.currentPhaseIndex || 0;
-  await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor de fase
-  _enrichParticipantsFromProfiles(t); // v1.3.52: gênero/skill/email por uid
-  if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(t);
-  const ok = drawWindow._phaseGenNextLeagueRound(t, cur);
-  if (!ok) { console.log(`Auto-draw phase: skip ${tId} (gen falhou / jogadores insuficientes)`); return; }
-  // v3.1.16 (inc 8): a Liga incremental de fase posterior mora em t.phaseRounds[cur]
-  // (rodadas reais, mesma forma de t.rounds da Fase 0) — não mais em t.matches +
-  // phaseLeagueState. Persiste só phaseRounds; dedup por slot.lastAutoDrawAt.
-  t.phaseRounds[cur].lastAutoDrawAt = owed;
-  t.updatedAt = now.toISOString();
-  let nextMs = null;
-  try { nextMs = drawWindow._nextOwedDrawMs(t, nowMs); } catch (e) { /* best-effort */ }
-  const nextField = (typeof nextMs === 'number') ? nextMs : FieldValue.delete();
-  // v4.4.70 FONTE ÚNICA Rei/Rainha: fase posterior também pode ter grupos
-  // Rei/Rainha duplicados (round.matches + monarchGroups[i].matches). Normaliza
-  // o que vai ser gravado via a MESMA função canônica vendored. Clona phaseRounds
-  // (não muta t em memória, lido nas notificações abaixo).
-  let _phaseRoundsToSave = t.phaseRounds;
-  if (drawWindow && typeof drawWindow._foldMonarchGroups === 'function') {
-    _phaseRoundsToSave = JSON.parse(JSON.stringify(t.phaseRounds));
-    drawWindow._foldMonarchGroups({ phaseRounds: _phaseRoundsToSave });
+  const _ref = db.collection('tournaments').doc(tId);
+  /* ── L6.R1 · MESMA DOUTRINA DA FASE 0 ───────────────────────────────────────────────
+   * ① monta das subcoleções (num torneio dividido o elenco/pool não está no documento);
+   * ② fuso do EVENTO e janela do MESMO MINUTO local; janela perdida reagenda o calendário;
+   * ③ trava de slot compartilhada com o manual; ④ persistência só por `_gravaTorneio`. */
+  try {
+    const _mont = await _leTorneio(_TX_LEITURA, _ref, tId);
+    if (_mont) { _mont.id = tId; t = _mont; }
+  } catch (e) { console.warn(`Auto-draw phase: montagem falhou em ${tId}:`, e && e.message); }
+
+  const _fzF = await _fusoDoEvento(t);
+  if (!_fzF.tz) {
+    console.warn(`[autoDraw phase] ${tId} SEM FUSO — não sorteio: ${_fzF.motivo}`);
+    if (typeof t.nextDrawAt === 'number') {
+      try { await _ref.update({ nextDrawAt: FieldValue.delete() }); } catch (e) { /* nada */ }
+    }
+    return;
   }
-  await db.collection('tournaments').doc(tId).update({
-    phaseRounds: _phaseRoundsToSave,
-    nextDrawAt: nextField,
-    updatedAt: t.updatedAt,
+  const cur = t.currentPhaseIndex || 0;
+  const _cfgF = _agenda.cfgDeAgenda((t.phases && t.phases[cur]) || {});
+  const owed = _agenda.slotDevido(_cfgF, nowMs, _fzF.tz);
+  const _futF = _agenda.proximoSlotFuturo(_cfgF, nowMs, _fzF.tz);
+  if (owed == null || !_agenda.mesmoMinuto(nowMs, owed)) {
+    const _q = (typeof _futF === 'number') ? _futF : null;
+    const _h = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
+    if (_q !== _h) {
+      try {
+        await _ref.update({ nextDrawAt: _q != null ? _q : FieldValue.delete() });
+        if (owed != null) console.log(`Auto-draw phase: ${tId} — janela perdida (${_fzF.tz}); próximo slot ${_q != null ? new Date(_q).toISOString() : '(nenhum)'}`);
+      } catch (e) { console.error(`[autoDraw phase] ${tId} ao reagendar:`, e && e.message); }
+    }
+    return;
+  }
+  if (_agenda.slotReivindicado(t, owed)) {
+    console.log(`Auto-draw phase: skip ${tId} (slot-ja-sorteado) — quem gerou foi o manual`);
+    return;
+  }
+  await _preloadDrawNames(t); // v4.5.85: nomes vivos por uid antes do motor de fase
+  /* ⭐ O MOTOR RODA DENTRO DA TRANSAÇÃO, sobre o torneio montado FRESCO. Antes ele rodava
+   * sobre uma leitura de fora e gravava com `.update()` seletivo — sem releitura, portanto
+   * last-write-wins contra qualquer coisa que tivesse acontecido na quadra no meio. E a
+   * trava de slot é reivindicada aqui, na mesma transação que grava a rodada. */
+  const _outF = await db.runTransaction(async (tx) => {
+    const tf = await _leTorneio(tx, _ref, tId);
+    if (!tf) return { pulou: 'torneio-sumiu' };
+    tf.id = tId;
+    const _tAntesF = _antesDoMotor(tf);
+    if (tf.status === 'finished') return { pulou: 'finished' };
+    if (!_agenda.reivindicarSlot(tf, owed)) return { pulou: 'slot-ja-sorteado' };
+    _enrichParticipantsFromProfiles(tf); // v1.3.52: gênero/skill/email por uid
+    if (typeof drawWindow._rehydrateEntryNames === 'function') drawWindow._rehydrateEntryNames(tf);
+    const ok = drawWindow._phaseGenNextLeagueRound(tf, cur);
+    if (!ok) return { pulou: 'gen-falhou-ou-jogadores-insuficientes' };
+    // v3.1.16 (inc 8): a rodada da fase mora em `phaseRounds[cur]`; o dedup por slot é o
+    // `lastAutoDrawAt` da própria fase, e a marca canônica é `drawSlotAt` (topo).
+    tf.phaseRounds[cur].lastAutoDrawAt = owed;
+    tf.drawSlotAt = owed;
+    tf.lastAutoDrawAt = new Date(owed).toISOString();
+    tf.updatedAt = now.toISOString();
+    // v4.4.70 FONTE ÚNICA Rei/Rainha: normaliza os grupos antes de gravar (a mesma
+    // função canônica vendored que o cliente usa).
+    if (drawWindow && typeof drawWindow._foldMonarchGroups === 'function') {
+      try { drawWindow._foldMonarchGroups({ phaseRounds: tf.phaseRounds }); } catch (e) { /* best-effort */ }
+    }
+    _gravaTorneio(tx, _ref, tf, _tAntesF);
+    return { ok: true, t: tf };
   });
+  if (!_outF || !_outF.ok) {
+    console.log(`Auto-draw phase: skip ${tId} (${(_outF && _outF.pulou) || 'sem-resultado'})`);
+    const _q = (typeof _futF === 'number') ? _futF : null;
+    const _h = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
+    if (_q !== _h) {
+      try { await _ref.update({ nextDrawAt: _q != null ? _q : FieldValue.delete() }); }
+      catch (e) { console.error(`[autoDraw phase] ${tId} ao reagendar após skip:`, e && e.message); }
+    }
+    return;
+  }
+  t = _outF.t;
   const _slotRounds = (t.phaseRounds[cur] && t.phaseRounds[cur].rounds) || [];
   const newMax = _slotRounds.reduce((mx, r) => Math.max(mx, (r && r.round) || 1), 0);
   // v4.5.73: carrega uids do slot (resolve nome vivo + casa "meu jogo" por uid).
@@ -1710,13 +1806,30 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
     return;
   }
   const snap = await db.collection('tournaments').get();
+  let semFuso = 0;
   for (const doc of snap.docs) {
     scanned++;
     const t = doc.data();
+    /* ── L6.R1 · A MESMA DECISÃO CANÔNICA DO `autoDraw` ────────────────────────────────
+     * ⛔ Este reconciliador JAMAIS pode recolocar no banco um `nextDrawAt` já vencido: era
+     * assim que o documento ficava preso na consulta do cron pra sempre. `_nextOwedDrawMs`
+     * segue decidindo SE há sorteio previsto (formato, manual, temporada, fase); o QUANDO
+     * vem do calendário no FUSO DO EVENTO, e nunca do passado. Sem fuso seguro o campo sai
+     * — e sai CONTADO, pra o diagnóstico existir sem virar uma linha por minuto. */
     let want = null;
     try {
       const owed = drawWindow._nextOwedDrawMs(t, now);
-      if (typeof owed === 'number') want = owed;
+      if (typeof owed === 'number') {
+        const fz = await _fusoDoEvento(t);
+        if (!fz.tz) { semFuso++; }
+        else {
+          const inc = !!(drawWindow._isIncrementalLigaPhase && drawWindow._isIncrementalLigaPhase(t));
+          const cur = t.currentPhaseIndex || 0;
+          const fonte = inc ? ((t.phases && t.phases[cur]) || {}) : t;
+          const q = _agenda.agendamentoCanonico(_agenda.cfgDeAgenda(fonte), t, now, fz.tz);
+          if (typeof q === 'number') want = q;
+        }
+      }
     } catch (e) { /* doc malformado: trata como sem sorteio devido */ }
     const have = (typeof t.nextDrawAt === 'number') ? t.nextDrawAt : null;
     if (want !== have) {
@@ -1729,7 +1842,8 @@ exports.autoDrawReconcile = onSchedule('every 30 minutes', async (event) => {
     gruposDaEspera += await _formarGruposDaEspera(doc);
   }
   console.log(`[autoDrawReconcile] ${scanned} torneios varridos, ${fixed} nextDrawAt atualizados, ` +
-    `${gruposDaEspera} grupo(s) formado(s) da lista de espera`);
+    `${gruposDaEspera} grupo(s) formado(s) da lista de espera` +
+    (semFuso ? `, ${semFuso} SEM FUSO resolvível (fora da agenda automática — o organizador ainda sorteia na mão)` : ''));
 });
 
 // ─── Push Notifications via FCM ─────────────────────────────────────────────

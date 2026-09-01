@@ -19,6 +19,17 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.80 NÃO ganhou item, e é DECISÃO — mesma família da 2.1.79. Pro usuário ela não
+    // muda NENHUMA tela: é o sorteio AGENDADO da Liga que passou a funcionar em torneio com
+    // os dados divididos (o elenco mora em subcoleção e o cron decidia com a lista vazia do
+    // documento — medido: 10 inscritos, agendamento vencido há 166 min, zero rodada e zero
+    // log), a agenda passou a ser calculada no FUSO DO LOCAL DO EVENTO em vez de um offset
+    // fixo de Brasília, a janela virou o MESMO MINUTO local (janela perdida NÃO gera rodada
+    // atrasada, só reagenda pro próximo horário do calendário) e manual × automático passou
+    // a disputar a mesma trava transacional — uma rodada por slot, sem duplicata. Em js/,
+    // css/ e index.html o diff é SÓ o rito de versão; toda a mudança é `functions-autodraw`.
+    // A trava (check-release-notes) pega OMISSÃO e não sabe julgar isso; a justificativa
+    // fica aqui, pro próximo leitor não achar que faltou.
     // ⚠️ 2.1.79 NÃO ganhou item, e é DECISÃO — mesma razão da 2.1.78 e da 2.1.64. Ela REMOVE
     // código morto: `deleteTournament` tentava apagar `discoveryFeed/{id}` pelo cliente, e essa
     // linha NUNCA funcionou — a regra da coleção é `allow write: if false` desde que a coleção

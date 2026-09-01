@@ -1884,6 +1884,42 @@ que depende de dado que saiu do documento. *Hipótese que fica de pé:* que o la
 documento — plausível pela sequência, **não verificado**, porque exigiria correlacionar
 horário de migração com o log e ler conteúdo que esta leva não expõe.
 
+**L6.R1 — CONCLUÍDA E PUBLICADA (2.1.80, 31/ago/2026).** Fecha a P8 da L6.P1 e corrige a P5
+da L6.P0. Escopo publicado: **`functions-autodraw` e Hosting**, mais nada.
+
+*Problema corrigido:* o sorteio AGENDADO não acontecia em torneio dividido. `exports.autoDraw`
+lia `doc.data()` cru, via `participants: []` (o elenco mora em `inscritos`) e saía num
+`continue` sem log. Junto vinham dois defeitos da mesma família: o horário era montado com
+**offset fixo `-03:00`** (o horário de Brasília, não o do evento) e a persistência gravava
+`rounds` direto no documento, o que devolveria os jogos ao pai e desfaria a divisão.
+
+*Decisões adotadas.* ① **O horário de negócio é o do LOCAL DO EVENTO, por identificador
+IANA**, resolvido nesta ordem: declarado no evento → local/endereço/coordenada do evento →
+cidade do organizador → **e, sem certeza, NÃO se sorteia**, com diagnóstico. ⛔ Nunca UTC,
+offset fixo ou fuso do servidor. ② **O calendário anda em dias civis** e só depois converte —
+somar milissegundos atravessa DST e desloca a hora de parede. ③ **Janela de UM MINUTO local**;
+perdida, não gera atrasado, não desliga nada e reagenda pro próximo slot de CALENDÁRIO
+(⛔ nunca `agora + intervalo`). ④ Dentro da janela, **monta com `_leTorneio` na transação** e
+persiste **só por `_gravaTorneio`**. ⑤ **Trava de slot transacional** (`drawSlotAt`)
+compartilhada por manual e automático: uma rodada por slot, retry não duplica.
+⑥ A regra de agendamento mora na **fronteira única de escrita** (`_applyWriteBoundary`), por
+onde passam sorteio manual, fecho de rodada, placar e cron — e `autoDrawReconcile` segue a
+mesma decisão, então **nunca recoloca um `nextDrawAt` vencido**.
+
+*Gates:* `test-agenda-core.js` (41 asserções, com DST provado em `America/Santiago` porque o
+Brasil não tem desde 2019) e `test-autodraw-dividido.js` (33). Ambos no `npm test` e no
+`npm run test:autodraw`. **Controle contra `c29544c9`:** com o módulo novo presente e o
+`index.js` antigo, o segundo **falha em 8** — montagem na transação, `_gravaTorneio`, trava,
+janela, gravação crua de `rounds`, offset fixo, fuso do evento e o reconciliador.
+
+*⚠️ Consequência dita ANTES de publicar e conferida por simulação read-only:* o torneio que
+estava vencido **não ganhou rodada** — o fuso dele **não é determinável** (sem `timeZone`, sem
+coordenada utilizável, sem local reconhecido, organizador sem cidade), então ele sai da agenda
+automática com diagnóstico, em vez de ganhar `nextDrawAt` futuro. É a regra (d) valendo sobre
+a da janela. ⏳ **Dívida aberta:** enquanto os eventos não declararem fuso (ou não tiverem
+coordenada — medido: `venueLat`/`venueLon` são **nulos nos 44**), o sorteio agendado fica
+inativo para eles. O caminho MANUAL não é afetado. Nenhum dado foi alterado por esta leva.
+
 ## Gates de processo registrados
 
 | Gate | Onde está pendurado | O que barra | Prova |

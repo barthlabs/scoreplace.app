@@ -1042,6 +1042,8 @@ const SUITES = [
   'js/views/phase-generators.test.js',
   'js/views/team-formation.test.js',
   'js/views/phase-brick4.test.js',
+  'functions-autodraw/test-agenda-core.js',       // L6.R1: fuso do evento, janela de 1 min, trava de slot
+  'functions-autodraw/test-autodraw-dividido.js', // L6.R1: sorteio agendado em torneio DIVIDIDO
   'functions-autodraw/test-draw.js',
   'functions-autodraw/test-rebase.js',
   'functions-autodraw/test-groupsby.js',
