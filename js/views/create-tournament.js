@@ -835,6 +835,14 @@ function setupCreateTournamentModal() {
                     <label class="toggle-switch"><input type="checkbox" id="suico-manual-draw"><span class="toggle-slider"></span></label>
                   </div>
                 </div>
+                <!-- L6.R2.1 · AVISO DE FUSO INDETERMINADO. Persistente (não é toast): fica
+                     enquanto o problema existir. Ele NÃO bloqueia nada — o sorteio manual
+                     segue disponível — e NÃO promete agendamento enquanto o fuso for
+                     desconhecido, que é justamente o que a tela não pode afirmar. -->
+                <div id="aviso-fuso-indeterminado" style="display:none;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.45);border-radius:10px;padding:10px 12px;margin-top:10px;">
+                  <div style="font-size:0.82rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);margin-bottom:4px;">⚠️ ${_t('create.tzUnknownTitle')}</div>
+                  <div style="font-size:0.76rem;color:var(--text-muted);line-height:1.5;">${_t('create.tzUnknownBody')}</div>
+                </div>
               </div>
 
               <!-- (Fases do torneio movido para logo após o box FASE 1) -->
@@ -869,6 +877,12 @@ function setupCreateTournamentModal() {
                     <input type="hidden" id="tourn-venue-lon" value="">
                     <input type="hidden" id="tourn-venue-address" value="">
                     <input type="hidden" id="tourn-venue-place-id" value="">
+                    <!-- L6.R2.1: os campos ESTRUTURADOS do Places. A tela já extraía a
+                         cidade pra montar o rótulo e a jogava fora; agora ela é persistida,
+                         que é o que o resolvedor de fuso consegue ler. -->
+                    <input type="hidden" id="tourn-venue-city" value="">
+                    <input type="hidden" id="tourn-venue-state" value="">
+                    <input type="hidden" id="tourn-venue-country" value="">
                     <input type="hidden" id="tourn-venue-photo-url" value="">
                   </div>
                 </div>
@@ -3142,6 +3156,10 @@ function setupCreateTournamentModal() {
   // é como se erra rotação de chave: troca-se uma e a outra segue chamando com a antiga.
 
   window._initPlacesAutocomplete = function () {
+    /* L6.R2.1: o aviso de fuso é avaliado assim que o formulário existe — criação E edição
+     * passam por aqui. Sem isso ele só apareceria depois de o organizador mexer em algo, e
+     * quem abre o formulário já configurado (edição/template) nunca o veria. */
+    setTimeout(function () { try { if (typeof window._atualizarAvisoFuso === 'function') window._atualizarAvisoFuso(); } catch (_e) {} }, 0);
     if (_placesInitialized) return;
 
     var input = document.getElementById('tourn-venue');
@@ -3183,6 +3201,12 @@ function setupCreateTournamentModal() {
         if (addrEl) addrEl.value = '';
         if (placeIdEl) placeIdEl.value = '';
         if (photoUrlEl) photoUrlEl.value = '';
+        // L6.R2.1: o estruturado sai JUNTO — cidade de um local que não é mais o escolhido
+        // é pior que cidade nenhuma (resolveria fuso pelo lugar errado).
+        ['tourn-venue-city', 'tourn-venue-state', 'tourn-venue-country'].forEach(function (id) {
+          var el = document.getElementById(id); if (el) el.value = '';
+        });
+        try { if (typeof window._atualizarAvisoFuso === 'function') window._atualizarAvisoFuso(); } catch (_e) {}
         window._applyVenuePhoto('');
         var mapEl = document.getElementById('venue-create-map');
         if (mapEl) mapEl.style.display = 'none';
@@ -3289,17 +3313,18 @@ function setupCreateTournamentModal() {
       var latEl = document.getElementById('tourn-venue-lat');
       var lonEl = document.getElementById('tourn-venue-lon');
 
-      // Extract city
-      var city = '';
-      if (place.addressComponents) {
-        for (var i = 0; i < place.addressComponents.length; i++) {
-          var comp = place.addressComponents[i];
-          if (comp.types && (comp.types.includes('administrative_area_level_2') || comp.types.includes('locality'))) {
-            city = comp.longText || '';
-            break;
-          }
-        }
-      }
+      /* L6.R2.1 · CIDADE/ESTADO/PAÍS ESTRUTURADOS — extraídos por `_venueGeo.doPlaces`, que
+       * é a MESMA função que o teste exercita. Antes isto era um laço local que pegava só a
+       * cidade e a usava apenas pra montar o rótulo `"Nome, Cidade"` — o dado estruturado
+       * existia aqui e morria nesta função. */
+      var _estrut = (window._venueGeo && typeof window._venueGeo.doPlaces === 'function')
+        ? window._venueGeo.doPlaces(place.addressComponents)
+        : { venueCity: null, venueState: null, venueCountry: null };
+      var city = _estrut.venueCity || '';
+      var _setLoc = function (id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; };
+      _setLoc('tourn-venue-city', _estrut.venueCity);
+      _setLoc('tourn-venue-state', _estrut.venueState);
+      _setLoc('tourn-venue-country', _estrut.venueCountry);
 
       var name = place.displayName || '';
       var displayName = name + (city ? ', ' + city : '');
@@ -3329,6 +3354,8 @@ function setupCreateTournamentModal() {
       }
       if (photoUrlEl) photoUrlEl.value = venuePhotoUrl;
       window._applyVenuePhoto(venuePhotoUrl);
+      // L6.R2.1: escolher o local pode ter RESOLVIDO o fuso — o aviso some na hora.
+      try { if (typeof window._atualizarAvisoFuso === 'function') window._atualizarAvisoFuso(); } catch (_e) {}
 
       if (infoEl) {
         infoEl.style.display = 'flex';
@@ -4639,6 +4666,12 @@ function setupCreateTournamentModal() {
 
     // Venue / Courts / Time
     document.getElementById('tourn-venue').value = t.venue || '';
+    // L6.R2.1: legado (string) e novo (number) repovoam igual — o input é texto por
+    // natureza; quem devolve o tipo canônico é a fronteira do save.
+    ['city', 'state', 'country'].forEach(function (k) {
+      var el = document.getElementById('tourn-venue-' + k);
+      if (el) el.value = t['venue' + k.charAt(0).toUpperCase() + k.slice(1)] || '';
+    });
     document.getElementById('tourn-venue-lat').value = t.venueLat || '';
     document.getElementById('tourn-venue-lon').value = t.venueLon || '';
     document.getElementById('tourn-venue-address').value = t.venueAddress || '';
@@ -4733,6 +4766,8 @@ function setupCreateTournamentModal() {
     if (t.drawFirstTime) document.getElementById('suico-first-draw-time').value = t.drawFirstTime;
     if (t.drawIntervalDays) document.getElementById('suico-draw-interval').value = t.drawIntervalDays;
     if (t.drawManual) document.getElementById('suico-manual-draw').checked = t.drawManual;
+    // L6.R2.1: agenda repovoada → reavalia o aviso com o estado REAL do torneio editado.
+    try { if (typeof window._atualizarAvisoFuso === 'function') window._atualizarAvisoFuso(); } catch (_e) {}
 
     // Liga (unificado — carrega dados de Liga e antigo Ranking)
     // Backward compat: migrar campos ranking* → liga* se necessário
@@ -5080,6 +5115,59 @@ function setupCreateTournamentModal() {
   // re-attach it after each host.innerHTML call (innerHTML destroys the old element
   // and its listener — the new btn-save-tournament needs a fresh attachment).
   // Sorteio automático COM data/hora futura marcada no formulário?
+  /* ── L6.R2.1 · O AVISO DE FUSO INDETERMINADO ──────────────────────────────────────────
+   * Só aparece quando o organizador LIGOU o sorteio automático (formato com agenda, toggle
+   * manual desmarcado e data marcada) E nenhuma das fontes PERMITIDAS resolve o fuso.
+   * ⛔ Não bloqueia nada: o sorteio manual segue disponível. ⛔ Não inventa fuso: nem do
+   * aparelho, nem do servidor, nem UTC, nem −03:00. E, enquanto ele estiver aceso, a tela
+   * NÃO afirma que o automático está agendado — porque não está.
+   * A resposta vem do espelho de `agenda-core` em `_venueGeo` (ver a nota lá sobre por que
+   * o espelho existe e qual gate o mantém honesto). */
+  function _estadoDoFusoNoForm() {
+    var v = function (id) { var e = document.getElementById(id); return e ? (e.value || '') : ''; };
+    var t = {
+      venueLat: (window._venueGeo ? window._venueGeo.latitude(v('tourn-venue-lat')) : null),
+      venueLon: (window._venueGeo ? window._venueGeo.longitude(v('tourn-venue-lon')) : null),
+      venueCity: v('tourn-venue-city'),
+      venueAddress: v('tourn-venue-address'),
+      venue: v('tourn-venue')
+    };
+    var cu = (window.AppStore && window.AppStore.currentUser) || null;
+    var perfil = cu ? { timeZone: cu.timeZone, city: cu.city, cidade: cu.cidade, state: cu.state } : null;
+    if (!window._venueGeo || typeof window._venueGeo.resolverFuso !== 'function') return { tz: null, indefinido: false };
+    var r = window._venueGeo.resolverFuso(t, perfil);
+    return { tz: r.tz || null, fonte: r.fonte || null, indefinido: !r.tz };
+  }
+
+  /* Recalcula sozinho quando qualquer coisa que ALIMENTA a decisão muda. Delegação no
+   * documento (instalada uma vez) porque o formulário é re-renderizado: listener presigido
+   * a elemento morreria no próximo render, e o aviso ficaria congelado — a armadilha de
+   * [[feedback_montagem_preguicosa_mata_o_clique]]. */
+  var _AVISO_IDS = ['suico-manual-draw', 'liga-draw-manual', 'suico-draw-manual',
+    'suico-first-draw-date', 'liga-first-draw-date', 'suico-first-draw-time',
+    'liga-first-draw-time', 'tourn-venue'];
+  if (typeof document !== 'undefined' && !window._avisoFusoLigado) {
+    window._avisoFusoLigado = true;
+    ['change', 'input'].forEach(function (ev) {
+      document.addEventListener(ev, function (e) {
+        var id = e && e.target && e.target.id;
+        if (!id || _AVISO_IDS.indexOf(id) === -1) return;
+        try { window._atualizarAvisoFuso(); } catch (_e) {}
+      }, true);
+    });
+  }
+
+  window._atualizarAvisoFuso = function () {
+    var box = document.getElementById('aviso-fuso-indeterminado');
+    if (!box) return false;
+    var ligado = false;
+    try { ligado = _autoDrawAgendadoNoForm(); } catch (e) { ligado = false; }
+    var st = _estadoDoFusoNoForm();
+    var mostrar = !!(ligado && st.indefinido);
+    box.style.display = mostrar ? 'block' : 'none';
+    return mostrar;
+  };
+
   function _autoDrawAgendadoNoForm() {
     function val(id) { var e = document.getElementById(id); return e ? (e.value || '') : ''; }
     function chk(id) { var e = document.getElementById(id); return !!(e && e.checked); }
@@ -5383,10 +5471,15 @@ window._saveTournamentClickHandler = function() {
           newMatchups: ((document.getElementById('new-matchups') || {}).value === 'true'), // v1.3.x: independente de Abertas
           venue: venueVal,
           venueAccess: venueAccessVal,
+          // L6.R2.1: entram CRUS aqui e saem normalizados pela fronteira, logo abaixo —
+          // number|null, nunca string. Ver `_normalizarLocalDoPayload`.
           venueLat: venueLatVal,
           venueLon: venueLonVal,
           venueAddress: venueAddressVal,
           venuePlaceId: venuePlaceIdVal,
+          venueCity: (document.getElementById('tourn-venue-city') || {}).value || '',
+          venueState: (document.getElementById('tourn-venue-state') || {}).value || '',
+          venueCountry: (document.getElementById('tourn-venue-country') || {}).value || '',
           venuePhotoUrl: venuePhotoUrlVal,
           coverPhotoData: coverPhotoDataVal,
           logoData: logoDataVal,
@@ -5651,6 +5744,17 @@ window._saveTournamentClickHandler = function() {
           tourData.equilibrado = window._drawBalanceChoice;
         }
         window._drawBalanceConfirmed = false; window._drawBalanceChoice = undefined;
+
+        /* ── L6.R2.1 · A FRONTEIRA DE TIPO DO LOCAL ────────────────────────────────────
+         * ÚLTIMO ponto antes de gravar, e vale pros DOIS caminhos (criar e editar) — é o
+         * que garante que `venueLat`/`venueLon` cheguem ao banco como number|null e nunca
+         * como string. O bug de origem foi exatamente este: `latEl.value = place.location
+         * .lat()` converte pra texto, e `agenda-core` só usa coordenada `typeof number`,
+         * então a resolução de fuso por coordenada estava morta POR TIPO (L6.R2.P0).
+         * ⛔ Aqui NÃO se deduz fuso: só se normaliza o LOCAL. */
+        if (window._venueGeo && typeof window._venueGeo.normalizarLocal === 'function') {
+          window._venueGeo.normalizarLocal(tourData);
+        }
 
         if (editId) {
           const idx = window.AppStore.tournaments.findIndex(tour => tour.id.toString() === editId.toString());
@@ -6983,6 +7087,9 @@ window._prefillFromTemplate = function(tpl) {
   _setV('tourn-venue-lon', tpl.venueLon);
   _setV('tourn-venue-address', tpl.venueAddress);
   _setV('tourn-venue-place-id', tpl.venuePlaceId);
+  _setV('tourn-venue-city', tpl.venueCity);
+  _setV('tourn-venue-state', tpl.venueState);
+  _setV('tourn-venue-country', tpl.venueCountry);
   _setV('tourn-venue-photo-url', tpl.venuePhotoUrl);
   if (typeof window._applyCoverPhoto === 'function') window._applyCoverPhoto(tpl.coverPhotoData || '');
   // Logo
@@ -7426,10 +7533,17 @@ window._saveCurrentFormAsTemplate = function() {
       gameDuration: parseInt(get('tourn-game-duration')) || '',
       venue: (get('tourn-venue') || '').trim(),
       venueAccess: get('tourn-venue-access') || '',
-      venueLat: get('tourn-venue-lat') || null,
-      venueLon: get('tourn-venue-lon') || null,
+      // L6.R2.1: template NOVO já nasce com o contrato de tipo (number|null); o legado
+      // continua sendo LIDO como está e é a fronteira do save que o normaliza.
+      // L6.R2.1: number|null já no template NOVO (o legado segue legível — quem normaliza
+      // de verdade é a fronteira do save do torneio).
+      venueLat: (window._venueGeo ? window._venueGeo.latitude(get('tourn-venue-lat')) : (get('tourn-venue-lat') || null)),
+      venueLon: (window._venueGeo ? window._venueGeo.longitude(get('tourn-venue-lon')) : (get('tourn-venue-lon') || null)),
       venueAddress: get('tourn-venue-address') || '',
       venuePlaceId: get('tourn-venue-place-id') || '',
+      venueCity: get('tourn-venue-city') || '',
+      venueState: get('tourn-venue-state') || '',
+      venueCountry: get('tourn-venue-country') || '',
       venuePhotoUrl: get('tourn-venue-photo-url') || '',
       coverPhotoData: (document.getElementById('tourn-cover-data') || {}).value || '',
       logoData: get('tourn-logo-data') || '',

@@ -1788,6 +1788,8 @@ window._translations['pt'] = {
   'create.repeatEvery': 'Repetir a cada',
   'create.daysUnit': 'dias',
   'create.manualDraw': 'Sorteio manual',
+  'create.tzUnknownTitle': 'O sorteio automático ainda não pode ser agendado',
+  'create.tzUnknownBody': 'O horário do sorteio é o do <b>local do evento</b>, e ainda não dá pra saber qual é o fuso deste torneio. Enquanto isso, o sorteio automático <b>não</b> acontece — mas você continua podendo sortear na mão, normalmente. Para resolver, faça uma destas: escolha o <b>local do torneio</b> na busca (ela traz a cidade e as coordenadas junto), ou preencha a <b>cidade</b> no seu perfil de organizador.',
   'create.manualDrawDesc': 'Quando ativado, o sorteio não ocorre automaticamente.',
   'create.enrollDeadline': 'Encerramento Inscrições',
   'create.tournamentStart': 'Início do Torneio',

@@ -1774,6 +1774,8 @@ window._translations['en'] = {
   'create.repeatEvery': 'Repeat every',
   'create.daysUnit': 'days',
   'create.manualDraw': 'Manual draw',
+  'create.tzUnknownTitle': 'The automatic draw can’t be scheduled yet',
+  'create.tzUnknownBody': 'The draw time follows the <b>event’s location</b>, and this tournament’s time zone can’t be determined yet. Until then the automatic draw will <b>not</b> run — you can still draw manually as usual. To fix it, do one of these: pick the <b>tournament venue</b> from the search (it brings the city and coordinates along), or fill in your <b>city</b> in your organizer profile.',
   'create.manualDrawDesc': 'When enabled, draws do not happen automatically.',
   'create.enrollDeadline': 'Registration Deadline',
   'create.tournamentStart': 'Tournament Start',

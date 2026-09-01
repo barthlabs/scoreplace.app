@@ -2091,6 +2091,47 @@ já existente; `venuePlaceId`; localidade estruturada do `addressComponents`;
 `preferredLocations` do organizador. ⛔ Nenhuma foi escolhida, nenhum schema foi alterado e
 nenhuma migração foi desenhada.
 
+**L6.R2.1 — CONCLUÍDA E PUBLICADA (2.1.81, 01/set/2026).** Fecha os problemas A, B, C e D da
+L6.R2.P0. Publicado **Hosting apenas**.
+
+*Causa-raiz corrigida.* A alínea de coordenada da resolução de fuso estava **morta por
+TIPO**: `create-tournament.js` fazia `latEl.value = place.location.lat()` — atribuir a
+`.value` converte pra texto — e o payload gravava `venueLat` como **string**, enquanto
+`agenda-core` só aceita `typeof === 'number'`. E a **cidade estruturada** que o Places já
+entregava era usada só pra montar o rótulo e descartada.
+
+*Correção.* Uma **fronteira de tipo única** (`js/views/venue-geo-core.js`), por onde passam
+criação, edição e template: `venueLat`/`venueLon` viram `number|null` — vazio, não-numérico,
+`NaN`, infinito e fora dos limites geográficos viram `null`, e **coordenada é par** (metade
+inválida derruba as duas). `venueCity`/`venueState`/`venueCountry` passaram a ser extraídos do
+`addressComponents` e persistidos; `venue`, `venueAddress` e `venuePlaceId` ficaram intactos.
+⛔ Nenhum fuso é deduzido: nem do aparelho, nem do servidor, nem UTC, nem offset fixo — a leva
+**habilita** o resolvedor existente, não cria fallback.
+
+*Aviso na tela.* Com sorteio automático ligado e fuso indeterminável, um aviso **persistente**
+diz que o automático não vai acontecer e o que resolve (local na busca, ou cidade no perfil).
+⛔ Não bloqueia o manual e ⛔ a tela não afirma agendamento enquanto o fuso for desconhecido.
+
+*Gates novos.* `tests/venue-geo-core.test.js`, **67 asserções**, no `npm test`. Prova nos dois
+sentidos: o payload **antigo** (string) NÃO resolve no `agenda-core` real e o **normalizado**
+resolve — por coordenada e por cidade. **Controle contra `53f82846`: falha em 10.**
+
+*⚠️ Dívida NOVA, assumida e travada — segunda cópia de uma regra.* O aviso precisa saber se o
+fuso resolve, e quem resolve é `agenda-core`, que roda no servidor e termina em
+`module.exports` (não carrega no navegador). Como a leva proibiu alterar o autodraw, o
+resolvedor foi **espelhado** em `venue-geo-core.js`. A alternativa era o aviso adivinhar por
+"tem texto no campo?" e dar **verde falso** para um local que o servidor recusa. A cópia só é
+aceitável porque tem **gate**: o teste compara as três tabelas e roda 17 casos pelos dois
+lados exigindo resposta idêntica — mesmo desenho do `check-vendor-fresh`.
+⏳ *Proposta futura, não escolhida:* unificar de verdade, movendo o resolvedor para um
+`*-core.js` compartilhado e vendorando-o para o autodraw — exige mexer no autodraw, o que
+esta leva não podia.
+
+*⏳ O que a L6.R2.P0 deixou aberto e SEGUE aberto:* (E) `preferredLocations` (coordenada
+numérica) e `preferredCeps` do organizador continuam sem leitor; (F) a distinção entre
+"coordenada ausente" e "coordenada string" nos torneios existentes **não foi medida** — a
+correção vale para o que for gravado de agora em diante, e **nenhum backfill foi feito**.
+
 ## Gates de processo registrados
 
 | Gate | Onde está pendurado | O que barra | Prova |
