@@ -19,6 +19,16 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.89 NÃO ganhou item, e é DECISÃO — mesma família da 2.1.88. O que ela conserta
+    // acontece SÓ no sandbox do desenvolvedor: o ouvinte da coleção `sandboxes` entregava o
+    // documento sem passar pela hidratação que o ouvinte de torneio de verdade usa, então o
+    // sandbox abria sem inscritos e sem chave — e, pior, uma gravação posterior saía desse
+    // estado vazio e APAGAVA a subcoleção de inscritos dele (medido: cópia com 0 inscritos e
+    // 114 jogos, contra 152 e 115 no torneio original, que ficou intacto).
+    // ⛔ NENHUM torneio de verdade foi afetado, nem nesta leva nem naquele estrago: o
+    // sandbox é uma cópia isolada, em outra coleção, que só o desenvolvedor enxerga. Em
+    // js/ o diff é `store.js` + testes; nenhuma tela de quem joga muda. Escrever um item
+    // prometeria novidade onde não há. Detalhe em docs/CHANGELOG.md (2.1.89).
     // ⚠️ 2.1.88 NÃO ganhou item PRÓPRIO, e é DECISÃO. Ela termina o trabalho que o item
     // "🔒 O sandbox de teste ficou realmente privado — e virou cópia exata" (2.1.87) já
     // descreve pro usuário, e o que ela conserta é INVISÍVEL pra quem joga: a cópia deixou

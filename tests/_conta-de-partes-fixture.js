@@ -46,18 +46,32 @@ function injetar(ctx, src) {
   return ctx;
 }
 
-/** Contexto novo com a conta e o `_enxertaJogos` reais dentro. */
+/** O TEXTO da porta de hidratação, como EXPRESSÃO de função pronta pra avaliar.
+ * ⭐ Existe pra que nenhum teste recorte a porta à mão: eram QUATRO recortes soltos, cada
+ * um com a sua âncora, e todos quebraram juntos quando a função saiu da closure na 2.1.89 —
+ * quatro falhas para UMA mudança de lugar. Agora a âncora mora aqui, num lugar só. */
+function recortarPorta(src) {
+  const ABRE = 'window._preservaPartesMontadas = function (novo, velho) {';
+  const i = src.indexOf(ABRE);
+  const j = src.indexOf('\n/* ══ R1.1 · "NÃO SEI AINDA"', i);
+  if (i === -1 || j <= i) throw new Error('[fixture] não achei `_preservaPartesMontadas` em js/store.js');
+  return src.slice(i, j).replace(ABRE, '(function (novo, velho) {').trim().replace(/\};\s*$/, '})');
+}
+
+/** Contexto novo com a conta e a porta de hidratação reais dentro. */
 function carregar() {
   const src = fonte();
   const ctx = { window: {}, console: console, Array: Array, Object: Object, JSON: JSON, String: String };
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   injetar(ctx, src);
-  const i = src.indexOf('function _enxertaJogos(novo, velho) {');
-  const j = src.indexOf('\n    function _aplicaSnapTorneios(snap)');
-  if (i === -1 || j <= i) throw new Error('[fixture] não achei `_enxertaJogos` em js/store.js');
-  const enxerta = vm.runInContext('(' + src.slice(i, j).trim() + ')', ctx);
+  /* ⚠️ 2.1.89 — A REDE SAIU DA CLOSURE E VIROU PORTA GLOBAL. Ela vivia dentro de
+   * `startRealtimeListener` como `function _enxertaJogos(...)`, e por isso SÓ o ouvinte de
+   * `tournaments` a executava; o de `sandboxes` entregava o documento magro cru. Agora é
+   * `window._preservaPartesMontadas`, chamada pelos DOIS — e `recortarPorta` é quem sabe
+   * disso. O nome exportado (`enxerta`) fica, pra não mexer em quem já o usa. */
+  const enxerta = vm.runInContext(recortarPorta(src), ctx);
   return { enxerta: enxerta, marca: ctx.window._marcaPartesQueFaltam, ctx: ctx, src: src };
 }
 
-module.exports = { carregar, injetar, corpoDaConta, fonte, MARCA_INI, MARCA_FIM, CAMINHO_STORE };
+module.exports = { carregar, injetar, corpoDaConta, fonte, recortarPorta, MARCA_INI, MARCA_FIM, CAMINHO_STORE };

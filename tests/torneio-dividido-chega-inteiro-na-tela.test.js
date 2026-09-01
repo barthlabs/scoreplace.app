@@ -18,6 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _contaFix = require(path.join(__dirname, '_conta-de-partes-fixture.js'));
 const _R = require('./recorte.js');   // recorta pelo CONSTRUTO, nunca por tamanho fixo
 const ROOT = path.join(__dirname, '..');
 let pass = 0, fail = 0;
@@ -31,8 +32,9 @@ ok(iA > 0, 'o aplicador do snapshot existe');
 // o corpo vai até o fecho da função no mesmo nível de indentação
 const fimA = src.indexOf('\n    }', src.indexOf('store._parsedById = _novoParsed;', iA));
 const corpoAplica = src.slice(iA, fimA + 6);
-const iE = src.indexOf('function _enxertaJogos(');
-const corpoEnxerta = src.slice(iE, src.indexOf('\n    }', iE) + 6);
+/* ⚠️ 2.1.89 — a rede virou a porta global `window._preservaPartesMontadas`, usada também
+ * pelo ouvinte de `sandboxes`. A âncora mora no fixture, num lugar só. */
+const corpoEnxerta = 'var _enxertaJogos = ' + _contaFix.recortarPorta(src) + ';';
 
 const montados = [];
 const ctx = {

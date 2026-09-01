@@ -120,8 +120,11 @@ ok(/_nJogos = \(_p\.matches \|\| \[\]\)\.length/.test(db),
   'e o cliente também, no mesmo lugar em que divide');
 
 // ── ③ a rede usa o número em vez de adivinhar — rodando a função REAL ──────
-const i0 = store.indexOf('function _enxertaJogos(');
-const corpo = store.slice(i0, store.indexOf('\n    }', i0) + 6);
+/* ⚠️ 2.1.89 — a rede saiu da closure de `startRealtimeListener` e virou a porta global
+ * `window._preservaPartesMontadas`, chamada TAMBÉM pelo ouvinte de `sandboxes`. O recorte
+ * à mão que morava aqui quebrou junto com os outros três na mudança de lugar — quatro
+ * falhas para UMA mudança. Agora a âncora é do fixture, num lugar só. */
+const corpo = 'var _enxertaJogos = ' + _contaFix.recortarPorta(store) + ';';
 const ctx = { store: { tournaments: [] }, window: {} }; vm.createContext(ctx);
 /* ⚠️ 2.1.66: a conta do que falta saiu de `_enxertaJogos` e virou
  * `window._marcaPartesQueFaltam` (os dois caminhos, ouvinte e cache, usam a MESMA).

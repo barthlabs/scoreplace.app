@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.88';
+window.SCOREPLACE_VERSION = '2.1.89';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -844,6 +844,99 @@ window._marcaPartesQueFaltam = function (t) {
   if (falta) { t._faltamPesados = true; t._faltaOQue = oQue; }
   else { delete t._faltamPesados; delete t._faltaOQue; }
   return falta;
+};
+
+
+/* ══ A PORTA ÚNICA DE HIDRATAÇÃO DO OUVINTE (FIX.SANDBOX.P3, 2.1.89) ═══════════════
+ * ⭐ ISTO ERA UMA CLOSURE DENTRO DE `startRealtimeListener`, e por isso SÓ o ouvinte de
+ * `tournaments` a executava. O ouvinte de `sandboxes` (2.1.87) chamava `_sbIngest` com o
+ * `doc.data()` CRU — o documento MAGRO de um torneio dividido —, então o sandbox entrava
+ * na lista sem elenco, sem jogos e sem grupos, ninguém marcava `_faltamPesados`, ninguém
+ * agendava a montagem, e a tela pintava a tarja de sandbox em cima de um torneio vazio:
+ * "sem inscritos", participação incerta e o botão de avançar sumindo.
+ * ⛔ E o `Object.assign` do `_sbIngest` fazia pior que não montar: um eco magro POSTERIOR
+ * sobrescrevia o que já tinha sido montado. Apagar o que já chegou é exatamente o defeito
+ * que a rede abaixo existe pra impedir — só que ela não estava no caminho do sandbox.
+ * ⇒ Agora é UMA função, no topo, e os DOIS ouvintes chamam ELA. Copiar a heurística pro
+ * `_sbIngest` seria criar a segunda fonte que este projeto já pagou caro três vezes.
+ * [[feedback_unify_dual_entry_points]] */
+window._preservaPartesMontadas = function (novo, velho) {
+    if (!novo || !Array.isArray(novo._semPesados) || !novo._semPesados.length) return novo;
+    var fora = novo._semPesados;
+    var _vazio = function (x) {
+      if (Array.isArray(x)) return !x.length;
+      if (x && typeof x === 'object') return !Object.keys(x).length;
+      return x === undefined || x === null;
+    };
+    var _cheio = function (x) { return !_vazio(x); };
+
+    // ① CAMPOS DE TOPO (participants, history, opponentHistory, checkedIn, …):
+    //    a lista/mapa é um só, então é substituição direta.
+    if (velho) {
+      fora.forEach(function (nome) {
+        if (nome === 'matches' || nome === 'grupos') return;   // aninhados: ② e ③
+        if (_vazio(novo[nome]) && _cheio(velho[nome])) novo[nome] = velho[nome];
+      });
+    }
+
+    // ② GRUPOS, aninhados em rounds[] — rodada é APPEND-ONLY, o índice é estável.
+    var achouG = false;
+    if (velho && fora.indexOf('grupos') !== -1 &&
+        Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
+      for (var gi = 0; gi < novo.rounds.length; gi++) {
+        var rn = novo.rounds[gi], rv = velho.rounds[gi];
+        if (!rn || !rv) continue;
+        if (_vazio(rn.monarchGroups) && _cheio(rv.monarchGroups)) { rn.monarchGroups = rv.monarchGroups; achouG = true; }
+      }
+    }
+
+    // ③ JOGOS, aninhados em rounds[]/groups[]/topo.
+    var achou = false;
+    if (fora.indexOf('matches') !== -1) {
+      var _puxa = function (destino, origem) {
+        if (!destino || !origem) return;
+        if (!Array.isArray(destino.matches) || !destino.matches.length) {
+          if (Array.isArray(origem.matches) && origem.matches.length) { destino.matches = origem.matches; achou = true; }
+        }
+      };
+      if (velho) {
+        if (Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
+          for (var i = 0; i < novo.rounds.length; i++) _puxa(novo.rounds[i], velho.rounds[i]);
+        }
+        _puxa(novo, velho);
+        if (Array.isArray(novo.groups) && Array.isArray(velho.groups)) {
+          for (var g = 0; g < novo.groups.length; g++) _puxa(novo.groups[g], velho.groups[g]);
+        }
+      }
+    }
+
+    /* ── FALTA É FALTA DE QUALQUER PARTE — E A PERGUNTA É A LISTA ────────────────
+     * ⛔ ISTO ESTAVA ERRADO E CUSTOU DUAS VERSÕES ATRÁS DA CAUSA ERRADA. A conta só
+     * perguntava por `matches` (e depois `grupos`). `participants` NUNCA entrava.
+     * O ESTRAGO, relatado pelo dono no PWA do Safari: o celular já tinha os JOGOS no
+     * cache local, o enxerto os encontrava (`achou = true`), a conta concluía "não falta
+     * nada", `_faltamPesados` era APAGADO — e a busca do elenco NUNCA disparava. Elenco
+     * vazio pra sempre: "0 INSCRITOS" num torneio com 148 e "você não está inscrito" pro
+     * próprio organizador. No desktop o cache estava frio, a busca rodou uma vez e encheu.
+     * Não era versão nem dado: era o cache quente satisfazendo metade da pergunta.
+     *
+     * ⭐ Agora percorre `_semPesados`. Parte nova entra na conta sem ninguém lembrar daqui.
+     * A pergunta por parte é: "está vazio em memória E eu tenho motivo pra crer que
+     * deveria ter algo?" O motivo, em ordem:
+     *   ① o CONTADOR gravado pelo escritor (`_nPartes`, `_nJogos`, `_nGrupos`) — se diz
+     *      zero, está vazio DE VERDADE e não se busca nada;
+     *   ② uma TESTEMUNHA no próprio documento, pra curar os docs que já existem sem
+     *      contador: `memberUids` prova que há elenco mesmo com `participants: []`;
+     *   ③ sem contador nem testemunha, NÃO acusa — melhor não buscar do que buscar em
+     *      laço a cada snapshot de um torneio que legitimamente não tem aquela parte. */
+    /* ⭐ A CONTA MORA NUM LUGAR SÓ (2.1.66). Ela vivia AQUI DENTRO, e por isso só o
+     * caminho do OUVINTE a executava — `_loadFromCache` jogava o cache direto em
+     * `store.tournaments` sem passar por aqui, então um torneio pintado do cache com 2
+     * inscritos de 152 e 1 jogo de 115 NUNCA pedia o resto. Era o último pedaço do
+     * incidente de 31/ago. Agora os dois caminhos chamam a MESMA função.
+     * [[feedback_unify_dual_entry_points]] */
+    window._marcaPartesQueFaltam(novo);
+    return novo;
 };
 
 /* ══ R1.1 · "NÃO SEI AINDA" É UM TERCEIRO ESTADO, E TEM QUE SER DITO ═══════════
@@ -3163,16 +3256,82 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
  * depois somem em silêncio (foi o que derrubou `_pName`, `_spinButton` e
  * `_findTournamentById` em três testes de Chromium). Mesma família do `<script>` sem
  * fechamento descrita no CLAUDE.md. Aqui o AppStore é resolvido na CHAMADA, não na carga. */
+/* ⭐ 2.1.89 — ESTE OUVINTE FAZ O QUE O DE `tournaments` FAZ, PELA MESMA PORTA.
+ *
+ * ⛔ O QUE ELE FAZIA ANTES, e o estrago: recebia `doc.data()` CRU e dava `push`/
+ * `Object.assign`. Num torneio DIVIDIDO — que é o caso do Confra — o documento é MAGRO:
+ * elenco, jogos e grupos moram em subcoleção. Então o sandbox entrava na lista vazio,
+ * ninguém marcava `_faltamPesados`, ninguém agendava a montagem, e a tela pintava a tarja
+ * vermelha em cima de um torneio sem nada: "sem inscritos", "você não está inscrito" pro
+ * próprio dono, chave vazia e o botão de avançar sumindo. No banco não faltava nada.
+ * ⛔ E o `Object.assign` era pior que não montar: o eco magro SEGUINTE sobrescrevia o que
+ * já tinha sido montado, apagando da tela o que já havia chegado.
+ *
+ * ⚠️ NADA DISSO É HEURÍSTICA NOVA. Tudo vem de `_preservaPartesMontadas` +
+ * `_marcaPartesQueFaltam` + `_montaPesadosQueFaltam` — as MESMAS funções do caminho real,
+ * com as mesmas tentativas, o mesmo piso entre elas e o mesmo estado de erro com botão.
+ * Reescrever a conta aqui seria a segunda fonte que este projeto já pagou três vezes.
+ *
+ * `vivos` é o conjunto COMPLETO de sandboxes `ready` do dono neste snapshot — é ele que
+ * permite reconciliar REMOÇÃO. */
 window._sbIngest = function (docs) {
   var AS = window.AppStore;
   if (!AS) return;
   var lista = AS.tournaments || (AS.tournaments = []);
+  var cu = AS.currentUser || {};
+  var vivos = {};
+  var paraMontar = [];
+
   (docs || []).forEach(function (d) {
     if (!d || !d.id || d.sbState !== 'ready') return;
+    var id = String(d.id);
+    vivos[id] = true;
+    window._sbIdsConhecidos = window._sbIdsConhecidos || {};
+    window._sbIdsConhecidos[id] = true;            // rotear já, antes mesmo de montar
+
     var i = -1;
-    for (var k = 0; k < lista.length; k++) { if (String(lista[k].id) === String(d.id)) { i = k; break; } }
-    if (i === -1) lista.push(d); else Object.assign(lista[i], d);
+    for (var k = 0; k < lista.length; k++) { if (lista[k] && String(lista[k].id) === id) { i = k; break; } }
+    var emMemoria = (i === -1) ? null : lista[i];
+    /* ⭐ A REDE, ANTES DE ENTRAR NA LISTA: o que já estava montado em memória é preservado,
+     * e o que falta é MARCADO. Sem isto, o vazio do documento seria lido como "não tem". */
+    var pronto = window._preservaPartesMontadas(d, emMemoria);
+    if (i === -1) lista.push(pronto);
+    else Object.assign(lista[i], pronto);          // escreve NO LUGAR: as telas guardam a referência
+    var vivoAgora = (i === -1) ? pronto : lista[i];
+    /* ⚠️ Recontar sobre o objeto que de fato ficou na lista — o `Object.assign` pode ter
+     * mudado o quadro, e é ele que a tela lê. */
+    if (window._marcaPartesQueFaltam(vivoAgora)) paraMontar.push(id);
+    /* ⭐ e o erro morre quando as partes chegam por outro caminho — igual ao ouvinte real.
+     * Um "não consegui carregar" ao lado do dado carregado é pior que o erro. */
+    else if (AS._partesEmErro) delete AS._partesEmErro[id];
   });
+
+  /* ── REMOÇÃO: sandbox que saiu do snapshot sai da memória ────────────────────────
+   * ⛔ Objeto velho de sandbox apagado (ou que voltou a não estar `ready`) é pior que
+   * ausência: ele ABRE, mostra estado antigo e mistura com o que existe.
+   * ⛔ E o filtro é ESTREITO de propósito: só sai o que é sandbox DESTE dono. Torneio real
+   * e sandbox de outra pessoa não são assunto deste ouvinte — varrer por `isSandbox` sozinho
+   * apagaria da tela o sandbox de outro dono que tenha chegado por link direto. */
+  for (var j = lista.length - 1; j >= 0; j--) {
+    var t = lista[j];
+    if (!t || t.isSandbox !== true) continue;
+    if (!cu.uid || String(t.sandboxOwnerUid || '') !== String(cu.uid)) continue;
+    if (vivos[String(t.id)]) continue;
+    var morto = String(t.id);
+    lista.splice(j, 1);
+    if (window._sbIdsConhecidos) delete window._sbIdsConhecidos[morto];
+    /* limpa o estado de montagem junto — deixar carimbo de um id que não existe mais só
+     * serve pra o piso/erro atrapalhar quem vier depois. */
+    ['_montandoPesados', '_ultimaMontagem', '_tentativasDePartes', '_retentandoPartes', '_partesEmErro']
+      .forEach(function (m) { if (AS[m]) delete AS[m][morto]; });
+    if (window._warn) window._warn('[sandbox] saiu do snapshot — removido da memória');
+  }
+
+  /* a montagem vai FORA do laço, uma de cada vez, pela mesma porta do torneio real
+   * (tentativas, piso entre elas, estado de erro com botão de tentar de novo). */
+  if (paraMontar.length && typeof AS._montaPesadosQueFaltam === 'function') {
+    AS._montaPesadosQueFaltam(paraMontar);
+  }
   try { if (typeof window._repintarSeNecessario === 'function') window._repintarSeNecessario(); } catch (e) {}
 };
 
@@ -11324,14 +11483,18 @@ window.AppStore = {
       window._sbUnsub = window.FirestoreDB.db.collection('sandboxes')
         .where('sandboxOwnerUid', '==', _uid)
         .onSnapshot(function (snap) {
-          snap.docChanges().forEach(function (ch) {
-            var d = ch.doc.data() || {};
-            var pronto = (d.sbState === 'ready');
-            if (ch.type === 'removed' || !pronto) { delete window._sbIdsConhecidos[ch.doc.id]; }
-            else { window._sbIdsConhecidos[ch.doc.id] = true; }
-          });
+          try { if (window._noteFsReads) window._noteFsReads(snap.docChanges().length, 'rt-sandboxes'); } catch (e) {}
+          /* ⭐ 2.1.89 — UMA CHAMADA, E QUEM DECIDE É `_sbIngest`. Aqui havia um laço sobre
+           * `docChanges` que registrava/desregistrava ids por conta própria: uma SEGUNDA
+           * fonte da mesma decisão, ao lado da que o ingest passou a tomar. Duas fontes da
+           * mesma pergunta divergem — e neste projeto já divergiram três vezes.
+           * ⛔ O conjunto entregue é o COMPLETO de `ready` deste dono: é ele que permite ao
+           * ingest reconciliar REMOÇÃO (o que sumiu do snapshot sai da memória). Mandar só
+           * o delta deixaria sandbox apagado vivo na lista. */
           var vivos = snap.docs.filter(function (d) { return (d.data() || {}).sbState === 'ready'; });
-          try { window._sbIngest(vivos.map(function (d) { return d.data(); })); } catch (e) {}
+          try { window._sbIngest(vivos.map(function (d) { return d.data(); })); } catch (e) {
+            if (window._error) window._error('[sandbox] ingest falhou', e);
+          }
         }, function (err) {
           // ⚠️ falhar aqui NÃO pode derrubar a lista de torneios reais — são ouvintes
           // independentes de propósito.
@@ -11374,84 +11537,9 @@ window.AppStore = {
      * ⚠️ E a regra é sempre a mesma: o documento só manda quando TEM o dado. Vazio no
      * documento não é "esvaziou", é "mora fora e não veio nesta entrega".
      * [[feedback_rede_que_cobre_o_rerender_nao_cobre_o_primeiro]] */
-    function _enxertaJogos(novo, velho) {
-      if (!novo || !Array.isArray(novo._semPesados) || !novo._semPesados.length) return novo;
-      var fora = novo._semPesados;
-      var _vazio = function (x) {
-        if (Array.isArray(x)) return !x.length;
-        if (x && typeof x === 'object') return !Object.keys(x).length;
-        return x === undefined || x === null;
-      };
-      var _cheio = function (x) { return !_vazio(x); };
-
-      // ① CAMPOS DE TOPO (participants, history, opponentHistory, checkedIn, …):
-      //    a lista/mapa é um só, então é substituição direta.
-      if (velho) {
-        fora.forEach(function (nome) {
-          if (nome === 'matches' || nome === 'grupos') return;   // aninhados: ② e ③
-          if (_vazio(novo[nome]) && _cheio(velho[nome])) novo[nome] = velho[nome];
-        });
-      }
-
-      // ② GRUPOS, aninhados em rounds[] — rodada é APPEND-ONLY, o índice é estável.
-      var achouG = false;
-      if (velho && fora.indexOf('grupos') !== -1 &&
-          Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
-        for (var gi = 0; gi < novo.rounds.length; gi++) {
-          var rn = novo.rounds[gi], rv = velho.rounds[gi];
-          if (!rn || !rv) continue;
-          if (_vazio(rn.monarchGroups) && _cheio(rv.monarchGroups)) { rn.monarchGroups = rv.monarchGroups; achouG = true; }
-        }
-      }
-
-      // ③ JOGOS, aninhados em rounds[]/groups[]/topo.
-      var achou = false;
-      if (fora.indexOf('matches') !== -1) {
-        var _puxa = function (destino, origem) {
-          if (!destino || !origem) return;
-          if (!Array.isArray(destino.matches) || !destino.matches.length) {
-            if (Array.isArray(origem.matches) && origem.matches.length) { destino.matches = origem.matches; achou = true; }
-          }
-        };
-        if (velho) {
-          if (Array.isArray(novo.rounds) && Array.isArray(velho.rounds)) {
-            for (var i = 0; i < novo.rounds.length; i++) _puxa(novo.rounds[i], velho.rounds[i]);
-          }
-          _puxa(novo, velho);
-          if (Array.isArray(novo.groups) && Array.isArray(velho.groups)) {
-            for (var g = 0; g < novo.groups.length; g++) _puxa(novo.groups[g], velho.groups[g]);
-          }
-        }
-      }
-
-      /* ── FALTA É FALTA DE QUALQUER PARTE — E A PERGUNTA É A LISTA ────────────────
-       * ⛔ ISTO ESTAVA ERRADO E CUSTOU DUAS VERSÕES ATRÁS DA CAUSA ERRADA. A conta só
-       * perguntava por `matches` (e depois `grupos`). `participants` NUNCA entrava.
-       * O ESTRAGO, relatado pelo dono no PWA do Safari: o celular já tinha os JOGOS no
-       * cache local, o enxerto os encontrava (`achou = true`), a conta concluía "não falta
-       * nada", `_faltamPesados` era APAGADO — e a busca do elenco NUNCA disparava. Elenco
-       * vazio pra sempre: "0 INSCRITOS" num torneio com 148 e "você não está inscrito" pro
-       * próprio organizador. No desktop o cache estava frio, a busca rodou uma vez e encheu.
-       * Não era versão nem dado: era o cache quente satisfazendo metade da pergunta.
-       *
-       * ⭐ Agora percorre `_semPesados`. Parte nova entra na conta sem ninguém lembrar daqui.
-       * A pergunta por parte é: "está vazio em memória E eu tenho motivo pra crer que
-       * deveria ter algo?" O motivo, em ordem:
-       *   ① o CONTADOR gravado pelo escritor (`_nPartes`, `_nJogos`, `_nGrupos`) — se diz
-       *      zero, está vazio DE VERDADE e não se busca nada;
-       *   ② uma TESTEMUNHA no próprio documento, pra curar os docs que já existem sem
-       *      contador: `memberUids` prova que há elenco mesmo com `participants: []`;
-       *   ③ sem contador nem testemunha, NÃO acusa — melhor não buscar do que buscar em
-       *      laço a cada snapshot de um torneio que legitimamente não tem aquela parte. */
-      /* ⭐ A CONTA MORA NUM LUGAR SÓ (2.1.66). Ela vivia AQUI DENTRO, e por isso só o
-       * caminho do OUVINTE a executava — `_loadFromCache` jogava o cache direto em
-       * `store.tournaments` sem passar por aqui, então um torneio pintado do cache com 2
-       * inscritos de 152 e 1 jogo de 115 NUNCA pedia o resto. Era o último pedaço do
-       * incidente de 31/ago. Agora os dois caminhos chamam a MESMA função.
-       * [[feedback_unify_dual_entry_points]] */
-      window._marcaPartesQueFaltam(novo);
-      return novo;
-    }
+    /* ⭐ o ouvinte de torneio REAL usa a MESMA porta do de sandbox (2.1.89) — ver
+     * `window._preservaPartesMontadas`. O nome local fica só pra não mexer nos call sites. */
+    var _enxertaJogos = function (novo, velho) { return window._preservaPartesMontadas(novo, velho); };
 
     function _aplicaSnapTorneios(snap) {
         var _paraMontar = [];

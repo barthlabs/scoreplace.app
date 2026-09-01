@@ -51,6 +51,11 @@ const SUITES = [
   // fidelidade em si é provada no Emulator (tests/sandbox-cf-emulador.test.js, fora da
   // suíte unitária porque sobe Firestore+Auth+Functions).
   'tests/sandbox-cliente-roteia-e-nao-fabrica.test.js',
+  // O sandbox no banco já era réplica fiel (CONFRA.QA.S1: 0 divergências) e a TELA mostrava
+  // torneio vazio — o defeito era só o caminho de LEITURA: o ouvinte de `sandboxes` não
+  // passava pela porta de hidratação que o de `tournaments` usa. Executa o `_sbIngest` REAL
+  // e traz o da 2.1.88 pelo `git show` como controle vermelho.
+  'tests/ouvinte-de-sandbox-hidrata-como-o-real.test.js',
   // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
   // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
   // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o

@@ -29,9 +29,13 @@ function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 const src = fs.readFileSync(path.join(ROOT, 'js', 'store.js'), 'utf8');
 
 // roda a função REAL, extraída do fonte — não uma cópia que pode divergir
-const i0 = src.indexOf('function _enxertaJogos(');
+/* ⚠️ 2.1.89 — a rede saiu da closure de `startRealtimeListener` e virou a porta global
+ * `window._preservaPartesMontadas`, chamada TAMBÉM pelo ouvinte de `sandboxes`. O recorte
+ * à mão que morava aqui quebrou junto com os outros três na mudança de lugar — quatro
+ * falhas para UMA mudança. Agora a âncora é do fixture, num lugar só. */
+const i0 = src.indexOf('window._preservaPartesMontadas = function (novo, velho) {');
 ok(i0 > 0, 'a rede existe no ouvinte');
-const corpo = src.slice(i0, src.indexOf('\n    }', i0) + 6);
+const corpo = 'var _enxertaJogos = ' + _contaFix.recortarPorta(src) + ';';
 const ctx = { store: { tournaments: [] } };
 vm.createContext(ctx);
 /* ⚠️ 2.1.66: a conta do que falta saiu de `_enxertaJogos` e virou

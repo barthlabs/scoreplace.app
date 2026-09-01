@@ -34,10 +34,13 @@ const SRC = fs.readFileSync(path.join(RAIZ, 'js', 'store.js'), 'utf8');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.log('  ✗ ' + m); } }
 
-/* recorta a função REAL — réplica aqui certificaria a minha imaginação, não o código */
-const INI = SRC.indexOf('function _enxertaJogos(novo, velho) {');
-const FIM = SRC.indexOf('\n    function _aplicaSnapTorneios(snap)');
-ok(INI !== -1 && FIM > INI, 'achei `_enxertaJogos` em js/store.js');
+/* recorta a função REAL — réplica aqui certificaria a minha imaginação, não o código.
+ * ⚠️ 2.1.89: a rede saiu da closure e virou `window._preservaPartesMontadas` (a mesma porta
+ * que o ouvinte de `sandboxes` passou a usar). A âncora mora no fixture, num lugar só. */
+const _contaFix = require(path.join(__dirname, '_conta-de-partes-fixture.js'));
+let _porta = '';
+try { _porta = _contaFix.recortarPorta(SRC); } catch (e) { _porta = ''; }
+ok(!!_porta, 'achei a porta de hidratação (`_preservaPartesMontadas`) em js/store.js');
 const ctx = { window: {}, console: console, Array: Array, Object: Object, JSON: JSON, String: String };
 ctx.globalThis = ctx; vm.createContext(ctx);
 /* ⚠️ A DECISÃO saiu de dentro de `_enxertaJogos` (2.1.66) e virou `window._marcaPartesQueFaltam`,
@@ -47,7 +50,7 @@ const M0 = SRC.indexOf('window._marcaPartesQueFaltam = function (t) {');
 const M1 = SRC.indexOf('window._userProfileCache = window._userProfileCache || {};');
 ok(M0 !== -1 && M1 > M0, 'achei `window._marcaPartesQueFaltam` (a conta, fonte única)');
 vm.runInContext(SRC.slice(M0, M1), ctx);
-const enxerta = vm.runInContext('(' + SRC.slice(INI, FIM).trim() + ')', ctx);
+const enxerta = vm.runInContext(_porta, ctx);
 
 /* O DOCUMENTO REAL do Confra naquele instante — números medidos, não inventados. */
 function confra() {

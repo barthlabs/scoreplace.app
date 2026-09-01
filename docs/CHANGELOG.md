@@ -1,5 +1,39 @@
 # Changelog do scoreplace.app
 
+## 2.1.89 — o ouvinte de `sandboxes` passa a hidratar como o de `tournaments` (01/set/2026)
+
+### O dado estava certo; a tela é que não sabia lê-lo
+
+Medição de 01/set (CONFRA.QA.S1, somente leitura): o sandbox do Confra no Firestore é **réplica fiel** — 0 divergências no documento, 7 subcoleções idênticas, 152 inscritos, 115 jogos, 105 com resultado, 25 classificações congeladas. E a tela mostrava a tarja vermelha em cima de um **torneio vazio**: sem inscritos, sem chave, "você não está inscrito" pro próprio dono e o botão de avançar sumindo.
+
+⛔ **A causa era só o caminho de LEITURA, e era uma segunda fonte.** O ouvinte de `tournaments` passa cada documento por `_enxertaJogos` (preserva o que já foi montado) → `_marcaPartesQueFaltam` (marca `_faltamPesados`) → agenda `_montaPesadosQueFaltam`. O ouvinte de `sandboxes` (2.1.87) chamava `_sbIngest` com o `doc.data()` **cru** — e num torneio dividido esse documento é MAGRO: elenco, jogos e grupos moram em subcoleção. Ninguém marcava, ninguém montava.
+
+⛔ **E o `Object.assign` fazia pior que não montar:** um eco magro **posterior** sobrescrevia o que já tinha sido montado, apagando da tela o que já havia chegado. Está medido no controle vermelho: com o código da 2.1.88, o segundo eco derrubava os 152 inscritos para **0** e os 115 jogos para **0**.
+
+### O que mudou
+
+- **⭐ A porta de hidratação virou UMA só.** `_enxertaJogos` era uma **closure dentro de `startRealtimeListener`** — por isso só o caminho real a executava. Agora é `window._preservaPartesMontadas`, no topo do arquivo, e os **dois** ouvintes chamam ela. ⛔ Copiar a heurística pro `_sbIngest` seria a segunda fonte que este projeto já pagou três vezes; o `_sbIngest` não menciona `_semPesados` em lugar nenhum, e há teste cobrando isso.
+- **⭐ `_sbIngest` faz o que o ouvinte real faz:** registra o id como sandbox **antes** de montar (é o que faz a montagem ler de `sandboxes/{id}/…`, com `results`→`resultsSandbox`), preserva as partes já montadas, marca o que falta, agenda **uma** montagem pela porta canônica — com as **mesmas** tentativas, o mesmo piso entre elas e o mesmo estado de erro com botão de tentar de novo — e repinta.
+- **⭐ Remoção reconciliada:** sandbox que sai do snapshot (apagado, ou que deixou de ser `ready`) sai da memória, sai de `_sbIdsConhecidos` e leva junto o estado de montagem. ⛔ O filtro é **estreito de propósito**: só sai o que é sandbox **deste dono** — torneio real e sandbox de outra pessoa não são assunto deste ouvinte, e varrer por `isSandbox` sozinho apagaria da tela um sandbox alheio aberto por link direto.
+- **⛔ O laço sobre `docChanges` saiu do listener:** ele registrava/desregistrava ids por conta própria, ao lado da decisão que o ingest passou a tomar. Duas fontes da mesma pergunta divergem.
+- **Nada de dado foi tocado:** o poder de organizador continua saindo só da condição `isSandbox && sandboxOwnerUid === meu uid` (2.1.88). `creatorUid`, `adminUids`, `coHosts`, `memberUids`, participantes, nome e datas seguem os do original.
+
+### ⛔ E não era só a tela: o eco magro APAGAVA a subcoleção
+
+Medido em produção enquanto esta leva era escrita: **Confra original 115 jogos / 152 inscritos, intacta; o sandbox com 114 jogos e ZERO inscritos**, `_nPartes.participants: 0`. A cadeia inteira: o ouvinte magro põe o objeto vazio na lista → uma gravação qualquer sai desse objeto → `saveTournament` recalcula `_nPartes` do que tem em memória (`participants: []` → 0) → `_sbGravaPartes` grava o **diff** → `jogosQueMudaram(152, 0)` devolve 152 em `sumiram` → a subcoleção `inscritos` **é apagada**. A mesma ausência de jogos faz a fase parecer incompleta e esconde o botão de avançar.
+
+⚠️ **Só o render não pegaria isto:** a tela fica vazia dos dois jeitos. O que separa "tela feia" de "dado perdido" é olhar a subcoleção **depois da gravação** — e é o que o teste passou a fazer.
+
+### Gates
+
+`tests/ouvinte-de-sandbox-hidrata-como-o-real.test.js` (novo) **executa o `_sbIngest` real** carregado pelo harness do projeto: entrega crua → marca incompleto e agenda **uma** montagem; partes chegam → 152 inscritos, membership, 91% de barra, 25 congeladas e 115 jogos; fase 1 completa → o dono vê o avançar **sem nenhum campo trocado**; eco magro posterior **não apaga**; remoção tira da memória sem tocar em torneio real nem em sandbox alheio; torneio real e torneio inteiro inalterados; e o que a tela diz enquanto os dados chegam (`_souInscrito` = `null`, o card não afirma "não está inscrito" nem "sem inscritos").
+
+⭐ **E o teste do estrago REAL:** eco magro **depois** de montado + `saveTournament` **de verdade** sobre um Firestore de mentira que conta documentos — `inscritos` continua **152** e `matches` continua **115**. O **controle destrutivo** roda o mesmo cenário com o `_sbIngest` do HEAD anterior (`git show`) e acusa a queda para **0 inscritos** — a mesma assinatura do sandbox danificado em produção. Mais o controle vermelho dos outros quatro defeitos (entrou sem marca, não agendou montagem, apagou 152/115 em memória, sandbox removido continuava vivo).
+
+### Escopo
+
+Publicado **somente Hosting**. ⛔ Functions, Rules, dados, Android, iOS, Stripe e autodraw: não tocados. Nenhum sandbox criado, apagado ou avançado — **inclusive o danificado**, que fica onde está como evidência; recriá-lo é decisão do dono, depois desta leva no ar.
+
 ## 2.1.88 — o envelope do sandbox encolhe pro que ele sempre devia ter sido (01/set/2026)
 
 ### O defeito: a prova estava rodando com os réus isentos

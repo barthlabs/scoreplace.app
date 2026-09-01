@@ -21,6 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const _contaFix = require(path.join(__dirname, '_conta-de-partes-fixture.js'));
 const ROOT = path.join(__dirname, '..');
 let falhas = 0;
 const ok = (n, c, extra) => { if (c) console.log('  ✓ ' + n); else { console.log('  ✗ ' + n + (extra ? '\n      ' + extra : '')); falhas++; } };
@@ -28,8 +29,12 @@ const ok = (n, c, extra) => { if (c) console.log('  ✓ ' + n); else { console.l
 console.log('──── cache quente não esconde parte que falta ────');
 
 const store = fs.readFileSync(path.join(ROOT, 'js/store.js'), 'utf8');
-const i = store.indexOf('    function _enxertaJogos(novo, velho) {');
-const corpo = store.slice(i, store.indexOf('\n    }\n', i) + 6);
+/* ⚠️ 2.1.89 — a rede saiu da closure de `startRealtimeListener` e virou a porta global
+ * `window._preservaPartesMontadas`, chamada TAMBÉM pelo ouvinte de `sandboxes`. O recorte
+ * à mão que morava aqui quebrou junto com os outros três na mudança de lugar — quatro
+ * falhas para UMA mudança. Agora a âncora é do fixture, num lugar só. */
+const i = store.indexOf('window._preservaPartesMontadas = function (novo, velho) {');
+const corpo = 'var _enxertaJogos = ' + _contaFix.recortarPorta(store) + ';';
 const ctx = { window: {} }; vm.createContext(ctx);
 /* ⚠️ 2.1.66: a conta do que falta saiu de dentro de `_enxertaJogos` e virou
  * `window._marcaPartesQueFaltam`, pra que o caminho do CACHE use a MESMA função. */
