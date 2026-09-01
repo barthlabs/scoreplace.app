@@ -1,5 +1,14 @@
 .DS_Store
 .claude/
+# Config de OUTRO agente na mesma árvore — simétrico ao .claude/ acima. Não é código
+# do produto; ignorar evita que o gate de árvore limpa do deploy trave por causa dela.
+.codex/
+# ⛔ AGENTS.md é uma CÓPIA do CLAUDE.md, gerada por outro agente pra si. Duas cópias do
+# mesmo contexto divergem na primeira edição — é o defeito que este repo mais combate
+# ("espelho não é fonte única"). O arquivo continua no disco, intacto, pra quem o usa;
+# só não entra no git. Se o dono quiser UMA fonte versionada, o certo é um link/symlink
+# pro CLAUDE.md, não um segundo arquivo.
+AGENTS.md
 *.backup
 *.bak
 outputs/
