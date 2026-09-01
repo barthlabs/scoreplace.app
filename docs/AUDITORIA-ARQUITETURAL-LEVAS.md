@@ -1965,6 +1965,132 @@ executa cada suíte em processo próprio). ⚠️ **Preço medido:** o `npm test
 para **4min03** — a diferença é o boot do emulador, e o `npm test` é predeploy do Hosting.
 ⛔ Nenhum código de produto foi alterado para tornar o teste possível.
 
+**L6.R2.P0 — inventário read-only da ORIGEM e da PERSISTÊNCIA do fuso do evento
+(31/ago/2026). ⛔ Nada editado, nada publicado, nenhum dado de produção lido — tudo abaixo
+sai do código.** Não escolhe arquitetura, não mexe em schema e não propõe migração.
+
+**(1) OS CAMPOS DE LOCAL QUE EXISTEM HOJE NO TORNEIO.** Sete, todos `venue*`, e nenhum de
+fuso: `venue` (texto livre; recebe `nome, cidade` concatenados), `venueAddress`
+(`formattedAddress` do Places), `venueLat`, `venueLon`, `venuePlaceId`, `venuePhotoUrl`,
+`venueAccess`. ⛔ **Não existe `timeZone`, `timezone`, `fusoHorario`, `venueCity`,
+`venueState` nem `venueCountry` em lugar nenhum do produto** — a varredura de `js/`,
+`functions/`, `functions-autodraw/`, `tests/`, `scripts/` e `firestore.rules` só acha
+`venueCity` numa linha: `functions-autodraw/agenda-core.js:247`, o próprio resolvedor.
+Ou seja, **uma das fontes que o resolvedor consulta nunca foi escrita por ninguém.**
+
+**(2) ONDE CADA UM NASCE, É EDITADO E SALVO.** Tudo em `js/views/create-tournament.js`, que
+é a MESMA tela de criar e de editar. Os campos são `<input type="hidden">`
+(`:868-871`) preenchidos pelo seletor do Google Places (`:3284-3320`, `fields:
+['displayName','formattedAddress','location','types','addressComponents','id','photos']`);
+o payload que vai pro banco monta em `:5313-5320` e é gravado em `:5384-5389`. A reabertura
+para edição repovoa os mesmos campos em `:4642-4689`, e o template em `:6982`.
+⛔ **NÃO há caminho que apague** os campos de local isoladamente — some junto com o torneio.
+
+*⭐ E é aqui que o dado estruturado é JOGADO FORA.* Em `:3294-3301` o código percorre
+`place.addressComponents` e extrai a **localidade** (`locality` ou
+`administrative_area_level_2`) numa variável `city`. Em `:3305` essa `city` é usada só
+para montar o rótulo (`displayName = nome + ', ' + city`) e **nunca é persistida como
+campo**. O produto TEM a cidade estruturada na mão, no instante da criação, e guarda só a
+frase concatenada.
+
+**(3) O PERFIL DO ORGANIZADOR.** Tem `city` (texto livre, `js/views/auth.js:5334`, input
+`profile-edit-city`), `preferredCeps` (input `profile-edit-cep`) e `preferredLocations[]`.
+⛔ Não tem estado, país nem fuso. ⚠️ `preferredLocations[]` guarda `{name, lat, lng|lon,
+placeId}` com coordenada **numérica** (`js/presence-geo.js:164-165`) — é a origem mais
+confiável que existe no perfil, e o resolvedor **não a lê**. Do perfil, o que chega ao
+autoDraw é o que `_fusoDoEvento` (`functions-autodraw/index.js`) passa adiante: o documento
+inteiro de `users/{creatorUid}`; e o que o resolvedor **usa** dele é só `timeZone`, `city`,
+`cidade` e `state` (`agenda-core.js:251-252`) — ou seja, na prática **só `city`**.
+
+**(4) A ORDEM EFETIVA DE RESOLUÇÃO, com linha** (`agenda-core.js:233-256`):
+(a) `:236-240` declarado no evento (`timeZone`/`timezone`/`fusoHorario`); inválido **recusa**,
+não cai pro próximo. (b) `:242-246` coordenada do evento; `:247-248` texto
+(`venueAddress | venueCity | venue`). (c) `:251` `perfil.timeZone`; `:252`
+`perfil.city|cidade|state`. (d) `:255` não determinado.
+⛔ **A alínea (b)-coordenada está MORTA POR TIPO, não por falta de dado.** `_porCoordenada`
+exige `typeof lat === 'number'` (`:223`) e `resolverFuso` só a chama se
+`typeof t.venueLat === 'number'` (`:243-244`). Mas o writer grava **string**: em `:3313-3314`
+de `create-tournament.js` o picker faz `latEl.value = place.location.lat()` (atribuir a
+`.value` converte pra texto) e o payload leva `venueLat: venueLatVal` — o `.value` cru, sem
+`parseFloat`. **Todo o resto do app sabe disso e converte na leitura**: `tournaments.js:1517`
+`Number(t.venueLat)`, `bracket-ui.js:768`, `tournaments-organizer.js:640`, `arbitros.js:183`,
+`weather.js:306`, `tournaments-enrollment.js:354`, `create-tournament.js:4657` — sete leitores
+com `Number`/`parseFloat`. O resolvedor é o único que exige número **cru** e por isso nunca
+resolve por coordenada, nem quando a coordenada existe.
+
+**(5) ONDE O FUSO PODERIA SER PERSISTIDO CANONICAMENTE.** O instante natural é o
+**momento em que o organizador escolhe o local** (`create-tournament.js:3284-3320`): ali já
+existem `place.location` (lat/lng numéricos), `place.addressComponents` (com `locality` e
+`administrative_area_level_1`) e `place.id` — tudo o que hoje é descartado ou achatado em
+texto. Persistir dali é o único ponto que não exige inventar nada: não usa UTC, não usa
+offset fixo, não usa o fuso do servidor. ⚠️ **E não pode usar o fuso do APARELHO**
+(`Intl.DateTimeFormat().resolvedOptions().timeZone`): é o fuso de quem cria, não o do evento —
+um organizador viajando cadastraria o torneio no fuso errado, e ninguém veria.
+*Rules:* um campo novo de topo já nasce **só do organizador** — `isTournamentAdmin` autoriza
+o update, e `isParticipantBracketDiff` (`firestore.rules:97`) é allowlist que não o contém,
+então participante não escreve. Nada a mudar nas Rules para isso.
+
+**(6) LEGADO SEM LOCALIZAÇÃO.** Torneio antigo, ou com local digitado à mão, tem só `venue`
+como frase. A alínea (b)-texto ainda o alcança quando a frase contém cidade/UF conhecida
+(`_porTexto`, `:205-220`), e recusa quando há **dois** estados no texto (`:219`), que é o
+comportamento certo. Fora disso cai em (d) e **não há sorteio automático** — sem quebrar
+nada: o caminho manual (`drawRound`/`closeRound`) não depende de fuso.
+
+**(7) TESTES, LACUNAS E INVARIANTES.** Cobertura hoje: `test-agenda-core.js:22-50` prova as
+quatro alíneas, o inválido que recusa, o `0,0`, e o texto ambíguo —
+⛔ **mas passa a coordenada como NÚMERO** (`:37`, `venueLat: -3.1`). É uma forma que o
+produto **nunca grava**. Um teste que usa um tipo que o writer não produz não pode pegar o
+defeito do item (4) — é a mesma família de "fixture que o teste sabia ler"
+([[feedback_congelador_cego_procurava_o_jogo_no_escopo_errado]]).
+*Lacunas objetivas:* (i) nenhum teste alimenta `resolverFuso` com o payload REAL da criação
+(strings); (ii) nenhum teste prova que o que a tela grava é o que o resolvedor consegue ler —
+não existe teste de ponta a ponta entre `create-tournament.js` e `agenda-core.js`;
+(iii) `venueCity` não tem teste porque não tem writer. *Invariantes que uma leva futura
+precisaria travar:* o tipo do que a tela grava é o tipo que o resolvedor aceita; toda fonte
+lida pelo resolvedor tem writer conhecido; e nenhuma origem nova pode introduzir UTC, offset
+fixo ou fuso do aparelho/servidor.
+
+**(8) MATRIZ — origem × confiabilidade × writer × leitor × risco.**
+
+| origem | confiabilidade | writer hoje | leitor hoje | risco |
+|---|---|---|---|---|
+| `timeZone` do evento | **alta** (declarado, validado por `Intl`) | **nenhum** | `agenda-core:236` | campo não existe: alínea (a) nunca dispara |
+| `venueLat`/`venueLon` | **alta** se numérico (vem do Places) | `create-tournament.js:5386` como **string** | `agenda-core:243` exige **número** | ⭐ alínea (b) morta por TIPO |
+| `venuePlaceId` | **alta** (id estável do Places) | `create-tournament.js:5387` | ninguém, para fuso | origem forte e não usada |
+| `venueAddress` | média (frase; tem cidade/UF em geral) | `create-tournament.js:5386` | `agenda-core:247` | funciona só se a cidade estiver no dicionário |
+| `venue` | baixa (rótulo livre) | `create-tournament.js:5384` | `agenda-core:247` | "Quadra do condomínio" não resolve |
+| `venueCity` | — | **nenhum** | `agenda-core:247` | fonte **inexistente** lida pelo resolvedor |
+| `users.city` | média (texto livre) | `auth.js:5334` | `agenda-core:252` | é a única do perfil que chega |
+| `users.preferredLocations[].lat/lng` | **alta** (numérico) | `presence-geo.js:164` | **ninguém** | origem forte e não usada |
+| `users.preferredCeps` | alta (CEP → município) | `auth.js` (`profile-edit-cep`) | **ninguém** | exigiria tabela/serviço de CEP |
+| fuso do aparelho | **baixa** para o evento | — | — | ⛔ tenta parecer certo e erra em viagem |
+
+═══ CLASSIFICAÇÃO ═══
+
+*Decisão já adotada (registro).* O fuso é do LOCAL DO EVENTO, por IANA; sem certeza não há
+sorteio automático (L6.R1); ⛔ nunca UTC, offset fixo ou fuso do servidor.
+
+*Problema aberto.* **(A)** A alínea de coordenada não dispara porque o writer grava string e
+o resolvedor exige número — código, não dado. **(B)** `venueCity` é lida e nunca escrita.
+**(C)** A criação extrai a localidade estruturada do Places e a descarta, guardando só a
+frase. **(D)** O teste da coordenada usa número, tipo que o produto não grava. **(E)** As
+duas origens mais confiáveis do perfil (`preferredLocations` numérico e `preferredCeps`) não
+são lidas. **(F)** ⚠️ *Retificação da L6.R1:* onde ficou escrito que `venueLat`/`venueLon`
+são "nulos nos 44", o correto é **"não-numéricos nos 44"** — o script contava como nulo
+qualquer valor que não fosse `integerValue`/`doubleValue`, e string cai aí. A conclusão da
+leva (o fuso não resolvia) não muda; a causa provável passa a ter duas explicações possíveis,
+e distinguir exige medir de novo.
+
+*Hipótese (não verificada nesta etapa).* Que parte dos 44 tenha coordenada gravada como
+STRING e não ausente — o que tornaria (A) a causa dominante e faria o conserto ser de leitura,
+não de captura de dado novo. Confirmar exige uma leitura de produção que esta leva proibiu.
+
+*Proposta futura (nada escolhido, nada autorizado).* As origens candidatas, em ordem de
+confiabilidade medida: campo `timeZone` persistido na escolha do local; coordenada numérica
+já existente; `venuePlaceId`; localidade estruturada do `addressComponents`;
+`preferredLocations` do organizador. ⛔ Nenhuma foi escolhida, nenhum schema foi alterado e
+nenhuma migração foi desenhada.
+
 ## Gates de processo registrados
 
 | Gate | Onde está pendurado | O que barra | Prova |
