@@ -5364,6 +5364,32 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       var who = { uid: s.uid || '', name: s.name };
       return window._idMapHas(t, _ciMonSt, who) && !window._idMapHas(t, _abMonSt, who);
     };
+    /* ── DEPOIS DE AVANÇAR, A TABELA VIRA HISTÓRICO: só #, Jogador, V e Saldo ──────────
+     * Ordem do dono (01/set/2026): a classificação da fase ANTERIOR, depois que a fase
+     * avançou, não precisa mais operar nada — ela só informa quem terminou onde. D, Pts/PA,
+     * % e as colunas de sets/games/TB saem, e a largura que elas comiam vai pro NOME, que é
+     * o que não pode quebrar uma-palavra-por-linha no celular.
+     * ⛔ `classifCongelada` NÃO SERVE DE SINAL, e essa foi a primeira tentativa aqui. Ela é
+     * gravada POR GRUPO, e um grupo congela quando ELE termina — os outros podem seguir
+     * jogando. Usá-la deixava a tabela do grupo que acabou primeiro compacta enquanto o
+     * torneio ainda precisava dela inteira pra operar os jogos que faltavam.
+     * ⭐ O SINAL é a FASE SEGUINTE TER SIDO MATERIALIZADA: `t._phaseMaterialized` só avança
+     * quando o motor gera a fase de verdade (phases-engine.js:2054/2083), e
+     * `currentPhaseIndex` quando o torneio passa dela. É a mesma régua que bracket.js já usa
+     * em `_showElimTbd`. Antes disso, mesmo com todos os grupos congelados, a tabela fica
+     * INTEIRA.
+     * ⛔ E é SÓ APRESENTAÇÃO: `standings` já veio calculado acima, com a mesma régua de
+     * desempate e o mesmo retrato congelado. Nada aqui muda cálculo, W.O. ou dado. */
+    var _idxFaseMon = 0;
+    if (Array.isArray(t.phases) && t.phases.length) {
+      var _ehMon = (window._phasesEngine && typeof window._phasesEngine.phaseIsMonarch === 'function')
+        ? window._phasesEngine.phaseIsMonarch
+        : function (c) { return !!c && (c.reiRainha === true || c.drawMode === 'rei_rainha'); };
+      for (var _pi = 0; _pi < t.phases.length; _pi++) {
+        if (_ehMon(t.phases[_pi])) { _idxFaseMon = _pi; break; }
+      }
+    }
+    var _compacta = ((t._phaseMaterialized || 0) > _idxFaseMon) || ((t.currentPhaseIndex || 0) > _idxFaseMon);
     var standingsRows = standings.map(function(s, i) {
       var diff = s.pointsFor - s.pointsAgainst;
       var setDiff = s.setsWon - s.setsLost;
@@ -5379,24 +5405,24 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
         '<td style="padding:6px 10px;font-weight:700;color:' + window._spCor(clr, 'color') + ';text-align:center;">' + (i + 1) + 'º</td>' +
         '<td class="sp-name-fit" data-maxrem="0.85" data-minrem="0.6" style="overflow-wrap:anywhere;padding:6px 10px;font-weight:600;color:' + window._spCor((_presM ? '#4ade80' : 'var(--text-bright)'), 'color') + ';">' + _presDotM + (typeof window._rowNameHtml === 'function' ? window._rowNameHtml : function (s, h) { return h; })(s, (typeof window._teamNameBreakHtml === 'function' ? window._teamNameBreakHtml(window._liveRowName(s), window._currentBracketTournament) : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament ? window._nameWithCrown(window._liveRowName(s), window._currentBracketTournament) : window._safeHtml(window._liveRowName(s))))) + (typeof window._reiRainhaInvictoCrown === 'function' ? window._reiRainhaInvictoCrown(t, standings, s, { groupDone: groupDone }) : '') + '</td>' +
         '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-4ade80,#4ade80);font-weight:700;">' + s.wins + '</td>' +
-        '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>' +
-        (s.points != null
+        (_compacta ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f87171,#f87171);">' + s.losses + '</td>') +
+        (_compacta ? '' : (s.points != null
           ? '<td ' + (typeof window._paCellHandlers === 'function' ? window._paCellHandlers(t.id, s.name, s.category || '') : '') + ' style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;cursor:pointer;-webkit-touch-callout:none;user-select:none;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + s.points + '</td>'
-          : '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>') +
+          : '<td style="padding:6px 10px;text-align:center;color:var(--text-bright);font-weight:800;" title="Pontos pró (somados em todos os jogos)">' + s.pointsFor + '</td>')) +
         '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((diff >= 0 ? '#4ade80' : '#f87171'), 'color') + ';" title="Saldo (pró − contra)">' + (diff >= 0 ? '+' : '') + diff + '</td>';
-      if (_useSetsMonarch) {
+      if (_useSetsMonarch && !_compacta) {
         row += '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);" title="Sets V-D">' + s.setsWon + '-' + s.setsLost + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((setDiff >= 0 ? '#06b6d4' : '#f87171'), 'color') + ';" title="Saldo de sets">' + (setDiff >= 0 ? '+' : '') + setDiff + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);" title="Games V-D">' + s.gamesWon + '-' + s.gamesLost + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:' + window._spCor((gameDiff >= 0 ? '#8b5cf6' : '#f87171'), 'color') + ';" title="Saldo de games">' + (gameDiff >= 0 ? '+' : '') + gameDiff + '</td>' +
           '<td style="padding:6px 10px;text-align:center;color:var(--sp-c-f59e0b,#f59e0b);" title="Tie-breaks V-D">' + s.tiebreaksWon + '-' + s.tiebreaksLost + '</td>';
       }
-      row += '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="Aproveitamento (V/J)">' + winRatePct + '%</td>' +
+      row += (_compacta ? '' : '<td style="padding:6px 10px;text-align:center;color:var(--text-muted);font-weight:600;" title="Aproveitamento (V/J)">' + winRatePct + '%</td>') +
       '</tr>';
       return row;
     }).join('');
 
-    var extraHeaders = _useSetsMonarch ? (
+    var extraHeaders = (_useSetsMonarch && !_compacta) ? (
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Sets vencidos − perdidos">Sets</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-06b6d4,#06b6d4);font-size:0.7rem;" title="Saldo de sets">±S</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-8b5cf6,#8b5cf6);font-size:0.7rem;" title="Games vencidos − perdidos">Games</th>' +
@@ -5406,15 +5432,18 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
     var standingsTable = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;margin-top:1rem;">' +
       '<thead><tr style="border-bottom:2px solid var(--border-color);">' +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">#</th>' +
-      '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;">Jogador</th>' +
+      // ⭐ `width:100%` na coluna do nome: a tabela dá a ela toda a sobra depois que as
+      // colunas numéricas (estreitas e de largura fixa pelo conteúdo) se servem. É assim que
+      // o nome ganha o espaço que D/Pts/% liberaram, em vez de a tabela só encolher.
+      '<th style="padding:6px 10px;color:var(--text-muted);font-size:0.7rem;' + (_compacta ? 'width:100%;' : '') + '">Jogador</th>' +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">V</th>' +
-      '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">D</th>' +
-      ((t.advancedScoring && t.advancedScoring.enabled)
+      (_compacta ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;">D</th>') +
+      (_compacta ? '' : ((t.advancedScoring && t.advancedScoring.enabled)
         ? '<th style="padding:6px 10px;text-align:center;color:var(--sp-c-fbbf24,#fbbf24);font-size:0.7rem;" title="Pontos Avançados — critério principal da classificação">💯 PA</th>'
-        : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>') +
+        : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Pontos pró (cada ponto conta)">Pts</th>')) +
       '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Saldo de pontos (pró − contra)">Saldo</th>' +
       extraHeaders +
-      '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento">%</th>' +
+      (_compacta ? '' : '<th style="padding:6px 10px;text-align:center;color:var(--text-muted);font-size:0.7rem;" title="Aproveitamento">%</th>') +
       '</tr></thead><tbody>' + standingsRows + '</tbody></table>';
 
     // Match cards — 1 "Cheguei" por GRUPO (no header), não por jogo: a presença é do
@@ -7767,6 +7796,18 @@ window._fbSyncDetalhe = function (det, nvis, buscando) {
 };
 
 window._bracketApplyFilter = function () {
+  /* ⭐ ANTES de mexer em qualquer `display`: é esta posição que tem que sobreviver ao filtro.
+   * ⛔ E LENDO COM REDE. Esta linha nasceu como `(document.scrollingElement ||
+   * document.documentElement).scrollTop` e derrubou duas suítes: no DOM de teste não existe
+   * nem um nem outro, e o `TypeError` estourava na PRIMEIRA linha da função — ou seja, o
+   * filtro inteiro deixava de rodar por causa de uma medição acessória. Ninguém pode morrer
+   * por causa do que é só instrumentação de posição.
+   * [[feedback_init_que_morre_no_meio_e_silencioso]] */
+  var _keepY = 0;
+  try {
+    var _se = document.scrollingElement || document.documentElement;
+    if (_se && typeof _se.scrollTop === 'number') _keepY = _se.scrollTop;
+  } catch (e) { _keepY = 0; }
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
   var onlyMine = !!window._showOnlyMyMatches;
@@ -7914,4 +7955,20 @@ window._bracketApplyFilter = function () {
   // Avisar aqui é barato (a função é idempotente e já roda a cada scroll) e fecha o
   // buraco na fonte: é o próprio ato de filtrar que reposiciona o chrome.
   if (typeof window._reflowChrome === 'function') window._reflowChrome();
+  /* ⛔ E QUEM FILTRA TAMBÉM TEM QUE MANTER O PAI ALTO — era o que faltava aqui.
+   * `position:sticky` só segura ENQUANTO o bloco-pai está na viewport. Filtrar de 55 cards
+   * para 5 encolhe o `#view-container`, o pai deixa de ter por onde viajar e a barra
+   * DESCOLA — sobe junto com o conteúdo e some. É a queixa do dono: depois de digitar e
+   * limpar no ✕, o cabeçalho e a busca "deixam de ficar fixos".
+   * ⭐ A cura já existia e é canônica: `_stickyFilterKeepRoom` põe um spacer invisível como
+   * último filho do PAI DA BARRA, do tamanho exato do déficit, e devolve o scroll onde
+   * estava. Explorar, dashboard e Inscritos chamam desde a v3.0.97 — a busca da CHAVE era a
+   * única consumidora da barra canônica que não chamava. O próprio doc da função manda:
+   * "TODO consumidor de filtro/busca in-place ou re-render deve chamar isto após aplicar".
+   * ⛔ `false` explícito no 2º argumento: aqui o scroll NÃO sobe sozinho. Não é paliativo —
+   * não há `scrollTo` de reposicionamento, temporizador nem ouvinte de rolagem; o spacer
+   * mantém a geometria e o `keepY` devolve exatamente a mesma posição. */
+  if (typeof window._stickyFilterKeepRoom === 'function') {
+    try { window._stickyFilterKeepRoom(_keepY, false); } catch (e) {}
+  }
 };

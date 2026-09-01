@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.82';
+window.SCOREPLACE_VERSION = '2.1.83';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -8016,7 +8016,12 @@ window._stickyFilterKeepRoom = function (keepY, bringToTop) {
     // (window._filterBarState[key].search). Assim TODA tela que usa a barra canônica
     // (inscritos, Explorar, dashboard, …) ganha o "1º resultado colado na barra"
     // automaticamente — sem cada caller precisar avisar. bringToTop explícito também força.
-    if (!bringToTop) {
+    // v2.1.83: `null`/ausente = AUTO-DETECTA (como sempre). `false` EXPLÍCITO = não subir —
+    // é o que a busca da CHAVE usa: lá o scroll não pode andar sozinho, porque esta função
+    // também é reaplicada depois de gravar um placar e mover a chave é proibido
+    // ([[project_lancar_placar_nao_move_a_chave]]). Os chamadores que passam `!!q` seguem
+    // idênticos: com q vazio a auto-detecção também daria false.
+    if (bringToTop == null) {
         try {
             var _bkey = bar.id.replace('fbwrap-', '');
             var _bst = window._filterBarState && window._filterBarState[_bkey];

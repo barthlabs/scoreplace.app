@@ -690,12 +690,30 @@ window._tournamentPlayableFromTs = function (t) {
 // uma reversão.
 var _num = function (v) { return (typeof v === 'number' && isFinite(v)) ? v : null; };
 
+/* ⛔ O CONTADOR SÓ FALA QUANDO A FONTE ESTÁ COERENTE — senão ele INVENTA.
+ * INCIDENTE (dono, 01/set/2026, web no CELULAR, sandbox da Confra): o cartão alternava
+ * entre "… inscritos" e "14 inscritos". Num torneio DIVIDIDO o elenco não mora no
+ * documento: o ouvinte entrega o documento-base e a subcoleção `inscritos` chega DEPOIS.
+ * Nessa janela `t.participants` é uma lista INCOMPLETA — e contar uma lista incompleta
+ * devolve um número que parece resposta. No desktop a janela é curta demais pra se ver; no
+ * celular (rede pior, retorno de aba, primeiro quadro) ela é visível e o número dança.
+ * ⭐ A SAÍDA é a mesma já canonizada em `_souInscrito`: `null` = "ainda não sei". `0` e um
+ * parcial CAEM em `if (x)` como se fossem resposta; `null` obriga quem desenha a mostrar
+ * carregando. E a assimetria vale aqui também — o número do RESUMO
+ * (`competitorsCount`) é fato e sai na hora, sem esperar parte nenhuma.
+ * [[project_derivado_nao_se_guarda_standings]] */
 window._cardCompetidores = function (t) {
-  if (!t) return { people: 0, teams: 0 };
+  if (!t) return { people: 0, teams: 0, carregando: false };
   var p = _num(t.competitorsCount);
-  if (p != null) return { people: p, teams: _num(t.teamsCount) || 0 };
-  return (typeof window._countCompetitors === 'function')
+  if (p != null) return { people: p, teams: _num(t.teamsCount) || 0, carregando: false };
+  // sem o número do resumo, a conta sai da LISTA — que num torneio dividido pode não ter
+  // chegado ainda. Aí não há número a dar.
+  if (typeof window._elencoCarregado === 'function' && !window._elencoCarregado(t)) {
+    return { people: null, teams: null, carregando: true };
+  }
+  var c = (typeof window._countCompetitors === 'function')
     ? window._countCompetitors(t) : { people: 0, teams: 0 };
+  return { people: c.people, teams: c.teams, carregando: false };
 };
 
 window._cardEspera = function (t) {
@@ -720,12 +738,22 @@ window._cardProgresso = function (t) {
 
 // "Já sorteou?" — no documento completo é a presença das listas; no resumo é um
 // booleano (as listas não viajam, é justamente o ponto).
+/* `true` | `false` | `null` (= a hidratação ainda não terminou; não dá pra afirmar).
+ * ⛔ "Não achei chave" NÃO é "não tem chave" enquanto `matches`/`grupos` ainda estiverem
+ * a caminho — foi assim que a chave "às vezes não desenhava" no celular. Vale a MESMA
+ * assimetria do elenco: achar é fato e responde na hora; não achar só vira resposta
+ * depois que as partes estruturais chegaram. Quem chama NÃO pode tratar `null` como
+ * `false`: trate como CARREGANDO. */
 window._cardTemChave = function (t) {
   if (!t) return false;
   if (typeof t.hasDraw === 'boolean') return t.hasDraw;
-  return (Array.isArray(t.matches) && t.matches.length > 0)
+  var tem = (Array.isArray(t.matches) && t.matches.length > 0)
     || (Array.isArray(t.rounds) && t.rounds.length > 0)
     || (Array.isArray(t.groups) && t.groups.length > 0);
+  if (tem) return true;                                    // ⭐ achar é FATO
+  if (typeof window._parteFalta === 'function' &&
+      (window._parteFalta(t, 'matches') || window._parteFalta(t, 'grupos'))) return null;
+  return false;
 };
 
 // ⭐ 2.0.90 — "estou inscrito?" e "estou na espera?" também aceitam o RESUMO.
@@ -1059,6 +1087,75 @@ window._tournamentScheduledWindow = function (t) {
 // Agrupa os jogos da fase por `round` (as trilhas paralelas — ex.: Ouro/Prata — somam no
 // mesmo round). Rodada atual = a 1ª (ordenada) com jogo pendente; se todas prontas, a última.
 // roundNum = índice sequencial da rodada dentro da fase (1-based). BYE/sit-out não contam.
+/* ══ RODADA TEM IDENTIDADE NO TORNEIO, NÃO SÓ DENTRO DA FASE ═════════════════════════
+ * ⛔ O QUE O DONO VIU no sandbox já avançado: a fase 2 anunciada como "RODADA 1 · 0/36
+ * jogos" num torneio que já tinha a Rodada 1 CONCLUÍDA com 105 jogos. Duas mentiras numa
+ * linha só — o número da rodada VOLTOU para 1, e o denominador era o da primeira coluna da
+ * chave, não o da fase.
+ * ⭐ A CAUSA do número: `_idx` é a posição da rodada DENTRO da fase. Índice local é o certo
+ * pro motor e pro AGENDAMENTO (`_phaseRoundWindow` fatia a janela da fase pelas rodadas
+ * DELA), então ele não muda. O que faltava era uma CAMADA DE APRESENTAÇÃO que somasse as
+ * rodadas que as fases anteriores já consumiram.
+ * ⛔ E ELA NÃO PODE DEPENDER DA ORDEM DE CARREGAMENTO. Contar só o que já chegou faria o
+ * rótulo nascer "Rodada 1" e virar "Rodada 2" quando a subcoleção da fase anterior
+ * aterrissasse — o mesmo defeito de hidratação que o contador de inscritos tinha. Por isso
+ * cada fase anterior vale o MAIOR entre o que se observa e o que a CONFIGURAÇÃO dela
+ * declara (`phases[j].rounds`), que viaja sempre no documento-base.
+ * ⛔ Torneio de fase única e dado legado: o deslocamento dá 0 e o número global é idêntico
+ * ao local — nada muda pra quem sempre teve uma fase só. */
+window._rodadasVisiveisDaFase = function (t, idx) {
+  if (!t) return 0;
+  idx = idx || 0;
+  var _isBye = window._isByeMatch || function (m) { return !!(m && m.isBye); };
+  var vistos = {};
+  var conta = function (m) {
+    if (!m || _isBye(m) || m.isSitOut) return;
+    if ((m.phaseIndex || 0) !== idx) return;
+    vistos[(m.round == null ? 1 : m.round)] = 1;
+  };
+  (Array.isArray(t.matches) ? t.matches : []).forEach(conta);
+  if (idx === 0) {
+    // a fase 0 guarda as rodadas em `t.rounds` (Liga/Suíço/Rei-Rainha) e os jogos de grupo
+    // dentro de cada grupo — as três formas contam para o mesmo número de rodadas.
+    (Array.isArray(t.rounds) ? t.rounds : []).forEach(function (r, ri) {
+      if (!r) return;
+      var n = (r.round == null ? ri + 1 : r.round);
+      var temJogo = (Array.isArray(r.matches) && r.matches.some(function (m) { return m && !_isBye(m) && !m.isSitOut; }))
+        || (Array.isArray(r.monarchGroups) && r.monarchGroups.length);
+      if (temJogo) vistos[n] = 1;
+    });
+    (Array.isArray(t.groups) ? t.groups : []).forEach(function (g) {
+      if (!g) return;
+      (Array.isArray(g.matches) ? g.matches : []).forEach(function (m) {
+        if (m && !_isBye(m) && !m.isSitOut) vistos[(m.round == null ? 1 : m.round)] = 1;
+      });
+      (Array.isArray(g.rounds) ? g.rounds : []).forEach(function (r, ri) {
+        if (r && Array.isArray(r.matches) && r.matches.some(function (m) { return m && !_isBye(m) && !m.isSitOut; })) {
+          vistos[(r.round == null ? ri + 1 : r.round)] = 1;
+        }
+      });
+    });
+  }
+  var observado = Object.keys(vistos).length;
+  // ⭐ o PISO vem da configuração da fase — é o que torna o rótulo estável antes de as
+  // partes pesadas chegarem. Ausente (legado), vale só o observado.
+  var cfg = (Array.isArray(t.phases) && t.phases[idx]) || null;
+  var declarado = cfg ? (parseInt(cfg.rounds, 10) || 0) : 0;
+  return Math.max(observado, declarado);
+};
+
+/** Quantas rodadas as fases ANTERIORES a esta já consumiram (o deslocamento do rótulo). */
+window._deslocamentoDeRodadas = function (t, idx) {
+  var n = 0;
+  for (var j = 0; j < (idx || 0); j++) n += window._rodadasVisiveisDaFase(t, j);
+  return n;
+};
+
+/** O número de rodada que a PESSOA vê. `localIdx` é 0-based dentro da fase. */
+window._numeroGlobalDaRodada = function (t, idx, localIdx) {
+  return window._deslocamentoDeRodadas(t, idx || 0) + (localIdx || 0) + 1;
+};
+
 window._phaseCurrentRoundProgress = function(t) {
   var _cp = (t && t.currentPhaseIndex) || 0;
   if (!t || _cp < 1 || !Array.isArray(t.matches)) return null;
@@ -1102,17 +1199,24 @@ window._phaseCurrentRoundProgress = function(t) {
   var _advN = total - _thirdN;
   var _perTier = Math.round(_advN / _nBk);
   var _name;
+  // ⭐ O RÓTULO usa o número GLOBAL; o índice local segue mandando no agendamento.
+  var _numGlobal = (typeof window._numeroGlobalDaRodada === 'function')
+    ? window._numeroGlobalDaRodada(t, _cp, _idx) : (_idx + 1);
   if (_isGrand) _name = _t2('bracket.grandFinal');
   else if (_advN === 0 && _thirdN > 0) _name = 'Disputa de 3º/4º lugar';
   else if (_perTier === 1) _name = _t2('bracket.final');
   else if (_perTier === 2) _name = _t2('bracket.semiFinal');
   else if (_perTier === 4) _name = _t2('bracket.quarterFinal');
   else if (_perTier === 8) _name = _t2('bracket.roundOf16');
-  else _name = _t2('bracket.round', { n: _idx + 1 });
+  else _name = _t2('bracket.round', { n: _numGlobal });
   // fallback se a chave i18n não resolveu (retornou a própria chave)
-  if (!_name || _name.indexOf('bracket.') === 0) _name = 'Rodada ' + (_idx + 1);
+  if (!_name || _name.indexOf('bracket.') === 0) _name = 'Rodada ' + _numGlobal;
   return {
+    // ⛔ LOCAL, e continua local de propósito: `_phaseRoundWindow` fatia a janela da FASE
+    // pelas rodadas DELA, então um número global aqui deslocaria todos os prazos.
     roundNum: _idx + 1,
+    // ⭐ o que a tela mostra — não se repete entre fases do mesmo torneio.
+    roundNumGlobal: _numGlobal,
     // quantas rodadas esta fase tem (colunas com jogo real) — é o divisor do prazo da fase
     // quando a regressiva é POR RODADA. Ver window._phaseRoundWindow.
     roundsTotal: rounds.length,
@@ -1355,12 +1459,23 @@ window._buildProgressInner = function(t) {
     var _pr = window._phaseCurrentRoundProgress(t);
     if (_pr && _pr.total > 0) {
       _phaseRoundActive = true;
-      prog = { total: _pr.total, completed: _pr.done, pct: _pr.pct };
-      progFrac = _pr.total ? (_pr.done / _pr.total) : 0;
+      /* ⛔ O DENOMINADOR É DA FASE, NÃO DA COLUNA. Aqui ficava `_pr.total` — os jogos da
+       * RODADA ATUAL — e era isso que anunciava "0/36" numa fase de 100 jogos: 36 é a
+       * primeira coluna da chave, não a etapa que a pessoa está começando.
+       * ⭐ O total sai de `_currentPhaseGames`, a MESMA fonte canônica que já conta os jogos
+       * da fase (e que `_buildProgressInner` usa lá em cima) — não de configuração, não de
+       * número escrito à mão. O agregado do torneio segue na barra roxa, intocado. */
+      var _faseHead = (typeof window._currentPhaseGames === 'function') ? window._currentPhaseGames(t) : null;
+      if (_faseHead && _faseHead.total > 0) {
+        prog = { total: _faseHead.total, completed: _faseHead.done, pct: _faseHead.pct };
+      } else {
+        prog = { total: _pr.total, completed: _pr.done, pct: _pr.pct };
+      }
+      progFrac = prog.total ? (prog.completed / prog.total) : 0;
       _roundNum = _pr.roundNum;
       _roundComplete = _pr.complete;
       _roundCompletedMs = _pr.roundEndMs;
-      _labelHead = _pr.name || ('Rodada ' + _roundNum);
+      _labelHead = _pr.name || ('Rodada ' + (_pr.roundNumGlobal || _roundNum));
       _labelSchedStart = 'início programado';
       _labelSchedEnd = 'final programado';
       // v4.5.x: fase eliminatória JÁ EM ANDAMENTO mas a rodada atual (ex.: Semifinais) ainda

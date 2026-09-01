@@ -68,7 +68,12 @@ ok('quem decide visibilidade continua sendo _bracketApplyFilter, por [data-playe
   // lotes guardados da chave antes de filtrar — grupo adiado não tem card no DOM, e
   // a busca diria "nenhum resultado" MENTINDO. A intenção não mudou: quem decide
   // visibilidade continua sendo ESTE filtro, por [data-players].
-  /window\._bracketApplyFilter = function[\s\S]{0,1200}querySelectorAll\('\[data-players\]'\)/.test(bracket));
+  // ⚠️ Ampliada de novo em 2.1.83, pelo MESMO motivo: o topo da função passou a guardar a
+  // posição de rolagem (pro spacer canônico devolvê-la depois do filtro) e o comentário que
+  // explica por que essa leitura é protegida. Continua sendo só prólogo — a decisão de
+  // visibilidade segue neste filtro, por [data-players]. Se um dia isto crescer de novo,
+  // amplie: o que a asserção trava é QUEM decide, não em que coluna a decisão começa.
+  /window\._bracketApplyFilter = function[\s\S]{0,2600}querySelectorAll\('\[data-players\]'\)/.test(bracket));
 
 // ── 4. a regra vale para o caso REAL do Confra ───────────────────────────────────────
 // Simula o que o filtro faz: normaliza e procura o trecho no data-players declarado.

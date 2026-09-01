@@ -204,11 +204,85 @@
     });
   }
 
+  /* ── A PORTA DO AVANÇO: A CLASSIFICAÇÃO PUBLICADA VIAJA JUNTO  (CONFRA.P1) ───────────
+   * ⛔ O DEFEITO QUE ISTO FECHA, medido no sandbox da Confra em 01/set/2026: o avanço
+   * montava um grupo SINTÉTICO — `{ players, matches }` — e entregava isso ao motor de
+   * classificação. `classifCongelada` ficava de fora, e `_computeMonarchStandings` só honra
+   * o retrato publicado quando o grupo o CARREGA (bracket-logic.js:308). Resultado: a TELA
+   * mostrava a ordem congelada e o AVANÇO recalculava outra — no Grupo D o Jogador X subia
+   * e o 3º caía, então a dupla que a Prata deveria ter (3º+4º) não se formava.
+   * ⭐ Esta função é a porta ÚNICA: leva a congelada, a IDENTIDADE (uids e slots — sem eles
+   * o retrato casa por nome, e nome não é identidade) e os jogos das duas formas
+   * (`g.matches` da fase posterior e `g.rounds[].matches` da Fase 0 standalone).
+   * ⛔ Ela NÃO escreve nada: monta um objeto novo e passa a congelada por referência só pra
+   * LEITURA. Congelada legada, sem `classifCongeladaAt`, vale igual e não é regravada.
+   * É exportada porque o teste tem que exercitar a PORTA, não uma imitação dela. */
+  /* ── LEGADO DA CONFRA: `rankTo: 999` NAQUELE arranjo quer dizer TOP-4 ─────────────────
+   * ⛔ ESTREITO DE PROPÓSITO. "Todos avançam" é escolha legítima em quase todo formato e
+   * NÃO pode mudar. O que não existe é "todos avançam" quando a fase seguinte FORMA DUPLAS
+   * em DUAS linhas a partir dos classificados de cada grupo: aí o grupo inteiro entra no
+   * pool e, num grupo de 5, sobra alguém sem par — foi o que deixou o 3º do Grupo D
+   * sozinho na Prata (medido em 01/set/2026).
+   * As QUATRO condições têm que valer JUNTAS; qualquer uma faltando, nada é reinterpretado:
+   *   ① a fase anterior é Rei/Rainha (grupos rotativos);
+   *   ② esta fase FORMA duplas (`fixedPairs`);
+   *   ③ são DUAS ou mais linhas (Ouro/Prata) — com uma linha só não há o que separar;
+   *   ④ TODAS as faixas são "1..todos" (é a assinatura do legado, não uma faixa de verdade).
+   * O corte vira 2 posições por linha: Ouro 1–2, Prata 3–4. A ESTRATÉGIA do organizador
+   * (Performance/Equilíbrio) continua sendo quem forma os pares dentro desse recorte. */
+  /* ⛔ "TER GRUPOS REI/RAINHA" NÃO BASTA — tem que ser REI/RAINHA DE RODADA ÚNICA.
+   * Uma primeira versão disto olhava os JOGOS (`m.isMonarch`) e concluía "é Rei/Rainha".
+   * Heurística insuficiente: Rei/Rainha de VÁRIAS rodadas também carimba `isMonarch` em
+   * todo jogo, e ali `rankTo:999` continua querendo dizer "todos avançam" — reinterpretar
+   * cortaria gente de um formato legítimo. O arranjo legado da Confra é especificamente
+   * RODADA ÚNICA por grupo; com mais de uma rodada, nada é reinterpretado.
+   * ⭐ Por isso a condição é lida da CONFIGURAÇÃO DA FASE ANTERIOR (`t.phases[cur]`), que é
+   * quem sabe `reiRainha`/`drawMode` e o `rounds` que o compilador gravou, e não do formato
+   * dos jogos. Quem chama calcula e passa; na dúvida (ninguém passou), NÃO reinterpreta. */
+  function ehReiRainhaRodadaUnica(prevCfg) {
+    if (!prevCfg || !isMonarchDraw(prevCfg)) return false;
+    return (parseInt(prevCfg.rounds, 10) || 1) === 1;
+  }
+
+  function _mappingLegadoConfra(mapping, fixedPairs, prevRRRodadaUnica) {
+    if (!fixedPairs || prevRRRodadaUnica !== true) return null;
+    if (!Array.isArray(mapping) || mapping.length < 2) return null;
+    var todasAbertas = mapping.every(function (mp) {
+      return mp && (parseInt(mp.rankFrom, 10) || 1) === 1 && (parseInt(mp.rankTo, 10) || 0) >= 999;
+    });
+    if (!todasAbertas) return null;
+    var rank = 1;
+    return mapping.map(function (mp) {
+      var faixa = { dest: mp.dest, rankFrom: rank, rankTo: rank + 1, label: mp.label || '' };
+      rank += 2;
+      return faixa;
+    });
+  }
+
+  function standingsDaFaseAnterior(g, t, tbOpts, isMonarch) {
+    if (!isMonarch) return _groupTeamStandings(g, tbOpts);
+    if (typeof window._computeMonarchStandings !== 'function') return (g && g.standings) || [];
+    var ms = ((g && g.matches) || []).concat(
+      ((g && g.rounds) || []).reduce(function (a, r) { return a.concat((r && r.matches) || []); }, []));
+    var entrada = { players: (g && g.players) || [], matches: ms };
+    // ⭐ só repassa o que EXISTE — campo ausente não vira `undefined` no objeto, pra o
+    // leitor distinguir "não tem retrato" de "retrato vazio".
+    if (g && Array.isArray(g.classifCongelada)) entrada.classifCongelada = g.classifCongelada;
+    if (g && Array.isArray(g.playersUids)) entrada.playersUids = g.playersUids;
+    if (g && Array.isArray(g.playersSlotIds)) entrada.playersSlotIds = g.playersSlotIds;
+    // v4.1.70: pareamento POR PERFORMANCE usa os MESMOS pontos da tela — passa `t` pra
+    // aplicar advancedScoring quando ligado (ordem = classificação exibida).
+    return window._computeMonarchStandings(entrada, t, (g && g.category) || null);
+  }
+
   function buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy, opts) {
     opts = opts || {};
     var scope = opts.scope || 'per_group';
     var basis = opts.rankingBasis || 'individual';
     var shuffle = opts.shuffle || _defaultShuffle;
+    // ⭐ o legado da Confra é reinterpretado AQUI, uma vez só, antes de qualquer uso do
+    // mapping — assim `byDest`, `destKeys` e a profundidade enxergam todos a mesma faixa.
+    mapping = _mappingLegadoConfra(mapping, fixedPairs, opts.prevRRRodadaUnica) || mapping;
     var byDest = {};
     mapping.forEach(function (mp) { if (!byDest[mp.dest]) byDest[mp.dest] = []; });
 
@@ -700,7 +774,10 @@
     // linha. Ver project_phase_inactive_resolution.
     var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
       { scope: scope, rankingBasis: rankingBasis, includeInactive: (phaseCfg && phaseCfg._includeInactive) || null,
-        promoteLines: (phaseCfg && phaseCfg._promoteLines) || 0 });
+        promoteLines: (phaseCfg && phaseCfg._promoteLines) || 0,
+        // quem chama é que sabe qual era a fase ANTERIOR; sem essa informação não se
+        // reinterpreta nada (ver ehReiRainhaRodadaUnica).
+        prevRRRodadaUnica: (phaseCfg && phaseCfg._prevRRRodadaUnica) === true });
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
     // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
@@ -1352,7 +1429,8 @@
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
       { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true,
-        includeInactive: (cfg && cfg._includeInactive) || null, promoteLines: (cfg && cfg._promoteLines) || 0 });
+        includeInactive: (cfg && cfg._includeInactive) || null, promoteLines: (cfg && cfg._promoteLines) || 0,
+        prevRRRodadaUnica: (ctx.prevRRRodadaUnica === true) || (cfg && cfg._prevRRRodadaUnica) === true });
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
@@ -1934,6 +2012,10 @@
     var _id = idPrefix || ('ph' + nextIdx);
     var _fmt = classifyPhaseFormat(cfg);
     var _mon = isMonarchDraw(cfg);
+    // ⭐ AQUI é a camada que conhece a fase ANTERIOR de verdade: `t.phases[cur]`, com o
+    // `reiRainha`/`drawMode` e o `rounds` que o compilador gravou. Vai numa CÓPIA do cfg —
+    // a configuração guardada do torneio não é tocada.
+    var _prevRRUnica = ehReiRainhaRodadaUnica(t.phases[cur]);
     var built;
     if (_mon || _fmt === 'league') {
       var _cfgL = _mon ? Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }) : cfg;
@@ -1941,7 +2023,7 @@
     } else if (_fmt === 'groups') {
       built = buildPhaseGroupStage(groups, cfg, cs, _id);
     } else {
-      built = buildPhaseBrackets(groups, cfg, cs, _id);
+      built = buildPhaseBrackets(groups, Object.assign({}, cfg, { _prevRRRodadaUnica: _prevRRUnica }), cs, _id);
     }
     // v3.1.16 (inc 8 — unificação de storage): Liga rodada a rodada de fase posterior
     // adota o MESMO modelo da Fase 0 — as rodadas moram num array `rounds` real (mesma
@@ -2045,17 +2127,7 @@
     // (antiguidade/juventude) pro _groupTeamStandings, pra classificação na transição
     // respeitar a ordem que o organizador definiu.
     var _tbOpts = { tiebreakers: t.tiebreakers, birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} };
-    var cs = _isMonarchPrev
-      ? function (g) {
-          // standings INDIVIDUAL do grupo Rei/Rainha. Achata jogos de g.matches (fase
-          // posterior) E g.rounds[].matches (Fase 0 standalone) → _computeMonarchStandings.
-          if (typeof window._computeMonarchStandings !== 'function') return g.standings || [];
-          var ms = (g.matches || []).concat((g.rounds || []).reduce(function (a, r) { return a.concat(r.matches || []); }, []));
-          // v4.1.70: pareamento POR PERFORMANCE usa os MESMOS pontos da tela — passa `t`
-          // pra aplicar advancedScoring quando ligado (ordem = classificação exibida).
-          return window._computeMonarchStandings({ players: g.players || [], matches: ms }, t, g.category || null);
-        }
-      : function (g) { return _groupTeamStandings(g, _tbOpts); };
+    var cs = function (g) { return standingsDaFaseAnterior(g, t, _tbOpts, _isMonarchPrev); };
     // ⛔ SEM PAINEL DE AJUSTE DE CHAVEAMENTO — mas COM o de PROMOVER LINHA (v1.5.25).
     //
     // Aqui havia UM gate que disparava DOIS painéis quando alguma linha da próxima fase
@@ -2083,7 +2155,8 @@
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _src = _nextCfg.source || {};
       var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
-      var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }) });
+      var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }),
+        prevRRRodadaUnica: ehReiRainhaRodadaUnica(t.phases[_cur]) });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
           typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {
@@ -2432,6 +2505,7 @@
     isMultiPhase: isMultiPhase,
     mkTeam: mkTeam,
     buildEntrantsByDest: buildEntrantsByDest,
+    standingsDaFaseAnterior: standingsDaFaseAnterior,   // a porta REAL do avanço (o teste exercita ELA)
     genTierBracket: genTierBracket,
     roundRobinSchedule: roundRobinSchedule,
     buildPhaseBrackets: buildPhaseBrackets,
@@ -2447,6 +2521,7 @@
     selectQualifiers: selectQualifiers,
     phaseIsGroups: _phaseIsGroups,
     phaseIsMonarch: _phaseIsMonarch,
+    ehReiRainhaRodadaUnica: ehReiRainhaRodadaUnica,   // a condição do legado, lida da CONFIG
     phaseIsLiga: _phaseIsLiga,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,

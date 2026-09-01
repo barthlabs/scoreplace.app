@@ -340,12 +340,25 @@
         });
         gRounds.forEach(function (r) { gMatches = gMatches.concat(r.matches); });
       }
-      return {
+      /* ⛔ PRESERVA TODOS OS CAMPOS DO GRUPO — este literal já apagou dois.
+       * Aqui havia `{ name, players, matches, rounds }` e mais nada. Tudo o que o grupo
+       * carrega além disso — `classifCongelada` à frente de todos, mas também `playersUids`,
+       * `playersSlotIds`, `category` e os campos de W.O./substituição — sumia na travessia.
+       * ⭐ MEDIDO em 01/set/2026: `_renderMonarchStage` passa `sg.classifCongelada` pro motor
+       * de classificação desde a 2.1.2, e nesta rota o campo NUNCA chegava — a correção do
+       * retrato congelado era INERTE em todo torneio cujos grupos moram em `t.groups`. O
+       * irmão desta função (a rota `t.rounds[].monarchGroups`, ~linha 196) sempre usou
+       * `Object.assign({}, g, …)` e por isso nunca teve o problema.
+       * A regra: copie o grupo INTEIRO e sobrescreva só o que esta coluna precisa mudar.
+       * `rounds` fica de fora quando não foi montado — `rounds: undefined` num Object.assign
+       * APAGA o `g.rounds` original, que é o oposto de preservar. */
+      var col = Object.assign({}, g, {
         name: window._groupDisplayName(g, gi),
         players: (g.players || g.participants || []).slice(),
-        matches: gMatches,
-        rounds: gRounds
-      };
+        matches: gMatches
+      });
+      if (gRounds) col.rounds = gRounds;
+      return col;
     });
 
     // Flattened matches for aggregate status

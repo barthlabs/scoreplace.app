@@ -2611,7 +2611,14 @@ function renderTournaments(container, tournamentId = null) {
 
         // v3.0.x: contagem canônica (deduplicada, equipe-aware) — estável antes E
         // depois do sorteio. Ver window._countCompetitors.
-        const _ccDetail = (typeof window._countCompetitors === 'function') ? window._countCompetitors(t) : { people: 0, teams: 0 };
+        /* ⛔ PELO ACESSADOR, NÃO PELA LISTA CRUA. Contar `t.participants` direto era o que
+         * fazia o DETALHE afirmar "14 inscritos" enquanto o cartão, que já passava pelo
+         * acessador, dizia "…": duas telas, a mesma fonte incompleta, respostas diferentes.
+         * `_cardCompetidores` devolve `null` enquanto a subcoleção não chegou, e o
+         * `_dashNum` abaixo transforma isso em reticências. */
+        const _ccDetail = (typeof window._cardCompetidores === 'function')
+          ? window._cardCompetidores(t)
+          : ((typeof window._countCompetitors === 'function') ? window._countCompetitors(t) : { people: 0, teams: 0 });
         let individualCount = _ccDetail.people;
         let teamCount = _ccDetail.teams;
         const standbyCount = (typeof window._waitlistPeopleCount === 'function')
@@ -3416,13 +3423,13 @@ function renderTournaments(container, tournamentId = null) {
                     <div id="stat-boxes-row" ${_pReadBg ? 'data-photo-bg="'+_pReadBg+'" data-photo-fg="'+_pReadFg+'" data-photo-bd="'+_pReadBd+'"' : ''} style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start;">
                         <div class="stat-box" data-stat="inscritos" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👤</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${individualCount}</span>
+                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(individualCount, t) : individualCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Inscritos</span>
                         </div>
                         ${teamCount > 0 ? `
                         <div class="stat-box" data-stat="equipes" ${_pReadBg ? 'style="background:' + window._spCor(_pReadBg, 'background')+';color:'+_pReadFg+' !important;border:1px solid ' + window._spCor(_pReadBd, 'borda')+';"' : ''}>
                            <span style="font-size: 1.1rem; margin-right: 4px;">👥</span>
-                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${teamCount}</span>
+                           <span class="stat-value" style="font-size: 1.4rem; font-weight: 800; line-height: 1; opacity: 0.95;">${window._dashNum ? window._dashNum(teamCount, t) : teamCount}</span>
                            <span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; margin-left: 8px; opacity: 0.8;">Equipes</span>
                         </div>
                         ` : ''}

@@ -97,5 +97,40 @@ chamadas.forEach((trecho, i) => {
 ok('⭐⭐ TODO chamador de bracket.js passa `classifCongelada`', semCampo === 0,
   semCampo + ' chamador(es) montam o objeto sem o campo — o retrato não chega e a tela recalcula');
 
+/* ── ⑤ E O RETRATO TEM QUE SOBREVIVER À TRAVESSIA ATÉ O RENDERIZADOR ────────────────
+ * ⛔ ACHADO EM 01/set/2026, e é a MESMA falha de novo, um andar acima. O bloco ④ garante que
+ * `bracket.js` PASSA `sg.classifCongelada`. Só que `sg` não é o grupo: é uma cópia montada
+ * por `_getUnifiedRounds`. E `_buildGroupsColumn` montava essa cópia com um literal de
+ * quatro campos — `{ name, players, matches, rounds }` — então em todo torneio cujos grupos
+ * moram em `t.groups` o campo chegava AUSENTE e a correção da 2.1.2 era INERTE.
+ * ⭐ A régua deste bloco é o comportamento, não o texto do código: monta um grupo com
+ * retrato, passa pelo construtor REAL e confere que o campo saiu do outro lado.
+ * [[feedback_chave_de_espelho_nunca_e_posicao]] — a cópia tem que copiar. */
+console.log('──── ⑤ o retrato sobrevive à travessia até o renderizador ────');
+{
+  const _t = {
+    id: 'tt', format: 'Liga', ligaRoundFormat: 'rei_rainha', drawMode: 'rei_rainha',
+    groups: [{ name: 'Grupo D', players, playersUids, matches, classifCongelada: congelada,
+               playersSlotIds: players.map(() => null) }],
+  };
+  const uni = (typeof W._getUnifiedRounds === 'function') ? W._getUnifiedRounds(_t) : null;
+  ok('⭐ o construtor de colunas rodou', !!(uni && uni.columns && uni.columns.length));
+  const col = (uni && uni.columns || []).find((c) => c.subgroups && c.subgroups.length);
+  ok('  → e produziu a coluna com subgrupos', !!col);
+  const sg = col && col.subgroups[0];
+  ok('⭐⭐ `classifCongelada` CHEGA no subgrupo que o render lê', !!(sg && Array.isArray(sg.classifCongelada)),
+    'chegou: ' + JSON.stringify(sg && sg.classifCongelada));
+  ok('  → com o retrato inteiro, na mesma ordem',
+    !!sg && JSON.stringify(sg.classifCongelada) === JSON.stringify(congelada));
+  ok('  → e a identidade veio junto (uids e slots)',
+    !!sg && Array.isArray(sg.playersUids) && Array.isArray(sg.playersSlotIds));
+  // e o efeito de ponta a ponta: com o subgrupo que o construtor entregou, a ordem sai congelada
+  const st = W._computeMonarchStandings(
+    { players: sg.players, playersUids: sg.playersUids, matches: sg.matches,
+      classifCongelada: sg.classifCongelada }, t, null);
+  ok('⭐⭐ e com ESSE subgrupo a classificação sai na ordem publicada',
+    nomes(st) === 'Rostanda · Zilda · Fernando · Vivian · Jogador X', 'obtido: ' + nomes(st));
+}
+
 console.log(falhas === 0 ? '\n✅ congelada-viaja-ate-o-render: OK' : '\n❌ ' + falhas + ' falha(s)');
 process.exit(falhas === 0 ? 0 : 1);

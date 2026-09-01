@@ -867,8 +867,15 @@ function renderDashboard(container) {
     // Enroll/unenroll button: only when inscriptions are truly open
     // hasDraw = tournament already has matches/rounds/groups drawn
     const hasDraw = window._cardTemChave(t);
+    /* ⛔ `null` = "a hidratação não terminou", e AÍ NÃO SE DECIDE. Tratar como `false`
+     * faria `!hasDraw` valer `true` e o cartão ofereceria "Inscrever-se" num torneio que
+     * JÁ TEM CHAVE — só porque os jogos ainda não chegaram. É a mesma classe de erro do
+     * contador: afirmar sobre o que ainda não se sabe. Enquanto é `null`, nada é oferecido;
+     * a chegada das partes re-renderiza e o botão aparece se for o caso. */
+    const _chaveIncerta = (hasDraw === null);
     const _leE = window._effectiveLateEnrollment ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    const canEnroll = isAberto && !isFinished && (!hasDraw || ligaAberta || _leE === 'standby' || _leE === 'expand');
+    const canEnroll = isAberto && !isFinished && !_chaveIncerta &&
+      (!hasDraw || ligaAberta || _leE === 'standby' || _leE === 'expand');
     let enrollBtnHtml = '';
     if (_isInStandby && !isFinished) {
       enrollBtnHtml = `<div style="font-size: 0.6rem; font-weight: 800; color: var(--sp-c-fbbf24,#fbbf24); text-transform: uppercase; letter-spacing: 0.4px; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 6px;">⏳ ${_t('enroll.onWaitlist')}</div><button class="btn btn-sm btn-danger hover-lift" onclick="event.stopPropagation(); window._spinButton(this, '${_t('enroll.processing')}'); window._leaveStandby('${t.id}')">🛑 ${_t('enroll.leaveWaitlist')}</button>`;
