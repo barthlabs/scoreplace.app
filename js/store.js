@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.89';
+window.SCOREPLACE_VERSION = '2.1.90';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3300,6 +3300,11 @@ window._sbIngest = function (docs) {
     var vivoAgora = (i === -1) ? pronto : lista[i];
     /* ⚠️ Recontar sobre o objeto que de fato ficou na lista — o `Object.assign` pode ter
      * mudado o quadro, e é ele que a tela lê. */
+    /* ⭐ a MESMA reidratação que o ouvinte de `tournaments` faz a cada eco (store.js,
+     * `startRealtimeListener`): `group.matches` volta a ser REFERÊNCIA dos jogos de
+     * `round.matches`. Aqui ela pega o caso do sandbox NÃO dividido (jogos já no doc);
+     * o dividido é servido pela montagem, que reidrata quando as partes chegam. */
+    try { if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(vivoAgora); } catch (_hmS) {}
     if (window._marcaPartesQueFaltam(vivoAgora)) paraMontar.push(id);
     /* ⭐ e o erro morre quando as partes chegam por outro caminho — igual ao ouvinte real.
      * Um "não consegui carregar" ao lado do dado carregado é pior que o erro. */
@@ -12928,6 +12933,22 @@ window.AppStore = {
               _soltar(tid); return;
             }
             Object.keys(montado).forEach(function (k) { vivo[k] = montado[k]; });
+            /* ⭐ REI/RAINHA: OS JOGOS SÓ EXISTEM DEPOIS DAQUI — e os grupos apontam pra eles
+             * por `matchIds`. `remontar` devolve um CLONE do config, então tudo o que fosse
+             * hidratado ANTES da montagem é jogado fora aqui em cima; e `rounds[].matches`
+             * só fica cheio agora (no doc magro do Confra os 115 jogos moram na subcoleção).
+             * Sem esta linha, `group.matches` fica VAZIO e `_phasesPhaseComplete` responde
+             * `false` pra sempre — foi assim que o atalho "Avançar de Fase" das Ferramentas
+             * sumiu do sandbox. MEDIDO nos dois documentos reais: sem hidratar,
+             * phaseComplete=false e 0 botões; hidratando, phaseComplete=true e 1 botão.
+             * ⚠️ Por que o torneio REAL disfarçava: o ouvinte de `tournaments` reidrata a
+             * CADA eco, e um torneio vivo ecoa o tempo todo. O sandbox não ecoa — ninguém
+             * mais escreve nele — então ficava para sempre com o eco da montagem.
+             * ⛔ Nenhuma regra de avanço mudou: mesma `_phaseCanAdvance`, mesma
+             * `_advanceMultiPhase`. É a MESMA `_hydrateMonarchGroups` que o ouvinte, o
+             * cache, o `loadTournamentById`, a transação e o render da chave já chamam —
+             * idempotente por construção. */
+            try { if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(vivo); } catch (_hmM) {}
             delete vivo._faltamPesados;
             delete vivo._faltaOQue;
             delete self._tentativasDePartes[tid];   // deu certo: o contador zera

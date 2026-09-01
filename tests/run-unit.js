@@ -38,6 +38,11 @@ const SUITES = [
   // renderTournaments produz — e cobre as três formas, porque o _advBtn só existia dentro do
   // ramo isLigaAutoDraw: apagar só o duplicado deixaria duas delas SEM ação de avanço.
   'tests/avancar-de-fase-e-um-botao-so.test.js',
+  // ⭐ E ele tem que aparecer TAMBÉM no sandbox do dono. Ali o atalho sumia porque o
+  // torneio dividido chega com os grupos apontando pros jogos por `matchIds` e ninguém
+  // religava DEPOIS da montagem — `_phasesPhaseComplete` respondia `false` pra sempre.
+  // O torneio real disfarçava: o ouvinte reidrata a cada eco, e sandbox não ecoa.
+  'tests/atalho-de-avancar-aparece-no-sandbox-do-dono.test.js',
   // A tela de avanço falava só dos que se desativaram; quem levou W.O. também não entra no
   // sorteio e ficava invisível. Agora aparece — em VERMELHO, como nas listas onde já está —
   // mas como INFORMAÇÃO: virar uma terceira opção é o defeito da v2.0.36 (W.O. na lista de

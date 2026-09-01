@@ -1,5 +1,34 @@
 # Changelog do scoreplace.app
 
+## 2.1.90 — o atalho de avançar volta às Ferramentas do sandbox (01/set/2026)
+
+### Dois botões, a MESMA regra — e só um aparecia
+
+Reportado pelo dono: no sandbox, "Ferramentas do organizador" não mostrava o atalho **⏭️ Avançar de Fase**, enquanto o botão **🏆 Avançar** do painel contextual da chave aparecia normalmente. Os dois saem do **mesmo** cálculo (`_isMultiPhase` + `_phasesPhaseComplete` + existe próxima fase) e chamam a **mesma** `_advanceMultiPhase` — então o defeito nunca esteve na regra: estava no **dado que chegava a cada tela**.
+
+⛔ **A causa, medida nos dois documentos REAIS antes de mexer.** Num Rei/Rainha dividido — o caso do Confra — o jogo mora uma vez só em `round.matches` e o grupo guarda apenas `matchIds`. Quem religa os dois é `_hydrateMonarchGroups`, e ela precisa rodar **depois** da montagem das partes: `remontar` devolve um **clone** (o que for hidratado antes é descartado) e os 115 jogos só chegam ali. `_montaPesadosQueFaltam` não a chamava. Sem os grupos religados, `phaseGames(t, 0)` volta **vazio**, `_phasesPhaseComplete` responde `false` **para sempre**, e o atalho nunca nasce.
+
+⚠️ **Por que o torneio real disfarçava:** o ouvinte de `tournaments` reidrata a **cada eco**, e torneio vivo ecoa o tempo todo. O sandbox **não ecoa** — ninguém mais escreve nele — então ficava congelado no eco da montagem. E a chave nunca sofreu porque `renderBracket` hidrata sozinha, no topo do render: exatamente o par de sintomas que o dono descreveu.
+
+### O que mudou
+
+- **⭐ A montagem das partes religa os grupos**, em `_montaPesadosQueFaltam` — a porta canônica, compartilhada pelo torneio real e pelo sandbox. É a **mesma** `_hydrateMonarchGroups` que o ouvinte, o cache, o `loadTournamentById`, a transação e o render da chave já chamavam; ela é idempotente por construção.
+- **⭐ `_sbIngest` reidrata como o ouvinte de `tournaments`**, para o sandbox **não** dividido (jogos já no documento). O dividido é servido pela montagem, acima.
+- **⛔ Nenhuma regra mudou.** Mesma `_phaseCanAdvance`, mesma `_advanceMultiPhase`, mesmo botão contextual, mesmos textos. Classificação, congelamento, pares, promoção, sorteio, horários, Functions, Rules e dados: intocados. Nenhum sandbox foi criado, apagado ou avançado.
+
+### Medição
+
+Nos documentos de produção (somente leitura), pelo caminho real do cliente — documento magro no ouvinte, partes servidas como o banco serve, e só então o render:
+
+| | antes | depois |
+|---|---|---|
+| original: `phaseComplete` / atalho / contextual | `false` / 0 / 1 | `true` / **1** / 1 |
+| sandbox: `phaseComplete` / atalho / contextual | `false` / **0** / 1 | `true` / **1** / 1 |
+
+### Gates
+
+`tests/atalho-de-avancar-aparece-no-sandbox-do-dono.test.js` (novo) entra pelo **caminho real** — fixture dividido por `dividir` e dobrado por `_foldMonarchGroups`, com as mesmas partes fora que o Confra tem — e cobre: torneio real elegível (1 atalho + 1 contextual); sandbox do dono elegível (1 + 1); sandbox de **outra pessoa** (nenhum atalho de organizador); fase ainda **não** elegível (nenhum dos dois); um só rótulo de avanço nas Ferramentas; e o atalho chamando a **mesma** ação canônica, com o mesmo id, do contextual. ⭐ O **controle vermelho** desliga `_hydrateMonarchGroups` e roda o mesmo caminho: os grupos ficam sem jogos, a fase se diz incompleta e o atalho **não** nasce — é o defeito reproduzido, provando que são os itens verdes que cobram a correção.
+
 ## 2.1.89 — o ouvinte de `sandboxes` passa a hidratar como o de `tournaments` (01/set/2026)
 
 ### O dado estava certo; a tela é que não sabia lê-lo

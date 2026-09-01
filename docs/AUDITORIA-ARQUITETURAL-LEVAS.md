@@ -2432,3 +2432,46 @@ legado. Os CONFRA.P1/P2/P2.1 seguem verdes.
 `functions-autodraw/index.js`, `functions-stripe/`, `android/` e `ios/` com diff **vazio**;
 o único arquivo tocado em `functions-autodraw/` é `vendor/phases-engine.js`, que é **cópia
 gerada** por `copy-vendor.js`. `sw.js` mudou **somente no `CACHE_NAME`**.
+
+## CONFRA.QA.S1B — o sandbox criado DEPOIS da 2.1.89 nasce íntegro (01/set/2026)
+
+Leitura **somente de produção**, agregada e sem PII: só contagens e hashes de JSON canônico
+(sha256, 16 hex). Nada foi escrito — o script tem apenas `.get()`/`listCollections()`.
+Nenhum sandbox criado, apagado, editado ou avançado; nenhuma publicação.
+
+**① Por que esta medição existe.** A CONFRA.QA.S1 (mesma data, 2.1.87 no ar) já tinha
+provado a cópia fiel. Horas depois, com a 2.1.88, o mesmo sandbox foi medido com **114 jogos
+e 0 inscritos** — `_nPartes.participants: 0`. A causa está registrada na 2.1.89: o ouvinte de
+`sandboxes` entregava o documento MAGRO sem passar pela hidratação canônica, e uma gravação
+posterior saía desse estado vazio, recalculava o marcador e o diff APAGAVA a subcoleção.
+Esta entrada mede o **primeiro sandbox criado com a correção no ar**.
+
+**② Fatos novos, objetivos.**
+
+- A coleção `sandboxes` tem **1** documento (`isSandbox`, `sandboxOf`, `sbState=ready`).
+  O sandbox danificado **não existe mais** — foi removido pelo organizador, fora desta leva.
+- Criado em **2026-09-01T22:26:57.388Z**, isto é **depois** da 2.1.89 ir ao ar.
+- Subcoleções: `inscritos` **152**, `matches` **115**, `resultsSandbox` **123** — iguais às
+  do original (`inscritos` 152, `matches` 115, `results` 123).
+- Marcadores: `_nPartes = {matches:115, participants:152, opponentHistory:1}`, `_nJogos=115`,
+  `_semPesados = ["matches","participants","opponentHistory"]`. **Nenhum valor zerado**, e o
+  que o marcador promete é o que a subcoleção tem.
+- Montagem canônica (`remontar`, do banco, sem cache de tela): elenco **152**, chave **115**
+  jogos na posição, barra **105/115 = 91%** — idênticos ao original. `_faltamPesados` **não**
+  fica marcado depois de montar.
+- Classificação congelada: **25** grupos, **101** linhas, **24** com `classifCongeladaAt`.
+  ⚠️ O grupo sem carimbo é do **original** e chega igual na cópia — é propriedade do dado de
+  origem, não defeito de cópia. Hash das congeladas e hash dos carimbos batem nos dois lados.
+- Documento pai: **0** campos divergentes fora do envelope técnico. Hash do doc sem envelope
+  `53180401e9d66e59` nos DOIS. Os 7 campos que existem só no sandbox são exatamente o
+  envelope (`isSandbox`, `sandboxOf`, `sandboxOwnerUid`, `sbState`, `sandboxCreatedAt`,
+  `sandboxSyncedAt`, `notificationsMuted`); o 8º (`id`) o original já tinha.
+  ⭐ O **torneio remontado inteiro** também é idêntico fora do envelope.
+- `results` → `resultsSandbox`: mesmos ids, mesmo conteúdo por documento, **0** documentos em
+  `results` dentro do sandbox. O original **não** ganhou `resultsSandbox`.
+- Original intocado: `updatedAt` **2698 min** anterior à criação da cópia, sem `isSandbox`
+  nem `sandboxOf`, e o id do sandbox **não** existe em `tournaments`.
+
+**③ O que isto não prova.** Que o avanço de fase no sandbox funciona — nada foi avançado.
+Prova que a cópia nasce íntegra e que a leitura a entrega íntegra; o teste de avanço é outra
+leva, e o sandbox segue **intocado** aguardando a decisão do dono.

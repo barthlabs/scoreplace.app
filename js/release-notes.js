@@ -19,6 +19,14 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.90 NÃO ganhou item, e é DECISÃO — mesma família da 2.1.89/2.1.88. Ela devolve
+    // o atalho "Avançar de Fase" às Ferramentas do organizador quando o torneio tem os
+    // dados divididos: os grupos apontam pros jogos por id e ninguém religava os dois
+    // DEPOIS que os jogos chegavam da subcoleção, então a fase parecia incompleta pra
+    // sempre e o botão não nascia. Aparecia no sandbox porque ali nada mais escreve; num
+    // torneio de verdade, cada atualização do banco já religava e o botão estava lá.
+    // ⛔ Nenhuma regra de avanço mudou, e o botão do painel da chave é o mesmo de sempre —
+    // não há novidade a prometer pra quem joga. Detalhe em docs/CHANGELOG.md (2.1.90).
     // ⚠️ 2.1.89 NÃO ganhou item, e é DECISÃO — mesma família da 2.1.88. O que ela conserta
     // acontece SÓ no sandbox do desenvolvedor: o ouvinte da coleção `sandboxes` entregava o
     // documento sem passar pela hidratação que o ouvinte de torneio de verdade usa, então o
