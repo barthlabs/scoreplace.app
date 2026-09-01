@@ -2320,3 +2320,115 @@ L0 resolveu uma falha concreta de consistência e reparou os dados afetados. Iss
 fecha, por aproximação, L6–L8 nem autoriza L10–L16. O próximo item técnico de menor
 escopo e causa já comprovada é L1 (`/mail`); ainda assim, ele permanece pendente até
 seleção explícita do arquiteto.
+
+## CONFRA.QA.P0 — oráculo da Confra antes do teste da fase 2 (01/set/2026)
+
+Leitura **somente de produção**, com a 2.1.83 no ar. Nada foi escrito, nenhum sandbox foi
+criado, apagado ou avançado, e o objeto de entrada ficou **byte a byte intacto** depois de
+rodar o motor numa cópia em memória. Os fatos abaixo são novos e não têm PII.
+
+**① O alvo é único, e o que o distingue não é o nome.** Há dois torneios com "Confra" no
+nome; o de produção é o único **sem `sandboxOf`**. O campo `sandboxOf` é o sinal confiável —
+o nome do sandbox por acaso também casa com heurística de texto, mas heurística de nome não
+é identidade e não deve ser usada sozinha em nenhuma varredura.
+
+**② A forma dos documentos das subcoleções, e por que remontar à mão lê VAZIO.** Em
+`tournaments/<id>/matches` cada documento é `{_chave, _loc, jogo, playerUids}` — o jogo mora
+em `jogo` e a **posição** dele (rodada/grupo) em `_loc`. Em `inscritos` é `{_idx, item, _k}`.
+Uma primeira tentativa remontou supondo `{m}`/`{p}` e devolveu **0 jogos** e 152 "inscritos"
+que eram os envelopes, não as pessoas — **sem erro nenhum**. É a mesma armadilha já
+registrada para REST, agora pelo Admin SDK: leitura errada não falha, ela vem vazia.
+⇒ Quem monta tem de ser `tournament-split-core.montarDoBanco`, e o resultado tem de ser
+conferido contra `_nPartes`/`_nJogos`, que é o que o escritor prometeu. Conferido: 115
+documentos de jogo → **105 jogos reais** (10 são BYE/folga), todos concluídos, todos na
+fase 0; 152 inscritos.
+
+**③ ⚠️ DUAS PORTAS RESPONDEM "QUEM CLASSIFICA" E DISCORDAM.** A fase 2 da Confra está
+configurada com `source.scope = 'overall'` (2 linhas, 35 grupos). Nesse arranjo:
+- `selectQualifiers` devolveu **2 equipes** (1 por linha);
+- `buildPhaseBrackets` gerou **100 jogos** com **70 duplas** corretas.
+
+As duas leem o mesmo `scope` e caem em ramos diferentes. Quem **materializa** a fase — e
+portanto quem decide o que vai para o banco — é `buildPhaseBrackets`; `selectQualifiers` é
+usada no **pré-cheque do painel de promover linha** (`_phasePromoteHelps`). Ou seja, o painel
+de promoção pode estar decidindo sobre um conjunto que não é o que será materializado.
+*Dívida registrada, NÃO corrigida nesta leva* (leva era read-only): unificar as duas portas
+ou provar por teste que o pré-cheque enxerga o mesmo conjunto do materializador.
+
+**④ O tamanho da correção da 2.1.83, medido no dado real.** Dos 35 grupos, **25 têm
+`classifCongelada`** (24 com `classifCongeladaAt`, **1 legada sem o carimbo**) e **10 ainda
+não têm** — nesses 10 o retrato **nasce no avanço**, a partir da ordem ao vivo. Nos 25 que
+têm, a porta da 2.1.83 devolveu **exatamente a congelada em 25/25**. E a medida que importa:
+em **24 dos 25** a ordem **ao vivo diverge** da congelada, e em **todos os 24** a divergência
+**atinge o top-4** — isto é, sem a correção, 24 grupos formariam **duplas diferentes** das
+publicadas. O defeito não era de um grupo; era de quase todos.
+
+**⑤ Oráculo do resultado esperado** (motor da 2.1.83, cópia em memória, entrada intacta):
+100 jogos na fase 2, distribuídos em `{1:36, 2:32, 3:16, 4:8, 5:4, 6:4}`; **140 slots** do
+top-4 presentes na chave e **nenhum** 5º colocado; **70/70** duplas na ordem de
+**Performance** (1º+2º, 3º+4º); a única vaga coringa do torneio está em **5º** e **não
+avança**; as duas "equipes de 1 slot" da 1ª rodada são o **mesmo marcador "a definir"** da
+chave, não pessoas — 142 slots com 141 distintos, sem ninguém repetido. Tela: primeira
+rodada visível **"Rodada 2"** (local 1 / global 2), contador da fase **0/100**, agregado do
+torneio **105/205**.
+
+## CONFRA.QA.P0.3 — a unificação da transição, publicada como 2.1.84 (01/set/2026)
+
+Fecha o item ③ da CONFRA.QA.P0, que ficou registrado como dívida porque aquela leva era
+read-only. **Escopo publicado: Hosting apenas.** Nenhuma escrita em Firestore, nenhum
+sandbox criado/apagado/avançado, nenhuma fase avançada em produção.
+
+**① A causa, e por que o erro era grande.** As duas portas montavam os `opts` à mão e só o
+pré-cheque repassava `source.flatOverall`. O tamanho do desvio, porém, vem da **interação
+com `_mappingLegadoConfra`**: ele reescreve as duas faixas abertas (`1..999`) em `1-2`/`3-4`,
+isto é `maxRankTo = 4`. Por **grupo** isso significa "1º+2º e 3º+4º **de cada grupo**";
+sobre o ranking **geral** o mesmo `4` vira "**top-4 do torneio inteiro**", e a lista de 140
+pessoas era cortada no 4º — daí as 2 equipes que a P0 mediu.
+
+**② O prejuízo não era de exibição: o organizador perdia uma decisão.** `_phasePromoteHelps`
+recusa `size <= 1`. Com **35/35** (dois ímpares; uma promoção deixa 36/34) o painel de
+promover linha **devia** ser oferecido — lendo **1/1**, ele **nunca** aparecia, e a fase caía
+em BYE/repescagem sem que ninguém soubesse que havia escolha. ⚠️ Com os **34** grupos do
+snapshot as duas portas coincidem **por acaso** (34 é par): foi isso que escondeu o defeito.
+
+**③ Uma porta só, e a regra num lugar só.** `optsDaTransicao` e `mappingDaTransicao` passam
+a montar `opts` e `mapping` das duas portas (e do rótulo de linha em `advanceMultiPhase`, que
+era a 3ª cópia). A pergunta "usa ranking geral?" virou `usaRankingGeral`, **exportada**, com a
+neutralização do legado: `flatOverall:true` gravado sobre **Rei/Rainha de rodada única** vale
+`false` — mesma condição e mesmo motivo do `_mappingLegadoConfra`, porque com **uma** rodada
+os grupos não rotacionam e o compilador de hoje grava `per_group` para esse arranjo.
+⭐ `bracket.js` (`_hideGeneralStandings`) era a **terceira** cópia da mesma pergunta, com um
+comentário admitindo que o campo do doc "mente"; agora ela **pergunta ao motor**. Varredura
+das **648** formas alcançáveis: decisão idêntica em todas, exceto **4** que exigem
+`flatOverall:true` sobre fase anterior **não**-Rei/Rainha — combinação que
+`format2.compileToPhases` **nunca** escreve (conferido no fonte, travado por asserção).
+
+**④ Segunda divergência do mesmo par, achada no caminho.** Sem `source.mapping`, o pré-cheque
+assumia `rankTo:999` e o materializador `rankTo:2` — **16 entrantes contra 8**. Unificado no
+do materializador, que é quem publica.
+
+**⑤ O materializador NÃO mudou.** Asserido: mesmas **70 duplas**, todas intra-grupo, mesmos
+**100 jogos**. Consertar o pré-cheque não reescreve chave que já foi ao ar.
+
+**⑥ A trava que faltava, sobre o `_advanceMultiPhase` REAL.** `tests/congelada-nasce-no-avanco-e-nunca-muda.test.js`
+(**29 asserções**) monta a Confra equivalente com os **35 grupos em DOIS estados** — **25** já
+congelados (um deles **legado**, sem `classifCongeladaAt`) e **10** sem — e avança de verdade:
+as 25 seguem **byte a byte** iguais; as 10 são congeladas **exatamente** pela classificação que
+a **tela** mostrava no instante anterior (medida pela expressão do render, não por uma cópia da
+do motor) e nascem **com** carimbo; depois do avanço são **35/35**; e nada é recalculado depois
+de congelado — idempotência medida e a guarda conferida por fonte. ⭐ O cenário é construído
+para **divergir**: a congelada dos 25 é a ordem viva **invertida**, então um recálculo trocaria
+Ouro por Prata e as asserções acusam. Fecha no oráculo da P0 ⑤: **105** jogos na fase 0, **141**
+pessoas, **70** duplas, **100** jogos, **140** slots do top-4, **nenhum 5º**, **"Rodada 2"** e
+contador **0/100** — e, ao **promover**, **Ouro 36 / Prata 34**, movendo a **dupla inteira**.
+
+**⑦ Controles (sem eles nada disso é prova).** `tests/duas-portas-um-classificado.test.js`
+(**24 asserções**, sobre a config real do snapshot, com a `_phasePromoteHelps` **real** lida do
+arquivo e varredura de **96** combinações) falha em **18** na árvore anterior; o teste do
+congelamento falha em **3** sem a guarda de idempotência e em **12** sem a neutralização do
+legado. Os CONFRA.P1/P2/P2.1 seguem verdes.
+
+**⑧ Publicação.** Versão **2.1.84**, **Hosting apenas**. ⛔ `firestore.rules`, `functions/`,
+`functions-autodraw/index.js`, `functions-stripe/`, `android/` e `ios/` com diff **vazio**;
+o único arquivo tocado em `functions-autodraw/` é `vendor/phases-engine.js`, que é **cópia
+gerada** por `copy-vendor.js`. `sw.js` mudou **somente no `CACHE_NAME`**.

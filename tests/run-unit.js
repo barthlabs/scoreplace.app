@@ -21,6 +21,18 @@ const SUITES = [
   // do TORNEIO) em vez de 1º+2º de cada grupo. Cobre as duas metades — o que os seletores
   // viram config, e o que o motor faz com ela — mais a semeadura por cabeça de chave.
   'tests/ouro-prata-sai-dos-seletores.test.js',
+  // Duas funções respondem "quem classifica" — `selectQualifiers` (o pré-cheque do painel
+  // "promover linha") e `buildPhaseBrackets` (quem MATERIALIZA a fase) — e montavam os opts
+  // à mão, cada uma do seu jeito. Medido no Confra: o pré-cheque via Ouro=1/Prata=1 e a fase
+  // nascia 35/35. Como o gate recusa `size<=1`, o painel NUNCA aparecia — e com 35/35 (dois
+  // ímpares) ele DEVIA. O organizador perdia a decisão sem saber que existia.
+  'tests/duas-portas-um-classificado.test.js',
+  // O outro lado da mesma fronteira: um torneio com os grupos em DOIS estados (25 já
+  // congelados, 10 não) passando pelo `_advanceMultiPhase` REAL. Quem tem retrato não é
+  // reescrito nem "porque o sistema melhorou"; quem não tem é congelado pela classificação
+  // que a TELA mostrava no instante anterior. Fecha no oráculo de produção da Confra:
+  // 105 jogos na fase 0, 70 duplas, 100 jogos, 140 top-4, nenhum 5º, Rodada 2 e 0/100.
+  'tests/congelada-nasce-no-avanco-e-nunca-muda.test.js',
   // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
   // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
   // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o

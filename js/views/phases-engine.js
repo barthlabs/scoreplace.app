@@ -259,6 +259,72 @@
     });
   }
 
+  /* ── USA O RANKING GERAL? — a regra ÚNICA de "quem classifica" ────────────────────────
+   * Ela existia SOLTA dentro de buildEntrantsByDest e COPIADA à mão em bracket.js. Duas
+   * cópias da mesma pergunta = duas respostas na primeira mudança; foi exatamente o que
+   * aconteceu (ver o teste duas-portas-um-classificado).
+   *
+   * `flatOverall` é a EXCEÇÃO Rei/Rainha: os "grupos" são rotativos de 4, então o ranking
+   * geral é uma lista plana de verdade e não degenera. Fora dela, escopo Geral com 2+
+   * linhas vindas de 2+ grupos DEGENERA (cada linha receberia 1 time só) → cai pra
+   * por-grupo, que é o que produz chaves de verdade.
+   *
+   * ⛔ E `flatOverall` GRAVADO NUM DOC DE REI/RAINHA DE RODADA ÚNICA É LEGADO — vale
+   * `false`. Mesma condição, mesmo motivo do `_mappingLegadoConfra` logo acima: com UMA
+   * rodada os grupos NÃO rotacionam, então "1º do grupo" significa alguma coisa e o
+   * compilador de hoje (format2.js) grava `scope:'per_group', flatOverall:false` pra esse
+   * arranjo. Os docs criados ANTES dessa correção ficaram com `flatOverall:true` no disco
+   * (é o caso do Confra, medido em 01/set/2026) — reinterpretar aqui é ler o legado pela
+   * mesma régua que o resto do motor já lê.
+   *
+   * ⭐ DECISÃO REGISTRADA (01/set/2026): o campo é lido LITERALMENTE — "o ranking da fase
+   * anterior é plano" — e não exige uma 2ª prova de que a fase anterior era Rei/Rainha.
+   * Pode, porque quem escreve o campo é `format2.compileToPhases`, e ele só escreve `true`
+   * quando `parceria === 'rei_rainha'` (duas ocorrências, ambas travadas por teste): num doc
+   * gerado pelos seletores, `flatOverall:true` JÁ implica Rei/Rainha. Exigir um segundo sinal
+   * significaria enfiá-lo em 3 call-sites, e um call-site que esquecesse de passá-lo
+   * DESLIGARIA o achatamento em silêncio — falha pior que a que este bloco conserta. */
+  function usaRankingGeral(scope, nLines, nGroups, flatOverall, prevRRRodadaUnica) {
+    if (scope !== 'overall') return false;
+    var flat = (flatOverall === true) && (prevRRRodadaUnica !== true);
+    return flat || !((nLines || 0) >= 2 && (nGroups || 0) >= 2);
+  }
+
+  /* O MAPPING da transição — mesmo default nas duas portas.
+   * ⛔ Aqui havia a SEGUNDA divergência do mesmo par (medida em 01/set/2026): sem
+   * `source.mapping`, o pré-cheque assumia `rankTo:999` ("todos avançam") e o
+   * materializador `rankTo:2` — 16 entrantes contra 8 no MESMO cenário. Quem manda é o
+   * materializador, porque é ele que publica; o pré-cheque existe pra DESCREVER o que vai
+   * nascer, então adota o default dele. (Config vinda dos seletores sempre traz mapping —
+   * `format2.compileToPhases` grava; o default só alcança doc incompleto/legado.) */
+  function mappingDaTransicao(cfg) {
+    var src = (cfg && cfg.source) || {};
+    return (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
+  }
+
+  /* ── OS OPTS DA TRANSIÇÃO, UM LUGAR SÓ ───────────────────────────────────────────────
+   * Quem responde "quem classifica" são DUAS portas: `selectQualifiers` (o pré-cheque do
+   * painel "promover linha") e `buildPhaseBrackets` (quem MATERIALIZA a fase). Cada uma
+   * montava os opts à mão, e elas divergiam: o pré-cheque repassava `flatOverall`, o
+   * materializador não. Medido no Confra (01/set/2026): pré-cheque via Ouro=1/Prata=1, a
+   * fase nascia com 35/35. Com 35 (ímpar) o painel de promoção NÃO era oferecido, porque o
+   * gate lia `size <= 1` — o organizador perdia a decisão sem nunca saber que existia.
+   * Daqui pra frente as duas leem ESTA função: divergir exige editar um lugar só. */
+  function optsDaTransicao(cfg, ctx) {
+    ctx = ctx || {};
+    var src = (cfg && cfg.source) || {};
+    return {
+      scope: src.scope || 'per_group',
+      rankingBasis: src.rankingBasis || 'individual',
+      flatOverall: src.flatOverall === true,
+      includeInactive: (cfg && cfg._includeInactive) || null,
+      promoteLines: (cfg && cfg._promoteLines) || 0,
+      // quem chama é que sabe qual era a fase ANTERIOR; sem essa informação não se
+      // reinterpreta nada (ver ehReiRainhaRodadaUnica).
+      prevRRRodadaUnica: (ctx.prevRRRodadaUnica === true) || (cfg && cfg._prevRRRodadaUnica) === true
+    };
+  }
+
   function standingsDaFaseAnterior(g, t, tbOpts, isMonarch) {
     if (!isMonarch) return _groupTeamStandings(g, tbOpts);
     if (typeof window._computeMonarchStandings !== 'function') return (g && g.standings) || [];
@@ -362,17 +428,10 @@
     // (>=999 ou ausente = todos). O destino (linha) vem da ESTRATÉGIA, não da faixa.
     var destKeys = mapping.map(function (mp) { return mp.dest; });
     var maxRankTo = mapping.reduce(function (mx, mp) { return Math.max(mx, parseInt(mp.rankTo, 10) || 0); }, 0);
-    // v3.0.x: escopo Geral com MÚLTIPLAS linhas vindas de MÚLTIPLOS grupos DEGENERA —
-    // o ranking geral tem 1 time por colocação, então cada linha receberia só 1 time
-    // (nenhuma chave, só a grande final). Nesse caso usa POR GRUPO: cada linha vira
-    // uma faixa de colocação (Linha 1 = 1º de cada grupo, Linha 2 = 2º, …) — chaves
-    // de verdade. Geral só vale com 1 linha OU 1 grupo (pool único de verdade).
-    // v4.4.x: EXCEÇÃO Rei/Rainha (opts.flatOverall): os "grupos" são rotativos de 4 (uma
-    // rodada), então o ranking GERAL é uma lista plana de N jogadores — pool geral de
-    // verdade. Aí NÃO degenera: usa o pool global e respeita o corte do slider (maxRankTo).
-    var _nLines = destKeys.length;
-    var _multiGroup = (prevGroups || []).length >= 2;
-    var _useOverall = (scope === 'overall') && (opts.flatOverall === true || !(_nLines >= 2 && _multiGroup));
+    // A regra mora em `usaRankingGeral` (logo acima) — é a MESMA que a tela lê pra decidir
+    // se mostra a classificação geral. Aqui só se pergunta.
+    var _useOverall = usaRankingGeral(scope, destKeys.length, (prevGroups || []).length,
+      opts.flatOverall, opts.prevRRRodadaUnica);
     // v4.4.110: INATIVOS "incluídos" (opts.includeInactive = objetos de participante).
     // Entram POR CLASSIFICAÇÃO — a MESMA régua dos ativos. Não jogaram → 0 pts naquelas
     // rodadas; quem jogou antes guarda os pontos. Ver project_phase_inactive_resolution.
@@ -761,23 +820,19 @@
   // Devolve { matches:[...], tiers:{dest:res}, converge:{gf,third} }.
   function buildPhaseBrackets(prevGroups, phaseCfg, computeStandings, idPrefix) {
     idPrefix = idPrefix || ('ph-' + ((phaseCfg && phaseCfg.name) || 'x').replace(/\s+/g, '_'));
-    var src = (phaseCfg && phaseCfg.source) || {};
-    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 2 }];
+    var mapping = mappingDaTransicao(phaseCfg);
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
     var pairingStrategy = (phaseCfg && phaseCfg.pairingStrategy) || 'top';
     var bracketSeeding = (phaseCfg && phaseCfg.bracketSeeding === 'balanced') ? 'balanced' : 'seed'; // cabeças × equilíbrio
-    var scope = src.scope || 'per_group';            // 'per_group' | 'overall'
-    var rankingBasis = src.rankingBasis || 'individual'; // 'individual' | 'team' (keep)
 
     // v4.4.110: inativos "incluídos" (phaseCfg._includeInactive) entram POR CLASSIFICAÇÃO
     // dentro de buildEntrantsByDest — escopo geral ranqueia junto; por-grupo cai na pior
     // linha. Ver project_phase_inactive_resolution.
+    // ⭐ OS MESMOS OPTS DO PRÉ-CHEQUE (`selectQualifiers`) — montados por `optsDaTransicao`,
+    // não à mão. Enquanto eram dois blocos parecidos, o `flatOverall` chegava num e no
+    // outro não, e o painel de promoção decidia sobre um conjunto que não era este.
     var byDest = buildEntrantsByDest(prevGroups, mapping, fixedPairs, computeStandings, pairingStrategy,
-      { scope: scope, rankingBasis: rankingBasis, includeInactive: (phaseCfg && phaseCfg._includeInactive) || null,
-        promoteLines: (phaseCfg && phaseCfg._promoteLines) || 0,
-        // quem chama é que sabe qual era a fase ANTERIOR; sem essa informação não se
-        // reinterpreta nada (ver ehReiRainhaRodadaUnica).
-        prevRRRodadaUnica: (phaseCfg && phaseCfg._prevRRRodadaUnica) === true });
+      optsDaTransicao(phaseCfg, null));
 
     // v4.1.29: DUPLA ELIMINATÓRIA CLÁSSICA como fase (pedido do dono: "escolhi dupla
     // eliminatória e parece simples"). Linha ÚNICA ('main', sem Ouro/Prata) + formato dupla
@@ -923,6 +978,11 @@
     var rankingBasis = src.rankingBasis || 'individual';
     var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
     var maxRankTo = mapping.reduce(function (mx, m) { return Math.max(mx, parseInt(m.rankTo, 10) || 0); }, 0) || 999;
+    // ⚠️ NÃO usa `optsDaTransicao` DE PROPÓSITO — não é a mesma pergunta. Aqui o destino é
+    // UM só ('main'), então `flatOverall` e `promoteLines` são no-op (nada degenera com 1
+    // linha, nada pra promover) e o legado da Confra também (exige 2+ faixas). O que
+    // MUDARIA é `includeInactive`, e incluir inativo num pool de Liga/Grupos é outra
+    // decisão — não se enfia num conserto de divergência.
     var byDest = buildEntrantsByDest(prevGroups, [{ dest: 'main', rankFrom: 1, rankTo: maxRankTo }],
       fixedPairs, computeStandings, pairingStrategy, { scope: scope, rankingBasis: rankingBasis });
     return byDest.main || [];
@@ -1423,14 +1483,11 @@
   // o orquestrador e o pré-cheque usam isto em vez de montar mapping/flags à mão.
   function selectQualifiers(prevGroups, cfg, ctx) {
     ctx = ctx || {};
-    var src = (cfg && cfg.source) || {};
-    var mapping = (src.mapping && src.mapping.length) ? src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+    var mapping = mappingDaTransicao(cfg);
     var fixedPairs = cfg ? (cfg.fixedPairs !== false) : true;
     var pairingStrategy = (cfg && cfg.pairingStrategy) || 'top';
     return buildEntrantsByDest(prevGroups, mapping, fixedPairs, ctx.computeStandings, pairingStrategy,
-      { scope: src.scope || 'per_group', rankingBasis: src.rankingBasis || 'individual', flatOverall: src.flatOverall === true,
-        includeInactive: (cfg && cfg._includeInactive) || null, promoteLines: (cfg && cfg._promoteLines) || 0,
-        prevRRRodadaUnica: (ctx.prevRRRodadaUnica === true) || (cfg && cfg._prevRRRodadaUnica) === true });
+      optsDaTransicao(cfg, ctx));
   }
 
   // v3.1: LIGA / PONTOS CORRIDOS como fase posterior. Tabela ÚNICA (não grupos):
@@ -2153,8 +2210,7 @@
     // Fase de Grupos / Rei-Rainha / Liga não têm chave → paridade de linha não se aplica.
     if (!_phaseIsGroups(_nextCfg) && !_phaseIsMonarch(_nextCfg) && !_phaseIsLiga(_nextCfg)) {
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
-      var _src = _nextCfg.source || {};
-      var _mp = (_src.mapping && _src.mapping.length) ? _src.mapping : [{ dest: 'main', rankFrom: 1, rankTo: 999 }];
+      var _mp = mappingDaTransicao(_nextCfg);
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }),
         prevRRRodadaUnica: ehReiRainhaRodadaUnica(t.phases[_cur]) });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
@@ -2522,6 +2578,9 @@
     phaseIsGroups: _phaseIsGroups,
     phaseIsMonarch: _phaseIsMonarch,
     ehReiRainhaRodadaUnica: ehReiRainhaRodadaUnica,   // a condição do legado, lida da CONFIG
+    usaRankingGeral: usaRankingGeral,   // "quem classifica": geral × por grupo — regra ÚNICA (a tela lê ESTA)
+    optsDaTransicao: optsDaTransicao,   // os opts das DUAS portas da transição, num lugar só
+    mappingDaTransicao: mappingDaTransicao,   // e o mapping delas (mesmo default nas duas)
     phaseIsLiga: _phaseIsLiga,
     linkTierToFinal: linkTierToFinal,
     prevPhaseGroups: prevPhaseGroups,

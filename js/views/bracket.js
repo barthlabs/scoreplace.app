@@ -7133,12 +7133,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
   // grupo (1º+2º → Ouro, 3º+4º → Prata, todos classificam) — a tabela geral não decide
   // nada e ainda sugere um ranking entre grupos que o motor não usa.
   //
-  // ⚠️ O `source.scope` GRAVADO NO DOC NÃO SERVE DE GATE — ele MENTE. O gerador real
-  // (`buildPhaseBrackets` → `buildEntrantsByDest`) NÃO repassa `flatOverall`, então o
-  // `_useOverall` do phases-engine degenera pra POR GRUPO sempre que houver 2+ linhas e
-  // 2+ grupos, mesmo com `scope:'overall'` no doc — é o caso do Confra (medido: 27 duplas
-  // de Ouro e 27 de Prata, TODAS intra-grupo, zero cruzadas). Ler o campo aqui faria a
-  // tela discordar do sorteio. Por isso o espelho abaixo é da regra EFETIVA, não do campo.
+  // ⚠️ O `source.scope` GRAVADO NO DOC NÃO SERVE DE GATE SOZINHO — ele MENTE. No Confra o
+  // doc diz `scope:'overall'` e o sorteio saiu POR GRUPO (medido: 27 duplas de Ouro e 27 de
+  // Prata, TODAS intra-grupo, zero cruzadas), porque escopo Geral com 2+ linhas vindas de
+  // 2+ grupos degenera. Ler o campo cru aqui faria a tela discordar do sorteio.
+  // ⭐ Por isso a pergunta é feita ao MOTOR (`_phasesEngine.usaRankingGeral`), que é quem
+  // decide de verdade — este bloco já foi um ESPELHO à mão da regra dele, e espelho diverge
+  // na primeira mudança (foi assim que as duas portas da transição passaram a discordar).
   // (O mesmo campo é lido em `_txPerGroup` mais abaixo, só pra POSIÇÃO da tabela — ali
   // errar não muda o que a pessoa lê.)
   //
@@ -7163,10 +7164,13 @@ function renderStandings(t, isOrg, canEnterResult, readyBannerHtml, progressBarH
       var _nGroups = _isReiRainhaRound
         ? (currentRoundData.monarchGroups || []).length
         : ((t.groups || []).length || (currentRoundData.groups || []).length);
-      // espelho de phases-engine `_useOverall` (flatOverall nunca chega pelo gerador).
-      var _useOverall = (_scope === 'overall') && !(_nLines >= 2 && _nGroups >= 2);
-      if (_useOverall) return false;
+      var _E = window._phasesEngine;
+      if (!_E || typeof _E.usaRankingGeral !== 'function') return false;  // sem o motor não se adivinha
       var _curCfg = ((t.phases || [])[t.currentPhaseIndex || 0]) || {};
+      // ⭐ a MESMA condição de legado que o motor aplica: Rei/Rainha de RODADA ÚNICA não
+      // rotaciona grupos, então um `flatOverall:true` gravado ali é resíduo e vale false.
+      var _rrUnica = (typeof _E.ehReiRainhaRodadaUnica === 'function') && _E.ehReiRainhaRodadaUnica(_curCfg);
+      if (_E.usaRankingGeral(_scope, _nLines, _nGroups, _src.flatOverall === true, _rrUnica)) return false;
       var _plannedRounds = parseInt(_curCfg.rounds, 10) || 1;
       return _plannedRounds <= 1;
     } catch (e) { return false; }
