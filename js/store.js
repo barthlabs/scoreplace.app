@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.85';
+window.SCOREPLACE_VERSION = '2.1.86';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3135,10 +3135,6 @@ window._resyncSandboxRoster = function (ft) {
     var orig = (typeof window._findTournamentById === 'function') ? window._findTournamentById(ft.sandboxOf) : null;
     if (!orig) return;
 
-    // Captura os inscritos REAIS que o SB já tem — ANTES do wipe. Rede de segurança pro
-    // original degradado (encerrado), cujos 26 limpos só sobrevivem aqui.
-    var sbReal = window._sbCollectRealEnrollees(ft);
-
     var keep = {
       id: ft.id, name: ft.name, isSandbox: true, sandboxOf: ft.sandboxOf,
       notificationsMuted: true, isPublic: false,
@@ -3153,19 +3149,25 @@ window._resyncSandboxRoster = function (ft) {
     Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) ft[k] = keep[k]; });
     delete ft.sandboxId;
     ft.sandboxSyncedAt = Date.now();
+    /* ⛔ O SB NASCE (E RESSINCRONIZA) INTEIRO — ver _sbAplicaEnvelope. Sem isto o resync
+     * gravaria `_semPesados` prometendo partes que ninguém pode escrever. */
+    delete ft._semPesados; delete ft._nPartes; delete ft._nJogos;
+    delete ft._nGrupos; delete ft._partesQueFaltam;
 
-    // Roster fiel: original vivo → puxa o dele; encerrado/degradado → mantém o do SB.
-    var origReal = window._sbCollectRealEnrollees(fresh);
-    var useOrig = (orig.status !== 'finished') && origReal.length > 0;
-    var chosen = useOrig ? origReal : (sbReal.length ? sbReal : origReal);
-    // enrollMode do original decide se DUPLA é unidade de inscrição (Casais=teams → mantém)
-    // ou artefato de sorteio/teste (Duplas Mistas=individual → desmonta pra pessoas).
-    var isTeamEnroll = (typeof window._isTeamEnrollMode === 'function') && window._isTeamEnrollMode(ft.enrollmentMode);
-    ft.participants = window._sbRebuildCleanRoster(chosen, isTeamEnroll);
-    ft.waitlist = [];
-    ft.standbyParticipants = [];
-    ft.monarchWaitlist = {};
-    if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(ft);
+    /* ⭐ RÉPLICA FIEL — o roster vem do original COMO ESTÁ, sem reconstrução.
+     *
+     * ⛔ AQUI HAVIA O SEGUNDO DEFEITO DO INVARIANTE, e ele era grande: este bloco RECONSTRUÍA
+     * o elenco (`_sbRebuildCleanRoster`), ZERAVA `waitlist`, `standbyParticipants` e
+     * `monarchWaitlist`, e ainda DESMONTAVA duplas em pessoas conforme o `enrollmentMode`.
+     * Ordem do dono (01/set/2026): _"não é permitido simplificar, limpar, reconstruir,
+     * normalizar, reduzir ou substituir participantes, inscrições, member state, jogos,
+     * resultados, fases, rankings, classificações congeladas, W.O., espera, histórico,
+     * barras, progresso ou chaves"_. Um sandbox que chega com a espera vazia e as duplas
+     * desmontadas não simula o torneio — simula outro torneio.
+     * ⇒ `participants`, `waitlist`, `standbyParticipants` e `monarchWaitlist` já vieram do
+     * `fresh` no bloco acima e ficam EXATAMENTE como o original os tem. Nada a fazer aqui.
+     * ⚠️ `_sbCollectRealEnrollees`/`_sbRebuildCleanRoster` seguem existindo (outros pontos as
+     * usam), mas NÃO entram mais na cópia: reconstruir é exatamente o que foi proibido. */
 
     // memberUids = SÓ os donos do SB (dev). Antes o roster real entrava aqui — e era isso
     // que fazia o Firestore ENTREGAR o SB no listener de cada participante espelhado. O

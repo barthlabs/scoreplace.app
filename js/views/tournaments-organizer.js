@@ -9,6 +9,95 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
 // isolamento. Depois um trigger de CF (Etapa 3) espelha o roster do original → SB. As
 // ÚNICAS diferenças: notificações mudas, stats/resultados não vazam, invisível pra não-dev.
 // Só o dev (_isTestIdentity) enxerga/usa. Ver memória project_sandbox_tournament.
+/* ⭐ O ENVELOPE DO SANDBOX — a ÚNICA coisa que pode diferir do original.
+ * Recebe a cópia FIEL e devolve o sandbox. Não simplifica, não limpa, não reconstrói e não
+ * normaliza NADA do estado do torneio: participantes, inscrições, jogos, resultados, fases,
+ * classificações congeladas, W.O., espera, histórico e chaves passam INTACTOS.
+ * A lista do que muda é a mesma de `_sbCore.ENVELOPE`, e é ela que o teste cobra. */
+window._sbAplicaEnvelope = function (completo, sbId, cu, nomeOriginal, origId) {
+    var sb = completo;                                  // já é uma cópia; não re-clona
+    sb.id = sbId;
+    sb.name = '(SB) ' + String(nomeOriginal || 'Torneio');
+    sb.isSandbox = true;
+    sb.sandboxOf = String(origId);
+    sb.notificationsMuted = true;   // notificações suprimidas
+    sb.isPublic = false;            // privado
+    sb.sandboxOwnerUid = cu.uid;
+    sb.creatorUid = cu.uid;         // dev = admin do SB (autoriza drawRound/reset)
+    sb.organizerEmail = cu.email || '';
+    sb.organizerName = cu.displayName || '';
+    sb.createdAt = new Date().toISOString();
+    sb.sandboxSyncedAt = Date.now();
+    delete sb.sandboxId;            // SB não tem SB próprio
+    // ⚠️ ENTREGA, não estado do torneio. O clone trouxe memberUids/coHosts/admin* do
+    // ORIGINAL — os uids de TODAS as pessoas reais. Enquanto eles estiverem aqui, o Firestore
+    // ENTREGA o doc do SB no listener (`memberUids array-contains`) de cada uma delas: 152
+    // pessoas recebendo um torneio fantasma. `participants` (o elenco, que É o estado)
+    // continua íntegro e é dele que o motor sorteia. Ver [[project_sandbox_tournament]].
+    sb.memberUids = [cu.uid];
+    sb.coHosts = [];                // co-host do original não administra (nem vê) o SB
+    sb.adminUids = [cu.uid];
+    sb.adminEmails = cu.email ? [String(cu.email).toLowerCase()] : [];
+    /* ⛔ O SANDBOX NASCE INTEIRO. Sem estes marcadores tudo mora no DOCUMENTO — e é isso que
+     * torna a cópia provável na hora, sem depender de ninguém escrever as partes depois.
+     * Gravar `_semPesados` aqui seria prometer subcoleções que NINGUÉM pode escrever: o
+     * cliente não pode (firestore.rules: `allow write: if false`) e a CF do espelho pula
+     * justamente o que está no marcador. Foi assim que o SB saiu com 14 inscritos e 0 jogos. */
+    delete sb._semPesados; delete sb._nPartes; delete sb._nJogos;
+    delete sb._nGrupos; delete sb._partesQueFaltam;
+    return sb;
+};
+
+/* ⛔ NUNCA CRIA A PARTIR DO OBJETO DA TELA. Carrega o original COMPLETO pela porta canônica
+ * (documento fresco + subcoleções + hidratação), PROVA que as partes cumprem o que o
+ * documento prometeu e que o sandbox é canonicamente igual — e só então grava e navega.
+ * Falhou ou veio incompleto: não grava documento parcial, não navega, avisa e deixa tentar
+ * de novo. Ordem do dono: _"se a cópia não puder provar igualdade canônica de tudo isso
+ * antes de ficar visível, ela NÃO serve, NÃO pode ser aberta"_. */
+window._criaSandboxFiel = async function (origId, cu) {
+    var _erro = function (titulo, detalhe) {
+        if (window._error) window._error('[sandbox] ' + titulo, detalhe);
+        if (typeof showNotification === 'function') {
+            showNotification('🧪 Sandbox não criado', detalhe + ' Nada foi gravado — pode tentar de novo.', 'error');
+        }
+        return { ok: false, motivo: titulo, detalhe: detalhe };
+    };
+    if (!window.FirestoreDB || typeof window.FirestoreDB.loadTournamentById !== 'function') {
+        return _erro('sem-porta', 'Não consegui ler o torneio original.');
+    }
+    // ① o original COMPLETO — documento fresco + partes + hidratação (porta canônica)
+    var completo = null;
+    try { completo = await window.FirestoreDB.loadTournamentById(origId); }
+    catch (e) { return _erro('leitura-falhou', 'A leitura do torneio original falhou.'); }
+    if (!completo) return _erro('leitura-vazia', 'A leitura do torneio original voltou vazia.');
+    // ② as partes cumprem o que o documento prometeu?
+    var chk = window._sbPartesCompletas ? window._sbPartesCompletas(completo) : { ok: true, faltas: [] };
+    if (!chk.ok) {
+        return _erro('partes-incompletas', 'O original chegou incompleto (' +
+            chk.faltas.map(function (f) { return f.parte + ': ' + f.veio + ' de ' + f.prometido; }).join(', ') + ').');
+    }
+    // ③ envelope sobre a cópia fiel
+    var origParaProva = JSON.parse(JSON.stringify(completo));   // retrato do original ANTES do envelope
+    var sbId = 'tour_' + Date.now() + '_sb';
+    var sb = window._sbAplicaEnvelope(completo, sbId, cu, origParaProva.name, origId);
+    // ④ PROVA a igualdade canônica ANTES de gravar
+    var prova = window._sbProvaIgualdade ? window._sbProvaIgualdade(origParaProva, sb) : { ok: true, diferencas: [] };
+    if (!prova.ok) {
+        return _erro('copia-divergente', 'A cópia saiu diferente do original em: ' +
+            prova.diferencas.slice(0, 4).map(function (d) { return d.campo; }).join(', ') + '.');
+    }
+    var prog = window._sbProvaProgresso ? window._sbProvaProgresso(origParaProva, sb) : { ok: true };
+    if (!prog.ok) return _erro('progresso-divergente', 'O progresso da cópia não bateu com o do original.');
+    // ⑤ só agora grava e navega
+    window.AppStore.addTournament(sb);
+    if (typeof showNotification === 'function') {
+        showNotification('🧪 Sandbox criado', '"' + sb.name + '" — réplica fiel: ' +
+            ((sb.participants || []).length) + ' inscritos, ' + prog.sb.total + ' jogos.', 'success');
+    }
+    setTimeout(function () { window.location.hash = '#tournaments/' + sbId; }, 400);
+    return { ok: true, id: sbId, progresso: prog.sb };
+};
+
 window._openOrCreateSandbox = function(origId) {
     if (!(window._isTestIdentity && window._isTestIdentity())) return; // só o dev
     var orig = window._findTournamentById ? window._findTournamentById(origId) : null;
@@ -21,37 +110,9 @@ window._openOrCreateSandbox = function(origId) {
     // Já existe um SB deste original? Abre.
     var existing = window._findSandboxOf ? window._findSandboxOf(origId) : null;
     if (existing) { window.location.hash = '#tournaments/' + existing.id; return; }
-    // Clona o estado ATUAL (deep copy) → SB.
-    var clone;
-    try { clone = JSON.parse(JSON.stringify(orig)); } catch (e) { clone = Object.assign({}, orig); }
-    var sbId = 'tour_' + Date.now() + '_sb';
-    clone.id = sbId;
-    clone.name = '(SB) ' + String(orig.name || 'Torneio');
-    clone.isSandbox = true;
-    clone.sandboxOf = String(origId);
-    clone.notificationsMuted = true;   // killswitch — rede de segurança
-    clone.isPublic = false;            // privado
-    clone.sandboxOwnerUid = cu.uid;
-    clone.creatorUid = cu.uid;         // dev = admin do SB (autoriza drawRound/reset)
-    clone.organizerEmail = cu.email || '';
-    clone.organizerName = cu.displayName || '';
-    clone.createdAt = new Date().toISOString();
-    clone.sandboxSyncedAt = Date.now();
-    delete clone.sandboxId;            // SB não tem SB próprio
-    // ENTREGA: o clone trouxe memberUids/coHosts/admin* do ORIGINAL — ou seja, os uids de
-    // TODAS as pessoas reais. Enquanto eles estiverem aqui, o Firestore ENTREGA o doc do SB
-    // no listener (`memberUids array-contains`) de cada uma delas e a invisibilidade passa a
-    // depender de cada tela filtrar. Zera aqui e deixa SÓ o dev; _computeMemberUids mantém
-    // assim em toda gravação seguinte. Ver [[project_sandbox_tournament]].
-    clone.memberUids = [cu.uid];
-    clone.coHosts = [];                // co-host do original não administra (nem vê) o SB
-    clone.adminUids = [cu.uid];
-    clone.adminEmails = cu.email ? [String(cu.email).toLowerCase()] : [];
-    window.AppStore.addTournament(clone);
-    if (typeof showNotification === 'function') {
-        showNotification('🧪 Sandbox criado', '"' + clone.name + '" — privado, notificações mudas, espelha o original.', 'success');
-    }
-    setTimeout(function() { window.location.hash = '#tournaments/' + sbId; }, 400);
+    // ⛔ NÃO clona `orig` (o objeto da TELA, que num torneio dividido é o documento MAGRO).
+    // A criação passa pela porta que lê o original COMPLETO e PROVA a igualdade.
+    return window._criaSandboxFiel(origId, cu);
 };
 
 window._cloneTournament = function(tournamentId) {

@@ -151,6 +151,8 @@ load('sport-rules.js');             // window.SPORT_RULES — fonte única das r
 // (2.1.25) e chama window._spDobra. Sem este load, duas suítes morriam com "_spDobra is not
 // a function". Mesma ordem do index.html — o harness espelha a produção, não a contorna.
 load('dobra-core.js');              // _spDobra/_spDobraToggle — seção dobrável com memória
+load('tournament-split-core.js');   // _tSplit — dividir/remontar/montarDoBanco (o tradutor das partes)
+load('sb-core.js');                 // a cópia FIEL do sandbox + a prova de igualdade canônica
 load('tournaments-utils.js');       // _isLigaFormat, _calcNextDrawDate
 load('tournaments-categories.js');  // _displayCategoryName, _getParticipantCategories, _participantInCategory
 load('bracket-model.js');           // _appendCanonicalColumn

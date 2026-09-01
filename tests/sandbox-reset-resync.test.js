@@ -47,41 +47,61 @@ ok(sb.memberUids.indexOf('uDEV') !== -1, 'dev no memberUids');
 // original NÃO tocado.
 ok(orig.participants.length === 3 && orig.creatorUid === 'uORG' && orig.isPublic === true, 'original intocado');
 
-// ── Original ENCERRADO/degradado: participants[] virou slots de chave SEM uid (é o que
-//    acontece de verdade num torneio finalizado — "Duplas Mistas Sorteadas"). O reset velho
-//    puxava esse lixo e destruía os inscritos reais do SB. NOVO: mantém os reais do SB,
-//    LIMPOS e em ORDEM de enrollSeq, dropando o placeholder-fantasma sem uid. ───────────
+/* ── Original ENCERRADO/degradado: participants[] virou slots de chave SEM uid ─────────
+ * ⚠️ ESTE BLOCO MUDOU DE LADO NA 2.1.86, e o motivo é uma ordem do dono (01/set/2026):
+ *   _"O sandbox é uma réplica fiel do original. […] Não é permitido simplificar, limpar,
+ *    reconstruir, normalizar, reduzir ou substituir participantes, inscrições, member
+ *    state, jogos, resultados, fases, rankings, classificações congeladas, W.O., espera,
+ *    histórico, barras, progresso ou chaves."_
+ *
+ * O que este bloco EXIGIA antes era exatamente isso: com o original degradado, o resync
+ * mantinha os inscritos que o SB tinha capturado, DESMONTAVA duplas de teste em pessoas,
+ * DROPAVA o placeholder sem uid e REORDENAVA por enrollSeq. Era uma reconstrução — bem
+ * intencionada (proteger gente real que só existia no SB), mas uma reconstrução, e ela
+ * produzia um sandbox que NÃO era o original: divergia em participantes, espera e ordem.
+ *
+ * ⭐ Agora o resync copia o original COMO ELE ESTÁ. Se o original está degradado, a réplica
+ * fica degradada igual — que é o que "réplica fiel" quer dizer. O isolamento (id, sandboxOf,
+ * mudez, privacidade, dono) continua preservado, e é isso que este bloco passa a medir.
+ * ⚠️ A perda que a versão antiga evitava é REAL e fica registrada: um SB de torneio
+ * encerrado perde os inscritos que só existiam nele. Se um dia isso incomodar, a saída NÃO
+ * é reconstruir aqui — é o SB não ressincronizar com original degradado. */
 var origFin = { id: 'FIN', name: 'Duplas Mistas', isPublic: true, creatorUid: 'uORG',
   format: 'Eliminatórias Simples', status: 'finished', enrollmentMode: 'individual', teamSize: 2,
-  // participants degradados: slots de chave, sem uid nem enrollSeq
   participants: [{ p1Name: 'X', p2Name: 'Y' }, { p1Name: 'Z', p2Name: 'W' }],
+  waitlist: [{ uid: 'uEsp', displayName: 'Espera' }],
+  standbyParticipants: [{ uid: 'uSup', displayName: 'Suplente' }],
   matches: [{ id: 'm1' }, { id: 'm2' }], memberUids: ['uORG', 'uA', 'uB', 'uC', 'uD'] };
-// SB capturou os reais (enrollSeq FORA de ordem) + 1 fantasma sem uid + 1 DUPLA FORMADA de
-// teste (uA/uD) — que num torneio de inscrição INDIVIDUAL não deveria existir.
 var sbFin = { id: 'FIN_SB', name: '(SB) Duplas Mistas', isSandbox: true, sandboxOf: 'FIN',
   notificationsMuted: true, isPublic: false, sandboxOwnerUid: 'uDEV', creatorUid: 'uDEV',
   organizerEmail: 'dev@x.com', createdAt: 't0', enrollmentMode: 'individual', teamSize: 2,
   participants: [
     { uid: 'uC', displayName: 'Ced', enrollSeq: 20, checkedIn: true, matchNum: 3 },
-    { p1Uid: 'uA', p1Name: 'Ana', p1Seq: 2, p2Uid: 'uD', p2Name: 'Duda', p2Seq: 5 }, // dupla de teste
-    { displayName: 'Fantasma', enrollSeq: 9 },              // sem uid = placeholder de teste
+    { p1Uid: 'uA', p1Name: 'Ana', p1Seq: 2, p2Uid: 'uD', p2Name: 'Duda', p2Seq: 5 },
+    { displayName: 'Fantasma', enrollSeq: 9 },
     { uid: 'uB', displayName: 'Bia', enrollSeq: 7, isStandby: true }
   ],
+  waitlist: [], standbyParticipants: [],
   matches: [{ id: 'mX' }], status: 'finished', teamOrigins: { 'Ana / Duda': 'manual' } };
 W.AppStore.tournaments = [origFin, sbFin];
 
 W._resyncSandboxRoster(sbFin);
 
-var finUids = (sbFin.participants || []).map(function (p) { return p.uid; });
-ok(sbFin.participants.length === 4, 'encerrado+individual: dupla de teste DESMONTADA → 4 pessoas (Ana,Duda,Bia,Ced)');
-ok(sbFin.participants.every(function (p) { return !(p.p1Name || p.p1Uid); }), 'encerrado+individual: NENHUMA equipe (tudo é individual)');
-['uA', 'uB', 'uC', 'uD'].forEach(function (u) { ok(finUids.indexOf(u) !== -1, 'encerrado: pessoa ' + u + ' presente'); });
-ok(sbFin.participants.every(function (p) { return !!p.uid; }), 'encerrado: fantasma sem uid dropado');
-// ordem = enrollSeq crescente: Ana(2), Duda(5), Bia(7), Ced(20)
-ok(sbFin.participants.map(function (p) { return p.uid; }).join(',') === 'uA,uD,uB,uC', 'encerrado: ordenado por enrollSeq (ordem de inscrição real)');
-ok(sbFin.participants.every(function (p) { return p.checkedIn === undefined && p.matchNum === undefined && p.isStandby === undefined; }), 'encerrado: roster limpo (sem presença/jogo/standby)');
-ok(sbFin.participants[0].enrollSeq === 2, 'encerrado: enrollSeq de ORIGEM preservado (não renumerou)');
+var _c = function (v) { return JSON.stringify(v === undefined ? null : v); };
+ok(_c(sbFin.participants) === _c(origFin.participants),
+  '⭐⭐ réplica fiel: participants IDÊNTICO ao do original (nada desmontado, dropado ou reordenado)');
+ok(_c(sbFin.waitlist) === _c(origFin.waitlist),
+  '⭐⭐ a ESPERA veio do original (o resync não zera mais)');
+ok(_c(sbFin.standbyParticipants) === _c(origFin.standbyParticipants),
+  '⭐⭐ e os SUPLENTES também');
+ok(sbFin.participants.some(function (p) { return p.p1Name === 'X'; }),
+  'encerrado: o slot degradado do original passou como está (não foi "limpo")');
 ok(sbFin.id === 'FIN_SB' && sbFin.isSandbox === true && sbFin.sandboxOf === 'FIN', 'encerrado: identidade do SB preservada');
+ok(sbFin.notificationsMuted === true && sbFin.isPublic === false, 'encerrado: isolamento preservado');
+ok(sbFin.memberUids.indexOf('uDEV') !== -1 && sbFin.memberUids.indexOf('uA') === -1,
+  'encerrado: memberUids segue sendo ESCOPO de entrega (só o dev)');
+ok(sbFin._semPesados === undefined && sbFin._nPartes === undefined,
+  '⛔ encerrado: o resync também nasce INTEIRO (não promete partes que ninguém escreve)');
 ok(origFin.participants.length === 2 && origFin.status === 'finished', 'encerrado: original intocado');
 
 // ── Torneio de DUPLAS FIXAS (Casais, enrollmentMode='teams'): a dupla É a unidade de
@@ -98,10 +118,13 @@ var sbTeam = { id: 'CAS_SB', name: '(SB) Casais', isSandbox: true, sandboxOf: 'C
   participants: [], status: 'active', matches: [{ id: 'mT' }] };
 W.AppStore.tournaments = [origTeam, sbTeam];
 W._resyncSandboxRoster(sbTeam);
+// ⭐ Aqui o par é preservado porque NADA é reconstruído — a cópia é fiel por definição.
 var pairKept = (sbTeam.participants || []).some(function (p) { return p.p1Uid === 'uP1' && p.p2Uid === 'uP2'; });
 ok(pairKept, 'casais (teams): dupla FIXA preservada como par (não desmontou)');
 ok((sbTeam.participants || []).some(function (p) { return p.uid === 'uSolo'; }), 'casais: solo esperando parceiro preservado');
 ok(sbTeam.participants.length === 2, 'casais: 2 entradas (1 dupla + 1 solo)');
+ok(JSON.stringify(sbTeam.participants) === JSON.stringify(origTeam.participants),
+  '⭐⭐ casais: participants IDÊNTICO ao do original');
 
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ sandbox-reset-resync FALHOU'); process.exit(1); }

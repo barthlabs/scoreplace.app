@@ -676,7 +676,10 @@ window._cancelDrawResolution = function(tId) {
         } catch (e) {}
         if (window.FirestoreDB && typeof window.FirestoreDB.saveTournament === 'function') window.FirestoreDB.saveTournament(t);
     }
-    ['unified-resolution-panel','phase-promote-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
+    // ⭐ `inactive-phase-panel` entrou na lista: o painel de inativos ganhou Cancelar e ele
+    // usa ESTE cancelar canônico (o mesmo dos outros do fluxo). Sem estar aqui, cancelar
+    // fecharia tudo menos ele — e o overlay ficaria por cima da tela recém-renderizada.
+    ['unified-resolution-panel','phase-promote-panel','inactive-phase-panel','remainder-resolution-panel','removal-subchoice-panel','solo-resolution-panel','solo-manual-pair-panel','groups-config-panel','reopen-panel','p2-resolution-panel','final-review-panel'].forEach(function(id){ var el=document.getElementById(id); if(el) el.remove(); });
     window._soloPairState = null;
     document.body.style.overflow = '';
     var c = document.getElementById('view-container');
@@ -857,6 +860,52 @@ window._phasePendingInactives = function(t){
     });
 };
 
+/* ⭐ QUEM LEVOU W.O. — o COMPLEMENTO exato da lista acima (pedido do dono, 01/set/2026:
+ * _"nessa tela deveria falar sobre os wo tambem que nao entrarao no sorteio"_).
+ *
+ * ⛔ ELES NÃO VIRAM UMA TERCEIRA OPÇÃO, e isso é o ponto. O desfecho de quem levou W.O. já
+ * está decidido ("fica no elenco, desativado") — foi por misturá-los na ESCOLHA que gente
+ * com W.O. acabou na lista de espera no avanço de fase (v2.0.36). Aqui eles entram só como
+ * INFORMAÇÃO: o organizador precisa saber que essas pessoas também não entram no sorteio,
+ * mas a decisão que ele toma no painel continua valendo só pros que se desativaram.
+ *
+ * ⭐ MESMA MARCA, LADOS OPOSTOS: `woDeactivatedAt` é o que exclui alguém de
+ * `_phasePendingInactives` e o que inclui aqui. Uma marca só, lida uma vez — não há como
+ * as duas listas se sobreporem nem deixarem alguém de fora.
+ * ⛔ E não se deduz do estado do grupo (`woAbsent`/`subName`): aquele slot guarda só o
+ * ÚLTIMO W.O. e já custou quatro correções em quatro dias ([[wo-log.js]]). A marca está na
+ * ENTRADA da pessoa, que é quem responde "esta pessoa avança?".
+ * [[project_wo_always_deactivates]] · [[o-passado-do-wo-e-gravado]] */
+window._phaseWoDeactivated = function(t){
+    if (!t) return [];
+    var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
+    return allP.filter(function(p){
+        return p && typeof p === 'object' && p.ligaActive === false && !!p.woDeactivatedAt;
+    });
+};
+
+/* Os nomes de quem NÃO joga saem VERMELHOS — a mesma tinta das listas onde eles já
+ * aparecem ("Desativados" e "W.O." no box "ficaram de fora", bracket.js:6291-6292).
+ * Ordem do dono: _"os nomes deveriam aparecer vermelhos (como nas listas em que estão)"_.
+ * ⚠️ Fica numa função só porque as DUAS seções (inativos e W.O.) usam a mesma régua: duas
+ * cópias divergiriam na primeira mudança de cor. */
+window._phaseOutNamesRow = function(icone, titulo, nomes, hint, borda){
+    if (!nomes || !nomes.length) return '';
+    var _chips = nomes.map(function(n){
+        return '<span style="display:inline-block;background:rgba(239,68,68,0.12);border:1px solid ' +
+            window._spCor('rgba(239,68,68,0.32)', 'borda') + ';border-radius:8px;padding:3px 9px;margin:0 5px 5px 0;' +
+            'font-size:0.76rem;font-weight:700;color:var(--sp-c-f87171,#f87171);">' + window._safeHtml(n) + '</span>';
+    }).join('');
+    return '<div style="background:rgba(239,68,68,0.05);border:1px solid ' + window._spCor(borda, 'borda') +
+        ';border-radius:12px;padding:10px 12px;margin-bottom:12px;">' +
+        '<div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin-bottom:7px;">' +
+            '<span style="font-size:0.8rem;font-weight:800;color:var(--sp-c-f87171,#f87171);">' + icone + ' ' + titulo + '</span>' +
+            (hint ? '<span style="font-size:0.68rem;font-weight:400;color:var(--text-muted,#94a3b8);">— ' + hint + '</span>' : '') +
+        '</div>' +
+        '<div>' + _chips + '</div>' +
+    '</div>';
+};
+
 // Aplica a escolha do organizador e retoma o avanço de fase.
 // ⛔ NÃO EXISTE MAIS "LISTA DE ESPERA" AQUI (v2.0.36) — ordem do dono (24/ago/2026):
 // _"ao avançar de fase o sistema colocou em lista de espera os inativos e os W.O., que foi
@@ -929,18 +978,28 @@ window._showInactivePhasePanel = function(tId, inativos){
     if (!t) return;
     var tIdSafe = String(tId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     var _n = inativos.length;
-    var _names = inativos.map(function(p){ return window._safeHtml((p && (p.displayName || p.name)) || 'Participante'); });
-    var _namesStr = _names.slice(0, 8).join(' · ') + (_names.length > 8 ? ' · +' + (_names.length - 8) : '');
+    var _names = inativos.map(function(p){ return (p && (p.displayName || p.name)) || 'Participante'; });
+    // ⭐ QUEM LEVOU W.O. TAMBÉM NÃO ENTRA NO SORTEIO — e o organizador precisa ver isso aqui,
+    // não descobrir depois na chave. Entram como INFORMAÇÃO; a escolha abaixo não os alcança.
+    var _wo = window._phaseWoDeactivated(t);
+    var _woNames = _wo.map(function(p){ return (p && (p.displayName || p.name)) || 'Participante'; });
     var existing = document.getElementById('inactive-phase-panel'); if (existing) existing.remove();
+    /* ⭐ SÓ W.O. (nenhum inativo comum): não há escolha a fazer, mas o painel APARECE — o
+     * organizador tem que ver quem fica de fora antes de avançar. Ordem do dono: _"não pode
+     * ser silencioso"_. A escolha fica pré-resolvida como 'exclude', que com a lista de
+     * inativos VAZIA é um no-op: `_resolvePhaseInactives` não mexe em ninguém, só marca a
+     * transição como resolvida e retoma o avanço. */
+    var _semEscolha = (inativos.length === 0);
+    window._inactPanelChoice = _semEscolha ? 'exclude' : null;   // senão, quem escolhe é o organizador
     var overlay = document.createElement('div');
     overlay.id = 'inactive-phase-panel';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
     document.body.style.overflow = 'hidden';
     function _optCard(choice, icon, title, desc, accent){
-        return '<button onclick="window._spinButton&&window._spinButton(this,\'Aplicando…\'); window._resolvePhaseInactives(\'' + tIdSafe + '\', \'' + choice + '\')" ' +
+        return '<button id="inact-opt-' + choice + '" data-accent="' + accent + '" onclick="window._inactPanelPick(\'' + choice + '\')" ' +
             'style="display:block;width:100%;text-align:left;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));border:1.5px solid ' + window._spCor(accent, 'borda') + ';border-radius:14px;padding:13px 15px;margin-bottom:10px;cursor:pointer;transition:all 0.15s;" ' +
-            'onmouseover="this.style.background=\'rgba(255,255,255,0.09)\'" onmouseout="this.style.background=\'rgba(255,255,255,0.04)\'">' +
-            '<div style="font-size:0.98rem;font-weight:800;color:var(--text-bright,#f8fafc);margin-bottom:3px;">' + icon + ' ' + title + '</div>' +
+            'onmouseover="this.style.background=\'rgba(255,255,255,0.09)\'" onmouseout="if(window._inactPanelChoice!==\'' + choice + '\')this.style.background=\'rgba(255,255,255,0.04)\'">' +
+            '<div style="font-size:0.98rem;font-weight:800;color:var(--text-bright,#f8fafc);margin-bottom:3px;"><span class="inact-tick" style="opacity:0;">✓ </span>' + icon + ' ' + title + '</div>' +
             '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.45;">' + desc + '</div>' +
         '</button>';
     }
@@ -949,20 +1008,100 @@ window._showInactivePhasePanel = function(tId, inativos){
             '<div style="display:flex;align-items:center;gap:12px;">' +
                 '<span style="font-size:1.5rem;flex-shrink:0;">😴</span>' +
                 '<div style="min-width:0;">' +
-                    '<h3 style="margin:0;color:var(--sp-c-fef3c7,#fef3c7);font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Participantes inativos</h3>' +
-                    '<p style="margin:2px 0 0;color:var(--sp-c-fde68a,#fde68a);font-size:0.75rem;opacity:0.9;">' + _n + (_n === 1 ? ' participante desativou' : ' participantes desativaram') + ' a participação e não jogaram esta fase</p>' +
+                    '<h3 style="margin:0;color:var(--sp-c-fef3c7,#fef3c7);font-size:1.1rem;font-weight:900;letter-spacing:-0.02em;">Quem não entra no sorteio</h3>' +
+                    '<p style="margin:2px 0 0;color:var(--sp-c-fde68a,#fde68a);font-size:0.75rem;opacity:0.9;">' +
+                        _n + (_n === 1 ? ' desativou' : ' desativaram') + ' a participação' +
+                        (_woNames.length ? ' · ' + _woNames.length + (_woNames.length === 1 ? ' levou W.O.' : ' levaram W.O.') : '') +
+                    '</p>' +
                 '</div>' +
             '</div>' +
         '</div>' +
-        '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
-            '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);background:rgba(148,163,184,0.08);border-radius:10px;padding:8px 11px;margin-bottom:14px;line-height:1.5;">' + _namesStr + '</div>' +
-            _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação, igual aos ativos: sobem ou descem de linha conforme os pontos que somaram. Quem não jogou fica com 0 e cai na linha de baixo.', 'rgba(74,222,128,0.5)') +
-            // ⛔ SEM "Lista de espera": a fila é consequência de a pessoa religar o toggle,
-            // nunca de uma escolha feita por ela aqui. Ver _resolvePhaseInactives.
-            _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio. Se quiserem voltar, é só religar a participação — aí entram no fim da lista de espera.', 'rgba(248,113,113,0.45)') +
+        // v3.0.x: barra de botões FIXA (flex-shrink:0 → nunca é cortada por scroll), logo
+        // após o box do título. Mesmo padrão do painel de grupos. Ordem do dono (01/set/2026):
+        // _"esses botoes sempre no topo travados e visiveis"_.
+        '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.4rem;background:var(--bg-card,#1e293b);border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+            '<button onclick="window._cancelPhaseAdvance(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
+            // ⭐ SÓ W.O., sem inativo comum: não há o que escolher, então o botão já nasce
+            // HABILITADO como "Seguir" — mas o painel APARECE, porque o organizador tem que
+            // ver quem fica de fora antes de avançar. Silêncio aqui era o defeito.
+            (_semEscolha
+              ? '<button id="inact-confirm-btn" onclick="window._inactPanelConfirm(\'' + tIdSafe + '\', this)" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">✓ Seguir</button>'
+              : '<button id="inact-confirm-btn" disabled onclick="window._inactPanelConfirm(\'' + tIdSafe + '\', this)" style="flex:2;padding:13px;border-radius:12px;border:none;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted,#94a3b8);font-weight:800;font-size:0.92rem;cursor:not-allowed;">✓ Confirmar</button>') +
+        '</div>' +
+        '<div style="padding:16px 1.4rem;overflow-y:auto;flex:1;">' +
+            window._phaseOutNamesRow('🔴', 'Desativados', _names, 'não jogaram esta fase', 'rgba(239,68,68,0.25)') +
+            // ⛔ INFORMATIVO. A escolha abaixo NÃO alcança quem levou W.O. — o desfecho dele já
+            // está decidido, e misturá-lo na decisão foi o defeito da v2.0.36.
+            window._phaseOutNamesRow('⚠️', 'W.O.', _woNames, 'não entram no sorteio — seguem inscritos, desativados', 'rgba(239,68,68,0.3)') +
+            (_semEscolha
+              ? '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.55;">Ninguém desativou a participação — não há nada a decidir aqui. Estas pessoas ficam de fora do sorteio da próxima fase e <b style="color:var(--text-bright,#f8fafc);">continuam inscritas no torneio</b>.</div>'
+              : '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-bottom:12px;">O que fazer com <b style="color:var(--text-bright,#f8fafc);">quem desativou</b> a participação:</div>' +
+                _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação, igual aos ativos: sobem ou descem de linha conforme os pontos que somaram. Quem não jogou fica com 0 e cai na linha de baixo.', 'rgba(74,222,128,0.5)') +
+                // ⛔ SEM "Lista de espera": a fila é consequência de a pessoa religar o toggle,
+                // nunca de uma escolha feita por ela aqui. Ver _resolvePhaseInactives.
+                _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio. Se quiserem voltar, é só religar a participação — aí entram no fim da lista de espera.', 'rgba(248,113,113,0.45)')) +
         '</div>' +
     '</div>';
     document.body.appendChild(overlay);
+};
+
+/* ⭐ CANCELAR NO FLUXO DE AVANÇO = SÓ FECHAR. Ordem do dono (01/set/2026): _"cancelar
+ * apenas fecha o painel e não grava, não avança e não muda participantes"_.
+ * ⛔ POR QUE NÃO O `_cancelDrawResolution`: aquele é o cancelar do SORTEIO — ele restaura
+ * snapshots de elenco, reabre inscrições, limpa decisões E CHAMA `saveTournament`. No
+ * avanço de fase nada foi mutado ainda quando estes painéis estão abertos, então gravar
+ * seria escrever por escrever. Aqui só se fecha.
+ * ⚠️ `_promoteAsked`/`_promoteLines` são limpos EM MEMÓRIA (não gravados): cancelar e
+ * mandar avançar de novo tem que voltar a perguntar, e isso não exige escrita. */
+window._cancelPhaseAdvance = function (tId) {
+    try { if (typeof window._drawBtnDone === 'function') window._drawBtnDone(); } catch (e) {}
+    var t = window._findTournamentById ? window._findTournamentById(tId) : null;
+    if (t) {
+        try {
+            var _idx = (t.currentPhaseIndex || 0) + 1;
+            if (t.phases && t.phases[_idx]) { delete t.phases[_idx]._promoteAsked; delete t.phases[_idx]._promoteLines; }
+            if (typeof window._clearPhaseResInfo === 'function') window._clearPhaseResInfo(t);
+        } catch (e) {}
+    }
+    ['inactive-phase-panel', 'phase-promote-panel'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.remove();
+    });
+    window._inactPanelChoice = null;
+    window._promotePanelChoice = null;
+    document.body.style.overflow = '';
+    var c = document.getElementById('view-container');
+    if (c && typeof window.renderTournaments === 'function') window.renderTournaments(c, String(tId));
+};
+
+/* Seleciona a opção (não aplica) — quem aplica é o Confirmar da barra de cima. */
+window._inactPanelPick = function(choice){
+    window._inactPanelChoice = choice;
+    ['include','exclude'].forEach(function(c){
+        var el = document.getElementById('inact-opt-' + c);
+        if (!el) return;
+        var _sel = (c === choice);
+        el.style.background = _sel ? 'rgba(255,255,255,0.11)' : 'rgba(255,255,255,0.04)';
+        el.style.borderWidth = _sel ? '2.5px' : '1.5px';
+        var tick = el.querySelector('.inact-tick');
+        if (tick) tick.style.opacity = _sel ? '1' : '0';
+    });
+    var btn = document.getElementById('inact-confirm-btn');
+    if (btn) {
+        btn.disabled = false;
+        btn.style.background = 'linear-gradient(135deg,#16a34a,#22c55e)';
+        btn.style.color = '#fff';
+        btn.style.cursor = 'pointer';
+        btn.style.boxShadow = '0 6px 18px rgba(34,197,94,0.35)';
+    }
+};
+
+/* Confirmar = aplica a escolha pela porta de sempre (`_resolvePhaseInactives`). ⛔ A regra
+ * não mudou: só o gesto passou de "clicou no card, aplicou" pra "escolhe e confirma". */
+window._inactPanelConfirm = function(tId, btnEl){
+    var choice = window._inactPanelChoice;
+    if (!choice) return;                                  // sem escolha, o Confirmar não faz nada
+    if (window._spinButton && btnEl) window._spinButton(btnEl, 'Aplicando…');
+    window._resolvePhaseInactives(tId, choice);
 };
 
 // ============ PROMOVER LINHA (v4.5.5) — gate ANTERIOR à resolução de pow2 ============
@@ -1011,6 +1150,7 @@ window._showPhasePromotePanel = function(tId) {
     var _afterSize = function(i){ return (i === 0) ? _lines[i].size + 1 : (i === _lastI ? _lines[i].size - 1 : _lines[i].size); };
 
     var existing = document.getElementById('phase-promote-panel'); if (existing) existing.remove();
+    window._promotePanelChoice = null;                   // nada pré-selecionado: promover é decisão de mérito
     var overlay = document.createElement('div');
     overlay.id = 'phase-promote-panel';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
@@ -1043,18 +1183,55 @@ window._showPhasePromotePanel = function(tId) {
                 '</div>' +
             '</div>' +
         '</div>' +
-        '<div style="padding:16px 1.4rem;overflow-y:auto;">' +
+        // Mesma barra FIXA do painel anterior (flex-shrink:0, logo após o título) — Cancelar
+        // e Seguir sempre no topo, visíveis, sem depender de rolagem.
+        '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.4rem;background:var(--bg-card,#1e293b);border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
+            '<button onclick="window._cancelPhaseAdvance(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
+            '<button id="promote-confirm-btn" disabled onclick="window._promotePanelConfirm(\'' + tIdSafe + '\', this)" style="flex:2;padding:13px;border-radius:12px;border:none;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted,#94a3b8);font-weight:800;font-size:0.92rem;cursor:not-allowed;">✓ Seguir</button>' +
+        '</div>' +
+        '<div style="padding:16px 1.4rem;overflow-y:auto;flex:1;">' +
             '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.55;margin-bottom:14px;">A melhor dupla da linha de baixo sobe pra de cima (cima +1, baixo −1). Todas as linhas ficam <strong style="color:var(--sp-c-6ee7b7,#6ee7b7);">pares</strong> → todo mundo tem adversário, gastando menos BYE/repescagem. Depois você resolve a potência de 2 de cada uma com os números já ajustados.</div>' +
             _lines.map(function(l, i){ return _lineRow(l, i); }).join('') +
-            '<button onclick="window._spinButton&&window._spinButton(this,\'…\'); window._phasePromoteApply(\'' + tIdSafe + '\')" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:13px 16px;border-radius:12px;font-weight:800;font-size:0.92rem;cursor:pointer;">⬆️ Promover — deixar tudo par</button>' +
-            '<button onclick="window._phasePromoteSkip(\'' + tIdSafe + '\')" style="width:100%;margin-top:10px;background:var(--sp-g-255-255-255-006,rgba(255,255,255,0.06));color:var(--text-bright,#f8fafc);border:1.5px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));padding:12px 16px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;">Não promover — resolver com BYE/repescagem</button>' +
-            '<button onclick="window._cancelDrawResolution(\'' + tIdSafe + '\')" style="width:100%;margin-top:8px;background:#dc2626;color:#fff;border:none;padding:10px;border-radius:10px;font-weight:700;font-size:0.82rem;cursor:pointer;">✕ Cancelar</button>' +
+            '<button id="promote-opt-yes" onclick="window._promotePanelPick(\'yes\')" style="display:block;width:100%;text-align:left;margin-top:6px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));color:var(--text-bright,#f8fafc);border:1.5px solid ' + window._spCor('rgba(16,185,129,0.55)', 'borda') + ';padding:13px 15px;border-radius:12px;font-weight:800;font-size:0.92rem;cursor:pointer;"><span class="promote-tick" style="opacity:0;">✓ </span>⬆️ Promover — deixar tudo par</button>' +
+            '<button id="promote-opt-no" onclick="window._promotePanelPick(\'no\')" style="display:block;width:100%;text-align:left;margin-top:10px;background:var(--sp-g-255-255-255-004,rgba(255,255,255,0.04));color:var(--text-bright,#f8fafc);border:1.5px solid var(--sp-b-255-255-255-02,rgba(255,255,255,0.2));padding:13px 15px;border-radius:12px;font-weight:700;font-size:0.88rem;cursor:pointer;"><span class="promote-tick" style="opacity:0;">✓ </span>Não promover — resolver com BYE/repescagem</button>' +
         '</div>' +
     '</div>';
     document.body.appendChild(overlay);
 };
 
 // PROMOVER (sim) → 1 promoção (deixa tudo par) + marca decidido → segue pro painel de pow2.
+/* Seleciona (não aplica) — quem aplica é o "Seguir" da barra de cima. */
+window._promotePanelPick = function(choice){
+    window._promotePanelChoice = choice;
+    [['yes', 'rgba(16,185,129,0.55)'], ['no', 'rgba(255,255,255,0.2)']].forEach(function(par){
+        var el = document.getElementById('promote-opt-' + par[0]);
+        if (!el) return;
+        var _sel = (par[0] === choice);
+        el.style.background = _sel ? 'rgba(255,255,255,0.11)' : 'rgba(255,255,255,0.04)';
+        el.style.borderWidth = _sel ? '2.5px' : '1.5px';
+        var tick = el.querySelector('.promote-tick');
+        if (tick) tick.style.opacity = _sel ? '1' : '0';
+    });
+    var btn = document.getElementById('promote-confirm-btn');
+    if (btn) {
+        btn.disabled = false;
+        btn.style.background = 'linear-gradient(135deg,#16a34a,#22c55e)';
+        btn.style.color = '#fff';
+        btn.style.cursor = 'pointer';
+        btn.style.boxShadow = '0 6px 18px rgba(34,197,94,0.35)';
+    }
+};
+
+/* Seguir = despacha pra porta de sempre. ⛔ A regra não mudou: `_phasePromoteApply` grava
+ * 1 promoção e `_phasePromoteSkip` grava 0 — os dois já existiam e seguem intactos. */
+window._promotePanelConfirm = function(tId, btnEl){
+    var choice = window._promotePanelChoice;
+    if (!choice) return;
+    if (window._spinButton && btnEl) window._spinButton(btnEl, '…');
+    if (choice === 'yes') window._phasePromoteApply(tId);
+    else window._phasePromoteSkip(tId);
+};
+
 window._phasePromoteApply = function(tId) {
     var t = window._findTournamentById(tId);
     if (!t) return;

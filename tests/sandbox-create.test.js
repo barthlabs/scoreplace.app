@@ -10,6 +10,13 @@
  * (_resyncSandboxRoster + _clearTournamentDraw, em tournaments-draw.js) — as duas metades
  * já cobriam os dois usos. A bifurcação foi removida; estas asserções ficam pra ninguém
  * mais precisar adivinhar o que a criação faz.
+ *
+ * ⚠️ 2.1.86 — A CRIAÇÃO VIROU ASSÍNCRONA, e por um motivo de fundo: ela NÃO pode mais clonar
+ * o objeto do AppStore. Num torneio DIVIDIDO esse objeto é o documento MAGRO (elenco e jogos
+ * moram em subcoleção e chegam depois), e o SB nascia com 14 inscritos e 0 jogos. Agora ela
+ * lê o original COMPLETO por `FirestoreDB.loadTournamentById` e PROVA a igualdade antes de
+ * gravar — por isso o teste precisa de um `FirestoreDB` e de `await`.
+ * Ver tests/sandbox-e-replica-fiel.test.js, que cobre a cópia fiel em si.
  */
 const fs = require('fs');
 const path = require('path');
@@ -26,7 +33,19 @@ console.log('──── sandbox-create ────');
 
 W.showNotification = function () {};
 if (!W.location) W.location = { hash: '' };
+/* A porta canônica que a criação passou a usar. Aqui ela devolve o original do AppStore —
+ * neste teste os torneios são INTEIROS (sem `_semPesados`), então a conferência de partes
+ * aprova de graça e o que se mede continua sendo o que este arquivo sempre mediu. */
+W.FirestoreDB = {
+  db: true,
+  async loadTournamentById(id) {
+    var t = (W.AppStore.tournaments || []).filter(function (x) { return String(x.id) === String(id); })[0];
+    return t ? JSON.parse(JSON.stringify(t)) : null;
+  },
+  async saveTournament() { return true; }
+};
 
+(async () => {
 ok(typeof W._openOrCreateSandbox === 'function', '_openOrCreateSandbox existe (falha no velho)');
 
 function mkOrig() {
@@ -41,13 +60,13 @@ function mkOrig() {
 // (0) não-dev → no-op.
 W.AppStore.tournaments = [mkOrig()];
 W.AppStore.currentUser = { uid: 'uRANDO', email: 'rando@x.com', displayName: 'Rando' };
-W._openOrCreateSandbox('ORIG');
+await W._openOrCreateSandbox('ORIG');
 ok(W.AppStore.tournaments.length === 1, '0: não-dev não cria SB');
 
 // (1) dev → cria o SB.
 W.AppStore.tournaments = [mkOrig()];
 W.AppStore.currentUser = { uid: 'uDEV', email: 'rstbarth@gmail.com', displayName: 'Rodrigo' };
-W._openOrCreateSandbox('ORIG');
+await W._openOrCreateSandbox('ORIG');
 var sb = W.AppStore.tournaments.find(function (t) { return t.isSandbox; });
 var orig = W.AppStore.tournaments.find(function (t) { return t.id === 'ORIG'; });
 ok(!!sb, '1: SB criado');
@@ -68,7 +87,7 @@ ok(orig.participants.length === 2, '2: roster do original intacto');
 
 // (3) segunda chamada NÃO duplica — abre o mesmo SB.
 var before = W.AppStore.tournaments.length;
-W._openOrCreateSandbox('ORIG');
+await W._openOrCreateSandbox('ORIG');
 ok(W.AppStore.tournaments.length === before, '3: segunda chamada não cria outro SB');
 ok(W._findSandboxOf('ORIG').id === sb.id, '3: _findSandboxOf acha o SB');
 
@@ -87,7 +106,7 @@ function mkSorteado() {
 W.AppStore.currentUser = { uid: 'uDEV', email: 'rstbarth@gmail.com', displayName: 'Rodrigo' };
 
 W.AppStore.tournaments = [mkSorteado()];
-W._openOrCreateSandbox('ORIG');
+await W._openOrCreateSandbox('ORIG');
 var sbE = W.AppStore.tournaments.find(function (t) { return t.isSandbox; });
 ok(!!sbE && (sbE.rounds || []).length === 1, '5: modo ESTADO preserva a rodada sorteada');
 ok(!!sbE && (sbE.rounds[0].monarchGroups || []).length === 1, '5: preserva os grupos');
@@ -106,3 +125,4 @@ ok(!/_clearTournamentDraw/.test(fs.readFileSync(path.join(__dirname, '..', 'js',
 console.log('  ' + pass + ' asserts OK, ' + fail + ' falhas');
 if (fail > 0) { console.error('❌ sandbox-create FALHOU'); process.exit(1); }
 console.log('✅ sandbox-create: OK');
+})().catch((e) => { console.error('ERRO:', e && e.stack || e); process.exit(1); });

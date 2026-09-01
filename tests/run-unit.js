@@ -38,6 +38,16 @@ const SUITES = [
   // renderTournaments produz — e cobre as três formas, porque o _advBtn só existia dentro do
   // ramo isLigaAutoDraw: apagar só o duplicado deixaria duas delas SEM ação de avanço.
   'tests/avancar-de-fase-e-um-botao-so.test.js',
+  // A tela de avanço falava só dos que se desativaram; quem levou W.O. também não entra no
+  // sorteio e ficava invisível. Agora aparece — em VERMELHO, como nas listas onde já está —
+  // mas como INFORMAÇÃO: virar uma terceira opção é o defeito da v2.0.36 (W.O. na lista de
+  // espera). Mais Cancelar/Confirmar e Cancelar/Seguir em barra FIXA no topo dos dois painéis.
+  'tests/quem-nao-entra-no-sorteio-aparece.test.js',
+  // O sandbox nascia de um clone do objeto da TELA — que num torneio dividido é o documento
+  // MAGRO: saía com 14 inscritos e 0 jogos, gravado com `_semPesados` prometendo partes que
+  // NINGUÉM pode escrever (a regra nega o cliente; a CF pula o que está no marcador). Agora
+  // ele lê o original COMPLETO pela porta canônica, PROVA a igualdade e só então grava.
+  'tests/sandbox-e-replica-fiel.test.js',
   // Entrar no torneio cai no TOPO DO SEU GRUPO — não no topo da página. O alvo da rolagem
   // era o JOGO da pessoa; sem jogo pendente não havia alvo nenhum, e no render Rei/Rainha o
   // grupo dela nem se anunciava. Cobre as duas metades: o render MARCA (data-my-group) e o

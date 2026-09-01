@@ -2157,7 +2157,15 @@
     var _niIdx = (t.currentPhaseIndex || 0) + 1;
     if (t._inactiveResolvedPhase !== _niIdx && typeof window._phasePendingInactives === 'function') {
       var _inatvList = window._phasePendingInactives(t);
-      if (_inatvList.length && typeof window._showInactivePhasePanel === 'function') {
+      /* ⭐ SÓ W.O., SEM INATIVO COMUM, TAMBÉM ABRE O PAINEL. Ordem do dono (01/set/2026):
+       * _"se houver somente W.O., sem inativo comum, o fluxo ainda deve mostrar a informação
+       * antes de seguir: não pode ser silencioso"_. Antes o gate só olhava a lista de
+       * inativos — num torneio em que ninguém se desativou mas 12 levaram W.O., o
+       * organizador avançava sem nunca ver que 12 pessoas ficariam de fora do sorteio.
+       * ⛔ Isto NÃO dá escolha sobre o W.O.: o painel os mostra como INFORMAÇÃO e a decisão
+       * (incluir/excluir) continua alcançando só quem se desativou. Ver _phaseWoDeactivated. */
+      var _woList = (typeof window._phaseWoDeactivated === 'function') ? window._phaseWoDeactivated(t) : [];
+      if ((_inatvList.length || _woList.length) && typeof window._showInactivePhasePanel === 'function') {
         window._showInactivePhasePanel(tId, _inatvList);
         return;
       }
