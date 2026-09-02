@@ -496,6 +496,11 @@ const SUITES = [
   // `_getUnifiedRounds` DE VERDADE com o shape gold/silver/bronze — se alguém reintroduzir
   // o gate de rodada, ele cai na hora.
   'tests/botoes-do-card-liberam-com-a-dupla-definida.test.js',
+  // 2.1.98 — o relógio da regressiva trocava o innerHTML do box inteiro a cada tick e
+  // roubava o toque: o nó sumia entre o touchstart e o touchend, o clique caía no card e
+  // o torneio abria sozinho. Exercita o mecanismo (document falso + ouvintes reais),
+  // porque um teste de regex passaria com o bug de pé.
+  'tests/o-ticker-nao-redesenha-debaixo-do-dedo.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',

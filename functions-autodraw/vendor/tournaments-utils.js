@@ -1890,12 +1890,40 @@ window._renderTournamentProgress = function(t) {
 // string; no segundo típico = ZERO writes, zero layout); (b) cadência 1s → 5s
 // (imperceptível em resolução de minuto); (c) MEDIDO ('progress-tick') — se
 // voltar a pesar, o relato do toque o nomeia.
+/* ⛔ 2.1.98 — NÃO SE REDESENHA DEBAIXO DO DEDO.
+ * Relato do dono (02/set/2026): _"esse mostrar mais/menos está abrindo o detalhe e está
+ * impossível de clicar nele"_.
+ *
+ * A CAUSA, e por que ela só apareceu agora: o tick abaixo troca o `innerHTML` INTEIRO do
+ * box sempre que o HTML muda. Enquanto a fase não tinha início carimbado, o cartão ficava
+ * em "⏳ Aguardando início" — HTML estável, nada era trocado. Com a regressiva correndo, os
+ * segundos mudam e o box é reconstruído a cada tick. Se isso acontece entre o `touchstart`
+ * e o `touchend`, o nó em que o dedo encostou DEIXOU DE EXISTIR: o navegador então dispara
+ * o `click` no ancestral que sobreviveu, e o `event.stopPropagation()` da linha da dobra
+ * (que só roda se o alvo estiver DENTRO dela) nunca acontece. O clique sobe até o card,
+ * cujo `onclick` é `_dashCardClick` — e o torneio abre. Os dois sintomas, um mecanismo só.
+ *
+ * ⛔ A saída NÃO é tirar a regressiva nem mexer na dobra: é não reconstruir um box com o
+ * ponteiro dentro dele. O atraso é imperceptível (o próximo tick reconstrói), e quem não
+ * está tocando em nada continua vendo o relógio andar normalmente.
+ * ⚠️ O `pointerup` limpa com FOLGA: o `click` sintetizado chega DEPOIS dele, e limpar na
+ * hora reabriria a janela exatamente no instante que estamos protegendo. */
+var _spProgTocado = null;
+function _spProgMarcaToque(ev) {
+  try {
+    var alvo = ev && ev.target;
+    _spProgTocado = (alvo && alvo.closest) ? alvo.closest('.tourn-progress-live') : null;
+  } catch (e) { _spProgTocado = null; }
+}
+function _spProgSoltaToque() { setTimeout(function () { _spProgTocado = null; }, 500); }
+
 window._progressTick = function() {
   var els = document.querySelectorAll('.tourn-progress-live');
   if (!els || !els.length) return;
   var passo = function () {
     var tours = (window.AppStore && window.AppStore.tournaments) || [];
     Array.prototype.forEach.call(els, function(el) {
+      if (el === _spProgTocado) return;   // ⛔ o dedo está aqui — ver a nota acima
       var tid = el.getAttribute('data-tid');
       var t = tours.find(function(x) { return String(x.id) === String(tid); });
       if (!t) return;
@@ -1910,6 +1938,16 @@ window._progressTick = function() {
 window._ensureProgressTicker = function() {
   if (window._progressTickerOn) return;
   window._progressTickerOn = true;
+  /* Em CAPTURA e no `document`: o box é remontado o tempo todo, então ouvinte preso a ele
+   * morreria junto. `passive` porque só se lê o alvo — nada é cancelado. */
+  try {
+    document.addEventListener('pointerdown', _spProgMarcaToque, true);
+    document.addEventListener('touchstart', _spProgMarcaToque, { capture: true, passive: true });
+    document.addEventListener('pointerup', _spProgSoltaToque, true);
+    document.addEventListener('pointercancel', _spProgSoltaToque, true);
+    document.addEventListener('touchend', _spProgSoltaToque, { capture: true, passive: true });
+    document.addEventListener('touchcancel', _spProgSoltaToque, { capture: true, passive: true });
+  } catch (e) {}
   setInterval(window._progressTick, 5000);
 };
 // v2.4.75: timestamp (ms) em que a temporada da Liga/Ranking encerra — ou null
