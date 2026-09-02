@@ -1432,7 +1432,10 @@ window._buildProgressInner = function(t) {
       if (_cfgEndMs) {
         // ⏱️ mesma régua do ramo das chaves: o prazo da FASE dividido pelas rodadas dela.
         // Rodada única (_plannedPhR<=1) devolve a janela inteira — sem regressão.
-        _rwP = window._phaseRoundWindow(_cfgStartMs, _cfgEndMs, _roundNum, _plannedPhR);
+        // 2.1.98: o ajuste fino do organizador entra aqui; sem ele, fatia igual (o padrão).
+        _rwP = window._phaseRoundWindow(_cfgStartMs, _cfgEndMs, _roundNum, _plannedPhR,
+          (typeof window._limitesDasRodadas === 'function')
+            ? window._limitesDasRodadas(t, _phIdx, _cfgStartMs, _cfgEndMs, _plannedPhR) : null);
         if (_rwP) {
           // (o rótulo das colunas é decidido UMA vez, no fim deste ramo)
           schedStart = _rwP.startMs; plannedEnd = _rwP.endMs; _schedEndReal = true;
@@ -1524,7 +1527,9 @@ window._buildProgressInner = function(t) {
       if (_cfgEL) {
         // ⏱️ A REGRESSIVA É DA RODADA: fatia a janela da fase pelas rodadas dela e pega a
         // fatia desta rodada. Ver window._phaseRoundWindow (a régua e o porquê).
-        var _rwL = window._phaseRoundWindow(_cfgSL || schedStart, _cfgEL, _pr.roundNum, _pr.roundsTotal);
+        var _rwL = window._phaseRoundWindow(_cfgSL || schedStart, _cfgEL, _pr.roundNum, _pr.roundsTotal,
+          (typeof window._limitesDasRodadas === 'function')
+            ? window._limitesDasRodadas(t, _cp, _cfgSL || schedStart, _cfgEL, _pr.roundsTotal) : null);
         if (_rwL) {
           schedStart = _rwL.startMs; plannedEnd = _rwL.endMs; _schedEndReal = true;
           if (_rwL.sliced) { _labelSchedStart = 'início da rodada'; _labelSchedEnd = 'final da rodada'; }
@@ -2189,18 +2194,37 @@ window._fimDaFase = function (t, idx) {
   return (i === 0) ? (window._tProgParseMs(t.endDate) || null) : null;
 };
 
-window._phaseRoundWindow = function (phaseStartMs, phaseEndMs, roundNum, roundsTotal) {
+window._phaseRoundWindow = function (phaseStartMs, phaseEndMs, roundNum, roundsTotal, limites) {
     if (!phaseStartMs || !phaseEndMs || phaseEndMs <= phaseStartMs) return null;
     var n = parseInt(roundsTotal, 10); if (!n || n < 1) n = 1;
     var k = parseInt(roundNum, 10); if (!k || k < 1) k = 1;
     // mais rodadas do que o planejado (rodada extra) → o divisor é o que EXISTE, senão a
     // última rodada herdaria uma fatia que já venceu.
     if (k > n) n = k;
+    /* ⭐ 2.1.98 — AJUSTE FINO DO ORGANIZADOR. Ordem do dono (02/set/2026): _"o padrão é o
+     * mesmo número de dias entre as rodadas. daí o organizador pode fazer um ajuste fino"_.
+     * `limites` são as N-1 divisões que ele arrastou no slider (round-bounds-core.js).
+     * ⛔ Sem elas — que é o caso comum — NADA muda: a fatia igual de sempre. E a validação
+     * mora no `_rbNormaliza`, não aqui: se o arranjo não descreve mais esta fase (o formato
+     * mudou e o nº de rodadas com ele), ele devolve null e caímos na régua antiga sozinhos.
+     * As PONTAS nunca vêm daqui: início e fim da fase seguem sendo do formulário. */
+    var lim = null;
+    if (Array.isArray(limites) && limites.length === n - 1 && typeof window._rbNormaliza === 'function') {
+        lim = window._rbNormaliza(limites, phaseStartMs, phaseEndMs, n);
+    }
+    if (lim) {
+        var cortes = [phaseStartMs].concat(lim, [phaseEndMs]);
+        return {
+            startMs: Math.round(cortes[k - 1]), endMs: Math.round(cortes[k]),
+            slotMs: cortes[k] - cortes[k - 1], roundNum: k, roundsTotal: n,
+            sliced: n > 1, ajustado: true
+        };
+    }
     var slot = (phaseEndMs - phaseStartMs) / n;
     return {
         startMs: Math.round(phaseStartMs + (k - 1) * slot),
         endMs: Math.round(phaseStartMs + k * slot),
-        slotMs: slot, roundNum: k, roundsTotal: n, sliced: n > 1
+        slotMs: slot, roundNum: k, roundsTotal: n, sliced: n > 1, ajustado: false
     };
 };
 

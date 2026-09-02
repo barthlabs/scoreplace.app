@@ -402,6 +402,23 @@ function setupCreateTournamentModal() {
                     </div>
                   </div>
                 </div>
+                <!-- ⏱️ 2.1.98 — DIVISÃO DAS RODADAS (slider de stops).
+                     Pedido do dono: "um slider com x stops. em cada stop a data dd/mm e entre
+                     os stops y dias… o organizador pode esticar umas rodadas e reduzir outras
+                     a vontade dentro do limite inicial/final" — e depois: "o padrão é o mesmo
+                     número de dias entre as rodadas. daí o organizador pode fazer um ajuste
+                     fino".
+                     ⛔ Nasce ESCONDIDO e só aparece quando faz sentido: com início, fim e 2+
+                     rodadas. Vazio = divisão igual, que é o padrão e continua sendo o que o
+                     app faz sem ninguém tocar em nada. Ver js/views/round-bounds-core.js. -->
+                <div id="round-bounds-box" style="display:none; margin-top:10px;">
+                  <div style="font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin:0 0 4px 0.35rem;">⏱️ Divisão das rodadas <span style="text-transform:none; font-weight:500; opacity:0.8;">— arraste para esticar ou encurtar</span></div>
+                  <input type="hidden" id="round-bounds" value="">
+                  <div id="round-bounds-mount"></div>
+                  <div style="text-align:right; margin-top:2px;">
+                    <button type="button" id="round-bounds-reset" onclick="window._rbFormReset()" style="background:none;border:0;color:var(--text-muted);font-size:0.66rem;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px 4px;">voltar ao padrão (dias iguais)</button>
+                  </div>
+                </div>
               </div>
 
               <!-- Inscrições durante a fase — logo abaixo do Agendamento de Sorteios (v2.6.51) -->
@@ -3984,9 +4001,91 @@ function setupCreateTournamentModal() {
     var le = document.getElementById('grupos-lbl-est'); if (le) le.innerHTML = window._gruposEstLine(c);
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
   };
+  /* ── ⏱️ 2.1.98 — O SLIDER DA DIVISÃO DAS RODADAS ───────────────────────────────
+   * A lógica toda mora em `js/views/round-bounds-core.js`; aqui só se liga o controle
+   * aos campos que já existem no formulário. Regras que valem a pena estarem escritas:
+   *   · PADRÃO É DIA IGUAL (ordem do dono). Enquanto o organizador não arrastar nada, o
+   *     campo escondido fica VAZIO e o app usa a fatia igual de sempre — o slider não
+   *     grava um arranjo "igual", porque isso congelaria a divisão e ela deixaria de
+   *     acompanhar uma mudança de data depois.
+   *   · Ele só aparece quando faz sentido: início, fim e 2+ rodadas.
+   *   · Nº de rodadas: `#f2-sched-n` quando o formulário tem esse campo; senão, o que o
+   *     torneio em edição realmente tem na fase atual (a chave já sorteada manda). */
+  function _rbNumeroDeRodadas() {
+    var el = document.getElementById('f2-sched-n');
+    var n = el ? parseInt(el.value, 10) : NaN;
+    if (n >= 1) return n;
+    try {
+      var t = window._editingTournament || (window.AppStore && window.AppStore._editing) || null;
+      if (t && typeof window._phaseCurrentRoundProgress === 'function') {
+        var pr = window._phaseCurrentRoundProgress(t);
+        if (pr && pr.roundsTotal >= 1) return pr.roundsTotal;
+      }
+      if (t) {
+        var f = (t.phases && t.phases[t.currentPhaseIndex || 0]) || {};
+        var r = parseInt(f.rounds, 10);
+        if (r >= 1) return r;
+      }
+    } catch (e) {}
+    return 1;
+  }
+  function _rbCampoMs(idData, idHora, horaPadrao) {
+    var d = (document.getElementById(idData) || {}).value || '';
+    if (!d) return NaN;
+    var h = (document.getElementById(idHora) || {}).value || horaPadrao;
+    return window._rbMs ? window._rbMs(d + 'T' + h) : NaN;
+  }
+  function _rbValorAtual() {
+    var el = document.getElementById('round-bounds');
+    if (!el || !el.value) return [];
+    try { return (JSON.parse(el.value) || []).map(window._rbMs).filter(function (x) { return !isNaN(x); }); }
+    catch (e) { return []; }
+  }
+  function _rbDoFormulario() {
+    var el = document.getElementById('round-bounds');
+    if (!el || !el.value) return [];
+    try { var v = JSON.parse(el.value); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  }
+  window._rbDoFormulario = _rbDoFormulario;
+  window._rbFormReset = function () {
+    var el = document.getElementById('round-bounds');
+    if (el) el.value = '';
+    window._rbFormRefresh(true);
+  };
+  window._rbFormRefresh = function (forcarRepintura) {
+    try {
+      var box = document.getElementById('round-bounds-box');
+      var mount = document.getElementById('round-bounds-mount');
+      if (!box || !mount || typeof window._rbMount !== 'function') return;
+      var ini = _rbCampoMs('tourn-start-date', 'tourn-start-time', '19:00');
+      var fim = _rbCampoMs('tourn-end-date', 'tourn-end-time', '23:59');
+      var n = _rbNumeroDeRodadas();
+      if (isNaN(ini) || isNaN(fim) || fim <= ini || n < 2) { box.style.display = 'none'; return; }
+      box.style.display = '';
+      if (!mount._rbOn) {
+        window._rbMount(mount, {
+          startMs: function () { return _rbCampoMs('tourn-start-date', 'tourn-start-time', '19:00'); },
+          endMs: function () { return _rbCampoMs('tourn-end-date', 'tourn-end-time', '23:59'); },
+          rodadas: _rbNumeroDeRodadas,
+          valor: _rbValorAtual,
+          onChange: function (v) {
+            var el = document.getElementById('round-bounds');
+            if (el) el.value = JSON.stringify((v || []).map(window._rbIso));
+          }
+        });
+      } else if (forcarRepintura !== false && mount._rbPinta) {
+        mount._rbPinta();
+      }
+    } catch (e) {}
+  };
+
   window._recalcDuration = function () {
     if (window._renderGruposSuggestions) { try { window._renderGruposSuggestions(); } catch (e) {} }
     if (window._renderPhaseEstimate) { try { window._renderPhaseEstimate(); } catch (e) {} }
+    /* mudou data ou hora da fase → a régua muda de tamanho; o arranjo do organizador é
+     * mantido e apenas RE-VALIDADO na leitura (se sair da janela, o core devolve null e
+     * a divisão volta a ser igual, sem estado inválido no meio). */
+    try { window._rbFormRefresh(); } catch (e) {}
     // v2.6.37: a escada de estimativa (_renderPhaseEstimate) é a ÚNICA estimativa.
     // O box de diagnóstico legado (capacidade/sugestões/"max feasible") mostrava
     // números absurdos derivados da janela de datas — desativado de vez.
@@ -4568,6 +4667,22 @@ function setupCreateTournamentModal() {
     document.getElementById('tourn-start-time').value = startT;
     document.getElementById('tourn-end-date').value = endD;
     document.getElementById('tourn-end-time').value = endT;
+    /* ⏱️ 2.1.98 — a divisão das rodadas da FASE ATUAL volta pro slider. Lê da fase (é onde
+     * o cartão de progresso procura) e cai no campo do topo só na fase 0, pela mesma regra
+     * do `_limitesDasRodadas`. `window._editingTournament` fica pro slider poder descobrir
+     * quantas rodadas a fase REALMENTE tem quando o formulário não tem o campo (chave já
+     * sorteada manda mais que configuração). */
+    try {
+      window._editingTournament = t;
+      var _rbEl = document.getElementById('round-bounds');
+      if (_rbEl) {
+        var _fi = t.currentPhaseIndex || 0;
+        var _f = (Array.isArray(t.phases) && t.phases[_fi]) || null;
+        var _rb = (_f && _f.roundBounds) || ((_fi === 0 && Array.isArray(t.roundBounds)) ? t.roundBounds : null);
+        _rbEl.value = (Array.isArray(_rb) && _rb.length) ? JSON.stringify(_rb) : '';
+      }
+      if (typeof window._rbFormRefresh === 'function') window._rbFormRefresh();
+    } catch (e) {}
     var _enrollMode = t.enrollmentMode || 'individual';
     document.getElementById('select-inscricao').value = _enrollMode;
     // Sync enrollment mode toggles
@@ -5449,6 +5564,26 @@ window._saveTournamentClickHandler = function() {
           sport: sportClean,
           startDate: startDateVal,
           endDate: endDateVal,
+          /* ⏱️ 2.1.98 — a divisão das rodadas que o organizador arrastou (N-1 datas).
+           * VAZIO é o padrão e significa "dias iguais": não se grava um arranjo igual, senão
+           * ele congelaria e deixaria de acompanhar uma mudança de data depois. A validação
+           * é toda na LEITURA (`_rbNormaliza`), que devolve null se o arranjo não descrever
+           * mais a fase — então um valor velho nunca vira estado inválido. */
+          roundBounds: _rbDoFormulario(),
+          /* E na FASE, quando o torneio já passou da primeira: o campo do topo descreve a
+           * fase INICIAL (mesma regra de `t.endDate`, store.js:14267), então numa fase
+           * posterior ele não seria lido. Só entra quando há torneio em edição e há fase —
+           * criar torneio novo nunca cai aqui. */
+          ...(function () {
+            try {
+              var t0 = window._editingTournament;
+              var fi = (t0 && t0.currentPhaseIndex) || 0;
+              if (!t0 || !Array.isArray(t0.phases) || fi < 1 || !t0.phases[fi]) return {};
+              var ps = JSON.parse(JSON.stringify(t0.phases));
+              ps[fi].roundBounds = _rbDoFormulario();
+              return { phases: ps };
+            } catch (e) { return {}; }
+          })(),
           // v2.1.21: Liga ignora prazo de inscrição (sempre aberta) — limpa o residual.
           registrationLimit: (format === 'Liga' ? '' : regDateVal),
           enrollmentMode: enrollmentVal,

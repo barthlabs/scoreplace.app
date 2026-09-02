@@ -505,6 +505,11 @@ const SUITES = [
   // "📡 Ao Vivo". A regra (`_syncConfirmBtn`) já era canônica e já rodava ali; faltavam as
   // duas amarras que ela procura no DOM. Metade comportamento, metade fiação — de propósito.
   'tests/ao-vivo-e-confirmar-sao-excludentes-na-dashboard.test.js',
+  // 2.1.98 — divisão das rodadas: dia igual é o PADRÃO, o slider é ajuste fino. A asserção
+  // que importa é a ⑤: arranjo que não descreve mais a fase (mudou data, mudou nº de
+  // rodadas) volta sozinho pra divisão igual — nunca vira rodada que começa depois de
+  // terminar. O que se guarda é a intenção; a validação é toda na leitura.
+  'tests/divisao-das-rodadas-e-ajuste-fino.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',
