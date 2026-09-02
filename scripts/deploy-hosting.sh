@@ -263,6 +263,13 @@ if [[ $PRE_OK -ne 1 ]]; then
 fi
 rm -rf "$PRE"
 echo "  ✓ preflight VERDE — pode alinhar o main e publicar"
+# ⭐ O CARIMBO DO PREFLIGHT. O `hosting.predeploy` roda a MESMA lista logo em seguida,
+# sobre o MESMO commit — eram duas rodadas da suíte por publicação (~5min20 cada, com o
+# runner paralelo). `scripts/predeploy-test.js` pula a segunda SÓ se este carimbo bater
+# com o HEAD e a árvore estiver limpa; sem a variável (ex.: alguém rodando `firebase
+# deploy` na mão) ele roda a suíte normalmente. Ordem do dono: _"faça o corte"_.
+# ⛔ Exportado AQUI, depois do preflight passar — nunca antes, e nunca fora dele.
+export SP_PREFLIGHT_OK="$COMMIT"
 
 # ── 2. alinhar o main ANTES de publicar ──────────────────────────────────────
 echo "▸ conferindo origin/main…"

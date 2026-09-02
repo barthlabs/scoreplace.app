@@ -1210,8 +1210,12 @@ window._contactPersonIconHtml = function (t, entryUid, entryName, opts) {
   return '<span data-contact-uid="' + window._safeHtml(String(entryUid)) + '"' +
     ' onclick="event.stopPropagation();window._contactPersonByUid(\'' + _u + '\',\'' + _n + '\',\'' + _tid + '\')"' +
     ' title="Falar com ' + window._safeHtml(entryName || '') + '"' +
-    ' style="cursor:pointer;font-size:0.78rem;margin-left:6px;color:#25D366;opacity:0.85;' +
-    'transition:opacity 0.2s;vertical-align:middle;user-select:none;"' +
+    ' style="cursor:pointer;font-size:0.78rem;margin-left:' + (o.dentroDaCaixa ? '4px' : '6px') +
+    ';color:#25D366;opacity:0.85;transition:opacity 0.2s;vertical-align:middle;user-select:none;' +
+    /* 2.1.99: dentro da caixa do nome (card da chave) a caixa é `display:flex` — sem isto o
+     * balãozinho seria ESPREMIDO pelo nome, que é o item que ocupa a linha. `flex-shrink:0`
+     * o mantém do tamanho do emoji; o nome já encolhe pelo ajuste de fonte, como sempre. */
+    (o.dentroDaCaixa ? 'flex-shrink:0;line-height:1;' : '') + '"' +
     ' onmouseover="this.style.opacity=\'1\'" onmouseout="this.style.opacity=\'0.85\'">💬</span>';
 };
 

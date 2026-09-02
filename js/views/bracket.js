@@ -4412,13 +4412,18 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
               window._isOrgName(name, window._currentBracketTournament)) ? (' ' + (window._CROWN_MINI || '')) : '')
           : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
               ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name))
-      }</span></div>` +
-      /* ⛔ FORA da `.sp-mc-box`, como IRMÃO dela. Dentro, o 💬 entraria na caixa que o
-       * auto-fit MEDE (`_fitNameToBox`) e mudaria a fonte do nome — a geometria do card é
-       * cânone e já foi revertida uma vez pelo dono. Aqui ele só consome a largura que
-       * sobra, e o nome encolhe o mínimo pelo caminho normal do fit. */
+      }</span>` +
+      /* ⭐ DENTRO da caixa, logo DEPOIS do nome. Ordem do dono (02/set/2026): _"os
+       * balõezinhos devem ficar junto do nome de cada atleta e não colado no placar"_.
+       * Fora da caixa ele era irmão dela, e como a caixa tem largura FIXA (mesma pra todo
+       * mundo, que é o cânone), num nome curto o balão ia parar a 231px do nome — colado
+       * no placar. MEDIDO no DOM real, movendo-o pra cá: a distância vira 4px tanto em
+       * "Val" quanto em "Maria Betânia Roberto Faria", o balão continua visível nos dois e
+       * NENHUM nome passa a ser cortado — a caixa já é `display:flex` e já previa ícone
+       * dentro (`.sp-mc-box svg{flex-shrink:0}`, components.css). */
       (typeof window._contactPersonIconHtml === 'function'
-        ? window._contactPersonIconHtml(t, _slotUid, name, { sameGroup: _souDoJogo }) : '') +
+        ? window._contactPersonIconHtml(t, _slotUid, name, { sameGroup: _souDoJogo, dentroDaCaixa: true }) : '') +
+      `</div>` +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -8029,7 +8034,23 @@ window._bracketApplyFilter = function () {
     var _casa = !q;
     if (!_casa) {
       _casa = window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
-      if (!_casa) _casa = window._bracketNorm(c.textContent || '').indexOf(q) !== -1;
+      /* ⛔ A REDE LÊ SÓ OS NOMES — NÃO O CARD INTEIRO. Escrito assim depois de eu quebrar
+       * a busca em produção na 2.1.99: a 1ª versão casava com `c.textContent`, que carrega
+       * "JOGO 116", o placar e os botões ("Aplicar W.O.", "Cheguei", "Ao Vivo", "Propor
+       * datas"). Digitar duas letras — "ar" — casava com "Aplicar" em TODO card, e o filtro
+       * deixava de filtrar. O relato do dono foi imediato: _"agora nem no desktop que
+       * funcionava"_.
+       * O palheiro certo são os elementos de NOME do card: `.sp-name-fit` (o nome que o
+       * ajuste desenha) e `[data-uid-name]` (o nome que a hidratação preenche) — que é
+       * justamente o texto que a pessoa lê e digita. */
+      if (!_casa) {
+        var _nomes = '';
+        try {
+          var _els = c.querySelectorAll('.sp-name-fit, [data-uid-name]');
+          for (var _n = 0; _n < _els.length; _n++) _nomes += ' ' + (_els[_n].textContent || '');
+        } catch (_e) { _nomes = ''; }
+        _casa = !!_nomes.trim() && window._bracketNorm(_nomes).indexOf(q) !== -1;
+      }
     }
     var hit = _casa && (!onlyMine || c.getAttribute('data-my-match') !== '0');
     // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de

@@ -12,7 +12,7 @@
       "node scripts/check-deploy-alignment.js",
       "node scripts/check-version-ahead.js",
       "node scripts/check-release-notes.js",
-      "npm test",
+      "node scripts/predeploy-test.js",
       "npm run prerender"
     ],
     "ignore": [

@@ -18,10 +18,17 @@
  *    classificação voltam a divergir — foi exatamente assim que o botão do WhatsApp e o
  *    de agenda divergiram em silêncio antes.
  *
- *  · O 💬 FICA FORA DA CAIXA DO NOME. A `.sp-mc-box` é a caixa que o auto-fit MEDE
- *    (`_fitNameToBox`); um filho a mais dentro dela muda a fonte de todos os nomes do
- *    card. A geometria desse card é cânone e o dono já mandou reverter uma leva inteira
- *    que a mexeu — então o balãozinho entra como IRMÃO da caixa, nunca dentro.
+ *  · O 💬 FICA DENTRO DA CAIXA, LOGO APÓS O NOME.
+ *    ⚠️ ASSERÇÃO INVERTIDA DE PROPÓSITO. Ela nasceu dizendo o contrário ("irmão da caixa,
+ *    nunca dentro"), por receio de mexer na geometria que o auto-fit mede. Ficou errado na
+ *    tela: a caixa tem largura FIXA (mesma pra todo mundo, que é o cânone), então num nome
+ *    curto o balãozinho ia parar a 231px do nome — colado no placar. Ordem do dono
+ *    (02/set/2026): _"os balõezinhos devem ficar junto do nome de cada atleta e não colado
+ *    no placar"_.
+ *    O receio foi MEDIDO no DOM real antes de inverter: movido pra dentro, a distância vira
+ *    4px tanto em "Val" quanto em "Maria Betânia Roberto Faria", o balão segue visível nos
+ *    dois e NENHUM nome passa a ser cortado. A caixa já é `display:flex` e já previa ícone
+ *    dentro (`.sp-mc-box svg{flex-shrink:0}`).
  */
 const fs = require('fs');
 const path = require('path');
@@ -39,7 +46,7 @@ const ini = bracket.indexOf('function _teamAvatarHtml');
 const fim = bracket.indexOf('\n  });', bracket.indexOf('sp-mc-side', ini));
 const corpo = bracket.slice(ini, fim);
 
-ok(/_contactPersonIconHtml\(t, _slotUid, name, \{ sameGroup: _souDoJogo \}\)/.test(corpo),
+ok(/_contactPersonIconHtml\(t, _slotUid, name, \{ sameGroup: _souDoJogo, dentroDaCaixa: true \}\)/.test(corpo),
    '① ⭐ o card chama a PORTA ÚNICA com o uid do slot e "é o meu jogo?"');
 ok(!/wa\.me|data-contact-uid|_contactPersonByUid/.test(corpo),
    '① ⛔ e NÃO reimplementa o balãozinho aqui — uma régua só para chave e classificação');
@@ -50,8 +57,11 @@ ok(!/wa\.me|data-contact-uid|_contactPersonByUid/.test(corpo),
 const corpoLimpo = corpo.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const iBox = corpoLimpo.lastIndexOf('sp-mc-box');
 const iChip = corpoLimpo.indexOf('_contactPersonIconHtml');
-ok(iBox !== -1 && iChip > iBox && /<\/span><\/div>`\s*\+/.test(corpoLimpo.slice(iBox, iChip)),
-   '① ⭐ o 💬 vem DEPOIS de a caixa do nome fechar — irmão dela, não filho (o auto-fit mede a caixa)');
+const entre = corpoLimpo.slice(iBox, iChip);
+ok(iBox !== -1 && iChip > iBox && /<\/span>`\s*\+/.test(entre) && entre.indexOf('</div>') === -1,
+   '① ⭐ o 💬 vem depois do NOME e ANTES de a caixa fechar — dentro dela, colado no nome');
+ok(/dentroDaCaixa: true/.test(corpoLimpo),
+   '① e avisa a porta única que está dentro da caixa (flex-shrink, pra não ser espremido)');
 
 // ── ② os dois lados do card passam o jogo ────────────────────────────────────
 const chamadas = bracket.match(/_teamAvatarHtml\([^;]*?\)\)?, m\)/g) || [];
