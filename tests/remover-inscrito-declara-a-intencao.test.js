@@ -18,8 +18,10 @@
  * Ou seja: o organizador nunca conseguiu remover ninguém, e o restaurado ainda voltava
  * pro FIM da fila — o "voltou como inscrito 8".
  *
- * ⚠️ E o teste guarda os DOIS lados: declarar a intenção não pode virar hábito. Só o
- * caminho de remoção declara; um save comum que chegue sem gente continua sendo barrado.
+ * ⚠️ E o teste guarda os DOIS lados: declarar a intenção não pode virar hábito. Só os
+ * três caminhos de remoção confirmada declaram: sair do torneio, remover pelo
+ * organizador e excluir definitivamente quem não entra na próxima fase. Um save comum
+ * que chegue sem gente continua sendo barrado.
  */
 'use strict';
 const fs = require('fs');
@@ -57,8 +59,8 @@ todos.forEach((x) => {
   const n = (x.s.match(/allowRosterRemoval:\s*true/g) || []).length;
   if (n) usos.push(x.f + '×' + n);
 });
-ok(usos.length <= 2,
-   '⛔ só os caminhos de REMOÇÃO declaram (sair do torneio + remover pelo organizador) — got ' +
+ok(usos.length <= 3 && usos.every((u) => /^(tournaments-draw-prep\.js|tournaments-enrollment\.js|tournaments\.js)×1$/.test(u)),
+   '⛔ só os três caminhos de REMOÇÃO confirmada declaram (sair, remover pelo organizador, excluir não-entrantes) — got ' +
    JSON.stringify(usos));
 
 console.log(falhas === 0

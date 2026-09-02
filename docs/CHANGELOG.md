@@ -1,5 +1,17 @@
 # Changelog do scoreplace.app
 
+## 2.1.93 — quem não jogou não ganha vaga na eliminatória (02/set/2026)
+
+O painel de avanço agora trata inativos e pessoas com W.O. como o que são: pessoas que não
+disputaram a fase classificatória e, por isso, não entram no sorteio da eliminatória. As duas
+opções aparecem antes dos nomes e valem para toda a lista: **manter no torneio**, desativadas e
+reativáveis para o fim da lista de espera, ou **excluir definitivamente do torneio**. Não há mais
+uma opção enganosa de incluí-las pela classificação.
+
+Quando a remoção definitiva é escolhida, o app salva a decisão antes de montar a próxima fase.
+Se a gravação falhar, restaura a tela e não avança. Jogos, W.O. e classificação já registrados
+continuam como histórico.
+
 ## 2.1.92 — sincronização parcial não pode apagar partes de sandbox (01/set/2026)
 
 `AppStore.sync()` usa uma fotografia administrativa com `skipParticipants`. Em um sandbox

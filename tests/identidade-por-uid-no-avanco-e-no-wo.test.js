@@ -4,10 +4,9 @@
  * uid."_ Dita olhando a leva 2.0.36 (avanço de fase), que ainda decidia identidade por nome
  * em dois pontos. Nos dois o defeito é REAL, não estilo:
  *
- * ① `_resolvePhaseInactives('include')` casava `(p.displayName || p.name) === _nm`. O save
- *    STRIPA o nome de toda entrada com uid ([[project_uid_identity_canon_locked]]), então os
- *    dois lados viravam `undefined` — e `undefined === undefined` é TRUE. Escolher "Incluir"
- *    reativava TODO participante só-uid do torneio, não os inativos escolhidos.
+ * ① A decisão "Excluir definitivamente" precisa atingir só as entradas que o painel mostrou.
+ *    O save STRIPA o nome de toda entrada com uid, então nome não pode ser a chave: dois
+ *    nomes ausentes nunca podem remover todo o elenco por acidente.
  *
  * ② `_ligaWoDeactivate` procurava a pessoa no elenco pelo NOME EXIBIDO (que é resolvido do
  *    perfil vivo e MUDA quando ela se renomeia). Sem casar, o `else` empurrava uma entrada
@@ -31,7 +30,7 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail++; console.error('  ✗ ' + m); } };
 console.log('──── identidade por uid: avanço de fase e W.O. ────');
 
-// ── ① "Incluir" reativa SÓ quem foi escolhido ────────────────────────────────────────
+// ── ① "Excluir definitivamente" remove SÓ quem o painel mostrou ───────────────────────
 // Elenco no formato REAL de produção: entradas só-uid (nome stripado no save).
 const t = { id: 'sb', currentPhaseIndex: 0, allowSelfDeactivation: true, phases: [{}, {}],
   standbyParticipants: [], participants: [
@@ -43,12 +42,13 @@ const t = { id: 'sb', currentPhaseIndex: 0, allowSelfDeactivation: true, phases:
 W._findTournamentById = () => t;
 W.FirestoreDB = { saveTournament: () => Promise.resolve() };
 W._advanceMultiPhase = () => {};
-W._resolvePhaseInactives('sb', 'include');
-ok(t.participants[2].ligaActive === true, 'o inativo escolhido é reativado (por uid)');
-ok(t.participants[3].ligaActive === true, '  → e o sem-conta também (aí o nome vale)');
-ok(t.participants[0].ligaActive === undefined && t.participants[1].ligaActive === undefined,
-  '  → e quem estava ATIVO não é tocado  ← o bug: undefined===undefined pegava todo mundo');
-ok((t.phases[1]._includeInactive || []).length === 2, '  → os 2 escolhidos vão pra fase seguinte');
+W._resolvePhaseInactives('sb', 'remove');
+ok(t.participants.length === 2, 'os dois inativos saíram do roster (got ' + t.participants.length + ')');
+ok(t.participants[0].uid === 'u1' && t.participants[1].uid === 'u2',
+  '  → e os ativos só-uid não foram tocados');
+ok(!t.participants.some((p) => p.uid === 'u3' || p.name === 'Zé Digitado'),
+  '  → inclusive o fictício sem conta saiu pela referência correta');
+ok(!t.phases[1]._includeInactive, '  → ninguém foi incluído na fase seguinte');
 
 // ── ② o W.O. acha a pessoa pelo uid, mesmo com o nome trocado ────────────────────────
 const liga = fs.readFileSync(path.join(ROOT, 'js', 'views', 'liga-substitution.js'), 'utf8');

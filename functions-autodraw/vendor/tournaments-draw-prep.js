@@ -836,11 +836,11 @@ window._phaseResToInfo = function(phaseCtx, t){
       _lines:(phaseCtx.lines||[]), _nLines:(phaseCtx.lines||[]).length, _nextIdx:phaseCtx.nextIdx, _nextName:phaseCtx.nextName };
 };
 
-// ============ INATIVOS NA TRANSIÇÃO DE FASE (v4.4.109 — staging) ============
-// Participantes que desativaram o toggle (ligaActive=false) não jogaram a classificatória,
-// então não têm colocação e somem da transição. Antes de montar as linhas da próxima fase,
-// o organizador decide: Incluir (formam duplas no fim da linha de baixo) / Lista de espera
-// (disponíveis pra W.O.) / Excluir (ficam de fora). Gate em advanceMultiPhase chama daqui.
+// ============ QUEM NÃO ENTRA NA TRANSIÇÃO DE FASE =============================
+// Quem desativou a participação ou levou W.O. não disputou a classificatória e não tem
+// colocação. Portanto NUNCA entra na eliminatória. Antes de avançar, o organizador decide
+// apenas se essas entradas continuam no torneio, inativas e reativáveis, ou se saem dele
+// definitivamente. Gate em advanceMultiPhase chama daqui.
 
 // Lista os inativos pendentes (objetos de participante). Vazio se auto-desativação está off.
 //
@@ -860,28 +860,22 @@ window._phasePendingInactives = function(t){
     });
 };
 
-/* ⭐ QUEM LEVOU W.O. — o COMPLEMENTO exato da lista acima (pedido do dono, 01/set/2026:
- * _"nessa tela deveria falar sobre os wo tambem que nao entrarao no sorteio"_).
- *
- * ⛔ ELES NÃO VIRAM UMA TERCEIRA OPÇÃO, e isso é o ponto. O desfecho de quem levou W.O. já
- * está decidido ("fica no elenco, desativado") — foi por misturá-los na ESCOLHA que gente
- * com W.O. acabou na lista de espera no avanço de fase (v2.0.36). Aqui eles entram só como
- * INFORMAÇÃO: o organizador precisa saber que essas pessoas também não entram no sorteio,
- * mas a decisão que ele toma no painel continua valendo só pros que se desativaram.
- *
- * ⭐ MESMA MARCA, LADOS OPOSTOS: `woDeactivatedAt` é o que exclui alguém de
- * `_phasePendingInactives` e o que inclui aqui. Uma marca só, lida uma vez — não há como
- * as duas listas se sobreporem nem deixarem alguém de fora.
- * ⛔ E não se deduz do estado do grupo (`woAbsent`/`subName`): aquele slot guarda só o
- * ÚLTIMO W.O. e já custou quatro correções em quatro dias ([[wo-log.js]]). A marca está na
- * ENTRADA da pessoa, que é quem responde "esta pessoa avança?".
- * [[project_wo_always_deactivates]] · [[o-passado-do-wo-e-gravado]] */
+/* Quem levou W.O. é o complemento da lista acima. A marca pertence à entrada da pessoa,
+ * não ao grupo: o slot do grupo guarda apenas o último W.O. e não responde quem segue
+ * inscrito. As duas listas continuam separadas para deixar o motivo visível, mas a decisão
+ * do organizador abaixo vale para ambas. */
 window._phaseWoDeactivated = function(t){
     if (!t) return [];
     var allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
     return allP.filter(function(p){
         return p && typeof p === 'object' && p.ligaActive === false && !!p.woDeactivatedAt;
     });
+};
+
+// A lista canônica do painel. Ela não cria elegibilidade: só reúne as duas razões para que
+// a decisão "manter ou excluir do torneio" alcance exatamente os nomes exibidos.
+window._phaseNonEntrants = function(t){
+    return window._phasePendingInactives(t).concat(window._phaseWoDeactivated(t));
 };
 
 /* Os nomes de quem NÃO joga saem VERMELHOS — a mesma tinta das listas onde eles já
@@ -906,72 +900,56 @@ window._phaseOutNamesRow = function(icone, titulo, nomes, hint, borda){
     '</div>';
 };
 
-// Aplica a escolha do organizador e retoma o avanço de fase.
-// ⛔ NÃO EXISTE MAIS "LISTA DE ESPERA" AQUI (v2.0.36) — ordem do dono (24/ago/2026):
-// _"ao avançar de fase o sistema colocou em lista de espera os inativos e os W.O., que foi
-// expressamente dito para não acontecer"_. É a MESMA regra do W.O.: a fila é consequência
-// de um ATO da pessoa (religar o toggle "Ativado"), nunca de uma decisão tomada por ela.
-// Quem desativou a participação declarou o CONTRÁRIO de disponibilidade — pôr essa pessoa
-// na fila afirma por ela uma intenção que ela não teve, e ainda a coloca entre quem estava
-// esperando de verdade. Sobram as duas escolhas que são de fato do organizador: INCLUIR
-// (por classificação) ou EXCLUIR (fica de fora da fase, segue inscrita).
-// Um `choice` desconhecido cai no mesmo lugar de 'exclude': não mexe em fila nenhuma.
-// [[project_wo_always_deactivates]] · [[project_sitout_vs_waitlist_canon]]
+// Aplica a decisão de CADASTRO e retoma o avanço. "Manter" não altera a participação:
+// continuam inativos e, se a própria pessoa religar o toggle depois, a porta canônica a põe
+// no fim da espera. "Excluir" remove deliberadamente as entradas do torneio; não altera
+// jogos, classificação ou histórico já registrados.
 window._resolvePhaseInactives = function(tId, choice){
     var t = window._findTournamentById(tId);
     if (!t) return;
     var _niIdx = (t.currentPhaseIndex || 0) + 1;
-    var inativos = window._phasePendingInactives(t);
-    if (choice === 'include') {
-        // Entram por classificação: como não jogaram (0 pts), são os piores → pior linha.
-        // Reativa (ligaActive=true) pra ficarem consistentes no resto do app.
-        if (t.phases && t.phases[_niIdx]) t.phases[_niIdx]._includeInactive = inativos.slice();
-        // ⛔ IDENTIDADE É uid (v2.0.37) — nome SÓ pra quem não tem uid (digitado/fictício).
-        //
-        // Aqui casava por `displayName || name`, e isso não era só estilo: o save STRIPA o
-        // nome de toda entrada com uid ([[project_uid_identity_canon_locked]]), então os dois
-        // lados viravam `undefined` e `undefined === undefined` dava TRUE — a comparação
-        // reativava TODO participante só-uid do torneio, não os inativos escolhidos.
-        //
-        // `inativos` são as PRÓPRIAS entradas de `t.participants` (mesma referência), então a
-        // reativação é direta. A varredura por uid existe pro caso de o elenco vir de um mapa
-        // (Object.values clona a lista, não os objetos) e pra irmãs do mesmo uid.
-        var _allP = Array.isArray(t.participants) ? t.participants : Object.values(t.participants || {});
-        var _uidsDe = function (x) {
-            return (typeof window._participantUids === 'function') ? window._participantUids(x)
-                 : ((x && x.uid) ? [x.uid] : []);
-        };
-        inativos.forEach(function(inp){
-            if (!inp || typeof inp !== 'object') return;
-            inp.ligaActive = true;                       // a entrada escolhida, sem intermediário
-            var _u = _uidsDe(inp);
-            if (_u.length) {
-                _allP.forEach(function(p){
-                    if (!p || typeof p !== 'object' || p === inp) return;
-                    var _pu = _uidsDe(p);
-                    if (_pu.some(function (x) { return _u.indexOf(x) !== -1; })) p.ligaActive = true;
-                });
-                return;
-            }
-            // SEM uid = nome digitado/fictício — aí, e só aí, o nome é a identidade.
-            var _nm = String((inp.displayName || inp.name || '')).trim().toLowerCase();
-            if (!_nm) return;
-            _allP.forEach(function(p){
-                if (!p || typeof p !== 'object' || p === inp || _uidsDe(p).length) return;
-                if (String((p.displayName || p.name || '')).trim().toLowerCase() === _nm) p.ligaActive = true;
-            });
+    var fora = window._phaseNonEntrants(t);
+    var _hadResolved = Object.prototype.hasOwnProperty.call(t, '_inactiveResolvedPhase');
+    var _oldResolved = t._inactiveResolvedPhase;
+    var _oldParticipants = t.participants;
+    if (choice === 'remove') {
+        var _allP = Array.isArray(t.participants) ? t.participants.slice() : Object.values(t.participants || {});
+        // `fora` contém as próprias referências do elenco. Assim não há reconciliação por
+        // nome, e homônimos nunca são removidos por engano. Um registro de dupla é uma só
+        // inscrição nesta transição e é removido inteiro, como o cartão que o painel mostrou.
+        t.participants = _allP.filter(function(p){ return fora.indexOf(p) === -1; });
+        fora.forEach(function(p){
+            if (!p || typeof p !== 'object' || typeof window._purgePersonFromMaps !== 'function') return;
+            var uid = p.uid || null;
+            var nome = p.displayName || p.name || '';
+            window._purgePersonFromMaps(t, uid, nome);
         });
     }
-    // 'exclude' → nada a fazer (não entram na próxima fase)
     t._inactiveResolvedPhase = _niIdx;
-    if (window.FirestoreDB && window.FirestoreDB.saveTournament) window.FirestoreDB.saveTournament(t);
-    var _p = document.getElementById('inactive-phase-panel'); if (_p) _p.remove();
-    document.body.style.overflow = '';
-    if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+    var _finish = function(){
+        var _p = document.getElementById('inactive-phase-panel'); if (_p) _p.remove();
+        document.body.style.overflow = '';
+        if (window._advanceMultiPhase) window._advanceMultiPhase(tId);
+    };
+    var _rollback = function(err){
+        t.participants = _oldParticipants;
+        if (_hadResolved) t._inactiveResolvedPhase = _oldResolved; else delete t._inactiveResolvedPhase;
+        var btn = document.getElementById('inact-confirm-btn');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Confirmar'; }
+        if (typeof window.showAlertDialog === 'function') {
+            window.showAlertDialog('Não foi possível registrar a decisão', 'Nada foi alterado. Tente novamente antes de avançar.');
+        }
+        if (window.console && console.error) console.error('phase non-entrants save failed', err);
+    };
+    if (window.FirestoreDB && window.FirestoreDB.saveTournament) {
+        Promise.resolve(window.FirestoreDB.saveTournament(t, choice === 'remove' ? { allowRosterRemoval: true } : undefined)).then(_finish).catch(_rollback);
+    } else {
+        _finish();
+    }
 };
 
-// Painel: 3 opções (Incluir / Lista de espera / Excluir). Mesma linguagem visual âmbar
-// do painel de resolução de potência de 2, mas ação direta (sem Nash).
+// Painel: manter inativos no cadastro ou excluir definitivamente. Mesma linguagem visual
+// âmbar do painel de resolução de potência de 2, mas nunca transforma ausência em vaga.
 window._showInactivePhasePanel = function(tId, inativos){
     inativos = inativos || [];
     var t = window._findTournamentById(tId);
@@ -984,13 +962,7 @@ window._showInactivePhasePanel = function(tId, inativos){
     var _wo = window._phaseWoDeactivated(t);
     var _woNames = _wo.map(function(p){ return (p && (p.displayName || p.name)) || 'Participante'; });
     var existing = document.getElementById('inactive-phase-panel'); if (existing) existing.remove();
-    /* ⭐ SÓ W.O. (nenhum inativo comum): não há escolha a fazer, mas o painel APARECE — o
-     * organizador tem que ver quem fica de fora antes de avançar. Ordem do dono: _"não pode
-     * ser silencioso"_. A escolha fica pré-resolvida como 'exclude', que com a lista de
-     * inativos VAZIA é um no-op: `_resolvePhaseInactives` não mexe em ninguém, só marca a
-     * transição como resolvida e retoma o avanço. */
-    var _semEscolha = (inativos.length === 0);
-    window._inactPanelChoice = _semEscolha ? 'exclude' : null;   // senão, quem escolhe é o organizador
+    window._inactPanelChoice = null;
     var overlay = document.createElement('div');
     overlay.id = 'inactive-phase-panel';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem 0;';
@@ -1021,25 +993,14 @@ window._showInactivePhasePanel = function(tId, inativos){
         // _"esses botoes sempre no topo travados e visiveis"_.
         '<div style="flex-shrink:0;display:flex;gap:10px;padding:12px 1.4rem;background:var(--bg-card,#1e293b);border-bottom:1px solid var(--sp-b-255-255-255-008,rgba(255,255,255,0.08));">' +
             '<button onclick="window._cancelPhaseAdvance(\'' + tIdSafe + '\')" style="flex:1;padding:13px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">✕ Cancelar</button>' +
-            // ⭐ SÓ W.O., sem inativo comum: não há o que escolher, então o botão já nasce
-            // HABILITADO como "Seguir" — mas o painel APARECE, porque o organizador tem que
-            // ver quem fica de fora antes de avançar. Silêncio aqui era o defeito.
-            (_semEscolha
-              ? '<button id="inact-confirm-btn" onclick="window._inactPanelConfirm(\'' + tIdSafe + '\', this)" style="flex:2;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-weight:800;font-size:0.92rem;cursor:pointer;box-shadow:0 6px 18px rgba(34,197,94,0.35);">✓ Seguir</button>'
-              : '<button id="inact-confirm-btn" disabled onclick="window._inactPanelConfirm(\'' + tIdSafe + '\', this)" style="flex:2;padding:13px;border-radius:12px;border:none;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted,#94a3b8);font-weight:800;font-size:0.92rem;cursor:not-allowed;">✓ Confirmar</button>') +
+            '<button id="inact-confirm-btn" disabled onclick="window._inactPanelConfirm(\'' + tIdSafe + '\', this)" style="flex:2;padding:13px;border-radius:12px;border:none;background:var(--sp-g-255-255-255-008,rgba(255,255,255,0.08));color:var(--text-muted,#94a3b8);font-weight:800;font-size:0.92rem;cursor:not-allowed;">✓ Confirmar</button>' +
         '</div>' +
         '<div style="padding:16px 1.4rem;overflow-y:auto;flex:1;">' +
+            '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-bottom:12px;">Escolha o que fazer com <b style="color:var(--text-bright,#f8fafc);">todas as pessoas abaixo</b>. Nenhuma delas entra na eliminatória.</div>' +
+            _optCard('keep', '↩️', 'Manter nas listas', 'Continuam inscritas, desativadas e fora deste sorteio. Se reativarem a participação depois, entram no fim da lista de espera como suplentes.', 'rgba(74,222,128,0.5)') +
+            _optCard('remove', '🗑️', 'Excluir definitivamente do torneio', 'Remove estas inscrições do torneio. Jogos, W.O. e a classificação já registrados permanecem no histórico.', 'rgba(248,113,113,0.45)') +
             window._phaseOutNamesRow('🔴', 'Desativados', _names, 'não jogaram esta fase', 'rgba(239,68,68,0.25)') +
-            // ⛔ INFORMATIVO. A escolha abaixo NÃO alcança quem levou W.O. — o desfecho dele já
-            // está decidido, e misturá-lo na decisão foi o defeito da v2.0.36.
-            window._phaseOutNamesRow('⚠️', 'W.O.', _woNames, 'não entram no sorteio — seguem inscritos, desativados', 'rgba(239,68,68,0.3)') +
-            (_semEscolha
-              ? '<div style="font-size:0.78rem;color:var(--text-muted,#94a3b8);line-height:1.55;">Ninguém desativou a participação — não há nada a decidir aqui. Estas pessoas ficam de fora do sorteio da próxima fase e <b style="color:var(--text-bright,#f8fafc);">continuam inscritas no torneio</b>.</div>'
-              : '<div style="font-size:0.76rem;color:var(--text-muted,#94a3b8);line-height:1.5;margin-bottom:12px;">O que fazer com <b style="color:var(--text-bright,#f8fafc);">quem desativou</b> a participação:</div>' +
-                _optCard('include', '➕', 'Incluir na eliminatória', 'Entram por classificação, igual aos ativos: sobem ou descem de linha conforme os pontos que somaram. Quem não jogou fica com 0 e cai na linha de baixo.', 'rgba(74,222,128,0.5)') +
-                // ⛔ SEM "Lista de espera": a fila é consequência de a pessoa religar o toggle,
-                // nunca de uma escolha feita por ela aqui. Ver _resolvePhaseInactives.
-                _optCard('exclude', '🚫', 'Excluir da próxima fase', 'Ficam de fora da eliminatória. Continuam inscritos no torneio. Se quiserem voltar, é só religar a participação — aí entram no fim da lista de espera.', 'rgba(248,113,113,0.45)')) +
+            window._phaseOutNamesRow('⚠️', 'W.O.', _woNames, 'não entram no sorteio', 'rgba(239,68,68,0.3)') +
         '</div>' +
     '</div>';
     document.body.appendChild(overlay);
@@ -1076,7 +1037,7 @@ window._cancelPhaseAdvance = function (tId) {
 /* Seleciona a opção (não aplica) — quem aplica é o Confirmar da barra de cima. */
 window._inactPanelPick = function(choice){
     window._inactPanelChoice = choice;
-    ['include','exclude'].forEach(function(c){
+    ['keep','remove'].forEach(function(c){
         var el = document.getElementById('inact-opt-' + c);
         if (!el) return;
         var _sel = (c === choice);

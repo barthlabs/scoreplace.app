@@ -7,12 +7,9 @@
  *   _"tambem precisa ter um cancelar/confirmar"_
  *   _"cancelar e seguir na tela seguinte tambem. esses botoes sempre no topo travados e visiveis"_
  *
- * ⛔ A ARMADILHA QUE ESTE TESTE GUARDA — e é o motivo de ele existir separado: quem levou
- * W.O. **não pode virar uma terceira opção**. O desfecho dele já está decidido ("fica no
- * elenco, desativado"), e foi justamente por misturá-lo na ESCOLHA que gente com W.O.
- * acabou na lista de espera no avanço de fase (v2.0.36 — o estado que o cânone chama de
- * impossível de explicar: "desativado e na fila ao mesmo tempo"). Ele entra como
- * INFORMAÇÃO; a decisão do organizador continua alcançando só quem se desativou.
+ * A decisão é de cadastro, nunca de classificação: inativos e W.O. não entram na
+ * eliminatória. O organizador decide se TODOS os nomes exibidos ficam no torneio,
+ * desativados e reativáveis, ou se são removidos definitivamente.
  *
  * As duas listas saem da MESMA marca (`woDeactivatedAt`), em lados opostos — então elas não
  * podem se sobrepor nem deixar alguém de fora. Isso é medido aqui.
@@ -96,22 +93,22 @@ ok('⭐⭐ os nomes saem na tinta VERMELHA canônica (#f87171 — a mesma das li
 ok('  → há a seção "W.O." e a seção "Desativados"', />⚠️ W\.O\.</.test(html) && />🔴 Desativados</.test(html));
 ok('  → e o cabeçalho conta os dois grupos', /levaram W\.O\./.test(html) && /desativaram/.test(html));
 
-console.log('\n── ③ ⛔ W.O. NÃO virou opção: a escolha alcança só quem se desativou ──');
+console.log('\n── ③ a decisão vale para todos, sem falsa inclusão na eliminatória ──');
 const opcoes = (html.match(/id="inact-opt-([a-z]+)"/g) || []);
-ok('⭐⭐ existem exatamente 2 opções (include/exclude) — nenhuma terceira pro W.O.',
-  opcoes.length === 2 && /inact-opt-include/.test(html) && /inact-opt-exclude/.test(html), opcoes.join(', '));
-ok('⭐ e o texto diz de quem é a escolha', /quem desativou<\/b> a participação/.test(html));
+ok('⭐⭐ existem exatamente 2 opções (manter/excluir definitivamente)',
+  opcoes.length === 2 && /inact-opt-keep/.test(html) && /inact-opt-remove/.test(html), opcoes.join(', '));
+ok('⛔ não existe opção de incluir na eliminatória', !/Incluir na eliminatória/.test(html));
+ok('⭐ as opções vêm ANTES dos nomes', html.indexOf('inact-opt-keep') < html.indexOf('Desativou Sozinho'));
+ok('⭐ o texto diz que a escolha alcança todas as pessoas abaixo', /todas as pessoas abaixo/.test(html));
 const src = fs.readFileSync(path.join(ROOT, 'js/views/tournaments-draw-prep.js'), 'utf8');
-// ⛔ o RESOLVEDOR não pode enxergar a lista de W.O. — era exatamente o defeito da v2.0.36.
-// Mede o corpo da função, não o arquivo: `_phaseWoDeactivated` existe no arquivo de propósito.
 const _corpoResolve = (function () {
   const i = src.indexOf('window._resolvePhaseInactives = function');
   return i < 0 ? '' : src.slice(i, src.indexOf('\n};', i));
 })();
-ok('⛔ `_resolvePhaseInactives` só olha `_phasePendingInactives` (nunca a lista de W.O.)',
-  _corpoResolve.indexOf('window._phasePendingInactives(t)') !== -1 &&
-  _corpoResolve.indexOf('_phaseWoDeactivated') === -1,
-  'o resolver passou a enxergar os W.O. — é o defeito da v2.0.36 voltando');
+ok('⭐⭐ o resolvedor reúne as duas listas pela porta canônica',
+  _corpoResolve.indexOf('window._phaseNonEntrants(t)') !== -1);
+ok('⛔ o resolvedor não reativa nem escreve _includeInactive',
+  _corpoResolve.indexOf('ligaActive = true') === -1 && _corpoResolve.indexOf('_includeInactive') === -1);
 
 console.log('\n── ④ barra Cancelar/Confirmar FIXA no topo, antes do corpo rolável ──');
 const iBarra = html.indexOf('inact-confirm-btn');
@@ -136,12 +133,29 @@ const _origResolve = W._resolvePhaseInactives;
 W._resolvePhaseInactives = (tid, choice) => { aplicado = { tid, choice }; };
 chama('_inactPanelConfirm', t.id, null);
 ok('⭐⭐ sem escolha, Confirmar NÃO aplica nada', aplicado === null, JSON.stringify(aplicado));
-chama('_inactPanelPick', 'exclude');
-ok('escolher grava a escolha', W._inactPanelChoice === 'exclude');
+chama('_inactPanelPick', 'keep');
+ok('escolher grava a escolha', W._inactPanelChoice === 'keep');
 chama('_inactPanelConfirm', t.id, null);
-ok('⭐⭐ Confirmar aplica a escolha pela porta de sempre', aplicado && aplicado.choice === 'exclude' && aplicado.tid === t.id,
+ok('⭐⭐ Confirmar aplica a escolha pela porta de sempre', aplicado && aplicado.choice === 'keep' && aplicado.tid === t.id,
   JSON.stringify(aplicado));
 W._resolvePhaseInactives = _origResolve;
+
+console.log('\n── ⑤b excluir definitivamente remove inativos E W.O., sem alterar histórico ──');
+const tExcluir = torneio();
+let saveOpts = null, avancosAposSave = 0;
+W.AppStore.tournaments = [tExcluir];
+W._findTournamentById = (id) => (String(id) === tExcluir.id ? tExcluir : null);
+W.FirestoreDB = { saveTournament: (_t, opts) => { saveOpts = opts; return Promise.resolve(); } };
+W._advanceMultiPhase = () => { avancosAposSave++; };
+chama('_resolvePhaseInactives', tExcluir.id, 'remove');
+ok('⭐⭐ saem os 2 desativados e os 2 W.O. (sobram só os ativos)',
+  tExcluir.participants.length === 2 && tExcluir.participants.every((p) => p.ligaActive !== false));
+ok('⭐⭐ a remoção pede explicitamente a porta de encolhimento autorizado',
+  saveOpts && saveOpts.allowRosterRemoval === true, JSON.stringify(saveOpts));
+ok('⛔ não criou _includeInactive nem reativou alguém',
+  !tExcluir.phases[1]._includeInactive && !tExcluir.participants.some((p) => p.uid === 'u3' || p.uid === 'u4' || p.uid === 'u5' || p.uid === 'u6'));
+W.AppStore.tournaments = [t];
+W._findTournamentById = (id) => (String(id) === t.id ? t : null);
 
 console.log('\n── ⑥ a TELA SEGUINTE (promover linha) tem Cancelar e Seguir, também no topo ──');
 t._phaseResInfo = { lines: [{ label: 'Ouro', dest: 'upper', size: 35 }, { label: 'Prata', dest: 'lower', size: 35 }],
@@ -174,7 +188,7 @@ W._phasePromoteApply = _oa; W._phasePromoteSkip = _os;
 console.log('\n── ⑧ nada de regra mudou ──');
 ok('_phasePromoteHelps intacta (35/35 ímpares → oferece)', W._phasePromoteHelps([{ size: 35 }, { size: 35 }]) === true);
 ok('  → e 36/34 (pares) não oferece', W._phasePromoteHelps([{ size: 36 }, { size: 34 }]) === false);
-ok('⛔ o filtro dos inativos segue excluindo quem levou W.O.',
+ok('⛔ as listas seguem separando motivo comum e W.O.',
   /p\.ligaActive === false && !p\.woDeactivatedAt/.test(src));
 
 console.log('\n── ⑨ SÓ W.O., sem inativo comum: o painel APARECE (não pode ser silencioso) ──');
@@ -187,9 +201,9 @@ ok('o cenário é só-W.O. (0 inativos, 2 W.O.)', inatSo.length === 0 && woSo.le
 const htmlSo = capturaPainel(() => W._showInactivePhasePanel(tSoWo.id, inatSo));
 ok('⭐⭐ o painel APARECE mesmo sem inativo comum', htmlSo.length > 500, 'veio ' + htmlSo.length + ' bytes');
 ok('⭐⭐ e mostra os W.O. pelo nome, em vermelho', /Levou WO Um/.test(htmlSo) && /--sp-c-f87171,#f87171/.test(htmlSo));
-ok('⭐ não oferece escolha nenhuma (não há o que decidir)', (htmlSo.match(/id="inact-opt-/g) || []).length === 0);
-ok('⭐⭐ e o botão nasce como "Seguir" HABILITADO', /id="inact-confirm-btn"[^>]*>✓ Seguir/.test(htmlSo) && !/id="inact-confirm-btn" disabled/.test(htmlSo));
-ok('  → dizendo que eles continuam inscritos', /continuam inscritas no torneio/.test(htmlSo));
+ok('⭐ também oferece as duas escolhas', (htmlSo.match(/id="inact-opt-/g) || []).length === 2);
+ok('⭐⭐ e o botão nasce desabilitado até a decisão explícita', /id="inact-confirm-btn" disabled/.test(htmlSo));
+ok('  → a opção manter explica que seguem inscritos', /Continuam inscritas, desativadas/.test(htmlSo));
 // e o GATE do avanço abre o painel nesse caso (antes só olhava a lista de inativos)
 const eng = fs.readFileSync(path.join(ROOT, 'js/views/phases-engine.js'), 'utf8');
 ok('⭐⭐ o gate do avanço também dispara com só-W.O.', /_inatvList\.length \|\| _woList\.length/.test(eng));

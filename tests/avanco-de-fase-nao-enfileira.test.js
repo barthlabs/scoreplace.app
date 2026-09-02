@@ -19,7 +19,8 @@
  *    nomes, 142 → 156.
  *
  * A REGRA: a fila é consequência de um ATO da pessoa (religar o toggle "Ativado"). O avanço
- * de fase decide entre INCLUIR (por classificação) e EXCLUIR — nunca enfileira.
+ * de fase decide entre MANTER a inscrição inativa e EXCLUIR definitivamente — nunca inclui
+ * alguém por classificação nem enfileira.
  * [[project_wo_always_deactivates]] · [[project_sitout_vs_waitlist_canon]]
  */
 const fs = require('fs'), path = require('path');
@@ -53,8 +54,10 @@ const prep = fs.readFileSync(path.join(ROOT, 'js', 'views', 'tournaments-draw-pr
 ok(!/_resolvePhaseInactives = function[\s\S]{0,1400}standbyParticipants/.test(prep),
   '_resolvePhaseInactives não escreve em standbyParticipants');
 ok(!/_optCard\('standby'/.test(prep), 'o painel de inativos não oferece "Lista de espera"');
-ok(/_optCard\('include'/.test(prep) && /_optCard\('exclude'/.test(prep),
-  '  → mas continua oferecendo Incluir e Excluir');
+ok(/_optCard\('keep'/.test(prep) && /_optCard\('remove'/.test(prep),
+  '  → oferece Manter nas listas e Excluir definitivamente');
+ok(!/_optCard\('include'/.test(prep) && !/Incluir na eliminatória/.test(prep),
+  '  → não oferece inclusão na eliminatória');
 
 // mesmo chamado à mão com 'standby', nada de fila (o caminho não existe)
 W._findTournamentById = () => t2;
