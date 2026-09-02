@@ -226,13 +226,13 @@ ok('⭐⭐ ao promover, fica Ouro 36 / Prata 34',
   (promovido.upper || []).length === 36 && (promovido.lower || []).length === 34,
   (promovido.upper || []).length + '/' + (promovido.lower || []).length);
 const sobe = (promovido.upper || [])[(promovido.upper || []).length - 1];
-const eraTopoDaPrata = (semPromover.lower || [])[0];
+const melhorIndividualDaPrata = (semPromover.lower || [])[0];
 ok('⭐⭐ o que sobe é uma DUPLA INTEIRA (dois integrantes, não uma pessoa)',
   !!(sobe && sobe.p1Name && sobe.p2Name && (sobe.participants || []).length === 2),
   J(sobe && { n: sobe.name, p1: sobe.p1Name, p2: sobe.p2Name }));
-ok('  → e é a MELHOR da linha de baixo, entrando como PIOR semente da de cima',
-  !!(sobe && eraTopoDaPrata && sobe.name === eraTopoDaPrata.name),
-  'subiu ' + (sobe && sobe.name) + ' · topo da Prata era ' + (eraTopoDaPrata && eraTopoDaPrata.name));
+ok('  → escolhe pelo desempenho COMBINADO, não pela melhor pessoa da Prata',
+  !!(sobe && melhorIndividualDaPrata && sobe.name !== melhorIndividualDaPrata.name),
+  'subiu ' + (sobe && sobe.name) + ' · melhor indivíduo estava em ' + (melhorIndividualDaPrata && melhorIndividualDaPrata.name));
 ok('  → e a de baixo nunca fica vazia nem perde ninguém no caminho (36+34 = 35+35)',
   (promovido.upper || []).length + (promovido.lower || []).length === 70);
 

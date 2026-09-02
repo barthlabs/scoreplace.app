@@ -4657,11 +4657,17 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   var _repTag = '<span title="Passou por repescagem nesta rodada" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-fb923c,#fb923c);background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.45);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">REP</span>';
   var _p1RepBadge = m.p1FromRepechage ? _repTag : '';
   var _p2RepBadge = m.p2FromRepechage ? _repTag : '';
+  // A dupla promovida da linha inferior para a superior é um fato do sorteio, não uma
+  // repescagem. A marca fica no SLOT DA RODADA DE ENTRADA, tal como REP; não acompanha
+  // uma vitória da dupla para as rodadas seguintes.
+  var _promotedTag = '<span title="Dupla promovida por desempenho combinado" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-e2e8f0,#e2e8f0);background:rgba(203,213,225,0.16);border:1px solid rgba(203,213,225,0.58);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">PROMO</span>';
+  var _p1PromotedBadge = m.p1PromotedFromLower ? _promotedTag : '';
+  var _p2PromotedBadge = m.p2PromotedFromLower ? _promotedTag : '';
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
       ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)))}</div>
-      ${_p1RepBadge}${_p1ByeBadge}
+      ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
       </div>
@@ -4670,7 +4676,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
       ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)))}</div>
-      ${_p2RepBadge}${_p2ByeBadge}
+      ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
       </div>

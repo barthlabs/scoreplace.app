@@ -113,6 +113,9 @@
       : (p.uids || (p.uid ? [p.uid] : []));
     if (W && typeof W._setSlot === 'function') W._setSlot(m, slot, uids, p);
     else m[slot === 'p1' ? 'team1Obj' : 'team2Obj'] = p;
+    // Promoção Ouro/Prata é um fato DA ENTRADA na chave. Fica no slot sem carregar
+    // junto com a equipe quando ela vence e progride para a rodada seguinte.
+    if (p && p.promotedFromLower) m[slot + 'PromotedFromLower'] = true;
   }
 
   /**

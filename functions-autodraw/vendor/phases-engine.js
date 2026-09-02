@@ -177,8 +177,18 @@
     return cmp || null;
   }
 
-  // Ordena cada linha (Ouro, Prata…) por mérito do MELHOR integrante. Estável e sem
-  // efeito quando o comparador não está disponível — nunca desempata por conta própria.
+  function _cmpConfigurado() {
+    var cmp = (typeof window !== 'undefined' && typeof window._standingsCompareConfig === 'function')
+      ? window._standingsCompareConfig : null;
+    if (!cmp && typeof require === 'function') {
+      try { cmp = require('./standings-core.js').standingsCompareConfig; } catch (e) { cmp = null; }
+    }
+    return cmp || null;
+  }
+
+  // A ordem da chave continua sendo a da MELHOR pessoa de cada dupla, exatamente como
+  // antes: em Performance a dupla é 1º+2º, portanto o primeiro membro é a cabeça de
+  // chave. Promoção é uma decisão diferente e usa a régua combinada abaixo.
   function _ordenaLinhasPorMerito(byDest) {
     var cmp = _cmpCanonico();
     if (!cmp) {
@@ -187,8 +197,6 @@
       }
       return;
     }
-    // O 1º participante é o melhor da dupla: 'top' pareia adjacente na classificação
-    // (1º+2º), então participants[0] é sempre o de cima.
     var melhor = function (tm) {
       return (tm && Array.isArray(tm.participants) && tm.participants[0]) || tm || {};
     };
@@ -198,7 +206,78 @@
         .map(function (tm, i) { return { tm: tm, i: i }; })
         .sort(function (a, b) {
           var d = cmp(melhor(a.tm), melhor(b.tm), false);
-          return d || (a.i - b.i);            // empate → ordem de chegada (estável)
+          return d || (a.i - b.i);
+        })
+        .map(function (x) { return x.tm; });
+    });
+  }
+
+  function _numero(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
+
+  // A promoção é de uma DUPLA JÁ FORMADA. A régua, portanto, é o desempenho COMBINADO:
+  // vitórias, saldo de sets/games, pontos, Buchholz etc. somam os dois membros; o
+  // aproveitamento é vitórias/jogos da dupla. Não se promove uma dupla porque SÓ um
+  // integrante foi bem enquanto o outro derrubou seu saldo.
+  function _metricasDaDupla(tm) {
+    var membros = (tm && Array.isArray(tm.participants) && tm.participants.length) ? tm.participants : [tm || {}];
+    var out = { name: (tm && (tm.displayName || tm.name)) || '' };
+    var campos = ['points', 'advancedPoints', 'wins', 'losses', 'draws', 'pointsDiff', 'played',
+      'setsWon', 'setsLost', 'gamesWon', 'gamesLost', 'tiebreaksWon', 'tiebreaksLost',
+      'tbPointsWon', 'tbPointsLost', 'pointsFor', 'pointsAgainst', 'buchholz', 'sonnebornBerger'];
+    campos.forEach(function (campo) {
+      var tem = false, total = 0;
+      membros.forEach(function (m) {
+        if (m && m[campo] != null) { tem = true; total += _numero(m[campo]); }
+      });
+      if (tem) out[campo] = total;
+    });
+    if (out.played != null) out.winRate = out.played ? _numero(out.wins) / out.played : 0;
+    // Chave interna estável da dupla: sempre pelos dois membros, nunca pela posição deles.
+    out.uid = 'pair:' + membros.map(function (m) {
+      return (m && m.uid) ? ('uid:' + m.uid) : ('name:' + ((m && (m.name || m.displayName)) || ''));
+    }).sort().join('|');
+    return out;
+  }
+
+  // Ordena cada linha (Ouro, Prata…) pelo desempenho COMBINADO da dupla. Se o
+  // organizador configurou desempates, aplica a mesma ordem configurada; confronto direto
+  // é neutro porque a dupla fixa ainda não existia na fase classificatória. Empate total
+  // preserva a ordem de formação, isto é, a ordem já publicada da classificação.
+  function _ordenaDuplasPorMeritoCombinado(byDest, opts) {
+    opts = opts || {};
+    var cmpPadrao = _cmpCanonico(), cmpConfigurado = _cmpConfigurado();
+    if (!cmpPadrao && !cmpConfigurado) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[phases] comparador de classificação ausente — linhas mantidas na ordem dos grupos');
+      }
+      return;
+    }
+    Object.keys(byDest).forEach(function (k) {
+      if (!Array.isArray(byDest[k])) return;
+      var ordem = {}, nascimentos = {};
+      var birth = opts.promotionBirthByName || {};
+      byDest[k] = byDest[k]
+        .map(function (tm, i) {
+          var metrica = _metricasDaDupla(tm);
+          ordem[metrica.uid] = i;
+          // A idade só é um dado de dupla se AMBOS os membros a preencheram. Com os dois
+          // valores, a média representa a dupla inteira sem premiar perfil incompleto.
+          var ms = (tm && tm.participants) || [];
+          var datas = ms.map(function (m) { return m && birth[m.uid || m.name]; });
+          if (datas.length && datas.every(function (d) { return d != null; })) {
+            nascimentos[metrica.uid] = datas.reduce(function (s, d) { return s + _numero(d); }, 0) / datas.length;
+          }
+          return { tm: tm, metrica: metrica, i: i };
+        })
+        .sort(function (a, b) {
+          var d;
+          if (cmpConfigurado && Array.isArray(opts.promotionTiebreakers) && opts.promotionTiebreakers.length) {
+            d = cmpConfigurado(a.metrica, b.metrica, {
+              tiebreakers: opts.promotionTiebreakers,
+              h2h: {}, birth: nascimentos, ordem: ordem
+            });
+          } else d = cmpPadrao ? cmpPadrao(a.metrica, b.metrica, false) : 0;
+          return d || (a.i - b.i);
         })
         .map(function (x) { return x.tm; });
     });
@@ -319,6 +398,10 @@
       flatOverall: src.flatOverall === true,
       includeInactive: (cfg && cfg._includeInactive) || null,
       promoteLines: (cfg && cfg._promoteLines) || 0,
+      // A promoção compara DUPLAS, não pessoas. Estes valores pertencem ao torneio
+      // (não à configuração persistida da fase), portanto chegam só pelo contexto.
+      promotionTiebreakers: ctx.tiebreakers || (cfg && cfg._promotionTiebreakers) || null,
+      promotionBirthByName: ctx.birthByName || (cfg && cfg._promotionBirthByName) || null,
       // quem chama é que sabe qual era a fase ANTERIOR; sem essa informação não se
       // reinterpreta nada (ver ehReiRainhaRodadaUnica).
       prevRRRodadaUnica: (ctx.prevRRRodadaUnica === true) || (cfg && cfg._prevRRRodadaUnica) === true
@@ -478,8 +561,6 @@
       // ⭐ CABEÇAS DE CHAVE: a linha sai daqui na ordem dos GRUPOS (A, B, C…), que é ordem
       // de sorteio, não de mérito. A chave semeia 1×N, 2×(N-1)… pela ordem do array, então
       // sem isto a "cabeça de chave" seria só quem calhou de estar no grupo A.
-      // Ordena cada linha pelo MELHOR integrante da dupla, com o comparador CANÔNICO — o
-      // mesmo do ranking geral, pra não existir uma segunda régua de mérito no app.
       // Só na estratégia Performance ('top'): em Equilíbrio a ordem carrega o pareamento
       // forte+fraco, e em Sorteio a ordem É o sorteio — reordenar destruiria os dois.
       if (pairingStrategy === 'top') _ordenaLinhasPorMerito(byDest);
@@ -493,7 +574,20 @@
       var _hiK = _highestDestKey(byDest), _loK2 = _lowestDestKey(byDest);
       if (_hiK && _loK2 && _hiK !== _loK2 && Array.isArray(byDest[_loK2]) && Array.isArray(byDest[_hiK])) {
         for (var _pm = 0; _pm < _promote && byDest[_loK2].length > 1; _pm++) {
-          byDest[_hiK].push(byDest[_loK2].shift());
+          // A promoção compara as duplas completas, mas NÃO troca a ordem que semeia as
+          // linhas. Ordenar uma cópia nos dá a melhor dupla e a removemos do array original.
+          var _rankingPromocao = {}; _rankingPromocao[_loK2] = byDest[_loK2].slice();
+          _ordenaDuplasPorMeritoCombinado(_rankingPromocao, opts);
+          var _duplaPromovida = _rankingPromocao[_loK2][0];
+          var _idxPromovida = byDest[_loK2].indexOf(_duplaPromovida);
+          if (_idxPromovida >= 0) byDest[_loK2].splice(_idxPromovida, 1);
+          // Fato de ENTRADA da chave. O gerador copia a marca para o primeiro jogo; as
+          // vitórias seguintes não levam a etiqueta adiante (mesma regra visual da REP).
+          if (_duplaPromovida) {
+            _duplaPromovida.promotedFromLower = true;
+            _duplaPromovida.promotedFromDest = _loK2;
+            byDest[_hiK].push(_duplaPromovida);
+          }
         }
       }
     }
@@ -755,6 +849,10 @@
         winner: isBye ? (s1 ? p1 : (s2 ? p2 : null)) : null, isBye: isBye
       };
       if (t1) m.team1Obj = t1; if (t2) m.team2Obj = t2;
+      // A promoção é uma condição de entrada, não uma propriedade eterna da dupla.
+      // Portanto o marcador vive no SLOT do jogo inicial, como pXFromRepechage.
+      if (t1 && t1.promotedFromLower) m.p1PromotedFromLower = true;
+      if (t2 && t2.promotedFromLower) m.p2PromotedFromLower = true;
       r1.push(m); matches.push(m);
       if (pi1) { pi1.nextMatchId = m.id; pi1.nextSlot = 'p1'; }
       if (pi2) { pi2.nextMatchId = m.id; pi2.nextSlot = 'p2'; }
@@ -2080,7 +2178,11 @@
     } else if (_fmt === 'groups') {
       built = buildPhaseGroupStage(groups, cfg, cs, _id);
     } else {
-      built = buildPhaseBrackets(groups, Object.assign({}, cfg, { _prevRRRodadaUnica: _prevRRUnica }), cs, _id);
+      built = buildPhaseBrackets(groups, Object.assign({}, cfg, {
+        _prevRRRodadaUnica: _prevRRUnica,
+        _promotionTiebreakers: t.tiebreakers,
+        _promotionBirthByName: (typeof window !== 'undefined' && typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {}
+      }), cs, _id);
     }
     // v3.1.16 (inc 8 — unificação de storage): Liga rodada a rodada de fase posterior
     // adota o MESMO modelo da Fase 0 — as rodadas moram num array `rounds` real (mesma
@@ -2220,7 +2322,8 @@
       var _curG = (_cur === 0) ? prevPhaseGroups(t) : bracketPhaseGroups(t, _cur);
       var _mp = mappingDaTransicao(_nextCfg);
       var _byDest = selectQualifiers(_curG, _nextCfg, { computeStandings: (_cur === 0 ? cs : function (g) { return g.standings || []; }),
-        prevRRRodadaUnica: ehReiRainhaRodadaUnica(t.phases[_cur]) });
+        prevRRRodadaUnica: ehReiRainhaRodadaUnica(t.phases[_cur]), tiebreakers: t.tiebreakers,
+        birthByName: (typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {} });
       var _lines = _mp.map(function (m) { return { label: (m.label || '').trim() || m.dest, dest: m.dest, size: (_byDest[m.dest] || []).length }; }).filter(function (l) { return l.size > 0; });
       if (_lines.length >= 2 && !_nextCfg._promoteAsked && typeof window._showPhasePromotePanel === 'function' &&
           typeof window._phasePromoteHelps === 'function' && window._phasePromoteHelps(_lines)) {

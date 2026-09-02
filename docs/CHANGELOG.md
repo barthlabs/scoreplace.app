@@ -1,5 +1,17 @@
 # Changelog do scoreplace.app
 
+## 2.1.94 — promoção Ouro/Prata respeita o desempenho da dupla (02/set/2026)
+
+Quando o organizador escolhe promover uma dupla da linha Prata para a Ouro, a escolha agora
+considera o desempenho **combinado dos dois integrantes** — vitórias, pontos, saldo de sets e
+saldo de games — na ordem de critérios de desempate configurada no torneio. Antes, o motor
+comparava apenas o melhor integrante, podendo promover uma dupla cujo outro integrante derrubava
+o desempenho total.
+
+a dupla promovida aparece no seu primeiro jogo eliminatório com a etiqueta prata **PROMO**.
+Ela identifica a entrada excepcional naquele sorteio e, como a marca de repescagem, não acompanha
+a dupla para rodadas posteriores.
+
 ## 2.1.93 — quem não jogou não ganha vaga na eliminatória (02/set/2026)
 
 O painel de avanço agora trata inativos e pessoas com W.O. como o que são: pessoas que não
