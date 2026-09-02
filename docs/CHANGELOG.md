@@ -1,5 +1,17 @@
 # Changelog do scoreplace.app
 
+## 2.1.95 — cabeças de chave Ouro/Prata pela campanha da dupla (02/set/2026)
+
+As cabeças de chave das linhas Ouro e Prata passam a usar a mesma campanha **combinada da
+dupla** que decide a promoção entre linhas: vitórias, pontos, saldo de sets e, em especial,
+**saldo de games dos dois integrantes somado**, obedecendo à ordem de desempates configurada
+pelo organizador. Não vale mais a campanha do melhor jogador isolado.
+
+O espelhamento da chave também foi corrigido: em uma chave de oito, as posições ficam
+1×8, 4×5, 2×7 e 3×6. Assim, as duas melhores duplas ficam em lados opostos e só podem se
+encontrar na final. A mudança vale para chaves futuras materializadas depois desta versão;
+nenhuma chave já sorteada é reordenada.
+
 ## 2.1.94 — promoção Ouro/Prata respeita o desempenho da dupla (02/set/2026)
 
 Quando o organizador escolhe promover uma dupla da linha Prata para a Ouro, a escolha agora

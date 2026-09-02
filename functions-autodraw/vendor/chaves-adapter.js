@@ -72,17 +72,27 @@
   // Mas quando a ordem SIGNIFICA alguma coisa — classificados de uma fase de grupos,
   // linha Ouro/Prata — emparelhar adjacente colocaria o 1º contra o 2º logo de cara.
   // A correção não é mudar o emparelhamento (perderíamos o crescimento), é entregar a
-  // LISTA na ordem certa: [1º, último, 2º, penúltimo, …]. Sobre pares adjacentes isso
-  // reproduz exatamente o espelho 1×N.
+  // LISTA na ordem CERTA da árvore. Para oito cabeças, por exemplo, ela é
+  // [1,8,4,5,2,7,3,6]: 1×8, 4×5, 2×7, 3×6. Assim a 1ª e a 2ª só podem se encontrar
+  // na final — o antigo zigue-zague [1,8,2,7,…] ainda as encontrava na semifinal.
   //
   // Com número ímpar de classificados, quem sobra é o MELHOR: a sobra ocupa a última
   // posição, que é a que recebe folga ou repescagem — a vantagem vai para quem fez a
   // melhor campanha, não para o pior colocado.
   function _ordemEspelho(arr) {
     var a = arr.slice(), sobra = null;
-    if (a.length % 2 === 1) sobra = a.shift();
-    var out = [], i = 0, j = a.length - 1;
-    while (i < j) { out.push(a[i]); out.push(a[j]); i++; j--; }
+    // A chave mínima ímpar já reserva a última posição para folga/repescagem. Mantém a
+    // vantagem histórica da melhor campanha nessa posição e semeia normalmente o restante.
+    if (a.length % 2 === 1) { sobra = a.shift(); }
+    var n = a.length, pot = 1, seeds = [1];
+    while (pot < n) {
+      var prox = [], espelho = (pot * 2) + 1;
+      seeds.forEach(function (seed) { prox.push(seed); prox.push(espelho - seed); });
+      seeds = prox; pot *= 2;
+    }
+    // Para 6, 10… a árvore subjacente ainda nasce no próximo degrau; os seeds fora da
+    // lista são BYEs implícitos e não entram no array de participantes.
+    var out = seeds.filter(function (seed) { return seed <= n; }).map(function (seed) { return a[seed - 1]; });
     if (sobra) out.push(sobra);
     return out;
   }

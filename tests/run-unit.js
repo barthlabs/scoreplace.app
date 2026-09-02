@@ -445,6 +445,9 @@ const SUITES = [
   // A promoção entre linhas compara o desempenho COMBINADO da dupla e obedece a
   // ordem de desempate do organizador; não pode escolher o melhor indivíduo isolado.
   'tests/promocao-da-melhor-dupla.test.js',
+  // Cabeças de chave Ouro/Prata usam a campanha COMBINADA da dupla (inclusive saldo
+  // de games) e o espelho real da árvore afasta 1ª e 2ª até a final.
+  'tests/cabecas-de-chave-por-dupla.test.js',
   'tests/advanced-points-dedup.test.js',
   'tests/pa-uid-identity.test.js',
   'tests/uid-name-display.test.js',

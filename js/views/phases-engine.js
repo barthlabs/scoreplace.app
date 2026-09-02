@@ -186,32 +186,6 @@
     return cmp || null;
   }
 
-  // A ordem da chave continua sendo a da MELHOR pessoa de cada dupla, exatamente como
-  // antes: em Performance a dupla é 1º+2º, portanto o primeiro membro é a cabeça de
-  // chave. Promoção é uma decisão diferente e usa a régua combinada abaixo.
-  function _ordenaLinhasPorMerito(byDest) {
-    var cmp = _cmpCanonico();
-    if (!cmp) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[phases] _standingsCompare ausente — linhas mantidas na ordem dos grupos');
-      }
-      return;
-    }
-    var melhor = function (tm) {
-      return (tm && Array.isArray(tm.participants) && tm.participants[0]) || tm || {};
-    };
-    Object.keys(byDest).forEach(function (k) {
-      if (!Array.isArray(byDest[k])) return;
-      byDest[k] = byDest[k]
-        .map(function (tm, i) { return { tm: tm, i: i }; })
-        .sort(function (a, b) {
-          var d = cmp(melhor(a.tm), melhor(b.tm), false);
-          return d || (a.i - b.i);
-        })
-        .map(function (x) { return x.tm; });
-    });
-  }
-
   function _numero(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
 
   // A promoção é de uma DUPLA JÁ FORMADA. A régua, portanto, é o desempenho COMBINADO:
@@ -220,7 +194,7 @@
   // integrante foi bem enquanto o outro derrubou seu saldo.
   function _metricasDaDupla(tm) {
     var membros = (tm && Array.isArray(tm.participants) && tm.participants.length) ? tm.participants : [tm || {}];
-    var out = { name: (tm && (tm.displayName || tm.name)) || '' };
+    var out = { name: (tm && (tm.displayName || tm.name)) || '', _temMetricaCombinada: false };
     var campos = ['points', 'advancedPoints', 'wins', 'losses', 'draws', 'pointsDiff', 'played',
       'setsWon', 'setsLost', 'gamesWon', 'gamesLost', 'tiebreaksWon', 'tiebreaksLost',
       'tbPointsWon', 'tbPointsLost', 'pointsFor', 'pointsAgainst', 'buchholz', 'sonnebornBerger'];
@@ -229,7 +203,7 @@
       membros.forEach(function (m) {
         if (m && m[campo] != null) { tem = true; total += _numero(m[campo]); }
       });
-      if (tem) out[campo] = total;
+      if (tem) { out[campo] = total; out._temMetricaCombinada = true; }
     });
     if (out.played != null) out.winRate = out.played ? _numero(out.wins) / out.played : 0;
     // Chave interna estável da dupla: sempre pelos dois membros, nunca pela posição deles.
@@ -239,7 +213,8 @@
     return out;
   }
 
-  // Ordena cada linha (Ouro, Prata…) pelo desempenho COMBINADO da dupla. Se o
+  // Ordena cada linha (Ouro, Prata…) pelo desempenho COMBINADO da dupla. É a regra ÚNICA
+  // tanto para escolher a promoção quanto para definir todas as cabeças de chave. Se o
   // organizador configurou desempates, aplica a mesma ordem configurada; confronto direto
   // é neutro porque a dupla fixa ainda não existia na fase classificatória. Empate total
   // preserva a ordem de formação, isto é, a ordem já publicada da classificação.
@@ -255,7 +230,8 @@
     Object.keys(byDest).forEach(function (k) {
       if (!Array.isArray(byDest[k])) return;
       var ordem = {}, nascimentos = {};
-      var birth = opts.promotionBirthByName || {};
+      var birth = opts.pairBirthByName || opts.promotionBirthByName || {};
+      var tiebreakers = opts.pairTiebreakers || opts.promotionTiebreakers || null;
       byDest[k] = byDest[k]
         .map(function (tm, i) {
           var metrica = _metricasDaDupla(tm);
@@ -271,9 +247,17 @@
         })
         .sort(function (a, b) {
           var d;
-          if (cmpConfigurado && Array.isArray(opts.promotionTiebreakers) && opts.promotionTiebreakers.length) {
+          // Fixtures e legados sem estatística não podem ser "ranqueados" por uma soma de
+          // zeros. Aí preservamos a régua anterior (melhor integrante), exclusivamente
+          // como compatibilidade. Com placar/estatística real nos dois lados, SEMPRE vale
+          // a campanha combinada da dupla.
+          if (!a.metrica._temMetricaCombinada || !b.metrica._temMetricaCombinada) {
+            var melhorA = (a.tm && a.tm.participants && a.tm.participants[0]) || a.tm || {};
+            var melhorB = (b.tm && b.tm.participants && b.tm.participants[0]) || b.tm || {};
+            d = cmpPadrao ? cmpPadrao(melhorA, melhorB, false) : 0;
+          } else if (cmpConfigurado && Array.isArray(tiebreakers) && tiebreakers.length) {
             d = cmpConfigurado(a.metrica, b.metrica, {
-              tiebreakers: opts.promotionTiebreakers,
+              tiebreakers: tiebreakers,
               h2h: {}, birth: nascimentos, ordem: ordem
             });
           } else d = cmpPadrao ? cmpPadrao(a.metrica, b.metrica, false) : 0;
@@ -559,23 +543,24 @@
         }
       }
       // ⭐ CABEÇAS DE CHAVE: a linha sai daqui na ordem dos GRUPOS (A, B, C…), que é ordem
-      // de sorteio, não de mérito. A chave semeia 1×N, 2×(N-1)… pela ordem do array, então
-      // sem isto a "cabeça de chave" seria só quem calhou de estar no grupo A.
-      // Só na estratégia Performance ('top'): em Equilíbrio a ordem carrega o pareamento
-      // forte+fraco, e em Sorteio a ordem É o sorteio — reordenar destruiria os dois.
-      if (pairingStrategy === 'top') _ordenaLinhasPorMerito(byDest);
+      // de sorteio, não de mérito. Em Performance ('top'), a campanha que semeia é a da
+      // DUPLA: soma de vitórias, saldo de games e os desempates escolhidos pelo organizador.
+      // O adaptador transforma essa lista em espelho 1×N, afastando as melhores até as
+      // rodadas finais. Em Equilíbrio a ordem carrega forte+fraco, e em Sorteio a ordem É
+      // o sorteio — reordenar destruiria os dois.
+      if (pairingStrategy === 'top') _ordenaDuplasPorMeritoCombinado(byDest, opts);
     }
     // v4.4.111: PROMOVER LINHA — sobe os N MELHORES da pior linha pra melhor, rebalanceando
-    // o resto (cima +N, baixo −N). O promovido é o melhor de baixo → entra como PIOR semente
-    // de cima. Se ainda sobrar degrau de potência de 2, o organizador resolve no painel
+    // o resto (cima +N, baixo −N). Depois, as duas linhas são semeadas de novo pela MESMA
+    // campanha combinada: a promovida não recebe uma posição arbitrária na Ouro. Se ainda
+    // sobrar degrau de potência de 2, o organizador resolve no painel
     // normal (BYE/repescagem). Nunca esvazia a linha de baixo (guard length>1).
     var _promote = parseInt(opts.promoteLines, 10) || 0;
     if (_promote > 0) {
       var _hiK = _highestDestKey(byDest), _loK2 = _lowestDestKey(byDest);
       if (_hiK && _loK2 && _hiK !== _loK2 && Array.isArray(byDest[_loK2]) && Array.isArray(byDest[_hiK])) {
         for (var _pm = 0; _pm < _promote && byDest[_loK2].length > 1; _pm++) {
-          // A promoção compara as duplas completas, mas NÃO troca a ordem que semeia as
-          // linhas. Ordenar uma cópia nos dá a melhor dupla e a removemos do array original.
+          // Ordenar uma cópia nos dá a melhor dupla e a removemos do array original.
           var _rankingPromocao = {}; _rankingPromocao[_loK2] = byDest[_loK2].slice();
           _ordenaDuplasPorMeritoCombinado(_rankingPromocao, opts);
           var _duplaPromovida = _rankingPromocao[_loK2][0];
@@ -591,6 +576,9 @@
         }
       }
     }
+    // A promoção altera a composição da linha de cima. Reaplica a mesma régua que escolheu
+    // a dupla promovida para que Ouro e Prata entreguem ao espelhamento cabeças coerentes.
+    if (pairingStrategy === 'top') _ordenaDuplasPorMeritoCombinado(byDest, opts);
     return byDest;
   }
 

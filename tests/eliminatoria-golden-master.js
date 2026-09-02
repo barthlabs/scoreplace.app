@@ -77,6 +77,15 @@
  * Provado por neutralização: zerando só o critério novo, o retrato volta BYTE A BYTE ao
  * anterior. É sorteio que AINDA NÃO FOI FEITO — a mesma licença das regravações acima.
  *
+ * ⚠️ REGRAVADO NA 2.1.95 — a cabeça de chave deixou de ser a MELHOR PESSOA da dupla e
+ * passou a ser a campanha COMBINADA dos dois integrantes, na mesma régua que escolhe a
+ * promoção Prata→Ouro. Além disso, o espelho da árvore agora posiciona 1×N, 4×(N-3),
+ * 2×(N-1), 3×(N-2)…; o zigue-zague anterior colocava cabeça 1 e 2 na mesma semifinal
+ * numa chave de oito. A classificação, os pares formados e as linhas Ouro/Prata continuam
+ * os mesmos; mudam exclusivamente os confrontos futuros para que as melhores duplas se
+ * encontrem o mais tarde possível. A prova específica está em
+ * `cabecas-de-chave-por-dupla.test.js`.
+ *
  * Uso:
  *   node tests/eliminatoria-golden-master.js --gravar   → grava a fixture
  *   node tests/eliminatoria-golden-master.js            → compara (exit 1 se mudou)
