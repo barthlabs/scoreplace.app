@@ -19,6 +19,13 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.91 NÃO ganhou item, e é DECISÃO — mesma família das três anteriores. O que ela
+    // conserta só acontece com o sandbox do desenvolvedor: a lista de torneios é uma só e
+    // recebe de duas fontes, e a atualização dos torneios de verdade estava dizendo que o
+    // sandbox tinha sido removido — jogava pro início com um aviso falso e esvaziava a cópia.
+    // ⛔ Nenhum torneio de verdade é afetado: a remoção de verdade continua removendo,
+    // avisando e voltando pro início como sempre, e nenhuma tela de quem joga muda.
+    // Detalhe em docs/CHANGELOG.md (2.1.91).
     // ⚠️ 2.1.90 NÃO ganhou item, e é DECISÃO — mesma família da 2.1.89/2.1.88. Ela devolve
     // o atalho "Avançar de Fase" às Ferramentas do organizador quando o torneio tem os
     // dados divididos: os grupos apontam pros jogos por id e ninguém religava os dois

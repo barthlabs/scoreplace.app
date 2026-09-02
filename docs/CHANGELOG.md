@@ -1,5 +1,28 @@
 # Changelog do scoreplace.app
 
+## 2.1.91 — o eco de `tournaments` para de dizer que o sandbox foi removido (01/set/2026)
+
+### Uma lista, dois ouvintes, duas coleções — e um deles falava pelo outro
+
+`AppStore.tournaments` é **uma** lista alimentada por **dois** ouvintes, de **duas** coleções: `tournaments` e (desde a 2.1.87) `sandboxes`. Um snapshot de `tournaments` **nunca** pode conter um documento de `sandboxes` — mas o ouvinte de torneio real tirava `_prevIds` da lista inteira e reconstruía a lista com `store.tournaments = tournaments`. Resultado: **todo** sandbox em memória caía em `_removedIds` a **cada** eco.
+
+⛔ **O estrago, reproduzido em produção com os ouvintes reais e o documento real (somente leitura).** O ouvinte de `sandboxes` montava o sandbox certinho — 152 inscritos, 115 jogos, 35/35 grupos religados, fase concluída, 1 atalho nas Ferramentas e 1 botão contextual. Bastava então **um eco comum** de `tournaments` (qualquer placar salvo por qualquer participante) para que quem estava vendo o sandbox fosse jogado pro `#dashboard` com o aviso **falso** *"Torneio removido — foi removido pelo organizador"*, e o objeto montado saísse da lista. O documento seguia **intacto** no banco o tempo todo: era expulsão de **memória**, não remoção.
+
+⛔ **E reabrir não curava.** Fora da memória, `renderTournaments` caía numa segunda porta — `_tRef(id).get()` — que empurrava o documento **cru e magro** na lista sem marcar `_faltamPesados`, sem agendar a montagem e sem religar os grupos. A ficha abria com as Ferramentas do organizador mas com **0 inscritos, 0 jogos e sem o atalho** — estado **estável**, não transitório, porque nada ali ia buscar o resto. E "esperar o próximo snapshot" não resolve: **sandbox não ecoa**, ninguém mais escreve nele.
+
+⚠️ Era também a diferença objetiva entre o fixture verde da 2.1.90 e o navegador: aquele teste alimentava o sandbox **só** pela porta canônica e nunca rodava o ouvinte de `tournaments` nem a porta de recuperação.
+
+### O que mudou
+
+- **⭐ Três portas dizem, num lugar só, o que o ouvinte de `tournaments` pode afirmar:** `window._idsDaColecaoTorneios` (reconcilia **somente** ids da coleção dele), `window._sbsNaLista` e `window._preservaSandboxes` (o rebuild **preserva** os sandboxes já montados, sem duplicar). Sandbox deixou de ser assunto desse ouvinte — nem pra remover, nem pra esvaziar, nem pra navegar, nem pra avisar.
+- **⭐ A porta de recuperação do `renderTournaments` virou a porta canônica:** `_preservaPartesMontadas` + `_hydrateMonarchGroups` + `_marcaPartesQueFaltam` + `_montaPesadosQueFaltam`, as **mesmas** do ouvinte, com as mesmas tentativas, o mesmo piso entre elas e o mesmo estado de erro com botão. Abrir um sandbox fora da memória **hidrata sozinho**, sem depender de snapshot nenhum. Vale igual pro torneio real aberto por link de convite, que sofria do mesmo mal.
+- **⚠️ O piso entre tentativas é pra rajada de eco, não pra abertura:** a porta limpa o carimbo de `_ultimaMontagem` antes de agendar (mesmo gesto do `_retentarDepois`), senão uma abertura logo depois da montagem anterior cairia no `continue` e ficaria magra. `_montandoPesados` **não** é tocado: montagem em voo continua sendo a única.
+- **⛔ Nada de regra mudou:** classificação, avanço, pares, promoção, W.O., a Function do sandbox, Rules, dados, estrutura de coleções, notificações e estatísticas seguem intocados. Remoção **verdadeira** de torneio real continua removendo, navegando e avisando; remoção verdadeira de sandbox continua sendo do ouvinte de `sandboxes`, limitada ao sandbox **deste** dono.
+
+### Gates
+
+`tests/eco-de-tournaments-nao-expulsa-sandbox.test.js` (novo) roda o **ciclo completo com os ouvintes reais**: o banco de mentira guarda o que o Firestore guarda (documento **magro** por `dividir` + `_foldMonarchGroups`, partes em subcoleção), o `db` falso só faz o papel da **rede**, e quem entrega os snapshots é `AppStore.startRealtimeListener`. Sequência: login estabilizando → snapshot de `tournaments` → snapshot de `sandboxes` → montagem → **eco** de `tournaments` com a rota do sandbox aberta → reabrir fora da memória **sem novo snapshot** → outro eco. Assere em cada ponto 152 inscritos, 115 jogos, 35/35 grupos religados, fase concluída, **um** atalho, **um** contextual, sem `#dashboard` e sem aviso; mais remoção verdadeira de torneio real (remove, navega, avisa), remoção verdadeira de sandbox pelo ouvinte certo, e sandbox de outro dono sem poder e sem ser varrido. ⭐ O **controle vermelho** desliga as três portas em tempo de execução e o defeito volta inteiro — expulsão, dashboard e aviso falso. ⛔ Medido: no HEAD `c094737e` o teste **falha**, no item ④, exatamente pela expulsão (exit 1).
+
 ## 2.1.90 — o atalho de avançar volta às Ferramentas do sandbox (01/set/2026)
 
 ### Dois botões, a MESMA regra — e só um aparecia

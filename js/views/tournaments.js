@@ -2337,7 +2337,45 @@ function renderTournaments(container, tournamentId = null) {
                     // Add to AppStore if not there
                     var exists = window.AppStore.tournaments.some(function(x) { return String(x.id) === String(t.id); });
                     if (!exists) {
-                        window.AppStore.tournaments.push(t);
+                        /* ⭐ PELA PORTA CANÔNICA (FIX.SANDBOX.P4, 2.1.91) — e não mais `push(doc.data())`.
+                         * ⛔ O QUE ESTA PORTA FAZIA, e o estrago: empurrava o documento CRU na lista. Num
+                         * torneio DIVIDIDO (o caso do Confra e o de qualquer sandbox dele) esse documento
+                         * é MAGRO — elenco, jogos e grupos moram em subcoleção. Ninguém marcava
+                         * `_faltamPesados`, ninguém agendava a montagem e ninguém religava os grupos:
+                         * a ficha abria com as Ferramentas do organizador, mas com 0 inscritos, 0 jogos
+                         * e SEM o atalho "Avançar de Fase" — estado ESTÁVEL, não transitório, porque
+                         * nada aqui ia buscar o resto. Medido em produção: só um snapshot do ouvinte
+                         * curava, e o eco seguinte de `tournaments` derrubava tudo de novo.
+                         * ⚠️ Depender de um snapshot futuro é depender de o torneio ecoar — e sandbox
+                         * NÃO ecoa: ninguém mais escreve nele.
+                         * ⭐ São as MESMAS funções do ouvinte (`_preservaPartesMontadas` +
+                         * `_hydrateMonarchGroups` + `_marcaPartesQueFaltam` + `_montaPesadosQueFaltam`),
+                         * com as mesmas tentativas, o mesmo piso entre elas e o mesmo estado de erro com
+                         * botão. Vale igual pro torneio real aberto por link de convite. */
+                        var _pronto = (typeof window._preservaPartesMontadas === 'function')
+                            ? window._preservaPartesMontadas(t, null) : t;
+                        // rotear já: é o que faz a montagem ler de `sandboxes/{id}/…` (e `resultsSandbox`)
+                        if (_pronto && _pronto.isSandbox === true) {
+                            window._sbIdsConhecidos = window._sbIdsConhecidos || {};
+                            window._sbIdsConhecidos[String(_pronto.id)] = true;
+                        }
+                        window.AppStore.tournaments.push(_pronto);
+                        try { if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(_pronto); } catch (_hmR) {}
+                        if (typeof window._marcaPartesQueFaltam === 'function' &&
+                            window._marcaPartesQueFaltam(_pronto) &&
+                            window.AppStore && typeof window.AppStore._montaPesadosQueFaltam === 'function') {
+                            /* ⚠️ O PISO ENTRE TENTATIVAS É PRA RAJADA DE ECO, NÃO PRA ABERTURA.
+                             * `_montaPesadosQueFaltam` pula quem tentou há menos de 15s — e uma
+                             * abertura logo depois de o objeto sair da memória cairia justamente
+                             * nesse `continue`, ficando MAGRA sem nada agendado. Aqui não há
+                             * rajada possível: assim que o objeto entra na lista, esta porta não
+                             * é mais alcançada. Mesmo gesto do `_retentarDepois` (store.js), que
+                             * limpa o carimbo antes de retentar pelo mesmo motivo.
+                             * ⛔ `_montandoPesados` NÃO é tocado: se há uma montagem EM VOO, ela
+                             * continua sendo a única. */
+                            try { if (window.AppStore._ultimaMontagem) delete window.AppStore._ultimaMontagem[String(_pronto.id)]; } catch (_pmR) {}
+                            window.AppStore._montaPesadosQueFaltam([String(_pronto.id)]);
+                        }
                     }
                     // Track as invited
                     if (window.AppStore._invitedTournamentIds.indexOf(String(tournamentId)) === -1) {

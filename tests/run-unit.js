@@ -43,6 +43,10 @@ const SUITES = [
   // religava DEPOIS da montagem — `_phasesPhaseComplete` respondia `false` pra sempre.
   // O torneio real disfarçava: o ouvinte reidrata a cada eco, e sandbox não ecoa.
   'tests/atalho-de-avancar-aparece-no-sandbox-do-dono.test.js',
+  // ⭐ E o eco do ouvinte de `tournaments` não pode expulsar o sandbox da memória: a lista é
+  // uma só, alimentada por DOIS ouvintes de DUAS coleções, e o snapshot de uma nunca fala
+  // sobre a outra. Ciclo completo com os ouvintes REAIS, do documento MAGRO até o render.
+  'tests/eco-de-tournaments-nao-expulsa-sandbox.test.js',
   // A tela de avanço falava só dos que se desativaram; quem levou W.O. também não entra no
   // sorteio e ficava invisível. Agora aparece — em VERMELHO, como nas listas onde já está —
   // mas como INFORMAÇÃO: virar uma terceira opção é o defeito da v2.0.36 (W.O. na lista de

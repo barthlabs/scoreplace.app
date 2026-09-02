@@ -2475,3 +2475,89 @@ Esta entrada mede o **primeiro sandbox criado com a correção no ar**.
 **③ O que isto não prova.** Que o avanço de fase no sandbox funciona — nada foi avançado.
 Prova que a cópia nasce íntegra e que a leitura a entrega íntegra; o teste de avanço é outra
 leva, e o sandbox segue **intocado** aguardando a decisão do dono.
+
+---
+
+## INCIDENTE SANDBOX — "sumiu da tela" e "o novo não oferece avanço" (01/set/2026, READ-ONLY)
+
+**Escopo.** Somente leitura. Nada foi criado, apagado, avançado, reparado ou publicado.
+Nenhum id, nome, e-mail ou uid aparece aqui — tudo por agregado ou hash curto (sha256/8).
+
+**① O documento não foi apagado; ele sai da MEMÓRIA.**
+
+- A coleção `sandboxes` tem **1** documento, `h:aa449183`, `sbState="ready"`,
+  `isSandbox=true`, criado em **2026-09-01T22:26:57.388Z**. Ele **existe** — conferido de
+  novo depois de cada etapa da reprodução.
+- `sandboxOwnerUid` = **`h:44980fc1`**, que é exatamente o hash de `SP_TEST_IDENTITIES[1]`
+  (o uid do dono). Logo `_isTestIdentity()` é verdadeiro e `getVisibleTournaments()` **não**
+  o filtra: o sumiço não é de visibilidade.
+- `sandboxOf` = `h:36bf6bde`, o original. **0** documentos com marca de sandbox em
+  `tournaments`. **Nenhum** torneio guarda campo `sandboxId`.
+- Integridade do documento "novo": `_semPesados=["matches","participants","opponentHistory"]`,
+  `_nPartes={matches:115, participants:152, opponentHistory:1}`, `_nJogos=115`;
+  subcoleções `inscritos` **152**, `matches` **115**, `resultsSandbox` **123**,
+  `history` 265, `participants` 305, `communications` 3 — idênticas ao original
+  (`results` 123 do lado de lá). `classifCongelada=false`, `currentPhaseIndex=0`,
+  `phases=2`, `status="active"` — **iguais** aos do original. O documento está íntegro.
+
+**⭐ Não houve sandbox novo.** `createSandbox` é **idempotente**: se já existe um `ready`
+para (dono, original), ela **devolve o mesmo id** com `reaproveitado: true` sem tocar em
+nada. O único documento da coleção foi criado **77 minutos antes** de a 2.1.90 ir ao ar
+(deploy às 23:43:47Z). Ou seja: o "sandbox anterior" e o "sandbox novo" são **o mesmo
+documento**; o que mudou foi só a memória do navegador.
+
+**② A causa do sumiço, reproduzida com o ouvinte REAL e os documentos REAIS.**
+
+`store.tournaments` é **uma lista só** desde a 2.1.87, alimentada por **dois** ouvintes de
+**duas** coleções. Mas o ouvinte de `tournaments` faz, a cada eco:
+
+- `_prevIds = store.tournaments.map(id)` — inclui os **sandboxes**;
+- `store.tournaments = tournaments` — **substitui** a lista pelos docs de `tournaments`;
+- `_removedIds = _prevIds − ids do snapshot` — todo sandbox cai aí, **sempre**, porque um
+  snapshot de `tournaments` nunca pode conter um documento de `sandboxes`.
+
+Consequência medida (sequência real: ouvinte sobe → snapshot de `tournaments` → snapshot de
+`sandboxes` → montagem → eco comum de `tournaments`), com a pessoa olhando o sandbox:
+
+| momento | na memória | inscritos | jogos | grupos religados | atalho |
+|---|---|---|---|---|---|
+| depois de montar pelo ouvinte de `sandboxes` | sim | 152 | 115 | 35/35 | **1** |
+| depois de UM eco comum de `tournaments` | **não** | — | — | — | **0** |
+
+E o eco ainda **expulsa a tela**: `hash` vai pra `#dashboard` com o aviso
+*"Torneio removido — Esse torneio não está mais disponível (foi removido pelo organizador)"*
+— enquanto o documento segue no banco (`exists: true`, conferido no mesmo instante).
+Num torneio vivo, qualquer placar salvo por qualquer participante produz esse eco.
+
+**③ Por que o "sandbox novo" não oferece avanço: a porta de recuperação é uma segunda fonte.**
+
+Com o sandbox fora da memória, `renderTournaments` cai no ramo
+`visible.length === 0 → FirestoreDB._tRef(id).get()`, que faz `AppStore.tournaments.push(doc.data())`:
+o documento **cru e magro**. Esse caminho **não** passa por `_preservaPartesMontadas`, **não**
+chama `_marcaPartesQueFaltam`, **não** agenda `_montaPesadosQueFaltam` e **não** chama
+`_hydrateMonarchGroups` — é exatamente a porta que a 2.1.89 canonizou para o ouvinte e que
+ficou fora daqui. Medido:
+
+| momento | na memória | inscritos | jogos | grupos religados | atalho | bytes |
+|---|---|---|---|---|---|---|
+| reaberto pela porta de recuperação | sim | **0** | **0** | **0/35** | **0** | 41493 |
+| depois de outro eco de `tournaments` | sim | **0** | **0** | **0/35** | **0** | 41493 |
+
+As Ferramentas do organizador **renderizam** (41 KB de detalhe, `isOrganizer=true`), mas
+`_phasesPhaseComplete` é `false` porque os grupos seguem apontando por `matchIds` para jogos
+que nunca chegaram — então o atalho não nasce. **Nada agenda a montagem** para um objeto que
+entrou por essa porta: o estado é estável, não transitório. Só um snapshot de `sandboxes`
+o cura — e o eco seguinte de `tournaments` o derruba de novo.
+
+**④ A diferença objetiva entre o fixture verde da 2.1.90 e o estado real.**
+
+O fixture da 2.1.90 alimenta o sandbox **só** por `_sbIngest` (porta canônica) e **nunca**
+roda o ouvinte de `tournaments` nem a porta de recuperação. Por isso ele fica verde e o
+navegador não: a 2.1.90 conserta o religamento dos grupos **depois da montagem** — e isso
+está certo e continua valendo (medido acima: 152/115/35-35/atalho 1 pela porta canônica) —
+mas não alcança nenhum dos dois caminhos deste incidente.
+
+**⑤ O que isto NÃO prova.** Não prova que a regra de avanço esteja errada: com o sandbox
+montado pela porta canônica, `_phasesPhaseComplete` é `true`, o atalho aparece **uma** vez e
+o contextual **uma** vez, e os dois chamam a mesma ação com o mesmo id. O defeito é de
+**caminho de leitura e de reconciliação de lista**, não de regra.

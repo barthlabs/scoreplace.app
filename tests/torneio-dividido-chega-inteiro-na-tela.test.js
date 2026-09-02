@@ -63,6 +63,11 @@ vm.createContext(ctx);
  * `window._marcaPartesQueFaltam`, chamada pelo ouvinte E pelo cache. O fixture a injeta
  * neste contexto, num lugar só. */
 require(require('path').join(__dirname, '_conta-de-partes-fixture.js')).injetar(ctx, src);
+/* ⚠️ 2.1.91: o ouvinte pergunta às portas do sandbox o que ele pode afirmar
+ * (`_idsDaColecaoTorneios`, `_sbsNaLista`, `_preservaSandboxes`). Vêm do fonte REAL, pelo
+ * mesmo fixture — stub aqui deixaria a suíte verde sobre o defeito que elas existem pra
+ * impedir. */
+_contaFix.injetarPortasDeSandbox(ctx, src);
 /* ⚠️ `_aplicaSnapTorneios` vive dentro de um closure e lê variáveis dele. Recriá-las aqui
  * é o preço de exercitar a função REAL em vez de uma cópia — e é um preço que vale: foi
  * justamente testar a cópia (a função isolada) que deixou o defeito passar. */

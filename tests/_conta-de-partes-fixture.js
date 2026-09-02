@@ -58,6 +58,25 @@ function recortarPorta(src) {
   return src.slice(i, j).replace(ABRE, '(function (novo, velho) {').trim().replace(/\};\s*$/, '})');
 }
 
+/** As TRÊS PORTAS que dizem o que o ouvinte de `tournaments` pode afirmar (2.1.91),
+ * injetadas do fonte REAL num contexto que já existe.
+ * ⚠️ Existe pelo mesmo motivo de `injetar`: quem recorta `_aplicaSnapTorneios` do fonte
+ * passa a precisar delas, e sem isto o teste morre em
+ * "window._idsDaColecaoTorneios is not a function" — que PARECE defeito do código e não é.
+ * ⛔ E são as portas DE VERDADE, nunca um stub: um stub aqui deixaria a suíte verde sobre
+ * um ouvinte que voltou a tratar sandbox como torneio removido. */
+function injetarPortasDeSandbox(ctx, src) {
+  const s = src || fonte();
+  const i = s.indexOf('window._sbsNaLista = function (lista) {');
+  const j = s.indexOf('window._sbIngest = function (docs) {', i);
+  if (i === -1 || j <= i) {
+    throw new Error('[fixture] não achei as portas `_sbsNaLista`/`_idsDaColecaoTorneios`/`_preservaSandboxes` em js/store.js — se mudaram de nome, ajuste aqui, num lugar só');
+  }
+  if (!ctx.window) ctx.window = {};
+  vm.runInContext(s.slice(i, j), ctx);
+  return ctx;
+}
+
 /** Contexto novo com a conta e a porta de hidratação reais dentro. */
 function carregar() {
   const src = fonte();
@@ -74,4 +93,4 @@ function carregar() {
   return { enxerta: enxerta, marca: ctx.window._marcaPartesQueFaltam, ctx: ctx, src: src };
 }
 
-module.exports = { carregar, injetar, corpoDaConta, fonte, recortarPorta, MARCA_INI, MARCA_FIM, CAMINHO_STORE };
+module.exports = { carregar, injetar, injetarPortasDeSandbox, corpoDaConta, fonte, recortarPorta, MARCA_INI, MARCA_FIM, CAMINHO_STORE };

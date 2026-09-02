@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.90';
+window.SCOREPLACE_VERSION = '2.1.91';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -3274,6 +3274,41 @@ window._sbRebuildCleanRoster = function (list, isTeamEnroll) {
  *
  * `vivos` é o conjunto COMPLETO de sandboxes `ready` do dono neste snapshot — é ele que
  * permite reconciliar REMOÇÃO. */
+/* ═══ A LISTA É UMA SÓ; OS OUVINTES SÃO DOIS (FIX.SANDBOX.P4, 2.1.91) ═══════════════
+ * `AppStore.tournaments` é alimentada por DOIS ouvintes, de DUAS coleções: `tournaments`
+ * (torneio real) e `sandboxes`. Um snapshot de `tournaments` NUNCA pode conter um documento
+ * de `sandboxes` — então, pro ouvinte de torneio real, todo sandbox em memória "sumiu".
+ *
+ * ⛔ O ESTRAGO, medido em produção com os ouvintes reais e o documento real: bastava UM eco
+ * comum de `tournaments` (qualquer placar salvo por qualquer participante) pra que
+ *   • `_removedIds` contivesse o id do sandbox,
+ *   • a pessoa que estava vendo o sandbox fosse jogada pro `#dashboard`,
+ *   • com o aviso FALSO "Torneio removido — foi removido pelo organizador",
+ *   • e o objeto montado (152 inscritos, 115 jogos, 35/35 grupos religados) saísse da lista.
+ * O documento seguia intacto no banco o tempo todo: era expulsão de MEMÓRIA, não remoção.
+ *
+ * ⭐ Estas três portas dizem, num lugar só, o que o ouvinte de `tournaments` pode afirmar:
+ * ele reconcilia SOMENTE ids que vieram da coleção dele, e o rebuild da lista PRESERVA os
+ * sandboxes que já estavam lá. Quem remove sandbox é o ouvinte de `sandboxes` (`_sbIngest`),
+ * que sabe olhar `sandboxOwnerUid` — e continua sendo o único. */
+window._sbsNaLista = function (lista) {
+  return (lista || []).filter(function (t) { return !!(t && t.isSandbox === true); });
+};
+window._idsDaColecaoTorneios = function (lista) {
+  return (lista || [])
+    .filter(function (t) { return !!t && t.isSandbox !== true; })
+    .map(function (t) { return String(t.id); });
+};
+window._preservaSandboxes = function (novos, guardados) {
+  var saida = (novos || []).slice();
+  var jaTem = {};
+  saida.forEach(function (t) { if (t) jaTem[String(t.id)] = true; });
+  /* ⚠️ sem duplicar: se um doc de sandbox legado chegar pela coleção `tournaments` (o
+   * "cinto" acima só o deixa passar pro dev), quem vale é o que o snapshot trouxe. */
+  (guardados || []).forEach(function (sb) { if (sb && !jaTem[String(sb.id)]) saida.push(sb); });
+  return saida;
+};
+
 window._sbIngest = function (docs) {
   var AS = window.AppStore;
   if (!AS) return;
@@ -11553,7 +11588,12 @@ window.AppStore = {
         // (deletados pelo organizador, ou usuário removido do torneio). Se o
         // participante está vendo a página de um torneio que sumiu, redireciona
         // pro dashboard (senão fica numa tela morta até dar refresh).
-        var _prevIds = (store.tournaments || []).map(function(t) { return String(t.id); });
+        /* ⭐ 2.1.91: só ids DA COLEÇÃO `tournaments`. Sandbox não é assunto deste ouvinte —
+         * ver `window._idsDaColecaoTorneios`. Antes, todo sandbox em memória caía em
+         * `_removedIds` a cada eco e a pessoa era expulsa pro dashboard com aviso falso. */
+        var _prevIds = window._idsDaColecaoTorneios(store.tournaments);
+        // ⭐ e o que já está montado em memória é GUARDADO pra sobreviver ao rebuild abaixo.
+        var _sbGuardados = window._sbsNaLista(store.tournaments);
         var tournaments = [];
         var deletedIds = store._deletedTournamentIds || [];
         // CINTO do isolamento do SANDBOX: mesmo que um doc de SB chegue aqui (legado criado
@@ -11620,7 +11660,10 @@ window.AppStore = {
           }
         });
         store._parsedById = _novoParsed;
-        store.tournaments = tournaments;
+        /* ⭐ 2.1.91: o rebuild da lista PRESERVA os sandboxes. O eco de `tournaments` não
+         * fala sobre eles — nem pra remover, nem pra esvaziar. Id, partes montadas,
+         * inscritos, jogos, congeladas e rota aberta seguem exatamente como estavam. */
+        store.tournaments = window._preservaSandboxes(tournaments, _sbGuardados);
         // ⭐ e SÓ AGORA (com o store montado) a busca do que falta é disparada — de fora
         // do laço síncrono, uma de cada vez, e repintando quando chegar.
         if (_paraMontar.length && typeof store._montaPesadosQueFaltam === 'function') {
