@@ -1409,9 +1409,24 @@ window._buildProgressInner = function(t) {
     // configurada → estima pelo tempo de quadra desta rodada. Rótulos viram
     // "início/final programado" (não há "próximo sorteio" em rodada única).
     if (_mp) {
-      var _ph = (t.phases && t.phases[t.currentPhaseIndex || 0]) || {};
-      var _cfgStartMs = window._tProgParseMs(_ph.startDate ? (_ph.startDate + (_ph.startTime ? ('T' + _ph.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
-      var _cfgEndMs = window._tProgParseMs(_ph.endDate ? (_ph.endDate + (_ph.endTime ? ('T' + _ph.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
+    /* ⛔ O FALLBACK PRO TOPO É SÓ DA FASE 0 — E FOI ELE QUE MOSTROU AS DATAS DA FASE 1
+     * NO PAINEL DA FASE 2. MEDIDO no navegador real (fase 2 sem datas próprias):
+     *   com datas na fase 2 → cfgStart 02/09 08:00 · cfgEnd 06/09 18:00  (certo)
+     *   SEM datas na fase 2 → cfgStart 02/08 · cfgEnd 19/08              (as da FASE 1)
+     * `t.startDate`/`t.endDate` NÃO são "do torneio": o box "📅 Datas da fase" do formulário
+     * pertence à fase INICIAL e grava neles — está escrito em js/store.js:14236-14238 e
+     * :14267-14268 ("t.endDate CRU é o fim da fase INICIAL"). Herdá-los numa fase POSTERIOR
+     * é anunciar a janela da fase anterior como se fosse a desta.
+     * ⭐ Sem datas próprias, a fase cai no ramo de ESTIMATIVA por tempo de quadra que já
+     * existe logo abaixo (`_schedEndReal = false`, sem regressiva) — que é o desfecho
+     * honesto: não sei a janela, então não invento uma que é de outra fase.
+     * ⚠️ A régua de fatiar por rodada (`_phaseRoundWindow`) não muda em nada: ela continua
+     * recebendo [início da fase, fim da fase] e dividindo pelo nº de rodadas da fase. */
+      var _phIdx = t.currentPhaseIndex || 0;
+      var _ph = (t.phases && t.phases[_phIdx]) || {};
+
+      var _cfgStartMs = window._inicioDaFase(t, _phIdx);
+      var _cfgEndMs = window._fimDaFase(t, _phIdx);
       if (_cfgStartMs) schedStart = _cfgStartMs;
       var _rwP = null;
       if (_cfgEndMs) {
@@ -1484,8 +1499,11 @@ window._buildProgressInner = function(t) {
       // nenhum jogo jogado — aí sim é "aguardando início" de verdade (mesma fonte do torneio).
       actualStart = _pr.roundStartMs || _pr.prevRoundEndMs || null;
       var _phL = (t.phases && t.phases[_cp]) || {};
-      var _cfgSL = window._tProgParseMs(_phL.startDate ? (_phL.startDate + (_phL.startTime ? ('T' + _phL.startTime) : '')) : '') || window._tProgParseMs(t.startDate);
-      var _cfgEL = window._tProgParseMs(_phL.endDate ? (_phL.endDate + (_phL.endTime ? ('T' + _phL.endTime) : '')) : '') || window._tProgParseMs(t.endDate);
+      /* ⛔ MESMA REGRA DO RAMO DE CIMA, e no MESMO arquivo de propósito: já foi provado aqui
+       * que consertar um ramo só deixa metade do defeito de pé. Fallback pro topo é da
+       * fase 0; fase posterior sem datas próprias vai pra estimativa, não herda. */
+      var _cfgSL = window._inicioDaFase(t, _cp);
+      var _cfgEL = window._fimDaFase(t, _cp);
       if (_cfgSL) schedStart = _cfgSL;
       if (_cfgEL) {
         // ⏱️ A REGRESSIVA É DA RODADA: fatia a janela da fase pelas rodadas dela e pega a
@@ -2063,6 +2081,73 @@ window._isIncrementalLigaPhase = function(t) {
 // fase posterior materializada) chamam esta função. Já foi provado neste arquivo que corrigir
 // um ramo só deixa metade do defeito de pé. [[feedback_unify_dual_entry_points]]
 // N=1 devolve a janela inteira da fase — rodada única e fase são a MESMA coisa, sem regressão.
+/* ══ O INÍCIO DE UMA FASE, EM UM LUGAR SÓ ════════════════════════════════════════════
+ * Ordem do dono (02/set/2026): _"quando avancei de fase em 02/09 é a data inicial da
+ * fase 2. data final lancada faz tempo"_.
+ *
+ * A ordem de procura, e o porquê de cada degrau:
+ *   ① `phases[i].startDate` — o organizador declarou a data. Declaração vence tudo.
+ *   ② `t.phaseStartedAt[i]` — o CARIMBO DO AVANÇO (js/views/phases-engine.js,
+ *      `_carimbaInicioDaFase`, gravado na porta única `storePhase`). É a regra do dono:
+ *      avançar É começar a fase seguinte.
+ *   ③ RETROATIVO, para quem JÁ avançou antes do carimbo existir: o instante em que a fase
+ *      ANTERIOR foi congelada (`classifCongeladaAt` nos grupos dela) é o mesmo instante do
+ *      avanço — é o `advanceMultiPhase` que congela e materializa na mesma ação. Pega o
+ *      MAIOR carimbo (o último grupo congelado fecha a fase). Sem isto, a Confra — que
+ *      avançou em 02/09 — continuaria sem início até alguém reeditar a fase.
+ *   ④ só a FASE 0 cai no topo (`t.startDate`): o box "📅 Datas da fase" do formulário
+ *      pertence à fase INICIAL e grava lá (js/store.js:14236-14238). Herdar isso numa fase
+ *      POSTERIOR é anunciar a janela da fase anterior como se fosse a desta — foi o
+ *      02/08 → 19/08 que apareceu na Fase 2.
+ * ⛔ Não decide nada de chave: só responde "quando esta fase começou". */
+window._inicioDaFase = function (t, idx) {
+  if (!t) return null;
+  var i = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
+  var ph = (Array.isArray(t.phases) && t.phases[i]) || {};
+  var _p = window._tProgParseMs;
+  // ① declarado na fase
+  var d = ph.startDate ? _p(ph.startDate + (ph.startTime ? ('T' + ph.startTime) : '')) : null;
+  if (d) return d;
+  // ② carimbo do avanço
+  if (t.phaseStartedAt && t.phaseStartedAt[String(i)]) {
+    var c = _p(t.phaseStartedAt[String(i)]);
+    if (c) return c;
+  }
+  // ③ retroativo: o congelamento da fase anterior é o instante do avanço
+  if (i >= 1) {
+    var maior = null;
+    try {
+      (t.rounds || []).forEach(function (r) {
+        ((r && r.monarchGroups) || []).forEach(function (g) {
+          if (!g || !g.classifCongeladaAt) return;
+          var ms = _p(g.classifCongeladaAt);
+          if (ms && (maior == null || ms > maior)) maior = ms;
+        });
+      });
+      (t.groups || []).forEach(function (g) {
+        if (!g || !g.classifCongeladaAt) return;
+        var ms = _p(g.classifCongeladaAt);
+        if (ms && (maior == null || ms > maior)) maior = ms;
+      });
+    } catch (e) {}
+    if (maior) return maior;
+  }
+  // ④ topo — SÓ a fase 0
+  return (i === 0) ? (_p(t.startDate) || null) : null;
+};
+
+/* O FIM de uma fase: o que o organizador lançou. O dono: _"data final lancada faz tempo"_.
+ * Mesma regra do topo — só a fase 0 herda `t.endDate`. Sem fim declarado, quem chama cai
+ * na ESTIMATIVA por tempo de quadra, que é o desfecho honesto. */
+window._fimDaFase = function (t, idx) {
+  if (!t) return null;
+  var i = (idx == null) ? (t.currentPhaseIndex || 0) : idx;
+  var ph = (Array.isArray(t.phases) && t.phases[i]) || {};
+  var e = ph.endDate ? window._tProgParseMs(ph.endDate + (ph.endTime ? ('T' + ph.endTime) : '')) : null;
+  if (e) return e;
+  return (i === 0) ? (window._tProgParseMs(t.endDate) || null) : null;
+};
+
 window._phaseRoundWindow = function (phaseStartMs, phaseEndMs, roundNum, roundsTotal) {
     if (!phaseStartMs || !phaseEndMs || phaseEndMs <= phaseStartMs) return null;
     var n = parseInt(roundsTotal, 10); if (!n || n < 1) n = 1;

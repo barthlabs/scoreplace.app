@@ -776,6 +776,12 @@ const SUITES = [
   // Roda as DUAS portas de escrita juntas, que é onde o buraco estava. v1.7.91.
   'tests/save-atrasado-nao-desfaz-troca.test.js',
   // Varredura do doc inteiro: grupo formado e registro de "já avisei" também não somem. v1.8.0.
+  // CONFRA.MOBILE.P1: chave de torneio DIVIDIDO não pinta área vazia — mostra carregamento,
+  // monta pela porta canônica e não roda lógica de chave (nem grava) com as partes fora.
+  // CONFRA.MOBILE.P1: o AVANÇO de fase é a data de início da fase seguinte (carimbo em
+  // storePhase) e nenhuma fase posterior herda a janela da fase inicial.
+  'tests/avanco-de-fase-e-o-inicio-da-fase.test.js',
+  'tests/chave-magra-nao-desenha-vazia.test.js',
   'tests/save-atrasado-nao-apaga-grupo.test.js',
   // CAUSA-RAIZ do inscrito invisível: o push otimista da inscrição não pode ser persistido
   // por um save de outra coisa quando a resposta do servidor nunca chega. v1.8.1.

@@ -2182,6 +2182,35 @@
     return storePhase(t, nextIdx, built);
   }
 
+  /* ══ O AVANÇO DE FASE É A DATA DE INÍCIO DA FASE SEGUINTE ═══════════════════════════
+   * Ordem do dono (02/set/2026): _"quando avancei de fase em 02/09 é a data inicial da
+   * fase 2. data final lancada faz tempo"_.
+   *
+   * ⛔ ESSE CARIMBO NÃO EXISTIA. `advanceMultiPhase` só gravava `classifCongeladaAt` nos
+   * grupos da fase que FECHOU — nada dizia quando a fase seguinte COMEÇOU. Sem ele, o
+   * painel da fase caía no `|| t.startDate/t.endDate`, e esses são da fase INICIAL
+   * (js/store.js:14236-14238) — foi assim que a Fase 2 anunciou 02/08 → 19/08, a janela
+   * da Fase 1.
+   *
+   * ⭐ MORA NA PORTA ÚNICA (`storePhase`), que é por onde TODA fase é armazenada — Fase 0
+   * pelo sorteio e Fase N pela materialização, nos dois ramos (Liga incremental e comum).
+   * Carimbar nos dois chamadores seria a segunda fonte que este projeto já pagou caro.
+   *
+   * ⛔ NUNCA REESCREVE um carimbo que já existe: re-materializar a fase (repescagem,
+   * correção, re-sorteio) não pode mover a data de início do que já começou.
+   * ⛔ E não toca em `t.phases`: aquilo é a CONFIG que o organizador edita no formulário —
+   * um carimbo de execução lá dentro seria apagado numa reedição. Mapa de topo, por índice.
+   * ⚠️ Não altera regra de avanço, seed, pareamento, promoção nem classificação: é UMA
+   * linha de registro, depois de a fase já estar decidida e armazenada. */
+  function _carimbaInicioDaFase(t, idx) {
+    try {
+      if (!t || idx == null) return;
+      t.phaseStartedAt = t.phaseStartedAt || {};
+      var k = String(idx);
+      if (!t.phaseStartedAt[k]) t.phaseStartedAt[k] = new Date().toISOString();
+    } catch (e) { /* o carimbo nunca derruba um avanço de fase */ }
+  }
+
   // STORAGE ÚNICO de uma fase (qualquer índice, inclusive 0): grava o resultado do
   // gerador (built) em t na shape taggeada (matches com phaseIndex) OU em
   // t.phaseRounds[idx] (Liga incremental). É o MESMO armazenamento pra Fase 0
@@ -2199,6 +2228,7 @@
       t.currentPhaseIndex = idx;
       t.currentStage = 'phase' + idx;
       t._phaseMaterialized = idx;
+      _carimbaInicioDaFase(t, idx);   // o avanço É o início desta fase
       return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: idx };
     }
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
@@ -2228,6 +2258,7 @@
     t.currentPhaseIndex = idx;
     t.currentStage = 'phase' + idx;
     t._phaseMaterialized = idx;
+    _carimbaInicioDaFase(t, idx);   // o avanço É o início desta fase
     return { ok: true, matches: built.matches, built: built };
   }
 

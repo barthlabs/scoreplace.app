@@ -873,6 +873,123 @@ window._chaveLigaLotes = function (raiz) {
   } catch (e) { if (window._warn) window._warn('[chave lotes]', e); }
 };
 
+/* ══ A CHAVE NÃO DESENHA — NEM DECIDE — COM AS PARTES FORA DO DOCUMENTO ═══════════════
+ * INCIDENTE (web mobile, Fase 2): a tela chegava em "Chaveamento do Torneio", escrevia
+ * "FASE 2 · Eliminatória" e o espaço abaixo ficava VAZIO. Sem erro, sem loader.
+ *
+ * ⛔ MEDIDO NO NAVEGADOR REAL (harness HTTP com os 96 scripts do index.html, render REAL,
+ * fixture sintético nascido do `_tSplit.dividir()` REAL), desktop e 375×812:
+ *     estado    jogos em memória   HTML do container   loader
+ *     MAGRO     0                  5.611 bytes         NÃO
+ *     MONTADO   204 (105+99)       11.489 bytes        —
+ * Os DOIS viewports deram números IDÊNTICOS — não é CSS, não é viewport, não é clipping
+ * (container 359×403, display block, visibility visible, overflow visible). É que
+ * `renderBracket` NUNCA soube de torneio dividido: `grep -c '_semPesados'` neste arquivo
+ * era 0. Ele acha o torneio, vê `rounds[].matches` vazio e desenha o nada.
+ *
+ * ⛔⛔ E ERA PIOR QUE DESENHAR VAZIO: logo abaixo, ANTES de pintar, o render roda
+ * `_maybeFinishElimination` e `_reassignBestLosersToRepechage` — lógica de CHAVE — e as
+ * duas GRAVAM por `AppStore.mutate` quando concluem que algo mudou. Decidir "não há jogo
+ * pendente" sobre um elenco e uma chave VAZIOS é decidir sobre um retrato que não existe.
+ * Este portão fecha a porta ANTES delas.
+ *
+ * ⭐ NENHUM LEITOR NOVO. A pergunta é `window._marcaPartesQueFaltam` (a MESMA do ouvinte,
+ * do cache e da porta de recuperação da ficha) e a montagem é a canônica:
+ *   · objeto que vive em `AppStore.tournaments` → `AppStore._montaPesadosQueFaltam`, que
+ *     já traz trava de "em voo", piso entre tentativas, retentativa e repintura;
+ *   · objeto que só existe em `publicDiscovery` (espectador por link) → o MESMO leitor que
+ *     aquele agendador usa por dentro, `FirestoreDB._montaDeSubcolecoes`, porque o
+ *     agendador procura o alvo SÓ em `self.tournaments` (js/store.js:12958/12973).
+ *     ⛔ E o espectador NÃO pode ser empurrado pra `AppStore.tournaments`: o ouvinte
+ *     reconcilia aquela lista por `where(memberUids array-contains uid)` e no eco seguinte
+ *     o id cairia em `_removedIds` — expulsão pro `#dashboard` com o aviso falso "Torneio
+ *     removido" (js/store.js:11721-11731). É o estrago que os sandboxes já pagaram.
+ *
+ * ⛔ ESTE CAMINHO NÃO MUTA NADA. Medido com sentinelas sobre saveTournament,
+ * mutateTournament, mutateMatchResult, AppStore.mutate, commitTournamentTx,
+ * commitResultTx, sync, syncImmediate e set/update/delete/add: ZERO chamadas.
+ * Só lê a subcoleção e escreve NO OBJETO EM MEMÓRIA — no lugar, mesma referência, como o
+ * agendador faz (js/store.js:12978).
+ *
+ * Devolve `true` quando SEGUROU o render (já pintou o estado) — quem chama sai. */
+function _bracketSeguraSemPartes(t, container, tId) {
+  if (!t || !container) return false;
+  if (typeof window._marcaPartesQueFaltam !== 'function') return false;
+  var falta = false;
+  try { falta = window._marcaPartesQueFaltam(t); } catch (e) { falta = false; }
+  if (!falta) return false;
+
+  var AS = window.AppStore;
+  var id = String(tId || t.id);
+
+  /* ① ESTADO EXPLÍCITO, NUNCA ÁREA VAZIA. Desistir também é estado: quando o agendador
+   *    esgota as tentativas (`_partesEmErro`), a tela DIZ isso e oferece o botão — girar
+   *    para sempre foi o defeito que a 2.1.71 pagou. */
+  var _erro = AS && AS._partesEmErro && AS._partesEmErro[id];
+  if (_erro) {
+    container.innerHTML =
+      '<div class="card" style="text-align:center;padding:2.5rem 1rem;">' +
+        '<div style="font-size:2rem;margin-bottom:10px;">🎾</div>' +
+        '<h3 style="color:var(--text-bright);margin-bottom:8px;">Não consegui carregar os jogos</h3>' +
+        '<p style="color:var(--text-muted);margin-bottom:18px;">A chave está no servidor; foi a busca que falhou.</p>' +
+        '<button class="btn btn-primary" onclick="window._bracketTentarPartesDeNovo(\'' + id + '\')">Tentar de novo</button>' +
+      '</div>';
+    return true;
+  }
+  container.innerHTML = (typeof window._renderBallLoader === 'function')
+    ? window._renderBallLoader('Carregando chaveamento…', { minHeight: '40vh', bar: true })
+    : '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Carregando chaveamento…</div>';
+
+  /* ② A PORTA CANÔNICA. */
+  var naLista = !!(AS && Array.isArray(AS.tournaments) &&
+    AS.tournaments.some(function (x) { return x && String(x.id) === id; }));
+  if (naLista && AS && typeof AS._montaPesadosQueFaltam === 'function') {
+    /* ⚠️ O PISO ENTRE TENTATIVAS É PRA RAJADA DE ECO, NÃO PRA ABERTURA — mesmo gesto e
+     * mesmo motivo da porta de recuperação da ficha (js/views/tournaments.js). Sem limpar
+     * o carimbo, abrir a chave logo após uma tentativa cairia no `continue` do piso e o
+     * loader giraria sem nada girando atrás. ⛔ `_montandoPesados` NÃO se toca: havendo
+     * montagem EM VOO, ela continua sendo a única. */
+    try {
+      if (AS._ultimaMontagem && !(AS._montandoPesados && AS._montandoPesados[id])) delete AS._ultimaMontagem[id];
+    } catch (e) {}
+    try { AS._montaPesadosQueFaltam([id]); }
+    catch (e) { if (window._error) window._error('[chave] montagem', e); }
+    return true;
+  }
+
+  /* Espectador: o objeto só existe em `publicDiscovery`. Mesmo leitor, uma vez só. */
+  window._bracketMontandoPub = window._bracketMontandoPub || {};
+  if (window._bracketMontandoPub[id]) return true;                       // já em voo
+  if (!window.FirestoreDB || typeof window.FirestoreDB._montaDeSubcolecoes !== 'function') return true;
+  window._bracketMontandoPub[id] = true;
+  window.FirestoreDB._montaDeSubcolecoes(id, t, t._semPesados)
+    .then(function (montado) {
+      delete window._bracketMontandoPub[id];
+      if (!montado) { if (window._warn) window._warn('[chave] montagem de ' + id + ' voltou vazia'); return; }
+      // NO LUGAR (mesma referência), como o agendador — telas que guardaram o objeto seguem válidas.
+      Object.keys(montado).forEach(function (k) { t[k] = montado[k]; });
+      try { if (typeof window._hydrateMonarchGroups === 'function') window._hydrateMonarchGroups(t); } catch (e) {}
+      delete t._faltamPesados; delete t._faltaOQue;
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    })
+    .catch(function (e) {
+      delete window._bracketMontandoPub[id];
+      if (window._error) window._error('[chave] não consegui montar ' + id, e);
+      if (typeof window._softRefreshView === 'function') window._softRefreshView();
+    });
+  return true;
+}
+
+/* Botão do estado de erro: limpa a desistência do agendador e pede de novo. Não muta dado. */
+window._bracketTentarPartesDeNovo = function (tId) {
+  var AS = window.AppStore, id = String(tId);
+  try { if (AS && AS._partesEmErro) delete AS._partesEmErro[id]; } catch (e) {}
+  try { if (AS && AS._tentativasDePartes) delete AS._tentativasDePartes[id]; } catch (e) {}
+  try { if (AS && AS._ultimaMontagem) delete AS._ultimaMontagem[id]; } catch (e) {}
+  try { delete (window._bracketMontandoPub || {})[id]; } catch (e) {}
+  if (typeof window._softRefreshView === 'function') window._softRefreshView();
+};
+
 function renderBracket(container, tournamentId, isInline) {
   // v1.4.20: a barra de busca da CLASSIFICAÇÃO sai no PRIMEIRO bloco deste render.
   // Reset aqui = começo do passo; sem isto, um render posterior não emitiria a barra.
@@ -896,6 +1013,12 @@ function renderBracket(container, tournamentId, isInline) {
   if (!t && tId && window.AppStore && Array.isArray(window.AppStore.publicDiscovery)) {
     t = window.AppStore.publicDiscovery.find(tour => tour.id.toString() === tId.toString()) || null;
   }
+
+  /* ⛔ PORTÃO DAS PARTES — ANTES de qualquer lógica de chave e de qualquer gravação.
+   * `_maybeFinishElimination` e `_reassignBestLosersToRepechage` (logo abaixo) decidem
+   * sobre jogos e elenco, e GRAVAM por `AppStore.mutate`. Com o documento magro elas
+   * decidiriam sobre listas vazias. Ver a nota longa em `_bracketSeguraSemPartes`. */
+  if (t && _bracketSeguraSemPartes(t, container, tId)) return;
 
   // v4.5.11: ao ABRIR a chave, se ela já está totalmente jogada (final/grande final
   // decidida) mas o torneio ficou 'active' — caso da inscrição tardia ('expand'/'standby')
