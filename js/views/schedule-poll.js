@@ -154,21 +154,35 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return { round: col.round, matches: _filterPlayable(col.matches), col: col };
   };
 
-  // memo leve: o chip é chamado por CADA card; evita rodar o adapter N vezes/render.
-  var _crCache = null;
-  function _currentRoundIdSet(t) {
-    var now = Date.now();
-    if (_crCache && _crCache.tid === String(t.id) && (now - _crCache.at) < 1500) return _crCache.ids;
-    var ids = {};
-    try { window._schCurrentRoundMatches(t).matches.forEach(function (m) { if (m && m.id != null) ids[m.id] = 1; }); } catch (e) {}
-    _crCache = { tid: String(t.id), ids: ids, at: now };
-    return ids;
+  // ⭐ 2.1.98 — O QUE LIBERA OS BOTÕES DO CARD É A DUPLA DEFINIDA, NÃO A RODADA.
+  // Ordem do dono (02/set/2026): _"os botões têm que aparecer no jogo (todos os botões)
+  // assim que tem as duplas definidas. assim a r3 pode começar em alguns jogos mesmo
+  // antes de terminar a r2 — se não dependerem de repescagem"_.
+  //
+  // ⛔ O QUE ISTO SUBSTITUI, E POR QUE: o gate era `_schIsCurrentRoundMatch`, que perguntava
+  // "este jogo está na coluna da rodada atual?". Medido no navegador, em PRODUÇÃO, na Confra
+  // (02/set/2026): `_schCurrentRoundMatches` devolvia a coluna da FASE 1 (`status: done`,
+  // 105 jogos) porque `_getUnifiedRounds` não monta coluna nenhuma para a chave
+  // gold/silver/bronze da Fase 2. Consequência medida: 0 dos 99 jogos da Fase 2 passavam no
+  // gate, e NENHUM participante via "📅 Propor datas" nem "💬 Criar grupo dos jogos". O
+  // organizador via, porque furava o gate por `_isOrg` — foi por isso que só o participante
+  // reclamou. Pela regra nova, os mesmos 99 jogos dão 35 liberados: exatamente a R1, que é
+  // o que se está jogando.
+  //
+  // A regra nova não depende de coluna, de rodada nem de fase — e é por isso que ela também
+  // entrega o que o dono pediu: um jogo da R3 cujos dois lados já saíram (não dependia de
+  // repescagem) pode ser combinado antes de a R2 acabar. Quem ainda espera vencedor tem TBD
+  // nos slots e continua de fora, sozinho.
+  //
+  // O gate de quem vê os dois chips TEM que ser o mesmo — fonte única aqui, nunca
+  // reimplementado em wa-group.js.
+  function _schJogoLiberado(t, m) {
+    if (!m) return false;
+    if (m.isBye || m.isSitOut) return false;
+    var a = m.p1, b = m.p2;
+    return !!(a && b && a !== 'TBD' && b !== 'TBD' && a !== 'BYE' && b !== 'BYE');
   }
-  function _schIsCurrentRoundMatch(t, m) { return !!(m && m.id != null && _currentRoundIdSet(t)[m.id]); }
-  // Exposto pro wa-group.js (botão "💬 Criar grupo", irmão do "📅 Propor datas"
-  // no mesmo rodapé do card). O gate de quem vê os dois TEM que ser o mesmo —
-  // fonte única aqui, nunca reimplementado lá.
-  window._schIsCurrentRoundMatch = _schIsCurrentRoundMatch;
+  window._schJogoLiberado = _schJogoLiberado;
 
   // ─── uids dos jogadores do match (singles + duplas + monarch) ──────────────────
   // IDENTIDADE = uid DO SLOT, nunca o nome. Isto já foi "procurar em t.participants
@@ -215,7 +229,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (typeof window._userTeamInMatch === 'function' && window._userTeamInMatch(t, m, user) > 0) return true;
     return !!(user.uid && _schMatchUids(t, m).indexOf(user.uid) !== -1);
   }
-  // Exposto pro wa-group.js — ver nota em _schIsCurrentRoundMatch.
+  // Exposto pro wa-group.js — ver nota em _schJogoLiberado.
   window._schMatchUids = _schMatchUids;
   window._schUserIsPlayer = _schUserIsPlayer;
 
@@ -225,7 +239,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // a ideia é o organizador poder colocar a data pelos participantes"_.
   //
   // ⚠️ ESTA FUNÇÃO EXISTE PORQUE A REGRA JÁ TINHA SIDO REIMPLEMENTADA — e as duas
-  // cópias divergiram em silêncio. O comentário logo acima de _schIsCurrentRoundMatch
+  // cópias divergiram em silêncio. O comentário logo acima de _schJogoLiberado
   // manda o contrário: _"o gate de quem vê os dois TEM que ser o mesmo — fonte única
   // aqui, nunca reimplementado lá"_. Mesmo assim, quando o dono pediu o chip do
   // WhatsApp pro organizador (2.0.57/2.0.60), a exceção nasceu SÓ do lado do
@@ -724,10 +738,10 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var cu = _cu(); if (!cu || !cu.uid) return '';
       // 2.1.7: PORTA ÚNICA — jogador do confronto OU organizador/co-host.
       if (!_schPodeGerirJogo(t, m, cu)) return '';
-      // O organizador FURA o gate de rodada (espelha wa-group.js): é ele quem monta a
-      // grade ANTES de a rodada abrir. Pro jogador o gate segue valendo — não há o que
-      // combinar num jogo que ainda nem é a vez.
-      if (!_schEhAdmin(t, cu) && !_schIsCurrentRoundMatch(t, m)) return '';
+      // O organizador FURA o gate (espelha wa-group.js): é ele quem monta a grade antes,
+      // inclusive de jogo que ainda tem TBD. Pro jogador vale a regra do dono: assim que as
+      // duas duplas existem, dá pra combinar — ver `_schJogoLiberado`.
+      if (!_schEhAdmin(t, cu) && !_schJogoLiberado(t, m)) return '';
       var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
       // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
       // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
@@ -830,7 +844,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // 2.1.7: PORTA ÚNICA — membro do grupo OU organizador/co-host (que vê em TODOS os
       // grupos). Era aqui que o botão sumia: o gate só falava de jogador.
       if (!_schPodeGerirJogo(t, m0, cu)) return '';
-      if (!_schEhAdmin(t, cu) && !_schIsCurrentRoundMatch(t, m0)) return '';
+      if (!_schEhAdmin(t, cu) && !_schJogoLiberado(t, m0)) return '';
       // Grupo inteiro decidido = sem botão PRA NINGUÉM, inclusive o organizador. Não é o
       // bug: não há agenda a marcar pra jogo que já aconteceu. (Difere do WhatsApp de
       // propósito — o grupo sobrevive ao jogo, a agenda não.)

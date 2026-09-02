@@ -126,15 +126,22 @@ G1.forEach(m => { m.winner = 'team1'; });
 });
 G1.forEach(m => { delete m.winner; });
 
-// ── o organizador FURA o gate de rodada; o jogador, não ───────────────────────
-// Ele monta a grade ANTES de a rodada abrir (mesma regra do chip do WhatsApp, 2.0.60).
+// ── rodada futura com as duplas já definidas: OS DOIS veem ────────────────────
+// ⚠️ ASSERÇÃO INVERTIDA DE PROPÓSITO em 2.1.98. Antes: _"jogador não propõe data em rodada
+// que ainda não é a vez dele"_. Ordem do dono (02/set/2026): _"os botões têm que aparecer
+// no jogo (todos os botões) assim que tem as duplas definidas"_ — o gate deixou de ser a
+// rodada (`_schIsCurrentRoundMatch`, apagado) e passou a ser `_schJogoLiberado`. Por isso
+// mexer em `_schCurrentRoundMatches` não muda mais nada aqui: é o que a última asserção
+// deste bloco prova, pra ninguém "consertar" isto reintroduzindo o gate de rodada.
 T = mkTorneio('T-RODADA-FUTURA');
 W.AppStore.tournaments = [T];
 W._schCurrentRoundMatches = () => ({ round: 9, matches: [], col: null }); // nada é "atual"
 como(JOGADOR);
-ok(!temBotao(chip(G1)), 'jogador não propõe data em rodada que ainda não é a vez dele');
+ok(temBotao(chip(G1)), '⭐ duplas definidas: o jogador propõe data mesmo fora da rodada atual');
 como(ORG);
 ok(temBotao(chip(G1)), 'ORGANIZADOR prepara a grade antes de a rodada abrir');
+ok(typeof W._schJogoLiberado === 'function' && W._schIsCurrentRoundMatch === undefined,
+   'o gate de rodada foi APAGADO — sobrou uma porta só, e é a das duplas definidas');
 W._schCurrentRoundMatches = (t) => ({ round: 1, matches: t.matches, col: null });
 
 // ── AS DUAS PORTAS NÃO PODEM DIVERGIR DE NOVO ─────────────────────────────────

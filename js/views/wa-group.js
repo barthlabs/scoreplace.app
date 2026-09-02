@@ -139,7 +139,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // cópia divergiu do irmão "📅 Propor datas" por 3 semanas: o WhatsApp ganhou a exceção
   // do organizador (2.0.57) e a agenda não, então o organizador via um botão e não o
   // outro no MESMO rodapé. A fonte única é `window._schPodeGerirJogo` (schedule-poll.js),
-  // como o comentário de `_schIsCurrentRoundMatch` sempre mandou. Aqui só se delega — o
+  // como o comentário de `_schJogoLiberado` sempre mandou. Aqui só se delega — o
   // fallback existe pro caso de schedule-poll.js não ter carregado, e repete a regra
   // antiga de propósito (degradar pro gate mais restrito, nunca abrir demais).
   function _podeGerirJogo(t, m, cu) {
@@ -278,9 +278,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
         _btn(_pos, 'event.stopPropagation(); window._waGrpOpenLink(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')') +
         _editBtn(open, 'Trocar o link do grupo ' + _mine) + '</span>';
     }
-    // Rodada que ainda não é a atual: o jogador não precisa (não há o que combinar), o
-    // ORGANIZADOR precisa — é ele quem prepara a rodada antes de ela abrir (2.0.60).
-    if (!_isOrg(t, cu) && !window._schIsCurrentRoundMatch(t, m)) return '';
+    // 2.1.98 — o gate é "as duas duplas já existem?", não "é a rodada atual?". Ordem do
+    // dono; a medição que provou o estrago está em `_schJogoLiberado` (schedule-poll.js),
+    // que é a FONTE ÚNICA — aqui só se delega. O organizador continua furando: ele prepara
+    // a grade antes, inclusive de jogo que ainda tem TBD.
+    // Se a fonte não carregou, LIBERA: quem chama (`_waGrpCardChip`) já verificou p1/p2
+    // definidos logo acima, e um erro de carga não pode ser mais um jeito de esconder o botão.
+    var _liberado = (typeof window._schJogoLiberado === 'function') ? window._schJogoLiberado(t, m) : true;
+    if (!_isOrg(t, cu) && !_liberado) return '';
     // v1.7.25 (dono): ANTES de existir link, os dois botões começam com "Criar grupo" —
     // é a ação, e o complemento diz DE QUEM: "geral oficial do torneio" × "dos seus jogos".
     return _btn(_souJogador ? 'Criar grupo<br>dos seus jogos' : 'Criar grupo<br>dos jogos', open);

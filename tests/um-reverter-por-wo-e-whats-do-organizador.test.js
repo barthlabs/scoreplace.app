@@ -289,17 +289,29 @@ sec('em todos os jogos', function () {
   W.AppStore.currentUser = { uid: 'u_fer', displayName: 'Fernanda Biojone', notifyWhatsApp: true };
   ok(W._waGrpGroupChip(t, g.matches) === '', 'e o jogador não — pra ele o grupo acabou');
 
-  // (b) jogo avulso (não Rei/Rainha) fora da rodada atual
+  // (b) jogo de RODADA FUTURA com as duas duplas já definidas
+  // ⚠️ ASSERÇÃO INVERTIDA DE PROPÓSITO em 2.1.98. Antes: _"o jogador só vê quando a rodada
+  // dele chega"_ (o gate era `_schIsCurrentRoundMatch`). Ordem do dono (02/set/2026):
+  // _"os botões têm que aparecer no jogo (todos os botões) assim que tem as duplas
+  // definidas. assim a r3 pode começar em alguns jogos mesmo antes de terminar a r2 — se
+  // não dependerem de repescagem"_. Quem espera vencedor tem TBD e continua fora — é o
+  // que o segundo par de asserções guarda.
   const t2 = torneio().t;
   comoOrganizador(t2);
   const avulso = { id: 'av1', round: 9, p1: 'Fernanda Biojone', p2: 'Eduardo Mange',
     p1Uid: 'u_fer', p2Uid: 'u_edu', winner: null };
   t2.rounds[0].matches.push(avulso);
-  W._schIsCurrentRoundMatch = () => false;     // rodada ainda não abriu
   ok(W._waGrpCardChip(t2, avulso) !== '', 'rodada futura: o organizador já pode montar o grupo');
   W.AppStore.currentUser = { uid: 'u_fer', displayName: 'Fernanda Biojone', notifyWhatsApp: true };
-  ok(W._waGrpCardChip(t2, avulso) === '', 'o jogador só vê quando a rodada dele chega');
-  W._schIsCurrentRoundMatch = () => true;
+  ok(W._waGrpCardChip(t2, avulso) !== '',
+     '⭐ duplas definidas: o jogador JÁ vê, mesmo a rodada não sendo a atual');
+  // e o que ainda não tem adversário segue escondido — pra os dois
+  const emEspera = { id: 'av2', round: 9, p1: 'Fernanda Biojone', p2: 'TBD',
+    p1Uid: 'u_fer', winner: null };
+  t2.rounds[0].matches.push(emEspera);
+  ok(W._waGrpCardChip(t2, emEspera) === '', 'jogo esperando adversário (TBD) não abre grupo pro jogador');
+  comoOrganizador(t2);
+  ok(W._waGrpCardChip(t2, emEspera) === '', 'nem pro organizador — sem os dois lados não há grupo');
 
   // (c) jogo já decidido
   comoOrganizador(t2);

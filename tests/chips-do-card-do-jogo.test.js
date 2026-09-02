@@ -182,13 +182,13 @@ ok(/_schGroupChip/.test(braket) && /_waGrpGroupChip/.test(braket),
   'o cabeçalho de grupo continua montando OS DOIS chips');
 
 const wa = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'wa-group.js'), 'utf8');
-ok(/window\._schIsCurrentRoundMatch\s*\(/.test(wa),
-  'wa-group usa o gate de rodada do schedule-poll — FONTE ÚNICA, não reimplementa');
+ok(/window\._schJogoLiberado\s*\(/.test(wa),
+  'wa-group usa o gate do schedule-poll — FONTE ÚNICA, não reimplementa');
 ok(/window\._schUserIsPlayer\s*\(/.test(wa),
   'wa-group usa o "sou jogador?" do schedule-poll — mesma régua do irmão');
 
 const sch = fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'schedule-poll.js'), 'utf8');
-ok(/window\._schIsCurrentRoundMatch\s*=/.test(sch) && /window\._schUserIsPlayer\s*=/.test(sch),
+ok(/window\._schJogoLiberado\s*=/.test(sch) && /window\._schUserIsPlayer\s*=/.test(sch),
   'schedule-poll continua EXPONDO o gate (sem isso o wa-group cai calado e os dois botões somem juntos)');
 
 // os dois scripts precisam continuar carregados na página — script fora do

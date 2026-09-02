@@ -490,6 +490,12 @@ const SUITES = [
   // marcou. Cobre também o buraco do Rei/Rainha, que aparecia SEM data nas Novidades.
   'tests/grade-estimada-e-propor-datas.test.js',
   'tests/propor-datas-organizador-ve-todos-os-grupos.test.js',
+  // 2.1.98 — o gate dos DOIS chips deixou de ser "é a rodada atual?" e passou a ser "as
+  // duas duplas existem?". Medido em produção: com o gate de rodada, 0 dos 99 jogos da
+  // Fase 2 da Confra passavam, e nenhum participante via botão nenhum. Este teste roda o
+  // `_getUnifiedRounds` DE VERDADE com o shape gold/silver/bronze — se alguém reintroduzir
+  // o gate de rodada, ele cai na hora.
+  'tests/botoes-do-card-liberam-com-a-dupla-definida.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',
