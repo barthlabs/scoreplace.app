@@ -2465,11 +2465,22 @@ function renderDashboard(container) {
       if (headerBtns === null) {
         // v2.7.56: botões no PADRÃO do app (.btn + variante de cor + .btn-micro =
         // sólido, com volume almofadado), não mais etiqueta flat com estilo inline.
+        /* ⭐ 2.1.98 — O PAR "AO VIVO × CONFIRMAR" É EXCLUDENTE AQUI TAMBÉM.
+         * Relato do dono (02/set/2026): _"esse botão confirmar só deve aparecer no lugar do
+         * ao vivo ao digitar um placar aí. exatamente como aparece na chave do torneio no
+         * detalhe"_.
+         * A regra já era canônica e já rodava — `window._syncConfirmBtn` (bracket-ui.js),
+         * disparada pelo `oninput` que ESTES campos já chamam. Ela não fazia efeito neste
+         * card por duas amarras que faltavam, e só por isso:
+         *   · o "Confirmar" nascia VISÍVEL (na chave ele nasce `display:none`);
+         *   · o "Ao Vivo" não tinha `id="live-<mId>"`, então não havia o que esconder.
+         * ⛔ Nada de reimplementar a regra aqui: seriam duas verdades pro mesmo par, e é
+         * exatamente assim que os dois botões divergiram entre as telas. */
         var liveBtnHtml = (!pendingScores && canLaunch)
-          ? '<button class="btn btn-live btn-micro" onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
+          ? '<button id="live-' + mId + '" class="btn btn-live btn-micro" onclick="event.stopPropagation();window._openLiveScoring(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">📡 Ao Vivo</button>'
           : '';
         var confirmBtnHtml = (!pendingScores && canLaunch)
-          ? '<button id="confirm-' + mId + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;">✓ Confirmar</button>'
+          ? '<button id="confirm-' + mId + '" data-confirm-for="' + _esc(mId) + '" class="btn btn-success btn-micro" onclick="event.stopPropagation();window._saveResultInline(\'' + _esc(tId) + '\',\'' + _esc(mId) + '\')" style="flex-shrink:0;font-size:0.72rem;display:none;">✓ Confirmar</button>'
           : '';
         defaultHeaderBtns = liveBtnHtml + confirmBtnHtml;
       }

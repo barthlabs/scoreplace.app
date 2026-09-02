@@ -501,6 +501,10 @@ const SUITES = [
   // o torneio abria sozinho. Exercita o mecanismo (document falso + ouvintes reais),
   // porque um teste de regex passaria com o bug de pé.
   'tests/o-ticker-nao-redesenha-debaixo-do-dedo.test.js',
+  // 2.1.98 — o "✓ Confirmar" aparecia com o placar em 0-0 no card da dashboard, ao lado do
+  // "📡 Ao Vivo". A regra (`_syncConfirmBtn`) já era canônica e já rodava ali; faltavam as
+  // duas amarras que ela procura no DOM. Metade comportamento, metade fiação — de propósito.
+  'tests/ao-vivo-e-confirmar-sao-excludentes-na-dashboard.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',
