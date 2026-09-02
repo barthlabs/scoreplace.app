@@ -2294,9 +2294,40 @@ function renderTournaments(container, tournamentId = null) {
     }
 
     if (!window.editModalSetupDone) {
+        /* ⛔ 2.1.99 — O "✏️ EDITAR" DO CARD MORRIA CALADO.
+         * Relato do dono (02/set/2026): _"o botao editar no card do torneio nao esta
+         * funcionando"_. Medido em produção, em carga limpa: `openEditTournamentModal`
+         * vinha `undefined`, o `typeof` abaixo ENGOLIA, e o clique não fazia nada —
+         * sem erro no console, sem Sentry, sem nada.
+         *
+         * A CAUSA: `openEditTournamentModal` é definida DENTRO de
+         * `setupCreateTournamentModal` (create-tournament.js), e a 2.0.84 tirou o
+         * `#modal-create-tournament` do arranque — ele passa a nascer sob demanda, pela
+         * porta única `_garanteModal` (js/ui.js). Enquanto ninguém abrisse "criar
+         * torneio" naquela sessão, a função não existia. Quem tivesse aberto o criar
+         * antes via o Editar funcionar; quem não, não — e é por isso que parecia
+         * intermitente. (`_recalcDuration`, `_findTournamentById` e outras 176 nascem
+         * no mesmo lugar; ver a nota de 2.0.84 em main.js.)
+         *
+         * ⛔ DUAS CORREÇÕES, e a segunda importa tanto quanto a primeira:
+         *   1. MONTA o modal antes de chamar — pela porta única, não reimplementando;
+         *   2. se ainda assim faltar, FALA. Um `typeof` que devolve silêncio transforma
+         *      um botão quebrado em "às vezes não funciona", que é o relato mais caro
+         *      de diagnosticar que existe. */
         window.openEditModal = function (id) {
+            if (typeof window._garanteModal === 'function') {
+                try { window._garanteModal('modal-create-tournament'); } catch (e) {}
+            }
             if (typeof window.openEditTournamentModal === 'function') {
                 window.openEditTournamentModal(id);
+                return;
+            }
+            if (typeof window.showNotification === 'function') {
+                window.showNotification('Não consegui abrir a edição',
+                    'Recarregue a página e tente de novo.', 'warning');
+            }
+            if (typeof window._captureMessage === 'function') {
+                window._captureMessage('openEditModal: openEditTournamentModal indisponível', 'error');
             }
         };
         window.editModalSetupDone = true;

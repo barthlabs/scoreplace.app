@@ -1,8 +1,9 @@
 /* Runner dos testes unitários headless — node tests/run-unit.js (ou npm test).
  * Roda cada suíte em processo próprio, mostra a saída e agrega o resultado.
  * Exit code != 0 se qualquer suíte falhar (serve pra CI / pre-deploy).
+ * Desde 2.1.99 roda em PARALELO — o desenho e o porquê estão na nota do runner, no fim
+ * deste arquivo, junto da lista de exclusivas.
  */
-const { spawnSync } = require('child_process');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
@@ -510,6 +511,27 @@ const SUITES = [
   // rodadas) volta sozinho pra divisão igual — nunca vira rodada que começa depois de
   // terminar. O que se guarda é a intenção; a validação é toda na leitura.
   'tests/divisao-das-rodadas-e-ajuste-fino.test.js',
+  // 2.1.99 — o runner passou a rodar em PARALELO. Três suítes corrompem arquivo do repo
+  // de propósito (store.js, index.html) e precisam rodar SOZINHAS; quem ler esses arquivos
+  // ao mesmo tempo falha ao acaso, e gate intermitente é pior que gate lento. Este teste
+  // VARRE as suítes atrás de escrita em caminho do repo e cai se achar alguma fora da
+  // lista de exclusivas — a rede E a busca.
+  'tests/o-runner-paralelo-nao-mistura.test.js',
+  // 2.1.99 — o "✏️ Editar" do card morria calado: `openEditTournamentModal` nasce DENTRO
+  // de `setupCreateTournamentModal`, e a 2.0.84 tirou o modal do arranque. Antes de alguém
+  // abrir "criar torneio", a função não existia e o `typeof` engolia o clique. Guarda as
+  // duas metades: montar pela porta única, e FALAR se ainda faltar.
+  'tests/editar-do-card-monta-o-modal-antes.test.js',
+  // 2.1.99 — o 💬 de contato passou a aparecer em TODO card de jogo (organizador vê todos,
+  // participante só onde joga). Guarda duas coisas: a decisão continua numa PORTA SÓ
+  // (`_contactPersonIconHtml`), e o chip fica FORA da `.sp-mc-box` — dentro dela mudaria a
+  // fonte de todos os nomes, e a geometria do card é cânone.
+  'tests/balaozinho-do-whats-em-todo-card-de-jogo.test.js',
+  // 2.1.99 — a busca da chave voltava VAZIA (e vazio esconde tudo, então a tela ficava
+  // preta) quando o nome visível do card vinha da hidratação e o `data-players`, escrito no
+  // render, ainda tinha o rótulo provisório. O filtro passou a casar também com o texto do
+  // card. Roda a função REAL contra um DOM de mentira e CONTA quem ficou visível.
+  'tests/busca-da-chave-acha-o-que-esta-na-tela.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',
@@ -1560,19 +1582,127 @@ const SUITES = [
   'tests/vendor-do-autodraw-nao-fica-velho.test.js',
 ];
 
-let failed = [];
-for (const rel of SUITES) {
-  console.log('\n──────────── ' + rel + ' ────────────');
-  const r = spawnSync(process.execPath, [path.join(ROOT, rel)], { stdio: 'inherit', cwd: ROOT });
-  if (r.status !== 0) failed.push(rel);
+/* ═══ EXECUÇÃO EM PARALELO (2.1.99) ══════════════════════════════════════════════
+ *
+ * Ordem do dono (02/set/2026): _"faz a paralelizacao"_ — medido no mesmo dia: as 563
+ * suítes em SÉRIE levam ~7min numa máquina de 14 núcleos usando 1, e o deploy roda a
+ * suíte DUAS vezes (preflight + hosting.predeploy), o que fazia 15min de publicação.
+ *
+ * ⛔ NÃO É "roda tudo junto". Três grupos, e a razão de cada um está medida:
+ *
+ *   1. EXCLUSIVAS — rodam SOZINHAS, uma de cada vez, nada mais na máquina.
+ *      Elas CORROMPEM arquivo do repo de propósito (pra provar que a trava acusa) e
+ *      restauram no fim. `js/store.js` e `index.html` são lidos por dezenas de outras
+ *      suítes: em paralelo, essas outras leriam o arquivo quebrado e falhariam ao acaso.
+ *      Um gate intermitente é PIOR que um gate lento — ele ensina a ignorar vermelho.
+ *
+ *   2. PESADAS — sobem Chromium. Não corrompem nada, mas cada uma é um navegador
+ *      inteiro; soltar 8 de uma vez faz a máquina paginar e as MEDIÇÕES de layout (que
+ *      é o que essas suítes provam) ficarem ruidosas. Pool curto, de propósito.
+ *
+ *   3. O RESTO — pool cheio.
+ *
+ * ⚠️ A LISTA DE EXCLUSIVAS NÃO SE MANTÉM SOZINHA. Quem escrever uma suíte nova que mexe
+ * em arquivo do repo e esquecer de listá-la aqui cria exatamente o gate intermitente que
+ * este desenho evita. Por isso existe `tests/o-runner-paralelo-nao-mistura.test.js`, que
+ * VARRE as suítes atrás de escrita em caminho derivado do repo e falha se achar alguma
+ * fora desta lista. A rede E a busca — construir só a rede já falhou aqui antes.
+ *
+ * Escape: SP_TEST_JOBS=1 volta ao serial puro (para depurar uma suíte suspeita de
+ * depender de vizinhança). SP_TEST_JOBS=<n> fixa o paralelismo.
+ */
+const os = require('os');
+const { spawn } = require('child_process');
+
+/* (1a) MEXEM EM ARQUIVO DO REPO — corrompem de propósito e restauram. Quem ler o mesmo
+ *      arquivo ao mesmo tempo falha ao acaso. Cada linha diz o que ela corrompe. */
+const MEXEM_NO_REPO = [
+  'tests/ext-version-single-source.test.js',            // reescreve js/store.js e extension/content.js
+  'tests/trava-de-cache-buster-nao-fica-vazia.test.js', // reescreve index.html
+  'tests/gate-amizade-detecta-alias.test.js',           // cria js/views/__sonda-gate-amizade.js
+];
+/* (1b) PRENDEM PORTA FIXA DE EMULADOR (8080/8097/8098/8099). Duas instâncias do
+ *      Firestore Emulator NÃO coexistem na mesma porta, e estas duas sobem a sua: a
+ *      segunda a começar morre com "Port 8097 is not open", sem provar nada.
+ *
+ * ⚠️ COMO EU CHEGUEI AQUI, porque a 1ª explicação estava ERRADA: na primeira execução
+ *      paralela as duas caíram e eu atribuí a disputa de CPU ("a prova de corrida precisa
+ *      de máquina livre"). Pus as duas em série — e elas CONTINUARAM caindo, rodando
+ *      sozinhas e primeiro. O log dizia outra coisa: a porta 8097 estava ocupada por um
+ *      emulador ÓRFÃO de 12min, sobra de um deploy que eu havia matado no meio. Morto o
+ *      órfão, a suíte passou (31 asserções) na hora.
+ *      Fica registrado porque a lição não é sobre esta lista: é que "falhou junto com a
+ *      mudança" não prova que a mudança causou. O log dizia; eu é que não tinha lido.
+ *
+ * ⛔ Se estas duas voltarem a falhar com "Port ... is not open", procure emulador órfão
+ *      (`lsof -ti :8097`) antes de suspeitar do paralelismo. */
+const PRENDEM_PORTA = [
+  'functions-autodraw/test-corrida-slot-emu.js',   // corrida real no Firestore Emulator
+  'tests/deploy-liga-firebase-admin.test.js',      // roda a corrida acima dentro da cópia extraída
+];
+const EXCLUSIVAS = new Set(MEXEM_NO_REPO.concat(PRENDEM_PORTA));
+
+// (2) sobem Chromium — pool curto para as medições de layout não ficarem ruidosas.
+const PESADAS = new Set(SUITES.filter((rel) => {
+  try { return /puppeteer|playwright|chromium/.test(require('fs').readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch (e) { return false; }
+}));
+
+const CPUS = os.cpus().length || 4;
+const JOBS_ENV = parseInt(process.env.SP_TEST_JOBS, 10);
+const JOBS = (JOBS_ENV >= 1) ? JOBS_ENV : Math.max(1, Math.min(8, CPUS - 2));
+const JOBS_PESADAS = Math.max(1, Math.min(3, JOBS));
+
+const failed = [];
+const t0 = Date.now();
+
+function roda(rel) {
+  return new Promise((resolve) => {
+    const p = spawn(process.execPath, [path.join(ROOT, rel)], { cwd: ROOT });
+    let saida = '';
+    p.stdout.on('data', (d) => { saida += d; });
+    p.stderr.on('data', (d) => { saida += d; });
+    p.on('close', (code) => {
+      /* A saída sai INTEIRA e de uma vez, na ordem em que a suíte terminou. Interleavar
+       * linha a linha (o que `stdio:'inherit'` faria em paralelo) misturaria a saída de 8
+       * suítes e tornaria ilegível justamente o que se lê quando algo falha. */
+      console.log('\n──────────── ' + rel + ' ────────────');
+      process.stdout.write(saida);
+      if (code !== 0) failed.push(rel);
+      resolve();
+    });
+  });
 }
 
-console.log('\n════════════════════════════════════════');
-if (failed.length === 0) {
-  console.log('✅ TODAS as ' + SUITES.length + ' suítes unitárias passaram');
-} else {
-  console.log('❌ ' + failed.length + '/' + SUITES.length + ' suíte(s) FALHARAM:');
-  failed.forEach((f) => console.log('   - ' + f));
+async function pool(lista, n) {
+  let i = 0;
+  const trabalhadores = new Array(Math.min(n, lista.length)).fill(0).map(async () => {
+    while (i < lista.length) { const meu = i++; await roda(lista[meu]); }
+  });
+  await Promise.all(trabalhadores);
 }
-console.log('════════════════════════════════════════');
-process.exit(failed.length ? 1 : 0);
+
+(async () => {
+  const exclusivas = SUITES.filter((r) => EXCLUSIVAS.has(r));
+  const pesadas = SUITES.filter((r) => !EXCLUSIVAS.has(r) && PESADAS.has(r));
+  const leves = SUITES.filter((r) => !EXCLUSIVAS.has(r) && !PESADAS.has(r));
+
+  console.log('▸ ' + SUITES.length + ' suítes · ' + JOBS + ' em paralelo (' + CPUS + ' núcleos)' +
+    ' · ' + exclusivas.length + ' exclusiva(s) em série · ' + pesadas.length + ' com Chromium a ' + JOBS_PESADAS);
+
+  // as exclusivas PRIMEIRO e sozinhas: assim o resto roda contra uma árvore intacta.
+  await pool(exclusivas, 1);
+  await pool(leves, JOBS);
+  await pool(pesadas, JOBS_PESADAS);
+
+  const seg = ((Date.now() - t0) / 1000).toFixed(0);
+  console.log('\n════════════════════════════════════════');
+  if (failed.length === 0) {
+    console.log('✅ TODAS as ' + SUITES.length + ' suítes unitárias passaram  (' + seg + 's)');
+  } else {
+    console.log('❌ ' + failed.length + '/' + SUITES.length + ' suíte(s) FALHARAM:');
+    failed.forEach((f) => console.log('   - ' + f));
+  }
+  console.log('════════════════════════════════════════');
+  process.exit(failed.length ? 1 : 0);
+})();

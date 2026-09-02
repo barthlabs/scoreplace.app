@@ -4208,7 +4208,24 @@ async function _preloadPlayerPhotos(tournament) {
 // retirada por `_reassignBestLosersToRepechage` (bracket-logic).
 
 // ─── Player avatars helper for bracket cards ────────────────────────────────
-function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
+function _teamAvatarHtml(teamName, pendingSub, t, uidHint, m) {
+  /* ⭐ 2.1.99 — O 💬 DE CADA PESSOA, EM TODO CARD DE JOGO.
+   * Ordem do dono (02/set/2026): _"precisa me devolver os balõezinhos em todos os jogos
+   * para que as pessoas se encontrem pelo whats"_ e _"para os participantes do grupo (e
+   * para organizadores de todos)"_.
+   * ⛔ NADA NOVO É INVENTADO AQUI: quem desenha e quem DECIDE é `_contactPersonIconHtml`
+   * (tournaments-organizer.js) — a mesma porta da classificação, dos chips de desativados
+   * e da lista de espera. O gate (organizador vê todos; participante só onde joga; nunca o
+   * próprio balãozinho) mora lá dentro. Uma segunda régua aqui seria a divergência que já
+   * aconteceu entre a chave e a classificação.
+   * `m` é opcional: sem ele, `sameGroup` é falso e só o organizador vê — que é o
+   * comportamento seguro pra qualquer chamador que ainda não passe o jogo. */
+  var _souDoJogo = false;
+  try {
+    var _cuJ = window.AppStore && window.AppStore.currentUser;
+    _souDoJogo = !!(m && _cuJ && typeof window._userTeamInMatch === 'function' &&
+                    window._userTeamInMatch(t, m, _cuJ) > 0);
+  } catch (e) { _souDoJogo = false; }
   // v4.0.84: identidade = uid → resolve a string GUARDADA da partida pro nome AO VIVO
   // (uid→perfil) antes de exibir. Sem 't' (callers legados) mantém a string como veio.
   // v4.5.71: uidHint (uid do slot, via _slotUids) → resolução homonym-safe; sem uid
@@ -4396,6 +4413,12 @@ function _teamAvatarHtml(teamName, pendingSub, t, uidHint) {
           : (typeof window._nameWithCrown === 'function' && window._currentBracketTournament
               ? window._nameWithCrown(name, window._currentBracketTournament) : window._safeHtml(name))
       }</span></div>` +
+      /* ⛔ FORA da `.sp-mc-box`, como IRMÃO dela. Dentro, o 💬 entraria na caixa que o
+       * auto-fit MEDE (`_fitNameToBox`) e mudaria a fonte do nome — a geometria do card é
+       * cânone e já foi revertida uma vez pelo dono. Aqui ele só consome a largura que
+       * sobra, e o nome encolhe o mínimo pelo caminho normal do fit. */
+      (typeof window._contactPersonIconHtml === 'function'
+        ? window._contactPersonIconHtml(t, _slotUid, name, { sameGroup: _souDoJogo }) : '') +
     `</div>`;
   });
   if (members.length > 1) html += '</div>';
@@ -4789,7 +4812,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p1Row = `
     <div style="${rowStyle(p1IsWinner, 'p1')}">
-      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)))}</div>
+      ${ciDot(p1ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p1AguardaMelhor ? 'TBD' : m.p1, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p1', t) : (m.p1Uid || m.team1Uids)), m)}</div>
       ${_p1PromotedBadge}${_p1RepBadge}${_p1ByeBadge}
       <div id="score-p1-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(1) : (showInputs ? p1Score : (p1ScoreVal || ''))}
@@ -4798,7 +4821,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
 
   const p2Row = `
     <div style="${rowStyle(p2IsWinner, 'p2')}">
-      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)))}</div>
+      ${ciDot(p2ci)}<div style="flex:1;overflow:hidden;min-width:0;">${_teamAvatarHtml(m.p2AguardaMelhor ? 'TBD' : m.p2, pendingSub, t, (window._slotUidsPositional ? window._slotUidsPositional(m, 'p2', t) : (m.p2Uid || m.team2Uids)), m)}</div>
       ${_p2PromotedBadge}${_p2RepBadge}${_p2ByeBadge}
       <div id="score-p2-${m.id}" class="sp-mc-sc">
         ${_multiSet ? _setGridHtml(2) : (showInputs ? p2Score : (p2ScoreVal || ''))}
@@ -7985,8 +8008,30 @@ window._bracketApplyFilter = function () {
   };
   for (var i = 0; i < cards.length; i++) {
     var c = cards[i];
-    var hit = (!q || window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1)
-      && (!onlyMine || c.getAttribute('data-my-match') !== '0');
+    /* ⭐ 2.1.99 — A BUSCA CASA TAMBÉM COM O QUE ESTÁ ESCRITO NA TELA.
+     * Relato do dono (02/set/2026): _"essa merda de barra de busca nao esta funcionando
+     * porra nenhuma"_ — digitou "Arna" com o Arnaldo visível no card e a chave ficou VAZIA.
+     *
+     * POR QUE: `data-players` é escrito NO RENDER, com o nome resolvido por uid. Se o
+     * perfil ainda não chegou, ele nasce com o rótulo provisório (ou vazio) enquanto o
+     * NOME NA TELA é preenchido depois, pela hidratação do `data-uid-name`. A partir daí a
+     * pessoa lê "Arnaldo Menezes" no card e o atributo que a busca varre diz outra coisa —
+     * então zero resultados, e como zero resultados esconde tudo, a tela fica preta.
+     * Existia uma cura (store.js), mas só para UM formato do rótulo provisório; qualquer
+     * outro estado de hidratação continuava invisível para a busca.
+     *
+     * ⛔ O TEXTO É REDE, NUNCA A FONTE: `data-players` continua sendo a chave (ele carrega
+     * a dupla inteira E membro a membro, e é ele que garante achar por nome NOVO de quem
+     * trocou o perfil). O `textContent` só entra quando o atributo NÃO casou — assim o
+     * custo é zero no caminho que já funciona, e ninguém fica invisível por causa de uma
+     * corrida de carregamento. Ver [[project_letzplay_textcontent_engole_estrutura]]: aqui
+     * ele é palheiro de busca, não estrutura. */
+    var _casa = !q;
+    if (!_casa) {
+      _casa = window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
+      if (!_casa) _casa = window._bracketNorm(c.textContent || '').indexOf(q) !== -1;
+    }
+    var hit = _casa && (!onlyMine || c.getAttribute('data-my-match') !== '0');
     // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de
     // quem levou W.O. e a pílula "🔁 Fulana W.O. → Beltrana" existem pra dizer DE QUAL GRUPO
     // a pessoa é — não são cards de jogo. Tratá-las como card tinha dois efeitos errados:
