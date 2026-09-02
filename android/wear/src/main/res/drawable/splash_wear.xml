@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ⛔ ABERTURA COM MARCA (Wear App Quality Guidelines · Branded launch).
+     O Google recusou a 109 com "Missing app icon in splash screen: Your app does not
+     show a 48x48dp app icon on a black background during app startup".
+     ⭐ Isto é `windowBackground` do tema de abertura: vale em TODA versão do Wear,
+     inclusive API 30, onde a SplashScreen API da plataforma (31+) não existe. Nas
+     versões 31+ o mesmo desenho é declarado em values-v31/themes.xml. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/black" />
+    <item android:gravity="center" android:width="48dp" android:height="48dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/serve_ball" />
+        </shape>
+    </item>
+</layer-list>

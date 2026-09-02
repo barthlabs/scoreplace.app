@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0f0f23</color>
-    <color name="half_blue">#162245</color>
-    <color name="half_red">#312728</color>
+    <!-- ⛔ PRETO, NÃO AZUL-ESCURO. O Google recusou a versão 109 com
+         "Background not black: Your app does not use a black background for all
+         apps and tiles". Era `#0f0f23` — o mesmo azul-noite do app de celular, que
+         no relógio viola a diretriz e ainda gasta bateria em tela OLED (pixel preto
+         fica APAGADO; #0f0f23 acende os três subpixels em toda a área da tela).
+         ⚠️ Isto vale para o FUNDO. As cores de conteúdo (times, saque, zonas de
+         batimento) continuam as mesmas — a identidade não muda, o fundo sim. -->
+    <color name="bg">#000000</color>
+    <!-- ⛔ AS DUAS METADES COBREM A TELA INTEIRA — logo, elas SÃO o fundo, e o Play exige
+         preto ("Background not black"). Visto no emulador Wear (454x454): o azul-noite e o
+         vinho ocupavam 100% do disco. A identidade dos times não se perde: ela vive no
+         NÚMERO e no NOME, que continuam azul (#60a5fa) e vermelho (#f87171). -->
+    <color name="half_blue">#000000</color>
+    <color name="half_red">#000000</color>
     <color name="team_blue">#60a5fa</color>
     <color name="team_red">#f87171</color>
     <color name="name_blue">#dbeafe</color>
@@ -25,7 +36,8 @@
     <color name="undo_bg">#1a1a2e</color>
     <color name="undo_border">#33334d</color>
     <color name="undo_text">#d5d5e5</color>
-    <color name="winner_scrim">#FF0F0F23</color>
+    <!-- cobre a tela inteira no fim do jogo: é FUNDO, logo preto. -->
+    <color name="winner_scrim">#FF000000</color>
     <color name="winner_gold">#f59e0b</color>
     <color name="btn_cancel_bg">#26263A</color>
     <color name="btn_confirm_bg">#3B82F6</color>

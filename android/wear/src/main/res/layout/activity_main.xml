@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- _AUTOSIZE_WEAR_ -->
+<!--
+  ⛔ TEXTO NÃO PODE SER CORTADO PELA BORDA (Wear App Quality Guidelines · Font size).
+  O Google recusou a versão 109 com: "Your app must conform to the font size set by the
+  user in System Settings. If the user selects a larger font size, ensure that text and
+  controls are not cut off by screen edges."
+
+  ⚠️ AS MEDIDAS JÁ ESTAVAM EM `sp` — ou seja, o app JÁ obedecia à preferência do usuário.
+  O defeito era o outro lado da regra: obedecendo, o texto crescia e ESTOURAVA a caixa
+  numa tela redonda, onde a borda come os cantos. Os nomes tinham `maxLines=1` +
+  `ellipsize=end`, que é literalmente cortar.
+
+  ⭐ A correção é `autoSizeTextType="uniform"`: o tamanho escolhido pelo usuário vira o
+  TETO, e o texto encolhe até caber na caixa quando não couber. Continua obedecendo à
+  configuração (fonte maior = texto maior, até onde a tela permite) e para de cortar.
+  O piso (`autoSizeMinTextSize`) existe pra não virar um fio ilegível.
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -23,7 +40,9 @@
             android:clickable="true"
             android:focusable="true"
             android:paddingTop="52dp"
-            android:paddingBottom="26dp">
+            android:paddingBottom="26dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="4dp">
 
             <TextView
                 android:id="@+id/point_left"
@@ -36,7 +55,10 @@
                 android:textColor="@color/team_blue"
                 android:textSize="64sp"
                 android:textStyle="bold"
-                android:includeFontPadding="false" />
+                android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="24sp"
+                    android:autoSizeStepGranularity="1sp" />
 
             <!-- Nomes do time ESQUERDO: alinhados à DIREITA (colados no centro). A
                  bola de saque (GRANDE) fica colada no lado de FORA do nome, só no
@@ -69,7 +91,10 @@
                     android:text="Ana"
                     android:textColor="@color/name_blue"
                     android:textSize="16sp"
-                    android:includeFontPadding="false" />
+                    android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="8sp"
+                    android:autoSizeStepGranularity="1sp" />
             </LinearLayout>
 
             <LinearLayout
@@ -100,7 +125,10 @@
                     android:text="Bruno"
                     android:textColor="@color/name_blue_dim"
                     android:textSize="16sp"
-                    android:includeFontPadding="false" />
+                    android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="8sp"
+                    android:autoSizeStepGranularity="1sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -116,7 +144,9 @@
             android:clickable="true"
             android:focusable="true"
             android:paddingTop="52dp"
-            android:paddingBottom="26dp">
+            android:paddingBottom="26dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="10dp">
 
             <TextView
                 android:id="@+id/point_right"
@@ -129,7 +159,10 @@
                 android:textColor="@color/team_red"
                 android:textSize="64sp"
                 android:textStyle="bold"
-                android:includeFontPadding="false" />
+                android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="24sp"
+                    android:autoSizeStepGranularity="1sp" />
 
             <!-- Nomes do time DIREITO: alinhados à ESQUERDA (colados no centro). Bola
                  GRANDE colada no lado de FORA (direita) do nome, só no sacador. -->
@@ -150,7 +183,10 @@
                     android:text="Carla"
                     android:textColor="@color/name_red"
                     android:textSize="16sp"
-                    android:includeFontPadding="false" />
+                    android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="8sp"
+                    android:autoSizeStepGranularity="1sp" />
                 <TextView
                     android:id="@+id/ball_r1"
                     android:layout_width="wrap_content"
@@ -181,7 +217,10 @@
                     android:text="Diego"
                     android:textColor="@color/name_red_dim"
                     android:textSize="16sp"
-                    android:includeFontPadding="false" />
+                    android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="8sp"
+                    android:autoSizeStepGranularity="1sp" />
                 <TextView
                     android:id="@+id/ball_r2"
                     android:layout_width="wrap_content"
@@ -364,7 +403,10 @@
                 android:textStyle="bold"
                 android:maxWidth="90dp"
                 android:maxLines="1"
-                android:ellipsize="end" />
+                android:ellipsize="end"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="8sp"
+                    android:autoSizeStepGranularity="1sp" />
         </LinearLayout>
 
         <!-- Barra Desfazer: cor sólida (topo reto), largura cheia. Mínima — o alvo
@@ -570,7 +612,10 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="🎲"
-                            android:textSize="30sp" />
+                            android:textSize="30sp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
                         <Switch
                             android:id="@+id/reshuffle_switch"
                             android:layout_width="wrap_content"
@@ -588,7 +633,10 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="👑"
-                            android:textSize="30sp" />
+                            android:textSize="30sp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
                         <Switch
                             android:id="@+id/rr_switch"
                             android:layout_width="wrap_content"
@@ -607,7 +655,10 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="⚥"
-                            android:textSize="30sp" />
+                            android:textSize="30sp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
                         <Switch
                             android:id="@+id/mixed_switch"
                             android:layout_width="wrap_content"
@@ -710,7 +761,10 @@
                 android:layout_height="wrap_content"
                 android:text="⚖️"
                 android:textSize="30sp"
-                android:includeFontPadding="false" />
+                android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -725,7 +779,10 @@
                     android:textColor="@color/team_blue"
                     android:textSize="36sp"
                     android:textStyle="bold"
-                    android:includeFontPadding="false" />
+                    android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -742,7 +799,10 @@
                     android:textColor="@color/team_red"
                     android:textSize="36sp"
                     android:textStyle="bold"
-                    android:includeFontPadding="false" />
+                    android:includeFontPadding="false"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -794,7 +854,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🎾"
-                android:textSize="30sp" />
+                android:textSize="30sp"
+                    android:autoSizeTextType="uniform"
+                    android:autoSizeMinTextSize="14sp"
+                    android:autoSizeStepGranularity="1sp" />
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

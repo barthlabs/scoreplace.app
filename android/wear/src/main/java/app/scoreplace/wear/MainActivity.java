@@ -121,6 +121,13 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        /* ⛔ ABERTURA COM MARCA — e a troca de tema tem de vir ANTES do super/setContentView.
+         * A activity NASCE com `ScoreplaceWearSplash` (manifesto): fundo preto + a bola de
+         * 48dp no centro, que é o que o Play exigiu ao recusar a versão 109
+         * ("Missing app icon in splash screen"). Assim que o processo está de pé, ela volta
+         * para o tema normal — senão o `windowBackground` do splash ficaria atrás da tela
+         * inteira do placar pelo resto da sessão. */
+        setTheme(R.style.ScoreplaceWearTheme);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
