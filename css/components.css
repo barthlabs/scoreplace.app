@@ -2420,8 +2420,14 @@ html, body,
 .sp-mc-num{font-weight:800;font-size:var(--sp-num-fs);min-width:1.9rem;text-align:center;line-height:1.15;}
 .sp-set-num{display:block;font-weight:800;font-size:var(--sp-num-fs-set);line-height:1.15;}
 /* O box "zerado até receber o placar": existe, ocupa a coluna, e não afirma resultado. */
-.sp-set-zero{display:block;font-weight:800;font-size:1rem;line-height:1.2;color:rgba(255,255,255,0.3);}
-.sp-set-inp{width:100%;box-sizing:border-box;text-align:center;font-size:0.9rem;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 2px;}
+/* ⭐ 2.1.101 — o "0" pendente e o campo de digitar leem a MESMA régua do número do set
+   (`--sp-num-fs-set`, que vem de `_SET_COL_ESCALA`). Estavam cravados em 1rem e 0,9rem:
+   a ordem do dono na 2.0.47 — _"aumente esse box e o 0 dentro dele para ficar no tamanho
+   do número com resultado lançado, em todos os cards de jogos, em qualquer fase"_ — só
+   tinha sido aplicada no caminho de UM SET (`.sp-mc-num`/`.sp-mc-inp`). Aqui, no caminho
+   de melhor de 3/5, o box pendente ficava menor que o número lançado ao lado dele. */
+.sp-set-zero{display:block;font-weight:800;font-size:var(--sp-num-fs-set,1rem);line-height:1.2;color:rgba(255,255,255,0.3);}
+.sp-set-inp{width:100%;box-sizing:border-box;text-align:center;font-size:var(--sp-num-fs-set,0.9rem);font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-bright);border-radius:6px;padding:4px 2px;}
 .sp-set-inp--live{border-color:rgba(56,189,248,0.55);}
 .sp-set-tb{width:100%;box-sizing:border-box;margin-top:3px;text-align:center;font-size:0.68rem;font-weight:700;background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:var(--text-bright);border-radius:5px;padding:2px 1px;}
 /* Set confirmado é CLICÁVEL pra corrigir (só enquanto o jogo não fechou) — o cursor é

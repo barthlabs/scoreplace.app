@@ -532,6 +532,11 @@ const SUITES = [
   // render, ainda tinha o rótulo provisório. O filtro passou a casar também com o texto do
   // card. Roda a função REAL contra um DOM de mentira e CONTA quem ficou visível.
   'tests/busca-da-chave-acha-o-que-esta-na-tela.test.js',
+  // 2.1.101 — o número do placar tinha TRÊS tamanhos no caminho de sets (número lê a
+  // escada, "0" pendente cravado em 1rem, campo cravado em 0,9rem), enquanto o caminho de
+  // 1 set já usava 1,45rem. Avançar de fase (1 set → melhor de 3) encolhia o placar quase
+  // pela metade. Guarda a régua ÚNICA e que cada degrau ainda cabe 2 dígitos na coluna.
+  'tests/o-numero-do-placar-tem-uma-regua-so.test.js',
   'tests/grupos-em-ordem-cronologica.test.js',
   'tests/countdown-de-rodada-nao-volta-pra-tela.test.js',
   'tests/todos-os-torneios-da-plataforma.test.js',

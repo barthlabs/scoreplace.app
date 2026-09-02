@@ -1130,10 +1130,27 @@
     };
   };
 
+  /* ⭐ 2.1.101 — O NÚMERO SOBE ATÉ ONDE A COLUNA DEIXA.
+   * Relato do dono (02/set/2026): _"havíamos aumentado os números do placar na rodada
+   * passada. isso deve ser canônico e vejo que voltou a ficar pequeno (número e campo).
+   * tínhamos fechado 1 set / melhor de 3 / melhor de 5 tudo de forma canônica."_
+   *
+   * O QUE ELE VIU, e por que não era impressão: o caminho de UM SET usa `--sp-num-fs`
+   * (1,45rem — o tamanho que ele mandou aumentar na 2.0.47). O caminho de SETS usa esta
+   * escada, que estava em 1,15/1,00/0,78. A Fase 1 da Confra era 1 set e a Fase 2 é melhor
+   * de 3: mudar de fase fez o número encolher quase pela metade. O cânone tinha ficado só
+   * na metade do app.
+   *
+   * ⛔ O TETO CONTINUA MEDIDO, e o que ele mede é a COLUNA: a largura (35/31/25px) NÃO
+   * muda, porque é ela que divide espaço com o nome — subir a fonte não rouba nada do nome.
+   * O limite é caber DOIS DÍGITOS (o tie-break passa de 9): a régua de referência é a do
+   * `.sp-mc-inp`, "dois dígitos a 1,45rem ≈ 36px". Daí 1,30 / 1,20 / 0,95 — cada degrau
+   * o maior que cabe em 35 / 31 / 25px sem estourar a coluna.
+   * ⛔ NÃO subir mais sem alargar a coluna primeiro; e alargar a coluna É roubar do nome. */
   window._SET_COL_ESCALA = [
-    { ate: 2, set: 35, stb: 37, fs: 1.15 },   // 1 ou 2 colunas: sobra espaço, número cheio
-    { ate: 3, set: 31, stb: 33, fs: 1.00 },   // 3 colunas (melhor de 3 completo)
-    { ate: 5, set: 25, stb: 27, fs: 0.78 }    // 4 ou 5 colunas (melhor de 5)
+    { ate: 2, set: 35, stb: 37, fs: 1.30 },   // 1 ou 2 colunas: sobra espaço, número cheio
+    { ate: 3, set: 31, stb: 33, fs: 1.20 },   // 3 colunas (melhor de 3 completo)
+    { ate: 5, set: 25, stb: 27, fs: 0.95 }    // 4 ou 5 colunas (melhor de 5)
   ];
   window._setColEscala = function (nCols) {
     var e = window._SET_COL_ESCALA;

@@ -41,23 +41,38 @@ function rodaSuite(motivo) {
   process.exit(r.status === 0 ? 0 : (r.status || 1));
 }
 
-let head = '', sujo = '';
+/* ⚠️ AQUI NÃO HÁ GIT — e foi isto que fez o corte não pegar na 1ª tentativa (2.1.100).
+ * O `firebase deploy` roda a partir da CÓPIA extraída por `git archive`, que não é
+ * repositório: `git rev-parse` estourava e o guardião, corretamente, rodava a suíte.
+ * O que a cópia TEM é o carimbo que a própria extração grava — `.deploy-alignment.json`,
+ * com o commit que está sendo publicado. É contra ele que se compara ali.
+ * No repo (alguém rodando o predeploy de dentro do checkout) vale o git, que é mais forte:
+ * além do SHA, ele prova que a árvore está limpa. */
+const carimbo = String(process.env.SP_PREFLIGHT_OK || '').trim();
+if (!carimbo) rodaSuite('sem carimbo do preflight');
+
+let head = '', sujo = '', origem = '';
 try {
   head = g('git rev-parse HEAD');
   sujo = g('git status --porcelain');
+  origem = 'git';
 } catch (e) {
-  rodaSuite('sem git — não dá para provar o que já foi testado');
+  try {
+    const j = JSON.parse(require('fs').readFileSync(path.join(ROOT, '.deploy-alignment.json'), 'utf8'));
+    head = String(j.commit || '').trim();
+    origem = 'carimbo da extração';
+  } catch (e2) {
+    rodaSuite('sem git e sem .deploy-alignment.json — não dá para provar o que já foi testado');
+  }
 }
 
-const carimbo = String(process.env.SP_PREFLIGHT_OK || '').trim();
-
-if (!carimbo) rodaSuite('sem carimbo do preflight');
+if (!head) rodaSuite('não consegui descobrir qual commit está sendo publicado');
 if (carimbo !== head) {
   rodaSuite('o carimbo é de outro commit (' + carimbo.slice(0, 8) + ' ≠ ' + head.slice(0, 8) + ')');
 }
 if (sujo) rodaSuite('árvore SUJA — o que subiria não é o commit provado');
 
 console.log('▸ predeploy: suíte PULADA — o preflight já a rodou sobre ' + head.slice(0, 8) +
-            ', com a árvore limpa, nesta mesma publicação.');
+            ' (' + origem + '), nesta mesma publicação.');
 console.log('  (o preflight roda a MESMA lista, numa cópia `git archive` deste commit)');
 process.exit(0);
