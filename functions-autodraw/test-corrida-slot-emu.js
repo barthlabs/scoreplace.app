@@ -251,13 +251,21 @@ fs.writeFileSync(drv, DRIVER);
 
 let R = null;
 try {
-  const saida = execFileSync('firebase', [
-    'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
-    'node ' + JSON.stringify(drv)
-  ], {
-    cwd: RAIZ, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-    env: Object.assign({}, process.env, { PATH: '/opt/homebrew/opt/openjdk/bin:' + process.env.PATH })
-  });
+  let saida;
+  try {
+    saida = execFileSync('firebase', [
+      'emulators:exec', '--only', 'firestore', '--config', cfg, '--project', PROJECT,
+      'node ' + JSON.stringify(drv)
+    ], {
+      cwd: RAIZ, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+      env: Object.assign({}, process.env, { PATH: '/opt/homebrew/opt/openjdk/bin:' + process.env.PATH })
+    });
+  } catch (_firebaseExit) {
+    /* O Firebase CLI desta máquina pode sair 2 DEPOIS de o driver encerrar 0,
+     * durante a limpeza do emulador. O marcador JSON vem do processo que mede a
+     * corrida; se ele não existir, a falha segue fatal. */
+    saida = String((_firebaseExit && _firebaseExit.stdout) || '');
+  }
   const m = /__JSON__(\{[\s\S]*\})/.exec(saida);
   if (!m) throw new Error('driver não devolveu resultado:\n' + saida.slice(-1200));
   R = JSON.parse(m[1]);

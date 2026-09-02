@@ -10,7 +10,7 @@
     "test:concurrency": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"node tests/concurrency/run.js\"",
     "test:purge": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore,functions --config firebase.purge.json --project demo-scoreplace \"node tests/purge/run.js\"",
     "test:amizade": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore,functions,auth --config firebase.amizade.json --project demo-scoreplace \"node tests/amizade/run.js\"",
-    "test:rules": "node tests/rules-privileged-fields.test.js && node tests/rules-sandbox-read.test.js && node tests/rules-cohost-uid-only.test.js && node tests/rules-inscricao-espera.test.js && node tests/rules-amizade-nao-cross-user.test.js && node tests/rules-mail-server-only.test.js && node tests/rules-magiclinks-sem-enumeracao.test.js",
+    "test:rules": "node tests/rules-privileged-fields.test.js && node tests/rules-sandbox-read.test.js && node tests/rules-sandbox-partes-intactas.test.js && node tests/rules-cohost-uid-only.test.js && node tests/rules-inscricao-espera.test.js && node tests/rules-amizade-nao-cross-user.test.js && node tests/rules-mail-server-only.test.js && node tests/rules-magiclinks-sem-enumeracao.test.js",
     "test:rules:sandbox": "node tests/rules-sandbox-read.test.js",
     "test:sandbox": "node tests/sandbox-cf-emulador.test.js",
     "test:e2e": "playwright test",

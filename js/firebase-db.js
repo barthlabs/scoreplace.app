@@ -284,6 +284,23 @@ window.FirestoreDB = {
     if (!this.db) return;
     var docId = String(tourData.id);
     var cleanData = this._cleanUndefined(tourData);
+    /* `sync()` salva uma fotografia administrativa e passa `skipParticipants`.
+     * Num sandbox dividido, essa fotografia NÃO é um mandato para reconciliar as
+     * subcoleções: ela pode chegar antes de participants/matches/opponentHistory.
+     * Tratar ausência como lista vazia apagou 152 inscritos da Confra.
+     *
+     * Este caminho preserva o documento-pai, mas não toca NENHUMA parte dividida nem
+     * seus marcadores. Mudanças reais de placar/avanço passam sem skipParticipants,
+     * depois de carregar as partes, e seguem pelo delta canônico abaixo. */
+    if (options && options.skipParticipants && this._ehSandbox(docId)) {
+      /* Sinal transitório, não-enumerável: não alcança o Firestore, mas impede que
+       * o reconciliador abaixo interprete a fotografia administrativa como elenco. */
+      Object.defineProperty(cleanData, '_syncSandboxSemPartes', { value: true, enumerable: false });
+    ['participants', 'matches', 'opponentHistory', '_nPartes', '_nJogos', '_nGrupos',
+      'nextDrawAt', '_faltamPesados', '_faltaOQue', '_montandoPesados'].forEach(function (k) {
+        delete cleanData[k];
+      });
+    }
     this._foldMonarchGroups(cleanData); // Rei/Rainha: grava só matchIds (fonte única = round.matches)
     // ── CLASSIFICAÇÃO É DERIVADA: NÃO VAI PRO BANCO (2.0.120) ──────────────────
     // MEDIDO: `standings` estava gravado em 2 dos 39 torneios — 120 linhas, TODAS zeradas e
@@ -1140,7 +1157,10 @@ window.FirestoreDB = {
      * resto da config de rodada são editados por aqui e não podem se perder.
      * ⛔ `participants`/`history` só saem se estiverem NO MARCADOR — `dividir` extrai os
      * três por natureza, e gravar a config crua dele zeraria o elenco. */
-    var _fora = Array.isArray(cleanData._semPesados) ? cleanData._semPesados : null;
+    /* O sync administrativo de sandbox já foi reconhecido acima: deixa o marcador
+     * intacto no pai, mas não entra no reconciliador de partes. O sinal é do objeto
+     * em memória e não é enumerável, portanto nunca vira campo persistido. */
+    var _fora = Array.isArray(cleanData._semPesados) && !cleanData._syncSandboxSemPartes ? cleanData._semPesados : null;
     var _sbPartesSave = null;
     if (_fora && _fora.length && window._tSplit && typeof window._tSplit.dividir === 'function') {
       try {

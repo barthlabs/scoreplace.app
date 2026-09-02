@@ -1,5 +1,17 @@
 # Changelog do scoreplace.app
 
+## 2.1.92 — sincronização parcial não pode apagar partes de sandbox (01/set/2026)
+
+`AppStore.sync()` usa uma fotografia administrativa com `skipParticipants`. Em um sandbox
+dividido, essa fotografia não é a cópia completa das subcoleções: recalcular `_nPartes` dela
+fazia o delta interpretar partes não carregadas como removidas. Agora esse caminho preserva os
+marcadores e não lê, escreve ou apaga nenhuma parte dividida. Atualizações reais de placar e
+avanço seguem pela rota explícita, carregada e com delta canônico.
+
+As Rules também recusam uma atualização do documento-pai de sandbox que reduza a contagem
+prometida de inscritos ou jogos, tornando atômica a negação de um batch antigo que tente
+esvaziar as subcoleções.
+
 ## 2.1.91 — o eco de `tournaments` para de dizer que o sandbox foi removido (01/set/2026)
 
 ### Uma lista, dois ouvintes, duas coleções — e um deles falava pelo outro

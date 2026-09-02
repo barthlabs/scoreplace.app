@@ -238,6 +238,18 @@ service cloud.firestore {
           && request.resource.data.get('isSandbox', false) == resource.data.get('isSandbox', false)
           && request.resource.data.get('sbState', '') == resource.data.get('sbState', '');
       }
+      /* Uma cópia dividida não pode perder partes porque uma aba trouxe um objeto
+       * magro. Avanço acrescenta jogos; placar preserva as contagens. Para recomeçar
+       * um teste, apaga-se o sandbox inteiro e a Function cria outro — não há reset
+       * cliente que precise reduzir o retrato copiado. Esta trava torna atômico o
+       * bloqueio do batch de um cliente antigo que tentasse apagar subcoleções. */
+      function sbPartesNaoEncolhem() {
+        let antes = resource.data.get('_nPartes', {});
+        let depois = request.resource.data.get('_nPartes', antes);
+        return depois.get('participants', antes.get('participants', 0)) >= antes.get('participants', 0)
+          && depois.get('matches', antes.get('matches', 0)) >= antes.get('matches', 0)
+          && request.resource.data.get('_nJogos', resource.data.get('_nJogos', 0)) >= resource.data.get('_nJogos', 0);
+      }
       allow read: if request.auth != null
         && request.auth.uid == resource.data.get('sandboxOwnerUid', '');
       /* ⛔ CRIAR É DA FUNCTION, E SÓ DELA. É isto — e não negar toda escrita — que sustenta
@@ -256,7 +268,8 @@ service cloud.firestore {
        * o CARIMBO, e é ele que `sbCarimboIntacto()` trava. */
       allow update: if request.auth != null
         && request.auth.uid == resource.data.get('sandboxOwnerUid', '')
-        && sbCarimboIntacto();
+        && sbCarimboIntacto()
+        && sbPartesNaoEncolhem();
       /* Apagar é do dono: _"os dados do SB devem ficar apenas enquanto existe o SB. ao apagar
        * o SB deve apagar tudo relativo a ele para não persistir."_ (dono, 01/ago/2026). Sem
        * isto o botão "Apagar Torneio" do próprio sandbox tomaria permission-denied e os

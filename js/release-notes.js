@@ -19,6 +19,9 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.92 NÃO ganhou item próprio: impede uma sincronização administrativa
+    // parcial de apagar partes de sandbox dividido. É uma trava de integridade do
+    // ambiente de teste, sem mudança de regra para torneio de verdade.
     // ⚠️ 2.1.91 NÃO ganhou item, e é DECISÃO — mesma família das três anteriores. O que ela
     // conserta só acontece com o sandbox do desenvolvedor: a lista de torneios é uma só e
     // recebe de duas fontes, e a atualização dos torneios de verdade estava dizendo que o
