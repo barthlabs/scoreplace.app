@@ -190,7 +190,9 @@ s.FirestoreDB = {
       // quem restringe o fallback do topo à fase 0 — ver tests/avanco-de-fase-e-o-inicio-da-fase
       const nIni = (src.match(/window\._inicioDaFase\(t, _(phIdx|cp)\)/g) || []).length;
       const nFim = (src.match(/window\._fimDaFase\(t, _(phIdx|cp)\)/g) || []).length;
-      ok(nIni === 2 && nFim === 2,
+      // 3 usos de _inicioDaFase: os dois ramos da janela + o que faz a fase materializada
+      // contar como INICIADA (senão o cartão diz "aguardando" com a regressiva correndo).
+      ok(nIni >= 2 && nFim === 2,
          'DATAS: os DOIS ramos leem a janela pela porta única (' + nIni + '/' + nFim + ')');
       ok(!/\|\| window\._tProgParseMs\(t\.startDate\)/.test(src),
          'DATAS: nenhum ramo herda t.startDate direto (era a janela da fase 1)');

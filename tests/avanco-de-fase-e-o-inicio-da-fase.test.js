@@ -53,15 +53,20 @@ const base = () => ({ id:'x', format:'Fase de Grupos + Eliminatórias', status:'
   ok(ini === s._tProgParseMs('2026-09-02T13:04:00.000Z'), '② o início da fase 2 é o instante do AVANÇO (02/09)');
   ok(new Date(ini).getUTCMonth() === 8, '② e cai em SETEMBRO, não em agosto');
 }
-// ── ③ RETROATIVO: quem já avançou antes do carimbo existir ───────────────────
+// ── ③ O CONGELAMENTO NÃO É O AVANÇO — e por isso NÃO vira data de início ─────
+/* ⛔ ESTA ASSERÇÃO JÁ FOI O CONTRÁRIO, por engano meu, e a inversão fica registrada em
+ * vez de o caso sumir. Eu usei `classifCongeladaAt` como marco retroativo do avanço.
+ * MEDIDO no documento real: os 24 carimbos vão de 22/ago a 26/ago, porque o grupo
+ * congela QUANDO TERMINA (cânone), e o organizador avançou em 02/set. O congelamento
+ * anunciaria uma data uma semana no passado com cara de verdade — pior que não ter data.
+ * ⭐ Sem marco, a resposta certa é NÃO RESPONDER: o cartão cai na duração estimada. */
 {
   const t = base();
   t.rounds = [{ round:1, monarchGroups:[
-    { classifCongeladaAt:'2026-09-02T13:00:00.000Z' },
-    { classifCongeladaAt:'2026-09-02T13:04:00.000Z' } ] }];
-  const ini = s._inicioDaFase(t, 1);
-  ok(ini === s._tProgParseMs('2026-09-02T13:04:00.000Z'),
-     '③ sem carimbo, usa o ÚLTIMO congelamento da fase anterior — o instante do avanço');
+    { classifCongeladaAt:'2026-08-26T16:29:58.437Z' },
+    { classifCongeladaAt:'2026-08-22T23:27:52.811Z' } ] }];
+  ok(s._inicioDaFase(t, 1) === null,
+     '③ o congelamento da fase anterior NÃO vira início da fase seguinte');
 }
 // ── ④ declaração do organizador vence o carimbo ──────────────────────────────
 {

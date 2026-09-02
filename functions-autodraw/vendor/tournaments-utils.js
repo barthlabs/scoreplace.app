@@ -1474,18 +1474,16 @@ window._buildProgressInner = function(t) {
     var _pr = window._phaseCurrentRoundProgress(t);
     if (_pr && _pr.total > 0) {
       _phaseRoundActive = true;
-      /* ⛔ O DENOMINADOR É DA FASE, NÃO DA COLUNA. Aqui ficava `_pr.total` — os jogos da
-       * RODADA ATUAL — e era isso que anunciava "0/36" numa fase de 100 jogos: 36 é a
-       * primeira coluna da chave, não a etapa que a pessoa está começando.
-       * ⭐ O total sai de `_currentPhaseGames`, a MESMA fonte canônica que já conta os jogos
-       * da fase (e que `_buildProgressInner` usa lá em cima) — não de configuração, não de
-       * número escrito à mão. O agregado do torneio segue na barra roxa, intocado. */
-      var _faseHead = (typeof window._currentPhaseGames === 'function') ? window._currentPhaseGames(t) : null;
-      if (_faseHead && _faseHead.total > 0) {
-        prog = { total: _faseHead.total, completed: _faseHead.done, pct: _faseHead.pct };
-      } else {
-        prog = { total: _pr.total, completed: _pr.done, pct: _pr.pct };
-      }
+      /* ⛔ O DENOMINADOR É DA RODADA — ordem do dono (02/set/2026): _"99 jogos é a fase 2
+       * toda. deveria ser apenas os jogos da rodada 2"_.
+       * ⚠️ ISTO JÁ FOI O CONTRÁRIO e está sendo revertido de propósito: uma versão anterior
+       * trocou `_pr.total` por `_currentPhaseGames` para não anunciar "0/36" numa fase de
+       * 100. O cartão, porém, é o da RODADA — o cabeçalho diz "RODADA N" e as duas colunas
+       * de baixo são o início e o fim DAQUELA rodada. Misturar o total da FASE com a janela
+       * da RODADA é o que produzia "RODADA 2 · 0/99" com prazo de uma rodada só.
+       * ⭐ O agregado da fase e do torneio continua na linha "🏆 TORNEIO COMPLETO", que é
+       * onde ele sempre esteve — nada se perde, cada número volta pro seu lugar. */
+      prog = { total: _pr.total, completed: _pr.done, pct: _pr.pct };
       progFrac = prog.total ? (prog.completed / prog.total) : 0;
       _roundNum = _pr.roundNum;
       _roundComplete = _pr.complete;
@@ -1497,14 +1495,32 @@ window._buildProgressInner = function(t) {
       // sem 1º jogo → NÃO é "aguardando início" (o torneio não parou). Usa o fim da rodada
       // anterior desta fase como início efetivo. Só fica null quando a fase inteira não tem
       // nenhum jogo jogado — aí sim é "aguardando início" de verdade (mesma fonte do torneio).
+      /* ⭐ FASE MATERIALIZADA É FASE INICIADA — ordem do dono (02/set/2026): _"deveria
+       * estar iniciado com o avanço de fase e rodando a regressiva para o fim da rodada"_.
+       * Antes, a fase recém-avançada ficava em "⏳ Aguardando início" até alguém lançar o
+       * PRIMEIRO placar: `roundStartMs` (1º jogo iniciado) e `prevRoundEndMs` (fim da
+       * rodada anterior DESTA fase) são os dois nulos numa fase que acabou de nascer.
+       * Mas avançar É começar: os jogos estão sorteados, as duplas publicadas e o prazo
+       * correndo. Sem isto o cartão diz "aguardando" com a regressiva já em curso.
+       * ⛔ Só vale com marco REAL e já passado (o carimbo do avanço, via `_inicioDaFase`):
+       * fase com início declarado no FUTURO continua, corretamente, aguardando. */
       actualStart = _pr.roundStartMs || _pr.prevRoundEndMs || null;
+      if (actualStart == null) {
+        var _iniFase = window._inicioDaFase(t, _cp);
+        if (_iniFase && _iniFase <= now) actualStart = _iniFase;
+      }
       var _phL = (t.phases && t.phases[_cp]) || {};
       /* ⛔ MESMA REGRA DO RAMO DE CIMA, e no MESMO arquivo de propósito: já foi provado aqui
        * que consertar um ramo só deixa metade do defeito de pé. Fallback pro topo é da
        * fase 0; fase posterior sem datas próprias vai pra estimativa, não herda. */
       var _cfgSL = window._inicioDaFase(t, _cp);
       var _cfgEL = window._fimDaFase(t, _cp);
-      if (_cfgSL) schedStart = _cfgSL;
+      /* ⛔ SEM INÍCIO DA FASE, NÃO SE HERDA O DE CIMA. `schedStart` chega aqui com o valor
+       * do escopo de fora — que numa fase posterior é a janela do TORNEIO (= da fase
+       * inicial). Deixá-lo passar era o último fio do 02/08 → 19/08 aparecendo na Fase 2:
+       * a porta nova devolvia `null` corretamente e o valor velho seguia valendo por
+       * omissão. Sem marco, a coluna fica VAZIA — que é a resposta honesta. */
+      schedStart = _cfgSL || null;
       if (_cfgEL) {
         // ⏱️ A REGRESSIVA É DA RODADA: fatia a janela da fase pelas rodadas dela e pega a
         // fatia desta rodada. Ver window._phaseRoundWindow (a régua e o porquê).
@@ -2113,25 +2129,12 @@ window._inicioDaFase = function (t, idx) {
     var c = _p(t.phaseStartedAt[String(i)]);
     if (c) return c;
   }
-  // ③ retroativo: o congelamento da fase anterior é o instante do avanço
-  if (i >= 1) {
-    var maior = null;
-    try {
-      (t.rounds || []).forEach(function (r) {
-        ((r && r.monarchGroups) || []).forEach(function (g) {
-          if (!g || !g.classifCongeladaAt) return;
-          var ms = _p(g.classifCongeladaAt);
-          if (ms && (maior == null || ms > maior)) maior = ms;
-        });
-      });
-      (t.groups || []).forEach(function (g) {
-        if (!g || !g.classifCongeladaAt) return;
-        var ms = _p(g.classifCongeladaAt);
-        if (ms && (maior == null || ms > maior)) maior = ms;
-      });
-    } catch (e) {}
-    if (maior) return maior;
-  }
+  /* ⛔ AQUI HAVIA UM FALLBACK PELO `classifCongeladaAt` E ELE ESTAVA ERRADO — retirado
+   * em 02/set/2026, MEDIDO no documento real: os 24 carimbos vão de 22/ago a 26/ago,
+   * porque o grupo congela QUANDO TERMINA (cânone), não quando a fase seguinte começa.
+   * O dono avançou em 02/set. Usar o congelamento anunciaria uma data uma semana no
+   * passado com cara de verdade. Sem marco, melhor NÃO responder do que responder errado.
+   * ⇒ Quem sabe quando a fase começou é o carimbo do avanço (② acima). */
   // ④ topo — SÓ a fase 0
   return (i === 0) ? (_p(t.startDate) || null) : null;
 };

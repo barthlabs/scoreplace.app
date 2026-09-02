@@ -99,8 +99,20 @@ console.log('──── ③ o rótulo aparece no box que o dono vê ───�
   ok('o box foi montado', html.length > 100);
   ok('⭐⭐ o box diz "Rodada 2"', /Rodada 2/.test(html), 'não achei "Rodada 2" no HTML');
   ok('⛔ e NÃO diz "RODADA 1"', !/Rodada 1\b/i.test(html));
-  ok('⭐⭐ e o denominador impresso é 100', /\b100\b/.test(html));
-  ok('⛔ e não é 36', !/\b0\s*\/\s*36\b/.test(html) && !/\b36 jogos/i.test(html));
+  /* ⛔⛔ ESTA REGRA FOI INVERTIDA PELO DONO em 02/set/2026, e a inversão fica registrada
+   * aqui em vez de o teste sumir. A versão anterior travava o oposto — "o denominador é
+   * 100 (a fase), não 36 (a coluna)" — porque anunciar "0/36" numa fase de 100 parecia
+   * mentir sobre o tamanho da etapa. Vendo no ar, a ordem foi outra:
+   *   _"99 jogos é a fase 2 toda. deveria ser apenas os jogos da rodada 2"_.
+   * O motivo é geometria do cartão: o cabeçalho diz "RODADA N" e as DUAS COLUNAS de baixo
+   * são o início e o fim DAQUELA rodada. Um total de FASE ao lado de um prazo de RODADA é
+   * que era a mentira — o número e o prazo falavam de coisas diferentes.
+   * ⭐ O agregado da fase e do torneio não se perde: ele vive na linha "🏆 TORNEIO
+   * COMPLETO", que este mesmo box imprime logo abaixo. */
+  ok('⭐⭐ o denominador da RODADA é 36 (a coluna atual), não 100 (a fase)',
+     /\b0\s*\/\s*36\b/.test(html) || /\b36 jogos/i.test(html));
+  ok('⭐ e o agregado da fase/torneio continua no box (linha do Torneio completo)',
+     /\b100\b/.test(html));
 }
 
 console.log('──── ④ mais fases: nenhum rótulo global se repete ────');

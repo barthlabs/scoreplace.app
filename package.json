@@ -31,7 +31,8 @@
     "test:autodraw": "node functions-autodraw/test-agenda-core.js && node functions-autodraw/test-autodraw-dividido.js && node functions-autodraw/test-corrida-slot-emu.js && node functions-autodraw/test-closeround.js && node functions-autodraw/test-closeround-authz.js && node functions-autodraw/test-drawinitial.js && node functions-autodraw/test-drawround-authz.js && node functions-autodraw/test-format2.js && node functions-autodraw/test-orphan-uid.js && node functions-autodraw/test-parity-old-vs-new.js && node functions-autodraw/test-persist-boundary.js && node functions-autodraw/test-uid-identity.js",
     "test:emu": "npm run test:emu:fs && npm run test:emu:fn",
     "test:emu:fs": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only firestore --config firebase.emulator.json --project demo-scoreplace \"FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-pair-replicate.js && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-sandbox-replicate.js && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/test-reminders-emulator.js\"",
-    "test:emu:fn": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only functions,firestore --project demo-scoreplace \"node functions/test-backfill-emu.js && node functions/test-syncroster-emu.js\""
+    "test:emu:fn": "PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" firebase emulators:exec --only functions,firestore --project demo-scoreplace \"node functions/test-backfill-emu.js && node functions/test-syncroster-emu.js\"",
+    "test:recuperacao": "node tests/recuperar-fase2-no-emulador.test.js"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
