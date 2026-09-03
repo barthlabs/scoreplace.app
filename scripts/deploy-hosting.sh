@@ -100,6 +100,31 @@ echo "  ▸ firebase-admin ligado na cópia ($NM_AD) — a corrida do sorteio ro
 # pulado (útil em máquina sem Java), com ela um 'pulado' vira VERMELHO.
 export SP_EXIGE_CORRIDA_REAL=1
 
+# ── O CODEBASE `functions/` PRECISA DO MESMO LINK ────────────────────────────────────
+# As provas da porta única de escrita, da contenção de fase nas Rules e da recuperação
+# sobem um driver que faz `require('<copia>/functions/node_modules/firebase-admin')`.
+# `functions/node_modules` é gitignored igual ao do autodraw, então na cópia extraída por
+# `git archive` ele não existe e as quatro suítes MORREM em MODULE_NOT_FOUND — não "pulam",
+# quebram. Medido em 03/set/2026, publicando a 2.1.102. Mesmo tratamento da raiz e do
+# autodraw: o node_modules real é LIGADO dentro da cópia e as provas rodam de verdade.
+NM_FN=""
+if [[ -e "$RAIZ/functions/node_modules/firebase-admin" ]]; then
+  NM_FN="$RAIZ/functions/node_modules"
+elif [[ -e "$RAIZ/functions-autodraw/node_modules/firebase-admin" ]]; then
+  NM_FN="$RAIZ/functions-autodraw/node_modules"
+fi
+if [[ -z "$NM_FN" ]]; then
+  echo
+  echo "✗ firebase-admin NÃO existe para o codebase 'functions/' — as provas da porta única"
+  echo "  de escrita e da contenção de fase nas Rules não teriam como rodar no predeploy."
+  echo
+  echo "  CONSERTO:  (cd functions && npm install)"
+  exit 1
+fi
+mkdir -p "$DEST/functions"
+ln -s "$NM_FN" "$DEST/functions/node_modules"
+echo "  ▸ firebase-admin ligado na cópia ($NM_FN) — as provas de escrita/Rules rodam no predeploy"
+
 # lixo que o Drive cria e que iria pro ar junto (hosting.public = ".")
 LIXO="$(find "$DEST" \( -name '* 2' -o -name '* 3' -o -name '.DS_Store' \) | head -5 || true)"
 if [[ -n "$LIXO" ]]; then echo "✗ lixo na extração:"; echo "$LIXO"; exit 1; fi
