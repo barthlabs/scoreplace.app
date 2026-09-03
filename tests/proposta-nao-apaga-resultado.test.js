@@ -133,7 +133,16 @@ eq(m6.woAbsent, 'Fulano', 'com quem faltou');
  * empurrar. Este bloco guarda as três regras dessa escrita.
  */
 const bui = fs.readFileSync(path.join(ROOT, 'js', 'views', 'bracket-ui.js'), 'utf8');
-const ad  = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+/* ⚠️ 2.2 — O GRAVADOR MUDOU DE ENDEREÇO, NÃO DE COMPORTAMENTO. O que era um bloco dentro
+ * de `_gravaTorneio` virou um planejador puro em `functions-autodraw/write-plan.js`
+ * (`planWrites`) mais um executor (`applyPlan`), por ordem do revisor: a checagem de teto e
+ * a escrita real precisam consumir o MESMO plano, senão o teto mede uma coisa e o banco
+ * recebe outra. Estas asserções continuam valendo palavra por palavra — só que o CAMINHO DE
+ * ESCRITA da CF agora são dois arquivos. Varrer só o index.js daria vermelho por endereço
+ * errado, que é o pior tipo de falso negativo: some a cobertura e parece regressão. */
+const _cfIdx = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+const _cfPlan = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'write-plan.js'), 'utf8');
+const ad = _cfIdx + '\n/* ── write-plan.js (mesmo caminho de escrita) ── */\n' + _cfPlan;
 
 console.log('\n6. O espelho do CLIENTE não existe mais');
 ok(!/_dualWriteMatchResult\s*\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')),
@@ -142,17 +151,23 @@ ok(!/function _dualWriteResult/.test(bui) && !/_dualWriteResult\(tId/.test(bui),
    'bracket-ui.js não tem mais o wrapper nem as 7 chamadas dele');
 
 console.log('\n7. A CF escreve o subdoc — e com as travas certas');
-const bloco = ad.slice(ad.indexOf("if (nome === 'matches' && _mrEspelho"),
-                       ad.indexOf("if (nome === 'matches' && _mrEspelho") + 2400);
+const bloco = ad.slice(ad.indexOf("if (nome === 'matches' && o.espelho"),
+                       ad.indexOf("if (nome === 'matches' && o.espelho") + 2400);
 ok(/buildMirrorDoc\(/.test(bloco),
    'usa buildMirrorDoc — a MESMA fonte de functions/, não uma segunda cópia do formato');
-ok(/pendingResult = FieldValue\.delete\(\)/.test(bloco),
+/* 2.2: o planejador é PURO — ele DECLARA `apagarCampos:['pendingResult']` e só o executor
+ * (applyPlan, que conhece o SDK) traduz para FieldValue.delete(). Confiro os DOIS lados:
+ * declarar sem traduzir não apaga nada, e traduzir sem declarar nunca é acionado. */
+ok(/apagar\.push\('pendingResult'\)/.test(bloco) &&
+   /doc\[c\] = FieldValue\.delete\(\)/.test(ad),
    '⛔ jogo DECIDIDO apaga o pendingResult — confirmado não fica pedindo confirmação');
-ok(/_decidido = \(jogo\.winner != null/.test(bloco) && /jogo\.draw === true \|\| jogo\.wo != null/.test(bloco),
+ok(/decidido = \(jogo\.winner != null/.test(bloco) && /jogo\.draw === true \|\| jogo\.wo != null/.test(bloco),
    'e "decidido" inclui empate e W.O., não só winner');
-ok(/delete _doc\.playerUids/.test(bloco),
+ok(/delete doc\.playerUids/.test(bloco),
    '⛔ roster VAZIO não sobrescreve roster bom — é ele que sustenta a regra de escrita');
-ok(/\{ merge: true \}/.test(bloco),
+/* 2.2: o merge também virou DECLARAÇÃO no plano (`merge: true` na op) e tradução no
+ * executor (`tx.set(alvo, doc, { merge: true })`). Os dois lados, pelo mesmo motivo de cima. */
+ok(/merge: true/.test(bloco) && /tx\.set\(alvo, doc, \{ merge: true \}\)/.test(ad),
    'grava com merge — é o que preserva o `replay`, que o servidor não sabe recalcular');
 
 console.log('\n8. O construtor do subdoc é de verdade e monta o formato de produção');

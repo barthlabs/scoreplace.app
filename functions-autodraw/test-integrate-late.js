@@ -115,7 +115,7 @@ const R1 = (t) => (t.matches || []).filter((m) => m && m.round === 1);
   ok('resolve nome e gênero por uid ANTES do motor', corpo.includes('_preloadDrawNames(') && corpo.includes('_enrichParticipantsFromProfiles('));
   ok('monta torneio dividido dentro da transação', corpo.includes('await _leTorneio(tx, doc.ref, doc.id)'));
   ok('guarda o estado anterior para gravar só deltas', corpo.includes('const _tAntes = _antesDoMotor(t)'));
-  ok('persiste pelo writer canônico (inclusive subcoleções)', corpo.includes('_gravaTorneio(tx, doc.ref, t, _tAntes)'));
+  ok('persiste pelo writer canônico (inclusive subcoleções)', corpo.includes('_gravaTorneio(tx, doc.ref, t, _tAntes, { agoraIso: _agoraIsoTx })'));
   ok('não pula torneio dividido por ler documento cru', !corpo.includes('PULADO: torneio dividido'));
   ok('best-effort por torneio (um doc ruim não derruba a varredura)', corpo.includes('catch'));
   ok('avisa depois de formar', corpo.includes('_avisarGrupoFormado('));

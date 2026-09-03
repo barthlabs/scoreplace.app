@@ -19,7 +19,16 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 const db = fs.readFileSync(path.join(ROOT, 'js', 'firebase-db.js'), 'utf8');
-const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+/* ⚠️ 2.2 — O GRAVADOR MUDOU DE ENDEREÇO, NÃO DE COMPORTAMENTO. O que era um bloco dentro
+ * de `_gravaTorneio` virou um planejador puro em `functions-autodraw/write-plan.js`
+ * (`planWrites`) mais um executor (`applyPlan`), por ordem do revisor: a checagem de teto e
+ * a escrita real precisam consumir o MESMO plano, senão o teto mede uma coisa e o banco
+ * recebe outra. Estas asserções continuam valendo palavra por palavra — só que o CAMINHO DE
+ * ESCRITA da CF agora são dois arquivos. Varrer só o index.js daria vermelho por endereço
+ * errado, que é o pior tipo de falso negativo: some a cobertura e parece regressão. */
+const _cfIdx = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+const _cfPlan = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'write-plan.js'), 'utf8');
+const cf = _cfIdx + '\n/* ── write-plan.js (mesmo caminho de escrita) ── */\n' + _cfPlan;
 
 // ── ① o cliente ─────────────────────────────────────────────────────────────
 const iS = db.indexOf('async saveTournament(');
@@ -36,20 +45,31 @@ ok(/'participants', 'history'/.test(antesDoSet),
   '⛔ e devolve pro doc o que NÃO está no marcador — dividir extrai os três e zeraria o elenco');
 
 // ── ② as CFs ────────────────────────────────────────────────────────────────
-ok(/function _gravaTorneio\(tx, ref, tDepois, tAntes\)/.test(cf), 'as CFs têm um gravador único');
+ok(/function _gravaTorneio\(tx, ref, tDepois, tAntes, ctx\)/.test(cf), 'as CFs têm um gravador único');
 ok(/function _leTorneio\(tx, ref, tId\)/.test(cf), 'e um leitor único que MONTA das subcoleções');
 const iG = cf.indexOf('function _gravaTorneio(');
 // ⛔ ANCORA NO FIM DA FUNÇÃO, não numa janela de N caracteres: já me pegou cinco vezes.
 // Um comentário a mais empurra o código pra fora da janela e o teste 'falha' sem regressão.
-const grava = cf.slice(iG, cf.indexOf('\nfunction ', iG + 10));
+  /* 2.2: o gravador virou planejador puro (`planWrites`) + executor (`applyPlan`) em
+   * write-plan.js. Mesma invariante, endereço novo — a âncora acompanha o código. */
+const iPlan = cf.indexOf('function planWrites(');
+const grava = cf.slice(iG, cf.indexOf('\nfunction ', iG + 10)) +
+              cf.slice(iPlan, cf.indexOf('\nfunction _fecha(', iPlan)) +
+              cf.slice(cf.indexOf('function applyPlan('));
 ok(/jogosQueMudaram/.test(grava),
   '⭐ só os jogos que MUDARAM são escritos — é o ponto inteiro (um ponto toca ~1 KB)');
-ok(/tx\.delete\(col\.doc/.test(grava), 'e jogo que sumiu é apagado — ali sumir é informação real');
+/* ⛔ ATENÇÃO AO QUE ESTA ASSERÇÃO MEDE. Ancorar só em `tx.delete(alvo)` NÃO serve: essa
+ * linha é a CAPACIDADE do executor e continua no arquivo mesmo que o planejador pare de
+ * emitir delete nenhum. Medi: apaguei o `d.sumiram.forEach` e o teste ficou VERDE. Então
+ * exijo os DOIS lados — o planejador EMITE a op para quem sumiu, e o executor a traduz. */
+ok(/d\.sumiram\.forEach\(\(m\) => ops\.push\(\{ tipo: 'delete'/.test(grava) &&
+   /tx\.delete\(alvo\)/.test(grava),
+   'e jogo que sumiu é apagado — ali sumir é informação real');
 ok(/\['participants', 'history'\]/.test(grava),
   '⛔ mesma proteção do elenco no servidor');
-ok((cf.match(/_gravaTorneio\(tx, ref, t, _tAntes\)/g) || []).length >= 6,
-  '⭐ TODAS as portas de escrita passam por ele (' +
-  ((cf.match(/_gravaTorneio\(tx, ref, t, _tAntes\)/g) || []).length) + ' pontos) — uma sozinha desfaz tudo');
+ok((cf.match(/_gravaTorneio\(tx, ref, t, _tAntes, \{ agoraIso: _agoraIsoTx \}\)/g) || []).length >= 6,
+  '⭐ TODAS as portas passam por ele E com instante ESTÁVEL (' +
+  ((cf.match(/_gravaTorneio\(tx, ref, t, _tAntes, \{ agoraIso: _agoraIsoTx \}\)/g) || []).length) + ' pontos) — uma sozinha desfaz tudo');
 ok(!/tx\.set\(ref, b\.persist\)/.test(cf.slice(cf.indexOf('exports.'))),
   '⛔ e nenhuma exportada grava o doc cru direto');
 

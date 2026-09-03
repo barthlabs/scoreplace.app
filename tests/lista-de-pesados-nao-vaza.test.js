@@ -105,10 +105,23 @@ const cli = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
 ok('⛔ o cliente devolve derivando de PESADOS (não de lista à mão)',
    /PESADOS\)?\s*\|\|\s*\[[^\]]*\]\)\.forEach/.test(cli));
 ok('   e sem alcançar símbolo de outro escopo', !/\(S\.PESADOS/.test(cli));
-const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
-ok('⛔ o servidor idem', /\(_tSplit\.PESADOS \|\| \[[^\]]*\]\)\.forEach/.test(cf));
+/* ⚠️ 2.2 — O GRAVADOR MUDOU DE ENDEREÇO, NÃO DE COMPORTAMENTO. O que era um bloco dentro
+ * de `_gravaTorneio` virou um planejador puro em `functions-autodraw/write-plan.js`
+ * (`planWrites`) mais um executor (`applyPlan`), por ordem do revisor: a checagem de teto e
+ * a escrita real precisam consumir o MESMO plano, senão o teto mede uma coisa e o banco
+ * recebe outra. Estas asserções continuam valendo palavra por palavra — só que o CAMINHO DE
+ * ESCRITA da CF agora são dois arquivos. Varrer só o index.js daria vermelho por endereço
+ * errado, que é o pior tipo de falso negativo: some a cobertura e parece regressão. */
+const _cfIdx = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+const _cfPlan = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'write-plan.js'), 'utf8');
+const cf = _cfIdx + '\n/* ── write-plan.js (mesmo caminho de escrita) ── */\n' + _cfPlan;
+ok('⛔ o servidor idem', /\((?:_tSplit|split)\.PESADOS \|\| \[[^\]]*\]\)\.forEach/.test(cf));
 const iG = cf.indexOf('function _gravaTorneio(');
-const grava = cf.slice(iG, cf.indexOf('\nfunction ', iG + 10));
+  /* 2.2: o gravador virou planejador puro (`planWrites`) + executor (`applyPlan`) em
+   * write-plan.js. Mesma invariante, endereço novo — a âncora acompanha o código. */
+const iPlan = cf.indexOf('function planWrites(');
+const grava = cf.slice(iG, cf.indexOf('\nfunction ', iG + 10)) +
+              cf.slice(iPlan, cf.indexOf('\nfunction _fecha(', iPlan));
 ok('⛔ e o servidor grava TODA parte do marcador, não só `matches`',
   /fora\.forEach\(/.test(grava),
   'era só o ramo de matches: qualquer outra parte era esvaziada do doc e nunca escrita');

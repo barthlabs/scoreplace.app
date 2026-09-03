@@ -376,7 +376,19 @@
   function optsDaTransicao(cfg, ctx) {
     ctx = ctx || {};
     var src = (cfg && cfg.source) || {};
+    /* ⭐ o embaralhador da transição sai do PRNG da operação quando ela existe. Sem `det`,
+     * `buildEntrantsByDest` cai no `_defaultShuffle` (Math.random), como sempre. */
+    var _det = (cfg && cfg._det) || (ctx && ctx._det) || {};
+    var _shuffleDet = _det.rnd ? function (arr) {
+      var a = arr.slice();
+      for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(_det.rnd() * (i + 1));
+        var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+      }
+      return a;
+    } : null;
     return {
+      shuffle: _shuffleDet || undefined,
       scope: src.scope || 'per_group',
       rankingBasis: src.rankingBasis || 'individual',
       flatOverall: src.flatOverall === true,
@@ -904,7 +916,8 @@
 
   // Monta TODAS as chaves de uma fase a partir dos grupos da fase anterior.
   // Devolve { matches:[...], tiers:{dest:res}, converge:{gf,third} }.
-  function buildPhaseBrackets(prevGroups, phaseCfg, computeStandings, idPrefix) {
+  function buildPhaseBrackets(prevGroups, phaseCfg, computeStandings, idPrefix, det) {
+    det = det || (phaseCfg && phaseCfg._det) || {};
     idPrefix = idPrefix || ('ph-' + ((phaseCfg && phaseCfg.name) || 'x').replace(/\s+/g, '_'));
     var mapping = mappingDaTransicao(phaseCfg);
     var fixedPairs = phaseCfg ? (phaseCfg.fixedPairs !== false) : true;
@@ -1202,7 +1215,8 @@
     return _ret;
   }
 
-  function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
+  function buildPhaseGroupStage(prevGroups, phaseCfg, computeStandings, idPrefix, det) {
+    det = det || {};
     idPrefix = idPrefix || 'phg';
     var pool = _poolFromPrev(prevGroups, phaseCfg, computeStandings);
     if (!pool.length) return { matches: [], groups: [] };
@@ -1580,7 +1594,8 @@
   // todos os classificados jogam todos (round-robin), repetido por `turnos`. Numa
   // fase posterior o avanço é MANUAL, então materializa TODOS os jogos de uma vez
   // (sem cadência de sorteio no tempo). Matches: { bracket:'league', round:turno }.
-  function buildPhaseLeagueStage(prevGroups, phaseCfg, computeStandings, idPrefix) {
+  function buildPhaseLeagueStage(prevGroups, phaseCfg, computeStandings, idPrefix, det) {
+    det = det || {};
     idPrefix = idPrefix || 'phl';
     return genLeagueFromPool(_poolFromPrev(prevGroups, phaseCfg, computeStandings), phaseCfg, idPrefix);
   }
@@ -2130,7 +2145,17 @@
 
   // Materializa a próxima fase: gera as chaves a partir das colocações da fase
   // anterior e anexa em t.matches (tagueadas com phaseIndex). PURA (sem DOM/AppStore).
-  function materializeNextPhase(t, computeStandings, idPrefix) {
+  /* ⭐ 2.2 — DETERMINISMO POR ARGUMENTO (`det`).
+   * O avanço passou a rodar numa Cloud Function, dentro de `db.runTransaction`, e o
+   * Firestore RE-EXECUTA o callback quando aborta. Qualquer `Date.now()`/`Math.random()`
+   * no caminho faria cada tentativa produzir IDS E ORDEM diferentes — a mesma operação
+   * gravaria coisas distintas, e a idempotência por `operationId` deixaria de valer.
+   * `det = { ts, rnd, agoraIso }` vem do carimbo da operação
+   * (sha256(operationId|tournamentId|toPhaseIndex), em advance-core.js).
+   * ⛔ TODO parâmetro é OPCIONAL: sem `det`, o comportamento é EXATAMENTE o de antes —
+   * o cliente e os fluxos antigos não mudam. */
+  function materializeNextPhase(t, computeStandings, idPrefix, det) {
+    det = det || {};
     if (!isMultiPhase(t)) return { ok: false, error: 'not-multiphase' };
     var cur = t.currentPhaseIndex || 0;
     var nextIdx = cur + 1;
@@ -2162,15 +2187,17 @@
     var built;
     if (_mon || _fmt === 'league') {
       var _cfgL = _mon ? Object.assign({}, cfg, { fixedPairs: false, ligaCadence: 'incremental' }) : cfg;
-      built = buildPhaseLeagueStage(groups, _cfgL, cs, _id);    // incremental devolve só o pool
+      built = buildPhaseLeagueStage(groups, _cfgL, cs, _id, det);    // incremental devolve só o pool
     } else if (_fmt === 'groups') {
-      built = buildPhaseGroupStage(groups, cfg, cs, _id);
+      built = buildPhaseGroupStage(groups, cfg, cs, _id, det);
     } else {
       built = buildPhaseBrackets(groups, Object.assign({}, cfg, {
         _prevRRRodadaUnica: _prevRRUnica,
         _promotionTiebreakers: t.tiebreakers,
-        _promotionBirthByName: (typeof window !== 'undefined' && typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {}
-      }), cs, _id);
+        _promotionBirthByName: (typeof window !== 'undefined' && typeof window._tbBirthByName === 'function') ? window._tbBirthByName(t) : {},
+        /* o embaralhador determinístico desce até `buildEntrantsByDest` por aqui */
+        _det: det
+      }), cs, _id, det);
     }
     // v3.1.16 (inc 8 — unificação de storage): Liga rodada a rodada de fase posterior
     // adota o MESMO modelo da Fase 0 — as rodadas moram num array `rounds` real (mesma
@@ -2179,7 +2206,7 @@
     // (slim: displayName + uid) + opponentHistory/sitOutHistory (acumulam por rodada) +
     // lastAutoDrawAt (dedup do auto-draw, por fase). O cliente (advanceMultiPhase →
     // _phaseGenNextLeagueRound) gera a 1ª rodada logo após, escrevendo em slot.rounds.
-    return storePhase(t, nextIdx, built);
+    return storePhase(t, nextIdx, built, det);
   }
 
   /* ══ O AVANÇO DE FASE É A DATA DE INÍCIO DA FASE SEGUINTE ═══════════════════════════
@@ -2202,12 +2229,15 @@
    * um carimbo de execução lá dentro seria apagado numa reedição. Mapa de topo, por índice.
    * ⚠️ Não altera regra de avanço, seed, pareamento, promoção nem classificação: é UMA
    * linha de registro, depois de a fase já estar decidida e armazenada. */
-  function _carimbaInicioDaFase(t, idx) {
+  /* ⚠️ `agoraIso` é OPCIONAL: sem ele o carimbo é `new Date()`, como sempre foi (o cliente
+   * e os fluxos antigos não mudam). Com ele, o instante é o da OPERAÇÃO — calculado uma
+   * vez fora da transação, para o retry do Firestore não gerar um carimbo por tentativa. */
+  function _carimbaInicioDaFase(t, idx, agoraIso) {
     try {
       if (!t || idx == null) return;
       t.phaseStartedAt = t.phaseStartedAt || {};
       var k = String(idx);
-      if (!t.phaseStartedAt[k]) t.phaseStartedAt[k] = new Date().toISOString();
+      if (!t.phaseStartedAt[k]) t.phaseStartedAt[k] = agoraIso || new Date().toISOString();
     } catch (e) { /* o carimbo nunca derruba um avanço de fase */ }
   }
 
@@ -2215,7 +2245,8 @@
   // gerador (built) em t na shape taggeada (matches com phaseIndex) OU em
   // t.phaseRounds[idx] (Liga incremental). É o MESMO armazenamento pra Fase 0
   // (generateDrawFunction) e Fase N (materializeNextPhase) — "tudo é fase N".
-  function storePhase(t, idx, built) {
+  function storePhase(t, idx, built, det) {
+    det = det || {};
     if (built.incrementalLeague) {
       var _slim = (built.pool || []).map(function (e) {
         var nm = e.displayName || e.name;
@@ -2228,7 +2259,7 @@
       t.currentPhaseIndex = idx;
       t.currentStage = 'phase' + idx;
       t._phaseMaterialized = idx;
-      _carimbaInicioDaFase(t, idx);   // o avanço É o início desta fase
+      _carimbaInicioDaFase(t, idx, det.agoraIso);   // o avanço É o início desta fase
       return { ok: true, matches: [], built: built, incrementalLeague: true, phaseIndex: idx };
     }
     if (!built.matches.length && !built.converge) return { ok: false, error: 'no-entrants' };
@@ -2258,7 +2289,7 @@
     t.currentPhaseIndex = idx;
     t.currentStage = 'phase' + idx;
     t._phaseMaterialized = idx;
-    _carimbaInicioDaFase(t, idx);   // o avanço É o início desta fase
+    _carimbaInicioDaFase(t, idx, det.agoraIso);   // o avanço É o início desta fase
     return { ok: true, matches: built.matches, built: built };
   }
 
@@ -2381,6 +2412,11 @@
         if (!_st.length) return;
         // nome E uid: o nome envelhece (a pessoa se renomeia), o uid é a identidade.
         g.classifCongelada = _st.map(function (x) { return { name: (x && x.name) || '', uid: (x && x.uid) || null }; });
+        /* ⚠️ AQUI NÃO EXISTE `det` — este congelamento é do `advanceMultiPhase` do CLIENTE,
+         * que não recebe carimbo de operação. Escrever `det.agoraIso` aqui seria
+         * ReferenceError em produção e o `node --check` NÃO pega (é erro de execução, não
+         * de sintaxe) — a armadilha de sempre. O congelamento determinístico é o da CF,
+         * que roda com o instante da operação. */
         g.classifCongeladaAt = new Date().toISOString();
       });
     } catch (e) { /* congelar nunca pode impedir o avanço */ }

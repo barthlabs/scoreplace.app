@@ -66,6 +66,34 @@ async function _freqDosTokensSoltos(db, dup, nomeMeu, pessoas) {
 }
 const _enrollCore = require("./enroll-core");
 const _splitParts = require("./split-parts.js");   // torneio dividido: elenco na subcoleção
+
+/* ═══ QUEM PERGUNTA "ESTA PESSOA ESTÁ INSCRITA?" TEM QUE LER O ELENCO ONDE ELE MORA ═══
+ *
+ * ⛔ O BURACO, MEDIDO EM PRODUÇÃO (02/set/2026, Confra `tour_1780009816637`):
+ *   _semPesados = ["matches","participants","opponentHistory"]
+ *   computeMemberUids(doc CRU)  →   5 uids
+ *   computeMemberUids(hidratado) → 153 uids
+ * Num torneio DIVIDIDO o campo `participants` do documento é `[]` — o elenco mora na
+ * subcoleção. Três portas liam o doc cru e decidiam com um elenco de 5 pessoas:
+ *   · setParticipantContactPhone → "Essa pessoa não está inscrita neste torneio." pra
+ *     quem está inscrita há meses (relato do dono, com print: a 153ª do Confra);
+ *   · setParticipantLetzplay     → a MESMA recusa, pelo mesmo motivo;
+ *   · sendOrgCommunication       → PIOR, porque é silenciosa: a lista de destinatários
+ *     saía vazia e o comunicado do organizador chegava só nele mesmo.
+ *
+ * ⭐ Hidrata SÓ `participants`: estas portas não decidem chave nem lotação, e arrastar
+ * `matches`/`opponentHistory` de um torneio de 150 pessoas dentro de um callable de 30s
+ * seria pagar pedágio por dado que ninguém vai olhar.
+ * ⛔ E `hidratar` LANÇA quando a parte não remonta — de propósito. Decidir "está inscrita?"
+ * contra um elenco que não veio é o defeito que isto conserta; falhar a pessoa vê.
+ * [[project_dividir_exige_todo_escritor_ciente]] [[project_grupo_e_documento_e_dividir_seletivo]]
+ */
+async function _lerTorneioComElenco(db, tournamentId) {
+  const ref = db.collection("tournaments").doc(tournamentId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  return await _splitParts.hidratar(null, ref, snap.data() || {}, ["participants"]);
+}
 const _partesPerm = require("./partes-permissao.js");   // allowlist: quem pode mexer em que
 const _tSplitFn = require("./vendor/tournament-split-core.js"); // colecaoDaParte
 const _splitResultMirror = require("./match-result-mirror-core.js");
@@ -3163,6 +3191,15 @@ exports.aplicarNoTorneio = onCall(
     if (!ops.length) return { aplicadas: 0, negadas: [] };
     if (ops.length > 200) throw new HttpsError("invalid-argument", "no máximo 200 operações por chamada");
 
+    /* ⛔ LOCAL, como em todas as vizinhas — e NUNCA no topo do módulo: `admin.initializeApp()`
+     * roda no load do arquivo, e um `db` de topo amarraria a instância ao momento do load.
+     * A ausência desta linha deixou a porta lançando `ReferenceError: db is not defined` em
+     * TODA chamada desde a 2.0.122: presença/check-in aparecia na tela (otimista) e o
+     * snapshot seguinte a apagava, porque nada chegou a ser gravado. O teste desta porta lia
+     * o arquivo como TEXTO e casava com o nome do lote — casar com o TEXTO de uma variável
+     * não prova que ela EXISTE. [[feedback_measure_dont_declare_fixed]] */
+    const db = admin.firestore();
+
     const docRef = db.collection("tournaments").doc(tournamentId);
     const snap = await docRef.get();
     if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
@@ -3285,6 +3322,273 @@ function _isTournamentOrgCaller(t, callerUid) {
   const ch = Array.isArray(t.coHosts) ? t.coHosts : [];
   return ch.some((c) => c && c.uid === callerUid && (c.status === 'active' || c.status === 'accepted'));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * O LINK DO GRUPO DE WHATSAPP DO JOGO — A PORTA DE ESCRITA
+ *
+ * ⛔ O BURACO QUE ISTO FECHA: `js/views/wa-group.js` gravava `m.waGroup` em MEMÓRIA e
+ * persistia com `FirestoreDB.saveTournament(t)` → `.set(merge:true)` no DOCUMENTO. Num
+ * torneio DIVIDIDO (`_semPesados` contém 'matches') os jogos não moram mais no documento:
+ * moram na subcoleção, onde `firestore.rules` diz `allow write: if false` pro cliente.
+ * Resultado: o link era pintado na tela, o app dizia "Grupo salvo", e NADA persistia — a
+ * próxima abertura devolvia o jogo sem grupo. É a mesma família do buraco que a 2.0.120
+ * fechou na inscrição. [[project_dividir_exige_todo_escritor_ciente]]
+ *
+ * ⛔ POR QUE NÃO PASSA PELA PORTA GENÉRICA (`aplicarNoTorneio`): quando a parte está no
+ * marcador, ela grava `{_idx, _k, item}` — a forma dos PESADOS. O registro de `matches` é
+ * `{_chave, _loc, jogo, playerUids}` (js/views/tournament-split-core.js). Escrever a forma
+ * errada DESTRUIRIA o registro: sem `_loc` o remonte não sabe onde o jogo mora, e sem
+ * `playerUids` a regra por jogo perde o insumo. E `matches` nem está na allowlist de
+ * `functions/partes-permissao.js` — corretamente.
+ *
+ * ⛔ E POR QUE NÃO `split-parts.gravar(tx, ref, antes, { matches: … })` — MEDIDO, não
+ * suposto (harness com o código real, 2 jogos em `rounds[0].matches`): `gravar` resolve a
+ * parte com `dividir({ matches: <array> }, ['matches'])`, e esse `dividir` só enxerga
+ * `t.matches[]`. Todo registro sai com `_loc = {tipo:'matches', mi}` e SEM `playerUids`,
+ * enquanto os jogos do Confra moram em `rounds[ri].matches[mi]`. Duas consequências, as
+ * duas fatais:
+ *   ① o jogo alterado é regravado com o LUGAR ERRADO — no remonte seguinte ele salta de
+ *      `rounds` pra `t.matches` e some da chave;
+ *   ② todo jogo que NÃO estivesse no array passado cai em `sumiram` e é APAGADO. Medido:
+ *      passar 1 jogo de um torneio de 2 apagou o outro.
+ * ⇒ Aqui a escrita é CIRÚRGICA: `tx.update(<doc do jogo>, FieldPath('jogo','waGroup'), …)`.
+ * Um caminho de campo toca SÓ aquele campo — `_chave`, `_loc`, `playerUids` e todo o resto
+ * do jogo ficam intactos POR CONSTRUÇÃO, não por cuidado meu.
+ *
+ * ⛔ O QUE ESTA PORTA NÃO FAZ, e é o ponto dela: ela não sabe escrever placar, agenda,
+ * elenco, chave nem outro jogo. O único campo que ela conhece é `jogo.waGroup`.
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+const _waRoster = require("./match-roster");   // matchRoster: quem joga ESTE jogo, por uid
+
+/* A REGRA DO QUE É UM LINK DE GRUPO — CÓPIA MANUAL, EM LOCKSTEP COM O APP.
+ * A fonte é `_normalizeLink` (js/views/wa-group.js), exposta como
+ * `window._waGrpNormalizeLink` e congelada em tests/wa-group-link.test.js. Arquivo de
+ * browser não é importável aqui e o copy-vendor não o copia, então a expressão é REPETIDA
+ * — e `tests/link-do-grupo-tem-uma-regra-so.test.js` compara os dois literais e falha se um
+ * mudar sem o outro. Mesma disciplina de `slotUids` em functions/match-roster.js.
+ * ⚠️ Aceita a colagem COM TEXTO EM VOLTA ("Entre no meu grupo…: <url>") porque é isso que
+ * o botão "Compartilhar" do WhatsApp produz — recusar seria um bug de UX real, e o usuário
+ * não distingue os dois botões do WhatsApp. [[feedback_unify_dual_entry_points]] */
+const _WA_GRUPO_LINK_RE = /https:\/\/chat\.whatsapp\.com\/([A-Za-z0-9_-]{6,})/;
+function _waNormalizaLink(raw) {
+  const m = String(raw == null ? "" : raw).match(_WA_GRUPO_LINK_RE);
+  return m ? "https://chat.whatsapp.com/" + m[1] : "";
+}
+
+/* ⛔ UUID v4 ESTRITO, não "uma string qualquer". O `operationId` é a CHAVE DA IDEMPOTÊNCIA:
+ * é ele que faz o RETRY de uma resposta perdida (quadra sem sinal, o caso normal aqui) não
+ * gravar duas vezes. Aceitar qualquer string convidaria o cliente a mandar algo derivado do
+ * conteúdo — e aí dois grupos diferentes com o mesmo link colidiriam na idempotência. */
+const _WA_UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/* ── REI/RAINHA: O GRUPO É DO GRUPO, NÃO DO JOGO ──────────────────────────────
+ * Os 3 jogos do grupo têm as MESMAS 4 pessoas → um grupo de WhatsApp só. A ÂNCORA é a
+ * ESTRUTURAL que o motor grava (rodada + índice do grupo + fase), a mesma de
+ * `_schGroupMatches` (js/views/schedule-poll.js) — NUNCA uma chave derivada dos jogadores.
+ * Chave derivada foi o desenho anterior e falhou catastroficamente: com o nome removido das
+ * entradas pelo strip do save, a chave saía VAZIA pra todo mundo, os 27 grupos do Confra
+ * viraram um só e o link de UM grupo foi espelhado nos 81 jogos.
+ * ⛔ O fallback POR UIDS que o cliente ainda tem pra doc legado NÃO existe aqui de
+ * propósito: o pior caso desta ausência é um card irmão mostrando "Criar grupo"; o pior
+ * caso do fallback é espalhar o link de um grupo pelo torneio. [[project_wa_group_por_grupo]] */
+function _waGrupoIdx(m) {
+  if (!m) return null;
+  if (m.groupIdx != null) return m.groupIdx;
+  if (m.monarchGroup != null) return m.monarchGroup;
+  return null;
+}
+/* TRAVA DE SANIDADE — `_buildMonarchGroup` sempre produz 4 jogadores → 3 jogos. "Grupo"
+ * maior que isso é bug de agrupamento, e o preço do bug é escrever o dado de um grupo em
+ * cima dos outros. Na dúvida, não espalha. Espelha `MONARCH_GROUP_MAX` do schedule-poll. */
+const _WA_MONARCH_GROUP_MAX = 3;
+function _waIrmaosDoGrupo(regs, jogo) {
+  if (!jogo || !jogo.isMonarch) return [];
+  const gi = _waGrupoIdx(jogo);
+  if (gi == null) return [];
+  const ph = (jogo.phaseIndex != null) ? jogo.phaseIndex : null;
+  const sibs = (regs || []).filter((r) => {
+    const j = r && r.jogo;
+    if (!j || !j.isMonarch || j.round !== jogo.round) return false;
+    if (_waGrupoIdx(j) !== gi) return false;
+    return ((j.phaseIndex != null) ? j.phaseIndex : null) === ph;
+  });
+  return (sibs.length > _WA_MONARCH_GROUP_MAX) ? [] : sibs;
+}
+
+/* ONDE O JOGO MORA DENTRO DO DOCUMENTO — o INVERSO do `remontar` de
+ * js/views/tournament-split-core.js, e nada além disso.
+ * ⛔ Não reimplemento o passeio pelas TRÊS moradas (rounds / matches / phaseRounds): quem
+ * sabe que jogo mora em três lugares é o `dividir`, e é dele que sai o `_loc`. Aqui só se
+ * navega até o slot que o `_loc` aponta — e devolve o CAMPO DE TOPO a ser gravado, porque
+ * array aninhado não tem caminho de campo no Firestore. */
+function _waSlotDoJogo(t, loc) {
+  if (!t || !loc) return null;
+  if (loc.tipo === "rounds") {
+    const r = (Array.isArray(t.rounds) ? t.rounds : [])[loc.ri];
+    if (!r || !Array.isArray(r.matches)) return null;
+    return { campo: "rounds", arr: r.matches, i: loc.mi };
+  }
+  if (loc.tipo === "phaseRounds") {
+    const ph = t.phaseRounds && t.phaseRounds[loc.fase];
+    const r = ph && (Array.isArray(ph.rounds) ? ph.rounds : [])[loc.ri];
+    if (!r || !Array.isArray(r.matches)) return null;
+    return { campo: "phaseRounds", arr: r.matches, i: loc.mi };
+  }
+  if (!Array.isArray(t.matches)) return null;
+  return { campo: "matches", arr: t.matches, i: loc.mi };
+}
+
+// Deploy:  firebase deploy --only functions:setMatchWhatsAppGroup
+exports.setMatchWhatsAppGroup = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+
+    const pedido = request.data || {};
+    const tournamentId = String(pedido.tournamentId || "");
+    const matchId = String(pedido.matchId || "");
+    const operationId = String(pedido.operationId || "");
+    if (!tournamentId || !matchId) {
+      throw new HttpsError("invalid-argument", "tournamentId e matchId são obrigatórios");
+    }
+    if (!_WA_UUID_V4_RE.test(operationId)) {
+      throw new HttpsError("invalid-argument", "operationId tem que ser um UUID v4");
+    }
+
+    // `link` ausente/nulo/vazio = REMOVER. Qualquer outra coisa tem que passar pelo parser.
+    const apagar = (pedido.link === null || pedido.link === undefined || String(pedido.link) === "");
+    const link = apagar ? null : _waNormalizaLink(pedido.link);
+    if (!apagar && !link) {
+      throw new HttpsError("invalid-argument", "link inválido — só https://chat.whatsapp.com/<código>");
+    }
+
+    const db = admin.firestore();
+
+    /* Nome de EXIBIÇÃO ("Criado por Fulano"), campo DERIVADO — a identidade é o uid, e é
+     * por uid que se autoriza. Lido do perfil e NÃO do payload: quem chama não escolhe como
+     * vai aparecer pros outros. Falha de leitura não derruba nada: o nome é enfeite. */
+    let byName = String((request.auth.token && request.auth.token.name) || "");
+    try {
+      const u = await db.collection("users").doc(callerUid).get();
+      if (u.exists) byName = String((u.data() || {}).displayName || byName || "");
+    } catch (_e) { /* perfil é só display */ }
+
+    /* ⛔ O INSTANTE É CALCULADO UMA VEZ, AQUI FORA, e entra por variável. Transação do
+     * Firestore RE-EXECUTA o callback sob contenção: `Date.now()` lá dentro daria um `at`
+     * diferente a cada tentativa e a mesma operação gravaria valores distintos conforme
+     * quantas vezes ela foi tentada — dado que depende de quem perdeu a corrida. */
+    const agoraMs = Date.now();
+    const agoraIso = new Date(agoraMs).toISOString();
+
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      /* Torneio DIVIDIDO: os jogos e o elenco moram nas subcoleções. Monta ANTES de decidir
+       * — sem isto se autoriza contra `rounds[].matches: []` e nenhum jogo existe.
+       *
+       * ⛔ E É `montarDoBanco`, NÃO `_splitParts.hidratar` — MEDIDO, não escolhido por
+       * gosto: `hidratar` remonta cada parte ISOLADA (`remontar({config:{matches:[]}, …})`),
+       * e o jogo que mora em `rounds[ri].matches[mi]` só volta pro lugar se o `config` que
+       * entra no remonte TIVER as rodadas. Sem elas, `remontar` descarta todo registro de
+       * `_loc.tipo === 'rounds'` e devolve `matches: []`. Provado no harness com o código
+       * real: `hidratar` → 0 jogos; `montarDoBanco` → os 2. Nas outras portas isso não
+       * mordeu porque nenhuma delas lê jogo — mas aqui o jogo É o assunto.
+       * `montarDoBanco` é o CAMINHO ÚNICO do tradutor (o mesmo que functions-autodraw usa),
+       * e a única coisa que varia entre os leitores — COMO se lê uma coleção — entra por
+       * parâmetro. [[project_dividir_exige_todo_escritor_ciente]]
+       * ⚠️ TODA leitura vem antes de QUALQUER escrita: é o que a transação exige. */
+      const t = await _tSplitFn.montarDoBanco(snap.data(), async (colecao) => {
+        const s = await tx.get(docRef.collection(colecao));
+        return s.docs.map((x) => x.data());
+      });
+
+      const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+      // O locator CANÔNICO: `dividir` é quem sabe onde jogo mora, e carimba `_loc`/`_chave`.
+      const regs = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), ["matches"]) || {}).matches || [];
+      const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === matchId);
+      if (!alvo) throw new HttpsError("not-found", "jogo não existe neste torneio");
+
+      /* AUTORIZAÇÃO NO DADO FRESCO, e SÓ POR UID — a mesma regra que o cliente pinta
+       * (`_schPodeGerirJogo`): joga o confronto, OU organiza/co-organiza. O organizador
+       * entra porque num torneio de temporada é ELE quem monta os grupos da rodada (2.0.57).
+       * ⛔ Nada por nome: `matchRoster` resolve pelo uid do slot e só cai no nome pra
+       * entrada legada sem uid. [[project_cohost_same_power_as_organizer]] */
+      const souOrg = _isTournamentOrgCaller(t, callerUid);
+      const elenco = _waRoster.matchRoster(t, alvo.jogo) || [];
+      if (!souOrg && elenco.indexOf(callerUid) === -1) {
+        throw new HttpsError("permission-denied", "só quem joga este confronto — ou quem organiza o torneio — mexe no grupo");
+      }
+
+      /* IDEMPOTÊNCIA. O caminho quente é a quadra sem sinal: a chamada sai, a resposta se
+       * perde, o app tenta de novo com o MESMO `operationId`. Reconhecer isso é a diferença
+       * entre "salvou" e "salvou duas vezes com `at` diferente". */
+      const atual = (alvo.jogo && alvo.jogo.waGroup) || null;
+      if (atual && atual.opId === operationId) {
+        return { ok: true, jaAplicado: true, waGroup: atual, espelhados: [] };
+      }
+      // Apagar o que já não existe é o mesmo estado de chegada: devolve sem reescrever.
+      if (apagar && !atual) return { ok: true, jaAplicado: true, waGroup: null, espelhados: [] };
+
+      const valor = apagar ? null
+        : { link: link, byUid: callerUid, byName: byName, at: agoraMs, opId: operationId };
+
+      /* ⭐ O ESPELHO LEVA SÓ O LINK. Ordem do dono (26/ago): _"cada grupo de jogo tem 1 link
+       * pequeno para o grupo do whats"_. O registro (quem criou, quando, o opId) fica no
+       * PORTADOR — medido no Confra, copiar o objeto inteiro dava 13 KB dos 105 KB dos
+       * jogos, sendo o link só 21% deles. E apagar TAMBÉM espelha: sem isso os irmãos
+       * ficariam com link morto. [[project_grupo_de_whats_e_um_link_pequeno]] */
+      const irmaos = _waIrmaosDoGrupo(regs, alvo.jogo).filter((r) => r !== alvo);
+      const espelhoDoIrmao = (valor === null) ? null : { link: valor.link };
+      const espelhados = [];
+
+      if (fora.indexOf("matches") !== -1) {
+        const FieldPath = admin.firestore.FieldPath;
+        const FieldValue = admin.firestore.FieldValue;
+        const col = docRef.collection(_tSplitFn.colecaoDaParte("matches"));
+        const caminho = new FieldPath("jogo", "waGroup");
+        const grava = (reg, v) => {
+          const k = _tSplitFn.chaveDoRegistro(reg);
+          if (!k) throw new HttpsError("failed-precondition", "jogo sem chave — recuso gravar sem identidade");
+          // ⛔ `update` por CAMINHO DE CAMPO, nunca `set`: `set` sem merge apagaria
+          // `_chave`/`_loc`/`playerUids`, e `set` com merge criaria um registro órfão (sem
+          // `_loc`) se o documento não existisse — e registro sem `_loc` envenena o remonte.
+          // Documento ausente aqui é inconsistência real: `update` falha ALTO, que é o certo.
+          const refDoJogo = col.doc(k);
+          tx.update(refDoJogo, caminho, (v === null) ? FieldValue.delete() : v);
+        };
+        grava(alvo, valor);
+        irmaos.forEach((r) => { grava(r, espelhoDoIrmao); espelhados.push(String(r.jogo.id)); });
+        /* ⛔ O DOCUMENTO PRECISA SER TOCADO MESMO QUANDO SÓ A SUBCOLEÇÃO MUDOU: `updatedAt`
+         * parado = `onSnapshot` do doc que não dispara = toda tela concluindo "nada mudou" e
+         * seguindo no cache. Foi o placar que "sumiu" no Confra. Ver split-parts.js. */
+        _splitParts.gravar(tx, docRef, t, { updatedAt: agoraIso });
+      } else {
+        /* Jogo ainda no DOCUMENTO. O que vai pro doc sai de `dividir(t, fora)`, NÃO do `t`
+         * hidratado: o `t` tem as partes divididas preenchidas, e escrever `rounds` a partir
+         * dele devolveria pro documento o que já mora fora (é assim que este projeto já
+         * perdeu/duplicou parte quatro vezes). `dividir` esvazia exatamente o que o marcador
+         * diz e mais nada. [[project_grupo_e_documento_e_dividir_seletivo]] */
+        const cfg = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), fora) || {}).config || {};
+        const upd = {};
+        const aplica = (reg, v) => {
+          const slot = _waSlotDoJogo(cfg, reg._loc);
+          const jogo = slot && slot.arr[slot.i];
+          if (!jogo) throw new HttpsError("failed-precondition", "não achei o jogo na estrutura do torneio");
+          if (v === null) delete jogo.waGroup; else jogo.waGroup = v;
+          upd[slot.campo] = cfg[slot.campo];   // só o campo de TOPO que contém o jogo
+        };
+        aplica(alvo, valor);
+        irmaos.forEach((r) => { aplica(r, espelhoDoIrmao); espelhados.push(String(r.jogo.id)); });
+        upd.updatedAt = agoraIso;
+        _splitParts.gravar(tx, docRef, t, upd);
+      }
+
+      return { ok: true, jaAplicado: false, waGroup: valor, espelhados: espelhados };
+    });
+  }
+);
 
 exports.formPair = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
@@ -3566,9 +3870,12 @@ exports.sendOrgCommunication = onCall(
     }
 
     const db = admin.firestore();
-    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-    if (!tSnap.exists) throw new HttpsError("not-found", "torneio não existe");
-    const t = tSnap.data();
+    // ⛔ ELENCO HIDRATADO — ver _lerTorneioComElenco. Lendo o doc CRU, num torneio dividido
+    // `t.participants` é `[]`: a lista de destinatários saía VAZIA e o comunicado chegava
+    // só no próprio organizador (que é acrescentado à lista logo abaixo) — sem erro nenhum
+    // na tela, que é o que fazia isto passar despercebido.
+    const t = await _lerTorneioComElenco(db, tournamentId);
+    if (!t) throw new HttpsError("not-found", "torneio não existe");
 
     // Sandbox/killswitch: torneio com notificações mudas não dispara comunicado.
     if (t && (t.isSandbox === true || t.notificationsMuted === true)) {
@@ -8478,8 +8785,10 @@ exports.setParticipantContactPhone = onCall(
     }
 
     const db = admin.firestore();
-    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-    const t = tSnap.exists ? (tSnap.data() || {}) : null;
+    // ⛔ ELENCO HIDRATADO, NUNCA O DOC CRU — ver _lerTorneioComElenco. Em torneio dividido
+    // `participants` no documento é `[]`, e decidir "está inscrita?" contra isso recusava
+    // quem estava inscrita.
+    const t = await _lerTorneioComElenco(db, tournamentId);
 
     // O perfil do ALVO é lido antes da decisão: é ele que diz se já existe um número
     // verificado (que não pode ser sobrescrito).
@@ -8560,8 +8869,10 @@ exports.setParticipantLetzplay = onCall(
     }
 
     const db = admin.firestore();
-    const tSnap = await db.collection("tournaments").doc(tournamentId).get();
-    const t = tSnap.exists ? (tSnap.data() || {}) : null;
+    // ⛔ ELENCO HIDRATADO, NUNCA O DOC CRU — ver _lerTorneioComElenco. Em torneio dividido
+    // `participants` no documento é `[]`, e decidir "está inscrita?" contra isso recusava
+    // quem estava inscrita.
+    const t = await _lerTorneioComElenco(db, tournamentId);
 
     const alvoSnap = await db.collection("users").doc(targetUid).get();
     const alvo = alvoSnap.exists ? (alvoSnap.data() || {}) : null;

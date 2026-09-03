@@ -194,6 +194,11 @@ const SUITES = [
   'tests/encerrados-em-lista-com-dobra.test.js',
   'tests/acoes-do-card-ficam-a-direita-mesmo-quebrando.test.js',
   'tests/card-de-inscrito-tem-um-dono-so.test.js',
+  // Os dois hotfixes da rota de inscritos (29/ago/2026), que ficaram parados em worktree:
+  // callback tardio repintava inscritos por cima do detalhe do torneio, com a URL dizendo
+  // `#tournaments/<id>`. Um cobre a ENTRADA do render, o outro o callback da gravação.
+  'tests/detail-route-never-renders-participants.test.js',
+  'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',
   'tests/torneio-dividido-chega-inteiro-na-tela.test.js',
   'tests/expandir-demais-jogos-para-no-primeiro.test.js',
@@ -205,8 +210,15 @@ const SUITES = [
   'tests/classificacao-nao-balanca.test.js',
   'tests/classificacao-e-derivada-nao-vai-pro-banco.test.js',
   'tests/inscricao-em-torneio-dividido.test.js',
+  'tests/elenco-hidratado-nas-portas-de-contato.test.js',
   'tests/lista-de-pesados-nao-vaza.test.js',
   'tests/porta-unica-de-escrita-fina.test.js',
+  // ⛔ E o gate que essa suíte acima NÃO conseguia dar: ela lia o index.js como TEXTO e casava
+  // com /db\.batch\(\)/ — casou e ficou VERDE por meses, enquanto `db` não existia em escopo
+  // nenhum e `aplicarNoTorneio` morria em ReferenceError desde 97b10a48. Casar com a LETRA de
+  // uma variável não prova que ela EXISTE. Aqui a prova é resolução de escopo por AST, e o
+  // controle vermelho é o próprio commit do bug, trazido do git.
+  'tests/variaveis-livres-gate.test.js',
   'tests/gravacao-so-na-subcolecao-toca-o-doc.test.js',
   'tests/congelada-viaja-ate-o-render.test.js',
   'tests/congelada-manda-no-avanco.test.js',
@@ -828,6 +840,21 @@ const SUITES = [
   // CONFRA.MOBILE.P1: o AVANÇO de fase é a data de início da fase seguinte (carimbo em
   // storePhase) e nenhuma fase posterior herda a janela da fase inicial.
   'tests/avanco-de-fase-e-o-inicio-da-fase.test.js',
+
+  /* ── LEVA 2.2: o avanço de fase vira Cloud Function ────────────────────────────────
+   * ⛔ Esta lista é À MÃO: teste que não está aqui NUNCA roda no gate, e ninguém percebe.
+   * As duas de emulador prendem porta FIXA, mas cada uma a SUA (8134, 8106/8107), então não
+   * disputam entre si nem com as de PRENDEM_PORTA — podem rodar em paralelo. */
+  'tests/avanco-de-fase-e-deterministico.test.js',          // ids/pares idênticos no retry
+  'tests/avanco-instante-estavel-e-id-duplicado.test.js',   // os 2 defeitos que o revisor achou
+  'tests/mapa-de-perfis-e-isolado-por-invocacao.test.js',   // AsyncLocalStorage sob concorrência
+  'tests/recuperar-fase2-no-emulador.test.js',              // emulador 8134 — ordem do dono
+  'tests/rules-contencao-avanco-de-fase.test.js',           // emulador 8106/8107, com controle
+
+  /* ── LEVA 2.2: o link do grupo de WhatsApp passa a ser gravado pela CF ─────────────── */
+  'tests/link-do-grupo-do-jogo-persiste.test.js',            // 1 link POR JOGO, em dividido e não dividido
+  'tests/o-cliente-dispara-a-porta-do-grupo.test.js',        // o cliente CHAMA; quem grava é o servidor
+  'tests/rechavear-nao-apaga-o-grupo-de-whats.test.js',      // rechavear não leva o link junto
   'tests/chave-magra-nao-desenha-vazia.test.js',
   'tests/save-atrasado-nao-apaga-grupo.test.js',
   // CAUSA-RAIZ do inscrito invisível: o push otimista da inscrição não pode ser persistido

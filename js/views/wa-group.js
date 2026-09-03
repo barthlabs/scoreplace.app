@@ -70,6 +70,92 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   }
   function _notify(a, b, k) { if (typeof showNotification === 'function') showNotification(a, b || '', k || 'info'); }
 
+  /* ══ O LINK DO JOGO É GRAVADO PELA CF, NÃO PELO `saveTournament` ══════════════
+   * ⛔ O BURACO (medido): `_save` acima é `FirestoreDB.saveTournament(t)`, que faz
+   * `.set(merge:true)` NO DOCUMENTO. Num torneio DIVIDIDO (`t._semPesados` contém
+   * 'matches') os jogos não moram mais no documento — moram na subcoleção, onde as
+   * `firestore.rules` dizem `allow write: if false` pro cliente. O link era pintado na
+   * tela, o app dizia "Grupo salvo", e NADA persistia.
+   * ⇒ O nível JOGO passa pela porta `setMatchWhatsAppGroup` (functions/index.js), que
+   * escreve `jogo.waGroup` por caminho de campo e preserva o resto do registro.
+   * ⚠️ O nível TORNEIO continua pelo `saveTournament`: `t.waGroup` é campo do DOCUMENTO,
+   * nunca esteve em `_semPesados`, e o cliente escreve o documento normalmente. Mover ele
+   * junto seria mudar um caminho que funciona, no mesmo dia em que conserto outro. */
+  var _WA_OP_PREFIX = 'wa-grp-op:';
+  var _opMem = {};      // fallback quando não há sessionStorage (Safari privado, WebView velha)
+  var _emVoo = {};      // trava de duplo clique — o botão pode nem existir (chamada por código)
+
+  /* UUID v4 ESTRITO — a CF recusa qualquer outra forma. `crypto.randomUUID` primeiro
+   * (iOS 15.4+/Chrome 92+), `getRandomValues` depois, e Math.random como último recurso:
+   * este id só precisa ser único entre as TENTATIVAS desta pessoa neste jogo, não
+   * imprevisível — mas a FORMA tem que ser v4 nos três caminhos, senão o último recurso
+   * vira um "invalid-argument" que só aparece no aparelho velho de alguém. */
+  function _uuidV4() {
+    try {
+      var c = window.crypto;
+      if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+      if (c && typeof c.getRandomValues === 'function') {
+        var b = new Uint8Array(16);
+        c.getRandomValues(b);
+        b[6] = (b[6] & 0x0f) | 0x40;   // versão 4
+        b[8] = (b[8] & 0x3f) | 0x80;   // variante RFC 4122
+        var h = [];
+        for (var i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1));
+        return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' + h.slice(6, 8).join('') +
+               '-' + h.slice(8, 10).join('') + '-' + h.slice(10, 16).join('');
+      }
+    } catch (e) {}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (ch) {
+      var r = (Math.random() * 16) | 0;
+      return (ch === 'x' ? r : ((r & 0x3) | 0x8)).toString(16);
+    });
+  }
+
+  function _opKey(tId, matchId) { return _WA_OP_PREFIX + String(tId) + ':' + String(matchId || ''); }
+  /* O MESMO id enquanto a operação não confirmar — é ISSO que faz o retry da quadra sem
+   * sinal não gravar duas vezes. Vive no sessionStorage pra sobreviver ao reload que o
+   * usuário dá quando "não aconteceu nada". Queimado só no SUCESSO: a próxima gravação é
+   * outra operação e merece outro id. */
+  function _opIdPara(tId, matchId) {
+    var k = _opKey(tId, matchId);
+    try {
+      var s = window.sessionStorage;
+      if (s) {
+        var v = s.getItem(k);
+        if (v) return v;
+        var novo = _uuidV4();
+        s.setItem(k, novo);
+        return novo;
+      }
+    } catch (e) {}
+    if (!_opMem[k]) _opMem[k] = _uuidV4();
+    return _opMem[k];
+  }
+  function _opQueimar(tId, matchId) {
+    var k = _opKey(tId, matchId);
+    try { if (window.sessionStorage) window.sessionStorage.removeItem(k); } catch (e) {}
+    delete _opMem[k];
+  }
+
+  // `link` string = criar/trocar; `null` = apagar. Devolve o ESTADO CONFIRMADO pelo servidor.
+  function _persistJogo(ctx, link) {
+    var tId = String(ctx.t.id), mId = String(ctx.m.id);
+    var DB = window.FirestoreDB;
+    if (!DB || typeof DB._callFn !== 'function') return Promise.reject(new Error('FirestoreDB indisponível'));
+    try {
+      return Promise.resolve(DB._callFn('setMatchWhatsAppGroup', {
+        tournamentId: tId, matchId: mId, link: link, operationId: _opIdPara(tId, mId)
+      })).then(function (r) { _opQueimar(tId, mId); return r || {}; });
+    } catch (e) { return Promise.reject(e); }
+  }
+  // Aplica no objeto EM MEMÓRIA o que o servidor confirmou. O ouvinte do Firestore traz o
+  // mesmo dado depois; isto é só pra a tela não ficar meio segundo mentindo.
+  function _aplicarConfirmado(ctx, resp) {
+    if (!resp || !Object.prototype.hasOwnProperty.call(resp, 'waGroup')) return;
+    if (resp.waGroup) ctx.target.waGroup = resp.waGroup; else delete ctx.target.waGroup;
+    if (ctx.groupMode) _mirror(ctx);
+  }
+
   // Extrai o link de convite de uma colagem. O "Convidar via link → Copiar" do
   // WhatsApp copia a URL limpa, MAS o "Compartilhar" manda com texto em volta
   // ("Entre no meu grupo...: https://chat.whatsapp.com/XXX"). Aceitar os dois é
@@ -634,11 +720,25 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (!window.confirm((prev.byName || 'Outra pessoa') + ' já criou um grupo aqui. Substituir pelo seu link?')) return;
     }
 
+    /* ⛔ DUPLO CLIQUE: o `_spin` só trava quando existe BOTÃO, e este fluxo também é
+     * disparado por código. Duas chamadas em voo com o MESMO operationId não duplicam nada
+     * (a CF é idempotente), mas gastam duas transações e embaralham qual resposta pinta a
+     * tela. A trava é por JOGO e é solta nos DOIS desfechos (o `.then(ok, err)` no fim da
+     * cadeia faz o papel de `finally` sem depender de `Promise.prototype.finally`). */
+    var _vk = _opKey(ctx.t.id, ctx.scope === 'match' ? ctx.m.id : '');
+    if (_emVoo[_vk]) return;
+    _emVoo[_vk] = 1;
+
     var release = _spin(btn, 'Salvando…');
     ctx.target.waGroup = { link: link, byUid: cu.uid, byName: (cu.displayName || cu.name || ''), at: Date.now() };
     if (ctx.groupMode) _mirror(ctx);
 
-    _save(ctx.t).then(function () {
+    /* O JOGO vai pela CF (a subcoleção é dela); o TORNEIO segue no documento. O `waGroup`
+     * acima é pintura otimista — quem manda é o retorno, aplicado em `_aplicarConfirmado`. */
+    var _grava = (ctx.scope === 'match') ? _persistJogo(ctx, link) : _save(ctx.t);
+
+    _grava.then(function (resp) {
+      if (ctx.scope === 'match') _aplicarConfirmado(ctx, resp);
       window._waGrpClose();
       _notify('Grupo salvo', ctx.scope === 'tournament'
         ? 'Os inscritos já veem "Entrar no grupo".' : 'Os outros jogadores já veem "Abrir grupo".', 'success');
@@ -646,14 +746,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       if (typeof window._rerenderBracket === 'function' && ctx.scope === 'match') window._rerenderBracket(ctx.t.id);
       else if (typeof window._softRefreshView === 'function') window._softRefreshView();
     }).catch(function (err) {
-      // Reverte o otimista — mesmo padrão do _saveSchedule.
+      // Reverte o otimista — mesmo padrão do _saveSchedule. O operationId NÃO é queimado:
+      // o "tentar de novo" tem que reusar o mesmo, senão o retry vira uma 2ª gravação.
       release();
       ctx.target.waGroup = prev;
       if (ctx.groupMode) _mirror(ctx);
       var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       _notify('⚠️ Não salvou', 'Não foi possível registrar no servidor (' + msg + ').', 'error');
       try { console.error('[wa-group] rejeitado:', err); } catch (e) {}
-    });
+    }).then(function () { delete _emVoo[_vk]; }, function () { delete _emVoo[_vk]; });
   };
 
   // v1.3.17: reenvio MANUAL do convite do grupo pra todos os inscritos (só torneio, org).
@@ -682,11 +783,19 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (!prev || !prev.link) { window._waGrpClose(); return; }
     if (!window.confirm('Apagar o link do grupo? O botão some pra todo mundo e volta o "Criar grupo".')) return;
 
+    var _vkD = _opKey(ctx.t.id, ctx.scope === 'match' ? ctx.m.id : '');
+    if (_emVoo[_vkD]) return;
+    _emVoo[_vkD] = 1;
+
     var releaseD = _spin(btn, 'Apagando…');
     delete ctx.target.waGroup;
     if (ctx.groupMode) _mirror(ctx);
 
-    _save(ctx.t).then(function () {
+    // Apagar é a MESMA porta com `link: null` — um só caminho de escrita pro jogo.
+    var _apaga = (ctx.scope === 'match') ? _persistJogo(ctx, null) : _save(ctx.t);
+
+    _apaga.then(function (resp) {
+      if (ctx.scope === 'match') _aplicarConfirmado(ctx, resp);
       window._waGrpClose();
       _notify('Link apagado', 'Voltou ao estado de antes do grupo.', 'success');
       if (typeof window._rerenderBracket === 'function' && ctx.scope === 'match') window._rerenderBracket(ctx.t.id);
@@ -698,7 +807,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var msg = (err && (err.code || err.message)) ? String(err.code || err.message) : 'tente novamente';
       _notify('⚠️ Não apagou', 'Não foi possível registrar no servidor (' + msg + ').', 'error');
       try { console.error('[wa-group] delete rejeitado:', err); } catch (e) {}
-    });
+    }).then(function () { delete _emVoo[_vkD]; }, function () { delete _emVoo[_vkD]; });
   };
 
   // Avisa quem interessa (push/in-app — nunca WhatsApp; esse canal depende de API

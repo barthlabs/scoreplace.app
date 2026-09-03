@@ -2995,7 +2995,7 @@ window._buildDoubleElimBracket = function (t, opts) {
     // tardia usa o preenchimento de BYE (e, sem bye, deixa o tardio na espera em vez de criar
     // repFill que double-booka). project_bye_rep_auto_resolution.
     t._duplaAutoStructure = true;
-    const ts = Date.now();
+    const ts = (opts && opts.ts) || Date.now();   /* 2.2: determinístico quando a CF injeta o carimbo da operação; sem ele, Date.now() como sempre */;
     // v4.1.29: phase-aware. opts.phaseIndex → só olha a R1 do upper DAQUELA fase e tagueia
     // TODOS os jogos novos (upper R2+/lower/grand) com phaseIndex (senão o render da fase,
     // que filtra por phaseIndex, não os enxerga). Sem opts = fase única (comportamento antigo).
@@ -3313,7 +3313,7 @@ window._buildRepechageDoubleElim = function (t, meta, opts) {
     // (que ressuscitaria um derrotado já vivo na inferior = double-book). project_bye_rep_auto_resolution.
     t._duplaAutoStructure = true;
     const _pi = (opts && opts.phaseIndex != null) ? opts.phaseIndex : null;
-    const ts = Date.now();
+    const ts = (opts && opts.ts) || Date.now();   /* 2.2: determinístico quando a CF injeta o carimbo da operação; sem ele, Date.now() como sempre */;
     let cnt = 0;
     const idp = meta.idPrefix || ('rde-' + ts);
     const cat = (meta.category != null) ? meta.category : null;   // 1 chave por categoria

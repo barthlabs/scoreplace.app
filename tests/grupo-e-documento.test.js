@@ -95,7 +95,16 @@ const cli = fs.readFileSync(path.join(ROOT, 'js/firebase-db.js'), 'utf8');
 ok('⛔ o cliente passa o marcador pro `dividir`', /dividir\(JSON\.parse\(JSON\.stringify\(cleanData\)\), _fora\)/.test(cli));
 ok('  → e grava `_nGrupos`', /_p\.config\._nGrupos = \(_p\.grupos \|\| \[\]\)\.length/.test(cli),
   'sem o número, "sem grupo" e "não carregou" pintam igual — e só um é honesto');
-const cf = fs.readFileSync(path.join(ROOT, 'functions-autodraw/index.js'), 'utf8');
+/* ⚠️ 2.2 — O GRAVADOR MUDOU DE ENDEREÇO, NÃO DE COMPORTAMENTO. O que era um bloco dentro
+ * de `_gravaTorneio` virou um planejador puro em `functions-autodraw/write-plan.js`
+ * (`planWrites`) mais um executor (`applyPlan`), por ordem do revisor: a checagem de teto e
+ * a escrita real precisam consumir o MESMO plano, senão o teto mede uma coisa e o banco
+ * recebe outra. Estas asserções continuam valendo palavra por palavra — só que o CAMINHO DE
+ * ESCRITA da CF agora são dois arquivos. Varrer só o index.js daria vermelho por endereço
+ * errado, que é o pior tipo de falso negativo: some a cobertura e parece regressão. */
+const _cfIdx = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'index.js'), 'utf8');
+const _cfPlan = fs.readFileSync(path.join(ROOT, 'functions-autodraw', 'write-plan.js'), 'utf8');
+const cf = _cfIdx + '\n/* ── write-plan.js (mesmo caminho de escrita) ── */\n' + _cfPlan;
 ok('⛔ o servidor idem', /dividir\(_clone\(b\.persist\), fora\)/.test(cf) &&
    /pDepois\.config\._nGrupos = \(pDepois\.grupos \|\| \[\]\)\.length/.test(cf));
 ok('  → inclusive no lado ANTES do diff (senão tudo pareceria novo a cada gravação)',

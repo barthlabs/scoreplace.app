@@ -1975,7 +1975,43 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     '</div>';
 };
 
+/* ⛔ CALLBACK TARDIO NÃO ESCOLHE A TELA (hotfix 2.1.47/2.1.49, 29/ago/2026 — só vai ao ar agora).
+ *
+ * O BUG (produção): clicar no card do torneio levava a URL certa — `#tournaments/<id>` — mas a
+ * tela mostrada era a lista de INSCRITOS. Sem o detalhe, sumiam sorteio, edição, configurações
+ * e exclusão. A causa: re-renders assíncronos chamavam `renderParticipants` SEM olhar a rota;
+ * com uma gravação em voo, bastava navegar no meio para a promessa resolver depois e pintar
+ * inscritos por cima, deixando a URL mentindo.
+ *
+ * A LÓGICA VIVE AQUI, UMA VEZ SÓ. São duas perguntas diferentes, não duas cópias:
+ *   `_rotaEhParticipantesDe` — ESTRITA: a rota é `#participants/<tId>` AGORA? Hash vazio é
+ *      "não". É a guarda dos callbacks tardios, onde o router sempre existe.
+ *   `_isParticipantsRouteFor` — a mesma pergunta MAIS a escapatória do hash vazio, para os
+ *      harnesses headless que chamam o renderer direto, sem router (`inscritos-em-fatias`).
+ *      É a guarda da ENTRADA do render.
+ * Query-string e `&` ficam fora da comparação (`?ref=UID`, `?diag=1`). */
+window._rotaEhParticipantesDe = function (tId) {
+  var h = String((typeof window !== 'undefined' && window.location && window.location.hash) || '');
+  if (h.charAt(0) === '#') h = h.slice(1);
+  h = h.split('?')[0].split('&')[0];
+  var partes = h.split('/');
+  if (partes[0] !== 'participants') return false;
+  var id;
+  try { id = decodeURIComponent(String(partes[1] || '')); }
+  catch (_e) { id = String(partes[1] || ''); }
+  return !!id && id === String(tId);
+};
+
+window._isParticipantsRouteFor = function (tId) {
+  var hash = String((typeof window !== 'undefined' && window.location && window.location.hash) || '');
+  if (!hash) return true;                      // harness headless sem router: deixa pintar
+  return window._rotaEhParticipantesDe(tId);
+};
+
 function renderParticipants(container, tournamentId) {
+  /* A tela de inscritos só pode pintar enquanto a rota AINDA aponta para ela. O detalhe
+   * reutiliza os mesmos cards e filtros, mas é OUTRA tela. */
+  if (!window._isParticipantsRouteFor(tournamentId)) return;
   if (window._autoKeepScroll) window._autoKeepScroll(); // v2.8.82: re-render por ação não pula scroll
   const tId = tournamentId;
   const t = tId && window.AppStore ? window._findTournamentById(tId) : null;
@@ -3120,6 +3156,10 @@ window._setParticipantSkillCategory = function(tId, pName, newSkill, uid) {
     : (window.FirestoreDB ? window.FirestoreDB.saveTournament(t) : Promise.resolve());
 
   savePromise.then(function() {
+    /* A gravação pode voltar DEPOIS de a pessoa navegar: só repinta se a rota ainda for a
+     * tela de inscritos DESTE torneio. Fora disso é no-op — e não mexe no hash, porque
+     * mudar a rota seria roubar a navegação de quem já saiu. */
+    if (!window._rotaEhParticipantesDe(tId)) return;
     const container = document.getElementById('view-container');
     if (container && typeof window.renderParticipants === 'function') {
       window.renderParticipants(container, tId);

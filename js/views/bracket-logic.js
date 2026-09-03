@@ -3781,7 +3781,10 @@ function _doCloseRound(t, tId, roundIdx, anchorMatchId, resultCtx, _forcarLocal)
 }
 
 // ─── Swiss pairing ────────────────────────────────────────────────────────────
-function _generateNextRound(t) {
+/* 2.2: `det` opcional — repassado ao dispatch dos geradores por jogador. Sem ele, nada
+ * muda para os chamadores antigos (tournaments-draw, autoDraw, phases-engine:1497). */
+function _generateNextRound(t, det) {
+  det = det || {};
   // v4.5.85 (ITEM 3 · Fase 4): REHIDRATA o nome das entradas (perfil vivo por uid) ANTES do
   // sorteio — o storage é só-uid mas o motor lê p.displayName/p1Name (ex.: _getActiveLigaPlayers
   // descartaria quem não tem nome). Transiente (o save re-sanitiza). No autoDraw o draw-core
@@ -3827,9 +3830,9 @@ function _generateNextRound(t) {
     ? window._sortCategoriesBySkillOrder(t.combinedCategories || [], t.skillCategories)
     : (t.combinedCategories || []);
   if (categories.length === 0) {
-    genFn(t, null, _batchRound);
+    genFn(t, null, _batchRound, det);
   } else {
-    categories.forEach(function(cat) { genFn(t, cat, _batchRound); });
+    categories.forEach(function(cat) { genFn(t, cat, _batchRound, det); });
   }
 }
 // v2.3.91: expostos pra que o Cloud Function autoDraw (functions-autodraw) chame
@@ -4035,15 +4038,20 @@ function _scoreShuffle(playerOrder, opponentHistory, groupSize, keyOf) {
 }
 
 // Helper: try N random shuffles and return the one with fewest repeat opponents
-function _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf) {
+/* ⭐ 2.2 — `rnd` OPCIONAL. Sem ele, `Math.random()`, exatamente como sempre (o cliente e o
+ * autoDraw não mudam). Com ele, o sorteio é reproduzível: o avanço de fase roda dentro de
+ * uma transação que o Firestore RE-EXECUTA no retry, e um embaralhamento diferente por
+ * tentativa geraria grupos diferentes para a MESMA operação. */
+function _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf, rnd) {
   attempts = attempts || 150;
   groupSize = groupSize || 4;
+  var _r = (typeof rnd === 'function') ? rnd : Math.random;
   var best = players.slice();
   var bestScore = _scoreShuffle(best, opponentHistory, groupSize, keyOf);
   for (var a = 0; a < attempts; a++) {
     var candidate = players.slice();
     for (var i = candidate.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
+      var j = Math.floor(_r() * (i + 1));
       var tmp = candidate[i]; candidate[i] = candidate[j]; candidate[j] = tmp;
     }
     var s = _scoreShuffle(candidate, opponentHistory, groupSize, keyOf);
@@ -4055,10 +4063,12 @@ function _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf) {
 // Embaralho Fisher-Yates simples (cópia). Usado quando os grupos Rei/Rainha são
 // formados por SORTEIO (groupsBy='sorteio') — diferente do _bestShuffle, que tenta
 // minimizar reencontros e, com histórico vazio, devolveria a ordem inalterada.
-function _plainShuffle(arr) {
+/* `rnd` opcional — mesma regra do `_bestShuffle` acima. */
+function _plainShuffle(arr, rnd) {
+  var _r = (typeof rnd === 'function') ? rnd : Math.random;
   var a = arr.slice();
   for (var i = a.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
+    var j = Math.floor(_r() * (i + 1));
     var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
   }
   return a;
@@ -4072,12 +4082,12 @@ function _plainShuffle(arr) {
 // Sem cluster válido (config ausente, ou cluster ≥ total), cai no _bestShuffle global
 // — comportamento legado intocado. clusterSize é arredondado pra baixo a múltiplo de
 // groupSize pra que as fronteiras de cluster batam com as fronteiras de grupo.
-function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex, keyOf) {
+function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize, attempts, rankIndex, keyOf, rnd) {
   groupSize = groupSize || 4;
   var n = players.length;
   var eff = Math.floor((parseInt(clusterSize, 10) || 0) / groupSize) * groupSize;
   if (!eff || eff < groupSize || eff >= n) {
-    return _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf);
+    return _bestShuffle(players, opponentHistory, groupSize, attempts, keyOf, rnd);
   }
   var ordered = players.slice().sort(function(a, b) {
     var ra = (rankIndex && rankIndex[a] != null) ? rankIndex[a] : 1e9;
@@ -4086,7 +4096,7 @@ function _clusteredBestShuffle(players, opponentHistory, groupSize, clusterSize,
   });
   var out = [];
   for (var i = 0; i < ordered.length; i += eff) {
-    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts, keyOf));
+    out = out.concat(_bestShuffle(ordered.slice(i, i + eff), opponentHistory, groupSize, attempts, keyOf, rnd));
   }
   return out;
 }
@@ -4466,7 +4476,8 @@ function _setMonarchWaitlist(t, category, keys) {
 //   (2) MESMO DIA → só PRESENTES (check-in, não-ausentes) contam; multi-dia → todos;
 //   (3) sorteia a ORDEM do pareamento dos 4 entrantes (os grupos já formados ficam
 //       inalterados). Não-presentes e a sobra permanecem na fila pra próxima vez.
-window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
+window._tryFormMonarchWaitlistGroups = function (t, category, roundNum, det) {
+  det = det || {};
   // (1) "Novos Confrontos" desligado (standby/closed) → não forma automaticamente.
   if (typeof window._expandFormationAllowed === 'function' && !window._expandFormationAllowed(t)) return 0;
   var fullWl = window._getMonarchWaitlist(t, category); // todos da fila (persistido)
@@ -4497,7 +4508,7 @@ window._tryFormMonarchWaitlistGroups = function (t, category, roundNum) {
   }
   if (colIdx === -1) return 0;
   var col = rounds[colIdx];
-  var ts = Date.now();
+  var ts = (det && det.ts != null) ? det.ts : Date.now();   /* 2.2: carimbo da operação quando a CF injeta; Date.now() nos demais chamadores */
   // (3) A ORDEM É A DA FILA — quem espera há mais tempo entra primeiro (v1.7.55).
   //
   // Aqui havia `_plainShuffle(eligible)`. Isso contradiz o cânone de que a espera é uma
@@ -5051,7 +5062,8 @@ function _spreadMinorityGender(t, lista, numGroups) {
 window._spreadMinorityGender = _spreadMinorityGender;
 window._monarchGenderOf = _monarchGenderOf;
 
-window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn) {
+window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPlayers(t, category, _rn, det) {
+  det = det || {};
   var standings = _computeStandings(t, category);
   var allPlayers = standings.map(function(s) { return s.name; });
   var isLiga = window._isLigaFormat && window._isLigaFormat(t);
@@ -5083,7 +5095,7 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // a 2ª categoria virava "Rodada 2". roundIndex (índice físico da coluna)
   // continua = length.
   var roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
-  var ts = Date.now();
+  var ts = (det && det.ts != null) ? det.ts : Date.now();   /* 2.2: carimbo da operação quando a CF injeta; Date.now() nos demais chamadores */
   var catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   var catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
 
@@ -5120,12 +5132,12 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
     var rrOpHist = (t.opponentHistory && t.opponentHistory[_rrCatKey]) || {};
     var _hasHist = rrOpHist && Object.keys(rrOpHist).length > 0;
     if (!_hasHist && _rrGroupsBy === 'sorteio') {
-      playingPlayers = _plainShuffle(playingPlayers); // 1ª rodada por sorteio
+      playingPlayers = _plainShuffle(playingPlayers, det.rnd); // 1ª rodada por sorteio
     } else {
-      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200, _fairnessKeyOf(_rrN2u));
+      playingPlayers = _bestShuffle(playingPlayers, rrOpHist, 4, 200, _fairnessKeyOf(_rrN2u), det.rnd);
     }
   } else if (_rrGroupsBy === 'sorteio') {
-    playingPlayers = _plainShuffle(playingPlayers);
+    playingPlayers = _plainShuffle(playingPlayers, det.rnd);
   }
 
   // EQUILÍBRIO DE GÊNERO NOS GRUPOS (t.equilibrado !== false). Pedido do dono
@@ -5284,17 +5296,18 @@ window._generateReiRainhaRoundForPlayers = function _generateReiRainhaRoundForPl
   // v2.6.99: se a lista de espera já tiver 4+ (ex.: sobra acumulada), forma grupo
   // na hora. Normalmente a sobra desta rodada é < 4, então isso é no-op aqui — o
   // gatilho real é o +participante (que empurra pra ≥4).
-  if (isLiga) window._tryFormMonarchWaitlistGroups(t, category, roundNum);
+  if (isLiga) window._tryFormMonarchWaitlistGroups(t, category, roundNum, det);
 };
 
-function _generateNextRoundForPlayers(t, category, _rn) {
+function _generateNextRoundForPlayers(t, category, _rn, det) {
+  det = det || {};
   const standings = _computeStandings(t, category);
   const _isLigaFmtHere = window._isLigaFormat && window._isLigaFormat(t);
   // v2.5.1: ver comentário em _generateReiRainhaRoundForPlayers — round = maior
   // round existente +1, pra categorias do mesmo sorteio compartilharem a rodada.
   const roundNum = (typeof _rn === 'number') ? _rn : (((t.rounds || []).reduce(function (mx, c) { return Math.max(mx, (c && c.round) || 0); }, 0)) + 1);
   const roundIdx = (t.rounds || []).length;
-  const timestamp = Date.now();
+  const timestamp = (det && det.ts != null) ? det.ts : Date.now();   /* 2.2: carimbo da operação quando a CF injeta; Date.now() nos demais chamadores */
   const catSuffix = category ? '-' + category.replace(/\s+/g, '_') : '';
   const catLabel = category && window._displayCategoryName ? ' (' + window._displayCategoryName(category) + ')' : (category ? ' (' + category + ')' : '');
 
@@ -5351,7 +5364,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     _migrateOppHistToUid(t, _ligaCatKey, _n2uGen); // v4.5.78: legado nome→uid antes de ler
     var _ligaKeyOf = _fairnessKeyOf(_n2uGen);
     var ligaOpHist = (t.opponentHistory && t.opponentHistory[_ligaCatKey]) || {};
-    var shuffled = _bestShuffle(players.slice(), ligaOpHist, 4, 200, _ligaKeyOf);
+    var shuffled = _bestShuffle(players.slice(), ligaOpHist, 4, 200, _ligaKeyOf, det.rnd);
 
     // Handle sit-outs: need multiple of 4 for doubles matches
     var remainder = shuffled.length % 4;
@@ -5373,7 +5386,7 @@ function _generateNextRoundForPlayers(t, category, _rn) {
     var _ligaBalanced = (t.equilibrado !== false) && t.clusterSize;
     playingPlayers = _ligaBalanced
       ? _clusteredBestShuffle(playingPlayers, ligaOpHist, 4, t.clusterSize, 200, _ligaRankIndex, _ligaKeyOf)
-      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200, _ligaKeyOf);
+      : _bestShuffle(playingPlayers, ligaOpHist, 4, 200, _ligaKeyOf, det.rnd);
 
     // Form doubles: take consecutive pairs of 4 → team1 = [0,1] vs team2 = [2,3]
     var newMatches = [];
@@ -5495,7 +5508,9 @@ window._generateNextRoundForPlayers = _generateNextRoundForPlayers;
 // motor canônico _generateNextRoundForPlayers INTOCADO. A nova rodada é taggeada
 // (phaseIndex + bracket:'league') e mergeada em t.matches. PURO (sem DOM/AppStore) —
 // a cadência de UI (_phaseCloseLeagueRound) e o avanço por cron (etapa 4) são à parte.
-function _phaseGenNextLeagueRound(t, phaseIdx) {
+/* 2.2: `det` opcional desce até o gerador de rodada; sem ele nada muda. */
+function _phaseGenNextLeagueRound(t, phaseIdx, det) {
+  det = det || {};
   if (!t || typeof window._generateNextRoundForPlayers !== 'function') return false;
   var st = t.phaseRounds && t.phaseRounds[phaseIdx];
   if (!st || !Array.isArray(st.pool) || !st.pool.length) return false;
@@ -5527,7 +5542,7 @@ function _phaseGenNextLeagueRound(t, phaseIdx) {
     opponentHistory: st.opponentHistory, sitOutHistory: st.sitOutHistory
   };
   var before = faux.rounds.length;
-  try { window._generateNextRound(faux); }
+  try { window._generateNextRound(faux, det); }
   catch (e) { if (window._warn) window._warn('[brick4] gen liga round falhou', e); return false; }
   if (faux.rounds.length <= before) return false;
   var newRound = faux.rounds[faux.rounds.length - 1];

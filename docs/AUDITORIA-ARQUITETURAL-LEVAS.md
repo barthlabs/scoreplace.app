@@ -2561,3 +2561,118 @@ mas não alcança nenhum dos dois caminhos deste incidente.
 montado pela porta canônica, `_phasesPhaseComplete` é `true`, o atalho aparece **uma** vez e
 o contextual **uma** vez, e os dois chamam a mesma ação com o mesmo id. O defeito é de
 **caminho de leitura e de reconciliação de lista**, não de regra.
+
+---
+
+## INCIDENTE CRÍTICO — PERDA REAL DE DADOS NO SANDBOX (02/set/2026, FORENSE READ-ONLY)
+
+**Escopo.** Somente leitura em produção. Nada foi criado, apagado, avançado, reparado ou
+publicado; nenhum código, teste, Rule, Function ou outro documento foi alterado. As
+reproduções rodaram com os módulos REAIS contra um Firestore de mentira que apenas
+REGISTRA o que seria escrito. Sem PII: ids por hash sha256/8, contagens e carimbos.
+
+**① Não é defeito visual: o dado foi apagado.**
+
+| | inscritos | matches | `_nPartes` | `_nJogos` |
+|---|---|---|---|---|
+| original `h:36bf6bde` | 152 | 115 | `{matches:115, participants:152, opponentHistory:1}` | 115 |
+| sandbox `h:aa449183` | **0** (a coleção deixou de existir) | **114** | `{matches:114, participants:0, opponentHistory:0}` | **114** |
+
+`opponentHistory` é o caso revelador: o **contador** foi zerado mas o **documento** sobreviveu
+(1) — a exclusão daquela parte não achou chave. Original intocado; sua última escrita é
+**anterior** à criação da cópia.
+
+**② Cronologia, pelos carimbos do próprio Firestore (`createTime`/`updateTime`).**
+
+- `22:26:57.707Z` — documento do sandbox criado pela `createSandbox`.
+- `22:26:57.914Z … 22:27:03.308Z` — a CF escreve as 7 subcoleções (cada uma num único
+  instante): 152 inscritos, 115 matches, 123 resultsSandbox, 265 history, 305 participants,
+  3 communications, 1 opponentHistory. **Última escrita boa.**
+- `00:45:56.641Z` (02/set) — **primeira e única escrita pós-criação no documento pai**.
+- `00:46:00.073Z` — a escrita das partes, 3,4 s depois: **86** dos 114 matches reescritos,
+  1 apagado, **152 inscritos apagados**.
+- Nenhuma outra subcoleção foi tocada (todas seguem no instante da criação).
+
+**③ A assinatura do escritor está gravada no documento.** Dos 134 campos comuns ao original,
+apenas **3** diferem: `_nJogos`, `_nPartes` e `id`. E o sandbox ganhou campos que não existem
+no original nem no que a CF escreve:
+
+- **`_faltamPesados: true`** e **`_faltaOQue: ["participants","opponentHistory"]`** — marcadores
+  de MEMÓRIA (`window._marcaPartesQueFaltam`). Só chegam ao banco se o objeto em memória for
+  serializado e gravado.
+- **`nextDrawAt: {_methodName: "FieldValue.delete"}`** — a **sentinela serializada**. Ela só
+  vira mapa quando passa por `JSON.parse(JSON.stringify(cleanData))`, que existe em UM lugar:
+  o ramo de torneio dividido do `saveTournament` (js/firebase-db.js:1151). Com isso o escritor
+  fica identificado sem ambiguidade: **`FirestoreDB.saveTournament`**, não `mutateTournament`
+  (que, por comentário e por código, NÃO recalcula `_nPartes`/`_nJogos` — js/firebase-db.js:1495).
+- `updatedAt` **não mudou**: o valor gravado é o que o objeto trazia. O save não carimba data.
+
+**④ A escrita que reduz 152→0, com arquivo e linha.**
+
+1. `js/store.js:10925-10935` — `AppStore.sync()` percorre **todos** os torneios em memória e,
+   para cada `isOrganizer(t)`, chama `saveTournament(t, { skipParticipants: true })`. Desde a
+   2.1.88 `isOrganizer(sandbox)` é **true** para o dono ⇒ o sandbox entra nesse laço.
+2. `js/firebase-db.js:348-349` — `skipParticipants` faz `delete cleanData.participants`.
+3. `js/firebase-db.js:486-488` — o guard do elenco só liga se `Array.isArray(cleanData.participants)`.
+   Foi apagado no passo 2 ⇒ **o guard nem roda**. E mesmo rodando ele compara o `participants`
+   do **documento** — que num torneio dividido é `[]` — e nunca a subcoleção.
+4. `js/firebase-db.js:1151` — `dividir(JSON.parse(JSON.stringify(cleanData)), _fora)`: sem o
+   campo, a parte sai **vazia**.
+5. `js/firebase-db.js:1190` — `_nPartes` é recalculado do que saiu: `participants: 0`.
+6. `js/firebase-db.js:1210-1217` — lê as partes atuais e chama `_sbGravaPartes`.
+7. `js/firebase-db.js:1311-1327` — `jogosQueMudaram(152, 0)` devolve 152 em `sumiram` e o lote
+   **apaga os 152 documentos** de `inscritos`.
+
+**MEDIDO com os módulos reais** (partes pré-dano = as do original, gravador falso):
+
+- `AppStore.sync()` REAL, com o torneio real e o sandbox **perfeitamente montados** (152/115
+  em memória): grava os dois documentos com `_nPartes.participants: 0` e **apaga 152
+  `inscritos` do sandbox**. Basta uma ação qualquer no torneio de verdade — o laço do `sync()`
+  não sabe que o sandbox existe.
+- `saveTournament` sobre objeto com jogos montados e **elenco ainda não montado**: reproduz a
+  assinatura observada — persiste `_faltamPesados: true`, `_faltaOQue: ["participants","opponentHistory"]`,
+  `nextDrawAt` serializado, `_nPartes.participants: 0`, apaga os 152 e zera `opponentHistory`.
+- `saveTournament` sobre objeto **magro**: apaga tudo (115 matches + 152 inscritos + 1).
+
+**⑤ O 115→114 é da mesma escrita, e mostra que ela re-indexou.** Os 114 registros que
+sobraram têm `_loc.mi` **contíguo de 0 a 113**; o original tem 0 a 114, sem duplicados. Ou
+seja, `dividir` renumerou as posições a partir de um array em memória com **114** elementos —
+por isso 86 documentos foram reescritos com chave nova e o excedente foi apagado.
+
+**⑥ Não é regressão de versão.** O caminho destrutivo é **idêntico** em 2.1.89, 2.1.90 e
+2.1.91: `git diff` de `js/firebase-db.js` entre `f6997f70`, `c094737e` e o HEAD é **vazio**, o
+ramo `skipParticipants` tem o mesmo hash nas três, e a reprodução rodada contra os fontes
+extraídos de cada uma dá o **mesmo** resultado (152 apagados). Ele existe desde que o sandbox
+passou a viver em `sandboxes/` com partes escritas pelo cliente (2.1.87).
+
+**⑦ O cliente que executa não é provado pelo `version.txt`.**
+
+- Hosting manda `Cache-Control: no-cache` para `**/*.@(js|css|html)`, `/`, `/index.html`,
+  `/version.txt` e `/sw.js`; navegação no Service Worker é rede-primeiro. Isso garante o que
+  o **servidor** entrega, não o que a **aba** está rodando: página já aberta continua
+  executando o JS que carregou até recarregar.
+- O `fetch` do SW serve estático por URL exata (com `?v=`), mas o fallback de rede caída usa
+  `caches.match(req, { ignoreSearch: true })` — que **serve deliberadamente o arquivo de outra
+  versão** (está documentado no próprio `sw.js` como conserto da landing em chaves cruas).
+- **O documento não guarda a versão de quem escreveu**: não há `appVersion`/`clientVersion` no
+  doc do torneio (o único `appVersion` do cliente, js/firebase-db.js:2558, é de outra coleção).
+  Logo não há como afirmar pela evidência qual build fez a escrita — e, pelo item ⑥, também
+  não faz diferença.
+
+**⑧ As Rules autorizam a escrita destrutiva, e são as que estão no ar** (`git diff` de
+`firestore.rules` desde a leva que as publicou: vazio).
+
+- `match /sandboxes/{sandboxId}/inscritos/{inscritoId} { allow read, write: if request.auth != null && request.auth.uid == sbDono(); }`
+  — o dono pode **apagar** qualquer inscrito.
+- `allow update` no documento pai exige apenas `sbCarimboIntacto()` (os 4 campos do carimbo);
+  `_nPartes`, `_nJogos`, `_faltamPesados`, `_faltaOQue` e `nextDrawAt` são livres.
+
+⇒ Enquanto a autorização for essa, **correção só de cliente não protege**: qualquer build que
+o navegador esteja executando — nova, antiga ou servida do cache por `ignoreSearch` — tem
+permissão para fazer exatamente esta exclusão.
+
+**⑨ Observação medida, fora do escopo do sandbox.** No mesmo `sync()`, o documento do torneio
+**real** também recebe `_nPartes.participants: 0`. Ali a subcoleção não é tocada (o cliente não
+tem permissão de escrita nela), mas o **contador** do documento é gravado zerado — e é ele que
+`_marcaPartesQueFaltam` consulta para decidir se busca o elenco. Registrado como fato; não foi
+investigado nesta forense.

@@ -8,6 +8,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 // enquanto pensava). Módulo PURO e testável — o index não é require-ável em teste.
 const { rebaseRounds } = require('./rebase-core.js');
 const _tourSummary = require('./tournament-summary-core.js');
+const _wp = require('./write-plan.js');
 const _tSplit = require('./vendor/tournament-split-core.js');   // fonte única: js/views/ (copy-vendor)
 // fonte única: functions/match-roster.js (copy-vendor) — monta o subdoc de resultado,
 // incluindo o carregar-adiante do `replay`, que o servidor não sabe recalcular.
@@ -221,7 +222,10 @@ async function _preloadDrawNames(t) {
 // Idempotente. Usa drawWindow._profByUid populado por _preloadDrawNames. Ver [[project_autodraw_server_parity]].
 function _enrichParticipantsFromProfiles(t) {
   try {
-    const prof = (drawWindow && drawWindow._profByUid) || {};
+    /* 2.2: lê pelo CONTEXTO da invocação quando há um aberto (advancePhase abre); fora
+     * dele, cai no global de sempre — comportamento idêntico ao de antes. */
+    const prof = (drawWindow && typeof drawWindow._spMapaDePerfis === 'function')
+      ? drawWindow._spMapaDePerfis() : ((drawWindow && drawWindow._profByUid) || {});
     if (!Object.keys(prof).length) return;
     const _one = (p) => {
       if (!p || typeof p !== 'object') return;
@@ -447,130 +451,48 @@ function _consumirSlotAgendado(t, nowMs, tz) {
  * ponto de placar toca ~1 KB em vez de reescrever o torneio.
  * ⛔ E `participants`/`history` só saem do documento se estiverem NO MARCADOR — `dividir`
  * extrai os três por natureza, e gravar a config crua dele zeraria o elenco. */
-function _gravaTorneio(tx, ref, tDepois, tAntes) {
-  const b = _applyWriteBoundary(tDepois);
-  const fora = Array.isArray(tDepois._semPesados) ? tDepois._semPesados : null;
-  if (!fora || !fora.length) { tx.set(ref, b.persist); return b; }
-  if (!_tSplit || typeof _tSplit.dividir !== 'function') {
-    throw new Error('[fase2] tradutor indisponível — recuso gravar torneio dividido');
+function _gravaTorneio(tx, ref, tDepois, tAntes, ctx) {
+  /* ⭐ 2.2 — ESTA PORTA PASSOU A DELEGAR AO PLANEJADOR ÚNICO (`write-plan.js`).
+   * Ordem do revisor externo: a checagem de limite e o executor têm de consumir EXATAMENTE
+   * o mesmo plano; um preflight que estime por fora pode divergir da escrita real, e aí o
+   * teto mede um plano enquanto o banco recebe outro.
+   * ⛔ O COMPORTAMENTO NÃO MUDA para quem já chamava aqui (`drawRound`, `closeRound`,
+   * `applyMatchResult`, `autoDraw`): a lógica de dividir, de `jogosQueMudaram`, do espelho
+   * de `results` e dos contadores foi MOVIDA, não reescrita. A suíte desses quatro é a
+   * linha de base do refator e roda antes e depois.
+   * ⚠️ ÚNICA diferença observável: o instante do espelho deixou de ser `new Date()` dentro
+   * da transação e passa a vir por argumento — o retry do Firestore re-executa o callback,
+   * e com `new Date()` cada tentativa produzia um espelho diferente.
+   * ⛔ E NÃO HÁ FALLBACK AQUI: quem não passa `ctx.agoraIso` recebe erro. Um fallback neste
+   * ponto reintroduziria exatamente o defeito, só que calado. Cada chamador calcula o
+   * instante UMA vez, imediatamente antes de `db.runTransaction`. */
+  /* ⛔ FALHA FECHADA, SEM FALLBACK AQUI DENTRO. Esta função roda dentro do callback de
+   * `db.runTransaction`, que o Firestore RE-EXECUTA quando aborta. Qualquer `new Date()`
+   * neste ponto faria a 2ª tentativa gerar um espelho de `results` e um plano diferentes
+   * da 1ª — o retry deixaria de ser idempotente. O instante é da OPERAÇÃO, calculado uma
+   * vez antes de abrir a transação, e chega por argumento. */
+  const _agoraIso = ctx && ctx.agoraIso;
+  if (!_agoraIso) {
+    throw new Error('[write-plan] _gravaTorneio exige ctx.agoraIso — instante estável calculado FORA da transação');
   }
-  const _clone = (x) => JSON.parse(JSON.stringify(x));
-  /* ⭐ PEDE SÓ O QUE O MARCADOR DIZ (2.0.124). Antes `dividir` extraía TUDO e quem grava
-   * tinha que lembrar de devolver o que não foi pedido — devolução que já esqueceu uma
-   * parte quatro vezes aqui. Passando a lista, o que não foi pedido nunca sai: não há o
-   * que devolver, logo não há o que esquecer. */
-  const pDepois = _tSplit.dividir(_clone(b.persist), fora);
-  // ⛔ sem torneio anterior, TODA parte é "vazia antes" — derivado de PESADOS + matches,
-  // porque citar três nomes aqui à mão faria a quarta parte parecer nova a cada gravação.
-  const _vazio = { matches: [] };
-  (_tSplit.PESADOS || []).forEach((k) => { _vazio[k] = []; });
-  const pAntes = tAntes ? _tSplit.dividir(_clone(tAntes), fora) : _vazio;
+  const plan = _planejaEscrita(tDepois, tAntes, { agoraIso: _agoraIso, extras: (ctx && ctx.extras) || [] });
+  _wp.applyPlan(tx, ref, plan, { FieldValue: FieldValue });
+  return plan.boundary;
+}
 
-  /* ── TODA PARTE DIVIDIDA É GRAVADA — A LISTA MANDA, NÃO O NOME ESCRITO À MÃO ──
-   * ⛔ MEDIDO (26/ago/2026): aqui só existia o ramo de `matches`. Para o Confra, cujo
-   * marcador diz ['matches','participants','opponentHistory'], isso significava que
-   * `dividir` ESVAZIAVA participants e opponentHistory do documento e ninguém escrevia a
-   * subcoleção — o `tx.set(ref, pDepois.config)` gravava a config sem eles. E o espelho
-   * (`tournamentMirror`) PULA justamente as partes divididas, corretamente, porque o
-   * documento não as tem mais. Ou seja: nenhuma alteração que o servidor fizesse no elenco
-   * persistia. Não sangrou ainda só porque ninguém entrou nem saiu depois da divisão —
-   * medido: 148 uids no doc, 148 docs em `inscritos`, zero divergência.
-   * ⭐ Agora deriva de `fora`. Campo novo no marcador passa a ser gravado sem que ninguém
-   * precise lembrar deste ponto — que é exatamente o que a lista à mão nunca garantiu.
-   * A chave sai de `chaveDoRegistro` (uma regra, não um mapa por parte). */
-  fora.forEach((nome) => {
-    const d = _tSplit.jogosQueMudaram(pAntes[nome] || [], pDepois[nome] || []);
-    const col = ref.collection(_tSplit.colecaoDaParte(nome));
-    const _ch = (x) => {
-      const k = _tSplit.chaveDoRegistro(x);
-      if (!k) throw new Error('[fase2] registro sem chave em "' + nome + '" — recuso gravar sem identidade');
-      return k;
-    };
-    d.mudaram.forEach((m) => tx.set(col.doc(_ch(m)), m));
-    d.sumiram.forEach((m) => tx.delete(col.doc(_ch(m))));
-    /* ⭐ A CF ASSUME O ESPELHO DO RESULTADO (2.1.30). Ordem do dono: _"acabe com o
-     * espelho... migre tudo para CF em sistema dividido leve e sem limites"_.
-     *
-     * ⛔ POR QUE ISTO PRECISAVA EXISTIR ANTES DE TIRAR O DO CLIENTE — medido em
-     * 28/ago/2026: `syncMatchRosters` (functions/index.js) monta `results` com
-     * `collectMatches(after)`, ou seja, a partir do DOCUMENTO. Torneio dividido tem
-     * `rounds[0].matches = []` ⇒ aquela CF já não escrevia NADA pro Confra, e o
-     * espelho do CLIENTE era o único escritor de `results`. E de `results` dependem o
-     * replay público, o relatório de inscritos, o compartilhamento e o adaptador de
-     * chaves. Tirar o cliente sem isto aqui congelaria os quatro.
-     *
-     * ⚠️ E era esse espelho do cliente que causou o 0-0 do grupo V: um cliente com a
-     * tela velha empurrava o estado de PROPOSTA por cima do resultado confirmado. Aqui
-     * quem escreve é quem acabou de APLICAR o placar, dentro da mesma transação — não
-     * há retrato velho possível. [[project_proposta_apagava_resultado_confirmado]]
-     *
-     * ⛔ `buildMirrorDoc` vem do vendor (fonte única em `functions/match-roster.js`):
-     * ele é quem carrega o `replay` adiante, e um `set` sem merge sem esse cuidado
-     * apagaria o ponto a ponto pra sempre. */
-    if (nome === 'matches' && _mrEspelho && d.mudaram.length) {
-      const _colR = ref.collection('results');
-      const _agora = new Date().toISOString();
-      d.mudaram.forEach((reg) => {
-        const jogo = reg && reg.jogo;
-        if (!jogo || jogo.id == null || jogo.id === '') return;
-        try {
-          const _doc = _mrEspelho.buildMirrorDoc(tDepois, jogo, ref.id, _agora, null);
-          /* ⛔ CONFIRMADO NÃO FICA PENDENTE — a versão robusta, no servidor.
-           * Ordem do dono: _"quando a proposta foi confirmada pelo organizador ou
-           * adversário não pode mais ficar pendente. tem que ficar confirmada"_.
-           * `merge: true` preserva o que não vem no payload — ótimo pro `replay`, ruim
-           * pro `pendingResult`: uma proposta já respondida sobreviveria calada e
-           * seguiria pedindo confirmação num jogo fechado (o estado exato dos jogos 1 e
-           * 2 do grupo V). Quando o jogo TEM resultado, a proposta é APAGADA de
-           * propósito — quem confirmou já respondeu. */
-          const _decidido = (jogo.winner != null && jogo.winner !== '') ||
-                            jogo.draw === true || jogo.wo != null;
-          if (_decidido) _doc.pendingResult = FieldValue.delete();
-          /* ⛔ ROSTER VAZIO NÃO SOBRESCREVE ROSTER BOM. `buildMirrorDoc` devolve
-           * `playerUids: []` quando não consegue resolver os uids a partir do torneio —
-           * e com `merge: true` esse array vazio APAGARIA o roster gravado. É ele que
-           * sustenta a regra "só quem joga ESTE jogo escreve": zerado, o participante
-           * toma permission-denied e o jogo só anda pelo organizador. Vazio aqui é
-           * "não sei", e "não sei" não escreve — a mesma regra do subdoc de resultado. */
-          if (!Array.isArray(_doc.playerUids) || !_doc.playerUids.length) delete _doc.playerUids;
-          tx.set(_colR.doc(String(jogo.id)), _doc, { merge: true });
-        } catch (e) {
-          // Best-effort declarado: o resultado JÁ está gravado em `matches`, que é a
-          // fonte de verdade. Falhar aqui não pode derrubar o placar.
-          console.error('[espelho-result] ' + ref.id + '/' + jogo.id + ': ' + (e && e.message));
-        }
-      });
-    }
+/* Monta o plano com as dependências do servidor. Separado de `_gravaTorneio` para que o
+ * avanço de fase possa PLANEJAR, checar o teto e só então executar — com o mesmo objeto. */
+function _planejaEscrita(tDepois, tAntes, opts) {
+  const o = opts || {};
+  return _wp.planWrites(tAntes, tDepois, {
+    split: _tSplit,
+    boundary: _applyWriteBoundary,
+    agoraIso: o.agoraIso,
+    espelho: _mrEspelho,
+    tournamentId: o.tournamentId || (tDepois && tDepois.id) || null,
+    extras: o.extras || [],
+    onAviso: (m) => console.error(m)
   });
-  // devolve pro documento tudo que NÃO está no marcador (dividir tira os três sempre)
-  // ⛔ deriva de PESADOS — ver a nota gêmea em firebase-db.saveTournament.
-  (_tSplit.PESADOS || ['participants', 'history']).forEach((k) => {
-    if (fora.indexOf(k) === -1 && b.persist[k] !== undefined) pDepois.config[k] = b.persist[k];
-  });
-  pDepois.config._semPesados = fora;
-  /* ⭐ QUANTOS jogos moram fora. Sem este número, "o documento não tem jogo" é ambíguo:
-   * pode ser torneio que ainda não sorteou (zero jogos MESMO) ou torneio dividido cujos
-   * jogos a tela ainda não buscou. Os dois pintam igual — vazio — e só um deles é honesto.
-   * Confundir os dois é como se apaga a chave de todo mundo. Com o número, a tela sabe
-   * dizer "ainda não carregou" ≠ "não tem jogo". */
-  if (fora.indexOf('matches') !== -1) pDepois.config._nJogos = (pDepois.matches || []).length;
-  /* ⭐ QUANTOS GRUPOS moram fora — gêmeo do `_nJogos`, e pelo mesmo motivo: sem o número,
-   * "o documento não tem grupo" é ambíguo entre torneio que ainda não sorteou e torneio
-   * dividido cujos grupos a tela ainda não buscou. Os dois pintam igual — vazio — e só um
-   * deles é honesto. Confundir os dois é apagar a chave de todo mundo. */
-  if (fora.indexOf('grupos') !== -1) pDepois.config._nGrupos = (pDepois.grupos || []).length;
-  /* ⭐ QUANTOS de CADA parte moram fora. Antes eram dois campos soltos (`_nJogos`,
-   * `_nGrupos`) e a conta do que falta só perguntava por eles — `participants` ficava de
-   * fora, e um cache quente com os jogos fazia o app concluir "não falta nada" e NUNCA
-   * buscar o elenco. Foi o "0 INSCRITOS" no PWA do dono.
-   * Agora deriva da lista: parte nova entra no contador sem ninguém lembrar deste ponto.
-   * ⚠️ `_nJogos`/`_nGrupos` continuam sendo gravados — documento já no ar é lido por app
-   * já instalado, e tirar o campo quebraria quem ainda não atualizou. */
-  pDepois.config._nPartes = fora.reduce((acc, nome) => {
-    acc[nome] = (pDepois[nome] || []).length; return acc;
-  }, {});
-  tx.set(ref, pDepois.config);
-  return b;
 }
 
 function _applyWriteBoundary(data) {
@@ -709,6 +631,10 @@ exports.drawRound = onCall(async (request) => {
 
   let out;
   try {
+    /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+     * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+     * cada tentativa produzir espelho e plano diferentes. */
+    const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -768,7 +694,7 @@ exports.drawRound = onCall(async (request) => {
      * agenda o próximo slot, em vez de sortear de novo. */
     const _slotManual = _consumirSlotAgendado(t, Date.now(), _fzManual && _fzManual.tz);
     if (_slotManual) console.log(`drawRound: slot ${new Date(_slotManual).toISOString()} consumido pelo manual (${_fzManual.tz})`);
-    const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
+    const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     // Devolve o doc COM nome (b.clean, não b.persist) — o cliente precisa dele pra notificar
     // (_notifyDrawPersonalized lê os nomes) e pra sincronizar o AppStore sem esperar o listener.
     // Vem FOLDADO (como o doc é no Firestore); o ingest do cliente hidrata, igual ao listener.
@@ -817,6 +743,10 @@ exports.integrateLateEntries = onCall(async (request) => {
 
   let out;
   try {
+    /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+     * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+     * cada tentativa produzir espelho e plano diferentes. */
+    const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -851,7 +781,7 @@ exports.integrateLateEntries = onCall(async (request) => {
       // tardio está presente, NÃO entrou, e o organizador precisa saber por quê e o que
       // fazer. Devolver só `changed:false` aqui era silêncio, e silêncio foi o pecado da 1.5.x.
       if (!res.changed) return { ok: true, changed: false, recusas: res.recusas || [] };
-      const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
+      const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
       // Devolve TODOS os contadores (v1.4.43): faltava `placed`/`repfill`/etc. — o "jogo 5" novo
       // (via _growAdefinir/_placeLateEntriesSurgically volta em `placed`) não aparecia no trace nem
       // disparava o toast, dando a impressão de "não criou" mesmo tendo criado. Todo caminho que muda
@@ -893,6 +823,10 @@ exports.formLatePair = onCall(async (request) => {
 
   let out;
   try {
+    /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+     * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+     * cada tentativa produzir espelho e plano diferentes. */
+    const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -901,7 +835,7 @@ exports.formLatePair = onCall(async (request) => {
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
       const res = formLatePairFn(t, { key1: key1, key2: key2, nowTs: Date.now() });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'form-failed', { tId });
-      const b = _gravaTorneio(tx, ref, t, _tAntes);
+      const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx });
       return { ok: true, formed: res.formed, integrated: res.integrated, tournament: b.clean };
     });
   } catch (e) {
@@ -932,6 +866,10 @@ exports.splitLatePair = onCall(async (request) => {
 
   let out;
   try {
+    /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+     * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+     * cada tentativa produzir espelho e plano diferentes. */
+    const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -940,7 +878,7 @@ exports.splitLatePair = onCall(async (request) => {
       try { drawWindow._hydrateMonarchGroups(t); } catch (e) {}
       const res = splitLatePairFn(t, { id1: id1, id2: id2 });
       if (!res || !res.ok) throw _drawFail('failed-precondition', (res && res.reason) || 'split-failed', { tId });
-      const b = _gravaTorneio(tx, ref, t, _tAntes);
+      const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx });
       return { ok: true, split: res.split, tournament: b.clean };
     });
   } catch (e) {
@@ -986,6 +924,10 @@ exports.splitLatePair = onCall(async (request) => {
  */
 async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMessage) {
   const ref = db.collection('tournaments').doc(tId);
+  /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+   * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+   * cada tentativa produzir espelho e plano diferentes. */
+  const _agoraIsoTx = new Date().toISOString();
   return db.runTransaction(async (tx) => {
     const t = await _leTorneio(tx, ref, tId);
     if (!t) return { ok: false, reason: 'not-found' };
@@ -1001,7 +943,7 @@ async function _aplicaPlacarNaTransacao(db, tId, matchId, payload, ator, logMess
       logMessage: logMessage
     });
     if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || 'apply-failed' };
-    const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
+    const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
     return { ok: true, outcome: res.outcome, tournament: b.clean };
   });
 }
@@ -1158,6 +1100,10 @@ exports.closeRound = onCall(async (request) => {
 
   let out;
   try {
+    /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+     * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+     * cada tentativa produzir espelho e plano diferentes. */
+    const _agoraIsoTx = new Date().toISOString();
     out = await db.runTransaction(async (tx) => {
       const t = await _leTorneio(tx, ref, tId);
       if (!t) throw new HttpsError('not-found', 'Torneio não encontrado.');
@@ -1178,7 +1124,7 @@ exports.closeRound = onCall(async (request) => {
        * agendado que estivesse devido — mesma marca, mesma transação. */
       const _slotClose = _consumirSlotAgendado(t, Date.now(), _fzClose && _fzClose.tz);
       if (_slotClose) console.log(`closeRound: slot ${new Date(_slotClose).toISOString()} consumido pelo manual (${_fzClose.tz})`);
-      const b = _gravaTorneio(tx, ref, t, _tAntes); // clobber-free; divide se o marcador mandar
+      const b = _gravaTorneio(tx, ref, t, _tAntes, { agoraIso: _agoraIsoTx }); // clobber-free; divide se o marcador mandar
       return { ok: true, branch: res.branch, tournament: b.clean };
     });
   } catch (e) {
@@ -1303,6 +1249,10 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
           if (_tNomes) { _tNomes.id = tId; await _preloadDrawNames(_tNomes); }
         } catch (e) { console.warn(`[autoDraw] ${tId} pré-carga de nomes falhou:`, e && e.message); }
 
+        /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+         * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+         * cada tentativa produzir espelho e plano diferentes. */
+        const _agoraIsoTx = new Date().toISOString();
         const _out = await db.runTransaction(async (tx) => {
           // ⭐ MONTA das subcoleções DENTRO da transação: é a única forma de decidir elenco
           // com o dado real e ainda ser clobber-free.
@@ -1349,11 +1299,11 @@ exports.autoDraw = onSchedule('every 1 minutes', async (event) => {
             tEspera.drawSlotAt = tf.drawSlotAt;
             tEspera.lastAutoDrawAt = tf.lastAutoDrawAt;
             tEspera.updatedAt = tf.updatedAt;
-            _gravaTorneio(tx, _refT, tEspera, _tAntes);
+            _gravaTorneio(tx, _refT, tEspera, _tAntes, { agoraIso: _agoraIsoTx });
             return { pulou: 'staged', roundNumber: _res.roundNumber };
           }
 
-          _gravaTorneio(tx, _refT, tf, _tAntes);
+          _gravaTorneio(tx, _refT, tf, _tAntes, { agoraIso: _agoraIsoTx });
           return { ok: true, t: tf, res: _res };
         });
 
@@ -1567,6 +1517,10 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
    * sobre uma leitura de fora e gravava com `.update()` seletivo — sem releitura, portanto
    * last-write-wins contra qualquer coisa que tivesse acontecido na quadra no meio. E a
    * trava de slot é reivindicada aqui, na mesma transação que grava a rodada. */
+  /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+   * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+   * cada tentativa produzir espelho e plano diferentes. */
+  const _agoraIsoTx = new Date().toISOString();
   const _outF = await db.runTransaction(async (tx) => {
     const tf = await _leTorneio(tx, _ref, tId);
     if (!tf) return { pulou: 'torneio-sumiu' };
@@ -1589,7 +1543,7 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
     if (drawWindow && typeof drawWindow._foldMonarchGroups === 'function') {
       try { drawWindow._foldMonarchGroups({ phaseRounds: tf.phaseRounds }); } catch (e) { /* best-effort */ }
     }
-    _gravaTorneio(tx, _ref, tf, _tAntesF);
+    _gravaTorneio(tx, _ref, tf, _tAntesF, { agoraIso: _agoraIsoTx });
     return { ok: true, t: tf };
   });
   if (!_outF || !_outF.ok) {
@@ -1700,7 +1654,8 @@ async function _autoDrawIncrementalPhaseRound(t, tId, now) {
 // A mensagem é PERSONALIZADA: cada um lê "você" e os nomes dos outros três.
 async function _avisarGrupoFormado(tId, tName, novos) {
   if (!Array.isArray(novos) || !novos.length) return 0;
-  const prof = (drawWindow && drawWindow._profByUid) || {};
+  const prof = (drawWindow && typeof drawWindow._spMapaDePerfis === 'function')
+    ? drawWindow._spMapaDePerfis() : ((drawWindow && drawWindow._profByUid) || {});
   const nomeDe = (uid, fallback) => {
     const d = prof[uid];
     return (d && (d.displayName || d.name)) || fallback || '';
@@ -1759,6 +1714,10 @@ async function _formarGruposDaEspera(doc) {
   // e sem isto o gênero não resolve e a proporção travada recusa todo mundo.
   await _preloadDrawNames(t0);
   try {
+    /* ⛔ INSTANTE ESTÁVEL DA OPERAÇÃO — calculado UMA VEZ, FORA do callback.
+     * O Firestore RE-EXECUTA o callback no retry; um `new Date()` lá dentro faria
+     * cada tentativa produzir espelho e plano diferentes. */
+    const _agoraIsoTx = new Date().toISOString();
     const res = await db.runTransaction(async (tx) => {
       // A query da varredura traz só o documento de configuração. Para torneio dividido,
       // grupos e jogos vivem nas subcoleções: montar aqui é obrigatório antes de deixar o
@@ -1783,7 +1742,7 @@ async function _formarGruposDaEspera(doc) {
       // `_gravaTorneio` preserva o marcador e grava apenas os registros que mudaram em
       // cada subcoleção. Nunca usar `tx.set` direto: ele recolocaria os pesados no doc ou
       // descartaria mudanças de grupos/jogos ao formar a espera.
-      _gravaTorneio(tx, doc.ref, t, _tAntes);
+      _gravaTorneio(tx, doc.ref, t, _tAntes, { agoraIso: _agoraIsoTx });
       return { changed: true, monarch: r.monarch || 0, wlClean: r.wlClean || 0, novos: novos, nome: t.name || '' };
     });
     if (res.changed) {
@@ -2091,7 +2050,19 @@ exports.tournamentMirror = onDocumentWritten(
         // pode APAGAR, não por quem pode escrever.
         // ⚠️ pelo NOME DA COLEÇÃO, não da parte — senão a limpeza deixaria `inscritos`
         // órfão e apagaria `participants`, que é de outro dono.
-        for (const nome of ['matches', 'inscritos', 'history', 'opponentHistory', 'categoryNotifications', 'resultQueue', 'participants']) {
+        /* ⛔ A LISTA MANDA, E A LISTA NÃO É MINHA. Era escrita à mão aqui, e à mão ela
+         * esqueceu QUATRO: `grupos`, `checkedIn`, `woLog` e `woClaims` nunca eram varridos —
+         * apagar um torneio dividido deixava as quatro vivas e sem dono, que é o mesmo
+         * estrago dos 151 `results` órfãos de 01/ago. Agora sai de `_tSplit` (PESADOS,
+         * traduzidos por `colecaoDaParte` — senão limpa `participants` e deixa `inscritos`),
+         * mais as que não são "parte": `matches`, `grupos`, a fila do placar e as duas do
+         * avanço, que nasceram com `read, write: if false` e portanto SÓ o servidor apaga. */
+        const _partes = (_tSplit && Array.isArray(_tSplit.PESADOS))
+          ? _tSplit.PESADOS.map((n) => (typeof _tSplit.colecaoDaParte === 'function' ? _tSplit.colecaoDaParte(n) : n))
+          : ['inscritos', 'history', 'opponentHistory', 'checkedIn', 'woClaims', 'woLog', 'categoryNotifications'];
+        const _limpar = _partes.concat(['matches', 'grupos', 'resultQueue', 'advanceReceipts', 'outbox'])
+          .filter((n, idx, a) => n && a.indexOf(n) === idx);
+        for (const nome of _limpar) {
           const col = db.collection('tournaments').doc(id).collection(nome);
           const snap = await col.get();
           let lote = db.batch(), n = 0;

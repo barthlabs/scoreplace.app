@@ -88,7 +88,12 @@ function servidor() {
       isOrganizer: () => true, getTournament: () => t, tournaments: [t],
       sync() {}, syncImmediate() { return Promise.resolve(); }, mutate() { return Promise.resolve(); }
     });
-    history.replaceState(null, '', '#participants/' + t.id);
+    /* A rota tem de casar com o id que o teste manda pintar. Este teste chama
+     * `renderParticipants(c, 'x')` — id fictício, porque `_findTournamentById` está
+     * stubado e devolve o fixture para qualquer id. Desde a guarda de rota (2.1.102),
+     * pintar inscritos de um torneio com a URL apontando para OUTRO é justamente o
+     * bug barrado, então o hash aqui usa o mesmo 'x' que as chamadas usam. */
+    history.replaceState(null, '', '#participants/x');
     // Isola a fatia: neste ambiente os perfis não resolvem, e o soft-refresh que a
     // hidratação dispara repinta a lista vazia depois de ~1s. É comportamento PRÉ-
     // EXISTENTE (o código anterior faz igual, conferido) e nada tem a ver com fatiar —

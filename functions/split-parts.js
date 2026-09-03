@@ -37,9 +37,19 @@ function partesDivididas(data) {
  * Muta e devolve o próprio objeto — quem chama já trabalha com uma cópia do snapshot.
  * ⛔ Se uma parte não vier, LANÇA. Entregar um torneio com o elenco vazio pra quem vai
  * decidir lotação e duplicata é pior que falhar: a falha a pessoa vê e tenta de novo.
+ *
+ * ⭐ `apenas` (opcional) — MESMA semântica do `dividir(t, apenas)` do tradutor: hidrata só
+ * as partes pedidas, e sempre INTERSECTADAS com `_semPesados` (pedir uma parte que este
+ * torneio não dividiu não inventa leitura nenhuma). Existe porque as portas que só
+ * precisam saber QUEM ESTÁ INSCRITO — telefone de contato, @ do letzplay, comunicado do
+ * organizador — não têm por que arrastar `matches` e `opponentHistory` inteiros de um
+ * torneio de 150 pessoas dentro de um callable de 30s.
+ * ⛔ Omitir `apenas` continua hidratando TUDO: quem decide chave/lotação precisa do
+ * torneio inteiro, e o default nunca pode ser o que entrega de menos.
  */
-async function hidratar(tx, ref, data) {
-  const fora = partesDivididas(data);
+async function hidratar(tx, ref, data, apenas) {
+  let fora = partesDivididas(data);
+  if (Array.isArray(apenas)) fora = fora.filter((n) => apenas.indexOf(n) !== -1);
   if (!fora.length) return data;
   for (const nome of fora) {
     const col = ref.collection(S.colecaoDaParte(nome));

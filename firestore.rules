@@ -316,6 +316,153 @@ service cloud.firestore {
     }
 
     match /tournaments/{tournamentId} {
+
+      /* ═══ CONTENÇÃO DO AVANÇO DE FASE ═══════════════════════════════════════════
+       * O `allow update` do ADMIN abaixo nunca teve `hasOnly`: quem é organizador escreve
+       * QUALQUER campo do documento. Enquanto avançar de fase era coisa do cliente isso era
+       * a regra funcionando; agora que o avanço vai pra CF (que usa Admin SDK e não passa
+       * por aqui), um cliente ANTIGO — e o nativo publicado fica versões atrás, sem
+       * auto-update — continua podendo escrever o estado de fase à mão por cima do servidor.
+       *
+       * ⛔ ESTES CINCO CAMPOS SÃO DO SERVIDOR, e é isto que a trava diz:
+       *     currentPhaseIndex   — em que fase o torneio está
+       *     _phaseMaterialized  — até que fase foi materializada
+       *     phaseStartedAt      — o CARIMBO do avanço (js/views/phases-engine.js:2208)
+       *     phaseRounds         — as rodadas namespaced por fase (phases-engine.js:2226)
+       *     _semPesados         — o marcador que diz o que mora FORA do documento
+       * O cliente pode continuar escrevendo tudo o mais: `phases` (a CONFIGURAÇÃO das fases,
+       * que o organizador edita o tempo todo) e `currentStage` ficam LIVRES de propósito —
+       * travá-los travaria a edição do torneio, que não é o que esta leva contém.
+       *
+       * ⭐ E A REGRA É "IGUAL", NÃO "AUSENTE". Um save do cliente manda o documento inteiro;
+       * exigir que o campo não venha reprovaria toda gravação. O que se exige é que o VALOR
+       * gravado seja o que já estava lá — quem muda o valor é a CF, por fora das regras.
+       *
+       * ⚠️ `igualZeroBase` existe por um caso REAL: três pontos legítimos gravam
+       * `currentPhaseIndex = 0` (js/views/tournaments-draw.js:514, js/views/draw-decisions.js:231,
+       * js/views/format2-ui.js:1186) e o documento pode NUNCA ter tido o campo. Comparando com
+       * `null` de default, "0 sobre ausente" seria mudança e a aplicação de formato morreria
+       * com permission-denied. AUSENTE e 0 são o MESMO estado ("fase 1, nada materializado").
+       *
+       * ⚠️ `listaVazia`/`mapaVazio` usam `[]`/`{}` de default, e isso É a decisão: campo
+       * AUSENTE conta como vazio, `null` e tipo trocado NÃO. Num torneio dividido o documento
+       * pode simplesmente não ter `matches` (o writer só zera o array quando ele já existe —
+       * js/views/tournament-split-core.js:355), e exigir presença travaria TODA escrita nesse
+       * torneio: placar, presença, inscrição. Já `matches: null` continua negado, que é o que
+       * importa — "não sei" gravado por cima de "não tem" é o bug que apagou resultado
+       * confirmado. [[project_proposta_apagava_resultado_confirmado]]
+       */
+      function d0() { return resource.data; }
+      function d1() { return request.resource.data; }
+      function igual(campo) { return d1().get(campo, null) == d0().get(campo, null); }
+      function igualZeroBase(campo) { return d1().get(campo, 0) == d0().get(campo, 0); }
+      function marcador() { return d0().get('_semPesados', []); }
+      function dividido() {
+        let m = marcador();
+        return m is list && m.size() > 0;
+      }
+      function divideParte(parte) {
+        let m = marcador();
+        return m is list && (parte in m);
+      }
+      function listaVazia(campo) {
+        let v = d1().get(campo, []);
+        return v is list && v.size() == 0;
+      }
+      function mapaVazio(campo) {
+        let v = d1().get(campo, {});
+        return v is map && v.size() == 0;
+      }
+      function nuloOuAusente(campo) { return d1().get(campo, null) == null; }
+
+      /* O BLOCO PROTEGIDO: o estado de fase não se mexe, e num torneio DIVIDIDO os
+       * contadores das partes não se mexem junto.
+       * ⛔ POR QUE OS CONTADORES ENTRAM: `_nJogos`/`_nGrupos`/`_nPartes` são o que separa
+       * "não sorteou" de "não carregou ainda" (js/store.js:788-830). Um cliente com cache
+       * frio recalcula esses números a partir do que TEM em memória e os gravaria pra baixo —
+       * o documento passaria a PROMETER menos do que existe na subcoleção, e a tela abriria
+       * com chave vazia sem nunca mais buscar o resto. É o mesmo desenho de
+       * `sbPartesNaoEncolhem` no sandbox, aqui como IGUALDADE porque quem legitimamente muda
+       * a contagem é a CF.
+       * ⛔ E `matches` FICA VAZIO no documento dividido: o jogo mora na subcoleção. Se o
+       * cliente devolvesse os jogos pro documento voltariam DUAS cópias divergindo, e o teto
+       * de 1 MB junto. [[project_teto_do_documento_e_arquitetura_de_dados]] */
+      function faseIntacta() {
+        return igualZeroBase('currentPhaseIndex')
+          && igualZeroBase('_phaseMaterialized')
+          && igual('phaseStartedAt')
+          && igual('phaseRounds')
+          && igual('_semPesados')
+          && (!dividido() || (igual('_nJogos') && igual('_nPartes') && igual('_nGrupos')))
+          && (!divideParte('matches') || listaVazia('matches'));
+      }
+
+      /* ⭐ A ÚNICA SAÍDA LEGÍTIMA: O RESET PARA INSCRIÇÕES.
+       * `window._clearTournamentDraw` (js/views/tournaments-draw.js:75) é o único caminho do
+       * cliente que MUDA `currentPhaseIndex`/`_phaseMaterialized` sem ser avanço — ele volta o
+       * torneio ao estado de inscrições. Sem esta porta, "Resetar para inscrições" morreria.
+       *
+       * ⛔ E A PORTA EXIGE A FORMA FINAL INTEIRA, não só os campos de avanço. Aceitar
+       * "currentPhaseIndex == 0" e mais nada seria pior do que não ter trava: bastaria mandar
+       * zero junto com o avanço pra passar por aqui. Então a regra descreve o RESULTADO
+       * COMPLETO do reset — cada campo que ele limpa, na forma canônica em que ele os deixa.
+       * Reset PARCIAL (qualquer campo faltando) não é reset: é permission-denied.
+       *
+       * ⛔ E SÓ EM TORNEIO NÃO DIVIDIDO. Num dividido o reset teria que apagar as
+       * subcoleções também, e o cliente não escreve lá (`allow write: if false`) — deixar
+       * passar aqui deixaria o documento dizendo "fase 0, zero jogo" com 115 jogos vivos na
+       * subcoleção. Resetar torneio dividido é da CF. [[project_porta_unica_de_escrita_cf]]
+       *
+       * ⚠️ `status`: o reset troca 'finished' → 'closed' e PRESERVA os demais ('open',
+       * 'closed', 'active'…). Por isso a regra não fixa um valor — ela NEGA 'finished', que é
+       * o único desfecho que o reset não pode deixar de pé.
+       *
+       * ⚠️ `phaseStartedAt` está aqui e o `_clearTournamentDraw` de hoje NÃO o limpa. É
+       * proposital: a regra descreve o reset CORRETO, e o cliente é corrigido na mesma leva.
+       * Deixar o carimbo do avanço sobreviver ao reset é o que faria a fase "voltar" sozinha. */
+      function contadoresZerados() {
+        let partes = d1().get('_nPartes', {});
+        return d1().get('_nJogos', 0) == 0
+          && d1().get('_nGrupos', 0) == 0
+          && partes.get('matches', 0) == 0
+          && partes.get('grupos', 0) == 0;
+      }
+      function ehResetOk() {
+        return !dividido()
+          && d1().get('currentPhaseIndex', 0) == 0
+          && d1().get('_phaseMaterialized', 0) == 0
+          && nuloOuAusente('currentStage')
+          && nuloOuAusente('phaseRounds')
+          && nuloOuAusente('phaseLeagueState')
+          && nuloOuAusente('phaseStartedAt')
+          && nuloOuAusente('standings')
+          && nuloOuAusente('thirdPlaceMatch')
+          && nuloOuAusente('rodadas')
+          && nuloOuAusente('sitOutHistory')
+          && nuloOuAusente('ligaGhosts')
+          && nuloOuAusente('woHistory')
+          && nuloOuAusente('nextDrawAt')
+          && nuloOuAusente('lastAutoDrawAt')
+          && nuloOuAusente('tournamentStarted')
+          && nuloOuAusente('finishedAt')
+          && nuloOuAusente('finishNotifiedAt')
+          && nuloOuAusente('durationMs')
+          && nuloOuAusente('lateIntegrated')
+          && nuloOuAusente('_phaseResInfo')
+          && listaVazia('matches')
+          && listaVazia('rounds')
+          && listaVazia('groups')
+          && listaVazia('waitlist')
+          && listaVazia('standbyParticipants')
+          && mapaVazio('checkedIn')
+          && mapaVazio('absent')
+          && mapaVazio('monarchWaitlist')
+          && d1().get('_canonicalDraw', false) == false
+          && d1().get('status', '') != 'finished'
+          && contadoresZerados()
+          && igual('_semPesados');
+      }
+
       // Anonymous users: only public tournaments. Authenticated users may
       // read any tournament (needed for invite links and enroll/deenroll
       // transactions, which have to read before writing). Private
@@ -338,9 +485,28 @@ service cloud.firestore {
       // declarando `creatorUid` de OUTRA pessoa (bastava o creatorEmail ser o seu) — doc
       // atribuído a terceiro. Todo torneio em produção já tem creatorUid (varredura de
       // 29/jul: 0 sem dono por uid), e o cliente sempre o grava.
+      //
+      // ⛔ E TORNEIO NASCE NA FASE 1, SEM ESTADO DE AVANÇO E SEM MARCADOR DE DIVISÃO.
+      // Sem isto a trava do `update` teria uma porta ao lado: o `igual(...)` compara com o
+      // que JÁ ESTÁ no documento, então quem criasse o doc já com `currentPhaseIndex: 3` e
+      // `phaseStartedAt` preenchido teria o estado de avanço fabricado e CONGELADO —
+      // legítimo aos olhos de toda escrita seguinte. Trava de mudança só vale com o VALOR
+      // INICIAL travado junto.
+      // ⛔ `_semPesados` é o marcador do que mora FORA do documento, e ele é do SERVIDOR:
+      // quem o escreve é `functions-autodraw/write-plan.js:129` (Admin SDK, não passa por
+      // regra). Nenhum caminho do cliente o origina — o `saveTournament` só ECOA o que leu
+      // (js/firebase-db.js:1194) e o clone monta objeto novo por lista explícita
+      // (js/views/tournaments-organizer.js:78). Deixá-lo entrar no create seria deixar o
+      // cliente DECLARAR que o torneio é dividido sem nada morar fora: o app abriria
+      // buscando subcoleção vazia e pintaria "0 inscritos" pra sempre.
       allow create: if request.auth != null
         && request.resource.data.creatorUid is string
-        && request.resource.data.creatorUid == request.auth.uid;
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.get('currentPhaseIndex', 0) == 0
+        && request.resource.data.get('_phaseMaterialized', 0) == 0
+        && !('_semPesados' in request.resource.data)
+        && !('phaseStartedAt' in request.resource.data)
+        && !('phaseRounds' in request.resource.data);
 
       // Update permitido em 3 caminhos:
       //   1. Admin (creator/co-host ativo) — qualquer mudança. SÓ POR UID
@@ -350,6 +516,12 @@ service cloud.firestore {
       //      aprovação de resultado, voto em poll, etc.) — lista positiva
       //      em isParticipantBracketDiff. Bloqueia mudanças em nome/datas/
       //      formato/regras/organizador/etc. mesmo pra participantes.
+      //
+      // ⛔ E ACIMA DOS TRÊS, A CONTENÇÃO DE FASE (`faseIntacta()`): AUTORIZAÇÃO E CONTENÇÃO
+      // são perguntas diferentes e as duas têm que passar. Quem pode escrever continua sendo
+      // decidido pelos três caminhos; O QUE se pode escrever passou a ter um piso que nem o
+      // organizador atravessa, porque o estado de fase é do servidor. A única saída é
+      // `ehResetOk()` — o reset para inscrições, exigido inteiro.
       allow update: if request.auth != null
         && (
           isTournamentAdmin(resource.data)
@@ -357,11 +529,22 @@ service cloud.firestore {
           || isTournamentAdminByUid(resource.data)
           || isEnrollmentOnlyDiff()
           || (isTournamentParticipant(resource.data) && isParticipantBracketDiff())
-        );
+        )
+        && (faseIntacta() || ehResetOk());
 
       // Delete: admins only.
+      // ⛔ E TORNEIO DIVIDIDO NÃO SE APAGA PELO CLIENTE. Apagar o documento aqui deixaria
+      // ÓRFÃS as subcoleções (`matches`, `inscritos`, `grupos`, `results`, `history`,
+      // `checkedIn`, `opponentHistory`, `woLog`…): no Firestore, apagar um documento NÃO
+      // apaga o que está abaixo dele. Foi exatamente assim que nasceram os 151 `results`
+      // órfãos de 01/ago — e agora, com 41 torneios divididos, o rastro seria o torneio
+      // inteiro menos a capa, invisível e impagável pelo cliente.
+      // ⏳ A exclusão de torneio DIVIDIDO migra para CF (varre e apaga as partes com o Admin
+      // SDK, depois o documento) — tarefa seguinte desta leva. Até lá o botão recebe
+      // permission-denied, que é o desfecho honesto: melhor recusar do que apagar pela metade.
       allow delete: if request.auth != null
-        && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data));
+        && (isTournamentAdmin(resource.data) || isTournamentAdminByUid(resource.data))
+        && !dividido();
 
       // ─── Resultado por JOGO em doc próprio (linha 4.1, project_match_result_docs) ───
       // Cada jogo tem seu placar/consenso em tournaments/{id}/results/{matchId}.
@@ -579,6 +762,29 @@ service cloud.firestore {
           && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
         allow delete: if request.auth != null
           && (isTournamentAdmin(parentTs()) || isTournamentAdminByUid(parentTs()));
+      }
+
+      /* ─── RECIBO DO AVANÇO E CAIXA DE SAÍDA: NASCEM FECHADOS ────────────────
+       * `advanceReceipts/{id}` é o carimbo de "esta fase avançou, uma vez só" e `outbox/{id}`
+       * é o que o avanço deixa pra ser entregue depois (notificação, e-mail, gatilho). As
+       * duas são escritas SÓ pela CF do avanço (Admin SDK, que não passa por regra).
+       *
+       * ⛔ FECHADAS ATÉ PRA LEITURA, e isso é decisão, não esquecimento. O recibo é o que
+       * torna o avanço IDEMPOTENTE: se o cliente pudesse criá-lo, fabricaria o "já avancei"
+       * e a CF pularia o avanço de verdade; se pudesse apagá-lo, faria a fase avançar duas
+       * vezes. É a mesma classe de `mergedInto` e de `loginRedirects` — campo que o servidor
+       * TRATA COMO PROVA não se deixa na mão de quem ele avalia.
+       * A `outbox` fecha pelo motivo gêmeo do `mail/`: quem escolhe destinatário e conteúdo
+       * de uma entrega que sai em nome do produto é o servidor, nunca o cliente.
+       *
+       * ⚠️ Sem regra o Firestore já negaria por omissão. Está escrito pra ser uma DECISÃO
+       * visível — e pra que o dia em que uma tela precisar LER o recibo seja uma mudança
+       * deliberada aqui, e não um efeito colateral de outra regra. */
+      match /advanceReceipts/{reciboId} {
+        allow read, write: if false;
+      }
+      match /outbox/{itemId} {
+        allow read, write: if false;
       }
     }
 

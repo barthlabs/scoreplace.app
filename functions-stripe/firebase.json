@@ -3,7 +3,10 @@
     {
       "source": ".",
       "codebase": "stripe",
-      "runtime": "nodejs22"
+      "runtime": "nodejs22",
+      "predeploy": [
+        "node \"$RESOURCE_DIR/../scripts/check-variaveis-livres.js\""
+      ]
     }
   ]
 }

@@ -75,11 +75,25 @@ SUITES.forEach((rel) => {
   const t = fs.readFileSync(abs, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
+  /* ⚠️ E SEM O MIOLO DAS STRINGS, pelo MESMO motivo dos comentários — só que esta me pegou
+   * de novo, um nível abaixo. `recuperar-fase2-no-emulador` MONTA uma cópia da ferramenta
+   * num diretório temporário, e o texto dessa cópia traz `const admin = require(${...ROOT
+   * ...})` dentro de um template. A varredura leu aquilo como declaração de verdade,
+   * marcou `admin` como "do repo", e a marca escorreu por `db → ref → S → p` até um `p` de
+   * OUTRO escopo, que grava em `mkdtemp`. Resultado: acusação de escrita no repo num teste
+   * que não escreve no repo. Código gerado é DADO; só o código que roda conta.
+   * ⛔ E NEUTRALIZO SÓ OS TEMPLATES, não toda string: na 1ª tentativa apaguei também
+   * `'...'` e `"..."` — aí `const idx = path.join(ROOT, 'index.html')` virou
+   * `path.join(ROOT, '')`, e a asserção ③ (chamariz: entrada de MEXEM_NO_REPO que não
+   * escreve mais) acusou `trava-de-cache-buster`, que escreve sim. Recorte largo demais
+   * troca um falso positivo por um falso negativo. */
+  const tCodigo = t.replace(/`(?:\\.|\$\{[^}]*\}|[^`\\])*`/g, '``');
+
   // variáveis que apontam pra dentro do repo (e não pra um tmp)
   const doRepo = {};
   const re = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g;
   let m;
-  while ((m = re.exec(t))) {
+  while ((m = re.exec(tCodigo))) {
     const nome = m[1], valor = m[2];
     if (/tmpdir|mkdtemp/i.test(valor)) continue;
     if (/\b(ROOT|root|RAIZ)\b/.test(valor) || /__dirname\s*,\s*'\.\.'/.test(valor)) doRepo[nome] = true;

@@ -212,7 +212,12 @@ function fakeDb(conteudo, opts) {
       // false` ficava fora do recorte e o teste dizia que a subcoleção era do cliente.
       const bloco = dentro.slice(i, i + 2600);
       const corpo = bloco.slice(0, bloco.indexOf('\n      }') + 1);
-      return /allow write:\s*if false/.test(corpo)
+      /* ⚠️ 2.2 — a forma `allow read, write: if false` NÃO casava com `/allow write:/`, e as
+       * duas subcoleções novas do avanço (`advanceReceipts`, `outbox`) foram classificadas
+       * como "do cliente". O teste então exigia que ele as limpasse — coisa que ele nem pode
+       * fazer, já que a mesma regra nega tudo. O classificador é que estava estreito: o que
+       * importa é se o DELETE do cliente está negado, e `read, write: if false` nega. */
+      return /allow (?:[a-z]+, )*write:\s*if false/.test(corpo)
           || /allow update, delete:\s*if false/.test(corpo)
           || /allow delete:\s*if false/.test(corpo);
     };
@@ -241,6 +246,28 @@ function fakeDb(conteudo, opts) {
       doServidor.forEach(function (s) {
         ok(DB._tournamentSubcollections.indexOf(s) < 0,
           'subcoleção "' + s + '" NÃO entra na lista do cliente (ele não escreve nela; levaria permission-denied)');
+      });
+      /* ⛔ 2.2 — E AGORA POR NOME, que é a parte que faltava. Antes eu só exigia que o
+       * gatilho TIVESSE código de apagar; ele tem, mas varria uma LISTA À MÃO — e à mão ela
+       * havia esquecido QUATRO (`grupos`, `checkedIn`, `woLog`, `woClaims`), além das duas
+       * novas do avanço. O teste passava e o órfão nascia igual.
+       * ⚠️ E NÃO LEIO TEXTO: agora a lista do gatilho DERIVA de `_tSplit.PESADOS`, então
+       * varrer o arquivo por nomes literais voltaria a mentir. Eu REPRODUZO a derivação
+       * contra o mesmo vendor que a CF carrega, e comparo com o que as regras exigem. */
+      const _split = require(path.join(__dirname, '..', 'functions-autodraw', 'vendor', 'tournament-split-core.js'));
+      const _iL = trecho.indexOf('.concat([');
+      const _extras = _iL >= 0 ? trecho.slice(_iL, trecho.indexOf('])', _iL)) : '';
+      const _efetiva = (_split.PESADOS || []).map(function (n) { return _split.colecaoDaParte(n); })
+        .concat((_extras.match(/'([a-zA-Z]+)'/g) || []).map(function (x) { return x.replace(/'/g, ''); }));
+      /* ⛔ E CONFIRO OS DOIS LADOS. Reproduzir a derivação prova que os NOMES estão certos,
+       * mas não que o gatilho use essa fonte: troquei `_tSplit.PESADOS` por `['inscritos']`
+       * lá dentro e este teste continuou VERDE. Então exijo também a expressão. */
+      ok(/_tSplit\.PESADOS\.map\(/.test(trecho) && /_tSplit\.colecaoDaParte\(/.test(trecho),
+        '⭐ o gatilho DERIVA de _tSplit.PESADOS (traduzido por colecaoDaParte), não de lista à mão');
+      ok(_efetiva.length >= 10, 'a lista do gatilho deriva da fonte de verdade (' + _efetiva.length + ' coleções)');
+      doServidor.forEach(function (s) {
+        ok(_efetiva.indexOf(s) >= 0,
+          '⭐ e o gatilho varre "' + s + '" — quem o cliente não pode apagar, o servidor apaga');
       });
     }
   }

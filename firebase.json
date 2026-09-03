@@ -80,7 +80,8 @@
       "codebase": "default",
       "runtime": "nodejs22",
       "predeploy": [
-        "node scripts/check-deploy-alignment.js"
+        "node scripts/check-deploy-alignment.js",
+        "node scripts/check-variaveis-livres.js"
       ]
     }
   ],

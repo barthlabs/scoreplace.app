@@ -332,7 +332,17 @@
     // W.O.
     'wo', 'woAbsent', 'woAbsentSide',
     // logística
-    'court', 'schedule', 'waGroupUrl', 'waGroupId',
+    /* ⛔ AQUI ESTAVA `waGroupUrl`/`waGroupId` — DOIS CAMPOS QUE NÃO EXISTEM. Varredura no
+     * repositório inteiro: os dois nomes aparecem SÓ nesta linha (e na cópia vendor dela).
+     * O campo real é `waGroup` — `{link, byUid, byName, at}`, gravado por
+     * js/views/wa-group.js e lido pelo chip "Abrir grupo" (`m.waGroup && m.waGroup.link`).
+     * Consequência do engano: como `waGroup` não estava na lista, TODO recálculo de chave
+     * (entrada tardia, crescimento, re-chaveamento) apagava o link do grupo de WhatsApp de
+     * cada jogo — em silêncio, porque o jogo continuava existindo e só o botão sumia.
+     * O comentário de `reconciliar` logo acima já prometia preservar o "grupo de WhatsApp";
+     * a lista é que não cumpria. Nome inventado não falha alto: ele preserva um campo que
+     * ninguém escreve e deixa de preservar o que existe. */
+    'court', 'schedule', 'waGroup',
     'presenceP1', 'presenceP2'
   ];
 

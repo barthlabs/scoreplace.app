@@ -45,7 +45,45 @@ g.window._error = function () { console.error.apply(console, arguments); };
 // preenche o nome nas entradas EM MEMÓRIA (transiente — o servidor persiste só os
 // campos mutados do sorteio, nunca as entradas). Espelha os helpers de store.js.
 g.window._profileNameByUid = g.window._profileNameByUid || {};
-g.window._nameForUid = function (uid) { return (uid && g.window._profileNameByUid[uid]) || ''; };
+
+/* ⭐ 2.2 — CONTEXTO POR INVOCAÇÃO (AsyncLocalStorage).
+ *
+ * ⛔ O PERIGO, MEDIDO: `window` aqui É o `global` do Node (linha 16-17 deste arquivo), e
+ * `index.js:213-214` grava `_profileNameByUid`/`_profByUid` POR REQUISIÇÃO. Num contêiner
+ * quente, duas invocações concorrentes disputam esses mapas. E não é dado cosmético: o
+ * nome resolvido por `_displayNameForUid` (linha ~79 abaixo) é lido por
+ * `phases-engine.js:57` (_asTeam) e `bracket-logic.js:106-107,:143`
+ * (_computeMonarchStandings) — ou seja, ele vira a CHAVE da classificação e é PERSISTIDO
+ * nos jogos da fase nova. Vazamento entre invocações grava o nome de outro torneio.
+ *
+ * ⛔ E "simplesmente não pré-carregar" NÃO é a saída: com o mapa vazio, `_displayNameForUid`
+ * cai em `storedName` e, como o save do cliente REMOVE o nome de quem tem uid, o próximo
+ * fallback é o rótulo "Jogador sem perfil (xxxx)" — que seria GRAVADO nos jogos.
+ *
+ * ⛔ Nem save/restore de global: com `async` intercalado ele não protege nada e dá falsa
+ * segurança. O contexto tem de acompanhar a cadeia assíncrona, e é exatamente isso que o
+ * AsyncLocalStorage faz.
+ *
+ * Quem não abre contexto (autoDraw, drawRound, closeRound) continua lendo o global de
+ * sempre — comportamento idêntico ao de antes. */
+const { AsyncLocalStorage } = require('node:async_hooks');
+const _alsNomes = new AsyncLocalStorage();
+g.window._spRodaComNomes = function (nameByUid, profByUid, fn) {
+  return _alsNomes.run({ nameByUid: nameByUid || {}, profByUid: profByUid || {} }, fn);
+};
+g.window._spMapaDeNomes = function () {
+  const st = _alsNomes.getStore();
+  return (st && st.nameByUid) || g.window._profileNameByUid;
+};
+g.window._spMapaDePerfis = function () {
+  const st = _alsNomes.getStore();
+  return (st && st.profByUid) || g.window._profByUid || {};
+};
+
+g.window._nameForUid = function (uid) {
+  const mapa = g.window._spMapaDeNomes();
+  return (uid && mapa && mapa[uid]) || '';
+};
 
 // ── v1.3.52: resolvedores de PERFIL por participante NO SERVIDOR ────────────────────
 // O vendor (tournaments-draw/-prep/-categories) chama window._pGender/_pSkillMap/_pBirth/

@@ -101,12 +101,14 @@ const base = () => ({ id:'x', format:'Fase de Grupos + Eliminatórias', status:'
 {
   const pe = fs.readFileSync(path.join(ROOT,'js/views/phases-engine.js'),'utf8');
   ok(/function _carimbaInicioDaFase/.test(pe), '⑦ o carimbo existe em phases-engine.js');
-  // conta CHAMADAS, nunca a definição (`function _carimbaInicioDaFase(t, idx)` também casa)
-  const nChamadas = (pe.match(/(?<!function )_carimbaInicioDaFase\(t, idx\)/g) || []).length;
+  // conta CHAMADAS, nunca a definição (`function _carimbaInicioDaFase(...)` também casa).
+  // 2.2: a assinatura ganhou `agoraIso` — o instante ESTÁVEL da operação, para o retry da
+  // transação não recarimbar com outro relógio. O padrão passou a casar o argumento.
+  const nChamadas = (pe.match(/(?<!function )_carimbaInicioDaFase\(t, idx, det\.agoraIso\)/g) || []).length;
   ok(nChamadas === 2, '⑦ carimbado nos DOIS ramos de storePhase (veio ' + nChamadas + ')');
   const iFn = pe.indexOf('function storePhase');
   const iFim = pe.indexOf('function advanceMultiPhase');
-  const dentro = [...pe.matchAll(/(?<!function )_carimbaInicioDaFase\(t, idx\)/g)]
+  const dentro = [...pe.matchAll(/(?<!function )_carimbaInicioDaFase\(t, idx, det\.agoraIso\)/g)]
     .every((m) => m.index > iFn && m.index < iFim);
   ok(iFn > 0 && dentro, '⑦ as DUAS chamadas moram DENTRO de storePhase (porta única)');
   ok(/if \(!t\.phaseStartedAt\[k\]\) t\.phaseStartedAt\[k\] =/.test(pe),
