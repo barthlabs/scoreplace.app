@@ -1,4 +1,24 @@
 // Retiramos o DOMContentLoaded event para evitar condição de corrida com ES Modules (type="module")
+
+/* ── A VERSÃO NO CABEÇALHO, EM TODA TELA ────────────────────────────────────────────
+ * Ordem do dono (03/set/2026): a versão saiu da dashboard (onde vivia acima do "novo
+ * torneio", visível numa tela só) e passou a morar sob o wordmark do cabeçalho, que é
+ * o único pedaço de UI presente em todas as rotas.
+ * ⛔ NÃO cravar o número no index.html: ele envelheceria a cada release e o cabeçalho
+ * passaria a mentir. A fonte é a MESMA de todo o resto — `window.SCOREPLACE_VERSION`
+ * (js/store.js), que o bump do release já atualiza num lugar só.
+ * Sem versão carregada, o span fica VAZIO — melhor um cabeçalho sem número do que um
+ * "v" solto ou um número velho. [[feedback_toda_resposta_termina_com_a_versao_no_ar]] */
+window._pintaVersaoNoCabecalho = function () {
+  try {
+    var el = document.getElementById('header-version');
+    if (!el) return;
+    var v = window.SCOREPLACE_VERSION;
+    el.textContent = v ? ('v' + v) : '';
+  } catch (e) {}
+};
+if (document.body) window._pintaVersaoNoCabecalho();
+else document.addEventListener('DOMContentLoaded', window._pintaVersaoNoCabecalho);
 // já que o script está no final do <body> e o DOM já estará parseado.
 
 // === Modal Ajuda / Manual ===
