@@ -1109,7 +1109,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
           '<span style="font-size:0.7rem;color:var(--text-muted);font-weight:700;">propôs</span></div>' +
         inner + '</div>';
     }).join('');
-    if (!(sched.options || []).length) optsHtml = '<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:14px 0;">Ninguém propôs horário ainda. Proponha abaixo 👇</div>';
+    if (!(sched.options || []).length) optsHtml = '<div style="text-align:center;color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Nenhum horário proposto ainda 👇</div>';
 
     var addHtml = isPlayer ? (
       '<div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--border-color);">' +
@@ -1133,7 +1133,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     ) : (isOrg ? '<div style="margin-top:10px;font-size:0.78rem;color:var(--text-muted);text-align:center;">Você não joga este confronto — acompanhando como organizador.</div>' : '');
 
     var body = '<div style="padding:1rem 1.1rem;">' + matchLine +
-      '<div style="font-size:0.72rem;color:var(--text-muted);margin:2px 0 12px;">Quem joga propõe horários e marca o que consegue. Quando todos derem ✅ no mesmo, o jogo é marcado.</div>' +
+      '<div style="font-size:0.7rem;color:var(--text-muted);margin:0 0 8px;">Proponha horários e marque os que consegue. Todos ✅ no mesmo = jogo marcado.</div>' +
       optsHtml + addHtml + (isOrg ? _orgBloco(t, m) : '') + '</div>';
     _overlay('sch-overlay', header + body);
   }
@@ -1158,7 +1158,9 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       _renderMatch(t, m);
       if (scheduledNow) { try { _schNotifyScheduled(t, m); } catch (e) {} }
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
-      _crCache = null;
+      // ⛔ 2.1.98 apagou `var _crCache` e deixou DUAS atribuições órfãs aqui e no organizador.
+      // Em 'use strict' isso é ReferenceError DEPOIS do _save: o servidor gravava, o `.catch`
+      // revertia a tela e dizia "Não salvou (_crCache is not defined)". Medido pelo dono na 2.1.115.
     }).catch(function (err) {
       m.schedule = prevClone.schedule; m.scheduledAt = prevClone.scheduledAt; m.scheduledBy = prevClone.scheduledBy; m.scheduledKind = prevClone.scheduledKind;
       _schMirrorToGroup(t, m); // reverte também o espelho nos jogos do grupo
@@ -1359,7 +1361,6 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       return;
     }
     _save(t).then(function () {
-      _crCache = null;
       window._schCloseOverlay();
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
       if (typeof showNotification === 'function') showNotification('🧮 Grade atualizada', n + ' jogo(s) com horário estimado.', 'success');

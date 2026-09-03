@@ -208,5 +208,26 @@ ok(/m\.scheduledKind = 'consensus'/.test(srcSch), 'o consenso dos jogadores cari
 ok(!/Combinar jogo/.test(srcSch.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')),
   'nenhum "Combinar jogo" sobrou no código vivo (só em comentário histórico)');
 
-console.log((fail ? '✗' : '✓') + ' grade-estimada-e-propor-datas: ' + pass + ' ok, ' + fail + ' falhas');
-process.exit(fail ? 1 : 0);
+/* ⛔ "NÃO SALVOU (_crCache is not defined)" — medido pelo dono na 2.1.115. A 2.1.98 apagou
+ * `var _crCache` e deixou duas atribuições órfãs DEPOIS do `_save`: em 'use strict' é
+ * ReferenceError dentro do `.then`, o `.catch` revertia a proposta e acusava o servidor.
+ * O teste grava de verdade pelo caminho do voto (não lê DOM) com o save resolvendo. */
+(async () => {
+  const notas = [];
+  W.FirestoreDB = { saveTournament: () => Promise.resolve() };
+  W.showNotification = (t) => notas.push(String(t));
+  W._softRefreshView = () => {};
+  const tS = { id: 'TS', name: 'S', format: 'Liga', status: 'active', startDate: '2026-09-05', endDate: '2026-09-06',
+    participants: [{ uid: 'u1' }, { uid: 'u2' }], matches: [],
+    rounds: [{ round: 1, status: 'active', matches: [{ id: 'mS', p1: 'A', p2: 'B', team1Uids: ['u1'], team2Uids: ['u2'], round: 1,
+      schedule: { options: [{ id: 'o1', kind: 'date', dateISO: '2026-09-05', time: '17:00', byUid: 'u2' }], votes: {} } }] }] };
+  W.AppStore.tournaments = [tS]; W.AppStore.currentUser = { uid: 'u1', displayName: 'A', email: 'a@x' };
+  W._findTournamentById = () => tS; W._currentBracketTournament = tS;
+  W._schVote('TS', 'mS', 'o1', 1);
+  await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r));
+  const m = tS.rounds[0].matches[0];
+  ok(!notas.some(n => /Não salvou/.test(n)), 'propor/votar com o save resolvendo NÃO acusa "Não salvou" (era ReferenceError depois de gravar)');
+  ok(m.schedule && m.schedule.votes && m.schedule.votes.u1 && m.schedule.votes.u1.o1 === 1, '  → e o voto fica registrado na tela (não é revertido)');
+  console.log((fail ? '✗' : '✓') + ' grade-estimada-e-propor-datas: ' + pass + ' ok, ' + fail + ' falhas');
+  process.exit(fail ? 1 : 0);
+})();

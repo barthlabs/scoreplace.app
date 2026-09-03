@@ -8437,9 +8437,12 @@ window._bracketApplyFilter = function () {
             uids: _uA.map(function (u) { return u.slice(0, 6) + ':' + (_nomeDeUid ? (_nomeDeUid(u) || '∅') : '?') + '/' + (_nomeInscrito[u] || '∅'); }).join(' ; ') });
         }
         var _parts = _tBusca ? (_tBusca.participants || []) : [];
-        _dbD.collection('debugDrawLogs').doc(_uD.uid).set({ buscaChave: {
+        var _contsOcultos = [];
+        try { for (var _ck = 0; _ck < conts.length && _contsOcultos.length < 12; _ck++) if (!contHasHit[_ck]) _contsOcultos.push(_desc(conts[_ck]) + ' [cards dentro: ' + conts[_ck].querySelectorAll('[data-players]').length + ']'); } catch (_ec) {}
+        // documento PRÓPRIO: o rastro do sorteio grava debugDrawLogs/{uid} com set() sem merge e apagava isto.
+        _dbD.collection('debugDrawLogs').doc('busca_' + _uD.uid).set({ uid: _uD.uid, email: _uD.email || '', buscaChave: {
           versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''),
-          q: q, cards: cards.length, casaram: _hitsDiag.length, visiveisDeVerdade: _visDeVerdade, culpados: _culpados, torneio: !!_tBusca, inscritos: _parts.length,
+          q: q, cards: cards.length, casaram: _hitsDiag.length, visiveisDeVerdade: _visDeVerdade, culpados: _culpados, contsOcultos: _contsOcultos, contsTotal: conts.length, shown: shown, torneio: !!_tBusca, inscritos: _parts.length,
           elencoCarregado: (_tBusca && typeof window._elencoCarregado === 'function') ? window._elencoCarregado(_tBusca) : null,
           faltaOQue: (_tBusca && _tBusca._faltaOQue) || null,
           cadastroMapa: Object.keys(_nomeInscrito).length, perfilCache: Object.keys(_perfis).length,
