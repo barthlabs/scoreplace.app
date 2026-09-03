@@ -3224,10 +3224,10 @@ window._orgSetContactPhone = function (tId, uid, nome) {
   var corpo =
     '<div style="font-size:0.86rem;line-height:1.5;color:var(--text-muted);">' +
       (verificado
-        ? '<p style="margin:0 0 10px;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já confirmou o celular por SMS: <b style="color:var(--text-bright);">' + window._safeHtml('+' + _ddiAtual + ' ' + _valorInicial) + '</b>. Só ela pode trocá-lo, no próprio perfil.</p>'
+        ? '<p style="margin:0 0 10px;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já confirmou o celular por SMS: <b style="color:var(--text-bright);">' + window._safeHtml('+' + _ddiAtual + ' ' + _valorInicial) + '</b>. Só a própria pessoa pode trocá-lo, no perfil dela.</p>'
         : jaRegistrado
         ? '<p style="margin:0 0 10px;">Hoje está registrado <b style="color:var(--text-bright);">' + window._safeHtml('+' + _ddiAtual + ' ' + _valorInicial) + '</b>, colocado por um organizador. Você pode corrigir.</p>'
-        : '<p style="margin:0 0 10px;">Use isto quando o SMS de verificação não chegar pra pessoa. Confirme o número <b>com ela</b> antes.</p>') +
+        : '<p style="margin:0 0 10px;">Use isto quando o SMS de verificação não chegar pra pessoa. Confirme o número <b>com quem vai usá-lo</b> antes.</p>') +
       (verificado ? '' :
       // ⭐ 2.1 (dono): "tem que poder escolher o DDI como em qualquer outra situação de
       // telefone" + "a máscara do número deve ser preenchida automaticamente e o organizador
@@ -3248,13 +3248,13 @@ window._orgSetContactPhone = function (tId, uid, nome) {
       '</div>' +
       '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:9px 11px;font-size:0.76rem;color:var(--sp-c-fbbf24,#fbbf24);">' +
         'Fica registrado que <b>você</b> colocou este número, e ' + window._safeHtml(nome || 'a pessoa') + ' recebe um aviso. ' +
-        'Ele vale só para <b>contato</b> — não serve para entrar no app nem para recuperar senha; para isso ela precisa confirmar por SMS.' +
+        'Ele vale só para <b>contato</b> — não serve para entrar no app nem para recuperar senha; para isso a própria pessoa precisa confirmar por SMS.' +
       '</div>') +
       // ── 🎾 letzplay (2.0.50) — mesmo diálogo, mesma procedência ────────────
       '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-color,#28313f);">' +
         '<label style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-bright);margin-bottom:6px;">🎾 Conta letzplay</label>' +
         (_lzProprio
-          ? '<p style="margin:0;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já indicou a própria conta: <b style="color:var(--text-bright);">@' + window._safeHtml(_lzAtual) + '</b>. Só ela pode trocá-la, no próprio perfil.</p>'
+          ? '<p style="margin:0;">✅ ' + window._safeHtml(nome || 'Essa pessoa') + ' já indicou a própria conta: <b style="color:var(--text-bright);">@' + window._safeHtml(_lzAtual) + '</b>. Só a própria pessoa pode trocá-la, no perfil dela.</p>'
           : ('<input id="org-contact-lz-input" class="form-control" autocomplete="off" oninput="window._orgContactLzDraft(this.value)" ' +
              'placeholder="@usuario no letzplay" value="' + window._safeHtml(_lzAtual ? '@' + _lzAtual : '') + '" ' +
              'style="width:100%;box-sizing:border-box;font-size:0.95rem;">' +
@@ -3349,7 +3349,11 @@ window._orgContactCommit = function (tId, uid, nome, o) {
       }
       // `jaEra` = botão apertado com o mesmo número — não houve registro nem aviso.
       if (!r.jaEra && typeof showNotification === 'function') {
-        showNotification('Contato registrado', (nome || 'A pessoa') + ' foi avisada de que você registrou o celular dela.', 'success');
+        /* ⛔ SEM PRESUMIR GÊNERO. Relato do dono (03/set/2026): pôs o celular de um homem e o app
+         * disse que "foi avisada". O particípio concordava com um feminino fixo, então com nome
+         * de homem saía errado E misgenderizava. A saída é não pedir concordância: quem avisa é
+         * o app ("Avisamos Fulano"), e o celular é "o celular" — nem dele, nem dela. */
+        showNotification('Contato registrado', 'Avisamos ' + (nome || 'a pessoa') + ' de que você registrou o celular.', 'success');
       }
       if (typeof window._softRefreshView === 'function') { try { window._softRefreshView(); } catch (e) {} }
     }).catch(_falhou);

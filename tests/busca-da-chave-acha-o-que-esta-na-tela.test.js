@@ -65,6 +65,12 @@ function monta(cards, busca) {
     documentElement: {}, scrollingElement: null
   };
   vm.createContext(W);
+  /* `_bracketApplyFilter` delega o casamento a `_buscaCasa` (a regra "toda PALAVRA da
+   * consulta precisa aparecer", que substituiu o trecho contíguo). Carrega-se a função
+   * REAL do fonte, e não um dublê: se a regra mudar, é aqui que este teste tem de sentir. */
+  const _casaSrc = src.match(/window\._buscaCasa = function[\s\S]*?\n};/);
+  if (!_casaSrc) { console.error('✗ não achei window._buscaCasa em js/views/bracket.js'); process.exit(1); }
+  vm.runInContext(_casaSrc[0], W, { filename: 'buscaCasa' });
   vm.runInContext(bloco, W, { filename: 'bracketApplyFilter' });
   W._bracketApplyFilter();
   return cards.filter((c) => c.style.display !== 'none');

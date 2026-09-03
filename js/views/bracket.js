@@ -2004,8 +2004,18 @@ window._renderLateJoinPairing = function _renderLateJoinPairing(t, isOrg) {
     var ph = _photoOf(nm);
     var mc = window._idMapHas ? window._idMapHas(t, ci, pObj || { displayName: nm, name: nm }) : false;
     var safeName = _sa(nm);
+    /* ⭐ O NOME DESTE CARD PRECISA DO GANCHO DE HIDRATAÇÃO. Pergunta do dono (03/set/2026):
+     * _"a pessoa se cadastra, se inscreve e não tem perfil? sem uid? não é um nome digitado?"_
+     * — e ele tinha razão: o dado está inteiro, quem falhava era o desenho.
+     * `_hydrateUidNames` (store.js) só preenche quem carrega `data-uid-name="<uid>"`; e, desde
+     * a 1.7.79, quem tem uid com perfil ainda não resolvido nasce SEM nome DE PROPÓSITO,
+     * contando com essa hidratação. Este span não tinha o atributo: nascia vazio e ficava
+     * vazio pra sempre — exatamente "a nova que entrou" aparecendo sem nome.
+     * `data-uid-avatar` entra junto porque o ícone é desenhado a partir do nome: sem ele o
+     * círculo ficaria sem a inicial mesmo depois de o nome chegar. */
+    var _uidCard = String((pObj && pObj.uid) || '');
     return '<div style="display:flex;flex-direction:column;gap:5px;min-width:0;flex:1 1 42%;">'
-      + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
+      + '<div style="display:flex;align-items:center;gap:7px;min-width:0;"><img src="' + _safeHtml(ph.url) + '" onerror="this.onerror=null;this.src=\'' + ph.fb + '\'" data-player-name="' + _safeHtml(nm) + '"' + (_uidCard ? ' data-uid-avatar="' + _safeHtml(_uidCard) + '"' : '') + ' style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;"><span' + (_uidCard ? ' data-uid-name="' + _safeHtml(_uidCard) + '"' : '') + ' style="font-weight:700;font-size:' + _nameFs + 'px;color:var(--text-bright);line-height:1.18;word-break:break-word;min-width:0;">' + _safeHtml(nm) + '</span></div>'
       + '<div style="display:flex;align-items:center;gap:6px;"><label class="toggle-switch toggle-sm" style="--toggle-on-bg:#10b981;--toggle-on-glow:rgba(16,185,129,0.3);--toggle-on-border:#10b981;flex-shrink:0;"><input type="checkbox" ' + (mc ? 'checked' : '') + ' onclick="event.stopPropagation();window._toggleCheckIn(\'' + tIdSafe + '\',\'' + safeName + '\',\'' + String((pObj && pObj.uid) || '').replace(/'/g, "\\'") + '\');"><span class="toggle-slider"></span></label><span style="font-size:0.62rem;font-weight:700;color:' + window._spCor((mc ? '#4ade80' : '#64748b'), 'color') + ';">' + (mc ? 'Presente' : 'Ausente') + '</span></div>'
       + '</div>';
   };
@@ -5543,7 +5553,12 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
        * (`align-items:flex-start` no pai, pra os botões não esticarem junto), o nome
        * vai curto (`R1 (C)`) e sem quebra, e o selo desce pra segunda linha inteiro —
        * fonte menor, `white-space:nowrap`, nunca truncado. */
-      '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
+      /* ⛔ ESPAÇO MORTO ENTRE OS BOTÕES E A CLASSIFICAÇÃO. Relato do dono (03/set/2026):
+       * _"não precisa desse espaço vazio entre os botões e a classificação. pode ser bem
+       * menor esse espaço"_. Era 1rem cheio abaixo de um cabeçalho que já tinha os botões
+       * altos — a tabela começava longe demais do que a explica. 0.45rem encosta a
+       * classificação no cabeçalho sem colar. */
+      '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:0.45rem;">' +
         '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
           '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(sg.name)) + '</h3>' +
           ((_mineBadgeMon || statusBadge) ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;">' + _mineBadgeMon + (statusBadge || '') + '</div>' : '') +
@@ -7851,6 +7866,34 @@ window._bracketNorm = function (s) {
   return String(s == null ? '' : s).toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
 };
+/* ── CASAR A BUSCA: TODA PALAVRA DIGITADA PRECISA APARECER — não o trecho inteiro ──────
+ * Relato do dono (03/set/2026): _"se escreve por exemplo ana r, deveria aparecer ana r…
+ * mas está sumindo tudo. deveria aparecer ana ribeiro, mesmo se escrevêssemos só rib"_.
+ *
+ * ⛔ O `indexOf` exigia o trecho CONTÍGUO. "rib" achava "Ana Ribeiro" (é pedaço de uma
+ * palavra), mas bastava a consulta cruzar uma fronteira — o " / " da dupla, o " | " que
+ * separa os nomes no `data-players`, um segundo nome no meio ("Ana Maria Ribeiro") — pra
+ * "ana r" não existir como trecho e a busca esconder TUDO. Sumir tudo é o pior resultado
+ * possível: parece que a pessoa não está no torneio.
+ *
+ * ⭐ Agora cada PALAVRA da consulta é procurada por conta própria, e todas precisam
+ * aparecer em algum lugar do palheiro. "ana r" → "ana" e "r", os dois estão em
+ * "ana ribeiro" ⇒ casa. "rib" ⇒ casa. E "ribeiro ana" (ordem trocada) também passa a
+ * achar, o que o trecho contíguo nunca fez.
+ * ⚠️ É estritamente MAIS permissivo que o anterior: nada que aparecia antes some agora.
+ * O teste `tests/cabecalho-e-busca-fixos-no-celular.test.js` só exercitava consulta de
+ * UMA palavra ("Fulano7") — por isso ficou verde o tempo todo com a busca quebrada. */
+window._buscaCasa = function (palheiro, q) {
+  var alvo = window._bracketNorm(palheiro || '');
+  if (!alvo) return false;
+  var termos = window._bracketNorm(q || '').split(/\s+/).filter(function (x) { return !!x; });
+  if (!termos.length) return true;
+  for (var i = 0; i < termos.length; i++) {
+    if (alvo.indexOf(termos[i]) === -1) return false;
+  }
+  return true;
+};
+
 /* ── ABRIR/FECHAR O <details> CONFORME A BUSCA ────────────────────────────────────
  * Extraída como função PURA (recebe o elemento, não vai buscá-lo) porque é aqui que mora
  * a parte que erra: a CONTABILIDADE de quem foi aberto pela busca. Fechar tudo ao limpar
@@ -7945,7 +7988,7 @@ window._bracketApplyFilter = function () {
      * ele é palheiro de busca, não estrutura. */
     var _casa = !q;
     if (!_casa) {
-      _casa = window._bracketNorm(c.getAttribute('data-players') || '').indexOf(q) !== -1;
+      _casa = window._buscaCasa(c.getAttribute('data-players') || '', q);
       /* ⛔ A REDE LÊ SÓ OS NOMES — NÃO O CARD INTEIRO. Escrito assim depois de eu quebrar
        * a busca em produção na 2.1.99: a 1ª versão casava com `c.textContent`, que carrega
        * "JOGO 116", o placar e os botões ("Aplicar W.O.", "Cheguei", "Ao Vivo", "Propor
@@ -7961,7 +8004,7 @@ window._bracketApplyFilter = function () {
           var _els = c.querySelectorAll('.sp-name-fit, [data-uid-name]');
           for (var _n = 0; _n < _els.length; _n++) _nomes += ' ' + (_els[_n].textContent || '');
         } catch (_e) { _nomes = ''; }
-        _casa = !!_nomes.trim() && window._bracketNorm(_nomes).indexOf(q) !== -1;
+        _casa = !!_nomes.trim() && window._buscaCasa(_nomes, q);
       }
     }
     var hit = _casa && (!onlyMine || c.getAttribute('data-my-match') !== '0');

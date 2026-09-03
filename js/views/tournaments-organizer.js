@@ -1156,7 +1156,7 @@ window._contactPersonByUid = function (uid, personName, tId) {
   var _nm = personName || 'A pessoa';
   if (!uid) {
     if (typeof showNotification === 'function') showNotification('Sem contato',
-      _nm + ' não tem conta no scoreplace.app — só o organizador pode ter o contato dela.', 'info');
+      _nm + ' não tem conta no scoreplace.app — só o organizador pode ter esse contato.', 'info');
     return;
   }
   var t = (tId && typeof window._findTournamentById === 'function') ? window._findTournamentById(tId) : null;

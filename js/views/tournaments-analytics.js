@@ -221,7 +221,7 @@ window._openPlayerProfile = function(playerName, opts) {
                 '<div style="padding:14px;text-align:center;border:1px dashed var(--border-color);border-radius:12px;">' +
                   '<div style="font-size:1.2rem;line-height:1;margin-bottom:4px;">🔒</div>' +
                   '<div style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;">' +
-                    'Esta pessoa escolheu não mostrar as conquistas dela.' +
+                    'Esta pessoa escolheu não mostrar as próprias conquistas.' +
                   '</div>' +
                 '</div>';
             }
@@ -1053,7 +1053,7 @@ window._showPlayerStats = function(playerName, currentTournamentId) {
                       '<div style="font-size:1.4rem;line-height:1;margin-bottom:6px;">🔒</div>' +
                       '<div style="font-size:0.84rem;font-weight:700;color:var(--text-bright,#fff);">Estatísticas privadas</div>' +
                       '<div style="font-size:0.74rem;color:var(--text-muted);margin-top:4px;line-height:1.45;">' +
-                        'Esta pessoa escolheu não mostrar o desempenho dela. Você define o seu em ' +
+                        'Esta pessoa escolheu não mostrar o próprio desempenho. Você define o seu em ' +
                         '<strong>Perfil → Minhas estatísticas</strong>.' +
                       '</div>' +
                     '</div>';

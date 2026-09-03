@@ -1298,7 +1298,9 @@ window._ligaInviteSubMulti = function (tId, roundIndex, groupName, absentName, i
       try {
         window._sendUserNotification(li.uid, {
           type: 'liga-sub-invite', level: 'fundamental', tournamentId: String(t.id), tournamentName: t.name || 'torneio',
-          message: 'Você foi convidado pra entrar no lugar de ' + absentName + ' no ' + groupName + ' do torneio "' + (t.name || 'torneio') + '". O primeiro que aceitar joga (vale pontos). Abra o torneio pra aceitar.'
+          /* sem gênero: o convite chega pra qualquer pessoa, e "convidado" concordava com um
+           * masculino fixo. "Chegou um convite" não pede concordância nenhuma. */
+          message: 'Chegou um convite pra você entrar no lugar de ' + absentName + ' no ' + groupName + ' do torneio "' + (t.name || 'torneio') + '". O primeiro que aceitar joga (vale pontos). Abra o torneio pra aceitar.'
         });
       } catch (e) {}
     });
@@ -1903,9 +1905,9 @@ window._ligaGroupControlsHtml = function (t, roundIndex, group) {
   if (group.subStatus === 'pending') {
     // multi-convite: lista TODOS os pendentes do grupo (1 → nome; 2+ → contagem).
     var _pend = Array.isArray(t.ligaSubInvites) ? t.ligaSubInvites.filter(function (x) { return x.status === 'pending' && x.groupName === group.name && x.roundIndex === roundIndex; }) : [];
-    var who = _pend.length === 1 ? (_pend[0].inviteeName + ' convidado, aguardando confirmação')
+    var who = _pend.length === 1 ? ('convite enviado a ' + _pend[0].inviteeName + ', aguardando confirmação')
       : _pend.length > 1 ? (_pend.length + ' convidados — o 1º que aceitar joga')
-      : 'substituto convidado, aguardando confirmação';
+      : 'convite enviado, aguardando confirmação';
     var s = '<span style="font-size:0.66rem;font-weight:700;color:var(--sp-c-fbbf24,#fbbf24);background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);padding:2px 8px;border-radius:6px;">⏳ ' + _safe(group.woAbsent) + ' levou W.O. · ' + _safe(who) + '</span>';
     // Demorou ou vai recusar? Os jogadores não ficam travados: convidam outro
     // folga OU completam com Jogador X na hora.

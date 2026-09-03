@@ -197,6 +197,9 @@ const SUITES = [
   // Os dois hotfixes da rota de inscritos (29/ago/2026), que ficaram parados em worktree:
   // callback tardio repintava inscritos por cima do detalhe do torneio, com a URL dizendo
   // `#tournaments/<id>`. Um cobre a ENTRADA do render, o outro o callback da gravação.
+  // A busca da chave casava por TRECHO contíguo: "ana r" sumia com tudo. O teste de
+  // navegador que a exercita só usava consulta de UMA palavra, então ficou verde.
+  'tests/busca-casa-por-palavra.test.js',
   'tests/detail-route-never-renders-participants.test.js',
   'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',

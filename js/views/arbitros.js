@@ -277,7 +277,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       })
       .then(function() {
         if (typeof window.showNotification === 'function') {
-          window.showNotification('Árbitro convidado', 'Convite enviado com sucesso.', 'success');
+          window.showNotification('Convite enviado', 'O convite de arbitragem foi enviado com sucesso.', 'success');
         }
         // Refresh page
         if (typeof window.renderArbitrosPage === 'function') {
