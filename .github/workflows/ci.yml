@@ -53,9 +53,22 @@ jobs:
         with:
           node-version: 20
 
+      # ⛔ 5 suítes exigem `functions/node_modules/firebase-admin` e o emulador do Firestore
+      # (porta-unica-de-escrita-fina, link-do-grupo-do-jogo-persiste, deploy-liga-firebase-admin,
+      # recuperar-fase2-no-emulador, rules-contencao-avanco-de-fase). O runner não instalava
+      # nenhum dos dois: 53 e-mails de "run failed" da 2.1.108 em diante, todos pelo mesmo motivo.
+      - name: Java (emulador do Firestore)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Suíte unitária
         run: |
           npm ci --ignore-scripts
+          (cd functions && npm ci --ignore-scripts)
+          (cd functions-autodraw && npm ci --ignore-scripts)
+          npm i -g firebase-tools
           # tests/letzplay-big-profile.test.js sobe um Chromium (Playwright) contra um
           # letzplay sintético. `--ignore-scripts` pula o postinstall que baixa o browser,
           # então SEM esta linha a suíte morre com "Executable doesn't exist" e o gate
