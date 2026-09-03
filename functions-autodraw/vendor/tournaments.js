@@ -4422,20 +4422,25 @@ function renderTournaments(container, tournamentId = null) {
         pollBannerHtml = window._renderPollBanner(visible[0]);
     }
 
-    // Search/filter bar (only on list view, not detail)
+    /* ⛔ BARRA À MÃO, FORA DO CÂNONE — E QUEBRADA. Pergunta do dono (03/set/2026):
+     * _"se a barra é canônica, pq outra barra de filtro porra?"_. Não havia motivo: era
+     * um `<input>` + `<select>` montados aqui, com filtro próprio.
+     *
+     * ⛔ E ELE NÃO FILTRAVA. O handler capturava os cards UMA vez
+     * (`querySelectorAll('#tourn-grid-container > div')`) e depois escrevia `display` NAQUELA
+     * lista. Esta tela repinta a cada dado que chega — e aí os nós capturados já estão
+     * DESLIGADOS do DOM: o filtro mexia em elementos fora da tela e não acontecia nada,
+     * sem erro nenhum. Filtro que morre calado parece "não tem resultado".
+     *
+     * ⭐ Agora é a barra CANÔNICA em `mode:'tournaments'` — a mesma de "Todos os torneios" e
+     * da tela inicial — e o filtro RELÊ o DOM a cada chamada. [[project_canonical_filter_bar_sticky]] */
     var filterBarHtml = '';
-    if (!tournamentId && visible.length > 3) {
-      filterBarHtml = `
-        <div style="display:flex;gap:8px;margin-bottom:1.25rem;align-items:center;flex-wrap:wrap;">
-          <input type="text" id="tourn-filter-input" class="form-control" placeholder="Filtrar por nome, esporte ou formato..." style="flex:1;min-width:180px;box-sizing:border-box;padding:8px 12px;font-size:0.85rem;">
-          <select id="tourn-filter-status" class="form-control" style="width:auto;padding:8px 10px;font-size:0.85rem;background:var(--bg-darker);border:1px solid var(--border-color);cursor:pointer;">
-            <option value="">Todos</option>
-            <option value="open">Inscrições Abertas</option>
-            <option value="active">Em Andamento</option>
-            <option value="finished">Encerrados</option>
-          </select>
-        </div>
-      `;
+    if (!tournamentId && visible.length > 3 && typeof window._inscritosFilterBar === 'function') {
+      filterBarHtml = window._inscritosFilterBar({
+        stateKey: 'tournList', mode: 'tournaments', sticky: true, searchOnly: true,
+        searchId: 'tourn-filter-input',
+        onChange: 'window._tournListAplicarFiltro()'
+      });
     }
 
     const html = `
@@ -4508,36 +4513,23 @@ function renderTournaments(container, tournamentId = null) {
         }, 0);
     }
 
-    // Setup filter bar handlers
-    var _filterInput = document.getElementById('tourn-filter-input');
-    var _filterStatus = document.getElementById('tourn-filter-status');
-    if (_filterInput || _filterStatus) {
-      var _allCards = document.querySelectorAll('#tourn-grid-container > div');
-      var _applyFilter = function() {
-        var q = (_filterInput ? _filterInput.value : '').toLowerCase().trim();
-        var statusFilter = _filterStatus ? _filterStatus.value : '';
-        _allCards.forEach(function(card) {
-          var text = (card.textContent || '').toLowerCase();
-          var matchesText = !q || text.indexOf(q) !== -1;
-          var matchesStatus = true;
-          if (statusFilter) {
-            var hasInscAbertas = text.indexOf('inscrições abertas') !== -1 || text.indexOf('liga ativa') !== -1;
-            var hasEmAndamento = text.indexOf('em andamento') !== -1;
-            var hasEncerrado = text.indexOf('encerrado') !== -1;
-            if (statusFilter === 'open') matchesStatus = hasInscAbertas;
-            else if (statusFilter === 'active') matchesStatus = hasEmAndamento;
-            else if (statusFilter === 'finished') matchesStatus = hasEncerrado;
-          }
-          card.style.display = (matchesText && matchesStatus) ? '' : 'none';
-        });
-      };
-      if (_filterInput) {
-        _filterInput.addEventListener('input', _applyFilter);
-      }
-      if (_filterStatus) {
-        _filterStatus.addEventListener('change', _applyFilter);
-      }
-    }
+    /* A barra canônica chama `window._tournListAplicarFiltro()` no onChange. O filtro
+     * RELÊ os cards a cada chamada — nunca uma lista capturada antes, que é o que fazia
+     * ele parar de funcionar depois do primeiro repinte da grade. */
+    window._tournListAplicarFiltro = function () {
+      var inp = document.getElementById('tourn-filter-input');
+      var q = (inp ? String(inp.value) : '').toLowerCase().trim();
+      var cards = document.querySelectorAll('#tourn-grid-container > div');
+      var vistos = 0;
+      Array.prototype.forEach.call(cards, function (card) {
+        var texto = (card.textContent || '').toLowerCase();
+        var bate = !q || texto.indexOf(q) !== -1;
+        if (card.dataset.tlDisp === undefined) card.dataset.tlDisp = card.style.display || '';
+        card.style.display = bate ? card.dataset.tlDisp : 'none';
+        if (bate) vistos++;
+      });
+      return vistos;
+    };
 
     // Check category/poll notifications (only once per tournament view, not on re-render)
     if (tournamentId && !_checksRan) {

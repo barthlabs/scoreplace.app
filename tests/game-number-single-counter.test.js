@@ -4,7 +4,8 @@
  * repetido na INFERIOR. Já tinha sido corrigido antes e voltou.
  *
  * CAUSA: existiam DOIS contadores carimbando `m._gameNum` sobre os mesmos jogos —
- *   (1) window._assignGlobalGameNumbers (bracket.js), a FONTE ÚNICA: pula BYE
+ *   (1) window._assignGlobalGameNumbers (bracket-model.js — mudou de casa em 03/set/2026,
+ *       pra ser VENDORIZÁVEL pro servidor), a FONTE ÚNICA: pula BYE
  *       (_gameNum = null) e deduplica por id (numById);
  *   (2) um _assignGameNums inline dentro de renderDoubleElimBracket, que rodava
  *       DEPOIS e sobrescrevia: NÃO pulava BYE e NÃO deduplicava.
@@ -23,14 +24,14 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗', m); } }
 
 const ROOT = path.join(__dirname, '..');
-const alvo = path.join(ROOT, 'js/views/bracket.js');
+const alvo = path.join(ROOT, 'js/views/bracket-model.js');
 const src = fs.readFileSync(alvo, 'utf8');
 const linhas = src.split('\n');
 
 // Delimita a FONTE ÚNICA: de `window._assignGlobalGameNumbers = function` até o
 // `};` na coluna 0 que a fecha. Atribuições a _gameNum aí dentro são legítimas.
 let ini = linhas.findIndex((l) => /window\._assignGlobalGameNumbers\s*=\s*function/.test(l));
-ok(ini >= 0, 'não achei window._assignGlobalGameNumbers em js/views/bracket.js');
+ok(ini >= 0, 'não achei window._assignGlobalGameNumbers em js/views/bracket-model.js');
 let fim = ini;
 for (let i = ini + 1; i < linhas.length; i++) {
   if (/^\};/.test(linhas[i])) { fim = i; break; }

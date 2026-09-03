@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.102';
+window.SCOREPLACE_VERSION = '2.1.103';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -7942,7 +7942,18 @@ window._fbAction = function (key, field, val, noRerender) {
         var wrap = document.getElementById('fbwrap-' + key);
         if (wrap) wrap.innerHTML = window._fbInner(key);
     }
-    if (opts.onChange) { try { (new Function(opts.onChange))(); } catch (e) {} }
+    /* ⛔ O onChange DA BARRA NÃO PODE FALHAR EM SILÊNCIO. Este `catch` era vazio: se o
+     * filtro estourasse, a barra continuava aceitando texto e simplesmente NÃO filtrava —
+     * indistinguível de "não tem resultado". Um filtro que morre calado é a pior versão
+     * de um filtro quebrado, porque não dá nem por onde começar a procurar.
+     * [[feedback_init_que_morre_no_meio_e_silencioso]] */
+    if (opts.onChange) {
+        try { (new Function(opts.onChange))(); }
+        catch (e) {
+            try { (window._warn || console.error)('[filterBar] onChange falhou (' + key + '):', opts.onChange, e); }
+            catch (e2) {}
+        }
+    }
 };
 // v1.4.14: digitar na busca — mostra/esconde o ✕ de limpar e repassa pro _fbAction.
 // Existe pra que o toggle do ✕ NÃO precise de re-render da barra (noRerender=true

@@ -2311,9 +2311,14 @@ function renderDashboard(container) {
       // (_monarchGlobalJogoNum) — que espelhava um bracket ANTIGO ("grupo do usuário por
       // último" → Jogo 73) e divergiu do atual (numera na ordem dos grupos → Jogo 19).
       // Fonte única = m._gameNum, carimbado acima. Proibido 2º contador.
+      /* ⛔ SEM SEGUNDO CONTADOR — nem como reserva. O `m.label` carrega a numeração
+       * LEGADA (por grupo/fase), que NÃO é a da chave: cair nele exibia um número
+       * diferente do que o torneio mostra, com a mesma cara de certo. Sem `_gameNum`
+       * carimbado (torneio ainda incompleto), o card mostra "Jogo" sem número e ganha o
+       * número assim que as partes chegam e a tela repinta. */
       var matchLabel = (item.m && item.m._gameNum != null)
         ? ('Jogo ' + item.m._gameNum)
-        : (item.m.label || 'JOGO 1');
+        : 'Jogo';
       var _gJogoNum = (item.m && item.m.isMonarch && item.m._gameNum != null) ? item.m._gameNum : null;
       var _monarchBoxLabel = (_gJogoNum != null) ? ('Jogo ' + _gJogoNum) : null;
 
@@ -2450,12 +2455,37 @@ function renderDashboard(container) {
           ' style="' + _dTb + 'display:none;margin-left:3px;flex-shrink:0;">';
       };
 
-      var p1ScoreHtml = pendingScores
+      /* ⭐ MELHOR DE 3/5 NA TELA INICIAL — A MESMA RÉGUA E O MESMO DESENHO DA CHAVE.
+       * Ordem do dono (03/set/2026): _"o que for na chave deve ser mostrado sempre que o
+       * jogo for mostrado na dashboard para qualquer sessão. próximo, novidade e seus
+       * últimos"_. Este card servia os TRÊS blocos e não desenhava set nenhum: nem o
+       * "Melhor de 3 · Set 1", nem uma coluna por set. `_matchSetPlan` decide (formato é
+       * POR FASE, via `_effectiveScoring`) e `_setHeadHtml`/`_setGridHtml` desenham — os
+       * mesmos que a chave usa, com as mesmas classes. */
+      var _tSc = tRef || (item && item.t) || null;
+      var _mSc = (_tSc && typeof window._effectiveScoring === 'function')
+        ? window._effectiveScoring(_tSc, item.m) : (_tSc && _tSc.scoring);
+      var _plan = (typeof window._matchSetPlan === 'function')
+        ? window._matchSetPlan(_mSc, item.m, {
+            sets: (pendingScores && Array.isArray(pendingScores.sets)) ? pendingScores.sets : null,
+            done: pendingScores ? true : undefined
+          })
+        : null;
+      /* W.O. e BYE ficam FORA, igual à chave: ali o box carrega a palavra, não placar. */
+      var _multiSet = !!(_plan && _plan.multi) && !item.m.wo && _plan.columns.length > 0;
+      var _setHead = _multiSet && typeof window._setHeadHtml === 'function'
+        ? window._setHeadHtml(_plan, { id: 'dash-sethead-' + mId }) : '';
+      var _setGrid = function (side) {
+        return (_multiSet && typeof window._setGridHtml === 'function')
+          ? window._setGridHtml(_plan, side, { italico: !!pendingScores }) : '';
+      };
+
+      var p1ScoreHtml = _multiSet ? _setGrid(1) : pendingScores
         ? '<span class="sp-mc-num" style="' + pendingScoreStyle + '">' + (pendingScores.p1 != null ? pendingScores.p1 : '?') + '</span>'
         : canLaunch
           ? '<input id="s1-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(1)
           : scorePlaceholder;
-      var p2ScoreHtml = pendingScores
+      var p2ScoreHtml = _multiSet ? _setGrid(2) : pendingScores
         ? '<span class="sp-mc-num" style="' + pendingScoreStyle + '">' + (pendingScores.p2 != null ? pendingScores.p2 : '?') + '</span>'
         : canLaunch
           ? '<input id="s2-' + mId + '" type="number" min="0" placeholder="0" onclick="event.stopPropagation();" oninput="window._highlightWinner&&window._highlightWinner(\'' + _esc(mId) + '\')" style="' + scoreInputStyle + 'flex-shrink:0;">' + _dTbInput(2)
@@ -2516,6 +2546,7 @@ function renderDashboard(container) {
               goToBtn +
             '</div>' +
           '</div>' +
+          _setHead +
           '<div style="' + rowStyle + '">' + _teamHtml(p1, _p1Uids) + '<div id="score-p1-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p1ScoreHtml + '</div></div>' +
           '<div style="text-align:center;font-size:0.65rem;color:var(--text-muted);font-weight:800;letter-spacing:2px;padding:3px 0;">VS</div>' +
           '<div style="' + rowStyle + '">' + _teamHtml(p2, _p2Uids) + '<div id="score-p2-' + mId + '" style="display:flex;align-items:center;flex-shrink:0;">' + p2ScoreHtml + '</div></div>' +
@@ -2648,8 +2679,8 @@ function renderDashboard(container) {
       if (_ngM && _ngM._gameNum != null) {
         _boxU = 'Jogo ' + _ngM._gameNum;
       } else {
-        var _jgU = String(_ngM.label || '').match(/Jogo\s*\d+/i);
-        _boxU = _jgU ? _jgU[0] : 'Jogo';
+        /* idem: nada de número tirado do `label` legado — ver matchLabel acima. */
+        _boxU = 'Jogo';
       }
 
       // v3.1.24: SEÇÃO SEPARADA, NÃO colapsável — renderizada ANTES de "Meus Últimos Resultados".
@@ -2659,7 +2690,15 @@ function renderDashboard(container) {
         '<div style="font-weight:800;color:var(--text-bright);font-size:0.92rem;text-transform:uppercase;letter-spacing:0.5px;line-height:1.25;">' + _sf(_ng.tName) + '</div>' +
         (_metaStr ? '<div style="color:var(--sp-c-a5b4fc,#a5b4fc);font-size:0.72rem;margin-top:3px;font-weight:600;">' + _sf(_metaStr) + '</div>' : '') +
       '</div>';
-      _upHtml += _miniBracketCard(_ng, _ngEntry.canLaunch, { hideFaseHeader: true, boxLabelOverride: _boxU });
+      /* MESMA LARGURA DAS NOVIDADES E DOS ÚLTIMOS RESULTADOS. Esta era a única das quatro
+       * chamadas de `_miniBracketCard` que entrava PELADA: sem o grid e sem o embrulho
+       * `min-width:0`, o card esticava para a largura inteira da seção enquanto todos os
+       * outros ocupavam uma coluna de `minmax(280px,1fr)`. Card de jogo tem geometria
+       * canônica em todo lugar — inclusive a caixa que o segura. */
+      _upHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start;">' +
+        '<div data-mr-card="1" style="min-width:0;">' +
+        _miniBracketCard(_ng, _ngEntry.canLaunch, { hideFaseHeader: true, boxLabelOverride: _boxU }) +
+        '</div></div>';
       _upHtml += '</div>'; // fecha #proximos-jogos-section
     }
 
