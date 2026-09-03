@@ -35,9 +35,12 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
   // ⭐ O card de verdade precisa dos ajudantes do motor (_matchWinnerSide, _slotUidsPositional).
   // Sem eles o teste só conseguiria montar card À MÃO — que foi exatamente como este bug
   // passou batido. Ordem igual à do index.html.
+  await p.addScriptTag({ content: ler('js/views/sport-rules.js') });
+  await p.addScriptTag({ content: ler('js/views/tournaments-utils.js') });
   await p.addScriptTag({ content: ler('js/views/bracket-logic.js') });
   await p.addScriptTag({ content: ler('js/views/bracket-model.js') });
   await p.addScriptTag({ content: ler('js/views/bracket.js') });
+  await p.addScriptTag({ content: ler('js/views/bracket-ui.js') });
 
   const r = await p.evaluate(async () => {
     var uidM = 'uMorais';
@@ -162,6 +165,28 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
     };
   });
 
+
+  /* ⭐ O CASO DO CONFRA, MEDIDO NA 2.1.112 COM O RENDERIZADOR REAL (03/set/2026).
+   * Torneio DIVIDIDO: a chave desenha ANTES de `participants` chegar da subcoleção, e o card
+   * nasce com o nome GRAVADO NO SORTEIO ("Fabi2401@"). Os inscritos chegam depois com o nome
+   * do CADASTRO ("Fabiana Silva") — a tela de Inscritos acha "silva"; a chave não achava,
+   * porque o filtro nunca olhava `t.participants`. Perfil VAZIO (uid sem doc) fecha a saída
+   * pelo perfil. Pergunta do dono: "o que tem lá que não tem nas chaves?" — isto. */
+  const rCadastro = await p.evaluate(async () => {
+    var uid = 'uFabi';
+    var t = { id: 'T', name: 'X', format: 'Liga', status: 'active', participants: [], matches: [],
+      rounds: [{ matches: [{ id: 'j1', p1: 'Fabi2401@', p2: 'Outra Pessoa', team1Uids: [uid], team2Uids: ['uOutra'], round: 1 }] }] };
+    window.AppStore.tournaments = [t]; window._findTournamentById = function () { return t; }; window._currentBracketTournament = t;
+    window._userProfileCache = {}; window._userProfileCache[uid] = { displayName: '', email: '' }; window._userProfileCache.uOutra = { displayName: 'Outra Pessoa' };
+    window._bracketSearchUidsAsked = {}; window._bracketSearchUidsDead = {};
+    window._preloadUserProfiles = function () { return Promise.resolve(); };
+    var card = window.renderMatchCard(t.rounds[0].matches[0], false, 'T', 1);   // desenhado SEM inscritos
+    document.body.innerHTML = '<div id="view-container">' + window._bracketBar(true) + '<div data-group-box="1">' + card + '</div></div>';
+    t.participants = [{ uid: uid, displayName: 'Fabiana Silva' }];                 // inscritos chegam DEPOIS
+    var el = document.getElementById('card-j1'), inp = document.getElementById('bracket-search');
+    var busca = async function (q) { inp.value = q; window._bracketApplyFilter(); await new Promise(function (r) { setTimeout(r, 30); }); return el.style.display !== 'none'; };
+    return { gravado: /Fabi2401/.test(el.getAttribute('data-players') || ''), fabi: await busca('fabi'), silva: await busca('silva'), fabiana: await busca('fabiana'), zzz: await busca('zzz') };
+  });
   await b.close();
 
   ok(r.adiadoNoDom === false, 'setup: o grupo do "mo" está ADIADO — não está no DOM antes da busca');
@@ -184,6 +209,11 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
   ok(rUidOnly.escondeOQueNaoTem, '⛔ e segue filtrando de verdade: "zzz" esconde o card');
   ok(rUidOnly.achouDeNovo, '⭐ buscar de novo continua achando');
   ok(rUidOnly.calls === 1, '⛔ e NENHUM pedido redundante depois — segue em ' + rUidOnly.calls);
+  ok(rCadastro.gravado, 'setup: o card nasceu com o nome GRAVADO no sorteio (inscritos ainda não tinham chegado)');
+  ok(rCadastro.fabi, 'o nome gravado continua achando');
+  ok(rCadastro.silva, '⭐ o nome do CADASTRO acha na chave — como já achava em Inscritos');
+  ok(rCadastro.fabiana, '⭐ idem pelo primeiro nome do cadastro');
+  ok(!rCadastro.zzz, '⛔ e o que não existe segue escondido');
 
   console.log('\n' + (fail ? '❌ ' + fail + ' FALHA(S)' : '✅ busca-puxa-nome-de-grupo-adiado: OK') + '  (' + pass + ' asserts ok)');
   if (fail) process.exit(1);

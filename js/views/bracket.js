@@ -8157,6 +8157,47 @@ window._bracketApplyFilter = function () {
   var _nomeDeUid = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
   var _preload = (typeof window._preloadUserProfiles === 'function') ? window._preloadUserProfiles : null;
   var _aPedir = null; // conjunto criado só se faltar alguém — zero alocação no caso comum
+  /* ⭐ A MESMA FONTE DA TELA DE INSCRITOS — o nome do CADASTRO, por uid.
+   * MEDIDO no Confra (dividido) com o renderizador real: a chave desenha ANTES de
+   * `participants` chegar da subcoleção, então `data-players` nasce com o nome GRAVADO NO
+   * SORTEIO ("Fabi2401@"). Os inscritos chegam depois — e a tela de Inscritos, que nomeia por
+   * `_pName(inscrito)`, acha "silva"; a chave não, porque nunca olhava `t.participants`.
+   * Pergunta do dono que resolveu: _"o que tem lá que não tem nas chaves? que resolve o nome
+   * dos atletas?"_ — isto. Mapa uid→nome montado UMA vez por passada, sem rede, ~150 entradas;
+   * entra na busca ao lado do perfil vivo e do nome gravado. */
+  var _nomeInscrito = (function () {
+    var mapa = {};
+    var t = window._currentBracketTournament;
+    if (!t && typeof window._findTournamentById === 'function') {
+      var _mh = String(window.location && window.location.hash || '').match(/#tournaments\/([^/?&]+)/);
+      if (_mh) { try { t = window._findTournamentById(_mh[1]); } catch (_et) { t = null; } }
+    }
+    if (!t) return mapa;
+    // ⛔ O CAMPO CRU, nunca `_pName`. `_pName` passa por `_displayNameForUid` → `_nameForUid`,
+    // que, com perfil VAZIO, devolve o nome GRAVADO NO JOGO (`_nomeGravadoPorUid`, capturado no
+    // render). Medido: `_pName({displayName:'Fabiana Silva'})` → "Fabi2401@" — o cadastro
+    // era sobrescrito pelo gravado antes de chegar à busca. Aqui o cadastro entra como é.
+    var pools = [t.participants, t.standbyParticipants, t.waitlist];
+    for (var pi = 0; pi < pools.length; pi++) {
+      var arr = pools[pi]; if (!Array.isArray(arr)) continue;
+      for (var i = 0; i < arr.length; i++) {
+        var e = arr[i]; if (!e || typeof e !== 'object') continue;
+        if (e.p1Uid && e.p1Name) mapa[e.p1Uid] = e.p1Name;
+        if (e.p2Uid && e.p2Name) mapa[e.p2Uid] = e.p2Name;
+        if (Array.isArray(e.participants)) {
+          for (var k = 0; k < e.participants.length; k++) {
+            var sub = e.participants[k];
+            if (sub && sub.uid) mapa[sub.uid] = sub.displayName || sub.name || mapa[sub.uid] || '';
+          }
+        }
+        if (e.uid && !e.p1Uid && !e.p2Uid) {
+          var nm = e.displayName || e.name || '';
+          if (nm && !(window._isOrphanLabel && window._isOrphanLabel(nm))) mapa[e.uid] = nm;
+        }
+      }
+    }
+    return mapa;
+  })();
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
   // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
   var root = document.getElementById('view-container') || document.body;
@@ -8238,9 +8279,10 @@ window._bracketApplyFilter = function () {
         var _nomesUid = '', _indeciso = false;
         for (var _u = 0; _u < _uids.length; _u++) {
           var _uid = _uids[_u];
-          var _nm = _nomeDeUid(_uid);
+          var _nm = _nomeDeUid(_uid), _nc = _nomeInscrito[_uid] || '';
+          if (_nc) _nomesUid += ' ' + _nc;                    // nome do CADASTRO (Inscritos)
           if (_nm) { _nomesUid += ' ' + _nm; continue; }      // sei quem é → decidido
-          if (_perfis[_uid] || _uidMudo[_uid]) continue;      // procurei, não tem nome → decidido
+          if (_nc || _perfis[_uid] || _uidMudo[_uid]) continue; // cadastro OU já procurei → decidido
           _indeciso = true;                                   // nunca procurei → não sei
           if (!_uidPedido[_uid]) (_aPedir || (_aPedir = {}))[_uid] = true;
         }
