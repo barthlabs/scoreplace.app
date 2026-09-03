@@ -67,7 +67,8 @@ const INSTANTE = '2026-09-02T14:17:51.424Z';
   }
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const destino = path.join(os.homedir(), 'Desktop', 'SNAPSHOT-PHASESTARTEDAT-' + ts + '.json');
+  try { fs.mkdirSync(path.join(os.homedir(), 'scoreplace-snapshots'), { recursive: true }); } catch (e) {}
+  const destino = path.join(os.homedir(), 'scoreplace-snapshots', 'SNAPSHOT-PHASESTARTEDAT-' + ts + '.json');
   fs.writeFileSync(destino, JSON.stringify({ em: new Date().toISOString(), antes: atual }, null, 1), { mode: 0o600 });
   fs.chmodSync(destino, 0o600);
 

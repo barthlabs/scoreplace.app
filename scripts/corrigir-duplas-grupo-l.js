@@ -144,7 +144,8 @@ function troca(jogo, lado, velha, nova) {
 
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const destino = path.join(os.homedir(), 'Desktop', 'SNAPSHOT-GRUPO-L-' + ts + '.json');
+  try { fs.mkdirSync(path.join(os.homedir(), 'scoreplace-snapshots'), { recursive: true }); } catch (e) {}
+  const destino = path.join(os.homedir(), 'scoreplace-snapshots', 'SNAPSHOT-GRUPO-L-' + ts + '.json');
 
   if (DRY) {
     console.log('\n✓ DRY-RUN completo. ZERO escritas. Todas as pré-condições passaram.');

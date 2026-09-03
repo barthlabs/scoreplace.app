@@ -155,7 +155,8 @@ const linha = (s) => console.log('  ' + s);
 
   // ══ 4. SNAPSHOT PRÉ-RECUPERAÇÃO (privado, fora do repositório) ═════════════
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const destino = path.join(os.homedir(), 'Desktop', 'SNAPSHOT-PRE-RECUPERACAO-' + ts + '.json');
+  try { fs.mkdirSync(path.join(os.homedir(), 'scoreplace-snapshots'), { recursive: true }); } catch (e) {}
+  const destino = path.join(os.homedir(), 'scoreplace-snapshots', 'SNAPSHOT-PRE-RECUPERACAO-' + ts + '.json');
   const snapshot = { _meta: { em: new Date().toISOString(), leva: 'CONFRA.RECOVERY.P0' },
     documento: doc, matches_subcolecao: msSnap.docs.map((d) => ({ id: d.id, dados: d.data() })) };
   if (!DRY) {
