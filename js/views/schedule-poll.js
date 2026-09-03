@@ -745,9 +745,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       var n = (m.schedule && Array.isArray(m.schedule.options)) ? m.schedule.options.length : 0;
       // v4.1.25: volume + altura PADRÃO (mesmas classes dos botões do header do card):
       // .btn dá o volume almofadado, .btn-shine o brilho, .btn-micro a altura padrão.
-      return '<button class="btn btn-micro btn-shine hover-lift" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
-        'style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;">' +
-        '📅 Propor datas' + (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.72rem;">' + n + '</span>' : '') +
+      // ⭐ COM PROPOSTA NA MESA o botão MUDA (pedido do dono, 03/set): brilha e diz o que há
+      // pra ver — "Veja data proposta", em fonte menor — em vez de convidar a propor de novo.
+      // O dado é POR JOGO (m.schedule deste confronto), nunca do grupo vizinho.
+      var _temProposta = n > 0;
+      return '<button class="btn btn-micro btn-shine hover-lift' + (_temProposta ? ' sp-glow-indigo' : '') + '" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
+        'style="background:#3b82f6;color:#fff;font-weight:800;font-size:' + (_temProposta ? '0.62rem' : '0.72rem') + ';' +
+        (_temProposta ? 'box-shadow:0 0 0 1px rgba(147,197,253,0.9),0 0 14px rgba(59,130,246,0.85);' : '') + '">' +
+        (_temProposta ? '📅 Veja data proposta' : '📅 Propor datas') +
+        (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.62rem;">' + n + '</span>' : '') +
         '</button>';
     } catch (e) { return ''; }
   };
@@ -859,10 +865,14 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // de baixo, ao lado de "jogos" — a largura do botão é a de "📅 Combinar",
       // com ou sem badge.
       var _badge = n ? '<span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:0 6px;font-size:0.66rem;">' + n + '</span>' : '';
-      return '<button type="button" class="btn btn-micro btn-shine hover-lift" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:0.72rem;font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;">' +
+      // ⭐ mesma regra do card: com proposta na mesa (deste GRUPO — m0 é o portador), o
+      // botão brilha e diz "Veja data proposta", em fonte menor.
+      var _temPropostaG = n > 0;
+      return '<button type="button" class="btn btn-micro btn-shine hover-lift' + (_temPropostaG ? ' sp-glow-indigo' : '') + '" onclick="' + open + '" style="background:#3b82f6;color:#fff;font-size:' + (_temPropostaG ? '0.62rem' : '0.72rem') + ';font-weight:800;padding:4px 9px;line-height:1.05;text-align:left;' +
+        (_temPropostaG ? 'box-shadow:0 0 0 1px rgba(147,197,253,0.9),0 0 14px rgba(59,130,246,0.85);' : '') + '">' +
         '<span style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;">' +
-          '<span>📅 Propor</span>' +
-          '<span style="display:inline-flex;align-items:center;gap:5px;">datas' + _badge + '</span>' +
+          '<span>📅 ' + (_temPropostaG ? 'Veja data' : 'Propor') + '</span>' +
+          '<span style="display:inline-flex;align-items:center;gap:5px;">' + (_temPropostaG ? 'proposta' : 'datas') + _badge + '</span>' +
         '</span></button>';
     } catch (e) { return ''; }
   };

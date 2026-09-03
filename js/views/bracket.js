@@ -8100,7 +8100,10 @@ window._bracketApplyFilter = function () {
    * ⛔ NÃO é o mesmo que `_chaveMontaTudo` logo abaixo: aquele monta os LOTES ADIADOS (o
    * conteúdo guardado atrás de um marcador); este termina a PINTURA das fatias já montadas.
    * Faltando qualquer um dos dois, a busca varre uma chave pela metade. */
+  var _SEL_CARDS = '[data-players]';
+  var _cardsAntesFlush = document.querySelectorAll(_SEL_CARDS).length;
   try { if (typeof window._flushBracketPaint === 'function') window._flushBracketPaint(); } catch (_ef) {}
+  var _cardsDepoisFlush = document.querySelectorAll(_SEL_CARDS).length;
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
   var onlyMine = !!window._showOnlyMyMatches;
@@ -8128,7 +8131,24 @@ window._bracketApplyFilter = function () {
     try { window._hydrateUidNames(document.getElementById('view-container') || document); } catch (_eh) {}
   }
   var cards = document.querySelectorAll('[data-players]');
-  if (!cards.length) return;
+  if (!cards.length) {
+    /* ⛔ SAÍDA ANTECIPADA MEDIDA: se aqui não há card, a busca "apaga a tela" sem passar pelo
+     * diagnóstico do fim. Grava o que havia ANTES do flush/montaTudo e o que sobrou. */
+    try {
+      if (q && window._buscaDiagVazio !== q) {
+        window._buscaDiagVazio = q;
+        var _fbV = window.firebase, _dbV = window.FirestoreDB && window.FirestoreDB.db, _uV = _fbV && _fbV.auth && _fbV.auth().currentUser;
+        var _ibc = document.getElementById('inline-bracket-container');
+        if (_dbV && _uV) _dbV.collection('debugDrawLogs').doc('busca_' + _uV.uid).set({ uid: _uV.uid, email: _uV.email || '', buscaChave: {
+          versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''), q: q,
+          saida: 'SEM CARDS', cardsAntesFlush: _cardsAntesFlush, cardsDepoisFlush: _cardsDepoisFlush, cardsAgora: 0,
+          container: _ibc ? ('h=' + _ibc.offsetHeight + ' filhos=' + _ibc.children.length + ' html=' + String(_ibc.innerHTML || '').replace(/\s+/g, ' ').slice(0, 1500)) : 'AUSENTE',
+          viewFilhos: Array.prototype.map.call((document.getElementById('view-container') || document.body).children, function (c) { return c.tagName + (c.id ? '#' + c.id : '') + '{' + (c.style.display || '-') + ' h=' + c.offsetHeight + '}'; }).join(' | ').slice(0, 1500)
+        } }, { merge: true }).catch(function () {});
+      }
+    } catch (_ev0) {}
+    return;
+  }
   /* ── QUEM AINDA NÃO SE CONHECE NÃO SE ESCONDE ──────────────────────────────────
    * O card nasce com o nome VAZIO quando o perfil não chegou (de propósito, desde a
    * 1.7.79: `data-uid-name` + hidratação). O filtro lia esse vazio como "não é essa
@@ -8423,7 +8443,7 @@ window._bracketApplyFilter = function () {
       _culpados.push({ card: _hc.id || _desc(_hc), players: (_hc.getAttribute('data-players') || '').slice(0, 80), cadeia: _cadeia.slice(0, 8) });
     }
   } catch (_ev) { _visDeVerdade = -1; }
-  if (q && (shown === 0 || _visDeVerdade === 0) && !onlyMine && window._buscaDiagUltima !== q + '|' + shown) {
+  if (q && !onlyMine && window._buscaDiagUltima !== q + '|' + shown) {
     window._buscaDiagUltima = q + '|' + shown;
     try {
       var _fbD = window.firebase, _dbD = window.FirestoreDB && window.FirestoreDB.db;
@@ -8437,12 +8457,25 @@ window._bracketApplyFilter = function () {
             uids: _uA.map(function (u) { return u.slice(0, 6) + ':' + (_nomeDeUid ? (_nomeDeUid(u) || '∅') : '?') + '/' + (_nomeInscrito[u] || '∅'); }).join(' ; ') });
         }
         var _parts = _tBusca ? (_tBusca.participants || []) : [];
+        // mapa do que está na tela: filhos diretos do container da chave e do view-container
+        var _mapa = [];
+        try {
+          ['inline-bracket-container', 'view-container'].forEach(function (id) {
+            var raiz = document.getElementById(id); if (!raiz) { _mapa.push(id + ': AUSENTE'); return; }
+            var cs0 = window.getComputedStyle(raiz);
+            _mapa.push(id + ' {' + (raiz.style.display || '-') + '/' + cs0.display + ' h=' + raiz.offsetHeight + ' cards=' + raiz.querySelectorAll('[data-players]').length + '}');
+            Array.prototype.forEach.call(raiz.children, function (ch) {
+              var cs = window.getComputedStyle(ch);
+              _mapa.push('  ' + _desc(ch) + ' {' + (ch.style.display || '-') + '/' + cs.display + ' h=' + ch.offsetHeight + ' cards=' + ch.querySelectorAll('[data-players]').length + '} ' + String(ch.textContent || '').replace(/\s+/g, ' ').slice(0, 40));
+            });
+          });
+        } catch (_em) { _mapa.push('erro ' + _em.message); }
         var _contsOcultos = [];
         try { for (var _ck = 0; _ck < conts.length && _contsOcultos.length < 12; _ck++) if (!contHasHit[_ck]) _contsOcultos.push(_desc(conts[_ck]) + ' [cards dentro: ' + conts[_ck].querySelectorAll('[data-players]').length + ']'); } catch (_ec) {}
         // documento PRÓPRIO: o rastro do sorteio grava debugDrawLogs/{uid} com set() sem merge e apagava isto.
         _dbD.collection('debugDrawLogs').doc('busca_' + _uD.uid).set({ uid: _uD.uid, email: _uD.email || '', buscaChave: {
           versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''),
-          q: q, cards: cards.length, casaram: _hitsDiag.length, visiveisDeVerdade: _visDeVerdade, culpados: _culpados, contsOcultos: _contsOcultos, contsTotal: conts.length, shown: shown, torneio: !!_tBusca, inscritos: _parts.length,
+          q: q, cards: cards.length, casaram: _hitsDiag.length, visiveisDeVerdade: _visDeVerdade, culpados: _culpados, contsOcultos: _contsOcultos, contsTotal: conts.length, shown: shown, mapa: _mapa, torneio: !!_tBusca, inscritos: _parts.length,
           elencoCarregado: (_tBusca && typeof window._elencoCarregado === 'function') ? window._elencoCarregado(_tBusca) : null,
           faltaOQue: (_tBusca && _tBusca._faltaOQue) || null,
           cadastroMapa: Object.keys(_nomeInscrito).length, perfilCache: Object.keys(_perfis).length,
