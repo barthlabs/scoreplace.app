@@ -187,6 +187,26 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
     var busca = async function (q) { inp.value = q; window._bracketApplyFilter(); await new Promise(function (r) { setTimeout(r, 30); }); return el.style.display !== 'none'; };
     return { gravado: /Fabi2401/.test(el.getAttribute('data-players') || ''), fabi: await busca('fabi'), silva: await busca('silva'), fabiana: await busca('fabiana'), zzz: await busca('zzz') };
   });
+
+  /* ⭐ O RESULTADO ENTRA NA TELA. Medido no desktop do dono (2.1.118): a busca casava, os
+   * cards ficavam visíveis, e ele via a página em branco — a eliminatória preserva a altura
+   * dos grupos escondidos e a rolagem ficava numa área vazia. */
+  const rRola = await p.evaluate(async () => {
+    var t = { id: 'TR', format: 'Liga', status: 'active', participants: [{ uid: 'uLonge', displayName: 'Deborah Monteiro' }], matches: [],
+      rounds: [{ matches: [{ id: 'jLonge', p1: 'Deborah Monteiro', p2: 'Alguem', team1Uids: ['uLonge'], team2Uids: ['uAlg'], round: 1 }] }] };
+    window.AppStore.tournaments = [t]; window._findTournamentById = function () { return t; }; window._currentBracketTournament = t;
+    window._userProfileCache = { uLonge: { displayName: 'Deborah Monteiro' }, uAlg: { displayName: 'Alguem' } };
+    var card = window.renderMatchCard(t.rounds[0].matches[0], false, 'TR', 1);
+    document.body.innerHTML = '<div id="view-container">' + window._bracketBar(true) +
+      '<div style="height:3000px"></div><div data-group-box="1">' + card + '</div><div style="height:3000px"></div></div>';
+    window.scrollTo(0, 0);
+    var el = document.getElementById('card-jLonge'), inp = document.getElementById('bracket-search');
+    var antes = el.getBoundingClientRect().top;
+    inp.value = 'mon'; window._bracketApplyFilter();
+    await new Promise(function (r) { setTimeout(r, 50); });
+    var r2 = el.getBoundingClientRect();
+    return { antesForaDaTela: antes > window.innerHeight, visivel: el.style.display !== 'none', depoisNaTela: r2.top >= 0 && r2.top < window.innerHeight };
+  });
   await b.close();
 
   ok(r.adiadoNoDom === false, 'setup: o grupo do "mo" está ADIADO — não está no DOM antes da busca');
@@ -214,6 +234,9 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m); } else { fail
   ok(rCadastro.silva, '⭐ o nome do CADASTRO acha na chave — como já achava em Inscritos');
   ok(rCadastro.fabiana, '⭐ idem pelo primeiro nome do cadastro');
   ok(!rCadastro.zzz, '⛔ e o que não existe segue escondido');
+  ok(rRola.antesForaDaTela, 'setup: o card que casa está 3000px abaixo, fora da viewport');
+  ok(rRola.visivel, 'a busca acha o card');
+  ok(rRola.depoisNaTela, '⭐ e ROLA até ele — o resultado entra na tela (era a página "em branco" do dono)');
 
   console.log('\n' + (fail ? '❌ ' + fail + ' FALHA(S)' : '✅ busca-puxa-nome-de-grupo-adiado: OK') + '  (' + pass + ' asserts ok)');
   if (fail) process.exit(1);

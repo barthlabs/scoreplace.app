@@ -8517,4 +8517,27 @@ window._bracketApplyFilter = function () {
   if (typeof window._stickyFilterKeepRoom === 'function') {
     try { window._stickyFilterKeepRoom(_keepY, false); } catch (e) {}
   }
+  /* ⭐ O RESULTADO TEM QUE ESTAR NA TELA (2.1.119 — medido no desktop do dono, 03/set):
+   * "mo" casava 9 cards, os 9 visíveis, container da chave com 4720px — e ele via a página
+   * EM BRANCO. A eliminatória preserva a altura dos grupos escondidos, os acertos ficam
+   * espalhados fora da viewport, e `keepY` (acima) devolve a rolagem exatamente onde estava:
+   * numa área que acabou de ficar vazia. Quatro versões "consertaram" a busca e ele
+   * continuava sem ver nada — porque o defeito era de ROLAGEM, não de casamento.
+   * Regra: com consulta e acertos, se o PRIMEIRO acerto visível não está na viewport, rola
+   * até ele (o card já leva scroll-margin-top = --scroll-anchor, então para sob a barra).
+   * Sem consulta, nada muda — `keepY` continua mandando. */
+  if (q && _hitsDiag.length && typeof window.getComputedStyle === 'function') {
+    try {
+      var _primeiro = null;
+      for (var _fh = 0; _fh < _hitsDiag.length; _fh++) {
+        if (_hitsDiag[_fh].offsetParent !== null && _hitsDiag[_fh].offsetHeight > 0) { _primeiro = _hitsDiag[_fh]; break; }
+      }
+      if (_primeiro && typeof _primeiro.getBoundingClientRect === 'function') {
+        var _rc = _primeiro.getBoundingClientRect();
+        var _ancora = parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--scroll-anchor')) || 120;
+        var _alturaVp = window.innerHeight || document.documentElement.clientHeight || 0;
+        if (_rc.top < _ancora || _rc.bottom > _alturaVp) _primeiro.scrollIntoView({ block: 'start', behavior: 'auto' });
+      }
+    } catch (_es) {}
+  }
 };
