@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.106';
+window.SCOREPLACE_VERSION = '2.1.107';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -13589,6 +13589,14 @@ window._isUserEnrolledInTournament = function(user, tournament) {
 // guardados nunca colide (os do form ficam estáveis).
 window._ensureEnrollSeqs = function(t) {
   if (!t) return;
+  /* ⛔ NÃO NUMERAR SOBRE ELENCO INCOMPLETO — e aqui é pior que mostrar errado: esta função
+   * GRAVA `enrollSeq` nos objetos. Com o torneio dividido, `participants` chega em partes; se
+   * o backfill roda com metade da lista, ele carimba sequências que colidem com as de quem
+   * ainda não chegou, e o número de inscrição fica embaralhado PARA SEMPRE.
+   * Relato do dono (03/set/2026): _"se inscreveu agora na fase 2. como pode ser inscrita 24?
+   * temos 150 e tantos já"_ — o rank foi calculado sobre o pedaço carregado.
+   * Mesma regra do `_assignGlobalGameNumbers`: sem o conjunto inteiro, não se numera. */
+  if (t._faltamPesados) return;
   var arr = Array.isArray(t.participants) ? t.participants : [];
   var maxSeq = 0;
   arr.forEach(function(p){ if (p && typeof p === 'object') [p.enrollSeq, p.p1Seq, p.p2Seq].forEach(function(s){ if (s != null && !isNaN(s) && s > maxSeq) maxSeq = s; }); });
@@ -13608,6 +13616,10 @@ window._ensureEnrollSeqs = function(t) {
   });
 };
 window._buildEnrollOrderMap = function(t) {
+  /* Elenco incompleto → mapa VAZIO, e o card sai SEM número. "Não sei" é a resposta
+   * honesta; um ordinal calculado sobre parte da lista é um número inventado com cara de
+   * certo. Quando as partes chegam a tela repinta e o número aparece correto. */
+  if (t && t._faltamPesados) return {};
   if (typeof window._ensureEnrollSeqs === 'function') window._ensureEnrollSeqs(t);
   var arr = Array.isArray(t.participants) ? t.participants : [];
   var maxSeq = 0;

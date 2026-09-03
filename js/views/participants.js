@@ -1872,7 +1872,24 @@ window._inscritoIndividualCard = function (t, p, idx, ctx) {
     // pelo NOME resolvido → lookup falha → _pUid vazio → nome preso no email/"Participante N" e SEM
     // data-uid-name (não re-hidrata). p.uid resolve sempre; mapa só fallback p/ p string.
     var _pPart = _nameToParticipant && _nameToParticipant[pName];
+    /* ⛔ SEM UID NO SPAN, A HIDRATAÇÃO NÃO TEM O QUE RESOLVER — e o card fica MUDO pra sempre.
+     * Relato do dono (03/set/2026): _"continua sem nome essa nova que entrou… ela tem até
+     * foto"_, e a régua dele: _"sempre por uid. só tem que hidratar"_.
+     * MEDIDO: `_hydrateUidNames` funciona — dado um `data-uid-name` com uid e o perfil no
+     * cache, ele preenche. O que falhava era o ATRIBUTO nascer vazio. Duas causas somadas:
+     * (a) entrada de espera criada a partir de texto nasce `{name, displayName}`, SEM uid
+     *     (waitlist-core `push({ name: s, displayName: s }, s)`);
+     * (b) o card da seção de espera é chamado com `nameToParticipant: {}` — mapa VAZIO de
+     *     propósito — então o único caminho de reserva já nascia morto.
+     * A saída continua sendo o uid, nunca o nome gravado: `_memberUidByName` é o resolvedor
+     * canônico de identidade (indexa os pools do torneio e casa pelo nome GRAVADO e pelo nome
+     * VIVO do perfil). Achando o uid, o span ganha `data-uid-name` e a hidratação faz o resto.
+     * ⛔ Não cair no `pName` como texto: nome gravado ENVELHECE e quem troca o nome no perfil
+     * apareceria com o antigo — que é o defeito que o cânone do uid existe pra impedir. */
     var _pUid = (typeof p === 'object' && p && p.uid) ? p.uid : ((_pPart && typeof _pPart === 'object') ? (_pPart.uid || '') : '');
+    if (!_pUid && typeof window._memberUidByName === 'function') {
+      try { _pUid = window._memberUidByName(t, pName) || ''; } catch (_eU) { _pUid = ''; }
+    }
     var _pUidJs = _pUid ? (',{uid:\'' + _pUid + '\',tournamentId:\'' + t.id + '\'}') : (',{tournamentId:\'' + t.id + '\'}');
     var _pDisp = _pUid ? window._safeHtml(window._displayName(_pUid, pName)) : _pNameH;
     var _pUidAttr = _pUid ? ' data-uid-name="' + window._safeHtml(_pUid) + '"' : '';

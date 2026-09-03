@@ -2413,7 +2413,17 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   // seção de PAREAMENTO (arrastar/soltar formando duplas). Fora disso, lista padrão.
   var _teamSizeSb = parseInt(t.teamSize) || 1;
   var _isDuplasSb = _teamSizeSb === 2 || (window._isTeamEnrollMode && window._isTeamEnrollMode(t.enrollmentMode));
-  if (_isDuplasSb && typeof window._lateEnrollWindowOpen === 'function' && window._lateEnrollWindowOpen(t) && typeof window._renderLateJoinPairing === 'function') {
+  /* ⛔ O TOGGLE DA FASE MANDA. Relato do dono (03/set/2026): _"sem entradas tardias nessa
+   * fase, deveria estar essa pessoa na lista de espera e não para formar dupla (para novos
+   * confrontos)"_ — e ele tinha desligado o toggle.
+   * São DOIS controles diferentes e esta linha só olhava um: `_lateEnrollWindowOpen` diz se a
+   * JANELA de R1 ainda está aberta (regra do formato), enquanto `_effectiveLateEnrollment` é a
+   * ESCOLHA do organizador PARA ESTA FASE. Com a janela aberta e o toggle desligado, a seção
+   * de pareamento continuava oferecendo gente pra formar confronto novo — exatamente o que a
+   * escolha dele proibia. Agora exige os dois: janela aberta E fase aceitando tardios.
+   * Desligado, cai no `standbyHtml` de sempre — a LISTA DE ESPERA. */
+  var _leFase = (typeof window._effectiveLateEnrollment === 'function') ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
+  if (_isDuplasSb && _leFase === 'expand' && typeof window._lateEnrollWindowOpen === 'function' && window._lateEnrollWindowOpen(t) && typeof window._renderLateJoinPairing === 'function') {
     var _ljHtml = window._renderLateJoinPairing(t, isOrg);
     if (_ljHtml) return _lateToggleHtml + _ljHtml;
   }
