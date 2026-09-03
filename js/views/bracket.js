@@ -822,13 +822,41 @@ window._chaveGuardaLote = function (montar) {
 // busca, 'só os meus jogos', exportação, testes.
 window._chaveMontaTudo = function (raiz) {
   try {
-    var marcas = (raiz || document).querySelectorAll('[data-chave-lote]');
-    for (var i = 0; i < marcas.length; i++) {
-      var id = marcas[i].getAttribute('data-chave-lote');
-      var fn = window._chaveLotes[id];
-      if (!fn) continue;
-      delete window._chaveLotes[id];
-      try { marcas[i].outerHTML = fn(); } catch (e) { if (window._warn) window._warn('[chave lote]', e); }
+    /* ⛔ LOTE QUE NASCE DE LOTE — UMA PASSADA NÃO BASTA. Relato do dono (03/set/2026):
+     * _"a barra de buscas ainda não funciona nas chaves (detalhes). funciona direito nos
+     * inscritos"_ — e a diferença entre as duas telas é exatamente esta: a chave monta em
+     * LOTES ADIADOS, os inscritos não.
+     *
+     * A varredura era uma passada só sobre um NodeList CAPTURADO ANTES de montar. Só que a
+     * chave adia em CAMADAS: o lote de fora desenha os grupos, e cada grupo adia os próprios
+     * jogos. Os marcadores que nascem DENTRO do HTML recém-montado não estavam na lista
+     * original e ficavam por montar — os cards nunca entravam no DOM.
+     * Efeito na tela: buscar um nome que só existe numa camada interna não achava NADA, e o
+     * filtro então escondia todo container sem acerto — a chave inteira sumia, sem sequer o
+     * "Nenhum jogo encontrado". Foi o que ele viu com "ana".
+     *
+     * Agora repete até não sobrar marcador montável. O teto de passadas existe porque um
+     * lote defeituoso que se re-emitisse viraria laço infinito no caminho quente da busca —
+     * melhor parar e avisar do que travar a aba. [[feedback_never_wait_for_an_exact_value]] */
+    var _raiz = raiz || document;
+    var _restantes = 0;
+    for (var _passo = 0; _passo < 12; _passo++) {
+      var marcas = _raiz.querySelectorAll('[data-chave-lote]');
+      if (!marcas.length) break;
+      var _montouAlgo = false;
+      for (var i = 0; i < marcas.length; i++) {
+        var id = marcas[i].getAttribute('data-chave-lote');
+        var fn = window._chaveLotes[id];
+        if (!fn) continue;
+        delete window._chaveLotes[id];
+        _montouAlgo = true;
+        try { marcas[i].outerHTML = fn(); } catch (e) { if (window._warn) window._warn('[chave lote]', e); }
+      }
+      /* nenhum marcador tinha função registrada → não há o que montar; insistir é laço. */
+      if (!_montouAlgo) { _restantes = marcas.length; break; }
+    }
+    if (_restantes && window._warn) {
+      window._warn('[chave lote] ' + _restantes + ' marcador(es) sem função registrada — a busca pode não ver esses jogos.');
     }
   } catch (e) { if (window._warn) window._warn('[chave monta tudo]', e); }
 };
@@ -1670,7 +1698,14 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
     if (!m || m.winner || m.isBye || !m.p1 || m.p1 === 'TBD' || !m.p2 || m.p2 === 'TBD') return;
     const p1s = _getCheckInStatus(t.id, m.p1);
     const p2s = _getCheckInStatus(t.id, m.p2);
-    const friendlyNum = idx + 1;
+    /* ⛔ SEGUNDO CONTADOR — o banner numerava `idx + 1` sobre a PRÓPRIA lista filtrada
+     * (só jogos sem vencedor, sem BYE e com os dois lados definidos). Ou seja: "Jogo 1" aqui
+     * podia ser o "Jogo 87" da chave, e os dois números conviviam na mesma tela.
+     * É o mesmo defeito que a dashboard já tinha (168 × 169) e que o próprio código proíbe
+     * por escrito: "Fonte única = m._gameNum. Proibido 2º contador."
+     * Sem `_gameNum` carimbado (torneio ainda incompleto), fica SEM número — a numeração é
+     * global e não se inventa a partir de um pedaço. [[project_uid_identity_canon_locked]] */
+    const friendlyNum = (m._gameNum != null) ? m._gameNum : null;
     const entry = { match: m, friendlyNum, p1s, p2s };
     if (p1s === 'full' && p2s === 'full') {
       readyMatches.push(entry);
@@ -1740,7 +1775,7 @@ window._renderReadyMatchesBanner = function _renderReadyMatchesBanner(t) {
     }
     return `
     <div style="padding:10px 14px;background:${window._spCor(bg, 'background')};border:1px solid ${border};border-radius:10px;display:flex;flex-direction:column;gap:4px;">
-      <div style="font-size:0.8rem;font-weight:800;color:${window._spCor(labelColor, 'color')};letter-spacing:0.5px;">${_t('bracket.matchNum', {n: e.friendlyNum})}</div>
+      <div style="font-size:0.8rem;font-weight:800;color:${window._spCor(labelColor, 'color')};letter-spacing:0.5px;">${e.friendlyNum != null ? _t('bracket.matchNum', {n: e.friendlyNum}) : ''}</div>
       ${renderSideRow(e.match.p1)}
       <div style="font-size:0.6rem;font-weight:800;color:rgba(255,255,255,0.2);letter-spacing:2px;padding:0 2px;">VS</div>
       ${renderSideRow(e.match.p2)}

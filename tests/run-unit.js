@@ -200,6 +200,9 @@ const SUITES = [
   // A busca da chave casava por TRECHO contíguo: "ana r" sumia com tudo. O teste de
   // navegador que a exercita só usava consulta de UMA palavra, então ficou verde.
   'tests/busca-casa-por-palavra.test.js',
+  // A busca da chave apagava tudo: `_chaveMontaTudo` montava só a camada de FORA, e os
+  // cards viviam num lote DENTRO de outro — nunca entravam no DOM. Nos inscritos não há lote.
+  'tests/busca-monta-lote-aninhado.test.js',
   'tests/detail-route-never-renders-participants.test.js',
   'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',
