@@ -767,6 +767,20 @@ function _applyMyMatchesFilter() {
 // aparece ou some não pode fazer as outras trocarem de posição. Sai limpa pro atributo.
 // [[project_placar_por_sets_no_card]] · o defeito que ela conserta: a chave voltava pra
 // Rodada 1 a cada placar lançado.
+/* ── "R1 Grupo C" → "R1 (C)" — SÓ PARA MOSTRAR ─────────────────────────────────────────
+ * Relato do dono (03/set/2026): _"3 linhas onde deveriam ser 2… poderia aqui ser R1 (C) e o
+ * concluído na linha de baixo sem truncar (fonte menor)"_. O título disputava a linha com
+ * dois botões grandes, sobrava uma coluna estreita e "R1 Grupo C" quebrava em TRÊS linhas —
+ * e era a altura dele que esticava os botões.
+ * ⛔ NÃO TOCA NA IDENTIDADE DO GRUPO. `sg.name` e `data-group-label` seguem inteiros: são a
+ * chave que casa o grupo entre a chave e a dashboard, e que a rolagem usa pra achar o box.
+ * Aqui é só o texto desenhado. Sem "Grupo" no nome, devolve como veio. */
+window._grpRotuloCurto = function (nome) {
+  var n = String(nome == null ? '' : nome).trim();
+  var m = n.match(/^(.+?)\s+Grupo\s+(\S+)$/i);
+  return m ? (m[1] + ' (' + m[2] + ')') : n;
+};
+
 window._hsKey = function (s) {
   return String(s == null ? '' : s).replace(/["'<>&\\]/g, '').replace(/\s+/g, '-').slice(0, 60);
 };
@@ -5522,9 +5536,19 @@ function _renderMonarchStage(t, isOrg, canEnterResult, opts) {
       ? '<span style="font-size:0.6rem;padding:2px 8px;border-radius:5px;background:rgba(34,211,238,0.15);color:var(--sp-c-22d3ee,#22d3ee);font-weight:700;">SEU GRUPO</span>'
       : '';
     html += '<div data-group-box="1"' + (_isMineMon ? ' data-my-group="1"' : '') + ' data-group-label="' + window._safeHtml(window._grpKey(sg.name)) + '" style="scroll-margin-top:var(--scroll-anchor,120px);background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + window._spCor((groupDone ? '#4ade80' : (_isMineMon ? '#22d3ee' : '#fbbf24')), 'borda') + ';border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">' +
-      '<div class="btn-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
-        '<h3 style="margin:0;font-size:1.1rem;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';flex:1;">' + window._safeHtml(sg.name) + '</h3>' +
-        _mineBadgeMon + (statusBadge || '') + _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
+      /* DUAS LINHAS, NÃO TRÊS: título curto em cima, selos embaixo, botões à direita.
+       * Antes era tudo numa linha só, com `flex:1` no <h3>: os dois botões grandes
+       * comiam a largura, o título quebrava em três linhas e ERA ELE que esticava a
+       * altura dos botões. Agora o título e os selos vivem numa coluna própria
+       * (`align-items:flex-start` no pai, pra os botões não esticarem junto), o nome
+       * vai curto (`R1 (C)`) e sem quebra, e o selo desce pra segunda linha inteiro —
+       * fonte menor, `white-space:nowrap`, nunca truncado. */
+      '<div class="btn-row" style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:1rem;">' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;flex:1;">' +
+          '<h3 style="margin:0;font-size:1.1rem;line-height:1.15;white-space:nowrap;color:' + window._spCor((_isMineMon ? '#22d3ee' : 'var(--text-bright)'), 'color') + ';">' + window._safeHtml(window._grpRotuloCurto(sg.name)) + '</h3>' +
+          ((_mineBadgeMon || statusBadge) ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap;">' + _mineBadgeMon + (statusBadge || '') + '</div>' : '') +
+        '</div>' +
+        _schGrpBtn2 + _waGrpBtn2 + _grpArrived + _woCtrlM +
       '</div>' +
       // v4.3.12 (pedido do dono): a tabela de classificação do grupo fica SEMPRE ACIMA das
       // chaves (mesmo padrão de renderGroupStage). Antes vinha depois dos cards de jogo.
