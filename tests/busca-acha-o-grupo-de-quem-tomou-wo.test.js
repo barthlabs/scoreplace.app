@@ -73,7 +73,16 @@ ok('quem decide visibilidade continua sendo _bracketApplyFilter, por [data-playe
   // explica por que essa leitura é protegida. Continua sendo só prólogo — a decisão de
   // visibilidade segue neste filtro, por [data-players]. Se um dia isto crescer de novo,
   // amplie: o que a asserção trava é QUEM decide, não em que coluna a decisão começa.
-  /window\._bracketApplyFilter = function[\s\S]{0,2600}querySelectorAll\('\[data-players\]'\)/.test(bracket));
+  // ⚠️ Ampliada de novo em 2.1.111 (2600 → 4200), pelo MESMO motivo das duas vezes
+  // anteriores: o prólogo ganhou mais DUAS portas, e nenhuma delas decide visibilidade.
+  //   · `_flushBracketPaint()` — termina a pintura em fatias antes de filtrar (a chave
+  //     pintava pela metade e o filtro escondia o que ainda não tinha chegado);
+  //   · `_hydrateUidNames()` — PUXA o nome por uid dos cards que `_chaveMontaTudo` acabou
+  //     de montar. Sem isso o grupo adiado entrava no DOM com o span de nome VAZIO e
+  //     procurar aquela pessoa nunca achava — medido pelo dono: "ro mostra, mo não".
+  // As duas são PRÓLOGO: garantem que o filtro veja a chave inteira e com os nomes. A
+  // decisão de quem aparece segue aqui, por [data-players], que é o que esta trava guarda.
+  /window\._bracketApplyFilter = function[\s\S]{0,4200}querySelectorAll\('\[data-players\]'\)/.test(bracket));
 
 // ── 4. a regra vale para o caso REAL do Confra ───────────────────────────────────────
 // Simula o que o filtro faz: normaliza e procura o trecho no data-players declarado.

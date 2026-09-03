@@ -6,6 +6,52 @@
  */
 const path = require('path');
 
+/* ── EMULADOR PENDURADO DERRUBA A SUÍTE SEGUINTE ─────────────────────────────────────
+ * Quatro ciclos perdidos em 03/set/2026, sempre igual: uma suíte é interrompida (ou dois
+ * gates rodam juntos) e o Firestore Emulator fica VIVO segurando a porta. A próxima
+ * execução falha com `Could not start Firestore Emulator, port taken` — em suítes que não
+ * têm defeito nenhum (`rules-contencao-avanco-de-fase`, `recuperar-fase2-no-emulador`,
+ * `test-corrida-slot-emu`). O diagnóstico custa mais que o conserto: parece bug do código.
+ *
+ * Aqui a suíte começa limpando o que ficou pendurado de execuções ANTERIORES. Só mata
+ * processo de emulador do Firebase — o padrão casa `firebase`+`emulator`/`firestore` na
+ * linha de comando, então um java qualquer do dono não entra. Falhar aqui NÃO derruba o
+ * runner: se não deu pra limpar, a suíte roda e a mensagem do emulador aparece como antes.
+ * ⛔ Não é "matar o que atrapalha": é matar o que ESTA suíte deixou para trás e ninguém
+ * mais usa. [[feedback_instrumentacao_nao_pode_cobrar_pedagio]] */
+(function _limpaEmuladorPendurado() {
+  try {
+    const { execSync } = require('child_process');
+    /* ⛔ CASAR O PROGRAMA, NÃO O TEXTO DA LINHA. A 1ª versão grepava `ps -Ao pid,command`
+     * por 'firebase|firestore' — e casou com o PRÓPRIO SHELL que roda este comando, porque
+     * essas palavras aparecem na linha de comando dele. Ou seja: mataria quem executa os
+     * testes. Peguei no controle antes de rodar.
+     * Agora o filtro é em DUAS partes: o executável (`comm`) tem que ser java/node E os
+     * argumentos têm que citar o emulador do Firestore. Um shell tem `comm` = zsh e não
+     * passa. [[feedback_never_invent_config_to_silence_error]] */
+    const saida = execSync('ps -Ao pid=,comm=,args= 2>/dev/null || true', { encoding: 'utf8', timeout: 5000 });
+    const pids = saida.split('\n').map(function (linha) {
+      const m = linha.trim().match(/^(\d+)\s+(\S+)\s+([\s\S]*)$/);
+      if (!m) return null;
+      const pid = m[1];
+      const exe = (m[2] || '').split('/').pop().toLowerCase();
+      const args = m[3] || '';
+      /* ⛔ SÓ JAVA. Quem segura a porta é o processo JAVA do emulador; o `node` que o
+       * envolve (`firebase emulators:exec`) morre junto e matá-lo não libera nada.
+       * E incluir `node` era perigoso pelo MESMO motivo da 1ª versão: qualquer script node
+       * cujos ARGUMENTOS citem "firestore" casava — inclusive o controle que eu rodei pra
+       * conferir este filtro. Java + o jar do emulador é assinatura que só ele tem. */
+      if (exe !== 'java') return null;
+      if (!/cloud[_-]?firestore/i.test(args)) return null;
+      if (String(process.pid) === pid) return null;                      // nunca a si mesmo
+      return pid;
+    }).filter(Boolean);
+    if (!pids.length) return;
+    pids.forEach((pid) => { try { process.kill(Number(pid), 'SIGTERM'); } catch (e) {} });
+    console.log('▸ emulador pendurado de execução anterior encerrado (' + pids.length + ') — a porta estava presa');
+  } catch (e) { /* sem ps, sem permissão: segue o jogo */ }
+})();
+
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
@@ -206,6 +252,9 @@ const SUITES = [
   // E a causa REAL da tela branca: `data-players` nasce sem o nome (stripado por ter conta)
   // e a cura só agia no rótulo de órfão. O filtro varria palheiro sem o nome da pessoa.
   'tests/busca-acha-nome-stripado.test.js',
+  // E o caso que o dono mediu ('ro mostra, mo não'): grupo ADIADO entra no DOM só na busca,
+  // com os spans de nome VAZIOS, e ninguém pedia os perfis — o nome não existia pra achar.
+  'tests/busca-puxa-nome-de-grupo-adiado.test.js',
   'tests/detail-route-never-renders-participants.test.js',
   'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',

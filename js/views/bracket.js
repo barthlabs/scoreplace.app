@@ -8039,6 +8039,21 @@ window._bracketApplyFilter = function () {
     var _se = document.scrollingElement || document.documentElement;
     if (_se && typeof _se.scrollTop === 'number') _keepY = _se.scrollTop;
   } catch (e) { _keepY = 0; }
+  /* ⚠️ FILTRAR EXIGE A CHAVE INTEIRA — a MESMA regra que `_partApplyFilter` (inscritos) já
+   * aplica na primeira linha dele, e que faltava aqui. É por isso que a busca "funciona nos
+   * inscritos e não nas chaves": o dono repetiu isso três vezes antes de eu ir ler a
+   * implementação que funciona.
+   *
+   * A chave pinta em FATIAS (rAF, lote a lote — 2.0.82/2.0.88). Digitar enquanto ela ainda
+   * está pintando fazia o filtro rodar sobre a PRIMEIRA fatia: se ninguém ali casasse, ele
+   * escondia todo container sem acerto — a tela ficava em branco — e as fatias seguintes
+   * chegavam depois, sem ninguém refiltrar. `_flushBracketPaint` é a porta de descarga
+   * síncrona que já existia (usada por testes e export); a busca é exatamente quem precisa
+   * da chave inteira AGORA.
+   * ⛔ NÃO é o mesmo que `_chaveMontaTudo` logo abaixo: aquele monta os LOTES ADIADOS (o
+   * conteúdo guardado atrás de um marcador); este termina a PINTURA das fatias já montadas.
+   * Faltando qualquer um dos dois, a busca varre uma chave pela metade. */
+  try { if (typeof window._flushBracketPaint === 'function') window._flushBracketPaint(); } catch (_ef) {}
   var inp = document.getElementById('bracket-search');
   var q = window._bracketNorm(inp ? inp.value : '').trim();
   var onlyMine = !!window._showOnlyMyMatches;
@@ -8047,6 +8062,24 @@ window._bracketApplyFilter = function () {
   // no DOM e a busca diria 'nenhum resultado' — mentindo. Filtrar é justamente
   // 'pedir para ver o que não está à vista', então aqui o adiamento acaba.
   if ((q || onlyMine) && typeof window._chaveMontaTudo === 'function') window._chaveMontaTudo();
+  /* ⭐ NOME SE PUXA SEMPRE, POR UID — ordem do dono (03/set/2026): _"precisa puxar sempre os
+   * nomes por uid. não pode isso de o nome não ter vindo e ficar por isso mesmo. tem que ir
+   * puxando sempre"_.
+   *
+   * ⛔ O BURACO: o card da chave nasce com o nome VAZIO quando o perfil ainda não chegou —
+   * de propósito, contando com `data-uid-name` + hidratação. Mas a hidratação roda UMA VEZ,
+   * no render. A linha acima injeta os grupos ADIADOS na hora da busca: cards novos, com
+   * spans de nome vazios, e ninguém pede os perfis deles. Resultado: procurar alguém de um
+   * grupo adiado NUNCA acha, porque o nome não existe em lugar nenhum do DOM.
+   * Foi o que o dono mediu sem saber: _"ro mostra, mo não"_ — o jogo DELE está na parte já
+   * pintada e hidratada (o app rola até ele); os outros grupos, não.
+   *
+   * `_hydrateUidNames` é assíncrono e, quando preenche algum nome, ele mesmo reaplica este
+   * filtro (a cura do `data-players` no fim dela) — então a busca se completa sozinha assim
+   * que os perfis chegam, sem laço: quem já tem nome não é remarcado. */
+  if (q && typeof window._hydrateUidNames === 'function') {
+    try { window._hydrateUidNames(document.getElementById('view-container') || document); } catch (_eh) {}
+  }
   var cards = document.querySelectorAll('[data-players]');
   if (!cards.length) return;
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
