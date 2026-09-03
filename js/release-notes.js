@@ -19,6 +19,7 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.1.115 NÃO ganhou item: a instrumentação passa a dizer QUAL ancestral esconde o card que casou.
     // ⚠️ 2.1.114 NÃO ganhou item: instrumentação — quando a busca da chave esconde tudo, a
     // tela grava o que enxergava em debugDrawLogs/{uid} pra diagnóstico. Nada muda pra quem joga.
     // ⚠️ 2.1.93 atualiza o item de avanço abaixo: inativo e W.O. nunca entram na

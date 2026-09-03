@@ -8217,6 +8217,7 @@ window._bracketApplyFilter = function () {
     el.style.display = visible ? el.dataset.fbDisp : 'none';
   };
   var shown = 0;
+  var _hitsDiag = [];
   var conts = [];            // ancestrais candidatos, na ordem em que aparecem
   var contHasHit = [];       // paralelo a conts: algum card casando lá dentro?
   // "Jogador X" é uma vaga, não uma pessoa: encontrá-lo exige o retrato do grupo
@@ -8295,6 +8296,7 @@ window._bracketApplyFilter = function () {
       }
     }
     var hit = _casa && (!onlyMine || c.getAttribute('data-my-match') !== '0');
+    if (hit && q) _hitsDiag.push(c);
     // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de
     // quem levou W.O. e a pílula "🔁 Fulana W.O. → Beltrana" existem pra dizer DE QUAL GRUPO
     // a pessoa é — não são cards de jogo. Tratá-las como card tinha dois efeitos errados:
@@ -8404,8 +8406,25 @@ window._bracketApplyFilter = function () {
    * ela enxergava: todos os data-players, os nomes de inscritos que a chave conhecia e como
    * cada uid resolve. Vai pra debugDrawLogs/{uid} (auth-only), em merge, sem tocar no rastro
    * do sorteio. Zero custo no caminho quente: só roda em `shown === 0`. */
-  if (q && shown === 0 && !onlyMine && window._buscaDiagUltima !== q) {
-    window._buscaDiagUltima = q;
+  var _visDeVerdade = 0, _culpados = [];
+  // ⛔ diagnóstico NUNCA derruba o filtro: DOM de teste não tem getComputedStyle/offsetParent.
+  if (q && typeof window.getComputedStyle === 'function') try {
+    var _desc = function (el) { return el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.split(' ').filter(Boolean).slice(0, 2).join('.') : '') + (el.getAttribute && el.getAttribute('data-group-box') ? '[group-box]' : '') + (el.tagName === 'DETAILS' ? (el.open ? '[open]' : '[FECHADO]') : ''); };
+    for (var _hi = 0; _hi < _hitsDiag.length; _hi++) {
+      var _hc = _hitsDiag[_hi];
+      if (_hc.offsetParent !== null && _hc.offsetHeight > 0) { _visDeVerdade++; continue; }
+      if (_culpados.length >= 3) continue;
+      var _cadeia = [];
+      for (var _pe = _hc; _pe && _pe !== document.body; _pe = _pe.parentElement) {
+        var _cs = window.getComputedStyle(_pe);
+        var _mot = (_pe.style.display === 'none' ? 'style=none' : '') + (_cs.display === 'none' ? ' computed=none' : '') + (_cs.visibility === 'hidden' ? ' visibility=hidden' : '') + (_pe.offsetHeight === 0 ? ' altura=0' : '') + (_pe.tagName === 'DETAILS' && !_pe.open ? ' details-fechado' : '') + (_pe.hidden ? ' hidden' : '');
+        if (_mot.trim()) _cadeia.push(_desc(_pe) + ' {' + _mot.trim() + '}');
+      }
+      _culpados.push({ card: _hc.id || _desc(_hc), players: (_hc.getAttribute('data-players') || '').slice(0, 80), cadeia: _cadeia.slice(0, 8) });
+    }
+  } catch (_ev) { _visDeVerdade = -1; }
+  if (q && (shown === 0 || _visDeVerdade === 0) && !onlyMine && window._buscaDiagUltima !== q + '|' + shown) {
+    window._buscaDiagUltima = q + '|' + shown;
     try {
       var _fbD = window.firebase, _dbD = window.FirestoreDB && window.FirestoreDB.db;
       var _uD = _fbD && _fbD.auth && _fbD.auth().currentUser;
@@ -8420,7 +8439,7 @@ window._bracketApplyFilter = function () {
         var _parts = _tBusca ? (_tBusca.participants || []) : [];
         _dbD.collection('debugDrawLogs').doc(_uD.uid).set({ buscaChave: {
           versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''),
-          q: q, cards: cards.length, torneio: !!_tBusca, inscritos: _parts.length,
+          q: q, cards: cards.length, casaram: _hitsDiag.length, visiveisDeVerdade: _visDeVerdade, culpados: _culpados, torneio: !!_tBusca, inscritos: _parts.length,
           elencoCarregado: (_tBusca && typeof window._elencoCarregado === 'function') ? window._elencoCarregado(_tBusca) : null,
           faltaOQue: (_tBusca && _tBusca._faltaOQue) || null,
           cadastroMapa: Object.keys(_nomeInscrito).length, perfilCache: Object.keys(_perfis).length,
