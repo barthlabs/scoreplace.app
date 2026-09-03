@@ -2391,21 +2391,45 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
   var _lateToggleHtml = '';
   if (isOrg) {
     var _leCur = (typeof window._effectiveLateEnrollment === 'function') ? window._effectiveLateEnrollment(t) : t.lateEnrollment;
-    var _leOn = (_leCur === 'expand');
     var _tIdTog = String(t.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    _lateToggleHtml =
-      '<div style="margin-bottom:0.9rem;padding:10px 12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.22);border-radius:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' +
-        '<div style="min-width:0;flex:1;">' +
-          '<div style="font-weight:800;font-size:0.84rem;color:' + window._spCor((_leOn ? '#4ade80' : 'var(--text-color)'), 'color') + ';">➕ Aceitar entradas tardias nesta fase</div>' +
-          '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;line-height:1.35;">' +
-            (_leOn ? 'Marque presença de quem está na espera — entra por repescagem (vs a definir).'
-                   : 'Ligado: marcar presença de quem está na espera cria um novo confronto (vs a definir).') +
-          '</div>' +
+    /* ── ATALHO DO QUE JÁ EXISTE NO EDITAR, NÃO UM CONTROLE NOVO ─────────────────────────
+     * Correção do dono (03/set/2026): _"são 2 situações… essa mecânica já existe no editar e
+     * seria apenas um atalho para ela ficar fácil de configurar e de lembrar o organizador da
+     * configuração"_.
+     * As duas perguntas são as MESMAS do bloco "Inscrições Durante a Fase" do construtor:
+     *    master ('closed') → Fechadas (🚫) × Abertas (🔓)
+     *    conf   ('expand') → Novos Confrontos (➕) × Suplentes Apenas (🪑)
+     * ⛔ RÓTULO E ÍCONE SAEM DE `window._lateEnrollLabel` (create-tournament.js), que já é a
+     * fonte única deles — escrever texto próprio aqui criaria a segunda régua, e o organizador
+     * leria uma palavra na tela de edição e outra na chave para a MESMA configuração.
+     * Antes disto a chave tinha um toggle de DOIS estados sobre um campo de TRÊS: desligar
+     * pulava de 'expand' direto pra 'closed' e "Suplentes Apenas" era inalcançável aqui. */
+    var _leFechadas = (_leCur === 'closed');
+    var _leConf = (_leCur !== 'closed' && _leCur !== 'standby');   // legado (undefined) = permite
+    var _rot = (typeof window._lateEnrollLabel === 'function') ? window._lateEnrollLabel : function (w, on) {
+      return { title: (w === 'master') ? (on ? 'Fechadas' : 'Abertas') : (on ? 'Novos Confrontos' : 'Suplentes Apenas'), icon: '' };
+    };
+    var _linhaTog = function (which, on, valLigado, valDesligado, cor) {
+      var r = _rot(which, on);
+      return '<div style="display:flex;align-items:center;gap:9px;justify-content:space-between;padding:7px 2px;min-width:0;">' +
+        '<div style="display:flex;align-items:center;gap:7px;min-width:0;">' +
+          '<span style="font-size:0.95rem;flex-shrink:0;">' + window._safeHtml(r.icon || '') + '</span>' +
+          '<span style="font-weight:700;font-size:0.8rem;color:' + window._spCor((on ? cor : 'var(--text-color)'), 'color') + ';min-width:0;">' +
+            window._safeHtml(r.title) + '</span>' +
         '</div>' +
-        '<label class="toggle-switch" style="--toggle-on-bg:#22c55e;--toggle-on-glow:rgba(34,197,94,0.3);--toggle-on-border:#22c55e;flex-shrink:0;" onclick="event.stopPropagation();">' +
-          '<input type="checkbox" ' + (_leOn ? 'checked' : '') + ' onclick="event.stopPropagation(); window._setPhaseLateEnrollment(\'' + _tIdTog + '\', this.checked ? \'expand\' : \'closed\');">' +
+        '<label class="toggle-switch toggle-sm" style="--toggle-on-bg:' + cor + ';--toggle-on-border:' + cor + ';flex-shrink:0;" onclick="event.stopPropagation();">' +
+          '<input type="checkbox" ' + (on ? 'checked' : '') +
+            ' onclick="event.stopPropagation(); window._setPhaseLateEnrollment(\'' + _tIdTog + '\', this.checked ? \'' + valLigado + '\' : \'' + valDesligado + '\');">' +
           '<span class="toggle-slider"></span>' +
         '</label>' +
+      '</div>';
+    };
+    var _tSec = (window._t ? window._t('create.lateEnrollSection') : 'Inscrições Durante a Fase');
+    _lateToggleHtml =
+      '<div style="margin-bottom:0.9rem;padding:10px 12px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.22);border-radius:12px;">' +
+        '<div style="font-weight:800;font-size:0.8rem;color:var(--sp-c-fbbf24,#fbbf24);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:2px;">⏱️ ' + window._safeHtml(_tSec) + '</div>' +
+        _linhaTog('master', _leFechadas, 'closed', 'standby', '#f87171') +
+        (_leFechadas ? '' : _linhaTog('conf', _leConf, 'expand', 'standby', '#4ade80')) +
       '</div>';
   }
 
@@ -2536,6 +2560,51 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       </div>`;
   }).join('');
 
+  /* ── ABAIXO DA ESPERA: INATIVOS E W.O. ────────────────────────────────────────────────
+   * Ordem do dono (03/set/2026): _"aqui também poderiam aparecer a seção inativo e wo. tudo
+   * em lista de espera. em cima os lista de espera ativados. abaixo inativos e abaixo os wo
+   * (qualquer um desses que se reativarem vão pra lista de espera em ordem de ativação)"_.
+   *
+   * ⛔ NÃO INVENTAR A RÉGUA: quem é inativo e quem levou W.O. já tem leitor canônico em
+   * tournaments-draw-prep.js — `_phasePendingInactives` (ligaActive:false SEM woDeactivatedAt)
+   * e `_phaseWoDeactivated` (o complemento, COM a marca). São listas separadas de propósito,
+   * pra deixar o MOTIVO visível. Duplicar o filtro aqui seria a segunda régua que diverge na
+   * primeira mudança. [[project_wo_lives_in_four_places]]
+   *
+   * A reativação já é a que o dono descreveu e não muda aqui: religar o toggle com a fase
+   * sorteada move a pessoa pra espera pelo `_waitlistPushBack` — FIM da fila, que é a ordem
+   * de ativação, e ela persiste por ser a ordem do próprio array. */
+  var _faixasForaDaEspera = (function () {
+    var _inat = (typeof window._phasePendingInactives === 'function') ? window._phasePendingInactives(t) : [];
+    var _wos  = (typeof window._phaseWoDeactivated === 'function') ? window._phaseWoDeactivated(t) : [];
+    if (!_inat.length && !_wos.length) return '';
+    var _linha = function (pp) {
+      var _uid = (pp && pp.uid) ? String(pp.uid) : '';
+      if (!_uid && typeof window._memberUidByName === 'function') {
+        try { _uid = window._memberUidByName(t, getName(pp)) || ''; } catch (_e) { _uid = ''; }
+      }
+      /* nome SEMPRE por uid (data-uid-name hidrata com o nome vivo do perfil); o texto
+       * inicial só existe pra quem não tem conta. */
+      var _txt = _uid ? window._safeHtml(window._displayName(_uid, '') || '') : window._safeHtml(getName(pp));
+      var _at = _uid ? (' data-uid-name="' + window._safeHtml(_uid) + '"') : '';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;' +
+        'background:rgba(255,255,255,0.03);border:1px solid var(--border-color);min-width:0;">' +
+        window._personAvatarHtml(_uid, getName(pp), 'width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0;') +
+        '<span' + _at + ' style="font-weight:700;font-size:0.82rem;color:var(--text-bright);min-width:0;overflow-wrap:anywhere;">' + _txt + '</span></div>';
+    };
+    var _bloco = function (titulo, cor, lista) {
+      if (!lista.length) return '';
+      return '<div style="margin-top:1rem;">' +
+        '<div style="font-size:0.72rem;font-weight:700;color:' + window._spCor(cor, 'color') + ';text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px;">' +
+          window._safeHtml(titulo) + ' (' + lista.length + ')</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' + lista.map(_linha).join('') + '</div>' +
+      '</div>';
+    };
+    return _bloco('💤 Inativos', '#94a3b8', _inat) +
+           _bloco('🚫 W.O.', '#f87171', _wos) +
+           '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:8px;">Quem reativar entra no fim da lista de espera.</div>';
+  })();
+
   return `
     <div id="standby-panel-section" style="margin-top:2rem;background:var(--bg-card);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:1.5rem;">
       ${_lateToggleHtml}
@@ -2552,6 +2621,7 @@ window._renderStandbyPanel = function _renderStandbyPanel(t, isOrg) {
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${listItems}
       </div>
+      ${_faixasForaDaEspera}
     </div>`;
 };
 
