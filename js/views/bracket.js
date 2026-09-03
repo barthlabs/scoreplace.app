@@ -8165,6 +8165,7 @@ window._bracketApplyFilter = function () {
    * Pergunta do dono que resolveu: _"o que tem lá que não tem nas chaves? que resolve o nome
    * dos atletas?"_ — isto. Mapa uid→nome montado UMA vez por passada, sem rede, ~150 entradas;
    * entra na busca ao lado do perfil vivo e do nome gravado. */
+  var _tBusca = null;
   var _nomeInscrito = (function () {
     var mapa = {};
     var t = window._currentBracketTournament;
@@ -8173,6 +8174,7 @@ window._bracketApplyFilter = function () {
       if (_mh) { try { t = window._findTournamentById(_mh[1]); } catch (_et) { t = null; } }
     }
     if (!t) return mapa;
+    _tBusca = t;
     // ⛔ O CAMPO CRU, nunca `_pName`. `_pName` passa por `_displayNameForUid` → `_nameForUid`,
     // que, com perfil VAZIO, devolve o nome GRAVADO NO JOGO (`_nomeGravadoPorUid`, capturado no
     // render). Medido: `_pName({displayName:'Fabiana Silva'})` → "Fabi2401@" — o cadastro
@@ -8397,6 +8399,38 @@ window._bracketApplyFilter = function () {
   }
   var empty = document.getElementById('bracket-search-empty');
   if (empty) empty.style.display = ((q || onlyMine) && shown === 0) ? 'block' : 'none';
+  /* ── INSTRUMENTAÇÃO (2.1.114) — só quando a busca escondeu TUDO, uma vez por consulta ──
+   * O dono vê "não acha" e eu não consigo ver a tela dele. Então a própria tela grava o que
+   * ela enxergava: todos os data-players, os nomes de inscritos que a chave conhecia e como
+   * cada uid resolve. Vai pra debugDrawLogs/{uid} (auth-only), em merge, sem tocar no rastro
+   * do sorteio. Zero custo no caminho quente: só roda em `shown === 0`. */
+  if (q && shown === 0 && !onlyMine && window._buscaDiagUltima !== q) {
+    window._buscaDiagUltima = q;
+    try {
+      var _fbD = window.firebase, _dbD = window.FirestoreDB && window.FirestoreDB.db;
+      var _uD = _fbD && _fbD.auth && _fbD.auth().currentUser;
+      if (_dbD && _uD) {
+        var _amostra = [];
+        for (var _ai = 0; _ai < cards.length && _amostra.length < 8; _ai++) {
+          var _cA = cards[_ai], _uA = _uidsDoCard(_cA);
+          if (!_uA.length) continue;
+          _amostra.push({ id: _cA.id || '', players: (_cA.getAttribute('data-players') || '').slice(0, 120),
+            uids: _uA.map(function (u) { return u.slice(0, 6) + ':' + (_nomeDeUid ? (_nomeDeUid(u) || '∅') : '?') + '/' + (_nomeInscrito[u] || '∅'); }).join(' ; ') });
+        }
+        var _parts = _tBusca ? (_tBusca.participants || []) : [];
+        _dbD.collection('debugDrawLogs').doc(_uD.uid).set({ buscaChave: {
+          versao: window.SCOREPLACE_VERSION, em: new Date().toISOString(), hash: String(window.location.hash || ''),
+          q: q, cards: cards.length, torneio: !!_tBusca, inscritos: _parts.length,
+          elencoCarregado: (_tBusca && typeof window._elencoCarregado === 'function') ? window._elencoCarregado(_tBusca) : null,
+          faltaOQue: (_tBusca && _tBusca._faltaOQue) || null,
+          cadastroMapa: Object.keys(_nomeInscrito).length, perfilCache: Object.keys(_perfis).length,
+          amostra: _amostra,
+          todosPlayers: Array.prototype.map.call(cards, function (c) { return c.getAttribute('data-players') || ''; }).filter(Boolean).join(' | ').slice(0, 9000),
+          inscritosNomes: _parts.map(function (e) { return e && (e.displayName || e.name || (e.p1Name ? e.p1Name + '/' + e.p2Name : '') || ''); }).filter(Boolean).join(', ').slice(0, 9000)
+        } }, { merge: true }).catch(function () {});
+      }
+    } catch (_ed) {}
+  }
   // v1.7.87 — QUEM FILTRA TEM QUE AVISAR O CHROME.
   //
   // O observer que mantém o cabeçalho fixo e a barra sticky no lugar
