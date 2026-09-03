@@ -5335,6 +5335,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // que aparecem na tela — senão buscar por quem trocou o nome no perfil não acharia nada.
   // Duplas entram inteiras E membro a membro (o "A / B" é tipografia, nunca chave —
   // project_dupla_entry_structural_not_slash).
+  // ⛔ ESCOPO — `_uidsFor` MORA NO CARD, nunca dentro do IIFE dos nomes.
+  // Enquanto ele era um `var` de dentro de `_searchNames`, o IIFE de `_searchUids` (logo
+  // abaixo, OUTRA função) lançava ReferenceError na PRIMEIRA linha do próprio `try`. O
+  // `catch (e) {}` engolia calado e `data-player-uids` saía VAZIO em TODO card — junto com
+  // os fallbacks (`m.p1Uid`, `m.team*Uids`), que nem chegavam a executar. A busca por UID
+  // nascia morta e só o fixture do teste, que escrevia o atributo à mão, ficava verde.
+  // [[feedback_funcao_dentro_de_outra_nao_existe]] · [[feedback_congelador_cego_procurava_o_jogo_no_escopo_errado]]
+  var _uidsFor = function (slot) {
+    try {
+      if (window._slotUidsPositional) return window._slotUidsPositional(m, slot, t);
+    } catch (e) {}
+    return slot === 'p1' ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids);
+  };
   var _searchNames = (function () {
     var out = [];
     function add(v) {
@@ -5344,10 +5357,6 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
       if (nm.indexOf(' / ') !== -1) nm.split(' / ').forEach(function (x) { if (x.trim()) out.push(x.trim()); });
     }
     try {
-      var _uidsFor = function (slot) {
-        return window._slotUidsPositional ? window._slotUidsPositional(m, slot, t)
-          : (slot === 'p1' ? (m.p1Uid || m.team1Uids) : (m.p2Uid || m.team2Uids));
-      };
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p1, _uidsFor('p1')) : m.p1);
       add(t && window._resolveSideLive ? window._resolveSideLive(t, m.p2, _uidsFor('p2')) : m.p2);
       // Rei/Rainha: os times são arrays de PESSOAS — e os NOMES ali são os GRAVADOS no
@@ -5368,11 +5377,33 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
     } catch (e) {}
     return window._safeHtml(out.join(' | '));
   })();
+  /* ⭐ OS UIDS DO CONFRONTO VIAJAM NO CARD.
+   * `data-players` é o palheiro do caminho quente, mas depende de HIDRATAÇÃO: num grupo
+   * recém-materializado ele nasce vazio. O uid não — ele já é conhecido no render. É por
+   * ele que o filtro descobre de quem é o jogo quando o nome ainda não chegou, e é por ele
+   * que o filtro sabe que ainda NÃO PODE dizer "não achei".
+   * ⛔ SEM `try` AQUI: `_uidsFor` já é total (trata o próprio erro) e o resto são leituras
+   * de propriedade. Um `try` em volta de tudo foi exatamente como este recurso morreu —
+   * a primeira fonte que lançava levava as outras cinco junto, em silêncio. */
+  var _searchUids = (function () {
+    var ids = [];
+    function add(u) {
+      if (u == null) return;
+      if (Array.isArray(u)) { for (var i = 0; i < u.length; i++) add(u[i]); return; }
+      u = String(u).trim();
+      // uid é uma palavra só; nome com espaço aqui é dado sujo de slot legado.
+      if (u && u.indexOf(' ') === -1 && ids.indexOf(u) === -1) ids.push(u);
+    }
+    add(_uidsFor('p1')); add(_uidsFor('p2'));
+    add(m.team1Uids); add(m.team2Uids);
+    add(m.p1Uid); add(m.p2Uid);
+    return window._safeHtml(ids.join(','));
+  })();
 
   var _tierLC = { gold: '#fbbf24', silver: '#cbd5e1', line3: '#cd7f32', line4: '#3b82f6', upper: '#10b981', lower: '#f59e0b' };
   var _lineLeftBorder = _tierLC[m.bracket] ? ('border-left:4px solid ' + window._spCor(_tierLC, 'borda')[m.bracket] + ';') : '';
   return `
-    <div id="card-${m.id}" data-players="${_searchNames}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
+    <div id="card-${m.id}" data-players="${_searchNames}" data-player-uids="${_searchUids}" data-my-match="${_isMyMatch ? '1' : '0'}" data-my-pending="${_isMyMatch && !isDecided && !isByeMatch ? '1' : '0'}" data-match-num="${matchNum != null ? matchNum : ''}" style="scroll-margin-top:var(--scroll-anchor,120px);background:${window._spCor(_isMyMatch ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)', 'background')};border:${_isMyMatch ? '2px' : '1px'} solid ${hasPending && _pr && _pr.disputed ? 'rgba(239,68,68,0.55)' : hasPending ? 'rgba(251,191,36,0.5)' : cardBorder};${_lineLeftBorder}border-radius:12px;padding:14px;${_cardMax}box-shadow:${_isMyMatch ? '0 0 20px rgba(99,102,241,0.25),0 0 8px rgba(99,102,241,0.12),0 4px 12px rgba(0,0,0,0.15)' : hasPending && _pr && _pr.disputed ? '0 0 14px rgba(239,68,68,0.2),0 4px 12px rgba(0,0,0,0.15)' : hasPending ? '0 0 14px rgba(251,191,36,0.18),0 4px 12px rgba(0,0,0,0.15)' : matchReady ? '0 0 16px rgba(16,185,129,0.15),0 4px 12px rgba(0,0,0,0.15)' : matchPartial ? '0 0 10px rgba(245,158,11,0.1),0 4px 12px rgba(0,0,0,0.15)' : '0 4px 12px rgba(0,0,0,0.15)'};${hasTBD ? 'opacity:0.6;' : ''}">
       ${_headerHtml}
       ${_pendingBtnsRow}
       ${pendingBanner}
@@ -8026,6 +8057,22 @@ window._fbSyncDetalhe = function (det, nvis, buscando) {
   if (nvis > 0 && !det.open) { det.open = true; det.dataset.fbAutoOpen = '1'; }
 };
 
+/* Os uids do card, parseados UMA vez por elemento. A busca roda a cada tecla e varre a
+ * chave inteira; refazer `split`+`trim` de todo card a cada letra é o tipo de pedágio que
+ * já voltou duas vezes como "trava só no celular".
+ * [[project_render_on2_resolucao_de_nome]] */
+var _SEM_UIDS = [];
+function _uidsDoCard(c) {
+  if (c._spUids) return c._spUids;
+  var raw = c.getAttribute('data-player-uids');
+  if (!raw) return (c._spUids = _SEM_UIDS);
+  var bruto = raw.split(','), out = [];
+  for (var i = 0; i < bruto.length; i++) {
+    var u = bruto[i].trim();
+    if (u) out.push(u);
+  }
+  return (c._spUids = out.length ? out : _SEM_UIDS);
+}
 window._bracketApplyFilter = function () {
   /* ⭐ ANTES de mexer em qualquer `display`: é esta posição que tem que sobreviver ao filtro.
    * ⛔ E LENDO COM REDE. Esta linha nasceu como `(document.scrollingElement ||
@@ -8082,6 +8129,34 @@ window._bracketApplyFilter = function () {
   }
   var cards = document.querySelectorAll('[data-players]');
   if (!cards.length) return;
+  /* ── QUEM AINDA NÃO SE CONHECE NÃO SE ESCONDE ──────────────────────────────────
+   * O card nasce com o nome VAZIO quando o perfil não chegou (de propósito, desde a
+   * 1.7.79: `data-uid-name` + hidratação). O filtro lia esse vazio como "não é essa
+   * pessoa" e apagava a chave — o bug do dono, _"ro mostra, mo não"_.
+   *
+   * ⭐ A DECISÃO É POR CARD, NUNCA PELA TELA. Quem casa aparece; quem NÃO casa e já tem
+   * todos os uids procurados some AGORA — a busca nunca para de filtrar; e só quem não
+   * casa tendo uid AINDA NÃO PROCURADO fica visível, indeciso, enquanto o perfil vem.
+   * Uma versão anterior disto abortava a função inteira durante a hidratação: a chave
+   * voltava TODA visível e o dono via a busca "não filtrar". Aqui o pedágio da espera é
+   * pago só por quem realmente não se conhece.
+   *
+   * ⛔ DEDUÇÃO POR UID, NUNCA PELA CONSULTA — com `q` na chave, digitar "m"→"mo"→"mon"
+   * pedia os mesmos perfis 3×. Cada uid é pedido UMA vez na sessão:
+   *   `_userProfileCache`      → já procurei (inclusive o perfil VAZIO que o banco grava
+   *                              para uid sem documento — por isso o teste é o CACHE, e
+   *                              nunca o NOME, que voltaria à fila a cada tecla);
+   *   `_bracketSearchUidsAsked`→ já pedi, está em voo;
+   *   `_bracketSearchUidsDead` → pedi e não voltou: paro de esperar (é sinal causal, não
+   *                              cronômetro — nada de esconder atrás de um timeout). */
+  var _uidPedido = window._bracketSearchUidsAsked || (window._bracketSearchUidsAsked = {});
+  var _uidMudo = window._bracketSearchUidsDead || (window._bracketSearchUidsDead = {});
+  var _perfis = window._userProfileCache || {};
+  // Resolvidos UMA vez, fora do laço: `typeof` por uid por card, a cada tecla, é pedágio
+  // no caminho quente. [[feedback_instrumentacao_nao_pode_cobrar_pedagio]]
+  var _nomeDeUid = (typeof window._nameForUid === 'function') ? window._nameForUid : null;
+  var _preload = (typeof window._preloadUserProfiles === 'function') ? window._preloadUserProfiles : null;
+  var _aPedir = null; // conjunto criado só se faltar alguém — zero alocação no caso comum
   // Limite de subida: nunca passar do container da view (senão, numa busca sem resultado,
   // TUDO seria escondido — inclusive a própria barra de busca, e o dono ficaria preso).
   var root = document.getElementById('view-container') || document.body;
@@ -8154,6 +8229,26 @@ window._bracketApplyFilter = function () {
         } catch (_e) { _nomes = ''; }
         _casa = !!_nomes.trim() && window._buscaCasa(_nomes, q);
       }
+      /* ⭐ E POR FIM O UID — a única chave que NÃO depende de hidratação.
+       * UMA passada responde as duas perguntas do card: casa por nome de perfil? e
+       * sobrou alguém que eu nunca procurei? Saber o NOME é a forma mais forte de
+       * "decidido" (vale o cache do bracket também), então ele vem primeiro. */
+      if (!_casa && _nomeDeUid) {
+        var _uids = _uidsDoCard(c);
+        var _nomesUid = '', _indeciso = false;
+        for (var _u = 0; _u < _uids.length; _u++) {
+          var _uid = _uids[_u];
+          var _nm = _nomeDeUid(_uid);
+          if (_nm) { _nomesUid += ' ' + _nm; continue; }      // sei quem é → decidido
+          if (_perfis[_uid] || _uidMudo[_uid]) continue;      // procurei, não tem nome → decidido
+          _indeciso = true;                                   // nunca procurei → não sei
+          if (!_uidPedido[_uid]) (_aPedir || (_aPedir = {}))[_uid] = true;
+        }
+        if (_nomesUid) _casa = window._buscaCasa(_nomesUid, q);
+        // ⛔ NÃO SE ESCONDE QUEM AINDA NÃO SE CONHECE. Este card — e SÓ ele — segura a
+        // decisão até o perfil chegar; o resto da chave já está sendo filtrado de verdade.
+        if (!_casa && _indeciso) _casa = true;
+      }
     }
     var hit = _casa && (!onlyMine || c.getAttribute('data-my-match') !== '0');
     // ⭐ MARCADOR (`data-fb-marker`) DECLARA, NÃO É RESULTADO. A linha da classificação de
@@ -8195,6 +8290,24 @@ window._bracketApplyFilter = function () {
   // por não conterem literalmente o rótulo da vaga. `data-fb-marker` continua
   // declarativo e não recebe display próprio. Uma busca por atleta real não
   // expande os irmãos; no modo "Só meus jogos", também não há expansão.
+  /* UM pedido, em LOTE, para todos os indecisos desta passada — e a MESMA consulta se
+   * reaplica quando os perfis chegam, RELENDO o input (o `q` daqui já pode estar velho).
+   * ⛔ Marcar ANTES de pedir: reentrada durante o voo não repete o pedido. */
+  if (_aPedir && _preload) {
+    var _lote = Object.keys(_aPedir);
+    for (var _lp = 0; _lp < _lote.length; _lp++) _uidPedido[_lote[_lp]] = true;
+    var _encerra = function () {
+      /* Quem foi pedido e NÃO voltou vira mudo. Sem isto o card seguiria indeciso — logo,
+       * visível — para sempre, e a busca pareceria não filtrar. É o sinal causal que
+       * dispensa cronômetro: não "esperei demais", e sim "perguntei e não há resposta". */
+      var _c = window._userProfileCache || {};
+      for (var _f = 0; _f < _lote.length; _f++) if (!_c[_lote[_f]]) _uidMudo[_lote[_f]] = true;
+      window._bracketApplyFilter();
+    };
+    // Nunca reaplicar de dentro da própria passada: o `catch` também sai por microtask.
+    try { Promise.resolve(_preload(_lote)).then(_encerra, _encerra); }
+    catch (_ep) { Promise.resolve().then(_encerra); }
+  }
   for (var hg = 0; hg < hitGroups.length; hg++) {
     var siblings = hitGroups[hg].querySelectorAll('[data-players]');
     for (var hs = 0; hs < siblings.length; hs++) {

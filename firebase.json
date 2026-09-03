@@ -24,6 +24,7 @@
       ".claude/**",
       "*.backup",
       "outputs/**",
+      "tmp/**",
       ".deploy-alignment.json"
     ],
     "headers": [

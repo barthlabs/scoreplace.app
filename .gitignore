@@ -140,3 +140,7 @@ scoreplace-audit-*.zip
 firebase-export-*/
 firestore-export-*/
 dump-*.json
+
+# Temporários de trabalho (provas, cópias, logs de suíte). Ordem do dono: ficam AQUI,
+# dentro do projeto, e são apagados após o uso — nunca na Área de Trabalho.
+tmp/
