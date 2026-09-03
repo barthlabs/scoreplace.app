@@ -63,7 +63,19 @@ try {
 }
 if (_de) console.log('▸ check-cache-busters' + _de);
 
+/* ── `--fix`: CONSERTA O QUE ELE MESMO ACUSA ──────────────────────────────────────────
+ * Esta trava já sabe QUAL arquivo está com o `?v=` velho e QUAL versão ele devia ter — só
+ * não escrevia. Resultado: cada release parava um ciclo inteiro (rodar o gate ~5min, ver a
+ * mesma falha mecânica, bumpar à mão, rodar de novo). Aconteceu CINCO vezes na leva de
+ * 03/set/2026. Uma trava que sabe o conserto e não o oferece cobra pedágio sem dar nada.
+ * ⛔ O modo padrão continua SÓ CONFERINDO — o `--fix` é explícito, para o predeploy e o
+ * pre-push seguirem reprovando em vez de consertar sozinhos e esconder a mudança de quem
+ * está publicando. O sufixo `-x<versão da extensão>` é PRESERVADO (é o pipeline da extensão
+ * que o grava). [[project_sync_ext_version_cache_buster_base_stale]] */
+const CONSERTAR = process.argv.includes('--fix');
+
 const falhas = [];
+const consertos = [];
 mudados.forEach((f) => {
   // regex do caminho exato + ?v=
   const re = new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=([0-9a-zA-Z.\\-]+)', 'g');
@@ -76,14 +88,31 @@ mudados.forEach((f) => {
     // vez que o store.js mudava — falso positivo. O que importa é a BASE bater com a versão.
     if (v.replace(/-x[\d.]+$/, '') !== versao) {
       falhas.push(f + ' mudou mas está com ?v=' + v + ' (atual: ' + versao + ')');
+      if (CONSERTAR) {
+        const sufixo = (v.match(/-x[\d.]+$/) || [''])[0];
+        consertos.push({ arquivo: f, de: v, para: versao + sufixo });
+      }
     }
   });
 });
 
+if (falhas.length && CONSERTAR && consertos.length) {
+  let novoHtml = html;
+  consertos.forEach((c) => {
+    const de = c.arquivo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\?v=' + c.de.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    novoHtml = novoHtml.replace(new RegExp(de, 'g'), c.arquivo + '?v=' + c.para);
+  });
+  fs.writeFileSync(path.join(root, 'index.html'), novoHtml);
+  console.log('\n✓ cache-busters CONSERTADOS no index.html:\n');
+  consertos.forEach((c) => console.log('  • ' + c.arquivo + '  ' + c.de + ' → ' + c.para));
+  console.log('\n  (rode de novo sem --fix para conferir)\n');
+  process.exit(0);
+}
 if (falhas.length) {
   console.error('\n✗ cache-buster desatualizado — o navegador serviria a versão VELHA:\n');
   falhas.forEach((f) => console.error('  • ' + f));
-  console.error('\n  Bumpe o ?v= no index.html pra ' + versao + '.\n');
+  console.error('\n  Bumpe o ?v= no index.html pra ' + versao + ' — ou rode:');
+  console.error('      node scripts/check-cache-busters.js --fix\n');
   process.exit(1);
 }
 console.log('✓ cache-busters ok (' + mudados.length + ' js alterado(s), versão ' + versao + ')');

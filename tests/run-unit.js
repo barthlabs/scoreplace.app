@@ -203,6 +203,9 @@ const SUITES = [
   // A busca da chave apagava tudo: `_chaveMontaTudo` montava só a camada de FORA, e os
   // cards viviam num lote DENTRO de outro — nunca entravam no DOM. Nos inscritos não há lote.
   'tests/busca-monta-lote-aninhado.test.js',
+  // E a causa REAL da tela branca: `data-players` nasce sem o nome (stripado por ter conta)
+  // e a cura só agia no rótulo de órfão. O filtro varria palheiro sem o nome da pessoa.
+  'tests/busca-acha-nome-stripado.test.js',
   'tests/detail-route-never-renders-participants.test.js',
   'tests/callback-tardio-nao-troca-detalhe-por-inscritos.test.js',
   'tests/remover-inscrito-declara-a-intencao.test.js',

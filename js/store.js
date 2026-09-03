@@ -1,4 +1,4 @@
-window.SCOREPLACE_VERSION = '2.1.109';
+window.SCOREPLACE_VERSION = '2.1.110';
 
 /* ══ R1.0 · COERÊNCIA DE VERSÃO E DE HIDRATAÇÃO ════════════════════════════════
  *
@@ -1369,8 +1369,35 @@ window._hydrateUidNames = function (root) {
       if (Object.keys(_nmByPfx).length) {
         root.querySelectorAll('[data-players]').forEach(function (e) {
           var v = e.getAttribute('data-players') || '';
-          if (typeof window._isOrphanLabel !== 'function' || !window._isOrphanLabel(v)) return;
-          var novo = v.replace(/jogador sem perfil \(([^)]{1,8})\)/ig, function (all, pfx) { return _nmByPfx[pfx] || all; });
+          /* ① rótulo de órfão explícito: troca pelo nome, pelo prefixo do uid. */
+          var novo = (typeof window._isOrphanLabel === 'function' && window._isOrphanLabel(v))
+            ? v.replace(/jogador sem perfil \(([^)]{1,8})\)/ig, function (all, pfx) { return _nmByPfx[pfx] || all; })
+            : v;
+          /* ② ⛔ O CASO NORMAL NÃO TEM RÓTULO NENHUM — e era ele que ficava de fora.
+           * Relato do dono (03/set/2026): _"a barra de buscas ainda não funciona nas chaves…
+           * ela tem que achar os jogos onde aquele nome/parte aparece"_.
+           * `data-players` é escrito NO RENDER. Para quem tem conta o nome é STRIPADO no save
+           * (cânone do uid), então com o perfil ainda não resolvido o atributo nasce SEM o
+           * nome real — e sem o rótulo "jogador sem perfil (…)", porque não é órfão: é só um
+           * perfil que ainda não chegou. A cura acima olhava só o rótulo e devolvia cedo,
+           * então o filtro seguia varrendo um palheiro onde o nome da pessoa NÃO EXISTE:
+           * buscar por ela não achava nada e o filtro escondia todo container sem acerto —
+           * a chave inteira sumia. Nos inscritos isso não aparece porque lá o card resolve o
+           * nome por outro caminho.
+           * A saída é a MESMA técnica que este arquivo já usa pro rótulo de arraste logo
+           * abaixo: reconstruir a partir dos spans `[data-uid-name]` deste card, que ACABARAM
+           * de ser hidratados com o nome vivo. Só ACRESCENTA ao palheiro (nunca substitui),
+           * pra não perder o nome de quem não tem conta — ali o nome gravado é a única
+           * identidade que existe. */
+          try {
+            var _spans = e.querySelectorAll ? e.querySelectorAll('[data-uid-name]') : [];
+            var _add = [];
+            for (var _s = 0; _s < _spans.length; _s++) {
+              var _nmv = String(_spans[_s].textContent || '').trim();
+              if (_nmv && novo.toLowerCase().indexOf(_nmv.toLowerCase()) === -1) _add.push(_nmv);
+            }
+            if (_add.length) novo = (novo ? novo + ' | ' : '') + _add.join(' | ');
+          } catch (_eS) {}
           if (novo !== v) { e.setAttribute('data-players', novo); _mexeu = true; }
         });
       }
