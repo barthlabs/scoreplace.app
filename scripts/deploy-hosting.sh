@@ -241,6 +241,23 @@ if [[ "$VER_APP" != "$VER_SW" ]]; then
 fi
 echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 
+# ── 1.8 · SEGUNDA OPINIÃO DO GPT SOBRE O QUE VAI SUBIR ───────────────────────────────
+# Ordem do dono (04/set/2026): o GPT revisa o que o Claude implementa, sempre, e nada segue
+# sem o APROVADO dele. Aqui é a porta do DIFF (a do PLANO é `scripts/revisar-com-gpt.sh
+# plano`, antes de editar). A faixa (trivial/normal/crítica) sai de uma REGRA sobre os
+# arquivos tocados e é o piso do esforço do revisor; faixa trivial (CSS/texto/bump) passa sem
+# chamar ninguém. RESSALVAS, BLOQUEIO, parecer ilegível ou COTA ESGOTADA param o deploy ANTES
+# do push — igual ao preflight: origin/main segue intocado.
+# Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
+echo "▸ 1.8 revisão do GPT sobre origin/main..HEAD…"
+if ! "$RAIZ/scripts/revisar-com-gpt.sh" diff; then
+  echo
+  echo "✗ O GPT NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
+  echo "  Parecer em .claude/tmp/parecer-gpt-diff.md: atenda os pontos e rode de novo (o parecer"
+  echo "  anterior vai junto na resubmissão). Cota esgotada? Espere reabrir ou use o escape acima."
+  exit 1
+fi
+
 # ── 1.9 · PREFLIGHT: TODOS OS GATES ANTES DE TOCAR NO `main` ─────────────────────────
 # ⛔ POR QUE ISTO EXISTE (medido em 01/set/2026, na publicação da 2.1.81 e de novo na
 # 2.1.82): este script empurrava o commit pro `main` no passo 2 e só DEPOIS extraía a

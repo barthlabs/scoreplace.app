@@ -55,6 +55,11 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const SUITES = [
   'tests/test-utils.js',
+  // A FAIXA da revisão do GPT (scripts/revisar-com-gpt.sh) é uma REGRA sobre os arquivos, e
+  // os escapes só ELEVAM. O próprio revisor pediu este teste (parecer BLOQUEIO, 04/set/2026):
+  // SP_GPT_FAIXA=trivial silenciava crítica, não rastreado não contava no teto, store.js
+  // numa lista à mão caía em trivial, SP_SEM_GPT liberava sem motivo. Não chama o Codex.
+  'tests/revisar-com-gpt-faixa.test.js',
   // Cada FASE pode ter o seu formato de partida (1 set na classificatória, melhor de 3 com
   // super tie-break na eliminatória — pedido do dono com a Confra de exemplo). Guarda o
   // caminho INTEIRO, não o desenho: cfg.eliminatoria.scoring → compileToPhases →
