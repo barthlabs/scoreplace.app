@@ -27,7 +27,8 @@ struct ScoreplaceWatchCompanionApp: App {
                 onSetReiRainha: { on in session.sendSetReiRainha(on) },
                 onSetMixed: { on in session.sendSetMixed(on) },
                 onClose: { session.sendClose() },
-                bpm: heart.bpm
+                bpm: heart.bpm,
+                hrDiag: heart.diagLine
             )
             .onAppear { session.hello() } // pede o estado atual ao aparecer
             // Liga/desliga o sensor conforme a partida está ao vivo.

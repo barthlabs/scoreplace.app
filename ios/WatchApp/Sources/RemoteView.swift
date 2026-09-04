@@ -81,6 +81,9 @@ struct RemoteView: View {
     /// BPM ao vivo (nil = sem leitura). Injetado pelo companion; o preview standalone
     /// não passa nada e a UI simplesmente não desenha o coração.
     var bpm: Int? = nil
+    /// Linha do DIAGNÓSTICO do batimento (origem · valor · idade · erro). Só é desenhada
+    /// quando o celular manda `hrDebug` — ver HeartRate.swift. O preview não passa nada.
+    var hrDiag: String? = nil
     @State private var heartBeat = false          // escala do coração (pulso)
 
     private var leftTeam: Int { state.leftTeam }
@@ -250,6 +253,25 @@ struct RemoteView: View {
                         .frame(width: fullW, height: bandH)       // CENTRO da tela física
                         .offset(y: -bandH * 0.10)                 // mesma linha do relógio
                         .allowsHitTesting(false)
+                }
+                // ── DIAGNÓSTICO DO BATIMENTO — só com `hrDebug` vindo do celular ──
+                // ⛔ Existe porque "consertado" sem medir já falhou duas vezes aqui, e o
+                // simulador do watchOS NÃO gera batimento: a única medição possível é no
+                // pulso, jogando. `live` = delegate do treino (o caminho certo);
+                // `query` = fallback do banco do HealthKit, mais velho por construção —
+                // é ele que faz o número parecer mais baixo do que a realidade.
+                if state.hrDebug, let d = hrDiag {
+                    VStack {
+                        Spacer(minLength: 0)
+                        Text(d)
+                            .font(.system(size: sz(9), design: .monospaced))
+                            .foregroundColor(.spMetaDim)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                            .padding(.bottom, sz(30))
+                    }
+                    .frame(width: fullW, height: fullH)
+                    .allowsHitTesting(false)
                 }
                 // ── GAMES (esquerda) + números "1 - 2" (centrados) LOGO ABAIXO da
                 //    faixa do relógio. GAMES no tamanho de sempre; 1-2 não encolhe. ──

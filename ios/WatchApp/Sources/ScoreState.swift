@@ -78,6 +78,11 @@ struct ScoreState: Decodable {
     // O relógio usa só pra saber em qual FAIXA DE QUEIMA (5 zonas) o BPM está e
     // pintar o box. 0 = perfil sem data de nascimento → não pinta faixa nenhuma.
     var hrMax: Int = 0
+    // DIAGNÓSTICO DO BATIMENTO (04/set/2026). Ligado no celular por
+    // `localStorage.sp_hr_debug = '1'`; só então o relógio desenha a linha de origem/idade
+    // da amostra. ⛔ Não é ajuste de usuário — é a régua pra MEDIR o relato "o BPM aparece
+    // mais baixo do que a realidade" no pulso, que é o único lugar onde ele existe.
+    var hrDebug: Bool = false
 
     struct RRStanding: Decodable, Hashable {
         let name: String
@@ -117,7 +122,7 @@ struct ScoreState: Decodable {
     enum CodingKeys: String, CodingKey {
         case v, seq, epoch, active, setLabel, points, games, isTiebreak, courtLeft, server, teams, sets, setsToWin, canReplay, isCasual, isDoubles, isFinished, winner, tieRulePending, tiedAt
         case canStart, sportName, canSetServer, serveEligible, servePickPhase, servePickCurrent, servePickOpen
-        case reiRainha, rrRound, rrStandings, rrSuggest, hrMax
+        case reiRainha, rrRound, rrStandings, rrSuggest, hrMax, hrDebug
         case shuffleOn, mixedOn, canMix
         case matchEpoch, scoring
     }
@@ -159,6 +164,7 @@ struct ScoreState: Decodable {
         mixedOn    = (try? c.decodeIfPresent(Bool.self, forKey: .mixedOn)) ?? false
         canMix     = (try? c.decodeIfPresent(Bool.self, forKey: .canMix)) ?? false
         hrMax      = (try? c.decodeIfPresent(Int.self, forKey: .hrMax)) ?? 0
+        hrDebug    = (try? c.decodeIfPresent(Bool.self, forKey: .hrDebug)) ?? false
         matchEpoch = (try? c.decodeIfPresent(String.self, forKey: .matchEpoch)) ?? ""
         scoring    = (try? c.decodeIfPresent(Scoring.self, forKey: .scoring)) ?? nil
     }

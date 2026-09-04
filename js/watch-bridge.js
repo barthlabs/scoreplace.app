@@ -101,6 +101,17 @@
     if (!snapshot) snapshot = currentState();
     // Carimbado ANTES do dedup pra fazer parte do corpo comparado.
     if (!snapshot.hrMax) snapshot.hrMax = hrMaxFromProfile();
+    // DIAGNÓSTICO DO BATIMENTO (04/set/2026). O relato "o BPM aparece mais baixo do que a
+    // realidade" só se resolve MEDINDO no pulso — o simulador do watchOS não gera batimento.
+    // Ligado por marca no aparelho (`localStorage.sp_hr_debug = '1'`), o relógio desenha uma
+    // linha discreta com ORIGEM (live = delegate do treino · query = fallback atrasado),
+    // valor, idade da amostra e último erro. ⛔ Sem a marca ninguém vê nada, e o campo nem
+    // viaja — snapshot é dedupado pelo corpo, então carimbar `false` mudaria o corpo à toa.
+    // ⚠️ Entra AQUI, no push, e não no `_getLiveScoreState`: os vetores de paridade capturam
+    // o estado do MOTOR, e campo de cromo lá dentro quebraria o gate anti-drift.
+    try {
+      if (window.localStorage && localStorage.getItem('sp_hr_debug') === '1') snapshot.hrDebug = true;
+    } catch (e) {}
     snapshot.epoch = epoch;   // constante nesta carga da WebView (ver topo)
     var body = JSON.stringify(snapshot);
     if (!force && body === lastBody) return;
