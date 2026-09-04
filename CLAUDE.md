@@ -491,60 +491,66 @@ store.js). Números queimados (não usar): `+55 11 91693-6454` e `+55 11 96658-1
 (WhatsApp Business banidos pela Meta, jul/2026) e o stopgap pessoal
 `+55 11 99723-7733` (conta TIM bloqueada, jul/2026).
 
-## Revisão cruzada com o GPT (Codex) — NADA se implementa sem o APROVADO dele
+## Revisão cruzada (Claude ⇄ GPT) — NADA se implementa sem o APROVADO do outro
 
 Ordens do dono (04/set/2026): _"quero que o GPT sempre revise o que o Claude vai implementar,
-pra sermos mais assertivos"_ · _"não executar o plano de cada ajuste sem aprovação do GPT: se
-ele indicar ajustes, submete de novo até ele aprovar, e daí sim edita"_ · _"o Claude indica o
-modelo e esforço do GPT conforme a necessidade, e o GPT indica o modelo e esforço do Claude
-conforme o plano"_. A ferramenta é `scripts/revisar-com-gpt.sh`, que chama o Codex CLI do app
-ChatGPT (`/Applications/ChatGPT.app/Contents/Resources/codex`, já logado) em **somente leitura**.
+pra sermos mais assertivos"_ · _"não executar o plano de cada ajuste sem aprovação: se ele
+indicar ajustes, submete de novo até ele aprovar, e daí sim edita"_ · _"quem dispara indica o
+modelo e esforço do revisor, e o revisor indica o modelo e esforço de quem executa"_ · _"pode ser
+bidirecional? se eu disparar do Claude, GPT revisa; se disparar do GPT, Claude revisa"_ ·
+_"quero poder desligar essa revisão automática e reativar quando voltarem os créditos"_.
 
-**A faixa é o PISO** — uma regra sobre os arquivos tocados (`revisar-com-gpt.sh faixa [arquivos]`
-só classifica), não opinião de modelo:
+**A ferramenta é uma só, `scripts/revisar.sh`, e os atalhos dizem QUEM revisa:**
+- `scripts/revisar-com-gpt.sh` — o GPT (Codex CLI do app ChatGPT, `codex exec`, só leitura)
+  revisa o que o **Claude** vai fazer. É o que o Claude usa.
+- `scripts/revisar-com-claude.sh` — o Claude (`claude -p`, sem Edit/Write/Bash) revisa o que o
+  **Codex** vai fazer. É o que o Codex usa (este arquivo é o mesmo AGENTS.md que ele lê).
+- `scripts/revisar.sh` sem atalho = **auto**: o oposto de quem chamou (dentro do Claude Code
+  chama o GPT; dentro do Codex chama o Claude; sem pista, os dois e os dois têm que aprovar).
+  É assim que o `deploy-hosting.sh` chama no passo 1.8.
 
-| faixa | o que toca | GPT (piso) |
-|---|---|---|
-| **trivial** | só CSS/texto/notas/ícones, ou (só no diff) só o bump em `store.js` | não roda |
-| **normal** | telas, componentes, fluxo de UI | perfil `revisao-normal` (medium) |
-| **crítica** | `functions*/`, `firestore.rules`, `firebase.json`, `sw.js`, `store.js`, `router.js`, `main.js`, DB/presença/venue, chave/sorteio/format2/placar/inscrição/perfil/auth/W.O./fases, `scripts/deploy-*`, `scripts/check-*`, `extensions/`, arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam) | perfil `revisao-critica` (high) |
+**A faixa é o PISO** — uma regra sobre os arquivos tocados (`revisar.sh faixa [arquivos]` só
+classifica), não opinião de modelo:
 
-**Quem escolhe o motor:** o Claude indica o do GPT por `--modelo`/`--esforco` (nunca abaixo do
-piso da faixa: normal=medium, crítica=high). O GPT devolve na 2ª linha do parecer
-`EXECUTOR: modelo=<sonnet|opus|fable> esforco=<low…max>` — a indicação dele pro Claude executar.
-Como a sessão não troca o próprio modelo, o Claude **diz a indicação ao dono antes de
-implementar** (o dono troca com `/model` e `/effort` se quiser) ou executa por subagente com
-`model:` correspondente. Os perfis vivem em `~/.codex/revisao-*.config.toml`; a árvore
-`~/dev/scoreplace.app` está *trusted* no `~/.codex/config.toml`.
+| faixa | o que toca | revisor GPT | revisor Claude |
+|---|---|---|---|
+| **trivial** | só CSS/texto/notas/ícones, ou (só no diff) só o bump em `store.js` | não roda | não roda |
+| **normal** | telas, componentes, fluxo de UI | perfil `revisao-normal` (medium) | sonnet, medium |
+| **crítica** | `functions*/`, `firestore.rules`, `firebase.json`, `sw.js`, `store.js`, `router.js`, `main.js`, DB/presença/venue, chave/sorteio/format2/placar/inscrição/perfil/auth/W.O./fases, `scripts/deploy-*`, `scripts/check-*`, `scripts/revisar*`, `extensions/`, arquivo NOVO nesses lugares, ou diff > 300 linhas (não rastreados contam) | perfil `revisao-critica` (high) | opus, high |
 
-**O fluxo, nesta ordem (faixa normal ou crítica):**
+**Quem escolhe o motor:** quem dispara indica o do revisor por `--modelo`/`--esforco` (nunca
+abaixo do piso). O revisor devolve na 2ª linha do parecer `EXECUTOR: modelo=… esforco=…`, a
+indicação dele pra quem vai executar. Como a sessão não troca o próprio modelo, quem executa
+**diz a indicação ao dono antes de implementar** (ele troca com `/model` e `/effort` no Claude,
+ou `/model` no Codex) ou executa por subagente com `model:` correspondente. Perfis do GPT em
+`~/.codex/revisao-*.config.toml`; `~/dev/scoreplace.app` está *trusted* no `~/.codex/config.toml`.
+
+**O fluxo, nesta ordem (faixa normal ou crítica), igual pros dois lados:**
 1. **Plano antes de editar.** Escreva `.claude/tmp/plano-<assunto>.md`: o que muda, em quais
-   arquivos, por quê, o que se espera ver. Rode `scripts/revisar-com-gpt.sh plano <arquivo>`.
+   arquivos, por quê, o que se espera ver. Rode `scripts/revisar-com-<outro>.sh plano <arquivo>`.
 2. **Só `VEREDITO: APROVADO` libera** (exit 0). RESSALVAS (exit 1) e BLOQUEIO (exit 2)
-   ⇒ atenda os pontos NO PLANO (acrescente uma seção "Resposta ao parecer" dizendo o que mudou
-   e, se discordar, por quê) e **submeta de novo** — o script anexa o parecer anterior pra ele
-   conferir ponto a ponto. Repita até APROVADO. ⛔ Nenhuma edição de código antes disso.
-   Na faixa crítica, peça também o subagente `revisor-critico` (Opus, high) e leve as
-   divergências dele pro plano resubmetido.
-3. **Diff antes de publicar.** O `deploy-hosting.sh` roda `revisar-com-gpt.sh diff` no passo
+   ⇒ atenda os pontos NO PLANO (seção "Resposta ao parecer": o que mudou e, se discorda, por
+   quê) e **submeta de novo** — o script anexa o parecer anterior pra conferência ponto a ponto.
+   Repita até APROVADO. ⛔ Nenhuma edição de código antes disso. Na faixa crítica o Claude
+   pede também o subagente `revisor-critico` (Opus, high) e leva as divergências pro plano.
+3. **Diff antes de publicar.** O `deploy-hosting.sh` roda `revisar.sh diff` (auto) no passo
    1.8 (origin/main..HEAD + sujo). Só APROVADO deixa passar; o resto **para o deploy antes do
-   push** — "abort é o aviso". Sem veredito legível (exit 3) e cota do ChatGPT esgotada
-   (exit 4) NÃO são aprovação.
+   push** — "abort é o aviso". Sem veredito (exit 3) e cota esgotada (exit 4) NÃO são aprovação.
 4. Escapes: `SP_GPT_FAIXA=normal|critica` só ELEVA (trivial é recusado). `SP_SEM_GPT=1` só no
    diff e só com uma linha `sem-gpt: <motivo>` num commit a publicar; nunca vale pra plano.
-5. **Interruptor** (ordem do dono: _"quero poder desligar essa revisão automática e reativar
-   quando voltarem os créditos, pra não ficarmos travados"_): `scripts/revisar-com-gpt.sh
-   desligar "<motivo>"` / `ligar` / `status`. A chave vive em `~/.codex/scoreplace-revisao.desligada`
-   (fora do repo, vale pra toda worktree). Desligada, plano e diff **passam com aviso** e o
-   deploy segue. ⚠️ Enquanto estiver desligada, o Claude **diz isso em toda resposta que
-   implementa algo** (o dono precisa lembrar de religar) e o plano continua sendo escrito.
+5. **Interruptor, um por lado:** `revisar-com-gpt.sh desligar "<motivo>"` / `ligar` e
+   `revisar-com-claude.sh desligar "<motivo>"` / `ligar`; `revisar.sh status` mostra os dois.
+   As chaves vivem em `~/.codex/scoreplace-revisao.desligada` e `~/.claude/scoreplace-revisao.desligada`
+   (fora do repo, valem pra toda worktree). Desligado, aquele lado **passa com aviso** e o
+   deploy segue. ⚠️ Enquanto um lado estiver desligado, quem implementa **diz isso em toda
+   resposta que implementa algo** (o dono precisa lembrar de religar) e o plano continua
+   sendo escrito.
 
-Os pareceres ficam em `.claude/tmp/parecer-gpt-plano-<assunto>.md` e `parecer-gpt-diff.md`
-(último) mais cópias datadas; `.claude/` é gitignored. ⛔ O revisor **não edita**; quem
-implementa é o Claude. ⚠️ Custo medido em 04/set: 56 mil tokens num diff de 3 arquivos, 110
-mil num plano crítico — e a cota do ChatGPT esgotou no 2º parecer (reabre 06/set/2026 23:24).
-Por isso a faixa trivial existe e por isso o plano vai completo de primeira: cada resubmissão
-custa outra leitura da árvore.
+Os pareceres ficam em `.claude/tmp/parecer-<revisor>-plano-<assunto>.md` e
+`parecer-<revisor>-diff.md` (último) mais cópias datadas; `.claude/` é gitignored. ⛔ O revisor
+**nunca edita**; quem implementa é quem disparou. ⚠️ Custo medido em 04/set: GPT, 56 mil
+tokens num diff de 3 arquivos e 110 mil num plano crítico (a cota fechou no 2º parecer; reabre
+06/set/2026 23:24). Por isso a faixa trivial existe e por isso o plano vai completo de primeira.
 
 ## Deploy
 

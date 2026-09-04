@@ -241,20 +241,22 @@ if [[ "$VER_APP" != "$VER_SW" ]]; then
 fi
 echo "  ✓ CACHE_NAME do SW = versão do app ($VER_APP)"
 
-# ── 1.8 · SEGUNDA OPINIÃO DO GPT SOBRE O QUE VAI SUBIR ───────────────────────────────
-# Ordem do dono (04/set/2026): o GPT revisa o que o Claude implementa, sempre, e nada segue
-# sem o APROVADO dele. Aqui é a porta do DIFF (a do PLANO é `scripts/revisar-com-gpt.sh
-# plano`, antes de editar). A faixa (trivial/normal/crítica) sai de uma REGRA sobre os
-# arquivos tocados e é o piso do esforço do revisor; faixa trivial (CSS/texto/bump) passa sem
-# chamar ninguém. RESSALVAS, BLOQUEIO, parecer ilegível ou COTA ESGOTADA param o deploy ANTES
-# do push — igual ao preflight: origin/main segue intocado.
+# ── 1.8 · SEGUNDA OPINIÃO CRUZADA SOBRE O QUE VAI SUBIR ──────────────────────────────
+# Ordem do dono (04/set/2026): quem implementa é revisado pelo OUTRO, sempre, e nada segue sem
+# o APROVADO. `scripts/revisar.sh diff` em modo auto chama o oposto de quem está publicando:
+# de dentro do Claude Code, o GPT (Codex) revisa; de dentro do Codex, o Claude (`claude -p`)
+# revisa; sem pista, os dois. A porta do PLANO (antes de editar) é a mesma ferramenta em modo
+# `plano`. A faixa (trivial/normal/crítica) sai de uma REGRA sobre os arquivos tocados e é o
+# piso do esforço; trivial (CSS/texto/bump) passa sem chamar ninguém. RESSALVAS, BLOQUEIO,
+# parecer ilegível ou COTA ESGOTADA param o deploy ANTES do push: origin/main segue intocado.
+# Interruptor por lado: `revisar-com-{gpt,claude}.sh desligar "<motivo>"` (passa com aviso).
 # Escape só com uma linha `sem-gpt: <motivo>` num commit a publicar, e SP_SEM_GPT=1.
-echo "▸ 1.8 revisão do GPT sobre origin/main..HEAD…"
-if ! "$RAIZ/scripts/revisar-com-gpt.sh" diff; then
+echo "▸ 1.8 revisão cruzada sobre origin/main..HEAD…"
+if ! "$RAIZ/scripts/revisar.sh" diff; then
   echo
-  echo "✗ O GPT NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
-  echo "  Parecer em .claude/tmp/parecer-gpt-diff.md: atenda os pontos e rode de novo (o parecer"
-  echo "  anterior vai junto na resubmissão). Cota esgotada? Espere reabrir ou use o escape acima."
+  echo "✗ O REVISOR NÃO APROVOU (ou não respondeu) — nada foi empurrado nem publicado."
+  echo "  Parecer em .claude/tmp/parecer-<revisor>-diff.md: atenda os pontos e rode de novo (o"
+  echo "  parecer anterior vai junto). Cota esgotada? desligue aquele lado com o motivo, ou espere."
   exit 1
 fi
 
