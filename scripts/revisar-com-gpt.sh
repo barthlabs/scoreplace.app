@@ -30,7 +30,15 @@
 #   exit 3 → parecer sem veredito legível (NÃO é aprovação — "abort é o aviso")
 #   exit 4 → cota do ChatGPT esgotada / Codex indisponível (NÃO é aprovação)
 #
+# INTERRUPTOR (ordem do dono, 04/set/2026: "de acordo com minha assinatura GPT quero poder
+# desligar essa revisão automática e reativar quando voltarem os créditos, pra não ficarmos
+# travados"): `desligar "<motivo>"` grava ~/.codex/scoreplace-revisao.desligada; enquanto ele
+# existir, plano e diff PASSAM com aviso em letras grandes (exit 0) e o deploy segue. `ligar`
+# apaga o arquivo; `status` mostra. Fica FORA do repo de propósito: não suja a árvore nem o
+# diff, e vale pra toda worktree.
+#
 # Uso:
+#   scripts/revisar-com-gpt.sh desligar "<motivo>" | ligar | status
 #   scripts/revisar-com-gpt.sh faixa [arquivo...]                # só classifica
 #   scripts/revisar-com-gpt.sh plano <plano.md> [--modelo M] [--esforco E]
 #   scripts/revisar-com-gpt.sh diff              [--modelo M] [--esforco E]
@@ -46,8 +54,22 @@ MODO="${1:-}"
 OUTDIR="$RAIZ/.claude/tmp"
 mkdir -p "$OUTDIR"
 
-uso() { sed -n '2,38p' "${BASH_SOURCE[0]}"; exit 1; }
-[[ "$MODO" =~ ^(faixa|plano|diff)$ ]] || uso
+uso() { sed -n '2,46p' "${BASH_SOURCE[0]}"; exit 1; }
+[[ "$MODO" =~ ^(faixa|plano|diff|desligar|ligar|status)$ ]] || uso
+
+# ── interruptor ──────────────────────────────────────────────────────────────────────
+CHAVE="${SP_GPT_CHAVE:-$HOME/.codex/scoreplace-revisao.desligada}"
+case "$MODO" in
+  desligar)
+    [[ -n "${1:-}" ]] || { echo "✗ diga o motivo: revisar-com-gpt.sh desligar \"sem créditos até 06/set\""; exit 1; }
+    mkdir -p "$(dirname "$CHAVE")"
+    printf 'desde: %s\nmotivo: %s\n' "$(date '+%Y-%m-%d %H:%M')" "$1" > "$CHAVE"
+    echo "🔕 revisão do GPT DESLIGADA — $1"; echo "   religue com: scripts/revisar-com-gpt.sh ligar"; exit 0 ;;
+  ligar)
+    if [[ -e "$CHAVE" ]]; then rm -f "$CHAVE"; echo "🔔 revisão do GPT LIGADA de novo."; else echo "🔔 já estava ligada."; fi; exit 0 ;;
+  status)
+    if [[ -e "$CHAVE" ]]; then echo "🔕 DESLIGADA"; sed 's/^/   /' "$CHAVE"; else echo "🔔 LIGADA"; fi; exit 0 ;;
+esac
 
 # ── argumentos ───────────────────────────────────────────────────────────────────────
 MODELO=""; ESFORCO=""; PLANO=""; ARGS=()
@@ -164,6 +186,16 @@ FAIXA=$(faixa_para "$LISTA")
 echo "▸ revisão do GPT ($MODO) — faixa: $FAIXA"
 sed 's/^/    /' "$LISTA"
 
+if [[ -e "$CHAVE" ]]; then
+  echo
+  echo "  ╔══════════════════════════════════════════════════════════════════════╗"
+  echo "  ║ 🔕 REVISÃO DO GPT DESLIGADA — este $MODO segue SEM segunda opinião.  ║"
+  echo "  ╚══════════════════════════════════════════════════════════════════════╝"
+  sed 's/^/     /' "$CHAVE"
+  echo "     religue com: scripts/revisar-com-gpt.sh ligar"
+  echo
+  exit 0
+fi
 if [[ "${SP_SEM_GPT:-0}" == "1" ]]; then
   if [[ "$MODO" != "diff" ]]; then
     echo "✗ SP_SEM_GPT não vale pra PLANO: plano só segue com APROVADO do GPT (ordem do dono)."; exit 1

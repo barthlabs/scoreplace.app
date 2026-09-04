@@ -26,7 +26,7 @@ function run(args, opts) {
   // o script acha a RAIZ pela própria localização — o laboratório usa a CÓPIA dele
   const r = spawnSync('bash', [opts.script || SCRIPT].concat(args), {
     cwd: opts.cwd || path.join(__dirname, '..'),
-    env: Object.assign({}, process.env, { CODEX_BIN: '/nonexistent/codex' }, opts.env || {}),
+    env: Object.assign({}, process.env, { CODEX_BIN: '/nonexistent/codex', SP_GPT_CHAVE: '/nonexistent/chave' }, opts.env || {}),
     encoding: 'utf8',
   });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
@@ -86,6 +86,23 @@ ok(r.code !== 0 && /exige o motivo/.test(r.out), 'SP_SEM_GPT sem motivo no commi
 git(['add', '-A']); git(['commit', '-q', '-m', 'lab: arquivo novo\n\nsem-gpt: laboratório do teste']);
 r = runLab(['diff'], { SP_SEM_GPT: '1' });
 ok(r.code === 0 && /PULADA/.test(r.out), 'SP_SEM_GPT com motivo no commit libera — code ' + r.code + ' saída: ' + r.out.trim().split('\n').slice(-2).join(' | '));
+
+// ── interruptor: desligado, plano e diff PASSAM com aviso; ligado, voltam a cobrar ──────
+const chave = path.join(lab, 'revisao.desligada');
+r = runLab(['desligar', 'sem créditos'], { SP_GPT_CHAVE: chave });
+ok(r.code === 0 && fs.existsSync(chave), 'desligar grava a chave — code ' + r.code);
+r = runLab(['desligar'], { SP_GPT_CHAVE: chave });
+ok(r.code !== 0, 'desligar sem motivo aborta — code ' + r.code);
+r = runLab(['status'], { SP_GPT_CHAVE: chave });
+ok(/DESLIGADA/.test(r.out) && /sem créditos/.test(r.out), 'status mostra desligada + motivo');
+r = runLab(['diff'], { SP_GPT_CHAVE: chave });
+ok(r.code === 0 && /DESLIGADA/.test(r.out), 'diff desligado passa com aviso — code ' + r.code);
+r = runLab(['plano', path.join(lab, 'a.css')], { SP_GPT_CHAVE: chave });
+ok(r.code === 0 && /DESLIGADA/.test(r.out), 'plano desligado passa com aviso — code ' + r.code);
+r = runLab(['ligar'], { SP_GPT_CHAVE: chave });
+ok(r.code === 0 && !fs.existsSync(chave), 'ligar apaga a chave — code ' + r.code);
+r = runLab(['diff'], { SP_GPT_CHAVE: chave });
+ok(r.code === 4, 'ligado de novo, sem Codex volta a falhar com exit 4 — code ' + r.code);
 
 fs.rmSync(lab, { recursive: true, force: true });
 console.log(fail ? '❌ revisar-com-gpt faixa: ' + fail + ' falha(s), ' + pass + ' ok' : '✅ revisar-com-gpt faixa: ' + pass + ' ok');

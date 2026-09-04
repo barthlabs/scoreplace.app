@@ -532,6 +532,12 @@ implementar** (o dono troca com `/model` e `/effort` se quiser) ou executa por s
    (exit 4) NÃO são aprovação.
 4. Escapes: `SP_GPT_FAIXA=normal|critica` só ELEVA (trivial é recusado). `SP_SEM_GPT=1` só no
    diff e só com uma linha `sem-gpt: <motivo>` num commit a publicar; nunca vale pra plano.
+5. **Interruptor** (ordem do dono: _"quero poder desligar essa revisão automática e reativar
+   quando voltarem os créditos, pra não ficarmos travados"_): `scripts/revisar-com-gpt.sh
+   desligar "<motivo>"` / `ligar` / `status`. A chave vive em `~/.codex/scoreplace-revisao.desligada`
+   (fora do repo, vale pra toda worktree). Desligada, plano e diff **passam com aviso** e o
+   deploy segue. ⚠️ Enquanto estiver desligada, o Claude **diz isso em toda resposta que
+   implementa algo** (o dono precisa lembrar de religar) e o plano continua sendo escrito.
 
 Os pareceres ficam em `.claude/tmp/parecer-gpt-plano-<assunto>.md` e `parecer-gpt-diff.md`
 (último) mais cópias datadas; `.claude/` é gitignored. ⛔ O revisor **não edita**; quem
