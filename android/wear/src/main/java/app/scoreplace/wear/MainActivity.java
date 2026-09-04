@@ -96,6 +96,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
     private LinearLayout startPlayers;
     // Seletor de sacador
     private LinearLayout serveBar, serveList;
+    private View serveScroll;
     private TextView serveBarName, btnServeConfirm;
     private androidx.wear.widget.CurvedTextView serveArcPrompt, serveArcSport;
     private View serveOverlay;
@@ -200,6 +201,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         serveBarName = findViewById(R.id.serve_bar_name);
         serveOverlay = findViewById(R.id.serve_overlay);
         serveList = findViewById(R.id.serve_list);
+        serveScroll = findViewById(R.id.serve_scroll);
         serveArcPrompt = findViewById(R.id.serve_arc_prompt);
         serveArcPrompt.setAnchorType(1); serveArcPrompt.setAnchorAngleDegrees(0f); serveArcPrompt.setClockwise(true); // 12h
         serveArcSport = findViewById(R.id.serve_arc_sport);
@@ -279,6 +281,7 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         btnTieTiebreak.setOnClickListener(v -> sendResolveTie("tiebreak"));
 
         applyScale();
+        applyRoundSafeInsets();
         applyPreviewExtras();
     }
 
@@ -316,6 +319,47 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         mScale = Math.max(0.60f, Math.min(1.35f, widthDp / 195f));
         if (Math.abs(mScale - 1f) < 0.001f) return; // referência → no-op
         scaleTree(findViewById(android.R.id.content), mScale);
+    }
+
+    // ── FOLGA DO DISCO (Wear App Quality Guidelines · Font size) ──
+    // ⛔ O Google recusou a 109 com "text and controls are not cut off by screen edges".
+    // As linhas de NOME vivem no terço de baixo, onde a corda do círculo já é bem mais
+    // curta que a largura da tela: medido no emulador 454×454 com `font_scale 1.30`, a
+    // 2ª linha começava em x≈37px e a borda do disco só abre em x≈47px — "Wanderleia"
+    // perdia o W e "Bartolomeu" perdia o u. `maxWidth` em dp NÃO resolve: é medida fixa,
+    // não sabe onde está a borda do disco (e o scaleTree nem a escala).
+    //
+    // ⭐ A régua é o QUADRADO INSCRITO no círculo: recuar (1 − √2/2)/2 ≈ 0,1465 da largura
+    //    em cada lado põe o conteúdo dentro do disco em QUALQUER altura, em qualquer
+    //    mostrador. O recuo entra como padding EXTERNO das linhas de nome (o lado que
+    //    aponta pra fora), descontando o que a metade já recua — a caixa do nome é
+    //    `0dp + weight`, então o autosize encolhe o texto até caber nela.
+    // ⚠️ Mostrador QUADRADO não paga esse pedágio (isScreenRound() == false).
+    private int roundInsetPx() {
+        if (!getResources().getConfiguration().isScreenRound()) return 0;
+        return Math.round(0.1465f * getResources().getDisplayMetrics().widthPixels);
+    }
+
+    private void applyRoundSafeInsets() {
+        int inset = roundInsetPx();
+        if (inset <= 0) return;
+        View halfL = findViewById(R.id.half_left), halfR = findViewById(R.id.half_right);
+        int folgaL = Math.max(0, inset - (halfL != null ? halfL.getPaddingStart() : 0));
+        int folgaR = Math.max(0, inset - (halfR != null ? halfR.getPaddingEnd() : 0));
+        padStart(findViewById(R.id.name_row_l1), folgaL);
+        padStart(findViewById(R.id.name_row_l2), folgaL);
+        padEnd(findViewById(R.id.name_row_r1), folgaR);
+        padEnd(findViewById(R.id.name_row_r2), folgaR);
+    }
+
+    private void padStart(View v, int start) {
+        if (v == null) return;
+        v.setPaddingRelative(start, v.getPaddingTop(), v.getPaddingEnd(), v.getPaddingBottom());
+    }
+
+    private void padEnd(View v, int end) {
+        if (v == null) return;
+        v.setPaddingRelative(v.getPaddingStart(), v.getPaddingTop(), end, v.getPaddingBottom());
     }
 
     // Multiplica recursivamente fonte/padding/margem/dimensões fixas de v e filhos.
@@ -1180,6 +1224,16 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
             tv.setTextSize(20);
             tv.setMaxLines(1);
             tv.setTypeface(null, isSel ? android.graphics.Typeface.BOLD : android.graphics.Typeface.NORMAL);
+            // ⛔ VIEW QUE NASCE EM RUNTIME NÃO É ALCANÇADA PELA REDE DO XML. Os 15
+            // `autoSizeTextType` do activity_main.xml não cobrem esta linha — e era ela,
+            // com nome longo e a fonte grande do sistema, que encostava na borda. Mesma
+            // régua das outras: teto em SP (cresce com a preferência do usuário), caixa
+            // limitada pelo quadrado inscrito no disco, e o texto encolhe até caber.
+            int folga = roundInsetPx();
+            int larguraSegura = getResources().getDisplayMetrics().widthPixels
+                                - 2 * folga - (int) (34 * d);  // 34dp = bola + paddings da linha
+            if (larguraSegura > 0) tv.setMaxWidth(larguraSegura);
+            tv.setAutoSizeTextTypeUniformWithConfiguration(11, 20, 1, TypedValue.COMPLEX_UNIT_SP);
             row.addView(tv);
 
             row.setClickable(true);
@@ -1195,6 +1249,47 @@ public class MainActivity extends Activity implements MessageClient.OnMessageRec
         View spEnd = new View(this);
         spEnd.setLayoutParams(new LinearLayout.LayoutParams(1, 0, 1f));
         serveList.addView(spEnd);
+        encolherSeletorParaCaber();
+    }
+
+    // ⛔ A ROLAGEM É A REDE, NÃO O PLANO. Com a fonte grande do sistema os 4 nomes de uma
+    // dupla passavam da altura do mostrador — no 384 sobrava um nome fora da tela, e quem
+    // não rolasse escolheria sem ver a lista inteira. Aqui, DEPOIS da medida real (o
+    // `post` roda com as alturas já calculadas, nunca com 0), se o conteúdo passou do
+    // visível o texto de TODAS as linhas encolhe na mesma proporção até caber — uniforme,
+    // porque nome menor que o vizinho pareceria menos importante. Se ainda assim não
+    // couber (fonte no talo + muitos nomes), o ScrollView garante que nada fique perdido.
+    private void encolherSeletorParaCaber() {
+        if (serveScroll == null || serveList == null) return;
+        serveList.post(() -> {
+            int visivel = serveScroll.getHeight() - serveList.getPaddingTop();
+            int conteudo = 0;
+            for (int i = 0; i < serveList.getChildCount(); i++) {
+                View c = serveList.getChildAt(i);
+                if (c instanceof LinearLayout) conteudo += c.getHeight();  // linhas; espaçadores não contam
+            }
+            if (visivel <= 0 || conteudo <= 0 || conteudo <= visivel) return;
+            float f = Math.max(0.55f, (float) visivel / conteudo);
+            for (int i = 0; i < serveList.getChildCount(); i++) {
+                View c = serveList.getChildAt(i);
+                if (!(c instanceof LinearLayout)) continue;
+                LinearLayout row = (LinearLayout) c;
+                row.setPadding(row.getPaddingLeft(), Math.round(row.getPaddingTop() * f),
+                               row.getPaddingRight(), Math.round(row.getPaddingBottom() * f));
+                for (int j = 0; j < row.getChildCount(); j++) {
+                    View ch = row.getChildAt(j);
+                    if (!(ch instanceof TextView)) continue;
+                    TextView t = (TextView) ch;
+                    if (t.getAutoSizeTextType() == TextView.AUTO_SIZE_TEXT_TYPE_UNIFORM) {
+                        int mn = Math.max(1, Math.round(t.getAutoSizeMinTextSize() * f));
+                        int mx = Math.max(mn + 1, Math.round(t.getAutoSizeMaxTextSize() * f));
+                        t.setAutoSizeTextTypeUniformWithConfiguration(mn, mx, 1, TypedValue.COMPLEX_UNIT_PX);
+                    } else {
+                        t.setTextSize(TypedValue.COMPLEX_UNIT_PX, t.getTextSize() * f);
+                    }
+                }
+            }
+        });
     }
 
     // Classificação final do Rei/Rainha: vitórias por PESSOA, invicto (3V) coroado.

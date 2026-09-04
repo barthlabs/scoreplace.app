@@ -68,6 +68,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+                android:id="@+id/name_row_l1"
                 android:gravity="end|center_vertical"
                 android:paddingEnd="7dp">
                 <TextView
@@ -82,9 +83,9 @@
                     android:visibility="visible" />
                 <TextView
                     android:id="@+id/name_l1"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:maxWidth="88dp"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="end"
@@ -101,6 +102,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+                android:id="@+id/name_row_l2"
                 android:gravity="end|center_vertical"
                 android:paddingEnd="7dp"
                 android:layout_marginTop="1dp">
@@ -116,9 +118,9 @@
                     android:visibility="gone" />
                 <TextView
                     android:id="@+id/name_l2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:maxWidth="88dp"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="end"
@@ -170,13 +172,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+                android:id="@+id/name_row_r1"
                 android:gravity="start|center_vertical"
                 android:paddingStart="7dp">
                 <TextView
                     android:id="@+id/name_r1"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:maxWidth="88dp"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="start"
@@ -203,14 +206,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+                android:id="@+id/name_row_r2"
                 android:gravity="start|center_vertical"
                 android:paddingStart="7dp"
                 android:layout_marginTop="1dp">
                 <TextView
                     android:id="@+id/name_r2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="wrap_content"
-                    android:maxWidth="88dp"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:gravity="start"
@@ -965,17 +969,31 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical">
-            <!-- Central: nomes distribuídos (runtime), com folga do topo pro prompt curvo. -->
-            <LinearLayout
-                android:id="@+id/serve_list"
+            <!-- Central: nomes distribuídos (runtime), com folga do topo pro prompt curvo.
+                 ⛔ ROLA. Com a fonte grande do sistema (font_scale 1.30) os 4 nomes NÃO cabem
+                 na altura do mostrador e o último ficava METADE ESCONDIDO atrás da barra
+                 "Confirmar" — que é o corte que o Google recusou. `fillViewport` mantém os
+                 espaçadores de peso funcionando quando SOBRA espaço, então em fonte normal a
+                 tela continua exatamente a mesma; quando FALTA, a lista rola (dedo e coroa). -->
+            <ScrollView
+                android:id="@+id/serve_scroll"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:paddingTop="34dp"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp" />
+                android:fillViewport="true"
+                android:scrollbars="none"
+                android:clipToPadding="false">
+
+                <LinearLayout
+                    android:id="@+id/serve_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:paddingTop="34dp"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp" />
+            </ScrollView>
 
             <!-- Confirmar: barra sólida na base (topo reto, largura cheia). -->
             <TextView
