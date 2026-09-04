@@ -26,12 +26,15 @@ const BYE = W._t('bui.byeLabel'); // mesmo rótulo que o código usa internament
   };
   const sf1 = W._findMatch(t, 'sf1');
   ok(!!sf1, '_findMatch acha sf1 em t.matches');
+  sf1.p1PromotedFromLower = true;   // A foi promovida da Prata para a Ouro
   sf1.winner = 'A'; W._advanceWinner(t, sf1);
   const sf2 = W._findMatch(t, 'sf2');
   sf2.winner = 'C'; W._advanceWinner(t, sf2);
   const f = W._findMatch(t, 'f');
   eq(f.p1, 'A', 'vencedor de sf1 vai pro slot p1 da final');
   eq(f.p2, 'C', 'vencedor de sf2 vai pro slot p2 da final');
+  ok(f.p1PromotedFromLower === true, '⭐ a PROMO acompanha a dupla: o slot da final herda pXPromotedFromLower (2.2.2 — antes ela sumia da R2 em diante)');
+  ok(!f.p2PromotedFromLower, '  → e quem não foi promovido não ganha a tag');
 
   eq(W._getChampion(t, [1, 2]), null, 'sem campeão enquanto a final não tem vencedor');
   f.winner = 'A';

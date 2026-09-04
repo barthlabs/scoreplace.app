@@ -4838,7 +4838,7 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // A dupla promovida da linha inferior para a superior é um fato do sorteio, não uma
   // repescagem. A marca fica no SLOT DA RODADA DE ENTRADA, tal como REP; não acompanha
   // uma vitória da dupla para as rodadas seguintes.
-  var _promotedTag = '<span title="Dupla promovida por desempenho combinado" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-e2e8f0,#e2e8f0);background:rgba(203,213,225,0.16);border:1px solid rgba(203,213,225,0.58);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">PROMO</span>';
+  var _promotedTag = '<span title="Dupla promovida por desempenho combinado" style="display:inline-flex;align-items:center;font-size:0.58rem;font-weight:800;color:var(--sp-c-c7d2fe,#c7d2fe);background:rgba(99,102,241,0.22);border:1px solid rgba(129,140,248,0.75);padding:2px 7px;border-radius:5px;margin-right:8px;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">PROMO</span>';
   var _p1PromotedBadge = m.p1PromotedFromLower ? _promotedTag : '';
   var _p2PromotedBadge = m.p2PromotedFromLower ? _promotedTag : '';
 

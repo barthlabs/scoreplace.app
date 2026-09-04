@@ -1628,27 +1628,36 @@ function _advanceWinner(t, completedMatch) {
       // normais não sinalizam mais). User: "isso deve se aplicar a todo
       // e qualquer bye em qualquer torneio".
       var fromBye = !!completedMatch.isBye;
+      /* ⭐ A PROMO ACOMPANHA A DUPLA (2.2.2 — pedido do dono, 04/set: "não estou vendo a tag PROMO
+       * da dupla que foi promovida"). Ela nascia só no 1º jogo eliminatório (phases-engine
+       * carimba pXPromotedFromLower ali) e o avanço do vencedor não a levava adiante: a partir
+       * da R2 a dupla promovida virava anônima. O BYE continua só na rodada em que aconteceu. */
+      var fromPromo = !!completedMatch[_winSide + 'PromotedFromLower'];
+      var _carimbaSlot = function (slot) {
+        if (fromBye) next[slot + 'FromBye'] = true;
+        if (fromPromo) next[slot + 'PromotedFromLower'] = true;
+      };
       // Play-in matches specify which slot to fill via nextSlot
       if (completedMatch.nextSlot === 'p1') {
         next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
-        if (fromBye) next.p1FromBye = true;
+        _carimbaSlot('p1');
       } else if (completedMatch.nextSlot === 'p2') {
         next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
-        if (fromBye) next.p2FromBye = true;
+        _carimbaSlot('p2');
       } else {
         // Standard advancement: fill first available TBD slot
         if ((!next.p1 || next.p1 === 'TBD') && !next.p1AguardaMelhor) {
           next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
-          if (fromBye) next.p1FromBye = true;
+          _carimbaSlot('p1');
         } else if ((!next.p2 || next.p2 === 'TBD') && !next.p2AguardaMelhor) {
           next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
-          if (fromBye) next.p2FromBye = true;
+          _carimbaSlot('p2');
         } else if (!next.p1 || next.p1 === 'TBD') {
           next.p1 = winner; _setSlot(next, 'p1', _winUids, _winObj);
-          if (fromBye) next.p1FromBye = true;
+          _carimbaSlot('p1');
         } else if (!next.p2 || next.p2 === 'TBD') {
           next.p2 = winner; _setSlot(next, 'p2', _winUids, _winObj);
-          if (fromBye) next.p2FromBye = true;
+          _carimbaSlot('p2');
         }
       }
       // Auto-resolve BYE matches: if one slot is filled and the other is BYE
