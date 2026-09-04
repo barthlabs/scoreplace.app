@@ -8419,8 +8419,27 @@ window._bracketApplyFilter = function () {
      * ⚠️ Marca quem foi aberto pela busca pra saber o que fechar quando ela for limpa. */
     window._fbSyncDetalhe(dets[d], nvis, true);
   }
+  /* ⛔ 04/set/2026 — O AVISO TEM QUE DIZER QUEM ESVAZIOU A TELA.
+   * Relato do dono: _"o toggle só meus jogos, nas chaves não está mostrando nada"_. Medido
+   * em produção (funções reais, uid real, somente leitura): em 6 dos 8 torneios recentes o
+   * elenco inteiro é de gente inscrita à mão, SEM CONTA — nenhum jogo tem dono por uid, e o
+   * filtro esvaziar a chave é a resposta CERTA. Só que a tela dizia "Nenhum jogo
+   * encontrado.", que é a frase da BUSCA: some tudo e o app parece quebrado. Filtro correto
+   * que apaga a tela sem explicar é indistinguível de filtro quebrado — foi assim que a
+   * busca da chave nos mordeu na 2.1.99.
+   * ⭐ Um elemento só, uma decisão só: o mesmo `#bracket-search-empty` passa a dizer o
+   * MOTIVO — vale em todo torneio, com ou sem consulta, sem caso particular. */
   var empty = document.getElementById('bracket-search-empty');
-  if (empty) empty.style.display = ((q || onlyMine) && shown === 0) ? 'block' : 'none';
+  if (empty) {
+    var _vazio = (q || onlyMine) && shown === 0;
+    empty.style.display = _vazio ? 'block' : 'none';
+    if (_vazio) {
+      empty.textContent = onlyMine
+        ? (q ? 'Nenhum jogo seu com esse nome. Desligue "Só meus jogos" para ver a chave inteira.'
+             : 'Você não tem jogos nesta chave. Desligue "Só meus jogos" para ver todos.')
+        : 'Nenhum jogo encontrado.';
+    }
+  }
   /* ── INSTRUMENTAÇÃO (2.1.114) — só quando a busca escondeu TUDO, uma vez por consulta ──
    * O dono vê "não acha" e eu não consigo ver a tela dele. Então a própria tela grava o que
    * ela enxergava: todos os data-players, os nomes de inscritos que a chave conhecia e como

@@ -306,6 +306,12 @@ const SUITES = [
   // null (Jogador X não rouba o nome do parceiro) e _rewriteSlot troca por uid mesmo
   // com rótulo envelhecido (jogos não jogados SEMPRE recebem o substituto).
   'tests/slot-se-decide-por-uid.test.js',
+  // ⛔ "É O MEU JOGO?" TEM UMA PORTA SÓ (04/set/2026, relato do dono: o toggle "Só meus
+  // jogos" não mostrava nada). `_userTeamInMatch` lia o slot CRU enquanto o card já
+  // desenhava a pessoa pelo leitor que RECUPERA o uid — o mesmo jogo era "meu" pra desenhar
+  // e "não meu" pra filtrar. E a cura não conhecia o ELENCO, então só funcionava onde algum
+  // outro jogo já tivesse o par nome+uid gravado.
+  'tests/meu-jogo-uid-do-slot-se-recupera.test.js',
   // ⭐ Jogador X é escolha de PRIMEIRA CLASSE no ato do W.O. (2.0.61, caso Fábio/E2).
   'tests/jogador-x-e-escolha-de-primeira-classe.test.js',
   // ⛔ OS CRITÉRIOS DE DESEMPATE E A ORDEM DO ORGANIZADOR MANDAM — SEMPRE, EM TODO CAMINHO.

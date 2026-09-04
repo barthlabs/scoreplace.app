@@ -388,10 +388,27 @@ window._propagateMatchUpdate = _propagateMatchUpdate;
 // displayName pode ter mudado, e homônimos colidiam. Sem uid no user → 0 (guest/informal não
 // loga; não é "o usuário atual"). Cobre 1v1, dupla e Rei/Rainha (todos carregam uid no slot).
 // Ver [[project_uid_identity_canon_locked]] / [[project_match_slot_uid_identity]].
+//
+// ⛔ 04/set/2026 — ESTA PERGUNTA LIA O SLOT CRU, E POR ISSO O MESMO JOGO ERA "MEU" PRA
+// DESENHAR E "NÃO MEU" PRA FILTRAR. O canon `uid do slot se RECUPERA` (ordem do dono,
+// 23/ago: _"não pode sumir o uid do slot porra!"_) ganhou leitor próprio —
+// `_slotUidsPositional`, que completa a posição vazia pelo mapa nome→uid do PRÓPRIO
+// torneio — e ele foi ligado no DISPLAY, mas ficou de fora daqui. Resultado medido em
+// produção (funções reais, uid real, somente leitura): no Confra, **64 dos 214 jogos**
+// não têm uid em slot nenhum; todos nasciam com `data-my-match="0"` e o toggle
+// "Só meus jogos" apagava a tela.
+// ⭐ Uma porta só: a MESMA identidade que a classificação, o W.O. e o avanço já usam.
+// Continua **uid e nada mais** — a recuperação resolve nome→uid pelo elenco e pelos slots
+// do próprio torneio; não entra casamento por nome, e-mail ou substring.
+// ⚠️ Sem `t` (servidor / autoDraw) o comportamento é byte a byte o de antes: o próprio
+// `_slotUidsPositional` devolve o caminho cru quando não há torneio pra recuperar — e ali
+// qualquer diferença vazaria pro motor, que conta POSIÇÕES.
 function _userTeamInMatch(t, m, user) {
   if (!m || !user || !user.uid) return 0;
   var uid = user.uid;
-  var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  var _pos = (typeof window._slotUidsPositional === 'function') ? window._slotUidsPositional : null;
+  var _cru = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };
+  var _su = (t && _pos) ? function (mm, side) { return _pos(mm, side, t); } : _cru;
   if (_su(m, 'p1').indexOf(uid) !== -1) return 1;
   if (_su(m, 'p2').indexOf(uid) !== -1) return 2;
   return 0;

@@ -1384,10 +1384,25 @@ function _slotObj(m, side) {
 // torneio à mão (render do card, avanço) passa e ganha a cura.
 // Memo de 1 posição porque o render varre UM torneio por vez e chama isto por CARD.
 var _n2uMemoSig = '', _n2uMemoMap = null;
+/* ⛔ 04/set/2026 — A CURA NÃO CONHECIA O ELENCO, e por isso só funcionava em torneio onde
+ * ALGUM outro jogo já tivesse o par nome+uid gravado. `_nameToUidRecovery` lê só jogos,
+ * rodadas e grupos; quem conhece os INSCRITOS — onde a pessoa se ligou à conta — é
+ * `_buildNameToUid`, o MESMO mapa que a classificação usa. Passar a memoizar ele fecha o
+ * buraco com UMA fonte, em vez de duas versões da mesma verdade.
+ * ⚠️ E NÃO SE INVERTE: `_buildNameToUid` já chama `_nameToUidRecovery` por baixo (elenco e
+ * nome vivo mandam; a recuperação entra depois). Mexer no sentido contrário — fazer a
+ * recuperação chamar o elenco — fecha um CICLO: foi o que eu fiz primeiro, e a suíte
+ * pendurou por 24 minutos em `draw-sweep-all-formats` até eu matar. A dependência é de mão
+ * única, e é esta. */
 function _nameToUidCached(t) {
   if (!t) return null;
   var sig = String(t.id) + '|' + String(t.updatedAt || '') + '|' + ((t.matches || []).length);
-  if (_n2uMemoSig !== sig || !_n2uMemoMap) { _n2uMemoMap = _nameToUidRecovery(t); _n2uMemoSig = sig; }
+  if (_n2uMemoSig !== sig || !_n2uMemoMap) {
+    _n2uMemoMap = (typeof window !== 'undefined' && typeof window._buildNameToUid === 'function')
+      ? window._buildNameToUid(t)
+      : _nameToUidRecovery(t);
+    _n2uMemoSig = sig;
+  }
   return _n2uMemoMap;
 }
 window._nameToUidCached = _nameToUidCached;
