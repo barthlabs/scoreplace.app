@@ -54,11 +54,57 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return window.AppStore && (window.AppStore.tournaments || []).find(function (x) { return String(x.id) === String(tId); });
   }
   // Promise do save — NUNCA engolir rejeição (classe do bug Confra).
-  function _save(t) {
+  /* ⛔ QUEM GRAVA JOGO É O SERVIDOR. Até a 2.2.0 isto era `saveTournament(t)` — `.set(merge)`
+   * no DOCUMENTO. Num torneio DIVIDIDO os jogos moram na subcoleção, onde o cliente não
+   * escreve: a tela dizia "proposto", o card brilhava, e NADA persistia (medido no Confra em
+   * 03/set/2026: 9 jogos com schedule, todos de agosto, zero depois da divisão). Mesma família
+   * do buraco do link do grupo, mesma cura: a porta `setMatchSchedule`, idempotente por
+   * operationId, que sabe onde cada jogo mora e espelha o grupo do Rei/Rainha.
+   * [[project_dividir_exige_todo_escritor_ciente]] */
+  var _SCH_OP_PREFIX = 'sch-op:';
+  var _schOpMem = {};
+  function _schUuidV4() {
     try {
-      if (window.FirestoreDB && window.FirestoreDB.saveTournament) return Promise.resolve(window.FirestoreDB.saveTournament(t));
+      var c = window.crypto;
+      if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+      if (c && typeof c.getRandomValues === 'function') {
+        var b = new Uint8Array(16); c.getRandomValues(b);
+        b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+        var h = []; for (var i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1));
+        return h.slice(0, 4).join('') + '-' + h.slice(4, 6).join('') + '-' + h.slice(6, 8).join('') + '-' + h.slice(8, 10).join('') + '-' + h.slice(10, 16).join('');
+      }
+    } catch (e) {}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (ch) {
+      var r = (Math.random() * 16) | 0; return (ch === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+  function _schOpKey(tId, ids) { return _SCH_OP_PREFIX + String(tId) + ':' + ids.join(','); }
+  // o MESMO id enquanto a operação não confirmar: o retry sem sinal não grava duas vezes
+  function _schOpIdPara(k) {
+    try { var ss = window.sessionStorage; if (ss) { var v = ss.getItem(k); if (v) return v; var novo = _schUuidV4(); ss.setItem(k, novo); return novo; } } catch (e) {}
+    if (!_schOpMem[k]) _schOpMem[k] = _schUuidV4();
+    return _schOpMem[k];
+  }
+  function _schOpQueimar(k) { try { if (window.sessionStorage) window.sessionStorage.removeItem(k); } catch (e) {} delete _schOpMem[k]; }
+  /* Persiste UM ou VÁRIOS jogos pela porta. O que vai é o ESTADO do jogo em memória
+   * (schedule/scheduledAt/By/Kind); o servidor valida quem pode e onde grava. */
+  function _persistJogos(t, jogos, espelharGrupo) {
+    var DB = window.FirestoreDB;
+    if (!DB || typeof DB._callFn !== 'function') return Promise.reject(new Error('FirestoreDB indisponível'));
+    var lista = (jogos || []).filter(Boolean);
+    if (!lista.length) return Promise.resolve({ ok: true, jogos: [] });
+    var ids = lista.map(function (m) { return String(m.id); });
+    var k = _schOpKey(t.id, ids);
+    var payload = {
+      tournamentId: String(t.id), operationId: _schOpIdPara(k), espelharGrupo: !!espelharGrupo,
+      jogos: lista.map(function (m) {
+        return { matchId: String(m.id), schedule: m.schedule ? JSON.parse(JSON.stringify(m.schedule)) : null,
+          scheduledAt: m.scheduledAt || null, scheduledBy: m.scheduledBy || null, scheduledKind: m.scheduledKind || null };
+      })
+    };
+    try {
+      return Promise.resolve(DB._callFn('setMatchSchedule', payload)).then(function (r) { _schOpQueimar(k); return r || {}; });
     } catch (e) { return Promise.reject(e); }
-    return Promise.reject(new Error('FirestoreDB indisponível'));
   }
   function _isOrg(t) { return !!(window.AppStore && ((window.AppStore.isOrganizer && window.AppStore.isOrganizer(t)) || (window.AppStore.isCreator && window.AppStore.isCreator(t)))); }
 
@@ -687,7 +733,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // por gente (kind 'organizer'/'consensus') — a invariante do topo desta seção.
   // Jogo legado com scheduledAt e SEM kind é tratado como combinado: veio de antes
   // desta régua existir, e o único jeito de ter data lá era alguém ter combinado.
-  window._schAplicarGrade = function (t) {
+  window._schAplicarGrade = function (t, alterados) {
     var plano = window._schGradeEstimada(t);
     if (!plano || !plano.slots.length) return 0;
     var n = 0;
@@ -699,6 +745,7 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       m.scheduledAt = s.iso;
       m.scheduledBy = '';
       m.scheduledKind = 'estimate';
+      if (Array.isArray(alterados)) alterados.push(m);   // quem persiste precisa saber QUAIS
       n++;
     });
     return n;
@@ -1164,7 +1211,8 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     return cu;
   }
   function _saveSchedule(t, m, prevClone, scheduledNow) {
-    return _save(t).then(function () {
+    var _espelhar = !!(_schGroupMode && String(m.id) === _schGroupMode);
+    return _persistJogos(t, [m], _espelhar).then(function () {
       _renderMatch(t, m);
       if (scheduledNow) { try { _schNotifyScheduled(t, m); } catch (e) {} }
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
@@ -1365,12 +1413,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
   // que é o preço conhecido de GRAVAR a estimativa em vez de recalculá-la a cada render.
   window._schRecalcularGrade = function (tId) {
     var t = _findT(tId); if (!t || !_isOrg(t)) return;
-    var n = window._schAplicarGrade(t);
+    var _alterados = [];
+    var n = window._schAplicarGrade(t, _alterados);
     if (!n) {
       if (typeof showNotification === 'function') showNotification('Nada a mudar', 'Os horários estimados já estão em dia.', 'info');
       return;
     }
-    _save(t).then(function () {
+    _persistJogos(t, _alterados, false).then(function () {
       window._schCloseOverlay();
       if (typeof window._softRefreshView === 'function') window._softRefreshView();
       if (typeof showNotification === 'function') showNotification('🧮 Grade atualizada', n + ' jogo(s) com horário estimado.', 'success');
@@ -1384,12 +1433,13 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
     if (typeof window._sendUserNotification !== 'function') { if (typeof showNotification === 'function') showNotification('Indisponível', 'Notificações indisponíveis.', 'warning'); return; }
     var cr = window._schCurrentRoundMatches(t);
     var n = 0;
+    var _abertos = [];
     (cr.matches || []).forEach(function (m) {
       if (m.scheduledAt) return; // já combinado
-      _ensureSchedule(m);
+      _ensureSchedule(m); _abertos.push(m);
       _schMatchUids(t, m).forEach(function (u) { window._sendUserNotification(u, _schKickoffData(t, m)); n++; });
     });
-    try { _save(t); } catch (e) {}
+    try { _persistJogos(t, _abertos, false).catch(function () {}); } catch (e) {}
     window._schCloseOverlay();
     if (typeof showNotification === 'function') showNotification('📣 Notificados', n + ' aviso(s) enviado(s).', 'success');
   };

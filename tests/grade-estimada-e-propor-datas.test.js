@@ -214,7 +214,9 @@ ok(!/Combinar jogo/.test(srcSch.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
  * O teste grava de verdade pelo caminho do voto (não lê DOM) com o save resolvendo. */
 (async () => {
   const notas = [];
-  W.FirestoreDB = { saveTournament: () => Promise.resolve() };
+  const chamadas = [];
+  // ⛔ a porta é a CF `setMatchSchedule` — `saveTournament` NÃO grava jogo de torneio dividido
+  W.FirestoreDB = { _callFn: (nome, data) => { chamadas.push({ nome, data }); return Promise.resolve({ ok: true, jogos: data.jogos }); } };
   W.showNotification = (t) => notas.push(String(t));
   W._softRefreshView = () => {};
   const tS = { id: 'TS', name: 'S', format: 'Liga', status: 'active', startDate: '2026-09-05', endDate: '2026-09-06',
@@ -228,6 +230,8 @@ ok(!/Combinar jogo/.test(srcSch.split('\n').filter(l => !/^\s*\/\//.test(l)).joi
   const m = tS.rounds[0].matches[0];
   ok(!notas.some(n => /Não salvou/.test(n)), 'propor/votar com o save resolvendo NÃO acusa "Não salvou" (era ReferenceError depois de gravar)');
   ok(m.schedule && m.schedule.votes && m.schedule.votes.u1 && m.schedule.votes.u1.o1 === 1, '  → e o voto fica registrado na tela (não é revertido)');
+  ok(chamadas.length === 1 && chamadas[0].nome === 'setMatchSchedule', '⛔ e a gravação vai pela PORTA setMatchSchedule, não por saveTournament (torneio dividido não grava jogo pelo doc)');
+  ok(chamadas[0] && /^[0-9a-f-]{36}$/.test(String(chamadas[0].data.operationId)) && chamadas[0].data.jogos[0].matchId === 'mS' && chamadas[0].data.jogos[0].schedule.votes.u1.o1 === 1, '  → com operationId UUID v4 e o schedule do jogo');
   console.log((fail ? '✗' : '✓') + ' grade-estimada-e-propor-datas: ' + pass + ' ok, ' + fail + ' falhas');
   process.exit(fail ? 1 : 0);
 })();

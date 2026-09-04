@@ -3590,6 +3590,157 @@ exports.setMatchWhatsAppGroup = onCall(
   }
 );
 
+/* ═══ PROPOR DATAS · a porta do AGENDAMENTO por jogo ═══════════════════════════════════
+ * Gêmea de `setMatchWhatsAppGroup`, pelo MESMO buraco (medido no Confra em 03/set/2026):
+ * `schedule-poll.js` gravava `m.schedule`/`scheduledAt` em memória e persistia com
+ * `saveTournament(t)` → `.set(merge)` no DOCUMENTO. Num torneio DIVIDIDO os jogos moram na
+ * subcoleção (`allow write: if false` pro cliente): a tela dizia "proposto", o card mostrava,
+ * e NADA chegava ao banco — 9 jogos com schedule, todos de agosto (antes da divisão), zero
+ * depois. Quem propôs não via mais; os outros nunca viram.
+ * Regras: quem joga o confronto propõe/vota; organizador aponta (kind 'organizer') e roda a
+ * grade ('estimate'); `espelharGrupo` copia scheduledAt/By/Kind pros irmãos do Rei/Rainha.
+ * Aceita UM jogo ou um LOTE (`jogos[]`, ≤300 — a grade estimada escreve dezenas de uma vez).
+ * Idempotente por `operationId` (UUID v4): o retry da quadra sem sinal não grava duas vezes. */
+const _SCH_KINDS = ["estimate", "organizer", "consensus"];
+function _schSaneiaSchedule(s) {
+  if (s === null || s === undefined) return null;
+  if (typeof s !== "object" || Array.isArray(s)) throw new HttpsError("invalid-argument", "schedule tem que ser objeto");
+  const out = {};
+  const opts = Array.isArray(s.options) ? s.options : [];
+  if (opts.length > 80) throw new HttpsError("invalid-argument", "schedule.options: no máximo 80 propostas");
+  out.options = opts.filter((o) => o && typeof o === "object").map((o) => {
+    const q = { id: String(o.id || ""), kind: (o.kind === "weekly" ? "weekly" : "date"), time: String(o.time || ""), byUid: String(o.byUid || "") };
+    if (q.kind === "date") q.dateISO = String(o.dateISO || "");
+    else q.weekdays = (Array.isArray(o.weekdays) ? o.weekdays : []).map(String).slice(0, 7);
+    return q;
+  });
+  out.votes = (s.votes && typeof s.votes === "object" && !Array.isArray(s.votes)) ? s.votes : {};
+  out.dayVotes = (s.dayVotes && typeof s.dayVotes === "object" && !Array.isArray(s.dayVotes)) ? s.dayVotes : {};
+  if (s.enabledAt) out.enabledAt = String(s.enabledAt);
+  if (JSON.stringify(out).length > 24000) throw new HttpsError("invalid-argument", "schedule grande demais");
+  return out;
+}
+exports.setMatchSchedule = onCall(
+  { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
+  async (request) => {
+    const callerUid = request.auth && request.auth.uid;
+    if (!callerUid) throw new HttpsError("unauthenticated", "login necessário");
+    const pedido = request.data || {};
+    const tournamentId = String(pedido.tournamentId || "");
+    const operationId = String(pedido.operationId || "");
+    if (!tournamentId) throw new HttpsError("invalid-argument", "tournamentId é obrigatório");
+    if (!_WA_UUID_V4_RE.test(operationId)) throw new HttpsError("invalid-argument", "operationId tem que ser um UUID v4");
+    const espelharGrupo = !!pedido.espelharGrupo;
+    // forma singular (um jogo) ou lote (`jogos[]`)
+    const lote = Array.isArray(pedido.jogos) ? pedido.jogos
+      : [{ matchId: pedido.matchId, schedule: pedido.schedule, scheduledAt: pedido.scheduledAt, scheduledBy: pedido.scheduledBy, scheduledKind: pedido.scheduledKind }];
+    if (!lote.length || lote.length > 300) throw new HttpsError("invalid-argument", "jogos: entre 1 e 300");
+    const itens = lote.map((j) => {
+      if (!j || !j.matchId) throw new HttpsError("invalid-argument", "cada jogo precisa de matchId");
+      const kind = (j.scheduledKind === null || j.scheduledKind === undefined || j.scheduledKind === "") ? null : String(j.scheduledKind);
+      if (kind !== null && _SCH_KINDS.indexOf(kind) === -1) throw new HttpsError("invalid-argument", "scheduledKind inválido");
+      const at = (j.scheduledAt === null || j.scheduledAt === undefined || j.scheduledAt === "") ? null : String(j.scheduledAt);
+      if (at !== null && isNaN(new Date(at).getTime())) throw new HttpsError("invalid-argument", "scheduledAt não é uma data");
+      return {
+        matchId: String(j.matchId),
+        // ⛔ só escreve `schedule` quando ele VEM como objeto. Ausente/null = não toca: o organizador
+        // apontar a data (sem mandar schedule) NÃO pode apagar as propostas dos jogadores — o teste ⑤ pegou.
+        temSchedule: !!(j.schedule && typeof j.schedule === "object" && !Array.isArray(j.schedule)),
+        schedule: (j.schedule && typeof j.schedule === "object" && !Array.isArray(j.schedule)) ? _schSaneiaSchedule(j.schedule) : null,
+        scheduledAt: at,
+        scheduledBy: (j.scheduledBy === null || j.scheduledBy === undefined) ? null : String(j.scheduledBy),
+        scheduledKind: kind,
+      };
+    });
+    const db = admin.firestore();
+    const agoraIso = new Date().toISOString();
+    const docRef = db.collection("tournaments").doc(tournamentId);
+    return await db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) throw new HttpsError("not-found", "torneio não existe");
+      const t = await _tSplitFn.montarDoBanco(snap.data(), async (colecao) => {
+        const s = await tx.get(docRef.collection(colecao));
+        return s.docs.map((x) => x.data());
+      });
+      const fora = Array.isArray(t._semPesados) ? t._semPesados : [];
+      const regs = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), ["matches"]) || {}).matches || [];
+      const souOrg = _isTournamentOrgCaller(t, callerUid);
+      const alvos = itens.map((it) => {
+        const alvo = regs.find((r) => r && r.jogo && r.jogo.id != null && String(r.jogo.id) === it.matchId);
+        if (!alvo) throw new HttpsError("not-found", "jogo " + it.matchId + " não existe neste torneio");
+        if (!souOrg) {
+          const elenco = _waRoster.matchRoster(t, alvo.jogo) || [];
+          if (elenco.indexOf(callerUid) === -1) throw new HttpsError("permission-denied", "só quem joga este confronto — ou quem organiza o torneio — mexe nas datas");
+          if (it.scheduledKind === "organizer" || it.scheduledKind === "estimate") throw new HttpsError("permission-denied", "só o organizador aponta ou estima horário");
+        }
+        return { it, alvo };
+      });
+      // idempotência: a MESMA operação já foi aplicada (retry da quadra sem sinal)
+      if (alvos.every(({ alvo }) => alvo.jogo && alvo.jogo.scheduleOpId === operationId)) {
+        return { ok: true, jaAplicado: true, jogos: alvos.map(({ alvo }) => ({ matchId: String(alvo.jogo.id), schedule: alvo.jogo.schedule || null, scheduledAt: alvo.jogo.scheduledAt || null, scheduledBy: alvo.jogo.scheduledBy || null, scheduledKind: alvo.jogo.scheduledKind || null })), espelhados: [] };
+      }
+      const espelhados = [];
+      const saida = [];
+      const camposDe = (it) => {
+        const c = { scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind, scheduleOpId: operationId, scheduleTouchedAt: agoraIso };
+        if (it.temSchedule) c.schedule = it.schedule;
+        return c;
+      };
+      if (fora.indexOf("matches") !== -1) {
+        const FieldPath = admin.firestore.FieldPath;
+        const FieldValue = admin.firestore.FieldValue;
+        const col = docRef.collection(_tSplitFn.colecaoDaParte("matches"));
+        const grava = (reg, campos) => {
+          const k = _tSplitFn.chaveDoRegistro(reg);
+          if (!k) throw new HttpsError("failed-precondition", "jogo sem chave — recuso gravar sem identidade");
+          const args = [];
+          Object.keys(campos).forEach((campo) => {
+            const v = campos[campo];
+            args.push(new FieldPath("jogo", campo), (v === null || v === undefined) ? FieldValue.delete() : v);
+          });
+          tx.update.apply(tx, [col.doc(k)].concat(args));
+        };
+        alvos.forEach(({ it, alvo }) => {
+          const campos = camposDe(it);
+          grava(alvo, campos);
+          saida.push({ matchId: it.matchId, schedule: it.temSchedule ? it.schedule : (alvo.jogo.schedule || null), scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind });
+          if (espelharGrupo) {
+            _waIrmaosDoGrupo(regs, alvo.jogo).filter((r) => r !== alvo).forEach((r) => {
+              grava(r, { scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind });
+              espelhados.push(String(r.jogo.id));
+            });
+          }
+        });
+        _splitParts.gravar(tx, docRef, t, { updatedAt: agoraIso });
+      } else {
+        const cfg = (_tSplitFn.dividir(JSON.parse(JSON.stringify(t)), fora) || {}).config || {};
+        const upd = {};
+        const aplica = (reg, campos) => {
+          const slot = _waSlotDoJogo(cfg, reg._loc);
+          const jogo = slot && slot.arr[slot.i];
+          if (!jogo) throw new HttpsError("failed-precondition", "não achei o jogo na estrutura do torneio");
+          Object.keys(campos).forEach((campo) => {
+            if (campos[campo] === null || campos[campo] === undefined) delete jogo[campo]; else jogo[campo] = campos[campo];
+          });
+          upd[slot.campo] = cfg[slot.campo];
+        };
+        alvos.forEach(({ it, alvo }) => {
+          aplica(alvo, camposDe(it));
+          saida.push({ matchId: it.matchId, schedule: it.temSchedule ? it.schedule : (alvo.jogo.schedule || null), scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind });
+          if (espelharGrupo) {
+            _waIrmaosDoGrupo(regs, alvo.jogo).filter((r) => r !== alvo).forEach((r) => {
+              aplica(r, { scheduledAt: it.scheduledAt, scheduledBy: it.scheduledBy, scheduledKind: it.scheduledKind });
+              espelhados.push(String(r.jogo.id));
+            });
+          }
+        });
+        upd.updatedAt = agoraIso;
+        _splitParts.gravar(tx, docRef, t, upd);
+      }
+      return { ok: true, jaAplicado: false, jogos: saida, espelhados: espelhados };
+    });
+  }
+);
 exports.formPair = onCall(
   { region: "us-central1", memory: "256MiB", timeoutSeconds: 60, cors: APP_ORIGINS },
   async (request) => {

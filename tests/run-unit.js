@@ -912,6 +912,7 @@ const SUITES = [
   /* ── LEVA 2.2: o link do grupo de WhatsApp passa a ser gravado pela CF ─────────────── */
   'tests/link-do-grupo-do-jogo-persiste.test.js',            // 1 link POR JOGO, em dividido e não dividido
   'tests/o-cliente-dispara-a-porta-do-grupo.test.js',        // o cliente CHAMA; quem grava é o servidor
+  'tests/propor-datas-persiste-no-dividido.test.js',        // a porta setMatchSchedule grava na subcoleção
   'tests/rechavear-nao-apaga-o-grupo-de-whats.test.js',      // rechavear não leva o link junto
   'tests/chave-magra-nao-desenha-vazia.test.js',
   'tests/save-atrasado-nao-apaga-grupo.test.js',
