@@ -70,7 +70,15 @@ ok(Math.round((rw.endMs - rw.startMs) / D * 100) / 100 === 2.67,
 // É aqui que o defeito aparecia: `deadlineMs` saía do fim da FASE. O `data-sp-cd2l` é o
 // atributo que o tique de 1s reescreve — ele carrega o instante da regressiva.
 (function () {
-  const iniISO = '2026-09-01', fimISO = '2026-09-09';
+  // ⛔ DATA RELATIVA A HOJE, não fixa. Com '2026-09-01' o teste passou até 03/set e caiu no
+  // dia 04: a R1 (2,67 dias) tinha terminado no relógio REAL, a regressiva passou a ser da R2
+  // (ou nenhuma) e as 3 asserções caíram — barrando um push que não tinha nada a ver.
+  // A fase começa HOJE às 09:00 (ontem, se ainda não são 09:00) e dura 8 dias: a R1 é sempre a atual.
+  const _pad = (n) => String(n).padStart(2, '0');
+  const _isoLocal = (d) => d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate());
+  const _ini = new Date(); _ini.setHours(9, 0, 0, 0); if (Date.now() < _ini.getTime()) _ini.setDate(_ini.getDate() - 1);
+  const _fim = new Date(_ini.getTime()); _fim.setDate(_fim.getDate() + 8);
+  const iniISO = _isoLocal(_ini), fimISO = _isoLocal(_fim);
   const iniMs = new Date(iniISO + 'T09:00').getTime(), fimMs = new Date(fimISO + 'T09:00').getTime();
   const tt = {
     id: 'x', status: 'active', currentPhaseIndex: 1, multiPhase: true,
