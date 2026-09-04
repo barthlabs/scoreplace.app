@@ -30,6 +30,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   margin: 0 !important;
   padding: 0 !important;
 }
+/* ⭐ O ÍCONE DO CALENDÁRIO/RELÓGIO EXISTE NO TEMA ESCURO (2.2.3 — print do dono, 04/set):
+   o indicador nativo é desenhado PRETO por padrão; sobre --bg-darker ele sumia e a pessoa não
+   sabia que dava pra abrir o calendário. `color-scheme: dark` manda o navegador desenhar o
+   controle inteiro (ícone e popup) na paleta escura — sem `filter: invert`, que inverteria de
+   volta em quem já respeita o color-scheme. */
+html[data-theme="dark"] input[type="date"],
+html[data-theme="dark"] input[type="time"],
+html[data-theme="dark"] input[type="datetime-local"] { color-scheme: dark; }
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.9; }
 /* ══ CANÔNICO (v4.0.51) — DATA/HORA NUNCA TRUNCAM O VALOR ════════════════════════
    O <input type=date/time> tem largura intrínseca = valor + ícone nativo. Quando o
    layout aperta o width abaixo disso, o valor é CORTADO ("23:00"→"23", "22/07/2026"→...).

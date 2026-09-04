@@ -19,6 +19,8 @@
 
 window._RELEASE_NOTES_HTML = (function () {
   var html =
+    // ⚠️ 2.2.3 NÃO ganhou item: ícone do calendário/relógio visível no tema escuro (color-scheme) e o
+    // "Veja data proposta" com o brilho padrão de varredura em vez do anel. Acabamento, sem regra nova.
     // ⚠️ 2.1.118 NÃO ganhou item: diagnóstico da busca em toda consulta, com o mapa da tela.
     // ⚠️ 2.1.117 NÃO ganhou item: diagnóstico da busca em documento próprio + lista dos containers escondidos.
     // ⚠️ 2.1.115 NÃO ganhou item: a instrumentação passa a dizer QUAL ancestral esconde o card que casou.
