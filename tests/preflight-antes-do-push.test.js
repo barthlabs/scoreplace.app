@@ -37,12 +37,14 @@ console.log('\n▸ ① no script, o preflight vem ANTES do push, e o push antes 
     cache: sh.indexOf('TRAVA DURA: O CACHE DO SW'),
     preflight: sh.indexOf('PREFLIGHT: TODOS OS GATES ANTES DE TOCAR NO'),
     npmtest: sh.indexOf('&& npm test'),
+    revisao: sh.indexOf('revisão cruzada sobre origin/main..HEAD'),
     push: sh.indexOf('git push origin "HEAD:main"'),
     deploy: sh.indexOf('firebase deploy --only hosting --project')
   };
   Object.keys(pos).forEach((k) => ok(pos[k] > 0, 'achei o marco `' + k + '` no script'));
   ok(pos.preflight < pos.push, '⭐ o preflight vem ANTES do `git push origin HEAD:main`');
   ok(pos.npmtest < pos.push, '⭐ e o `npm test` do preflight também');
+  ok(pos.revisao < pos.push, '⭐ a revisão cruzada (1.8) também vem ANTES do push');
   ok(pos.cache < pos.push, 'a trava do CACHE_NAME também foi pra antes do push');
   ok(pos.push < pos.deploy, 'e o push continua antes do upload (o main descreve o ar)');
   ok(/SP_EXIGE_CORRIDA_REAL=1/.test(sh.slice(pos.preflight, pos.push)),
@@ -78,6 +80,14 @@ function cenario(preflightPassa) {
   fs.copyFileSync(path.join(RAIZ, 'scripts', 'deploy-hosting.sh'), path.join(repo, 'scripts', 'deploy-hosting.sh'));
   fs.chmodSync(path.join(repo, 'scripts', 'deploy-hosting.sh'), 0o755);
   // gates do preflight que rodam no REPO (não na cópia): version-ahead
+  // ⛔ 04/set/2026 — ESTE STUB FALTAVA E DERRUBOU O TESTE INTEIRO. O passo 1.8 do script
+  // passou a chamar `scripts/revisar.sh diff` (revisão cruzada), e a árvore mínima daqui só
+  // copiava o `deploy-hosting.sh`: o deploy morria em "O REVISOR NÃO APROVOU" ANTES de
+  // chegar no preflight, então ② e ③ não mediam mais o que dizem medir. O revisor NÃO é o
+  // assunto deste teste — a ORDEM é —, e quem prova que ele vem antes do push é a asserção
+  // por fonte em ①. Aqui ele é um stub que aprova, como os outros gates.
+  fs.writeFileSync(path.join(repo, 'scripts', 'revisar.sh'), '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(path.join(repo, 'scripts', 'revisar.sh'), 0o755);
   fs.writeFileSync(path.join(repo, 'scripts', 'check-version-ahead.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-release-notes.js'), 'process.exit(0);\n');
   fs.writeFileSync(path.join(repo, 'scripts', 'check-deploy-alignment.js'), 'process.exit(0);\n');
