@@ -671,7 +671,39 @@ function _alvoDeEntrada() {
 // a ordem de prioridade é regra de produto do dono, não detalhe interno.
 window._bracketEntryTarget = _alvoDeEntrada;
 
+/* A LARGURA ÚTIL DA CHAVE, MEDIDA — nunca deduzida de `100vw` (ver `_cardMax`).
+ * Fonte: o `clientWidth` do rolador horizontal da chave, que já desconta a barra de rolagem
+ * e o padding do container. Sem rolador na tela (lista, classificação), vale o
+ * `clientWidth` do documento, que também exclui a barra — o `100vw` do CSS não exclui.
+ * ⚠️ Idempotente e barata: só escreve a variável quando o número MUDA, pra não sujar o
+ * caminho quente com invalidação de estilo a cada render
+ * ([[feedback_instrumentacao_nao_pode_cobrar_pedagio]]). */
+function _medirLarguraUtilDaChave() {
+  try {
+    var alvo = document.querySelector('[data-hscroll]')
+            || document.getElementById('inline-bracket-container')
+            || document.getElementById('view-container');
+    var w = (alvo && alvo.clientWidth) || 0;
+    if (!w) w = (document.documentElement && document.documentElement.clientWidth) || 0;
+    if (!w) return;
+    var px = Math.max(220, w - 24) + 'px';
+    var raiz = document.documentElement;
+    if (raiz.style.getPropertyValue('--sp-card-max') !== px) raiz.style.setProperty('--sp-card-max', px);
+  } catch (e) {}
+}
+window._medirLarguraUtilDaChave = _medirLarguraUtilDaChave;
+try {
+  if (typeof window.addEventListener === 'function' && !window._spLarguraUtilLigada) {
+    window._spLarguraUtilLigada = true;
+    // Girar o aparelho muda a largura útil; sem isto o card ficaria com a régua do retrato.
+    window.addEventListener('resize', function () { _medirLarguraUtilDaChave(); });
+    window.addEventListener('orientationchange', function () { setTimeout(_medirLarguraUtilDaChave, 60); });
+  }
+} catch (e) {}
+
 function _applyMyMatchesFilter() {
+  // A régua do card é medida a cada render — é aqui que a chave nova já está no DOM.
+  _medirLarguraUtilDaChave();
   // v4.0.96: fia o arrastar-real-sobre-vaga (placeholder) APÓS cada render do bracket,
   // em TODOS os formatos. Antes do early-return abaixo pra sempre rodar.
   if (typeof window._wirePlaceholderDnD === 'function') { try { window._wirePlaceholderDnD(); } catch (e) {} }
@@ -5290,7 +5322,19 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // ⚠️ É teto RELATIVO À TELA, não número fixo: o cap fixo de 280px foi removido em 1.8.46
   // justamente porque fazia cards da mesma coluna medirem diferente. Aqui todos os cards
   // param no mesmo lugar — a borda da tela.
-  var _cardMax = 'box-sizing:border-box;max-width:calc(100vw - 24px);';
+  /* ⛔ `100vw` NÃO É A LARGURA ÚTIL — e era por isso que o card cortava no celular
+   * (dono, 04/set/2026: _"no celular, pela largura da tela está cortando"_ e _"os tamanhos
+   * dos placares não parecem certos"_ — são o MESMO defeito, medido na captura dele).
+   * `100vw` inclui a barra de rolagem e ignora tudo o que está entre ela e o card: o padding
+   * do container, o trilho lateral "Fase anterior" e o próprio rolador horizontal da chave
+   * (`data-hscroll`, com `min-width:max-content` — dentro dele nada é contido por `100%`).
+   * Resultado: o card nascia mais largo que o espaço real, e quem ficava de fora era a
+   * ÚLTIMA coisa da linha — o "Ao Vivo", o chip ✎ e a CAIXA DO PLACAR. O placar não estava
+   * com tamanho errado: estava fora da tela.
+   * ⭐ A régua passa a ser MEDIDA (`--sp-card-max`, escrita por `_mediraLarguraUtilDaChave`
+   * a partir do `clientWidth` do rolador — que já exclui a barra de rolagem). O `100vw`
+   * continua como piso pra quem renderizar antes da medida existir. */
+  var _cardMax = 'box-sizing:border-box;max-width:var(--sp-card-max, calc(100vw - 24px));';
   var _pendingBtnsRow = (_showHeaderPending && pendingActionBtns)
     ? `<div id="pending-banner-btns-${m.id}" style="display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${pendingActionBtns}</div>`
     : '';

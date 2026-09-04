@@ -68,9 +68,27 @@ window._spDobra = function (chave, rotuloHtml, corpoHtml, padraoAberto, estiloLi
   var pill = (typeof window._spVerMaisTag === 'function')
     ? window._spVerMaisTag('', !aberta, { attrs: ' data-dobra-pill="1"' })
     : '<span data-dobra-pill="1" style="margin-left:auto;font-size:0.7rem;">' + (aberta ? 'ver menos' : 'ver mais') + '</span>';
+  /* ⛔ GUARD GRANDE EM VOLTA DO GATILHO (dono, 04/set/2026: _"clicar em ver mais/menos ainda
+   * está abrindo o detalhe. precisa criar um guard maior em torno desses botões"_).
+   *
+   * O `stopPropagation` só no `onclick` NÃO basta, e o motivo é a ordem dos eventos: o card
+   * que navega reage ao TOQUE (pointerdown/pointerup/touchend), que acontecem ANTES do
+   * `click`. Quando o clique enfim chega aqui pra ser barrado, o card já abriu — barrar
+   * depois é barrar o que já passou.
+   * ⭐ Então o gatilho barra a família inteira do gesto, na ida e na volta, e não só o
+   * `click`. É a mesma lição do toque perdido pro `user-select`
+   * ([[feedback_toque_no_card_perdido_para_selecao_de_texto]]): num card que navega, quem
+   * tem ação própria precisa segurar o gesto INTEIRO.
+   * ⚠️ `touchstart` NÃO é passivo aqui de propósito — é ele que chega primeiro no celular.
+   * ⭐ E o alvo cresce: `padding` + `touch-action:manipulation` dão dedo onde antes havia
+   * uma pílula de 0.7rem, que é a outra metade do "ainda abre o detalhe" — errar o alvo por
+   * 3px cai no card. */
+  var _guard = ' onpointerdown="event.stopPropagation();" onpointerup="event.stopPropagation();"' +
+    ' ontouchstart="event.stopPropagation();" ontouchend="event.stopPropagation();"' +
+    ' onmousedown="event.stopPropagation();" onmouseup="event.stopPropagation();"';
   return '<div data-dobra="' + window._safeHtml(chave) + '">' +
-    '<div onclick="event.stopPropagation(); window._spDobraToggle(\'' + window._safeHtml(chave) + '\')" ' +
-      'style="display:flex;align-items:center;gap:6px;cursor:pointer;' + (estiloLinha || '') + '">' +
+    '<div onclick="event.stopPropagation(); event.preventDefault(); window._spDobraToggle(\'' + window._safeHtml(chave) + '\')"' + _guard + ' ' +
+      'style="display:flex;align-items:center;gap:6px;cursor:pointer;touch-action:manipulation;padding:6px 2px;margin:-6px -2px;' + (estiloLinha || '') + '">' +
       rotuloHtml + pill +
     '</div>' +
     '<div data-dobra-corpo="1"' + (aberta ? '' : ' style="display:none;"') + '>' + corpoHtml + '</div>' +
