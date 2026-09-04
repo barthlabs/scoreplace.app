@@ -607,6 +607,36 @@ function setupHelpModal() {
           '<p><b>Quando usar</b> — Professor dando aula, pai acompanhando o filho, organizador gerenciando várias partidas ao mesmo tempo, ou qualquer pessoa que apenas quer marcar pontos sem participar.</p>' +
         '</div>'
     },
+    // ⛔ AQUI NÃO ENTRA LISTA DE MODELOS. Ordem do dono (04/set/2026): "pelo menos apple watch
+    //    X ou superior; smart watch marca tal modelo tal ou superior". Lista de aparelhos
+    //    apodrece sozinha — cada relógio novo da Samsung/Google deixa a página errada sem
+    //    ninguém tocar em nada, e não há de onde puxar isso automaticamente.
+    // ⭐ O que o app tem de verdade são DOIS PISOS, e piso só muda quando NÓS mudamos:
+    //    watchOS 7.0 (WATCHOS_DEPLOYMENT_TARGET no ios/App/App.xcodeproj) e Wear OS 3
+    //    (minSdkVersion 30 no android/wear/build.gradle). Os modelos abaixo são TRADUÇÃO do
+    //    piso, sempre com "a partir de" — relógio mais novo também serve.
+    // ⚠️ Se um dia subirmos qualquer um dos dois alvos, esta seção muda NA MESMA LEVA.
+    {
+      id: 'relogio',
+      title: 'Relógio (Apple Watch e Wear OS)',
+      icon: '⌚',
+      content: '<p>O scoreplace tem <b>app de relógio</b>: dá pra marcar o ponto, desfazer, escolher o sacador e ver o placar no pulso, com o celular no bolso ou na bolsa. O relógio também mostra o seu <b>batimento cardíaco</b> durante a partida.</p>' +
+        '<p style="font-size:0.8rem;color:var(--text-muted);">Quem grava o resultado oficial continua sendo o celular — o relógio é a segunda tela do mesmo placar.</p>' +
+        '<div style="background:rgba(148,163,184,0.08);border:1px solid rgba(148,163,184,0.22);border-radius:10px;padding:12px;margin-bottom:12px;">' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">🍎 Apple Watch</div>' +
+          '<p><b>A partir do watchOS 7</b> — na prática, <b>Apple Watch Series 3 ou mais novo</b> (Series 3, 4, 5, 6, 7, 8, 9, 10, SE, SE 2 e Ultra).</p>' +
+          '<p style="font-size:0.78rem;color:var(--text-muted);margin:0;">O app do relógio viaja dentro do app do iPhone, então o iPhone precisa de <b>iOS 15 ou mais novo</b>. Instalando o app no iPhone, o relógio aparece sozinho.</p>' +
+        '</div>' +
+        '<div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.18);border-radius:10px;padding:12px;margin-bottom:12px;">' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">🤖 Relógio Android (Wear OS)</div>' +
+          '<p><b>A partir do Wear OS 3</b> — na prática, <b>Galaxy Watch4 ou mais novo</b> (Watch4, 5, 6, 7, Ultra), <b>Pixel Watch</b> de qualquer geração, <b>TicWatch Pro 3 / Pro 5</b>, <b>Fossil Gen 6</b> e os demais que receberam o Wear OS 3.</p>' +
+          '<p style="font-size:0.78rem;color:var(--text-muted);margin:0;">⛔ Relógios de <b>Wear OS 2 ou anterior</b> não rodam o app. Também não funciona em pulseira sem Wear OS (Mi Band, Amazfit com sistema próprio, Garmin, Huawei Watch com HarmonyOS).</p>' +
+        '</div>' +
+        '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:10px;padding:12px;">' +
+          '<div style="font-weight:700;font-size:0.85rem;color:var(--text-bright);margin-bottom:8px;">⚠️ O relógio vem com o app instalado da loja</div>' +
+          '<p style="margin:0;">O app de relógio faz parte da versão <b>nativa</b> (App Store e Google Play). Quem usa só o atalho do navegador na tela inicial tem o scoreplace inteiro no celular, mas <b>não</b> o app no pulso — para isso, instale pela loja.</p>' +
+        '</div>'
+    },
     {
       id: 'presenca',
       title: 'Presença no Local',
