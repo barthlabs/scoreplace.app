@@ -147,9 +147,58 @@ window._resultEntryIncludes = function(t, role, match) {
 
 // "Só meus jogos" toggle — hides non-user match cards
 window._showOnlyMyMatches = false;
+/* ⛔ LIGAR O FILTRO É UM PEDIDO DE FOCO — não é um re-render qualquer.
+ * Ordem do dono (04/set/2026): _"ao ativá-lo role a tela até o jogo do usuário e suprima o
+ * espaço que agora está vazio. ao desativar deve colocar tudo nos seus lugares mas continuar
+ * no jogo do usuário sem mexer"_.
+ *
+ * ⭐ O "espaço vazio" tem nome e dono: é o `#sp-sticky-spacer`. `_stickyFilterKeepRoom`
+ * (store.js) o infla com `(keepY + 1 viewport) − fundo do host` pra segurar a barra sticky
+ * quando a lista encolhe — filtrar 214 cards pra 4 esvazia o host e o spacer vira uma
+ * lacuna do tamanho da tela. Ele existe pro caminho em que a rolagem NÃO pode andar
+ * ([[project_lancar_placar_nao_move_a_chave]]); aqui a rolagem VAI andar de propósito,
+ * porque foi a pessoa que pediu. Então zeramos o spacer e mandamos a tela pro jogo dela.
+ *
+ * ⭐ E DESLIGAR NÃO PODE PERDER O LUGAR: guardamos o topo do alvo ANTES de restaurar e
+ * devolvemos o mesmo topo depois — os outros jogos reaparecem acima e abaixo, e o jogo do
+ * usuário fica parado onde estava. Âncora por ELEMENTO, nunca por `scrollTop` guardado: a
+ * altura da página muda entre os dois estados, então o número velho pousaria em outro lugar.
+ * ⚠️ `_bracketEntryTarget` é a MESMA regra do scroll de entrada (jogo pendente dele → grupo
+ * dele → último), e `--scroll-anchor` já vive no `scroll-margin-top` do card e do box.
+ * ⛔ `_travaRolagemDaChave` continua mandando: com placar em edição, ninguém rola nada. */
 window._toggleMyMatches = function(checked) {
+  var _ancora = null, _topoAntes = 0;
+  var _alvo = function () {
+    try { return (typeof window._bracketEntryTarget === 'function') ? window._bracketEntryTarget() : null; }
+    catch (e) { return null; }
+  };
+  if (!checked) {
+    _ancora = _alvo();
+    try { if (_ancora && _ancora.getBoundingClientRect) _topoAntes = _ancora.getBoundingClientRect().top; }
+    catch (e) { _ancora = null; }
+  }
   window._showOnlyMyMatches = !!checked;
   _applyMyMatchesFilter();
+  try {
+    var _sp = document.getElementById('sp-sticky-spacer');
+    if (_sp) _sp.style.height = '0px';
+  } catch (e) {}
+  if (typeof window._reflowChrome === 'function') { try { window._reflowChrome(); } catch (e) {} }
+  var _ir = function () {
+    if (window._travaRolagemDaChave) return;
+    try {
+      if (checked) {
+        var a = _alvo();
+        if (a && a.scrollIntoView) a.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (_ancora && _ancora.getBoundingClientRect) {
+        var _d = _ancora.getBoundingClientRect().top - _topoAntes;
+        if (Math.abs(_d) > 1 && typeof window.scrollBy === 'function') window.scrollBy(0, _d);
+      }
+    } catch (e) {}
+  };
+  // Dois quadros: o 1º entrega o `display` novo, o 2º já mede o layout com ele.
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { requestAnimationFrame(_ir); });
+  else setTimeout(_ir, 0);
 };
 // ── PINTAR EM ETAPAS (1.9.40) ────────────────────────────────────────────────
 // A chave inteira ia pra tela numa tacada só. MEDIDO no navegador, no Confra real

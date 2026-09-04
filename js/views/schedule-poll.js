@@ -798,9 +798,15 @@ if (typeof window !== 'undefined' && !window._spCor) window._spCor = function (c
       // O dado é POR JOGO (m.schedule deste confronto), nunca do grupo vizinho.
       var _temProposta = n > 0;
       return '<button class="btn btn-micro btn-shine hover-lift' + (_temProposta ? ' sp-shine-dica' : '') + '" onclick="event.stopPropagation(); window._schOpenMatch(\'' + _attr(t.id) + '\',\'' + _attr(m.id) + '\')" ' +
-        'style="background:#3b82f6;color:#fff;font-weight:800;font-size:' + (_temProposta ? '0.62rem' : '0.72rem') + ';' +
-        (_temProposta ? '' : '') + '">' +
-        (_temProposta ? '📅 Veja data proposta' : '📅 Propor datas') +
+        // ⭐ DUAS LINHAS, COMO OS VIZINHOS (dono, 04/set/2026: _"o veja data proposta pode ter
+        // menos largura se dividir o texto em 2 linhas como no aplicar WO e seu grupo de whats
+        // de jogo"_). O idioma da casa é o `<br>` no próprio rótulo — 'Aplicar<br>W.O.'
+        // ([[project_wo_button_standard]]) e 'Seu grupo<br>de whats de jogo' (wa-group.js).
+        // ⛔ E A FONTE NÃO SOBE. Eu ia devolver o 0.72rem dos irmãos "já que agora cabe" — mas
+        // o pedido era MENOS LARGURA, e no celular a fileira de botões do card já está
+        // estourando a tela. Aumentar a fonte andaria na direção contrária do que ele pediu.
+        'style="background:#3b82f6;color:#fff;font-weight:800;font-size:' + (_temProposta ? '0.62rem' : '0.72rem') + ';line-height:1.15;">' +
+        (_temProposta ? '📅 Veja<br>data proposta' : '📅 Propor datas') +
         (n ? ' <span style="background:var(--sp-g-255-255-255-025,rgba(255,255,255,0.25));border-radius:999px;padding:1px 7px;font-size:0.62rem;">' + n + '</span>' : '') +
         '</button>';
     } catch (e) { return ''; }
