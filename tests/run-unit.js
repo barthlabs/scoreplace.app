@@ -425,6 +425,7 @@ const SUITES = [
   'tests/repechage-best-loser.test.js',
   // fase anterior conserva o lançamento autorizado e o consenso entre os times
   'tests/fase-anterior-permite-correcao-com-consenso.test.js',
+  'tests/editar-placar-parcial.test.js',
   // MOTOR DE CHAVES determinístico (js/views/chaves.js): a chave é função pura de
   // (N, formato). Trava os invariantes que quebraram AO VIVO no torneio de casais
   // (1.5.2→1.5.5): auto-confronto Time X vs X, tardio derrubando confronto já

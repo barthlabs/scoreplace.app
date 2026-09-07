@@ -5026,8 +5026,14 @@ function renderMatchCard(m, canEnterResult, tId, matchNum, compactDone, pendingS
   // Edit button: for decided matches — opens inline inputs for editing.
   // v2.1.85: NÃO aparece em partidas decididas por W.O. de time (m.wo) — nelas
   // não há placar real pra editar; o caminho é "Reverter W.O." (headerWoRevertBtn).
-  const headerEditBtn = isDecided && !isByeMatch && canEnterResult && !m.wo && !compactDone
-    ? `<button class="btn btn-warning btn-micro" onclick="window._editResultInline('${_esc(tId)}','${_esc(m.id)}')" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
+  const _hasPartialSets = !isDecided && Array.isArray(m.sets) && m.sets.length > 0;
+  // Um melhor-de-N pode já ter sets gravados sem ter vencedor (ex.: 6-4, 5-7).
+  // A coluna é clicável, mas o caminho precisa ser descobrível: o mesmo botão Editar
+  // reabre o último set lançado, mantendo os anteriores e liberando sua correção.
+  const headerEditBtn = !isByeMatch && canEnterResult && !m.wo && !compactDone && (isDecided || _hasPartialSets)
+    ? `<button class="btn btn-warning btn-micro" onclick="${isDecided
+        ? `window._editResultInline('${_esc(tId)}','${_esc(m.id)}')`
+        : `window._reopenSet('${_esc(tId)}','${_esc(m.id)}',${m.sets.length - 1})`}" style="flex-shrink:0;font-size:0.72rem;" title="${_t('bracket.editResult')}">✏️ ${_t('bracket.editResult')}</button>`
     : '';
 
   const matchLabel = matchNum ? _t('bracket.matchNum', {n: matchNum}) : (m.label || _t('bracket.matchLabel'));
