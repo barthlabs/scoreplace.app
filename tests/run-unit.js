@@ -848,6 +848,9 @@ const SUITES = [
   // resultado, somem Confirmar/Contestar e sobra só Editar. Roda o renderNotifications
   // REAL com Firestore falso; a régua é a MESMA do card da chave (pendingResult && !winner).
   'tests/notificacao-de-placar-segue-o-jogo.test.js',
+  // O placar por sets precisa manter sua estrutura até o destinatário: app, fila e
+  // e-mail não podem transformar Set 1/2/STB em uma sequência ambígua de números.
+  'tests/notificacao-placar-estruturado.test.js',
   // O botão de dar W.O. fica na MESMA PONTA da linha com e sem W.O. aplicado, e diz o
   // que faz ("Aplicar W.O.") — "W.O." pelado lê como selo de estado, que é o que a
   // tabela do grupo usa. A posição já regrediu 2x (1.7.90 e 1.7.93, ambas verificadas

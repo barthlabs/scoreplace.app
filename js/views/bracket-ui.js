@@ -599,6 +599,17 @@ function _notifyPendingApproval(t, m, proposerName) {
     level: 'fundamental',
     timestamp: Date.now()
   };
+  // O texto continua sendo o fallback para push e versões antigas. Para app e
+  // e-mail, porém, o placar viaja estruturado: números soltos como “6 5 14”
+  // deixam de fora a qual set cada ponto pertence.
+  if (pr.useSets && Array.isArray(pr.sets) && pr.sets.length) {
+    notifData.scoreboard = {
+      p1: m.p1 || '?', p2: m.p2 || '?', winner: pr.winner || '',
+      sets: pr.sets.map(function (s, i) {
+        return { label: s.superTiebreak ? 'STB' : ('Set ' + (i + 1)), p1: s.gamesP1, p2: s.gamesP2, superTiebreak: !!s.superTiebreak };
+      })
+    };
+  }
   // Lado do proponente E adversário — SÓ pelo UID do slot (nunca casando nome). Notifica
   // TODOS os uids do lado adversário; o proponente é pulado. Ver [[project_uid_identity_canon_locked]].
   var _su = (typeof window._slotUids === 'function') ? window._slotUids : function () { return []; };

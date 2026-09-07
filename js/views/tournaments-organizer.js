@@ -522,7 +522,8 @@ window._dispatchChannels = function(channelResult, templateType, templateData) {
                 tournamentName: templateData.tournamentName || '',
                 tournamentUrl: templateData.tournamentUrl || '',
                 ctaLabel: (_emCta && _emCta.label) || '',
-                ctaUrl: (_emCta && _emCta.url) || ''
+                ctaUrl: (_emCta && _emCta.url) || '',
+                scoreboard: templateData.scoreboard || null
             });
         } else {
             /* ⛔ L1.1 · O FALLBACK MORREU, e não foi substituído por outro envio direto.

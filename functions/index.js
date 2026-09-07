@@ -1246,12 +1246,25 @@ function _digestPalette(theme) {
   }
   return { pageBg: "#0f172a", cardBg: "#111827", text: "#f1f5f9", text2: "#e5e7eb", muted: "#94a3b8", footer: "#64748b", divider: "#1e293b", heading: "#ffffff" };
 }
+// Tabela básica (em vez de grid/flex) para os clientes de e-mail manterem os
+// cabeçalhos e os números na mesma coluna em Gmail, Apple Mail e Outlook.
+function _digestScoreboard(it, P) {
+  const b = it && it.scoreboard;
+  if (!b || !Array.isArray(b.sets) || !b.sets.length) return "";
+  const heads = b.sets.map((s, i) => {
+    const label = s && s.label ? s.label : ((s && s.superTiebreak) ? "STB" : "Set " + (i + 1));
+    return '<td align="center" style="min-width:38px;padding:0 4px 5px;font-size:0.68rem;font-weight:800;color:' + P.muted + ';text-transform:uppercase;">' + _digestEscape(label) + "</td>";
+  }).join("");
+  const row = (name, side, won) => '<tr><td style="padding:7px 8px 7px 0;font-size:0.88rem;font-weight:700;color:' + (won ? "#16a34a" : (b.winner ? "#dc2626" : P.text)) + ';">' + _digestEscape(name || "?") + "</td>" + b.sets.map((s) => '<td align="center" style="padding:7px 4px;font-size:1.05rem;font-weight:800;color:' + (won ? "#16a34a" : (b.winner ? "#dc2626" : P.text)) + ';">' + _digestEscape(String(s && s[side] != null ? s[side] : "–")) + "</td>").join("") + "</tr>";
+  return '<table cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-top:12px;border-collapse:separate;border-spacing:0;background:rgba(148,163,184,0.08);border:1px solid ' + P.divider + ';border-radius:8px;"><tr><td></td>' + heads + "</tr>" + row(b.p1, "p1", b.winner && b.winner === b.p1) + row(b.p2, "p2", b.winner && b.winner === b.p2) + "</table>";
+}
 function _buildDigestHtml(items, theme) {
   const P = _digestPalette(theme);
   const rows = items.map((it) => {
     const meta = _digestLevelMeta(it.level);
     const msgHtml = _digestEscape(it.message).replace(/\n/g, "<br>");
     const tName = it.tournamentName ? ('<div style="font-size:0.72rem;font-weight:700;color:' + P.muted + ';text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">🏆 ' + _digestEscape(it.tournamentName) + "</div>") : "";
+    const scoreboard = _digestScoreboard(it, P);
     // v2.8.51: CTA por tipo (botão âmbar). Usa ctaUrl/ctaLabel quando vierem; senão
     // cai no tournamentUrl genérico. Toda notificação ganha um botão de ação.
     const _ctaUrl = it.ctaUrl || it.tournamentUrl || "";
@@ -1264,6 +1277,7 @@ function _buildDigestHtml(items, theme) {
             '<div style="font-size:0.68rem;font-weight:800;color:' + meta.color + ';margin-bottom:6px;">' + meta.emoji + " " + meta.label + "</div>" +
             tName +
             '<div style="font-size:0.92rem;color:' + P.text + ';line-height:1.5;">' + msgHtml + "</div>" +
+            scoreboard +
             link +
           "</td></tr>" +
         "</table>" +

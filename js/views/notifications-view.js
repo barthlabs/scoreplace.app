@@ -173,6 +173,23 @@ function renderNotifications(container) {
       if (!m) return null;                       // jogo sumiu (re-sorteio) → não decide
       return !!m.pendingResult && !m.winner;
     }
+    // Mesmo payload do digest: no app os sets ficam em colunas, e não como uma
+    // sequência ambígua de números. A cor só aparece quando há vencedor proposto.
+    function _scoreboardHtml(n) {
+      var b = n && n.scoreboard;
+      if (!b || !Array.isArray(b.sets) || !b.sets.length) return '';
+      var safe = window._safeHtml;
+      var heads = b.sets.map(function (s, i) {
+        return '<td style="text-align:center;padding:0 4px 4px;color:var(--text-muted);font-size:.65rem;font-weight:800;text-transform:uppercase;">' + safe((s && s.label) || ((s && s.superTiebreak) ? 'STB' : 'Set ' + (i + 1))) + '</td>';
+      }).join('');
+      var row = function (name, side, won) {
+        var color = won ? 'var(--success-color)' : (b.winner ? 'var(--danger-color)' : 'var(--text-bright)');
+        return '<tr><td style="padding:5px 8px 5px 0;color:' + color + ';font-size:.8rem;font-weight:700;">' + safe(name || '?') + '</td>' + b.sets.map(function (s) {
+          return '<td style="text-align:center;padding:5px 4px;color:' + color + ';font-size:1rem;font-weight:800;">' + safe(String(s && s[side] != null ? s[side] : '–')) + '</td>';
+        }).join('') + '</tr>';
+      };
+      return '<div style="margin-top:9px;padding:8px 10px;background:rgba(148,163,184,.08);border:1px solid var(--border-color);border-radius:8px;overflow-x:auto;"><table style="border-collapse:collapse;min-width:100%;"><tr><td></td>' + heads + '</tr>' + row(b.p1, 'p1', b.winner && b.winner === b.p1) + row(b.p2, 'p2', b.winner && b.winner === b.p2) + '</table></div>';
+    }
     function _renderNotifCard(n) {
       var isUnread = !n.read;
       // Use centralized notification catalog for icon + IMPORTANCE (level) color.
@@ -327,6 +344,7 @@ function renderNotifications(container) {
 
       // Escape HTML in message to prevent XSS — v2.8.37: via window._safeHtml (canônico).
       var safeMessage = window._safeHtml(n.message || _t('notif.fallback'));
+      var scoreboardHtml = _scoreboardHtml(n);
 
       var safeNotifIdOnclick = (n._id || '').replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       // Borda esquerda colorida pela IMPORTÂNCIA (sempre visível, lida ou não).
@@ -368,7 +386,7 @@ function renderNotifications(container) {
         (isUnread ? 'onclick="_markNotifRead(\'' + safeNotifIdOnclick + '\', this)"' : '') + '>' +
         '<div style="font-size: 1.5rem; flex-shrink: 0; line-height: 1;">' + icon + '</div>' +
         '<div style="flex: 1; min-width: 0;">' +
-          '<div style="font-size: 0.9rem; color: var(--text-bright); font-weight: ' + (isUnread ? '600' : '400') + '; white-space: pre-line;">' + safeMessage + '</div>' +
+          '<div style="font-size: 0.9rem; color: var(--text-bright); font-weight: ' + (isUnread ? '600' : '400') + '; white-space: pre-line;">' + safeMessage + '</div>' + scoreboardHtml +
           '<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
             '<span style="display:inline-flex;align-items:center;gap:3px;color:' + window._spCor(accentColor, 'color') + ';font-weight:700;">' + _lvlMeta.emoji + ' ' + _lvlMeta.label + '</span>' +
             '<span style="opacity:0.45;">·</span><span>' + timeAgo + '</span>' +

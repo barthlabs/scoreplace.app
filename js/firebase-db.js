@@ -3271,6 +3271,7 @@ window.FirestoreDB = {
           tournamentUrl: opts.tournamentUrl || '',
           ctaLabel: opts.ctaLabel || '',
           ctaUrl: opts.ctaUrl || '',
+          scoreboard: opts.scoreboard || null,
           createdAt: now,
           flushAtMs: now + mins * 60 * 1000
         });
