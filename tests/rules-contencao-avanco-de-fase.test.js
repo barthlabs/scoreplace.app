@@ -34,6 +34,7 @@ const PROJECT = 'demo-scoreplace';
 const ORG = 'uid_organizador';
 const JOG = 'uid_jogador';
 const FORA = 'uid_estranho';
+const SERVER_TIME = '__server_timestamp__';
 
 function driver(port) {
   return `
@@ -43,6 +44,7 @@ const P = '${PROJECT}', H = 'http://127.0.0.1:${port}';
 admin.initializeApp({ projectId: P });
 const db = admin.firestore();
 const ORG = '${ORG}', JOG = '${JOG}', FORA = '${FORA}';
+const SERVER_TIME = '${SERVER_TIME}';
 
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 const tok = uid => b64({ alg:'none', typ:'JWT' }) + '.' + b64({
@@ -52,6 +54,7 @@ const tok = uid => b64({ alg:'none', typ:'JWT' }) + '.' + b64({
   firebase:{ identities:{}, sign_in_provider:'google.com' }
 }) + '.';
 const base = H + '/v1/projects/' + P + '/databases/(default)/documents/';
+const commitUrl = H + '/v1/projects/' + P + '/databases/(default)/documents:commit';
 
 /* JS → valor tipado do REST. Escrever \`{stringValue:...}\` à mão num payload de reset com
  * 30 campos é onde se erra em silêncio: um campo com o tipo errado vira "negado" e o teste
@@ -77,10 +80,34 @@ const campos = o => { const f = {}; Object.keys(o).forEach(k => { f[k] = enc(o[k
 async function patch(doc, uid, dados, mask) {
   let url = base + 'tournaments/' + doc;
   if (mask) url += '?' + mask.map(p => 'updateMask.fieldPaths=' + encodeURIComponent(p)).join('&');
+  /* A criação legítima usa serverTimestamp. A regra que impede recriar torneio apagado
+   * exige request.resource._nascidoEm == request.time; enviar uma string comum testaria
+   * outra coisa. O REST representa serverTimestamp com updateTransforms. */
+  const semCarimbo = Object.assign({}, dados);
+  const transforms = [];
+  if (semCarimbo._nascidoEm === SERVER_TIME) {
+    delete semCarimbo._nascidoEm;
+    transforms.push({ fieldPath: '_nascidoEm', setToServerValue: 'REQUEST_TIME' });
+  }
+  /* documents.patch não aceita transformações. A API Commit aceita e é a representação
+   * REST exata de set(..., { merge:false }) com serverTimestamp. */
+  if (transforms.length) {
+    const r = await fetch(commitUrl, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tok(uid), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ writes: [{
+        update: { name: 'projects/' + P + '/databases/(default)/documents/tournaments/' + doc,
+          fields: campos(semCarimbo) },
+        updateTransforms: transforms
+      }] })
+    });
+    return r.status;
+  }
   const r = await fetch(url, {
     method: 'PATCH',
     headers: { Authorization: 'Bearer ' + tok(uid), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: campos(dados) }),
+    body: JSON.stringify(Object.assign({ fields: campos(semCarimbo) },
+      transforms.length ? { updateTransforms: transforms } : {})),
   });
   return r.status;
 }
@@ -104,6 +131,7 @@ const JOGO = { id: 'm1', p1: 'A', p2: 'B', status: 'pending' };
 function baseNaoDividido(extra) {
   return Object.assign({
     name: 'Torneio de prova', creatorUid: ORG, adminUids: [ORG], isPublic: true,
+    _nascidoEm: SERVER_TIME,
     status: 'active', format: 'Liga',
     memberUids: [ORG, JOG], participants: [{ uid: ORG }, { uid: JOG }],
     phases: [{ name: 'Fase 1', endDate: '2026-09-10' }, { name: 'Fase 2', endDate: '2026-09-20' }],
